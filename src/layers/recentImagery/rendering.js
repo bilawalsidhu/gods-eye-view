@@ -41,13 +41,16 @@ const boxKey = (box) =>
 const partsKey = (parts) => parts.map(boxKey).sort().join(';');
 
 /**
- * Without per-half evidence every part drapes. With evidence, only the parts
- * it lists drape (the source's drapesOnlyProven decides which those are).
- * Evidence for another box lists none of them.
+ * Without per-half evidence a dateline JPEG waits for the probe because
+ * an empty side would draw black. Other boxes drape all their parts.
+ * With evidence, only the listed parts of this box drape.
  */
-function drapedParts(box, availableBoxes) {
+function drapedParts(candidate, box, availableBoxes) {
   const parts = nonCrossingBoxes(box);
-  if (!Array.isArray(availableBoxes)) return parts;
+  if (!Array.isArray(availableBoxes))
+    return parts.length > 1 && PRODUCTS[candidate.product]?.format === 'jpg'
+      ? []
+      : parts;
   const listed = new Set(availableBoxes.filter(Boolean).map(boxKey));
   return parts.filter((part) => listed.has(boxKey(part)));
 }
@@ -138,16 +141,10 @@ export function createRecentImageryRenderer({
 
   function mount(slotId, { candidate, parts, alpha, split }) {
     if (!parts.length) return false;
-    const layers = [];
-    try {
-      for (const part of parts)
-        layers.push(host.globe.imagery.add(specFor(candidate, part)));
-    } catch (error) {
-      for (const layer of layers) layer.remove();
-      throw error;
-    }
     owned[slotId] = {
-      layers,
+      layers: parts.map((part) =>
+        host.globe.imagery.add(specFor(candidate, part)),
+      ),
       globe: host.globe,
       candidate,
       parts,
@@ -160,8 +157,9 @@ export function createRecentImageryRenderer({
 
   return {
     /**
-     * Drape the available parts of a candidate into a slot. The same parts of
-     * the same day on the same port only need their look updated.
+     * Drape the available parts of a candidate into a slot. On the same day
+     * and port, keep each surviving layer, add a new part right above it and
+     * remove dropped parts.
      * @param {'a'|'b'} slotId
      * @param {object} candidate
      * @param {object} box Degrees box.
@@ -181,14 +179,41 @@ export function createRecentImageryRenderer({
       }
       const current = owned[slotId];
       const look = { alpha: clampAlpha(alpha), split: splitDirection };
-      const parts = drapedParts(box, availableBoxes);
+      const parts = drapedParts(candidate, box, availableBoxes);
       if (
         current &&
         current.globe === host.globe &&
         current.candidate.key === candidate.key &&
-        partsKey(current.parts) === partsKey(parts)
+        parts.length
       ) {
-        if (current.alpha !== look.alpha || current.split !== look.split) {
+        if (partsKey(current.parts) !== partsKey(parts)) {
+          const previous = new Map(
+            current.parts.map((part, i) => [boxKey(part), current.layers[i]]),
+          );
+          // A new half goes right above the slot's surviving half, so both
+          // halves keep the same place against the other slot.
+          const survivor = parts
+            .map((part) => previous.get(boxKey(part)))
+            .find(Boolean);
+          const at = survivor
+            ? host.globe.imagery.list().indexOf(survivor) + 1
+            : undefined;
+          const layers = parts.map((part) => {
+            const key = boxKey(part);
+            const layer = previous.get(key);
+            previous.delete(key);
+            return (
+              layer ?? host.globe.imagery.add(specFor(candidate, part), at)
+            );
+          });
+          for (const layer of previous.values()) layer.remove();
+          Object.assign(current, { layers, parts, ...look });
+          applyLook(current);
+          requestRender('recent-imagery-show');
+        } else if (
+          current.alpha !== look.alpha ||
+          current.split !== look.split
+        ) {
           Object.assign(current, look);
           applyLook(current);
           requestRender('recent-imagery-look');

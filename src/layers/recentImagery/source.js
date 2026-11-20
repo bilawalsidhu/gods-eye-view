@@ -127,8 +127,8 @@ function withHalves(response, { presentBoxes, emptyBoxes }) {
  * Thumbnail responses must expose Data-Present: true for image admission, or
  * false for confirmed empty coverage, including injected getThumbnail sources.
  * getThumbnail also sets presentBoxes and emptyBoxes (see withHalves).
- * Without per-half evidence the renderer drapes every side of a dateline
- * box, so an empty side of a VIIRS JPEG then draws black.
+ * Without per-half evidence the renderer drapes every side of an HLS
+ * dateline box and no side of a VIIRS one.
  */
 export function createRecentImagerySource({
   fetchImpl = (...args) => globalThis.fetch(...args),

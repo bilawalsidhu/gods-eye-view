@@ -136,14 +136,16 @@ function coverageText(coverage) {
   return t('unknown');
 }
 
-/** A present day covers the box only in part when its probe omits a side. */
+/** A confirmed-empty side means partial coverage. An unanswered side leaves coverage unknown. */
 function shownCoverage(candidate, box) {
-  const drapes = candidate.thumbnail?.availableBoxes;
-  return candidate.thumbnail?.status === 'present' &&
-    Array.isArray(drapes) &&
-    drapes.length < nonCrossingBoxes(box).length
-    ? 'partial'
-    : candidate.coverage;
+  const { status, availableBoxes, emptyBoxes } = candidate.thumbnail ?? {};
+  if (
+    status !== 'present' ||
+    !Array.isArray(availableBoxes) ||
+    availableBoxes.length >= nonCrossingBoxes(box).length
+  )
+    return candidate.coverage;
+  return emptyBoxes?.length ? 'partial' : 'unknown';
 }
 
 function cloudText(candidate) {

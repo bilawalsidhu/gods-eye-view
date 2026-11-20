@@ -16,6 +16,7 @@ const EMPTY = Object.freeze({
   objectUrl: null,
   acquisitionTime: null,
   availableBoxes: null,
+  emptyBoxes: null,
   loading: false,
 });
 
@@ -157,6 +158,7 @@ export function createThumbnailLoader({
       entry.status = status;
       entry.acquisitionTime = acquisitionTime;
       entry.availableBoxes = availableBoxes;
+      entry.emptyBoxes = emptyBoxes;
     }
     entry.objectUrl = objectUrl;
     touch(entry);
@@ -221,6 +223,7 @@ export function createThumbnailLoader({
         objectUrl: null,
         acquisitionTime: null,
         availableBoxes: null,
+        emptyBoxes: null,
         loading: false,
         controller: null,
         touched: 0,
@@ -297,7 +300,7 @@ export function createThumbnailLoader({
     /**
      * Read a day's state. A read is not a use: it never changes residency.
      * @param {string} key Candidate key.
-     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, availableBoxes: Array<object> | null, loading: boolean }}
+     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, availableBoxes: Array<object> | null, emptyBoxes: Array<object> | null, loading: boolean }}
      */
     get(key) {
       const entry = entries.get(key);
@@ -307,6 +310,7 @@ export function createThumbnailLoader({
         objectUrl: entry.objectUrl,
         acquisitionTime: entry.acquisitionTime,
         availableBoxes: entry.availableBoxes,
+        emptyBoxes: entry.emptyBoxes,
         loading: entry.loading,
       };
     },

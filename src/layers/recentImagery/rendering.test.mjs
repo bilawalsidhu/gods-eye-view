@@ -330,7 +330,7 @@ test('the renderer drapes only the halves the probe allows, and rebind keeps the
     next.layers.map((layer) => layer.spec.rectangle),
     [east, west, east],
   );
-  renderer.showSlot('a', VIIRS, FIJI_BOX);
+  renderer.showSlot('a', VIIRS, FIJI_BOX, { availableBoxes: [west, east] });
   assert.equal(next.layers.length, 4);
   renderer.destroy();
   assert.equal(next.layers.length, 0);
@@ -347,15 +347,64 @@ test('no allowed half, or halves of another box, drapes nothing', () => {
   }
 });
 
+test('without per-half evidence a VIIRS dateline box drapes nothing, a plain VIIRS box and an HLS dateline box still drape', () => {
+  const { renderer, globe } = fixture();
+  assert.equal(renderer.showSlot('a', VIIRS, FIJI_BOX), false);
+  assert.equal(globe.layers.length, 0);
+  assert.equal(renderer.showSlot('a', VIIRS, BOX), true);
+  assert.equal(globe.layers.length, 1);
+  assert.equal(renderer.showSlot('b', S30, FIJI_BOX), true);
+  assert.equal(globe.layers.length, 3);
+  renderer.destroy();
+});
+
 test('evidence going from none to empty removes the drape', () => {
   const { renderer, globe } = fixture();
-  renderer.showSlot('a', VIIRS, FIJI_BOX);
+  renderer.showSlot('a', S30, FIJI_BOX);
   assert.equal(globe.layers.length, 2);
   assert.equal(
-    renderer.showSlot('a', VIIRS, FIJI_BOX, { availableBoxes: [] }),
+    renderer.showSlot('a', S30, FIJI_BOX, { availableBoxes: [] }),
     false,
   );
   assert.equal(globe.layers.length, 0);
+  renderer.destroy();
+});
+
+test('a probe that narrows or widens a dateline drape keeps the layer of the unchanged half', () => {
+  const renderer = createRecentImageryRenderer();
+  const globe = fakeGlobePort();
+  renderer.rebind({ collection: {}, kind: 'globe', globe });
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  const keyOf = (box) => [box.west, box.south, box.east, box.north].join(',');
+  const layerFor = (box) =>
+    globe.layers.find((layer) => keyOf(layer.spec.rectangle) === keyOf(box));
+
+  // An HLS day drapes both halves before its probe answers.
+  renderer.showSlot('a', S30, FIJI_BOX, { alpha: 0.4, splitDirection: 'left' });
+  const kept = layerFor(west);
+  assert.ok(kept);
+  const added = globe.added.length;
+
+  // The probe confirms the east half empty: only the east layer goes.
+  renderer.showSlot('a', S30, FIJI_BOX, {
+    alpha: 0.4,
+    splitDirection: 'left',
+    availableBoxes: [west],
+  });
+  assert.equal(kept.removed, false, 'the west layer survives the narrowing');
+  assert.equal(globe.added.length, added, 'narrowing adds no layer');
+  assert.equal(layerFor(east), undefined);
+
+  // A later probe admits east again: only the east layer is added.
+  renderer.showSlot('a', S30, FIJI_BOX, {
+    alpha: 0.4,
+    splitDirection: 'left',
+    availableBoxes: [west, east],
+  });
+  assert.equal(kept.removed, false, 'the west layer survives the widening');
+  assert.equal(globe.added.length, added + 1);
+  assert.equal(kept.alpha, 0.4);
+  assert.equal(kept.split, 'left');
   renderer.destroy();
 });
 

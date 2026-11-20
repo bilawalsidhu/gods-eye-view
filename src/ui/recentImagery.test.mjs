@@ -1066,7 +1066,7 @@ test('DETAILS is a collapsed rail card holding every note, and the empty-days to
   assert.equal(article.dataset.open, 'false');
 });
 
-test('DETAILS shows partial coverage when a present dateline day drapes one half', async () => {
+test('DETAILS shows partial coverage for a dateline day with one side empty, unknown when a side did not answer', async () => {
   const f = fixture();
   f.layer.enable();
   f.layer.setBox(FIJI_BOX);
@@ -1074,10 +1074,21 @@ test('DETAILS shows partial coverage when a present dateline day drapes one half
   await settle();
   assert.match(f.byId('ri-details').textContent, /Coverage full/);
   const get = f.thumbnails.get;
-  const [west] = nonCrossingBoxes(FIJI_BOX);
-  f.thumbnails.get = (key) => ({ ...get(key), availableBoxes: [west] });
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  f.thumbnails.get = (key) => ({
+    ...get(key),
+    availableBoxes: [west],
+    emptyBoxes: [east],
+  });
   f.thumbnails.probe(f.snap().focus.key, 'present');
   assert.match(f.byId('ri-details').textContent, /Coverage partial/);
+  f.thumbnails.get = (key) => ({
+    ...get(key),
+    availableBoxes: [west],
+    emptyBoxes: [],
+  });
+  f.thumbnails.probe(f.snap().focus.key, 'present');
+  assert.match(f.byId('ri-details').textContent, /Coverage unknown/);
 });
 
 test('the body scroll position survives renders even when DOM mutations reset it', async () => {
