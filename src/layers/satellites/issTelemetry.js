@@ -139,6 +139,26 @@ const WANTED_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 5_000;
 /** After a failed request the next one waits this long. */
 const FAILURE_WAIT_MS = 30_000;
+/** A busy relay's `Retry-After` is honoured up to this long. */
+const BUSY_MAX_WAIT_MS = 300_000;
+
+/**
+ * How long a busy relay (a 429) asks to be left: its `Retry-After`, in
+ * seconds or as a date, never shorter than the poll; without one, the
+ * failure wait.
+ * @param {{headers?: {get?: (name: string) => string|null}}} response
+ * @param {number} nowMs
+ * @returns {number} Milliseconds.
+ */
+function busyWaitMs(response, nowMs) {
+  const header = String(response.headers?.get?.('Retry-After') ?? '').trim();
+  const ms = /^\d+$/.test(header)
+    ? Number(header) * 1000
+    : Date.parse(header) - nowMs;
+  if (!Number.isFinite(ms)) return FAILURE_WAIT_MS;
+  return Math.min(BUSY_MAX_WAIT_MS, Math.max(ISS_TELEMETRY_POLL_MS, ms));
+}
+
 /**
  * Relay answers without a whole pose that keep the last one until it is too
  * old: `live` short of a joint, and the gap while the relay reconnects. The
@@ -152,13 +172,14 @@ const KEEPS_POSE = new Set(['live', 'connecting', 'reconnecting']);
  * good once the server says the relay is not switched on.
  * @param {{fetchImpl?: typeof fetch, now?: () => number,
  *   setTimer?: (fn: () => void, ms: number) => unknown,
- *   clearTimer?: (id: unknown) => void}} [options]
+ *   clearTimer?: (id: unknown) => void, random?: () => number}} [options]
  */
 export function createIssTelemetryFeed({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = Date.now,
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (id) => clearTimeout(id),
+  random = Math.random,
 } = {}) {
   /** False once the server answered that the relay is off. */
   let configured = null;
@@ -173,6 +194,8 @@ export function createIssTelemetryFeed({
   let relayStatus = null;
   let answeredAt = null;
   let failures = 0;
+  /** The last request was turned away (429): the relay is busy, not down. */
+  let busy = false;
   /** When the relay last reported signal; the "no signal since" time. */
   let liveUntil = null;
 
@@ -187,9 +210,20 @@ export function createIssTelemetryFeed({
         signal: controller.signal,
         cache: 'no-store',
       });
+      if (response.status === 429) {
+        if (mine !== generation) return;
+        // Turned away to spare the server: wait as long as it asks, spread
+        // out so the tabs turned away together do not come back together.
+        // The last pose holds until it is too old, as after a failure.
+        busy = true;
+        failures = 0;
+        wait = busyWaitMs(response, now()) + random() * ISS_TELEMETRY_POLL_MS;
+        return;
+      }
       if (!response.ok) throw new Error('unavailable');
       const body = await response.json();
       if (mine !== generation) return;
+      busy = false;
       if (body?.configured !== true) {
         configured = false;
         pose = null;
@@ -214,6 +248,7 @@ export function createIssTelemetryFeed({
       }
     } catch {
       if (mine !== generation) return;
+      busy = false;
       failures += 1;
       wait = FAILURE_WAIT_MS;
     } finally {
@@ -267,9 +302,10 @@ export function createIssTelemetryFeed({
      * lacks an array or radiator joint; `no-signal` while the relay is up
      * but the station is out of contact; `unavailable` when the relay cannot
      * be reached or is not connected; `disabled` when this server does not
-     * relay the feed; `pending` before the first answer and while the relay
-     * reconnects. `poseAgeMs` is how old the last pose is, `liveUntilMs`
-     * when signal was last had (epoch ms), both null when there was none.
+     * relay the feed; `pending` before the first answer, while the relay
+     * reconnects and while it is too busy to answer (a 429). `poseAgeMs` is
+     * how old the last pose is, `liveUntilMs` when signal was last had
+     * (epoch ms), both null when there was none.
      * @returns {{state: 'live'|'partial'|'no-signal'|'unavailable'|
      *   'disabled'|'pending', poseAgeMs: number|null,
      *   liveUntilMs: number|null}}
@@ -288,6 +324,8 @@ export function createIssTelemetryFeed({
       else if (configured === null)
         state = failures > 0 ? 'unavailable' : 'pending';
       else if (pose && poseAgeMs < ISS_TELEMETRY_FRESH_MS) state = 'live';
+      // Turned away while the relay is busy: asked again when it said.
+      else if (busy) state = 'pending';
       else if (failures === 0 && relayStatus === 'no-signal')
         state = 'no-signal';
       // The relay has signal, but no recent answer held the whole pose: a
@@ -313,6 +351,7 @@ export function createIssTelemetryFeed({
       relayStatus = null;
       answeredAt = null;
       failures = 0;
+      busy = false;
       liveUntil = null;
     },
   };

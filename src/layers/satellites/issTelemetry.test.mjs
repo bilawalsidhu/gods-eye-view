@@ -576,6 +576,94 @@ test('a whole pose holds while the relay reconnects, and the clock may land firs
   fresh.feed.destroy();
 });
 
+/** The relay turning a request away (429), with its `Retry-After` if any. */
+const busyResponse = (retryAfter = null) => ({
+  ok: false,
+  status: 429,
+  headers: {
+    get: (name) => (name.toLowerCase() === 'retry-after' ? retryAfter : null),
+  },
+  json: async () => ({ error: 'Too Many Requests' }),
+});
+
+/** A feed answered by `respond()` at request time, with each request's time. */
+function respondingFeed(time, random) {
+  let respond = () => ({ ok: true, json: async () => LIVE });
+  const calls = [];
+  const fetchImpl = async () => {
+    calls.push(time.now());
+    return respond();
+  };
+  const feed = createIssTelemetryFeed({ fetchImpl, ...time, random });
+  const drawFor = async (ms) => {
+    for (let t = 0; t < ms; t += 1000) {
+      feed.touch();
+      await time.advance(1000);
+    }
+  };
+  return { feed, calls, drawFor, respond: (next) => (respond = next) };
+}
+
+test('a busy relay (429) is asked again when it says, plus jitter, and the pose holds', async () => {
+  const time = fakeTime();
+  const { feed, calls, drawFor, respond } = respondingFeed(time, () => 0.5);
+  feed.touch();
+  await time.advance(0);
+  const whole = feed.pose();
+  respond(() => busyResponse('12'));
+  await drawFor(ISS_TELEMETRY_POLL_MS + 1000);
+  assert.equal(calls.length, 2, 'the next poll is turned away');
+  assert.deepEqual(feed.pose(), whole, 'the pose holds');
+  assert.equal(feed.status().state, 'live');
+  await drawFor(ISS_TELEMETRY_FRESH_MS);
+  // Twelve seconds, and half the jitter (up to a poll) on top.
+  assert.equal(calls[2] - calls[1], 12_000 + ISS_TELEMETRY_POLL_MS / 2);
+  assert.equal(feed.pose(), null, 'too old: back to the rules');
+  assert.equal(feed.status().state, 'pending', 'busy, not unavailable');
+  respond(() => ({ ok: true, json: async () => LIVE }));
+  await drawFor(20_000);
+  assert.equal(feed.status().state, 'live');
+  feed.destroy();
+});
+
+test('a Retry-After date is honoured; without one a busy relay waits 30 s, never under a poll', async () => {
+  const time = fakeTime();
+  const cases = [
+    ['a date', () => new Date(time.now() + 40_000).toUTCString(), 40_000],
+    ['none', () => null, 30_000],
+    ['unreadable', () => 'soon', 30_000],
+    ['zero', () => '0', ISS_TELEMETRY_POLL_MS],
+  ];
+  for (const [label, header, expected] of cases) {
+    const { feed, calls, drawFor, respond } = respondingFeed(time, () => 0);
+    respond(() => busyResponse(header()));
+    feed.touch();
+    await time.advance(0);
+    await drawFor(expected + 1000);
+    assert.equal(calls[1] - calls[0], expected, label);
+    feed.destroy();
+  }
+});
+
+test('a 429 reads as connecting, not unavailable; other errors still read as unavailable', async () => {
+  const time = fakeTime();
+  const { feed, drawFor, respond } = respondingFeed(time, () => 0);
+  respond(() => busyResponse('5'));
+  feed.touch();
+  await time.advance(0);
+  assert.equal(feed.configured(), null, 'never answered');
+  assert.equal(feed.status().state, 'pending', 'turned away before any answer');
+  respond(() => ({ ok: true, json: async () => LIVE }));
+  await drawFor(ISS_TELEMETRY_POLL_MS);
+  assert.equal(feed.status().state, 'live');
+  // A server error is still a failure, as before.
+  respond(() => ({ ok: false, status: 500, json: async () => ({}) }));
+  await drawFor(ISS_TELEMETRY_FRESH_MS + 1000);
+  assert.equal(feed.pose(), null);
+  assert.equal(feed.status().state, 'unavailable');
+  feed.destroy();
+});
+
 test('a relay route that is not there reads as unavailable, not as connecting forever', async () => {
   const time = fakeTime();
   // A 404, or a deploy's HTML fallback page: never a relay answer.
