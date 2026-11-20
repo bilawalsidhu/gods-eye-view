@@ -3770,6 +3770,71 @@ export function portChecks() {
       { capability: 'models' },
     ),
     check(
+      'draw.models.nodes',
+      "a model item's nodes pose its named glTF nodes, live, and a node that leaves the map goes back to its authored pose",
+      async (h, r) => {
+        if (!h.assets?.model || !h.assets?.modelNode)
+          return { skip: 'no model with a named node in this harness' };
+        const NODE = h.assets.modelNode;
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:models.nodes' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        // Far off along the node's own x axis: off the screen's centre.
+        const away = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5000, 0, 0, 1];
+        const model = (nodes) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 160,
+          environmentMap: false,
+          shading: 'unlit',
+          tint: '#ff0000',
+          colorBlend: { mode: 'replace' },
+          ...(nodes ? { nodes } : {}),
+        });
+        try {
+          set.set([model(null)]);
+          for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+          deepEqual(ready, ['m'], 'ready');
+          const s = r.query.project(pos);
+          // How many pixels of a patch at the model's centre are red.
+          const red = async () => {
+            await drawn(h, r, 3);
+            await settled(r);
+            r.frame.renderNow();
+            const image = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 4,
+                y: Math.round(s.y) - 4,
+                width: 9,
+                height: 9,
+              },
+            });
+            let n = 0;
+            for (let i = 0; i < image.data.length; i += 4) {
+              const [r0, g, b] = image.data.subarray(i, i + 3);
+              if (r0 > 180 && g < 70 && b < 70) n++;
+            }
+            return n;
+          };
+          ok((await red()) >= 40, 'authored pose: at the centre');
+          set.upsert([model({ [NODE]: away })]);
+          ok((await red()) < 10, 'the node moved away, live');
+          set.upsert([model({ [NODE]: away, NO_SUCH_NODE: away })]);
+          ok((await red()) < 10, 'a name the model lacks changes nothing');
+          set.upsert([model(null)]);
+          ok((await red()) >= 40, 'the node left the map: authored pose');
+          deepEqual(ready, ['m'], 'without loading again');
+        } finally {
+          set.dispose();
+        }
+      },
+      { capability: 'modelNodes', bareSky: true },
+    ),
+    check(
       'draw.models.loadFailed',
       'a model set says when a model fails to load, and loads it when added again',
       async (h, r) => {

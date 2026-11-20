@@ -28,16 +28,20 @@ const views = {
   // Display's and Radio's collapse and launcher buttons, Radio's Enable,
   // Previous, Play and Next, and the desktop rail's two items and glyphs.
   'panels/CockpitUtilityControls.vue': { buttons: 10, icons: 2 },
-  // Previous, Next, Auto, the card's collapse and the three page tabs; the
-  // first, second and fourth draw a glyph.
-  'panels/CockpitBriefing.vue': { buttons: 7, icons: 3 },
+  // Previous, Next, Auto, the card's collapse and the four page tabs (LIVE
+  // shows only with a stream); the first, second and fourth draw a glyph.
+  'panels/CockpitBriefing.vue': { buttons: 8, icons: 3 },
   // Previous, Next, the card's collapse and Weather; three of them draw a
   // glyph, and the nearest contact's arrow is the fourth.
   'panels/CockpitContext.vue': { buttons: 4, icons: 4 },
   // A signal row's target and its chevron.
   'panels/CockpitSignalList.vue': { buttons: 1, icons: 1 },
-  // TLE, Nadir, Zoom out, Zoom in and Sensor.
-  'panels/CockpitOrbital.vue': { buttons: 5, icons: 0 },
+  // TLE, Nadir, Zoom out, Zoom in and Sensor, and a station's Previous and
+  // Next view, which draw the two glyphs.
+  'panels/CockpitOrbital.vue': { buttons: 7, icons: 2 },
+  // The LIVE page's Previous, Next, Play and Try again; the first three draw
+  // a glyph.
+  'panels/CockpitLivePage.vue': { buttons: 4, icons: 3 },
   // The range step.
   'panels/CockpitRadar.vue': { buttons: 1, icons: 0 },
   // The flight plan's arrow.

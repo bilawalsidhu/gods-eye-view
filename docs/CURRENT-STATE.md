@@ -2111,6 +2111,213 @@ tracked satellite's dot a set of its own drawn where the follow camera framed
 it, and the orbit rings a line set dimmed behind the globe and turned with the
 Earth each second. A caller handing it a Cesium viewer, with no
 renderer bound, loads the `./render/cesium/unbound` export once first.
+
+The ISS (NORAD 25544, by number, not name) is drawn as NASA's 3D model within
+1,500 km of the camera and as its dot beyond; the two split the distance range,
+so exactly one draws (the tracked dot too). The model is at its real 109 m span
+with a 72 px floor, flies the station's usual attitude (modules along the
+velocity, the same side to the Earth) from its own per-frame SGP4 sample, sits
+on the follow camera's sample while tracked, loads only once the ISS is shown,
+and hides with the dot's own rules. A click on it tracks the ISS.
+The station has several catalog entries that are one body: the ISS itself
+(listed as ISS (ZARYA)), ISS (NAUKA) and whatever vehicle is docked, each with
+a dot of its own, so a click on the station's dot can land on any of them.
+`issTrackedOnStation` (`policy.js`) treats a tracked entry as the station when
+it is the ISS or the ISS shares its position (`_dockedCompanions`). For such
+an entry the model sits on the tracked entry's own per-frame sample, as it
+does for the ISS (drawn from a later sample it stood a frame of orbital
+motion, over 100 m, off the camera's centre); its tracked dot and orbit ring
+leave the near range to the model, its card keeps clear of the model, and the
+command panel and the live video show as they do for the ISS. Such an entry
+draws no orbit ring of its own (its elements would put a second line beside
+the ISS's through the same station): when tracking judges it docked (both
+orbits at one instant within 5 km) the ISS's ring shows for it, even with the
+Stations class hidden.
+In the Cockpit, a station entry is ridden from the station itself instead of
+the straight-down picture: the camera sits at a point on the model
+(`issMounts.js`), with the model drawn, and looks out, away from the station.
+There are six views, the same whichever entry was selected: from Nauka (the
+one it opens on; its lower end, out ahead to port), from Zarya (its port
+side, out across the track), from Poisk (its top, out behind to starboard),
+from the Cupola (just below it, out aft past the Russian segment), from Kibo
+(outside the two windows on its port end, out over the Exposed Facility;
+the port solar arrays turn through it as they follow the Sun, as they do past
+the real windows)
+and, while a vehicle is docked, from that vehicle (behind Zvezda's aft port,
+out behind the station; the catalog does not say which port a vehicle is
+on). The Cupola and Kibo have no catalog entries: their views ride the ISS's
+and show cards of their own (`ISS_MOUNT_CARDS`: the Cupola as ESA's
+observation module with 7 windows, launched 8 Feb 2010 on STS-130, on
+Tranquility's Earth-facing port; Kibo as JAXA's laboratory module with 2
+windows, launched 31 May 2008 on STS-124, on Harmony's port side) in place of
+the entry's NORAD number, owner and TLE; altitude, velocity and the
+sub-satellite point stay the station's.
+Each looks 20° to 30° below level, which keeps the Earth's limb in the frame.
+The points were chosen by casting rays across the view against the model at
+rest: over a meter clear of every surface, at most a tenth of the frame
+meeting the station and none of it nearer than 12 m. The satellites layer's
+`getCockpitMount(key)` gives the eye point, the view frame, the view shown,
+the catalog entry it belongs to (ISS (NAUKA), the ISS itself for Zarya,
+POISK, the docked vehicle) and the views on offer, worked out from the same
+sample the model is then placed on, so the camera stays on the model. The
+Cockpit rides the view's own entry (`switchOrbitalSatellite`, as riding
+another satellite from Live Signals), so the readout, the TLE and the signals
+describe the module the view is from; a view whose entry is missing or cannot
+be tracked keeps the entry ridden, and is not retried until the view changes.
+Leaving the Cockpit from a station view selects Nauka (when the catalog has
+it) and puts the follow camera on it, whichever view it ended on; leaving
+any other satellite's view refocuses that satellite as before. `cockpitOrbitalView.js` puts the
+camera there, turns the arrow-key look about the view's own frame, keeps the
+chosen view for the session (also while the model is away) and publishes its
+name (`mount`) and the number on offer (`mountViews`). The HUD shows STATION
+VIEW with the view's name between two arrows that step back and forth
+through them, wrapping round,
+and leaves out the nadir reticle, north pointer, swath and sensor strip. A
+ground focus (a click on a mapped installation, or its Live Signals row)
+works from a station view as from the nadir picture: it aims from the
+view's camera point and turns about the view's own frame, with the same
+±45° reach, so the sites listed and focusable are those within reach of
+where the view looks; their rows still give the angle from straight down.
+Switching views ends a focus.
+Until the model has loaded, or with the model not shown, the entry keeps the
+nadir picture, and the TRACK ACQUIRED line follows the change. Zoom, the
+place line and the identity readouts are unchanged.
+While the station is selected on the map, Context gains a LIVE section
+(`src/ui/liveControls.js`, `LivePanel.vue`, the `gev-live` store): the live
+streams attached to the selected object. The list is fixed
+(`src/data/liveStreams.js`: NASA's exterior cameras, and its live video with
+space-to-ground audio, both on YouTube) and each stream names the subject
+keys it belongs to; a layer names its selected subject's keys with
+`getLiveSubjectKeys` (the satellites layer answers `station:iss` for the ISS,
+Nauka and a docked vehicle, and `station:tiangong` for Tiangong's entries,
+which no stream is listed for yet), and the keys are read again every 2 s while
+something is selected, since a docked entry is judged so only once both
+orbits have been compared. The section shows the subject, the stream's name
+with two arrows when there are several, a screen and a status line. It
+starts collapsed, and nothing loads on selection: the screen is a poster
+with Play, under the line "Video plays from YouTube, which sees your IP
+address." Play is the one thing that loads the player:
+`youtubeLivePlayer.js` builds YouTube's player (the IFrame API from
+`www.youtube.com`, the video on `www.youtube-nocookie.com`), muted, and reads
+its state back. Collapsing the section, collapsing or closing Context, or the
+section leaving the page removes the player, so nothing plays unseen. ON AIR
+with a blinking red dot while it plays; LOADING with an amber dot while it
+starts; an offline card ("Stream is offline", with Try again) when
+the player reports the video ended, errored or did not start within 25 s,
+which is how an off-air broadcast shows, or when YouTube's player API does not
+load (Try again loads it afresh); "This stream cannot play here" when the
+owner refuses embedding. Stepping to another
+stream hands a playing one over; a selection that moves to an object
+without that stream, clearing it or turning the layer off removes the
+player, while another entry of the same station (a module, a docked vehicle,
+the Cockpit stepping between views) keeps it. In the Cockpit the rail is hidden, so the
+briefing card gains a fourth page, LIVE (SIG / NEWS / LOCAL / LIVE,
+`CockpitLivePage.vue`), with the same subject line, arrows, screen, states
+and credit, and the same poster with Play under the IP line; it is offered
+only while the ridden subject has a stream, and with none the briefing keeps
+its three pages. There is one player: entering or leaving the Cockpit
+removes it (an embedded player cannot change parents without reloading, and
+the view it was in is hidden), and so does leaving the LIVE page; the view
+now shown offers Play again. Previous, Next and the tabs reach the LIVE page;
+the automatic 9-second cycle never turns to it and waits while it is shown.
+The credit links the owner and the stream's own page.
+The model is NASA/JSC IGOAL's current-configuration station, reduced to 3 MB
+with its joints kept as nodes (`public/models/README.md`), fetched only once
+the camera nears its range, and drawn as an item of a `models` set of the
+renderer's draw port, its joints posed through the item's `nodes`.
+`issArticulation.js` turns them every frame, by default from computation: the two alpha joints and eight beta joints face
+the arrays to the Sun (feathered along the flight direction in the Earth's
+shadow, taken as a cylinder), the two radiator joints keep the radiators
+edge-on to it, the two Ku-band dishes aim at the highest TDRS nominal slots
+(41°W, 171°W, 85°E) above the station's horizon plane, and Canadarm2, Dextre's
+arms and the Japanese arm sway a few degrees about NASA's filed pose, which is
+illustrative only (no public source gives their real pose; the European arm has
+no joints in the file). Joints turn at most 12°/s of wall time. Docked objects
+are found by comparing both orbits at one instant, since dots are moved at
+different moments. Selecting the station on the map also gives Context a
+STATION section (`stationPanel.js` presents it through the `gev-station`
+store; `StationPanel.vue` renders it; `issStation.js` describes the ISS, and
+another station plugs in with a description of its own): the station's badge
+and the selected entry's name, **Automatic** / **Manual**, a status line, and
+**Zoom to the ISS** (offered beyond 1 km while the viewer's follow camera is
+on the station's entity; it shortens the camera's offset from the station,
+a step per frame, to 260 m, and never moves along the view direction, which
+ran away when the camera was not looking at the station).
+Automatic (the default) leaves the joints to their rules and says where the
+angles come from: "Telemetry · updated 4 s ago" with a green dot while the
+relay's answer is fresh, "No signal since 12:04 · computed values" when the
+feed lost the station, "Telemetry unavailable · last update 3 min ago ·
+computed values" when the relay cannot be reached, "Telemetry not enabled on
+this server · computed values" when it is switched off, and a lit/shadow
+line. Manual pauses telemetry ("Manual · telemetry paused") and offers the
+controls: replace the Sun with a chosen position or a 40 s orbit, fold the
+arrays and radiators as a labelled demonstration, aim the dishes and pose
+Canadarm2 by joint. Automatic, a new selection, the Cockpit (the rail is
+hidden there, and the section with it) or turning the layer off hand every
+joint back. `issCommand.js` keeps the rules these share (the zoom's range and
+step, the fast orbit, the status wording).
+With `ISS_TELEMETRY_ENABLED=1` (off by default: the feed publishes no terms)
+`server/providers/space/issTelemetry.js` relays NASA's public ISSLive telemetry
+at `/api/iss-telemetry`. It speaks Lightstreamer's text protocol over `ws`,
+holds one connection for the whole server, opens it on the first request,
+closes it after two minutes without one, retries on a 5 s to 5 min ladder and
+recycles a socket that is silent for 30 s. The body is
+`{ configured, status, generatedAt, items }`: `status` is `live` only while the
+station clock ticked with signal in the last 20 s, and each item is
+`[value, epoch ms it was true at]`. On a socket loss the relay discards that
+connection's joint samples and station-clock credit, so fresh signal after
+reconnection cannot present old angles as live telemetry. Unset, the route answers
+`{ configured: false }` without contacting the feed, and the browser asks once.
+`issTelemetry.js` in the satellites layer polls it every 5 s while the model is
+drawn and, in Automatic, replaces the computed targets with the feed's: each
+alpha joint its own angle (port `+`, starboard `-`), each beta joint
+`±angle + 90°`, each radiator joint its angle, and the first dish the direction
+its elevation and cross-elevation give (the second holds still: the feed
+reports one dish and not which). The mapping was fitted on a recording of the
+feed: the dish direction stayed within 0.3° of a TDRS satellite across a
+hand-over, and the arrays sat 5° to 9° off the Sun; the radiator joints did not
+move in the recording, so their sign is not fitted. With no relay, no signal,
+an answer older than 20 s, Manual, or a Sun chosen by hand, the joints keep the
+computed rules, and the STATION section's status line and note say which
+holds. The arms still sway for illustration.
+Tiangong is the second station, drawn the same way: `stationModel.js` is the
+station-independent model part (load on approach, placement from its own SGP4
+sample or the tracked entry's, dot and companion hand-over, ring hidden up
+close, card anchor and clearance), driven by a spec; `issModel.js` gives the
+ISS's and `tiangongModel.js` Tiangong's (`CSS (TIANHE)`, NORAD 48274, with
+`CSS (WENTIAN)`, `CSS (MENGTIAN)` and the Shenzhou and Tianzhou ships as its
+docked entries). `policy.js` lists both stations (`STATIONS`) and
+`stationModels.js` says which station a tracked entry belongs to, so the card,
+the detection marks, the LIVE keys, the Cockpit's mounts and the STATION
+section work per station rather than for the ISS alone (tracking records
+`_trackedDockedToStation`; the ISS's ring keeps its own rules). The model
+(`public/models/tiangong.glb`, 382 KB, 26 k triangles) is the project's own,
+built from primitives with procedural textures, in meters and in the ISS
+file's frame, so it takes the ISS's flight-axes mapping: the station is
+assumed to fly with Tianhe along the velocity, the node forward, the labs
+across the orbit and nadir to the Earth. `tiangongJoints.js` carries the
+file's 37 joint and dock nodes (pivot, axis, kind) and
+`tiangongArticulation.js` drives them, all computed, since China publishes no
+telemetry: Tianhe's and the ships' one-axis wings turn about their booms to
+face the Sun, the lab wings turn about the lab's axis then their own (the
+SARJ/BGA pair), in the Earth's shadow every wing turns flat to the Earth
+(edge into the flight direction), the high-gain antenna aims at the highest
+Tianlian II nominal slot (79.9°E, 171.04°E, 10.5°E) above the horizon plane,
+and the two arms sway a few degrees on one side of their folded pose (so they
+lift off the hull), at the ISS's 12°/s cap. The STATION section for Tiangong
+(`tiangongStation.js`) says "No public telemetry · computed values", offers
+the Sun positions and the fast orbit, every wing on a slider of its own
+(Tianhe's two; the labs' four, alpha and beta each: a wing set by hand holds
+its angle, reached at the joint rate, while the rest keep following the Sun,
+and "Follow the Sun" frees them), and the Tianhe and Wentian arms by joint;
+**Zoom to Tiangong** uses the ISS's zoom range. In the Cockpit, Tiangong is
+ridden from views on its model (`tiangongMounts.js`), as the ISS is: from
+Tianhe (the one it opens on; its port side, out across the track), from the
+outer end of Wentian and of Mengtian (out past their wings, which turn through
+the view as they follow the Sun) and from the docked vehicle (standing in on
+the aft port, looking behind the station); each rides its own catalog entry,
+so no cards are needed, and leaving selects Tianhe. The visiting ships are
+always drawn; they are not yet toggled by what the catalog shows docked.
 The mission factory separates paths, replay, camera, panel, overlays and placement.
 Its markers, lines, live rings and pad zone are renderer draw sets, and it
 follows a mission through the camera port, so a caller handing it a Cesium
@@ -2834,9 +3041,16 @@ frame the arrows tilt, so the site stays at the centre as the satellite
 moves. The turn onto it (and between sites) eases what is left of the swing
 with the arrows' easing on a slower clock (250 ms time constant, about
 0.75 s to 95%), then holds the site exactly, and cuts under
-`prefers-reduced-motion`. A single click on a site's marker focuses it too:
-the pick is resolved through the layer's own pick ids (`findByPick`: a named
-marker's `{ installationId }` or a site entity). A click anywhere else
+`prefers-reduced-motion`. A single click on a site's marker, or on the label
+box the overlay paints for it, focuses it too: the click is resolved through
+the layer's own lookup (`findAt`: `scene.pick` for a named marker's
+`{ installationId }` or a site entity, else the box the overlay painted for
+the label; from orbit the dot is 7 px, so the label is what a click lands
+on). The map's own click selection reads the label the same way, through a
+click claim (`registerClickClaim`) rather than as an interactive card: the
+label takes a click only where nothing another layer draws is under it, so
+an aircraft or vessel drawn under a base's label stays selectable, and
+another layer's card painted over the label keeps its click. A click anywhere else
 (a site beyond the reach included), the
 focused site's row, NADIR, Home or `0` ends the focus and the view eases
 back to nadir on the same clock; an arrow ends it (or the ease back) and
@@ -8861,7 +9075,7 @@ apply to `public/` assets or built-preview serving.
   The ship bridge and the orbital view have their own own-layer gates
   (`bridgeEntryAllowed`, `orbitEntryAllowed`; see
   [Ship bridge view](#ship-bridge-view) and [Orbital view](#orbital-view)).
-- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical layout), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a three-page **cockpit briefing carousel**: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Regional News holds its list to the last 24 hours (`newsWindowHours` in the brief; the client drops anything older or undated even if a server sends it) and shows four distinct states: fresh results with no banner and a `{SOURCE} · LAST 24 H` footer; earlier results kept after a failed refresh under `CACHED · REFRESH FAILED` with the cached age in the footer; `NO NEWS IN THE LAST 24 H` when a source answered with nothing recent; and `REGIONAL NEWS UNAVAILABLE` when there is no place or no source answered, which clears the list only when there was nothing to keep. The footer follows that state across page changes. These are compact text states rather than an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `Escape` or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
+- **Aircraft cockpit view:** selecting a commercial or military aircraft reveals a `COCKPIT` action once that aircraft's own layer is on; Contacts is not required. The action shows in Contacts (`#cockpit-entry`) and under the Intel HUD's bottom-right readout (`#cockpit-entry-readout`, with the HUD on, in its Tactical layout), so entry needs no Contacts panel. Turning off the ridden aircraft's layer ends the view (the layer clears its tracking). When an air feed the surrounding picture uses is off, the Cockpit says so instead of blocking: Live Signals leads with `MILITARY FEED OFF · PARTIAL PICTURE` or `FLIGHTS FEED OFF · PARTIAL PICTURE`, and the Contact card shows that line in place of its inputs status, so a partial picture is never presented as complete. `control_cockpit` refuses entry with `entryBlockedReason` `contacts-starting` (a Context change in flight), `subject-layer-off` (the aircraft's layer, or with none tracked any aircraft layer, is off) or `no-tracked-aircraft`. Cockpit mode temporarily releases Cesium's orbit-follow transform and drives a first-person camera from the tracked aircraft's existing smoothed display position and course. Its concave helmet-visor HUD shows callsign, UTC time, coordinates, curved roll/pitch guides, and a seven-division heading tape. Ambient commercial and military AIR contacts use a Cockpit near/far band selected by the shared Display 3D mode: Proximity admits at 150 km and retains to 185 km; All admits at 400 km and retains to 450 km. The shared 3D toggle now applies in Cockpit: Off keeps in-range contacts as rotating 2D aircraft silhouettes, while On lets a ready admitted glTF take over without a drawing gap. The Cockpit model cap remains 60 and can only lower the map budget; in-range contacts that are capped or still loading remain 2D silhouettes instead of degrading to out-of-range dots. Contacts outside the selected band use small rotation-free cyan-white pips for civilian aircraft and amber pips for military. The pilot's own airframe is not drawn in first person, and exiting clears the Cockpit band and restores normal map silhouettes/models. The normal left accordion remains available for Layers and Authoring and keeps the same 26vh HUD-aligned anchor used in map mode, independent of whether the bottom-left Contact card is expanded or collapsed; the right-rail CCTV and Context chooser are hidden to avoid duplicating or overlapping the cockpit presentation. When the intelligence HUD is enabled, its classification, scene summary, collection/orbit metadata, coordinates, and imaging-status text remain visible as reduced peripheral cockpit telemetry; the optical center and flight instruments stay clear, and turning the HUD off still hides it. Ground speed, exact heading, and rendered altitude form one compact lower-center instrument cluster, keeping the horizon and peripheral view open. A second live altitude tape hugs the inside-right visor rim: its rail and nine moving ticks are derived from the same responsive keyhole radius, remain 20 px inside the circular edge even on wide displays, fade deeply at both vertical ends, and move continuously behind a fixed current-altitude pointer; its interval tightens automatically near the surface and it is suppressed on narrow screens. Cockpit mode also has a weather-backed transparent volumetric-cloud pass derived from the supplied FBM/domain-warped R&D shader. It renders at no more than 520×320, uses 24 ray steps/three FBM octaves at 12 FPS, is clipped to the visor, fails clear when Open-Meteo is unavailable, and stops its animation completely on cockpit exit. It does not restore the prior CPU weather canvases, precipitation, scene fog, or any map-mode effect. When Contacts is active for the tracked aircraft, the compact `CONTACT` rail adds the 250 km subject window, four cohort counts, nearest observed/mapped example with relative bearing and distance, freshness, explicit uncertainty, and Previous and Next controls plus its own collapse control. The mirrored right rail is a **cockpit briefing carousel** of three pages: source-backed live signals, location-matched regional headlines, and physical-region/current-weather context from bundled Natural Earth polygons and Open-Meteo; a fourth page, LIVE, is offered while the ridden subject has a live stream (the ISS; see the LIVE section) and shows the same muted player. It is manual-first: Previous, Next, and direct page controls are always available, and the visible `CYCLE OFF` / `CYCLE ON` control starts or stops the nine-second page cycle. The cycle pauses on hover or keyboard focus, never turns to the LIVE page and waits while it is shown, and stops while collapsed, hidden, or outside cockpit mode; live signal data continues refreshing either way. Regional News holds its list to the last 24 hours (`newsWindowHours` in the brief; the client drops anything older or undated even if a server sends it) and shows four distinct states: fresh results with no banner and a `{SOURCE} · LAST 24 H` footer; earlier results kept after a failed refresh under `CACHED · REFRESH FAILED` with the cached age in the footer; `NO NEWS IN THE LAST 24 H` when a source answered with nothing recent; and `REGIONAL NEWS UNAVAILABLE` when there is no place or no source answered, which clears the list only when there was nothing to keep. The footer follows that state across page changes. These are compact text states rather than an empty media frame; partial local data remains explicit. Article links open their original publisher, and no headline is treated as verified risk intelligence. On desktop both cockpit rails use the same width and share a bottom-aligned safe baseline in opposite corners above the peripheral MGRS/GSD/time telemetry, leaving both that text and the lower-center instrument cluster readable. They collapse independently to slim tabs without stopping live data updates. Narrow screens use separated top/bottom fallbacks. Empty-space globe clicks are inert while cockpit owns the camera; `Escape` or `EXIT COCKPIT` explicitly exits and restores the same tracked entity and standard follow camera. Unknown feeds remain unknown, selection loss still exits safely without inventing a replacement track, and the cockpit never presents the summary as threat scoring or an all-clear. This is a desktop first-person presentation, not a WebXR session.
 - **Cockpit left-panel clearance:** the Cockpit Contact card and peripheral HUD participate in the adaptive left accordion's live obstacle measurements, including live viewport-height changes. Expanding Layers or Authoring keeps the active panel in the available upper-left corridor with internal scrolling; it does not cover the Contact card, lower Cockpit controls, or Cesium credit line. Outside Cockpit the hidden card does not alter the normal corridor.
 - **Cockpit Context scope:** the 250 km radius applies to the air/sea proximity cohorts. Installation counts come only from the currently loaded viewport and are labeled `CURRENT VIEWPORT ONLY` in the cockpit as well as the normal Context panel; neither surface presents them as a complete 250 km installation survey.
 - **Cockpit camera anchor:** first-person mode does not write feed-boundary corrections directly into the camera. A cockpit-only inertial anchor advances from the selected aircraft's displayed course and speed, then converges toward the authoritative delayed track with correction capped below forward motion. The displayed kinematics are derived from the same consecutive fix segment as the rendered position, with raw feed speed/course used only as fallback; a transient zero/missing feed speed therefore cannot freeze a visibly moving aircraft after layer enable or a map/cockpit handoff. Rendered altitude continues to come from that interpolated track position. Late ADS-B fixes and short render stalls can remove drift without accelerating or reversing the view. Camera placement runs before scene update/culling at a bounded 20 Hz so a moving cockpit does not force Photoreal 3D Tiles to retraverse on every display frame; textual instruments update at 10 Hz and context/layout work at 4 Hz. Every far Cockpit contact pip shares one stable Cesium texture-atlas entry and skips unused screen-projected course calculations, while only in-range 2D aircraft silhouettes pay the screen-projected rotation cost; ambient glTF collections are hidden/retained rather than synchronously destroyed at cockpit entry, and context rails lay out only on explicit content/state changes and viewport resize. The deliberate 15/30-second layer interpolation delays and per-Cesium-frame position caches remain unchanged.
@@ -8872,7 +9086,7 @@ apply to `public/` assets or built-preview serving.
 - **Cockpit weather status:** the earlier multi-canvas atmospheric compositor remains fail-closed and is not attached to the live viewer. Cockpit clouds are a separate transparent WebGL pass with a capped 520×320 framebuffer, 24 ray steps, three FBM octaves, and a 12 FPS ceiling. It defaults off and starts only when local storage explicitly contains the persisted `WX ON` opt-in (`'1'`). When opted in, observations refresh after five minutes or 25 km of aircraft movement, fail transparent when unavailable or clear, and stop on exit or disable. `WX OFF` governs atmospheric rendering only: the briefing still fetches source-backed Natural Earth region, headline, and Open-Meteo local-information data, aborting and replacing any in-flight request when the selected aircraft changes. No weather effect runs in map mode and no synthetic fallback is shown.
 - **Cockpit trail visibility:** entering cockpit hides the selected aircraft's trail body and head so they cannot cross the first-person view; exit restores them. This cockpit-only presentation change does not alter the normal map-mode invariant that aircraft trails render through terrain using their depth-fail material.
 - **Aircraft course slew:** civilian and military 3D models retain the 60°/s course limiter, but each rendered frame can consume at most 250 ms of accumulated slew time. A long tile/render stall therefore catches up over multiple visible frames instead of turning one delayed frame into a heading snap.
-- **Manual-first cockpit briefing:** the right-side Live Signals / Regional News / Local Info carousel does not advance automatically on page load. Previous, Next, and direct page controls remain available; the visible `CYCLE OFF` / `CYCLE ON` toggle explicitly starts or stops the nine-second page cycle, which still pauses on hover/focus and while collapsed, hidden, or outside cockpit mode. Live signal data continues refreshing in either state.
+- **Manual-first cockpit briefing:** the right-side Live Signals / Regional News / Local Info carousel (plus LIVE while the ridden subject has a stream) does not advance automatically on page load. Previous, Next, and direct page controls remain available; the visible `CYCLE OFF` / `CYCLE ON` toggle explicitly starts or stops the nine-second page cycle, which still pauses on hover/focus and while collapsed, hidden, or outside cockpit mode, and which never turns to the LIVE page. Live signal data continues refreshing in either state.
 - **Photoreal horizon blend:** Cesium's sky atmosphere remains enabled behind the hidden base globe, but its light intensity, saturation, and brightness are reduced from the library defaults so the distant Google Photorealistic 3D Tiles boundary blends into the sky instead of producing a bright cyan horizon seam.
   - **Cockpit direction and speed tapes:** plausible destination metadata now drives one translucent, isometric visor chevron labeled directly below with the estimated geographic bearing; the prior full geodesic dashed path is not rendered. A mirrored live ground-speed tape follows the inside-left keyhole rim using the same responsive curve, end fades, fixed pointer, and fractional tick motion as the altitude tape on the right. Speed values scroll upward as they increase while altitude values scroll downward. Its tick endpoints and current-speed pointer share the rail's inset-circle origin, so the markings stay attached to the visible curve rather than drifting inward with the text-label gutter.
 - Voice control UI (`#gev-voice-control`) shows status states OFF / CONNECTING / LISTENING / EXECUTING / ERROR.
