@@ -138,12 +138,14 @@ export function createPortsLayer({
   function rebuild(portRecords) {
     records = new Map(portRecords.map((port) => [port.id, port]));
     pins = portRecords.map((port) => {
+      const position = fromDegrees(port.lon, port.lat);
       const pin = {
         record: port,
+        position,
         inFront: true,
         item: {
           id: `${PICK_PREFIX}${port.wpiNumber}`,
-          pos: fromDegrees(port.lon, port.lat),
+          pos: position,
           image: MARKER,
           size: [20, 20],
           height: 'clampGround',
