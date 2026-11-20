@@ -17,6 +17,7 @@ import {
   drawn,
   fakeHost,
   until,
+  resetPhotoView,
 } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
@@ -25,6 +26,9 @@ import {
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
 import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 /** A photo record `metres` east of (42.3314, -83.0458), in sequence `seq` at `index`. */
 function photoRecord(id, { metres = 0, seq = '14010', index = 0 } = {}) {
