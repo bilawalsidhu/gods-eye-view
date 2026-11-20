@@ -112,16 +112,52 @@ test('civil record owners isolate state and preserve partial, missing-poll and l
   );
 });
 
-test('ground transitions preserve last render height while a surface cell is cold', () => {
+test('a landing with a cold surface cell sits on the geoid, not at its approach height', () => {
   const store = records();
+  store.geoidReady = true;
   store.receive(observation({ ellipsoidAltitudeM: 1040 }), view());
+  // Every grounded poll, not just the first: a contact far from the viewer
+  // never has its cell warmed (HAL-1032).
+  for (let poll = 0; poll < 3; poll += 1) {
+    const next = store.receive(
+      observation({
+        onGround: true,
+        baroAltitudeM: null,
+        positionTimeMs: 1700000010000 + poll * 10000,
+      }),
+      view(),
+    );
+    assert.equal(next.groundFlipped, poll === 0);
+    assert.equal(next.meta.renderAltitudeM, 40);
+    assert.equal(next.meta.wasAirborne, true);
+  }
+});
+
+test('a landing before the geoid loads sits at 0 m, not at its approach height', () => {
+  const store = records();
+  store.receive(observation({ baroAltitudeM: 1539 }), view());
   const next = store.receive(
     observation({ onGround: true, baroAltitudeM: null }),
     view(),
   );
-  assert.equal(next.groundFlipped, true);
-  assert.equal(next.meta.renderAltitudeM, 1040);
-  assert.equal(next.meta.wasAirborne, true);
+  assert.equal(next.meta.renderAltitudeM, 0);
+});
+
+test('a parked contact whose surface cell goes cold holds its ground height', () => {
+  let floor = 312;
+  const store = new FlightRecords({
+    geoidHeight: () => 40,
+    cachedGroundFloor: () => floor,
+    floorAltitudeM: (altitude) => altitude,
+    approxDistanceKm: () => 0,
+    fleetModels: () => null,
+  });
+  store.geoidReady = true;
+  const grounded = () =>
+    store.receive(observation({ onGround: true, baroAltitudeM: null }), view());
+  assert.equal(grounded().meta.renderAltitudeM, 312);
+  floor = null;
+  assert.equal(grounded().meta.renderAltitudeM, 312);
 });
 
 test('complete snapshots age out vanished aircraft and retain position-less ones unless landed', () => {

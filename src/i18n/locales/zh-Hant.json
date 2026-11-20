@@ -4209,5 +4209,9 @@
   "Select a map item to see its details.": "選擇地圖上的項目以查看詳情。",
   "Bilawal on {site}": "Bilawal 的 {site} 主頁",
   "Bilawal's website": "Bilawal 的網站",
-  "BACK": "返回"
+  "BACK": "返回",
+  "Finding it…": "正在查找…",
+  "No reading at this time": "此時無數據",
+  "Last reading · {age}": "最後數據 · {age}",
+  "Find it": "查找"
 }

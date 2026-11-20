@@ -769,19 +769,38 @@ test('shared panel hooks affect only opted-in rail surfaces without overriding d
   );
 });
 
-test('narrow Omnibar corners clear the World Timeline over the dock', () => {
+test('the Omnibar dock sits above the World Timeline, and narrow corners clear the dock', () => {
   const css = read('./styles/omnibar-dock.css');
-  const timeline = css.match(
-    /#world-timeline \{\s*bottom: calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px\);/,
+  // The bar takes the dock's floor; the dock and the field inside it rise by
+  // the bar's lift (world-timeline.css), as the plain dock does.
+  assert.match(
+    css,
+    /#world-timeline \{\s*bottom: var\(--omnibar-dock-bottom\);/,
+  );
+  assert.match(
+    css,
+    /--omnibar-dock-raised: calc\(\s*var\(--omnibar-dock-bottom\) \+ var\(--world-timeline-lift, 0px\)\s*\);/,
+  );
+  assert.match(
+    css,
+    /#command-dock \{[^}]*bottom: var\(--omnibar-dock-raised\);/,
+  );
+  assert.match(
+    css,
+    /#gev-omnibar \{[^}]*bottom: calc\(var\(--omnibar-dock-raised\) \+ 11px\);/,
+  );
+  assert.doesNotMatch(css, /--world-timeline-lift\s*:/);
+  const lift = read('./styles/world-timeline.css').match(
+    /body:has\(#world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
   );
   const height = read('./styles/world-timeline.css').match(
     /#world-timeline \{[^}]*\n {2}height: (\d+)px;/,
   );
+  assert.ok(lift && height && Number(lift[1]) > Number(height[1]));
   const corners = css.match(
-    /&:has\(#world-timeline\) \{\s*--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px \+ (\d+)px \+ (\d+)px\)/,
+    /--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-raised\) \+ (\d+)px \+ (\d+)px\)/,
   );
-  assert.ok(timeline && height && corners);
-  assert.equal(Number(corners[1]), Number(timeline[1]));
-  assert.equal(Number(corners[2]), Number(height[1]));
-  assert.ok(Number(corners[3]) >= 6);
+  assert.ok(corners);
+  assert.equal(Number(corners[1]), 56);
+  assert.ok(Number(corners[2]) >= 6);
 });

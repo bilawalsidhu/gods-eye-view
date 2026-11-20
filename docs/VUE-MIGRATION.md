@@ -84,21 +84,43 @@ Home and End), since each of Core's groups keeps its own keyboard policy, and
 once and asks for a change only when it lands on another option. Every
 segmented group in Core is a `UiSegmented`; the old `segmentedControl.js`
 adapter is gone.
+No view hand-writes a control the kit has: every button in an SFC outside
+the kit is a `UiButton`, `UiCloseButton` or another kit control, every
+Material Symbols glyph a `UiIcon`, every checkbox a `UiCheckbox`, every
+select a `UiSelect`, and every range a `UiSlider` except the radio
+tuner's and the world timeline's, for the reasons given below. No module
+outside the kit, and no SFC's script, builds a button, select, field or
+Material glyph in script or writes one as markup in a string, apart from
+the globe panel's standalone page (`src/tools/globePanel.js`), plain HTML
+a host serves with no Vue or kit, whose Expand and Open buttons are
+written as markup (`src/ui/kit/viewControls.test.mjs` pins all of it).
+The native fields left are the text, number, password and file inputs
+and the two text areas (the chat's message box and the scene dialog's
+multiline field) the kit has no control for, and the search fields whose
+surfaces this document names. The scene dialog's single-line field takes
+its type from its caller, which passes text-like types only.
 `UiButton` adds `pressedClass`, Core's class on a pressed toggle (most use
 `active`); its pressed classes toggle through `classList`, so a class other
 code adds (a voice highlight) survives a press. Every pressed toggle (a
 control with `aria-pressed`) in the views is a `UiButton` with `pressed`
-except two that keep their own `aria-pressed`: Bhote Koshi's cinematic
-button, whose state the event layer writes into the attributes its panel
-renders, and Explore's story cards, which are `role="button"` elements,
-not buttons (`src/ui/kit/viewControls.test.mjs` pins it). Where the
+except Explore's story cards, which keep their own `aria-pressed` since
+they are `role="button"` elements, not buttons
+(`src/ui/kit/viewControls.test.mjs` pins it). Where the
 converted buttons draw Material symbols (the tilt-map button, the Context
 header's search and expand, the imported files' row actions and the rail
 chips' icons), the glyphs are `UiIcon`s with `:size="null"`, so the site
 rules still size them. Core's pressable chips and pills (the rail cards'
 chips and action chips, Recent Imagery's day chips, SWAP and ZOOM IN, map
-sources, cities and places, and the view context's place and layer chips)
-are `UiButton`s too; the key setup chip is still a plain button. `UiChip`
+sources, cities and places, the view context's place and layer chips and
+the key setup chip) are `UiButton`s too. `UiChip` is a non-interactive
+label chip, used by the voice card.
+header's search and expand, Draw, Import, the imported files' and drawn
+shapes' row actions and the rail chips' icons), the glyphs are `UiIcon`s
+with `:size="null"`, so the site rules still size them. Core's pressable
+chips and pills (the rail cards' chips and action chips, Recent Imagery's
+day chips, SWAP and ZOOM IN, map sources, cities and places, and the view
+context's place and layer chips) are `UiButton`s too; the key setup chip
+is still a plain button. `UiChip`
 is a non-interactive label chip, used by the voice card.
 The welcome card's buttons (SKIP, the three start tiles, BROWSE STORIES,
 BACK and the main NEXT / ENTER GOD MODE action) are ghost `UiButton`s:
@@ -122,6 +144,23 @@ magnifier would replace their SVG one, and Explore's two clear buttons,
 which draw an SVG cross, are ghost `UiButton`s rather than
 `UiCloseButton`s (`src/ui/kit/storiesControls.test.mjs` pins it).
 Explore's sort is a `UiSelect`.
+Every button in the Cockpit HUD (`CockpitView` and its panels: the vision
+selector, Look ahead, the view switcher's Reset and Exit, the utility
+strip's launchers, collapse buttons, Radio transport and desktop rail, the
+briefing card's paging, Auto, collapse and page tabs, the Contact card's
+navigation, collapse and Weather, a signal row's target, the orbital
+view's TLE, Nadir, zoom and Sensor, and the bridge radar's range) is a
+ghost `UiButton` that keeps its id and classes, so the Cockpit
+controller's listeners and the cockpit stylesheets still find it. Radio's
+Enable (with `active`), Auto and Weather are pressed toggles; the
+disclosures keep `aria-expanded` and the page tabs `aria-current`. Its
+glyphs (the rim pointers, the reticle, the heading caret, the chevrons and
+panel glyphs, the contact and route arrows) are `UiIcon`s with
+`:size="null"`; the heading caret's rule reads
+`.cockpit-compass .cockpit-heading-caret`, so it still outranks the kit's
+`.ui-icon`, which loads after cockpit.css
+(`src/ui/kit/cockpitControls.test.mjs` pins it). The −, ◀ ▶ and + glyphs
+are text characters and stay text, and the Radio volume is a `UiSlider`.
 The Omnibar's mic (a pressed toggle with `active`) and its suggestion
 strip's chips (options, so `aria-current` rather than `pressed`) are
 ghost `UiButton`s, and its search, row and chip glyphs are `UiIcon`s with
@@ -175,6 +214,51 @@ while a query is typed. The Filter button opens a disclosure and carries
 a `UiIcon` with `:size="null"`, so `layer-finder.css` still sizes them
 (`src/ui/kit/layerFinderControls.test.mjs` pins it); the search field's
 magnifier is `UiSearchField`'s own span.
+The Space Missions panel's buttons (a mission's roster row, FOCUS,
+REPLAY ASCENT, the replay's pause, PREV, NEXT and SHOW ALL / DESELECT),
+the Contacts panel's (PREV, FOCUS, NEXT and a contact's row), the Radio
+panel's (Enable, PREV, PLAY, NEXT and STOP), the RTL-SDR card's (Connect,
+Locate, Change device, FM, ADS-B, Tune and the two seeks) and the key
+setup's (the POWER UP chip, a key's REMOVE, the voice auth toggle and
+SAVE KEYS) are ghost `UiButton`s. Radio's Enable and the card's Connect,
+FM and ADS-B are pressed toggles with `active`; PLAY and Locate keep
+their own `active` class without `aria-pressed`, since their words say
+what they will do or have done. The chip's bolt is a `UiIcon` with
+`:size="null"`, so provider-settings.css still sizes it
+(`src/ui/kit/missionsRadioControls.test.mjs` pins it). The card's FM
+frequency stays a native number field, which the kit has no control for,
+and the replay's pause, the roster's chevron and the compass arrows are
+text characters, not Material symbols.
+Utilities' Draw and Import are on the kit. Draw (a pressed toggle with
+`active`), Clear and Import are ghost `UiButton`s, their glyphs `UiIcon`s
+with `pp-icon` and `:size="null"`. Draw's five colour swatches, in the
+toolbar and in a drawn shape's row, are ghost `UiButton`s with
+`role="radio"`: they say they are chosen with `aria-checked` and their own
+`active` class, never `aria-pressed`. A drawn shape's row (its swatch,
+show/hide, the application's row actions and fly to, beside its remove
+`UiCloseButton`) is on the kit too, its glyphs `UiIcon`s with
+`:size="null"`, so `controls.css` still sizes them; show/hide says what it
+does in its name (Show …, Hide …) rather than being pressed. The Street
+Level panel's controls already were kit controls; its EXPAND ⤢ ⤡ and its
+errors' ⚠ are text characters and stay text
+(`src/ui/kit/drawControls.test.mjs` pins it).
+The AI chat panel's and the voice control's buttons are ghost
+`UiButton`s: the chat's Settings, quick prompts, attachment removes,
+Attach layer, Attach a file, Expand conversation, command suggestions,
+Expand chat, Add attachment and Send (a submit button that turns into
+Stop reply), and the voice control's Open AI chat, Back to chat, Back to
+voice, its Preview and Settings tabs and the error tray's DISMISS, beside
+the tier button, the mic and the dock and minimize buttons, which already
+were. The tier button and dock are pressed toggles; the mic is one only
+while its owner has a state for it; the tabs keep `role="tab"` and
+`aria-selected`. DISMISS is a text button, not a cross, so it is not a
+`UiCloseButton`. The Settings and tab glyphs are `UiIcon`s with
+`:size="null"`, so voice-cost.css and voice-card.css still size them
+(`src/ui/kit/chatVoiceControls.test.mjs` pins it). The chat bubble,
+globe, attach, send and stop, expand and Back glyphs stay inline SVG,
+since no Material symbol the page loads draws them the same, and the
+message box, file picker and inactivity minutes stay native fields, which
+the kit has none of. The voice modules build no controls in script.
 The small surfaces' buttons are ghost `UiButton`s: the locale picker's
 button, the phone tab bar's tabs, the globe actions' Clear, Share, Reset
 and north-up compass, the imagery divider's handle, the scene sharing
@@ -191,6 +275,36 @@ targets in its template, as many as `view.subRings` says, rather than
 building them in script; the Omnibar's one other `material-symbols-outlined`
 is a stylesheet selector, and the layer disclosure only names a button in a
 comment (`src/ui/kit/smallSurfacesControls.test.mjs` pins it).
+The Street Level photo viewer of KartaView and Panoramax (the photo, the
+panorama canvas and the ‹ › buttons) is `StreetLevelPhotoViewer`, drawn
+from what the photo viewer presents rather than built in script. Its ‹ and
+› are ghost `UiButton`s, not pressed toggles, whose glyphs are text
+characters; the viewer builds no element, and the street-level layer it
+belongs to needs no Vue (`src/ui/kit/streetLevelPhotoControls.test.mjs`
+pins it). The notice the God's Eye View panel page shows when it loses its
+3D graphics (`#status`, in `src/app/globePanelRuntime.js`) stays built in
+script: that script is sent to the host as source text and runs in the
+host's panel page before the app loads, so it can import nothing.
+The Bhote Koshi reconstruction panel's buttons (previous and next beat,
+Play, Play scene, Cinematic, Full story, Open original, Lower gorge, the
+field reports and Open public map) are ghost `UiButton`s that keep their
+`data-action` hooks. Cinematic is a pressed toggle with no pressed class,
+since bhote-koshi.css reads its `aria-pressed`: the event layer presents
+its state as the record's `pressed`, which the panel passes to the
+button, instead of writing an `aria-pressed` attribute. The ‹ and ›
+arrows are text characters. The event's embedded media cards (each
+anchored witness clip's frame, leader line, title, status and original
+link, and the hidden YouTube preload) are drawn by
+`BhoteKoshiMediaCards`, which `src/data/bhoteKoshiEmbeddedMedia.js`
+renders into its overlay root with `h()` and `render()` on every change,
+words again on a locale change, and places after each frame; they hold
+no control, and the original link stays a link. The script still builds
+the provider SDKs' script and preconnect tags, the overlay root, and the
+Facebook player node: that node is warmed hidden before its card exists
+and carried, loaded, into the card's player, where the SDK replaces its
+contents, so a template could only rebuild it and reload the player; the
+X post is likewise built by its SDK inside the player
+(`src/ui/kit/bhoteKoshiControls.test.mjs` pins it).
 `UiSelect` renders the bare native select (Core's labels sit outside it or
 come as an `aria-label`) with `v-model`, `options` and `disabled`;
 options that carry their own attributes come through the slot, a caller's
@@ -371,7 +485,20 @@ slot whenever its view is drawn.
    (done: `RecentImageryReadout` and its day cards, the same way),
    Street level (done: `StreetLevelPanel` renders the `gev-street-level`
    store that `StreetLevelControls` publishes to; the controls keep their
-   listeners, EXPAND, focus and resizing), CCTV (done: `CctvPanel` renders
+   listeners, EXPAND, focus and resizing; `StreetLevelPhotoViewer`, beside
+   it in the layer panels, teleports into the viewer host the photo viewer
+   KartaView and Panoramax mount there, which `createPhotoViewer()`
+   presents through the layer's `subscribePhotoViewer()` and the
+   application shell publishes to the `gev-street-level-photo` store, so
+   the portable `./layers/street-level` entries need no Vue; the viewer
+   keeps every decision, the photo loading, keys, drag and zoom, and draws
+   its panorama on the canvas the view hands back, a fresh one after a lost
+   WebGL context; each mount and canvas is keyed, so no viewer reuses
+   another's elements, and of two viewers mounting at once only the later
+   is drawn while the earlier one's mount closes; with no view
+   subscribed, as when the layer runs without the application shell, a
+   KartaView or Panoramax photo cannot mount),
+   CCTV (done: `CctvPanel` renders
    the whole panel from the `gev-cctv` store, including the camera picker,
    the inline pose editor, the frame preview, source badge and typed
    summary; `CctvControls` keeps its listeners, the frame requests and the
@@ -473,7 +600,8 @@ slot whenever its view is drawn.
    reconstruction panel (`BhoteKoshiPanel`, last in the context rail,
    renders what the event layer publishes to the `gev-bhote-koshi-panel`
    store: each control's text, hidden, disabled, value and attributes as
-   the layer writes them, unchanged frames sending nothing; the rail takes
+   the layer writes them, and the cinematic button's pressed state,
+   unchanged frames sending nothing; the rail takes
    `bhote-event-active` while it shows), the full-globe celestial ring
    (`CelestialRing` teleports into the globe container what `CelestialRing`
    in `src/celestialRing.js` publishes to the `gev-celestial-ring` store and
