@@ -1891,35 +1891,45 @@ test('a shown HLS day on a plain box stays draped after a probe without Data-Pre
   layer.destroy();
 });
 
-test('an HLS dateline day leaves out a half confirmed empty when the other half fails', async () => {
-  const day = candidate('S30', '2026-11-10');
-  const { layer, loader, globe } = realLayer({
-    candidates: [day],
-    halfDeadlineMs: 5000,
-    fetchImpl: async (url) =>
-      sideOf(url) === 'west'
-        ? snapshotAnswer(false)
-        : snapshotAnswer(null, 503),
-  });
-  layer.enable();
-  layer.setBox(FIJI_BOX);
-  assert.equal(
-    await until(() => loader.get(day.key)?.status === 'error', { ticks: 2000 }),
-    true,
-  );
-  layer.setAssignment('a', day.key);
-  await until(() => false, { ticks: 50 });
-  const entry = loader.get(day.key);
-  const [west] = nonCrossingBoxes(FIJI_BOX);
-  assert.deepEqual(
-    {
-      empty: (entry.emptyBoxes ?? []).map(boxKey),
-      layers: globe.layers.length,
+for (const [label, failEast] of [
+  ['answers 503', async () => snapshotAnswer(null, 503)],
+  [
+    'rejects',
+    async () => {
+      throw new TypeError('Failed to fetch');
     },
-    { empty: [boxKey(west)], layers: 1 },
-  );
-  layer.destroy();
-});
+  ],
+  ['never answers', () => new Promise(() => {})],
+]) {
+  test(`an HLS dateline day leaves out a half confirmed empty when the other half ${label}`, async () => {
+    const day = candidate('S30', '2026-11-10');
+    const { layer, loader, globe } = realLayer({
+      candidates: [day],
+      fetchImpl: async (url) =>
+        sideOf(url) === 'west' ? snapshotAnswer(false) : failEast(),
+    });
+    layer.enable();
+    layer.setBox(FIJI_BOX);
+    assert.equal(
+      await until(() => loader.get(day.key)?.status === 'error', {
+        ticks: 2000,
+      }),
+      true,
+    );
+    layer.setAssignment('a', day.key);
+    await until(() => false, { ticks: 50 });
+    const entry = loader.get(day.key);
+    const [west] = nonCrossingBoxes(FIJI_BOX);
+    assert.deepEqual(
+      {
+        empty: (entry.emptyBoxes ?? []).map(boxKey),
+        layers: globe.layers.length,
+      },
+      { empty: [boxKey(west)], layers: 1 },
+    );
+    layer.destroy();
+  });
+}
 
 test('a re-probe of a present HLS dateline day takes a fresh empty half when the shown half has no Data-Present', async () => {
   const day1 = candidate('S30', '2026-11-10');

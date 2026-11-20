@@ -98,7 +98,8 @@ function withHalves(response, { presentBoxes, emptyBoxes }) {
  * NASA-compatible imagery acquisition; transport and URL builders are replaceable.
  * Thumbnail responses must expose Data-Present: true for image admission, or
  * false for confirmed empty coverage, including injected getThumbnail sources.
- * getThumbnail also sets presentBoxes and emptyBoxes (see withHalves).
+ * getThumbnail also sets presentBoxes and emptyBoxes (see withHalves),
+ * also on the error it throws when another half was confirmed empty.
  * Without per-half evidence the renderer drapes every side of an HLS
  * dateline box and no side of a VIIRS one.
  */
@@ -144,17 +145,28 @@ export function createRecentImagerySource({
       const answers = results.map((result) =>
         result.status === 'fulfilled' ? dataPresent(result.value) : null,
       );
-      // A missing answer is an error unless another half proved data.
+      const halvesWhere = (value) =>
+        halves.filter((_, i) => answers[i] === value);
+      // A missing answer is an error unless another half proved data. The
+      // error keeps a half confirmed empty (see withHalves).
       const failure = results.find((result) => result.status === 'rejected');
-      if (failure && !answers.includes('true')) throw failure.reason;
+      if (failure && !answers.includes('true')) {
+        const emptyBoxes = halvesWhere('false');
+        if (Object.isExtensible(failure.reason))
+          withHalves(
+            failure.reason,
+            emptyBoxes.length
+              ? { presentBoxes: [], emptyBoxes }
+              : { presentBoxes: null, emptyBoxes: null },
+          );
+        throw failure.reason;
+      }
       // Show the first half with data (the wider wins a tie), else the first
       // not confirmed empty, so an unreadable answer is never called empty.
       // Every half answered here unless one proved data.
       let shown = answers.indexOf('true');
       if (shown < 0) shown = answers.findIndex((answer) => answer !== 'false');
       if (shown < 0) shown = 0;
-      const halvesWhere = (value) =>
-        halves.filter((_, i) => answers[i] === value);
       return withHalves(results[shown].value, {
         presentBoxes: halvesWhere('true'),
         emptyBoxes: halvesWhere('false'),

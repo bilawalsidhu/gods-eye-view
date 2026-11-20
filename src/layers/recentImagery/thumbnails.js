@@ -133,7 +133,11 @@ export function createThumbnailLoader({
     } catch (error) {
       if (controller.signal.aborted || error?.name === 'AbortError')
         cancelled = true;
-      else status = 'error';
+      else {
+        status = 'error';
+        availableBoxes = error?.presentBoxes ?? availableBoxes;
+        emptyBoxes = error?.emptyBoxes ?? emptyBoxes;
+      }
     } finally {
       inFlight -= 1;
       entry.loading = false;
