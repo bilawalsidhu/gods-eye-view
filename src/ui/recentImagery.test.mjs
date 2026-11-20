@@ -992,11 +992,10 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
   const crossingExport = f.byAction('export-a');
   assert.equal(crossingExport.disabled, true, 'EXPORT is off up front');
   assert.equal(crossingExport.title, 'Select one side of the dateline');
-  // The exportImage guard stays as a backstop.
   assert.equal(await f.readout.exportImage('a'), false);
   assert.equal(
     f.byId('ri-notice-text').textContent,
-    'Select one side of the dateline',
+    'Export failed · A snapshot cannot cross the dateline',
   );
   assert.equal(
     f.fetches.length,

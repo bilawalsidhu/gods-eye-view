@@ -581,6 +581,8 @@ export function createRecentImageryLayer({
     for (const slotId of SLOT_IDS) {
       const candidate = candidateFor(shown[slotId]);
       if (candidate && _hostInfo.collection) {
+        const { availableBoxes, emptyBoxes } =
+          thumbnails.get(candidate.key) ?? {};
         renderer.showSlot(slotId, candidate, _box, {
           alpha: _alpha,
           splitDirection: !live
@@ -588,8 +590,8 @@ export function createRecentImageryLayer({
             : (slotId === 'a') !== _swapped
               ? 'left'
               : 'right',
-          // The halves the probe lets this product drape, unknown before it answers.
-          availableBoxes: thumbnails.get(candidate.key)?.availableBoxes,
+          availableBoxes,
+          emptyBoxes,
         });
       } else {
         renderer.hideSlot(slotId);
@@ -904,16 +906,17 @@ export function createRecentImageryLayer({
           _followKey === _focusKey &&
           drapable(candidateFor(_followKey)) &&
           applyPreview(_followKey);
-        // A pinned or previewed day that was still being probed drapes now.
         const shown = plan();
         const owned = renderer.getOwned?.() || {};
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
         // One render per probe: the key can stay the same while its halves change.
+        // A host found moved changes the divider, so the panel renders in full.
+        const moved = !followed && syncHost();
         if (!followed) syncRender();
         notify('thumbnail');
-        if (pruned || followed || drapesChanged) notify();
+        if (pruned || followed || drapesChanged || moved) notify();
       });
       syncHost();
       if (_box && !_candidates.length) void runSearch();

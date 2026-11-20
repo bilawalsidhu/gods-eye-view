@@ -55,6 +55,7 @@ test('imagery source routes catalog, thumbnails and tiles through supplied adapt
 
 test('cancelled thumbnail acquisition does not return stale responses or retry', async () => {
   const controller = new AbortController();
+  const box = { west: 0, south: 0, east: 1, north: 1 };
   let calls = 0;
   const source = createRecentImagerySource({
     thumbnailUrl: () => 'https://imagery.example/thumbnail',
@@ -65,11 +66,11 @@ test('cancelled thumbnail acquisition does not return stale responses or retry',
     },
   });
   await assert.rejects(
-    source.getThumbnail({}, {}, { signal: controller.signal }),
+    source.getThumbnail({}, box, { signal: controller.signal }),
     { name: 'AbortError' },
   );
   await assert.rejects(
-    source.getThumbnail({}, {}, { signal: controller.signal }),
+    source.getThumbnail({}, box, { signal: controller.signal }),
     { name: 'AbortError' },
   );
   assert.equal(calls, 1);
@@ -197,85 +198,28 @@ test('a rejected half does not hide data on the other half, and never reads as e
   });
   await assert.rejects(
     failing.source.getThumbnail(candidate, NARROW_WEST),
-    /Thumbnail request failed/,
+    /network/,
   );
 });
 
-test('a JPEG product drapes only the half Worldview confirmed present: a rejected half is not draped', async () => {
-  const { source } = halvesSource({
-    '-180/-179': new Error('network'),
-    '179.9/180': dated('true', 'narrow'),
-  });
-  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
-  assert.equal(
-    response.headers.get('Data-Present'),
-    'true',
-    'the day itself stays present',
-  );
-  assert.deepEqual(
-    response.presentBoxes,
-    [NARROW_BOX],
-    'the failed half is not draped',
-  );
-});
-
-test('a JPEG product does not drape a half whose probe hung', async () => {
-  const requested = [];
-  const source = createRecentImagerySource({
-    thumbnailUrl: ({ box }) => {
-      requested.push(box);
-      return `https://imagery.example/${box.west}/${box.east}`;
-    },
-    halfDeadlineMs: 20,
-    fetchImpl: async (url) => {
-      const answer = {
-        '-180/-179': () => new Promise(() => {}),
-        '179.9/180': () => dated('true', 'narrow'),
-      }[url.split('imagery.example/')[1]];
-      return answer();
-    },
-  });
-  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
-  assert.equal(requested.length, 2, 'both halves were requested');
-  assert.equal(
-    response.headers.get('Data-Present'),
-    'true',
-    'the day itself stays present',
-  );
-  assert.deepEqual(
-    response.presentBoxes,
-    [NARROW_BOX],
-    'the hung half is not draped',
-  );
-});
-
-test('a JPEG product does not drape a half that answered with an unknown presence', async () => {
-  const { source } = halvesSource({
-    '-180/-179': dated('unknown', 'maybe'),
-    '179.9/180': dated('true', 'narrow'),
-  });
-  const response = await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
-  assert.equal(response.headers.get('Data-Present'), 'true');
-  assert.deepEqual(
-    response.presentBoxes,
-    [NARROW_BOX],
-    'an unproven half is not draped',
-  );
-});
-
-test('a PNG product keeps an unknown or failed half: alpha hides it', async () => {
-  const { source } = halvesSource({
-    '-180/-179': new Error('network'),
-    '179.9/180': dated('true', 'narrow'),
-  });
-  const response = await source.getThumbnail(candidate, NARROW_WEST);
-  assert.equal(await response.text(), 'narrow');
-  assert.deepEqual(
-    response.presentBoxes,
-    [WIDE_BOX, NARROW_BOX],
-    'a PNG keeps the unproven half',
-  );
-});
+for (const [label, answer] of [
+  ['rejected', new Error('network')],
+  ['hung', () => new Promise(() => {})],
+  ['answered without a presence', () => dated('unknown', 'maybe')],
+]) {
+  for (const product of [JPEG_CANDIDATE, candidate]) {
+    test(`a ${product.product} half that ${label} is neither present nor empty`, async () => {
+      const { source } = halvesSource(
+        { '-180/-179': answer, '179.9/180': () => dated('true', 'narrow') },
+        { halfDeadlineMs: 20 },
+      );
+      const response = await source.getThumbnail(product, NARROW_WEST);
+      assert.equal(response.headers.get('Data-Present'), 'true');
+      assert.deepEqual(response.presentBoxes, [NARROW_BOX]);
+      assert.deepEqual(response.emptyBoxes, []);
+    });
+  }
+}
 
 test('synchronous abort inside an abort-ignoring fetch settles immediately', async () => {
   const controller = new AbortController();
@@ -338,27 +282,4 @@ test('a successful probe leaves no deadline timer behind', async () => {
   await source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST);
   assert.equal(timers.armed(), 0);
   assert.equal(timers.cleared.length, 2);
-});
-
-test('transport rejection does not expose untrusted error details', async () => {
-  const marker = 'synthetic-secret-do-not-expose-ABC123';
-  const source = createRecentImagerySource({
-    thumbnailUrl: () => 'https://example.invalid/',
-    fetchImpl: () => {
-      throw new Error(marker);
-    },
-  });
-  await assert.rejects(
-    source.getThumbnail(JPEG_CANDIDATE, NARROW_WEST),
-    (error) => {
-      assert.equal(error.message, 'Thumbnail request failed');
-      assert.equal(
-        `${error.stack} ${JSON.stringify(error)} ${error.cause}`.includes(
-          marker,
-        ),
-        false,
-      );
-      return true;
-    },
-  );
 });

@@ -529,7 +529,6 @@ export function createRecentImageryPanel({
 
   function exportsView() {
     const ab = snapshot.mode === 'ab';
-    // Worldview Snapshots rejects a crossing BBOX: say so up front.
     const crossing = Boolean(
       snapshot.box && snapshot.box.west > snapshot.box.east,
     );
@@ -781,12 +780,6 @@ export function createRecentImageryPanel({
     const candidate = exportTarget(slotId);
     if (destroyed || !candidate || !snapshot.box || exporting.has(slotId))
       return false;
-    // Worldview Snapshots rejects a west > east BBOX: say so, request nothing.
-    if (snapshot.box.west > snapshot.box.east) {
-      exportError = t('Select one side of the dateline');
-      preserveScroll(paint);
-      return false;
-    }
     exporting.add(slotId);
     exportError = null;
     preserveScroll(paint);

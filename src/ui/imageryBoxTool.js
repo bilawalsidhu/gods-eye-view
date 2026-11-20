@@ -53,7 +53,7 @@ export function initImageryBoxTool({
     const lo = Math.min(anchor.lon, corner.lon);
     const hi = Math.max(anchor.lon, corner.lon);
     // Corners more than half the globe apart are the short way round, over
-    // the dateline: west is the eastern corner and east the western one.
+    // the dateline: west gets the larger longitude, east the smaller.
     const crosses = hi - lo > 180;
     return {
       west: crosses ? hi : lo,

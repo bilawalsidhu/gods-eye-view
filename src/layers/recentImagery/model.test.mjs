@@ -528,7 +528,11 @@ test('boxFromPin returns the short-arc box for a pin near the dateline', () => {
         (lon > 0 || lon === -180 ? Math.abs(lon) : 360 + lon) - half,
       ),
     );
-    assert.equal(nonCrossingBoxes(box).length, 2, 'splits for tiling and CMR');
+    assert.equal(
+      nonCrossingBoxes(box).length,
+      2,
+      'splits for tiling and Worldview',
+    );
     assert.ok(
       Math.abs(
         Math.abs(boxCentre(box).lon) - Math.abs(lon === -180 ? 180 : lon),

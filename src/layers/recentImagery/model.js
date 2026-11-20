@@ -120,10 +120,15 @@ export function lonSpanDeg(west, east) {
   return east >= west ? east - west : east + 360 - west;
 }
 
+/** A comparable key for a degrees box. */
+export const boxKey = (box) =>
+  [box.west, box.south, box.east, box.north].map(Number).join(',');
+
 /**
  * One or two boxes with west <= east that cover the same area. A dateline
  * box is split at ±180 so each side is a plain rectangle for a draped layer
  * or a Worldview request. A box with a missing or nonfinite edge is [].
+ * So is a dateline box of zero width (west 180, east -180).
  * @param {object} box Degrees box.
  * @returns {Array<object>}
  */

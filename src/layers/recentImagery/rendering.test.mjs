@@ -6,7 +6,7 @@ import {
   createRecentImageryRenderer,
 } from './rendering.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { nonCrossingBoxes } from './model.js';
+import { boxKey, nonCrossingBoxes } from './model.js';
 import { BOX, FIJI_BOX } from './testDoubles.mjs';
 import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
@@ -363,11 +363,33 @@ test('evidence going from none to empty removes the drape', () => {
   renderer.showSlot('a', S30, FIJI_BOX);
   assert.equal(globe.layers.length, 2);
   assert.equal(
-    renderer.showSlot('a', S30, FIJI_BOX, { availableBoxes: [] }),
+    renderer.showSlot('a', S30, FIJI_BOX, {
+      availableBoxes: [],
+      emptyBoxes: nonCrossingBoxes(FIJI_BOX),
+    }),
     false,
   );
   assert.equal(globe.layers.length, 0);
   renderer.destroy();
+});
+
+test('an HLS dateline day drapes every half not confirmed empty, a VIIRS one only the confirmed halves', () => {
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  for (const [product, expected] of [
+    [S30, [west, east]],
+    [VIIRS, [east]],
+  ]) {
+    const { renderer, globe } = fixture();
+    renderer.showSlot('a', product, FIJI_BOX, {
+      availableBoxes: [east],
+      emptyBoxes: [],
+    });
+    assert.deepEqual(
+      globe.layers.map((layer) => layer.spec.rectangle),
+      expected,
+    );
+    renderer.destroy();
+  }
 });
 
 test('a probe that narrows or widens a dateline drape keeps the layer of the unchanged half', () => {
@@ -390,6 +412,7 @@ test('a probe that narrows or widens a dateline drape keeps the layer of the unc
     alpha: 0.4,
     splitDirection: 'left',
     availableBoxes: [west],
+    emptyBoxes: [east],
   });
   assert.equal(kept.removed, false, 'the west layer survives the narrowing');
   assert.equal(globe.added.length, added, 'narrowing adds no layer');
@@ -400,11 +423,30 @@ test('a probe that narrows or widens a dateline drape keeps the layer of the unc
     alpha: 0.4,
     splitDirection: 'left',
     availableBoxes: [west, east],
+    emptyBoxes: [],
   });
   assert.equal(kept.removed, false, 'the west layer survives the widening');
   assert.equal(globe.added.length, added + 1);
   assert.equal(kept.alpha, 0.4);
   assert.equal(kept.split, 'left');
+  renderer.destroy();
+});
+
+test('widening slot a over the dateline keeps it below slot b on both sides', () => {
+  const { renderer, globe } = fixture();
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  const topOn = (box) =>
+    globe.layers
+      .filter((layer) => boxKey(layer.spec.rectangle) === boxKey(box))
+      .at(-1)
+      .spec.url.includes('S30')
+      ? 'A'
+      : 'B';
+  renderer.showSlot('a', S30, FIJI_BOX, { emptyBoxes: [east] });
+  renderer.showSlot('b', L30, FIJI_BOX, { emptyBoxes: [] });
+  assert.deepEqual([topOn(west), topOn(east)], ['B', 'B']);
+  renderer.showSlot('a', S30, FIJI_BOX, { emptyBoxes: [] });
+  assert.deepEqual([topOn(west), topOn(east)], ['B', 'B']);
   renderer.destroy();
 });
 

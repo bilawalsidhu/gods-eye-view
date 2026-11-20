@@ -10,6 +10,7 @@ import {
   IMAGERY_BOX_POINTER_OWNER,
   initImageryBoxTool,
 } from './imageryBoxTool.js';
+import { lonSpanDeg, validateBox } from '../layers/recentImagery/model.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
 import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
@@ -230,11 +231,19 @@ test('a drag whose short arc is still over the size limit is refused as too larg
     lon: nx < 0.5 ? 100 : -100,
     lat: ny,
   });
-  const f = fixture({ pickWorld });
+  const refused = [];
+  const f = fixture({
+    pickWorld,
+    onCancel: (reason, message, box) => refused.push({ reason, message, box }),
+  });
   f.tool.start();
   f.fire('LEFT_DOWN', { position: { x: 100, y: 200 } });
   f.fire('LEFT_UP', { position: { x: 800, y: 250 } });
   assert.equal(f.boxes.length, 0);
-  assert.equal(f.cancels.at(-1)[0], 'too-large');
+  const { reason, message, box } = refused.at(-1);
+  assert.equal(reason, 'too-large');
+  assert.deepEqual([box.west, box.east], [100, -100], 'the short arc');
+  assert.equal(lonSpanDeg(box.west, box.east), 160);
+  assert.equal(message, validateBox(box).message);
   await f.tool.destroy();
 });

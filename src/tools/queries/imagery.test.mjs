@@ -102,7 +102,7 @@ test('overview fallback, empty results and invalid areas are reported', async ()
     wrapped.call('get_recent_imagery', {
       area: { bbox: [179, 0, -179, 1] },
     }),
-    /must not cross the dateline/,
+    /must not cross the antimeridian/,
   );
   assert.equal(crossing.snapshots.length, 0);
   assert.equal(crossing.boxes.length, 0);

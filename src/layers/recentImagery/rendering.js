@@ -17,6 +17,7 @@ import { markBaseTileset } from '../../render/baseTilesets.js';
 import { drawOf } from '../../render/rendererOf.js';
 import {
   PRODUCTS,
+  boxKey,
   gibsTemplate,
   lonSpanDeg,
   nonCrossingBoxes,
@@ -34,25 +35,26 @@ function clampAlpha(value) {
   return Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
 }
 
-const boxKey = (box) =>
-  [box.west, box.south, box.east, box.north].map(Number).join(',');
-
 /** One comparable key for a slot's draped parts. */
 const partsKey = (parts) => parts.map(boxKey).sort().join(';');
 
 /**
- * Without per-half evidence a dateline JPEG waits for the probe because
- * an empty side would draw black. Other boxes drape all their parts.
- * With evidence, only the listed parts of this box drape.
+ * The parts of a box a slot drapes. The VIIRS JPEG has no alpha and would
+ * draw an empty side black, so it drapes only parts Worldview confirmed
+ * present, and no part of a dateline box before the probe answers. A PNG
+ * drapes every part not confirmed empty.
  */
-function drapedParts(candidate, box, availableBoxes) {
+function drapedParts(candidate, box, { availableBoxes, emptyBoxes }) {
   const parts = nonCrossingBoxes(box);
-  if (!Array.isArray(availableBoxes))
-    return parts.length > 1 && PRODUCTS[candidate.product]?.format === 'jpg'
-      ? []
-      : parts;
-  const listed = new Set(availableBoxes.filter(Boolean).map(boxKey));
-  return parts.filter((part) => listed.has(boxKey(part)));
+  const keys = (list) => new Set(list.map(boxKey));
+  if (PRODUCTS[candidate.product]?.format !== 'jpg') {
+    if (!Array.isArray(emptyBoxes)) return parts;
+    const empty = keys(emptyBoxes);
+    return parts.filter((part) => !empty.has(boxKey(part)));
+  }
+  if (!Array.isArray(availableBoxes)) return parts.length > 1 ? [] : parts;
+  const proven = keys(availableBoxes);
+  return parts.filter((part) => proven.has(boxKey(part)));
 }
 
 /**
@@ -157,20 +159,24 @@ export function createRecentImageryRenderer({
 
   return {
     /**
-     * Drape the available parts of a candidate into a slot. On the same day
-     * and port, keep each surviving layer, add a new part right above it and
-     * remove dropped parts.
+     * Drape the parts of a candidate's box that the evidence allows (see drapedParts).
+     * The same candidate on the same port keeps the layer of each unchanged part.
      * @param {'a'|'b'} slotId
      * @param {object} candidate
      * @param {object} box Degrees box.
-     * @param {{ alpha?: number, splitDirection?: 'left'|'right'|'none', availableBoxes?: object[] | null }} [look]
+     * @param {{ alpha?: number, splitDirection?: 'left'|'right'|'none', availableBoxes?: object[] | null, emptyBoxes?: object[] | null }} [look]
      * @returns {boolean} Whether a layer is now draped for the slot.
      */
     showSlot(
       slotId,
       candidate,
       box,
-      { alpha = 1, splitDirection = 'none', availableBoxes = null } = {},
+      {
+        alpha = 1,
+        splitDirection = 'none',
+        availableBoxes = null,
+        emptyBoxes = null,
+      } = {},
     ) {
       if (destroyed || !candidate?.key || !box) return false;
       if (!host.globe) {
@@ -179,7 +185,7 @@ export function createRecentImageryRenderer({
       }
       const current = owned[slotId];
       const look = { alpha: clampAlpha(alpha), split: splitDirection };
-      const parts = drapedParts(candidate, box, availableBoxes);
+      const parts = drapedParts(candidate, box, { availableBoxes, emptyBoxes });
       if (
         current &&
         current.globe === host.globe &&

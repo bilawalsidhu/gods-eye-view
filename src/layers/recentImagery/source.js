@@ -1,10 +1,5 @@
 import { searchHls } from './catalog.js';
-import {
-  PRODUCTS,
-  gibsTemplate,
-  nonCrossingBoxes,
-  wvsSnapshotUrl,
-} from './model.js';
+import { gibsTemplate, nonCrossingBoxes, wvsSnapshotUrl } from './model.js';
 
 /**
  * Deadline for one half's response headers, so a day whose other half
@@ -15,41 +10,19 @@ const DEFAULT_HALF_DEADLINE_MS = 15_000;
 /**
  * Worldview Snapshots rejects a BBOX with west > east, so a dateline box is
  * probed as its two non-crossing halves, wider first. A plain box is its
- * one normalized half. Granules do not cross ±180, so a day has data when
- * either half does.
+ * one normalized half. A day has data when either half does.
  */
 function requestBoxes(box) {
-  const halves = nonCrossingBoxes(box);
-  if (!halves.length) return [box];
-  return halves.sort((a, b) => b.east - b.west - (a.east - a.west));
+  return nonCrossingBoxes(box).sort(
+    (a, b) => b.east - b.west - (a.east - a.west),
+  );
 }
 
-const isPresent = (response) => dataPresent(response) === 'true';
-
-/**
- * Which halves a product may drape. The VIIRS JPEG has no alpha and would
- * drape an empty side as a black rectangle, so it drapes only a half
- * Worldview confirmed present. An HLS PNG drapes every half not confirmed empty.
- */
-const drapesOnlyProven = (candidate) =>
-  PRODUCTS[candidate?.product]?.format === 'jpg';
-
-const dataPresent = (response) =>
+/** A response's Data-Present answer in lower case, or '' when it failed or has none. */
+export const dataPresent = (response) =>
   response?.ok
     ? String(response.headers?.get?.('Data-Present') ?? '').toLowerCase()
     : '';
-
-/**
- * Of the halves that answered, prefer the first with data (wider wins a
- * tie), then the first not confirmed empty so an unreadable answer is
- * never called empty, then the first response.
- */
-function combineHalves(responses) {
-  const present = responses.find(isPresent);
-  if (present) return present;
-  const unproven = responses.find((r) => dataPresent(r) !== 'false');
-  return unproven ?? responses[0];
-}
 
 /**
  * One half's snapshot fetch, raced against its own deadline so a half that
@@ -109,12 +82,11 @@ function probeHalf(
 }
 
 /**
- * Non-enumerable evidence for the box's non-crossing halves. presentBoxes
- * lists the halves this product may drape (see drapesOnlyProven).
- * emptyBoxes lists the halves Worldview confirmed empty.
+ * Non-enumerable per-half evidence for the box's non-crossing halves:
+ * presentBoxes lists the halves Worldview confirmed present, emptyBoxes
+ * the halves it confirmed empty. What drapes is decided by drapedParts in rendering.js.
  */
 function withHalves(response, { presentBoxes, emptyBoxes }) {
-  if (!response) return response;
   Object.defineProperties(response, {
     presentBoxes: { value: presentBoxes, configurable: true },
     emptyBoxes: { value: emptyBoxes, configurable: true },
@@ -172,30 +144,20 @@ export function createRecentImagerySource({
       const answers = results.map((result) =>
         result.status === 'fulfilled' ? dataPresent(result.value) : null,
       );
-      const responses = results
-        .filter((result) => result.status === 'fulfilled')
-        .map((result) => result.value);
-      const halvesWhere = (keep) => halves.filter((_, i) => keep(answers[i]));
-      const emptyBoxes = halvesWhere((answer) => answer === 'false');
-      if (answers.includes('true'))
-        return withHalves(combineHalves(responses), {
-          presentBoxes: halvesWhere(
-            drapesOnlyProven(candidate)
-              ? (answer) => answer === 'true'
-              : (answer) => answer !== 'false',
-          ),
-          emptyBoxes,
-        });
       // A missing answer is an error unless another half proved data.
       const failure = results.find((result) => result.status === 'rejected');
-      if (failure) {
-        if (failure.reason?.name === 'TimeoutError')
-          throw new DOMException('Thumbnail request timed out', 'TimeoutError');
-        throw new Error('Thumbnail request failed');
-      }
-      return withHalves(combineHalves(responses), {
-        presentBoxes: [],
-        emptyBoxes,
+      if (failure && !answers.includes('true')) throw failure.reason;
+      // Show the first half with data (the wider wins a tie), else the first
+      // not confirmed empty, so an unreadable answer is never called empty.
+      // Every half answered here unless one proved data.
+      let shown = answers.indexOf('true');
+      if (shown < 0) shown = answers.findIndex((answer) => answer !== 'false');
+      if (shown < 0) shown = 0;
+      const halvesWhere = (value) =>
+        halves.filter((_, i) => answers[i] === value);
+      return withHalves(results[shown].value, {
+        presentBoxes: halvesWhere('true'),
+        emptyBoxes: halvesWhere('false'),
       });
     },
     getTileTemplate: (product, day) => tileTemplate(product, day),

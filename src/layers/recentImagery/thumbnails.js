@@ -1,6 +1,6 @@
 /**
  * Thumbnail loader for the Recent Imagery strip: one Worldview snapshot per
- * candidate day. The response's `Data-Present` header is the only proof that
+ * candidate day (one per side of a dateline box). The response's `Data-Present` header is the only proof that
  * a day has pixels in the box (GIBS answers an empty tile with HTTP 200), and
  * `Acquisition-Time` carries the sensing time. Fetches are bounded, and so
  * are decoded images: residency is least-recently-USED, where a request or a
@@ -8,8 +8,8 @@
  * card on every render, so a read that counted would evict the visible cards
  * first). Eviction revokes the image only; what the probe proved is kept.
  */
-import { thumbnailOrder } from './model.js';
-import { createRecentImagerySource } from './source.js';
+import { boxKey, thumbnailOrder } from './model.js';
+import { createRecentImagerySource, dataPresent } from './source.js';
 
 const EMPTY = Object.freeze({
   status: 'unknown',
@@ -20,14 +20,16 @@ const EMPTY = Object.freeze({
   loading: false,
 });
 
-const halfKey = (box) => [box.west, box.south, box.east, box.north].join(',');
-
-/** Keep earlier proof on a re-probe unless the new answer confirms that half empty. */
-function keepProvenHalves(previous, next, empty) {
-  if (!Array.isArray(previous) || !Array.isArray(next) || !Array.isArray(empty))
+/** On a re-probe, keep earlier halves of one answer (present or empty) unless the new probe answered them the other way. */
+function keepProvenHalves(previous, next, opposite) {
+  if (
+    !Array.isArray(previous) ||
+    !Array.isArray(next) ||
+    !Array.isArray(opposite)
+  )
     return next;
-  const drop = new Set([...next, ...empty].map(halfKey));
-  return [...next, ...previous.filter((half) => !drop.has(halfKey(half)))];
+  const drop = new Set([...next, ...opposite].map(boxKey));
+  return [...next, ...previous.filter((half) => !drop.has(boxKey(half)))];
 }
 
 /**
@@ -102,7 +104,7 @@ export function createThumbnailLoader({
     let status = 'error';
     let objectUrl = null;
     let acquisitionTime = null;
-    // The halves the probe lets this product drape, or null without a per-half probe.
+    // Per-half evidence (see withHalves in source.js), or null without it.
     let availableBoxes = null;
     let emptyBoxes = null;
     let cancelled = false;
@@ -114,9 +116,7 @@ export function createThumbnailLoader({
       if (controller.signal.aborted) {
         cancelled = true;
       } else if (response?.ok) {
-        const present = String(
-          response.headers?.get?.('Data-Present') ?? '',
-        ).toLowerCase();
+        const present = dataPresent(response);
         availableBoxes = response.presentBoxes ?? null;
         emptyBoxes = response.emptyBoxes ?? null;
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
@@ -147,14 +147,16 @@ export function createThumbnailLoader({
       return;
     }
     // A failed re-fetch of an evicted image keeps what the day proved.
-    // A re-probe drops a half only on a fresh "empty".
     if (status !== 'error' || entry.status !== 'present') {
-      if (status === 'present' && entry.status === 'present')
+      if (status === 'present' && entry.status === 'present') {
+        const fresh = availableBoxes;
         availableBoxes = keepProvenHalves(
           entry.availableBoxes,
-          availableBoxes,
+          fresh,
           emptyBoxes,
         );
+        emptyBoxes = keepProvenHalves(entry.emptyBoxes, emptyBoxes, fresh);
+      }
       entry.status = status;
       entry.acquisitionTime = acquisitionTime;
       entry.availableBoxes = availableBoxes;

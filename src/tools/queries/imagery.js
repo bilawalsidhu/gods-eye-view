@@ -55,7 +55,7 @@ export const getRecentImagery = defineTool({
     if (box.west > box.east)
       throw new ToolError(
         'invalid_arguments',
-        'The area must not cross the dateline: Worldview snapshots cannot',
+        'The area must not cross the antimeridian',
       );
     let latest;
     try {
