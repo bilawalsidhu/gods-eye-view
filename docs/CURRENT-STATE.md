@@ -2061,6 +2061,19 @@ in view finishes loading. The camera picker lists the active camera first, then
 one camera per visible cell, preferring healthy feeds. It ends with the count of
 catalog cameras missing from the list.
 
+Turning CCTV on opens on the camera nearest the view. Until someone picks a
+camera, each settled move, such as a shared view's flight landing, moves it to
+the camera then nearest the view. Automatic selection ends at the first pick:
+NEAREST, PREV or NEXT, FOCUS, a camera chosen in the picker, a click on a
+camera, a click on empty ground that deselects, an auto-hop step, or a call to
+`selectCamera`, `focusNearest`, `focusNearestToPoint` or
+`setParams({ selectedCameraId })`, which voice and scenes use. Picking the
+camera that is already active counts. The picker shows the automatic camera
+as its own option, and a native list sends no change for the option it
+already shows, so the list cannot pick that camera: FOCUS does, and so does
+NEAREST when that camera is the nearest. Closing the list without a choice
+keeps automatic selection.
+
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
 Traffic and bikeshare expose factories through `./layers/traffic` and
