@@ -311,6 +311,13 @@ export function createRecentImageryLayer({
     return status !== 'empty' && status !== 'error';
   }
 
+  /** A pick dropped for an empty day hands a deferred slot over now. */
+  function resumeHandover() {
+    if (!_handoverDeferred || pickWaiting()) return false;
+    syncRender();
+    return true;
+  }
+
   /**
    * A day whose probe came back empty leaves the map: JPEG products have no
    * alpha and would drape black "no data" tiles. A pinned day is unpinned and
@@ -715,7 +722,7 @@ export function createRecentImageryLayer({
     const key = activeSlotOf(candidate.key) ? null : candidate.key;
     if (key === _previewKey) return;
     if (key && !drapable(candidate)) {
-      _followKey = key;
+      if (availability(candidate) !== 'empty') _followKey = key;
       return;
     }
     _pending = { key };
@@ -1088,6 +1095,7 @@ export function createRecentImageryLayer({
       if (list[next].key === _focusKey) return;
       _focusKey = list[next].key;
       schedulePreviewFromFocus();
+      resumeHandover();
       requestThumbnails();
       notify();
     },
@@ -1126,6 +1134,7 @@ export function createRecentImageryLayer({
       if (!drapable(candidate)) {
         clearPending();
         _followKey = availability(candidate) === 'empty' ? null : candidate.key;
+        if (resumeHandover()) requestThumbnails();
         notify();
         return false;
       }

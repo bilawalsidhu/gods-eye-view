@@ -1641,6 +1641,28 @@ test('a pick whose probe failed does not block the hand-over', async () => {
   assert.equal(f.owned().a?.key, L16);
 });
 
+test('a pick dropped for an empty card lets a deferred hand-over go ahead at once', async () => {
+  const f = fixture();
+  await f.ready();
+  f.layer.setShowUnavailable(true);
+  f.thumbnails.probe(V21, 'empty');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a, null, 'the pick keeps the slot while it is probed');
+  assert.equal(f.layer.preview(V21), false);
+  assert.equal(f.owned().a?.key, L16, 'a click on an empty card');
+  const g = fixture();
+  await g.ready();
+  g.layer.setShowUnavailable(true);
+  g.thumbnails.probe(V21, 'empty');
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  g.layer.focus(0);
+  assert.equal(g.owned().a?.key, L16, 'an arrow key onto an empty card');
+  assert.equal(g.snap().focus.key, V21, 'focus stays where the user put it');
+  assert.equal(g.diag().following, null, 'an empty day is not followed');
+});
+
 test('an arrow-key pick waiting out the debounce keeps Esri through an empty automatic result', async () => {
   const controller = leasingController();
   const f = fixture({ controller });
