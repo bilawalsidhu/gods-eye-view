@@ -680,9 +680,10 @@ export function createStationModel(
           (spec.retryAfterMs ?? STATION_MODEL_RETRY_AFTER_MS)
       )
         _unload(); // asked for again on the next frame in range
-      // A model still loading in range is waited for; one not drawn
-      // otherwise is released after a while.
-      else if (!ready && inRange) undrawnSince = null;
+      // In range, a model still loading, or one with no orbit to draw it on,
+      // is waited for: released, it would be asked for again on the next
+      // frame. One not drawn otherwise is released after a while.
+      else if (inRange) undrawnSince = null;
       else _undrawn();
       return;
     }

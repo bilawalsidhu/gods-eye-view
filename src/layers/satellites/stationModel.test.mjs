@@ -362,9 +362,16 @@ test('while the orbit will not propagate the dots stand at every distance, as fo
   assert.equal(f.modelItem().show, true);
   assert.deepEqual(f.drawn(COMPANION).displayRange, FAR_RANGE);
   assert.equal(f.ring(STATION).show, false);
-  // Undrawn so, the model is released after a while, the camera in range.
+  // Undrawn so with the camera in range, the model is kept: released, it
+  // would be fetched again on the next frame, and again a minute later.
   f.model.spec.unloadAfterMs = 0;
   f.state._catalog.get(STATION).satrec = BROKEN;
+  const kept = f.modelSet();
+  for (let i = 0; i < 5; i++) f.tick();
+  assert.equal(f.modelSet(), kept, 'neither released nor fetched again');
+  // Out of range it is released as any undrawn model is.
+  f.cameraAt(MAX_M * 5);
+  f.tick();
   f.tick();
   assert.equal(f.modelSet(), undefined);
 });
