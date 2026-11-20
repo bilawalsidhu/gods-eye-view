@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { ref, watch, onBeforeUnmount } from 'vue';
 import { t } from '../../i18n/index.js';
+import UiButton from '../kit/UiButton.vue';
 import { useWellRecordsStore } from '../stores/wellRecords.js';
 import WellRecordDialog from './panels/WellRecordDialog.vue';
 
@@ -42,10 +43,10 @@ onBeforeUnmount(() => { if (focused.value) view.value?.focus(focused.value, fals
   <Teleport v-if="view" to="#world-overlay-actions">
     <div class="world-overlay-accessibility" role="group" :aria-label="t('Visible source records')">
       <span id="well-record-navigation-instructions">{{ t('Use Arrow keys to move between source records, Home or End to jump, and Enter to inspect.') }}</span>
-      <button v-for="record in view.records" :key="record.id" :ref="(el) => el ? buttons.set(record.id, el) : buttons.delete(record.id)" type="button"
+      <UiButton v-for="record in view.records" :key="record.id" :ref="(button) => button?.$el ? buttons.set(record.id, button.$el) : buttons.delete(record.id)"
         :data-record-id="record.id" :tabindex="active === record.id ? 0 : -1"
         aria-describedby="well-record-navigation-instructions" @focus="focus(record.id)" @blur="blur(record.id)"
-        @keydown="move($event, record.id)" @click="view.select(record.id)">{{ record.label }}</button>
+        @keydown="move($event, record.id)" @click="view.select(record.id)">{{ record.label }}</UiButton>
     </div>
   </Teleport>
   <Teleport to="body">
