@@ -6,6 +6,33 @@ import { createPinia } from 'pinia';
 import { useStoriesStore } from './stores/stories.js';
 import { storyById } from '../stories/catalog.js';
 import StoryScreen from './views/stories/StoryScreen.vue';
+import StoriesView from './views/StoriesView.vue';
+
+test('the announcement stays unread when a lazy Stories open resolves to false', async (t) => {
+  const host = document.body.appendChild(document.createElement('div'));
+  const pinia = createPinia();
+  const store = useStoriesStore(pinia);
+  let allowed = false;
+  store.connect({ open: async () => allowed });
+  const app = createApp(StoriesView).use(pinia);
+  app.mount(host);
+  t.after(() => {
+    app.unmount();
+    host.remove();
+    localStorage.removeItem('gevStoriesPopSeen');
+  });
+
+  const entry = host.querySelector('#hStories');
+  entry.click();
+  await nextTick();
+  assert.equal(localStorage.getItem('gevStoriesPopSeen'), null);
+  assert.ok(host.querySelector('#hPop'));
+
+  allowed = true;
+  entry.click();
+  await nextTick();
+  assert.equal(localStorage.getItem('gevStoriesPopSeen'), '1');
+});
 
 test('the story screen previews a drag and seeks once on release', async (t) => {
   const host = document.body.appendChild(document.createElement('div'));

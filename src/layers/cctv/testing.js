@@ -108,6 +108,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
   } = {}) {
     layerState._viewer = viewer;
     layerState._records = Array.isArray(records) ? records : [];
+    layerState._count = layerState._records.length;
     layerState._recordById = new Map(
       layerState._records
         .filter((record) => record?.camera?.id)

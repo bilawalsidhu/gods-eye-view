@@ -7103,6 +7103,63 @@ test('models moved every frame keep their shader and pick ids: only a new look o
   }
 });
 
+test('a model poses its named nodes once ready, writes only what changed, and gives a dropped one its own pose back', async () => {
+  const { loads, restore } = fakeModelLoads();
+  try {
+    const part = createCesiumDraw({
+      scene: fakeScene(),
+      report: (error) => assert.fail(error),
+    });
+    const set = part.port.models({ id: 'station' });
+    const turn = (x) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, 0, 0, 1];
+    const item = (nodes) => ({
+      id: 'iss',
+      pos: { lon: 0, lat: 0, height: 400e3 },
+      url: 'iss.glb',
+      orientation: { heading: 0, pitch: 0, roll: 0 },
+      nodes,
+    });
+    set.upsert([item({ joint: turn(1), other: turn(2), missing: turn(3) })]);
+    loads[0].resolve();
+    await settle();
+    const model = loads[0].model;
+    const writes = [];
+    const nodes = {};
+    for (const name of ['joint', 'other'])
+      nodes[name] = {
+        originalMatrix: Cesium.Matrix4.fromTranslation(
+          new Cesium.Cartesian3(9, 9, 9),
+        ),
+        set matrix(m) {
+          writes.push(name);
+          // As Cesium's runtime node does: a copy, not the matrix handed in.
+          this.current = Cesium.Matrix4.clone(m);
+        },
+      };
+    model.getNode = (name) => {
+      assert.equal(model.ready, true, 'nodes are asked for once ready');
+      return nodes[name];
+    };
+    loads[0].ready();
+    assert.deepEqual(writes.sort(), ['joint', 'other'], 'posed when ready');
+    assert.equal(nodes.joint.current[12], 1);
+    assert.equal(nodes.other.current[12], 2);
+
+    writes.length = 0;
+    set.upsert([item({ joint: turn(1), other: turn(5), missing: turn(3) })]);
+    assert.deepEqual(writes, ['other'], 'only the node that moved');
+    assert.equal(nodes.other.current[12], 5);
+
+    writes.length = 0;
+    set.upsert([item({ other: turn(5) })]);
+    assert.deepEqual(writes, ['joint'], 'the dropped node, back to its pose');
+    assert.equal(nodes.joint.current[12], 9);
+    set.dispose();
+  } finally {
+    restore();
+  }
+});
+
 test('a model set that recedes fades its models toward the limb with their focus; focus alone dims', async () => {
   const { recedeFactors, recedeFrame, recedeParams, recededAlpha } =
     await import('../recession.js');

@@ -81,9 +81,8 @@ export function createNavigation({
       return false;
     const nearest = nearestCameraIdToViewer();
     if (!nearest || nearest === layerState._activeCameraId) return false;
-    parts.selection.setActiveCamera(nearest);
-    // setActiveCamera ends the opening pick; this is still that pick.
-    layerState._openingCameraProvisional = true;
+    // Still the opening pick: later settled moves may replace it.
+    parts.selection.setActiveCamera(nearest, { opening: true });
     return true;
   }
 
