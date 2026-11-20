@@ -122,6 +122,11 @@ export interface ImagerySpec {
   ) => Promise<unknown> | undefined;
   /** Draw order among imagery layers; higher draws on top. */
   zOrder?: number;
+  /**
+   * What the imagery shows, such as `'clouds'` or `'radar'`. Drawing never
+   * depends on it; a renderer may use it to tell such a layer apart.
+   */
+  shows?: string;
 }
 
 export interface TimedUrl {
