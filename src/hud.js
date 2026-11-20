@@ -3,7 +3,7 @@ import { applicationServices } from './services/application.js';
  * @module hud
  * @description Intelligence HUD Overlay — NRO/NGA Satellite Aesthetic.
  *
- * Renders reconnaissance-styled telemetry over the Cesium canvas. The
+ * Renders reconnaissance-styled telemetry over the map canvas. The
  * MGRS/lat-lon coordinates (the point below the camera), altitude and
  * off-nadir angle come from the live camera, and the clocks show the current
  * UTC time. Sun elevation is an approximate estimate from that position and
@@ -14,12 +14,13 @@ import { applicationServices } from './services/application.js';
  * on independent fixed cadences.
  *
  * The HUD auto-activates when a military-style shader (NVG, FLIR, CRT) is
- * selected and supports the layout variants: tactical, minimal, cyber.
+ * selected and supports the layout variants: tactical, minimal.
  *
  * Color theming is driven by the active shader mode via CSS custom properties.
  */
 
-import * as Cesium from 'cesium';
+import { toDegrees, toRadians } from './geo/index.js';
+import { findCamera } from './render/rendererOf.js';
 import { greatCircleKm } from './geoDistance.js';
 import { forward as toMGRS } from 'mgrs';
 import { CITY_POIS } from './cityPois.js';
@@ -49,11 +50,7 @@ import {
   provenanceLine,
   provenanceTag,
 } from './data/layerSnapshot.js';
-import {
-  applyHudUiTheme,
-  DEFAULT_HUD_LAYOUT,
-  normalizeHudLayout,
-} from './hudLayouts.js';
+import { DEFAULT_HUD_LAYOUT, normalizeHudLayout } from './hudLayouts.js';
 import {
   formatNumber,
   getLocale,
@@ -220,7 +217,7 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
 );
 
 /**
- * Full-screen intelligence HUD overlay rendered on top of the Cesium canvas.
+ * Full-screen intelligence HUD overlay rendered on top of the map canvas.
  *
  * Displays MGRS/lat-lon, altitude and off-nadir readouts from the live
  * camera, UTC clocks, an approximate sun elevation, the selected vessel and a
@@ -232,8 +229,10 @@ const NEARBY_POINTS = Object.values(CITY_POIS).flatMap((city) =>
  */
 export class IntelHUD {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium Viewer instance used for
-   *   camera telemetry and coordinate derivation.
+   * @param {object} viewer - The scene the HUD sits over.
+   * @param {object} [options]
+   * @param {import('./render/contract/camera').CameraPort} [options.camera]
+   *   Camera telemetry; default the viewer's renderer's camera.
    */
   constructor(
     viewer,
@@ -243,8 +242,11 @@ export class IntelHUD {
       basemapContext = {},
       summaryService = applicationServices.summary,
       publish = () => {},
+      camera = findCamera(viewer),
     } = {},
   ) {
+    if (!camera) throw new Error('IntelHUD needs a camera port');
+    this._camera = camera;
     this._publish = publish;
     this.summaryService = summaryService;
     this.summaryPolicy = summaryPolicy;
@@ -283,7 +285,7 @@ export class IntelHUD {
     // A) kick a real AI summary once the intro fly-to settles.
     this._firstMetricsShown = false;
     this._firstSummaryKicked = false;
-    // ALT readout datum: the camera height Cesium reports is ELLIPSOIDAL, the
+    // ALT readout datum: the camera height the renderer reports is ELLIPSOIDAL, the
     // number a viewer reads is MSL. N comes from the same lazy ~2.7 MB EGM96
     // chunk the flight layers use — requested on the first telemetry tick of a
     // VISIBLE HUD, never at construction, so a hidden HUD costs nothing — and
@@ -348,8 +350,10 @@ export class IntelHUD {
           : { active: false, text: t('AIS: --') },
       }),
     );
-    this.viewer.camera.moveStart.addEventListener(this._onCameraMoveStart);
-    this.viewer.camera.moveEnd.addEventListener(this._onCameraMoveEnd);
+    this._offCamera = [
+      camera.on('moveStart', this._onCameraMoveStart),
+      camera.on('moveEnd', this._onCameraMoveEnd),
+    ];
     this._offLocale = onLocaleChange(() => this._relocalize());
     this._startTimers();
   }
@@ -438,7 +442,7 @@ export class IntelHUD {
 
     // Camera-derived data — 4 updates/second (250ms). Skipped in a hidden
     // page, except an inline panel, whose host may report it hidden while it
-    // is on screen (see keepPanelRendering in app/embed.js).
+    // is on screen (see keepPanelRendering in app/panelRendering.js).
     this._updateInterval = setInterval(() => {
       if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
       this._updateCameraData();
@@ -500,18 +504,17 @@ export class IntelHUD {
 
   /**
    * Derive all camera-based telemetry and push values to the DOM.
-   * Reads the viewer camera's cartographic position and computes MGRS,
+   * Reads the camera's pose and computes MGRS,
    * lat/lon DMS, GSD, NIIRS, sun elevation, off-nadir angle, and
    * collection timestamp. Stores results in {@link _latestMetrics}.
    */
   _updateCameraData() {
-    const camera = this.viewer.camera;
-    const cartographic = camera.positionCartographic;
-    if (!cartographic) return;
-
-    const lonDeg = Cesium.Math.toDegrees(cartographic.longitude);
-    const latDeg = Cesium.Math.toDegrees(cartographic.latitude);
-    const altM = cartographic.height;
+    const pose = this._camera.pose();
+    // No position yet: the readouts keep their last values.
+    if (![pose.lon, pose.lat, pose.height].every(Number.isFinite)) return;
+    const lonDeg = pose.lon;
+    const latDeg = pose.lat;
+    const altM = pose.height;
     const latDMS = this._toDMS(latDeg, 'lat');
     const lonDMS = this._toDMS(lonDeg, 'lon');
     let mgrsLabel = '---';
@@ -568,7 +571,7 @@ export class IntelHUD {
 
     // Off-nadir angle (ONA): camera pitch of -90 deg is nadir (straight down),
     // so ONA = 90 + pitch gives 0 at nadir and increases toward the horizon.
-    const pitchDeg = Cesium.Math.toDegrees(camera.pitch);
+    const pitchDeg = toDegrees(pose.pitch);
     const ona = Math.max(0, 90 + pitchDeg);
     // i18n-ignore: sensor codes
     readouts.ona = `ONA: ${ona.toFixed(1)}°`;
@@ -675,19 +678,19 @@ export class IntelHUD {
     const declination =
       23.45 *
       Math.sin(
-        Cesium.Math.toRadians(
+        toRadians(
           (360 / 365) * (now.getUTCDate() + 30 * now.getUTCMonth() - 81),
         ),
       );
-    const latRad = Cesium.Math.toRadians(lat);
-    const decRad = Cesium.Math.toRadians(declination);
-    const haRad = Cesium.Math.toRadians(hourAngle);
+    const latRad = toRadians(lat);
+    const decRad = toRadians(declination);
+    const haRad = toRadians(hourAngle);
     // Standard formula: sin(el) = sin(lat)*sin(dec) + cos(lat)*cos(dec)*cos(ha)
     const sinEl =
       Math.sin(latRad) * Math.sin(decRad) +
       Math.cos(latRad) * Math.cos(decRad) * Math.cos(haRad);
     // Clamp to [-1,1] to guard against floating-point drift before asin
-    return Cesium.Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
+    return toDegrees(Math.asin(Math.max(-1, Math.min(1, sinEl))));
   }
 
   /**
@@ -732,22 +735,16 @@ export class IntelHUD {
    *   dimensions, or null if the view rectangle cannot be computed.
    */
   _viewWindowKm(latDeg) {
-    const rect = this.viewer.camera.computeViewRectangle();
+    const rect = this._camera.viewRectangle();
     if (!rect) return null;
-    const north = Cesium.Math.toDegrees(rect.north);
-    const south = Cesium.Math.toDegrees(rect.south);
-    let east = Cesium.Math.toDegrees(rect.east);
-    let west = Cesium.Math.toDegrees(rect.west);
+    const { north, south, east, west } = rect;
     let lonSpan = Math.abs(east - west);
     // Handle antimeridian wrap: if span exceeds 180 deg, take the shorter arc
     if (lonSpan > 180) lonSpan = 360 - lonSpan;
     const latSpan = Math.abs(north - south);
     // 111 km/deg is the approximate surface distance per degree of latitude;
     // longitude distance is scaled by cos(lat) to account for meridian convergence.
-    const widthKm = Math.max(
-      0,
-      lonSpan * 111 * Math.cos(Cesium.Math.toRadians(latDeg)),
-    );
+    const widthKm = Math.max(0, lonSpan * 111 * Math.cos(toRadians(latDeg)));
     const heightKm = Math.max(0, latSpan * 111);
     return { widthKm, heightKm };
   }
@@ -1035,6 +1032,7 @@ export class IntelHUD {
     const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
       ...this.basemapContext,
       previous: this._placeLabels,
+      camera: this._camera,
     });
     // A slower build for a view the camera has left must not replace the
     // newer view's lookup.
@@ -1166,14 +1164,12 @@ export class IntelHUD {
 
   /**
    * Switch the HUD layout variant. Falls back to `'tactical'` if the
-   * name is unrecognized. Cyber also applies a coordinated skin to the full
-   * application shell; leaving Cyber restores the standard shell tokens.
-   * @param {string} variantName - One of `'tactical'`, `'minimal'`, `'cyber'`.
+   * name is unrecognized.
+   * @param {string} variantName - One of `'tactical'`, `'minimal'`.
    */
   setVariant(variantName) {
     this._variant = normalizeHudLayout(variantName);
     this._present({ variant: this._variant });
-    applyHudUiTheme(document.documentElement, this._variant);
   }
 
   /**
@@ -1223,8 +1219,7 @@ export class IntelHUD {
     clearInterval(this._timestampInterval);
     clearInterval(this._summaryInterval);
     clearInterval(this._summaryTypingInterval);
-    this.viewer.camera.moveStart.removeEventListener(this._onCameraMoveStart);
-    this.viewer.camera.moveEnd.removeEventListener(this._onCameraMoveEnd);
+    for (const off of this._offCamera.splice(0)) off();
     this._dataManagerUnsubscribe?.();
     this._vesselUnsubscribe?.();
     this._summaryRequest?.abort();

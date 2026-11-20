@@ -1066,10 +1066,11 @@ const STEP_TITLES = Object.freeze({
   control_cockpit: msg('Control cockpit'),
   set_visual_style: msg('Change visual style'),
   set_hud: msg('Adjust HUD'),
-  set_cyber_sonar: msg('Adjust cyber sonar'),
+  set_cyber_sonar: msg('Adjust sonar'),
   set_detection: msg('Adjust detection overlay'),
   set_map_stack: msg('Change map stack'),
   set_post_processing: msg('Adjust post-processing'),
+  open_stories: msg('Stories'),
   control_scene: msg('Control scene'),
   control_cctv: msg('Control CCTV'),
   control_radio: msg('Control radio'),
@@ -1112,14 +1113,26 @@ export function planStepLabel(name, args = {}) {
     }
     case 'show_street_level': {
       const source = STREET_LEVEL_SOURCE_NAMES[args.provider];
-      const place = args.query
-        ? shownPlace(args.query, 32)
-        : args.latitude != null
-          ? t('this spot')
-          : t('the view centre');
+      const query = String(args.query || '').trim();
+      // A pointed or numbered thing is found later (deixis): no place yet.
+      if (query.toLowerCase() === 'pointer' || args.referent != null)
+        return source || t('Street Level');
+      // "This spot" and "the view centre" are phrases, not place names:
+      // each is a message of its own, worded in the grammar of the language.
+      if (query) {
+        const place = shownPlace(query, 32);
+        return source
+          ? t('{source} at {place}', { source, place })
+          : t('Street level at {place}', { place });
+      }
+      // Coordinates count only as a pair, as show_street_level reads them.
+      if (args.latitude != null && args.longitude != null)
+        return source
+          ? t('{source} at this spot', { source })
+          : t('Street level at this spot');
       return source
-        ? t('{source} at {place}', { source, place })
-        : t('Street level at {place}', { place });
+        ? t('{source} at the view centre', { source })
+        : t('Street level at the view centre');
     }
     case 'set_layer_visibility': {
       const on = args.enabled !== false;
@@ -1195,6 +1208,9 @@ export function narrationLabel(name, args = {}) {
   }
 }
 
+/** The place show_street_level reports when it names none. */
+export const VIEW_CENTRE_LABEL = 'the view centre';
+
 /** On-screen labels for progress steps. */
 const STEP_LABELS = Object.freeze({
   resolve: msg('Finding places'),
@@ -1219,10 +1235,11 @@ export function progressStepLabel(step, label) {
     : step
       ? spokenLabel(step, 24)
       : t('Working');
-  // The join is a catalog string so each language spaces its colon.
-  return label
-    ? t('{name}: {state}', { name: base, state: spokenLabel(label, 32) })
-    : base;
+  // The join is a catalog string so each language spaces its colon. The
+  // view centre is a phrase show_street_level reports in English, not a name.
+  const state =
+    label === VIEW_CENTRE_LABEL ? t('the view centre') : spokenLabel(label, 32);
+  return label ? t('{name}: {state}', { name: base, state }) : base;
 }
 
 /**

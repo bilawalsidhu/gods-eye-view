@@ -2,21 +2,30 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDroneAirspaceLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
+import { clickCard } from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+
+// The fills set of the layer the last harness made: zone picks name it.
+let fillsSetId = null;
+/** A Cesium pick of a zone's fill, as the draw port makes it. */
+const zonePick = (id) => ({ id: { set: fillsSetId, id } });
+const liveSet = (draw, suffix) =>
+  [...draw.sets.values()].find(
+    (record) => !record.disposed && record.spec.id.endsWith(suffix),
+  );
 
 function harness(source, { pick = () => null, cardHit = () => null } = {}) {
-  const sources = [];
   const overlay = { entries: new Map(), visible: null };
-  const clicks = { handler: null, destroyed: 0 };
   const owners = new Map();
-  const viewer = {
-    scene: { pick },
-    dataSources: {
-      add(value) {
-        sources.push(value);
-      },
-      remove(value) {
-        sources.splice(sources.indexOf(value), 1);
-      },
+  const viewer = { scene: { pick } };
+  const { draw } = bindFakeDraw(viewer);
+  const input = fakeInputUnderLabel(viewer);
+  const clicks = {
+    handler: (click) => input.click(click.position),
+    // Only the label's own overlay handler is left.
+    get destroyed() {
+      return input.input.subscriberCount() === 1 ? 1 : 0;
     },
   };
   const layer = createDroneAirspaceLayer({
@@ -33,27 +42,35 @@ function harness(source, { pick = () => null, cardHit = () => null } = {}) {
       },
       hitTest: (x, y, options) => cardHit(x, y, options),
     },
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction(callback) {
-        clicks.handler = callback;
-      },
-      destroy() {
-        clicks.destroyed += 1;
-        clicks.handler = null;
-      },
-    }),
+    inputFor: () => input.input,
     picking: {
-      resolvePickId: (picked) => picked?.id ?? null,
+      resolvePickId: (picked) => picked?.id?.id ?? picked?.id ?? null,
       isOwnedByOtherLayer: (layerId, pickedId) =>
         String(pickedId).startsWith('other-layer:'),
       registerPickOwner: (layerId, predicate) => owners.set(layerId, predicate),
       unregisterPickOwner: (layerId) => owners.delete(layerId),
+      // The card on top at a click, as the registry answers from the host.
+      // A mission label painted over everything comes first.
+      clickCard: (click) =>
+        clickCard(click) ??
+        cardHit(click.screenPosition?.x, click.screenPosition?.y, {}),
     },
-    pointer: { isPointerFree: () => true },
   });
   layer.init(viewer);
   layer.enable(viewer);
-  return { layer, viewer, sources, overlay, clicks, owners };
+  fillsSetId = liveSet(draw, ':fills').spec.id;
+  return {
+    layer,
+    viewer,
+    draw,
+    fills: () => liveSet(draw, ':fills'),
+    lines: () => liveSet(draw, ':lines'),
+    overlay,
+    clicks,
+    owners,
+    /** A label painted over the map: while `over`, it takes each click. */
+    label: input.label,
+  };
 }
 
 const ring = [
@@ -76,7 +93,7 @@ const row = {
   polygons: [[ring]],
 };
 
-test('each zone polygon renders as one filled entity with its outline', async () => {
+test('each zone polygon draws as one clamped fill with its draped boundary', async () => {
   const h = harness({
     getSnapshot: async () => [
       row,
@@ -84,11 +101,23 @@ test('each zone polygon renders as one filled entity with its outline', async ()
     ],
   });
   assert.equal(await h.layer.update(h.viewer), true);
-  const entities = h.sources[0].entities.values;
-  assert.equal(entities.length, 3);
-  assert.equal(entities[0].id, 'drone-airspace:310:0');
-  assert.ok(entities[0].polygon, 'zone fill missing');
-  assert.ok(entities[0].polyline, 'zone outline missing');
+  const ids = [
+    'drone-airspace:310:0',
+    'drone-airspace:400:0',
+    'drone-airspace:400:1',
+  ];
+  assert.deepEqual([...h.fills().items.keys()], ids, 'zone fill missing');
+  assert.deepEqual([...h.lines().items.keys()], ids, 'zone outline missing');
+  assert.equal(h.fills().show, true);
+  const fill = h.fills().items.get(ids[0]);
+  assert.equal(fill.height, 'clampGround');
+  assert.equal(fill.geometry.kind, 'polygon');
+  assert.equal(fill.fill[3], 0.25);
+  const line = h.lines().items.get(ids[0]);
+  assert.equal(line.mode, 'draped');
+  assert.equal(line.widthPx, 2);
+  assert.equal(line.style.color[3], 0.9);
+  assert.equal(line.positions.length, ring.length, 'the exterior ring only');
   assert.equal(h.layer.getStats().count, 2);
 });
 
@@ -99,10 +128,10 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
     { pick: () => pickResult },
   );
   await h.layer.update(h.viewer);
-  assert.equal(typeof h.clicks.handler, 'function', 'click handler missing');
+  assert.equal(h.clicks.destroyed, 0, 'click handler missing');
   assert.equal(h.owners.size, 0);
 
-  pickResult = { id: 'drone-airspace:310:0' };
+  pickResult = zonePick('drone-airspace:310:0');
   h.clicks.handler({ position: { x: 10, y: 10 } });
   const entries = h.overlay.entries.get('drone-airspace');
   assert.equal(entries.length, 1);
@@ -121,6 +150,86 @@ test('clicking a zone publishes its card; empty space clears it', async () => {
   pickResult = null;
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+});
+
+test('a click on a mission label over the open zone card keeps it open and takes no zone beneath', async () => {
+  let pickResult = null;
+  let cardHitResult = null;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    { pick: () => pickResult, cardHit: () => cardHitResult },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  const [card] = h.overlay.entries.get('drone-airspace');
+
+  // The open card and its zone lie under the label: the label on top is
+  // its own click, so the card stays open.
+  cardHitResult = { sourceId: 'drone-airspace', entryId: card.id };
+  h.label.over = true;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.[0]?.id, card.id);
+  pickResult = null;
+  cardHitResult = null;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')?.[0]?.id,
+    card.id,
+    'a label over bare map is not empty space either',
+  );
+
+  // Off the label, the same click on bare map closes the card.
+  h.label.over = false;
+  h.clicks.handler({ position: { x: 12, y: 12 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+  h.layer.destroy();
+});
+
+// Another layer's card or label painted over the area (a quake's card or
+// magnitude label) is that layer's click: the area under it stands aside.
+test("another layer's overlay on top keeps a click off the area", async () => {
+  let pickResult = null;
+  let foreignOnTop = false;
+  const h = harness(
+    { getSnapshot: async () => [row] },
+    {
+      pick: () => pickResult,
+      // Unfiltered: the topmost entry of any source.
+      // As the host does: drone-airspace cards are not interactive, so only
+      // another layer's card painted on top is ever hit.
+      cardHit: (_x, _y, options) =>
+        foreignOnTop && !options?.sourceId
+          ? { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' }
+          : null,
+    },
+  );
+  await h.layer.update(h.viewer);
+  pickResult = zonePick('drone-airspace:310:0');
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(h.overlay.entries.get('drone-airspace')?.length ?? 0, 0);
+  // With nothing painted over it, the same click selects the area.
+  foreignOnTop = false;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+  // An overlay on top covers the selected area's card.
+  foreignOnTop = true;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+  );
+  pickResult = null;
+  h.clicks.handler({ position: { x: 10, y: 10 } });
+  assert.equal(
+    h.overlay.entries.get('drone-airspace')[0].id,
+    'drone-airspace-card:310',
+    'the foreground overlay preserves selection over bare map too',
+  );
 });
 
 test('late refresh cannot publish after disable or destroy', async () => {
@@ -202,17 +311,14 @@ test('a boundary change alone redraws the zone; identical geometry does not', as
   let rows = [row];
   const h = harness({ getSnapshot: async () => rows });
   await h.layer.update(h.viewer);
-  const [first] = h.sources[0].entities.values;
+  const [first] = h.lines().items.values();
   rows = [{ ...row, polygons: [[ring.map((point) => [...point])]] }];
   await h.layer.update(h.viewer);
-  assert.equal(h.sources[0].entities.values[0], first, 'same geometry kept');
+  assert.equal([...h.lines().items.values()][0], first, 'same geometry kept');
   rows = [{ ...row, polygons: [[moved]] }];
   await h.layer.update(h.viewer);
-  const [redrawn] = h.sources[0].entities.values;
+  const [redrawn] = h.lines().items.values();
   assert.notEqual(redrawn, first, 'moved boundary must redraw');
-  assert.notDeepEqual(
-    redrawn.polyline.positions.getValue(),
-    first.polyline.positions.getValue(),
-  );
+  assert.notDeepEqual(redrawn.positions, first.positions);
   assert.ok(h.layer.getAnalystRecords()[0].lon > -76.6);
 });

@@ -1,0 +1,410 @@
+/* ── "Show me how" guide ───────────────────────────────────────────────
+   A spotlight dims everything but the control to press and frames it with
+   tactical corner brackets; a second frame marks a part of it (a layer's
+   switch). A glass callout beside it, with an arrow to the target, says
+   what to do and how far along the walk is. Clicks pass through to the
+   app: the guide only points. */
+.gev-guide {
+  --gev-guide-accent: #ff9f43;
+  --gev-guide-accent-soft: rgba(255, 159, 67, 0.5);
+  position: fixed;
+  z-index: 400;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── Spotlight ── */
+.gev-guide-ring {
+  position: fixed;
+  border: 1px solid rgba(255, 159, 67, 0.28);
+  border-radius: 8px;
+  box-shadow: 0 0 0 200vmax rgba(3, 8, 14, 0.55);
+  opacity: 0;
+  transition:
+    left 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease;
+}
+
+/* Corner brackets, drawn as eight short gradient strokes. */
+.gev-guide-ring::before {
+  position: absolute;
+  inset: -3px;
+  background:
+    linear-gradient(var(--gev-guide-accent) 0 0) top left / 12px 2px,
+    linear-gradient(var(--gev-guide-accent) 0 0) top left / 2px 12px,
+    linear-gradient(var(--gev-guide-accent) 0 0) top right / 12px 2px,
+    linear-gradient(var(--gev-guide-accent) 0 0) top right / 2px 12px,
+    linear-gradient(var(--gev-guide-accent) 0 0) bottom left / 12px 2px,
+    linear-gradient(var(--gev-guide-accent) 0 0) bottom left / 2px 12px,
+    linear-gradient(var(--gev-guide-accent) 0 0) bottom right / 12px 2px,
+    linear-gradient(var(--gev-guide-accent) 0 0) bottom right / 2px 12px;
+  background-repeat: no-repeat;
+  content: '';
+  filter: drop-shadow(0 0 4px rgba(255, 159, 67, 0.6));
+}
+
+/* A soft ping that grows out of the frame: "press here". */
+.gev-guide-ring > i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--gev-guide-accent-soft);
+  border-radius: inherit;
+  animation: gev-guide-ping 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+
+/* A second frame inside the spotlight does not dim the screen again. */
+.gev-guide-ring--sub {
+  border-color: rgba(255, 159, 67, 0.4);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.gev-guide-ring--sub::before {
+  inset: -2px;
+  background-size:
+    8px 2px,
+    2px 8px,
+    8px 2px,
+    2px 8px,
+    8px 2px,
+    2px 8px,
+    8px 2px,
+    2px 8px;
+}
+
+/* ── Callout ── */
+.gev-guide-callout {
+  position: fixed;
+  width: 280px;
+  padding: 0.7rem 0.8rem 0.65rem;
+  color: rgba(232, 238, 242, 0.95);
+  background: rgba(40, 44, 52, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    left 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    top 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 180ms ease,
+    transform 180ms ease;
+  pointer-events: auto;
+}
+
+.gev-guide.visible .gev-guide-callout {
+  opacity: 1;
+  transform: none;
+}
+
+/* A leader line from the callout to the target's frame, ending in a dot. */
+.gev-guide-callout::before,
+.gev-guide-callout::after {
+  position: absolute;
+  top: var(--gev-guide-arrow-y, 50%);
+  content: '';
+  transition: top 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.gev-guide-callout::before {
+  width: 18px;
+  height: 1px;
+  background: var(--gev-guide-accent);
+  box-shadow: 0 0 6px rgba(255, 159, 67, 0.7);
+}
+
+.gev-guide-callout::after {
+  width: 5px;
+  height: 5px;
+  margin-top: -2px;
+  background: var(--gev-guide-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(255, 159, 67, 0.9);
+}
+
+.gev-guide-callout[data-side='right']::before {
+  right: 100%;
+}
+
+.gev-guide-callout[data-side='right']::after {
+  right: calc(100% + 15px);
+}
+
+.gev-guide-callout[data-side='left']::before {
+  left: 100%;
+}
+
+.gev-guide-callout[data-side='left']::after {
+  left: calc(100% + 15px);
+}
+
+.gev-guide-callout[data-side='none']::before,
+.gev-guide-callout[data-side='none']::after {
+  display: none;
+}
+
+/* The edge the line leaves from picks up the accent. */
+.gev-guide-callout[data-side='right'] {
+  border-left-color: rgba(255, 159, 67, 0.55);
+}
+
+.gev-guide-callout[data-side='left'] {
+  border-right-color: rgba(255, 159, 67, 0.55);
+}
+
+/* Header: what this walk is about, how far along, and a close. */
+.gev-guide-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gev-guide-title,
+.gev-guide-count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.12rem;
+  text-transform: uppercase;
+}
+
+.gev-guide-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--gev-guide-accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gev-guide-count {
+  color: rgba(214, 220, 226, 0.55);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06rem;
+}
+
+/* Shares close-button.css: no padding, border or background, a pointer. */
+.gev-guide-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin: -2px -4px 0 0;
+  color: rgba(214, 220, 226, 0.55);
+  font-size: 0.95rem;
+  line-height: 1;
+  border-radius: 5px;
+}
+
+.gev-guide-close:hover,
+.gev-guide-close:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Progress: one segment per step. */
+.gev-guide-progress {
+  display: flex;
+  gap: 3px;
+  margin: 0.45rem 0 0.6rem;
+  padding: 0;
+  list-style: none;
+}
+
+.gev-guide-progress li {
+  flex: 1;
+  height: 2px;
+  background: rgba(214, 220, 226, 0.16);
+  border-radius: 2px;
+  transition: background 220ms ease;
+}
+
+.gev-guide-progress li.done {
+  background: rgba(255, 159, 67, 0.55);
+}
+
+.gev-guide-progress li.current {
+  background: var(--gev-guide-accent);
+  box-shadow: 0 0 6px rgba(255, 159, 67, 0.6);
+}
+
+.gev-guide-callout.swap .gev-guide-body {
+  animation: gev-guide-swap 260ms ease both;
+}
+
+.gev-guide-text {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+/* "Press the highlighted control", with a live dot. */
+.gev-guide-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0;
+  color: rgba(214, 220, 226, 0.6);
+  font-size: 0.68rem;
+}
+
+.gev-guide-hint[hidden] {
+  display: none;
+}
+
+.gev-guide-hint-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  background: var(--gev-guide-accent);
+  border-radius: 50%;
+  animation: gev-guide-blink 1.4s ease-in-out infinite;
+}
+
+/* Footer: the Esc hint on the left, the buttons on the right. */
+.gev-guide-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.gev-guide-actions > span {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.gev-guide-keys {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: rgba(214, 220, 226, 0.45);
+  font-size: 0.62rem;
+}
+
+.gev-guide-keys[hidden] {
+  display: none;
+}
+
+/* With the Esc hint gone, the offer's buttons sit on the right. */
+.gev-guide-actions > span:only-of-type {
+  margin-left: auto;
+}
+
+.gev-guide-keys kbd {
+  padding: 0.05rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  border: 1px solid rgba(214, 220, 226, 0.22);
+  border-radius: 4px;
+}
+
+.gev-guide-actions button {
+  padding: 0.28rem 0.6rem;
+  color: #1a1206;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: var(--gev-guide-accent);
+  border: 1px solid var(--gev-guide-accent);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.gev-guide-actions button[hidden] {
+  display: none;
+}
+
+.gev-guide-actions button:hover,
+.gev-guide-actions button:focus-visible {
+  background: #ffb36b;
+  border-color: #ffb36b;
+}
+
+/* Secondary buttons: skip a step that waits, or decline the offer. */
+.gev-guide-actions button.quiet,
+.gev-guide-actions .gev-guide-skip {
+  color: rgba(214, 220, 226, 0.75);
+  font-weight: 400;
+  background: none;
+  border-color: rgba(214, 220, 226, 0.2);
+}
+
+.gev-guide-actions button.quiet:hover,
+.gev-guide-actions button.quiet:focus-visible,
+.gev-guide-actions .gev-guide-skip:hover,
+.gev-guide-actions .gev-guide-skip:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 159, 67, 0.6);
+}
+
+@keyframes gev-guide-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes gev-guide-blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes gev-guide-swap {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gev-guide-ring,
+  .gev-guide-callout,
+  .gev-guide-callout::before {
+    transition: none;
+  }
+
+  .gev-guide-ring > i,
+  .gev-guide-hint-dot,
+  .gev-guide-callout.swap .gev-guide-body {
+    animation: none;
+  }
+}
+
+/* The guide's live status: read by screen readers, not shown. */
+.gev-guide-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

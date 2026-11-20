@@ -2,7 +2,6 @@ import { rangeForBoundingSphere } from './data/cameraFraming.js';
 import { isUnavailableCapability } from './sources/capability.js';
 import { createOverpassFeatureSource } from './sources/overpassFeatures.js';
 import { applicationServices } from './services/application.js';
-import * as Cesium from 'cesium';
 import { greatCircleKm } from './geoDistance.js';
 import {
   viewportBias,
@@ -12,6 +11,9 @@ import { unavailablePlaceSearch } from './search/placeSearch.js';
 import { cancelCameraArrival } from './data/cameraArrival.js';
 import { guardCameraAboveGround } from './cameraGroundGuard.js';
 import { CITY_POIS } from './cityPois.js';
+import { fromDegrees, toRadians } from './geo/index.js';
+import { heightsOf } from './queries/heights.js';
+import { cameraOf } from './render/rendererOf.js';
 
 /** Newest landmark arrival; an older post-arrival ground guard yields to it. */
 let arrivalGeneration = 0;
@@ -30,37 +32,40 @@ export const GLOBE_VIEW = Object.freeze({
 
 /**
  * Fly straight out to the full-earth globe view, keeping the current sub-camera
- * point centered so the user's continent stays in front of them.
- * @param {Cesium.Viewer} viewer
- * @param {{duration?: number, onComplete?: Function, onCancel?: Function}} options
+ * point centered so the user's continent stays in front of them. With `view`
+ * (`{ lon, lat, height, heading?, pitch? }`, angles in degrees, as the start
+ * view is given), fly to that view instead.
+ * @param {object} viewer
+ * @param {{duration?: number, onComplete?: Function, onCancel?: Function,
+ *   view?: {lon: number, lat: number, height: number, heading?: number,
+ *   pitch?: number}}} options
  * @returns {{latitude: number, longitude: number, heightM: number}}
  */
 export function flyToGlobeView(viewer, options = {}) {
-  const carto = viewer.camera.positionCartographic;
-  const longitude = Cesium.Math.toDegrees(carto.longitude);
-  const latitude = Cesium.Math.toDegrees(carto.latitude);
-  viewer.camera.cancelFlight();
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      longitude,
-      latitude,
-      GLOBE_VIEW.heightM,
-    ),
-    orientation: {
-      heading: 0,
-      pitch: Cesium.Math.toRadians(GLOBE_VIEW.pitchDeg),
-      roll: 0,
+  const camera = cameraOf(viewer);
+  const here = camera.pose();
+  const view = options.view ?? {
+    lon: here.lon,
+    lat: here.lat,
+    height: GLOBE_VIEW.heightM,
+  };
+  const { lon: longitude, lat: latitude, height: heightM } = view;
+  camera.cancelFlight();
+  camera.flyTo(
+    { lon: longitude, lat: latitude, height: heightM },
+    {
+      orientation: {
+        heading: toRadians(view.heading ?? 0),
+        pitch: toRadians(view.pitch ?? GLOBE_VIEW.pitchDeg),
+        roll: 0,
+      },
+      durationS: finitePositive(options.duration) || GLOBE_VIEW.durationS,
+      endFrame: 'world',
+      onComplete: options.onComplete,
+      onCancel: options.onCancel,
     },
-    duration: finitePositive(options.duration) || GLOBE_VIEW.durationS,
-    endTransform: Cesium.Matrix4.IDENTITY,
-    // Cesium's Camera.flyTo reads `complete`/`cancel`. `onComplete`/`onCancel`
-    // are this module's OWN option names and are silently ignored by Cesium —
-    // spelling them through to flyTo meant the reset never resolved on the
-    // flight's own events and every caller fell back to its watchdog timeout.
-    complete: options.onComplete,
-    cancel: options.onCancel,
-  });
-  return { latitude, longitude, heightM: GLOBE_VIEW.heightM };
+  );
+  return { latitude, longitude, heightM };
 }
 
 /**
@@ -77,7 +82,7 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * Fly the camera to a landmark using lookAt-based targeting.
  * Guarantees the target is centered in viewport via flyToBoundingSphere + lookAt.
  *
- * @param {Cesium.Viewer} viewer
+ * @param {object} viewer
  * @param {number} lat - Latitude in degrees
  * @param {number} lon - Longitude in degrees
  * @param {object} options
@@ -89,7 +94,7 @@ export const LOCATIONS = Object.entries(CITY_POIS).map(([id, city]) => ({
  * @param {number} options.duration - Flight duration in seconds (default 3.0)
  * @param {{cachedGroundFloor?: Function, warmGroundFloor?: Function}} [options.ground] -
  *   Optional ground-floor service; its cached elevation outranks `groundElevation`
- * @returns {{ targetPosition: Cesium.Cartesian3 }} The computed target for orbit use
+ * @returns {{ targetPosition: {x: number, y: number, z: number} }} The computed target for orbit use
  */
 export function flyToLandmark(viewer, lat, lon, options = {}) {
   cancelCameraArrival(viewer);
@@ -108,8 +113,9 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
   } = options;
 
   // Sample terrain height (sync — uses loaded tiles; 0 if globe/terrain not ready)
-  const targetCartographic = Cesium.Cartographic.fromDegrees(lon, lat);
-  const sampledHeight = viewer.scene.globe?.getHeight(targetCartographic);
+  const sampledHeight = viewer
+    ? heightsOf(viewer).now({ lon, lat }, { against: 'terrain' })
+    : null;
 
   // Use sampled height if available, otherwise the cached ground-floor
   // elevation (same ellipsoidal datum), then the pre-baked city elevation.
@@ -135,7 +141,7 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
   const targetHeight = bounds
     ? terrainHeight + bounds.height / 2
     : terrainHeight + buildingHeight;
-  const targetPosition = Cesium.Cartesian3.fromDegrees(lon, lat, targetHeight);
+  const targetPosition = fromDegrees(lon, lat, targetHeight);
   const boundingRadius = bounds ? buildingBoundingRadius(bounds) : 0;
   const framingRange = bounds
     ? Math.max(
@@ -144,11 +150,11 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
       )
     : range;
 
-  const hpr = new Cesium.HeadingPitchRange(
-    Cesium.Math.toRadians(heading),
-    Cesium.Math.toRadians(pitch),
-    framingRange,
-  );
+  const hpr = {
+    heading: toRadians(heading),
+    pitch: toRadians(pitch),
+    range: framingRange,
+  };
 
   if (typeof onStart === 'function') {
     try {
@@ -159,14 +165,15 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
   }
 
   // Fly to target, then lock with lookAt for guaranteed centering
-  viewer.camera.flyToBoundingSphere(
-    new Cesium.BoundingSphere(targetPosition, boundingRadius),
+  const camera = cameraOf(viewer);
+  camera.flyToBounds(
+    { center: targetPosition, radius: boundingRadius },
     {
       offset: hpr,
-      duration,
-      complete: () => {
-        viewer.camera.lookAt(targetPosition, hpr);
-        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      durationS: duration,
+      onComplete: () => {
+        camera.lookAt(targetPosition, hpr);
+        camera.release();
         // Framing used a predicted ground height. Once tiles stream in, measure
         // the rendered surface and lift the eye if it is buried or pressed
         // against it; a newer arrival or a manual gesture ends the check.
@@ -187,7 +194,7 @@ export function flyToLandmark(viewer, lat, lon, options = {}) {
           }
         }
       },
-      cancel: () => {
+      onCancel: () => {
         if (typeof onCancel === 'function') {
           try {
             onCancel();
@@ -594,8 +601,7 @@ export function viewportMetrics(viewport) {
   if (centerLng > 180) centerLng -= 360;
 
   const latSpanKm = Math.abs(latSpanDeg) * KM_PER_DEGREE;
-  const lonSpanKm =
-    lonSpanDeg * KM_PER_DEGREE * Math.cos(Cesium.Math.toRadians(centerLat));
+  const lonSpanKm = lonSpanDeg * KM_PER_DEGREE * Math.cos(toRadians(centerLat));
   return {
     latSpanDeg,
     lonSpanDeg,
@@ -696,7 +702,7 @@ export function placeFramingViewport(
 
   const latHalfDeg = PLACE_FALLBACK_HALF_SPAN_KM / KM_PER_DEGREE;
   // Guard the cosine so a near-polar anchor cannot blow the longitude half-extent up.
-  const cosLat = Math.max(0.05, Math.cos(Cesium.Math.toRadians(anchorLat)));
+  const cosLat = Math.max(0.05, Math.cos(toRadians(anchorLat)));
   const lngHalfDeg = PLACE_FALLBACK_HALF_SPAN_KM / (KM_PER_DEGREE * cosLat);
   const wrapLng = (lng) => ((((lng + 180) % 360) + 360) % 360) - 180;
   return {
@@ -791,15 +797,17 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
   const paddedLonSpan = metrics.lonSpanDeg + longitudePadding * 2;
   const south = Math.max(-89.9, southwest.lat - latitudePadding);
   const north = Math.min(89.9, northeast.lat + latitudePadding);
-  const rectangle =
+  const rect =
     paddedLonSpan >= 360
-      ? Cesium.Rectangle.fromDegrees(-180, south, 180, north)
-      : Cesium.Rectangle.fromDegrees(
-          wrapLongitude(southwest.lng - longitudePadding),
+      ? { west: -180, south, east: 180, north }
+      : {
+          west: wrapLongitude(southwest.lng - longitudePadding),
           south,
-          wrapLongitude(southwest.lng + metrics.lonSpanDeg + longitudePadding),
+          east: wrapLongitude(
+            southwest.lng + metrics.lonSpanDeg + longitudePadding,
+          ),
           north,
-        );
+        };
   if (typeof beforeFly === 'function' && beforeFly() === false)
     return CANCELLED_SEARCH;
   if (typeof onStart === 'function') {
@@ -809,37 +817,35 @@ function flyToViewportBounds(viewer, viewport, options = {}) {
       /* no-op */
     }
   }
-  viewer.camera.flyTo({
-    destination: rectangle,
-    duration,
-    endTransform: Cesium.Matrix4.IDENTITY,
-    complete: () => {
-      if (typeof onComplete === 'function') {
-        try {
-          onComplete();
-        } catch {
-          /* no-op */
+  cameraOf(viewer).flyTo(
+    { rect },
+    {
+      durationS: duration,
+      endFrame: 'world',
+      onComplete: () => {
+        if (typeof onComplete === 'function') {
+          try {
+            onComplete();
+          } catch {
+            /* no-op */
+          }
         }
-      }
-    },
-    cancel: () => {
-      if (typeof onCancel === 'function') {
-        try {
-          onCancel();
-        } catch {
-          /* no-op */
+      },
+      onCancel: () => {
+        if (typeof onCancel === 'function') {
+          try {
+            onCancel();
+          } catch {
+            /* no-op */
+          }
         }
-      }
+      },
     },
-  });
+  );
   // Same short-way-round rule for the reported centre: averaging raw longitudes
   // puts a dateline-crossing box's centre on the opposite side of the planet.
   return {
-    targetPosition: Cesium.Cartesian3.fromDegrees(
-      metrics.centerLng,
-      metrics.centerLat,
-      0,
-    ),
+    targetPosition: fromDegrees(metrics.centerLng, metrics.centerLat, 0),
     boundingRadius: 0,
     range: null,
     viewBounds: viewport,
@@ -1009,8 +1015,7 @@ function pointInPolygon(lon, lat, coordinates) {
 
 function approximateDistanceM(latA, lonA, latB, lonB) {
   const latitudeScale = 111320;
-  const longitudeScale =
-    latitudeScale * Math.cos(Cesium.Math.toRadians((latA + latB) / 2));
+  const longitudeScale = latitudeScale * Math.cos(toRadians((latA + latB) / 2));
   return Math.hypot(
     (latB - latA) * latitudeScale,
     (lonB - lonA) * longitudeScale,

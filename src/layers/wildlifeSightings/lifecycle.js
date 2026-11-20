@@ -15,6 +15,8 @@ import {
   wildlifeGridTiles,
   wildlifeGridCellId,
 } from './gridViewport.js';
+import { canvasOf, findCamera } from '../../render/rendererOf.js';
+import { wildlifeEyeHeight, wildlifeViewRectangle } from './view.js';
 import { wildlifeViewportBoxes, snapWildlifeBox } from './viewport.js';
 import {
   WILDLIFE_DEBOUNCE_MS,
@@ -125,15 +127,14 @@ export function createLifecycle({ state, services, parts }) {
   }
 
   function currentQuery() {
-    const height = state.viewer?.camera?.positionCartographic?.height;
+    const height = wildlifeEyeHeight(state.viewer);
     state.band = getWildlifeHeightBand(height ?? Infinity, state.band);
+    const rectangle = wildlifeViewRectangle(state.viewer);
     const boxes =
       state.band === 'global'
         ? null
-        : wildlifeViewportBoxes(state.viewer)?.map((box) =>
-            snapWildlifeBox(box),
-          );
-    const visibleBoxes = wildlifeGridViewportBoxes(state.viewer);
+        : wildlifeViewportBoxes(rectangle)?.map((box) => snapWildlifeBox(box));
+    const visibleBoxes = wildlifeGridViewportBoxes(rectangle);
     const scope =
       state.band === 'global' ||
       (!boxes && (height ?? Infinity) > WILDLIFE_GRID_HEIGHT_METERS)
@@ -147,7 +148,7 @@ export function createLifecycle({ state, services, parts }) {
       state.confirmed,
       state.taxa,
     ]);
-    const canvas = state.viewer?.scene?.canvas;
+    const canvas = canvasOf(state.viewer);
     const zoom = visibleBoxes?.length
       ? chooseWildlifeGridZoom({
           boxes: visibleBoxes,
@@ -529,7 +530,7 @@ export function createLifecycle({ state, services, parts }) {
   }
 
   const methods = {
-    /** Attach this layer's Cesium resources to one viewer. */
+    /** Attach this layer's draw sets and listeners to one viewer. */
     init(viewer, { signal } = {}) {
       if (state.viewer)
         throw new Error('Wildlife sightings layer is already initialized');
@@ -559,25 +560,20 @@ export function createLifecycle({ state, services, parts }) {
           id.startsWith('wildlife:') &&
           state.rowById.has(id.slice(9)),
       );
-      state.removeCamera = state.viewer.camera?.moveEnd?.addEventListener?.(
-        () => {
-          if (!state.enabled) return;
-          wildlifeMeasure('moveEnd', () => {
-            if (
-              initialCameraDeadline &&
-              services.now() < initialCameraDeadline
-            ) {
-              initialCameraDeadline = services.now() + INITIAL_CAMERA_SETTLE_MS;
-              refreshView();
-              initialSettle?.schedule();
-            } else {
-              refreshView();
-              scheduleRefresh();
-            }
-            parts.controls.notify();
-          });
-        },
-      );
+      state.removeCamera = findCamera(state.viewer)?.on('moveEnd', () => {
+        if (!state.enabled) return;
+        wildlifeMeasure('moveEnd', () => {
+          if (initialCameraDeadline && services.now() < initialCameraDeadline) {
+            initialCameraDeadline = services.now() + INITIAL_CAMERA_SETTLE_MS;
+            refreshView();
+            initialSettle?.schedule();
+          } else {
+            refreshView();
+            scheduleRefresh();
+          }
+          parts.controls.notify();
+        });
+      });
       // A debounce can expire while the manager is still enabling and cannot
       // accept refreshLayer yet. Its settled visibility event is the one
       // catch-up edge; completed initial queries are skipped by their key.
@@ -591,12 +587,8 @@ export function createLifecycle({ state, services, parts }) {
           )
             scheduleRefresh();
         }) || null;
-      if (services.sprites?.restoreSpriteOrderOnEnable)
-        services.sprites.restoreSpriteOrderOnEnable(
-          'wildlife-sightings',
-          state.viewer,
-        );
-      else services.sprites?.restoreSpriteOrder?.(state.viewer);
+      // The badges' set keeps its place among the sprite layers by its draw
+      // order (`spriteDrawOrder`), whichever layer was turned on first.
       return true;
     },
     /** Refresh observations and density independently for the current filters. */

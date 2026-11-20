@@ -1,52 +1,68 @@
-import * as Cesium from 'cesium';
+import { cameraOf, findCamera, findFrame } from '../../render/rendererOf.js';
+import {
+  entityFollowTarget,
+  onFollowChanged,
+  stopFollowing,
+} from '../../data/followed.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
-import { aircraftIcon, TRACKED_ICON_PX } from '../../data/aircraftIcons.js';
-import { trackedModelZoomActive } from '../../data/trackedModelRegime.js';
 import {
-  screenProjectedRotation,
+  courseScreenRotation,
   stabilizeScreenRotation,
-} from '../../data/iconOrientation.js';
-import { trailHeadStart } from '../../data/modelVisualAnchor.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+} from '../../data/screenRotation.js';
 import {
-  bindTrackingClickGesture,
+  createTrackedAircraftIcon,
+  isOtherTrackedIconSet,
+  trackedContactHolder,
+  trackedIconColor,
+} from '../../data/trackedAircraftIcon.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { julianToEpochMs } from '../../geo/julian.js';
+import { renderedFrames } from '../../data/renderedFrames.js';
+import { clone, distanceSquared, vec } from '../../geo/vector.js';
+import { trailHeadLine } from '../../data/modelVisualAnchor.js';
+import {
   isTrackingSelectionGesture,
   isTrackingClickGesture,
 } from '../../data/trackingClickGesture.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
-  TRACKED_MODEL_MAX_LOAD_FAILS,
-  TRACKED_MODEL_RETRY_BACKOFF_MS,
+  COCKPIT_AIR_ALL_ADD_M,
+  COCKPIT_AIR_ALL_KEEP_M,
+  COCKPIT_AIR_PROX_ADD_M,
+  COCKPIT_AIR_PROX_KEEP_M,
   TRAIL_MAX_POINTS,
-  DR_CORRECTION_MS,
   displayDelayMs,
   followsClock,
-  TRAIL_COLOR,
-  BILLBOARD_SCALE,
-  GROUND_SCALE,
-  AMBER_TRANSPARENT,
-  TRACKED_ICON_COLOR,
   STALE_ALPHA,
+  TRAIL_COLOR,
 } from './policy.js';
-import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 import {
   drawTrailSegments,
   historyFixEpochMs,
   insertTrailFix,
   joinTrailBackfill,
-  recordTrailPoint,
   trailBackfillFixes,
   trailBodyCount,
-  trailBodyCountOutsideModel,
   trailBodySegments,
+  trailHeadCurvePoints,
   trailHeadStartFix,
-  trailRecordingBlocked,
-  TRAIL_RECORD_STEP_M,
-  TRAIL_RECORD_STEP_MS,
+  trailTimeAt,
 } from '../../data/trailContinuity.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { entityRecord } from '../../data/entityRecords.js';
 
-const STALE_TRACKED_COLOR = TRACKED_ICON_COLOR.withAlpha(STALE_ALPHA);
+/**
+ * The icao a click's hit carries (`event.hit`, the contract's `Hit`): a
+ * draw-set item's id (the icon and model sets' rows), or the id of
+ * something drawn outside the draw port (a hit with no set).
+ */
+function aircraftPickId(hit) {
+  if (!hit || hit.surface) return undefined;
+  if (!hit.set) return hit.id || undefined;
+  return isOtherTrackedIconSet(hit.set, 'military') ? undefined : hit.id;
+}
 
 export function createTracking({
   flightState,
@@ -68,8 +84,25 @@ export function createTracking({
   const { createTrail } = services.trails;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
-  const { applyTrackedCameraFrame } = services.camera;
-  const { resolvePickId, isOwnedByOtherLayer, pickContact } = services.picking;
+  const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
+    services.camera;
+  const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
+    services.picking;
+  /** The tracked contact's billboard (an icon set on the draw port). */
+  const trackedIcon = createTrackedAircraftIcon({
+    viewer: () => flightState._viewer,
+    setPrefix: 'military',
+  });
+
+  /** The camera's pose, or null without a camera to ask. */
+  function _pose() {
+    const viewer = flightState._viewer;
+    try {
+      return (viewer && findCamera(viewer)?.pose()) ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   function _emitAwarenessEvent(type, detail) {
     if (
@@ -82,11 +115,11 @@ export function createTracking({
   }
 
   function _publishTrackedSelection(icao24, origin = 'programmatic') {
-    const bb = flightState._billboards.get(icao24);
+    const position = parts.icons._iconPosition(icao24, vec());
     const info = flightState.records.data.get(icao24);
-    if (!bb?.position || !info) return false;
+    if (!position || !info) return false;
     if (flightState._trackedEntity)
-      flightState._trackedEntity.gevSelectionOrigin = origin;
+      entityRecord(flightState._trackedEntity).selectionOrigin = origin;
     _emitAwarenessEvent('gev:awareness-subject-selected', {
       layerId: 'military',
       id: icao24,
@@ -94,7 +127,7 @@ export function createTracking({
         parts.queries._toCleanText(info.callsign) ||
         parts.queries._toCleanText(info.registration) ||
         icao24,
-      position: Cesium.Cartesian3.clone(bb.position),
+      position,
       origin,
     });
     selectTrackedSubjectContext(_contextSubjectMetadata(icao24));
@@ -160,40 +193,38 @@ export function createTracking({
   /** Refresh the AIR-only Cockpit near band independently from model admission. */
 
   function _refreshCockpitNearContacts() {
-    if (
-      !flightState._cockpitContactMode ||
-      !flightState._viewer?.camera?.positionWC
-    ) {
+    const eye = flightState._cockpitContactMode ? _pose()?.position : null;
+    if (!eye) {
       if (flightState._cockpitNearContacts.size)
         flightState._cockpitNearContacts = new Set();
       return;
     }
     const previous = flightState._cockpitNearContacts;
     const distancesSquared = [];
-    for (const [icao24, bb] of flightState._billboards) {
-      if (icao24 === flightState._trackedIcao || !bb?.position) continue;
-      distancesSquared.push([
+    const icons = flightState._icons;
+    const t = parts.icons._displayMs();
+    for (const icao24 of icons?.ids() ?? []) {
+      if (icao24 === flightState._trackedIcao) continue;
+      const position = icons.position(
         icao24,
-        Cesium.Cartesian3.distanceSquared(
-          flightState._viewer.camera.positionWC,
-          bb.position,
-        ),
-      ]);
+        t,
+        flightState._scratchCockpitPos,
+      );
+      distancesSquared.push([icao24, distanceSquared(eye, position)]);
     }
+    // The AIR band follows the 3D mode, not the 3D model radius.
+    const all = flightState._models3dMode === 'all';
     const next = nextCockpitNearContacts(
       previous,
       distancesSquared,
-      parts.rendering._modelAddDistM(),
-      parts.rendering._modelKeepDistM(),
+      all ? COCKPIT_AIR_ALL_ADD_M : COCKPIT_AIR_PROX_ADD_M,
+      all ? COCKPIT_AIR_ALL_KEEP_M : COCKPIT_AIR_PROX_KEEP_M,
     );
     flightState._cockpitNearContacts = next;
-    let presentationChanged = false;
-    for (const [icao24, bb] of flightState._billboards) {
-      if (previous.has(icao24) === next.has(icao24)) continue;
-      parts.rendering._applyFleetBillboardPresentation(icao24, bb);
-      presentationChanged = true;
-    }
-    if (presentationChanged) flightState._lastCamPoseSig = '';
+    for (const icao24 of previous)
+      if (!next.has(icao24)) parts.icons._applyIconPresentation(icao24);
+    for (const icao24 of next)
+      if (!previous.has(icao24)) parts.icons._applyIconPresentation(icao24);
   }
 
   /** Switch all current and future ambient contacts between silhouettes and cockpit pips. */
@@ -207,12 +238,11 @@ export function createTracking({
     // The collection stays visible in cockpit. Near AIR contacts retain their
     // aircraft silhouette until a ready model takes over; far contacts are pips.
     // Never bulk-destroy here: that stalls the renderer exactly as cockpit begins.
-    if (flightState._modelCollection) flightState._modelCollection.show = true;
+    parts.rendering._setModelsShown(true);
     flightState._trail?.setVisible(!next);
-    if (flightState._trailHeadEntity) flightState._trailHeadEntity.show = !next;
-    for (const [icao24, bb] of flightState._billboards)
-      parts.rendering._applyFleetBillboardPresentation(icao24, bb);
-    flightState._lastCamPoseSig = '';
+    const icons = flightState._icons;
+    for (const icao24 of icons?.ids() ?? [])
+      parts.icons._applyIconPresentation(icao24);
     flightState._lastFleetTickMs = 0;
   }
 
@@ -244,10 +274,9 @@ export function createTracking({
     const backoff = flightState.feed._backoff === true;
     // Computed once per frame for the label, the icon colour and the model
     // fade; a poll between frames changes the key.
-    const frame = flightState._viewer?.scene?.frameState?.frameNumber;
-    const key = Number.isFinite(frame)
-      ? `${frame}|${icao24}|${misses}|${repeated}|${backoff}`
-      : null;
+    const frame = renderedFrames(flightState._viewer);
+    const key =
+      frame >= 0 ? `${frame}|${icao24}|${misses}|${repeated}|${backoff}` : null;
     const cached = flightState._trackedStaleCueCache;
     if (key !== null && cached?.key === key) return cached.cue;
     const cue = _computeTrackedStaleCue(
@@ -279,14 +308,18 @@ export function createTracking({
     return { text: '', dimmed: false };
   }
 
-  /** The tracked billboard's colour: amber, faded while stale, clear while the 3D model is the visual. */
+  /** The tracked billboard's colour: the contact's own fleet colour (tracking
+   *  never recolours it), faded while stale, clear while the 3D model is the
+   *  visual. */
 
   function _trackedIconColor() {
-    if (parts.rendering._modelOwnsVisual(flightState._trackedIcao))
-      return AMBER_TRANSPARENT;
-    return _trackedStaleCue(flightState._trackedIcao).dimmed
-      ? STALE_TRACKED_COLOR
-      : TRACKED_ICON_COLOR;
+    const icao24 = flightState._trackedIcao;
+    const color = parts.rendering._fleetBillboardColor(icao24);
+    if (parts.rendering._modelOwnsVisual(icao24))
+      return trackedIconColor(color, 0);
+    return _trackedStaleCue(icao24).dimmed
+      ? trackedIconColor(color, STALE_ALPHA)
+      : color;
   }
 
   /**
@@ -347,28 +380,48 @@ export function createTracking({
   function _updateTrackedLabelModel(icao24) {
     if (!flightState._trackedEntity || icao24 !== flightState._trackedIcao)
       return;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _buildTrackedLabel(flightState.records.data.get(icao24), icao24),
-      '#ffd166',
-    );
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(
+        _buildTrackedLabel(flightState.records.data.get(icao24), icao24),
+        '#ffd166',
+      );
     refreshTrackedReadout(flightState._trackedEntity);
     // The readout and the context slot describe the same contact — refresh them
     // together so voice never narrates a fix the card has already replaced.
     refreshTrackedSubjectContext(_contextSubjectMetadata(icao24));
   }
 
-  /** Re-image the tracked entity's billboard from the current class/conversion. */
+  /** The tracked billboard's images, from the current class/conversion: the
+   *  fleet icon's own (`_fleetLook`), so selecting it changes only its colour. */
+  function _trackedBillboardLook() {
+    return parts.icons._fleetLook(flightState._trackedIcao);
+  }
+
+  /**
+   * What the tracked billboard is drawn at: the size, scale and scale by
+   * distance its fleet icon has (the scale read live: a landing changes it).
+   * Kept in its entity record too, so the camera guard and screen
+   * annotations size it from the app's own state.
+   * @param {string} icao24
+   */
+  function _trackedSprite(icao24) {
+    const look = parts.icons._fleetLook(icao24);
+    return {
+      width: look.size[0],
+      height: look.size[1],
+      get scale() {
+        return parts.rendering._fleetBillboardScale(icao24);
+      },
+      scaleByDistance: look.scaleByDistance,
+    };
+  }
+
+  /** Re-image the tracked billboard from the current class/conversion. */
 
   function _syncTrackedBillboardImage() {
-    if (!flightState._trackedIcao || !flightState._trackedEntity?.billboard)
-      return;
-    flightState._trackedEntity.billboard.image = aircraftIcon(
-      parts.rendering._iconKind(
-        flightState._trackedIcao,
-        flightState.records.data.get(flightState._trackedIcao)?.klass,
-      ),
-      TRACKED_ICON_PX,
-    );
+    if (!flightState._trackedIcao || !flightState._trackedEntity) return;
+    const look = _trackedBillboardLook();
+    trackedIcon.setImage(look.image, look.imageLod);
   }
 
   /**
@@ -385,117 +438,69 @@ export function createTracking({
       .toLowerCase();
     if (!id) return false;
     if (isTr3b(id)) {
-      if (flightState._models.has(id) || flightState._modelPending.has(id))
-        parts.rendering._releaseModel(id);
-      const modelled = flightState._billboards.get(id);
-      if (modelled && id !== flightState._trackedIcao) modelled.show = true; // horizon cull re-asserts next tick
+      if (flightState._models.has(id)) parts.rendering._releaseModel(id);
+      if (flightState._icons?.has(id) && id !== flightState._trackedIcao)
+        flightState._icons.setShown(id, true);
       if (id === flightState._trackedIcao) {
         parts.rendering._releaseTrackedModel();
         _syncTracked2dRotation();
       }
     }
-    const bb = flightState._billboards.get(id);
-    if (bb) parts.rendering._applyFleetBillboardPresentation(id, bb);
+    parts.icons._applyIconPresentation(id);
     if (id === flightState._trackedIcao) {
       _syncTrackedBillboardImage();
       _updateTrackedLabelModel(id);
     }
-    flightState._viewer?.scene?.requestRender?.();
-    return flightState._billboards.has(id) || id === flightState._trackedIcao;
+    if (flightState._viewer)
+      findFrame(flightState._viewer)?.requestRender('military: TR-3B restyle');
+    return flightState._icons?.has(id) || id === flightState._trackedIcao;
   }
 
   /** Re-image every converted contact this layer owns (IR style flip). */
 
   function _refreshTr3bForStyle() {
     for (const id of tr3bConvertedIds()) {
-      if (flightState._billboards.has(id) || id === flightState._trackedIcao)
+      if (flightState._icons?.has(id) || id === flightState._trackedIcao)
         _refreshTr3bContact(id);
     }
   }
 
-  /** Clear every per-SELECTION tracked-model latch: the zoom hysteresis band and
-   *  the load-failure bound. Called from each path that changes which contact is
-   *  selected — deselect, re-track, cross-layer handoff, init, destroy.
-   *
-   *  This must live in the production lifecycle, not only in the predicate's
-   *  icao-change guard: a deselect followed by a same-turn re-track of the SAME
-   *  icao (Contacts re-entry, a cross-layer round trip back to this layer) never
-   *  makes `_trackedIcao` *observably* change, so the guard never fires. Without
-   *  the reset, a contact dropped inside the hysteresis band comes back as a
-   *  MODEL above the ENTER ceiling, and a contact whose GLB had already failed
-   *  out would never get its retries back. Mirror of flights.js. */
+  /** Start a selection's tracked-model state afresh: the model it draws
+   *  with (whatever the fleet drew it with, a model or its icon) and the
+   *  load-failure budget. Called from each path that changes which contact
+   *  is selected — deselect, re-track, cross-layer handoff, init, destroy. */
 
   function _resetTrackedSelectionState() {
-    flightState._trackedZoomLatched = false;
-    flightState._trackedZoomLatchIcao = null;
+    flightState._trackedModelEligible = Boolean(
+      flightState._trackedIcao &&
+      flightState._models?.has(flightState._trackedIcao),
+    );
     flightState._trackedModelFailIcao = null;
     flightState._trackedModelFailCount = 0;
     flightState._trackedModelRetryAtMs = 0;
   }
 
-  /** Whether the driver may start another tracked-model load this frame. */
-
-  function _trackedModelLoadAllowed(nowMs = Date.now()) {
-    if (flightState._trackedModelFailIcao !== flightState._trackedIcao)
-      return true; // untried selection
-    if (flightState._trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS)
-      return false;
-    return nowMs >= flightState._trackedModelRetryAtMs;
-  }
-
-  /** Record a rejected tracked-model load and arm the backoff / give-up latch. */
-
-  function _noteTrackedModelLoadFailure(url, err) {
-    if (flightState._trackedModelFailIcao !== flightState._trackedIcao) {
-      flightState._trackedModelFailIcao = flightState._trackedIcao;
-      flightState._trackedModelFailCount = 0;
-    }
-    flightState._trackedModelFailCount += 1;
-    flightState._trackedModelRetryAtMs =
-      Date.now() + TRACKED_MODEL_RETRY_BACKOFF_MS;
-    if (flightState._trackedModelFailCount >= TRACKED_MODEL_MAX_LOAD_FAILS) {
-      console.warn(
-        `[Data:Military] tracked 3D model gave up after ${flightState._trackedModelFailCount} failed loads of ${url} — ` +
-          'this contact stays 2D until another is selected',
-        err,
-      );
-    }
-  }
-
   /**
-   * The TRACKED aircraft's own model regime — DEFAULT-ON, camera-distance driven
-   * (owner directive 2026-08-19). Mirror of flights.js: this does NOT consult the
-   * DISPLAY-rail `models3d` toggle, which keeps owning the FLEET
-   * (`_modelRegimeActive`) and its draw-call budget. Thresholds + hysteresis live
-   * in trackedModelRegime.js — enter at TRACKED_MODEL_ENTER_ALT_M (150_000 m, the
-   * owner's playtested swap distance, deliberately NEARER than the fleet's 800 km
-   * ceiling this used to inherit), hand back only above
-   * TRACKED_MODEL_EXIT_ALT_M so a boundary orbit cannot flap billboard↔model.
-   * First-person means your own airframe is not drawn in cockpit — the eye sits
-   * metres from its origin.
+   * Whether the TRACKED aircraft draws as its 3D model: exactly when the
+   * fleet's own rule would draw it so (`_modelRegimeActive` — 3D on and the
+   * camera below the ceiling — and a place in the nearest-first cap, which
+   * the fleet pass keeps in `_trackedModelEligible`). Selecting a contact
+   * therefore never turns its icon into a model or its model into an icon.
+   * A converted TR-3B has no 3D asset, and in cockpit you sit in your own
+   * airframe, so neither draws one.
    */
 
   function _trackedModelRegimeActive() {
-    if (flightState._trackedZoomLatchIcao !== flightState._trackedIcao) {
-      flightState._trackedZoomLatchIcao = flightState._trackedIcao;
-      flightState._trackedZoomLatched = false;
-    }
-    // A converted TR-3B has no 3D asset — suppressing the regime keeps its
-    // tracked billboard fully opaque (the colour callback reads this too), so
-    // the triangle stays the visual all the way in. Mirror of flights.js.
     if (
       !flightState._trackedIcao ||
       flightState._cockpitContactMode ||
       isTr3b(flightState._trackedIcao)
-    ) {
-      flightState._trackedZoomLatched = false;
+    )
       return false;
-    }
-    flightState._trackedZoomLatched = trackedModelZoomActive(
-      flightState._viewer?.camera?.positionCartographic?.height,
-      flightState._trackedZoomLatched,
+    return (
+      flightState._trackedModelEligible === true &&
+      parts.rendering._modelRegimeActive()
     );
-    return flightState._trackedZoomLatched;
   }
 
   /** Seed the tracked billboard's 2D orientation before a 3D→2D handoff. */
@@ -504,10 +509,10 @@ export function createTracking({
     if (!flightState._trackedIcao || !flightState._viewer) return;
     const pos =
       parts.motion._trackedDisplayCached() ||
-      flightState._billboards.get(flightState._trackedIcao)?.position;
+      parts.icons._iconPosition(flightState._trackedIcao, vec());
     if (!pos) return;
-    const projected = screenProjectedRotation(
-      flightState._viewer.scene,
+    const projected = courseScreenRotation(
+      _pose(),
       pos,
       parts.motion._trackedDisplayCourse(),
       flightState._lastTrackedRotation,
@@ -528,33 +533,29 @@ export function createTracking({
    * invariant), so every position entering the TRAIL subsystem (seed, append,
    * per-frame head) goes through this instead — the visible taxi history sits
    * on the surface without touching the billboard/model machinery.
-   * @param {Cesium.Cartesian3} position - Owned position (mutated/replaced freely).
-   * @returns {Cesium.Cartesian3} The same or a lifted position.
+   * @param {{x: number, y: number, z: number}} position - Owned ECEF position (mutated/replaced freely).
+   * @returns {{x: number, y: number, z: number}} The same or a lifted position.
    */
 
   function _trailFloorPosition(position) {
-    const carto = Cesium.Cartographic.fromCartesian(
-      position,
-      Cesium.Ellipsoid.WGS84,
-      flightState._scratchTrailCarto,
-    );
+    const carto = toLonLatH(position);
     if (!carto) return position;
-    const latDeg = Cesium.Math.toDegrees(carto.latitude);
-    const lonDeg = Cesium.Math.toDegrees(carto.longitude);
+    const latDeg = carto.lat;
+    const lonDeg = carto.lon;
     const floored = floorAltitudeM(
       carto.height,
       cachedGroundFloor(latDeg, lonDeg),
     );
     if (floored == null || floored === carto.height) return position;
-    return Cesium.Cartesian3.fromDegrees(lonDeg, latDeg, floored);
+    return fromDegrees(lonDeg, latDeg, floored);
   }
 
   /**
    * Put one report into the tracked aircraft's trail, in time order, and
-   * refresh the rendered trail. Caller passes an owned (cloned) Cartesian3. A
+   * refresh the rendered trail. Caller passes an owned (cloned) position. A
    * report that breaks from its neighbour starts a new segment (see
    * trailContinuity).
-   * @param {Cesium.Cartesian3} position - The report's position.
+   * @param {{x: number, y: number, z: number}} position - The report's ECEF position.
    * @param {number} [epochMs] - The report's time; defaults to the tracked
    *   aircraft's newest position-history fix, which every caller has just pushed.
    * @param {{nullAltitude?: boolean}} [options] - `nullAltitude`: the report
@@ -563,7 +564,11 @@ export function createTracking({
    *   drawn after it (see `insertTrailFix`).
    */
 
-  function _appendTrailFix(position, epochMs, { nullAltitude = false } = {}) {
+  function _appendTrailFix(
+    position,
+    epochMs,
+    { nullAltitude = false, track = undefined } = {},
+  ) {
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     const timeMs = Number.isFinite(epochMs)
       ? epochMs
@@ -573,65 +578,30 @@ export function createTracking({
       _trailFloorPosition(position),
       timeMs,
       TRAIL_MAX_POINTS,
-      {
-        nullAltitude,
-        displayMs: flightState.now() - displayDelayMs(flightState),
-        settleMs: DR_CORRECTION_MS,
-      },
+      { nullAltitude, track },
     );
     _refreshTrailDisplay();
   }
 
   /**
-   * Per-frame trail work, run from the layer's preRender pass whether or not
-   * the head is visible: record where the tracked icon is drawn (at most once
-   * a second or every 150 m, floored like the head) and move the body on as
-   * the display time passes reports. The head callback only reads the result.
+   * Per-frame trail work, run before each frame draws whether or not the
+   * head is visible: move the body on as the display time passes reports.
+   * The head only reads the result.
    */
 
   function _trailTick() {
     if (!flightState._trackedIcao || !flightState._trail) return;
-    const displayMs = flightState.now() - displayDelayMs(flightState);
-    let changed = false;
-    if (
-      flightState._trailFixes.length &&
-      !parts.motion._isTrackWarmingUp() &&
-      !trailRecordingBlocked(flightState._trailFixes, displayMs)
-    ) {
-      const drawn = parts.motion._trackedDisplayPosition(
-        flightState._trackedIcao,
-      );
-      const last = flightState._trailRecordPosition;
-      if (
-        drawn &&
-        (!last ||
-          displayMs - flightState._trailRecordMs >= TRAIL_RECORD_STEP_MS ||
-          Cesium.Cartesian3.distance(last, drawn) >= TRAIL_RECORD_STEP_M)
-      ) {
-        flightState._trailRecordMs = displayMs;
-        flightState._trailRecordPosition = Cesium.Cartesian3.clone(
-          drawn,
-          flightState._trailRecordPosition ?? undefined,
-        );
-        changed = recordTrailPoint(
-          flightState._trailFixes,
-          _trailFloorPosition(Cesium.Cartesian3.clone(drawn)),
-          displayMs,
-          TRAIL_MAX_POINTS,
-        );
-      }
-    }
-    if (changed || _trailBodyCountNow() !== flightState._trailBodyCount)
+    if (_trailBodyCountNow() !== flightState._trailBodyCount)
       _refreshTrailDisplay();
   }
 
   /**
-   * Renders the trail BODY — the accumulated fixes at or before the delayed display
-   * time (now − RENDER_DELAY_SEC). Newer fixes are AHEAD of the icon, so drawing them
-   * would push the trail in FRONT of the plane. The cheap per-frame _trailHeadEntity
-   * segment bridges the last body point to the delayed dead-reckoned head, so the
-   * body rebuilds only on a real fix or when the display time passes one, never at
-   * motion cadence. A break lifts the pen: each segment is
+   * Renders the trail BODY — the reports at or before the delayed display time,
+   * joined along the curve the aircraft is drawn along. Newer reports are AHEAD of
+   * the icon, so drawing them would push the trail in FRONT of the plane. The
+   * per-frame head runs on along the same curve from the last body report to the
+   * icon, so the body rebuilds only on a real report or when the display time
+   * passes one, never at motion cadence. A break lifts the pen: each segment is
    * its own line, nothing between them.
    */
 
@@ -644,19 +614,104 @@ export function createTracking({
     );
   }
 
-  /** Fixes at or before the time the aircraft is drawn (now − RENDER_DELAY_SEC),
-   *  less the newest recorded points inside its 3D model. */
+  /** Reports at or before the time the aircraft is drawn (`_trailDisplayMs`). */
 
   function _trailBodyCountNow() {
-    return trailBodyCountOutsideModel(
+    return trailBodyCount(flightState._trailFixes, _trailDisplayMs());
+  }
+
+  /**
+   * The time on its trail at which a host-supplied placement draws the
+   * aircraft, read off the trail where it is drawn (`trailTimeAt`): such a
+   * placement draws at a delay of its own, not this layer's. NaN when this
+   * layer's own motion draws it, or the trail has no pair to read.
+   * @returns {number} Epoch ms or NaN.
+   */
+  function _placedTrailMs() {
+    if (!parts.motion._trackedPlaced?.()) return NaN;
+    return trailTimeAt(
       flightState._trailFixes,
-      trailBodyCount(
+      parts.motion._trackedDisplayCached(),
+    );
+  }
+
+  /**
+   * The time the trail runs up to: the time the aircraft is drawn at, now −
+   * the display delay, or where a placement draws it. Otherwise the trail
+   * ends short of a placed aircraft, or runs on ahead of it.
+   * @returns {number} Epoch ms.
+   */
+  function _trailDisplayMs() {
+    const placedMs = _placedTrailMs();
+    return Number.isFinite(placedMs)
+      ? placedMs
+      : flightState.now() - displayDelayMs(flightState);
+  }
+
+  /** Whether the trail holds no report behind the aircraft yet: this
+   *  layer's own motion draws it before its oldest fix. Never for an
+   *  aircraft a placement draws: its trail is read where it is drawn. */
+  function _trailWarmingUp() {
+    return (
+      !Number.isFinite(_placedTrailMs()) && parts.motion._isTrackWarmingUp()
+    );
+  }
+
+  /**
+   * The live head: the last DISPLAYED body point to the delayed head, or no
+   * positions while there is none.
+   * @returns {Array<{x: number, y: number, z: number}>}
+   */
+  function _trailHeadPositions() {
+    // The head starts at the last DISPLAYED body point, the newest fix at or
+    // before the delayed display time; a fix ahead of the icon would draw the
+    // segment IN FRONT of the plane. During warm-up the icon predates all real
+    // history, so there is no valid body point behind it.
+    if (
+      !flightState._trackedIcao ||
+      !flightState._trailFixes.length ||
+      _trailWarmingUp()
+    )
+      return [];
+    const head =
+      parts.motion._trackedTrailCached() ||
+      parts.motion._trackedDisplayPosition(flightState._trackedIcao);
+    if (!head) return [];
+    // The last body report → the icon. No head across a break: a body point
+    // more than 150 km away, or too long ago or too far to be one path, stays
+    // detached; none while the aircraft holds at its last point.
+    const last = trailHeadStartFix(
+      flightState._trailFixes,
+      head,
+      flightState.now(),
+      flightState._trailBodyCount,
+    );
+    if (!last) return [];
+    // Floor the head too (round 2): a grounded tracked contact's DR
+    // display height is the pre-datum default — without this the last
+    // segment dives underground while taxiing. The model envelope is
+    // measured against the FLOORED endpoint, which is the one actually drawn.
+    const end = _trailFloorPosition(clone(head));
+    return trailHeadLine(
+      last.position,
+      // Along the curve the icon is drawn along, to where it is now.
+      trailHeadCurvePoints(
         flightState._trailFixes,
-        flightState.now() - displayDelayMs(flightState),
+        flightState._trailBodyCount,
+        _trailDisplayMs(),
       ),
+      end,
       parts.motion._trackedModelCenterWorld(),
       parts.motion._trackedModelEnvelopeM(),
+      flightState._scratchTrailHead,
     );
+  }
+
+  /** Each drawn frame, before it draws: the trail moved on, then the live
+   *  head where the aircraft is now. */
+  function _drawTrailHead() {
+    _trailTick();
+    flightState._trail?.setHead(_trailHeadPositions());
   }
 
   /**
@@ -669,11 +724,9 @@ export function createTracking({
   function _startTrail(icao24) {
     flightState._trailBackfillToken += 1;
     flightState._trailFixes = [];
-    flightState._trailRecordPosition = null;
-    flightState._trailRecordMs = -Infinity;
     const history = flightState._positionHistory.get(icao24) || [];
     // Seed every report. The body only draws those at or before the delayed
-    // display time (now − RENDER_DELAY_SEC); newer ones join it as the display
+    // display time (now − displayDelayMs); newer ones join it as the display
     // passes them. A synthetic forward fix (it carries `reportEpochMs`) is a
     // motion aid, never a report. A report drawn at an invented height keeps
     // no position and breaks the line.
@@ -684,10 +737,14 @@ export function createTracking({
       // the surface instead (pure lift; airborne fixes pass through).
       insertTrailFix(
         flightState._trailFixes,
-        _trailFloorPosition(Cesium.Cartesian3.clone(fix.position)),
+        _trailFloorPosition(clone(fix.position)),
         historyFixEpochMs(fix),
         TRAIL_MAX_POINTS,
-        { nullAltitude: fix.inventedHeight === true },
+        {
+          nullAltitude: fix.inventedHeight === true,
+          onGround: fix.onGround,
+          track: fix.track,
+        },
       );
     }
     if (!flightState._trail && flightState._viewer) {
@@ -697,81 +754,18 @@ export function createTracking({
       });
     }
     flightState._trail?.setVisible(!flightState._cockpitContactMode);
-    // Live head segment: last DISPLAYED body point → current dead-reckoned icon, updated
-    // every frame via a CallbackProperty (Cesium updates entity-polyline positions cheaply,
-    // unlike the trail primitive which fully rebuilds on setPositions). Keeps the head glued
-    // to the 12 Hz icon instead of lagging ~1 s behind it.
-    if (!flightState._trailHeadEntity && flightState._viewer) {
-      flightState._trailHeadEntity = flightState._viewer.entities.add({
-        // 'gev-trail' namespace (round 6): claimed by trailRenderer's pick
-        // owner so a click on the head segment never reads as empty space.
-        id: `gev-trail:mil-head-${++flightState._trailHeadSeq}`,
-        show: !flightState._cockpitContactMode,
-        polyline: {
-          positions: new Cesium.CallbackProperty(() => {
-            // The head starts at the last DISPLAYED body point, the newest fix at or
-            // before the delayed display time; a fix ahead of the icon would draw the
-            // segment IN FRONT of the plane. During warm-up the icon predates all real
-            // history, so there is no valid body point behind it.
-            if (
-              !flightState._trackedIcao ||
-              !flightState._trailFixes.length ||
-              parts.motion._isTrackWarmingUp()
-            )
-              return [];
-            const head =
-              parts.motion._trackedTrailCached() ||
-              parts.motion._trackedDisplayPosition(flightState._trackedIcao);
-            if (!head) return [];
-            // The last body point (a report, or where the icon was drawn a
-            // moment ago) → the icon. The body is moved on by _trailTick, never
-            // here: a callback must not add or remove entities.
-            // No head across a break: a body point more than 150 km away, or
-            // too long ago or too far to be one path, stays detached; none while
-            // the aircraft holds at its last point.
-            const last = trailHeadStartFix(
-              flightState._trailFixes,
-              head,
-              flightState.now(),
-              flightState._trailBodyCount,
-            );
-            if (!last) return [];
-            const start = last.position;
-            // Floor the head too (round 2): a grounded tracked contact's DR
-            // display height is the pre-datum default — without this the last
-            // segment dives underground while taxiing.
-            const end = _trailFloorPosition(Cesium.Cartesian3.clone(head));
-            // On a contact that has not moved this segment runs from inside the
-            // model out to its own anchor — a line through the fuselage. The END
-            // never gives, so a moving trail still terminates on the tail; the
-            // START is what slides, from nothing on a parked contact out to the
-            // whole segment once it has cleared its own envelope. Measured against
-            // the FLOORED endpoint, which is the one actually drawn.
-            // See trailHeadStart.
-            const from = trailHeadStart(
-              start,
-              end,
-              parts.motion._trackedModelCenterWorld(),
-              parts.motion._trackedModelEnvelopeM(),
-              flightState._scratchTrailHead,
-            );
-            if (!from) return [];
-            return [from, end];
-          }, false),
-          width: 2.5,
-          material: Cesium.Color.fromCssColorString(TRAIL_COLOR).withAlpha(0.9),
-          // Round 4: the head must never vanish into the mesh either (dimmed
-          // when occluded so depth still reads).
-          depthFailMaterial:
-            Cesium.Color.fromCssColorString(TRAIL_COLOR).withAlpha(0.45),
-          arcType: Cesium.ArcType.GEODESIC, // round 8: consistent with the trail body (no chords)
-        },
-      });
+    // Live head segment: last displayed body point → current dead-reckoned icon, drawn
+    // again each frame before it draws, so it stays glued to the 12 Hz icon instead of
+    // lagging ~1 s behind it. Only the head line is rebuilt; the body rebuilds on a real
+    // fix (poll cadence). Dimmed where occluded (round 4), geodesic as the body (round 8).
+    if (!flightState._trailHeadOff && flightState._viewer) {
+      flightState._trailHeadOff =
+        findFrame(flightState._viewer)?.on('preRender', _drawTrailHead) ?? null;
     }
     _refreshTrailDisplay();
 
     const oldestFixEpochSec = history.length
-      ? Cesium.JulianDate.toDate(history[0].time).getTime() / 1000
+      ? julianToEpochMs(history[0].time) / 1000
       : Infinity;
     _backfillTrail(icao24, flightState._trailBackfillToken, oldestFixEpochSec);
   }
@@ -873,17 +867,23 @@ export function createTracking({
           cachedGroundFloor(lat, lon),
         );
         return {
-          position:
-            altM == null ? null : Cesium.Cartesian3.fromDegrees(lon, lat, altM),
+          position: altM == null ? null : fromDegrees(lon, lat, altM),
           timeMs,
           nullAltitude: known == null,
         };
       }),
     );
+    // A history that ends in the air does not join an aircraft now on the
+    // ground (or the reverse) across a landing or take-off nobody saw.
     flightState._trailFixes = joinTrailBackfill(
       backfill,
       flightState._trailFixes,
       TRAIL_MAX_POINTS,
+      {
+        backfillEndsOnGround: parsed[parsed.length - 1].onGround,
+        onGroundNow: flightState.records.data.get(icao24)?.onGround,
+        nowMs: flightState.now(),
+      },
     );
     _refreshTrailDisplay();
   }
@@ -895,21 +895,9 @@ export function createTracking({
   function _clearTrail() {
     flightState._trailBackfillToken += 1;
     flightState._trailFixes = [];
-    flightState._trailRecordPosition = null;
-    flightState._trailRecordMs = -Infinity;
     if (flightState._trail) flightState._trail.clear();
-    if (
-      flightState._trailHeadEntity &&
-      flightState._viewer &&
-      !flightState._viewer.isDestroyed()
-    ) {
-      try {
-        flightState._viewer.entities.remove(flightState._trailHeadEntity);
-      } catch {
-        /* already gone */
-      }
-    }
-    flightState._trailHeadEntity = null;
+    flightState._trailHeadOff?.();
+    flightState._trailHeadOff = null;
   }
 
   /**
@@ -926,7 +914,7 @@ export function createTracking({
 
   /**
    * Stop tracking the current aircraft and clean up all tracking state.
-   * Restores the original billboard, removes the tracked Entity, invalidates
+   * Hands the contact back to its icon, removes the tracked Entity, invalidates
    * the per-frame DR cache, and RELEASES the camera IN PLACE — no flyTo
    * (mirror of flights.js). Deselect used to fly an ~80 km pulled-back
    * overview; the owner field-ruled that wrong (2026-07-02: "it randomly zooms
@@ -936,7 +924,7 @@ export function createTracking({
    * and voice stopTracking.
    *
    * @param {boolean} [skipViewerUntrack=false] - ANOTHER layer just grabbed the
-   *   follow-camera: tear down our own state but leave viewer.trackedEntity
+   *   follow-camera: tear down our own state but leave the camera's follow
    *   alone (the new owner controls it).
    * @param {object} [options] - Clear origin.
    * @param {boolean} [options.evicted=false] - The contact aged out of the feed
@@ -949,8 +937,7 @@ export function createTracking({
     skipViewerUntrack = false,
     { evicted = false, origin = 'programmatic' } = {},
   ) {
-    flightState._trackedCameraFrameStop?.();
-    flightState._trackedCameraFrameStop = null;
+    flightState._followTarget = null;
     if (!flightState._trackedIcao) {
       clearFocusTarget('militaryFlights');
       return;
@@ -958,50 +945,30 @@ export function createTracking({
     const clearedIcao = flightState._trackedIcao;
     clearFocusTarget('militaryFlights', clearedIcao);
 
-    // Restore the original billboard appearance. The rotation is re-seeded from
-    // the tracked entity's last rendered rotation and a rotation pass is forced
-    // (_lastCamPoseSig below): the fleet billboard otherwise reappears with the
-    // STALE screen rotation it had when tracking began — up to a full
-    // ROTATION_REFRESH_MS of a wrong (possibly reversed) nose on release.
-    if (flightState._billboards.has(flightState._trackedIcao)) {
-      const bb = flightState._billboards.get(flightState._trackedIcao);
-      const meta = flightState.records.data.get(flightState._trackedIcao);
-      bb.show = true;
-      bb.width = 20;
-      bb.height = 20;
-      // Ground-aware restore (a plane untracked while taxiing comes back at
-      // ground scale; the fleet tint is amber, or red while broadcasting an
-      // emergency, on the ground and in the air).
-      bb.scale =
-        BILLBOARD_SCALE *
-        (CLASS_SCALE_2D[meta?.klass] || 1) *
-        (meta?.onGround ? GROUND_SCALE : 1);
-      bb.color = parts.rendering._fleetBillboardColor(
-        flightState._trackedIcao,
-        meta,
-      );
-      bb.rotation = flightState._lastTrackedRotation;
-    }
-    flightState._lastCamPoseSig = ''; // force a fleet rotation pass on the next tick
+    // The nose the icon continues from (the shared _displayCourse entry), so
+    // release never flips it.
+    const trackedCourseDeg = flightState._displayCourse.get(clearedIcao);
 
-    // Stop tracking and remove the entity. skipViewerUntrack: another layer just grabbed the
-    // follow-camera, so tear down our state but DON'T clear viewer.trackedEntity (they own it now).
-    // Releasing trackedEntity does NOT move the camera: Cesium resets the lookAt transform in
-    // place, so the view stays where the follow left it and the user can immediately orbit/zoom.
+    // Stop tracking and hide the tracked billboard. skipViewerUntrack: another layer just grabbed
+    // the follow-camera, so tear down our state but DON'T clear the camera's follow (they own it
+    // now). Releasing the follow does NOT move the camera: the view stays where the follow left it
+    // and the user can immediately orbit/zoom.
     if (flightState._viewer && !skipViewerUntrack) {
-      flightState._viewer.trackedEntity = undefined;
+      stopFollowing(flightState._viewer);
     }
-    if (flightState._trackedEntity) {
-      flightState._viewer.entities.remove(flightState._trackedEntity);
-      flightState._trackedEntity = null;
-    }
+    trackedIcon.hide();
+    flightState._trackedEntity = null;
     parts.rendering._releaseTrackedModel();
     _resetTrackedSelectionState(); // the zoom band + load-failure budget belong to the selection we just dropped
     flightState._trackedIcao = null;
-    parts.rendering._applyFleetBillboardPresentation(
-      clearedIcao,
-      flightState._billboards.get(clearedIcao),
-    );
+    // Hand the contact back to its icon only now, once it no longer reads as
+    // tracked (the settle plans it as a fleet contact).
+    // Its fleet model, kept loaded while it was selected, takes it back in
+    // this frame; the icon shows only when there is no loaded one.
+    parts.rendering._handBackDeselected(clearedIcao);
+    if (flightState._icons?.has(clearedIcao))
+      parts.icons._settleIcon(clearedIcao, { fromCourseDeg: trackedCourseDeg });
+    parts.icons._applyIconPresentation(clearedIcao);
     clearTrackedSubjectContext('military');
     _emitAwarenessEvent('gev:awareness-subject-cleared', {
       layerId: 'military',
@@ -1022,10 +989,7 @@ export function createTracking({
       pending.generation !== flightState._trackingIntentGeneration
     )
       return false;
-    if (
-      !flightState._billboardCollection?.show ||
-      !flightState._billboards.has(pending.id)
-    )
+    if (!flightState._icons?.show || !flightState._icons.has(pending.id))
       return false;
     flightState._pendingTrackingRestore = null;
     _trackFlight(pending.id, { origin: pending.origin });
@@ -1039,156 +1003,162 @@ export function createTracking({
 
   /**
    * Begin tracking a specific aircraft. Clears any previous tracking, hides the
-   * billboard, creates a new Entity with dead-reckoning CallbackProperties for
+   * icon, creates a new Entity with dead-reckoning CallbackProperties for
    * smooth continuous motion, and sets the viewer's trackedEntity so the camera
    * follows.
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
+   * @param {{origin?: string, keepView?: boolean}} [options] `keepView` (a
+   *   click on the plane): follow from the camera's own distance and angle,
+   *   the plane sliding to the centre, rather than the calibrated framing.
    */
 
-  function _trackFlight(icao24, { origin = 'programmatic' } = {}) {
+  function _trackFlight(
+    icao24,
+    { origin = 'programmatic', keepView = false } = {},
+  ) {
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
-    const bb = flightState._billboards.get(icao24);
+    const icons = flightState._icons;
     const info = flightState.records.data.get(icao24);
-    if (!bb || !info) return;
+    if (!icons?.has(icao24) || !info) return;
 
+    // The tracked limiter continues from the nose the icon was drawn with, and
+    // the entity starts with the rotation the icon had on screen.
+    const t = parts.icons._displayMs();
+    const iconPosition = icons.position(icao24, t, vec());
+    const iconCourse = icons.course(icao24, t);
+    flightState._displayCourse.set(icao24, iconCourse);
     flightState._trackedIcao = icao24;
     _resetTrackedSelectionState(); // fresh selection: enter at the ENTER ceiling, full load-retry budget
     flightState._cachedDRFrame = -1;
-    flightState._lastTrackedRotation = bb.rotation || 0;
-    // Drop any fleet 3D model for this aircraft — the tracked entity now owns its visual (its
-    // own billboard + model graphic), and the fleet tick skips the tracked icao, so a leftover
-    // fleet model would be orphaned + double-rendered.
-    parts.rendering._releaseModel(icao24);
+    flightState._lastTrackedRotation =
+      courseScreenRotation(_pose(), iconPosition, iconCourse, 0) ?? 0;
+    // A fleet 3D model this aircraft had keeps drawing it until the tracked
+    // model is ready (`_updateTrackedModel` lets it go then), so it never
+    // turns into its icon for the frames the tracked model takes to load.
 
-    // Hide the billboard -- the tracked entity replaces it visually
-    bb.show = false;
+    // Hide the icon -- the tracked entity replaces it visually
+    icons.setShown(icao24, false);
 
     // Helper: smoothed, per-frame-cached tracked position (see _trackedDisplayPosition —
     // one computation shared by the position/rotation/trail-head callbacks, with
-    // discontinuity reconciliation). Falls back to the last billboard position when the
+    // discontinuity reconciliation). Falls back to the icon's position when the
     // aircraft has no fix.
     const getTrackedPosition = () =>
-      parts.motion._trackedDisplayPosition(icao24) || bb.position;
+      parts.motion._trackedDisplayPosition(icao24) ||
+      parts.icons._iconPosition(icao24, vec()) ||
+      iconPosition;
 
-    // Dead-reckoning position property evaluated every render frame.
-    // isConstant = false so CesiumJS re-evaluates each frame.
-    const positionProperty = new Cesium.CallbackProperty(() => {
-      return getTrackedPosition();
-    }, false);
-
-    // World-space orientation for the 3D model: nose along the course heading (ENU, pitch/roll 0).
-    // Create tracked entity: a 2D billboard when zoomed out, a 3D model when zoomed in past the
-    // TRACKED altitude ceiling. That handoff is DEFAULT behaviour — it does NOT wait on the
-    // DISPLAY-rail 3D toggle, which arms the FLEET. The plane the user zooms into always
+    // The tracked billboard: a 2D icon when zoomed out, handing over to the 3D model when zoomed
+    // in past the TRACKED altitude ceiling. That handoff is DEFAULT behaviour — it does NOT wait on
+    // the DISPLAY-rail 3D toggle, which arms the FLEET. The plane the user zooms into always
     // resolves into an aircraft.
     //
     // The billboard stays SHOWN at all times and is hidden by going TRANSPARENT (alpha 0), not by
-    // show=false. This is deliberate: viewer.trackedEntity derives the follow-camera framing from
-    // the entity's bounding sphere, and a 3D model graphic reports a PENDING sphere until its glTF
-    // finishes loading. If we hid the billboard outright, tracking a plane while already zoomed in
-    // would stall the centering until the model loaded. A shown-but-transparent billboard always
-    // supplies a ready sphere, so framing is instant; we only drop its alpha once the model GLB is
-    // preloaded (_planeModelLoaded), so there's neither a billboard+model double-image nor a gap.
-    // The tracked entity is a PURE BILLBOARD — no label or model graphic. The tracked plane's 3D
-    // model is the standalone primitive driven by _updateTrackedModel(); keeping it off the entity is
-    // what makes the follow-camera's bounding sphere always ready (see _trackedModel).
-    flightState._trackedEntity = flightState._viewer.entities.add({
-      position: positionProperty,
-      // Keep Cesium's EntityView in the same ENU frame as the close-range
-      // camera guard; AUTO may otherwise alternate with a velocity frame.
-      trackingReferenceFrame: Cesium.TrackingReferenceFrame.ENU,
-      billboard: {
-        image: aircraftIcon(
-          parts.rendering._iconKind(
-            flightState._trackedIcao,
-            flightState.records.data.get(flightState._trackedIcao)?.klass,
-          ),
-          TRACKED_ICON_PX,
-        ),
-        width: 28,
-        height: 28,
-        scale:
-          BILLBOARD_SCALE *
-          (CLASS_SCALE_2D[
-            flightState.records.data.get(flightState._trackedIcao)?.klass
-          ] || 1),
-        // Solid amber (faded while stale) when the billboard is the visual (zoomed out, 3D off,
-        // or model still loading); transparent once the STANDALONE tracked model is actually up.
-        color: new Cesium.CallbackProperty(_trackedIconColor, false),
-        sizeInMeters: false,
-        scaleByDistance: new Cesium.NearFarScalar(1000, 3.0, 8000000, 0.5),
-        alignedAxis: Cesium.Cartesian3.ZERO,
-        // The tracked target must never vanish into tile geometry — tracking a
-        // taxiing plane at street level would otherwise bury the amber icon inside
-        // the runway skin exactly like the fleet ground icons (_groundDepthDistance);
-        // its shared-host tracked card is top-composited separately.
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        // Screen-projected rotation, evaluated per frame: exact in tracked-orbit
-        // mode where camera.heading lives in the entity's reference frame.
-        rotation: new Cesium.CallbackProperty(() => {
-          const tracked = flightState.records.data.get(
-            flightState._trackedIcao,
-          );
-          const pos = getTrackedPosition();
-          if (!tracked || !pos || !flightState._viewer)
-            return flightState._lastTrackedRotation;
-          const projected = screenProjectedRotation(
-            flightState._viewer.scene,
-            pos,
-            parts.motion._trackedDisplayCourse(),
-            flightState._lastTrackedRotation,
-          );
-          const rot = stabilizeScreenRotation(
-            flightState._lastTrackedRotation,
-            projected,
-          );
-          if (rot !== null) flightState._lastTrackedRotation = rot;
+    // show=false: it drops its alpha only once the tracked model is drawing, so there's neither a
+    // billboard+model double-image nor a gap. The camera follows its own target through the camera
+    // port, so nothing here frames the camera. The tracked plane's 3D model is a draw-set item
+    // driven by _updateTrackedModel() (see _trackedModel).
+    const sprite = _trackedSprite(icao24);
+    // The tracked contact as its readers see it (the tracked card, Cockpit, share links): a
+    // plain holder of its entity record, drawn while it is the one tracked.
+    const holder = trackedContactHolder(
+      `military:${icao24}`,
+      trackedIcon,
+      parts.motion._trackedDisplayCached,
+    );
+    flightState._trackedEntity = holder;
+    entityRecord(holder).drawn = () => flightState._trackedEntity === holder;
+    // The draw sets a height sample under the contact sees through (its
+    // icons and models), for Cockpit's ground probe.
+    entityRecord(holder).groundSets = () => {
+      const sets = [...parts.rendering._groundSampleExclusions().sets];
+      if (trackedIcon.setId) sets.push(trackedIcon.setId);
+      return sets;
+    };
+    trackedIcon.show({
+      id: icao24,
+      image: _trackedBillboardLook().image,
+      imageLod: _trackedBillboardLook().imageLod,
+      sprite,
+      position: getTrackedPosition,
+      // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
+      // or model still loading); transparent once the tracked model is actually up (ready + shown).
+      color: _trackedIconColor,
+      // Screen-projected rotation, evaluated per frame on the camera's own
+      // axes, so it stays exact through a tracked orbit. The tracked target
+      // must never vanish into tile geometry — tracking a taxiing plane at
+      // street level would otherwise bury the icon inside the runway
+      // skin, so it draws over depth like the fleet icon set; its
+      // shared-host tracked card is top-composited separately.
+      rotation: () => {
+        const tracked = flightState.records.data.get(flightState._trackedIcao);
+        const pos = getTrackedPosition();
+        if (!tracked || !pos || !flightState._viewer)
           return flightState._lastTrackedRotation;
-        }, false),
+        // A ground station's mast stands upright.
+        if (tracked.klass === 'station') return 0;
+        const projected = courseScreenRotation(
+          _pose(),
+          pos,
+          parts.motion._trackedDisplayCourse(),
+          flightState._lastTrackedRotation,
+        );
+        const rot = stabilizeScreenRotation(
+          flightState._lastTrackedRotation,
+          projected,
+        );
+        if (rot !== null) flightState._lastTrackedRotation = rot;
+        return flightState._lastTrackedRotation;
       },
     });
-    flightState._trackedEntity.gevSelectionOrigin = origin;
-    flightState._trackedEntity.gevTrackedId = `military:${icao24}`;
-    flightState._trackedEntity.gevLabelModel = trackedLabelModelFromText(
-      _buildTrackedLabel(info, icao24),
-      '#ffd166',
-    );
+    entityRecord(flightState._trackedEntity).selectionOrigin = origin;
+    entityRecord(flightState._trackedEntity).trackedId = `military:${icao24}`;
+    entityRecord(flightState._trackedEntity).sprite = sprite;
+    entityRecord(flightState._trackedEntity).labelModel =
+      trackedLabelModelFromText(_buildTrackedLabel(info, icao24), '#ffd166');
 
-    // A billboard has a ~zero bounding sphere, so Cesium's default follow distance is
-    // far too tight (the user had to scroll out to read the plane). Give the entity a
-    // calibrated viewFrom — behind + above, distance scaled to altitude — for a readable
+    // A click on the plane follows it from where the camera is (`keepView`,
+    // below). A selection from elsewhere (a search, voice, a share link) has no
+    // view of the plane to keep: a billboard has a ~zero bounding sphere, so the
+    // renderer's default follow distance is far too tight. It gets a calibrated
+    // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
-    flightState._trackedEntity.viewFrom = new Cesium.Cartesian3(
-      0,
-      -followRange * 0.8,
-      followRange * 0.55,
-    );
+    const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);
 
-    // Cancel any in-progress camera flight first — otherwise Cesium won't apply the tracked
-    // entity's viewFrom on the first frame, so voice-initiated tracking (which often fires
+    // Cancel any in-progress camera flight first — otherwise the camera won't apply the follow
+    // target's viewFrom on the first frame, so voice-initiated tracking (which often fires
     // mid-fly_to_location) would follow the plane WITHOUT centering it like a click does.
     // Cross-module HUD consumers (tracked-target readout) read the camera's settled position, not a
     // postRender recompute, so the label doesn't jitter against the now-stable plane (mirror of flights).
-    flightState._trackedEntity.gevDisplayPosition =
+    entityRecord(flightState._trackedEntity).displayPosition =
       parts.motion._trackedDisplayCached;
-    // Separate accessor on purpose (mirror of flights.js): `gevDisplayPosition` keeps the
+    // Separate accessor on purpose (mirror of flights.js): the entity record's `displayPosition` keeps the
     // follow-camera anti-jitter contract; presentation that must weld to the aircraft you
-    // can see reads `gevVisualPosition`.
-    flightState._trackedEntity.gevVisualPosition =
+    // can see reads the entity record's `visualPosition`.
+    entityRecord(flightState._trackedEntity).visualPosition =
       parts.motion._trackedVisualCached;
     refreshTrackedReadout(flightState._trackedEntity);
-    flightState._viewer.camera.cancelFlight();
-    // Camera follows the tracked entity
-    flightState._viewer.trackedEntity = flightState._trackedEntity;
-    flightState._trackedCameraFrameStop =
-      applyTrackedCameraFrame(
-        flightState._viewer,
-        flightState._trackedEntity,
-        flightState._trackedEntity.viewFrom,
-      ) || null;
+    // The camera follows through its port: a target framed from viewFrom in
+    // ENU, never closer than the readable minimum, whose presentation (key,
+    // label, sprite, display position) reads the tracked entity's record.
+    const camera = cameraOf(flightState._viewer);
+    camera.cancelFlight();
+    const kept = keepView
+      ? followViewFrom(camera.pose(), getTrackedPosition())
+      : null;
+    flightState._followTarget = entityFollowTarget(flightState._trackedEntity, {
+      position: getTrackedPosition,
+      frame: 'enu',
+      viewFrom: kept ?? viewFrom,
+      minRange: FOLLOW_MIN_RANGE_M,
+      // A click keeps the camera's distance and angle: the plane slides to
+      // the centre from where the camera is, and is followed from there.
+      ...(kept ? { transitionS: SELECTION_FOLLOW_TRANSITION_S } : {}),
+    });
+    camera.follow(flightState._followTarget);
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
     // Ground traffic draws NO trail — if the plane takes off while tracked, the
@@ -1223,36 +1193,34 @@ export function createTracking({
    * Clicking a military billboard starts tracking that aircraft; clicking empty
    * space or a non-military object deselects. Also attaches the Escape key
    * listener via {@link _onKeyDown}. Idempotent -- no-ops if already installed.
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {object} viewer - The viewer
    */
 
   function _installClickHandler(viewer) {
-    if (flightState._clickHandler) return; // already installed
+    if (flightState._clickSubscription) return; // already installed
 
     // Cross-layer untrack (mirror of flights): if another layer grabs the follow-camera, drop our
-    // tracking without touching viewer.trackedEntity (the new owner controls it).
+    // tracking without touching the camera's follow (the new owner controls it).
     if (!flightState._trackedEntityChangedRemove) {
-      flightState._trackedEntityChangedRemove =
-        viewer.trackedEntityChanged.addEventListener(() => {
+      flightState._trackedEntityChangedRemove = onFollowChanged(
+        viewer,
+        (followed) => {
           if (
             flightState._trackedIcao &&
             flightState._viewer &&
-            flightState._viewer.trackedEntity &&
-            flightState._viewer.trackedEntity !== flightState._trackedEntity
+            followed &&
+            followed !== flightState._followTarget
           ) {
             _clearTracking(true, {
-              origin:
-                flightState._viewer.trackedEntity?.gevSelectionOrigin ||
-                'programmatic',
+              origin: followed.selectionOrigin || 'programmatic',
             });
           }
-        });
+        },
+      );
     }
 
-    flightState._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    bindTrackingClickGesture(flightState._clickHandler, (click, gesture) => {
+    flightState._clickSubscription = inputFor(viewer).onClick((event) => {
+      const gesture = event.gesture;
       // Camera drags never select or deselect, even if they finish over a plane.
       // Duration alone is allowed through so a stationary long press can still
       // select/switch contacts; the destructive empty-space branch below applies
@@ -1262,48 +1230,24 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
-      const picked = pickContact
-        ? pickContact(viewer.scene, click.position)
-        : viewer.scene.pick(click.position);
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard?.(event)) return;
+      const picked = event.hit;
 
       if (picked) {
-        // Clicking the tracked entity itself -- ignore (don't deselect)
-        if (picked.id === flightState._trackedEntity) return;
-
-        // Clicking the plane we're ALREADY tracking (its standalone 3D model or
-        // any pick carrying its icao) — same no-op as the 2D tracked-entity click
-        // above. H1: the model used to have no pick id, so this fell through to
+        // Clicking the plane we're ALREADY tracking (its tracked billboard, its
+        // 3D model, or any pick carrying its icao) — ignore, don't deselect.
+        // H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
-        if (flightState._trackedIcao) {
-          const rawPick =
-            typeof picked.id === 'string' ? picked.id : picked.primitive?.id;
-          if (
-            picked.primitive === flightState._trackedModel ||
-            rawPick === flightState._trackedIcao
-          )
-            return;
-        }
-
-        // BillboardCollection picks: CesiumJS may expose the billboard as
-        // picked.primitive (with .id = icao24) or directly as picked.id
-        const billboard = picked.primitive;
-        if (
-          billboard &&
-          billboard.id &&
-          flightState._billboards.has(billboard.id)
-        ) {
-          _cancelPendingTrackingRestore();
-          _trackFlight(billboard.id, { origin: 'user' });
+        // Its billboard and models are draw-set items keyed by icao, like its icons.
+        const pickedIcao = aircraftPickId(picked);
+        if (flightState._trackedIcao && pickedIcao === flightState._trackedIcao)
           return;
-        }
-        // Fallback: some CesiumJS versions surface the id string at picked.id
-        if (
-          picked.id &&
-          typeof picked.id === 'string' &&
-          flightState._billboards.has(picked.id)
-        ) {
+
+        if (pickedIcao && flightState._icons?.has(pickedIcao)) {
           _cancelPendingTrackingRestore();
-          _trackFlight(picked.id, { origin: 'user' });
+          _trackFlight(pickedIcao, { origin: 'user', keepView: true });
           return;
         }
       }
@@ -1346,18 +1290,23 @@ export function createTracking({
     _refreshTr3bContact,
     _refreshTr3bForStyle,
     _resetTrackedSelectionState,
-    _trackedModelLoadAllowed,
-    _noteTrackedModelLoadFailure,
     _trackedModelRegimeActive,
+    _trackedBillboardLook,
+    _trackedSprite,
     _syncTracked2dRotation,
     _trailFloorPosition,
     _appendTrailFix,
     _trailTick,
+    _drawTrailHead,
+    _trailHeadPositions,
     _refreshTrailDisplay,
     _startTrail,
     _backfillTrail,
     _clearTrail,
     _destroyTrail,
+    /** Let the tracked billboard's set go (layer teardown). */
+    _disposeTrackedIcon: () => trackedIcon.dispose(),
+    /** The tracked billboard's set id, or null before one is made. */
     _clearTracking,
     _applyPendingTrackingRestore,
     _cancelPendingTrackingRestore,

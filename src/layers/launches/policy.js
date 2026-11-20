@@ -1,6 +1,9 @@
-import * as Cesium from 'cesium';
+import { TWO_PI, toRadians } from '../../geo/vector.js';
 
 export const WINDOW_DAYS = 30;
+
+/** Longest Space Missions waits for pending Satellites work to settle. */
+export const SATELLITE_SETTLE_TIMEOUT_MS = 30000;
 
 export const ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID = 'rocket-missions';
 
@@ -48,9 +51,9 @@ export const REPLAY_ORBIT_GLOBE_RANGE_M = 18000000;
 
 export const REPLAY_ORBIT_PULLBACK_FRACTION = 0.2;
 
-export const REPLAY_ASCENT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(30);
+export const REPLAY_ASCENT_CAMERA_OFFSET_RAD = toRadians(30);
 
-export const REPLAY_ORBIT_CAMERA_OFFSET_RAD = Cesium.Math.toRadians(45);
+export const REPLAY_ORBIT_CAMERA_OFFSET_RAD = toRadians(45);
 
 export const REPLAY_ORBIT_FRAME_CENTER_BLEND = 0.45;
 
@@ -64,7 +67,7 @@ export const MAX_POST_TLE_RETRIES = 1;
 
 export const POST_TLE_RETRY_DELAY_MS = 1500;
 
-export const EARTH_ROTATION_RAD_PER_SEC = Cesium.Math.TWO_PI / 86164.0905;
+export const EARTH_ROTATION_RAD_PER_SEC = TWO_PI / 86164.0905;
 
 export const PROJECTED_ASCENT_ROTATION_SEC = 600;
 
@@ -100,3 +103,10 @@ export const TRAJECTORY_STAGE_COLORS = [
   '#ffd166',
   '#60a5fa',
 ];
+
+/** Whether the cockpit view is on; it holds the camera while it is. */
+export function cockpitActive() {
+  return Boolean(
+    globalThis.document?.body?.classList?.contains?.('cockpit-mode'),
+  );
+}
