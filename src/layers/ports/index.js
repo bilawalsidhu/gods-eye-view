@@ -3,7 +3,12 @@ import { fromDegrees } from '../../geo/ellipsoid.js';
 import { drawOf, findFrame } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { createHorizonCull } from '../streetLevel/view.js';
-import { PORT_FACILITIES, portProfileLines, visibleWpiPort } from './records.js';
+import {
+  PORT_FACILITIES,
+  WPI_REFERENCE_URL,
+  portProfileLines,
+  visibleWpiPort,
+} from './records.js';
 
 export const PORTS_LAYER_ID = 'ports';
 const PICK_PREFIX = 'ports:';
@@ -34,6 +39,7 @@ export function createPortsLayer({
   picking = null,
   pointer = null,
   input = (viewer) => inputFor(viewer),
+  openExternal = null,
   now = Date.now,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
@@ -87,13 +93,26 @@ export function createPortsLayer({
       clearCard();
       return;
     }
+    const formatDay = (value) =>
+      Number.isFinite(value) ? new Date(value).toISOString().slice(0, 10) : 'Unavailable';
     overlayHost.setEntries(
       PORTS_LAYER_ID,
       [
         {
           id: `ports-card:${port.wpiNumber}`,
           title: port.name,
-          details: portProfileLines(port),
+          details: [
+            ...portProfileLines(port),
+            `NGA publication date: Unavailable`,
+            `Mirror last edit: ${formatDay(snapshot?.mirrorLastEditAt)}`,
+            `Retrieved: ${formatDay(snapshot?.retrievedAt)}`,
+            ...(snapshot?.partial ? ['WARNING: partial snapshot'] : []),
+            ...(snapshot?.stale ? ['WARNING: cached/stale snapshot'] : []),
+          ],
+          interactive: Boolean(openExternal),
+          ...(openExternal
+            ? { activate: () => (openExternal(WPI_REFERENCE_URL), true) }
+            : {}),
           selected: true,
           priority: Number.MAX_SAFE_INTEGER,
           accent: '#4bc6ca',
@@ -161,7 +180,16 @@ export function createPortsLayer({
     if (!dispatcher) return;
     clickOff = dispatcher.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
-      if (picking.clickCard?.(click)) return;
+      const cardHit = picking.clickCard?.(click) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === PORTS_LAYER_ID &&
+          cardHit.entryId === `ports-card:${records.get(selectedId)?.wpiNumber}` &&
+          openExternal
+        )
+          openExternal(WPI_REFERENCE_URL);
+        return;
+      }
       const id = click.topHit
         ? picking.resolvePickId?.(click.topHit)
         : null;
