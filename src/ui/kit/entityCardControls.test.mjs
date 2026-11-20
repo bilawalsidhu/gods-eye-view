@@ -31,9 +31,9 @@ const heroViews = [
 test('the entity card hand-writes no button; each is a UiButton', () => {
   for (const markup of [card, camera, nearby, ...heroViews])
     assert.deepEqual(markup.match(/<button\b/gi) ?? [], []);
-  // Photos, Route, 3D, Cockpit view, the cockpit entry, Fly to, Follow and
-  // Ask GEV.
-  assert.equal(card.match(/<UiButton\b/g)?.length, 8);
+  // Photos, Route, 3D, Cockpit view, Find it, the cockpit entry, Fly to,
+  // Follow and Ask GEV.
+  assert.equal(card.match(/<UiButton\b/g)?.length, 9);
   assert.equal(card.match(/<UiCloseButton\b/g)?.length, 1);
   // A camera's bigger view and More info; its popup closes with a UiCloseButton.
   assert.equal(camera.match(/<UiButton\b/g)?.length, 2);
@@ -59,9 +59,10 @@ test('the entity card hand-writes no Material glyph; each is a UiIcon', () => {
   for (const markup of [card, camera, nearby, ...heroViews])
     assert.deepEqual(markup.match(/material-symbols-outlined/g) ?? [], []);
   const counts = [
-    // The preview switch's three, the hero glyph, the header icon, the
-    // warning, the route's plane, the route note and the three actions.
-    [card, 11],
+    // The preview switch's three, the hero glyph, the header icon, Find
+    // it, the warning, the route's plane, the route note and the three
+    // actions.
+    [card, 12],
     // Bigger view, the popup's camera and More info.
     [camera, 3],
     // The two weather glyphs, five headings and three row glyphs.

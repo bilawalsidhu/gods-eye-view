@@ -27,6 +27,7 @@ import {
   followsClock,
 } from './policy.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 const UUID_KEY =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -626,6 +627,39 @@ export function createQueries({
       const record = state.selectedRecord;
       if (!record || !state.feed.enabled) return false;
       return components.selection.selectAndFocusVessel(record);
+    },
+
+    /**
+     * The track reference of a loaded vessel, so it can be looked up again
+     * once it has left the feed (see locate).
+     * @param {string} id
+     * @returns {string|null}
+     */
+    referenceOf(id) {
+      if (id === null || id === undefined) return null;
+      return recordFor(String(id).trim())?.reference ?? null;
+    },
+
+    /**
+     * Where a vessel is at the layer's time (the world clock's while the
+     * layer follows it, else now), from its own track: for a vessel that has
+     * left the feed, so it can be found again.
+     * @param {string} id
+     * @param {{reference?: string, signal?: AbortSignal}} [options]
+     * @returns {Promise<{status: 'found', lat: number, lon: number,
+     *   altitudeM: ?number, observedAtMs: number}|{status: 'none'}>}
+     */
+    locate(id, { reference, signal } = {}) {
+      const atMs = followsClock(vesselState)
+        ? vesselState.worldNow()
+        : undefined;
+      return locateOnTrack(
+        vesselState._source,
+        reference ??
+          recordFor(String(id ?? '').trim())?.reference ??
+          String(id ?? ''),
+        { atMs, signal },
+      );
     },
 
     /**

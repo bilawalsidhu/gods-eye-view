@@ -139,3 +139,34 @@ test('same pixels at a new aspect redraw at the new fit', () => {
   ]);
   assert.equal(runtime.canvasStamp, 2);
 });
+
+test('same pixels at a new resolution with the same fit skip the redraw', () => {
+  const { runtime, load } = stillHarness();
+  load(640, 480);
+  assert.deepEqual(load(1280, 960), []);
+  assert.equal(runtime.canvasStamp, 1);
+  assert.equal(runtime.drawnImageStamp, 2);
+});
+
+test('changed pixels redraw even when the fitted rectangle is unchanged', () => {
+  const { runtime, load } = stillHarness();
+  load(640, 480);
+  const changedPixels = new Uint8ClampedArray(
+    FRAME_SIGNATURE_W * FRAME_SIGNATURE_H * 4,
+  ).fill(90);
+  runtime.signatureCtx.getImageData = () => ({ data: changedPixels });
+  const calls = load(640, 480);
+  assert.equal(calls[0][0], 'fillRect');
+  assert.deepEqual(calls[1], ['drawImage', 240, 0, 1440, 1080]);
+  assert.equal(runtime.canvasStamp, 2);
+});
+
+test('a failed pixel signature redraws rather than assuming equal content', () => {
+  const { runtime, load } = stillHarness();
+  load(640, 480);
+  runtime.signatureCtx.getImageData = () => {
+    throw new Error('tainted canvas');
+  };
+  assert.deepEqual(load(640, 480).at(-1), ['drawImage', 240, 0, 1440, 1080]);
+  assert.equal(runtime.canvasStamp, 2);
+});

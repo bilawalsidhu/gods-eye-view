@@ -77,6 +77,40 @@ test('the view listeners follow the camera port and let go on teardown', () => {
   assert.equal(state._viewListenerCamera, null);
 });
 
+test('terrain loading and surface changes rerun the view pass', () => {
+  const viewer = {};
+  let version = 1,
+    progress,
+    removed = false;
+  bindRenderer(viewer, {
+    camera: fakeCameraPort().port,
+    globe: {
+      surfaceVersion: () => version,
+      on(event, cb) {
+        assert.equal(event, 'progress');
+        progress = cb;
+        return () => {
+          removed = true;
+        };
+      },
+    },
+  });
+  const { lifecycle, passes } = lifecycleFor({
+    _viewer: viewer,
+    _enabled: true,
+  });
+  lifecycle.attachViewListeners();
+  progress({ terrainPending: 2 });
+  assert.equal(passes.length, 0);
+  progress({ terrainPending: 0 });
+  assert.equal(passes.length, 1);
+  version++;
+  progress({ terrainPending: 0 });
+  assert.equal(passes.length, 2);
+  lifecycle.detachViewListeners();
+  assert.ok(removed);
+});
+
 /** A part whose members are `own`'s, and any other a function that does
  *  nothing. */
 const inert = (own = {}) =>
