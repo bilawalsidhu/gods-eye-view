@@ -954,3 +954,45 @@ test('two views handing back canvases of their own do not take the panorama in t
   viewer.unmount();
   for (const unsubscribe of unsubscribes) unsubscribe();
 });
+
+test('the panorama goes back to the one view left once a second view leaves', async () => {
+  const { viewer, renderers } = trackedViewer({
+    onReopen: (id) => viewer.open(id).catch(() => {}),
+  });
+  const one = elements();
+  const two = elements();
+  const unsubscribeOne = viewer.subscribeView(
+    (view) => view && attachAll(view, one),
+  );
+  await viewer.mount({});
+  await viewer.open('a');
+  // A second view subscribes and draws its own canvas: the panorama moves.
+  const unsubscribeTwo = viewer.subscribeView(
+    (view) => view && attachAll(view, two),
+  );
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(renderers.at(-1).canvas, two.canvas);
+  unsubscribeTwo();
+  assert.ok(
+    await settles(viewer.open('b')),
+    'the next open is not left waiting',
+  );
+  for (let i = 0; i < 5; i++) await tick();
+  assert.equal(
+    renderers.at(-1).canvas,
+    one.canvas,
+    'the panorama is back on the view left',
+  );
+  assert.equal(renderers.at(-1).images.at(-1), 'b-first');
+  viewer.unmount();
+  unsubscribeOne();
+});
+
+test('a mount its view unmounts inside the first draw fails as closed', async () => {
+  const { viewer } = trackedViewer();
+  const unsubscribe = viewer.subscribeView((view) => {
+    if (view) viewer.unmount();
+  });
+  await assert.rejects(viewer.mount({}), /Street-level viewer was closed/);
+  unsubscribe();
+});

@@ -247,7 +247,9 @@ export function panoSizeFor(canvasPixels, fovDeg) {
  * a panorama's open waiting on a draw when the last view leaves fails as
  * closed (the mount unmounts; the open leaves no photo shown). A view
  * handing back another canvas element than the renderer's (one subscribed
- * since) gets the panorama drawn again on it, as after a lost context.
+ * since) gets the panorama drawn again on it, as after a lost context;
+ * while several views draw, a canvas the panorama moved off is not moved
+ * back to, and once one view is left its canvas is taken back.
  *
  * Photos are normalized by the provider: `{id, sequenceId, lon, lat,
  * heading, isPano, capturedAt}` plus whatever its `sources` read.
@@ -300,10 +302,12 @@ export function createPhotoViewer({
   /** How many times the view has handed the canvas back (once per draw). */
   let canvasDraws = 0;
   /**
-   * Canvases the panorama moved off: one handed back again (a second view
-   * drawing its own) is not moved back to, so two views cannot take turns.
+   * Canvases the panorama moved off while more than one view draws: one
+   * handed back again (a second view drawing its own) is not moved back to,
+   * so two views cannot take turns. Forgotten once a single view is left,
+   * so its canvas is taken back.
    */
-  const retiredCanvases = new WeakSet();
+  let retiredCanvases = new WeakSet();
   /** The canvas moved while an open waited on its draw. */
   let canvasMoved = false;
   let renderer = null;
@@ -716,8 +720,16 @@ export function createPhotoViewer({
     const actions = {
       attach(name, element) {
         if (presented?.actions !== actions || !element) return;
-        if (name === 'canvas' && retiredCanvases.has(element)) return;
-        if (name === 'canvas' && renderer && canvas && element !== canvas)
+        const retired = name === 'canvas' && retiredCanvases.has(element);
+        if (retired) {
+          // Another view still draws the panorama: this draw is counted, so
+          // an open waiting on it goes on, but the panorama stays put.
+        } else if (
+          name === 'canvas' &&
+          renderer &&
+          canvas &&
+          element !== canvas
+        )
           moveCanvas(element);
         else ELEMENTS[name]?.(element);
         if (name === 'root') wake(rootWaiters);
@@ -1018,8 +1030,10 @@ export function createPhotoViewer({
       const waitRoot = () => new Promise((resolve) => rootWaiters.add(resolve));
       let drawn = waitRoot();
       build(host);
-      // This mount's presentation: a later mount presents its own.
-      const mine = presented.actions;
+      // This mount's presentation: a later mount presents its own. A view
+      // may have unmounted it already, inside its first draw.
+      const mine = presented?.actions;
+      if (!mine) throw undrawn();
       for (;;) {
         if (!root) await drawn;
         const current = presented?.actions === mine;
@@ -1125,7 +1139,10 @@ export function createPhotoViewer({
       return () => {
         // The last view went: a mount or an open waiting on its draw fails
         // as closed.
-        if (viewListeners.delete(listener) && !viewListeners.size) {
+        if (!viewListeners.delete(listener)) return;
+        // One view left: the canvases moved off are its to hand back again.
+        if (viewListeners.size <= 1) retiredCanvases = new WeakSet();
+        if (!viewListeners.size) {
           wake(rootWaiters);
           wake(canvasWaiters);
         }
