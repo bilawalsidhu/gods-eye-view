@@ -139,6 +139,12 @@ const WANTED_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 5_000;
 /** After a failed request the next one waits this long. */
 const FAILURE_WAIT_MS = 30_000;
+/**
+ * Relay answers without a whole pose that keep the last one until it is too
+ * old: `live` short of a joint, and the gap while the relay reconnects. The
+ * joints do not jump to their rules and back.
+ */
+const KEEPS_POSE = new Set(['live', 'connecting', 'reconnecting']);
 
 /**
  * Polls the relay while the model is drawn. `touch()` each frame the model
@@ -194,13 +200,18 @@ export function createIssTelemetryFeed({
       failures = 0;
       relayStatus = typeof body.status === 'string' ? body.status : null;
       const next = body.status === 'live' ? issTelemetryPose(body.items) : null;
-      pose = next;
-      poseAt = next ? now() : null;
-      if (next) liveUntil = poseAt;
-      // A page that opens during a loss of signal still learns when the
-      // feed last had data: the newest value the relay holds was true then.
-      else if (body.status === 'no-signal' && liveUntil === null)
-        liveUntil = issTelemetryLatestEpoch(body.items);
+      if (next) {
+        pose = next;
+        poseAt = now();
+        liveUntil = poseAt;
+      } else if (!KEEPS_POSE.has(relayStatus)) {
+        pose = null;
+        poseAt = null;
+        // A page that opens during a loss of signal still learns when the
+        // feed last had data: the newest value the relay holds was true then.
+        if (relayStatus === 'no-signal' && liveUntil === null)
+          liveUntil = issTelemetryLatestEpoch(body.items);
+      }
     } catch {
       if (mine !== generation) return;
       failures += 1;
@@ -238,7 +249,7 @@ export function createIssTelemetryFeed({
     },
     /**
      * The joint angles to use now, or null: no relay, no signal, or the last
-     * answer is too old.
+     * whole pose is too old.
      * @returns {{alpha: number[], beta: number[], gamma: number[],
      *   dish: number[]|null}|null}
      */
@@ -252,18 +263,24 @@ export function createIssTelemetryFeed({
     },
     /**
      * Where the joints' angles stand, for the station panel: `live` with a
-     * fresh pose; `no-signal` while the relay is up but the station is out
-     * of contact; `unavailable` when the relay cannot be reached or is not
-     * connected; `disabled` when this server does not relay the feed;
-     * `pending` before the first answer. `poseAgeMs` is how old the last
-     * pose is, `liveUntilMs` when signal was last had (epoch ms), both null
-     * when there was none.
-     * @returns {{state: 'live'|'no-signal'|'unavailable'|'disabled'|'pending',
-     *   poseAgeMs: number|null, liveUntilMs: number|null}}
+     * fresh pose; `partial` while the relay has signal but its newest answer
+     * lacks an array or radiator joint; `no-signal` while the relay is up
+     * but the station is out of contact; `unavailable` when the relay cannot
+     * be reached or is not connected; `disabled` when this server does not
+     * relay the feed; `pending` before the first answer and while the relay
+     * reconnects. `poseAgeMs` is how old the last pose is, `liveUntilMs`
+     * when signal was last had (epoch ms), both null when there was none.
+     * @returns {{state: 'live'|'partial'|'no-signal'|'unavailable'|
+     *   'disabled'|'pending', poseAgeMs: number|null,
+     *   liveUntilMs: number|null}}
      */
     status() {
       const at = now();
       const poseAgeMs = poseAt === null ? null : at - poseAt;
+      const answeredLately =
+        failures === 0 &&
+        answeredAt !== null &&
+        at - answeredAt < ISS_TELEMETRY_FRESH_MS;
       let state;
       if (configured === false) state = 'disabled';
       // Never answered: still asking, or the route is not there (a 404, an
@@ -273,11 +290,12 @@ export function createIssTelemetryFeed({
       else if (pose && poseAgeMs < ISS_TELEMETRY_FRESH_MS) state = 'live';
       else if (failures === 0 && relayStatus === 'no-signal')
         state = 'no-signal';
+      // The relay has signal, but no recent answer held the whole pose: a
+      // joint it never got stays partial rather than blaming the relay.
+      else if (answeredLately && relayStatus === 'live') state = 'partial';
       else if (
-        failures === 0 &&
-        (relayStatus === 'connecting' || relayStatus === 'reconnecting') &&
-        answeredAt !== null &&
-        at - answeredAt < ISS_TELEMETRY_FRESH_MS
+        answeredLately &&
+        (relayStatus === 'connecting' || relayStatus === 'reconnecting')
       )
         state = 'pending';
       else state = 'unavailable';

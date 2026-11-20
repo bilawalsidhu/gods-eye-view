@@ -137,6 +137,12 @@ test('the status line words each telemetry state, with ages in seconds or minute
     telemetry: { state: 'unavailable', poseAgeMs: null, liveUntilMs: null },
   });
   assert.equal(telemetryText(), 'Telemetry unavailable · computed values');
+  // The relay has signal but not every joint: not its fault, so not off.
+  await publish({
+    telemetry: { state: 'partial', poseAgeMs: 25_000, liveUntilMs: null },
+  });
+  assert.equal(telemetryText(), 'Telemetry incomplete · computed values');
+  assert.equal($('station-telemetry').dataset.tone, 'waiting');
   await publish({
     telemetry: { state: 'disabled', poseAgeMs: null, liveUntilMs: null },
   });

@@ -4510,6 +4510,7 @@
   "No signal · computed values": "Pas de signal · valeurs calculées",
   "Telemetry unavailable · last update {ago} ago · computed values": "Télémétrie indisponible · dernière mise à jour il y a {ago} · valeurs calculées",
   "Telemetry unavailable · computed values": "Télémétrie indisponible · valeurs calculées",
+  "Telemetry incomplete · computed values": "Télémétrie incomplète · valeurs calculées",
   "Telemetry not enabled on this server · computed values": "Télémétrie non activée sur ce serveur · valeurs calculées",
   "No public telemetry · computed values": "Pas de télémétrie publique · valeurs calculées",
   "Zoom to Tiangong": "Zoomer sur Tiangong",
