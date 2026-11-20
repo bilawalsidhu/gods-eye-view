@@ -7,26 +7,45 @@ import ts from 'typescript';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 
-/** Every browser-built module under src/ — the test files are Node-only. */
-function browserModules(directory = SRC_ROOT) {
+/** Every module under src/ the build compiles: scripts and single-file
+ * components, not the Node-only tests. */
+function builtModules(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...browserModules(absolute));
+    if (entry.isDirectory()) files.push(...builtModules(absolute));
     else if (
       entry.isFile() &&
-      entry.name.endsWith('.js') &&
-      !entry.name.endsWith('.test.js')
+      /\.(js|mjs|vue)$/.test(entry.name) &&
+      !/\.test\.(js|mjs)$/.test(entry.name)
     )
       files.push(absolute);
   }
   return files.sort();
 }
 
+/** The code of `file` to parse: a component's script blocks in place (every
+ * other character a space, so lines keep their numbers), else the file. */
+function scriptOf(file) {
+  const text = readFileSync(file, 'utf8');
+  if (!file.endsWith('.vue')) return { code: text, kind: ts.ScriptKind.JS };
+  const kept = text.replace(/[^\n]/g, ' ').split('');
+  let kind = ts.ScriptKind.JS;
+  for (const match of text.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+    if (/lang=["']ts["']/.test(match[1])) kind = ts.ScriptKind.TS;
+    const start = match.index + match[0].indexOf('>') + 1;
+    for (let i = 0; i < match[2].length; i += 1)
+      kept[start + i] = text[start + i];
+  }
+  return { code: kept.join(''), kind };
+}
+
 /**
  * Whether `node` is an optional call of a method reached through an optional
- * chain: `a?.b?.()`, `f()?.g?.h?.()`. The forms esbuild compiles correctly,
- * `a?.b()` and `a.b?.()`, are not.
+ * chain: `a?.b?.()`, `a.b?.c?.()`, `f()?.g?.()`. Of these esbuild breaks the
+ * ones whose optional property is read from a property or a call
+ * (`a.b?.c?.()`, `f()?.g?.()`); the rule is kept stricter than that, as such a
+ * value is as easily read in the body. `a?.b()` and `a.b?.()` are not matched.
  */
 function optionalMethodCall(node) {
   if (!ts.isCallExpression(node) || !node.questionDotToken) return false;
@@ -58,20 +77,21 @@ function defaultsOf(binding, found = []) {
 }
 
 test('no parameter default calls a method through an optional chain', () => {
-  // esbuild compiles `a?.b?.()` in a parameter's default, for the browsers a
+  // esbuild compiles `a.b?.c?.()` in a parameter's default, for the browsers a
   // build still lowers optional chaining for (Chrome and Edge before 91), into
   // code that reads a variable out of its scope: the call throws a
   // ReferenceError in the built app, never under node:test. The weather shell
   // read its texture limit this way, so every satellite frame failed. Compute
   // such a value in the function's body instead.
   const offenders = [];
-  for (const file of browserModules()) {
+  for (const file of builtModules()) {
+    const { code, kind } = scriptOf(file);
     const source = ts.createSourceFile(
       file,
-      readFileSync(file, 'utf8'),
+      code,
       ts.ScriptTarget.Latest,
       true,
-      ts.ScriptKind.JS,
+      kind,
     );
     const visit = (node) => {
       if (ts.isFunctionLike(node))
