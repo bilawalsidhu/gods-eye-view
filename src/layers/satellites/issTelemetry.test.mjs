@@ -540,6 +540,22 @@ test('a whole pose holds through partial answers until it is 20 s old', async ()
   feed.destroy();
 });
 
+test('after partial live answers, "no signal since" is the last live answer', async () => {
+  const time = fakeTime();
+  const { feed, drawFor, answer } = switchableFeed(time, LIVE);
+  feed.touch();
+  await time.advance(0);
+  answer({ configured: true, status: 'live', items: without('S0000003') });
+  await drawFor(30_000);
+  const lastLive = time.now(); // the last partial answer came now
+  answer({ configured: true, status: 'no-signal', items: RECORDED[0].items });
+  await drawFor(ISS_TELEMETRY_POLL_MS);
+  const status = feed.status();
+  assert.equal(status.state, 'no-signal');
+  assert.equal(status.liveUntilMs, lastLive, 'not the last whole pose');
+  feed.destroy();
+});
+
 test('a whole pose holds while the relay reconnects, and the clock may land first', async () => {
   const time = fakeTime();
   const { feed, drawFor, answer } = switchableFeed(time, LIVE);

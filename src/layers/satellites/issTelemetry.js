@@ -233,11 +233,13 @@ export function createIssTelemetryFeed({
       answeredAt = now();
       failures = 0;
       relayStatus = typeof body.status === 'string' ? body.status : null;
+      // A live answer says the station has signal, with a whole pose or
+      // not: "no signal since" counts from the last one.
+      if (relayStatus === 'live') liveUntil = answeredAt;
       const next = body.status === 'live' ? issTelemetryPose(body.items) : null;
       if (next) {
         pose = next;
         poseAt = now();
-        liveUntil = poseAt;
       } else if (!KEEPS_POSE.has(relayStatus)) {
         pose = null;
         poseAt = null;
