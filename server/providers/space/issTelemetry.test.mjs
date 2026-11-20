@@ -463,6 +463,25 @@ test('a minute later an address starts afresh, and at most 2,000 are counted', (
   assert.equal(many('k0'), 0, 'forgotten, so counted afresh');
 });
 
+test('a clock stepped back starts a fresh minute instead of refusing until it catches up', () => {
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({
+    perAddress: 2,
+    total: 100,
+    now: () => clock.ms,
+  });
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 60, 'the address is at its cap');
+  // NTP or a resumed machine moves the clock back half an hour.
+  clock.ms -= 30 * 60_000;
+  assert.equal(admit('a'), 0, 'a fresh minute');
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 60, 'and the cap holds in it');
+  clock.ms += 60_000;
+  assert.equal(admit('a'), 0, 'a minute on, it starts afresh again');
+});
+
 test('the served text is the snapshot as JSON, its items encoded again only after a change', () => {
   const { relay, sockets, clock } = relayAt(NOV_13);
   relay.demand();

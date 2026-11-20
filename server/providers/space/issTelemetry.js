@@ -398,10 +398,14 @@ function minuteCount(second) {
   return { buckets: new Uint32Array(WINDOW_S), total: 0, second };
 }
 
-/** Move a count on to `second`, emptying the buckets that left the minute. */
+/**
+ * Move a count on to `second`, emptying the buckets that left the minute. A
+ * clock stepped back (NTP, a resumed machine) starts a fresh minute: the
+ * old buckets would otherwise never age out until real time caught up.
+ */
 function slide(count, second) {
-  if (second <= count.second) return;
-  if (second - count.second >= WINDOW_S) {
+  if (second === count.second) return;
+  if (second < count.second || second - count.second >= WINDOW_S) {
     count.buckets.fill(0);
     count.total = 0;
   } else
