@@ -26,6 +26,7 @@ test('panel presentation places Transit and Rail between Street Traffic and Bike
       'military',
       'local-adsb',
       'ais-live-vessels',
+      'local-ais',
       'traffic',
       'transit',
       'rail',

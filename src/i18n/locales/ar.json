@@ -4856,5 +4856,44 @@
   "JTWC warning ↗": "تحذير JTWC ↗",
   "Active cyclone advisories and warnings": "نشرات وتحذيرات الأعاصير النشطة",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "اختر عاصفة على الخريطة، أو اختر عاصفة من القائمة لتحديدها وتحريك الكاميرا إليها. انقر على مكان فارغ من الخريطة لإلغاء التحديد. نشرات NOAA NHC/CPHC وتحذيرات JTWC. يصف مخروط NHC عدم اليقين في المسار المتوقع للمركز، لا حجم العاصفة ولا منطقة الخطر كاملة. منطقة خطر رياح 34 عقدة لدى JTWC هي حيث قد تصل رياح بسرعة 34 عقدة، موسّعةً بخطأ توقع المسار؛ وهي ليست مخروطًا. تسميات نقاط التوقع هي ساعات المهلة لدى المصدر، لا أوقات محسوبة من وقت الإصدار. تتبع الأشكال سطح الأرض؛ والارتفاع ليس ارتفاعًا جويًا. ارجع إلى النشرة الرسمية أو إلى مركز الإنذار الإقليمي.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}",
+  "Local AIS": "AIS المحلي",
+  "Local AIS receiver unavailable": "جهاز استقبال AIS المحلي غير متاح",
+  "not configured": "غير مهيأ",
+  "no recent messages": "لا رسائل حديثة",
+  "Position approximate (AIS type 27)": "الموقع تقريبي (AIS من النوع 27)",
+  "Position not yet validated by the receiver": "لم يتحقق جهاز الاستقبال من الموقع بعد",
+  "{count} vessels heard": {
+    "zero": "السفن الملتقطة: {count}",
+    "one": "السفن الملتقطة: {count}",
+    "two": "السفن الملتقطة: {count}",
+    "few": "السفن الملتقطة: {count}",
+    "many": "السفن الملتقطة: {count}",
+    "other": "السفن الملتقطة: {count}"
+  },
+  "feeds {names} rejected": {
+    "zero": "المصادر {names} مرفوضة",
+    "one": "المصدر {names} مرفوض",
+    "two": "المصدران {names} مرفوضان",
+    "few": "المصادر {names} مرفوضة",
+    "many": "المصادر {names} مرفوضة",
+    "other": "المصادر {names} مرفوضة"
+  },
+  "Validated": "تم التحقق",
+  "AIS-SART beacon": "منارة AIS-SART",
+  "Man-overboard (MOB) beacon": "منارة الرجل في البحر (MOB)",
+  "EPIRB beacon": "منارة EPIRB",
+  "AIS distress beacon": "منارة استغاثة AIS",
+  "Distress or test beacon heard by your receiver": "منارة استغاثة أو اختبار التقطها جهاز الاستقبال لديك",
+  "Test transmissions are common. This is not a verified emergency.": "عمليات الإرسال التجريبية شائعة. هذا ليس طارئًا مؤكدًا.",
+  "Active or test status: unknown": "الحالة (نشطة أو اختبار): غير معروفة",
+  "{count} beacons heard": {
+    "zero": "المنارات الملتقطة: {count}",
+    "one": "المنارات الملتقطة: {count}",
+    "two": "المنارات الملتقطة: {count}",
+    "few": "المنارات الملتقطة: {count}",
+    "many": "المنارات الملتقطة: {count}",
+    "other": "المنارات الملتقطة: {count}"
+  },
+  "beacon": "منارة"
 }

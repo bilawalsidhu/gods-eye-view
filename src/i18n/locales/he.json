@@ -4538,5 +4538,35 @@
   "JTWC warning ↗": "אזהרת JTWC ↗",
   "Active cyclone advisories and warnings": "עדכוני ציקלונים ואזהרות פעילים",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "בחרו סופה במפה, או בחרו סופה ברשימה כדי לסמן אותה ולהזיז אליה את המצלמה. לחיצה על מקום ריק במפה מבטלת את הבחירה. עדכוני NOAA NHC/CPHC ואזהרות JTWC. החרוט של NHC מתאר את אי-הוודאות במסלול החזוי של המרכז, לא את גודל הסופה ולא את כל אזור הסכנה. אזור הסכנה של 34 קשר של JTWC הוא המקום שאליו עשויות להגיע רוחות של 34 קשר, מורחב בשגיאת תחזית המסלול; הוא אינו חרוט. התוויות של נקודות התחזית הן שעות התחזית של המקור, לא זמנים שחושבו ממועד הפרסום. הצורות עוקבות אחר פני השטח; הגובה אינו גובה מטאורולוגי. עיינו בעדכון הרשמי או במרכז ההתרעות האזורי.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · אזהרה {number} · פורסמה {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · אזהרה {number} · פורסמה {time}",
+  "Local AIS": "AIS מקומי",
+  "Local AIS receiver unavailable": "מקלט ה-AIS המקומי אינו זמין",
+  "not configured": "לא הוגדר",
+  "no recent messages": "אין הודעות עדכניות",
+  "Position approximate (AIS type 27)": "מיקום משוער (AIS מסוג 27)",
+  "Position not yet validated by the receiver": "המיקום טרם אומת על ידי המקלט",
+  "{count} vessels heard": {
+    "one": "{count} כלי שיט נקלט",
+    "two": "{count} כלי שיט נקלטו",
+    "other": "{count} כלי שיט נקלטו"
+  },
+  "feeds {names} rejected": {
+    "one": "הפיד {names} נדחה",
+    "two": "הפידים {names} נדחו",
+    "other": "הפידים {names} נדחו"
+  },
+  "Validated": "מאומת",
+  "AIS-SART beacon": "משואת AIS-SART",
+  "Man-overboard (MOB) beacon": "משואת אדם מעבר לסיפון (MOB)",
+  "EPIRB beacon": "משואת EPIRB",
+  "AIS distress beacon": "משואת מצוקה AIS",
+  "Distress or test beacon heard by your receiver": "משואת מצוקה או בדיקה שנקלטה במקלט שלך",
+  "Test transmissions are common. This is not a verified emergency.": "שידורי בדיקה שכיחים. זה אינו מקרה חירום מאומת.",
+  "Active or test status: unknown": "מצב (פעילה או בדיקה): לא ידוע",
+  "{count} beacons heard": {
+    "one": "{count} משואה נקלטה",
+    "two": "{count} משואות נקלטו",
+    "other": "{count} משואות נקלטו"
+  },
+  "beacon": "משואה"
 }
