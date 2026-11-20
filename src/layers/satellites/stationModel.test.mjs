@@ -128,7 +128,6 @@ function fixture(t, { showOrbits = true } = {}) {
     }),
     createTelemetry: null,
     cockpitMount: null,
-    hideInCockpit: true,
     syncOrbit: null,
   };
   const model = createStationModel(spec, {
@@ -268,44 +267,6 @@ test('posed, the model sits on the station with its flight axes as heading, pitc
     0,
     'destroyed, every node goes back to its authored pose',
   );
-});
-
-test('a station without views on its model hides it while the Cockpit rides the station, its own entry or a docked one', async (t) => {
-  const f = fixture(t);
-  let held = false;
-  f.parts.cockpit = { _cockpitHeld: () => held };
-  await f.load();
-  f.cameraAt(20);
-  // Riding a docked object (the companion shares the orbit).
-  f.track(COMPANION, f.stationPos);
-  f.tick();
-  assert.equal(f.modelItem().show, true, 'outside the Cockpit it draws');
-  held = true;
-  // Frame after frame: hiding the model gives the docked dots back, and
-  // that must not make the layer forget the companion is docked (which
-  // showed the model again, and so on, every other frame).
-  for (let i = 0; i < 4; i++) {
-    f.tick();
-    assert.equal(
-      f.modelItem().show,
-      false,
-      `the Cockpit camera would sit inside the hull (tick ${i})`,
-    );
-    assert.equal(f.model._trackedOnStation(), true, `docked (tick ${i})`);
-  }
-  assert.equal(f.model._visualPosition(), null);
-  // Riding the station itself.
-  held = false;
-  f.track(STATION, f.stationPos);
-  f.tick();
-  assert.equal(f.modelItem().show, true);
-  held = true;
-  f.tick();
-  assert.equal(f.modelItem().show, false);
-  // A station that mounts the Cockpit camera on its model keeps drawing.
-  f.model.spec.hideInCockpit = false;
-  f.tick();
-  assert.equal(f.modelItem().show, true);
 });
 
 test('until the renderer has the model the dots stand at every distance, and stay so when it fails to load', async (t) => {

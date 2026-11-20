@@ -20,11 +20,9 @@ test("Tiangong is CSS (TIANHE) by NORAD number, drawn at the file's meters", () 
   assert.equal(spec.modelUrl, TIANGONG_MODEL_URL);
   // The same frame as the ISS file, so the same flight-axes mapping.
   assert.equal(spec.localAxes, ISS_MODEL_LOCAL_AXES);
-  // No telemetry; Cockpit views on the model, so the model stays while the
-  // Cockpit rides it.
+  // No telemetry; Cockpit views on the model.
   assert.equal(spec.createTelemetry, null);
   assert.equal(typeof spec.cockpitMount, 'function');
-  assert.equal(spec.hideInCockpit, false);
   assert.equal(spec.syncOrbit, null);
   assert.equal(typeof spec.createArticulation().update, 'function');
 });
@@ -33,7 +31,6 @@ test("the ISS spec keeps the ISS's own rules", () => {
   const spec = issModelSpec({ parts: {} });
   assert.equal(spec.norad, ISS_NORAD);
   assert.equal(spec.key, 'iss');
-  assert.equal(spec.hideInCockpit, false);
   assert.equal(typeof spec.cockpitMount, 'function');
   assert.equal(typeof spec.createTelemetry, 'function');
   assert.equal(typeof spec.syncOrbit, 'function');
@@ -55,20 +52,15 @@ test("the station's modules are CSS (…) entries; ships are vehicles", () => {
   );
 });
 
-test("a station hidden for the Cockpit stays hidden; the dot's rules otherwise", () => {
+test("a station model shows on its dot's rules", () => {
   const shown = {
     enabled: true,
     showPoints: true,
     hasStation: true,
     classVisible: true,
     tracked: false,
-    cockpitHidden: false,
   };
   assert.equal(stationModelShouldShow(shown), true);
-  assert.equal(
-    stationModelShouldShow({ ...shown, cockpitHidden: true }),
-    false,
-  );
   assert.equal(stationModelShouldShow({ ...shown, hasStation: false }), false);
   assert.equal(
     stationModelShouldShow({ ...shown, classVisible: false, tracked: true }),

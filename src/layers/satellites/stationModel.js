@@ -58,9 +58,6 @@ import { stationTrackedOn } from './policy.js';
  *   entry: (noradId: number|null) => number|null,
  *   dockedVehicle: number|null}) => object|null)|null} cockpitMount The
  *   Cockpit camera's views on the model, or null when the station has none.
- * @property {boolean} hideInCockpit Hide the model while the Cockpit rides
- *   the station: true where its camera would sit inside the hull, false
- *   where it rides a mount on the model.
  * @property {(() => void)|null} syncOrbit Puts the station's ring back to
  *   its own rules on leaving the close-up; null for the layer's orbit toggle
  *   (a ring that exists only while the station is tracked).
@@ -82,10 +79,11 @@ export const STATION_MODEL_RETRY_AFTER_MS = 30_000;
 
 /**
  * Whether a station model may be drawn: the dot's own rules (layer on, points
- * on, the station loaded and its class shown or the station tracked), and
- * not while the Cockpit hides it.
+ * on, the station loaded and its class shown or the station tracked). The
+ * Cockpit rides a station from views on its model, so the model stays
+ * drawn then.
  * @param {{enabled: boolean, showPoints: boolean, hasStation: boolean,
- *   classVisible: boolean, tracked: boolean, cockpitHidden: boolean}} input
+ *   classVisible: boolean, tracked: boolean}} input
  * @returns {boolean}
  */
 export function stationModelShouldShow({
@@ -94,14 +92,12 @@ export function stationModelShouldShow({
   hasStation,
   classVisible,
   tracked,
-  cockpitHidden,
 }) {
   return (
     Boolean(enabled) &&
     Boolean(showPoints) &&
     Boolean(hasStation) &&
-    (Boolean(classVisible) || Boolean(tracked)) &&
-    !cockpitHidden
+    (Boolean(classVisible) || Boolean(tracked))
   );
 }
 
@@ -281,19 +277,12 @@ export function createStationModel(
   let visualValid = false;
 
   function _shouldShow() {
-    const tracked = layerState._trackedNorad === norad;
     return stationModelShouldShow({
       enabled: layerState._enabled,
       showPoints: layerState._params.showPoints,
       hasStation: layerState._catalog.has(norad),
       classVisible: parts.controls._classVisible(norad),
-      tracked,
-      // With no mounts on the model the Cockpit camera would sit inside the
-      // hull, so the model goes while the Cockpit rides the station.
-      cockpitHidden:
-        spec.hideInCockpit &&
-        Boolean(parts.cockpit?._cockpitHeld?.()) &&
-        _trackedOnStation(),
+      tracked: layerState._trackedNorad === norad,
     });
   }
 
@@ -637,9 +626,8 @@ export function createStationModel(
    */
   function _updateStationModel() {
     visualValid = false;
-    // The docked set first: whether the model may show (the Cockpit riding
-    // the station) is read from it, so it is kept current before that. Once
-    // a second; the dots are handed over or given back with the scan.
+    // The docked set, once a second, whether or not the model may show; the
+    // dots are handed over or given back with the scan.
     if (item) _scanCompanions(Date.now(), handingOver);
     const show = _shouldShow();
     if (!show) {

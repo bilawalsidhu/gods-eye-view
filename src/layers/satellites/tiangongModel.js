@@ -58,9 +58,6 @@ export function tiangongModelSpec() {
     createArticulation: createTiangongArticulation,
     createTelemetry: null,
     cockpitMount: tiangongCockpitMount,
-    // The Cockpit rides the station from a mount on the model, so the model
-    // stays while it does.
-    hideInCockpit: false,
     syncOrbit: null,
   };
 }
