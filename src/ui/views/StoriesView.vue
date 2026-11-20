@@ -152,9 +152,9 @@ function markPopSeen() {
     /* storage off: the popup comes back next visit */
   }
 }
-function openExplore() {
-  markPopSeen();
-  store.controller.open();
+async function openExplore() {
+  // A refused open (Cockpit) leaves the announcement unread.
+  if (await store.controller.open()) markPopSeen();
 }
 
 // ── Opened in GEV: a toast that leads back to the story ──

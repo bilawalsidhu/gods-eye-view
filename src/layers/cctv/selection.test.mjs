@@ -215,3 +215,16 @@ test('a count click is the card on top for every layer, unless the count yields'
     picking.unregisterPickOwner('flights');
   }
 });
+
+test('same-camera selection ends the opening pick without notifying snapshot feeds', () => {
+  const fixture = makeSelection('tripcheck-odot');
+  fixture.state._openingCameraProvisional = true;
+
+  assert.equal(
+    fixture.selection.setActiveCamera('same-camera'),
+    CCTV_ACTIVATION_RESULT.UNCHANGED,
+  );
+  assert.equal(fixture.state._openingCameraProvisional, false);
+  assert.equal(fixture.state._activeCameraReselection, 0);
+  assert.equal(fixture.notifications(), 0);
+});

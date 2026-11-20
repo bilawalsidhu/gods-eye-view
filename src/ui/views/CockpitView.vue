@@ -25,8 +25,14 @@ import UiIcon from '../kit/UiIcon.vue';
 // does, they show the state they start in. The controller also publishes
 // which surfaces are shown and the utility strip's measured layout; the
 // layout pass stays with it, and the controls keep its listeners.
-const { presence, instruments, route, vision, utilityLayout } =
-  storeToRefs(useCockpitStore());
+const {
+  presence,
+  instruments,
+  route,
+  vision,
+  utilityLayout,
+  orbital: orbitalView,
+} = storeToRefs(useCockpitStore());
 const active = computed(() => Boolean(presence.value?.active));
 // A vessel subject swaps the aviation readouts for bridge ones.
 const bridge = computed(() => presence.value?.subjectKind === 'vessel');
@@ -36,6 +42,9 @@ const orbital = computed(() => presence.value?.subjectKind === 'satellite');
 // window view whose readouts, labels and texts the provider words.
 const generic = computed(() => presence.value?.subjectGeneric === true);
 const labels = computed(() => presence.value?.subjectLabels ?? null);
+// The station is ridden from a mount on its 3D model: the arrows look about
+// it and Home returns to it, where the nadir picture tilts and returns to nadir.
+const stationView = computed(() => (orbitalView.value?.mount ?? null) !== null);
 const subject = computed(() =>
   generic.value
     ? presence.value.subjectKind
@@ -272,7 +281,7 @@ const tickStyle = (tick) =>
       <CockpitRadar />
     </div>
     <CockpitUtilityControls />
-    <div class="cockpit-help"><bdi>{{ t('ESC EXIT') }}</bdi><template v-if="looks"> <span>·</span> <bdi>{{ t('ARROWS LOOK') }}</bdi> <span>·</span> <bdi>{{ t('HOME RESET') }}</bdi></template><template v-if="orbital"> <span>·</span> <bdi>{{ t('+/− ZOOM') }}</bdi> <span>·</span> <bdi>{{ t('ARROWS TILT') }}</bdi> <span>·</span> <bdi>{{ t('HOME NADIR') }}</bdi></template></div>
+    <div class="cockpit-help"><bdi>{{ t('ESC EXIT') }}</bdi><template v-if="looks"> <span>·</span> <bdi>{{ t('ARROWS LOOK') }}</bdi> <span>·</span> <bdi>{{ t('HOME RESET') }}</bdi></template><template v-if="orbital"> <span>·</span> <bdi>{{ t('+/− ZOOM') }}</bdi> <span>·</span> <template v-if="stationView"><bdi>{{ t('ARROWS LOOK') }}</bdi> <span>·</span> <bdi>{{ t('HOME RESET') }}</bdi></template><template v-else><bdi>{{ t('ARROWS TILT') }}</bdi> <span>·</span> <bdi>{{ t('HOME NADIR') }}</bdi></template></template></div>
   </section>
 
   <nav id="view-switcher" :aria-label="t('View switcher')">

@@ -45,6 +45,7 @@ export function mountCctvProvider(t, { cameras, fetch }) {
     'CCTV_FORCE_AUSTIN',
     'GOOGLE_MAPS_SERVER_API_KEY',
     'GOOGLE_MAPS_API_KEY',
+    'GEV_RATELIMIT_GOOGLE_PER_MIN',
   ])
     saved[name] = process.env[name];
 
@@ -65,6 +66,8 @@ export function mountCctvProvider(t, { cameras, fetch }) {
   // No Street View key: a /frame miss lands on the synthetic billboard.
   delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
   delete process.env.GOOGLE_MAPS_API_KEY;
+  // The default Google budget, whatever the shell sets.
+  delete process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;
   // The HLS puller binds fetch when cctvProxy() creates it, so mock first.
   globalThis.fetch = fetch;
   let handler;

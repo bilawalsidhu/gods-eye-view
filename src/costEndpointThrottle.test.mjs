@@ -335,6 +335,7 @@ test('the Google places route throttles by default and keeps its places[] contra
   const overLimit = await request(handler, { url, method: 'GET' });
   assert.equal(overLimit.status, 429);
   assert.equal(overLimit.headers['retry-after'], '5');
+  assert.equal(overLimit.headers['cache-control'], 'no-store');
   // Every error response on this route carries places[]; the client reads it
   // unconditionally, so a throttled reply must not be the one shape that omits it.
   assert.deepEqual(JSON.parse(overLimit.body).places, []);

@@ -98,10 +98,10 @@ test('the media cards are drawn by their view, not built in script', () => {
   const source = read('data/bhoteKoshiEmbeddedMedia.js');
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|createElementNS/);
   // Provider scripts and preconnects, the overlay root, and the Facebook
-  // embed node and its warm host.
+  // embed node and its warm host. The YouTube API's script is youtubeApi.js's.
   assert.deepEqual(
     [...source.matchAll(/createElement\('(\w+)'\)/g)].map((m) => m[1]),
-    ['script', 'script', 'script', 'link', 'div', 'div', 'div'],
+    ['script', 'script', 'link', 'div', 'div', 'div'],
   );
   assert.match(source, /renderVue\(\s*h\(BhoteKoshiMediaCards,/);
   const cards = template(CARDS);
