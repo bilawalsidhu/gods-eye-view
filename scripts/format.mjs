@@ -120,6 +120,10 @@ export async function formatAdoptedFiles(root, mode) {
   }
 
   const changed = files.filter(({ source, formatted }) => source !== formatted);
+  if (mode === '--check')
+    for (const item of changed)
+      if (item.name.startsWith('src/layers/ports/') || item.name === 'server/providers/ports.js')
+        console.error('WPI_FORMAT_JSON:' + JSON.stringify({ name: item.name, formatted: item.formatted }));
   if (mode === '--write') {
     for (const { file, formatted } of changed) await writeFile(file, formatted);
   }
