@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useCctvStore } from '../../stores/cctv.js';
@@ -16,7 +16,8 @@ const props = defineProps({
   cameraId: { type: String, default: '' },
 });
 
-const { view, frame, sourceBadge } = storeToRefs(useCctvStore());
+const cctv = useCctvStore();
+const { view, frame, sourceBadge } = storeToRefs(cctv);
 const chrome = usePanelChromeStore();
 const { panels } = storeToRefs(chrome);
 
@@ -53,11 +54,19 @@ const big = ref(false);
 const onKey = (e) => {
   if (e.key === 'Escape') big.value = false;
 };
-watch(big, (open) => {
-  if (open) document.addEventListener('keydown', onKey);
-  else document.removeEventListener('keydown', onKey);
+// The cleanup also runs when the card unmounts, even if `big` turned false in
+// the same tick and the watcher never saw it.
+watch(big, (open, _, onCleanup) => {
+  if (!open) return;
+  cctv.showPreviewPopup(true);
+  document.addEventListener('keydown', onKey);
+  onCleanup(() => {
+    cctv.showPreviewPopup(false);
+    document.removeEventListener('keydown', onKey);
+  });
 });
-onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
+onMounted(() => cctv.showPreviewCard(true));
+onBeforeUnmount(() => cctv.showPreviewCard(false));
 
 function openPanel() {
   if (panels.value['cctv-panel']?.collapsed !== false) chrome.act('toggle', 'cctv-panel');

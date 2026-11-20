@@ -649,6 +649,8 @@ const ZH_HANT_CORRECTIONS = [
   ['箇中', '個中'],
   // 周 as a week: the time-lapse speed in weeks per second.
   [' 周/秒', ' 週/秒'],
+  // 后 as "behind" after a module name (问天, 梦天), not 天后 (empress).
+  ['天后側', '天後側'],
 ];
 
 let s2tw;

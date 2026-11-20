@@ -81,6 +81,13 @@ optional:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- `camera.visiblePoints(points, horizonMarginM)` (capability `pointVisibility`)
+  is whether any of the points may be on screen: `false` only when their
+  bounding sphere is outside the view or all of them are below the horizon
+  of the WGS84 ellipsoid shrunk by `horizonMarginM` metres; `null` when it
+  cannot tell (not a 3D scene, an empty point set, or a non-finite point or
+  camera vector), and callers count that as visible. Supply a finite,
+  nonnegative margin smaller than the shortest WGS84 radius.
 - `globe.surfaceVersion()` (capability `surfaceIdentity`) is a number that
   changes whenever what surface heights answer against changes (base,
   terrain or photoreal route swapped, the globe shown or hidden) and never
@@ -342,6 +349,17 @@ correction turns them to, paints the mask in a custom shader per colour
 (unlit under `unlit` shading, left out under `thermal`), and clips with a
 clipping plane through the model's origin. The checks `draw.models.bytes`
 and `draw.models.fleet` cover them.
+
+An articulated model's joints are its item's `nodes`: transforms of the
+model's named glTF nodes, each a column-major 4×4 matrix in the node's
+parent frame that replaces the node's own (the ISS's solar arrays,
+radiators, dishes and arms). They change live; a node whose name leaves the
+map goes back to its authored pose, and names the model lacks are ignored.
+A renderer that poses nodes lists `modelNodes`; one without it draws the
+model as authored. The Cesium port lists it, and writes each node's matrix
+once the model is ready, and again only when its numbers change. The check
+`draw.models.nodes` moves the harness model's node off the screen's centre
+and back.
 
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium

@@ -12,6 +12,7 @@ import { createNativeClick } from './nativeClick.js';
 test('capabilities follow what the scene supports', () => {
   const effects = [
     'followFrame',
+    'pointVisibility',
     'followAutodetect',
     'cameraChangeThreshold',
     'columns',
@@ -38,6 +39,7 @@ test('capabilities follow what the scene supports', () => {
     'models',
     'modelParts',
     'modelAtmosphere',
+    'modelNodes',
     'quads',
     'meshes',
     'fields',

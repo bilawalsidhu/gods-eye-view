@@ -9,7 +9,7 @@ import { poseSignature } from '../../render/camera/poseSignature.js';
 import { heightsOf } from '../../queries/heights.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { Vec3 } from '../../geo/vector.js';
-import { frustumPlanes } from '../../geo/frustum.js';
+import { viewPlanes } from '../../geo/frustum.js';
 import { perspectiveCourseRotation } from '../../data/screenRotation.js';
 import {
   PLACED_WAKE_MS,
@@ -1072,23 +1072,6 @@ export function createRendering({ state, services, parts }) {
       },
       Math.max(0, VISIBILITY_REFRESH_MS - (Date.now() - state._visibilityAt)),
     );
-  }
-
-  /**
-   * The planes of the frustum the camera looks through, as the default
-   * renderer culls with them, or null when the pose does not describe one.
-   */
-  function viewPlanes(pose) {
-    if (
-      !pose?.position ||
-      !pose.direction ||
-      !pose.up ||
-      !Number.isFinite(pose.fovy) ||
-      !Number.isFinite(pose.aspectRatio) ||
-      !Number.isFinite(pose.near)
-    )
-      return null;
-    return frustumPlanes(pose);
   }
 
   function refreshVisibility() {

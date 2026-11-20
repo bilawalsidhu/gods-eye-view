@@ -296,6 +296,10 @@
     "Route",
     "3D",
     "KT",
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode",
     "Container"
   ],
   "es": [
@@ -490,7 +494,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "fr": [
     "1 min/s",
@@ -747,7 +753,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "it": [
     "1 min/s",
@@ -981,6 +988,7 @@
     "{n} mm",
     "3D",
     "KT",
+    "{seconds} s",
     "Container"
   ],
   "ja": [
@@ -1259,7 +1267,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "ru": [
     "1900–1945",
@@ -1497,6 +1507,7 @@
     "{n} mm",
     "3D",
     "KT",
+    "{seconds} s",
     "Container"
   ],
   "uk": [

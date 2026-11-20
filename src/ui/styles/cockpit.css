@@ -1956,6 +1956,61 @@ html:not([lang='en']) .cockpit-brief-tabs button {
   color: #fff;
   outline: none;
 }
+/* The LIVE tab is in the markup whether or not a stream is on offer. */
+.cockpit-brief-tabs button[hidden] {
+  display: none;
+}
+
+/* The briefing's LIVE page: the LIVE section's parts (live.css) in the
+   card's measure. */
+.cockpit-live-subject {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: #fff;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.cockpit-live-subject strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-live-subject .live-badge {
+  flex: none;
+  font-size: 7px;
+}
+.cockpit-live-pick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 6px;
+}
+.cockpit-live-pick .live-stream-title {
+  font-size: 8px;
+}
+.cockpit-live-pick .live-step .material-symbols-outlined {
+  font-size: 14px;
+}
+.cockpit-live-status {
+  margin: 5px 0 0;
+  color: rgba(244, 251, 255, 0.7);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cockpit-live-credit {
+  margin: 4px 0 0;
+  color: rgba(182, 226, 241, 0.72);
+  font: 600 7px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cockpit-live-credit a {
+  color: inherit;
+}
 .cockpit-signal-window[data-layout-mode='rail-right-constrained'] {
   gap: 5px;
 }
