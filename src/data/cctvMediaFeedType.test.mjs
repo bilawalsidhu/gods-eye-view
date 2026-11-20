@@ -553,12 +553,14 @@ test('the Street View fallback frames catalog cameras only, from the catalog pos
   assert.deepEqual(streetView(), [], 'no Google call for an unknown id');
 
   const steered = await app.call(
-    `/frame/${STILL.id}?lat=48.85&lon=2.29&heading=90`,
+    `/frame/${STILL.id}?lat=48.85&lon=2.29&heading=90&fov=74&pitch=-17`,
   );
   assert.equal(steered.headers['X-CCTV-Source'], 'streetview');
-  const location = new URL(streetView()[0].url).searchParams.get('location');
-  assert.equal(location, `${STILL.lat},${STILL.lon}`);
-  assert.equal(new URL(streetView()[0].url).searchParams.get('heading'), '90');
+  const sv = new URL(streetView()[0].url).searchParams;
+  assert.equal(sv.get('location'), `${STILL.lat},${STILL.lon}`);
+  assert.equal(sv.get('heading'), '90');
+  assert.equal(sv.get('fov'), '74');
+  assert.equal(sv.get('pitch'), '-17');
 });
 
 test('the Street View fallback spends a per-IP Google budget, and only with a key', async (t) => {
@@ -586,8 +588,27 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
   assert.equal(streetViewCalls(), 0);
 
   process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
+  // Neither an unknown id nor a forwarded request spends the window.
+  assert.equal(
+    (await app.call('/frame/not-a-camera', {}, first)).headers['X-CCTV-Source'],
+    'synthetic',
+  );
+  assert.equal(
+    (
+      await app.call(
+        `/frame/${STILL.id}`,
+        { 'x-forwarded-for': '203.0.113.9' },
+        first,
+      )
+    ).headers['X-CCTV-Source'],
+    'synthetic',
+  );
   assert.deepEqual(
-    [await frameSource(first), await frameSource(first), await frameSource(first)],
+    [
+      await frameSource(first),
+      await frameSource(first),
+      await frameSource(first),
+    ],
     ['streetview', 'streetview', 'synthetic'],
   );
   assert.equal(streetViewCalls(), 2, 'no Google call over the budget');
@@ -598,4 +619,13 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
     'streetview',
   );
   assert.equal(streetViewCalls(), 3);
+
+  // Addresses within one IPv6 /64 share a budget.
+  const v6 = (remoteAddress) => frameSource({ remoteAddress });
+  assert.deepEqual(
+    [await v6('2001:db8::1'), await v6('2001:db8::2'), await v6('2001:db8::3')],
+    ['streetview', 'streetview', 'synthetic'],
+  );
+  assert.equal(await v6('2001:db8:0:1::1'), 'streetview', 'another /64');
+  assert.equal(streetViewCalls(), 6);
 });
