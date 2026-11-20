@@ -1,22 +1,32 @@
 /**
  * NGA Pub 150 records mirrored by US DOE/NETL. This module is also imported
- * by the server, so keep it independent of browser globals and UI/i18n.
+ * by the server, so keep it independent of browser globals and UI/i18n:
+ * labels are marked with the portable msg() and translated by the layer.
  */
+import { msg } from '../../i18n/marker.js';
+
 export const WPI_REFERENCE_URL = 'https://msi.nga.mil/Publications/WPI';
 export const WPI_MIRROR_URL =
   'https://arcgis.netl.doe.gov/server/rest/services/Hosted/CCS_EJ_SJ_Data/FeatureServer/17';
 
 export const PORT_FACILITIES = Object.freeze([
-  Object.freeze({ id: 'container', key: 'fac_container', label: 'Container' }),
+  Object.freeze({
+    id: 'container',
+    key: 'fac_container',
+    label: msg('Container'),
+  }),
   Object.freeze({
     id: 'solid-bulk',
     key: 'fac_solidbulk',
-    label: 'Solid bulk',
+    label: msg('Solid bulk'),
   }),
-  Object.freeze({ id: 'oil', key: 'fac_oilterm', label: 'Oil terminal' }),
-  Object.freeze({ id: 'lng', key: 'fac_lngterm', label: 'LNG terminal' }),
+  Object.freeze({ id: 'oil', key: 'fac_oilterm', label: msg('Oil terminal') }),
+  Object.freeze({ id: 'lng', key: 'fac_lngterm', label: msg('LNG terminal') }),
 ]);
 
+const WPI_REFERENCE_LINE = msg(
+  'Reference: NGA World Port Index / DOE NETL mirror',
+);
 const TEXT_MAX = 140;
 const UNAVAILABLE = 'Unavailable';
 
@@ -144,8 +154,9 @@ export function portProfileLines(port) {
     `Ownership: ${UNAVAILABLE}`,
     `Annual throughput: ${UNAVAILABLE}`,
     `Handling capacity: ${UNAVAILABLE}`,
+    // i18n-ignore: composite WPI data-card field, English like its neighbours
     `Operational status: ${UNAVAILABLE} (WPI listing is not current operation)`,
     `Expansion: ${UNAVAILABLE}`,
-    'Reference: NGA World Port Index / DOE NETL mirror',
+    WPI_REFERENCE_LINE,
   ];
 }

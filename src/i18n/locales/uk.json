@@ -4531,5 +4531,17 @@
   "Finding it…": "Пошук…",
   "No reading at this time": "Немає даних на цей час",
   "Last reading · {age}": "Останні дані · {age}",
-  "Find it": "Знайти"
+  "Find it": "Знайти",
+  "WPI pagination limit reached — showing partial data": "Досягнуто ліміту сторінок WPI — дані неповні",
+  "World Port Index unavailable": "World Port Index недоступний",
+  "Facility": "Об’єкт",
+  "Country filter": "Фільтр за країною",
+  "All countries": "Усі країни",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "Лише довідкові дані NGA. Наявність порту в списку не означає, що він діє. Фільтри за об’єктами враховують лише ствердні значення. Фільтри за країною та об’єктами діють лише в цьому сеансі.",
+  "Container": "Контейнери",
+  "Solid bulk": "Навалювальні вантажі",
+  "Oil terminal": "Нафтовий термінал",
+  "LNG terminal": "СПГ-термінал",
+  "Reference: NGA World Port Index / DOE NETL mirror": "Джерело: NGA World Port Index / дзеркало DOE NETL",
+  "Ports & terminals": "Порти й термінали"
 }

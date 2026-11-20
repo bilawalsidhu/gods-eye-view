@@ -4213,5 +4213,17 @@
   "Finding it…": "正在查找…",
   "No reading at this time": "此時無數據",
   "Last reading · {age}": "最後數據 · {age}",
-  "Find it": "查找"
+  "Find it": "查找",
+  "WPI pagination limit reached — showing partial data": "已達到 WPI 分頁上限 — 僅顯示部分數據",
+  "World Port Index unavailable": "World Port Index 不可用",
+  "Facility": "設施",
+  "Country filter": "按國家篩選",
+  "All countries": "所有國家",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "僅為 NGA 參考數據。列入名單的港口並不代表其正在運營。設施篩選僅包含明確為“是”的值。國家和設施篩選僅在本次會話中有效。",
+  "Container": "集裝箱",
+  "Solid bulk": "固體散貨",
+  "Oil terminal": "石油碼頭",
+  "LNG terminal": "LNG 碼頭",
+  "Reference: NGA World Port Index / DOE NETL mirror": "來源：NGA World Port Index / DOE NETL 鏡像",
+  "Ports & terminals": "港口和碼頭"
 }

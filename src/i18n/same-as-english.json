@@ -295,7 +295,8 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "Container"
   ],
   "es": [
     "1 min/s",
@@ -979,7 +980,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Container"
   ],
   "ja": [
     "1090 MHz",
@@ -1494,7 +1496,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Container"
   ],
   "uk": [
     "1900–1945",
