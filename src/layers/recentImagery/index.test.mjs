@@ -1563,3 +1563,133 @@ test('a voice search cancelled mid-flight says so instead of looking empty', asy
   assert.equal(f.snap().searching, false);
   assert.equal(f.snap().notice, 'Search cancelled');
 });
+
+test('a pick that probes empty after the automatic day lets the next ranked day drape', async () => {
+  for (const order of [
+    [S18, V15],
+    [V15, S18],
+  ]) {
+    const f = fixture();
+    await f.ready();
+    f.thumbnails.probe(L16, 'present');
+    assert.equal(f.snap().preview.key, S18);
+    f.layer.preview(V15);
+    assert.equal(f.diag().following, V15);
+    for (const key of order) f.thumbnails.probe(key, 'empty');
+    assert.equal(f.snap().preview.key, L16, `order ${order.join(' then ')}`);
+    assert.equal(f.owned().a?.key, L16, `order ${order.join(' then ')}`);
+  }
+  // A catalog day can also probe empty during the arrow-key debounce.
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(V21, 'present');
+  f.layer.focus(2);
+  assert.equal(f.diag().pending, L16);
+  f.thumbnails.probe(S18, 'empty');
+  f.thumbnails.probe(L16, 'empty');
+  assert.equal(f.owned().a, null);
+  f.timers.flush();
+  assert.equal(f.owned().a?.key, V21);
+  assert.equal(f.snap().focus.key, V21);
+});
+
+test('a deferred hand-over goes ahead once the pick fails or its source turns off', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a, null, 'the pick keeps the slot while it is probed');
+  f.thumbnails.probe(V15, 'error');
+  assert.equal(f.diag().following, null);
+  assert.equal(f.owned().a?.key, L16);
+  assert.equal(f.snap().focus.key, L16, 'focus leaves the failed pick');
+  const g = fixture();
+  await g.ready();
+  g.thumbnails.probe(L16, 'present');
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  g.layer.setSources({ viirs: false });
+  assert.equal(g.diag().following, null);
+  assert.equal(g.owned().a?.key, L16);
+});
+
+test('turning off the source of a followed pick does not block the hand-over', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  assert.equal(f.diag().following, V15);
+  f.layer.setSources({ viirs: false });
+  f.thumbnails.probe(S18, 'empty');
+  assert.notEqual(
+    f.diag().following,
+    V15,
+    'a pick whose source is off is no longer followed',
+  );
+  assert.equal(f.owned().a?.key, L16);
+});
+
+// The fake loader's 'error' status stands for the real loader's terminal error (never re-fetched).
+test('a pick whose probe failed does not block the hand-over', async () => {
+  const f = fixture();
+  await f.ready();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(V15, 'error');
+  f.thumbnails.probe(S18, 'empty');
+  assert.equal(f.owned().a?.key, L16);
+});
+
+test('an arrow-key pick waiting out the debounce keeps Esri through an empty automatic result', async () => {
+  const controller = leasingController();
+  const f = fixture({ controller });
+  await f.ready();
+  await settleTimes();
+  assert.equal(controller.getActiveId(), 'esri-imagery');
+  f.thumbnails.probe(L16, 'present');
+  f.thumbnails.probe(V15, 'present');
+  const before = controller.calls.length;
+  f.layer.focus(3);
+  f.thumbnails.probe(S18, 'empty');
+  await settleTimes(8);
+  assert.equal(f.owned().a, null, 'no other day drapes meanwhile');
+  assert.equal(
+    controller.getActiveId(),
+    'esri-imagery',
+    'Esri held during the debounce',
+  );
+  f.timers.flush();
+  await settleTimes(8);
+  assert.equal(f.owned().a?.key, V15);
+  assert.deepEqual(controller.calls.slice(before), [], 'no stack switches');
+});
+
+test('Escape ends a deferred hand-over, and a followed pick keeps Esri through it', async () => {
+  const escapeController = leasingController();
+  const f = fixture({ controller: escapeController });
+  await f.ready();
+  await settleTimes();
+  f.thumbnails.probe(L16, 'present');
+  f.layer.preview(V15);
+  f.thumbnails.probe(S18, 'empty');
+  f.layer.clearPreview();
+  await settleTimes(8);
+  assert.equal(escapeController.getActiveId(), 'photoreal');
+  f.thumbnails.probe(V21, 'present');
+  assert.equal(f.owned().a, null, 'nothing drapes after Escape');
+  const controller = leasingController();
+  const g = fixture({ controller });
+  await g.ready();
+  await settleTimes();
+  g.thumbnails.probe(L16, 'present');
+  const before = controller.calls.length;
+  g.layer.preview(V15);
+  g.thumbnails.probe(S18, 'empty');
+  await settleTimes(8);
+  assert.equal(controller.getActiveId(), 'esri-imagery');
+  g.thumbnails.probe(V15, 'empty');
+  await settleTimes(8);
+  assert.equal(g.owned().a?.key, L16);
+  assert.deepEqual(controller.calls.slice(before), [], 'no stack switches');
+});
