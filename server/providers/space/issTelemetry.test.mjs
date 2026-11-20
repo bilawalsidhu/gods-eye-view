@@ -461,6 +461,23 @@ test('a minute later an address starts afresh, and at most 2,000 are counted', (
   for (let i = 0; i <= 2000; i++) assert.equal(many(`k${i}`), 0);
   assert.equal(many('k2000'), 60, 'a counted address');
   assert.equal(many('k0'), 0, 'forgotten, so counted afresh');
+  assert.equal(many.addresses(), 2000, 'the cap holds');
+});
+
+test('an address idle for a whole minute is forgotten, not kept at a count of nothing', () => {
+  // Its answers would be the same either way (its count has slid to empty),
+  // so only the number of addresses kept shows it: without the forgetting the
+  // map would hold every address of the last 2,000 until the cap pushed them out.
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({ now: () => clock.ms });
+  assert.equal(admit('198.51.100.1'), 0);
+  assert.equal(admit.addresses(), 1);
+  clock.ms += 59_000;
+  assert.equal(admit('198.51.100.2'), 0);
+  assert.equal(admit.addresses(), 2, 'not yet idle a whole minute');
+  clock.ms += 2_000;
+  assert.equal(admit('198.51.100.3'), 0);
+  assert.equal(admit.addresses(), 2, 'the first, idle 61 s, is gone');
 });
 
 test('a clock stepped back starts a fresh minute instead of refusing until it catches up', () => {

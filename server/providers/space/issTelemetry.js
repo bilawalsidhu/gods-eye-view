@@ -357,7 +357,11 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     return out;
   }
 
-  /** The body served to browsers. */
+  /**
+   * The body served to browsers, as an object. The route sends
+   * `snapshotText()` instead; this stays as its reference, which a test holds
+   * the text to, so it is not dead code.
+   */
   function snapshot() {
     return {
       configured: true,
@@ -439,8 +443,9 @@ function secondsUnder(count, cap) {
  * (src/sources/rateLimit.js) filters every time stamp in the window on each
  * call, which grows with the traffic.
  * @param {{perAddress?: number, total?: number, now?: () => number}} [options]
- * @returns {(key: string) => number} 0 when the request is admitted, else
- *   the whole seconds until one would be.
+ * @returns {((key: string) => number) & {addresses: () => number}} 0 when
+ *   the request is admitted, else the whole seconds until one would be;
+ *   `addresses()` is how many keys it counts now, idle ones forgotten.
  */
 export function createIssTelemetryLimiter({
   perAddress = PER_ADDRESS_PER_MIN,
@@ -450,7 +455,10 @@ export function createIssTelemetryLimiter({
   let everyone = null;
   /** Per key, the most recent asker last, so the idle ones come first. */
   const keys = new Map();
-  return function admit(key) {
+  admit.addresses = () => keys.size;
+  return admit;
+
+  function admit(key) {
     const second = Math.floor(now() / 1000);
     everyone ??= minuteCount(second);
     slide(everyone, second);
@@ -476,7 +484,7 @@ export function createIssTelemetryLimiter({
     add(mine);
     add(everyone);
     return 0;
-  };
+  }
 }
 
 let webSocketImpl;
