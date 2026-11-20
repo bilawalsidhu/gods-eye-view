@@ -18,23 +18,20 @@ import {
   readPanelState,
 } from './rail/panelState.js';
 
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+} from './mobileSheets.js';
+
+export {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
-export const MOBILE_SHELL_CLASS = 'mobile-shell';
-export const MOBILE_SHEET_ATTR = 'data-mobile-sheet';
-
-/**
- * Panels each sheet expands. A sheet also shows its rail's other panels
- * collapsed (Scenes under Layers), per styles/mobile-shell.css.
- */
-export const MOBILE_SHEET_PANELS = Object.freeze({
-  layers: Object.freeze(['data-panel']),
-  cameras: Object.freeze(['cctv-panel', 'street-level-panel']),
-  context: Object.freeze(['global-context-panel']),
-  missions: Object.freeze(['space-missions-panel']),
-  search: Object.freeze(['location-bar']),
-  more: Object.freeze(['control-panel', 'pp-toggles']),
-});
-
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
@@ -63,17 +60,6 @@ const BORROWED_PANELS = Object.freeze([
 ]);
 
 const BORROW_OPTIONS = Object.freeze({ persist: false, syncShare: false });
-
-/**
- * @param {string} panelId
- * @returns {string|null} The sheet that presents `panelId`.
- */
-export function sheetForPanelId(panelId) {
-  for (const [sheet, ids] of Object.entries(MOBILE_SHEET_PANELS)) {
-    if (ids.includes(panelId)) return sheet;
-  }
-  return null;
-}
 
 /**
  * The sheet after a tab press: the same tab closes its sheet, another opens.

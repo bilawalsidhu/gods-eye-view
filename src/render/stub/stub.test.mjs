@@ -40,6 +40,15 @@ test('the stub passes the conformance suite', async () => {
   ]);
 });
 
+test('point visibility capability is optional and the stub reports unknown', () => {
+  const without = createStubRenderer({ capabilities: [] });
+  const withVisibility = createStubRenderer({
+    capabilities: ['pointVisibility'],
+  });
+  assert.equal(without.camera.visiblePoints, undefined);
+  assert.equal(withVisibility.camera.visiblePoints([], 200), null);
+});
+
 test('a frame runs the contract’s steps in order', () => {
   const r = createStubRenderer();
   r.frame.requestRender('test');

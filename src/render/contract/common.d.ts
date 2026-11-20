@@ -183,6 +183,8 @@ export type Capability =
   | 'pickPosition'
   /** Points tested against the frame's depth (`query.occlusionTest`). */
   | 'occlusionTest'
+  /** Conservative camera visibility of a point set (`camera.visiblePoints`). */
+  | 'pointVisibility'
   /** Outward user zooms that keep the Earth framed (`controls.keepEarthFramed`). */
   | 'keepEarthFramed'
   /** Height sampling against tiles and terrain. */
