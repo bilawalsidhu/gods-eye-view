@@ -10,6 +10,20 @@ or an older position from another feed) and one reported slower than 2 m/s
 give no course and keep the last; an aircraft with no course at all faces
 north.
 
+A selected vessel, aircraft or military aircraft can be found again from its
+Context card. While it is off screen, behind the globe or out of its layer's
+feed (the clock jumped to a time the feed lacks it, or the view moved away
+from it), the card's header shows Find it (`store.locate()`,
+`src/ui/stores/entityCard.js`). One still in its feed is flown to (an
+aircraft followed). One out of its feed is looked up at the layer's time on
+its own track (`locate` on the vessels, flights and military layers, through
+`locateOnTrack` in `src/data/locate.js`): the newest point at or before the
+world clock's time while the layer follows the clock, else the newest. The card
+moves to it and says how old that reading is, and the camera flies there. Once
+the feed has it again, its layer selects it again (an aircraft is followed).
+With no point at or before the time, the card says there is no reading then and
+the camera stays. A followed item is never counted as off screen.
+
 While anything moves (a layer in motion, the camera, a followed contact), the
 globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
 The render governor (`src/renderGovernor.js`) caps a parked scene at
@@ -92,6 +106,16 @@ settling. Oblique views below 300 km are left alone.
 
 `QA_BASE_URL=http://localhost:4173 node scripts/qa-zoom-out-guard.mjs` exercises
 the real browser controller at desktop and phone widths with keyless fixtures.
+
+Below 150 km Cesium sizes a wheel or pinch zoom step from the depth it picks at
+the canvas centre. Icons drawn over depth (aircraft, vessels and most markers:
+`disableDepthTest: Infinity`) sit on the near plane and write a depth of
+exactly 0 there (`src/render/cesium/iconSetPrimitive.js`), which that pick
+reads as nothing drawn, so it keeps the ground under the icon. Any depth past
+the near plane would be taken for a surface a near plane's distance from the
+camera, and the zoom would stop while an icon is under the centre.
+`QA_BASE_URL=http://localhost:5173 node scripts/qa-zoom-under-icon.mjs` checks
+this against a dev server (`npm run dev`).
 
 Cesium's free look (Shift+drag, which turns the camera in place) works only
 below 1,000 km. Above that height a few drags could turn the whole planet out of
@@ -1191,9 +1215,11 @@ every width, right to left it takes the bottom right at every width, and
 `src/ui/creditLineHeight.js` keeps its height in `--credit-line-height`: the
 coordinates (and, right to left, the Tactical readout) stay 6px above it
 however many lines it wraps onto, and the dock and World Timeline rise when
-it is taller than their usual clearance. Narrower than 1120px the dock leaves
-no room between the corners, so the coordinates and the readout sit above
-the dock, and above the World Timeline while it shows. Outside that layout
+it is taller than their usual clearance. The World Timeline takes the dock's
+floor and the dock (with the Omnibar's field) sits above it, rising by the
+bar's height while it shows, as the plain dock does. Narrower than 1120px the
+dock leaves no room between the corners, so the coordinates and the readout
+sit above the dock. Outside that layout
 Cesium's credit box wraps from 1200px, as before; the phone shell, clean
 view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
@@ -1929,6 +1955,16 @@ The row count explicitly says **nearby**: loaded records can be outside the
 screen. Cyan camera badges use Manjunath's camera artwork; selection switches to a
 larger coral badge with corner brackets and an animated tactical card. Numeric
 mapped bearings draw illustrative 90 m direction wedges (not measured coverage).
+A camera whose OSM `model` tag names known hardware (Motorola Solutions Vigilant,
+Genetec AutoVu, Axis, Verkada, Bosch MIC; 408 of the 1,567 tagged cameras
+in October 2026) gets a `SPEC` line on its card from vendored datasheet records
+(`src/layers/alpr/modelSpecs.js`, matched with the CCTV layer's
+`createModelSpecLookup`). A `manufacturer` naming another maker rejects the
+match, and the raw tag text is never shown.
+Unversioned `AutoVu SharpV` and `AutoVu SharpX` tags show no specs; G1/G2
+tags show the G2 (1280x960) record and G3 tags the G3 record. The default
+hourly extract has no `model` field yet; an Overpass-backed source or a custom
+adapter record's optional `model` fills it.
 The shared overlay paints gradients for at most 64 nearby cameras, promoting the
 selected camera; farther cameras keep native Cesium badges without wedges.
 Native ground-clamped wedges (a ground polyline plus a classification polygon per
@@ -1991,14 +2027,33 @@ directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
 request skips the key-bearing Street View fallback and gets the placeholder.
 
-The CCTV layer draws only the cameras on or near the screen. Zoomed out, it
-keeps one camera per ground cell sized to the view, preferring a healthy feed,
-and the cells are anchored to the ground so a pan keeps the same cameras. The
-active camera always shows. Ground placement and coverage geometry load only
-for the cameras in view, with at most two attempts per camera and view regime.
-The view pass reruns while the camera moves, paced by its own cost. The camera
-picker lists the cameras in view, active camera first, and closes with the
-count of cameras outside the view.
+The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
+ground cell with two or more cameras shows one marker at their mean position. A
+green camera pictogram sits under its top edge and the count just below its
+middle. The marker grows with the count and paints on the world overlay at
+callout resolution. The count covers the whole cell up to the horizon, including
+its off-screen cameras. Overlapping markers merge and add their counts. A lone
+camera whose icon would touch a marker joins the nearest one, unless the HUD
+hides the merged marker. In that case the lone camera keeps its icon and the
+count stays where it was before the merge. If the marker there would still cover
+the icon, the camera stays in its count when the label fits. The active camera
+keeps its own icon beside any marker that would cover it and stays out of the
+count. A click on a marker zooms in on its group, at least halving the distance
+each time. If halving would leave the group wider or taller than the frame, the
+view zooms in on the nearest of the group's ground cells with two or more
+cameras. The cockpit or a tracked object holds the view in place. Ambient cards
+and coverage attach only to
+cameras drawn as icons. On a globe map a marker stands on the drawn terrain. A
+camera the height batch never answered for takes the drawn terrain as its ground
+once it is near the screen. It reads that height again from much closer, once
+the terrain in view has loaded, or when the terrain source changes. A later
+Re:Earth answer replaces it. A fallback preserves it. Close up every camera
+shows. Cameras on one mount draw side by side and their records keep the mount.
+Ground placement has at most two attempts per camera and view regime. The view
+pass reruns while the camera moves, paced by its own cost, and when the terrain
+in view finishes loading. The camera picker lists the active camera first, then
+one camera per visible cell, preferring healthy feeds. It ends with the count of
+catalog cameras missing from the list.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
@@ -2117,7 +2172,10 @@ trail, a route. A layer under another layer's card or label
 (`isUnderOtherCard`) does nothing: it neither acts on its item there nor
 treats the click as empty space, so a tracked aircraft stays tracked and a
 selection stays selected. Context (`src/ui/entityContextBridge.js`) names
-nothing under a card. With no card on top, the scene rules are unchanged.
+nothing under a card. A layer can claim a target it paints outside the overlay's
+entries (`registerClickClaim`) where no card or label is on top. A CCTV count
+claims each click that zooms to it, so a tracked aircraft stays tracked.
+With no card or claim on top, the scene rules are unchanged.
 World-overlay hit rectangles are what is painted on screen until the next
 paint: an overlay change (a click subscriber publishing its selection card)
 no longer clears them mid-click, and a paint that draws nothing clears them
@@ -6304,7 +6362,17 @@ caption has no place name (KartaView's is where the drive began) and links to
 the full-size photo through the image proxy, since kartaview.org's photo
 pages fail for signed-out visitors. The viewer itself is `photoViewer.js`,
 shared with Panoramax: each provider hands it a `PhotoSources` table (first
-and sharper flat and panorama URLs, and the caption fields).
+and sharper flat and panorama URLs, and the caption fields). It builds no
+element: it presents the viewer through the layer's
+`subscribePhotoViewer()`, which the application shell publishes to the
+`gev-street-level-photo` store, and `StreetLevelPhotoViewer` draws it in the
+viewer host and hands back the canvas the panorama is drawn on (a fresh one
+after a lost context). Each mount and each canvas has a key of its own, so
+a viewer never draws on another one's elements, and of two viewers
+mounting at once only the later one is drawn (`photoViewers.js`): the
+earlier one's mount closes. A view may draw at once or later; what it
+reads (`mountKey`, `actions.supersede()`) is `ViewerAdapter.subscribeView`
+in `registry.js`. Without a subscribed view these photos cannot open.
 
 Panoramax (`providers/panoramax/`) is keyless and browser-side: the
 meta-catalogue `api.panoramax.xyz` (CORS open) federates every instance, and
@@ -7516,7 +7584,7 @@ silently demoting every later lookup for the session.
   ground clamp now lifts the cap _center_ only so the wireframe stays a true pyramid welded to
   the plane (was a flattened fan / the ~47.5 m divergence — RESOLVED), re-selecting the active
   camera is a no-op (killed a click-flash), and texture swaps gate on canvas content (killed a
-  periodic white flash). Camera icons are cyan for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
+  periodic white flash). Camera icons are green for stills, violet for cameras with a video feed, and amber for the active camera. Coverage is now **metro-wide: 250 cameras** (`CCTV_AUSTIN_MAX_SOURCES`
   default 36 → 250, hard bound 300), filtered to `camera_status === TURNED_ON` (~815 live of
   1,003 rows). City packs (2026-07-04): Caltrans (districts 4/7/11/3 — SF, LA, San Diego,
   Sacramento; cap 300) and TfL London JamCams (cap 250) join Austin (cap 250) as keyless default
@@ -8562,7 +8630,7 @@ pins and share links already supply complete boxes.
 - Vessels, Transit and Rail draw fleet models under the same DISPLAY rail `3D` toggle, at the same altitude ceiling, caps and 3 km add/keep radii as the aircraft, at true size (`FLEET_MODEL_POLICY`, `src/layers/flights/policy.js`; `createFleetModelLayer`, `src/data/fleetModelInstances.js`). A vessel's model follows its AIS ship type and is drawn at its reported length and beam (AIS static dimensions A+B and C+D, now carried on vessel rows as `length` and `beam`), standing at the sea surface, heading by true heading then course. An aid to navigation is not a hull: a vessel record whose type names a buoy, beacon, mark, RACON or light, or whose MMSI is an aid-to-navigation station's (`99MIDxxxx`), is `isAidToNavigation` (`src/data/vesselTypes.js`) and is drawn as the set's `buoys` model of the IALA mark its type names (`aidToNavigationModel`, `src/data/fleetModels.js`: cardinal N/E/S/W, port or starboard hand, preferred channel by its side, safe water, isolated danger, special mark; a beacon, light, light vessel, RACON or reference point with no mark of its own is the special mark), else a red can (`DEFAULT_AID_MODEL`), at its built size and facing north whatever heading it reports. A type is an aid's when it is one of the 32 kinds an aid report names or uses a word for one (buoy, beacon, cardinal, safe water, RACON, lighthouse and so on); a vessel that works on aids (`Buoy Tender`, `Buoy Layer`) is not one. Its icon is the buoy sprite, tinted bone white (`AID_TO_NAVIGATION_STYLE`, `src/data/vesselLabels.js`), upright and never turned, and its card, selected card and HUD readout (`src/layers/vessels/cards.js`) show its kind alone, whole, in that colour: no speed or heading, since a fixed mark has neither. AISStream subscribes to `AidsToNavigationReport` (message 21) by default, and the server names each report's aid type code (0 to 31) as its kind (`aidToNavigationTypeName`: `20` is `Cardinal Mark N`) rather than reading it as a ship type, and its name runs on into the report's `NameExtension`. A virtual aid (the report's `VirtualAtoN` flag: a mark broadcast where nothing physical stands) carries `virtual: true` on its row, and on its vessel source record (the live-source contract's `virtual`, `src/sources/live/contract.js`, false unless a source says true; any source may set it). It keeps its buoy sprite but never gets a model (`vesselModelSpec` returns null for it, and the vessel layer gathers no model item for it), and its card and readout add `VIRTUAL` after its kind. `aisStreamRows` (`server/providers/vessels/ais-store.js`) puts every vessel ahead of every aid, so a capped request (the layer asks for 12,000 rows) never gives up a ship for a buoy. The `vessels_in_area` tool (and the brief built on it) counts ships only: it leaves aids out of its rows, counts, breakdowns and speed stats. A transit vehicle's model follows its route's GTFS `route_type` when its record carries one and that type is a kind of the vehicle's mode (`types.json` `transit.route_types`: 200 a coach, 101 a high-speed set, 106 a regional DMU, 710 a double-decker), else its layer mode (`transit.modes`: bus, trolleybus, tram, cable car, subway, monorail, rail, funicular, gondola or ferry; a vehicle of `unknown` mode keeps its icon); a fleet hint that overrules the route (a bus on a tram route) leaves the type unused. A monorail and a gondola are raised by their `transit.elevation` lifts. A train's model follows its rail category and mode (rail, metro or tram). The bundled GTFS-Realtime proxy carries no route type, so its vehicles draw their mode's model; a source that adds `routeType` reaches the finer ones. Both stand on the road or rail top they are drawn on, without the 1.5 m `GROUND_FLOOR_LIFT_M` their icons carry, and are painted in their mode or category colour where the model's `_TINT` attribute marks it. A vessel model is clipped at its waterline (one clipping plane per model, at the model origin's horizontal plane), so its hull below the water never shows through a plain globe, which Cesium does not depth-test models against. Under the NVG/FLIR styles (the Flights `irBoost` parameter) these models render unlit flat white, as aircraft models do. Each vehicle's icon stays the visual until its model is loaded, ready and placed; a model is picked as its icon is, and a vehicle drawn as its model keeps its selection card and its place in the detection overlay.
 - **Aircraft models skip Cesium's dynamic environment map (2026-10-24).** Flights, Military Flights and Local ADS-B pass `environmentMapOptions: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS` (`{ enabled: false }`, `src/data/aircraftModelLighting.js`) to every drawn model. Otherwise each `Model` renders the sky around it and reads it back from the GPU (`readPixels`) when it is first placed, and again whenever it moves more than 1 km, the scene's atmosphere settings change, or (under sunlight dynamic lighting) an hour of scene time passes (`DynamicEnvironmentMapManager`, Cesium 1.138). The models are lit from Cesium's default spherical harmonics instead, with no specular environment map, so the sky's model-lighting cube map no longer reaches aircraft. `src/data/aircraftModelLighting.test.mjs` pins the option at every drawn model call; every model is built from the fleet set loaded up front, so there is no separate preload.
 - The DISPLAY-rail `3D` toggle is the user-facing activation path for both aircraft layers. Their small approved GLBs build their render resources without Cesium's frame-spread job queue, preventing continuous Photorealistic 3D Tiles streaming from starving model readiness; model caps, tracking, camera, and fallback billboards are unchanged.
-- **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only within 3 km of the camera and only for the nearest `MODEL_MAX` — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. **Consequence for returning users:** a stored `gev:layer-state:v2` blob is a FULL options snapshot, so a session that wrote one before this change carries `models3d:false` and keeps 3D off until the operator flips it (or clears the key) — the durable snapshot is treated as the recipient's own state, by design.
+- **The `3D` toggle DEFAULTS ON in `proximity` on a first run.** Proximity is itself the budget — models appear only within 3 km of the camera and only for the nearest `MODEL_MAX` — so the default costs nothing at globe scale, and `all` remains a deliberate opt-in. A fresh boot runs NO layer-state restoration (`LayerStateCoordinator.start()` returns early with neither a share payload nor stored state), so four independent initializers decide what a first-run operator sees and must agree: `booleanOption('models3d', 'e', true)` in `src/data/layerState.js`, `_models3dEnabled = true` in BOTH flight layers, `this._models3dEnabled = true` in `src/ui/aircraftDisplay.js`, and the `active` / `visible` classes on `#models3d-toggle` / `#models3d-mode-row` in `index.html`. All four are pinned together in `src/data/layerState.test.mjs`. Explicit state still wins: because the codec omits default-valued options, `models3d: false` is now what travels in a link (`lo=…f.e.0`) and restores OFF at both aircraft layers. Start-up never reads a stored `gev:layer-state:v2` blob back: a bare URL starts from these defaults and a link from its hash (`src/ui/shareRestoration.js`, `allowLocalState: false`), so clearing the address always resets the view.
 - Civilian and military 2D aircraft use the established distance scale: `3×` near
   the camera and a `0.5×` floor from 8,000 km outward. A standard 20 px ambient
   icon therefore remains about 10 px at globe altitude while retaining the
@@ -8805,13 +8873,18 @@ that era's default (`scf` → 35, `ko` → 5). Every link since carries both fie
 explicitly, because the generator always writes them, so no era whose default
 later changed depends on a fallback either way.
 
-**They do NOT all persist the same way, and only one of them persists at all.**
+**None of them comes back from storage on a bare URL; only the hash carries them.**
 Worth stating plainly, because "a default you can override" and "a default that
 remembers" are different promises:
 
-- **3D models** have durable storage — `gev:layer-state:v2` in local storage,
-  written by `LayerStateCoordinator` on explicit intent. A session that stored a
-  snapshot keeps whatever it stored, across tabs and restarts.
+- **3D models** are written to `gev:layer-state:v2` in local storage by
+  `LayerStateCoordinator` on explicit intent, but start-up never reads it back:
+  a link restores what its hash carries, and a bare URL starts with the default
+  layers and options (`src/ui/shareRestoration.js` passes
+  `allowLocalState: false`), so clearing the address always resets the view.
+  A host may name the layers a bare URL starts with (`startLayers` on
+  `createApplicationControls`, e.g. `['flights', 'satellites']`); they are
+  restored passively, never written to storage, and a link's own layers win.
 - **Detection mode/density and scope feather have NO storage key at all.** Their
   only durable carrier is the URL hash (`dm`/`dd`, `scf`), written on a 500 ms
   debounce. A same-URL reload therefore keeps them only if that debounce already

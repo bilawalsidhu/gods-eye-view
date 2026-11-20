@@ -989,9 +989,10 @@ function createPanelRecords(event) {
       textContent: t('▶ PLAY SCENE'),
       hidden: true,
     }),
+    // `pressed` is the button's pressed state; the view renders it as one.
     cinematicButton: panelRecord({
       textContent: t('◉ CINEMATIC'),
-      attributes: { 'aria-pressed': 'false' },
+      pressed: false,
     }),
     storyReplayButton: panelRecord({ textContent: t('↺ FULL STORY') }),
     corridorButton: panelRecord(),
@@ -2860,7 +2861,7 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       _cinematicActive ? t('■ RELEASE CAMERA') : t('◉ CINEMATIC'),
     );
-    setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
+    setElementProperty(button, 'pressed', _cinematicActive);
     return true;
   }
 

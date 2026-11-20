@@ -584,6 +584,8 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+      /** What the raster shows, as imagery's `shows`. */
+      shows?: string;
     };
 
 export interface FieldHandle extends Handle {

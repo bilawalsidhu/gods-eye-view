@@ -1,4 +1,4 @@
-import { toRadians } from '../geo/index.js';
+import { toRadians } from '../geo/vector.js';
 import { findCamera } from '../render/rendererOf.js';
 
 /** The camera port's pose, or null when there is none to read. */
