@@ -16,7 +16,7 @@ export const HLS_LIMITS = Object.freeze({
   readyMs: 12000,
 });
 
-/** Every lease or session slot is taken: the source itself has not failed. */
+/** Every lease or session slot is taken, or the viewer's lease ended mid-request: the source itself has not failed. */
 export class HlsCapacityError extends Error {}
 
 /** Refuse redirects; count actual streamed bytes, including chunked responses. */

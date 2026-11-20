@@ -8,8 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { cctvProxy } from '../../server/providers/cctv.js';
-import { recordingResponse } from './cctvRecordingResponse.mjs';
+import { mountCctvProvider } from '../testSupport/cctvProviderHarness.mjs';
 
 const STILL = {
   id: 'still-fixture',
@@ -64,72 +63,17 @@ function upstreamResponse({ status = 200, headers = {}, body = 'payload' }) {
   };
 }
 
-/**
- * Mount the real provider over the fixture cameras and answer every upstream
- * request from the supplied function.
- */
+/** Mount the real provider over the fixture cameras, recording upstream requests. */
 function mount(t, respond) {
-  const before = {
-    json: process.env.CCTV_SOURCES_JSON,
-    file: process.env.CCTV_SOURCES_FILE,
-    austin: process.env.CCTV_FORCE_AUSTIN,
-    serverKey: process.env.GOOGLE_MAPS_SERVER_API_KEY,
-    browserKey: process.env.GOOGLE_MAPS_API_KEY,
-  };
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([
-    STILL,
-    STILL_ALIAS,
-    VIDEO,
-    WEBM,
-    MJPEG,
-  ]);
-  process.env.CCTV_SOURCES_FILE = 'absent-source-file.json';
-  process.env.CCTV_FORCE_AUSTIN = '0';
-  // No Street View key: a /frame miss lands on the synthetic billboard rather
-  // than a network call this file does not model.
-  delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
-  delete process.env.GOOGLE_MAPS_API_KEY;
-  const nativeFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    requests.push({ url: String(url), redirect: init.redirect });
-    return respond({ url: String(url), init });
-  };
-  t.after(() => {
-    globalThis.fetch = nativeFetch;
-    for (const [name, value] of [
-      ['CCTV_SOURCES_JSON', before.json],
-      ['CCTV_SOURCES_FILE', before.file],
-      ['CCTV_FORCE_AUSTIN', before.austin],
-      ['GOOGLE_MAPS_SERVER_API_KEY', before.serverKey],
-      ['GOOGLE_MAPS_API_KEY', before.browserKey],
-    ]) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  });
-
-  let handler = null;
-  cctvProxy().configureServer({
-    middlewares: {
-      use: (_route, fn) => {
-        handler = fn;
-      },
+  const app = mountCctvProvider(t, {
+    cameras: [STILL, STILL_ALIAS, VIDEO, WEBM, MJPEG],
+    fetch: async (url, init = {}) => {
+      requests.push({ url: String(url), redirect: init.redirect });
+      return respond({ url: String(url), init });
     },
   });
-  assert.ok(handler, 'the CCTV provider must mount a middleware');
-
-  const call = async (path, headers = {}, method = 'GET') => {
-    const { res, done } = recordingResponse();
-    await handler({ url: path, headers, method, on() {} }, res);
-    await done;
-    return res;
-  };
-  const health = async (id) => {
-    const res = await call('/health');
-    return JSON.parse(res.body).cameras.find((entry) => entry.id === id);
-  };
-  return { call, health, requests };
+  return { ...app, requests };
 }
 
 test('a still camera is refused by /media without any upstream request', async (t) => {
