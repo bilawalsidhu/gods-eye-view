@@ -812,6 +812,35 @@ test('docking is judged again once a second while tracked, between catalog updat
   assert.equal(f.ring(COMPANION)?.show, true);
 });
 
+test('a docked judgement holds out to three radii, so a pair near the radius does not flip', async (t) => {
+  const f = await fixture(t);
+  f.track(COMPANION);
+  f.nextScan();
+  assert.equal(f.state._trackedDockedToIss, true);
+  const at = (anomaly) => {
+    const [, line1, line2] = tle(
+      'PROGRESS-MS 31',
+      COMPANION,
+      undefined,
+      undefined,
+      anomaly,
+    ).split('\n');
+    f.state._catalog.get(COMPANION).satrec = twoline2satrec(line1, line2);
+    f.nextScan();
+    return f.state._trackedDockedToIss;
+  };
+  // About 8 km apart (0.068° along the orbit), past the 5 km radius: still
+  // docked, as a pair whose elements drift apart over an orbit is.
+  assert.equal(at(' 88.1836'), true);
+  assert.equal(f.ring(COMPANION), undefined);
+  // About 20 km apart, past three radii: undocked.
+  assert.equal(at(' 88.2856'), false);
+  assert.equal(f.ring(COMPANION)?.show, true);
+  // Back at 8 km it stays undocked: docking needs the radius itself.
+  assert.equal(at(' 88.1836'), false);
+  assert.equal(at(DOCKED), true);
+});
+
 test('a vehicle that undocks in Manual hands the station’s joints back to Automatic', async (t) => {
   const f = await fixture(t);
   const calls = [];

@@ -17,6 +17,9 @@ import {
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { modelFor } from './stationModels.js';
 
+/** A docked object is judged undocked only beyond this many companion radii. */
+const UNDOCK_RADIUS_FACTOR = 3;
+
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget } = services.focus;
   const {
@@ -429,11 +432,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
    * The station a satellite is docked to: both orbits, propagated to one
    * instant, within the station's companion radius (dots are moved at
    * different moments, so their spacing cannot say). A station is docked to
-   * nothing, and the dense group never is.
+   * nothing, and the dense group never is. The station it is already judged
+   * docked to (`held`) keeps it out to `UNDOCK_RADIUS_FACTOR` times the
+   * radius.
    * @param {number} noradId
+   * @param {number|null} [held] The station it is judged docked to now.
    * @returns {number|null} The station's NORAD number, or null.
    */
-  function _dockedToStation(noradId) {
+  function _dockedToStation(noradId, held = null) {
     if (STATIONS.some((station) => station.norad === noradId)) return null;
     const sat = layerState._catalog.get(noradId);
     if (!sat?.satrec || sat.group === 'dense') return null;
@@ -446,8 +452,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
       own ??= parts.orbits.propagatePosition(sat.satrec, date);
       if (!own) return null;
       const there = parts.orbits.propagatePosition(entry.satrec, date);
-      if (there && distance(at(own), at(there)) <= station.companionRadiusM)
-        return station.norad;
+      // Judged docked, it stays so until well clear: elements of different
+      // epochs can swing a docked pair's distance about the radius over an
+      // orbit, which would flip the ring, STATION and LIVE twice an orbit.
+      const radius =
+        station.companionRadiusM *
+        (station.norad === held ? UNDOCK_RADIUS_FACTOR : 1);
+      if (there && distance(at(own), at(there)) <= radius) return station.norad;
     }
     return null;
   }
@@ -468,7 +479,10 @@ export function createTracking({ state: layerState, services, parts, source }) {
   function _syncTrackedDocking() {
     const noradId = layerState._trackedNorad;
     if (noradId === null) return;
-    const station = _dockedToStation(noradId);
+    const station = _dockedToStation(
+      noradId,
+      layerState._trackedDockedToStation,
+    );
     const dockedToIss = station === ISS_NORAD;
     const swapped = dockedToIss !== layerState._trackedDockedToIss;
     layerState._trackedDockedToStation = station;

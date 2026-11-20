@@ -2145,9 +2145,11 @@ command panel and the live video show as they do for the ISS. Such an entry
 draws no orbit ring of its own (its elements would put a second line beside
 the ISS's through the same station): while tracking judges it docked (both
 orbits at one instant within 5 km, judged when tracking begins, once a second
-while tracked and after each catalog update) the ISS's ring shows for it, even
-with the Stations class hidden; a vehicle that undocks while tracked gets its
-own ring back, and one that docks hands its ring to the ISS's.
+while tracked and after each catalog update; once docked it stays so until
+15 km apart, so a pair whose elements swing about 5 km does not flip) the
+ISS's ring shows for it, even with the Stations class hidden; a vehicle that
+undocks while tracked gets its own ring back, and one that docks hands its
+ring to the ISS's.
 In the Cockpit, a station entry is ridden from the station itself instead of
 the straight-down picture: the camera sits at a point on the model
 (`issMounts.js`), with the model drawn, and looks out, away from the station.
