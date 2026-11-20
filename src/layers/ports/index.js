@@ -63,7 +63,7 @@ export function createPortsLayer({
   };
   const notify = () => rowListener?.();
   const visible = (record) =>
-    visibleWpiPort(record, { country, facility });
+    Boolean(record) && visibleWpiPort(record, { country, facility });
   const horizon = createHorizonCull({
     getViewer: () => viewer,
     items: () => pins,
