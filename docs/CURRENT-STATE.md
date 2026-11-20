@@ -8865,6 +8865,9 @@ remembers" are different promises:
   a link restores what its hash carries, and a bare URL starts with the default
   layers and options (`src/ui/shareRestoration.js` passes
   `allowLocalState: false`), so clearing the address always resets the view.
+  A host may name the layers a bare URL starts with (`startLayers` on
+  `createApplicationControls`, e.g. `['flights', 'satellites']`); they are
+  restored passively, never written to storage, and a link's own layers win.
 - **Detection mode/density and scope feather have NO storage key at all.** Their
   only durable carrier is the URL hash (`dm`/`dd`, `scf`), written on a 500 ms
   debounce. A same-URL reload therefore keeps them only if that debounce already

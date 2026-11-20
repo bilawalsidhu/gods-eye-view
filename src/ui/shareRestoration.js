@@ -167,7 +167,10 @@ export class ShareRestoration {
     feedback,
     updateFeedback,
     applyFollowOffset = null,
+    startLayers = [],
   }) {
+    // The layers a bare address starts with; a link names its own.
+    this._startLayers = startLayers;
     Object.assign(this, {
       viewer,
       navigation,
@@ -421,6 +424,7 @@ export class ShareRestoration {
         // with the default layers. Saved layer choices never come back on
         // their own, so clearing the address always resets the view.
         allowLocalState: false,
+        startLayerIds: this._initialShareState ? [] : this._startLayers,
       });
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
