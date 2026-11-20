@@ -12,6 +12,7 @@ import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
 import CctvPanel from './panels/CctvPanel.vue';
 import StreetLevelPanel from './panels/StreetLevelPanel.vue';
+import StreetLevelPhotoViewer from './panels/StreetLevelPhotoViewer.vue';
 import DrawControls from './panels/DrawControls.vue';
 import GeoImport from './panels/GeoImport.vue';
 import UiSelect from '../kit/UiSelect.js';
@@ -71,6 +72,7 @@ async function importChosen(event) {
 
   <!-- Street Level Panel (moved into #right-context-rail at runtime) -->
   <StreetLevelPanel />
+  <StreetLevelPhotoViewer />
 
   <!-- Scene Director Panel -->
   <RailPanel id="scene-panel" start-collapsed v-class-toggle="{ running: scene?.running, 'has-shots': scene?.hasShots }" :title="t('AUTHORING')" :hint="t('Create and edit scenes')" scroll>

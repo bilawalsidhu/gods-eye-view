@@ -4527,5 +4527,9 @@
   "Select a map item to see its details.": "Виберіть об’єкт на карті, щоб побачити подробиці.",
   "Bilawal on {site}": "Білал на {site}",
   "Bilawal's website": "Сайт Білала",
-  "BACK": "НАЗАД"
+  "BACK": "НАЗАД",
+  "Finding it…": "Пошук…",
+  "No reading at this time": "Немає даних на цей час",
+  "Last reading · {age}": "Останні дані · {age}",
+  "Find it": "Знайти"
 }

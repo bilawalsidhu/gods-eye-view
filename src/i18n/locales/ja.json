@@ -4209,5 +4209,9 @@
   "Select a map item to see its details.": "地図上の項目を選択すると詳細が表示されます。",
   "Bilawal on {site}": "{site}のBilawal",
   "Bilawal's website": "Bilawalのウェブサイト",
-  "BACK": "戻る"
+  "BACK": "戻る",
+  "Finding it…": "検索中…",
+  "No reading at this time": "この時刻のデータなし",
+  "Last reading · {age}": "最終データ・{age}",
+  "Find it": "探す"
 }

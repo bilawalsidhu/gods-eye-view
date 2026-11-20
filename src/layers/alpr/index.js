@@ -27,7 +27,9 @@ let instances = 0;
  * records fully cover, reused for later views inside it) and `zoom` (their
  * tile precision; `source.detailZoom(box)` names the zoom a view needs). Records use stable string ids and latitude /
  * longitude in degrees; optional directionDeg is a compass bearing [0, 360).
- * Manufacturer, operator and cameraType are optional display fields.
+ * Manufacturer, operator, cameraType and model are optional display fields;
+ * model only selects a vendored datasheet line (modelSpecs.js), never shown
+ * as text.
  * Source label and attribution { name, description, text, href } identify the
  * actual provider; href must be HTTPS. Provider payload parsing stays in source.
  * Context services remove obsolete records with
