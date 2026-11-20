@@ -96,8 +96,21 @@ function resubscribe() {
 }
 
 /**
+ * Start the shared view afresh, with no viewer: a test file calls it before
+ * each test, so a viewer left by an earlier test is not drawn with a later
+ * test's (nor superseded by it). A viewer it held is left without a view.
+ */
+export function resetPhotoView() {
+  shared.generation++;
+  shared.unsubscribe?.();
+  shared.unsubscribe = null;
+  shared.viewers.clear();
+  shared.draw = null;
+}
+
+/**
  * Draw a photo viewer with the shared view, alongside every other viewer
- * given here (see `shared`).
+ * given here since the last `resetPhotoView()` (see `shared`).
  * @returns {() => void} Stop drawing it.
  */
 export function drawPhotoViewer(viewer) {

@@ -160,6 +160,16 @@ async function loadBitmap(url, timeoutMs, resize, failure, signal) {
 }
 
 /**
+ * Unmounted, superseded or left without a view before the view drew what
+ * was waiting on it (`undrawn`): a mount or an open that fails as closed.
+ */
+function undrawn() {
+  return Object.assign(new Error('Street-level viewer was closed'), {
+    undrawn: true,
+  });
+}
+
+/**
  * A picture refused for its size (`tooLarge`): the viewer will not load
  * that file another way, an <img> having no size limit at all.
  */
@@ -235,8 +245,11 @@ export function panoSizeFor(canvasPixels, fovDeg) {
  * and a new `canvasKey` asks for a fresh canvas (a lost WebGL context):
  * neither is ever reused. `actions.supersede()` tells a viewer another one
  * is drawn in its place: it unmounts, and a mount still waiting to be drawn
- * fails as closed. Mounting with no view subscribed fails; an open waiting
- * on a draw when the last view leaves goes on without it.
+ * fails as closed. Mounting with no view subscribed fails, and a mount or
+ * a panorama's open waiting on a draw when the last view leaves fails as
+ * closed (the mount unmounts; the open leaves no photo shown). A view
+ * handing back another canvas element than the renderer's (one subscribed
+ * since) gets the panorama drawn again on it, as after a lost context.
  *
  * Photos are normalized by the provider: `{id, sequenceId, lon, lat,
  * heading, isPano, capturedAt}` plus whatever its `sources` read.
@@ -479,6 +492,27 @@ export function createPhotoViewer({
     const from = event?.currentTarget ?? event?.target;
     if (from && from !== canvas) return;
     event.preventDefault?.();
+    dropRenderer();
+    // A lost canvas hands back its lost context: the view draws a new
+    // element in its place and hands it back.
+    canvas = null;
+    present({ canvasKey: ++viewKeys });
+    reopen();
+  }
+
+  /**
+   * The view drew the panorama on another canvas element than the
+   * renderer's (a view that subscribed since): the renderer cannot follow
+   * it, so the photo is drawn again on a new one, as after a lost context.
+   */
+  function moveCanvas(element) {
+    dropRenderer();
+    canvas = element;
+    reopen();
+  }
+
+  /** Let the renderer go, keeping the user's look for the photo's reopen. */
+  function dropRenderer() {
     const lost = renderer;
     renderer = null;
     // The new renderer starts facing the photo's heading: keep the user's look.
@@ -489,11 +523,10 @@ export function createPhotoViewer({
     } catch {
       /* already gone */
     }
-    // A lost canvas hands back its lost context: the view draws a new
-    // element in its place and hands it back.
-    canvas = null;
-    present({ canvasKey: ++viewKeys });
-    // Show the photo again through the core, unless a newer one is opening.
+  }
+
+  /** Show the panorama again through the core, unless a newer photo is opening. */
+  function reopen() {
     if (showing === 'pano' && photo && openingId === null) {
       const again = photo.id;
       show(null);
@@ -675,7 +708,9 @@ export function createPhotoViewer({
     const actions = {
       attach(name, element) {
         if (presented?.actions !== actions || !element) return;
-        ELEMENTS[name]?.(element);
+        if (name === 'canvas' && renderer && canvas && element !== canvas)
+          moveCanvas(element);
+        else ELEMENTS[name]?.(element);
         if (name === 'root') wake(rootWaiters);
         if (name === 'canvas') {
           canvasDraws++;
@@ -883,6 +918,14 @@ export function createPhotoViewer({
     const draws = canvasDraws;
     show('pano');
     await drawnAfter(draws, signal);
+    // The last view left before drawing it: the canvas was never shown, and
+    // nothing is drawn until a view is back.
+    if (seq === openSeq && canvasDraws === draws && !viewListeners.size) {
+      image.close?.();
+      photo = null;
+      show(null);
+      throw undrawn();
+    }
     if (seq !== openSeq || !renderer) {
       image.close?.();
       if (seq !== openSeq) return false;
@@ -931,7 +974,8 @@ export function createPhotoViewer({
     if (sources.hasPano(target) && ensureRenderer()) {
       try {
         shown = await showPano(target, seq, keepView, signal);
-      } catch {
+      } catch (error) {
+        if (error?.undrawn) throw error;
         // The panorama failed: its front view is better than nothing.
         if (seq !== openSeq) return;
         shown = await showFlat(target, seq, signal);
@@ -952,12 +996,16 @@ export function createPhotoViewer({
       rendererFailed = false;
       if (!viewListeners.size)
         throw new Error('Street Level photo viewer has no view to draw it');
-      // Resolves once the view drew the viewer, or it was unmounted meanwhile.
+      // Resolves once the view drew the viewer, or it was unmounted, or its
+      // last view left, meanwhile.
       const drawn = new Promise((resolve) => rootWaiters.add(resolve));
       build(host);
       if (!root) await drawn;
-      // Unmounted or superseded before the view drew it.
-      if (!root) throw new Error('Street-level viewer was closed');
+      if (root) return;
+      // The last view left before drawing it: no view will. Unmounted, as
+      // when superseded, so a view subscribing later draws nothing.
+      if (presented) adapter.unmount();
+      throw undrawn();
     },
 
     /** Resolves once the photo is on screen and its pose was emitted. */
@@ -1045,9 +1093,12 @@ export function createPhotoViewer({
       viewListeners.add(listener);
       listener(presented);
       return () => {
-        // The last view went: an open waiting on its draw goes on without.
-        if (viewListeners.delete(listener) && !viewListeners.size)
+        // The last view went: a mount or an open waiting on its draw fails
+        // as closed.
+        if (viewListeners.delete(listener) && !viewListeners.size) {
+          wake(rootWaiters);
           wake(canvasWaiters);
+        }
       };
     },
   };

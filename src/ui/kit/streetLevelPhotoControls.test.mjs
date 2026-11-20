@@ -101,11 +101,38 @@ test('the photo viewer is drawn by its view, and its layer needs no Vue', () => 
     /from 'vue'|\.vue'/,
   ])
     assert.doesNotMatch(source, write);
-  assert.doesNotMatch(rest, /\.src\s*=[^=]/, 'a .src written on the page');
-  // In loadImage, only on the off-page Image it creates.
+  // No property written through brackets (`picture['src'] = …`,
+  // `el[name] = …`), outside array destructuring declarations.
+  assert.doesNotMatch(
+    source.replace(/\b(?:const|let|var)\s*\[/g, ''),
+    /[\w$)\]]\s*\[[^[\]]*\]\s*=(?![=>])/,
+    'a bracket write',
+  );
+  const SRC = /\.src\s*=(?![=>])/g;
+  assert.doesNotMatch(rest, SRC, 'a .src written on the page');
+  // In loadImage, only on the off-page Image it creates: `image` is bound
+  // once, to that Image, and never rebound or shadowed.
   assert.match(loader, /\bconst image = new Image\(\);/);
-  for (const [write] of loader.matchAll(/[\w$.\]]+\.src\s*=(?!=)/g))
-    assert.match(write, /^image\.src\s*=$/, write);
+  assert.equal(
+    loader.match(/\b(?:const|let|var|function|class)\s+image\b/g)?.length,
+    1,
+    'one binding of image',
+  );
+  for (const rebinding of [
+    /(?<!\b(?:const|let|var)\s+)(?<![\w$.])image\s*=(?![=>])/,
+    /(?<![\w$.])image\s*=>/,
+    /\((?:[^()]*[,{[\s(])?image\b[^()]*\)\s*=>/,
+    /\bfunction\b[^(]*\((?:[^)]*[,{[\s(])?image\b[^)]*\)/,
+    /\b(?:const|let|var)\s*[{[][^=]*\bimage\b/,
+    /\bcatch\s*\(\s*image\b/,
+  ])
+    assert.doesNotMatch(loader, rebinding, 'image rebound or shadowed');
+  const writes = loader.match(SRC)?.length ?? 0;
+  assert.equal(
+    loader.match(/(?<![\w$.)\]])image\.src\s*=(?![=>])/g)?.length ?? 0,
+    writes,
+    'a .src written on something other than the Image',
+  );
   const markup = template(VIEW);
   const opening = (name, attribute) =>
     new RegExp(String.raw`<${name}\b${ATTRS}\s${attribute}${ATTRS}>`);
