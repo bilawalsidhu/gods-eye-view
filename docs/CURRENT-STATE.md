@@ -1123,17 +1123,18 @@ Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
 continues to follow the existing tool and caller behavior.
 
-Fire-perimeter queries test polygon interiors and holes on continuous unwrapped
-longitudes, matching the short-edge convention used for boundary intersections.
-An outline crossing ±180° contains nearby boxes and radius areas without also
-containing their counterparts near Greenwich. Returned perimeter coordinates
-use a circular mean for longitude, including multipart outlines. Incident cards
-also use a circular longitude mean over the largest outer ring (excluding its
-repeated closing vertex). Their relative-area comparison follows short longitude
-edges so a small dateline-crossing part cannot outweigh a larger ordinary part.
-Regression coverage lives in `src/tools/area.test.mjs`,
-`src/tools/queries/environment.test.mjs` and
-`src/layers/perimeters/cards.test.mjs`.
+Fire-perimeter queries test the polygon interiors and holes of each fire's
+pieces on continuous unwrapped longitudes, matching the short-edge convention
+used for boundary intersections: a fire is in the area when one of its pieces
+is. An outline crossing ±180° contains nearby boxes and radius areas without
+also containing their counterparts near Greenwich. A fire is returned at its
+card anchor, which the source gives; for WFIGS it is a circular longitude mean
+over the largest outer ring (excluding its repeated closing vertex), with the
+relative-area comparison following short longitude edges so a small
+dateline-crossing part cannot outweigh a larger ordinary part. Context's
+hazard list measures distance to the same anchor. Regression coverage lives in
+`src/tools/area.test.mjs`, `src/tools/queries/environment.test.mjs` and
+`src/layers/perimeters/records.test.mjs`.
 
 ## Scope display controls
 
@@ -6404,7 +6405,11 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
-Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Link checks cancel on disable or selection change.
+
+Fire Perimeters draws the fires and burned-area pieces of its source's snapshot. The `getSnapshot` contract is documented in the JSDoc of `createFirePerimetersLayer` (`src/layers/perimeters/index.js`). Pieces are coloured by age at `at` (or now). Areas under 6 hours old are yellow, 6–24 hours orange, and 1–3 days red. Older areas, areas of unknown age and areas dated after `at` are dark red. The layer redraws when `revision` changes or a piece moves to another age band. A snapshot without a string `revision` is redrawn on every read. The legend counts fires by `lastGrowthTime` at the moment of the last successful read, matching the map, and shows the source's `note`. A failed read keeps the last picture and the row shows the error. For a snapshot with a past `at`, a card can link only to an InciWeb incident that began by that time. Of several same-name incidents in the fire's state, it links the one that began nearest the fire's discovery. If none of them began by then, or the ones that did failed to load, it links the fire's complex page by the same rule. A page that fails to load is skipped until the fire is selected again or a read finds its card without a link. `analyst_query` counts `ageHours` from `at` too and treats times after `at` as unknown.
+
+WFIGS keeps one current perimeter per fire, so each of its polygons is one piece. Colour shows the age of the perimeter based on `poly_PolygonDateTime`. When that field is empty (8 of 54 fires on 2026-11-20), the source falls back to `poly_DateCurrent`, which changes with any edit to the record. A time more than 10 minutes ahead of the browser clock counts as unknown, a nearer one as now. The `revision` follows fire ids and `poly_DateCurrent`. For a fire without `poly_DateCurrent`, it follows the mapping time and outline. WFIGS snapshots always have `at: null`.
 
 The incident card rounds the WFIGS size to whole acres, except under one acre,
 where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not

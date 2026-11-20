@@ -1070,11 +1070,6 @@
   "Unnamed incident": "Incident sans nom",
   "Open {title} on InciWeb": "Ouvrir {title} sur InciWeb",
   "Perimeter source unavailable": "Source des périmètres indisponible",
-  "Not contained or unknown": "Non circonscrit ou inconnu",
-  "Under 50% contained": "Circonscrit à moins de 50 %",
-  "50–99% contained": "Circonscrit à 50–99 %",
-  "Fully contained": "Entièrement circonscrit",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "La couleur indique la part du périmètre déclarée circonscrite. Les périmètres sont simplifiés à environ 100 m.",
   "Malformed perimeter snapshot": "Instantané des périmètres mal formé",
   "radio tag|All": "Toutes",
   "News": "Actualités",
@@ -4538,5 +4533,12 @@
   "JTWC warning ↗": "Avertissement du JTWC ↗",
   "Active cyclone advisories and warnings": "Bulletins et avertissements cycloniques en cours",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Sélectionnez une tempête sur la carte, ou choisissez-en une dans la liste pour la sélectionner et déplacer la caméra. Cliquez sur une zone vide de la carte pour effacer la sélection. Bulletins NOAA NHC/CPHC et avertissements du JTWC. Le cône du NHC décrit l’incertitude de la trajectoire prévue du centre, pas la taille de la tempête ni toute la zone de danger. La zone de danger de 34 nœuds du JTWC est l’endroit que peuvent atteindre des vents de 34 nœuds, élargi de l’erreur de prévision de trajectoire ; ce n’est pas un cône. Les étiquettes des points de prévision sont les échéances de la source, pas des heures calculées depuis l’émission. La géométrie suit la surface ; la hauteur n’est pas une altitude météorologique. Consultez le bulletin officiel ou le centre d’avertissement régional.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avertissement {number} · émis {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avertissement {number} · émis {time}",
+  "last growth {age} ago": "dernière progression il y a {age}",
+  "Last 6 hours": "6 dernières heures",
+  "6–24 hours": "6–24 heures",
+  "1–3 days": "1–3 jours",
+  "Older or unknown": "Plus ancien ou inconnu",
+  "Colour shows the age of each area.": "La couleur indique l’âge de chaque zone.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Âge compté depuis la cartographie WFIGS, sinon depuis la dernière modification de la fiche. Périmètres simplifiés à ~100 m."
 }

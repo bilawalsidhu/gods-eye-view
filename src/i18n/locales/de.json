@@ -1727,11 +1727,6 @@
   "Unnamed incident": "Unbenannter Einsatz",
   "Open {title} on InciWeb": "{title} auf InciWeb öffnen",
   "Perimeter source unavailable": "Quelle der Brandgrenzen nicht verfügbar",
-  "Not contained or unknown": "Nicht eingedämmt oder unbekannt",
-  "Under 50% contained": "Unter 50 % eingedämmt",
-  "50–99% contained": "50–99 % eingedämmt",
-  "Fully contained": "Vollständig eingedämmt",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Die Farbe zeigt die gemeldete Eindämmung. Brandgrenzen sind auf etwa 100 m vereinfacht.",
   "Malformed perimeter snapshot": "Fehlerhafter Brandgrenzen-Snapshot",
   "radio tag|All": "Alle",
   "Directory refresh degraded; showing the previous station catalog.": "Verzeichnisaktualisierung eingeschränkt; der vorherige Senderkatalog wird gezeigt.",
@@ -4432,5 +4427,12 @@
   "JTWC warning ↗": "JTWC-Warnung ↗",
   "Active cyclone advisories and warnings": "Aktive Wirbelsturm-Lageberichte und -Warnungen",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Wähle einen Sturm auf der Karte oder in der Liste, um ihn auszuwählen und die Kamera hinzubewegen. Ein Klick auf eine leere Kartenstelle hebt die Auswahl auf. Lageberichte von NOAA NHC/CPHC und Warnungen des JTWC. Der NHC-Kegel beschreibt die Unsicherheit der vorhergesagten Zugbahn des Zentrums, nicht die Sturmgröße oder das gesamte Gefahrengebiet. Der 34-Knoten-Gefahrenbereich des JTWC ist das Gebiet, das Winde von 34 Knoten erreichen können, erweitert um den Fehler der Zugbahnvorhersage; er ist kein Kegel. Die Beschriftungen der Vorhersagepunkte sind die Vorlaufstunden der Quelle, keine aus der Ausgabe berechneten Zeiten. Die Geometrie folgt der Oberfläche; die Höhe ist keine Wetterhöhe. Maßgeblich sind der offizielle Lagebericht oder das regionale Warnzentrum.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Warnung {number} · ausgegeben {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Warnung {number} · ausgegeben {time}",
+  "last growth {age} ago": "zuletzt gewachsen vor {age}",
+  "Last 6 hours": "Letzte 6 Stunden",
+  "6–24 hours": "6–24 Stunden",
+  "1–3 days": "1–3 Tage",
+  "Older or unknown": "Älter oder unbekannt",
+  "Colour shows the age of each area.": "Die Farbe zeigt das Alter jeder Fläche.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht."
 }
