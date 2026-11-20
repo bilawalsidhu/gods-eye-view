@@ -16,7 +16,7 @@ export const SATCAT_WAIT_MS = 3000;
 /**
  * How long a complete, current SATCAT read is kept before the layer asks
  * again, ms. SATCAT changes daily and the proxy caches it a day, so the
- * five-minute TLE update does not read all eleven groups each time.
+ * five-minute TLE update does not read all ten groups each time.
  */
 export const SATCAT_KEEP_MS = 6 * 60 * 60 * 1000;
 

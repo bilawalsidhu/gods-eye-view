@@ -381,7 +381,6 @@ test('every ingested group names the class its unnamed members fall back to', ()
     resource: 'imaging',
     weather: 'imaging',
     planet: 'imaging',
-    sar: 'imaging',
     science: 'probes',
   };
   assert.deepEqual(

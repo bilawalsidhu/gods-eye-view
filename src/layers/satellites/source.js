@@ -10,7 +10,6 @@ const GROUPS = new Set([
   'resource',
   'weather',
   'planet',
-  'sar',
   'science',
 ]);
 

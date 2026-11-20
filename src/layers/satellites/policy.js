@@ -5,9 +5,9 @@ import { SATELLITE_CLASS_DISPLAY, SATELLITE_CLASS_IDS } from './classes.js';
 /**
  * Satellite Orbits — Real-time positions via CelesTrak TLE + SGP4 propagation.
  *
- * Loads eleven CelesTrak groups: stations, visual, GPS, GLONASS, Galileo, the
- * geosynchronous belt, and the Earth resources, weather, Planet, SAR and
- * science groups. Each object is filed under one of six classes
+ * Loads ten CelesTrak groups: stations, visual, GPS, GLONASS, Galileo, the
+ * geosynchronous belt, and the Earth resources, weather, Planet and science
+ * groups. Each object is filed under one of six classes
  * (src/layers/satellites/classes.js) whose visibility the layer row toggles; dense mode
  * (setParams catalog:'dense', the STARLINK toggle) adds the Starlink shell as
  * points-only extras.
@@ -211,6 +211,9 @@ export const RING_ROTATION_MS = 1000;
  * proxy; `tag` is the internal group key used for POINT_STYLES lookup.
  * Note: CelesTrak's GLONASS group is named 'glo-ops' (not
  * 'glonass-operational' — that name 404s upstream).
+ * Every entry must be a group CelesTrak serves: one that is not fails on every
+ * update, so the layer row reads DEGRADED ("1 CelesTrak group unavailable")
+ * for good. CelesTrak has no `sar` group (`sarsat` is search and rescue).
  */
 
 export const CATALOG_GROUPS = [
@@ -225,7 +228,6 @@ export const CATALOG_GROUPS = [
   { tag: 'resource', path: 'resource' },
   { tag: 'weather', path: 'weather' },
   { tag: 'planet', path: 'planet' },
-  { tag: 'sar', path: 'sar' },
   { tag: 'science', path: 'science' },
 ];
 
