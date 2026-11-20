@@ -41,12 +41,13 @@ function fixture() {
   let selected = false;
   let held = false;
   let position = null;
+  let subject = 'TEST STATION';
   let telemetry = { state: 'live', poseAgeMs: 3000, liveUntilMs: null };
   const station = {
     key: 'test',
     title: 'TEST',
     selected: () => selected,
-    subjectName: () => 'TEST STATION',
+    subjectName: () => subject,
     articulation: () => articulation,
     telemetry: () => telemetry,
     position: () => position,
@@ -121,6 +122,7 @@ function fixture() {
     hold: (on) => (held = on),
     setTelemetry: (next) => (telemetry = next),
     setPosition: (next) => (position = next),
+    setSubject: (next) => (subject = next),
   };
 }
 
@@ -367,4 +369,35 @@ test('frame after frame, the section is republished only when the age crosses a 
   f.panel._syncStationPanel();
   assert.equal(f.views.length, published + 1);
   assert.equal(f.view().telemetry.poseAgeMs, 4000);
+});
+
+test('an unchanged frame does not build the view again; a new subject shows on the next frame', (t) => {
+  const f = fixture();
+  t.after(() => f.panel._destroyStationPanel());
+  f.select(true);
+  f.panel._syncStationPanel();
+  const published = f.views.length;
+  const real = JSON.stringify;
+  let built = 0;
+  JSON.stringify = (...args) => {
+    built += 1;
+    return real(...args);
+  };
+  try {
+    for (let frame = 0; frame < 600; frame++) f.panel._syncStationPanel();
+  } finally {
+    JSON.stringify = real;
+  }
+  assert.equal(built, 0, 'nothing moved, so nothing was built');
+  assert.equal(f.views.length, published);
+  // A docked entry is tracked instead: its name shows on this frame, not on
+  // the next tick of the age line.
+  f.setSubject('TEST CREW SHIP');
+  f.panel._syncStationPanel();
+  assert.equal(f.views.length, published + 1);
+  assert.equal(f.view().subject, 'TEST CREW SHIP');
+  // An action builds the view though nothing read per frame moved.
+  f.actions.chooseStation('sun', 'ahead');
+  assert.equal(f.views.length, published + 2);
+  assert.equal(f.view().groups[0].choices[1].active, true);
 });
