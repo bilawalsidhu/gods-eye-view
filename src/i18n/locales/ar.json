@@ -4849,5 +4849,17 @@
   "Telemetry reads while the model is on screen": "تُقرأ القياسات أثناء ظهور النموذج على الشاشة",
   "Connecting to telemetry…": "جارٍ الاتصال بالقياسات…",
   "{seconds} s": "{seconds} ث",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "الألواح والمشعّات وأحد الأطباق تتبع القياسات الحية من ناسا. الطبق الآخر ثابت، والأذرع تتحرك للتوضيح فقط."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "الألواح والمشعّات وأحد الأطباق تتبع القياسات الحية من ناسا. الطبق الآخر ثابت، والأذرع تتحرك للتوضيح فقط.",
+  "WPI pagination limit reached — showing partial data": "تم بلوغ حد صفحات WPI — البيانات جزئية",
+  "World Port Index unavailable": "فهرس الموانئ العالمي (WPI) غير متاح",
+  "Facility": "المرفق",
+  "Country filter": "تصفية حسب الدولة",
+  "All countries": "كل الدول",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "بيانات مرجعية من NGA فقط. إدراج ميناء في القائمة ليس دليلًا على أنه قيد التشغيل. تشمل مرشحات المرافق القيم الإيجابية فقط. تبقى مرشحات الدولة والمرفق محلية لهذه الجلسة.",
+  "Container": "حاويات",
+  "Solid bulk": "بضائع سائبة صلبة",
+  "Oil terminal": "محطة نفط",
+  "LNG terminal": "محطة غاز طبيعي مسال",
+  "Reference: NGA World Port Index / DOE NETL mirror": "المرجع: فهرس الموانئ العالمي من NGA / نسخة DOE NETL",
+  "Ports & terminals": "الموانئ والمحطات"
 }

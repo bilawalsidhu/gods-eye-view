@@ -4319,5 +4319,17 @@
   "Telemetry reads while the model is on screen": "模型显示在屏幕上时读取遥测",
   "Connecting to telemetry…": "正在连接遥测…",
   "{seconds} s": "{seconds} 秒",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太阳能板、散热器和一副天线依据 NASA 的实时遥测转动。另一副天线保持不动，机械臂仅作演示性摆动。"
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太阳能板、散热器和一副天线依据 NASA 的实时遥测转动。另一副天线保持不动，机械臂仅作演示性摆动。",
+  "WPI pagination limit reached — showing partial data": "已达到 WPI 分页上限 — 仅显示部分数据",
+  "World Port Index unavailable": "World Port Index 不可用",
+  "Facility": "设施",
+  "Country filter": "按国家筛选",
+  "All countries": "所有国家",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "仅为 NGA 参考数据。列入名单的港口并不代表其正在运营。设施筛选仅包含明确为“是”的值。国家和设施筛选仅在本次会话中有效。",
+  "Container": "集装箱",
+  "Solid bulk": "固体散货",
+  "Oil terminal": "石油码头",
+  "LNG terminal": "LNG 码头",
+  "Reference: NGA World Port Index / DOE NETL mirror": "来源：NGA World Port Index / DOE NETL 镜像",
+  "Ports & terminals": "港口和码头"
 }

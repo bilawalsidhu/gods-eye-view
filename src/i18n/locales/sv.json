@@ -4425,5 +4425,17 @@
   "Telemetry reads while the model is on screen": "Telemetri läses medan modellen syns på skärmen",
   "Connecting to telemetry…": "Ansluter till telemetri…",
   "{seconds} s": "{seconds} s",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Paneler, radiatorer och en antenn följer NASA:s telemetri i realtid. Den andra antennen står stilla och armarna rör sig som illustration."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Paneler, radiatorer och en antenn följer NASA:s telemetri i realtid. Den andra antennen står stilla och armarna rör sig som illustration.",
+  "WPI pagination limit reached — showing partial data": "WPI:s sidgräns nådd – ofullständiga data",
+  "World Port Index unavailable": "World Port Index är inte tillgängligt",
+  "Facility": "Anläggning",
+  "Country filter": "Landsfilter",
+  "All countries": "Alla länder",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "Endast referensdata från NGA. Att en hamn finns i listan bevisar inte att den är i drift. Anläggningsfilter tar bara med uttryckligt jakande värden. Lands- och anläggningsfilter gäller bara den här sessionen.",
+  "Container": "Container",
+  "Solid bulk": "Torrbulk",
+  "Oil terminal": "Oljeterminal",
+  "LNG terminal": "LNG-terminal",
+  "Reference: NGA World Port Index / DOE NETL mirror": "Källa: NGA World Port Index / DOE NETL-spegel",
+  "Ports & terminals": "Hamnar och terminaler"
 }

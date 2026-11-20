@@ -68,6 +68,7 @@ const PANEL_GROUPS = [
       'military-installations',
       'drone-airspace',
       'local-datacenters',
+      'ports',
       'telegeography-submarine-cables',
       'local-dams',
       'sea-marks',

@@ -4319,5 +4319,17 @@
   "Telemetry reads while the model is on screen": "テレメトリはモデルが画面にある間に読み取られます",
   "Connecting to telemetry…": "テレメトリに接続中…",
   "{seconds} s": "{seconds} 秒",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太陽電池パネル、ラジエーター、アンテナの1基はNASAのライブテレメトリに従います。もう1基のアンテナは動かず、アームは説明用にゆっくり動きます。"
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太陽電池パネル、ラジエーター、アンテナの1基はNASAのライブテレメトリに従います。もう1基のアンテナは動かず、アームは説明用にゆっくり動きます。",
+  "WPI pagination limit reached — showing partial data": "WPIのページ上限に達しました — 一部のデータのみ表示",
+  "World Port Index unavailable": "World Port Indexを利用できません",
+  "Facility": "施設",
+  "Country filter": "国で絞り込み",
+  "All countries": "すべての国",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "NGAの参照データのみです。掲載されている港が稼働中である証拠ではありません。施設フィルターは肯定値のみを対象にします。国と施設のフィルターはこのセッション内でのみ有効です。",
+  "Container": "コンテナ",
+  "Solid bulk": "ドライバルク",
+  "Oil terminal": "石油ターミナル",
+  "LNG terminal": "LNGターミナル",
+  "Reference: NGA World Port Index / DOE NETL mirror": "出典: NGA World Port Index / DOE NETLミラー",
+  "Ports & terminals": "港湾・ターミナル"
 }

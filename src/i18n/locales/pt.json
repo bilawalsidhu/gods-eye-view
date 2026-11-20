@@ -4531,5 +4531,17 @@
   "Telemetry reads while the model is on screen": "A telemetria é lida enquanto o modelo está no ecrã",
   "Connecting to telemetry…": "A ligar à telemetria…",
   "{seconds} s": "{seconds} s",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Painéis, radiadores e uma antena seguem a telemetria ao vivo da NASA. A outra antena fica parada e os braços se movem de forma ilustrativa."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Painéis, radiadores e uma antena seguem a telemetria ao vivo da NASA. A outra antena fica parada e os braços se movem de forma ilustrativa.",
+  "WPI pagination limit reached — showing partial data": "Limite de paginação do WPI atingido — dados parciais",
+  "World Port Index unavailable": "World Port Index indisponível",
+  "Facility": "Instalação",
+  "Country filter": "Filtro por país",
+  "All countries": "Todos os países",
+  "NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.": "Apenas dados de referência da NGA. Um porto listado não é prova de que esteja operacional. Os filtros de instalação incluem apenas valores afirmativos. Os filtros de país e de instalação permanecem locais à sessão.",
+  "Container": "Contêineres",
+  "Solid bulk": "Granéis sólidos",
+  "Oil terminal": "Terminal petrolífero",
+  "LNG terminal": "Terminal de GNL",
+  "Reference: NGA World Port Index / DOE NETL mirror": "Referência: NGA World Port Index / espelho DOE NETL",
+  "Ports & terminals": "Portos e terminais"
 }
