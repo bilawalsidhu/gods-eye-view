@@ -94,7 +94,9 @@ export function createPortsLayer({
       return;
     }
     const formatDay = (value) =>
-      Number.isFinite(value) ? new Date(value).toISOString().slice(0, 10) : 'Unavailable';
+      Number.isFinite(value)
+        ? new Date(value).toISOString().slice(0, 10)
+        : 'Unavailable';
     overlayHost.setEntries(
       PORTS_LAYER_ID,
       [
@@ -184,15 +186,14 @@ export function createPortsLayer({
       if (cardHit) {
         if (
           cardHit.sourceId === PORTS_LAYER_ID &&
-          cardHit.entryId === `ports-card:${records.get(selectedId)?.wpiNumber}` &&
+          cardHit.entryId ===
+            `ports-card:${records.get(selectedId)?.wpiNumber}` &&
           openExternal
         )
           openExternal(WPI_REFERENCE_URL);
         return;
       }
-      const id = click.topHit
-        ? picking.resolvePickId?.(click.topHit)
-        : null;
+      const id = click.topHit ? picking.resolvePickId?.(click.topHit) : null;
       if (typeof id === 'string' && id.startsWith(PICK_PREFIX)) {
         const key = `wpi:${id.slice(PICK_PREFIX.length)}`;
         if (visible(records.get(key))) {
@@ -202,8 +203,7 @@ export function createPortsLayer({
           return;
         }
       }
-      if (id && picking.isOwnedByOtherLayer?.(PORTS_LAYER_ID, id))
-        return;
+      if (id && picking.isOwnedByOtherLayer?.(PORTS_LAYER_ID, id)) return;
       if (selectedId) clearCard();
     });
   }
@@ -307,8 +307,7 @@ export function createPortsLayer({
         PORT_FACILITIES.some((entry) => entry.id === params.facility)
           ? params.facility
           : facility;
-      if (country === nextCountry && facility === nextFacility)
-        return true;
+      if (country === nextCountry && facility === nextFacility) return true;
       country = nextCountry;
       facility = nextFacility;
       applyFilters();
@@ -368,9 +367,7 @@ export function createPortsLayer({
     },
     getStats() {
       return {
-        count: enabled
-          ? [...records.values()].filter(visible).length
-          : 0,
+        count: enabled ? [...records.values()].filter(visible).length : 0,
         lastUpdate: snapshot?.retrievedAt ?? null,
         stale: snapshot?.stale === true || snapshot?.partial === true,
         error: lastError,
@@ -378,9 +375,7 @@ export function createPortsLayer({
     },
     getAnalystRecords(maxCount = 2000) {
       if (!enabled) return [];
-      return [...records.values()]
-        .filter(visible)
-        .slice(0, maxCount);
+      return [...records.values()].filter(visible).slice(0, maxCount);
     },
   };
   return layer;
