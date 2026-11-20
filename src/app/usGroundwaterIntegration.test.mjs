@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createApplicationCatalog } from './constructCatalog.js';
 import { createSurfaceServices } from './surfaceServices.js';
 import { createStandaloneLayerSources } from '../standalone/layerSources.js';
@@ -12,11 +11,16 @@ import {
 } from '../data/trackedReadout.js';
 import { getSelectedEntityContext } from '../data/contextStore.js';
 import { findPickOwner } from '../data/pickRegistry.js';
+import { toLonLatH } from '../geo/ellipsoid.js';
+import { fakeInput } from '../input/testDoubles.mjs';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 // The shared selection store and the card bridge live on window.
 globalThis.window ??= new EventTarget();
 globalThis.document ??= { querySelector: () => null };
 
+const MARKERS = 'us-groundwater:markers';
 const wells = Array.from({ length: 6 }, (_, i) => ({
   id: `W${i + 1}`,
   recordId: `TX${i + 1}`,
@@ -34,50 +38,44 @@ const fixtureSource = () => ({
   getSnapshot: async () => ({ records: wells, total: 6, limited: false }),
 });
 
-function fixtureViewer() {
-  const dataSources = new Cesium.DataSourceCollection();
-  const events = new Map();
-  const canvas = {
-    clientWidth: 1440,
-    clientHeight: 900,
-    disableRootEvents: true,
-    onwheel: null,
-    getBoundingClientRect: () => ({ left: 0, top: 0 }),
-    addEventListener: (type, listener) => events.set(type, listener),
-    removeEventListener: (type) => events.delete(type),
+/** A scene whose renderer ports are doubles, and the globe's real clicks. */
+function fixtureScene() {
+  const camera = fakeCameraPort({
+    pose: { height: 25000 },
+    viewRectangle: { west: -98, south: 30, east: -97, north: 31 },
+  });
+  const frames = new Set();
+  const state = { picked: null };
+  // The input double takes its clicks over a viewer's scene canvas.
+  const viewer = {
+    scene: { canvas: { clientWidth: 1440, clientHeight: 900 } },
   };
+  const { draw } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    frame: {
+      on(phase, cb) {
+        frames.add(cb);
+        return () => frames.delete(cb);
+      },
+      requestRender() {},
+    },
+    query: {
+      pick: () => state.picked,
+      drillPick: () => (state.picked ? [state.picked] : []),
+      // No well is near a click unless the renderer picks its marker.
+      project: () => null,
+      sampleHeightNow: () => 430,
+    },
+  });
+  const input = fakeInput(viewer);
   return {
-    dataSources,
-    events,
-    click() {
-      const event = {
-        button: 0,
-        clientX: 50,
-        clientY: 50,
-        preventDefault() {},
-      };
-      events.get('mousedown')(event);
-      events.get('mouseup')(event);
-    },
-    viewer: {
-      dataSources,
-      camera: {
-        changed: new Cesium.Event(),
-        moveEnd: new Cesium.Event(),
-        percentageChanged: 0.5,
-        positionCartographic: { height: 25000 },
-        computeViewRectangle: () =>
-          Cesium.Rectangle.fromDegrees(-98, 30, -97, 31),
-      },
-      scene: {
-        canvas,
-        preRender: new Cesium.Event(),
-        globe: { getHeight: () => 430 },
-        requestRender() {},
-        pick: () => undefined,
-        cartesianToCanvasCoordinates: () => undefined,
-      },
-    },
+    viewer,
+    camera,
+    frames,
+    state,
+    input,
+    markers: () => draw.set(MARKERS),
+    click: () => input.tap({ x: 50, y: 50 }),
   };
 }
 
@@ -114,8 +112,8 @@ test('the catalog layer turns on and off through the layer manager', async (t) =
   assert.ok(layer);
   assert.equal(catalog.getSourceAvailability('us-groundwater').available, true);
   assert.equal(catalog.metadata.find(({ id }) => id === layer.id)?.token, '03');
-  const fixture = fixtureViewer();
-  const manager = new LayerLifecycle(fixture.viewer, {
+  const scene = fixtureScene();
+  const manager = new LayerLifecycle(scene.viewer, {
     getSourceAvailability: catalog.getSourceAvailability,
   });
   for (const item of catalog.layers) manager.register(item);
@@ -127,14 +125,18 @@ test('the catalog layer turns on and off through the layer manager', async (t) =
   assert.equal(row.stats.count, 6);
   assert.equal(row.stats.countLabel, '6');
   assert.equal(row.stats.visible, 6);
-  assert.equal(fixture.dataSources.get(0).entities.values.length, 6);
+  assert.equal(scene.markers().items.size, 6);
+  assert.equal(scene.markers().show, true);
   assert.equal(findPickOwner('us-groundwater:W4'), 'us-groundwater');
+  assert.equal(scene.camera.listenerCount('moveEnd'), 1);
 
   assert.equal(await manager.setEnabled('us-groundwater', false), true);
-  assert.equal(fixture.dataSources.get(0).entities.values.length, 0);
-  assert.equal(fixture.events.size, 0, 'the click handler is released');
+  assert.equal(scene.markers().items.size, 0);
+  assert.equal(scene.markers().show, false);
   assert.equal(findPickOwner('us-groundwater:W4'), null);
-  assert.equal(fixture.viewer.camera.moveEnd.numberOfListeners, 0);
+  assert.equal(scene.camera.listenerCount('moveEnd'), 0);
+  assert.equal(scene.camera.listenerCount('changed'), 0);
+  assert.equal(scene.frames.size, 0, 'the frame listener is released');
 });
 
 test('a picked well publishes its card through the shared tracked-card bridge', async (t) => {
@@ -146,43 +148,47 @@ test('a picked well publishes its card through the shared tracked-card bridge', 
     clearSource: (id) => clears.push(id),
   });
   const layer = wellCatalog(t).get('us-groundwater');
-  const fixture = fixtureViewer();
-  const viewer = fixture.viewer;
+  const scene = fixtureScene();
+  const viewer = scene.viewer;
   t.after(() => {
     layer.destroy();
     destroyTrackedReadout();
     _setTrackedOverlayHostForTest();
+    scene.input.destroy();
   });
   initTrackedReadout(viewer);
   layer.init(viewer);
   layer.enable();
   assert.equal(await layer.update(), true);
-  const marker = fixture.dataSources
-    .get(0)
-    .entities.getById('us-groundwater:W4');
-  viewer.scene.pick = () => ({ id: marker, primitive: {} });
 
-  fixture.click();
-  assert.equal(viewer.selectedEntity, marker);
-  assert.equal(getSelectedEntityContext().entity, marker);
+  scene.state.picked = {
+    set: MARKERS,
+    id: 'us-groundwater:W4',
+    surface: false,
+  };
+  scene.click();
+  const selected = getSelectedEntityContext();
+  assert.equal(selected.id, 'us-groundwater:W4');
+  assert.equal(selected.layerId, 'us-groundwater');
   const published = writes.at(-1);
   assert.equal(published.id, 'tracked');
   const card = published.entries[0];
   assert.equal(card.title, 'Water well record');
   assert.equal(card.accent, '#f5b942');
+  assert.equal(card.verticalOnly, false);
   assert.deepEqual(card.details, [
     'Well depth: 24 ft',
     'Texas',
     'Historical record; not current conditions.',
     'Source: USGWD TX4',
   ]);
-  const anchor = Cesium.Cartographic.fromCartesian(card.position());
-  assert.ok(Math.abs(anchor.height - 430) < 0.001);
+  assert.ok(Math.abs(toLonLatH(card.position()).height - 430) < 0.001);
 
   const before = writes.length;
-  viewer.scene.pick = () => ({ id: { id: 'another-layer' } });
-  fixture.click();
+  scene.state.picked = { set: 'flights', id: 'another-layer', surface: false };
+  scene.click();
   assert.equal(writes.length, before, 'another layer’s pick publishes nothing');
+  assert.equal(getSelectedEntityContext().id, 'us-groundwater:W4');
 
   layer.disable();
   assert.equal(getSelectedEntityContext(), null);

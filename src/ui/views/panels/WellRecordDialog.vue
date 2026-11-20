@@ -1,31 +1,30 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, useTemplateRef } from 'vue';
+import { ref, onMounted, onUnmounted, useTemplateRef } from 'vue';
 import { t } from '../../../i18n/index.js';
-import UiSelect from '../../kit/UiSelect.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiDialog from '../../kit/UiDialog.vue';
+import UiSelect from '../../kit/UiSelect.js';
+// One open chooser. The parent keys it by choice, so each one is a fresh
+// modal: UiDialog opens it on mount and closes it on unmount.
 const props = defineProps({ view: { type: Object, required: true } });
-const root = useTemplateRef('root');
+const dialog = useTemplateRef('dialog');
 const selected = ref(props.view.records[0]?.id);
-let previous;
-onMounted(() => {
-  previous = document.activeElement;
-  root.value?.showModal?.();
-  root.value?.querySelector('select')?.focus();
-});
-onBeforeUnmount(() => {
-  if (root.value?.open) root.value.close();
+// Read before the dialog opens and takes the focus.
+const previous = document.activeElement;
+onMounted(() => dialog.value?.element?.querySelector('select')?.focus());
+onUnmounted(() => {
   if (previous?.isConnected) previous.focus();
 });
 </script>
 
 <template>
-  <dialog ref="root" class="gev-panel well-record-dialog" aria-labelledby="well-record-choice-title" @cancel.prevent="view.cancel()">
+  <UiDialog ref="dialog" open class="gev-panel well-record-dialog" aria-labelledby="well-record-choice-title" @dismiss="view.cancel()" @browser-close="view.cancel()">
     <h3 id="well-record-choice-title">{{ t('Source records at this location') }}</h3>
     <p>{{ t('These records may describe the same physical well. Choose a source record.') }}</p>
     <UiSelect v-model="selected" class="gev-field" :aria-label="t('Source record')" :options="view.records.map((record) => ({ value: record.id, label: record.label }))" />
     <UiButton type="button" class="gev-action-button" @click="view.select(selected)">{{ t('View record') }}</UiButton>
     <UiButton type="button" class="gev-action-button" @click="view.cancel()">{{ t('Cancel') }}</UiButton>
-  </dialog>
+  </UiDialog>
 </template>
 
 <style scoped>

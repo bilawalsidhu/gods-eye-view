@@ -1,16 +1,23 @@
-import * as Cesium from 'cesium';
 import { formatNumber, msg, t } from '../../i18n/index.js';
 import { isPointerFree } from '../../data/inputOwnership.js';
 import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
   clearSelectedEntityContextForLayer,
+  getContextStore,
   registerEntityContext,
   removeEntityContextsForLayer,
   selectEntityContext,
 } from '../../data/contextStore.js';
+import { entityRecord } from '../../data/entityRecords.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { heightsOf } from '../../queries/heights.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
 import {
   createRecordPicker,
   recordsAtPixel,
@@ -38,19 +45,21 @@ const WELL_MARKER_IMAGE =
 /**
  * Water Wells: historical well records near the camera, from an injected
  * source whose getSnapshot({ signal, bounds }) resolves
- * { records, total, limited }.
+ * { records, total, limited }. The markers are one renderer icon set, made
+ * when the layer is first turned on.
  */
 export function createUsGroundwaterLayer({
   source,
   picking,
   recordUi = {},
   requestRender,
+  // The clicks on the globe: the application's input dispatcher.
+  input = (viewer) => inputFor(viewer),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('A well source is required');
   let viewer;
-  let dataSource;
-  let clickHandler;
+  let markers; // the icon set, one item per record
   let enabled = false;
   let request; // the load in flight
   let timer; // a load scheduled while the camera moves
@@ -60,36 +69,64 @@ export function createUsGroundwaterLayer({
   let lastUpdate = null;
   let cardColumns = 68;
   let listed = '';
-  const records = new Map(); // entity id → record
+  const wells = new Map(); // marker id → well
   const listeners = [];
 
   const near = () =>
-    (viewer?.camera.positionCartographic?.height ?? Infinity) <=
-    WELL_DETAIL_HEIGHT;
+    (findCamera(viewer)?.pose().height ?? Infinity) <= WELL_DETAIL_HEIGHT;
   const render = (reason) =>
     typeof requestRender === 'function'
       ? requestRender(reason)
-      : viewer?.scene?.requestRender?.();
-  const isWell = (entity) => records.has(entity?.id);
+      : findFrame(viewer)?.requestRender(reason);
   const viewBounds = () => {
-    const r = viewer.camera.computeViewRectangle();
-    return r
-      ? [r.west, r.south, r.east, r.north].map(Cesium.Math.toDegrees)
-      : null;
+    const r = findCamera(viewer)?.viewRectangle();
+    return r ? [r.west, r.south, r.east, r.north] : null;
   };
+  /**
+   * Where a well's marker stands: on the terrain, where its height is loaded.
+   * The marker is clamped to the ground, so a well placed on the ellipsoid
+   * would be found some pixels away from its marker over high ground.
+   */
+  const groundOf = (well) => {
+    const { longitude, latitude } = well.record;
+    const height = heightsOf(viewer).now(
+      { lon: longitude, lat: latitude },
+      { against: 'terrain' },
+    );
+    return height === null
+      ? well.position
+      : fromDegrees(longitude, latitude, height);
+  };
+  /** Where a well's marker is on the canvas, or null off screen. */
+  const project = (well) => findQuery(viewer)?.project(groundOf(well)) ?? null;
+  /** The well the shared selection holds, if it holds one of ours. */
+  const selectedWell = () => {
+    const store = getContextStore();
+    const selected = store.entities.get(store.selectedEntityId);
+    return selected?.layerId === WELL_LAYER_ID ? selected.entity : null;
+  };
+  const markerOf = (well) => ({
+    id: well.id,
+    pos: well.position,
+    image: WELL_MARKER_IMAGE,
+    size: [12, 12],
+    scale: well.focused ? 1.8 : 1,
+    height: 'clampGround',
+    disableDepthTest: Number.POSITIVE_INFINITY,
+  });
 
   function clearSelection() {
-    if (!isWell(viewer?.selectedEntity)) return;
-    viewer.selectedEntity = undefined;
+    if (!selectedWell()) return;
     clearSelectedEntityContextForLayer(WELL_LAYER_ID);
     render('well-clear-selection');
   }
 
-  function select(entity) {
-    if (!enabled || !isWell(entity) || !near()) return false;
-    entity.gevAnchorToGround();
-    viewer.selectedEntity = entity;
-    selectEntityContext(entity);
+  function select(well) {
+    if (!enabled || !wells.has(well?.id) || !near()) return false;
+    // The card hangs from the ground under the marker, sampled on selection.
+    // It is a visual anchor only, never a water level.
+    well.anchor = groundOf(well);
+    selectEntityContext(well);
     render('well-select');
     return true;
   }
@@ -100,71 +137,51 @@ export function createUsGroundwaterLayer({
     if (typeof recordUi.publishRecords !== 'function') return;
     const shown =
       enabled && near()
-        ? recordsOnScreen(viewer, dataSource.entities.values)
+        ? recordsOnScreen(project, wells.values(), canvasOf(viewer))
         : [];
-    const next = shown.map((entity) => entity.id).join('|');
+    const next = shown.map((well) => well.id).join('|');
     if (next === listed) return;
     listed = next;
     recordUi.publishRecords(
       shown.length
         ? {
-            records: shown.map((entity) => ({
-              id: entity.id,
-              label: entity.name,
-            })),
+            records: shown.map((well) => ({ id: well.id, label: well.name })),
             focus(id, focused) {
-              const entity = dataSource?.entities.getById(id);
-              if (entity?.billboard) entity.billboard.scale = focused ? 1.8 : 1;
+              const well = wells.get(id);
+              if (well) {
+                well.focused = focused;
+                markers?.upsert([markerOf(well)]);
+              }
               render('well-focus');
             },
             focusMap() {
-              const canvas = viewer.scene.canvas;
+              const canvas = canvasOf(viewer);
               if (typeof canvas?.focus !== 'function') return;
               canvas.tabIndex = 0;
               canvas.focus();
             },
             select(id) {
-              select(dataSource?.entities.getById(id));
+              select(wells.get(id));
             },
           }
         : null,
     );
   }
 
-  function addMarker(id, record) {
-    const position = Cesium.Cartesian3.fromDegrees(
-      record.longitude,
-      record.latitude,
-    );
-    const entity = dataSource.entities.add({
+  function addWell(id, record) {
+    const position = fromDegrees(record.longitude, record.latitude);
+    const well = {
       id,
       name: wellLabel(record),
+      record,
       position,
-      // Explicit size: a pooled billboard must not inherit another symbol's.
-      billboard: {
-        image: WELL_MARKER_IMAGE,
-        width: 12,
-        height: 12,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
-    // The card hangs from the ground under the marker, sampled on selection.
-    // It is a visual anchor only, never a water level.
-    let anchor = position;
-    entity.gevDisplayPosition = () => anchor;
-    entity.gevAnchorToGround = () => {
-      const height = viewer.scene.globe?.getHeight?.(
-        Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
-      );
-      anchor = Cesium.Cartesian3.fromDegrees(
-        record.longitude,
-        record.latitude,
-        Number.isFinite(height) ? height : 0,
-      );
+      anchor: position,
+      focused: false,
     };
+    const card = entityRecord(well);
+    card.displayPosition = () => well.anchor;
     // Built when read, so the card follows the UI language and canvas width.
-    Object.defineProperty(entity, 'gevLabelModel', {
+    Object.defineProperty(card, 'labelModel', {
       get: () => ({
         title: t('Water well record'),
         details: wellCardLines(record).flatMap((line) =>
@@ -178,41 +195,38 @@ export function createUsGroundwaterLayer({
         anchorRadiusScale: null,
       }),
     });
-    registerEntityContext(entity, {
+    registerEntityContext(well, {
       id,
       layerId: WELL_LAYER_ID,
       // i18n-ignore -- context data; the panel translates the layer name.
       layerName: 'Water Wells',
       // i18n-ignore -- Provider brand.
       source: 'Rainfolk',
-      dataSource,
-      label: entity.name,
+      // Hidden with the markers: the context store reads its `show`.
+      dataSource: markers,
+      label: well.name,
       properties: { ...record },
       latitude: record.latitude,
       longitude: record.longitude,
     });
-    records.set(id, record);
+    wells.set(id, well);
+    return well;
   }
 
   /** Make the map show exactly `next`, keeping markers that are already there. */
   function show(next) {
     const keep = new Set();
-    dataSource.entities.suspendEvents();
+    const added = [];
     for (const record of next) {
       const id = `${WELL_LAYER_ID}:${record.id}`;
       keep.add(id);
-      if (!records.has(id)) addMarker(id, record);
+      if (!wells.has(id)) added.push(markerOf(addWell(id, record)));
     }
-    let removed = false;
-    for (const id of [...records.keys()]) {
-      if (keep.has(id)) continue;
-      if (viewer.selectedEntity?.id === id) viewer.selectedEntity = undefined;
-      dataSource.entities.removeById(id);
-      records.delete(id);
-      removed = true;
-    }
-    dataSource.entities.resumeEvents();
-    if (removed) {
+    const removed = [...wells.keys()].filter((id) => !keep.has(id));
+    for (const id of removed) wells.delete(id);
+    if (added.length) markers.upsert(added);
+    if (removed.length) {
+      markers.remove(removed);
       picker.close();
       // Also clears the shared selection when its record left the view.
       removeEntityContextsForLayer(WELL_LAYER_ID, { retainIds: keep });
@@ -266,39 +280,53 @@ export function createUsGroundwaterLayer({
   /** Per frame: apply the height gate and re-wrap an open card on resize. */
   function beforeFrame() {
     const visible = near();
-    if (dataSource.show !== visible) {
-      dataSource.show = visible;
+    if (markers.show !== visible) {
+      // The card closes first: the selection of a hidden set reads as gone.
       if (!visible) {
         clearSelection();
         picker.close();
       }
+      markers.show = visible;
       publishList();
     }
-    const columns = wellCardColumns(viewer.scene.canvas?.clientWidth);
+    const columns = wellCardColumns(canvasOf(viewer)?.clientWidth);
     if (columns === cardColumns) return;
     cardColumns = columns;
-    if (isWell(viewer.selectedEntity))
-      selectEntityContext(viewer.selectedEntity);
+    const selected = selectedWell();
+    if (selected) selectEntityContext(selected);
   }
 
-  function onClick(event) {
+  function onClick(click) {
     if (!enabled || !isPointerFree()) return;
-    const picked = viewer.scene.pick(event.position);
-    const hit = picked?.id;
+    // Another layer's card painted on top takes the click.
+    if (picking?.isUnderOtherCard?.(click)) return;
+    const hit = click.topHit;
+    const empty = !hit || hit.surface;
+    const own =
+      !empty && hit.set === markers.id ? wells.get(hit.id) : undefined;
     // The ring is hollow, so a click on its middle picks nothing: also take
     // wells within a few pixels, but never over another layer's object.
-    if (near() && (isWell(hit) || !picked)) {
+    if (near() && (own || empty)) {
       const candidates = recordsAtPixel(
-        viewer,
-        dataSource.entities.values,
-        event.position,
+        project,
+        wells.values(),
+        click.position,
       );
-      if (candidates.length || isWell(hit)) {
-        picker.choose(candidates.length ? candidates : [hit]);
+      if (candidates.length || own) {
+        picker.choose(candidates.length ? candidates : [own]);
         return;
       }
     }
-    if (!picked) clearSelection();
+    if (empty) clearSelection();
+  }
+
+  /** The globe's clicks; a viewer with no renderer input bound takes none. */
+  function clicks() {
+    try {
+      return input(viewer) ?? null;
+    } catch {
+      return null;
+    }
   }
 
   const layer = {
@@ -319,31 +347,32 @@ export function createUsGroundwaterLayer({
       if (enabled) return true;
       enabled = true;
       error = null;
-      if (!dataSource) {
-        dataSource = new Cesium.CustomDataSource(WELL_LAYER_ID);
-        void viewer.dataSources.add(dataSource);
-      }
-      dataSource.show = near();
-      cardColumns = wellCardColumns(viewer.scene.canvas?.clientWidth);
-      // camera.changed fires at 5% view changes (Cesium's default is 50%), so
-      // the view refreshes during a long move, not only when it ends.
-      claimCameraSensitivity(viewer.camera, WELL_LAYER_ID, 0.05);
+      // Translucent: the ring's edge is antialiased. Explicit sizes per item.
+      markers ??= drawOf(viewer).icons({
+        id: `${WELL_LAYER_ID}:markers`,
+        blend: 'translucent',
+      });
+      markers.show = near();
+      cardColumns = wellCardColumns(canvasOf(viewer)?.clientWidth);
+      const camera = findCamera(viewer);
       listeners.push(
-        viewer.camera.changed.addEventListener(() => {
-          if (timer || request) return;
-          timer = setTimeout(() => void refresh(), 200);
-        }),
-        viewer.camera.moveEnd.addEventListener(() => void refresh()),
-        viewer.scene.preRender.addEventListener(beforeFrame),
+        // Its own 5% threshold (the default is 50%), so the view refreshes
+        // during a long move, not only when it ends.
+        camera?.on(
+          'changed',
+          () => {
+            if (timer || request) return;
+            timer = setTimeout(() => void refresh(), 200);
+          },
+          { threshold: 0.05 },
+        ),
+        camera?.on('moveEnd', () => void refresh()),
+        findFrame(viewer)?.on('preRender', beforeFrame),
+        clicks()?.onClick(onClick),
       );
       // Own clicks on well markers, so a layer that treats an unowned pick as
       // empty space (a tracked flight) leaves the selection alone.
-      picking?.registerPickOwner?.(WELL_LAYER_ID, (id) => records.has(id));
-      clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-      clickHandler.setInputAction(
-        onClick,
-        Cesium.ScreenSpaceEventType.LEFT_CLICK,
-      );
+      picking?.registerPickOwner?.(WELL_LAYER_ID, (id) => wells.has(id));
       return true;
     },
 
@@ -354,14 +383,11 @@ export function createUsGroundwaterLayer({
       request = undefined;
       clearTimeout(timer);
       timer = undefined;
-      for (const remove of listeners.splice(0)) remove();
-      releaseCameraSensitivity(viewer.camera, WELL_LAYER_ID);
+      for (const remove of listeners.splice(0)) remove?.();
       picking?.unregisterPickOwner?.(WELL_LAYER_ID);
-      clickHandler?.destroy();
-      clickHandler = undefined;
       picker.close();
       show([]);
-      dataSource.show = false;
+      markers.show = false;
       loaded = null;
     },
 
@@ -375,8 +401,8 @@ export function createUsGroundwaterLayer({
     destroy() {
       if (!viewer) return;
       layer.disable();
-      if (dataSource) viewer.dataSources.remove(dataSource, true);
-      dataSource = undefined;
+      markers?.dispose();
+      markers = undefined;
       viewer = undefined;
     },
 
@@ -394,7 +420,7 @@ export function createUsGroundwaterLayer({
                 notation: 'compact',
                 maximumFractionDigits: 1,
               }),
-        visible: enabled && near() ? records.size : 0,
+        visible: enabled && near() ? wells.size : 0,
         error,
         lastUpdate,
         loading: Boolean(request || timer),

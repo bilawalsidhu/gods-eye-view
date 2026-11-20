@@ -1,14 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { createUsGroundwaterLayer, WELL_DETAIL_HEIGHT } from './index.js';
 import { getSelectedEntityContext } from '../../data/contextStore.js';
-import { cameraSensitivityClaims } from '../../data/cameraSensitivity.js';
+import { readEntityRecord } from '../../data/entityRecords.js';
 import { claimPointer, releasePointer } from '../../data/inputOwnership.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 // The shared selection store lives on window and announces through it.
 globalThis.window ??= new EventTarget();
 
+const MARKERS = 'us-groundwater:markers';
 const well = (n, fields = {}) => ({
   id: `W${n}`,
   recordId: `TX${n}`,
@@ -23,13 +26,9 @@ const well = (n, fields = {}) => ({
   reportedYear: null,
   ...fields,
 });
-const entityId = (n) => `us-groundwater:W${n}`;
-/** Degrees survive the trip through Cesium's radians only approximately. */
-const assertView = (actual, expected) =>
-  assert.deepEqual(
-    actual.map((degrees) => Math.round(degrees * 1e6) / 1e6),
-    expected,
-  );
+const markerId = (n) => `us-groundwater:W${n}`;
+const view = ([west, south, east, north]) => ({ west, south, east, north });
+const selectedId = () => getSelectedEntityContext()?.id;
 
 /** A source that answers each load from `answer` and remembers what was asked. */
 function fakeSource(answer) {
@@ -44,99 +43,102 @@ function fakeSource(answer) {
   };
 }
 
-/** Just enough viewer for the layer: real Cesium events and data sources. */
-function fakeViewer() {
-  const dataSources = new Cesium.DataSourceCollection();
-  const listeners = new Set();
-  const canvas = {
-    clientWidth: 800,
-    clientHeight: 600,
-    disableRootEvents: true,
-    onwheel: null,
-    addEventListener: (type, listener) => listeners.add(listener),
-    removeEventListener: (type, listener) => listeners.delete(listener),
-  };
+/** A scene with the renderer ports the layer reaches, each a test double. */
+function fakeScene() {
+  const camera = fakeCameraPort({
+    pose: { height: 25000 },
+    viewRectangle: view([-98, 30, -97, 31]),
+  });
+  const changedOptions = [];
   const state = {
-    view: [-98, 30, -97, 31],
-    picked: undefined,
     // Every marker projects to the canvas centre unless a test says otherwise.
-    project: () => new Cesium.Cartesian2(400, 300),
+    project: () => ({ x: 400, y: 300 }),
+    // The terrain under every well, metres; null while it has not loaded.
+    terrain: 430,
+    heightOptions: [],
     renders: 0,
+    frameListeners: new Set(),
+    clickListeners: new Set(),
   };
-  const viewer = {
-    dataSources,
-    selectedEntity: undefined,
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  const { draw } = bindFakeDraw(viewer, {
     camera: {
-      changed: new Cesium.Event(),
-      moveEnd: new Cesium.Event(),
-      percentageChanged: 0.5,
-      positionCartographic: { height: 25000 },
-      computeViewRectangle: () =>
-        state.view && Cesium.Rectangle.fromDegrees(...state.view),
+      ...camera.port,
+      on(event, cb, options) {
+        if (event === 'changed') changedOptions.push(options);
+        return camera.port.on(event, cb, options);
+      },
     },
-    scene: {
-      canvas,
-      preRender: new Cesium.Event(),
-      globe: { getHeight: () => 430 },
-      pick: () => state.picked,
-      cartesianToCanvasCoordinates: (position) => state.project(position),
+    frame: {
+      on(phase, cb) {
+        assert.equal(phase, 'preRender');
+        state.frameListeners.add(cb);
+        return () => state.frameListeners.delete(cb);
+      },
       requestRender: () => state.renders++,
     },
-  };
-  return { viewer, state, listeners, dataSources };
-}
-
-/** Create and enable a layer, capturing its click handler and collaborators. */
-async function enabledLayer(answer, { ui = false } = {}) {
-  const fixture = fakeViewer();
-  const source = fakeSource(answer);
-  const owners = new Map();
-  const published = { records: undefined, choices: undefined };
-  const original = Cesium.ScreenSpaceEventHandler.prototype.setInputAction;
-  let click;
-  Cesium.ScreenSpaceEventHandler.prototype.setInputAction = function (
-    action,
-    type,
-  ) {
-    if (type === Cesium.ScreenSpaceEventType.LEFT_CLICK) click = action;
-    return original.call(this, action, type);
-  };
-  const layer = createUsGroundwaterLayer({
-    source,
-    picking: {
-      registerPickOwner: (id, owns) => owners.set(id, owns),
-      unregisterPickOwner: (id) => owners.delete(id),
+    query: {
+      project: (position) => state.project(position),
+      sampleHeightNow(point, options) {
+        state.heightOptions.push(options);
+        return state.terrain;
+      },
     },
-    recordUi: ui
-      ? {
-          publishRecords: (view) => (published.records = view),
-          publishChoices: (view) => (published.choices = view),
-        }
-      : {},
   });
-  try {
-    layer.init(fixture.viewer);
-    assert.equal(layer.enable(), true);
-  } finally {
-    Cesium.ScreenSpaceEventHandler.prototype.setInputAction = original;
-  }
-  const loaded = await layer.update();
-  const markers = () => fixture.dataSources.get(0).entities;
+  const input = () => ({
+    onClick(cb) {
+      state.clickListeners.add(cb);
+      return () => state.clickListeners.delete(cb);
+    },
+  });
   return {
-    ...fixture,
-    layer,
-    source,
-    owners,
-    published,
-    loaded,
-    markers,
-    click: (x = 400, y = 300) =>
-      click({ position: new Cesium.Cartesian2(x, y) }),
+    viewer,
+    state,
+    draw,
+    camera,
+    changedOptions,
+    input,
+    markers: () => draw.set(MARKERS),
+    frame: () => {
+      for (const cb of [...state.frameListeners]) cb();
+    },
+    /** A left click at `x, y`; `topHit` is what the renderer picked there. */
+    click: (x = 400, y = 300, topHit = null) => {
+      for (const cb of [...state.clickListeners])
+        cb({ position: { x, y }, screenPosition: { x, y }, topHit });
+    },
     moveEnd: async () => {
-      fixture.viewer.camera.moveEnd.raiseEvent();
+      camera.emit('moveEnd');
       await new Promise((resolve) => setImmediate(resolve));
     },
   };
+}
+
+/** Create and enable a layer over a fake scene, with its collaborators. */
+async function enabledLayer(answer, { ui = false, underOtherCard } = {}) {
+  const scene = fakeScene();
+  const source = fakeSource(answer);
+  const owners = new Map();
+  const published = { records: undefined, choices: undefined };
+  const layer = createUsGroundwaterLayer({
+    source,
+    input: scene.input,
+    picking: {
+      registerPickOwner: (id, owns) => owners.set(id, owns),
+      unregisterPickOwner: (id) => owners.delete(id),
+      isUnderOtherCard: (click) => underOtherCard?.(click) ?? false,
+    },
+    recordUi: ui
+      ? {
+          publishRecords: (list) => (published.records = list),
+          publishChoices: (list) => (published.choices = list),
+        }
+      : {},
+  });
+  layer.init(scene.viewer);
+  assert.equal(layer.enable(), true);
+  const loaded = await layer.update();
+  return { ...scene, layer, source, owners, published, loaded };
 }
 
 test('a source is required', () => {
@@ -146,16 +148,14 @@ test('a source is required', () => {
 test('enabling loads the view and draws one hollow marker per record', async () => {
   const t = await enabledLayer(() => ({ records: [well(1), well(2)] }));
   assert.equal(t.loaded, true);
-  assert.equal(t.source.asked.length, 1);
-  assertView(t.source.asked[0], [-98, 30, -97, 31]);
-  assert.deepEqual(
-    t.markers().values.map((e) => [e.id, e.name]),
-    [
-      [entityId(1), 'USGWD TX1'],
-      [entityId(2), 'USGWD TX2'],
-    ],
-  );
-  assert.equal(t.dataSources.get(0).show, true);
+  assert.deepEqual(t.source.asked, [[-98, 30, -97, 31]]);
+  assert.equal(t.markers().kind, 'icons');
+  assert.deepEqual([...t.markers().items.keys()], [markerId(1), markerId(2)]);
+  const marker = t.markers().items.get(markerId(1));
+  assert.deepEqual(marker.size, [12, 12]);
+  assert.equal(marker.height, 'clampGround');
+  assert.match(marker.image, /^data:image\/svg\+xml/);
+  assert.equal(t.markers().show, true);
   const stats = t.layer.getStats();
   assert.equal(stats.count, 12452285);
   assert.equal(stats.countLabel, '12.5M');
@@ -164,42 +164,42 @@ test('enabling loads the view and draws one hollow marker per record', async () 
   assert.equal(stats.status, undefined);
   assert.equal(stats.loading, false);
   assert.ok(stats.lastUpdate > 0);
-  assert.equal(t.owners.get('us-groundwater')(entityId(1)), true);
+  assert.equal(t.owners.get('us-groundwater')(markerId(1)), true);
   assert.equal(t.owners.get('us-groundwater')('other:1'), false);
-  assert.deepEqual(cameraSensitivityClaims(t.viewer.camera), [
-    'us-groundwater',
-  ]);
+  assert.deepEqual(
+    t.changedOptions,
+    [{ threshold: 0.05 }],
+    'a 5% threshold on its own camera listener',
+  );
   t.layer.destroy();
 });
 
 test('above the height gate only the total is asked for and the row says to zoom in', async () => {
-  const fixture = fakeViewer();
-  fixture.viewer.camera.positionCartographic.height = WELL_DETAIL_HEIGHT + 1;
+  const scene = fakeScene();
+  scene.camera.setPose({ height: WELL_DETAIL_HEIGHT + 1 });
   const source = fakeSource((bounds) =>
     bounds ? { records: [well(1)] } : { limited: true },
   );
-  const layer = createUsGroundwaterLayer({ source });
-  layer.init(fixture.viewer);
+  const layer = createUsGroundwaterLayer({ source, input: scene.input });
+  layer.init(scene.viewer);
   layer.enable();
   assert.equal(await layer.update(), true);
   assert.deepEqual(source.asked, [null]);
-  assert.equal(fixture.dataSources.get(0).show, false);
+  assert.equal(scene.markers().show, false);
   let stats = layer.getStats();
   assert.equal(stats.countLabel, '12.5M');
   assert.equal(stats.visible, 0);
   assert.equal(stats.status, 'zoom-in');
   assert.equal(stats.statusMessage, 'Zoom in to see wells');
 
-  fixture.viewer.camera.moveEnd.raiseEvent();
-  await new Promise((resolve) => setImmediate(resolve));
+  await scene.moveEnd();
   assert.equal(source.asked.length, 1, 'nothing more to load while far away');
 
-  fixture.viewer.camera.positionCartographic.height = 20000;
-  fixture.viewer.scene.preRender.raiseEvent();
-  assert.equal(fixture.dataSources.get(0).show, true);
-  fixture.viewer.camera.moveEnd.raiseEvent();
-  await new Promise((resolve) => setImmediate(resolve));
-  assertView(source.asked[1], [-98, 30, -97, 31]);
+  scene.camera.setPose({ height: 20000 });
+  scene.frame();
+  assert.equal(scene.markers().show, true);
+  await scene.moveEnd();
+  assert.deepEqual(source.asked[1], [-98, 30, -97, 31]);
   stats = layer.getStats();
   assert.equal(stats.visible, 1);
   assert.equal(stats.status, undefined);
@@ -209,21 +209,18 @@ test('above the height gate only the total is asked for and the row says to zoom
 test('a new view keeps markers that stay, and a view inside the loaded one loads nothing', async () => {
   let records = [well(1), well(2)];
   const t = await enabledLayer(() => ({ records }));
-  const kept = t.markers().getById(entityId(2));
+  const kept = t.markers().items.get(markerId(2));
 
-  t.state.view = [-97.9, 30.1, -97.1, 30.9];
+  t.camera.setViewRectangle(view([-97.9, 30.1, -97.1, 30.9]));
   await t.moveEnd();
   assert.equal(t.source.asked.length, 1, 'zooming in is already covered');
 
-  t.state.view = [-97.5, 30, -96.5, 31];
+  t.camera.setViewRectangle(view([-97.5, 30, -96.5, 31]));
   records = [well(2), well(3)];
   await t.moveEnd();
   assert.equal(t.source.asked.length, 2);
-  assert.deepEqual(
-    t.markers().values.map((e) => e.id),
-    [entityId(2), entityId(3)],
-  );
-  assert.equal(t.markers().getById(entityId(2)), kept, 'not rebuilt');
+  assert.deepEqual([...t.markers().items.keys()], [markerId(2), markerId(3)]);
+  assert.equal(t.markers().items.get(markerId(2)), kept, 'not rebuilt');
   t.layer.destroy();
 });
 
@@ -233,12 +230,11 @@ test('too many records in view draws none and says so', async () => {
     limited ? { limited: true } : { records: [well(1)] },
   );
   t.click();
-  assert.equal(t.viewer.selectedEntity?.id, entityId(1));
+  assert.equal(selectedId(), markerId(1));
   limited = true;
-  t.state.view = [-99, 29.5, -97, 31];
+  t.camera.setViewRectangle(view([-99, 29.5, -97, 31]));
   await t.moveEnd();
-  assert.equal(t.markers().values.length, 0);
-  assert.equal(t.viewer.selectedEntity, undefined);
+  assert.equal(t.markers().items.size, 0);
   assert.equal(getSelectedEntityContext(), null);
   const stats = t.layer.getStats();
   assert.equal(stats.status, 'zoom-in');
@@ -250,20 +246,30 @@ test('too many records in view draws none and says so', async () => {
 });
 
 test('a click on the hollow centre selects the well and opens its card', async () => {
-  const t = await enabledLayer(() => ({
-    records: [well(1, { depthFt: 240, constructedYear: '1987' })],
-  }));
-  const marker = t.markers().getById(entityId(1));
+  let cardOnTop = false;
+  const t = await enabledLayer(
+    () => ({ records: [well(1, { depthFt: 240, constructedYear: '1987' })] }),
+    { underOtherCard: () => cardOnTop },
+  );
 
   const lease = claimPointer('draw');
   t.click();
   releasePointer(lease);
-  assert.equal(t.viewer.selectedEntity, undefined, 'another tool owns clicks');
+  assert.equal(selectedId(), undefined, 'another tool owns clicks');
 
+  cardOnTop = true;
+  t.click();
+  assert.equal(selectedId(), undefined, 'another layer’s card takes the click');
+  cardOnTop = false;
+
+  // Nothing is picked in the middle of the ring: the nearby well is taken.
   t.click(404, 304);
-  assert.equal(t.viewer.selectedEntity, marker);
-  assert.equal(getSelectedEntityContext().entity, marker);
-  const card = marker.gevLabelModel;
+  assert.equal(selectedId(), markerId(1));
+  const selected = getSelectedEntityContext();
+  assert.equal(selected.layerId, 'us-groundwater');
+  assert.equal(selected.properties.recordId, 'TX1');
+  const record = readEntityRecord(selected.entity);
+  const card = record.labelModel;
   assert.equal(card.title, 'Water well record');
   assert.equal(card.accent, '#f5b942');
   assert.deepEqual(card.details, [
@@ -273,53 +279,73 @@ test('a click on the hollow centre selects the well and opens its card', async (
     'Historical record; not current conditions.',
     'Source: USGWD TX1',
   ]);
-  const anchor = Cesium.Cartographic.fromCartesian(marker.gevDisplayPosition());
   assert.ok(
-    Math.abs(anchor.height - 430) < 0.001,
+    Math.abs(toLonLatH(record.displayPosition()).height - 430) < 0.001,
     'card hangs from the ground',
   );
 
-  const foreign = { id: 'other-layer:1' };
-  t.state.picked = { id: foreign };
-  t.viewer.selectedEntity = foreign;
-  t.click();
-  assert.equal(t.viewer.selectedEntity, foreign, 'never over another layer');
-
-  t.state.picked = undefined;
-  t.click();
-  assert.equal(t.viewer.selectedEntity, marker);
   t.click(430, 330);
-  assert.equal(t.viewer.selectedEntity, undefined, 'a click on empty map');
-  assert.equal(getSelectedEntityContext(), null);
+  assert.equal(selectedId(), undefined, 'a click on empty map');
+
+  const foreign = { set: 'flights', id: 'other-layer:1', surface: false };
+  t.click(400, 300, foreign);
+  assert.equal(selectedId(), undefined, 'never over another layer');
+
+  // The ring itself is picked: the renderer names the marker.
+  t.click(900, 900, { set: MARKERS, id: markerId(1), surface: false });
+  assert.equal(selectedId(), markerId(1));
+  t.click(400, 300, foreign);
+  assert.equal(selectedId(), markerId(1), 'another layer’s pick is not empty');
+  t.click(430, 330, { set: '', id: '', surface: true });
+  assert.equal(selectedId(), undefined, 'a click on the map itself');
+  t.layer.destroy();
+});
+
+test('a click finds a well where its marker stands on the terrain', async () => {
+  const t = await enabledLayer(() => ({ records: [well(1)] }));
+  // Over high ground a point on the ellipsoid projects away from the marker.
+  t.state.project = (position) =>
+    toLonLatH(position).height > 400 ? { x: 400, y: 300 } : { x: 400, y: 340 };
+  t.click(400, 300);
+  assert.equal(selectedId(), markerId(1));
+  assert.equal(t.state.heightOptions.at(-1).against, 'terrain');
+
+  // Until the terrain has loaded, the well is looked for on the ellipsoid.
+  t.click(900, 900);
+  assert.equal(selectedId(), undefined);
+  t.state.terrain = null;
+  t.click(400, 340);
+  assert.equal(selectedId(), markerId(1));
   t.layer.destroy();
 });
 
 test('rising above the gate hides the markers and closes the card; a narrower canvas re-wraps it', async () => {
   const t = await enabledLayer(() => ({ records: [well(1)] }));
-  const marker = t.markers().getById(entityId(1));
   t.click();
-  assert.equal(t.viewer.selectedEntity, marker);
+  assert.equal(selectedId(), markerId(1));
+  const record = readEntityRecord(getSelectedEntityContext().entity);
 
   const selections = [];
   const onSelected = (event) => selections.push(event.detail.id);
   window.addEventListener('gev:entity-selected', onSelected);
-  t.viewer.scene.canvas.clientWidth = 200;
-  t.viewer.scene.preRender.raiseEvent();
+  t.viewer.canvas.clientWidth = 200;
+  t.frame();
   window.removeEventListener('gev:entity-selected', onSelected);
-  assert.deepEqual(selections, [entityId(1)], 'the open card is republished');
-  assert.ok(marker.gevLabelModel.details.every((line) => line.length <= 23));
+  assert.deepEqual(selections, [markerId(1)], 'the open card is republished');
+  assert.ok(record.labelModel.details.every((line) => line.length <= 23));
 
-  t.viewer.camera.positionCartographic.height = WELL_DETAIL_HEIGHT + 1;
-  t.viewer.scene.preRender.raiseEvent();
-  assert.equal(t.dataSources.get(0).show, false);
-  assert.equal(t.viewer.selectedEntity, undefined);
+  const cleared = [];
+  const onCleared = (event) => cleared.push(event.detail.layerId);
+  window.addEventListener('gev:entity-selection-cleared', onCleared);
+  t.camera.setPose({ height: WELL_DETAIL_HEIGHT + 1 });
+  t.frame();
+  window.removeEventListener('gev:entity-selection-cleared', onCleared);
+  assert.equal(t.markers().show, false);
+  assert.deepEqual(cleared, ['us-groundwater'], 'the card is told to close');
+  assert.equal(getSelectedEntityContext(), null);
   assert.equal(t.layer.getStats().visible, 0);
   t.click();
-  assert.equal(
-    t.viewer.selectedEntity,
-    undefined,
-    'hidden wells are not picked',
-  );
+  assert.equal(selectedId(), undefined, 'hidden wells are not picked');
   t.layer.destroy();
 });
 
@@ -330,25 +356,56 @@ test('overlapping wells open a chooser, and the keyboard list holds the wells on
   );
   assert.equal(t.published.records.records.length, 50, 'capped');
   assert.deepEqual(t.published.records.records[0], {
-    id: entityId(1),
+    id: markerId(1),
     label: 'USGWD TX1',
   });
-  t.published.records.focus(entityId(1), true);
-  assert.equal(
-    t.markers().getById(entityId(1)).billboard.scale.getValue(),
-    1.8,
-  );
-  t.published.records.select(entityId(2));
-  assert.equal(t.viewer.selectedEntity.id, entityId(2));
+  t.published.records.focus(markerId(1), true);
+  assert.equal(t.markers().items.get(markerId(1)).scale, 1.8);
+  t.published.records.focus(markerId(1), false);
+  assert.equal(t.markers().items.get(markerId(1)).scale, 1);
+  t.published.records.select(markerId(2));
+  assert.equal(selectedId(), markerId(2));
 
   t.click();
   assert.equal(t.published.choices.records.length, 60);
-  t.published.choices.select(entityId(7));
-  assert.equal(t.viewer.selectedEntity.id, entityId(7));
+  t.published.choices.select(markerId(7));
+  assert.equal(selectedId(), markerId(7));
   assert.equal(t.published.choices, null);
 
   t.layer.disable();
   assert.equal(t.published.records, null);
+  t.layer.destroy();
+});
+
+test('wells off screen are left out of the keyboard list and the chooser', async () => {
+  const t = await enabledLayer(
+    () => ({ records: [well(1), well(2), well(3)] }),
+    { ui: true },
+  );
+  // No terrain: each well is projected where its marker item is placed.
+  t.state.terrain = null;
+  const at = new Map([
+    [markerId(1), { x: 400, y: 300 }],
+    [markerId(2), { x: 404, y: 300 }],
+    [markerId(3), null],
+  ]);
+  const byPosition = new Map(
+    [...t.markers().items.values()].map((item) => [item.pos, at.get(item.id)]),
+  );
+  t.state.project = (position) => byPosition.get(position);
+  // A new view republishes the list.
+  t.camera.setViewRectangle(view([-97.9, 30.1, -97.1, 30.9]));
+  await t.moveEnd();
+  assert.deepEqual(
+    t.published.records.records.map(({ id }) => id),
+    [markerId(1), markerId(2)],
+  );
+  t.click(403, 300);
+  assert.deepEqual(
+    t.published.choices.records.map(({ id }) => id),
+    [markerId(2), markerId(1)],
+    'nearest first',
+  );
   t.layer.destroy();
 });
 
@@ -395,44 +452,43 @@ test('turning the layer off cancels a load in flight and leaves nothing behind',
         });
   });
   t.click();
-  t.state.view = [-96, 30, -95, 31];
-  t.viewer.camera.moveEnd.raiseEvent();
+  t.camera.setViewRectangle(view([-96, 30, -95, 31]));
+  t.camera.emit('moveEnd');
   assert.equal(t.layer.getStats().loading, true);
 
   t.layer.disable();
   assert.equal(signals[1].aborted, true);
   release();
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(t.markers().values.length, 0, 'the late answer is ignored');
-  assert.equal(t.viewer.selectedEntity, undefined);
+  const markers = t.markers();
+  assert.equal(markers.items.size, 0, 'the late answer is ignored');
   assert.equal(getSelectedEntityContext(), null);
-  assert.equal(t.dataSources.get(0).show, false);
+  assert.equal(markers.show, false);
   assert.equal(t.owners.size, 0);
-  assert.equal(t.listeners.size, 0);
-  assert.equal(t.viewer.camera.changed.numberOfListeners, 0);
-  assert.equal(t.viewer.camera.moveEnd.numberOfListeners, 0);
-  assert.equal(t.viewer.scene.preRender.numberOfListeners, 0);
-  assert.deepEqual(cameraSensitivityClaims(t.viewer.camera), []);
-  assert.equal(t.viewer.camera.percentageChanged, 0.5);
+  assert.equal(t.state.clickListeners.size, 0);
+  assert.equal(t.state.frameListeners.size, 0);
+  assert.equal(t.camera.listenerCount('changed'), 0);
+  assert.equal(t.camera.listenerCount('moveEnd'), 0);
   assert.equal(await t.layer.update(), false);
 
   assert.equal(t.layer.enable(), true);
-  assert.equal(t.dataSources.length, 1, 'the same data source is reused');
+  assert.equal(t.markers(), markers, 'the same icon set is reused');
   t.layer.destroy();
-  assert.equal(t.dataSources.length, 0);
+  assert.equal(markers.disposed, true);
+  assert.equal(t.draw.sets.size, 1);
 });
 
 test('a long camera move loads at most once per 200 ms, and not while a load is running', async (context) => {
   context.mock.timers.enable({ apis: ['setTimeout'] });
   const t = await enabledLayer(() => ({ records: [] }));
-  t.state.view = [-96, 30, -95, 31];
-  t.viewer.camera.changed.raiseEvent();
-  t.viewer.camera.changed.raiseEvent();
+  t.camera.setViewRectangle(view([-96, 30, -95, 31]));
+  t.camera.emit('changed');
+  t.camera.emit('changed');
   assert.equal(t.layer.getStats().loading, true);
   assert.equal(t.source.asked.length, 1);
   context.mock.timers.tick(200);
   assert.equal(t.source.asked.length, 2);
-  t.viewer.camera.changed.raiseEvent();
+  t.camera.emit('changed');
   context.mock.timers.tick(200);
   assert.equal(t.source.asked.length, 2, 'the running load finishes first');
   t.layer.destroy();

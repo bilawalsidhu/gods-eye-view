@@ -1,57 +1,42 @@
-import * as Cesium from 'cesium';
-
-const screenPoint = (viewer, entity) => {
-  const position = entity.position?.getValue?.(Cesium.JulianDate.now());
-  return position && viewer.scene.cartesianToCanvasCoordinates?.(position);
-};
-
-/** Well markers within `radius` pixels of a click, nearest first. */
-export function recordsAtPixel(viewer, entities, pixel, radius = 10) {
-  return entities
-    .flatMap((entity) => {
-      const point = screenPoint(viewer, entity);
-      const distance = point
-        ? Math.hypot(point.x - pixel.x, point.y - pixel.y)
-        : Infinity;
-      return distance <= radius ? [{ entity, distance }] : [];
-    })
+/**
+ * Wells whose screen position passes `distanceOf`, nearest first. `project`
+ * gives where a well's marker is on the canvas, in pixels, or nothing when
+ * it is not on screen.
+ */
+function nearest(project, wells, distanceOf) {
+  const hits = [];
+  for (const well of wells) {
+    const point = project(well);
+    const distance = point ? distanceOf(point) : Infinity;
+    if (Number.isFinite(distance)) hits.push({ well, distance });
+  }
+  return hits
     .sort(
       (a, b) =>
         a.distance - b.distance ||
-        String(a.entity.id).localeCompare(String(b.entity.id)),
+        String(a.well.id).localeCompare(String(b.well.id)),
     )
-    .map((hit) => hit.entity);
+    .map((hit) => hit.well);
+}
+
+/** Well markers within `radius` pixels of a click, nearest first. */
+export function recordsAtPixel(project, wells, pixel, radius = 10) {
+  return nearest(project, wells, (point) => {
+    const distance = Math.hypot(point.x - pixel.x, point.y - pixel.y);
+    return distance <= radius ? distance : Infinity;
+  });
 }
 
 /** Up to `limit` well markers on the canvas, nearest its centre first. */
-export function recordsOnScreen(viewer, entities, limit = 50) {
-  const canvas = viewer.scene.canvas;
+export function recordsOnScreen(project, wells, canvas, limit = 50) {
   const width = canvas?.clientWidth;
   const height = canvas?.clientHeight;
   if (!(width > 0 && height > 0)) return [];
-  return entities
-    .flatMap((entity) => {
-      const point = screenPoint(viewer, entity);
-      return point &&
-        point.x >= 0 &&
-        point.y >= 0 &&
-        point.x <= width &&
-        point.y <= height
-        ? [
-            {
-              entity,
-              distance: Math.hypot(point.x - width / 2, point.y - height / 2),
-            },
-          ]
-        : [];
-    })
-    .sort(
-      (a, b) =>
-        a.distance - b.distance ||
-        String(a.entity.id).localeCompare(String(b.entity.id)),
-    )
-    .slice(0, limit)
-    .map((hit) => hit.entity);
+  return nearest(project, wells, (point) =>
+    point.x >= 0 && point.y >= 0 && point.x <= width && point.y <= height
+      ? Math.hypot(point.x - width / 2, point.y - height / 2)
+      : Infinity,
+  ).slice(0, limit);
 }
 
 /** Several records under one click: publish the choices; the host draws them. */
@@ -61,21 +46,21 @@ export function createRecordPicker(onSelect, publishChoices = () => {}) {
     generation++;
     publishChoices(null);
   }
-  function choose(entities) {
+  function choose(wells) {
     close();
-    if (entities.length === 1) return onSelect(entities[0]);
-    if (!entities.length) return false;
+    if (wells.length === 1) return onSelect(wells[0]);
+    if (!wells.length) return false;
     const current = generation;
     publishChoices({
-      records: entities.map((entity) => ({
-        id: String(entity.id),
-        label: entity.name || String(entity.id),
+      records: wells.map((well) => ({
+        id: String(well.id),
+        label: well.name || String(well.id),
       })),
       select(id) {
         if (current !== generation) return;
-        const entity = entities.find((e) => String(e.id) === id);
+        const well = wells.find((candidate) => String(candidate.id) === id);
         close();
-        if (entity) onSelect(entity);
+        if (well) onSelect(well);
       },
       cancel: close,
     });
