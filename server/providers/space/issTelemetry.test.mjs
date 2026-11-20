@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   ISS_TELEMETRY_ITEMS,
   ISS_TELEMETRY_ROUTE,
+  createIssTelemetryLimiter,
   createIssTelemetryRelay,
   issTelemetryEnabled,
   issTelemetryProxy,
@@ -315,7 +316,7 @@ function install(plugin, preview = false) {
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({
     middlewares: { use: (route, handler) => routes.set(route, handler) },
   });
-  return (method = 'GET', headers = {}, url = '/') => {
+  return (method = 'GET', headers = {}, url = '/', remoteAddress) => {
     const res = {
       headers: {},
       writeHead(status, headers) {
@@ -329,7 +330,10 @@ function install(plugin, preview = false) {
         this.status ??= this.statusCode;
       },
     };
-    routes.get(ISS_TELEMETRY_ROUTE)({ url, method, headers, socket: {} }, res);
+    routes.get(ISS_TELEMETRY_ROUTE)(
+      { url, method, headers, socket: { remoteAddress } },
+      res,
+    );
     return res;
   };
 }
@@ -369,6 +373,8 @@ test('switched on, the route opens the feed once and serves the snapshot', () =>
     const first = JSON.parse(request().body);
     assert.equal(first.configured, true);
     assert.equal(first.status, 'connecting');
+    assert.equal(first.generatedAt, NOV_13);
+    assert.deepEqual(first.items, {});
     request();
     assert.equal(sockets.length, 1, 'one connection for every request');
     assert.equal(request('POST').status, 405);
@@ -380,14 +386,172 @@ test('switched on, the route opens the feed once and serves the snapshot', () =>
       request('GET', { 'sec-fetch-site': 'cross-site' }).status,
       403,
     );
-    // Sixty requests a minute from one client, then 429.
-    let limited = 0;
-    for (let i = 0; i < 70; i++) if (request().status === 429) limited += 1;
-    assert.ok(limited > 0);
+    // 240 requests a minute from one address (the three served above among
+    // them), then 429 with how long to wait; another address is served.
+    const answers = Array.from({ length: 250 }, () => request());
+    const refused = answers.filter((res) => res.status === 429);
+    assert.equal(answers.length - refused.length, 240 - 3);
+    assert.equal(refused[0].headers['Retry-After'], '60');
+    assert.equal(refused[0].headers['Cache-Control'], 'no-store');
+    assert.deepEqual(JSON.parse(refused[0].body), {
+      error: 'Too Many Requests',
+    });
+    assert.equal(request('GET', {}, '/', '192.0.2.7').status, 200);
   } finally {
     plugin.closeBundle();
   }
   assert.equal(sockets[0].terminated, true);
+});
+
+test('the route admits 240 requests a minute from an address and 12,000 from everyone', () => {
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({ now: () => clock.ms });
+  // Four a second from one address for a minute: every one is admitted.
+  let admitted = 0;
+  for (let s = 0; s < 60; s++) {
+    clock.ms = NOV_13 + s * 1000 + 500;
+    for (let i = 0; i < 4; i++) if (admit('198.51.100.1') === 0) admitted += 1;
+  }
+  assert.equal(admitted, 240);
+  // One more waits until the first second's four leave the minute.
+  assert.equal(admit('198.51.100.1'), 1);
+  assert.equal(admit('198.51.100.2'), 0, 'another address is counted apart');
+  clock.ms += 1000;
+  for (let i = 0; i < 4; i++) assert.equal(admit('198.51.100.1'), 0);
+  assert.equal(admit('198.51.100.1'), 1);
+
+  // 12,000 in one second from 60 addresses: then even a new one waits the
+  // minute out.
+  const everyone = createIssTelemetryLimiter({ now: () => clock.ms });
+  admitted = 0;
+  for (let a = 0; a < 60; a++)
+    for (let i = 0; i < 200; i++)
+      if (everyone(`10.0.0.${a}`) === 0) admitted += 1;
+  assert.equal(admitted, 12_000);
+  assert.equal(everyone('10.0.1.1'), 60);
+  clock.ms += 59_000;
+  assert.equal(everyone('10.0.1.1'), 1);
+  clock.ms += 1000;
+  assert.equal(everyone('10.0.1.1'), 0);
+});
+
+test('a minute later an address starts afresh, and at most 2,000 are counted', () => {
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({
+    perAddress: 2,
+    total: 3,
+    now: () => clock.ms,
+  });
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 60);
+  assert.equal(admit('b'), 0, 'the refused one was not counted');
+  assert.equal(admit('c'), 60, 'the total is reached');
+  clock.ms += 60_000;
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('c'), 0);
+
+  // Past 2,000 addresses the longest idle one is forgotten, so the map
+  // cannot grow without bound; the total still holds for everyone.
+  const many = createIssTelemetryLimiter({
+    perAddress: 1,
+    now: () => clock.ms,
+  });
+  for (let i = 0; i <= 2000; i++) assert.equal(many(`k${i}`), 0);
+  assert.equal(many('k2000'), 60, 'a counted address');
+  assert.equal(many('k0'), 0, 'forgotten, so counted afresh');
+  assert.equal(many.addresses(), 2000, 'the cap holds');
+});
+
+test('an address idle for a whole minute is forgotten, not kept at a count of nothing', () => {
+  // Its answers would be the same either way (its count has slid to empty),
+  // so only the number of addresses kept shows it: without the forgetting the
+  // map would hold every address of the last 2,000 until the cap pushed them out.
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({ now: () => clock.ms });
+  assert.equal(admit('198.51.100.1'), 0);
+  assert.equal(admit.addresses(), 1);
+  clock.ms += 59_000;
+  assert.equal(admit('198.51.100.2'), 0);
+  assert.equal(admit.addresses(), 2, 'not yet idle a whole minute');
+  clock.ms += 2_000;
+  assert.equal(admit('198.51.100.3'), 0);
+  assert.equal(admit.addresses(), 2, 'the first, idle 61 s, is gone');
+});
+
+test('a clock stepped back starts a fresh minute instead of refusing until it catches up', () => {
+  const clock = { ms: NOV_13 };
+  const admit = createIssTelemetryLimiter({
+    perAddress: 2,
+    total: 100,
+    now: () => clock.ms,
+  });
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 60, 'the address is at its cap');
+  // NTP or a resumed machine moves the clock back half an hour.
+  clock.ms -= 30 * 60_000;
+  assert.equal(admit('a'), 0, 'a fresh minute');
+  assert.equal(admit('a'), 0);
+  assert.equal(admit('a'), 60, 'and the cap holds in it');
+  clock.ms += 60_000;
+  assert.equal(admit('a'), 0, 'a minute on, it starts afresh again');
+});
+
+test('the served text is the snapshot as JSON, its items encoded again only after a change', () => {
+  const { relay, sockets, clock } = relayAt(NOV_13);
+  relay.demand();
+  const same = (label) =>
+    assert.equal(relay.snapshotText(), JSON.stringify(relay.snapshot()), label);
+  same('connecting');
+  const socket = sockets[0];
+  socket.emit('open');
+  socket.emit('message', 'CONOK,S1,50000,5000,*');
+  const stamp = stampOf(clock.ms);
+  socket.emit(
+    'message',
+    `U,1,${index('S0000004')},${stamp}|17.25|24\r\n` +
+      `U,1,${index('S0000001')},|-3|24\r\n` +
+      `U,1,${index('TIME_000001')},${stamp}|1|24`,
+  );
+  same('live, with an item that has no time');
+
+  // The time and the station clock move on; the items do not.
+  const real = JSON.stringify;
+  let encoded = 0;
+  JSON.stringify = (...args) => {
+    encoded += 1;
+    return real(...args);
+  };
+  try {
+    relay.snapshotText();
+    clock.ms += 1000;
+    socket.emit(
+      'message',
+      `U,1,${index('TIME_000001')},${stampOf(clock.ms)}|1|24`,
+    );
+    relay.snapshotText();
+  } finally {
+    JSON.stringify = real;
+  }
+  assert.equal(encoded, 0, 'unchanged items are not encoded again');
+  assert.equal(JSON.parse(relay.snapshotText()).generatedAt, clock.ms);
+
+  // A new value, a lost signal and a lost socket each show at once.
+  socket.emit('message', `U,1,${index('S0000004')},|18|`);
+  same('a new value');
+  assert.deepEqual(JSON.parse(relay.snapshotText()).items.S0000004, [
+    18,
+    NOV_13,
+  ]);
+  clock.ms += 21_000;
+  same('no signal');
+  assert.equal(JSON.parse(relay.snapshotText()).status, 'no-signal');
+  socket.emit('close');
+  same('reconnecting');
+  assert.deepEqual(JSON.parse(relay.snapshotText()).items, {});
+  relay.dispose();
 });
 
 test('a session that keeps ending soon after its snapshot climbs the retry ladder', () => {

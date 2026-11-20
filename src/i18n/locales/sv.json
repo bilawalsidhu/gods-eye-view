@@ -4404,6 +4404,7 @@
   "No signal · computed values": "Ingen signal · beräknade värden",
   "Telemetry unavailable · last update {ago} ago · computed values": "Telemetri otillgänglig · senast uppdaterad för {ago} sedan · beräknade värden",
   "Telemetry unavailable · computed values": "Telemetri otillgänglig · beräknade värden",
+  "Telemetry incomplete · computed values": "Telemetri ofullständig · beräknade värden",
   "Telemetry not enabled on this server · computed values": "Telemetri inte aktiverad på den här servern · beräknade värden",
   "No public telemetry · computed values": "Ingen offentlig telemetri · beräknade värden",
   "Zoom to Tiangong": "Zooma in på Tiangong",

@@ -13,6 +13,7 @@ import {
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
   TRACKED_ORBIT_COLOR,
+  UNDOCK_RADIUS_FACTOR,
 } from './policy.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { modelFor } from './stationModels.js';
@@ -174,11 +175,15 @@ export function createTracking({ state: layerState, services, parts, source }) {
       layerState._trackedFrameNumber = frameNumber;
       // Throttled inside; membership changes are rare, so resync the ISS ambient
       // gate only when the cluster actually changed.
+      const scannedAtMs = layerState._lastDockedScanMs;
       const clusterChanged = parts.labels._refreshDockedCompanions(
         layerState._trackedFrameNowForTest
           ? layerState._trackedFrameNowForTest()
           : Date.now(),
       );
+      // On the same beat, once a second, whether it is docked to a station
+      // is judged again: a vehicle can dock or undock while it is tracked.
+      if (layerState._lastDockedScanMs !== scannedAtMs) _syncTrackedDocking();
       _updateTrackedSatelliteLabelModel();
       // The card and the context slot describe the same satellite — keep them
       // together so voice never narrates a fix the card has already replaced.
@@ -425,11 +430,14 @@ export function createTracking({ state: layerState, services, parts, source }) {
    * The station a satellite is docked to: both orbits, propagated to one
    * instant, within the station's companion radius (dots are moved at
    * different moments, so their spacing cannot say). A station is docked to
-   * nothing, and the dense group never is.
+   * nothing, and the dense group never is. The station it is already judged
+   * docked to (`held`) keeps it out to `UNDOCK_RADIUS_FACTOR` times the
+   * radius.
    * @param {number} noradId
+   * @param {number|null} [held] The station it is judged docked to now.
    * @returns {number|null} The station's NORAD number, or null.
    */
-  function _dockedToStation(noradId) {
+  function _dockedToStation(noradId, held = null) {
     if (STATIONS.some((station) => station.norad === noradId)) return null;
     const sat = layerState._catalog.get(noradId);
     if (!sat?.satrec || sat.group === 'dense') return null;
@@ -442,10 +450,61 @@ export function createTracking({ state: layerState, services, parts, source }) {
       own ??= parts.orbits.propagatePosition(sat.satrec, date);
       if (!own) return null;
       const there = parts.orbits.propagatePosition(entry.satrec, date);
-      if (there && distance(at(own), at(there)) <= station.companionRadiusM)
-        return station.norad;
+      // Judged docked, it stays so until well clear (UNDOCK_RADIUS_FACTOR).
+      const radius =
+        station.companionRadiusM *
+        (station.norad === held ? UNDOCK_RADIUS_FACTOR : 1);
+      if (there && distance(at(own), at(there)) <= radius) return station.norad;
     }
     return null;
+  }
+
+  /**
+   * Judge whether the tracked satellite is docked to a station, from both
+   * orbits now, and draw its ring by the answer. An object docked to the
+   * ISS (Nauka, a Progress…) flies the station's orbit under elements of its
+   * own: its ring would run beside the ISS's, a second line through the
+   * same station, so the ISS's ring stands in for it. Another station's ring
+   * is drawn only while that station is tracked, so its docked objects keep
+   * their own. Run when tracking begins, once a second while tracked (a
+   * vehicle docks or undocks), and after a catalog rebuild (new elements,
+   * and every ring removed). The station model's own docked set is not
+   * read: it is kept only while the model is loaded, so the answer would
+   * depend on how near the camera is.
+   */
+  function _syncTrackedDocking() {
+    const noradId = layerState._trackedNorad;
+    if (noradId === null) return;
+    const station = _dockedToStation(
+      noradId,
+      layerState._trackedDockedToStation,
+    );
+    const dockedToIss = station === ISS_NORAD;
+    const swapped = dockedToIss !== layerState._trackedDockedToIss;
+    layerState._trackedDockedToStation = station;
+    layerState._trackedDockedToIss = dockedToIss;
+    // Either is a no-op when the ring is already as it should be.
+    if (dockedToIss) parts.rendering._hideOrbitPath(noradId);
+    else parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
+    if (!swapped) return;
+    // The ISS's ring takes over, or goes back to its own rules.
+    parts.controls._syncIssOrbit?.();
+    // A held Cockpit subject keeps its ring hidden, and the others dimmed.
+    if (layerState._cockpitSubjectNorad !== null)
+      parts.cockpit?._syncCockpitSubjectVisuals();
+  }
+
+  /**
+   * Carry tracking over a catalog rebuild (ingestion.js), which replaced
+   * every dot and removed every ring: the tracked satellite's own dot is
+   * hidden again (the tracked dot draws it), and whether it is docked, and
+   * so its ring, is judged again from the new elements.
+   */
+  function _reconcileTrackedMarks() {
+    const noradId = layerState._trackedNorad;
+    if (noradId === null) return;
+    parts.rendering._hidePoint(noradId);
+    _syncTrackedDocking();
   }
 
   function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
@@ -462,18 +521,11 @@ export function createTracking({ state: layerState, services, parts, source }) {
     // Hide the dot — the tracked dot draws it, larger and over everything.
     parts.rendering._hidePoint(noradId);
 
-    // Show orbital path. An object docked to the ISS (Nauka, a Progress…)
-    // flies the station's orbit under elements of its own: its ring would
-    // run beside the ISS's, a second line through the same station. The
-    // ISS's ring stands for it instead. Another station's ring is drawn only
-    // while that station is tracked, so its docked objects keep their own.
-    layerState._trackedDockedToStation = _dockedToStation(noradId);
-    layerState._trackedDockedToIss =
-      layerState._trackedDockedToStation === ISS_NORAD;
-    if (!layerState._trackedDockedToIss)
-      parts.rendering._showOrbitPath(noradId, TRACKED_ORBIT_COLOR);
-    if (noradId === ISS_NORAD || layerState._trackedDockedToIss)
-      parts.controls._syncIssOrbit?.();
+    // Show orbital path, or let the ISS's stand in for an object docked to
+    // it (see _syncTrackedDocking). The tracked ISS keeps its ring with its
+    // class hidden.
+    _syncTrackedDocking();
+    if (noradId === ISS_NORAD) parts.controls._syncIssOrbit?.();
 
     // The tracked position propagates per evaluation through the per-frame
     // cache (WS-D2) — dot, host readout, and camera share one SGP4 epoch per frame.
@@ -551,6 +603,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
     _reconcileTrackedSubjectContext,
     _refreshTrackedSubjectContext,
     _updateTrackedSatelliteLabelModel,
+    _syncTrackedDocking,
+    _reconcileTrackedMarks,
     _trackSatellite,
   };
 }

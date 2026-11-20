@@ -1,10 +1,15 @@
 // src/layers/satellites/stationResume.test.mjs — handing a station's moving
 // parts back from the STATION section's Manual: every joint posed by hand
 // leaves its manual angle, the ones the illustrative sway does not move
-// included, and the ISS's Automatic lets telemetry back in.
+// included, and the ISS's Automatic lets telemetry back in. A joint posed
+// before the model was first posed takes its angle once it is.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createIssArticulation, ISS_ARM_JOINTS } from './issArticulation.js';
+import {
+  createIssArticulation,
+  ISS_ARM_JOINTS,
+  issAxisMatrix,
+} from './issArticulation.js';
 import { issStationDescription } from './issStation.js';
 import { createNodePoses } from './stationModel.js';
 import {
@@ -56,6 +61,76 @@ test('Tiangong: resuming an arm gives its held joints their folded pose back, an
   articulation.resumeArm();
   for (const joint of heldOf('emm'))
     assert.equal(nodes.poses[joint.node], undefined, joint.node);
+});
+
+/** The matrix a joint takes at `angle`, as an array. */
+const posed = (joint, angle) =>
+  Array.from(
+    issAxisMatrix(joint.pivot, joint.axis, angle, new Float64Array(16)),
+  );
+
+test('ISS: a slider moved before the model is first posed reaches its joint once it is', () => {
+  // The STATION section can be in Manual before the model has loaded: the
+  // model part poses it only once loaded and in range.
+  const held = ISS_ARM_JOINTS.find((joint) => !joint.sway);
+  const swaying = ISS_ARM_JOINTS.find((joint) => joint.sway);
+  const angle = (40 * Math.PI) / 180;
+  const articulation = createIssArticulation();
+  const nodes = createNodePoses();
+  for (const joint of [held, swaying])
+    articulation.setJoint(joint.node, joint.pivot, joint.axis, angle);
+  articulation.update(nodes, DATE, AT, AXES, 1_000);
+  articulation.update(nodes, DATE, AT, AXES, 2_000);
+  for (const joint of [held, swaying])
+    assert.deepEqual(
+      Array.from(nodes.poses[joint.node] ?? []),
+      posed(joint, angle),
+      `${joint.node} at the slider's angle`,
+    );
+  // Resumed, or reset, before the model is posed: nothing is kept.
+  for (const release of ['resumeArm', 'reset']) {
+    const later = createIssArticulation();
+    const fresh = createNodePoses();
+    for (const joint of [held, swaying])
+      later.setJoint(joint.node, joint.pivot, joint.axis, angle);
+    later[release]();
+    later.update(fresh, DATE, AT, AXES, 1_000);
+    assert.equal(fresh.poses[held.node], undefined, `${release}: filed pose`);
+    assert.notDeepEqual(
+      Array.from(fresh.poses[swaying.node]),
+      posed(swaying, angle),
+      `${release}: swaying again`,
+    );
+  }
+});
+
+test('Tiangong: an arm slider moved before the model is first posed reaches its joint once it is', () => {
+  const joint = TIANGONG_ARMS.cmm.find((entry) => entry.sway || entry.centre);
+  const angle = (30 * Math.PI) / 180;
+  const articulation = createTiangongArticulation();
+  const nodes = createNodePoses();
+  articulation.setJoint(joint.node, joint.pivot, joint.axis, angle);
+  articulation.update(nodes, DATE, AT, AXES, 1_000);
+  articulation.update(nodes, DATE, AT, AXES, 2_000);
+  assert.deepEqual(
+    Array.from(nodes.poses[joint.node] ?? []),
+    posed(joint, angle),
+    "at the slider's angle, the arm off its sway",
+  );
+  // Resumed, or reset, before the model is posed: the arm sways again.
+  for (const release of ['resumeArm', 'reset']) {
+    const later = createTiangongArticulation();
+    const fresh = createNodePoses();
+    later.setJoint(joint.node, joint.pivot, joint.axis, angle);
+    later[release]();
+    later.update(fresh, DATE, AT, AXES, 1_000);
+    assert.ok(fresh.poses[joint.node], `${release}: posed by the sway`);
+    assert.notDeepEqual(
+      Array.from(fresh.poses[joint.node]),
+      posed(joint, angle),
+      `${release}: swaying again`,
+    );
+  }
 });
 
 test('a node given no matrix leaves the item’s nodes, as a model node goes back to its authored pose', () => {

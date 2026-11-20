@@ -69,6 +69,10 @@ export function createStationPanel({
   let pumpUntil = 0;
   /** The last view published, as text: an unchanged view is not republished. */
   let publishedKey = null;
+  /** What the view last read per frame, as one string (see _publish). */
+  let builtFrom = null;
+  /** Set when an action or a new station changed the rest of the view. */
+  let dirty = true;
 
   function _stationShown() {
     if (!layerState._enabled) return null;
@@ -89,19 +93,32 @@ export function createStationPanel({
   }
 
   /**
-   * The telemetry status with its ages in whole seconds: the section words
-   * them so, and an age in ms would make every frame a change.
+   * An age in whole seconds: the section words it so, and an age in ms
+   * would make every frame a change.
    */
+  const wholeSecond = (ms) =>
+    Number.isFinite(ms) ? Math.floor(ms / 1000) * 1000 : ms;
+
+  /** The telemetry status with its ages in whole seconds. */
   function wholeSeconds(status) {
     if (!status) return status;
-    const second = (ms) =>
-      Number.isFinite(ms) ? Math.floor(ms / 1000) * 1000 : ms;
-    return { ...status, poseAgeMs: second(status.poseAgeMs) };
+    return { ...status, poseAgeMs: wholeSecond(status.poseAgeMs) };
+  }
+
+  /** Whether the zoom is offered: far from the station, on its follow. */
+  function _zoomOffered(station) {
+    const position = station.position();
+    const eye = position
+      ? (findCamera(layerState._viewer)?.pose?.()?.position ?? null)
+      : null;
+    const range = position && eye ? distance(eye, position) : null;
+    return range !== null && issCommandOffersZoom(range) && _cameraOnStation();
   }
 
   function _publish() {
     const station = current;
     if (!station) {
+      dirty = true;
       if (view !== null) {
         view = null;
         publishedKey = null;
@@ -110,22 +127,29 @@ export function createStationPanel({
       return;
     }
     const articulation = station.articulation();
-    const position = station.position();
-    const eye = position
-      ? (findCamera(layerState._viewer)?.pose?.()?.position ?? null)
-      : null;
-    const range = position && eye ? distance(eye, position) : null;
+    const status = station.telemetry();
+    const sunlit =
+      mode === 'manual' ? null : (articulation?.isSunlit?.() ?? null);
+    const live = Boolean(articulation?.isLive?.());
+    const offered = _zoomOffered(station);
+    const subject = station.subjectName();
+    // Called every frame from the tick. What the view reads per frame is
+    // checked first, as one string, and the view is built only when that
+    // moved or an action changed the rest. The subject goes last: the
+    // fields before it never hold the separator.
+    const inputs = `${station.key}|${mode}|${status?.state}|${wholeSecond(status?.poseAgeMs)}|${status?.liveUntilMs}|${sunlit}|${live}|${offered}|${subject}`;
+    if (!dirty && inputs === builtFrom) return;
+    dirty = false;
+    builtFrom = inputs;
     const next = {
       key: station.key,
       title: station.title,
-      subject: station.subjectName(),
+      subject,
       mode,
-      telemetry: wholeSeconds(station.telemetry()),
-      sunlit: mode === 'manual' ? null : (articulation?.isSunlit?.() ?? null),
+      telemetry: wholeSeconds(status),
+      sunlit,
       note:
-        (articulation?.isLive?.() ? station.notes?.live : null) ??
-        station.notes?.computed ??
-        '',
+        (live ? station.notes?.live : null) ?? station.notes?.computed ?? '',
       groups: station.groups.map((group) =>
         group.kind === 'choices'
           ? {
@@ -154,14 +178,10 @@ export function createStationPanel({
               })),
             },
       ),
-      zoom: {
-        offered:
-          range !== null && issCommandOffersZoom(range) && _cameraOnStation(),
-        label: station.zoomLabel,
-      },
+      zoom: { offered, label: station.zoomLabel },
     };
-    // Called every frame from the tick: the section re-renders only on a
-    // change (the age line moves once a second, the rest on an action).
+    // The section re-renders only on a change (the age line moves once a
+    // second, the rest on an action).
     const key = JSON.stringify(next);
     if (key === publishedKey) return;
     publishedKey = key;
@@ -260,6 +280,12 @@ export function createStationPanel({
     return true;
   }
 
+  /** An action changed what the view shows: build it again now. */
+  function _publishChange() {
+    dirty = true;
+    _publish();
+  }
+
   const actions = {
     setStationMode(next) {
       const articulation = current?.articulation();
@@ -273,7 +299,7 @@ export function createStationPanel({
         current.automatic(articulation);
       }
       _renderFor(20_000);
-      _publish();
+      _publishChange();
       return true;
     },
     chooseStation(groupId, choiceId) {
@@ -284,7 +310,7 @@ export function createStationPanel({
       choices.set(groupId, choiceId);
       choice.apply(articulation);
       _renderFor(20_000);
-      _publish();
+      _publishChange();
       return true;
     },
     slideStation(sliderId, value) {
@@ -299,7 +325,7 @@ export function createStationPanel({
       sliders.set(sliderId, clamped);
       slider.apply(articulation, clamped);
       _renderFor(2000);
-      _publish();
+      _publishChange();
       return true;
     },
     resumeStationArm(groupId) {
@@ -309,7 +335,7 @@ export function createStationPanel({
       for (const slider of group.sliders) sliders.set(slider.id, 0);
       group.resumeApply(articulation);
       _renderFor(20_000);
-      _publish();
+      _publishChange();
       return true;
     },
     zoomStation() {
@@ -334,6 +360,7 @@ export function createStationPanel({
       current = station;
       mode = 'automatic';
       _resetManual(station);
+      dirty = true;
       if (station) _tick();
     }
     _publish();

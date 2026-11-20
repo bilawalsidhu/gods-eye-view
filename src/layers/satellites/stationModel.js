@@ -3,7 +3,7 @@ import { fromRadians } from '../../geo/ellipsoid.js';
 import { headingPitchRollOfAxes } from '../../geo/frames.js';
 import { copyInto, distance, vec } from '../../geo/vector.js';
 import { canvasOf, drawOf, findCamera } from '../../render/rendererOf.js';
-import { stationTrackedOn } from './policy.js';
+import { stationTrackedOn, UNDOCK_RADIUS_FACTOR } from './policy.js';
 
 /**
  * A space station as a 3D model when the camera is close, driven by a
@@ -58,9 +58,6 @@ import { stationTrackedOn } from './policy.js';
  *   entry: (noradId: number|null) => number|null,
  *   dockedVehicle: number|null}) => object|null)|null} cockpitMount The
  *   Cockpit camera's views on the model, or null when the station has none.
- * @property {boolean} hideInCockpit Hide the model while the Cockpit rides
- *   the station: true where its camera would sit inside the hull, false
- *   where it rides a mount on the model.
  * @property {(() => void)|null} syncOrbit Puts the station's ring back to
  *   its own rules on leaving the close-up; null for the layer's orbit toggle
  *   (a ring that exists only while the station is tracked).
@@ -82,10 +79,11 @@ export const STATION_MODEL_RETRY_AFTER_MS = 30_000;
 
 /**
  * Whether a station model may be drawn: the dot's own rules (layer on, points
- * on, the station loaded and its class shown or the station tracked), and
- * not while the Cockpit hides it.
+ * on, the station loaded and its class shown or the station tracked). The
+ * Cockpit rides a station from views on its model, so the model stays
+ * drawn then.
  * @param {{enabled: boolean, showPoints: boolean, hasStation: boolean,
- *   classVisible: boolean, tracked: boolean, cockpitHidden: boolean}} input
+ *   classVisible: boolean, tracked: boolean}} input
  * @returns {boolean}
  */
 export function stationModelShouldShow({
@@ -94,14 +92,12 @@ export function stationModelShouldShow({
   hasStation,
   classVisible,
   tracked,
-  cockpitHidden,
 }) {
   return (
     Boolean(enabled) &&
     Boolean(showPoints) &&
     Boolean(hasStation) &&
-    (Boolean(classVisible) || Boolean(tracked)) &&
-    !cockpitHidden
+    (Boolean(classVisible) || Boolean(tracked))
   );
 }
 
@@ -281,19 +277,12 @@ export function createStationModel(
   let visualValid = false;
 
   function _shouldShow() {
-    const tracked = layerState._trackedNorad === norad;
     return stationModelShouldShow({
       enabled: layerState._enabled,
       showPoints: layerState._params.showPoints,
       hasStation: layerState._catalog.has(norad),
       classVisible: parts.controls._classVisible(norad),
-      tracked,
-      // With no mounts on the model the Cockpit camera would sit inside the
-      // hull, so the model goes while the Cockpit rides the station.
-      cockpitHidden:
-        spec.hideInCockpit &&
-        Boolean(parts.cockpit?._cockpitHeld?.()) &&
-        _trackedOnStation(),
+      tracked: layerState._trackedNorad === norad,
     });
   }
 
@@ -451,7 +440,9 @@ export function createStationModel(
             teme.z - stationTeme.z,
           ) *
             1000 <=
-            spec.companionRadiusM;
+            // Docked, it stays so until well clear (UNDOCK_RADIUS_FACTOR).
+            spec.companionRadiusM *
+              (dockedByOrbit.has(noradId) ? UNDOCK_RADIUS_FACTOR : 1);
       }
       if (docked) dockedByOrbit.add(noradId);
       else dockedByOrbit.delete(noradId);
@@ -474,19 +465,21 @@ export function createStationModel(
     handedCompanions.clear();
   }
 
+  /** Whether the layer's rings show: the layer on and its orbit toggle on. */
+  function _orbitsShown() {
+    return parts.controls.satelliteVisualsVisible(
+      layerState._enabled,
+      layerState._params.showOrbits,
+    );
+  }
+
   /** The station's ring back to its own rules (see `syncOrbit`). */
   function _restoreOrbit() {
     if (spec.syncOrbit) {
       spec.syncOrbit();
       return;
     }
-    parts.rendering._setOrbitPathShown(
-      norad,
-      parts.controls.satelliteVisualsVisible(
-        layerState._enabled,
-        layerState._params.showOrbits,
-      ),
-    );
+    parts.rendering._setOrbitPathShown(norad, _orbitsShown());
   }
 
   /**
@@ -509,12 +502,13 @@ export function createStationModel(
     const companion =
       near && tracked !== norad && _trackedOnStation() ? tracked : null;
     if (companionRingHidden !== null && companionRingHidden !== companion) {
-      // A tracked satellite's ring shows; untracking has already hidden it.
+      // A tracked satellite's ring is back on the layer's orbit toggle, as
+      // it was built; untracking has already removed it.
       if (
         tracked === companionRingHidden &&
         layerState._cockpitHiddenPath !== companionRingHidden
       )
-        parts.rendering._setOrbitPathShown(companionRingHidden, true);
+        parts.rendering._setOrbitPathShown(companionRingHidden, _orbitsShown());
       companionRingHidden = null;
     }
     if (companion !== null) {
@@ -634,9 +628,8 @@ export function createStationModel(
    */
   function _updateStationModel() {
     visualValid = false;
-    // The docked set first: whether the model may show (the Cockpit riding
-    // the station) is read from it, so it is kept current before that. Once
-    // a second; the dots are handed over or given back with the scan.
+    // The docked set, once a second, whether or not the model may show; the
+    // dots are handed over or given back with the scan.
     if (item) _scanCompanions(Date.now(), handingOver);
     const show = _shouldShow();
     if (!show) {
@@ -670,10 +663,14 @@ export function createStationModel(
         _load(dotPosition);
       return;
     }
+    // Out of range the model would not draw anyway: no SGP4 sample is taken.
+    const inRange = cameraDistance <= spec.maxDistanceM * 1.5;
+    const frame = ready && inRange ? _stationFrame(scratchPosition) : null;
     // Until the renderer has the model loaded and posed, the dots stand at
     // every distance: the station never goes dark while the file loads, nor
-    // for good when it fails to.
-    if (!ready) {
+    // for good when it fails to. They do so too while the orbit will not
+    // propagate: there is nowhere to draw the model.
+    if (!ready || (inRange && !frame)) {
       _hide();
       _releaseDots();
       if (handedCompanions.size) _releaseCompanions();
@@ -685,8 +682,11 @@ export function createStationModel(
           (spec.retryAfterMs ?? STATION_MODEL_RETRY_AFTER_MS)
       )
         _unload(); // asked for again on the next frame in range
-      else if (cameraDistance > spec.maxDistanceM * 1.5) _undrawn();
-      else undrawnSince = null;
+      // In range, a model still loading, or one with no orbit to draw it on,
+      // is waited for: released, it would be asked for again on the next
+      // frame. One not drawn otherwise is released after a while.
+      else if (inRange) undrawnSince = null;
+      else _undrawn();
       return;
     }
     // The docked dots are the model's within its range: handed over at
@@ -698,22 +698,13 @@ export function createStationModel(
     }
     _handOverDots();
     _syncOrbitCloseUp(cameraDistance < spec.orbitHideM);
-    // Out of range the model would not draw anyway: skip the SGP4 sample.
-    if (cameraDistance > spec.maxDistanceM * 1.5) {
+    if (!frame) {
+      // Out of range: not drawn, and beyond its range the dots draw.
       _hide();
       _undrawn();
       return;
     }
     undrawnSince = null;
-
-    const frame = _stationFrame(scratchPosition);
-    if (!frame) {
-      // Nowhere to draw the model (the orbit would not propagate): the dots
-      // draw at every distance rather than nothing at all.
-      _hide();
-      _releaseDots();
-      return;
-    }
     const { date, axes } = frame;
     copyInto(scratchPosition, visualPosition);
     copyInto(scratchPosition, item.pos);

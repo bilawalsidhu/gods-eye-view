@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { clientNetworkKey, makeRateLimiter } from '../common/rate-limit.js';
+import { clientNetworkKey } from '../common/rate-limit.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 
 /**
@@ -89,6 +89,19 @@ const MAX_FRAME_BYTES = 64 * 1024;
 const TICK_MS = 5_000;
 
 /**
+ * Requests a minute one address may make. A tab asks every 5 s while the
+ * model is drawn, so this is about 20 tabs: behind a reverse proxy or the
+ * Docker bridge every browser shares one address.
+ */
+const PER_ADDRESS_PER_MIN = 240;
+/** Requests a minute from everyone together: about 1,000 tabs. */
+const TOTAL_PER_MIN = 12_000;
+/** The limits' window, counted in one-second buckets. */
+const WINDOW_S = 60;
+/** Addresses counted at most; past it the longest idle one is forgotten. */
+const MAX_ADDRESSES = 2000;
+
+/**
  * Whether the operator switched the relay on. Only "1" does.
  * @param {Record<string, string|undefined>} [env]
  * @returns {boolean}
@@ -169,6 +182,8 @@ export function parseTlcpUpdate(line, previousOf, fieldCount) {
 export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
   /** @type {Map<string, {value: number, at: number|null}>} */
   const values = new Map();
+  /** `values` as the JSON the route serves, or null after they changed. */
+  let itemsText = null;
   /** Per item index, the raw field values the next update is decoded against. */
   const fields = new Map();
   let socket = null;
@@ -193,6 +208,7 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     // A replacement session must rebuild both its joint snapshot and signal
     // credit; a new clock tick cannot make the old session's angles live.
     values.clear();
+    itemsText = null;
     signalAt = null;
     signalClass = null;
     try {
@@ -252,6 +268,7 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
           ? null
           : issTelemetryTimeMs(Number(stamp), at),
     });
+    itemsText = null;
   }
 
   function connect() {
@@ -333,17 +350,42 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
       : 'no-signal';
   }
 
-  /** The body served to browsers: each item's `[value, epoch ms it was true at]`. */
+  /** Each item's `[value, epoch ms it was true at]`, by name. */
+  function items() {
+    const out = {};
+    for (const [name, { value, at }] of values) out[name] = [value, at];
+    return out;
+  }
+
+  /**
+   * The body served to browsers, as an object. The route sends
+   * `snapshotText()` instead; this stays as its reference, which a test holds
+   * the text to, so it is not dead code.
+   */
   function snapshot() {
-    const items = {};
-    for (const [name, { value, at }] of values) items[name] = [value, at];
-    return { configured: true, status: status(), generatedAt: now(), items };
+    return {
+      configured: true,
+      status: status(),
+      generatedAt: now(),
+      items: items(),
+    };
+  }
+
+  /**
+   * The snapshot as the route sends it: the text `JSON.stringify` makes of
+   * it, with the items encoded again only after they change rather than on
+   * every request. The status is one of a few fixed words.
+   */
+  function snapshotText() {
+    itemsText ??= JSON.stringify(items());
+    return `{"configured":true,"status":"${status()}","generatedAt":${now()},"items":${itemsText}}`;
   }
 
   /** Close the connection and forget what it said. */
   function dispose() {
     drop();
     values.clear();
+    itemsText = null;
     lastDemandAt = null;
     signalAt = null;
     signalClass = null;
@@ -352,7 +394,97 @@ export function createIssTelemetryRelay({ createSocket, now = Date.now }) {
     unavailable = false;
   }
 
-  return { demand, tick, snapshot, dispose };
+  return { demand, tick, snapshot, snapshotText, dispose };
+}
+
+/** A minute of request counts, one bucket per second, as of `second`. */
+function minuteCount(second) {
+  return { buckets: new Uint32Array(WINDOW_S), total: 0, second };
+}
+
+/**
+ * Move a count on to `second`, emptying the buckets that left the minute. A
+ * clock stepped back (NTP, a resumed machine) starts a fresh minute: the
+ * old buckets would otherwise never age out until real time caught up.
+ */
+function slide(count, second) {
+  if (second === count.second) return;
+  if (second < count.second || second - count.second >= WINDOW_S) {
+    count.buckets.fill(0);
+    count.total = 0;
+  } else
+    for (let s = count.second + 1; s <= second; s++) {
+      count.total -= count.buckets[s % WINDOW_S];
+      count.buckets[s % WINDOW_S] = 0;
+    }
+  count.second = second;
+}
+
+/** Count one request in the count's current second. */
+function add(count) {
+  count.buckets[count.second % WINDOW_S] += 1;
+  count.total += 1;
+}
+
+/** Whole seconds until the count is under `cap` again. */
+function secondsUnder(count, cap) {
+  let left = count.total;
+  for (let ahead = 1; ahead < WINDOW_S; ahead++) {
+    left -= count.buckets[(count.second + ahead) % WINDOW_S];
+    if (left < cap) return ahead;
+  }
+  return WINDOW_S;
+}
+
+/**
+ * The route's admission: at most `perAddress` requests a minute from one
+ * client key and `total` from everyone. The counts are kept per second, so
+ * a request costs the same however busy the minute is; the shared limiter
+ * (src/sources/rateLimit.js) filters every time stamp in the window on each
+ * call, which grows with the traffic.
+ * @param {{perAddress?: number, total?: number, now?: () => number}} [options]
+ * @returns {((key: string) => number) & {addresses: () => number}} 0 when
+ *   the request is admitted, else the whole seconds until one would be;
+ *   `addresses()` is how many keys it counts now, idle ones forgotten.
+ */
+export function createIssTelemetryLimiter({
+  perAddress = PER_ADDRESS_PER_MIN,
+  total = TOTAL_PER_MIN,
+  now = Date.now,
+} = {}) {
+  let everyone = null;
+  /** Per key, the most recent asker last, so the idle ones come first. */
+  const keys = new Map();
+  admit.addresses = () => keys.size;
+  return admit;
+
+  function admit(key) {
+    const second = Math.floor(now() / 1000);
+    everyone ??= minuteCount(second);
+    slide(everyone, second);
+    // Forget the keys idle for a whole window: they lead the map.
+    for (const [idle, count] of keys) {
+      if (second - count.second < WINDOW_S) break;
+      keys.delete(idle);
+    }
+    let mine = keys.get(key);
+    if (mine) {
+      slide(mine, second);
+      keys.delete(key);
+      keys.set(key, mine);
+    }
+    if (everyone.total >= total) return secondsUnder(everyone, total);
+    if (mine && mine.total >= perAddress) return secondsUnder(mine, perAddress);
+    if (!mine) {
+      // Past the cap, the longest idle key makes room.
+      if (keys.size >= MAX_ADDRESSES) keys.delete(keys.keys().next().value);
+      mine = minuteCount(second);
+      keys.set(key, mine);
+    }
+    add(mine);
+    add(everyone);
+    return 0;
+  }
 }
 
 let webSocketImpl;
@@ -375,12 +507,18 @@ function loadWebSocket() {
   return webSocketImpl;
 }
 
-function json(res, status, body) {
+/** Send JSON text that is already encoded. */
+function send(res, status, text, headers = {}) {
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Cache-Control': 'no-store',
+    ...headers,
   });
-  res.end(JSON.stringify(body));
+  res.end(text);
+}
+
+function json(res, status, body, headers) {
+  send(res, status, JSON.stringify(body), headers);
 }
 
 /**
@@ -405,8 +543,9 @@ export function issTelemetryProxy({
   now = Date.now,
 } = {}) {
   const relay = createIssTelemetryRelay({ createSocket, now });
-  // A browser polls every few seconds; this leaves room for several tabs.
-  const allow = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 1200 });
+  // An answer is local work and never reaches NASA, so the caps only keep
+  // one client, or a flood, from tying up the server.
+  const admit = createIssTelemetryLimiter({ now });
   let timer = null;
 
   function stop() {
@@ -443,13 +582,20 @@ export function issTelemetryProxy({
       return;
     }
     // IPv6 clients fold to their /64, so one host cannot spread across it.
-    if (!allow(clientNetworkKey(req))) {
-      json(res, 429, { error: 'Too Many Requests' });
+    const wait = admit(clientNetworkKey(req));
+    if (wait > 0) {
+      // Busy, not down: the browser asks again once there is room.
+      json(
+        res,
+        429,
+        { error: 'Too Many Requests' },
+        { 'Retry-After': String(wait) },
+      );
       return;
     }
     relay.demand();
     watch();
-    json(res, 200, relay.snapshot());
+    send(res, 200, relay.snapshotText());
   }
 
   function install(server) {
