@@ -8,7 +8,11 @@ export const WPI_MIRROR_URL =
 
 export const PORT_FACILITIES = Object.freeze([
   Object.freeze({ id: 'container', key: 'fac_container', label: 'Container' }),
-  Object.freeze({ id: 'solid-bulk', key: 'fac_solidbulk', label: 'Solid bulk' }),
+  Object.freeze({
+    id: 'solid-bulk',
+    key: 'fac_solidbulk',
+    label: 'Solid bulk',
+  }),
   Object.freeze({ id: 'oil', key: 'fac_oilterm', label: 'Oil terminal' }),
   Object.freeze({ id: 'lng', key: 'fac_lngterm', label: 'LNG terminal' }),
 ]);
