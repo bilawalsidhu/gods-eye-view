@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PANORAMAX_SOURCES, createPanoramaxViewer } from './viewer.js';
 import { normalizeItem } from './policy.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
 import { stacItem } from '../../../../testSupport/panoramaxFixtures.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const photo = (options) =>
   normalizeItem(stacItem({ lon: 2.35, lat: 48.85, ...options }));

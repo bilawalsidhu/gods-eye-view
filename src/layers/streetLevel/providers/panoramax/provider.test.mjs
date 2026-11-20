@@ -18,6 +18,7 @@ import {
   drawn,
   fakeHost,
   until,
+  resetPhotoView,
 } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
@@ -30,6 +31,9 @@ import {
   encodePanoramaxTile,
   stacItem,
 } from '../../../../testSupport/panoramaxFixtures.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const ORIGIN = { lon: 2.3495, lat: 48.8874 };
 /** A point `metres` east of ORIGIN. */

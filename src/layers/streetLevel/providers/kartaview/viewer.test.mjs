@@ -5,7 +5,11 @@ import {
   drawn,
   fakeHost,
   until,
+  resetPhotoView,
 } from '../../../../testSupport/kartaViewFakes.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const PHOTOS = {
   flat1: {
