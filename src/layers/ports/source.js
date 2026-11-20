@@ -12,7 +12,9 @@ export function createPortsSource({
         cache: 'no-store',
       });
       if (!response?.ok)
-        throw new Error(`World Port Index unavailable (HTTP ${response?.status})`);
+        throw new Error(
+          `World Port Index unavailable (HTTP ${response?.status})`,
+        );
       const payload = await readResponseJsonCapped(
         response,
         9 * 1024 * 1024,
