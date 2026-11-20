@@ -262,6 +262,8 @@ export function createStubRenderer(options = {}) {
   camera.setViewRectangle(viewRectangle);
   if (capabilities.has('followFrame'))
     camera.port.followFrame = camera.eyeFrame;
+  if (capabilities.has('pointVisibility'))
+    camera.port.visiblePoints = () => null;
   camera.port.setView({
     destination: { lon: -97.7431, lat: 30.2672, height: 15000000 },
   });
