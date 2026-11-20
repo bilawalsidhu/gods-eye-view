@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance, dot } from '../../geo/vector.js';
-import { canvasOf, findCamera } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findGlobe } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
@@ -23,8 +23,14 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const { resolvePickId, registerPickOwner, unregisterPickOwner, clickCard } =
-    services.picking;
+  const {
+    resolvePickId,
+    registerPickOwner,
+    unregisterPickOwner,
+    clickCard,
+    registerClickClaim,
+    unregisterClickClaim,
+  } = services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
@@ -103,6 +109,30 @@ export function createLifecycle({
    * listeners to its camera; one against the same viewer keeps them.
    */
   function attachViewListeners() {
+    const globe = findGlobe(layerState._viewer);
+    if (layerState._surfaceListenerGlobe !== globe) {
+      layerState._surfaceListener?.();
+      layerState._surfaceListener = null;
+      layerState._surfaceListenerGlobe = globe;
+    }
+    if (!layerState._surfaceListener && globe?.on) {
+      // Refresh drawn heights when terrain finishes loading or the surface changes.
+      let version = globe.surfaceVersion?.();
+      let terrainPending = globe.isSettled?.('terrain') === false ? 1 : 0;
+      layerState._surfaceListener = globe.on('progress', (progress) => {
+        const next = globe.surfaceVersion?.();
+        const loaded = progress?.terrainPending === 0 && terrainPending !== 0;
+        const swapped = next !== version;
+        version = next;
+        terrainPending = progress?.terrainPending ?? terrainPending;
+        if (
+          (loaded || swapped) &&
+          layerState._enabled &&
+          !layerState._cameraMoving
+        )
+          settleView();
+      });
+    }
     const viewCamera = findCamera(layerState._viewer);
     if (
       layerState._viewListenerCamera &&
@@ -140,6 +170,9 @@ export function createLifecycle({
 
   /** Drop the move listeners; nothing reports the end of a move after it. */
   function detachViewListeners() {
+    layerState._surfaceListener?.();
+    layerState._surfaceListener = null;
+    layerState._surfaceListenerGlobe = null;
     layerState._horizonCullListener?.();
     layerState._horizonCullListener = null;
     layerState._moveStartListener?.();
@@ -163,9 +196,11 @@ export function createLifecycle({
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
+    layerState._pickerRecords = [];
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    layerState._coverageCohort = null;
     layerState._viewUnpublished = false;
     layerState._viewPose = null;
     layerState._viewMotionPass = null;
@@ -285,9 +320,8 @@ export function createLifecycle({
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
-          //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
-          //     (null until a late batch lands). The prior applies in EVERY
-          //     regime and is the terrain-globe resolution outright.
+          //   groundPrior — { ellipsoid, source } from the Re:Earth batch, or
+          //     drawn-terrain with its read conditions for an unanswered camera.
           //   groundResolved  — PER-REGIME one-shot latch (regime key →
           //     boolean): true once this record's resolution completed for that
           //     regime; such records are excluded from the completion pass so
@@ -386,6 +420,7 @@ export function createLifecycle({
       parts.rendering.refreshHorizonCulling();
 
       const input = inputFor(layerState._viewer);
+      layerState._clickSubscription?.();
       const unsubscribeClick = parts.selection.bindCctvWorldClickGesture(
         input,
         (event) => {
@@ -481,6 +516,7 @@ export function createLifecycle({
           );
         return Boolean(coverage && layerState._recordById.has(coverage[1]));
       });
+      registerClickClaim?.('cctv', parts.selection.countClickCard);
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;
@@ -517,6 +553,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
@@ -532,6 +569,7 @@ export function createLifecycle({
       parts.rendering.hideCctvVisuals();
       // Nothing is in view while the layer is off.
       layerState._viewRecords = [];
+      layerState._pickerRecords = [];
       layerState._cameraIndexCache = null;
       parts.presentation.notifyListeners();
     },
@@ -550,6 +588,7 @@ export function createLifecycle({
           parts.cards.handleVisibilityChange,
         );
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       if (layerState._mapStackListener && typeof window !== 'undefined') {
         window.removeEventListener(
           'gev:map-stack-changed',

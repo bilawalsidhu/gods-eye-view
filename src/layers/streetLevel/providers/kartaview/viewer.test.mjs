@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createKartaViewViewer, loadImage, panoSizeFor } from './viewer.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  drawn,
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const PHOTOS = {
   flat1: {
@@ -148,7 +156,7 @@ function setup({
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   return {
     viewer,
     poses,
@@ -223,6 +231,7 @@ test('a flat photo shows its 1280 px version, then the sharp one, with a pose fa
   assert.equal(picture.src, loads[1].url, 'upgraded to the sharp version');
   assert.equal(viewer.supportsRenderModes(), true);
   viewer.setRenderMode('fill');
+  await drawn();
   assert.equal(picture.style.objectFit, 'cover');
 });
 
@@ -357,12 +366,14 @@ test('a newer open wins; close hides the photo; unmount tears down the panorama'
   assert.equal(renderers.length, 0, 'nor built a WebGL context');
   await viewer.open('pano1');
   viewer.close();
+  await drawn();
   const { picture, canvas, root } = parts(host);
   assert.equal(canvas.hidden, true);
   assert.equal(picture.hidden, true);
   assert.equal(root.dataset.kind, '');
   await assert.rejects(viewer.open('nope'), /no such photo/);
   viewer.unmount();
+  await drawn();
   assert.equal(host.children.length, 0);
   assert.equal(renderers[0].destroyed, true);
   await assert.rejects(viewer.open('flat1'), /not mounted/);
@@ -463,12 +474,14 @@ test('a lost WebGL context drops the panorama and shows the photo again on a new
   const lost = parts(host).canvas;
   lost.fire('webglcontextlost');
   assert.equal(renderers[0].destroyed, true);
+  await drawn();
   // A lost canvas only ever gives back its lost context: a new element.
   assert.notEqual(parts(host).canvas, lost);
   assert.deepEqual(stepped, ['pano1'], 'reopened through the core');
   assert.ok(await until(() => renderers.length === 2), 'a new renderer');
   assert.equal(renderers[1].canvas, parts(host).canvas);
   assert.equal(poses.at(-1).imageId, 'pano1');
+  await drawn();
   assert.equal(parts(host).canvas.hidden, false);
 });
 
@@ -498,7 +511,7 @@ test('a WebGL failure only lasts until the viewer is mounted again', async () =>
       return renderer;
     },
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   await viewer.open('pano1');
   assert.equal(parts(host).picture.hidden, false, 'front view');
@@ -589,7 +602,7 @@ function heldSetup({ slowSteps = false } = {}) {
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose.imageId));
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   /** Let the load showing `what` (e.g. 'a@1280') finish. */
   const release = async (what) => {
     assert.ok(
@@ -798,7 +811,7 @@ function heldPanoSetup(held) {
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
-  return { viewer, renderers, stepped, poses, host: fakeHost(), release };
+  return { viewer, renderers, stepped, poses, host: fakeHost(viewer), release };
 }
 
 const pano2Preview = Buffer.from(
@@ -931,7 +944,7 @@ test('a docked viewer keeps the 1,280 px photo; expanding it brings the 2,560 px
   viewer.resize();
   assert.ok(await until(() => loads.length === 2));
   assert.match(loads[1].url, /rs:fit:2560:2560/);
-  assert.equal(parts(host).picture.src, loads[1].url);
+  assert.ok(await until(() => parts(host).picture.src === loads[1].url));
   viewer.resize();
   for (let i = 0; i < 4; i++) await settle();
   assert.equal(loads.length, 2, 'once only');

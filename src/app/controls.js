@@ -21,6 +21,8 @@ export { START_VIEW };
  * `homeView` is where the title's logo goes back to (with the clock live): the
  * start view unless given, for a host whose `startView` only carries a view
  * across a rebuild.
+ * `startLayers` are the layer ids a bare address (one that carries no link)
+ * starts with: none by default; a host may pass `['flights', 'satellites']`.
  * `services.cockpitSubjects` adds the application's own first-person subjects
  * to the Cockpit (src/cockpitSubjectProviders.js).
  */
@@ -36,6 +38,7 @@ export function createApplicationControls({
   localePicker = true,
   startView = START_VIEW,
   homeView = startView,
+  startLayers = [],
 }) {
   // Every boot starts from the same view, before share restoration flies on.
   applyStartView(viewer, startView);
@@ -59,6 +62,7 @@ export function createApplicationControls({
     initialShareCode,
     localePicker,
     homeView,
+    startLayers,
   });
   defer(() => styleManager.orbitController.stop());
   defer(() => styleManager.hud.destroy());

@@ -6,6 +6,7 @@ import { createInfrastructureLayers } from 'gods-eye-view/infrastructure';
 import { createLocalGeoJsonLayer } from 'gods-eye-view/infrastructure/geojson';
 import { fakeInput } from '../input/testDoubles.mjs';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { parseGeojsonLines } from '../sources/infrastructureData.js';
 
 function services() {
   const records = new Map();
@@ -33,6 +34,20 @@ function services() {
     selection: () => selection,
   };
 }
+
+// Added from the OSM API, not the OpenInfraMap extract: [id, name, OSM
+// object, version]. Both must stay polygons: the Dams layer skips
+// LineStrings.
+const OSM_API_DAMS = [
+  [262532166, 'Acaray', 'way/262532166', 7],
+  [-5671745, 'Represa Yacyretá-Apipé', 'relation/5671745', 2],
+];
+const DAMS = parseGeojsonLines(
+  readFileSync(
+    new URL('./local_data/dams/dams.geojsonl', import.meta.url),
+    'utf8',
+  ),
+);
 
 test('package exports import without an application, DOM, fetch, or timers', () => {
   const result = spawnSync(
@@ -66,7 +81,11 @@ test('infrastructure factory preserves identity and creates independent state wi
     first.map(({ id, name, source }) => ({ id, name, source })),
     [
       { id: 'local-datacenters', name: 'Datacenters', source: 'Local' },
-      { id: 'local-dams', name: 'Dams', source: 'USACE' },
+      {
+        id: 'local-dams',
+        name: 'Dams',
+        source: 'OpenStreetMap / OpenInfraMap',
+      },
     ],
   );
   first.forEach((layer, index) => {
@@ -84,7 +103,7 @@ test('infrastructure factory preserves identity and creates independent state wi
 test('dataset URLs still name the complete bundled sources', () => {
   for (const [file, count] of [
     ['datacenters', 4352],
-    ['dams', 704],
+    ['dams', 706],
   ]) {
     const lines = readFileSync(
       new URL(`./local_data/${file}/${file}.geojsonl`, import.meta.url),
@@ -94,6 +113,64 @@ test('dataset URLs still name the complete bundled sources', () => {
       .filter((line) => line.trim());
     assert.equal(lines.length, count);
   }
+});
+
+test('Acaray and Yacyretá appear once each with OSM provenance', () => {
+  for (const [id, name, object, version] of OSM_API_DAMS) {
+    const matches = DAMS.filter((feature) => feature.id === id);
+    assert.equal(matches.length, 1);
+    const { properties } = matches[0];
+    assert.equal(properties.name, name);
+    assert.equal(properties.osm_id, id);
+    assert.equal(properties.source_version, version);
+    assert.equal(
+      properties.source_url,
+      `https://www.openstreetmap.org/${object}`,
+    );
+    assert.equal(properties.retrieved_at, '2026-10-15');
+  }
+});
+
+test('Acaray and Yacyretá each get a stem, a selection context and an analyst record', async (t) => {
+  const added = DAMS.filter((feature) =>
+    OSM_API_DAMS.some(([id]) => id === feature.id),
+  );
+  t.mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    text: async () =>
+      added.map((feature) => JSON.stringify(feature)).join('\n'),
+  }));
+  const host = services();
+  const layer = createLocalGeoJsonLayer(
+    {
+      id: 'local-dams',
+      name: 'Dams',
+      osmDerived: true,
+      color: '#0088ff',
+      url: '/dams.geojsonl',
+    },
+    host,
+  );
+  const viewer = {
+    scene: { screenSpaceCameraController: { enableInputs: true } },
+  };
+  const fake = bindFakeGroundRenderer(viewer);
+  fakeInput(viewer);
+  t.after(() => layer.destroy(viewer));
+  await layer.enable(viewer);
+  const names = OSM_API_DAMS.map(([, name]) => name).sort();
+  assert.equal(fake.set('stems').items.size, 2, 'both dams get a stem');
+  assert.deepEqual(
+    [...host.records.values()].map((record) => record.label).sort(),
+    names,
+  );
+  assert.deepEqual(
+    layer
+      .getAnalystRecords()
+      .map((record) => record.name)
+      .sort(),
+    names,
+  );
 });
 
 test('two viewers use their supplied contexts and dispose independently', async (t) => {

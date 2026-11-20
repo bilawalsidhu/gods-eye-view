@@ -9,6 +9,7 @@ import {
 } from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
+import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
 
@@ -177,13 +178,20 @@ export function createWeatherShell({
   drawOf = findDraw,
   cameraOf = findCamera,
   frameOf = findFrame,
-  maxTextureSize = rendererOf(viewer)?.quality?.device?.().maxTextureSize ?? 0,
+  maxTextureSize,
   frameSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
-  const size = fitTexture(WEATHER_IMAGE_SIZES[product], maxTextureSize);
-  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, maxTextureSize);
+  // Read in the body, not as the parameter's default: an optional method call
+  // in a default parameter is compiled for older browsers into code that
+  // throws (esbuild).
+  const textureLimit =
+    maxTextureSize === undefined
+      ? (rendererOf(viewer)?.quality?.device?.().maxTextureSize ?? 0)
+      : maxTextureSize;
+  const size = fitTexture(WEATHER_IMAGE_SIZES[product], textureLimit);
+  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, textureLimit);
   const infrared = product === 'clouds' || product === 'clouds-regional';
   // Global infrared contrast depends on the requested extent, so a window would
   // not match the image around it; the globe host also shows one mosaic.
@@ -250,6 +258,7 @@ export function createWeatherShell({
       heightM: height,
       alpha,
       detail: null,
+      shows: WEATHER_IMAGERY_SHOWS[product],
     });
     fieldAlpha = alpha;
     owed = true;
