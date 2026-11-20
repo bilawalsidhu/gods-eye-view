@@ -262,6 +262,117 @@ test('traffic refuses cross-site requests in dev and preview before spending the
   }
 });
 
+test('traffic falls back to the Orbis flow endpoint when TomTom refuses the key on the TomTom Maps one', async (t) => {
+  isolate(t, { TOMTOM_API_KEY: 'orbis-only', TOMTOM_DAILY_TILE_BUDGET: '' });
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (raw, init = {}) => {
+    const url = new URL(raw);
+    const orbis = url.pathname.startsWith('/maps/orbis/');
+    calls.push(orbis ? 'orbis' : 'legacy');
+    if (orbis) {
+      assert.match(
+        url.pathname,
+        /^\/maps\/orbis\/traffic\/flow\/vector\/tile\/8\/[12]\/1$/,
+        'no .pbf suffix or flow style on Orbis',
+      );
+      assert.equal(url.searchParams.get('apiVersion'), '2');
+      assert.equal(url.searchParams.get('key'), null);
+      assert.equal(init.headers['TomTom-Api-Key'], 'orbis-only');
+      return new Response(new Uint8Array([4, 5, 6]));
+    }
+    assert.equal(url.pathname, '/traffic/map/4/tile/flow/relative/8/1/1.pbf');
+    assert.equal(url.searchParams.get('key'), 'orbis-only');
+    return Response.json(
+      { detailedError: { code: 'Forbidden' } },
+      { status: 403 },
+    );
+  });
+  const request = install(tomtomProxy());
+  const first = await request('/flow/8/1/1.pbf');
+  assert.equal(first.status, 200);
+  assert.equal(first.headers['x-tomtom-cache'], 'MISS');
+  assert.deepEqual([...first.body], [4, 5, 6]);
+  assert.deepEqual(calls, ['legacy', 'orbis']);
+  assert.equal(json(await request('/status')).keyRejected, false);
+  // Both attempts were real upstream requests.
+  assert.equal(json(await request('/status')).dailyCount, 2);
+  // The working endpoint is remembered: no second 403 per tile.
+  calls.length = 0;
+  process.env.TOMTOM_API_KEY = 'orbis-only';
+  assert.equal((await request('/flow/8/2/1.pbf')).status, 200);
+  assert.deepEqual(calls, ['orbis']);
+  // A new key starts over on the TomTom Maps endpoint.
+  calls.length = 0;
+  process.env.TOMTOM_API_KEY = 'another-key';
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    calls.push(
+      new URL(raw).pathname.startsWith('/maps/orbis/') ? 'orbis' : 'legacy',
+    );
+    return new Response(new Uint8Array([7]));
+  });
+  assert.equal((await request('/flow/8/3/1.pbf')).status, 200);
+  assert.deepEqual(calls, ['legacy']);
+});
+
+test('traffic names a key both TomTom flow endpoints refuse and stops spending the budget on it', async (t) => {
+  isolate(t, { TOMTOM_API_KEY: 'refused', TOMTOM_DAILY_TILE_BUDGET: '' });
+  let now = Date.UTC(2026, 10, 20, 12);
+  t.mock.method(Date, 'now', () => now);
+  let calls = 0;
+  let status = 403;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return status === 200
+      ? new Response(new Uint8Array([1]))
+      : new Response('{}', { status });
+  });
+  const request = install(tomtomProxy());
+  assert.equal(json(await request('/status')).keyRejected, false);
+  const refused = await request('/flow/8/1/1.pbf');
+  assert.equal(refused.status, 403);
+  assert.deepEqual(json(refused), { error: 'key_rejected' });
+  assert.equal(calls, 2, 'one attempt per endpoint');
+  // Other tiles answer from the verdict, without asking TomTom again.
+  for (const x of [2, 3, 4])
+    assert.deepEqual(json(await request(`/flow/8/${x}/1.pbf`)), {
+      error: 'key_rejected',
+    });
+  assert.equal(calls, 2);
+  const state = json(await request('/status'));
+  assert.equal(state.hasKey, true);
+  assert.equal(state.keyRejected, true);
+  assert.equal(state.dailyCount, 2);
+  // The verdict expires, so a key fixed at TomTom recovers without a restart.
+  now += 5 * 60_000 + 1;
+  status = 200;
+  assert.equal((await request('/flow/8/1/1.pbf')).status, 200);
+  assert.equal(json(await request('/status')).keyRejected, false);
+  // A replaced key is tried at once.
+  status = 403;
+  now += 120_001;
+  assert.equal((await request('/flow/8/5/1.pbf')).status, 403);
+  process.env.TOMTOM_API_KEY = 'replacement';
+  status = 200;
+  assert.equal((await request('/flow/8/6/1.pbf')).status, 200);
+});
+
+test('traffic keeps an ordinary upstream failure on one endpoint and reports it as upstream', async (t) => {
+  isolate(t, { TOMTOM_API_KEY: 'fixture-key', TOMTOM_DAILY_TILE_BUDGET: '' });
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (raw) => {
+    calls.push(
+      new URL(raw).pathname.startsWith('/maps/orbis/') ? 'orbis' : 'legacy',
+    );
+    return new Response('', { status: 500 });
+  });
+  const request = install(tomtomProxy());
+  const res = await request('/flow/8/1/1.pbf');
+  assert.equal(res.status, 502);
+  assert.deepEqual(json(res), { error: 'upstream' });
+  assert.deepEqual(calls, ['legacy']);
+  assert.equal(json(await request('/status')).keyRejected, false);
+});
+
 test('traffic middleware answers 502 to an oversized tile without caching it', async (t) => {
   isolate(t, { TOMTOM_API_KEY: 'fixture-key', TOMTOM_DAILY_TILE_BUDGET: '' });
   const bodies = [];

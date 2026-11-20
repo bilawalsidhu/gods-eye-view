@@ -2463,6 +2463,7 @@
   "Military area": "Zona militar",
   "SIMULATED — {reason}": "SIMULADO — {reason}",
   "TomTom key unavailable": "Clave de TomTom no disponible",
+  "TomTom key rejected": "Clave de TomTom rechazada",
   "TomTom daily budget reached": "Se alcanzó el límite diario de TomTom",
   "Monthly traffic allowance used": "Cupo mensual de tráfico agotado",
   "Traffic rate limit reached": "Límite de peticiones de tráfico alcanzado",

@@ -46,6 +46,9 @@ test('hosted account limits and service failures name their own reason', () => {
   assert.equal(failure(429, 'budget'), 'TomTom daily budget reached');
   assert.equal(failure(503, 'no_key'), 'TomTom key unavailable');
   assert.equal(failure(503, null), 'TomTom key unavailable');
+  // TomTom refused the key itself: not the generic HTTP 403 line.
+  assert.equal(failure(403, 'key_rejected'), 'TomTom key rejected');
+  assert.equal(failure(403, null), 'TomTom flow error (HTTP 403)');
   assert.equal(
     failure(503, 'USAGE_UNAVAILABLE'),
     'Traffic service unavailable',

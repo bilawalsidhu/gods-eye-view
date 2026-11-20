@@ -1178,6 +1178,7 @@
   "Moving dots colored by live flow": "按實時路況著色的移動圓點",
   "Moving dots": "移動圓點",
   "TomTom key unavailable": "TomTom 密鑰不可用",
+  "TomTom key rejected": "TomTom 密鑰被拒絕",
   "TomTom daily budget reached": "已達 TomTom 每日配額",
   "Monthly traffic allowance used": "本月交通數據配額已用完",
   "Traffic rate limit reached": "已達到交通數據請求頻率上限",
