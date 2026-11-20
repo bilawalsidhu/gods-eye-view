@@ -351,6 +351,63 @@ test('until the renderer has the model the dots stand at every distance, and sta
   assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
 });
 
+/** A satrec SGP4 cannot use: every read throws, as propagate does then. */
+const BROKEN = new Proxy(
+  {},
+  {
+    get() {
+      throw new Error('no state for this time');
+    },
+  },
+);
+
+test('while the orbit will not propagate the dots stand at every distance, as for a model not loaded', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
+  f.track(COMPANION, f.stationPos);
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
+  assert.deepEqual(f.drawn(COMPANION).displayRange, FAR_RANGE);
+  assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
+  assert.equal(f.ring(STATION).show, false);
+  // The station's elements no longer propagate (decayed, or a clock far
+  // from their epoch): nowhere to draw the model.
+  const satrec = f.state._catalog.get(STATION).satrec;
+  f.state._catalog.get(STATION).satrec = BROKEN;
+  f.tick();
+  assert.equal(f.modelItem().show, false);
+  assert.equal(f.drawn(STATION).displayRange, undefined);
+  assert.equal(f.drawn(COMPANION).displayRange, undefined, 'the docked dot');
+  assert.equal(f.trackedDot().displayRange, undefined);
+  assert.equal(f.model._standsInFor(COMPANION), false);
+  assert.equal(f.ring(STATION).show, true, 'the ring is back');
+  // Frame after frame nothing is handed over and given back again.
+  const ranges = [];
+  const setRange = f.parts.rendering._setPointDisplayRange;
+  f.parts.rendering._setPointDisplayRange = (noradId, range) => {
+    ranges.push([noradId, range]);
+    return setRange(noradId, range);
+  };
+  f.tick();
+  f.tick();
+  assert.deepEqual(ranges, []);
+  f.parts.rendering._setPointDisplayRange = setRange;
+  // It propagates again: the model draws and stands in again.
+  f.state._catalog.get(STATION).satrec = satrec;
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  assert.deepEqual(f.drawn(COMPANION).displayRange, FAR_RANGE);
+  assert.equal(f.ring(STATION).show, false);
+  // Undrawn so, the model is released after a while, the camera in range.
+  f.model.spec.unloadAfterMs = 0;
+  f.state._catalog.get(STATION).satrec = BROKEN;
+  f.tick();
+  assert.equal(f.modelSet(), undefined);
+});
+
 test('a model still loading counts as undrawn out of range and is released', (t) => {
   const f = fixture(t);
   f.cameraAt(MAX_M * 1.4);

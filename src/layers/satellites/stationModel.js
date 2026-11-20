@@ -670,10 +670,14 @@ export function createStationModel(
         _load(dotPosition);
       return;
     }
+    // Out of range the model would not draw anyway: no SGP4 sample is taken.
+    const inRange = cameraDistance <= spec.maxDistanceM * 1.5;
+    const frame = ready && inRange ? _stationFrame(scratchPosition) : null;
     // Until the renderer has the model loaded and posed, the dots stand at
     // every distance: the station never goes dark while the file loads, nor
-    // for good when it fails to.
-    if (!ready) {
+    // for good when it fails to. They do so too while the orbit will not
+    // propagate: there is nowhere to draw the model.
+    if (!ready || (inRange && !frame)) {
       _hide();
       _releaseDots();
       if (handedCompanions.size) _releaseCompanions();
@@ -685,8 +689,10 @@ export function createStationModel(
           (spec.retryAfterMs ?? STATION_MODEL_RETRY_AFTER_MS)
       )
         _unload(); // asked for again on the next frame in range
-      else if (cameraDistance > spec.maxDistanceM * 1.5) _undrawn();
-      else undrawnSince = null;
+      // A model still loading in range is waited for; one not drawn
+      // otherwise is released after a while.
+      else if (!ready && inRange) undrawnSince = null;
+      else _undrawn();
       return;
     }
     // The docked dots are the model's within its range: handed over at
@@ -698,22 +704,13 @@ export function createStationModel(
     }
     _handOverDots();
     _syncOrbitCloseUp(cameraDistance < spec.orbitHideM);
-    // Out of range the model would not draw anyway: skip the SGP4 sample.
-    if (cameraDistance > spec.maxDistanceM * 1.5) {
+    if (!frame) {
+      // Out of range: not drawn, and beyond its range the dots draw.
       _hide();
       _undrawn();
       return;
     }
     undrawnSince = null;
-
-    const frame = _stationFrame(scratchPosition);
-    if (!frame) {
-      // Nowhere to draw the model (the orbit would not propagate): the dots
-      // draw at every distance rather than nothing at all.
-      _hide();
-      _releaseDots();
-      return;
-    }
     const { date, axes } = frame;
     copyInto(scratchPosition, visualPosition);
     copyInto(scratchPosition, item.pos);
