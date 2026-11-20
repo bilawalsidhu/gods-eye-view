@@ -94,6 +94,26 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /** Bumped on each refresh, so ages shown on the card tick. */
   const tick = ref(0);
   /**
+   * True while the item is not to be seen: out of its feed, off screen or
+   * behind the globe. The card then offers to find it.
+   */
+  const away = ref(false);
+  /**
+   * Finding the item again (see locate): `'idle'`, `'finding'` while its
+   * layer looks it up, or `'none'` when it has no reading at the time.
+   */
+  const finding = ref('idle');
+  /**
+   * Where an item out of its feed was found (see locate):
+   * `{lat, lon, altitudeM, observedAtMs, atMs}`, or null.
+   */
+  const located = shallowRef(null);
+  /** The track reference of the card's item, kept for when it leaves its feed. */
+  let reference = null;
+  let locating = null;
+  /** An aircraft found again is followed once it is back in its feed. */
+  let followWhenBack = false;
+  /**
    * What the camera shows, for the panel to describe when nothing is picked:
    * `{center: {lat, lon}, rect: {west, south, east, north}, heightM}`.
    */
@@ -229,12 +249,105 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     // Keep showing the last reading when the item drops out of its feed.
     if (!next || next.key !== current.key || next.basis !== 'record') {
       lost.value = current.basis === 'record';
+      away.value = lost.value || !shown(current);
       tick.value++;
       return;
     }
+    const wasLost = lost.value;
     card.value = markRaw(next);
     lost.value = false;
+    // The camera follows it where it is drawn, which can be ahead of its last
+    // reading; one being followed is always in view.
+    away.value = !isFollowing() && !shown(next);
     tick.value++;
+    if (wasLost) back(next);
+  }
+
+  /** Whether the camera shows the item; true when the shell cannot tell. */
+  function shown(current) {
+    const test = shell.value?.onScreen;
+    return typeof test === 'function' ? test(current) !== false : true;
+  }
+
+  /**
+   * The item is back in its feed: its layer selects it again, as the click
+   * that picked it did, and an aircraft just found is followed.
+   */
+  function back(current) {
+    const follows = followWhenBack;
+    // A lookup still running is no longer needed: the feed has it.
+    stopLocating();
+    reference =
+      layerOf(current.layerId)?.referenceOf?.(current.identity?.id) ??
+      reference;
+    shell.value?.reselect?.(current, { follow: follows });
+  }
+
+  const layerOf = (layerId) =>
+    shell.value?.dataManager?.()?.layers?.get?.(layerId)?.module ?? null;
+
+  /**
+   * Take the camera back to the item. One the camera can see or one still in
+   * its feed is flown to (an aircraft followed); one out of its feed is
+   * looked up at the layer's time (the world clock's while it follows the
+   * clock) on its own track, shown there and flown to, and its layer picks
+   * it up again once its feed has it.
+   * @returns {Promise<void>}
+   */
+  async function locate() {
+    const current = card.value;
+    if (!current) return;
+    if (!lost.value) {
+      if (canFollow()) follow();
+      else flyTo();
+      return;
+    }
+    const layer = layerOf(current.layerId);
+    if (typeof layer?.locate !== 'function') {
+      flyTo();
+      return;
+    }
+    locating?.abort();
+    const controller = new AbortController();
+    locating = controller;
+    finding.value = 'finding';
+    let result;
+    try {
+      result = await layer.locate(current.identity?.id, {
+        reference,
+        signal: controller.signal,
+      });
+    } catch {
+      result = { status: 'none' };
+    }
+    if (locating !== controller) return;
+    locating = null;
+    const now = card.value;
+    if (!now || now.key !== current.key) return;
+    if (result?.status !== 'found') {
+      finding.value = 'none';
+      return;
+    }
+    finding.value = 'idle';
+    located.value = markRaw({ ...result });
+    card.value = markRaw({
+      ...now,
+      lat: result.lat,
+      lon: result.lon,
+      altitudeM: Number.isFinite(result.altitudeM)
+        ? result.altitudeM
+        : now.altitudeM,
+    });
+    followWhenBack = canFollow();
+    shell.value?.flyTo?.(card.value);
+  }
+
+  function stopLocating() {
+    locating?.abort();
+    locating = null;
+    finding.value = 'idle';
+    located.value = null;
+    followWhenBack = false;
   }
 
   /**
@@ -261,6 +374,11 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    */
   function select(identity, { fly = false, follow: autoFollow = true } = {}) {
     if (!read(identity)) return false;
+    stopLocating();
+    away.value = false;
+    reference =
+      layerOf(identity.layerId)?.referenceOf?.(card.value?.identity?.id) ??
+      null;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
     shell.value?.openPanel?.();
@@ -292,6 +410,9 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     timer = null;
     card.value = null;
     lost.value = false;
+    away.value = false;
+    reference = null;
+    stopLocating();
   }
 
   const flyTo = () => card.value && shell.value?.flyTo?.(card.value);
@@ -324,6 +445,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     card,
     lost,
     tick,
+    away,
+    finding,
+    located,
+    locate,
     connect,
     select,
     clear,

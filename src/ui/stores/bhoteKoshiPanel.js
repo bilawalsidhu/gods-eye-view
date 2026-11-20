@@ -13,7 +13,8 @@ export const useBhoteKoshiPanelStore = defineStore(
     /**
      * `{owner, sceneBeat, refs, beforeDate, afterDate, reports}`, or null while
      * the event layer is off. Each entry of `refs` holds one control's
-     * `textContent`, `hidden`, `disabled`, `value` and `attributes`.
+     * `textContent`, `hidden`, `disabled`, `value` and `attributes`; the
+     * cinematic button's also holds `pressed`.
      */
     const panel = shallowRef(null);
 

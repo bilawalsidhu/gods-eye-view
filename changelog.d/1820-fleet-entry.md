@@ -3,4 +3,4 @@
   posing, and the vessel hull sprites are part of the package's public entry
   points as `gods-eye-view/fleet`, with declarations, so contacts can be drawn
   exactly as the Flights and Vessels layers draw them (Sameh Khamis,
-  @samehkhamis, #XXXX).
+  @samehkhamis, #1820).
