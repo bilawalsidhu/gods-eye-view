@@ -159,7 +159,7 @@ export function switchOrbitalSatellite(noradId) {
     'track',
     'track',
     t('TRACK ACQUIRED'),
-    t('{label} · NADIR VIEW', { label: info.name }),
+    this.orbitalViewSignal(info),
   );
   this.updateOrbitalHud(info);
   this.refreshOrbitalSignals?.();

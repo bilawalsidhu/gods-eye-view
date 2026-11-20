@@ -321,6 +321,8 @@ test('the application’s Cesium renderer runs the controller around its preUpda
   const renderer = await plugin.create({ container: {} });
   assert.equal(scene.screenSpaceCameraController.enableInputs, false);
   assert.equal(typeof renderer.camera.native.setPose, 'function');
+  assert.equal(renderer.capabilities.has('pointVisibility'), true);
+  assert.equal(renderer.camera.visiblePoints([], 200), null);
   renderer.frame.on('preUpdate', () => order.push('preUpdate'));
   scene.preUpdate.raise(scene, Cesium.JulianDate.fromDate(new Date(5000)));
   assert.deepEqual(order, [['before', 5000], 'preUpdate', 'after']);
