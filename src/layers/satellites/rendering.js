@@ -593,6 +593,11 @@ export function createRendering({
       if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
         _hideOrbitPath(noradId);
         _showOrbitPath(noradId, path.color);
+        // The same ring where the orbit now runs: it keeps whether it is
+        // shown (its class, the close-up, the Cockpit) and the alpha it is
+        // drawn at, so a rebake never changes what is seen.
+        _setOrbitPathShown(noradId, path.item.show);
+        _setOrbitPathAlpha(noradId, path.alphaFactor);
         continue;
       }
       path.item.positions = _ringPositions(path, gmst);

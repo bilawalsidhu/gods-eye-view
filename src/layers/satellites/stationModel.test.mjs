@@ -460,6 +460,29 @@ test('within its range the model stands in for the dots and hides the ring; beyo
   assert.equal(f.ring(STATION).show, true, "back to the layer's orbit toggle");
 });
 
+test('a ring baked again keeps the close-up’s hide, and a shown ring stays shown', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.ring(STATION).show, false);
+  // The world time has moved far from the bake: the ring is baked again,
+  // after this frame's close-up rule has run.
+  const rebake = () => {
+    const path = f.state._orbitPaths.get(STATION);
+    f.parts.rendering._updateOrbitPathRotations(new Date(AT_MS + 31 * 60_000));
+    assert.notEqual(f.state._orbitPaths.get(STATION), path, 'baked again');
+  };
+  rebake();
+  assert.equal(f.ring(STATION).show, false, 'still hidden up close');
+  f.cameraAt(MAX_M * 2.5);
+  f.tick();
+  assert.equal(f.ring(STATION).show, true, 'back after the close-up');
+  rebake();
+  assert.equal(f.ring(STATION).show, true, 'still shown');
+});
+
 test('after the close-up the rings follow the orbit toggle, the tracked docked object’s too', async (t) => {
   for (const showOrbits of [true, false]) {
     const f = fixture(t, { showOrbits });

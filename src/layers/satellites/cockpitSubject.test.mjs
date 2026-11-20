@@ -919,3 +919,34 @@ test('with Orbits off a tracked satelliteâ€™s ring is built hidden, as the ISSâ€
   assert.equal(f.ring(COMPANION).show, true);
   assert.equal(f.ring(ISS_NORAD).show, true);
 });
+
+test('a ring baked again keeps whether it shows and the alpha it is drawn at', async (t) => {
+  const f = await fixture(t);
+  f.track(GPS);
+  f.nextFrame();
+  // The world time has moved far from the bake: every ring is baked again.
+  const rebake = () => {
+    const before = new Map(f.state._orbitPaths);
+    f.parts.rendering._updateOrbitPathRotations(
+      new Date(f.state.now() + 31 * 60_000),
+    );
+    for (const [id, path] of before)
+      assert.notEqual(f.state._orbitPaths.get(id), path, `${id} baked again`);
+  };
+  // The ISS's ring hidden with its class; the tracked ring shown.
+  f.methods.setParams({ classes: { stations: false } });
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  assert.equal(f.ring(GPS).show, true);
+  rebake();
+  assert.equal(f.ring(ISS_NORAD).show, false, 'still hidden with its class');
+  assert.equal(f.ring(GPS).show, true, 'still shown');
+  // Riding GPS in the Cockpit: its ring hidden, the ISS's dimmed.
+  f.methods.setParams({ classes: { stations: true } });
+  f.methods.setCockpitSubject(GPS);
+  const dimmed = ringColors(f, ISS_NORAD);
+  assert.equal(f.ring(GPS).show, false);
+  rebake();
+  assert.equal(f.ring(GPS).show, false, 'still hidden for the Cockpit');
+  assert.equal(f.ring(ISS_NORAD).show, true);
+  assert.deepEqual(ringColors(f, ISS_NORAD), dimmed, 'still dimmed');
+});
