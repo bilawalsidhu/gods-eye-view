@@ -550,10 +550,9 @@ export function createRendering({
         kind: 'solid',
         color: withAlpha(pathColor, RING_BEHIND_ALPHA),
       },
-      show: parts.controls.satelliteVisualsVisible(
-        layerState._enabled,
-        layerState._params.showOrbits,
-      ),
+      // The rule of controls.satelliteVisualsVisible, read from the state.
+      show:
+        Boolean(layerState._enabled) && Boolean(layerState._params?.showOrbits),
     };
     layerState._orbitPaths.set(noradId, path);
     sets?.rings.upsert([path.item]);
