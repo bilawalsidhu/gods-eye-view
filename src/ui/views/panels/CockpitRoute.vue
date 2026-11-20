@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { createRouteState } from '../../cockpitInstrumentState.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The Cockpit flight plan card. The Cockpit controller presents the route's
 // endpoints and whether a destination direction exists; until it does, the
@@ -39,7 +40,7 @@ const label = computed(() =>
         <span>{{ t('FROM') }}</span>
         <strong id="cockpit-route-from">{{ r.from }}</strong>
       </div>
-      <span v-if="r.kind !== 'vessel'" class="cockpit-route-arrow material-symbols-outlined" aria-hidden="true">east</span>
+      <UiIcon v-if="r.kind !== 'vessel'" name="east" class="cockpit-route-arrow" :size="null" />
       <div class="cockpit-route-airport">
         <span>{{ t('TO') }}</span>
         <strong id="cockpit-route-to">{{ r.to }}</strong>

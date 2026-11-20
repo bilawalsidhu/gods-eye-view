@@ -39,6 +39,7 @@ test('capabilities follow what the scene supports', () => {
     'models',
     'modelParts',
     'modelAtmosphere',
+    'modelNodes',
     'quads',
     'meshes',
     'fields',

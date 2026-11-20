@@ -134,6 +134,7 @@ test('a bad or keyless geocode request never reaches Google', async () => {
   ]) {
     const response = await invokeRoute(routes.get(path), { url });
     assert.equal(response.statusCode, 400);
+    assert.equal(response.headers['cache-control'], 'no-store');
     assert.deepEqual(response.body.results, []);
     assert.equal(response.body.status, 'REQUEST_DENIED');
   }
@@ -144,6 +145,7 @@ test('a bad or keyless geocode request never reaches Google', async () => {
       url: '/?address=Austin&lat=30&lon=-97',
     });
     assert.equal(rejected.statusCode, 405);
+    assert.equal(rejected.headers['cache-control'], 'no-store');
   }
 
   // Keyless is an empty capability, not an outage: a 200 the browser adapters
@@ -167,6 +169,33 @@ test('a bad or keyless geocode request never reaches Google', async () => {
   assert.deepEqual(upstream, []);
 });
 
+test('only a Geocoding answer is kept by the browser', async () => {
+  // Google can report a denied key or exhausted quota with HTTP 200.
+  for (const [httpStatus, status, cacheControl] of [
+    [200, 'OK', 'private, max-age=300'],
+    [200, 'ZERO_RESULTS', 'private, max-age=300'],
+    [200, 'REQUEST_DENIED', 'no-store'],
+    [200, 'OVER_QUERY_LIMIT', 'no-store'],
+    [200, 'OVER_DAILY_LIMIT', 'no-store'],
+    [200, 'UNKNOWN_ERROR', 'no-store'],
+    [503, 'ZERO_RESULTS', 'no-store'],
+  ]) {
+    const routes = installRoutes({
+      fetchImpl: async () =>
+        Response.json({ status, results: [] }, { status: httpStatus }),
+    });
+    for (const path of ['/api/google/geocode', '/api/google/reverse-geocode']) {
+      const label = `${path} ${httpStatus} ${status}`;
+      const response = await invokeRoute(routes.get(path), {
+        url: '/?address=Austin&lat=30&lon=-97',
+      });
+      assert.equal(response.statusCode, httpStatus, label);
+      assert.equal(response.body.status, status, label);
+      assert.equal(response.headers['cache-control'], cacheControl, label);
+    }
+  }
+});
+
 test('an upstream failure reaches the browser as fixed public text', async () => {
   const routes = installRoutes({
     fetchImpl: async () => {
@@ -178,6 +207,7 @@ test('an upstream failure reaches the browser as fixed public text', async () =>
       url: '/?address=Austin&lat=30&lon=-97',
     });
     assert.equal(response.statusCode, 502);
+    assert.equal(response.headers['cache-control'], 'no-store');
     assert.deepEqual(response.body, {
       status: 'UNKNOWN_ERROR',
       results: [],

@@ -21,6 +21,7 @@ import {
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 export function createQueries({
   flightState,
@@ -545,7 +546,9 @@ export function createQueries({
           object._labelCallsign = callsign;
           object._labelRegistration = registration;
         }
-        const altitude = info?.altitude;
+        // A grounded contact shows no flight level: its sticky `altitude` may
+        // still be the approach height.
+        const altitude = info?.onGround ? 0 : info?.altitude;
         if (object._altitude !== altitude) {
           object._altitude = altitude;
           object.metric = formatFlightLevel(altitude); // altitude is metres
@@ -776,6 +779,46 @@ export function createQueries({
         if (result.length >= limit) break;
       }
       return result;
+    },
+
+    /**
+     * The track reference of a loaded aircraft, so it can be looked up again
+     * once it has left the feed (see locate).
+     * @param {string} icao24
+     * @returns {string|null}
+     */
+    referenceOf(icao24) {
+      const id = String(icao24 ?? '')
+        .trim()
+        .toLowerCase();
+      if (!id) return null;
+      return flightState.records.data.get(id)?.sourceReference ?? id;
+    },
+
+    /**
+     * Where an aircraft is at the layer's time (the world clock's while the
+     * layer follows it, else now), from its own track: for an aircraft that
+     * has left the feed, so it can be found again.
+     * @param {string} icao24
+     * @param {{reference?: string, signal?: AbortSignal}} [options]
+     * @returns {Promise<{status: 'found', lat: number, lon: number,
+     *   altitudeM: ?number, observedAtMs: number}|{status: 'none'}>}
+     */
+    locate(icao24, { reference, signal } = {}) {
+      const atMs = followsClock(flightState) ? flightState.now() : undefined;
+      return locateOnTrack(
+        flightState.feed._source,
+        reference ??
+          flightState.records.data.get(
+            String(icao24 ?? '')
+              .trim()
+              .toLowerCase(),
+          )?.sourceReference ??
+          String(icao24 ?? '')
+            .trim()
+            .toLowerCase(),
+        { atMs, signal },
+      );
     },
 
     /**

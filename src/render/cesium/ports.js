@@ -77,6 +77,8 @@ export function cesiumCapabilities(scene, only) {
     // Cesium scatters drawn models through the atmosphere wherever the
     // scene draws fog (its models' atmosphere stage).
     'modelAtmosphere',
+    // A model item's nodes, written to the model's runtime nodes.
+    'modelNodes',
     'quads',
     'meshes',
     // Raster shells; other field kinds are refused.

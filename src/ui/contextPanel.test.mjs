@@ -58,7 +58,10 @@ test('before ContextControls renders, the switch shows its initial markup', (t) 
   );
   assert.equal(panel.hasAttribute('data-context-mode'), false);
   const tab = $('global-context-flights-btn');
-  assert.equal(tab.className, 'context-mode-button');
+  assert.equal(
+    tab.className,
+    'ui-button ui-focus ui-button--ghost ui-button--accent context-mode-button',
+  );
   assert.equal(tab.getAttribute('aria-selected'), 'false');
   assert.equal(tab.getAttribute('tabindex'), '0');
   assert.equal(tab.hasAttribute('aria-busy'), false);
@@ -149,4 +152,22 @@ test('the nearby sites search is busy, without native disable, until it settles'
   await nextTick();
   assert.equal(button.getAttribute('aria-busy'), 'false');
   assert.equal(button.getAttribute('aria-disabled'), 'false');
+});
+
+test('with Context closed, the collapsible sections are already in the page for PanelChrome', (t) => {
+  // PanelChrome finds collapsible panels once, at startup, by their collapse
+  // buttons; Context starts closed, so a section that mounts only while it
+  // is open would never be registered and its +/- would do nothing.
+  fixture(t);
+  assert.equal(
+    document
+      .getElementById('global-context-panel')
+      .classList.contains('collapsed'),
+    true,
+  );
+  const targets = [
+    ...document.querySelectorAll('.panel-collapse-btn[data-collapse-target]'),
+  ].map((button) => button.dataset.collapseTarget);
+  for (const id of ['station-panel', 'live-panel', 'radio-panel'])
+    assert.ok(targets.includes(id), `${id} is there to be registered`);
 });

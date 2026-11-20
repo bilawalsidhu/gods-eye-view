@@ -1466,3 +1466,535 @@ test('back to nadir from past the limb, the sensor waits for the view', async (t
   await settle();
   assert.ok(store.orbital.sensor, 'back on the Earth');
 });
+
+/** A mount on the station: 20 m from the satellite's position, looking along the track. */
+function stationMount() {
+  const centre = satellitePosition();
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(centre);
+  const axis = (x, y, z) =>
+    Cesium.Matrix4.multiplyByPointAsVector(
+      enu,
+      new Cesium.Cartesian3(x, y, z),
+      new Cesium.Cartesian3(),
+    );
+  const direction = axis(0, 1, 0);
+  const up = axis(0, 0, 1);
+  return {
+    position: Cesium.Cartesian3.add(
+      centre,
+      Cesium.Cartesian3.multiplyByScalar(up, 20, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    ),
+    direction,
+    up,
+    right: Cesium.Cartesian3.cross(direction, up, new Cesium.Cartesian3()),
+    label: 'ZARYA',
+  };
+}
+
+test('the station is ridden from its mount: the camera sits there and looks along it', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const mount = stationMount();
+  satellites.getCockpitMount = () => mount;
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  const shot = shots.at(-1);
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(shot.destination, mount.position, 1e-9),
+    'the camera is at the mount, not at the satellite',
+  );
+  near(
+    angleDeg(shot.direction, mount.direction),
+    0,
+    'looks along the mount',
+    1e-9,
+  );
+  near(angleDeg(shot.up, mount.up), 0, 'the mount is upright', 1e-9);
+
+  // The HUD names the view and drops what describes the nadir picture.
+  assert.equal(store.orbital.mount, 'ZARYA');
+  assert.equal(store.orbital.footprintKm, null);
+  assert.equal(store.orbital.sensor, null);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · ZARYA',
+  );
+  assert.equal($('.cockpit-orbital-reticle'), null);
+  assert.equal($('.cockpit-orbital-north'), null);
+  assert.match($('.cockpit-help').textContent, /ARROWS LOOK/);
+  assert.match($('.cockpit-help').textContent, /HOME RESET/);
+  assert.doesNotMatch($('.cockpit-help').textContent, /NADIR/);
+
+  // The arrows turn the view about the mount's own frame, and Home returns.
+  press(cockpit, 'ArrowRight');
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  const turned = shots.at(-1);
+  near(angleDeg(turned.direction, mount.direction), 5, 'one step is 5°', 1e-6);
+  assert.ok(
+    Cesium.Cartesian3.dot(turned.direction, mount.right) > 0,
+    'right turns toward the mount’s right',
+  );
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(turned.destination, mount.position, 1e-9),
+  );
+  assert.equal($('#cockpit-orbital-nadir').textContent, 'RESET');
+  assert.equal($('#cockpit-orbital-look-readout').textContent, '');
+  press(cockpit, 'Home');
+  clock.advance(16);
+  cockpit.update();
+  near(angleDeg(shots.at(-1).direction, mount.direction), 0, 'Home', 1e-9);
+});
+
+test('without a mount the same satellite keeps the nadir picture, and gets it back', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const position = satellitePosition();
+  const toCentre = Cesium.Cartesian3.negate(
+    Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const signals = [];
+  cockpit.pushCockpitSignal = (key, kind, title, detail) =>
+    signals.push(detail);
+  // The model has not loaded yet: straight down, as for any satellite.
+  satellites.getCockpitMount = () => null;
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  assert.deepEqual(signals, [], 'nothing changed: nothing to say');
+  near(angleDeg(shots.at(-1).direction, toCentre), 0, 'nadir', 1e-9);
+  assert.equal(store.orbital.mount, null);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'ORBITAL VIEW · NADIR',
+  );
+  assert.ok($('.cockpit-orbital-reticle'));
+
+  // It loads: the view moves to the mount. It goes again: back to nadir.
+  const mount = stationMount();
+  satellites.getCockpitMount = () => mount;
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  near(angleDeg(shots.at(-1).direction, mount.direction), 0, 'mount', 1e-9);
+  // The TRACK ACQUIRED line follows the picture, once per change.
+  cockpit.update();
+  assert.deepEqual(signals, ['ISS (ZARYA) · STATION VIEW']);
+  satellites.getCockpitMount = () => null;
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  assert.deepEqual(signals, [
+    'ISS (ZARYA) · STATION VIEW',
+    'ISS (ZARYA) · NADIR VIEW',
+  ]);
+  assert.equal(store.orbital.mount, null);
+  near(angleDeg(shots.at(-1).direction, toCentre), 0, 'nadir again', 1e-9);
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(shots.at(-1).destination, position, 1e-6),
+  );
+});
+
+/** The station's views as the satellites layer offers them, by key. */
+function stationViews({ docked = true } = {}) {
+  const views = [
+    { key: 'nauka', label: 'NAUKA' },
+    { key: 'zarya', label: 'ZARYA' },
+    ...(docked ? [{ key: 'docked', label: 'PROGRESS-MS 34' }] : []),
+  ];
+  const base = stationMount();
+  // Each view sits a different distance above the satellite's position.
+  const heights = { nauka: 10, zarya: 20, docked: 30 };
+  const asked = [];
+  return {
+    asked,
+    views,
+    heightOf(shot) {
+      return Math.round(
+        Cesium.Cartesian3.distance(shot.destination, satellitePosition()),
+      );
+    },
+    getCockpitMount(key) {
+      asked.push(key);
+      const view = views.find((entry) => entry.key === key) ?? views[0];
+      return {
+        ...base,
+        position: Cesium.Cartesian3.add(
+          satellitePosition(),
+          Cesium.Cartesian3.multiplyByScalar(
+            base.up,
+            heights[view.key],
+            new Cesium.Cartesian3(),
+          ),
+          new Cesium.Cartesian3(),
+        ),
+        key: view.key,
+        label: view.label,
+        views,
+      };
+    },
+  };
+}
+
+test('the station opens on its first view and the arrows step through the rest', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const station = stationViews();
+  satellites.getCockpitMount = station.getCockpitMount;
+  const frame = async () => {
+    clock.advance(16);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  // Nothing was chosen: the layer is asked for its first view, Nauka's,
+  // though the entry ridden is ISS (ZARYA).
+  assert.equal(station.asked[0], null);
+  assert.equal(store.orbital.mount, 'NAUKA');
+  assert.equal(store.orbital.mountViews, 3);
+  assert.equal(station.heightOf(shots.at(-1)), 10);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · NAUKA',
+  );
+  assert.equal(
+    $('#cockpit-orbital-view-next').getAttribute('aria-label'),
+    'Next station view',
+  );
+  assert.equal(
+    $('#cockpit-orbital-view-previous').getAttribute('aria-label'),
+    'Previous station view',
+  );
+  assert.equal($('#cockpit-orbital-view-name').textContent, 'NAUKA');
+
+  // A look off to one side is dropped by the step: each view looks its own way.
+  press(cockpit, 'ArrowRight');
+  await frame();
+  assert.equal(store.orbital.look.offset, true);
+
+  // The button, as a click anywhere inside it.
+  $('#cockpit-orbital-view-next').dispatchEvent(
+    new Event('click', { bubbles: true }),
+  );
+  await settle();
+  assert.equal(store.orbital.mount, 'ZARYA', 'named at once, before a frame');
+  await frame();
+  assert.equal(station.asked.at(-1), 'zarya');
+  assert.equal(station.heightOf(shots.at(-1)), 20);
+  assert.equal(store.orbital.look.offset, false);
+  near(
+    angleDeg(shots.at(-1).direction, stationMount().direction),
+    0,
+    'reset',
+    1e-9,
+  );
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · ZARYA',
+  );
+
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
+  assert.equal(station.heightOf(shots.at(-1)), 30);
+  // Round again to the first.
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA');
+  assert.equal(station.heightOf(shots.at(-1)), 10);
+});
+
+test('the chosen view is kept while the model is away, and one view has no arrows', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  const station = stationViews({ docked: false });
+  satellites.getCockpitMount = station.getCockpitMount;
+  // A second per frame: the HUD republishes on its own cadence.
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.mountViews, 2);
+  cockpit.nextOrbitalView();
+  await frame();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  // The model goes: nadir, no control, nothing to step.
+  satellites.getCockpitMount = () => null;
+  await frame();
+  assert.equal(store.orbital.mount, null);
+  assert.equal(store.orbital.mountViews, 0);
+  assert.equal($('#cockpit-orbital-view-next'), null);
+  assert.equal($('#cockpit-orbital-view-previous'), null);
+  assert.equal(cockpit.nextOrbitalView(), false);
+  // It comes back: the same view is asked for again.
+  satellites.getCockpitMount = station.getCockpitMount;
+  await frame();
+  assert.equal(station.asked.at(-1), 'zarya');
+  assert.equal(store.orbital.mount, 'ZARYA');
+
+  // A station offering a single view shows no control.
+  station.views.length = 1;
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA', 'the view on offer');
+  assert.equal(store.orbital.mountViews, 1);
+  assert.equal($('#cockpit-orbital-view-next'), null);
+  assert.equal($('#cockpit-orbital-view-previous'), null);
+  assert.equal(cockpit.nextOrbitalView(), false);
+});
+
+test('the view arrows do nothing outside a station view', async (t) => {
+  const { cockpit, clock } = await orbitAt(t);
+  clock.advance(16);
+  cockpit.update();
+  assert.equal(cockpit.nextOrbitalView(), false);
+  assert.equal(cockpit.previousOrbitalView(), false);
+  cockpit.exit();
+  assert.equal(cockpit.nextOrbitalView(), false);
+  assert.equal(cockpit.previousOrbitalView(), false);
+});
+
+test('each station view rides its own entry, so the card describes that module', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  // The layer, as it behaves: tracking another entry makes it the subject.
+  const names = {
+    25544: 'ISS (ZARYA)',
+    49044: 'ISS (NAUKA)',
+    36086: 'POISK',
+    68837: 'PROGRESS-MS 34',
+  };
+  let subject = { ...ISS, noradId: 68837, id: '68837', name: names[68837] };
+  const tracked = [];
+  satellites.getCockpitSubject = () => ({ ...subject });
+  satellites.trackById = (noradId) => {
+    tracked.push(Number(noradId));
+    const id = Number(noradId);
+    subject = { ...ISS, noradId: id, id: String(id), name: names[id] };
+    return true;
+  };
+  cockpit.subjectId = 68837;
+  const base = stationMount();
+  const views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044 },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+    { key: 'poisk', label: 'POISK', noradId: 36086 },
+    { key: 'docked', label: 'PROGRESS-MS 34', noradId: 68837 },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  // Entered on the Progress; the view opens on Nauka and rides Nauka.
+  await frame();
+  await frame();
+  assert.deepEqual(tracked, [49044]);
+  assert.equal(cockpit.subjectId, 49044);
+  assert.equal(store.orbital.name, 'ISS (NAUKA)');
+  assert.equal($('.cockpit-orbital-name').textContent, 'ISS (NAUKA)');
+  assert.equal(store.orbital.mount, 'NAUKA');
+
+  // Each step rides the next view's entry.
+  for (const [noradId, name] of [
+    [25544, 'ISS (ZARYA)'],
+    [36086, 'POISK'],
+    [68837, 'PROGRESS-MS 34'],
+    [49044, 'ISS (NAUKA)'],
+  ]) {
+    assert.equal(cockpit.nextOrbitalView(), true);
+    await frame();
+    await frame();
+    assert.equal(cockpit.subjectId, noradId);
+    assert.equal(store.orbital.name, name);
+    assert.equal($('.cockpit-orbital-name').textContent, name);
+  }
+  assert.deepEqual(tracked, [49044, 25544, 36086, 68837, 49044]);
+});
+
+test('a view with no entry, or one that cannot be ridden, keeps the subject', async (t) => {
+  const { cockpit, satellites, store, clock } = await orbitAt(t);
+  const base = stationMount();
+  let views = [
+    { key: 'nauka', label: 'NAUKA', noradId: null },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  let asked = 0;
+  satellites.trackById = () => {
+    asked += 1;
+    return false;
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  // No entry for Nauka: the ISS stays the subject, and nothing is tracked.
+  await frame();
+  assert.equal(asked, 0);
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(store.orbital.mount, 'NAUKA');
+  // An entry the layer will not track: asked once, not every frame.
+  views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044 },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+  ];
+  await frame();
+  await frame();
+  await frame();
+  assert.equal(asked, 1);
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(document.body.classList.contains('cockpit-orbit'), true);
+});
+
+const CUPOLA_CARD = Object.freeze({
+  name: 'CUPOLA',
+  classLabel: 'OBSERVATION MODULE · ISS',
+  operator: 'European Space Agency (ESA)',
+  facts: ['7 WINDOWS', 'LAUNCHED 8 FEB 2010 · STS-130'],
+});
+
+test('a view with a card of its own shows it in place of the entry’s identity', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  const base = stationMount();
+  const views = [
+    { key: 'zarya', label: 'ZARYA', noradId: 25544, card: null },
+    { key: 'cupola', label: 'CUPOLA', noradId: 25544, card: CUPOLA_CARD },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.name, 'ISS (ZARYA)');
+  assert.equal(store.orbital.noradId, 25544);
+  assert.equal(store.orbital.facts, null);
+
+  cockpit.nextOrbitalView();
+  await frame();
+  // Same entry ridden (nothing to switch), the Cupola's own card shown.
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(store.orbital.mount, 'CUPOLA');
+  assert.equal(store.orbital.name, 'CUPOLA');
+  assert.equal($('.cockpit-orbital-name').textContent, 'CUPOLA');
+  assert.equal(store.orbital.classLabel, 'OBSERVATION MODULE · ISS');
+  assert.equal(store.orbital.operator, 'European Space Agency (ESA)');
+  assert.equal(store.orbital.noradId, null);
+  assert.equal(store.orbital.tle, null);
+  assert.equal(store.orbital.owner, null);
+  assert.equal(
+    $('.cockpit-orbital-ident-text').textContent,
+    '7 WINDOWS · LAUNCHED 8 FEB 2010 · STS-130',
+  );
+  assert.equal($('#cockpit-orbital-tle-toggle'), null);
+  // Altitude, velocity and the sub-satellite point are the station's still.
+  assert.ok($('.cockpit-orbital-altitude').textContent.length > 0);
+
+  // Back round to Zarya: the entry's own card again.
+  cockpit.nextOrbitalView();
+  await frame();
+  assert.equal(store.orbital.name, 'ISS (ZARYA)');
+  assert.equal(store.orbital.noradId, 25544);
+  assert.equal(store.orbital.facts, null);
+});
+
+test('leaving a station view selects Nauka; leaving any other keeps the satellite', async (t) => {
+  const { cockpit, satellites, clock } = await orbitAt(t);
+  const names = { 25544: 'ISS (ZARYA)', 49044: 'ISS (NAUKA)' };
+  let subject = { ...ISS };
+  const tracked = [];
+  satellites.getCockpitSubject = () => ({ ...subject });
+  satellites.trackById = (noradId) => {
+    const id = Number(noradId);
+    tracked.push(id);
+    subject = { ...ISS, noradId: id, id: String(id), name: names[id] };
+    return true;
+  };
+  const base = stationMount();
+  const views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044, card: null },
+    { key: 'cupola', label: 'CUPOLA', noradId: 25544, card: CUPOLA_CARD },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  await frame();
+  // On the Cupola, riding the ISS's entry, when the Cockpit is left.
+  cockpit.nextOrbitalView();
+  await frame();
+  await frame();
+  assert.equal(cockpit.subjectId, 25544);
+  satellites.calls.length = 0;
+  tracked.length = 0;
+  assert.equal(cockpit.exit(), true);
+  assert.deepEqual(tracked, [49044], 'Nauka is selected');
+  assert.deepEqual(satellites.calls, [
+    ['subject', null],
+    ['refocus', 49044],
+  ]);
+});
+
+test('leaving the plain orbital view refocuses the satellite ridden', async (t) => {
+  const { cockpit, satellites } = await orbitAt(t);
+  const tracked = [];
+  satellites.trackById = (noradId) => {
+    tracked.push(noradId);
+    return true;
+  };
+  satellites.calls.length = 0;
+  assert.equal(cockpit.exit(), true);
+  assert.deepEqual(tracked, []);
+  assert.deepEqual(satellites.calls, [
+    ['subject', null],
+    ['refocus', 25544],
+  ]);
+});
+
+test('the left arrow steps back through the views, wrapping round', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const station = stationViews();
+  satellites.getCockpitMount = station.getCockpitMount;
+  const frame = async () => {
+    clock.advance(16);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA');
+  // From the first view back to the last.
+  $('#cockpit-orbital-view-previous').dispatchEvent(
+    new Event('click', { bubbles: true }),
+  );
+  await settle();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
+  await frame();
+  // The camera is at the docked vehicle's view (30 m up in this stand-in).
+  assert.equal(station.heightOf(shots.at(-1)), 30);
+  assert.equal(cockpit.previousOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
+});

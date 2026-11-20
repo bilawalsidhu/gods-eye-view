@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import * as Cesium from 'cesium';
 import { createIconSet } from '../../data/iconSet.js';
 import { IconSetPrimitive } from './iconSetPrimitive.js';
@@ -57,4 +58,30 @@ test('by default the set draws an opaque pass and a translucent one, and draws n
   assert.deepEqual(translucent.shaderProgram.defines, ['TRANSLUCENT']);
   assert.equal(translucent.renderState.depthMask, false);
   assert.equal(primitive.drawsBlend('translucent'), false);
+});
+
+test('an over-depth row writes a depth of exactly 0, which a depth pick ignores', () => {
+  // Shaders do not compile under node: this reads the fragment shader's
+  // source. A depth past the near plane (as 1.0001 through
+  // czm_writeLogDepth was) is a surface to Cesium's depth pick, a near
+  // plane's distance from the camera, and the wheel stops zooming with an
+  // icon under the canvas centre (scripts/qa-zoom-under-icon.mjs).
+  const source = fs.readFileSync(
+    new URL('./iconSetPrimitive.js', import.meta.url),
+    'utf8',
+  );
+  const [vertex, fragment] = source
+    .slice(source.indexOf('const VERTEX_SHADER'))
+    .split('const FRAGMENT_SHADER')
+    .map((shader) => shader.replace(/\/\/.*$/gm, '')); // comments out
+  assert.match(
+    fragment,
+    /if \(v_overDepth > 0\.5\) gl_FragDepth = 0\.0;\s+else czm_writeLogDepth\(v_depthFromNearPlusOne\);/,
+  );
+  // The vertex shader flags the row and leaves its log depth alone.
+  assert.match(
+    vertex,
+    /gl_Position\.z = -gl_Position\.w;[^}]*v_overDepth = 1\.0;/,
+  );
+  assert.doesNotMatch(vertex, /v_depthFromNearPlusOne\s*=/);
 });

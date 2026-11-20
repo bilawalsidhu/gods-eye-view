@@ -1347,9 +1347,13 @@ small {
     calc(var(--mobile-sheet-cover, 0px) + 6px)
   );
   left: auto;
-  inset-inline: 16px 60px;
+  inset-inline: 16px;
   width: auto;
   transform: none;
+}
+/* The language picker sits at the right edge beside the field; the field leaves it room. */
+:global(body.mobile-shell:has(#locale-picker) #gev-omnibar) {
+  inset-inline: 16px 60px;
 }
 /* A lifted timeline leaves less map above the credits on short phones. */
 @media (max-height: 480px) {

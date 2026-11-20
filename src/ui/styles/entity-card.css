@@ -104,6 +104,33 @@
   font-size: 1rem;
 }
 
+/* Find it: shown while the selected item is off screen or out of its feed. */
+.entity-card__find {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  color: #36dcff;
+  background: rgba(29, 69, 81, 0.35);
+  border: 1px solid rgba(48, 194, 224, 0.55);
+  border-radius: 7px;
+}
+
+.entity-card__find:hover,
+.entity-card__find:focus-visible {
+  color: #fff;
+  background: rgba(48, 194, 224, 0.3);
+}
+
+.entity-card__find:disabled {
+  opacity: 0.55;
+}
+
+.entity-card__find .material-symbols-outlined {
+  font-size: 1.1rem;
+}
+
 .entity-card__title {
   margin: 0.55rem 0 0.1rem;
   overflow-wrap: anywhere;
@@ -2180,7 +2207,11 @@
   border-radius: 3px;
 }
 
-.entity-hero:is([data-hero='flight'], [data-hero='satellite'], [data-hero='photo']) {
+.entity-hero:is(
+  [data-hero='flight'],
+  [data-hero='satellite'],
+  [data-hero='photo']
+) {
   height: 168px;
   background: radial-gradient(
     ellipse 55% 60% at 50% 55%,
