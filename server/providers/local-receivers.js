@@ -274,13 +274,14 @@ function fetchLocalReceiverFeed(url, options) {
  * @param {object} options
  * @returns {Promise<object>} Parsed JSON document.
  */
-async function fetchLocalReceiverDocument(
+export async function fetchLocalReceiverDocument(
   url,
   {
     fetchImpl = fetchLocalReceiverFeed,
     lookupImpl = dnsLookup,
     timeoutMs = LOCAL_RECEIVER_TIMEOUT_MS,
     maxBytes = LOCAL_RECEIVER_MAX_BODY_BYTES,
+    documentKey = 'aircraft',
   } = {},
 ) {
   const controller = new AbortController();
@@ -324,7 +325,7 @@ async function fetchLocalReceiverDocument(
     } catch {
       throw new FeedError('BAD_JSON');
     }
-    if (!json || typeof json !== 'object' || !Array.isArray(json.aircraft))
+    if (!json || typeof json !== 'object' || !Array.isArray(json[documentKey]))
       throw new FeedError('BAD_DOCUMENT');
     return json;
   } catch (error) {
