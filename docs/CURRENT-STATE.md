@@ -1215,9 +1215,11 @@ every width, right to left it takes the bottom right at every width, and
 `src/ui/creditLineHeight.js` keeps its height in `--credit-line-height`: the
 coordinates (and, right to left, the Tactical readout) stay 6px above it
 however many lines it wraps onto, and the dock and World Timeline rise when
-it is taller than their usual clearance. Narrower than 1120px the dock leaves
-no room between the corners, so the coordinates and the readout sit above
-the dock, and above the World Timeline while it shows. Outside that layout
+it is taller than their usual clearance. The World Timeline takes the dock's
+floor and the dock (with the Omnibar's field) sits above it, rising by the
+bar's height while it shows, as the plain dock does. Narrower than 1120px the
+dock leaves no room between the corners, so the coordinates and the readout
+sit above the dock. Outside that layout
 Cesium's credit box wraps from 1200px, as before; the phone shell, clean
 view, recording and scene playback lay the line out themselves.
 The left rail treats the centered World Timeline and voice control as
