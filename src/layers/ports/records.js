@@ -72,8 +72,11 @@ export function unknownPortCommercial() {
   };
 }
 
-/** Normalize one WGS84 GeoJSON feature from the NETL WPI ArcGIS layer. */
-export function normalizeWpiFeature(feature) {
+/**
+ * Classify one WGS84 GeoJSON feature from the NETL WPI ArcGIS layer. Returns
+ * `{ port }` or `{ reason }`; the reason lets the snapshot count skipped rows.
+ */
+function classifyWpiFeature(feature) {
   const props = feature?.properties;
   const coordinates = feature?.geometry?.coordinates;
   if (
@@ -82,54 +85,83 @@ export function normalizeWpiFeature(feature) {
     !Array.isArray(coordinates) ||
     coordinates.length < 2
   )
-    return null;
+    return { reason: 'invalidGeometry' };
   const lon = availableNumber(coordinates[0], -180, 180);
   const lat = availableNumber(coordinates[1], -90, 90);
+  if (lat === null || lon === null) return { reason: 'invalidGeometry' };
   const number = props.wpinumber;
+  // The live layer holds a few fractional numbers (for example 49454.5). The
+  // share/pick grammar, the source validator and the card accept integers
+  // only, so these rows are skipped and counted rather than coerced.
   if (
-    lat === null ||
-    lon === null ||
-    !Number.isSafeInteger(number) ||
-    number <= 0
+    typeof number === 'number' &&
+    Number.isFinite(number) &&
+    !Number.isInteger(number)
   )
-    return null;
+    return { reason: 'fractionalId' };
+  if (!Number.isSafeInteger(number) || number <= 0)
+    return { reason: 'malformedId' };
   const name = clean(props.main_port_name) || clean(props.regionname);
-  if (!name) return null;
+  if (!name) return { reason: 'missingName' };
   const facilities = Object.fromEntries(
     PORT_FACILITIES.map(({ id, key }) => [id, wpiAffirmative(props[key])]),
   );
   return {
-    id: `wpi:${number}`,
-    wpiNumber: number,
-    name,
-    alternateName: clean(props.alternate_name),
-    country: clean(props.wpi_cc, 60),
-    unlocode: clean(props.unlocode, 20),
-    lat,
-    lon,
-    facilities,
-    harborSize: clean(props.harbor_size_code, 60),
-    harborType: clean(props.harbor_type_code, 60),
-    channelDepthM: availableNumber(props.channel_depth, 0, 1000),
-    cargoPierDepthM: availableNumber(props.cargo_pier_depth, 0, 1000),
-    // No WPI flag states whether the port is presently operating.
-    commercial: unknownPortCommercial(),
-    source: 'NGA WPI (DOE NETL mirror)',
-    sourceUrl: WPI_REFERENCE_URL,
+    port: {
+      id: `wpi:${number}`,
+      wpiNumber: number,
+      name,
+      alternateName: clean(props.alternate_name),
+      country: clean(props.wpi_cc, 60),
+      unlocode: clean(props.unlocode, 20),
+      lat,
+      lon,
+      facilities,
+      harborSize: clean(props.harbor_size_code, 60),
+      harborType: clean(props.harbor_type_code, 60),
+      channelDepthM: availableNumber(props.channel_depth, 0, 1000),
+      cargoPierDepthM: availableNumber(props.cargo_pier_depth, 0, 1000),
+      // No WPI flag states whether the port is presently operating.
+      commercial: unknownPortCommercial(),
+      source: 'NGA WPI (DOE NETL mirror)',
+      sourceUrl: WPI_REFERENCE_URL,
+    },
   };
 }
 
-/** Preserve stable WPI identities and reject inconsistent duplicate features. */
+/** Normalize one WGS84 GeoJSON feature; null when the row is unusable. */
+export function normalizeWpiFeature(feature) {
+  return classifyWpiFeature(feature).port ?? null;
+}
+
+/**
+ * Per-row default-deny: a bad row is skipped and counted by reason, never
+ * allowed to sink the snapshot. A repeated WPI number keeps the first row in
+ * source order and counts the rest; fields are never merged. Returns null only
+ * when the input is not a feature list.
+ */
 export function normalizeWpiFeatures(features) {
   if (!Array.isArray(features)) return null;
   const byId = new Map();
+  const skipped = {
+    total: 0,
+    duplicateId: 0,
+    fractionalId: 0,
+    malformedId: 0,
+    invalidGeometry: 0,
+    missingName: 0,
+  };
   for (const feature of features) {
-    const port = normalizeWpiFeature(feature);
-    if (!port) continue;
-    if (byId.has(port.id)) return null;
-    byId.set(port.id, port);
+    const { port, reason } = classifyWpiFeature(feature);
+    if (!port) {
+      skipped[reason] += 1;
+      skipped.total += 1;
+    } else if (byId.has(port.id)) {
+      skipped.duplicateId += 1;
+      skipped.total += 1;
+    } else byId.set(port.id, port);
   }
-  return [...byId.values()];
+  return { records: [...byId.values()], skipped };
 }
 
 export function visibleWpiPort(port, { country = '', facility = 'all' } = {}) {

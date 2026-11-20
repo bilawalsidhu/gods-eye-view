@@ -127,7 +127,10 @@ test('country and positive-only facility filters work in visible map and panel',
   assert.equal(h.layer.getRowControls().segmented.options.length, 5);
   h.layer.setParams({ facility: 'container' });
   assert.equal(h.layer.getStats().count, 1);
-  assert.deepEqual(h.layer.getAnalystRecords().map((r) => r.id), ['wpi:1']);
+  assert.deepEqual(
+    h.layer.getAnalystRecords().map((r) => r.id),
+    ['wpi:1'],
+  );
   assert.equal(
     [...h.markerSet().items.values()].filter((record) => record.show).length,
     1,
@@ -143,9 +146,7 @@ test('country and positive-only facility filters work in visible map and panel',
 });
 
 test('click selects the exact port and hiding its facility clears card', async () => {
-  const h = harness([
-    makeSnapshot([makePort(44, 'GB', { container: true })]),
-  ]);
+  const h = harness([makeSnapshot([makePort(44, 'GB', { container: true })])]);
   h.layer.enable();
   await h.layer.update();
   h.click(44);
@@ -182,5 +183,18 @@ test('partial data is conspicuous and stale data expires', async () => {
   assert.match(h.layer.getRowControls().info, /PARTIAL/);
   assert.match(h.layer.getRowControls().info, /STALE/);
   assert.equal(h.layer.getStats().stale, true);
+  h.layer.destroy();
+});
+
+test('skipped source rows are reported in the info line', async () => {
+  const h = harness([
+    {
+      ...makeSnapshot([makePort(56)]),
+      skipped: { total: 4, duplicateId: 2, fractionalId: 2 },
+    },
+  ]);
+  h.layer.enable();
+  await h.layer.update();
+  assert.match(h.layer.getRowControls().info, /4 skipped/);
   h.layer.destroy();
 });

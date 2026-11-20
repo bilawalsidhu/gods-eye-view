@@ -115,6 +115,61 @@ test('rejects duplicated or descending objectids rather than silently merging', 
   assert.equal(output.json.error, 'wpi_unavailable');
 });
 
+test('bad WPI rows are skipped and counted, the snapshot is still served', async () => {
+  const row = (objectid, wpinumber, name) => ({
+    ...PORT(objectid),
+    properties: {
+      ...PORT(objectid).properties,
+      wpinumber,
+      main_port_name: name,
+    },
+  });
+  const handler = makeHandler({
+    now: () => NOW,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (!url.pathname.endsWith('/query')) return Response.json({});
+      return Response.json({
+        type: 'FeatureCollection',
+        features: [
+          row(1, 400, 'Seydisfjordur'),
+          row(2, 401, 'Second'),
+          row(3, 400, 'Seydhisfjordhur'),
+          row(4, 49454.5, 'Kattupalli Port'),
+          row(5, 'bad', 'Malformed'),
+          row(6, 402, 'Third'),
+        ],
+      });
+    },
+  });
+  const output = await call(handler);
+  assert.equal(output.status, 200);
+  assert.deepEqual(
+    output.json.records.map((r) => r.id),
+    ['wpi:400', 'wpi:401', 'wpi:402'],
+  );
+  assert.equal(output.json.skipped.total, 3);
+  assert.equal(output.json.skipped.duplicateId, 1);
+  assert.equal(output.json.skipped.fractionalId, 1);
+  assert.equal(output.json.skipped.malformedId, 1);
+});
+
+test('a snapshot with zero valid rows is still rejected', async () => {
+  const handler = makeHandler({
+    now: () => NOW,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (!url.pathname.endsWith('/query')) return Response.json({});
+      return Response.json({
+        type: 'FeatureCollection',
+        features: [{ ...PORT(1), properties: { objectid: 1, wpinumber: 1.5 } }],
+      });
+    },
+  });
+  const output = await call(handler);
+  assert.equal(output.status, 502);
+});
+
 test('a truncated full-page series is marked partial, never complete', async () => {
   const handler = makeHandler({
     now: () => NOW,
@@ -165,7 +220,11 @@ test('stale snapshot is bounded and never silently reported as fresh', async () 
 });
 
 test('only GET on exact route, no request-controlled upstream URL', async () => {
-  const handler = makeHandler({ fetchImpl: async () => { throw Error('no'); } });
+  const handler = makeHandler({
+    fetchImpl: async () => {
+      throw Error('no');
+    },
+  });
   assert.equal((await call(handler, { method: 'POST' })).status, 405);
   assert.equal((await call(handler, { url: '/evil' })).status, 404);
 });

@@ -59,8 +59,14 @@ test('WPI identifier is stable and commercial fields are explicitly unknown', ()
     operationalStatus: null,
     expansion: null,
   });
-  assert.match(portProfileLines(record).join('\n'), /Operational status: Unavailable/);
-  assert.match(portProfileLines(record).join('\n'), /Annual throughput: Unavailable/);
+  assert.match(
+    portProfileLines(record).join('\n'),
+    /Operational status: Unavailable/,
+  );
+  assert.match(
+    portProfileLines(record).join('\n'),
+    /Annual throughput: Unavailable/,
+  );
 });
 
 test('reject invalid coordinates, identifiers, and duplicate WPI numbers', () => {
@@ -72,13 +78,95 @@ test('reject invalid coordinates, identifiers, and duplicate WPI numbers', () =>
   assert.equal(
     normalizeWpiFeature({
       ...port(6),
-      geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [0, 0],
+          [1, 1],
+        ],
+      },
     }),
     null,
   );
-  assert.equal(normalizeWpiFeatures([port(7), port(7)]), null);
-  assert.equal(normalizeWpiFeatures([port(7), port(8)]).length, 2);
+  assert.equal(normalizeWpiFeatures([port(7), port(8)]).records.length, 2);
   assert.equal(normalizeWpiFeatures('not a feature collection'), null);
+});
+
+// Real NETL layer 17 shape: objectid is unique, wpinumber is not always.
+const netl = (objectid, wpinumber, name) => ({
+  type: 'Feature',
+  geometry: { type: 'Point', coordinates: [-16.1, 65.26] },
+  properties: {
+    objectid,
+    wpinumber,
+    regionname: 'Iceland',
+    main_port_name: name,
+    alternate_name: null,
+    wpi_cc: 'IS',
+    unlocode: 'ISSEY',
+    harbor_size_code: 'S',
+    fac_container: 'No',
+  },
+});
+
+test('a duplicate WPI number keeps the first row and counts the rest', () => {
+  const out = normalizeWpiFeatures([
+    netl(1, 400, 'Seydisfjordur'),
+    netl(2, 401, 'Other'),
+    netl(3, 400, 'Seydhisfjordhur'),
+  ]);
+  assert.deepEqual(
+    out.records.map((r) => r.id),
+    ['wpi:400', 'wpi:401'],
+  );
+  assert.equal(out.records[0].name, 'Seydisfjordur');
+  assert.equal(out.skipped.duplicateId, 1);
+  assert.equal(out.skipped.total, 1);
+});
+
+test('fractional and malformed WPI numbers are skipped and counted, never coerced', () => {
+  const out = normalizeWpiFeatures([
+    netl(1, 49454.5, 'Kattupalli Port'),
+    netl(2, 9510.1, 'Puerto Progreso'),
+    netl(3, 'abc', 'Bad text id'),
+    netl(4, null, 'Null id'),
+    netl(5, -3, 'Negative id'),
+    netl(6, 12, 'Good Port'),
+  ]);
+  assert.deepEqual(
+    out.records.map((r) => r.id),
+    ['wpi:12'],
+  );
+  assert.equal(out.skipped.fractionalId, 2);
+  assert.equal(out.skipped.malformedId, 3);
+  assert.equal(out.skipped.total, 5);
+});
+
+test('a snapshot with a few bad rows still serves the good rows', () => {
+  const rows = [
+    ...Array.from({ length: 50 }, (_, i) =>
+      netl(i + 1, i + 1, `Port ${i + 1}`),
+    ),
+    netl(51, 7, 'Dup of 7'),
+    netl(52, 49454.5, 'Fractional'),
+    netl(53, 'x', 'Malformed'),
+    { type: 'Feature', geometry: null, properties: { wpinumber: 99 } },
+    (() => {
+      const nameless = netl(55, 100, '   ');
+      nameless.properties.regionname = null;
+      return nameless;
+    })(),
+  ];
+  const out = normalizeWpiFeatures(rows);
+  assert.equal(out.records.length, 50);
+  assert.deepEqual(out.skipped, {
+    total: 5,
+    duplicateId: 1,
+    fractionalId: 1,
+    malformedId: 1,
+    invalidGeometry: 1,
+    missingName: 1,
+  });
 });
 
 test('unknown origin facts remain unavailable, never current operations', () => {
@@ -93,6 +181,10 @@ test('unknown origin facts remain unavailable, never current operations', () => 
   assert.equal(record.facilities.oil, null);
   assert.equal(record.facilities.lng, true);
   assert.equal(record.commercial.operationalStatus, null);
-  assert.ok(portProfileLines(record).some((text) => text.includes('not current operation')));
+  assert.ok(
+    portProfileLines(record).some((text) =>
+      text.includes('not current operation'),
+    ),
+  );
   assert.equal(visibleWpiPort(record, { facility: 'does-not-exist' }), false);
 });

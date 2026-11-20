@@ -34,7 +34,11 @@ The GEV server retrieves WPI at runtime from the fixed NETL origin, through
 queries use WGS84 GeoJSON, selected fields only, `objectid ASC`, and ordered
 offset pagination at 1,000 features/page. Every page is bounded to 4 MiB and
 a 15-second timeout. There are at most 8 pages. The service validates
-monotonically increasing `objectid` values and rejects repeated WPI IDs.
+monotonically increasing `objectid` values. A bad row never sinks the
+snapshot: rows with a repeated WPI number (first in source order is kept,
+fields are never merged), a fractional or malformed WPI number, a bad
+geometry or no name are skipped and counted by reason in the response's
+`skipped` object. Only an invalid envelope or zero valid rows is rejected.
 A terminating short page means `complete: true`; an exhausted cap is
 `partial: true` with visible warnings and response header
 `X-Data-Partial: true`. It does not claim missing ports have no facility.

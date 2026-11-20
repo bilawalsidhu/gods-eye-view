@@ -1,5 +1,22 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
+const SKIP_KEYS = [
+  'total',
+  'duplicateId',
+  'fractionalId',
+  'malformedId',
+  'invalidGeometry',
+  'missingName',
+];
+
+function cleanSkipped(value) {
+  const out = {};
+  for (const key of SKIP_KEYS)
+    out[key] =
+      Number.isSafeInteger(value?.[key]) && value[key] >= 0 ? value[key] : 0;
+  return out;
+}
+
 /** Same-origin, bounded snapshot acquisition for NGA World Port Index. */
 export function createPortsSource({
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -49,6 +66,7 @@ export function createPortsSource({
           ? payload.mirrorLastEditAt
           : null,
         ngaPublicationDate: null,
+        skipped: cleanSkipped(payload.skipped),
         partial: payload.partial,
         complete: payload.complete,
         stale: payload.stale === true,

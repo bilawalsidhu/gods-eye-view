@@ -361,7 +361,7 @@ export function createPortsLayer({
           })),
         },
         chips: [],
-        info: `${formatNumber(shown)} / ${formatNumber(records.size)} ports · ${snapshot?.partial ? 'PARTIAL · ' : ''}${snapshot?.stale ? 'STALE · ' : ''}NGA WPI (NETL mirror)`,
+        info: `${formatNumber(shown)} / ${formatNumber(records.size)} ports · ${snapshot?.partial ? 'PARTIAL · ' : ''}${snapshot?.stale ? 'STALE · ' : ''}${snapshot?.skipped?.total ? `${formatNumber(snapshot.skipped.total)} skipped · ` : ''}NGA WPI (NETL mirror)`,
         infoTitle: t(
           'NGA reference data only. A listed port is not evidence it is operational. Facility filters include affirmative values only. Country and facility filters remain session-local.',
         ),

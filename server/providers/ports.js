@@ -137,13 +137,15 @@ export function portsProxy({
       }
     }
     if (!features.length) throw new Error('wpi_empty_snapshot');
-    const records = normalizeWpiFeatures(features);
-    if (!records?.length) throw new Error('wpi_invalid_snapshot');
+    const normalized = normalizeWpiFeatures(features);
+    if (!normalized?.records.length) throw new Error('wpi_invalid_snapshot');
+    const { records, skipped } = normalized;
     if (features.length > MAX_RESPONSE_PORTS)
       throw new Error('wpi_snapshot_overflow');
     const retrievedAt = now();
     lastGood = {
       records,
+      skipped,
       retrievedAt,
       mirrorLastEditAt: mirrorLastEdit,
       // Only the government mirror's last-edit is known; NGA edition not known.
