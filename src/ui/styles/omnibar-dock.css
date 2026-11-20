@@ -8,11 +8,15 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
   /* Clear of the attribution line under it, however many lines it wraps
      onto (--credit-line-height, src/ui/creditLineHeight.js). */
   --omnibar-credits-clear: calc(1rem + var(--credit-line-height, 28px) + 6px);
-  /* The dock, and the World Timeline and narrow corners placed from it,
+  /* The World Timeline, and the dock and narrow corners placed from it,
      rise over a line wrapped taller than its usual one or two lines. */
   --omnibar-dock-bottom: max(74px, calc(var(--omnibar-credits-clear) + 2px));
+  /* The dock sits above the World Timeline, rising by its height
+     (--world-timeline-lift, world-timeline.css) as the plain dock does. */
+  --omnibar-dock-raised: calc(
+    var(--omnibar-dock-bottom) + var(--world-timeline-lift, 0px)
+  );
   --omnibar-coordinates-bottom: max(4.25rem, var(--omnibar-credits-clear));
-  --world-timeline-lift: 0px;
 
   #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
     :is(.hud-top-left, .hud-top-right) {
@@ -32,23 +36,14 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
   }
 
   #world-timeline {
-    bottom: calc(var(--omnibar-dock-bottom) + 66px);
+    bottom: var(--omnibar-dock-bottom);
     width: var(--omnibar-dock-width);
-  }
-
-  &:has(#gev-chat-panel:not([hidden]), #gev-voice-panel:not([hidden]))
-    #world-timeline,
-  &:has(#gev-omnibar.has-results):not(
-      :has(#gev-voice-control[data-assistant-mode='voice'])
-    )
-    #world-timeline {
-    visibility: hidden;
   }
 
   #command-dock {
     --dock-voice-width: var(--omnibar-dock-width);
     top: auto;
-    bottom: var(--omnibar-dock-bottom);
+    bottom: var(--omnibar-dock-raised);
     z-index: 149;
     width: var(--omnibar-dock-width);
     max-width: none;
@@ -197,7 +192,7 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
 
   #gev-omnibar {
     top: auto;
-    bottom: calc(var(--omnibar-dock-bottom) + 11px);
+    bottom: calc(var(--omnibar-dock-raised) + 11px);
     left: 50%;
     width: calc(var(--omnibar-dock-width) - 120px);
     transform: translateX(-50%);
@@ -235,7 +230,7 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     bottom: calc(100% + 11px);
     max-height: min(
       360px,
-      max(0px, calc(100dvh - var(--omnibar-dock-bottom) - 144px))
+      max(0px, calc(100dvh - var(--omnibar-dock-raised) - 144px))
     );
     overflow: auto;
     border-radius: 18px 18px 0 0;
@@ -365,16 +360,9 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
      rise above the dock. */
   @media (max-width: 1119px) {
     --omnibar-coordinates-bottom: max(
-      calc(var(--omnibar-dock-bottom) + 56px + 10px),
+      calc(var(--omnibar-dock-raised) + 56px + 10px),
       var(--omnibar-credits-clear)
     );
-    /* And above the World Timeline (42px tall) over the dock. */
-    &:has(#world-timeline) {
-      --omnibar-coordinates-bottom: max(
-        calc(var(--omnibar-dock-bottom) + 66px + 42px + 10px),
-        var(--omnibar-credits-clear)
-      );
-    }
     #intel-hud[data-variant='tactical'] .hud-bottom-right,
     &:where(html[dir='rtl'] *):not(.context-docked)
       #intel-hud[data-variant='tactical']

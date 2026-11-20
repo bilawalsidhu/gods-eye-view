@@ -1006,6 +1006,7 @@ test('global infrared is acquired before staging and cropped from one processed 
   assert.equal(provider.spec.kind, 'canvas');
   assert.equal(provider.spec.maxLevel, 3);
   assert.equal(provider.spec.tileSize, 256);
+  assert.equal(provider.spec.shows, 'clouds');
   assert.equal(provider.spec.tiling, 'geographic');
   assert.deepEqual(provider.spec.rectangle, snapshot.bounds);
   const first = await provider.requestImage(0, 0, 0);

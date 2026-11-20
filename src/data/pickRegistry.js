@@ -154,6 +154,24 @@ export function pickContact(query, position, options = {}) {
 let _overlayHitTest = null;
 /** @type {WeakMap<object, {sourceId: string, entryId: string}|null>} */
 const clickCards = new WeakMap();
+const _clickClaims = new Map();
+
+/**
+ * Register a target drawn outside the world overlay's entries, such as a CCTV
+ * count. A claim runs once per click where no card or label is painted above
+ * it and must not call `clickCard`.
+ * @param {string} layerId
+ * @param {(click: object) => ({sourceId: string, entryId: string}|null)} claim
+ */
+export function registerClickClaim(layerId, claim) {
+  if (!layerId || typeof claim !== 'function') return;
+  _clickClaims.set(layerId, claim);
+}
+
+/** Remove a layer's claim when it is disabled or destroyed. */
+export function unregisterClickClaim(layerId) {
+  _clickClaims.delete(layerId);
+}
 
 /**
  * Sets (or with null, clears) the hit test that names the card or label
@@ -166,8 +184,8 @@ export function setClickCardHitTest(hitTest) {
 }
 
 /**
- * The topmost interactive card or label painted at a click, read once per
- * click so every handler of it sees the same one whatever ran first.
+ * The topmost interactive card or label painted at a click, or a target a
+ * layer claims (`registerClickClaim`). All handlers share one result per click.
  * @param {{screenPosition?: {x: number, y: number}}|null|undefined} click
  * @returns {{sourceId: string, entryId: string}|null}
  */
@@ -179,14 +197,28 @@ export function clickCard(click) {
   try {
     card = _overlayHitTest?.(at?.x, at?.y) ?? null;
   } catch {
-    // a broken hit test must never break click handling
+    clickCards.set(click, null);
+    return null;
+  }
+  if (!card) {
+    // A claim that reads this click again cannot re-enter the claims loop.
+    clickCards.set(click, null);
+    for (const claim of _clickClaims.values()) {
+      try {
+        card = claim(click) ?? null;
+      } catch {
+        card = null;
+      }
+      if (card) break;
+    }
   }
   clickCards.set(click, card);
   return card;
 }
 
 /**
- * True when another layer's card or label is painted on top at a click. The
+ * True when another layer has the top card, label, or claimed target
+ * (`registerClickClaim`) at a click. The
  * card on top takes the click: a scene item under it does not act, and is
  * not empty space either, so the layer leaves its selection alone.
  * @param {object} click The shared dispatcher event.

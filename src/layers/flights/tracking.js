@@ -900,13 +900,19 @@ export function createTracking({
     // the ICAO hex, so a callsign-less enriched contact heads its readout with
     // the tail number rather than raw hex.
     const cs = parts.queries._contactLabel(icao24, info);
-    const altFt = Math.round((info.altitude || 0) * 3.28084);
+    const altFt = info.onGround
+      ? null
+      : Math.round((info.altitude || 0) * 3.28084);
     // Flight levels are an aviation code; feet and knots read in the active
     // language ("0 фт · 1 уз").
     const quantity = (value, unit) =>
       `${formatNumber(value, { useGrouping: false })} ${unitLabel(unit)}`;
     const fl =
-      altFt >= 18000 ? `FL${Math.round(altFt / 100)}` : quantity(altFt, 'ft');
+      altFt == null
+        ? t('On the ground')
+        : altFt >= 18000
+          ? `FL${Math.round(altFt / 100)}`
+          : quantity(altFt, 'ft');
     const spd = info.velocity
       ? quantity(Math.round(info.velocity * 1.944), 'kts')
       : '';
@@ -1164,7 +1170,7 @@ export function createTracking({
     // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const followRange = Math.min(
-      Math.max((info.altitude || 1500) * 1.1 + 2500, 3000),
+      Math.max((info.onGround ? 0 : info.altitude || 1500) * 1.1 + 2500, 3000),
       30000,
     );
     const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);

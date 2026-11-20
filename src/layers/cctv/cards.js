@@ -229,7 +229,7 @@ export function createCards({ state: layerState, services, parts, source }) {
     let rank = 0;
     const push = (id, { pinned = false, active = false } = {}) => {
       const record = layerState._recordById.get(id);
-      if (!record?.position) return;
+      if (!record?.position || (!active && record.viewGrouped)) return;
       entries.push(
         createCctvThumbnailOverlayEntry({
           id,

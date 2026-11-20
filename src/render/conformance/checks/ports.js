@@ -5356,10 +5356,14 @@ export function portChecks() {
         const chunks = [];
         recorder.ondataavailable = (e) => chunks.push(e.data);
         let colour = '#ff0000';
-        const paint = setInterval(() => {
+        const fill = () => {
           g.fillStyle = colour;
           g.fillRect(0, 0, 32, 32);
-        }, 20);
+        };
+        // Red from the first recorded frame: a blank canvas until the first
+        // tick read dark early in the segment on a loaded runner.
+        fill();
+        const paint = setInterval(fill, 20);
         const wait = (ms) => new Promise((done) => setTimeout(done, ms));
         recorder.start();
         await wait(1000);

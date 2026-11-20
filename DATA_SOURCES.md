@@ -411,7 +411,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | Dataset                                                                     | Folder                            | License                                                                                                   | Commercial use?                                  | Attribution                                                                 |
 | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------- |
 | **Datacenters** (4,352) | `datacenters/` | **ODbL 1.0** (OpenStreetMap extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) |
-| **Dams** (704) | `dams/` | **ODbL 1.0** (OpenInfraMap / OSM extract) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Open Infrastructure Map |
+| **Dams** (706) | `dams/` | **ODbL 1.0** (OpenInfraMap / OSM extract + OSM API) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Open Infrastructure Map |
 | **Military area names** (36,466) | `osm_military_names/` | **ODbL 1.0** (OpenStreetMap, via Overture Maps) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + Overture Maps Foundation |
 | **Ukraine outline** (Rail layer no-positions rule; 1 ring, 7,801 points) | `src/data/railNoPositions.js` | **ODbL 1.0** (OpenStreetMap, via geoBoundaries gbOpen UKR ADM0, commit 9469f09; simplified to 0.0005°) | ✅ (attribution + share-alike on data) | © OpenStreetMap contributors (shared credit) + geoBoundaries |
 | **Québec CCTV source catalog** (1,120 locations) | `public/quebec-cameras.json` | Mixed: MTQ locations CC BY 4.0; Montréal camera nodes ODbL 1.0; scenic records retain per-record provenance. No video files are bundled or cached. | Location data is per-record; video remains hosted by Québec 511 and its platform terms apply; scenic source pages may have separate terms | MTQ / Données Québec CC BY 4.0; © OpenStreetMap contributors (ODbL); scenic operator and position source shown in the selected-camera panel |
@@ -432,7 +432,7 @@ The [Bhote Koshi event pack](public/events/bhote-koshi-2026/README.md), under `p
 | **Yale Bright Star Catalogue** (9,096 stars, sky background)                | `sky/`                            | **Public domain**                                                                                         | ✅ (no restrictions)                             | "Yale Bright Star Catalogue (Hoffleit & Warren, via CDS)" (courtesy credit) |
 | **ESO Milky Way panorama** (eso0932a, blurred cube map, sky background)     | `sky/`                            | **CC BY 4.0**                                                                                             | ✅ (attribution; changes stated)                 | "ESO/S. Brunier"                                                            |
 | **CCTV ground heights** (3,445 cameras)                                     | `cctv_ground_heights/`            | Precomputed camera placement heights, aligned to work with Google Photorealistic 3D Tiles (folder README) | —                                                | —                                                                           |
-| **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 camera-model records) | `src/layers/cctv/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
+| **CCTV Camera Database** model-enrichment extract v2.26.0 + v2.29.0 (20 CCTV and 15 ALPR camera-model records) | `src/layers/cctv/modelSpecs.js`, `src/layers/alpr/modelSpecs.js` | **CC0-1.0** (public domain dedication) | ✅ (no restrictions) | "Specs: cctv-database.com" (courtesy — not legally required) |
 
 ### ⚠️ TeleGeography is bundled but NonCommercial
 
@@ -458,6 +458,17 @@ commercial use with attribution and applicable database share-alike/access
 obligations; it does not license the application code. Trimmed test-only tile
 fixtures retain their provenance in `src/data/fixtures/README.md`.
 
+A mapped `model` tag that names datasheet hardware adds a spec line to the
+selected card. The specs are 16 CC0-1.0 records from the CCTV Camera Database
+model-enrichment extract (v2.29.0): 15 compiled into
+`src/layers/alpr/modelSpecs.js`, with the bare product codes mappers tag added
+as aliases and the SharpV G3 and SharpX XGA titles naming their variant, plus
+the CCTV layer's Bosch MIC-7522-Z30 record. Nothing is fetched at runtime, and
+an unrecognised tag is never displayed. The default hourly extract does not
+carry `model` yet, so the line appears only with a source that supplies it: an
+Overpass-backed source or a custom adapter whose records include the optional
+`model` field.
+
 ### CCTV Camera Database (`src/layers/cctv/modelSpecs.js`)
 
 The CCTV layer's hardware-model specs are a small extract (v2.26.0, plus the Bosch MIC
@@ -474,7 +485,7 @@ credits it anyway as `SPECS: CCTV-DATABASE.COM` beside any spec line it renders.
 
 ### Bundled OpenStreetMap data
 
-Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (via Open Infrastructure Map), [military names](src/data/local_data/osm_military_names/), the Rail layer's Ukraine outline in [`railNoPositions.js`](src/data/railNoPositions.js) (OpenStreetMap via geoBoundaries gbOpen, Runfola et al. 2020, simplified; the module's code stays MIT), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
+Bundled OSM-derived data is distributed under [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/), separately from the MIT code: [datacenters](src/data/local_data/datacenters/), [dams](src/data/local_data/dams/) (from Open Infrastructure Map and the OpenStreetMap API), [military names](src/data/local_data/osm_military_names/), the Rail layer's Ukraine outline in [`railNoPositions.js`](src/data/railNoPositions.js) (OpenStreetMap via geoBoundaries gbOpen, Runfola et al. 2020, simplified; the module's code stays MIT), and [OSM test fixtures](src/data/fixtures/). Keep © OpenStreetMap contributors and offer modified databases under ODbL.
 
 ### NASA FIRMS acknowledgement
 

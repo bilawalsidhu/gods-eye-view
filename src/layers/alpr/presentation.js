@@ -16,6 +16,8 @@ import { boxContains } from './model.js';
 import { msg } from '../../i18n/index.js';
 import { createAlprFloorResolver } from './floors.js';
 import { createAlprOverlay } from './overlay.js';
+import { lookupAlprModelSpec } from './modelSpecs.js';
+import { specSummary } from '../cctv/modelSpecs.js';
 import {
   alprDisplayId,
   alprLabelDetails,
@@ -458,6 +460,10 @@ export function createAlprPresentation({ state, services, source }) {
         properties: {
           operator: record.operator,
           manufacturer: record.manufacturer,
+          spec:
+            specSummary(
+              lookupAlprModelSpec(record.model, record.manufacturer),
+            ) || null,
           cameraType: record.cameraType,
           zone: record.zone,
           directionDeg: record.directionDeg,

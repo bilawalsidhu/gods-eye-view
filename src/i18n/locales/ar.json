@@ -4739,5 +4739,9 @@
   "Select a map item to see its details.": "اختر عنصرًا على الخريطة لرؤية تفاصيله.",
   "Bilawal on {site}": "بلال على {site}",
   "Bilawal's website": "موقع بلال الإلكتروني",
-  "BACK": "رجوع"
+  "BACK": "رجوع",
+  "Finding it…": "جارٍ البحث عنه…",
+  "No reading at this time": "لا توجد قراءة في هذا الوقت",
+  "Last reading · {age}": "آخر قراءة · {age}",
+  "Find it": "اعثر عليه"
 }
