@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { formatDate, formatNumber, t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import UiSlider from '../../kit/UiSlider.js';
@@ -88,8 +89,8 @@ const stationWords = computed(() => ({
   <template v-if="view">
     <div class="station-subject">{{ view.subject }}</div>
     <div class="station-modes" role="radiogroup" :aria-label="t('Mode')" @keydown.left.prevent="stepMode" @keydown.right.prevent="stepMode" @keydown.up.prevent="stepMode" @keydown.down.prevent="stepMode">
-      <button id="station-automatic-btn" type="button" role="radio" class="station-mode" :tabindex="manual ? -1 : 0" :aria-checked="String(!manual)" v-class-toggle="{ 'is-active': !manual }" @click="act('setStationMode', 'automatic')">{{ t('Automatic') }}</button>
-      <button id="station-manual-btn" type="button" role="radio" class="station-mode" :tabindex="manual ? 0 : -1" :aria-checked="String(manual)" v-class-toggle="{ 'is-active': manual }" @click="act('setStationMode', 'manual')">{{ t('Manual') }}</button>
+      <UiButton id="station-automatic-btn" role="radio" class="station-mode" :tabindex="manual ? -1 : 0" :aria-checked="String(!manual)" v-class-toggle="{ 'is-active': !manual }" @click="act('setStationMode', 'automatic')">{{ t('Automatic') }}</UiButton>
+      <UiButton id="station-manual-btn" role="radio" class="station-mode" :tabindex="manual ? 0 : -1" :aria-checked="String(manual)" v-class-toggle="{ 'is-active': manual }" @click="act('setStationMode', 'manual')">{{ t('Manual') }}</UiButton>
     </div>
     <p id="station-telemetry" class="station-telemetry" :data-tone="telemetryTone" role="status" aria-live="polite"><span class="station-telemetry-dot" aria-hidden="true"></span>{{ telemetryText }}</p>
     <p v-if="!manual && sunText" id="station-sun" class="station-note">{{ sunText }}</p>
@@ -98,7 +99,7 @@ const stationWords = computed(() => ({
       <div v-for="group in view.groups" :key="group.id" class="station-group">
         <div class="station-label">{{ t(group.label) }}</div>
         <div v-if="group.kind === 'choices'" class="station-row" role="group" :aria-label="t(group.label)">
-          <button v-for="choice in group.choices" :key="choice.id" type="button" class="station-button" :data-station-choice="`${group.id}:${choice.id}`" v-class-toggle="{ 'is-active': choice.active }" :aria-pressed="String(choice.active)" @click="act('chooseStation', group.id, choice.id)">{{ t(choice.label) }}</button>
+          <UiButton v-for="choice in group.choices" :key="choice.id" class="station-button" :data-station-choice="`${group.id}:${choice.id}`" :pressed="Boolean(choice.active)" pressed-class="is-active" @click="act('chooseStation', group.id, choice.id)">{{ t(choice.label) }}</UiButton>
         </div>
         <div v-else class="station-sliders">
           <label v-for="slider in group.sliders" :key="slider.id" class="station-slider">
@@ -106,12 +107,12 @@ const stationWords = computed(() => ({
             <UiSlider :id="`station-slider-${slider.id}`" :min="slider.min" :max="slider.max" :model-value="slider.value" :aria-label="t(slider.label)" @update:model-value="act('slideStation', slider.id, $event)" />
             <output class="gev-slider-value">{{ formatNumber(slider.value) }}°</output>
           </label>
-          <button v-if="group.resume" type="button" class="station-button" :data-station-resume="group.id" @click="act('resumeStationArm', group.id)">{{ t(group.resume) }}</button>
+          <UiButton v-if="group.resume" class="station-button" :data-station-resume="group.id" @click="act('resumeStationArm', group.id)">{{ t(group.resume) }}</UiButton>
         </div>
         <p v-if="group.note" class="station-note">{{ t(group.note) }}</p>
       </div>
     </template>
-    <button v-if="view.zoom.offered" id="station-zoom-btn" type="button" class="station-button station-zoom" @click="act('zoomStation')">{{ t(view.zoom.label) }}</button>
+    <UiButton v-if="view.zoom.offered" id="station-zoom-btn" class="station-button station-zoom" @click="act('zoomStation')">{{ t(view.zoom.label) }}</UiButton>
   </template>
 </RailPanel>
 </template>

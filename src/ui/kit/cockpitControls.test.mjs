@@ -36,8 +36,12 @@ const views = {
   'panels/CockpitContext.vue': { buttons: 4, icons: 4 },
   // A signal row's target and its chevron.
   'panels/CockpitSignalList.vue': { buttons: 1, icons: 1 },
-  // TLE, Nadir, Zoom out, Zoom in and Sensor.
-  'panels/CockpitOrbital.vue': { buttons: 5, icons: 0 },
+  // TLE, Nadir, Zoom out, Zoom in and Sensor, and a station's Previous and
+  // Next view, which draw the two glyphs.
+  'panels/CockpitOrbital.vue': { buttons: 7, icons: 2 },
+  // The LIVE page's Previous, Next, Play and Try again; the first three draw
+  // a glyph.
+  'panels/CockpitLivePage.vue': { buttons: 4, icons: 3 },
   // The range step.
   'panels/CockpitRadar.vue': { buttons: 1, icons: 0 },
   // The flight plan's arrow.

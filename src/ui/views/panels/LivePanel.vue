@@ -2,6 +2,8 @@
 import { storeToRefs } from 'pinia';
 import { computed, onBeforeUnmount, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { useLiveScreen } from '../../liveScreen.js';
@@ -51,19 +53,19 @@ const liveWords = computed(() => ({
   <template v-if="view">
     <div class="live-subject">{{ view.label }}</div>
     <div class="live-pick" role="group" :aria-label="t('Stream')">
-      <button v-if="view.count > 1" id="live-previous-btn" type="button" class="live-step" @click="act('cycleLive', -1)" :aria-label="t('Previous stream')" :title="t('Previous stream')"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+      <UiButton v-if="view.count > 1" id="live-previous-btn" type="button" class="live-step" @click="act('cycleLive', -1)" :aria-label="t('Previous stream')" :title="t('Previous stream')"><UiIcon name="chevron_left" :size="null" /></UiButton>
       <span id="live-stream-title" class="live-stream-title" aria-live="polite">{{ t(view.current.title) }}<small v-if="view.count > 1"> · {{ view.index + 1 }}/{{ view.count }}</small></span>
-      <button v-if="view.count > 1" id="live-next-btn" type="button" class="live-step" @click="act('cycleLive', 1)" :aria-label="t('Next stream')" :title="t('Next stream')"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+      <UiButton v-if="view.count > 1" id="live-next-btn" type="button" class="live-step" @click="act('cycleLive', 1)" :aria-label="t('Next stream')" :title="t('Next stream')"><UiIcon name="chevron_right" :size="null" /></UiButton>
     </div>
     <p class="live-privacy">{{ t('Video plays from YouTube, which sees your IP address.') }}</p>
     <!-- The player's element stays put across re-renders: LiveControls mounts the player in it. -->
     <div class="live-screen" :class="{ active: playing || loading }">
       <div id="live-player-host" class="live-player-host"></div>
-      <button v-if="idle" id="live-play-btn" type="button" class="live-play" @click="act('playLive')"><span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>{{ t('Play') }}</button>
+      <UiButton v-if="idle" id="live-play-btn" class="live-play" @click="act('playLive')"><UiIcon name="play_arrow" :size="null" />{{ t('Play') }}</UiButton>
       <div v-if="offline || unavailable" class="live-card" :class="{ offline, unavailable }">
         <span class="live-card-dot" aria-hidden="true"></span>
         <strong>{{ offline ? t('Stream is offline') : t('This stream cannot play here') }}</strong>
-        <button v-if="offline" id="live-retry-btn" type="button" @click="act('retryLive')">{{ t('Try again') }}</button>
+        <UiButton v-if="offline" id="live-retry-btn" @click="act('retryLive')">{{ t('Try again') }}</UiButton>
       </div>
     </div>
     <p id="live-status" class="live-status" role="status" aria-live="polite">{{ statusText }}</p>

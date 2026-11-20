@@ -1,6 +1,8 @@
 <script setup>
 import { onBeforeUnmount, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import { useLiveScreen } from '../../liveScreen.js';
 
 // The Cockpit briefing's LIVE page: the LIVE section of Context, in the
@@ -42,19 +44,19 @@ onBeforeUnmount(() => act('hideLive', 'cockpit'));
       <span class="live-badge"><span class="live-dot" :class="{ 'on-air': playing, waiting: loading }" aria-hidden="true"></span><span id="cockpit-live-badge-text">{{ badgeText }}</span></span>
     </div>
     <div class="cockpit-live-pick" role="group" :aria-label="t('Stream')">
-      <button v-if="view.count > 1" id="cockpit-live-previous" type="button" class="live-step" @click="act('cycleLive', -1)" :aria-label="t('Previous stream')" :title="t('Previous stream')"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+      <UiButton v-if="view.count > 1" id="cockpit-live-previous" type="button" class="live-step" @click="act('cycleLive', -1)" :aria-label="t('Previous stream')" :title="t('Previous stream')"><UiIcon name="chevron_left" :size="null" /></UiButton>
       <span id="cockpit-live-stream-title" class="live-stream-title" aria-live="polite">{{ t(view.current.title) }}<small v-if="view.count > 1"> · {{ view.index + 1 }}/{{ view.count }}</small></span>
-      <button v-if="view.count > 1" id="cockpit-live-next" type="button" class="live-step" @click="act('cycleLive', 1)" :aria-label="t('Next stream')" :title="t('Next stream')"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+      <UiButton v-if="view.count > 1" id="cockpit-live-next" type="button" class="live-step" @click="act('cycleLive', 1)" :aria-label="t('Next stream')" :title="t('Next stream')"><UiIcon name="chevron_right" :size="null" /></UiButton>
     </div>
     <p class="live-privacy cockpit-live-privacy">{{ t('Video plays from YouTube, which sees your IP address.') }}</p>
     <!-- The player's element stays put across re-renders: LiveControls mounts the player in it. -->
     <div class="live-screen" :class="{ active: playing || loading }">
       <div id="cockpit-live-player-host" class="live-player-host"></div>
-      <button v-if="idle" id="cockpit-live-play" type="button" class="live-play" @click="act('playLive')"><span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>{{ t('Play') }}</button>
+      <UiButton v-if="idle" id="cockpit-live-play" class="live-play" @click="act('playLive')"><UiIcon name="play_arrow" :size="null" />{{ t('Play') }}</UiButton>
       <div v-if="offline || unavailable" class="live-card" :class="{ offline, unavailable }">
         <span class="live-card-dot" aria-hidden="true"></span>
         <strong>{{ offline ? t('Stream is offline') : t('This stream cannot play here') }}</strong>
-        <button v-if="offline" id="cockpit-live-retry" type="button" @click="act('retryLive')">{{ t('Try again') }}</button>
+        <UiButton v-if="offline" id="cockpit-live-retry" @click="act('retryLive')">{{ t('Try again') }}</UiButton>
       </div>
     </div>
     <p id="cockpit-live-status" class="cockpit-live-status" role="status" aria-live="polite">{{ statusText }}</p>

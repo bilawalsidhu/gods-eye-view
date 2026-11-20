@@ -15,6 +15,7 @@ import {
 } from '../../ownerFlag.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The orbital view's HUD: a nadir reticle over the picture, the satellite's
 // identity and orbit, and the optical zoom. The Cockpit controller presents
@@ -328,9 +329,9 @@ const lensStyle = computed(() => {
         <p v-if="mount === null" class="cockpit-orbital-north">{{ trackUp ? t('TRACK UP') : t('NORTH UP') }}</p>
         <!-- A station view: which one it is, and the step to the next. -->
         <div v-if="mount !== null && mountViews > 1" class="cockpit-orbital-look cockpit-orbital-views">
-          <button id="cockpit-orbital-view-previous" type="button" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Previous station view')" :title="t('Previous station view')"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+          <UiButton id="cockpit-orbital-view-previous" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Previous station view')" :title="t('Previous station view')"><UiIcon name="chevron_left" :size="null" /></UiButton>
           <span id="cockpit-orbital-view-name" class="cockpit-orbital-look-readout" aria-live="polite">{{ mount }}</span>
-          <button id="cockpit-orbital-view-next" type="button" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Next station view')" :title="t('Next station view')"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
+          <UiButton id="cockpit-orbital-view-next" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Next station view')" :title="t('Next station view')"><UiIcon name="chevron_right" :size="null" /></UiButton>
         </div>
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
