@@ -863,7 +863,7 @@ function getCurrentViewState(result) {
   if (!result?.ok) return null;
   const heightM = Number(result.camera?.heightM);
   const height = Number.isFinite(heightM)
-    ? heightM >= 1000
+    ? Math.round(heightM) >= 1000
       ? `${Math.round(heightM / 1000).toLocaleString('en-US')} km up`
       : `${Math.round(heightM)} m up`
     : null;

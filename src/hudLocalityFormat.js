@@ -28,6 +28,17 @@ export function hudQuantity(value, unit, digits = 0) {
   return `${number}${label.toUpperCase()}`;
 }
 
+/**
+ * The summary's altitude tag: metres below 1 km, else kilometres to one
+ * decimal. Metres are rounded before the choice, so 999.6 m reads `1.0KM`,
+ * not `1000M`.
+ */
+export function hudAltitude(altM) {
+  return Math.round(altM) >= 1000
+    ? hudQuantity(altM / 1000, 'km', 1)
+    : hudQuantity(Math.round(altM), 'm');
+}
+
 /** One hemisphere-tagged coordinate, e.g. `21.33N` / `21,33С`. */
 function hudCoordinate(value, positive, negative) {
   return `${hudQuantity(Math.abs(value), '', 2)}${value >= 0 ? positive : negative}`;

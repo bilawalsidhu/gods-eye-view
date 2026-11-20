@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { composeLocalityTag, NEAR_POI_MAX_KM } from './hudLocality.js';
-import { LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import { hudAltitude, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
 import { setLocale } from './i18n/index.js';
 
 const ALCATRAZ = { poi: 'Alcatraz Island', city: 'San Francisco' };
@@ -154,4 +154,11 @@ test('the HUD formatter translates the catalogued city, then upper-cases it', ()
   } finally {
     setLocale('en');
   }
+});
+
+test('the summary ALT tag moves a height that rounds to 1,000 m into kilometres', () => {
+  assert.equal(hudAltitude(999.4), '999M');
+  assert.equal(hudAltitude(999.6), '1.0KM');
+  assert.equal(hudAltitude(1000), '1.0KM');
+  assert.equal(hudAltitude(40210), '40.2KM');
 });
