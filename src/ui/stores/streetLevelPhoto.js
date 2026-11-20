@@ -10,9 +10,12 @@ export const useStreetLevelPhotoStore = defineStore(
   'gev-street-level-photo',
   () => {
     /**
-     * `{host, providerId, label, alt, kind, src, fit, canvasKey, dragging,
-     * prevLabel, prevDisabled, nextLabel, nextDisabled, actions}`, or null
-     * while no photo viewer is mounted.
+     * `{host, mountKey, providerId, label, alt, kind, src, fit, canvasKey,
+     * dragging, prevLabel, prevDisabled, nextLabel, nextDisabled, actions}`,
+     * or null while no photo viewer is mounted. Of the viewers mounting in
+     * the host, only the one mounted last (the largest `mountKey`) is
+     * published; `actions.supersede()` tells the others they are not drawn
+     * (see `ViewerAdapter.subscribeView` in src/layers/streetLevel/registry.js).
      */
     const photo = shallowRef(null);
 

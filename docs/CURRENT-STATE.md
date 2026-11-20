@@ -6369,8 +6369,9 @@ viewer host and hands back the canvas the panorama is drawn on (a fresh one
 after a lost context). Each mount and each canvas has a key of its own, so
 a viewer never draws on another one's elements, and of two viewers
 mounting at once only the later one is drawn (`photoViewers.js`): the
-earlier one's mount closes. Without a subscribed view these photos cannot
-open.
+earlier one's mount closes. A view may draw at once or later; what it
+reads (`mountKey`, `actions.supersede()`) is `ViewerAdapter.subscribeView`
+in `registry.js`. Without a subscribed view these photos cannot open.
 
 Panoramax (`providers/panoramax/`) is keyless and browser-side: the
 meta-catalogue `api.panoramax.xyz` (CORS open) federates every instance, and
