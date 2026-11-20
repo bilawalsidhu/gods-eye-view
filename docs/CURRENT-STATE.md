@@ -1954,6 +1954,16 @@ The row count explicitly says **nearby**: loaded records can be outside the
 screen. Cyan camera badges use Manjunath's camera artwork; selection switches to a
 larger coral badge with corner brackets and an animated tactical card. Numeric
 mapped bearings draw illustrative 90 m direction wedges (not measured coverage).
+A camera whose OSM `model` tag names known hardware (Motorola Solutions Vigilant,
+Genetec AutoVu, Axis, Verkada, Bosch MIC; 408 of the 1,567 tagged cameras
+in October 2026) gets a `SPEC` line on its card from vendored datasheet records
+(`src/layers/alpr/modelSpecs.js`, matched with the CCTV layer's
+`createModelSpecLookup`). A `manufacturer` naming another maker rejects the
+match, and the raw tag text is never shown.
+Unversioned `AutoVu SharpV` and `AutoVu SharpX` tags show no specs; G1/G2
+tags show the G2 (1280x960) record and G3 tags the G3 record. The default
+hourly extract has no `model` field yet; an Overpass-backed source or a custom
+adapter record's optional `model` fills it.
 The shared overlay paints gradients for at most 64 nearby cameras, promoting the
 selected camera; farther cameras keep native Cesium badges without wedges.
 Native ground-clamped wedges (a ground polyline plus a classification polygon per
@@ -8870,6 +8880,9 @@ remembers" are different promises:
   a link restores what its hash carries, and a bare URL starts with the default
   layers and options (`src/ui/shareRestoration.js` passes
   `allowLocalState: false`), so clearing the address always resets the view.
+  A host may name the layers a bare URL starts with (`startLayers` on
+  `createApplicationControls`, e.g. `['flights', 'satellites']`); they are
+  restored passively, never written to storage, and a link's own layers win.
 - **Detection mode/density and scope feather have NO storage key at all.** Their
   only durable carrier is the URL hash (`dm`/`dd`, `scf`), written on a 500 ms
   debounce. A same-URL reload therefore keeps them only if that debounce already
