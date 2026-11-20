@@ -9,6 +9,7 @@ import {
   getAircraftInfo,
   getAircraftTrack,
 } from './queries/aviation.js';
+import { getAirQuality } from './queries/airQuality.js';
 import { getWeatherMap, getWind } from './queries/atmosphere.js';
 import { findSubmarineCables } from './queries/cables.js';
 import {
@@ -26,6 +27,7 @@ import {
   getWeather,
 } from './queries/environment.js';
 import { getBhoteKoshiFlood } from './queries/events.js';
+import { getGnssIntegrity } from './queries/gnss.js';
 import { getActiveFires, getEarthquakes } from './queries/hazards.js';
 import { getRecentImagery } from './queries/imagery.js';
 import { findInfrastructure } from './queries/infrastructure.js';
@@ -107,8 +109,10 @@ export const coreTools = Object.freeze([
   getTransitVehicles,
   getTrafficFlow,
   getWeather,
+  getAirQuality,
   getWeatherMap,
   getWind,
+  getGnssIntegrity,
   getRecentImagery,
   findSubmarineCables,
   findInfrastructure,
