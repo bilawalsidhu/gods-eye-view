@@ -52,9 +52,9 @@ const MODEL_ITEM = 'station:test';
  * A station model over the real rendering part, a fake draw port (the
  * model is an item of a `models` set on it) and a fake camera port. The
  * station and a companion share an orbit (docked); a stranger's dot sits
- * 500 km off.
+ * 500 km off. `showOrbits` is the layer's orbit toggle.
  */
-function fixture(t) {
+function fixture(t, { showOrbits = true } = {}) {
   const stationPos = ecef(ISS, AT_MS);
   const strangerPos = { ...stationPos, x: stationPos.x + 500_000 };
   const camera = fakeCameraPort({
@@ -65,7 +65,7 @@ function fixture(t) {
   const state = {
     now: () => AT_MS,
     _enabled: true,
-    _params: { showPoints: true, showOrbits: true },
+    _params: { showPoints: true, showOrbits },
     _points: new Map(),
     _orbitPaths: new Map(),
     _catalog: new Map([
@@ -497,6 +497,29 @@ test('within its range the model stands in for the dots and hides the ring; beyo
   assert.equal(f.model._visualPosition(), null);
   assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
   assert.equal(f.ring(STATION).show, true, "back to the layer's orbit toggle");
+});
+
+test('after the close-up the rings follow the orbit toggle, the tracked docked object’s too', async (t) => {
+  for (const showOrbits of [true, false]) {
+    const f = fixture(t, { showOrbits });
+    await f.load();
+    // A tracked station's ring (Tiangong's has no rules of its own), and
+    // then a tracked docked object's, as tracking builds them.
+    for (const tracked of [STATION, COMPANION]) {
+      f.track(tracked, f.stationPos);
+      f.parts.rendering._showOrbitPath(tracked, TRACKED_ORBIT_COLOR);
+      f.cameraAt(MAX_M * 2.5);
+      f.tick();
+      assert.equal(f.ring(tracked).show, showOrbits, `${tracked}: built`);
+      f.cameraAt(20_000);
+      f.tick();
+      assert.equal(f.ring(tracked).show, false, `${tracked}: the close-up`);
+      f.cameraAt(MAX_M * 2.5);
+      f.tick();
+      assert.equal(f.ring(tracked).show, showOrbits, `${tracked}: after it`);
+      f.parts.rendering._hideOrbitPath(tracked);
+    }
+  }
 });
 
 test('the dots and the ring come back when the model may not show, and on destroy', async (t) => {

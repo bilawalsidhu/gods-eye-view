@@ -896,3 +896,26 @@ test('a tracked Starlink keeps its ring, and its own dot hidden, over a catalog 
   assert.equal(f.ring(STARLINK)?.show, true, 'its ring is drawn again');
   assert.equal(f.state._points.get(STARLINK).show, false);
 });
+
+test('with Orbits off a tracked satellite’s ring is built hidden, as the ISS’s is', async (t) => {
+  const f = await fixture(t, { companionAnomaly: APART });
+  // Space Missions' Satellite params while it borrows the layer.
+  f.methods.setParams({ showPoints: false, showOrbits: false });
+  f.track(ISS_NORAD);
+  f.nextFrame();
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  f.track(GPS);
+  f.nextFrame();
+  assert.equal(f.ring(GPS).show, false);
+  f.track(COMPANION);
+  f.nextFrame();
+  assert.equal(f.ring(COMPANION).show, false);
+  // A catalog update builds it again, still hidden.
+  await f.refresh();
+  f.nextFrame();
+  assert.equal(f.ring(COMPANION).show, false);
+  // Orbits on: every ring shows.
+  f.methods.setParams({ showOrbits: true });
+  assert.equal(f.ring(COMPANION).show, true);
+  assert.equal(f.ring(ISS_NORAD).show, true);
+});

@@ -474,19 +474,21 @@ export function createStationModel(
     handedCompanions.clear();
   }
 
+  /** Whether the layer's rings show: the layer on and its orbit toggle on. */
+  function _orbitsShown() {
+    return parts.controls.satelliteVisualsVisible(
+      layerState._enabled,
+      layerState._params.showOrbits,
+    );
+  }
+
   /** The station's ring back to its own rules (see `syncOrbit`). */
   function _restoreOrbit() {
     if (spec.syncOrbit) {
       spec.syncOrbit();
       return;
     }
-    parts.rendering._setOrbitPathShown(
-      norad,
-      parts.controls.satelliteVisualsVisible(
-        layerState._enabled,
-        layerState._params.showOrbits,
-      ),
-    );
+    parts.rendering._setOrbitPathShown(norad, _orbitsShown());
   }
 
   /**
@@ -509,12 +511,13 @@ export function createStationModel(
     const companion =
       near && tracked !== norad && _trackedOnStation() ? tracked : null;
     if (companionRingHidden !== null && companionRingHidden !== companion) {
-      // A tracked satellite's ring shows; untracking has already hidden it.
+      // A tracked satellite's ring is back on the layer's orbit toggle, as
+      // it was built; untracking has already removed it.
       if (
         tracked === companionRingHidden &&
         layerState._cockpitHiddenPath !== companionRingHidden
       )
-        parts.rendering._setOrbitPathShown(companionRingHidden, true);
+        parts.rendering._setOrbitPathShown(companionRingHidden, _orbitsShown());
       companionRingHidden = null;
     }
     if (companion !== null) {

@@ -511,7 +511,9 @@ export function createRendering({
    * Show orbital path for a satellite: the ring over one orbit, baked once
    * in ECEF at the current GMST, bright in front of the globe and dimmed
    * behind it (`depthFail`), and turned with the Earth each
-   * `RING_ROTATION_MS` (`_updateOrbitPathRotations`).
+   * `RING_ROTATION_MS` (`_updateOrbitPathRotations`). Built shown only while
+   * the layer is on and its orbit toggle is (rings are not turned while it
+   * is off); the ISS's ring then follows its class too (`_syncIssOrbit`).
    */
 
   function _showOrbitPath(noradId, color) {
@@ -548,7 +550,10 @@ export function createRendering({
         kind: 'solid',
         color: withAlpha(pathColor, RING_BEHIND_ALPHA),
       },
-      show: true,
+      show: parts.controls.satelliteVisualsVisible(
+        layerState._enabled,
+        layerState._params.showOrbits,
+      ),
     };
     layerState._orbitPaths.set(noradId, path);
     sets?.rings.upsert([path.item]);
