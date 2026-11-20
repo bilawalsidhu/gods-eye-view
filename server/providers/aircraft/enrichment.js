@@ -132,7 +132,19 @@ export function adsbdbProxy() {
           if (!/^[A-Z0-9]{2,8}$/.test(cs))
             return send(400, { error: 'invalid callsign' });
           const data = await lookup('route', cs);
-          return send(200, data ? { found: true, ...data } : { found: false });
+          return send(
+            200,
+            data
+              ? {
+                  found: true,
+                  ...data,
+                  source: 'adsbdb',
+                  retrievedAtMs: cache.routes[cs]?.at ?? null,
+                  operatingDate: null,
+                  verification: 'unverified-reference',
+                }
+              : { found: false },
+          );
         }
         if (kind === 'type') {
           const hex = String(rawKey || '').toLowerCase();

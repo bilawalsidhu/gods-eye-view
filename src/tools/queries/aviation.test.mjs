@@ -336,9 +336,13 @@ test('aircraft info combines type and route lookups', async () => {
   });
   assert.equal(
     both.summary,
-    'Aircraft aaa111 is Boeing 737-800 (N12345); flight UAL123 flies SFO to EWR (United Airlines).',
+    'Aircraft aaa111 is Boeing 737-800 (N12345); undated adsbdb reference route for UAL123: SFO to EWR (United Airlines) (unverified for this flight).',
   );
   assert.equal(both.data.route.destination.name, 'Newark');
+  assert.equal(both.data.route.source, 'adsbdb');
+  assert.equal(both.data.route.operatingDate, null);
+  assert.equal(both.data.route.retrievedAtMs, null);
+  assert.equal(both.data.route.verification, 'unverified-reference');
   const unknown = await catalog.call('get_aircraft_info', { callsign: 'XYZ9' });
   assert.equal(unknown.summary, 'No route is known for XYZ9.');
   assert.deepEqual(unknown.data, { aircraft: null, route: null });
