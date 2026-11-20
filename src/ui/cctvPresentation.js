@@ -1,5 +1,9 @@
 import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
-import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
+import {
+  cctvSourceLabelText,
+  cctvSourceMessageText,
+  isCctvLiveFrameFallback,
+} from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
@@ -105,9 +109,10 @@ function metaText(state, enabled, activeCamera, catalogCount) {
     const provider = cctvSourceLabelText(
       activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
     );
-    const statusMsg = activeCamera.sourceMessage
-      ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
-      : '';
+    const statusMsg =
+      activeCamera.sourceMessage && !isCctvLiveFrameFallback(activeCamera)
+        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
+        : '';
     // A partner-supplied feed inside a pack names its owner here.
     const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
     const calBadge = activeCamera.calBadge

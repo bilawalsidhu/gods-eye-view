@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
-import { cctvProxy } from '../../server/providers/cctv.js';
+import { mountCctvProvider } from '../testSupport/cctvProviderHarness.mjs';
 
 const STILL = {
   id: 'still-fixture',
@@ -63,113 +63,17 @@ function upstreamResponse({ status = 200, headers = {}, body = 'payload' }) {
   };
 }
 
-/** Collects what a handler wrote, the way a Node ServerResponse would. */
-function recordingResponse() {
-  const chunks = [];
-  let finished;
-  const done = new Promise((resolve) => {
-    finished = resolve;
-  });
-  const res = {
-    statusCode: 0,
-    headers: {},
-    writableEnded: false,
-    body: '',
-    writeHead(status, headers) {
-      res.statusCode = status;
-      res.headers = { ...res.headers, ...headers };
-    },
-    setHeader(name, value) {
-      res.headers[name] = value;
-    },
-    write(chunk) {
-      chunks.push(Buffer.from(chunk));
-      return true;
-    },
-    end(chunk) {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      res.writableEnded = true;
-      res.body = Buffer.concat(chunks).toString('utf8');
-      finished();
-    },
-    on() {},
-    once() {},
-    emit() {},
-    destroy() {},
-  };
-  return { res, done };
-}
-
-/**
- * Mount the real provider over the fixture cameras and answer every upstream
- * request from the supplied function.
- */
+/** Mount the real provider over the fixture cameras, recording upstream requests. */
 function mount(t, respond) {
-  const before = {
-    json: process.env.CCTV_SOURCES_JSON,
-    file: process.env.CCTV_SOURCES_FILE,
-    austin: process.env.CCTV_FORCE_AUSTIN,
-    serverKey: process.env.GOOGLE_MAPS_SERVER_API_KEY,
-    browserKey: process.env.GOOGLE_MAPS_API_KEY,
-    rateLimit: process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
-  };
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([
-    STILL,
-    STILL_ALIAS,
-    VIDEO,
-    WEBM,
-    MJPEG,
-  ]);
-  process.env.CCTV_SOURCES_FILE = 'absent-source-file.json';
-  process.env.CCTV_FORCE_AUSTIN = '0';
-  // No Street View key: a /frame miss lands on the synthetic billboard rather
-  // than a network call this file does not model.
-  delete process.env.GOOGLE_MAPS_SERVER_API_KEY;
-  delete process.env.GOOGLE_MAPS_API_KEY;
-  // The default Google budget, whatever the shell sets.
-  delete process.env.GEV_RATELIMIT_GOOGLE_PER_MIN;
-  const nativeFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    requests.push({ url: String(url), redirect: init.redirect });
-    return respond({ url: String(url), init });
-  };
-  t.after(() => {
-    globalThis.fetch = nativeFetch;
-    for (const [name, value] of [
-      ['CCTV_SOURCES_JSON', before.json],
-      ['CCTV_SOURCES_FILE', before.file],
-      ['CCTV_FORCE_AUSTIN', before.austin],
-      ['GOOGLE_MAPS_SERVER_API_KEY', before.serverKey],
-      ['GOOGLE_MAPS_API_KEY', before.browserKey],
-      ['GEV_RATELIMIT_GOOGLE_PER_MIN', before.rateLimit],
-    ]) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  });
-
-  let handler = null;
-  cctvProxy().configureServer({
-    middlewares: {
-      use: (_route, fn) => {
-        handler = fn;
-      },
+  const app = mountCctvProvider(t, {
+    cameras: [STILL, STILL_ALIAS, VIDEO, WEBM, MJPEG],
+    fetch: async (url, init = {}) => {
+      requests.push({ url: String(url), redirect: init.redirect });
+      return respond({ url: String(url), init });
     },
   });
-  assert.ok(handler, 'the CCTV provider must mount a middleware');
-
-  const call = async (path, headers = {}, socket) => {
-    const { res, done } = recordingResponse();
-    await handler({ url: path, headers, method: 'GET', on() {}, socket }, res);
-    await done;
-    return res;
-  };
-  const health = async (id) => {
-    const res = await call('/health');
-    return JSON.parse(res.body).cameras.find((entry) => entry.id === id);
-  };
-  return { call, health, requests };
+  return { ...app, requests };
 }
 
 test('a still camera is refused by /media without any upstream request', async (t) => {
@@ -405,24 +309,35 @@ test('every CCTV route refuses cross-site requests and admits the app itself', a
     }),
   );
   const host = 'localhost:5173';
-  const paths = [
-    '/sources',
-    '/health',
-    `/stream/${STILL.id}`,
-    `/frame/${STILL.id}`,
-    `/media/${VIDEO.id}`,
+  const lease = '00000000-0000-4000-8000-000000000000';
+  const routes = [
+    ['GET', '/sources'],
+    ['GET', '/health'],
+    ['GET', `/stream/${STILL.id}`],
+    ['GET', `/frame/${STILL.id}`],
+    ['GET', `/media/${VIDEO.id}`],
+    ['GET', `/media/${VIDEO.id}/seg_0.ts?lease=${lease}`],
+    ['DELETE', `/media/${VIDEO.id}?lease=${lease}`],
   ];
+  // A catalog refresh would fetch the live packs: a refused request must not
+  // start one.
+  process.env.CCTV_FORCE_AUSTIN = '1';
   for (const headers of [
     { host, 'sec-fetch-site': 'cross-site' },
     { host, 'sec-fetch-site': 'same-site' },
     { host, origin: 'https://elsewhere.example' },
     { host, origin: 'null' },
   ])
-    for (const path of paths) {
-      const res = await app.call(path, headers);
-      assert.equal(res.statusCode, 403, `${path} ${JSON.stringify(headers)}`);
+    for (const [method, path] of routes) {
+      const res = await app.call(path, headers, method);
+      assert.equal(
+        res.statusCode,
+        403,
+        `${method} ${path} ${JSON.stringify(headers)}`,
+      );
     }
   assert.deepEqual(app.requests, [], 'a refused request reached an upstream');
+  process.env.CCTV_FORCE_AUSTIN = '0';
   for (const headers of [
     { host, 'sec-fetch-site': 'same-origin' },
     { host, origin: `http://${host}` },
@@ -578,9 +493,11 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
     app.requests.filter(({ url }) =>
       url.startsWith('https://maps.googleapis.com/'),
     ).length;
-  const first = { remoteAddress: '203.0.113.7' };
-  const frameSource = async (socket) =>
-    (await app.call(`/frame/${STILL.id}`, {}, socket)).headers['X-CCTV-Source'];
+  const first = '203.0.113.7';
+  const frameSource = async (address) =>
+    (await app.call(`/frame/${STILL.id}`, {}, 'GET', address)).headers[
+      'X-CCTV-Source'
+    ];
 
   // Without a key nothing is spent.
   for (let i = 0; i < 3; i++)
@@ -590,7 +507,9 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
   process.env.GOOGLE_MAPS_SERVER_API_KEY = 'fixture-key';
   // Neither an unknown id nor a forwarded request spends the window.
   assert.equal(
-    (await app.call('/frame/not-a-camera', {}, first)).headers['X-CCTV-Source'],
+    (await app.call('/frame/not-a-camera', {}, 'GET', first)).headers[
+      'X-CCTV-Source'
+    ],
     'synthetic',
   );
   assert.equal(
@@ -598,6 +517,7 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
       await app.call(
         `/frame/${STILL.id}`,
         { 'x-forwarded-for': '203.0.113.9' },
+        'GET',
         first,
       )
     ).headers['X-CCTV-Source'],
@@ -614,14 +534,11 @@ test('the Street View fallback spends a per-IP Google budget, and only with a ke
   assert.equal(streetViewCalls(), 2, 'no Google call over the budget');
 
   // Another address has a budget of its own.
-  assert.equal(
-    await frameSource({ remoteAddress: '203.0.113.8' }),
-    'streetview',
-  );
+  assert.equal(await frameSource('203.0.113.8'), 'streetview');
   assert.equal(streetViewCalls(), 3);
 
   // Addresses within one IPv6 /64 share a budget.
-  const v6 = (remoteAddress) => frameSource({ remoteAddress });
+  const v6 = frameSource;
   assert.deepEqual(
     [await v6('2001:db8::1'), await v6('2001:db8::2'), await v6('2001:db8::3')],
     ['streetview', 'streetview', 'synthetic'],

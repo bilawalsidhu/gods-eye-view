@@ -202,6 +202,15 @@ voice follow-ups match on them and bikeshare uses the raw station name as its
 ID. The text is still untrusted: normalization does not prevent prompt
 injection.
 
+`src/annotations/screenAnnotationRenderer.js` does not sample the surface
+height under an anchor whose whole accepted height range (-430 to 9000 m) is
+behind the camera or below the globe horizon; such an anchor is hidden. A lone
+point whose range lies outside one plane of the view frustum is not sampled
+either. Points of arrows, routes and areas are sampled even outside the view,
+so the visible part of a mark runs to their real height. Until sampled, a point
+is projected at 0 m. At most 32 samples run per `projectAll()` pass,
+oldest-refused first, and each anchor retries a miss at most once a second.
+
 Terrain height requests accept at most 64 points, matching the browser service's
 existing batch size and one bounded upstream chunk. Larger requests return HTTP
 413 before disk-cache loading or upstream work; malformed coordinates remain 400.
@@ -9924,7 +9933,12 @@ its paint loop. Camera deactivation destroys the decoder, and fatal playback
 errors revert to the labeled frame fallback. Camera changes clear the old panel
 frame. hls.js is imported only when an HLS camera starts. Two live sessions may
 coexist with at most eight independent consumer leases each; no-access lease
-expiry is 15 seconds. Closing one consumer leaves other consumers running. Lease
+expiry is 15 seconds. A viewer refused because every lease or session slot is
+taken gets 503 with `Retry-After: 2` and leaves the camera's health unchanged;
+so does its frame fallback, since an HLS camera without a snapshot has no frame
+of its own. That viewer's panel badge reads FALLBACK · DEGRADED and its meta
+line drops the live health message, since the shared live health does not
+describe the frame it shows. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
