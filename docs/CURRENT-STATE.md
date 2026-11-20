@@ -8439,7 +8439,8 @@ Providers normalize coordinates, canonical name, label, place types and optional
 bounds. Camera framing, nearby landmark recovery and footprint selection remain
 in their consumers, including the Capitol identity/containment safeguards.
 Radio keeps localized country names in labels rather than station filters.
-Nearby/text-search endpoints retain their existing behavior.
+Nearby/text-search cache and error rules are listed under Proxy/Security
+Baseline below.
 
 **Google geocoding is a server route, not a browser call** (#363). Forward and
 reverse lookups go to `/api/google/geocode` and `/api/google/reverse-geocode`,
@@ -8759,6 +8760,7 @@ apply to `public/` assets or built-preview serving.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/vessels` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
+- The Places and geocode routes cache only an answer (`private, max-age=300`). For geocode, that means an HTTP success with `OK` or `ZERO_RESULTS`, because Google sends `REQUEST_DENIED` and `OVER_QUERY_LIMIT` as HTTP 200. Every other reply, including an unreadable Places 200 (now a 502), is `no-store`.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
