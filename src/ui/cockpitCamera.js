@@ -336,7 +336,7 @@ function updateVessel(nowMs) {
  * gives none) and slew toward its heading. A frame that is null, malformed or
  * for another subject ends the view, as an aircraft tracked meanwhile does.
  * The update runs on the provider's `cameraIntervalMs` (0: every frame), and
- * its rates advance by the time that interval spans (cockpitSubjectStepSec).
+ * its rates advance by the time since the last update (cockpitSubjectStepSec).
  */
 function updateSubject(nowMs) {
   const provider = this.subjectProvider;
@@ -357,6 +357,7 @@ function updateSubject(nowMs) {
   }
   this.lastSubjectFrame = frame;
   let heightM = frame.heightM;
+  let held = false;
   if (heightM === null) {
     this.services.warmGroundFloor?.([
       { lat: frame.latitude, lon: frame.longitude },
@@ -366,8 +367,10 @@ function updateSubject(nowMs) {
       frame.longitude,
     );
     // A frame with no height stands on the shared floor; while that is cold
-    // it keeps the height it last stood at.
-    heightM = Number.isFinite(floorM) ? floorM : this.subjectHeightM;
+    // the eye keeps the last height it stood at (a frame's or the floor's),
+    // at first the entry frame's.
+    held = !Number.isFinite(floorM);
+    heightM = held ? this.subjectHeightM : floorM;
   }
   if (!Number.isFinite(heightM)) {
     // Nothing to stand on yet, from the first frame: the camera stays where
@@ -399,6 +402,21 @@ function updateSubject(nowMs) {
   }
   this.surfaceWaitStartedMs = 0;
   this.surfaceAcquiring = false;
+  if (!held) {
+    // The first height to replace the entry frame's is the anchor's at once
+    // (an inertial anchor would close on it only at the horizontal
+    // correction's rate); where the anchor stands, it stays.
+    if (
+      this.subjectHeightFromEntry &&
+      this.cockpitAnchorValid &&
+      heightM !== this.subjectHeightM
+    ) {
+      const anchor = toCartographicRadians(this.cockpitAnchor);
+      if (anchor)
+        this.cockpitAnchor = fromRadians(anchor.lon, anchor.lat, heightM);
+    }
+    this.subjectHeightFromEntry = false;
+  }
   this.subjectHeightM = heightM;
   const target = fromDegrees(frame.longitude, frame.latitude, heightM);
   const dtSec = cockpitSubjectStepSec(nowMs - this.lastFrameMs, intervalMs);
@@ -411,7 +429,9 @@ function updateSubject(nowMs) {
         : slewHeading(
             this.heading ?? frame.headingDeg,
             frame.headingDeg,
-            rate * dtSec,
+            // At most half a turn, which reaches any heading: a huge rate times
+            // the step must not overflow to Infinity and stop the turn.
+            Math.min(rate * dtSec, 180),
           );
   }
   let look = null;
@@ -459,8 +479,10 @@ function updateSubject(nowMs) {
  *   Aircraft pass none and look along the heading at the profile pitch.
  */
 function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
-  if (!this.cockpitAnchorValid) {
-    this.cockpitAnchor = clone(target);
+  // The update that first sets the anchor stands it on the target: the time
+  // before it (an entry, a floor wait) moved nothing, so it has no step.
+  const anchoring = !this.cockpitAnchorValid;
+  if (anchoring) {
     this.cockpitAnchorValid = true;
     this.subjectLiftM = null;
   }
@@ -485,7 +507,7 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     : 0;
 
   const groundClamp = info.groundClamp !== false;
-  if (info.stale || info.anchor === 'exact') {
+  if (anchoring || info.stale || info.anchor === 'exact') {
     // A feed backoff has no authoritative velocity epoch to advance from.
     // Hold the cockpit on the exact layer-rendered position so the camera
     // cannot coast away while the icon correctly remains fixed.
@@ -503,8 +525,8 @@ function placeCamera(target, info, nowMs, dtSec, profile, look = null) {
     );
     const correction = sub(target, this.cockpitAnchor);
     const correctionDistanceM = magnitude(correction);
-    // An application subject's step is already bounded by its own update
-    // interval (cockpitSubjectStepSec); the built-in views keep the 0.1 s.
+    // An application subject's step is already bounded (cockpitSubjectStepSec);
+    // the built-in views keep the 0.1 s.
     const correctionStepM = cockpitAnchorCorrectionStep(
       correctionDistanceM,
       speedMps,

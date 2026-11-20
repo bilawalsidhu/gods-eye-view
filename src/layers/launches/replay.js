@@ -336,6 +336,8 @@ export function createReplay({ state: layerState, services, parts, source }) {
     // The chase camera moves on the frame loop; without one, no replay.
     const frame = findFrame(layerState._viewer);
     if (!layerState._viewer || !launch || !track || !frame) return false;
+    // Not while the layer is going off.
+    if (!layerState._enabled) return false;
     if (layerState._replayCameraLaunchId === launchId) {
       stopMissionReplay();
       return false;

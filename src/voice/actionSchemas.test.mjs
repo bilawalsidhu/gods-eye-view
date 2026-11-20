@@ -61,7 +61,10 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
     // Aircraft feed lookup adds lookupOnly and aircraft-only tracking guidance.
-    'a392aa4b55b31532f0d76ee765292bb7cc47abd1d1cda5138320153f22cce852',
+    // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
+    // visual style; set_cyber_sonar is excluded above).
+    // The Space Missions panel adds one panel target.
+    'a8c4064a27e4a789d7be103e48fad87efb8bdb6f9512008361f495970f8f6451',
   );
 });
 
@@ -194,6 +197,7 @@ test('all legacy action arguments are byte-identical after removing the delibera
         'voice-preview',
         'provider-settings',
         'utilities-panel',
+        'space-missions-panel',
       ].includes(id),
   );
   for (const tool of legacy) {
@@ -230,9 +234,9 @@ test('all legacy action arguments are byte-identical after removing the delibera
     delete center.properties[axis].minimum;
     delete center.properties[axis].maximum;
   }
-  // Cyber adds one HUD layout and Operator was retired.
+  // Operator and then Cyber were retired.
   const hud = property('set_hud').layout;
-  assert.deepEqual(hud.enum, ['tactical', 'minimal', 'cyber']);
+  assert.deepEqual(hud.enum, ['tactical', 'minimal']);
   hud.enum = ['tactical', 'operator', 'minimal'];
   // Snow is retired from set_visual_style; restore it to keep the legacy pin.
   const visualStyle = legacy.find((tool) => tool.name === 'set_visual_style')
@@ -341,5 +345,19 @@ test('tilt accepts an angle with no direction', () => {
   // No range in the schema (prompt budget): the runner clamps to -89..-5.
   assert.ok(
     validateArgs(schema, { motion: 'tilt', pitchDeg: 'steep' }).length > 0,
+  );
+});
+
+test('set_panel_open accepts the Space Missions panel', () => {
+  const schema = GEV_ACTION_SCHEMAS.find(
+    (tool) => tool.name === 'set_panel_open',
+  ).parameters;
+  assert.deepEqual(
+    validateArgs(schema, { panelId: 'space-missions-panel', open: true }),
+    [],
+  );
+  assert.ok(
+    validateArgs(schema, { panelId: 'space-missions', open: true }).length > 0,
+    'the Context mode name is not a panel id',
   );
 });

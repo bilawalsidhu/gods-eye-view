@@ -6,6 +6,7 @@ import {
 } from './localGeojsonCore.js';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { getContextStore } from './contextStore.js';
+import { setClickCardHitTest } from './pickRegistry.js';
 import { readEntityRecord } from './entityRecords.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 const feature = (id, geometry, properties = { name: `Feature ${id}` }) => ({
@@ -159,6 +160,24 @@ test('polygons fill the ground, lines drape, points stand on pins, all shown', a
     readEntityRecord(fill.meta)?.contextId,
   );
   assert.equal(record?.label, 'Feature p');
+});
+
+// The card or label painted on top takes the click: a feature under another
+// layer's card is not selected.
+test("another layer's card over a drawn part keeps the click", async (t) => {
+  const env = await enabledLayer(t, [
+    feature('p', { type: 'Polygon', coordinates: square(0, 0) }),
+  ]);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const fills = env.fake.set('fills');
+  const at = { x: 5, y: 5 };
+  env.click({ screenPosition: at, drawHit: { set: fills.spec.id, id: 'p' } });
+  assert.equal(env.fake.flights.length, 0, 'covered: not selected');
+  top = null;
+  env.click({ screenPosition: at, drawHit: { set: fills.spec.id, id: 'p' } });
+  assert.equal(env.fake.flights.length, 1);
 });
 
 test('a click on a drawn part selects its feature and flies above it', async (t) => {

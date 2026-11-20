@@ -707,13 +707,19 @@ export function createGhostMapsLayer({
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
     _clickSubscription = inputFor(_viewer).onClick((event) => {
-      const cardHit = overlayHost.hitTest?.(
-        event.screenPosition?.x,
-        event.screenPosition?.y,
-        { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink && openExternal) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours opens its source whatever is drawn
+      // under it; another layer's is that layer's click, so the maps under
+      // it do not act and the selection stays.
+      const cardHit = picking.clickCard?.(event) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === GHOSTMAPS_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink &&
+          openExternal
+        )
+          openExternal(_selectedLink);
         return;
       }
       const picked = event.topHit;
@@ -857,9 +863,12 @@ export function createGhostMapsLayer({
             title:
               days === null
                 ? t('Show markers of every age')
-                : t('Maximum event age: {days}d; undated markers are kept', {
-                    days: formatNumber(days),
-                  }),
+                : tn(
+                    days,
+                    'Maximum event age: {days}d; undated markers are kept',
+                    'Maximum event age: {days}d; undated markers are kept',
+                    { days: formatNumber(days) },
+                  ),
             active: days === _ageDays,
             onClick: () => setAgeDays(days),
           })),
@@ -894,7 +903,7 @@ export function createGhostMapsLayer({
           };
         }),
         legend: [],
-        info: `${_ageDays === null ? t('All markers') : t('Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
+        info: `${_ageDays === null ? t('All markers') : tn(_ageDays, 'Event age: {days}d · undated kept', 'Event age: {days}d · undated kept', { days: formatNumber(_ageDays) })} · ${info}`,
         infoTitle: t(
           'S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.',
         ),

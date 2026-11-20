@@ -194,8 +194,10 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    /** The height an application subject's frame last stood at (m). */
+    /** The height an application subject's eye last stood at (m). */
     this.subjectHeightM = null;
+    /** Whether `subjectHeightM` is still the one its entry frame gave. */
+    this.subjectHeightFromEntry = false;
     /** The ground clamp's eased lift under that subject's eye (m). */
     this.subjectLiftM = null;
     /**
@@ -735,8 +737,16 @@ export class CockpitViewController {
   publishCockpitSignals() {
     return publishCockpitSignals.call(this);
   }
-  pushCockpitSignal(key, tone, title, detail, target) {
-    return pushCockpitSignal.call(this, key, tone, title, detail, target);
+  pushCockpitSignal(key, tone, title, detail, target, options) {
+    return pushCockpitSignal.call(
+      this,
+      key,
+      tone,
+      title,
+      detail,
+      target,
+      options,
+    );
   }
   dropCockpitSignal(key) {
     return dropCockpitSignal.call(this, key);

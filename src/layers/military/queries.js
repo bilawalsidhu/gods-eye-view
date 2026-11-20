@@ -19,6 +19,7 @@ import {
   followsClock,
 } from './policy.js';
 import { emergencyBroadcastPhrase } from '../../data/aircraftEmergency.js';
+import { locateOnTrack } from '../../data/locate.js';
 
 export function createQueries({
   flightState,
@@ -109,6 +110,7 @@ export function createQueries({
       derivedSpeedMps: flightState._drSpeedMps,
       derivedTrackDeg: flightState._drCourseDeg,
       reportedSpeedMps: info?.speedMps,
+      derivedFromPlacement: flightState._drSpeedPlaced === true,
       reportedTrackDeg: info?.track,
     });
     const carto = toLonLatH(basePos);
@@ -192,9 +194,12 @@ export function createQueries({
       lon: num(info?.rawLon),
       // altitudeFt is the sticky barometric/MSL aviation field — converted to
       // meters here for shape parity with the flights layer.
-      altitudeM: Number.isFinite(info?.altitudeFt)
-        ? info.altitudeFt * 0.3048
-        : null,
+      // A grounded contact reports only an altitude it gave on the ground.
+      altitudeM: info?.onGround
+        ? (info.groundAltitudeM ?? null)
+        : Number.isFinite(info?.altitudeFt)
+          ? info.altitudeFt * 0.3048
+          : null,
       speedMps: num(info?.speedMps),
       heading: num(info?.track),
       verticalRateMps: num(info?.verticalRateMps),
@@ -249,11 +254,11 @@ export function createQueries({
 
     /**
      * Live layer params.
-     * `models3d` toggles 3D glTF jet-model rendering for the FLEET (altitude-gated): when on,
-     * surrounding military aircraft become 3D models once the camera is zoomed in past
-     * MODEL_ALT_CEIL_M. The TRACKED contact follows the same rule (`_trackedModelRegimeActive`),
+     * `models3d` toggles 3D glTF jet-model rendering for the FLEET: when on, military
+     * aircraft within MODEL_ADD_M (3 km) of the camera become 3D models, drawn at their true
+     * size. The TRACKED contact follows the same rule (`_trackedModelRegimeActive`),
      * so selecting a contact never turns its icon into a model or its model into an icon.
-     * `models3dMode` is 'proximity' (nearest MODEL_MAX in view) or 'all' (every in-view plane).
+     * `models3dMode` is 'proximity' (cap MODEL_MAX) or 'all' (cap MODEL_MAX_ALL); both use the 3 km radius.
      * @param {{models3d?: boolean, models3dMode?: 'proximity'|'all', selectedMilitaryTrackingId?: string|null}} params
      */
     setParams(params = {}, { origin = 'programmatic' } = {}) {
@@ -508,7 +513,9 @@ export function createQueries({
         // TR-3B, not the airframe underneath it.
         const klass = tr3bTypeLabel(icao24, info?.type || 'MIL');
         if (object.klass !== klass) object.klass = klass;
-        const altitudeFt = info?.altitudeFt ?? 0;
+        // A grounded contact shows no flight level, like the civil layer; its
+        // sticky altitudeFt may still be the approach height.
+        const altitudeFt = info?.onGround ? 0 : (info?.altitudeFt ?? 0);
         if (object._altitudeFt !== altitudeFt) {
           object._altitudeFt = altitudeFt;
           // military metadata stores altitudeFt (feet); the helper takes metres
@@ -648,6 +655,46 @@ export function createQueries({
         if (result.length >= limit) break;
       }
       return result;
+    },
+
+    /**
+     * The track reference of a loaded aircraft, so it can be looked up again
+     * once it has left the feed (see locate).
+     * @param {string} icao24
+     * @returns {string|null}
+     */
+    referenceOf(icao24) {
+      const id = String(icao24 ?? '')
+        .trim()
+        .toLowerCase();
+      if (!id) return null;
+      return flightState.records.data.get(id)?.sourceReference ?? id;
+    },
+
+    /**
+     * Where an aircraft is at the layer's time (the world clock's while the
+     * layer follows it, else now), from its own track: for an aircraft that
+     * has left the feed, so it can be found again.
+     * @param {string} icao24
+     * @param {{reference?: string, signal?: AbortSignal}} [options]
+     * @returns {Promise<{status: 'found', lat: number, lon: number,
+     *   altitudeM: ?number, observedAtMs: number}|{status: 'none'}>}
+     */
+    locate(icao24, { reference, signal } = {}) {
+      const atMs = followsClock(flightState) ? flightState.now() : undefined;
+      return locateOnTrack(
+        flightState.feed._source,
+        reference ??
+          flightState.records.data.get(
+            String(icao24 ?? '')
+              .trim()
+              .toLowerCase(),
+          )?.sourceReference ??
+          String(icao24 ?? '')
+            .trim()
+            .toLowerCase(),
+        { atMs, signal },
+      );
     },
 
     /**

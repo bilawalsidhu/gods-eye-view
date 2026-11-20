@@ -122,7 +122,7 @@ export function createRendering({
     glowAlpha = alpha;
     const set = layerState._icons;
     if (!set) return;
-    set.show = layerState._enabled && heat < 1;
+    set.show = layerState._enabled && !layerState._standIn && heat < 1;
     if (!changed || !drawnGlows.size) return;
     const faded = [];
     for (const drawn of drawnGlows.values()) {
@@ -273,7 +273,7 @@ export function createRendering({
     // The map stack may have changed since the last render.
     imagery.rehome();
     ensureHeatRaster(now);
-    imagery.setShow(layerState._enabled);
+    imagery.setShow(layerState._enabled && !layerState._standIn);
   }
 
   /**
@@ -469,7 +469,10 @@ export function createRendering({
       // Blended as one translucent pass, as its billboards were.
       blend: 'translucent',
       horizonCull: true,
-      show: layerState._enabled && !(layerState._handoffHeat >= 1),
+      show:
+        layerState._enabled &&
+        !layerState._standIn &&
+        !(layerState._handoffHeat >= 1),
       drawOrder: spriteDrawOrder?.('firms') ?? 0,
     });
     // Columns of no rows put the set's host in the scene now, rather than

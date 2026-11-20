@@ -380,14 +380,20 @@ export function createPanel({ state: layerState, services, parts, source }) {
 
   function scheduleMissionRosterPreview(index) {
     const launch = layerState._launches[index];
-    if (!launch || layerState._selectedLaunchId) return;
+    // Once the layer is going off (its Satellites restore may still be
+    // running) hovering or focusing a roster row moves no camera.
+    if (!launch || layerState._selectedLaunchId || !layerState._enabled) return;
     if (layerState._missionRosterHoverTimer)
       clearTimeout(layerState._missionRosterHoverTimer);
     layerState._hoveredRosterLaunchId = launch.id;
     parts.overlays.syncMissionOverlayEntries();
     layerState._missionRosterHoverTimer = setTimeout(() => {
       layerState._missionRosterHoverTimer = null;
-      if (layerState._hoveredRosterLaunchId !== launch.id) return;
+      if (
+        layerState._hoveredRosterLaunchId !== launch.id ||
+        !layerState._enabled
+      )
+        return;
       const currentLaunch = resolveMissionRosterPreviewLaunch(
         layerState._launches,
         launch.id,

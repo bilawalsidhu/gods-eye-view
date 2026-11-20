@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createGhostMapsLayer } from './index.js';
+import { setLocale } from '../../i18n/index.js';
+import { createGhostMapsLayer, GHOSTMAPS_OVERLAY_SOURCE_ID } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL } from '../../input/testDoubles.mjs';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -308,6 +312,35 @@ test('age controls default to seven days and widening restores filtered and expi
     'age options are one switch, not product chips',
   );
   assert.equal(ageChip(layer, null).active, true);
+});
+
+test('the event age agrees with its number of days', async (t) => {
+  t.after(() => setLocale('en'));
+  const { layer, viewer } = fixture(t, { reports: [{ name: 'Undated' }] });
+  await layer.update(viewer);
+  const info = () =>
+    layer.getRowControls().info.split(' · ').slice(0, 2).join(' · ');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximum event age: 1d; undated markers are kept',
+  );
+  setLocale('de');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximales Ereignisalter: 1 Tag; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(
+    ageChip(layer, 7).title,
+    'Maximales Ereignisalter: 7 Tage; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(info(), 'Ereignisalter: 7 Tage · undatierte bleiben');
+  await ageChip(layer, 1).onClick();
+  assert.equal(info(), 'Ereignisalter: 1 Tag · undatierte bleiben');
+  setLocale('es');
+  assert.equal(
+    info(),
+    'Antigüedad: 1 día · se conservan los marcadores sin fecha',
+  );
 });
 
 test('age preferences persist independently of product choices and reject invalid storage', async (t) => {
@@ -641,4 +674,110 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  const cards = [];
+  const opened = [];
+  let cardUnder = null;
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top; under it may lie our open card.
+  let labelOver = false;
+  setClickCardHitTest(() =>
+    labelOver
+      ? MISSION_LABEL
+      : cardUnder
+        ? { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID, entryId: cardUnder }
+        : null,
+  );
+  t.after(() => setClickCardHitTest(null));
+  const { layer, viewer, click } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [
+      {
+        name: 'Linked',
+        description:
+          '<table><tr><td>Date</td><td>11/2/2026</td></tr>' +
+          '<tr><td>Source</td><td><a href="https://example.com/report">report</a></td></tr></table>',
+      },
+    ],
+    controls: {
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      picking: { resolvePickId: (picked) => picked?.id ?? null, clickCard },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  inputFor(viewer).onOverlayClick(() => labelOver);
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const [card] = cards.at(-1);
+  assert.equal(card.interactive, true);
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  cardUnder = card.id;
+  labelOver = true;
+  click(null);
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  labelOver = false;
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/report']);
+});
+
+test('a covered selected card yields while genuine GhostMaps markers still select', async (t) => {
+  const cards = [];
+  const opened = [];
+  let painted = [];
+  const { layer, viewer, click } = fixture(t, {
+    reports: [
+      {
+        name: 'First',
+        description: '<a href="https://example.com/first">Source</a>',
+      },
+      {
+        name: 'Second',
+        description: '<a href="https://example.com/second">Source</a>',
+      },
+    ],
+    controls: {
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        // The card on top at a click, as the registry answers from the host.
+        clickCard: () => painted[0] ?? null,
+      },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const first = cards.at(-1)[0];
+  const foreign = {
+    sourceId: 'earthquake-card',
+    entryId: 'earthquake-card:ak1',
+  };
+  painted = [foreign, { sourceId: 's2-ghostmaps', entryId: first.id }];
+  click(null);
+  assert.deepEqual(opened, []);
+  assert.equal(cards.at(-1)[0].id, first.id);
+  // A marker under another layer's card is that card's click too.
+  click('ghostmaps:cip:1:0');
+  assert.equal(cards.at(-1)[0].id, first.id, 'a covered marker yields');
+  painted = [];
+  click('ghostmaps:cip:1:0');
+  const second = cards.at(-1)[0];
+  assert.notEqual(second.id, first.id, 'a bare marker selects');
+  painted = [{ sourceId: 's2-ghostmaps', entryId: second.id }];
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/second']);
+  painted = [];
+  click(null);
+  assert.deepEqual(cards.at(-1), [], 'bare map still clears the selection');
 });

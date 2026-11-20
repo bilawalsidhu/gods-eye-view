@@ -287,6 +287,9 @@ export function normalizeShot(
       hud: {
         visible: typeof hud.visible === 'boolean' ? hud.visible : true,
         variant: typeof hud.variant === 'string' ? hud.variant : 'tactical',
+        // Sonar on beside a layout whose code cannot say so; absent is off
+        // unless the variant names the retired Cyber layout.
+        ...(hud.sonar === true ? { sonar: true } : {}),
       },
       detection: {
         ...(typeof detection.allocation === 'string'

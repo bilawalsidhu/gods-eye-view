@@ -84,10 +84,9 @@
   margin: 0.2rem 0 0.5rem;
 }
 
+/* A UiSearchField (search-field.css). */
 .layer-finder__field {
-  display: flex;
   flex: 1 1 auto;
-  align-items: center;
   gap: 0.35rem;
   padding: 0 0.55rem;
   height: 30px;
@@ -103,11 +102,8 @@
 
 .layer-finder__field input {
   flex: 1 1 auto;
-  min-width: 0;
   color: rgba(236, 244, 248, 0.95);
   font-size: 0.75rem;
-  background: none;
-  border: 0;
   outline: none;
 }
 

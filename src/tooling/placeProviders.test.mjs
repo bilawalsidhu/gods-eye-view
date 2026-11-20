@@ -11,7 +11,11 @@ import {
   _routeInflightCountForTest,
   _setRouteUpstreamIntervalForTest,
 } from '../../server/providers/places/routes.js';
-import { ROUTE_STEPS_MAX } from '../../src/data/routeSteps.js';
+import {
+  ROUTE_STEPS_MAX,
+  normalizeOsrmSteps,
+} from '../../src/data/routeSteps.js';
+import * as placePayloads from '../../src/data/placeProviderPayloads.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -463,6 +467,10 @@ test('identical concurrent route requests make one upstream call', async (t) => 
     0,
     'the in-flight entry is released',
   );
+});
+
+test('the place payloads entry serves the same route steps the dev proxy does', () => {
+  assert.equal(placePayloads.normalizeOsrmSteps, normalizeOsrmSteps);
 });
 
 test('a pathological maneuver count is bounded before it reaches the browser', async (t) => {

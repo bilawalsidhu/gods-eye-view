@@ -703,7 +703,9 @@ html:not([lang='en']) .cockpit-roll-token.is-separator {
   color: var(--cockpit-accent);
   font-size: 12px;
 }
-.cockpit-heading-caret {
+/* Inside the compass, so it outranks the kit icon's own display and
+   line height. */
+.cockpit-compass .cockpit-heading-caret {
   display: block;
   height: 20px;
   color: var(--cockpit-accent);

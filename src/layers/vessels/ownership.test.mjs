@@ -7,6 +7,10 @@ import { createVesselIconBook } from './iconBook.js';
 import { liftedForHorizon } from '../../geo/horizon.js';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
+import { VESSEL_KIND_STYLES } from '../../data/vesselTypes.js';
+import { AID_TO_NAVIGATION_STYLE } from '../../data/vesselLabels.js';
+import { cssColor } from '../../render/color.js';
 
 /** A query port with nothing on screen: the viewer doubles have no scene. */
 const offscreen = {
@@ -90,7 +94,7 @@ const snapshot = (records, extra = {}) => ({
   ...extra,
 });
 
-test('vessel construction is inert and each instance owns its records, icon cache and clock', () => {
+test('vessel construction is inert and each instance owns its records and clock', () => {
   let requested = 0;
   const source = {
     getSnapshot() {
@@ -99,8 +103,7 @@ test('vessel construction is inert and each instance owns its records, icon cach
   };
   const one = createVesselState({ source, services: services() });
   const two = createVesselState({ source, services: services() });
-  for (const key of ['state', 'shipIconCache'])
-    assert.notEqual(one[key], two[key]);
+  assert.notEqual(one.state, two.state);
   assert.notEqual(one.state.records.byId, two.state.records.byId);
   assert.notEqual(one.state.feed, two.state.feed);
   assert.notEqual(one.state.records.all, two.state.records.all);
@@ -557,7 +560,7 @@ test('AIS feed rows stay keyed by their MMSI', async () => {
   );
 });
 
-test('an aid to navigation is drawn as a disc, a vessel as its chevron', async () => {
+test('an aid to navigation is drawn as the upright buoy, a vessel as its kind’s hull turned with course', async () => {
   const aid = {
     ...observation('993672001'),
     mmsi: '993672001',
@@ -565,26 +568,62 @@ test('an aid to navigation is drawn as a disc, a vessel as its chevron', async (
     speedMps: 0,
   };
   const ship = { ...observation('366999002'), type: 'Cargo' };
+  const sailing = { ...observation('366999003'), type: '36' };
+  const { layer, icons } = setup({
+    async getSnapshot() {
+      return snapshot([aid, ship, sailing]);
+    },
+  });
+  await layer.update();
+  const itemOf = (id) => {
+    assert.ok(icons.has(id), id);
+    return icons.item(id);
+  };
+  const buoy = itemOf('993672001');
+  assert.equal(buoy.image, aidSprite());
+  assert.equal(buoy.rotationMode, 'screen', 'upright');
+  assert.equal(buoy.rotation, 0, 'never turned');
+  assert.deepEqual(buoy.color, cssColor(AID_TO_NAVIGATION_STYLE.css));
+  // The source's virtual flag reaches the layer's record.
+  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
+  assert.equal(recordOf('993672001').virtual, false);
+  assert.equal(recordOf('366999002').virtual, false);
+  const cargo = itemOf('366999002');
+  assert.equal(cargo.image, vesselSprite('cargo'));
+  assert.equal(cargo.rotationMode, 'course');
+  assert.deepEqual(cargo.color, cssColor(VESSEL_KIND_STYLES.cargo.css));
+  const sail = itemOf('366999003');
+  assert.equal(sail.image, vesselSprite('sailing'));
+  assert.deepEqual(sail.color, cssColor(VESSEL_KIND_STYLES.sailing.css));
+  // Every vessel and aid draws the same size before its speed scale.
+  assert.deepEqual(cargo.size, buoy.size);
+  assert.deepEqual(sail.size, buoy.size);
+});
+
+test('selecting a vessel or an aid never changes its colour', async () => {
+  const aid = {
+    ...observation('993672002'),
+    mmsi: '993672002',
+    type: 'Port Hand Mark',
+    speedMps: 0,
+  };
+  const ship = { ...observation('366999004'), type: 'Cargo' };
   const { layer, icons } = setup({
     async getSnapshot() {
       return snapshot([aid, ship]);
     },
   });
   await layer.update();
-  const svgOf = (id) => {
-    assert.ok(icons.has(id), id);
-    return atob(icons.item(id).image.split(',')[1]);
-  };
-  assert.match(svgOf('993672001'), /<circle/);
-  // The source's virtual flag reaches the layer's record.
-  const recordOf = (id) => layer.testing._vesselRecordForTest(id);
-  assert.equal(recordOf('993672001').virtual, false);
-  assert.equal(recordOf('366999002').virtual, false);
-  assert.doesNotMatch(svgOf('993672001'), /<path/);
-  assert.match(svgOf('366999002'), /<path/);
+  for (const [id, css] of [
+    ['366999004', VESSEL_KIND_STYLES.cargo.css],
+    ['993672002', AID_TO_NAVIGATION_STYLE.css],
+  ]) {
+    assert.equal(layer.selectById(id), true);
+    assert.deepEqual(icons.item(id).color, cssColor(css), id);
+  }
 });
 
-test('a virtual aid to navigation keeps its disc and its virtual flag', async () => {
+test('a virtual aid to navigation keeps its buoy and its virtual flag', async () => {
   const aid = {
     ...observation('993672009'),
     mmsi: '993672009',
@@ -599,7 +638,7 @@ test('a virtual aid to navigation keeps its disc and its virtual flag', async ()
   await layer.update();
   assert.ok(icons.has('993672009'));
   assert.equal(layer.testing._vesselRecordForTest('993672009').virtual, true);
-  assert.match(atob(icons.item('993672009').image.split(',')[1]), /<circle/);
+  assert.equal(icons.item('993672009').image, aidSprite());
 });
 
 test('a feed with no AISStream key reports its key as required, and a live one does not', async () => {

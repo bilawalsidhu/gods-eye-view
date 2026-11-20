@@ -28,6 +28,33 @@ const sameColor = (a, b) =>
     a.length === b.length &&
     a.every((value, i) => value === b[i]));
 
+/** `trackedIconColor`'s answers, by base colour then alpha. */
+const tintsAtAlpha = new Map();
+
+/**
+ * The tracked icon's colour: the contact's own colour (the one its fleet
+ * icon draws in), at `alpha`. Tracking never recolours a contact; only the
+ * alpha changes (faded while stale, clear while its model draws it). One
+ * frozen array per colour and alpha, so a frame allocates nothing.
+ * @param {ArrayLike<number>} color The contact's RGBA colour, 0..1.
+ * @param {number} alpha
+ * @returns {readonly number[]}
+ */
+export function trackedIconColor(color, alpha) {
+  if (color[3] === alpha && Object.isFrozen(color)) return color;
+  let byAlpha = tintsAtAlpha.get(color);
+  if (!byAlpha) {
+    byAlpha = new Map();
+    tintsAtAlpha.set(color, byAlpha);
+  }
+  let tint = byAlpha.get(alpha);
+  if (!tint) {
+    tint = Object.freeze([color[0], color[1], color[2], alpha]);
+    byAlpha.set(alpha, tint);
+  }
+  return tint;
+}
+
 /**
  * Whether `setId` names another layer's tracked icon set: a layer must not
  * take a pick of that icon for one of its own contacts.

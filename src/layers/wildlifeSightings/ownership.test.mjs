@@ -196,8 +196,9 @@ function harness(
       },
       setVisible: (id, value) => overlay.visible.set(id, value),
       clearSource: (id) => overlay.entries.delete(id),
-      hitTest: (_x, _y, { sourceId }) =>
-        cardHit?.sourceId === sourceId ? cardHit : null,
+      // As the host does: unfiltered, the topmost entry.
+      hitTest: (_x, _y, { sourceId } = {}) =>
+        !sourceId || cardHit?.sourceId === sourceId ? cardHit : null,
     },
     input: () => ({
       onClick(fn) {
@@ -220,6 +221,8 @@ function harness(
       unregisterPickOwner: (id) => owners.delete(id),
       resolvePickId: (pick) => pick?.id ?? pick?.primitive?.id,
       isOwnedByOtherLayer: (_layerId, id) => id?.startsWith('other:'),
+      // The card on top at a click, as the registry answers from the host.
+      clickCard: () => cardHit,
     },
     sprites: { spriteDrawOrder: () => -9 },
     render: { governorRequestRender: (reason) => renders.push(reason) },
@@ -1936,7 +1939,7 @@ test('unavailable grids fail closed to visible sampled sprites without a global 
   assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
   assert.ok(h.clicks.collection.values[0].size[0] * 0.5 >= 8);
   assert.equal(h.layer.getStats().count, 1);
-  assert.match(h.layer.getStats().countLabel, /sightings in view/);
+  assert.equal(h.layer.getStats().countLabel, '1 sighting in view');
   assert.equal(h.layer.getStats().partial, undefined);
   assert.equal(layerFeedState(h.layer.getStats()), 'degraded');
   assert.match(h.layer.getStats().error, /Malformed iNaturalist grid response/);
@@ -1973,7 +1976,7 @@ test('an oversized view coarsens to a complete grid within the six-tile cap', as
   await h.update();
   assert.equal(h.clicks.collection.values.length, 1);
   assert.equal(h.clicks.collection.values[0].id, 'wildlife:inat:1');
-  assert.match(h.layer.getStats().countLabel, /sightings in view/);
+  assert.match(h.layer.getStats().countLabel, /sightings? in view/);
   assert.equal(layerFeedState(h.layer.getStats()), 'nominal');
   h.layer.destroy();
 });

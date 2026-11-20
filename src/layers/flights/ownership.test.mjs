@@ -4,6 +4,8 @@ import { createCivilFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createEnrichment } from './enrichment.js';
 import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 import { LiveSourceError } from '../../sources/live/contract.js';
 
 function services() {
@@ -606,5 +608,121 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
     destination: { code: 'NEWD' },
   });
   assert.equal(meta.routeCallsign, 'UAL10');
+  flightState.lifetime.abort();
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
+});
+
+test("a type lookup overrides the feed's type and fills the type name", async () => {
+  const queries = [];
+  const source = {
+    getEnrichment(query) {
+      queries.push(query);
+      return Promise.resolve({
+        found: true,
+        typeCode: 'B738',
+        typeName: 'Boeing 737-800',
+        registration: 'N123AB',
+      });
+    },
+  };
+  const flightState = createFlightState({ source, services: services() });
+  const view = {
+    viewerLatDeg: null,
+    viewerLonDeg: null,
+    trackedId: null,
+    floorWarmPoints: [],
+  };
+  const { meta } = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  );
+  assert.equal(meta.klass, 'helicopter', 'classed by the feed type at once');
+  const restyled = [];
+  const synced = [];
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {
+      icons: { _applyIconPresentation: (id) => restyled.push(id) },
+      rendering: { _syncModelToClass: (id) => synced.push(id) },
+    },
+  });
+  // A present feed type does not skip the lookup.
+  enrichment._requestTypeEnrichment('abc123', true);
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, [{ kind: 'type', id: 'abc123' }]);
+  const looked = flightState.records.data.get('abc123');
+  assert.equal(looked.typeCode, 'B738');
+  assert.equal(looked.typeName, 'Boeing 737-800');
+  assert.equal(looked.registration, 'N123AB');
+  assert.equal(looked.klass, 'airliner');
+  assert.deepEqual(restyled, ['abc123']);
+  assert.deepEqual(synced, ['abc123']);
+  // The next poll's feed type no longer wins.
+  const next = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  ).meta;
+  assert.equal(next.typeCode, 'B738');
+  assert.equal(next.klass, 'airliner');
   flightState.lifetime.abort();
 });

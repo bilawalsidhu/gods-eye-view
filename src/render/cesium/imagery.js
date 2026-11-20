@@ -18,13 +18,21 @@
  * `prefetch` frames loading unseen at alpha 0. A frame is ready
  * (`frameReady`) once the globe's tiles drawn are drawn from its own
  * imagery (`imageryFrames.js`).
+ *
+ * With `imageryDecoded`, a `decoded` source is drawn the same way, a layer
+ * a slot: the slot its clock shows, and the next `prefetch` of the slots the
+ * source holds ahead, each tile the image the source answers for it.
  */
 import * as Cesium from 'cesium';
 import { vectorBaseProvider } from './vectorBase.js';
 import { creditMarkup } from './credits.js';
 import { listenerList } from './common.js';
 import {
+  MissingTile,
   createTileVideos,
+  decodedHeld,
+  decodedProvider,
+  decodedShownAt,
   framesOf,
   heldFrames,
   layerDrawn,
@@ -40,14 +48,6 @@ const DRAPES = new Set(['surface', 'objects', 'all']);
 export const TILE_RETRY_DELAY_MS = 250;
 /** Ion's world imagery assets, by contract style. */
 const WORLD_ASSETS = { aerial: 2, aerialLabels: 3 };
-
-/** A tile the source says is not there: Cesium draws the parent's. */
-class MissingTile extends Error {
-  constructor() {
-    super('No tile here');
-    this.name = 'MissingTile';
-  }
-}
 
 const rectangleOf = (rect) =>
   rect &&
@@ -676,11 +676,21 @@ export function createCesiumImagery(
     };
     if (capabilities.has('imageryFrames')) {
       handle.setFrames = (source, options = {}) => {
+        const decoded = source?.kind === 'decoded';
+        if (decoded && !capabilities.has('imageryDecoded'))
+          throw new TypeError('decoded imagery needs imageryDecoded');
+        if (
+          decoded &&
+          (typeof source.slotAt !== 'function' ||
+            typeof source.tile !== 'function')
+        )
+          throw new TypeError('a decoded source needs slotAt and tile');
         const frames = framesOf(source);
         if (record.removed) return;
         dropFrames(record);
         record.timed = {
           video: source.kind === 'video',
+          decoded: decoded ? source : null,
           frames,
           mode: options.mode === 'blend' ? 'blend' : 'nearest',
           prefetch: Math.max(0, Math.floor(options.prefetch ?? 1)),
@@ -723,12 +733,24 @@ export function createCesiumImagery(
   function frameLayer(record, frame) {
     const timed = record.timed;
     const spec = { ...record.spec, url: frame.url };
-    const entry = { layer: null, host: null, offError: null };
+    const entry = {
+      layer: null,
+      host: null,
+      offError: null,
+      signals: new Set(),
+    };
     let made;
     try {
-      made = timed.video
-        ? videoProvider(record.spec, frame, timed.videos)
-        : providerFor(spec, { worldDataToken: worldDataToken() });
+      made = timed.decoded
+        ? decodedProvider(record.spec, frame.slot, timed.decoded, {
+            laterFrame,
+            signals: entry.signals,
+            urgency: () =>
+              timed.at?.nearest === frame.slot ? 'shown' : 'prefetch',
+          })
+        : timed.video
+          ? videoProvider(record.spec, frame, timed.videos)
+          : providerFor(spec, { worldDataToken: worldDataToken() });
     } catch (error) {
       report(error);
       made = Promise.reject(error);
@@ -746,7 +768,9 @@ export function createCesiumImagery(
     } else {
       entry.offError = record.watchErrors(made);
       entry.layer = new Cesium.ImageryLayer(
-        timed.video ? made : hookProvider(made, spec, record.ctx),
+        timed.video || timed.decoded
+          ? made
+          : hookProvider(made, spec, record.ctx),
         layerOptions(spec),
       );
     }
@@ -756,6 +780,9 @@ export function createCesiumImagery(
 
   function dropFrameLayer(entry) {
     entry.removed = true;
+    // A decoded slot's tiles still asked for are not wanted any more.
+    for (const controller of entry.signals) controller.abort();
+    entry.signals.clear();
     entry.offError?.();
     if (usable(entry.host) && entry.host.contains(entry.layer))
       entry.host.remove(entry.layer, true);
@@ -785,9 +812,15 @@ export function createCesiumImagery(
       const timed = record.timed;
       if (!timed || record.removed) continue;
       const ms = timed.clock === 'own' ? (timed.own ?? NaN) : sceneMs;
-      const at = shownAt(timed.frames, ms, timed.mode);
+      const at = timed.decoded
+        ? decodedShownAt(timed.decoded, ms)
+        : shownAt(timed.frames, ms, timed.mode);
       timed.at = at;
-      const held = at ? heldFrames(timed.frames, at, timed.prefetch) : [];
+      const held = !at
+        ? []
+        : timed.decoded
+          ? decodedHeld(timed.decoded, at, timed.prefetch, ms)
+          : heldFrames(timed.frames, at, timed.prefetch);
       for (const [index, entry] of timed.layers)
         if (!held.includes(index) || entry.layer.isDestroyed()) {
           dropFrameLayer(entry);
@@ -802,7 +835,10 @@ export function createCesiumImagery(
       for (const index of held.sort((a, b) => a - b)) {
         let entry = timed.layers.get(index);
         if (!entry) {
-          entry = frameLayer(record, timed.frames[index]);
+          entry = frameLayer(
+            record,
+            timed.decoded ? { slot: index, url: '' } : timed.frames[index],
+          );
           timed.layers.set(index, entry);
         }
         const layer = entry.layer;
@@ -846,7 +882,9 @@ export function createCesiumImagery(
       const timed = record.timed;
       // A layer removed by another's listener says nothing.
       if (record.removed || !timed?.at || !record.show) continue;
-      const time = timed.frames[timed.at.nearest].time;
+      const time = timed.decoded
+        ? timed.at.nearest
+        : timed.frames[timed.at.nearest].time;
       if (time === timed.announced) continue;
       if (!timed.at.shown.every((s) => frameDrawn(timed.layers.get(s.index))))
         continue;

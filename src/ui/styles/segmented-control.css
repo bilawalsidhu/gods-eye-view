@@ -1,4 +1,6 @@
-/* Shared one-of-many control. Feature classes retain surrounding placement. */
+/* Shared one-of-many control. Feature classes retain surrounding placement.
+   The kit's UiSegmented (.ui-segmented, .ui-segmented__item) wears it. */
+.ui-segmented,
 .gev-segmented {
   display: inline-flex;
   min-width: 0;
@@ -6,9 +8,11 @@
   border-radius: 6px;
   overflow: hidden;
 }
+.ui-segmented[hidden],
 .gev-segmented[hidden] {
   display: none;
 }
+.ui-segmented__item,
 .gev-segment {
   flex: 1;
   min-width: min-content;
@@ -28,23 +32,28 @@
     background-color var(--transition-fast),
     color var(--transition-fast);
 }
+.ui-segmented__item + .ui-segmented__item,
 .gev-segment + .gev-segment {
   border-left: 1px solid var(--glass-border);
 }
+.ui-segmented__item:hover:not(:disabled),
 .gev-segment:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
+.ui-segmented__item[aria-checked='true'],
 .gev-segment[aria-checked='true'] {
   background: var(--accent);
   color: #000;
 }
+.ui-segmented__item:focus-visible,
 .gev-segment:focus-visible {
   position: relative;
   outline: 2px solid var(--text-primary);
   outline-offset: -3px;
   box-shadow: inset 0 0 0 4px #061014;
 }
+.ui-segmented__item:disabled,
 .gev-segment:disabled {
   opacity: 0.42;
   cursor: not-allowed;

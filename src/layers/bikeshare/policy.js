@@ -15,6 +15,22 @@ const ACTIVATION_ALTITUDE_M = 50000;
 
 export const ACTIVATION_ENTER_ALTITUDE_M = ACTIVATION_ALTITUDE_M - 2000;
 
+/**
+ * Where a covered city's marker flies to: straight down from this height,
+ * well inside the activation band, with the city's stations in view.
+ */
+export const COVERAGE_FLY_HEIGHT_M = 20000;
+
+/** A covered city's marker: the stations' green, larger, ringed in white. */
+export const COVERAGE_PIXEL_SIZE = 11;
+export const COVERAGE_OUTLINE_WIDTH = 2;
+
+/**
+ * A marker's height: above the highest covered city's ground, so terrain
+ * never hides it, while the globe itself hides the markers behind it.
+ */
+export const COVERAGE_HEIGHT_M = 5000;
+
 /** Hysteresis exit threshold — layer deactivates when camera rises above this. */
 
 export const ACTIVATION_EXIT_ALTITUDE_M = ACTIVATION_ALTITUDE_M + 2000;

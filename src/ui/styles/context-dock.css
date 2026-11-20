@@ -97,14 +97,13 @@ body.mobile-shell .context-dock-btn {
 
 /* Context's own search field, under the header: narrows what the panel shows.
    Sized and framed like the tab bar beneath it. */
+/* A UiSearchField (search-field.css). */
 .context-search {
   position: sticky;
   top: 0;
   z-index: 2;
-  display: flex;
   flex: none;
   box-sizing: border-box;
-  align-items: center;
   gap: 8px;
   min-height: 34px;
   margin: 0 0 0.5rem;
@@ -132,15 +131,12 @@ body.mobile-shell .context-dock-btn {
 
 .context-search__input {
   flex: 1;
-  min-width: 0;
   height: 100%;
   padding: 0;
   color: var(--text-primary, #e8eaed);
   font: inherit;
   font-size: 0.74rem;
   line-height: 32px;
-  background: transparent;
-  border: 0;
   outline: 0;
 }
 
@@ -148,18 +144,15 @@ body.mobile-shell .context-dock-btn {
   display: none;
 }
 
+/* A UiCloseButton (close-button.css). */
 .context-search__clear {
   display: grid;
   flex: none;
   place-items: center;
   width: 24px;
   height: 24px;
-  padding: 0;
   color: rgba(199, 214, 222, 0.65);
-  background: transparent;
-  border: 0;
   border-radius: 50%;
-  cursor: pointer;
 }
 
 .context-search__clear:hover,

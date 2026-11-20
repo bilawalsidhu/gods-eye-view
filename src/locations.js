@@ -32,21 +32,31 @@ export const GLOBE_VIEW = Object.freeze({
 
 /**
  * Fly straight out to the full-earth globe view, keeping the current sub-camera
- * point centered so the user's continent stays in front of them.
+ * point centered so the user's continent stays in front of them. With `view`
+ * (`{ lon, lat, height, heading?, pitch? }`, angles in degrees, as the start
+ * view is given), fly to that view instead.
  * @param {object} viewer
- * @param {{duration?: number, onComplete?: Function, onCancel?: Function}} options
+ * @param {{duration?: number, onComplete?: Function, onCancel?: Function,
+ *   view?: {lon: number, lat: number, height: number, heading?: number,
+ *   pitch?: number}}} options
  * @returns {{latitude: number, longitude: number, heightM: number}}
  */
 export function flyToGlobeView(viewer, options = {}) {
   const camera = cameraOf(viewer);
-  const { lon: longitude, lat: latitude } = camera.pose();
+  const here = camera.pose();
+  const view = options.view ?? {
+    lon: here.lon,
+    lat: here.lat,
+    height: GLOBE_VIEW.heightM,
+  };
+  const { lon: longitude, lat: latitude, height: heightM } = view;
   camera.cancelFlight();
   camera.flyTo(
-    { lon: longitude, lat: latitude, height: GLOBE_VIEW.heightM },
+    { lon: longitude, lat: latitude, height: heightM },
     {
       orientation: {
-        heading: 0,
-        pitch: toRadians(GLOBE_VIEW.pitchDeg),
+        heading: toRadians(view.heading ?? 0),
+        pitch: toRadians(view.pitch ?? GLOBE_VIEW.pitchDeg),
         roll: 0,
       },
       durationS: finitePositive(options.duration) || GLOBE_VIEW.durationS,
@@ -55,7 +65,7 @@ export function flyToGlobeView(viewer, options = {}) {
       onCancel: options.onCancel,
     },
   );
-  return { latitude, longitude, heightM: GLOBE_VIEW.heightM };
+  return { latitude, longitude, heightM };
 }
 
 /**

@@ -219,7 +219,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       for (let i = start; i < records.length; i += stride) {
         const camera = records[i].camera;
         objects.push({
-          position: records[i].position,
+          // A camera sharing its mount is drawn beside its mates.
+          position: records[i].spreadPosition ?? records[i].position,
           sourceId: camera.id,
           // Short semantic code where the id is opaque (see cameraDisplayCode).
           id: `CAM-${camera.code || camera.id}`,
@@ -333,6 +334,25 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);
       }
       return nextId;
+    },
+
+    /**
+     * Selects the camera nearest a WGS84 point and optionally flies to it.
+     * @param {number} lat Latitude in degrees.
+     * @param {number} lon Longitude in degrees.
+     * @param {Object} [options={}]
+     * @param {boolean} [options.focus=true] Whether to fly after selection.
+     * @param {number} [options.durationSec] Fly-to duration in seconds.
+     * @returns {string|null} Camera ID, or null (invalid point, empty catalog).
+     */
+    focusNearestToPoint(lat, lon, options = {}) {
+      const nearest = parts.navigation.nearestCameraIdToPoint(lat, lon);
+      if (!nearest) return null;
+      parts.selection.setActiveCamera(nearest);
+      if (options.focus !== false) {
+        parts.navigation.focusCamera(nearest, options.durationSec || 1.8);
+      }
+      return nearest;
     },
 
     /**

@@ -168,3 +168,30 @@ test('captured scope and extended detection edits survive migration', () => {
     project.scenes[0].shots[0].visual.detection,
   );
 });
+
+test('a shot keeps Sonar beside its HUD layout; one without it reads as before', () => {
+  const project = fixture();
+  const shot = project.scenes[0].shots[0];
+  shot.visual = { hud: { visible: true, variant: 'minimal', sonar: true } };
+  const read = (p) =>
+    normalizeProject(parseSceneDocument(JSON.stringify(p))).scenes[0].shots[0]
+      .visual.hud;
+  assert.deepEqual(read(project), {
+    visible: true,
+    variant: 'minimal',
+    sonar: true,
+  });
+  // Older shots name no Sonar: the layout alone, Cyber included, as before.
+  for (const variant of ['minimal', 'cyber']) {
+    shot.visual = { hud: { visible: true, variant } };
+    assert.deepEqual(read(project), { visible: true, variant });
+  }
+  // Off is the meaning of an absent field, so it is not kept.
+  shot.visual = { hud: { variant: 'minimal', sonar: false } };
+  assert.equal(Object.hasOwn(read(project), 'sonar'), false);
+  shot.visual = { hud: { variant: 'minimal', sonar: 'on' } };
+  assert.throws(
+    () => validateSceneDocument(project),
+    /\$\.scenes\[0\]\.shots\[0\]\.visual\.hud\.sonar/,
+  );
+});

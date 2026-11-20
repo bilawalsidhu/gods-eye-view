@@ -65,7 +65,15 @@ function recordingTrail() {
   };
 }
 
-function trackedHarness({ liveFixes = [], trace = null, nowMs, floor, head }) {
+function trackedHarness({
+  liveFixes = [],
+  trace = null,
+  nowMs,
+  floor,
+  head,
+  placed = false,
+  warmingUp = false,
+}) {
   const trail = recordingTrail();
   const svc = services({ trails: trail, floor });
   const flightState = createFlightState({
@@ -104,7 +112,9 @@ function trackedHarness({ liveFixes = [], trace = null, nowMs, floor, head }) {
     services: svc,
     parts: {
       motion: {
-        _isTrackWarmingUp: () => false,
+        _isTrackWarmingUp: () => warmingUp,
+        _trackedPlaced: () => placed,
+        _trackedDisplayCached: () => head ?? null,
         _trackedTrailCached: () => head ?? null,
         _trackedDisplayPosition: () => head ?? null,
         _trackedModelCenterWorld: () => null,
@@ -255,4 +265,37 @@ test('a full 24 h military trace fits within TRAIL_MAX_POINTS without thinning',
   await settle();
   assert.ok(TRAIL_MAX_POINTS >= day + 500);
   assert.equal(flightState._trailFixes.length, day + 1);
+});
+
+test('a placed military aircraft drawn ahead of the display delay keeps its trail joined to it', () => {
+  const t0 = Date.UTC(2026, 10, 8, 0, 0);
+  const liveFixes = [0, 1, 2, 3].map((i) => ({
+    timeMs: t0 + i * MINUTE,
+    lat: 50,
+    lon: 1 + i * 0.12,
+  }));
+  // Warming up by the layer's own delay; the placement draws it between the
+  // third and fourth reports.
+  const near = Cesium.Cartesian3.fromDegrees(1.3, 50, 9_000);
+  const harness = trackedHarness({
+    liveFixes,
+    nowMs: t0 + 3.5 * MINUTE,
+    head: near,
+    placed: true,
+    warmingUp: true,
+  });
+  harness.flightState._displayDelay = { currentMs: 10 * MINUTE };
+  harness.tracking._startTrail('ae0001');
+  const body = harness.trail.last()[0];
+  assert.equal(harness.trail.last().length, 1);
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      body[body.length - 1],
+      Cesium.Cartesian3.fromDegrees(1.24, 50, 9_000),
+    ) < 1,
+  );
+  const drawn = harness.headPositions();
+  assert.ok(drawn.length >= 2);
+  assert.ok(Cesium.Cartesian3.distance(drawn[0], body[body.length - 1]) < 1);
+  assert.ok(Cesium.Cartesian3.distance(drawn[drawn.length - 1], near) < 1);
 });
