@@ -187,12 +187,10 @@ export function portsProxy({
       });
       res.end(JSON.stringify(value));
     };
-    if (req.method !== 'GET')
-      return send(405, { error: 'method_not_allowed' });
+    if (req.method !== 'GET') return send(405, { error: 'method_not_allowed' });
     if ((req.url || '/').split('?')[0] !== '/')
       return send(404, { error: 'unknown_route' });
-    if (!allow(clientKey(req)))
-      return send(429, { error: 'rate_limited' });
+    if (!allow(clientKey(req))) return send(429, { error: 'rate_limited' });
     try {
       return send(200, await snapshot());
     } catch {
