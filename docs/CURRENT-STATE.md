@@ -9658,7 +9658,9 @@ coexist with at most eight independent consumer leases each; no-access lease
 expiry is 15 seconds. A viewer refused because every lease or session slot is
 taken gets 503 with `Retry-After: 2` and leaves the camera's health unchanged;
 so does its frame fallback, since an HLS camera without a snapshot has no frame
-of its own. Closing one consumer leaves other consumers running. Lease
+of its own. That viewer's panel badge reads FALLBACK · DEGRADED and its meta
+line drops the live health message, since the shared live health does not
+describe the frame it shows. Closing one consumer leaves other consumers running. Lease
 ids use `crypto.randomUUID` where the page is a secure context and an equivalent
 v4 id from `crypto.getRandomValues` on plain-HTTP LAN pages. Encrypted/fMP4/byte-range playlists fail
 closed. Performance and live agency reliability require recorded validation.
