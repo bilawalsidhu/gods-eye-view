@@ -9,7 +9,7 @@
   "maintainer": "github:Herr-Enklo",
   "coverage": {
     "countries": ["FI", "EE", "SE", "RU"],
-    "bbox": [17.9, 58.7, 30.4, 65.9]
+    "bbox": [17.0, 58.3, 31.6, 66.0]
   },
   "source": {
     "format": "geojson",

@@ -77,7 +77,7 @@
   },
   "attribution": {
     "text": "NASA GIBS — GHRSST Level 4 MUR sea surface temperature (JPL MUR MEaSUREs Project)",
-    "url": "https://podaac.jpl.nasa.gov/dataset/MUR-JPL-L4-GLOB-v4.1"
+    "url": "https://doi.org/10.5067/GHGMR-4FJ04"
   },
   "status": "community",
   "reviewed": "2026-11-17"

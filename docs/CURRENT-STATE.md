@@ -710,10 +710,7 @@ per-IP limit for unidentified clients). Worldwide: GEBCO 2026 shaded relief (WMS
 grid's versioned endpoint, so the citation stays true) and two NASA GIBS
 drapes that ask for the `default` time in the tile path, IMERG half-hourly
 precipitation and MUR sea surface temperature, with legends from GIBS's colour
-maps. For Europe: the EEA's European Air Quality Index, a modelled hourly 1–6
-surface (good to extremely poor) from the EEA AQMobile ImageServer, coloured
-server-side by a Colormap rendering rule in the EAQI band colours and clipped to
-Europe. None of the dataset entries sets a rank. As for every library dataset, a
+maps. None of the dataset entries sets a rank. As for every library dataset, a
 zoomed-out view draws only part of a large set (80, 200 or 420 features by
 camera height) while the row counts all of them, so the warning areas of a
 stormy day are not all drawn in a Germany-wide view. Library tile layers do not reload on a
