@@ -263,10 +263,11 @@ export function createCockpitSubject({ state: layerState, parts }) {
     },
 
     /**
-     * Where the Cockpit camera sits and looks when the subject is the
-     * station: a view from a point on the ISS model (issMounts.js) in place
-     * of the straight-down picture. The station offers several (from Nauka,
-     * from Zarya, from a docked vehicle), whichever of its entries is ridden.
+     * Where the Cockpit camera sits and looks when the subject is a
+     * station: a view from a point on its model (issMounts.js,
+     * tiangongMounts.js) in place of the straight-down picture. Each station
+     * offers several (on the ISS from Nauka, from Zarya, from a docked
+     * vehicle), whichever of its entries is ridden.
      * @param {string|null} [key] The view asked for; the first on offer when
      *   it is not given or not on offer.
      * @returns {{position: object, direction: object, up: object,
@@ -278,8 +279,8 @@ export function createCockpitSubject({ state: layerState, parts }) {
      */
     getCockpitMount(key = null) {
       if (!_cockpitHeld()) return null;
-      // The station the subject belongs to; a station without views on its
-      // model (Tiangong) answers null, and the Cockpit keeps the nadir picture.
+      // The station the subject belongs to; until its model has loaded it
+      // answers null, and the Cockpit keeps the nadir picture.
       return (
         trackedStation(layerState, parts)?.model?._cockpitMount?.(key) ?? null
       );

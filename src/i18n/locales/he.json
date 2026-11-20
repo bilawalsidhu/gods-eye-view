@@ -4510,6 +4510,7 @@
   "No signal · computed values": "אין אות · ערכים מחושבים",
   "Telemetry unavailable · last update {ago} ago · computed values": "הטלמטריה אינה זמינה · עדכון אחרון לפני {ago} · ערכים מחושבים",
   "Telemetry unavailable · computed values": "הטלמטריה אינה זמינה · ערכים מחושבים",
+  "Telemetry incomplete · computed values": "הטלמטריה אינה שלמה · ערכים מחושבים",
   "Telemetry not enabled on this server · computed values": "הטלמטריה אינה מופעלת בשרת זה · ערכים מחושבים",
   "No public telemetry · computed values": "אין טלמטריה ציבורית · ערכים מחושבים",
   "Zoom to Tiangong": "התקרבות לטיאנגונג",

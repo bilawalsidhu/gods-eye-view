@@ -52,9 +52,9 @@ const MODEL_ITEM = 'station:test';
  * A station model over the real rendering part, a fake draw port (the
  * model is an item of a `models` set on it) and a fake camera port. The
  * station and a companion share an orbit (docked); a stranger's dot sits
- * 500 km off.
+ * 500 km off. `showOrbits` is the layer's orbit toggle.
  */
-function fixture(t) {
+function fixture(t, { showOrbits = true } = {}) {
   const stationPos = ecef(ISS, AT_MS);
   const strangerPos = { ...stationPos, x: stationPos.x + 500_000 };
   const camera = fakeCameraPort({
@@ -65,7 +65,7 @@ function fixture(t) {
   const state = {
     now: () => AT_MS,
     _enabled: true,
-    _params: { showPoints: true, showOrbits: true },
+    _params: { showPoints: true, showOrbits },
     _points: new Map(),
     _orbitPaths: new Map(),
     _catalog: new Map([
@@ -128,7 +128,6 @@ function fixture(t) {
     }),
     createTelemetry: null,
     cockpitMount: null,
-    hideInCockpit: true,
     syncOrbit: null,
   };
   const model = createStationModel(spec, {
@@ -270,44 +269,6 @@ test('posed, the model sits on the station with its flight axes as heading, pitc
   );
 });
 
-test('a station without views on its model hides it while the Cockpit rides the station, its own entry or a docked one', async (t) => {
-  const f = fixture(t);
-  let held = false;
-  f.parts.cockpit = { _cockpitHeld: () => held };
-  await f.load();
-  f.cameraAt(20);
-  // Riding a docked object (the companion shares the orbit).
-  f.track(COMPANION, f.stationPos);
-  f.tick();
-  assert.equal(f.modelItem().show, true, 'outside the Cockpit it draws');
-  held = true;
-  // Frame after frame: hiding the model gives the docked dots back, and
-  // that must not make the layer forget the companion is docked (which
-  // showed the model again, and so on, every other frame).
-  for (let i = 0; i < 4; i++) {
-    f.tick();
-    assert.equal(
-      f.modelItem().show,
-      false,
-      `the Cockpit camera would sit inside the hull (tick ${i})`,
-    );
-    assert.equal(f.model._trackedOnStation(), true, `docked (tick ${i})`);
-  }
-  assert.equal(f.model._visualPosition(), null);
-  // Riding the station itself.
-  held = false;
-  f.track(STATION, f.stationPos);
-  f.tick();
-  assert.equal(f.modelItem().show, true);
-  held = true;
-  f.tick();
-  assert.equal(f.modelItem().show, false);
-  // A station that mounts the Cockpit camera on its model keeps drawing.
-  f.model.spec.hideInCockpit = false;
-  f.tick();
-  assert.equal(f.modelItem().show, true);
-});
-
 test('until the renderer has the model the dots stand at every distance, and stay so when it fails to load', async (t) => {
   const f = fixture(t);
   f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
@@ -349,6 +310,92 @@ test('until the renderer has the model the dots stand at every distance, and sta
   assert.equal(f.modelItem().show, true);
   assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
   assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
+});
+
+/** A satrec SGP4 cannot use: every read throws, as propagate does then. */
+const BROKEN = new Proxy(
+  {},
+  {
+    get() {
+      throw new Error('no state for this time');
+    },
+  },
+);
+
+test('while the orbit will not propagate the dots stand at every distance, as for a model not loaded', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
+  f.track(COMPANION, f.stationPos);
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
+  assert.deepEqual(f.drawn(COMPANION).displayRange, FAR_RANGE);
+  assert.deepEqual(f.trackedDot().displayRange, FAR_RANGE);
+  assert.equal(f.ring(STATION).show, false);
+  // The station's elements no longer propagate (decayed, or a clock far
+  // from their epoch): nowhere to draw the model.
+  const satrec = f.state._catalog.get(STATION).satrec;
+  f.state._catalog.get(STATION).satrec = BROKEN;
+  f.tick();
+  assert.equal(f.modelItem().show, false);
+  assert.equal(f.drawn(STATION).displayRange, undefined);
+  assert.equal(f.drawn(COMPANION).displayRange, undefined, 'the docked dot');
+  assert.equal(f.trackedDot().displayRange, undefined);
+  assert.equal(f.model._standsInFor(COMPANION), false);
+  assert.equal(f.ring(STATION).show, true, 'the ring is back');
+  // Frame after frame nothing is handed over and given back again.
+  const ranges = [];
+  const setRange = f.parts.rendering._setPointDisplayRange;
+  f.parts.rendering._setPointDisplayRange = (noradId, range) => {
+    ranges.push([noradId, range]);
+    return setRange(noradId, range);
+  };
+  f.tick();
+  f.tick();
+  assert.deepEqual(ranges, []);
+  f.parts.rendering._setPointDisplayRange = setRange;
+  // It propagates again: the model draws and stands in again.
+  f.state._catalog.get(STATION).satrec = satrec;
+  f.tick();
+  assert.equal(f.modelItem().show, true);
+  assert.deepEqual(f.drawn(COMPANION).displayRange, FAR_RANGE);
+  assert.equal(f.ring(STATION).show, false);
+  // Undrawn so with the camera in range, the model is kept: released, it
+  // would be fetched again on the next frame, and again a minute later.
+  f.model.spec.unloadAfterMs = 0;
+  f.state._catalog.get(STATION).satrec = BROKEN;
+  const kept = f.modelSet();
+  for (let i = 0; i < 5; i++) f.tick();
+  assert.equal(f.modelSet(), kept, 'neither released nor fetched again');
+  // Out of range it is released as any undrawn model is.
+  f.cameraAt(MAX_M * 5);
+  f.tick();
+  f.tick();
+  assert.equal(f.modelSet(), undefined);
+});
+
+test('a docked object holds out to three radii before its dot is given back', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.model._standsInFor(COMPANION), true);
+  // The companion on the station's elements, its mean anomaly moved: about
+  // 117 km a degree along this orbit.
+  const at = (anomaly) => {
+    f.state._catalog.get(COMPANION).satrec = twoline2satrec(
+      '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927',
+      `2 25544  51.6416 247.4627 0006703 130.5360 ${anomaly} 15.72125391563537`,
+    );
+    f.tick();
+    return f.model._standsInFor(COMPANION);
+  };
+  assert.equal(at('325.0968'), true, 'about 8 km: still docked');
+  assert.equal(at('325.1988'), false, 'about 20 km: undocked');
+  assert.equal(at('325.0968'), false, 'docking needs the radius itself');
+  assert.equal(at('325.0288'), true);
 });
 
 test('a model still loading counts as undrawn out of range and is released', (t) => {
@@ -440,6 +487,52 @@ test('within its range the model stands in for the dots and hides the ring; beyo
   assert.equal(f.model._visualPosition(), null);
   assert.deepEqual(f.drawn(STATION).displayRange, FAR_RANGE);
   assert.equal(f.ring(STATION).show, true, "back to the layer's orbit toggle");
+});
+
+test('a ring baked again keeps the close-up’s hide, and a shown ring stays shown', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.parts.rendering._showOrbitPath(STATION, TRACKED_ORBIT_COLOR);
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.ring(STATION).show, false);
+  // The world time has moved far from the bake: the ring is baked again,
+  // after this frame's close-up rule has run.
+  const rebake = () => {
+    const path = f.state._orbitPaths.get(STATION);
+    f.parts.rendering._updateOrbitPathRotations(new Date(AT_MS + 31 * 60_000));
+    assert.notEqual(f.state._orbitPaths.get(STATION), path, 'baked again');
+  };
+  rebake();
+  assert.equal(f.ring(STATION).show, false, 'still hidden up close');
+  f.cameraAt(MAX_M * 2.5);
+  f.tick();
+  assert.equal(f.ring(STATION).show, true, 'back after the close-up');
+  rebake();
+  assert.equal(f.ring(STATION).show, true, 'still shown');
+});
+
+test('after the close-up the rings follow the orbit toggle, the tracked docked object’s too', async (t) => {
+  for (const showOrbits of [true, false]) {
+    const f = fixture(t, { showOrbits });
+    await f.load();
+    // A tracked station's ring (Tiangong's has no rules of its own), and
+    // then a tracked docked object's, as tracking builds them.
+    for (const tracked of [STATION, COMPANION]) {
+      f.track(tracked, f.stationPos);
+      f.parts.rendering._showOrbitPath(tracked, TRACKED_ORBIT_COLOR);
+      f.cameraAt(MAX_M * 2.5);
+      f.tick();
+      assert.equal(f.ring(tracked).show, showOrbits, `${tracked}: built`);
+      f.cameraAt(20_000);
+      f.tick();
+      assert.equal(f.ring(tracked).show, false, `${tracked}: the close-up`);
+      f.cameraAt(MAX_M * 2.5);
+      f.tick();
+      assert.equal(f.ring(tracked).show, showOrbits, `${tracked}: after it`);
+      f.parts.rendering._hideOrbitPath(tracked);
+    }
+  }
 });
 
 test('the dots and the ring come back when the model may not show, and on destroy', async (t) => {

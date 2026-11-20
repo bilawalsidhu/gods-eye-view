@@ -31,7 +31,6 @@ const shown = {
   hasIss: true,
   classVisible: true,
   tracked: false,
-  cockpitHidden: false,
 };
 
 test('the ISS model shows on the same terms as its dot', () => {
@@ -46,13 +45,6 @@ test('a tracked ISS keeps its model with its class hidden', () => {
   assert.equal(
     issModelShouldShow({ ...shown, classVisible: false, tracked: true }),
     true,
-  );
-});
-
-test('the Cockpit hold hides the model', () => {
-  assert.equal(
-    issModelShouldShow({ ...shown, tracked: true, cockpitHidden: true }),
-    false,
   );
 });
 
