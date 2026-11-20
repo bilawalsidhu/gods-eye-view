@@ -505,9 +505,12 @@ export function createIssArticulation() {
   let lastLive = null;
   /** Whether the last update had the station in sunlight; null before one. */
   let lastSunlit = null;
-  /** Command panel state: the arm is being posed by hand, so the sway is off. */
-  /** The arm joints posed by hand (command panel); the rest keep swaying. */
-  const manualJoints = new Set();
+  /**
+   * The arm joints posed by hand (command panel), node name → the pivot,
+   * axis and angle each was set to; the rest keep swaying. Kept so a model
+   * bound after the slider moved (bind) still takes the pose.
+   */
+  const manualJoints = new Map();
   let armNodes = null;
   /** Command panel state: how far the arrays are rolled out, 0.05 to 1. */
   let deploy = 1;
@@ -540,6 +543,17 @@ export function createIssArticulation() {
     angles = null;
     dishes = null;
     armNodes = null;
+    // A joint set by hand before this model was bound takes its angle now.
+    for (const [name, joint] of manualJoints) {
+      const node = model.getNode(name);
+      if (node)
+        node.matrix = issAxisMatrix(
+          joint.pivot,
+          joint.axis,
+          joint.angle,
+          scratchMatrix,
+        );
+    }
   }
 
   function sunEcef(date) {
@@ -721,14 +735,15 @@ export function createIssArticulation() {
   }
 
   /**
-   * Command panel: turn any named node about an axis through a pivot.
+   * Command panel: turn any named node about an axis through a pivot. With
+   * no model bound yet, the angle is applied when one is.
    * @param {string} name
    * @param {number[]} pivot
    * @param {number[]} axis Unit vector.
    * @param {number} angle Radians.
    */
   function setJoint(name, pivot, axis, angle) {
-    manualJoints.add(name);
+    manualJoints.set(name, { pivot, axis, angle });
     const node = boundModel?.getNode(name);
     if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
   }
@@ -809,7 +824,7 @@ export function createIssArticulation() {
   function resumeArm() {
     // A joint the sway does not move would keep its manual angle: it goes
     // back to its filed pose. The swaying ones are posed again next update.
-    for (const name of manualJoints) {
+    for (const name of manualJoints.keys()) {
       if (ISS_SWAYING_NODES.has(name)) continue;
       const node = boundModel?.getNode(name);
       if (node) node.matrix = undefined;

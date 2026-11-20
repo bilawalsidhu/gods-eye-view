@@ -258,6 +258,12 @@ export function createTiangongArticulation() {
   /** STATION section: arms being posed by hand, so their sway is off. */
   const armManual = new Set();
   /**
+   * STATION section: joints set by hand, node name → the pivot, axis and
+   * angle each was set to. Kept so a model bound after the slider moved
+   * (bind) still takes the pose.
+   */
+  const jointManual = new Map();
+  /**
    * STATION section: wings set by hand, node name → radians. A wing with an
    * entry here holds that angle (reached at the joint rate) instead of
    * following the Sun; the others keep following.
@@ -282,6 +288,9 @@ export function createTiangongArticulation() {
     };
     angles = null;
     dish = null;
+    // A joint set by hand before this model was bound takes its angle now.
+    for (const [name, joint] of jointManual)
+      write(model.getNode(name), joint, joint.angle);
   }
 
   function sunEcef(date) {
@@ -393,7 +402,8 @@ export function createTiangongArticulation() {
 
   /**
    * STATION section: turn any named node about an axis through a pivot. A
-   * node of either arm takes that arm off its sway.
+   * node of either arm takes that arm off its sway. With no model bound
+   * yet, the angle is applied when one is.
    * @param {string} name
    * @param {number[]} pivot
    * @param {number[]} axis Unit vector.
@@ -402,6 +412,7 @@ export function createTiangongArticulation() {
   function setJoint(name, pivot, axis, angle) {
     for (const [key, joints] of Object.entries(TIANGONG_ARMS))
       if (joints.some((joint) => joint.node === name)) armManual.add(key);
+    jointManual.set(name, { pivot, axis, angle });
     const node = boundModel?.getNode(name);
     if (node) node.matrix = issAxisMatrix(pivot, axis, angle, scratchMatrix);
   }
@@ -416,6 +427,7 @@ export function createTiangongArticulation() {
     override = null;
     wingManual.clear();
     armManual.clear();
+    jointManual.clear();
   }
 
   /**
@@ -443,6 +455,7 @@ export function createTiangongArticulation() {
       // Joints the sway does not move would keep their manual angle: they go
       // back to the folded pose. The swaying ones are posed again next update.
       for (const joint of TIANGONG_ARMS[arm] ?? []) {
+        jointManual.delete(joint.node);
         if (joint.sway || joint.centre) continue;
         const node = boundModel?.getNode(joint.node);
         if (node) node.matrix = undefined;
