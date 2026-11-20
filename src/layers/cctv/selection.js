@@ -108,10 +108,13 @@ export function createSelection({
    * Sets the active camera by ID, initializes its projection runtime, refreshes
    * its frame, and updates styles.
    * @param {string} cameraId - ID of the camera to activate.
+   * @param {Object} [options]
+   * @param {boolean} [options.opening=false] - The opening camera following
+   *   the view, not someone's pick: settled moves may still replace it.
    * @returns {'activated'|'unchanged'|'not-found'} Discriminated activation result.
    */
 
-  function setActiveCamera(cameraId) {
+  function setActiveCamera(cameraId, { opening = false } = {}) {
     if (!cameraId || !layerState._recordById.has(cameraId))
       return CCTV_ACTIVATION_RESULT.NOT_FOUND;
     const record = layerState._recordById.get(cameraId);
@@ -129,6 +132,9 @@ export function createSelection({
         record,
       )
     ) {
+      // Picking the camera a settled move re-opened is still a pick: later
+      // settled moves must leave it alone.
+      if (!opening) layerState._openingCameraProvisional = false;
       // Browser-only feeds have a separate player; a reselect retries it
       // without re-running activation or touching the projection geometry.
       if (parts.model.isBrowserOverlayCamera(record.camera)) {
@@ -139,7 +145,7 @@ export function createSelection({
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
-    layerState._openingCameraProvisional = false;
+    layerState._openingCameraProvisional = opening;
     // A real activation creates projection work — wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {

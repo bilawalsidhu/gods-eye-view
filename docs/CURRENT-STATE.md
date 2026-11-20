@@ -2025,7 +2025,13 @@ and follows redirects only on the camera's origin. Catalog image URLs, and
 redirects on those hosts, are pinned by parsed URL to the agency's image
 directory. Every `/api/cctv` route refuses cross-site browser requests but
 accepts forwarding headers, so cameras work behind a reverse proxy; a forwarded
-request skips the key-bearing Street View fallback and gets the placeholder.
+request skips the key-bearing Street View fallback and gets the placeholder. The
+fallback answers only for cameras the server lists, at their catalog position,
+so position calibration never reaches it. Heading, field of view (clamped to
+20–120°) and pitch (clamped to −40–20°) come from the request, else from the
+catalog pose. A bundled seed camera, shown when the server catalog is empty,
+gets the placeholder. The fallback counts in its own per-IP Google window (see
+the cost-bearing proxies below).
 
 The CCTV layer draws only the cameras on or near the screen. Zoomed out, a
 ground cell with two or more cameras shows one marker at their mean position. A
@@ -2054,6 +2060,19 @@ pass reruns while the camera moves, paced by its own cost, and when the terrain
 in view finishes loading. The camera picker lists the active camera first, then
 one camera per visible cell, preferring healthy feeds. It ends with the count of
 catalog cameras missing from the list.
+
+Turning CCTV on opens on the camera nearest the view. Until someone picks a
+camera, each settled move, such as a shared view's flight landing, moves it to
+the camera then nearest the view. Automatic selection ends at the first pick:
+NEAREST, PREV or NEXT, FOCUS, a camera chosen in the picker, a click on a
+camera, a click on empty ground that deselects, an auto-hop step, or a call to
+`selectCamera`, `focusNearest`, `focusNearestToPoint` or
+`setParams({ selectedCameraId })`, which voice and scenes use. Picking the
+camera that is already active counts. The picker shows the automatic camera
+as its own option, and a native list sends no change for the option it
+already shows, so the list cannot pick that camera: FOCUS does, and so does
+NEAREST when that camera is the nearest. Closing the list without a choice
+keeps automatic selection.
 
 Traffic owns its rendered-surface observer only while enabled, removes it on disable/destroy, and rebuilds no cached heights on frames where the surface identity is unchanged. Its dots and heat-lines are two renderer draw sets, it animates on the frame port's preRender, and it follows the camera through the camera port at its own 5% threshold rather than the shared `percentageChanged` ledger. The surface identity is the globe port's `surfaceVersion()` and tile readiness its `isSettled('surface')`, so the layer no longer reaches Cesium. Heat-lines are always asked for draped: where the Cesium renderer cannot drape (no depth textures) its draw port draws them (and every other draped line) over the surface, in their colour where the surface hides them and hidden past the horizon, recolouring a line in place when only its colour changes, rather than the layer dropping them.
 
@@ -3793,6 +3812,9 @@ unaffected. `GEV_RATELIMIT_OPENAI_PER_MIN` and `GEV_RATELIMIT_GOOGLE_PER_MIN` ov
 those; exactly `0` disables the limiter, while a value that cannot be read as a
 number falls back to the default rather than to unlimited. Over-limit requests
 receive a sanitized `429` with `Retry-After: 5` and never reach the provider.
+The CCTV Street View fallback counts in a separate window with the Google cap.
+An IPv6 /64 counts as one client. Over the cap, a frame gets the placeholder
+image instead of a `429`.
 Typed chat (`/api/openai/chat`, `/api/gemini/chat`) counts in its own window,
 set by `GEV_RATELIMIT_OPENAI_CHAT_PER_MIN` and `GEV_RATELIMIT_GEMINI_CHAT_PER_MIN`.
 Left unset, each takes its provider's resolved cap — `GEV_RATELIMIT_OPENAI_PER_MIN`
@@ -7818,7 +7840,7 @@ silently demoting every later lookup for the session.
   requires a developer key, so the pack needs `ONTARIO_511_API_KEY` and is skipped without one
   (#1228). All sources are RAW PRIOR
   poses, and the layer is stills-first.
-  sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
+  Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
@@ -7833,11 +7855,17 @@ silently demoting every later lookup for the session.
   empty keeps the old catalog and is retried after another 15 minutes, not on the next
   request. Estonia's Tarktee DATEX feeds, which answer in 2 to 16.6 s, get 30 s
   (`TARKTEE_FETCH_TIMEOUT_MS`) where other packs get 15 s.
-  Both Tarktee XML catalogs refuse redirects and have a 4 MiB per-document
-  limit, enforced against declared length and streamed bytes. A rejected fetch,
-  unsuccessful response, or body-read failure releases both available response
-  bodies; read failures also cancel an active sibling reader. Cameras sharing
-  an image number are deduplicated before the Tarktee pack cap is applied.
+  Ontario catalog requests refuse redirects and log only the error class and
+  system code for transport/JSON failures, never the request URL or key.
+  Both Tarktee XML catalogs share that 30 s deadline, refuse redirects and
+  have a 4 MiB per-document limit, enforced against declared length and
+  streamed bytes. A failed request, unsuccessful response or body read aborts
+  the other feed at once and releases every response body, including one that
+  arrives after the failure. The Lithuania pack reads its two catalogs
+  through the same helper (`readCatalogsTogether`,
+  `server/providers/cctv/catalogPair.js`) with its 15 s deadline. An Ontario
+  error response has its body released. Cameras sharing an image number are
+  deduplicated before the Tarktee pack cap is applied.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum
@@ -8625,7 +8653,8 @@ Providers normalize coordinates, canonical name, label, place types and optional
 bounds. Camera framing, nearby landmark recovery and footprint selection remain
 in their consumers, including the Capitol identity/containment safeguards.
 Radio keeps localized country names in labels rather than station filters.
-Nearby/text-search endpoints retain their existing behavior.
+Nearby/text-search cache and error rules are listed under Proxy/Security
+Baseline below.
 
 **Google geocoding is a server route, not a browser call** (#363). Forward and
 reverse lookups go to `/api/google/geocode` and `/api/google/reverse-geocode`,
@@ -8945,6 +8974,7 @@ apply to `public/` assets or built-preview serving.
 - `AISSTREAM_API_KEY` is server-side only; the browser reads the same-origin `/api/vessels` cache.
 - `/api/google/nearby-places` keeps the Google key out of Places requests issued for voice scene context.
 - `/api/google/text-search` keeps the Google key server-side for view-biased Places recovery used by annotation resolution.
+- The Places and geocode routes cache only an answer (`private, max-age=300`). For geocode, that means an HTTP success with `OK` or `ZERO_RESULTS`, because Google sends `REQUEST_DENIED` and `OVER_QUERY_LIMIT` as HTTP 200. Every other reply, including an unreadable Places 200 (now a 502), is `no-store`.
 - `/api/overpass` is bounded by body/response caps, per-client/global rate limits, concurrency limits, operator-configured upstreams, in-flight dedupe, cache bounds, and static validation that every selector is spatially bounded.
 - `/api/military-installations` uses an independent limiter with the same 90-per-client/300-global one-minute bounds, so viewport installation refreshes never consume `/api/overpass` annotation capacity.
 - `/api/route` proxies bounded OSRM route requests for annotation routes, with profile allowlisting, distance caps, response caps, caching, and sanitized "no route found" errors; routing outages return 502.
