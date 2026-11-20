@@ -53,7 +53,7 @@ test('same-camera selection notifies browser-overlay feeds so playback can retry
   assert.equal(fixture.notifications(), 1);
 });
 
-test('same-camera selection ends the opening pick and tells the panel once', () => {
+test('same-camera selection ends the opening pick without notifying snapshot feeds', () => {
   const fixture = makeSelection('tripcheck-odot');
   fixture.state._openingCameraProvisional = true;
 
@@ -63,5 +63,5 @@ test('same-camera selection ends the opening pick and tells the panel once', () 
   );
   assert.equal(fixture.state._openingCameraProvisional, false);
   assert.equal(fixture.state._activeCameraReselection, 0);
-  assert.equal(fixture.notifications(), 1);
+  assert.equal(fixture.notifications(), 0);
 });

@@ -5,9 +5,7 @@ import { useCctvStore } from '../stores/cctv.js';
 
 // The camera picker: the cameras in view and a closing note for those the
 // view leaves out. It renders only when CctvControls publishes a picker,
-// which re-applies the active camera, as on every layer notification. The
-// opening camera, which follows the view until someone picks one, shows in a
-// hidden first option: choosing that camera from the list is a change.
+// which re-applies the active camera, as on every layer notification.
 const { picker } = storeToRefs(useCctvStore());
 
 // The selection, applied once the options are in place.
@@ -23,13 +21,6 @@ const vPick = { mounted: pick, updated: pick };
 
 <template>
   <UiSelect v-pick="picker?.selection" :disabled="picker?.disabled"
-    ><option
-      v-if="picker?.opening"
-      value=""
-      hidden
-      disabled
-      data-cctv-opening
-      >{{ picker.opening }}</option
     ><option
       v-for="option in picker?.options"
       :key="option.value"

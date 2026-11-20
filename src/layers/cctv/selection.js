@@ -73,16 +73,13 @@ export function createSelection({
         record,
       )
     ) {
-      // Picking the camera a settled move re-opened is still a choice: later
-      // settled moves must leave it alone, and the picker learns it.
-      const endsOpening = layerState._openingCameraProvisional && !opening;
-      if (endsOpening) layerState._openingCameraProvisional = false;
+      // Picking the camera a settled move re-opened is still a pick: later
+      // settled moves must leave it alone.
+      if (!opening) layerState._openingCameraProvisional = false;
       // Browser-only feeds have a separate player; a reselect retries it
       // without re-running activation or touching the projection geometry.
       if (parts.model.isBrowserOverlayCamera(record.camera)) {
         layerState._activeCameraReselection += 1;
-        parts.presentation.notifyListeners();
-      } else if (endsOpening) {
         parts.presentation.notifyListeners();
       }
       return CCTV_ACTIVATION_RESULT.UNCHANGED;

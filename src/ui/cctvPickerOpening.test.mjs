@@ -1,8 +1,8 @@
-// src/ui/cctvPickerOpening.test.mjs — the picker can pick the opening camera.
-// The opening camera follows the view until someone picks one. A native
-// select fires no change for the option it already shows, so the picker keeps
-// that camera in a hidden first option: choosing it from the list is a change
-// and ends the opening pick, while closing the list leaves it.
+// src/ui/cctvPickerOpening.test.mjs — the picker and the opening camera.
+// The opening camera follows the view until someone picks one. The picker
+// shows it as its own option; a native select fires no change for the
+// option it already shows, so FOCUS keeps that camera, and leaving the list
+// without a choice lets it follow the view.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -122,6 +122,7 @@ async function reopenedAtCambridge(t) {
     elements: {
       _cctvPanel: document.getElementById('cctv-panel'),
       _cctvSelect: select,
+      _cctvFocusBtn: document.getElementById('cctv-focus-btn'),
     },
     cctv: cctvLayer,
     actions: {
@@ -154,52 +155,43 @@ async function reopenedAtCambridge(t) {
   return { viewer, select };
 }
 
-/** The label of the opening camera's hidden option, or null. */
-function openingLabel(select) {
-  return (
-    select.querySelector('option[data-cctv-opening]')?.textContent ?? null
-  );
-}
-
-test('the opening camera shows as itself, from a hidden option', async (t) => {
+test('the opening camera shows as its own option', async (t) => {
   const { select } = await reopenedAtCambridge(t);
-  assert.equal(openingLabel(select), 'London · Camera b-cambridge');
-  assert.equal(select.selectedIndex, 0, 'the closed picker shows it');
-  const opening = select.options[0];
-  assert.equal(opening.dataset.cctvOpening, '');
-  assert.equal(opening.hidden, true, 'the open list does not show it twice');
-  assert.equal(opening.disabled, true);
-  assert.ok(
-    [...select.options].some((option) => option.value === 'b-cambridge'),
-    'the camera itself stays in the list to be picked',
+  assert.equal(select.value, 'b-cambridge');
+  const shown = select.options[select.selectedIndex];
+  assert.equal(shown.hidden, false);
+  assert.equal(shown.disabled, false);
+  assert.equal(
+    [...select.options].filter((option) => option.value === 'b-cambridge')
+      .length,
+    1,
+    'the list shows the camera once',
   );
+  assert.ok([...select.options].every((option) => !option.hidden));
 });
 
-test('choosing the shown camera from the picker keeps it after a pan', async (t) => {
+test('FOCUS on the shown camera keeps it after a pan', async (t) => {
   const { viewer, select } = await reopenedAtCambridge(t);
-  select.value = 'b-cambridge';
-  select.dispatchEvent(new Event('change'));
-  // The change handler waits for the layer switch before it picks.
+  const focus = document.getElementById('cctv-focus-btn');
+  assert.equal(focus.disabled, false);
+  focus.click();
+  // The click handler waits for the layer switch before it picks.
   await new Promise((resolve) => setTimeout(resolve, 0));
   await nextTick();
-  assert.equal(cctvLayer.getUIState().activeCameraProvisional, false);
-  assert.equal(openingLabel(select), null);
-  assert.equal(select.value, 'b-cambridge');
 
   assert.equal(settleOver(viewer, TRAFALGAR), false);
   assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
+  assert.equal(select.value, 'b-cambridge');
 });
 
-test('closing the picker without a choice lets the camera follow a pan', async (t) => {
+test('leaving the picker without a pick lets the camera follow a pan', async (t) => {
   const { viewer, select } = await reopenedAtCambridge(t);
   select.focus();
   select.blur();
   await nextTick();
-  assert.equal(cctvLayer.getUIState().activeCameraProvisional, true);
 
   assert.equal(settleOver(viewer, TRAFALGAR), true);
   await nextTick();
   assert.equal(cctvLayer.getUIState().activeCameraId, 'a-trafalgar');
-  assert.equal(openingLabel(select), 'London · Camera a-trafalgar');
-  assert.equal(select.selectedIndex, 0);
+  assert.equal(select.value, 'a-trafalgar');
 });

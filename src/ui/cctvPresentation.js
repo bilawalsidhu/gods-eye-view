@@ -253,23 +253,15 @@ export function _renderCctvState(state) {
       };
     }
     this._picker = picker;
-    // The opening camera follows the view until someone picks one. The picker
-    // shows it in a hidden first option, so choosing it from the list changes
-    // the value and counts as that pick; closing the list leaves it as is.
-    const opening = Boolean(
-      state?.activeCameraProvisional && activeId && activeCamera,
-    );
     this.store.setPicker({
       options: picker?.options || [],
       note: picker?.note || '',
-      opening: opening ? pickerOption(activeCamera, activeId).label : '',
       disabled,
       // The active camera is always one of the listed records. With nothing
       // active the closed picker shows the note when nothing is in view; a
       // focused picker keeps its old options, so it only clears.
-      selection: opening
-        ? { index: 0 }
-        : activeId && activeCamera
+      selection:
+        activeId && activeCamera
           ? { value: activeId }
           : !activeId
             ? { index: !picking && cameras.length === 0 && outside ? 0 : -1 }

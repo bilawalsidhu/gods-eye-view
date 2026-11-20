@@ -95,7 +95,6 @@ function withReopenedLayer(fn) {
     moveViewer(viewer, 51.5131, -0.1291);
     assert.equal(reopenNearestCamera(), true);
     assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
-    assert.equal(cctvLayer.getUIState().activeCameraProvisional, true);
     fn(viewer);
   } finally {
     globalThis.document = originalDocument;
@@ -121,7 +120,6 @@ for (const [name, pick] of [
     withReopenedLayer((viewer) => {
       pick();
       assert.equal(cctvLayer.getUIState().activeCameraId, 'b-cambridge');
-      assert.equal(cctvLayer.getUIState().activeCameraProvisional, false);
       // A later settled move (a pan, or the landing of the pick's own flight)
       // leaves the explicit choice alone.
       moveViewer(viewer, 51.5081, -0.1281);
@@ -130,3 +128,11 @@ for (const [name, pick] of [
     });
   });
 }
+
+test('without a pick, the next settled move still follows the view', () => {
+  withReopenedLayer((viewer) => {
+    moveViewer(viewer, 51.5081, -0.1281);
+    assert.equal(reopenNearestCamera(), true);
+    assert.equal(cctvLayer.getUIState().activeCameraId, 'a-trafalgar');
+  });
+});
