@@ -37,5 +37,6 @@
   #1767).
 - Let a click on a mapped installation's label box select the site, as a
   click on its 7 px dot does: from orbit the label is what a click lands on.
-  As with every card on top, the label takes the click from an aircraft or
-  vessel drawn under it (Denis Groshev, @ZloyS, #1767).
+  The label takes a click only where nothing else is drawn under it, so an
+  aircraft or vessel under a base's label stays selectable (Denis Groshev,
+  @ZloyS, #1767).

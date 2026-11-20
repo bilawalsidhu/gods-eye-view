@@ -3025,10 +3025,13 @@ with the arrows' easing on a slower clock (250 ms time constant, about
 `prefers-reduced-motion`. A single click on a site's marker, or on the label
 box the overlay paints for it, focuses it too: the click is resolved through
 the layer's own lookup (`findAt`: `scene.pick` for a named marker's
-`{ installationId }` or a site entity, else the overlay's hit rect for the
-label, which the installation entries now register as interactive; from
-orbit the dot is 7 px, so the label is what a click lands on). The map's own
-click selection reads the label the same way. A click anywhere else
+`{ installationId }` or a site entity, else the box the overlay painted for
+the label; from orbit the dot is 7 px, so the label is what a click lands
+on). The map's own click selection reads the label the same way, through a
+click claim (`registerClickClaim`) rather than as an interactive card: the
+label takes a click only where nothing another layer draws is under it, so
+an aircraft or vessel drawn under a base's label stays selectable, and
+another layer's card painted over the label keeps its click. A click anywhere else
 (a site beyond the reach included), the
 focused site's row, NADIR, Home or `0` ends the focus and the view eases
 back to nadir on the same clock; an arrow ends it (or the ease back) and

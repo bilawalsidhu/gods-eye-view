@@ -26,7 +26,13 @@ function setup(t) {
     setVisible(_id, value) {
       visible = value;
     },
+    // The boxes the overlay painted last frame, by entry id.
+    paintRect(id, entryId) {
+      assert.equal(id, 'military-installations');
+      return boxes.get(entryId) ?? null;
+    },
   };
+  const boxes = new Map();
   let x = -100;
   t.mock.method(C.SceneTransforms, 'worldToWindowCoordinates', () => new C.Cartesian2(x, 300));
   const camera = { changed: new C.Event(), moveEnd: new C.Event(), positionWC: C.Cartesian3.fromDegrees(0, 0, 1e6), directionWC: new C.Cartesian3(0, 0, -1) };
@@ -42,7 +48,7 @@ function setup(t) {
   lifecycle.init(state.viewer); lifecycle.enable();
   const records = [1, 2].map((n) => ({ id: `osm:military:w${n}`, name: `Site ${n}`, namedArea: true, areaM2: 100 / n, latitude: 0, longitude: 0, pointOnly: true }));
   const points = () => [...draw.sets.values()].find((set) => set.kind === 'points' && !set.disposed);
-  return { state, camera, draw, points, get labels() { return labels; }, get options() { return options; }, get visible() { return visible; }, records, markers: parts.namedMarkers, lifecycle, setX: (value) => { x = value; }, publications: () => publications, loads: () => loads };
+  return { state, camera, draw, points, get labels() { return labels; }, get options() { return options; }, get visible() { return visible; }, records, markers: parts.namedMarkers, lifecycle, boxes, setX: (value) => { x = value; }, publications: () => publications, loads: () => loads };
 }
 
 test('Contacts camera motion reprojects and declutters existing labels without source loads or primitive replacement', (t) => {
@@ -170,7 +176,7 @@ test('the bounded host cohort ranks wide points and polygon titles by area', (t)
         !entry.stateless &&
         entry.horizonCull &&
         entry.collisionGroup === 'ambient-card' &&
-        entry.interactive === true,
+        entry.interactive === false,
     ),
   );
   const first = h.labels[0];
@@ -200,14 +206,33 @@ test('wide and polygon titles use the Data Centers entry contract and persistent
       priority: entry.priority,
       accent: entry.accent,
     });
-    // Interactive: the overlay then keeps a hit rect for the label box, so
-    // a click on it finds the site (controls.findAt).
-    assert.deepEqual(entry, {
-      ...reference,
-      interactive: true,
-      selected: false,
-    });
+    // Not interactive: an interactive entry is a card that takes the click
+    // from an aircraft or vessel drawn under it. A click on the label box
+    // finds the site through its painted box (labelAt).
+    assert.deepEqual(entry, { ...reference, selected: false });
   }
+  h.lifecycle.destroy(h.state.viewer);
+});
+
+test("labelAt finds the site whose label box was painted at a point, in CSS px", (t) => {
+  const h = setup(t);
+  h.markers.sync(h.records);
+  const [first, second] = h.records.map((record) => record.id);
+  h.boxes.set(first, { x: 100, y: 100, w: 80, h: 20 });
+  h.boxes.set(second, { x: 300, y: 100, w: 60, h: 20 });
+  assert.equal(h.markers.labelAt({ x: 120, y: 110 }), first);
+  assert.equal(h.markers.labelAt({ x: 360, y: 120 }), second, 'edges count');
+  assert.equal(h.markers.labelAt({ x: 250, y: 110 }), null, 'between boxes');
+  assert.equal(h.markers.labelAt(null), null);
+  assert.equal(h.markers.labelAt({ x: Number.NaN, y: 110 }), null);
+  // A site no longer marked has no label to find, even with a stale box.
+  h.markers.sync([h.records[1]]);
+  assert.equal(h.markers.labelAt({ x: 120, y: 110 }), null);
+  assert.equal(h.markers.labelAt({ x: 320, y: 110 }), second);
+  // Nor does a layer that is off.
+  h.state.enabled = false;
+  assert.equal(h.markers.labelAt({ x: 320, y: 110 }), null);
+  h.state.enabled = true;
   h.lifecycle.destroy(h.state.viewer);
 });
 
