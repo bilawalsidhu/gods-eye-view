@@ -1445,11 +1445,6 @@
   "Routing unavailable — no response from the routing service": "Построение маршрута недоступно — сервис маршрутизации не отвечает",
   "Routing unavailable": "Построение маршрута недоступно",
   "Fire · FRP {frp} MW": "Пожар · FRP {frp} МВт",
-  "Not contained or unknown": "Не локализован или неизвестно",
-  "Under 50% contained": "Локализован менее чем на 50%",
-  "50–99% contained": "Локализован на 50–99%",
-  "Fully contained": "Полностью локализован",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Цвет показывает заявленную степень локализации. Контуры упрощены примерно до 100 м.",
   "MORE DETAIL · 30 m": "БОЛЬШЕ ДЕТАЛЕЙ · 30 м",
   "Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days": "Sentinel‑2 и Landsat через HLS, 30 м, каждые 2–6 дней",
   "DAILY OVERVIEW · 250 m": "ЕЖЕДНЕВНЫЙ ОБЗОР · 250 м",
@@ -4637,5 +4632,12 @@
   "Telemetry reads while the model is on screen": "Телеметрия читается, пока модель на экране",
   "Connecting to telemetry…": "Подключение к телеметрии…",
   "{seconds} s": "{seconds} с",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Панели, радиаторы и одна антенна следуют телеметрии NASA в реальном времени. Вторая антенна неподвижна, а манипуляторы движутся для иллюстрации."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Панели, радиаторы и одна антенна следуют телеметрии NASA в реальном времени. Вторая антенна неподвижна, а манипуляторы движутся для иллюстрации.",
+  "last growth {age} ago": "последний рост {age} назад",
+  "New in 6 hours": "Новое за 6 часов",
+  "6–24 hours": "6–24 часа",
+  "1–3 days": "1–3 дня",
+  "Older or unknown": "Старше или неизвестно",
+  "Colour shows how long ago each area was mapped.": "Цвет показывает, как давно нанесён каждый участок.",
+  "Perimeters are simplified to about 100 m.": "Контуры упрощены примерно до 100 м."
 }

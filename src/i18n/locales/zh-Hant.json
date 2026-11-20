@@ -1010,11 +1010,6 @@
   "Unnamed incident": "未命名火情",
   "Open {title} on InciWeb": "在 InciWeb 上打開 {title}",
   "Perimeter source unavailable": "周界數據源不可用",
-  "Not contained or unknown": "未控制或未知",
-  "Under 50% contained": "控制低於 50%",
-  "50–99% contained": "控制 50–99%",
-  "Fully contained": "已全部控制",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "顏色表示報告的控制比例。周界簡化至約 100 m。",
   "Malformed perimeter snapshot": "周界快照格式錯誤",
   "radio tag|All": "全部",
   "News": "新聞",
@@ -4319,5 +4314,12 @@
   "Telemetry reads while the model is on screen": "模型顯示在屏幕上時讀取遙測",
   "Connecting to telemetry…": "正在連接遙測…",
   "{seconds} s": "{seconds} 秒",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太陽能板、散熱器和一副天線依據 NASA 的實時遙測轉動。另一副天線保持不動，機械臂僅作演示性擺動。"
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "太陽能板、散熱器和一副天線依據 NASA 的實時遙測轉動。另一副天線保持不動，機械臂僅作演示性擺動。",
+  "last growth {age} ago": "最近一次擴展於 {age}前",
+  "New in 6 hours": "6 小時內新增",
+  "6–24 hours": "6–24 小時",
+  "1–3 days": "1–3 天",
+  "Older or unknown": "更早或未知",
+  "Colour shows how long ago each area was mapped.": "顏色表示各區域測繪至今的時間。",
+  "Perimeters are simplified to about 100 m.": "周界簡化至約 100 m。"
 }

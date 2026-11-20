@@ -20,7 +20,7 @@ const validPayload = {
   ],
 };
 
-test('a successful response yields normalized perimeter rows', async () => {
+test('a successful response yields the snapshot of fires and pieces', async () => {
   let requested;
   const source = createWfigsPerimeterSource({
     fetchImpl: async (url) => {
@@ -30,9 +30,13 @@ test('a successful response yields normalized perimeter rows', async () => {
       });
     },
   });
-  const rows = await source.getSnapshot();
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].stableId, '2026-NMGNF-000123');
+  const snapshot = await source.getSnapshot();
+  assert.deepEqual(
+    snapshot.fires.map((fire) => fire.id),
+    ['2026-NMGNF-000123'],
+  );
+  assert.deepEqual(snapshot.pieces[0].polygons, [[ring]]);
+  assert.equal(snapshot.at, null);
   assert.equal(requested, '/api/fire-perimeters');
 });
 
@@ -160,22 +164,20 @@ test('a failed refresh serves the last snapshot marked stale for a day, then ref
   assert.equal((await ask()).status, 502, 'a day-old snapshot is not served');
 });
 
-test('the snapshot detail carries the proxy staleness and fetch time', async () => {
+test('the snapshot carries the proxy staleness and fetch time', async () => {
   const fetchedAt = Date.UTC(2026, 9, 25, 12);
   const source = createWfigsPerimeterSource({
     fetchImpl: async () => Response.json({ rows: [], stale: true, fetchedAt }),
   });
-  assert.deepEqual(await source.getSnapshotDetail(), {
-    rows: [],
-    stale: true,
-    fetchedAt,
-  });
-  assert.deepEqual(await source.getSnapshot(), []);
+  const snapshot = await source.getSnapshot();
+  assert.equal(snapshot.stale, true);
+  assert.equal(snapshot.fetchedAt, fetchedAt);
+  assert.deepEqual([snapshot.fires, snapshot.pieces], [[], []]);
 });
 
 test('getSnapshot works when taken off its source object', async () => {
   const { getSnapshot } = createWfigsPerimeterSource({
     fetchImpl: async () => Response.json({ rows: [] }),
   });
-  assert.deepEqual(await getSnapshot(), []);
+  assert.deepEqual((await getSnapshot()).fires, []);
 });

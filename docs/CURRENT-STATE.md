@@ -1123,17 +1123,19 @@ Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
 continues to follow the existing tool and caller behavior.
 
-Fire-perimeter queries test polygon interiors and holes on continuous unwrapped
-longitudes, matching the short-edge convention used for boundary intersections.
-An outline crossing ±180° contains nearby boxes and radius areas without also
-containing their counterparts near Greenwich. Returned perimeter coordinates
-use a circular mean for longitude, including multipart outlines. Incident cards
-also use a circular longitude mean over the largest outer ring (excluding its
-repeated closing vertex). Their relative-area comparison follows short longitude
-edges so a small dateline-crossing part cannot outweigh a larger ordinary part.
-Regression coverage lives in `src/tools/area.test.mjs`,
-`src/tools/queries/environment.test.mjs` and
-`src/layers/perimeters/cards.test.mjs`.
+Fire-perimeter queries test the polygon interiors and holes of each fire's
+pieces on continuous unwrapped longitudes, matching the short-edge convention
+used for boundary intersections: a fire is in the area when one of its pieces
+is. An outline crossing ±180° contains nearby boxes and radius areas without
+also containing their counterparts near Greenwich. A fire is returned at its
+card anchor, which the source gives; for WFIGS it is a circular longitude mean
+over the largest outer ring (excluding its repeated closing vertex), with the
+relative-area comparison following short longitude edges so a small
+dateline-crossing part cannot outweigh a larger ordinary part. Context's
+hazard list measures distance to the same anchor. Regression coverage lives in
+`src/tools/area.test.mjs`, `src/tools/queries/environment.test.mjs`,
+`src/layers/perimeters/cards.test.mjs` and
+`src/layers/perimeters/records.test.mjs`.
 
 ## Scope display controls
 
@@ -6387,7 +6389,11 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
-Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Link checks cancel on disable or selection change.
+
+Fire Perimeters draws a snapshot of fires and the pieces of their burned area: the source's `getSnapshot({ signal })` answers `{ at, fetchedAt, stale, revision, note, fires, pieces }` (`src/layers/perimeters/records.js`). Each piece is filled and its `outline` drawn as separate draped lines, so a piece cut from a larger area has no line along the cut; a piece whose fire is not listed is dropped. Pieces are coloured by age at `at` (or now) on the WorldFX scale: under 6 hours yellow, 6–24 hours orange, 1–3 days red, older or of unknown birth dark red. The layer redraws only when `revision` changes or a piece moves to another age band. The legend counts fires by `lastGrowthTime` in the same four bands and shows the source's `note` below them; the card keeps its containment accent, ages from `at`, and adds "last growth … ago". A selected fire keeps its card while the snapshot lists it, with or without pieces. A failed read keeps the last picture and the row shows the error. When to read again (a timeline, the camera) is the host's call through the manager's `refreshLayer`. `createApplicationCatalog({ perimeterOptions: { inciweb: false } })` creates no InciWeb sources: the cards carry no links and InciWeb is never asked.
+
+WFIGS keeps one current perimeter per fire, so each of its polygons is one piece, outlined by all its rings, and colour is the age of that perimeter: `poly_PolygonDateTime`, or the record's last edit `poly_DateCurrent` when that is empty (about one fire in seven), which moves with any edit to the record. A time more than 10 minutes ahead of the browser clock counts as unknown. Its `revision` follows fire ids and `poly_DateCurrent`, `at` is always null, and the note reads "Perimeters are simplified to about 100 m.".
 
 The incident card rounds the WFIGS size to whole acres, except under one acre,
 where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not

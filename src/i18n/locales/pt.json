@@ -1074,11 +1074,6 @@
   "Unnamed incident": "Sem nome",
   "Open {title} on InciWeb": "Abrir {title} no InciWeb",
   "Perimeter source unavailable": "Fonte de perímetros indisponível",
-  "Not contained or unknown": "Não contido ou desconhecido",
-  "Under 50% contained": "Menos de 50% contido",
-  "50–99% contained": "50–99% contido",
-  "Fully contained": "Totalmente contido",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "A cor indica a contenção informada. Os perímetros são simplificados para cerca de 100 m.",
   "Malformed perimeter snapshot": "Snapshot de perímetros malformado",
   "radio tag|All": "Todas",
   "News": "Notícias",
@@ -4531,5 +4526,12 @@
   "Telemetry reads while the model is on screen": "A telemetria é lida enquanto o modelo está no ecrã",
   "Connecting to telemetry…": "A ligar à telemetria…",
   "{seconds} s": "{seconds} s",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Painéis, radiadores e uma antena seguem a telemetria ao vivo da NASA. A outra antena fica parada e os braços se movem de forma ilustrativa."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Painéis, radiadores e uma antena seguem a telemetria ao vivo da NASA. A outra antena fica parada e os braços se movem de forma ilustrativa.",
+  "last growth {age} ago": "último crescimento há {age}",
+  "New in 6 hours": "Novo nas últimas 6 horas",
+  "6–24 hours": "6–24 horas",
+  "1–3 days": "1–3 dias",
+  "Older or unknown": "Mais antigo ou desconhecido",
+  "Colour shows how long ago each area was mapped.": "A cor indica há quanto tempo cada área foi mapeada.",
+  "Perimeters are simplified to about 100 m.": "Os perímetros são simplificados para cerca de 100 m."
 }

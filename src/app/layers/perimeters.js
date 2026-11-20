@@ -6,8 +6,15 @@ import {
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 
-/** Wire WFIGS fire perimeters into the application catalog. */
-export function createApplicationFirePerimeters(options) {
+/**
+ * Wire fire perimeters into the application catalog. `inciweb: false`
+ * creates no InciWeb sources, so the cards carry no links and InciWeb is
+ * never asked.
+ */
+export function createApplicationFirePerimeters({
+  inciweb = true,
+  ...options
+} = {}) {
   return createFirePerimetersLayer({
     overlayHost: {
       setEntries: overlays.setOverlayEntries,
@@ -15,8 +22,12 @@ export function createApplicationFirePerimeters(options) {
       clearSource: overlays.clearOverlaySource,
       hitTest: overlays.hitTestWorldOverlay,
     },
-    inciwebSource: createInciwebIndexSource(),
-    inciwebPublications: createInciwebPublicationSource(),
+    ...(inciweb === false
+      ? {}
+      : {
+          inciwebSource: createInciwebIndexSource(),
+          inciwebPublications: createInciwebPublicationSource(),
+        }),
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     picking,
     ...options,

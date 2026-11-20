@@ -1098,11 +1098,6 @@
   "Unnamed incident": "Без назви",
   "Open {title} on InciWeb": "Відкрити {title} в InciWeb",
   "Perimeter source unavailable": "Джерело контурів пожеж недоступне",
-  "Not contained or unknown": "Не локалізовано або невідомо",
-  "Under 50% contained": "Локалізовано менш ніж на 50%",
-  "50–99% contained": "Локалізовано на 50–99%",
-  "Fully contained": "Повністю локалізовано",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Колір показує заявлений ступінь локалізації. Контури спрощено приблизно до 100 м.",
   "Malformed perimeter snapshot": "Некоректний знімок контурів пожеж",
   "radio tag|All": "Усі",
   "News": "Новини",
@@ -4637,5 +4632,12 @@
   "Telemetry reads while the model is on screen": "Телеметрія читається, поки модель на екрані",
   "Connecting to telemetry…": "Підключення до телеметрії…",
   "{seconds} s": "{seconds} с",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Панелі, радіатори й одна антена слідують телеметрії NASA в реальному часі. Друга антена нерухома, а маніпулятори рухаються для ілюстрації."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "Панелі, радіатори й одна антена слідують телеметрії NASA в реальному часі. Друга антена нерухома, а маніпулятори рухаються для ілюстрації.",
+  "last growth {age} ago": "останнє зростання {age} тому",
+  "New in 6 hours": "Нове за 6 годин",
+  "6–24 hours": "6–24 години",
+  "1–3 days": "1–3 дні",
+  "Older or unknown": "Старше або невідомо",
+  "Colour shows how long ago each area was mapped.": "Колір показує, як давно нанесено кожну ділянку.",
+  "Perimeters are simplified to about 100 m.": "Контури спрощено приблизно до 100 м."
 }

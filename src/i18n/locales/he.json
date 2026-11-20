@@ -925,11 +925,6 @@
   "Unnamed incident": "אירוע ללא שם",
   "Open {title} on InciWeb": "פתיחת {title} ב-InciWeb",
   "Perimeter source unavailable": "מקור ההיקף אינו זמין",
-  "Not contained or unknown": "ללא הכלה או לא ידוע",
-  "Under 50% contained": "הכלה מתחת ל-50%",
-  "50–99% contained": "הכלה 50–99%",
-  "Fully contained": "הכלה מלאה",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "הצבע מציג את ההכלה שדווחה. ההיקפים מפושטים לכ-100 מ׳.",
   "Malformed perimeter snapshot": "תמונת מצב היקף פגומה",
   "radio tag|All": "הכול",
   "News": "חדשות",
@@ -4531,5 +4526,12 @@
   "Telemetry reads while the model is on screen": "הטלמטריה נקראת כל עוד הדגם מוצג על המסך",
   "Connecting to telemetry…": "מתחבר לטלמטריה…",
   "{seconds} s": "{seconds} שנ׳",
-  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "הלוחות, הרדיאטורים וצלחת אחת עוקבים אחר הטלמטריה החיה של נאס״א. הצלחת השנייה נשארת במקומה והזרועות נעות להמחשה בלבד."
+  "Arrays, radiators and one dish follow NASA's live telemetry. The other dish holds still and the arms sway for illustration.": "הלוחות, הרדיאטורים וצלחת אחת עוקבים אחר הטלמטריה החיה של נאס״א. הצלחת השנייה נשארת במקומה והזרועות נעות להמחשה בלבד.",
+  "last growth {age} ago": "התפשטות אחרונה לפני {age}",
+  "New in 6 hours": "חדש ב-6 השעות האחרונות",
+  "6–24 hours": "6–24 שעות",
+  "1–3 days": "1–3 ימים",
+  "Older or unknown": "ישן יותר או לא ידוע",
+  "Colour shows how long ago each area was mapped.": "הצבע מציג לפני כמה זמן מופה כל אזור.",
+  "Perimeters are simplified to about 100 m.": "ההיקפים מפושטים לכ-100 מ׳."
 }
