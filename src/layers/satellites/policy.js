@@ -108,6 +108,15 @@ export const ISS_MODEL_MIN_PX = 72;
 export const ISS_COMPANION_RADIUS_M = 5_000;
 
 /**
+ * An object judged docked stays so until it is this many companion radii
+ * from the station: elements of different epochs can swing a docked pair's
+ * distance about the radius over an orbit, which would flip the ring,
+ * STATION, LIVE and the Cockpit's mount twice an orbit. Docking still needs
+ * the radius itself.
+ */
+export const UNDOCK_RADIUS_FACTOR = 3;
+
+/**
  * Dots are moved at different moments, so with the clock sped up a docked
  * object's dot can trail the ISS's by a long way. Only objects whose dots are
  * within this distance are checked orbit against orbit (issModel.js).

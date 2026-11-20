@@ -3,7 +3,7 @@ import { fromRadians } from '../../geo/ellipsoid.js';
 import { headingPitchRollOfAxes } from '../../geo/frames.js';
 import { copyInto, distance, vec } from '../../geo/vector.js';
 import { canvasOf, drawOf, findCamera } from '../../render/rendererOf.js';
-import { stationTrackedOn } from './policy.js';
+import { stationTrackedOn, UNDOCK_RADIUS_FACTOR } from './policy.js';
 
 /**
  * A space station as a 3D model when the camera is close, driven by a
@@ -440,7 +440,9 @@ export function createStationModel(
             teme.z - stationTeme.z,
           ) *
             1000 <=
-            spec.companionRadiusM;
+            // Docked, it stays so until well clear (UNDOCK_RADIUS_FACTOR).
+            spec.companionRadiusM *
+              (dockedByOrbit.has(noradId) ? UNDOCK_RADIUS_FACTOR : 1);
       }
       if (docked) dockedByOrbit.add(noradId);
       else dockedByOrbit.delete(noradId);

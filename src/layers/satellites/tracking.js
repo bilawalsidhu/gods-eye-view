@@ -13,12 +13,10 @@ import {
   TRACK_VIEW_FROM_HIGH_SCALE,
   TRACK_VIEW_FROM_LEO,
   TRACKED_ORBIT_COLOR,
+  UNDOCK_RADIUS_FACTOR,
 } from './policy.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
 import { modelFor } from './stationModels.js';
-
-/** A docked object is judged undocked only beyond this many companion radii. */
-const UNDOCK_RADIUS_FACTOR = 3;
 
 export function createTracking({ state: layerState, services, parts, source }) {
   const { clearFocusTarget } = services.focus;
@@ -452,9 +450,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       own ??= parts.orbits.propagatePosition(sat.satrec, date);
       if (!own) return null;
       const there = parts.orbits.propagatePosition(entry.satrec, date);
-      // Judged docked, it stays so until well clear: elements of different
-      // epochs can swing a docked pair's distance about the radius over an
-      // orbit, which would flip the ring, STATION and LIVE twice an orbit.
+      // Judged docked, it stays so until well clear (UNDOCK_RADIUS_FACTOR).
       const radius =
         station.companionRadiusM *
         (station.norad === held ? UNDOCK_RADIUS_FACTOR : 1);

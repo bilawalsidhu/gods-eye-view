@@ -376,6 +376,28 @@ test('while the orbit will not propagate the dots stand at every distance, as fo
   assert.equal(f.modelSet(), undefined);
 });
 
+test('a docked object holds out to three radii before its dot is given back', async (t) => {
+  const f = fixture(t);
+  await f.load();
+  f.cameraAt(20_000);
+  f.tick();
+  assert.equal(f.model._standsInFor(COMPANION), true);
+  // The companion on the station's elements, its mean anomaly moved: about
+  // 117 km a degree along this orbit.
+  const at = (anomaly) => {
+    f.state._catalog.get(COMPANION).satrec = twoline2satrec(
+      '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927',
+      `2 25544  51.6416 247.4627 0006703 130.5360 ${anomaly} 15.72125391563537`,
+    );
+    f.tick();
+    return f.model._standsInFor(COMPANION);
+  };
+  assert.equal(at('325.0968'), true, 'about 8 km: still docked');
+  assert.equal(at('325.1988'), false, 'about 20 km: undocked');
+  assert.equal(at('325.0968'), false, 'docking needs the radius itself');
+  assert.equal(at('325.0288'), true);
+});
+
 test('a model still loading counts as undrawn out of range and is released', (t) => {
   const f = fixture(t);
   f.cameraAt(MAX_M * 1.4);
