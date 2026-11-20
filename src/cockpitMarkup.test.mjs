@@ -74,10 +74,14 @@ const voiceActions = fs.readFileSync(
 test('Cockpit has one reset action beside its bottom exit path', () => {
   assert.doesNotMatch(html, /id="cockpit-quick-entry"/);
   assert.doesNotMatch(html, /id="cockpit-exit"/);
-  assert.match(
-    html,
-    /id="map-view-switch"[^>]*aria-label="Exit cockpit view"[^>]*aria-keyshortcuts="Escape"[\s\S]*?close_fullscreen[\s\S]*?EXIT COCKPIT/,
+  // The exit button's attributes, in whatever order the button renders them.
+  const exit = html.match(
+    /<button\b(?=[^>]*\sid="map-view-switch")([^>]*)>([\s\S]*?)<\/button>/,
   );
+  assert.ok(exit, 'Cockpit exit is missing');
+  assert.match(exit[1], /\saria-label="Exit cockpit view"/);
+  assert.match(exit[1], /\saria-keyshortcuts="Escape"/);
+  assert.match(exit[2], /close_fullscreen[\s\S]*?EXIT COCKPIT/);
   const topCenterActions = html.match(
     /<nav id="top-center-actions"[\s\S]*?<\/nav>/,
   );
@@ -108,9 +112,18 @@ test('Cockpit has one reset action beside its bottom exit path', () => {
     /id="reset-globe-view"/,
     'map-only reset must stay outside Cockpit',
   );
-  assert.match(
-    viewSwitcher[0],
-    /id="cockpit-reset-globe"[^>]*type="button"[^>]*aria-label="Reset cockpit to full globe view"[^>]*hidden[\s\S]*?public[\s\S]*?RESET[\s\S]*?id="map-view-switch"/,
+  // The reset button's attributes, in whatever order the button renders them.
+  const reset = viewSwitcher[0].match(
+    /<button\b(?=[^>]*\sid="cockpit-reset-globe")([^>]*)>([\s\S]*?)<\/button>/,
+  );
+  assert.ok(reset, 'Cockpit Reset is missing from the view switcher');
+  assert.match(reset[1], /\stype="button"/);
+  assert.match(reset[1], /\saria-label="Reset cockpit to full globe view"/);
+  assert.match(reset[1], /\shidden(?=[\s>=]|$)/);
+  assert.match(reset[2], /public[\s\S]*?RESET/);
+  assert.ok(
+    viewSwitcher[0].indexOf('id="map-view-switch"') > reset.index,
+    'Cockpit Reset must sit before the exit button',
   );
 
   const actions = html.match(
@@ -194,12 +207,12 @@ test('Cockpit vision cycle exposes every map preset exactly once', () => {
 
 test('Contacts uses the approved radar icon', () => {
   const button = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(button, 'Contacts button is missing');
   assert.match(
     button[0],
-    /material-symbols-outlined" aria-hidden="true">radar<\/span>/,
+    /material-symbols-outlined"[^>]*aria-hidden="true">radar<\/span>/,
   );
 });
 
@@ -369,11 +382,11 @@ test('Cockpit owns a focused shared Display portal and compact Radio controls', 
   assert.doesNotMatch(html, /data-cockpit-display-slot="presets"/);
   assert.match(
     html,
-    /id="clear-selected-layers"[^>]*aria-label="Clear selected data layers"/,
+    /<button\b(?=[^>]*\bid="clear-selected-layers")[^>]*aria-label="Clear selected data layers"/,
   );
   assert.match(
     html,
-    /id="reset-globe-view"[^>]*aria-label="Reset to full globe view"/,
+    /<button\b(?=[^>]*\bid="reset-globe-view")[^>]*aria-label="Reset to full globe view"/,
   );
   assert.match(
     css,
@@ -1146,6 +1159,15 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   );
   assert.match(
     mobileCockpit[1],
+    /body\.cockpit-mode\.mobile-shell[^{]*?\.cockpit-utility-controls \{[^}]*?top:[^;]*?var\(--cockpit-visor-top\)/,
+  );
+  assert.match(
+    mobileCockpit[1],
+    /@media \(min-width: 390px\) and \(min-height: 240px\),\s*\(min-height: 450px\) \{\s*body\.cockpit-mode\.mobile-shell/,
+  );
+  assert.match(css, /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/);
+  assert.match(
+    mobileCockpit[1],
     /body\.cockpit-mode \.cockpit-utility-control\.is-expanded[\s\S]*?top:\s*96px;/,
   );
   assert.match(
@@ -1159,6 +1181,15 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode #view-switcher button \{[\s\S]*?padding-inline:\s*9px;/,
+  );
+});
+
+test('the unread Stories announcement waits until Cockpit closes', () => {
+  assert.match(css, /body\.cockpit-mode #gev-stories #hPop \{\s*display:\s*none;\s*\}/);
+  const storiesView = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'StoriesView.vue'), 'utf8');
+  assert.match(
+    storiesView,
+    /async function openExplore\(\) \{[^}]*?if \(await store\.controller\.open\(\)\) markPopSeen\(\);/,
   );
 });
 
@@ -1231,7 +1262,7 @@ test('Cockpit Contact navigation omits the redundant Focus camera action', () =>
 
 test('Global Context names its mixed contact cycle without changing the stable mode id', () => {
   const match = html.match(
-    /<button id="global-context-flights-btn"[\s\S]*?<\/button>/,
+    /<button\b[^>]*\bid="global-context-flights-btn"[\s\S]*?<\/button>/,
   );
   assert.ok(match, 'Global Context contacts button is missing');
   assert.match(match[0], />CONTACTS</);

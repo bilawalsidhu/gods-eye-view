@@ -3231,3 +3231,46 @@ test('an application with every layer registered keeps every requested layer', a
   ]);
   coordinator.destroy();
 });
+
+test('start layers turn on when nothing names any, and are never written as the user choice', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  const results = await coordinator.start({
+    allowLocalState: false,
+    startLayerIds: ['earthquakes', 'traffic', 'not-a-layer'],
+  });
+  assert.equal(coordinator.source, 'start');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'traffic',
+  ]);
+  assert.equal(manager.isEnabled('earthquakes'), true);
+  assert.equal(manager.isEnabled('traffic'), true);
+  assert.equal(
+    results.every((result) => result.persistenceWrite === false),
+    true,
+  );
+  assert.deepEqual(storage.writes, []);
+  coordinator.destroy();
+});
+
+test('a shared layer payload wins over start layers', async () => {
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+  });
+  const shared = createDefaultLayerState();
+  shared.enabledLayerIds = ['radio'];
+  await coordinator.start({
+    shareLayerState: shared,
+    allowLocalState: false,
+    startLayerIds: ['earthquakes'],
+  });
+  assert.equal(coordinator.source, 'share');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['radio']);
+  assert.equal(manager.isEnabled('earthquakes'), false);
+  coordinator.destroy();
+});

@@ -557,7 +557,7 @@ test('the imported files render what the file import publishes and keep focus', 
   assert.equal(name.textContent, '<b>a</b>.geojson');
   assert.equal(name.children.length, 0, 'the name is text');
   assert.match(name.title, /GEOJSON, 2 map objects$/);
-  assert.equal(toggle.className, 'geo-import-action');
+  assert.ok(toggle.classList.contains('geo-import-action'));
   assert.equal(toggle.getAttribute('type'), 'button');
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   assert.equal(toggle.getAttribute('aria-label'), 'Hide <b>a</b>.geojson');
