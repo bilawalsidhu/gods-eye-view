@@ -9,6 +9,7 @@ import {
 } from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
+import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
 
@@ -257,6 +258,7 @@ export function createWeatherShell({
       heightM: height,
       alpha,
       detail: null,
+      shows: WEATHER_IMAGERY_SHOWS[product],
     });
     fieldAlpha = alpha;
     owed = true;
