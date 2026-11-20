@@ -21,11 +21,12 @@ const utc = (time) =>
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
     : t('Unavailable');
 const clockTime = (time) => utcClock(time) || t('Unavailable');
-const age = (time) => {
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - Date.parse(time)) / 60_000),
-  );
+// Ages are measured from `nowMs`: the world clock's time at a past time, the
+// wall clock while live.
+const minutesBefore = (time, nowMs = Date.now()) =>
+  Math.max(0, Math.floor((nowMs - Date.parse(time)) / 60_000));
+const age = (time, nowMs) => {
+  const minutes = minutesBefore(time, nowMs);
   return minutes >= 60
     ? t('{hours}h {minutes}m ago', {
         hours: Math.floor(minutes / 60),
@@ -33,12 +34,21 @@ const age = (time) => {
       })
     : t('{minutes}m ago', { minutes });
 };
-const historyTime = (time) =>
-  t('{time} · {minutes} min ago', {
-    time: clockTime(time),
-    minutes: Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 60_000)),
-  });
-const dated = (time) => `${utc(time)} · ${age(time)}`;
+// A frame's time on the timeline: its age while live; at a past time, the
+// clock time alone, as the timeline time is the one it is measured from.
+const historyTime = (time, state) =>
+  state?.mode === 'history'
+    ? clockTime(time)
+    : t('{time} · {minutes} min ago', {
+        time: clockTime(time),
+        minutes: minutesBefore(time),
+      });
+const dated = (time, nowMs) => `${utc(time)} · ${age(time, nowMs)}`;
+/** The time the observed products show: the timeline time, or now while live. */
+const shownNow = (state) =>
+  state?.mode === 'history' && Number.isFinite(Date.parse(state.target))
+    ? Date.parse(state.target)
+    : Date.now();
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -151,7 +161,7 @@ export function createWeatherPanel({
               ? t('No frame within {gap} min of {time}', { gap, time })
               : t('No frame within {gap} h of {time}', { gap: gap / 60, time });
         } else if (shown) {
-          detail = dated(shown);
+          detail = dated(shown, shownNow(state));
           if (state.mode === 'history')
             detail =
               Date.parse(shown) === Date.parse(state.target)
@@ -163,7 +173,8 @@ export function createWeatherPanel({
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
         });
-        if (state.mode === 'history')
+        // Unless its source follows the timeline, wind stays at the live edge.
+        if (state.mode === 'history' && !clock?.follows?.(id))
           detail = t('{detail} · Does not follow history', { detail });
       }
       const lines = [

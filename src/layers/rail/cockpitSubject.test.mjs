@@ -44,6 +44,13 @@ const PACK = Object.freeze({
   routes: { R1: [0] },
 });
 
+/** A floor service that knows the ground everywhere, at 12 m. */
+const WARM_GROUND = Object.freeze({
+  GROUND_FLOOR_LIFT_M: 1.5,
+  cachedGroundFloor: () => 12,
+  warmGroundFloor() {},
+});
+
 /** Two trains on the line, T1 running east and T2 west, a step a poll. */
 async function onTheLine(t, options = {}) {
   const app = harness(t, {
@@ -65,11 +72,18 @@ async function onTheLine(t, options = {}) {
   return app;
 }
 
+/** Whether the selected train's route line is drawn: its live set's `show`. */
+const routeShown = (app) =>
+  [...app.draw.sets.values()].find(
+    (set) =>
+      !set.disposed && set.kind === 'lines' && /:route:\d+$/.test(set.spec.id),
+  )?.show;
+
 const T1 = railTrainKey('mbta-rail', 'T1');
 const T2 = railTrainKey('mbta-rail', 'T2');
 
 test('the selected train reads as a snapshot of its place, motion and sources', async (t) => {
-  const app = await onTheLine(t);
+  const app = await onTheLine(t, { ground: WARM_GROUND });
   assert.equal(app.layer.getSelectedTrain(), null, 'nothing selected');
   app.parts().selection.selectTrain(T1);
   const view = app.layer.getSelectedTrain();
@@ -98,6 +112,7 @@ test('the selected train reads as a snapshot of its place, motion and sources', 
   assert.equal(view.provenance.positionSource, 'gps');
   assert.equal(view.provenance.timestampSource, 'vehicle');
   const drawn = app.entry(T1).drawnHeight;
+  assert.ok(view.position.heightQuality > 0, 'on a known floor');
   assert.equal(view.position.railHeightM, drawn.h - 1.5);
   assert.ok(Number.isFinite(view.position.latitude));
   assert.ok(Array.isArray(view.stops));
@@ -121,6 +136,71 @@ const stopList = (...names) =>
     lon: LON0 + (i * 2000) / KX,
     state: 'upcoming',
   }));
+
+test('a train drawn on an unknown floor reports no rail height', async (t) => {
+  // The harness's floor service is always cold: the train is drawn on the
+  // ellipsoid, which is no floor for a view to stand on.
+  const app = await onTheLine(t);
+  app.parts().selection.selectTrain(T1);
+  const view = app.layer.getSelectedTrain();
+  assert.equal(view.position.heightQuality, 0, 'no floor is known');
+  assert.equal(
+    view.position.railHeightM,
+    null,
+    'an unknown floor is no height',
+  );
+});
+
+test('a train on a known floor at sea level reports a rail height of 0 m', async (t) => {
+  const app = await onTheLine(t, {
+    ground: { ...WARM_GROUND, cachedGroundFloor: () => 0 },
+  });
+  app.parts().selection.selectTrain(T1);
+  const { position } = app.layer.getSelectedTrain();
+  assert.ok(position.heightQuality > 0, 'the floor is known');
+  assert.equal(position.railHeightM, 0, 'a height, not none');
+});
+
+test('a train first seen standing takes no direction from its GPS jitter', async (t) => {
+  // Reports 13 m apart, and the course drawn between them, do not tell which
+  // way it runs; an operator's bearing does.
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let jitterM = 0;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + (1000 + jitterM) / KX),
+    train('T2', LAT, LON0 + (3000 + jitterM) / KX, { bearing: 270 }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [13, 0, 13, 0, 13, 0]) {
+    jitterM = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    const standing = app.layer.getSelectedTrain().path.direction;
+    app.parts().selection.selectTrain(T2);
+    seen.push([standing, app.layer.getSelectedTrain().path.direction]);
+  }
+  assert.deepEqual(seen, Array(6).fill([0, -1]));
+});
+
+test('a standing train keeps its operator’s bearing through reports that leave it out', async (t) => {
+  const app = harness(t, { paths: { 'mbta-rail': PACK }, at: BOSTON });
+  let bearing = 270;
+  app.feeds.set('mbta-rail', () => [
+    train('T1', LAT, LON0 + 1000 / KX, { bearing }),
+  ]);
+  await app.enable();
+  const seen = [];
+  for (const next of [270, 270, 270, null, null, null]) {
+    bearing = next;
+    app.run(RAIL_POLL_MS);
+    await app.poll();
+    app.parts().selection.selectTrain(T1);
+    seen.push(app.layer.getSelectedTrain().path.direction);
+  }
+  assert.deepEqual(seen, Array(6).fill(-1));
+});
 
 test('a snapshot read again while nothing changed is the one read before', async (t) => {
   let list = stopList('Alpha', 'Bravo', 'Charlie');
@@ -200,7 +280,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, true);
   // From inside the train its selected line would run under the eye.
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],
@@ -222,7 +302,7 @@ test('a held train hides its marker and card and keeps the selection', async (t)
   assert.equal(app.layer.getCockpitSubject(), null);
   app.run(1000);
   assert.equal(app.entry(T1).marker.show, true);
-  assert.equal(app.state()._route.primitive.show, true, 'the line is back');
+  assert.equal(routeShown(app), true, 'the line is back');
   assert.equal(
     (app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? []).length,
     1,
@@ -231,11 +311,13 @@ test('a held train hides its marker and card and keeps the selection', async (t)
 });
 
 test('a held train draws no 3D model either; let go, its model draws again', async (t) => {
-  const models = await fleetModelFakes(t);
+  const models = await fleetModelFakes();
   const app = await onTheLine(t, { fleet: models.fleet, altitude: 1_000 });
+  models.watch(app.draw);
   // A model's load answers off the frame; the next frames place it.
   const frames = async () => {
     app.run(500);
+    models.load();
     await app.settle();
     app.run(500);
   };
@@ -354,7 +436,7 @@ test('a held train keeps the selection and moves, hidden, when its category is t
   assert.equal(app.layer.getCockpitSubject()?.key, T1);
   assert.equal(app.entry(T1).marker.show, false);
   assert.equal(app.entry(T2).marker.show, false, 'its category is hidden');
-  assert.equal(app.state()._route.primitive.show, false, 'no line');
+  assert.equal(routeShown(app), false, 'no line');
   assert.deepEqual(
     app.overlayEntries.get(RAIL_SELECTED_OVERLAY_SOURCE_ID) ?? [],
     [],

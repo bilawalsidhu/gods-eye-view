@@ -1,13 +1,14 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { createRendering } from './rendering.js';
+import { bindWildlifeViewer } from '../../testSupport/wildlifeViewer.mjs';
 import { createSelection } from './selection.js';
 
 export const DENSE_CONTINENT_CELLS = 6 * 32 * 32;
 export const DENSE_CONTINENT_ROWS = 500;
 const NOW = Date.parse('2026-11-04T18:00:00Z');
 
-/** The real render + selection pipeline with Cesium coordinates/billboards.
- * Only the WebGL scene and external overlay host are replaced. Six fully
+/** The real render + selection pipeline with ECEF anchors and badges on a
+ * fake draw port. Only the renderer and external overlay host are replaced. Six fully
  * occupied logical tiles deliberately include off-window cells and collisions. */
 export function denseContinentalRendering({ onOperations } = {}) {
   const cells = [];
@@ -41,17 +42,7 @@ export function denseContinentalRendering({ onOperations } = {}) {
       obscured: false,
       cell: null,
     }));
-  const primitives = {
-    add: (value) => value,
-    remove(value) {
-      value.destroy();
-      return true;
-    },
-  };
-  const scene = {
-    canvas: { clientWidth: 1440, clientHeight: 900 },
-    primitives,
-  };
+  const scene = { canvas: { clientWidth: 1440, clientHeight: 900 } };
   const state = {
     enabled: true,
     viewer: {
@@ -66,7 +57,7 @@ export function denseContinentalRendering({ onOperations } = {}) {
     pointById: new Map(),
     positions: new Map(),
     cells: [],
-    staging: null,
+    cellSets: null,
     taxa: 'all',
     selectedId: null,
     query: { visibleBoxes: [{ south: 5, west: -130, north: 75, east: -50 }] },
@@ -77,10 +68,16 @@ export function denseContinentalRendering({ onOperations } = {}) {
     carriers: new Map(),
     contextIds: new Set(),
   };
-  const centre = Cesium.Cartesian3.fromDegrees(-90, 42);
-  const frame = Cesium.Transforms.eastNorthUpToFixedFrame(centre);
-  const east = Cesium.Matrix4.getColumn(frame, 0, new Cesium.Cartesian4());
-  const north = Cesium.Matrix4.getColumn(frame, 1, new Cesium.Cartesian4());
+  bindWildlifeViewer(state.viewer);
+  // The local east and north axes at 42 N, 90 W.
+  const lon = (-90 * Math.PI) / 180;
+  const lat = (42 * Math.PI) / 180;
+  const east = { x: -Math.sin(lon), y: Math.cos(lon), z: 0 };
+  const north = {
+    x: -Math.sin(lat) * Math.cos(lon),
+    y: -Math.sin(lat) * Math.sin(lon),
+    z: Math.cos(lat),
+  };
   const metrics = { projections: 0, publications: 0, cartesianBuilds: 0 };
   let pan = 0;
   let nextIdle = 0;
@@ -106,14 +103,9 @@ export function denseContinentalRendering({ onOperations } = {}) {
     performanceSlice(slice) {
       slices.push(slice);
     },
-    cesium: {
-      ...Cesium,
-      Cartesian3: class extends Cesium.Cartesian3 {
-        static fromDegrees(...args) {
-          metrics.cartesianBuilds++;
-          return Cesium.Cartesian3.fromDegrees(...args);
-        }
-      },
+    fromDegrees(...args) {
+      metrics.cartesianBuilds++;
+      return fromDegrees(...args);
     },
     project(_scene, anchor) {
       metrics.projections++;

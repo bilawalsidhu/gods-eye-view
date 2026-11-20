@@ -9,17 +9,10 @@ import { createPinia } from 'pinia';
 import { useWindInspectionStore } from '../../ui/stores/windInspection.js';
 import WindInspectionMarker from '../../ui/views/panels/WindInspectionMarker.vue';
 import { createWindInspectionMarker } from './inspectionMarker.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 
-const cesium = {
-  SceneMode: { SCENE3D: 3 },
-  Ellipsoid: { WGS84: {} },
-  EllipsoidalOccluder: class {
-    isPointVisible() {
-      return cesium.visible;
-    }
-  },
-  visible: true,
-};
+/** Whether the fake query port sees the point over the horizon. */
+const horizon = { visible: true };
 
 function fixture(t) {
   document.body.replaceChildren();
@@ -31,49 +24,66 @@ function fixture(t) {
   t.after(() => app.unmount());
   const frames = { listener: null };
   const projected = [];
+  const requests = [];
   const viewer = {
-    camera: { positionWC: {} },
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
-      mode: 3,
       canvas: {
         clientWidth: 800,
         clientHeight: 600,
         getBoundingClientRect: () => ({ left: 15, top: 30 }),
       },
-      postRender: {
-        addEventListener(fn) {
-          assert.equal(frames.listener, null);
-          frames.listener = fn;
-          return () => {
-            frames.listener = null;
-          };
-        },
-      },
-      cartesianToCanvasCoordinates(point) {
+    },
+  };
+  bindRenderer(viewer, {
+    query: {
+      project(point) {
         projected.push(point);
         return { x: 100, y: 200 };
       },
-      requestRender() {},
+      isOccluded: () => !horizon.visible,
     },
-  };
+    frame: {
+      on(phase, fn) {
+        assert.equal(phase, 'postRender');
+        assert.equal(frames.listener, null);
+        frames.listener = fn;
+        return () => {
+          frames.listener = null;
+        };
+      },
+      requestRender: (reason) => requests.push(reason),
+    },
+  });
   const store = useWindInspectionStore(pinia);
-  cesium.visible = true;
+  horizon.visible = true;
   const owner = createWindInspectionMarker({
     container,
     viewer,
-    cesium,
     store,
   });
   const nodes = () => [
     ...container.querySelectorAll('.gev-wind-inspection-marker'),
   ];
-  return { owner, viewer, store, frames, projected, nodes, container, cesium };
+  return {
+    owner,
+    viewer,
+    store,
+    frames,
+    projected,
+    requests,
+    nodes,
+    container,
+  };
 }
 
 test('the marker follows only its captured point, hides beyond the limb, and releases its listener', async (t) => {
-  const { owner, viewer, frames, projected, nodes } = fixture(t);
+  const { owner, frames, projected, requests, nodes } = fixture(t);
   const point = { x: 1, y: 2, z: 3 };
   owner.show(point);
+  assert.ok(requests.length > 0, 'showing asks the frame port for a frame');
   await nextTick();
   assert.equal(nodes().length, 1);
   const [marker] = nodes();
@@ -84,14 +94,13 @@ test('the marker follows only its captured point, hides beyond the limb, and rel
   assert.equal(marker.style.left, '110px');
   assert.equal(marker.style.top, '220px');
   assert.equal(marker.hidden, false);
-  viewer.camera.positionWC = { moved: true };
-  cesium.visible = false;
+  horizon.visible = false;
   frames.listener();
   await nextTick();
   assert.equal(marker.hidden, true);
   assert.equal(marker.style.left, '110px', 'a hidden marker keeps its place');
   assert.ok(projected.every((value) => value === point));
-  cesium.visible = true;
+  horizon.visible = true;
   frames.listener();
   await nextTick();
   assert.equal(marker.hidden, false);
@@ -125,7 +134,6 @@ test('an unchanged frame publishes nothing, and an older owner leaves a newer ma
   const newer = createWindInspectionMarker({
     container,
     viewer,
-    cesium,
     store,
   });
   newer.show({ x: 2 });

@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import inspector from 'node:inspector/promises';
 import { createTransitLayer } from './index.js';
+import { spriteDrawOrder } from '../../data/spriteOrder.js';
 import {
   FEED_EVICT_AFTER_MS,
   FEED_STALE_AFTER_MS,
@@ -33,11 +35,6 @@ const lat = (entry) =>
     Cesium.Cartographic.fromCartesian(entry.marker.position).latitude,
   );
 import {
-  cameraSensitivityClaims,
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
-import {
   _resetRenderGovernorForTest,
   getRenderGovernorDiagnostics,
   governorRequestRender,
@@ -46,6 +43,14 @@ import {
   releaseContinuousRender,
   uninstallRenderGovernor,
 } from '../../renderGovernor.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { setClickCardHitTest } from '../../data/pickRegistry.js';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { bindRenderer, rendererOf } from '../../render/rendererOf.js';
+import { fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
+import { framePortFor } from '../../testSupport/fakeFramePort.mjs';
+import { registerStyleStages } from '../../styles/styleStages.js';
 
 const BOSTON = { lat: 42.3601, lon: -71.0589 };
 
@@ -66,25 +71,6 @@ function snapshot(
     truncated: false,
     count: vehicles.length,
     vehicles,
-  };
-}
-
-/** A camera's place and frame looking straight down from `altitude` over `at`. */
-function lookingDown(at, altitude) {
-  const positionWC = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, altitude);
-  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-    positionWC,
-    new Cesium.Cartesian3(),
-  );
-  return {
-    positionWC,
-    directionWC: Cesium.Cartesian3.negate(up, new Cesium.Cartesian3()),
-    upWC: Cesium.Cartesian3.UNIT_Z,
-    frustum: {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    },
   };
 }
 
@@ -169,6 +155,68 @@ function groundStub(floorAt) {
   };
 }
 
+/** A number per terrain the fake viewer has had, as `surfaceVersion` is. */
+const surfaceVersions = new WeakMap();
+let surfaceVersionSeq = 0;
+function surfaceVersion(terrain) {
+  if (!terrain) return 0;
+  if (!surfaceVersions.has(terrain))
+    surfaceVersions.set(terrain, (surfaceVersionSeq += 1));
+  return surfaceVersions.get(terrain);
+}
+
+// A marker record's colour (a 0..1 tuple or a CSS string) as a Cesium colour.
+function colourOf(c) {
+  return typeof c === 'string'
+    ? Cesium.Color.fromCssColorString(c)
+    : new Cesium.Color(c[0], c[1], c[2], c[3]);
+}
+
+// A marker's glyph size on screen, CSS pixels: its width less the halo the
+// raster pads it with (the SVG's viewBox is the padded frame at 96 units per
+// glyph).
+function glyphPx(marker) {
+  const svg = Buffer.from(marker.image.split(',')[1], 'base64').toString();
+  return (marker.width * 96) / Number(svg.match(/viewBox="-\d+ -\d+ (\d+)/)[1]);
+}
+
+// A camera `height` metres above a place, looking straight down at it or,
+// with `away`, straight out to space.
+function viewFrom(lon, lat, height, away = false) {
+  const ground = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  const n = Cesium.Cartesian3.normalize(ground, new Cesium.Cartesian3());
+  const position = Cesium.Cartesian3.fromDegrees(lon, lat, height);
+  const east = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.cross(
+      Cesium.Cartesian3.UNIT_Z,
+      n,
+      new Cesium.Cartesian3(),
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const north = Cesium.Cartesian3.cross(n, east, new Cesium.Cartesian3());
+  const v = (c) => ({ x: c.x, y: c.y, z: c.z });
+  const down = Cesium.Cartesian3.negate(n, new Cesium.Cartesian3());
+  return {
+    position: v(position),
+    direction: v(away ? n : down),
+    up: v(north),
+    right: v(
+      away ? Cesium.Cartesian3.negate(east, new Cesium.Cartesian3()) : east,
+    ),
+    heading: 0,
+    pitch: away ? Math.PI / 2 : -Math.PI / 2,
+    roll: 0,
+    fovy: Math.PI / 3,
+    aspectRatio: 1,
+    near: 1,
+    far: 5e8,
+  };
+}
+
+// A camera above Boston's antipode looking out to space: Boston is behind it.
+const lookingAway = () => viewFrom(BOSTON.lon + 180, -BOSTON.lat, 1e6, true);
+
 function harness(
   t,
   {
@@ -212,7 +260,6 @@ function harness(
   const originalFetch = globalThis.fetch;
   const originalDocument = globalThis.document;
   const primitives = [];
-  const sprites = new Map();
   const pickOwners = new Map();
   const overlaySources = new Map();
   const credits = [];
@@ -230,6 +277,13 @@ function harness(
 
   const preRender = new Cesium.Event();
   const cameraChanged = new Cesium.Event();
+  const cameraListeners = new Set();
+  const preUpdates = new Set();
+  const preRenders = new Set();
+  // The scene's preRender is the frame port's, as the Cesium port's is.
+  preRender.addEventListener(() => {
+    for (const cb of [...preRenders]) cb({ frame: 0 });
+  });
   const viewer = {
     camera: {
       changed: cameraChanged,
@@ -247,7 +301,7 @@ function harness(
           viewRect.north,
         );
       },
-      ...(fleet ? lookingDown(at, altitude) : {}),
+      ...(fleet ? { view: viewFrom(at.lon, at.lat, altitude) } : {}),
     },
     scene: {
       canvas: { addEventListener() {}, removeEventListener() {} },
@@ -268,7 +322,10 @@ function harness(
           return index >= 0;
         },
         contains: (primitive) => primitives.includes(primitive),
-        raiseToTop() {},
+        get: (index) => primitives[index],
+        get length() {
+          return primitives.length;
+        },
       },
     },
   };
@@ -307,12 +364,7 @@ function harness(
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection: (id, collection) =>
-          sprites.set(id, collection),
-        unregisterSpriteCollection: (id) => sprites.delete(id),
-        restoreSpriteOrder() {},
-      },
+      sprites: { spriteDrawOrder },
       picking: {
         registerPickOwner: (id, predicate) => pickOwners.set(id, predicate),
         unregisterPickOwner: (id) => pickOwners.delete(id),
@@ -332,7 +384,122 @@ function harness(
     },
   });
 
-  installRenderGovernor(viewer);
+  // The layer reads the camera through its port; this one reads the fake
+  // camera above as the Cesium port reads a real one, so a test can still
+  // move it by changing the fake. Terrain heights come through the query
+  // port, which reads the fake globe the same way. The selected trail is
+  // drawn through the draw port.
+  const draw = fakeDrawPort();
+  const unbindCamera = bindRenderer(viewer, {
+    draw,
+    query: {
+      ...fakeSceneQuery(viewer),
+      // A 1000 px square pinhole through the test's `view`; none without.
+      project(p) {
+        const view = viewer.camera.view;
+        if (!view) return null;
+        const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+        const v = {
+          x: p.x - view.position.x,
+          y: p.y - view.position.y,
+          z: p.z - view.position.z,
+        };
+        const z = dot(v, view.direction);
+        if (!(z > 0)) return null;
+        const f = 500 / Math.tan(view.fovy / 2);
+        return {
+          x: 500 + (f * dot(v, view.right)) / z,
+          y: 500 - (f * dot(v, view.up)) / z,
+        };
+      },
+      // The horizon from the fake camera's eye, as the Cesium port reads it
+      // from a real camera's.
+      isOccluded(position) {
+        const eye = Cesium.Ellipsoid.WGS84.cartographicToCartesian(
+          viewer.camera.positionCartographic,
+        );
+        return !new Cesium.EllipsoidalOccluder(
+          Cesium.Ellipsoid.WGS84,
+          eye,
+        ).isPointVisible(
+          new Cesium.Cartesian3(position.x, position.y, position.z),
+        );
+      },
+      // Terrain heights as the fake globe has them, told apart from the
+      // bare ellipsoid as the Cesium port tells them.
+      async sampleHeight(points, { against } = {}) {
+        if (against !== 'terrain') return points.map(() => null);
+        const flat =
+          viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider;
+        return points.map(() => ({
+          height: 0,
+          confidence: 1,
+          source: flat ? 'ellipsoid' : 'terrain',
+          lod: 'visible',
+        }));
+      },
+    },
+    // Whether the fake globe is shown, and a version that changes with its
+    // terrain, as the Cesium globe port reads them.
+    globe: {
+      isGlobeVisible: () => viewer.scene.globe.show === true,
+      surfaceVersion: () => surfaceVersion(viewer.terrainProvider),
+    },
+    // The tick the layer's camera listener waits on, and its frames.
+    frame: {
+      on(phase, cb) {
+        const listeners =
+          phase === 'preUpdate'
+            ? preUpdates
+            : phase === 'preRender'
+              ? preRenders
+              : null;
+        if (!listeners) return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
+      requestRender() {},
+    },
+    camera: {
+      // `changed` listeners, each at its own threshold, fired by the fake
+      // camera's own event as a real camera move fires them.
+      on(event, cb, options = {}) {
+        if (event !== 'changed') return () => {};
+        const listener = { cb, threshold: options.threshold ?? 0.5 };
+        cameraListeners.add(listener);
+        const remove = cameraChanged.addEventListener(cb);
+        return () => {
+          cameraListeners.delete(listener);
+          remove();
+        };
+      },
+      pose() {
+        const carto = viewer.camera.positionCartographic;
+        return {
+          lon: carto ? Cesium.Math.toDegrees(carto.longitude) : NaN,
+          lat: carto ? Cesium.Math.toDegrees(carto.latitude) : NaN,
+          height: carto ? carto.height : NaN,
+          // A test sets `view` (position, direction, up, right and the
+          // frustum's fovy, aspectRatio and near) to cull by the frustum.
+          ...viewer.camera.view,
+        };
+      },
+      viewRectangle() {
+        const rect = viewer.camera.computeViewRectangle?.(
+          Cesium.Ellipsoid.WGS84,
+        );
+        if (!rect) return null;
+        const deg = Cesium.Math.toDegrees;
+        return {
+          west: deg(rect.west),
+          south: deg(rect.south),
+          east: deg(rect.east),
+          north: deg(rect.north),
+        };
+      },
+    },
+  });
+  installRenderGovernor(framePortFor(viewer.scene));
   layer.init(viewer);
 
   t.after(() => {
@@ -341,7 +508,8 @@ function harness(
     } catch {
       /* a test may already have destroyed it */
     }
-    uninstallRenderGovernor(viewer);
+    uninstallRenderGovernor(framePortFor(viewer.scene));
+    unbindCamera();
     _resetRenderGovernorForTest();
     globalThis.fetch = originalFetch;
     if (originalDocument === undefined) delete globalThis.document;
@@ -350,11 +518,23 @@ function harness(
     else globalThis.window = originalWindow;
   });
 
+  const input = fakeInput(viewer);
   return {
     layer,
     viewer,
+    draw,
+    /** One frame tick, as the frame port's `preUpdate` hears it. */
+    tick() {
+      for (const cb of [...preUpdates]) cb({ frame: 0 });
+    },
+    /** Move the view rectangle without the camera reporting the move. */
+    moveQuietly(next) {
+      Object.assign(viewRect, next);
+    },
+    /** The thresholds of the camera port's `changed` listeners. */
+    cameraThresholds: () => [...cameraListeners].map((l) => l.threshold),
+    input,
     primitives,
-    sprites,
     pickOwners,
     overlaySources,
     credits,
@@ -366,6 +546,27 @@ function harness(
       responders.delete(feedId);
     },
     state: () => layer._transitStateForTest(),
+    /**
+     * The items of the markers' draw set, `still` or `moving`, as the draw
+     * port holds them (none once the set is gone).
+     */
+    markers(name = 'still') {
+      const state = layer._transitStateForTest();
+      const set = name === 'moving' ? state._movingIcons : state._stillIcons;
+      return set ? (draw.set(set.id)?.items ?? new Map()) : new Map();
+    },
+    /**
+     * What a Cesium pick of a vehicle's marker returns: the draw port's pick
+     * id for its item in the set that draws it now.
+     */
+    pickOf(entry) {
+      const state = layer._transitStateForTest();
+      const set = entry.animated ? state._movingIcons : state._stillIcons;
+      return {
+        primitive: {},
+        id: { set: set.id, id: entry.key, meta: { layer: 'transit' } },
+      };
+    },
     vehicles: () => [...layer._transitStateForTest()._vehicles.values()],
     frame() {
       preRender.raiseEvent();
@@ -510,8 +711,7 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
   app.layer.enable(app.viewer);
   await app.layer.update();
   assert.equal(app.vehicles().length, 2);
-  const collection = app.sprites.get('transit');
-  assert.equal(collection.length, 2);
+  assert.equal(app.markers('still').size, 2);
 
   app.serve('mbta', () => ({
     status: 200,
@@ -535,7 +735,7 @@ test('a vehicle the feed stops reporting is removed, and its primitive with it',
     ['bus-1'],
   );
   assert.equal(
-    collection.length + app.sprites.get('transit-motion').length,
+    app.markers('still').size + app.markers('moving').size,
     1,
     'the removed vehicle released its point primitive',
   );
@@ -605,7 +805,7 @@ test('a feed that goes silent has its vehicles evicted instead of frozen on the 
   app.advance(FEED_EVICT_AFTER_MS + 1_000);
   await app.layer.update();
   assert.equal(app.vehicles().length, 0, 'the last fleet is not left standing');
-  assert.equal(app.sprites.get('transit').length, 0);
+  assert.equal(app.markers('still').size, 0);
   const stats = app.layer.getStats();
   assert.equal(stats.count, 0);
   assert.equal(stats.stale, true);
@@ -689,7 +889,7 @@ test('a snapshot the proxy replayed from its own cache for six minutes is refuse
     0,
     'the replayed fleet is gone, not frozen',
   );
-  assert.equal(app.sprites.get('transit').length, 0);
+  assert.equal(app.markers('still').size, 0);
   const stats = app.layer.getStats();
   assert.equal(stats.count, 0);
   assert.equal(stats.stale, true);
@@ -758,25 +958,68 @@ test('disable aborts in-flight work and a response that lands late is ignored', 
   assert.equal(app.vehicles().length, 1);
 });
 
-test('a held vehicle with no floor yet tells its view no height', async (t) => {
-  // Not the ellipsoid: a first-person view waits for the surface instead.
-  const app = harness(t, { floorAt: () => undefined });
+/**
+ * Serves one bus at `place.lat` (read on every poll), enables the layer, polls
+ * once and settles; returns its entry.
+ */
+async function oneBus(app, place = { lat: 42.36 }) {
   app.serve('mbta', () => ({
     status: 200,
     body: snapshot(
       'mbta',
       'MBTA',
-      [vehicle('bus-1', 42.36, -71.06, Date.now() / 1000)],
+      [vehicle('bus-1', place.lat, -71.06, reported())],
       { fetchedAt: Date.now() },
     ),
   }));
   app.layer.enable(app.viewer);
   await app.layer.update();
   app.settle();
-  const entry = app.vehicles()[0];
+  return app.vehicles()[0];
+}
+
+test('a held vehicle with no floor yet tells its view no height', async (t) => {
+  // Not the ellipsoid: a first-person view waits for the surface instead.
+  const app = harness(t, { floorAt: () => undefined });
+  const entry = await oneBus(app);
   assert.equal(entry.heightPending, true, 'it has nothing to stand on');
   assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
   assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
+});
+
+test('with the camera above the height gate, a held vehicle drawn on the ellipsoid tells its view no height', async (t) => {
+  const app = harness(t, { altitude: 100_000, floorAt: () => undefined });
+  const entry = await oneBus(app);
+  assert.ok(app.layer.setCockpitSubject(entry.key) !== false);
+  app.frame();
+  assert.equal(entry.surfaceReady, true, 'it is drawn');
+  const drawnM = Cesium.Cartographic.fromCartesian(
+    entry.marker.position,
+  ).height;
+  assert.ok(Math.abs(drawnM) < 1e-3, `on the ellipsoid, got ${drawnM} m`);
+  assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
+});
+
+test('with the camera above the height gate, a held vehicle with one floor unknown tells its view no height', async (t) => {
+  // Drawn between a floor its view could stand on and none.
+  for (const knownLat of [42.36, 42.361]) {
+    await t.test(`floor known at ${knownLat}`, async (t) => {
+      const app = harness(t, { altitude: 100_000, floorAt: () => undefined });
+      app.ground._warm.set(app.ground._key(knownLat, -71.06), 12);
+      const start = Date.now();
+      const place = { lat: 42.36 };
+      const entry = await oneBus(app, place);
+      place.lat = 42.361;
+      app.run(TRANSIT_POLL_MS);
+      await app.layer.update();
+      assert.equal(app.layer.setCockpitSubject(entry.key), true);
+      app.run(start - AGE_MS + LAG_MS + TRANSIT_POLL_MS / 2 - Date.now());
+      const { from, to } = entry.segment;
+      assert.notEqual(Number.isFinite(from.h), Number.isFinite(to.h));
+      assert.equal(entry.surfaceReady, true, 'it is drawn');
+      assert.equal(app.layer.getCockpitSubject().position.groundHeightM, null);
+    });
+  }
 });
 
 test('a vehicle waits for its floor rather than standing on the ellipsoid', async (t) => {
@@ -886,63 +1129,42 @@ test('the render hold follows real motion, and is released when everything settl
   );
   assert.equal(app.viewer.scene.requestRenderMode, true);
 });
-test('disable hands back the camera sensitivity it borrowed', async (t) => {
+test('the layer listens to the camera at its own fine threshold while enabled', async (t) => {
   const app = harness(t);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
+  assert.deepEqual(app.cameraThresholds(), []);
   app.layer.enable(app.viewer);
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'the layer needs a finer camera trigger',
+  assert.deepEqual(
+    app.cameraThresholds(),
+    [0.05],
+    'the layer needs a finer camera trigger, as its own',
   );
-  app.layer.disable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5, 'and gives it back');
-});
-
-test('disable leaves the fine camera trigger another layer asked for', async (t) => {
-  // The sequence that broke it: two layers ask for the SAME sensitivity, so
-  // the value on the camera cannot say who owns it. Transit used to compare
-  // the number, find its own 0.05 still there, and hand the coarse default
-  // back while Bikeshare was still driving off the fine one.
-  const app = harness(t);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
-
-  app.layer.enable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.05);
-
-  claimCameraSensitivity(app.viewer.camera, 'bikeshare', 0.05);
-  app.layer.disable(app.viewer);
-
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'bikeshare is still enabled, so the fine trigger stays',
-  );
-  assert.deepEqual(cameraSensitivityClaims(app.viewer.camera), ['bikeshare']);
-
-  releaseCameraSensitivity(app.viewer.camera, 'bikeshare');
   assert.equal(
     app.viewer.camera.percentageChanged,
     0.5,
-    'and the original returns once the last claim is gone',
-  );
-  assert.deepEqual(cameraSensitivityClaims(app.viewer.camera), []);
-});
-
-test('a finer claim wins while it stands, and the coarser one survives it', async (t) => {
-  const app = harness(t);
-  app.layer.enable(app.viewer);
-  claimCameraSensitivity(app.viewer.camera, 'traffic', 0.01);
-  assert.equal(app.viewer.camera.percentageChanged, 0.01);
-
-  releaseCameraSensitivity(app.viewer.camera, 'traffic');
-  assert.equal(
-    app.viewer.camera.percentageChanged,
-    0.05,
-    'transit still needs its own trigger',
+    'and leaves the camera every other listener shares as it was',
   );
   app.layer.disable(app.viewer);
-  assert.equal(app.viewer.camera.percentageChanged, 0.5);
+  assert.deepEqual(app.cameraThresholds(), [], 'and stops on disable');
+});
+
+test('a move before the camera listener first measures is still looked at', async (t) => {
+  const app = harness(t);
+  app.layer.enable(app.viewer);
+  // The move lands before the listener's first tick, so it is the view the
+  // listener measures from and never reports.
+  app.moveQuietly({ west: -71.2, south: 10, east: -71.0, north: 10.2 });
+  app.tick();
+  assert.ok(app.state()._viewBounds.south > 40, 'not looked at yet');
+  app.tick();
+  assert.ok(
+    app.state()._viewBounds.south < 11,
+    'looked at once the first tick is past',
+  );
+  app.moveQuietly({ west: -71.2, south: 42.3, east: -71.0, north: 42.5 });
+  app.tick();
+  app.tick();
+  assert.ok(app.state()._viewBounds.south < 11, 'once, not every tick');
+  app.layer.disable(app.viewer);
 });
 
 test('destroy releases every shared registration this layer took', async (t) => {
@@ -960,25 +1182,25 @@ test('destroy releases every shared registration this layer took', async (t) => 
   }));
   app.layer.enable(app.viewer);
   await app.layer.update();
-  assert.ok(app.sprites.has('transit'));
   assert.ok(app.pickOwners.has('transit'));
-  assert.equal(app.primitives.length, 2);
+  const ids = app.layer._transitSetIdsForTest();
+  assert.deepEqual(
+    ids.map((id) => app.draw.set(id)?.spec.id),
+    ids,
+    'two marker sets are live',
+  );
 
   app.layer.destroy(app.viewer);
-  assert.equal(
-    app.sprites.has('transit'),
-    false,
-    'the sprite collection is unregistered',
-  );
+  assert.deepEqual(app.cameraThresholds(), [], 'the camera listener goes');
   assert.equal(
     app.pickOwners.has('transit'),
     false,
     'the pick owner is released',
   );
-  assert.equal(
-    app.primitives.length,
-    0,
-    'the primitive collection leaves the scene',
+  assert.deepEqual(
+    ids.map((id) => app.draw.set(id)),
+    [undefined, undefined],
+    'both marker sets are let go',
   );
   assert.equal(app.holds().includes('transit'), false);
   assert.equal(app.state()._viewer, null);
@@ -995,11 +1217,7 @@ test('two layers built from the factory share no state', async (t) => {
         holdContinuousRender,
         releaseContinuousRender,
       },
-      sprites: {
-        registerSpriteCollection() {},
-        unregisterSpriteCollection() {},
-        restoreSpriteOrder() {},
-      },
+      sprites: { spriteDrawOrder },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
       overlays: {
         setOverlayEntries() {},
@@ -1944,12 +2162,18 @@ test('a segment climbs from the ground it left to the ground it reaches', async 
     `its snapshot stands where it is drawn, got ${floor().toFixed(1)} m`,
   );
 
-  // Halfway along the segment it is halfway up; at the end, on the high ground.
+  // Halfway along the segment it still follows the low ground it crosses; at
+  // the end, it is on the high ground.
   const firstFixAt = start - AGE_MS;
   app.run(firstFixAt + LAG_MS + TRANSIT_POLL_MS / 2 - Date.now());
   assert.ok(
     Math.abs(height() - 11.5) < 3,
     `at the corridor floor, got ${height().toFixed(1)} m`,
+  );
+  // The two reports' floors blended at the fraction would say about 55 m.
+  assert.ok(
+    Math.abs(floor() + 1.5 - height()) < 1,
+    `its snapshot stands on that floor too, got ${floor().toFixed(1)} m`,
   );
   app.run(TRANSIT_POLL_MS);
   assert.ok(
@@ -2330,12 +2554,12 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   const bus = byRoute.get('742');
   const plainImage = bus.marker.image;
   const plainWidth = bus.marker.width;
-  const modeColour = bus.marker.color.clone();
+  const modeColour = colourOf(bus.marker.color);
 
   app.style('thermal');
   for (const entry of app.vehicles()) {
     assert.ok(
-      Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+      Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
       `${entry.record.routeId} is white-hot`,
     );
     assert.notEqual(entry.marker.image, plainImage, 'a haloed raster');
@@ -2346,19 +2570,21 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
     );
     assert.ok(entry.marker.width > plainWidth * 1.2, 'and larger');
   }
-  // Selecting under FLIR grows the sprite and keeps it white — cyan would dim it.
+  // Selecting under FLIR keeps the sprite white (cyan would dim it) and its
+  // size: a selected vehicle is drawn no bigger than its neighbours.
   app.layer._transitPartsForTest().selection.selectVehicle(bus.key);
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(bus.marker.color), Cesium.Color.WHITE),
     'still white when selected',
   );
-  assert.ok(
-    bus.marker.width > byRoute.get('Red').marker.width,
-    'and bigger than its neighbours',
+  assert.equal(
+    Math.round(glyphPx(bus.marker) * 1e6),
+    Math.round(glyphPx(byRoute.get('Red').marker) * 1e6),
+    'and no bigger than its neighbours',
   );
   app.layer._transitPartsForTest().selection.clearSelection();
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(bus.marker.color), Cesium.Color.WHITE),
     'and white when deselected',
   );
   assert.equal(bus.marker.width, byRoute.get('Red').marker.width);
@@ -2366,7 +2592,7 @@ test('under FLIR and NVG every sprite is white-hot with a dark halo, and selecti
   // Back to normal: the shipped look, exactly.
   app.style('normal');
   assert.ok(
-    Cesium.Color.equals(bus.marker.color, modeColour),
+    Cesium.Color.equals(colourOf(bus.marker.color), modeColour),
     'mode colour restored',
   );
   assert.equal(bus.marker.image, plainImage, 'plain raster restored');
@@ -2391,12 +2617,12 @@ test('a cockpit vision override wins over the map style while it lasts, and dest
   const plain = entry.marker.image;
   app.vision('nvg', true);
   assert.ok(
-    Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
     'cockpit NVG restyles',
   );
   app.style('normal');
   assert.ok(
-    Cesium.Color.equals(entry.marker.color, Cesium.Color.WHITE),
+    Cesium.Color.equals(colourOf(entry.marker.color), Cesium.Color.WHITE),
     'the map style cannot undo a live cockpit override',
   );
   app.vision('normal', false);
@@ -2469,16 +2695,16 @@ test('the floor cycle samples the rendered mesh for the cells it warms, with its
     'the sampler was asked after the floor resolved',
   );
   const call = app.meshCalls[0];
-  assert.equal(call.scene, app.viewer.scene);
+  assert.equal(call.scene, app.viewer);
   assert.deepEqual(
     call.points.map((p) => p.lat).sort(),
     [42.36, 42.37],
     'the in-view cells, and not the one off screen',
   );
-  assert.equal(
-    call.options.excludeObjects.length,
-    2,
-    'both in-view billboards excluded',
+  assert.deepEqual(
+    call.options.sets,
+    app.layer._transitPartsForTest().rendering.setIds(),
+    'both marker sets excluded',
   );
   assert.ok(
     Math.abs(call.options.viewerLat - BOSTON.lat) < 1e-6,
@@ -2914,11 +3140,7 @@ test('missing rectangle still rejects the far side, and frustum rejection wins',
     [...app.state()._visible].map((e) => e.record.id),
     ['near'],
   );
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  app.viewer.camera.view = lookingAway();
   app.advance(250);
   app.layer._transitPartsForTest().rendering.refreshVisibility();
   assert.equal(app.state()._visible.size, 0);
@@ -2948,11 +3170,15 @@ test('motion transitions migrate billboards and update cached positions; disable
   latitude += 0.001;
   await app.layer.update();
   app.run(8000, 16);
-  assert.equal(entry.markerCollection, app.state()._animatedMarkers);
-  assert.notEqual(entry.marker, old);
+  assert.equal(entry.animated, true);
+  assert.ok(app.markers('moving').has(entry.key));
+  assert.equal(app.markers('still').has(entry.key), false);
+  assert.equal(entry.marker, old, 'the record stays; only its draw set moves');
   assert.equal(entry.detectContact.position, entry.marker.position);
   app.run(30000, 16);
-  assert.equal(entry.markerCollection, app.state()._markers);
+  assert.equal(entry.animated, false);
+  assert.ok(app.markers('still').has(entry.key));
+  assert.equal(app.markers('moving').has(entry.key), false);
   const parts = app.layer._transitPartsForTest();
   const contacts = app.layer.getDetectableObjects();
   const metric = contacts[0].metric;
@@ -2989,7 +3215,10 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
   const entry = app.vehicles()[0],
     parts = app.layer._transitPartsForTest();
   const check = (hex, display) => {
-    assert.equal(entry.marker.color.toCssHexString().toUpperCase(), hex);
+    assert.equal(
+      colourOf(entry.marker.color).toCssHexString().toUpperCase(),
+      hex,
+    );
     const svg = Buffer.from(
       entry.marker.image.split(',')[1],
       'base64',
@@ -2997,21 +3226,22 @@ test('every styling path retains the mode palette and exact unpadded size', asyn
     const width = Number(svg.match(/viewBox="-\d+ -\d+ (\d+)/)[1]);
     assert.ok(Math.abs((entry.marker.width * 96) / width - display) < 1e-9);
   };
+  // Selection never changes the drawn size.
   check('#5EF08A', 20);
   parts.selection.selectVehicle(entry.key);
-  check('#5EF08A', 30);
+  check('#5EF08A', 20);
   parts.rendering.paintMode(entry, 'subway');
-  check('#FF4538', 30);
+  check('#FF4538', 20);
   app.style('thermal');
-  check('#FFFFFF', 39);
+  check('#FFFFFF', 26);
   parts.selection.clearSelection();
   check('#FFFFFF', 26);
   app.vision('nvg', true);
   check('#FFFFFF', 26);
   parts.selection.selectVehicle(entry.key);
-  check('#FFFFFF', 39);
+  check('#FFFFFF', 26);
   app.vision('normal', false);
-  check('#FF4538', 30);
+  check('#FF4538', 20);
   parts.selection.clearSelection();
   check('#FF4538', 20);
 });
@@ -3039,11 +3269,7 @@ test('visible motion is recullable without a camera event and releases its hold 
   await app.layer.update();
   app.layer._loadTransitFleetForTest(1, BOSTON, 1);
   assert.equal(app.state()._moving.size, 1);
-  app.viewer.camera.frustum = {
-    computeCullingVolume: () => ({
-      computeVisibility: () => Cesium.Intersect.OUTSIDE,
-    }),
-  };
+  app.viewer.camera.view = lookingAway();
   app.layer._transitPartsForTest().rendering.maintainPresentation();
   app.advance(250);
   assert.equal(app.state()._moving.size, 0);
@@ -3067,7 +3293,6 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
     _vehicles: new Map([[entry.key, entry]]),
     _floorCursor: 0,
     _heightDirty: new Set(),
-    _viewer: { camera: { positionCartographic: { height: 100 } } },
   };
   const height = createHeight({
     state,
@@ -3078,11 +3303,6 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
-          for (const point of points) probed.add(point.cell);
-        },
-      },
     },
     parts: {
       trails: {
@@ -3092,7 +3312,14 @@ test('mesh refinement reaches all 100 retained DEM cells within five poll budget
               collect(point, height.requestHeight(point.lat, point.lon));
         },
       },
-      rendering: { requestVisibility() {} },
+      rendering: {
+        requestVisibility() {},
+        cameraHeightM: () => 100,
+        globeSurface: () => 'none',
+        sampleMeshFloors(cells) {
+          for (const point of cells) probed.add(point.cell);
+        },
+      },
     },
   });
   t.after(() => height.clear());
@@ -3120,7 +3347,7 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
     _vehicles: new Map([[entry.key, entry]]),
     _floorCursor: 0,
     _heightDirty: new Set(),
-    _viewer: { camera: { positionCartographic: { height: 100 } } },
+    _viewer: {},
   };
   const height = createHeight({
     state,
@@ -3134,11 +3361,6 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
-          probed.push(...points.map((p) => [p.lat, p.lon]));
-        },
-      },
     },
     parts: {
       trails: {
@@ -3148,7 +3370,14 @@ test('mesh refinement probes the latest point the path offers in a cell', async 
               collect(point, height.requestHeight(point.lat, point.lon));
         },
       },
-      rendering: { requestVisibility() {} },
+      rendering: {
+        requestVisibility() {},
+        cameraHeightM: () => 100,
+        globeSurface: () => 'none',
+        sampleMeshFloors(points) {
+          probed.push(...points.map((p) => [p.lat, p.lon]));
+        },
+      },
     },
   });
   t.after(() => height.clear());
@@ -3175,7 +3404,7 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
     _vehicles: new Map([[entry.key, entry]]),
     _floorCursor: 0,
     _heightDirty: new Set(),
-    _viewer: { camera: { positionCartographic: { height: 100 } } },
+    _viewer: {},
   };
   const height = createHeight({
     state,
@@ -3189,11 +3418,6 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
         cachedGroundFloor: () => 10,
         GROUND_FLOOR_LIFT_M: 1.5,
       },
-      mesh: {
-        sampleMeshFloorCells(scene, points) {
-          probed.push(...points.map((p) => [p.lat, p.lon]));
-        },
-      },
     },
     parts: {
       trails: {
@@ -3203,7 +3427,14 @@ test('the selected vehicle is probed at its newest fix in its own cell', async (
               collect(point, height.requestHeight(point.lat, point.lon));
         },
       },
-      rendering: { requestVisibility() {} },
+      rendering: {
+        requestVisibility() {},
+        cameraHeightM: () => 100,
+        globeSurface: () => 'none',
+        sampleMeshFloors(points) {
+          probed.push(...points.map((p) => [p.lat, p.lon]));
+        },
+      },
     },
   });
   t.after(() => height.clear());
@@ -3315,11 +3546,8 @@ test('tab visibility synchronizes playback before the returning frame and remove
 for (const bounds of ['null', 'stale']) {
   test(`browser visibility starts an injected fleet with ${bounds} bounds and an unsampled hidden marker`, async (t) => {
     const app = harness(t);
-    app.viewer.camera.frustum = {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    };
+    // A real view over the fleet: the frustum, not the bounds, admits it.
+    app.viewer.camera.view = viewFrom(BOSTON.lon, BOSTON.lat, 4000);
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(4, BOSTON, 70, [
       'Red',
@@ -3378,6 +3606,81 @@ test('keyless loaded terrain resolves a pending surface without needing a frame 
   assert.equal(entry.marker.show, true);
 });
 
+test('the terrain under a vehicle is asked through the query port, and a flat globe stands at the ellipsoid', async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  const parts = app.layer._transitPartsForTest();
+  const lift = parts.height.requestHeight(0, 0).height;
+  assert.equal(lift, null, 'with the globe hidden, no terrain is read');
+  const asked = [];
+  app.viewer.scene.globe.show = true;
+  app.viewer.scene.globe.getHeight = (carto) => {
+    asked.push(Cesium.Math.toDegrees(carto.latitude));
+    return 30;
+  };
+  const terrain = parts.height.requestHeight(42.36, -71.06);
+  assert.ok(Math.abs(asked[0] - 42.36) < 1e-9, 'asked at the vehicle');
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  app.viewer.scene.globe.getHeight = () => undefined;
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  // The surface is read once in a task, as a terrain swap comes in a task
+  // of its own.
+  await new Promise((resolve) => setImmediate(resolve));
+  // The new surface is asked about through the height service; until the
+  // answer arrives the last one holds.
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(parts.rendering.globeSurface(), 'flat');
+  const flat = parts.height.requestHeight(42.36, -71.06);
+  assert.equal(terrain.height - flat.height, 30, 'flat terrain is height 0');
+  assert.equal(flat.prior, null);
+});
+
+test('a flat-globe answer that flips starts one fresh floor cycle, and a failed one is asked again', async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  app.viewer.scene.globe.show = true;
+  app.layer.enable(app.viewer);
+  const parts = app.layer._transitPartsForTest();
+  const anchored = [];
+  const anchorFloors = parts.height.anchorFloors;
+  parts.height.anchorFloors = () => {
+    anchored.push(app.state()._floorTimer);
+    anchorFloors();
+  };
+  const tick = () => new Promise((resolve) => setImmediate(resolve));
+  assert.equal(parts.rendering.globeSurface(), 'terrain');
+  await tick();
+  assert.equal(anchored.length, 0, 'the same answer starts nothing');
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  await tick();
+  parts.rendering.globeSurface();
+  await tick();
+  assert.equal(parts.rendering.globeSurface(), 'flat');
+  assert.equal(anchored.length, 1, 'one fresh cycle on the flip');
+  // A probe that fails is asked again at the next read.
+  const query = rendererOf(app.viewer).query;
+  const sampleHeight = query.sampleHeight;
+  let asked = 0;
+  query.sampleHeight = async () => {
+    asked += 1;
+    throw new Error('terrain request failed');
+  };
+  app.viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  await tick();
+  parts.rendering.globeSurface();
+  await tick();
+  assert.ok(asked > 0);
+  let askedAgain = 0;
+  query.sampleHeight = (...args) => {
+    askedAgain += 1;
+    return sampleHeight(...args);
+  };
+  await tick();
+  assert.equal(parts.rendering.globeSurface(), 'flat', 'the last answer holds');
+  assert.ok(askedAgain > 0, 'and the same surface is asked about again');
+  await tick();
+  assert.equal(anchored.length, 1, 'the same answer starts nothing');
+});
+
 test('scripted keyless fleet keeps its known floor through selection and floor rereads', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.viewer.scene.globe.show = true;
@@ -3398,27 +3701,13 @@ for (const count of [800, 3000]) {
   test(`real perspective frustum admits all ${count} moving budget fixtures`, async (t) => {
     const altitude = count === 800 ? 600 : 30000;
     const app = harness(t, { altitude, floorAt: () => undefined });
-    const camera = app.viewer.camera;
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(
-      BOSTON.lon,
-      BOSTON.lat,
-      altitude,
-    );
-    camera.directionWC = Cesium.Cartesian3.negate(
-      Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-        camera.positionWC,
-        new Cesium.Cartesian3(),
-      ),
-      new Cesium.Cartesian3(),
-    );
-    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(camera.positionWC);
-    camera.upWC = Cesium.Matrix4.getColumn(enu, 1, new Cesium.Cartesian3());
-    camera.frustum = new Cesium.PerspectiveFrustum({
-      fov: Math.PI / 3,
+    // Straight down from the altitude, through the frustum the camera port
+    // describes.
+    app.viewer.camera.view = {
+      ...viewFrom(BOSTON.lon, BOSTON.lat, altitude),
       aspectRatio: 1920 / 1080,
-      near: 1,
       far: 100000,
-    });
+    };
     app.layer.enable(app.viewer);
     const loaded = app.layer._loadTransitFleetForTest(
       count,
@@ -3427,6 +3716,10 @@ for (const count of [800, 3000]) {
     );
     assert.equal(loaded.moving, count);
     assert.equal(app.state()._visible.size, count);
+    assert.ok(
+      app.vehicles().every((e) => e.visibility?.boundsApplied === false),
+      'the frustum, not the view rectangle, admitted them',
+    );
     const entry = app.vehicles()[0],
       before = Cesium.Cartesian3.clone(entry.marker.position);
     app.run(1000, 16);
@@ -3435,32 +3728,46 @@ for (const count of [800, 3000]) {
   });
 }
 
-test('click handler selects a migrated scripted billboard and prepares a valid depth-fail trail', async (t) => {
+test('click handler selects a migrated scripted billboard and prepares its draped trail', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
   const entry = app.vehicles()[0];
-  assert.equal(entry.markerCollection, app.state()._animatedMarkers);
-  app.viewer.scene.pick = () => ({ primitive: entry.marker, id: entry.key });
-  app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)({
-    position: new Cesium.Cartesian2(500, 400),
-  });
+  assert.equal(entry.animated, true);
+  app.viewer.scene.pick = () => app.pickOf(entry);
+  app.input.click(new Cesium.Cartesian2(500, 400));
   assert.equal(app.state()._selectedKey, entry.key);
   const body = app.layer._transitPartsForTest().trails.diagnostics().body;
-  assert.ok(body.geometryInstances.length > 0);
-  body._batchTableAttributeIndices = { color: 0, depthFailColor: 1 };
-  assert.doesNotThrow(() =>
-    Cesium.Primitive._updateColorAttribute(
-      body,
-      body.depthFailAppearance.vertexShaderSource,
-      true,
-    ),
-  );
+  const lines = [...app.draw.sets.get(body.id).items.values()];
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => line.mode === 'draped'));
   assert.ok(entry.trailSegments.length > 0);
   app.run(1000, 16);
   assert.equal(entry.marker.show, true);
+});
+
+// The card or label painted on top takes the click: a vehicle under another
+// layer's card is neither selected nor released.
+test("another layer's card over a vehicle keeps the click", async (t) => {
+  const app = harness(t, { floorAt: () => undefined });
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  app.layer.enable(app.viewer);
+  app.layer._loadTransitFleetForTest(4, BOSTON, 70);
+  const [first, second] = app.vehicles();
+  app.viewer.scene.pick = () => app.pickOf(first);
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, null, 'covered: not selected');
+  top = null;
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, first.key);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  app.viewer.scene.pick = () => app.pickOf(second);
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  app.viewer.scene.pick = () => undefined;
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, first.key, 'covered: kept');
 });
 
 test('intercepted scripted reports resolve their explicit floor and wake without a preRender bootstrap', async (t) => {
@@ -3493,6 +3800,79 @@ test('intercepted scripted reports resolve their explicit floor and wake without
   assert.ok(Cesium.Cartesian3.distance(before, entry.marker.position) > 1);
   app.layer.disable(app.viewer);
   assert.equal(app.state()._qaFixtureFloors.size, 0);
+});
+
+/** Source files whose allocations are the layer's own, as the fleet QA reads them. */
+const LAYER_SOURCE =
+  /\/layers\/transit\/|\/data\/(?:contactPlayback|contactTrailRenderer|transit[^/]*)\.js/;
+
+/**
+ * Bytes per frame the layer's own code allocates over `frames` frames: what
+ * its functions allocate, and what the engine's built-ins (a set or array
+ * growing) allocate for them. Sampled, collected objects included.
+ */
+async function layerFrameBytes(h, frames) {
+  const session = new inspector.Session();
+  session.connect();
+  try {
+    await session.post('HeapProfiler.startSampling', {
+      samplingInterval: 32,
+      includeObjectsCollectedByMajorGC: true,
+      includeObjectsCollectedByMinorGC: true,
+    });
+    for (let i = 0; i < frames; i++) {
+      h.advance(16);
+      h.frame();
+    }
+    const { profile } = await session.post('HeapProfiler.stopSampling');
+    let bytes = 0;
+    const sites = new Map();
+    const layer = (url) => LAYER_SOURCE.test(url) && !url.includes('.test.');
+    (function visit(node, parentUrl) {
+      const { url, functionName, lineNumber } = node.callFrame;
+      const own = layer(url) || (!url && layer(parentUrl));
+      if (own && node.selfSize) {
+        bytes += node.selfSize;
+        const site = `${functionName || '(anonymous)'} ${url || parentUrl}:${lineNumber + 1}`;
+        sites.set(site, (sites.get(site) || 0) + node.selfSize);
+      }
+      for (const child of node.children) visit(child, url || parentUrl);
+    })(profile.head, '');
+    return { perFrame: bytes / frames, sites: [...sites] };
+  } finally {
+    session.disconnect();
+  }
+}
+
+test('a moving fleet frame allocates next to nothing in the layer', async (t) => {
+  // The fleet QA's size: the engine optimises a frame of it as it would in
+  // the app (a smaller fleet's frame can stay in a tier that allocates).
+  const FLEET = 3000;
+  const h = harness(t, { altitude: 600 });
+  await h.layer.enable(h.viewer);
+  h.layer._loadTransitFleetForTest(FLEET, BOSTON, 120);
+  // Warm: the engine optimises the frame path before it is measured.
+  for (let i = 0; i < 300; i++) {
+    h.advance(16);
+    h.frame();
+  }
+  assert.equal(h.state()._moving.size, FLEET);
+  // What the draw port does with the markers is its own (draw.test.mjs):
+  // here each push is only counted, so none of its work is counted as the
+  // layer's where the engine runs the two as one.
+  let pushed = 0;
+  for (const set of [h.state()._stillIcons, h.state()._movingIcons])
+    set.upsert = (list) => {
+      pushed += list.length;
+    };
+  const frames = 120;
+  const { perFrame, sites } = await layerFrameBytes(h, frames);
+  assert.equal(h.state()._moving.size, FLEET);
+  assert.equal(pushed, FLEET * frames, 'every marker moved every frame');
+  // Every vehicle moves every frame; what the layer allocates must not
+  // grow with them: the fleet QA's gate, 8 KiB a frame (a position boxed
+  // per vehicle would be ~100 KiB).
+  assert.ok(perFrame <= 8192, JSON.stringify({ perFrame, sites }));
 });
 
 test('hot path reuses sample outputs and reads camera altitude once per frame', async (t) => {
@@ -3653,7 +4033,7 @@ test('selected anchor rejects nonfinite marker coordinates before sampling and d
   assert.equal(card.position(), null);
 });
 
-test('preset clicks preserve both pick id paths through moving and stationary collection migration', async (t) => {
+test('preset clicks pick the marker in whichever set draws it, moving or still', async (t) => {
   const app = harness(t, { floorAt: () => undefined });
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(4, BOSTON, 70);
@@ -3667,21 +4047,17 @@ test('preset clicks preserve both pick id paths through moving and stationary co
       entry.sample.nextWakeMonoMs = Infinity;
       entry.sample.segmentCourseDeg = entry.courseDeg;
       parts.rendering.schedulePlayback(entry);
+      parts.rendering.flushMarkers();
+      assert.equal(entry.animated, animated);
+      assert.ok(app.markers(animated ? 'moving' : 'still').has(entry.key));
+      app.viewer.scene.pick = () => app.pickOf(entry);
+      app.input.click(new Cesium.Cartesian2(500, 400));
+      assert.equal(app.state()._selectedKey, entry.key);
       assert.equal(
-        entry.markerCollection,
-        animated ? app.state()._animatedMarkers : app.state()._markers,
+        app.state()._lastPickForTest.collection,
+        animated ? 'animated' : 'stationary',
       );
-      assert.equal(entry.marker.id, entry.key);
-      for (const pick of [{ id: entry.key }, { primitive: entry.marker }]) {
-        app.viewer.scene.pick = () => pick;
-        app
-          .state()
-          ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK)(
-          { position: new Cesium.Cartesian2(500, 400) },
-        );
-        assert.equal(app.state()._selectedKey, entry.key);
-        parts.selection.clearSelection();
-      }
+      parts.selection.clearSelection();
     }
 });
 
@@ -3713,7 +4089,7 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
   let actual;
   scene.pick = (p) => {
     actual = { x: p.x, y: p.y };
-    return { id: entry.key };
+    return app.pickOf(entry);
   };
   scene.canvas = {
     width: 1920,
@@ -3722,19 +4098,24 @@ test('sensor clicks map displayed pixels into the pre-shader pick buffer', async
     clientHeight: 1080,
   };
   const uniforms = { intensity: 1, pixelation: 1 };
-  scene.postProcessStages = {
-    getStageByName: () => ({ enabled: true, uniforms }),
-  };
-  const click = app
-    .state()
-    ._clickHandler.getInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-  app.layer._transitPartsForTest().rendering.setStylePreset('surveillance');
-  click({ position: new Cesium.Cartesian2(1440, 540) });
+  let preset = 'surveillance';
+  const stage = (name) =>
+    name === preset ? { enabled: true, uniforms } : undefined;
+  registerStyleStages(scene, {
+    get surveillance() {
+      return stage('surveillance');
+    },
+    get thermal() {
+      return stage('thermal');
+    },
+  });
+  const click = (position) => app.input.click(position);
+  click(new Cesium.Cartesian2(1440, 540));
   assert.ok(Math.abs(actual.x - 1472) < 1e-6);
   assert.equal(actual.y, 540);
-  app.layer._transitPartsForTest().rendering.setStylePreset('thermal');
+  preset = 'thermal';
   uniforms.pixelation = 1.5;
-  click({ position: new Cesium.Cartesian2(100.9, 200.1) });
+  click(new Cesium.Cartesian2(100.9, 200.1));
   assert.ok(Math.abs(actual.x - 100.5) < 1e-6);
   assert.ok(Math.abs(actual.y - 201) < 1e-6);
   assert.equal(app.state()._selectedKey, entry.key);
@@ -3832,7 +4213,7 @@ test('reject then selected history backfill cannot resurrect a 111 km displaceme
   assert.equal(entry.track.resets, 0);
 });
 
-test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in every enable/disable order', async (t) => {
+test('the actual Transit lifecycle keeps exactly its own camera listener in every enable/disable order, Traffic and Bikeshare among them', async (t) => {
   const { createLifecycle: trafficLifecycle } =
     await import('../traffic/lifecycle.js');
   const { createLifecycle: bikeLifecycle } =
@@ -3854,13 +4235,13 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
   }).methods;
   const bike = bikeLifecycle({
     state: {
-      _pointCollection: {},
+      _stationSet: {},
       _overlayHost: { setVisible: noop },
       _cityRuntime: new Map(),
       _failedCityIds: new Set(),
     },
     services: {
-      sprites: { restoreSpriteOrder: noop },
+      sprites: { spriteDrawOrder },
       picking: { registerPickOwner: noop, unregisterPickOwner: noop },
     },
     source: {},
@@ -3874,12 +4255,46 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
         onCameraChanged: noop,
         runProximityCheck: noop,
         deactivateAllCities: noop,
+        showCoverage: noop,
       },
       ingestion: { abortAllInFlight: noop },
     },
   }).methods;
   app.viewer.camera.moveEnd = new Cesium.Event();
-  const layers = { traffic, bikeshare: bike, transit: app.layer };
+  // Bikeshare listens through its renderer's camera port, at its own
+  // threshold: it takes no claim on the shared camera's sensitivity.
+  const bikeCamera = fakeCameraPort();
+  const bikeViewer = {};
+  const unbindBike = bindRenderer(bikeViewer, { camera: bikeCamera.port });
+  t.after(unbindBike);
+  // So does traffic, which animates on its renderer's frame port.
+  const trafficCamera = fakeCameraPort();
+  const trafficViewer = {};
+  const trafficFrames = new Set();
+  const unbindTraffic = bindRenderer(trafficViewer, {
+    camera: trafficCamera.port,
+    frame: {
+      on(_phase, cb) {
+        trafficFrames.add(cb);
+        return () => trafficFrames.delete(cb);
+      },
+      requestRender: noop,
+    },
+  });
+  t.after(unbindTraffic);
+  const layers = {
+    traffic: {
+      enable: () => traffic.enable(trafficViewer),
+      disable: () => traffic.disable(trafficViewer),
+    },
+    bikeshare: {
+      enable: () => bike.enable(bikeViewer),
+      disable: () => bike.disable(bikeViewer),
+    },
+    transit: app.layer,
+  };
+  // Only transit listens on this viewer's camera port.
+  const claimants = new Set(['transit']);
   const orders = [
     ['traffic', 'bikeshare', 'transit'],
     ['traffic', 'transit', 'bikeshare'],
@@ -3894,81 +4309,52 @@ test('actual Traffic, Bikeshare and Transit lifecycles retain sensitivity in eve
         const active = new Set();
         for (const id of enable) {
           layers[id].enable(app.viewer);
-          active.add(id);
-          assert.equal(app.viewer.camera.percentageChanged, 0.05);
+          if (claimants.has(id)) active.add(id);
+          if (id === 'bikeshare')
+            assert.equal(bikeCamera.listenerCount('changed'), 1);
+          if (id === 'traffic') {
+            assert.equal(trafficCamera.listenerCount('changed'), 1);
+            assert.equal(trafficFrames.size, 1);
+          }
           assert.deepEqual(
-            new Set(cameraSensitivityClaims(app.viewer.camera)),
-            active,
+            app.cameraThresholds(),
+            active.has('transit') ? [0.05] : [],
           );
+          assert.equal(app.viewer.camera.percentageChanged, 0.5);
         }
         for (const id of disable) {
           layers[id].disable(app.viewer);
           active.delete(id);
-          assert.equal(
-            app.viewer.camera.percentageChanged,
-            active.size ? 0.05 : 0.5,
+          assert.deepEqual(
+            app.cameraThresholds(),
+            active.has('transit') ? [0.05] : [],
             `${enable} / ${disable} after ${id}`,
           );
-          assert.deepEqual(
-            new Set(cameraSensitivityClaims(app.viewer.camera)),
-            active,
-          );
+          assert.equal(app.viewer.camera.percentageChanged, 0.5);
         }
+        assert.equal(bikeCamera.listenerCount('changed'), 0);
+        assert.equal(trafficCamera.listenerCount('changed'), 0);
+        assert.equal(trafficCamera.listenerCount('moveEnd'), 0);
+        assert.equal(trafficFrames.size, 0);
       }
   } finally {
     for (const layer of Object.values(layers)) layer.disable(app.viewer);
   }
 });
 
-test('moving and stationary transit stay adjacent above CCTV and Bikeshare during migration', async (t) => {
-  const {
-    registerSpriteCollection,
-    unregisterSpriteCollection,
-    restoreSpriteOrder,
-  } = await import('../../data/spriteOrder.js');
+test('moving and stationary transit draw next to each other, above CCTV and Bikeshare and under flights', (t) => {
   const app = harness(t);
   app.layer.enable(app.viewer);
   app.layer._loadTransitFleetForTest(1, BOSTON, 70);
-  const cctv = {},
-    bike = {},
-    flights = {};
-  app.primitives.push(cctv, bike, flights);
-  app.viewer.scene.primitives.raiseToTop = (c) => {
-    app.primitives.splice(app.primitives.indexOf(c), 1);
-    app.primitives.push(c);
-  };
-  const collections = new Map([
-    ...app.sprites,
-    ['cctv', cctv],
-    ['bikeshare', bike],
-    ['flights', flights],
-  ]);
-  for (const [id, collection] of collections)
-    registerSpriteCollection(id, collection);
-  t.after(() => {
-    for (const [id, c] of collections) unregisterSpriteCollection(id, c);
-  });
-  const entry = app.vehicles()[0],
-    parts = app.layer._transitPartsForTest();
-  for (const moving of [true, false, true]) {
-    entry.sample.phase = moving ? 'playing' : 'held';
-    entry.sample.segmentSpeedMps = moving ? 1 : 0;
-    entry.sample.segmentCourseDeg = NaN;
-    parts.rendering.schedulePlayback(entry);
-    restoreSpriteOrder(app.viewer);
-    const active = app.primitives.indexOf(entry.markerCollection);
-    assert.ok(active > app.primitives.indexOf(cctv));
-    assert.ok(active > app.primitives.indexOf(bike));
-    assert.ok(active < app.primitives.indexOf(flights));
-    assert.equal(
-      Math.abs(
-        app.primitives.indexOf(app.state()._markers) -
-          app.primitives.indexOf(app.state()._animatedMarkers),
-      ),
-      1,
-    );
-    assert.equal(entry.marker.id, entry.key);
-  }
+  const [still, moving] = app.layer
+    ._transitSetIdsForTest()
+    .map((id) => app.draw.set(id).spec.drawOrder);
+  assert.equal(still, spriteDrawOrder('transit'));
+  assert.equal(moving, spriteDrawOrder('transit-motion'));
+  assert.equal(moving - still, 1, 'adjacent, the moving ones over the still');
+  for (const under of ['cctv', 'bikeshare'])
+    assert.ok(still > spriteDrawOrder(under), `over ${under}`);
+  assert.ok(moving < spriteDrawOrder('flights'), 'under flights');
 });
 
 test('transit polls the supplied source and cancels it when disabled', async (t) => {
@@ -4110,18 +4496,12 @@ test('selected draped history prepares geometry before surface heights resolve',
   delete entry.qaFloorM;
   entry.marker.show = false;
   entry.heightPending = true;
-  // Exercise the real GroundPolylinePrimitive branch, without a WebGL context.
-  const width = Cesium.ContextLimits._maximumAliasedLineWidth;
-  Cesium.ContextLimits._maximumAliasedLineWidth = 1;
-  t.after(() => {
-    Cesium.ContextLimits._maximumAliasedLineWidth = width;
-  });
-  app.viewer.scene.frameState = { context: { depthTexture: true } };
-  app.viewer.scene.groundPrimitives = app.viewer.scene.primitives;
   parts.selection.selectVehicle(entry.key);
   const trail = parts.trails.diagnostics();
   assert.equal(trail.ground, true);
-  assert.ok(trail.body instanceof Cesium.GroundPolylinePrimitive);
+  const lines = [...app.draw.sets.get(trail.body.id).items.values()];
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => line.mode === 'draped'));
   assert.ok(trail.segments > 0);
   assert.equal(trail.body.show, true);
   assert.equal(
@@ -4176,6 +4556,50 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     );
   };
   pose(0);
+  // The camera port reads the camera above; the query port projects through
+  // it as a pinhole the size of the canvas.
+  const viewer = { scene };
+  const plainOf = (c) => ({ x: c.x, y: c.y, z: c.z });
+  const direction = { x: -1, y: 0, z: 0 };
+  const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({
+        lon: 0,
+        lat: 0,
+        height: 1000,
+        heading: scene.camera.heading,
+        pitch: scene.camera.pitch,
+        roll: scene.camera.roll,
+        position: plainOf(cameraPosition),
+        direction,
+        up: plainOf(scene.camera.upWC),
+        right: plainOf(scene.camera.rightWC),
+        fovy: scene.camera.frustum.fovy,
+        aspectRatio: 1.6,
+        near: 1,
+        far: 1e7,
+      }),
+    },
+    query: {
+      project(p) {
+        const v = {
+          x: p.x - cameraPosition.x,
+          y: p.y - cameraPosition.y,
+          z: p.z - cameraPosition.z,
+        };
+        const z = dot(v, direction);
+        if (!(z > 0)) return null;
+        const f = 400 / Math.tan(scene.camera.frustum.fovy / 2);
+        return {
+          x: 640 + (f * dot(v, scene.camera.rightWC)) / z,
+          y: 400 - (f * dot(v, scene.camera.upWC)) / z,
+        };
+      },
+      isOccluded: () => false,
+    },
+  });
+  t.after(unbind);
   const make = (key, courseDeg, bearing) => ({
     key,
     courseDeg,
@@ -4188,7 +4612,7 @@ test('parked transit reprojects held and reported courses at the bounded camera 
   const unknown = make('unknown', null, null);
   const hidden = make('hidden', 90, 90);
   const state = {
-    _viewer: { scene },
+    _viewer: viewer,
     _enabled: true,
     _vehicles: new Map(
       [held, reportedOnly, unknown, hidden].map((e) => [e.key, e]),
@@ -4255,6 +4679,22 @@ test('parked transit reprojects held and reported courses at the bounded camera 
     0,
     'selected unknown course also stays screen-up',
   );
+  state._selectedKey = null;
+  // A vehicle coming into view is turned on the next pass, the camera still.
+  state._visible.delete(held);
+  held.marker.rotation = 0.7;
+  // Its course as last turned: the camera moved while it was out of view.
+  held.rotationCourse = held.courseDeg;
+  Object.assign(state, {
+    _visibilityAt: 0,
+    _stillIcons: { upsert: noop, remove: noop },
+    _movingIcons: { upsert: noop, remove: noop },
+  });
+  rendering.refreshVisibility();
+  assert.ok(state._visible.has(held), 'back in view');
+  t.mock.timers.tick(200);
+  rendering.onPreRender();
+  assert.notEqual(held.marker.rotation, 0.7, 'turned once in view');
 });
 
 test('a view with no feed reads its coverage prompt, not an undated feed', async (t) => {
@@ -4385,8 +4825,9 @@ test('a vehicle read again while nothing changed is the snapshot read before', a
 });
 
 test('a held vehicle draws no 3D model either; let go, its model draws again', async (t) => {
-  const models = await fleetModelFakes(t);
+  const models = await fleetModelFakes();
   const app = harness(t, { fleet: models.fleet, altitude: 1_000 });
+  models.watch(app.draw);
   const key = await busRunningNorth(app);
   const [entry] = app.vehicles();
   assert.notEqual(entry.mode, 'unknown', 'a mode its model is chosen by');
@@ -4395,6 +4836,7 @@ test('a held vehicle draws no 3D model either; let go, its model draws again', a
   const frames = async () => {
     app.advance(250);
     app.settle();
+    models.load();
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
     app.settle();
   };
@@ -4512,4 +4954,198 @@ test('a held vehicle hides, keeps moving out of view, and lets go when it goes',
   assert.equal(app.vehicles().length, 0, 'the vehicle is gone');
   assert.equal(app.state()._cockpitSubjectKey, null);
   assert.equal(app.layer.getCockpitSubject(), null);
+});
+
+/** A vehicle's icon in the set that draws it, still or moving. */
+function iconOf(app, key) {
+  return app.markers('still').get(key) ?? app.markers('moving').get(key);
+}
+
+test('turning Transit off ends a hold; on again, the vehicle shows, a click selects it and Escape deselects it', async (t) => {
+  const app = harness(t);
+  const key = await busRunningNorth(app);
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  app.layer.disable(app.viewer);
+  assert.equal(
+    app.state()._cockpitSubjectKey,
+    null,
+    'the hold ended with the layer',
+  );
+  // On again, without a release: the same bus is listed again.
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  const [entry] = app.vehicles();
+  app.frame();
+  assert.equal(entry.marker.show, true, 'the vehicle is drawn, not held');
+  assert.equal(iconOf(app, key)?.show, true, 'and so is its icon in the set');
+  app.viewer.scene.pick = () => app.pickOf(entry);
+  app.input.click(new Cesium.Cartesian2(500, 400));
+  assert.equal(app.state()._selectedKey, key, 'a click selects it');
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state()._selectedKey, null, 'Escape deselects');
+});
+
+test('a held parked vehicle draws no icon; let go, it draws its icon again', async (t) => {
+  // A parked bus with no course: nothing moves or turns its icon, so only the
+  // hold itself can take the icon out of the set that draws it.
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [vehicle('bus-1', 42.36, -71.06, reported(), { stopId: 'place-1' })],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  for (let i = 0; i < 3; i += 1) {
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+    app.settle();
+  }
+  const key = 'mbta:bus-1';
+  const [entry] = app.vehicles();
+  assert.equal(iconOf(app, key)?.show, true, 'drawn before the hold');
+  assert.equal(app.layer.setCockpitSubject(key), true);
+  assert.equal(iconOf(app, key)?.show ?? false, false, 'hidden at once');
+  // The view rides it for a while: frames, a sweep, a poll.
+  app.run(2_000, 16);
+  app.settle();
+  app.run(TRANSIT_POLL_MS);
+  await app.layer.update();
+  app.settle();
+  assert.equal(entry.marker.show, false, 'its marker is hidden');
+  assert.equal(
+    iconOf(app, key)?.show ?? false,
+    false,
+    'and so is the icon the set draws',
+  );
+
+  assert.equal(app.layer.setCockpitSubject(null), true);
+  app.advance(250);
+  app.settle();
+  assert.equal(iconOf(app, key)?.show, true, 'let go: drawn again');
+});
+
+test('a hold moved to another vehicle lets the first go out of view', async (t) => {
+  const app = harness(t);
+  app.serve('mbta', () => ({
+    status: 200,
+    body: snapshot(
+      'mbta',
+      'MBTA',
+      [
+        vehicle('bus-1', 42.36, -71.06, reported()),
+        vehicle('bus-2', 42.37, -71.05, reported()),
+      ],
+      { fetchedAt: Date.now() },
+    ),
+  }));
+  app.layer.enable(app.viewer);
+  await app.layer.update();
+  app.settle();
+  const bus = (id) => app.vehicles().find((entry) => entry.key === id);
+  const first = bus('mbta:bus-1');
+  assert.equal(app.layer.setCockpitSubject(first.key), true);
+  // The view looks away from both, as a view from inside the first does.
+  app.lookAt({ west: -70.98, south: 42.3, east: -70.9, north: 42.42 });
+  app.advance(250);
+  app.settle();
+  assert.equal(app.state()._visible.has(bus('mbta:bus-2')), false);
+  assert.equal(app.layer.setCockpitSubject('mbta:bus-2'), true);
+  assert.equal(app.state()._visible.has(first), false, 'let go, out of play');
+  assert.equal(first.marker.show, false, 'and not drawn out of view');
+});
+
+test('a vehicle in view let go of a hold goes on from its own clock', async (t) => {
+  // Held, it played on; let go, the sweep that finds it in view does not
+  // set its clock again, though the feed's lag has grown since.
+  for (const next of ['mbta:b', null]) {
+    await t.test(`the hold moves to ${next}`, async (t) => {
+      const app = harness(t, { floorAt: () => 5 });
+      let fixAt = Date.now() - AGE_MS;
+      let north = 42.36;
+      app.serve('mbta', () => ({
+        status: 200,
+        body: snapshot(
+          'mbta',
+          'MBTA',
+          [
+            vehicle('a', north, -71.06, fixAt / 1000),
+            vehicle('b', 42.37, -71.05, reported()),
+          ],
+          { fetchedAt: Date.now() },
+        ),
+      }));
+      app.layer.enable(app.viewer);
+      await app.layer.update();
+      app.settle();
+      const a = app.vehicles().find((e) => e.key === 'mbta:a');
+      app.layer.setCockpitSubject(a.key);
+      for (let poll = 1; poll <= 5; poll += 1) {
+        fixAt += TRANSIT_POLL_MS;
+        north += 0.001;
+        app.run(TRANSIT_POLL_MS);
+        await app.layer.update();
+      }
+      // One late poll raises the feed's target lag.
+      app.run(TRANSIT_POLL_MS + 10_000);
+      fixAt += TRANSIT_POLL_MS;
+      north += 0.001;
+      await app.layer.update();
+      app.run(3_000);
+      const beforeT = a.track.displayT;
+      const beforeLat = lat(a);
+      app.layer.setCockpitSubject(next);
+      app.advance(250);
+      app.settle();
+      assert.equal(app.state()._visible.has(a), true, 'A is in view');
+      assert.ok(a.track.displayT >= beforeT, 'its clock did not go back');
+      assert.ok(lat(a) >= beforeLat, 'nor did it move back');
+    });
+  }
+});
+
+test('holding a vehicle out of view tells its view at once the floor it stands on', async (t) => {
+  // Out of view a vehicle plays on but its marker is not moved: the hold
+  // places it, so its view reads the floor it is on now, not the old one or
+  // null.
+  const app = harness(t, { floorAt: (lat) => (lat > 42.3625 ? 100 : 10) });
+  for (const [lat, floorM] of [
+    [42.361, 10],
+    [42.362, 10],
+    [42.363, 100],
+    [42.364, 100],
+  ])
+    app.ground._warm.set(app.ground._key(lat, -71.06), floorM);
+  const place = { lat: 42.36 };
+  const entry = await oneBus(app, place);
+  const drawnM = () =>
+    Cesium.Cartographic.fromCartesian(entry.marker.position).height;
+  assert.ok(Math.abs(drawnM() - 11.5) < 1, 'drawn on the low ground');
+  app.lookAt({ west: -70.98, south: 42.3, east: -70.9, north: 42.42 });
+  app.advance(250);
+  app.settle();
+  assert.equal(app.state()._visible.has(entry), false, 'out of view');
+  // Unseen, it drives up the hill and stands there.
+  for (const next of [42.361, 42.362, 42.363, 42.364, 42.364, 42.364]) {
+    place.lat = next;
+    app.run(TRANSIT_POLL_MS);
+    await app.layer.update();
+  }
+  app.run(LAG_MS);
+  app.settle();
+  assert.ok(drawnM() < 30, 'its marker was left on the low ground');
+  assert.equal(app.layer.setCockpitSubject(entry.key), true);
+  const floorM = app.layer.getCockpitSubject().position.groundHeightM;
+  assert.ok(Math.abs(floorM - 100) < 1.5, `up the hill, got ${floorM} m`);
 });

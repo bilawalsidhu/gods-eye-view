@@ -1,7 +1,9 @@
+import '../testSupport/registerDom.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Window } from 'happy-dom';
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
 import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
 
 const MEDIA_URL =
@@ -20,23 +22,36 @@ const CAMERA = Object.freeze({
 });
 
 /**
- * Mount the overlay in a happy-dom window with recorded media loads, timers
- * and postRender listeners. `play` decides what each play() returns.
+ * Mount the overlay in the registered happy-dom window (Vue binds the
+ * document it loads with) with recorded media loads, timers and postRender
+ * listeners. `play` decides what each play() returns.
  */
 function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
-  const window = new Window({ url: 'http://localhost:4173/' });
-  const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
-  globalThis.window = window;
-  globalThis.document = window.document;
+  const { window } = globalThis;
+  const media = window.HTMLMediaElement.prototype;
+  const previous = {
+    load: media.load,
+    play: media.play,
+    pause: media.pause,
+    setInterval: window.setInterval,
+    clearInterval: window.clearInterval,
+  };
+  t.after(() => {
+    media.load = previous.load;
+    media.play = previous.play;
+    media.pause = previous.pause;
+    window.setInterval = previous.setInterval;
+    window.clearInterval = previous.clearInterval;
+    delete window.document.hidden;
+  });
   const loads = [];
-  window.HTMLMediaElement.prototype.load = function () {
+  media.load = function () {
     if (this.getAttribute('src')) loads.push(this.getAttribute('src'));
   };
-  window.HTMLMediaElement.prototype.play = function () {
+  media.play = function () {
     return play(this);
   };
-  window.HTMLMediaElement.prototype.pause = function () {};
+  media.pause = function () {};
   const intervals = new Map();
   let nextTimer = 1;
   window.setInterval = (fn) => {
@@ -46,28 +61,24 @@ function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
   };
   window.clearInterval = (id) => intervals.delete(id);
   const renderListeners = new Set();
-  const viewer = {
-    camera: {
-      positionWC: Cesium.Cartesian3.fromDegrees(-73.5502, 45.51651, 1000),
-    },
-    scene: {
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      cartesianToCanvasCoordinates: () => null,
-      postRender: {
-        addEventListener(fn) {
-          renderListeners.add(fn);
-          return () => renderListeners.delete(fn);
-        },
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: fakeCameraPort({
+      pose: { position: fromDegrees(-73.5502, 45.51651, 1000) },
+    }).port,
+    query: { project: () => null },
+    frame: {
+      on(phase, fn) {
+        if (phase !== 'postRender') return () => {};
+        renderListeners.add(fn);
+        return () => renderListeners.delete(fn);
       },
+      requestRender() {},
     },
-  };
-  const overlay = createQuebecCctvOverlay(viewer);
-  t.after(() => {
-    overlay?.dispose();
-    globalThis.window = previousWindow;
-    globalThis.document = previousDocument;
-    window.close();
   });
+  t.after(unbind);
+  const overlay = createQuebecCctvOverlay(viewer);
+  t.after(() => overlay?.dispose());
   const [live, still] = window.document.querySelectorAll('video');
   return {
     window,
@@ -95,7 +106,11 @@ test('selecting a Québec camera contacts Québec 511 only after Play', (t) => {
   assert.equal(ui.renderListeners.size, 1);
 
   ui.playButton().click();
-  assert.deepEqual(ui.loads, [MEDIA_URL, MEDIA_URL], 'live player and map still');
+  assert.deepEqual(
+    ui.loads,
+    [MEDIA_URL, MEDIA_URL],
+    'live player and map still',
+  );
   assert.equal(ui.playButton().hidden, true);
   assert.equal(ui.intervals.size, 1);
 
@@ -111,7 +126,11 @@ test('selecting a Québec camera contacts Québec 511 only after Play', (t) => {
   assert.equal(ui.playButton().hidden, false);
 
   ui.overlay.setCamera(null);
-  assert.equal(ui.renderListeners.size, 0, 'deselect drops the per-frame listener');
+  assert.equal(
+    ui.renderListeners.size,
+    0,
+    'deselect drops the per-frame listener',
+  );
 });
 
 test('a camera without browser media shows only its provider link', (t) => {
@@ -155,7 +174,9 @@ test('an interrupted play() is not reported as an unavailable source', async (t)
 
 test('a real play() failure is reported', async (t) => {
   const fail = () =>
-    Promise.reject(new DOMException('no supported source', 'NotSupportedError'));
+    Promise.reject(
+      new DOMException('no supported source', 'NotSupportedError'),
+    );
   const ui = mountOverlay(t, { play: fail });
   ui.overlay.setCamera(CAMERA);
   ui.playButton().click();
@@ -189,4 +210,22 @@ test('the refresh timer reloads with a cache-buster, skips hidden tabs, and stop
   assert.equal(ui.intervals.size, 0);
   assert.equal(ui.renderListeners.size, 0);
   assert.equal(ui.window.document.querySelector('.qci-panel') === null, true);
+});
+
+test('Escape in the window closes it and stops the refresh until the camera is picked again', (t) => {
+  const ui = mountOverlay(t);
+  ui.overlay.setCamera(CAMERA);
+  ui.playButton().click();
+  const panel = ui.window.document.querySelector('.qci-panel');
+  panel.dispatchEvent(
+    new ui.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  assert.equal(panel.hidden, true);
+  assert.equal(ui.intervals.size, 0);
+
+  ui.overlay.setCamera({ ...CAMERA });
+  assert.equal(panel.hidden, true, 'a routine update keeps it closed');
+  ui.overlay.setCamera({ ...CAMERA }, { reselected: true });
+  assert.equal(panel.hidden, false, 'picking the camera again reopens it');
+  assert.equal(ui.intervals.size, 1);
 });

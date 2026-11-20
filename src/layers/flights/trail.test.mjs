@@ -4,7 +4,12 @@ import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
 import { TRAIL_MAX_POINTS } from './policy.js';
-import { trailHeadJoins, trailPairBreaks } from '../../data/trailContinuity.js';
+import {
+  insertTrailFix,
+  trailHeadJoins,
+  trailPairBreaks,
+  trailTimeAt,
+} from '../../data/trailContinuity.js';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -92,6 +97,8 @@ function trackedHarness({
   nowMs,
   floor,
   head = null,
+  placed = false,
+  warmingUp = false,
 } = {}) {
   const trail = recordingTrail();
   const svc = services({ trails: trail, floor });
@@ -122,7 +129,9 @@ function trackedHarness({
     services: svc,
     parts: {
       motion: {
-        _isTrackWarmingUp: () => false,
+        _isTrackWarmingUp: () => warmingUp,
+        _trackedPlaced: () => placed,
+        _trackedDisplayCached: () => head,
         _trackedTrailCached: () => head,
         _trackedDisplayPosition: () => head,
         _trackedModelCenterWorld: () => null,
@@ -147,11 +156,9 @@ function leg(startMs, lat, lon, count) {
   );
 }
 
-function headPositions(v) {
-  const entity = v.added.find((definition) =>
-    String(definition.id).startsWith('gev-trail:fl-head-'),
-  );
-  return entity.polyline.positions.getValue();
+/** The live head the trail would draw now. */
+function headPositions({ tracking }) {
+  return tracking._trailHeadPositions();
 }
 
 test('a pair 40 minutes and 300 km apart stays joined', () => {
@@ -321,7 +328,7 @@ test('the head is drawn to a nearby aircraft and not to one more than 150 km awa
     head: near,
   });
   joined.tracking._startTrail('abc123');
-  const drawn = headPositions(joined.viewer);
+  const drawn = headPositions(joined);
   assert.equal(drawn.length, 2);
   assert.ok(Cesium.Cartesian3.distance(drawn[1], near) < 1e-6);
 
@@ -332,12 +339,12 @@ test('the head is drawn to a nearby aircraft and not to one more than 150 km awa
     head: far,
   });
   detached.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(detached.viewer), []);
+  assert.deepEqual(headPositions(detached), []);
 
   // An hour without a fix: the head no longer joins the last body point.
   const stale = trackedHarness({ liveFixes, nowMs: t0 + HOUR, head: near });
   stale.tracking._startTrail('abc123');
-  assert.deepEqual(headPositions(stale.viewer), []);
+  assert.deepEqual(headPositions(stale), []);
 });
 
 test('a live fix after a one-hour feed gap starts a new segment', () => {
@@ -411,4 +418,137 @@ test('every waypoint of a 24 h history survives, and the trail stays within TRAI
   assert.equal(fixes.length, TRAIL_MAX_POINTS);
   // The oldest go first: the newest live fix is still the last point.
   assert.equal(fixes[fixes.length - 1].timeMs, liveStart);
+});
+
+/** A trail of `count` reports one minute apart flying east from (50, 1). */
+function eastTrail(t0, count) {
+  const fixes = [];
+  for (let i = 0; i < count; i++)
+    insertTrailFix(
+      fixes,
+      Cesium.Cartesian3.fromDegrees(1 + i * 0.12, 50, 10_000),
+      t0 + i * MINUTE,
+      TRAIL_MAX_POINTS,
+    );
+  return fixes;
+}
+
+test('the time on the trail is read where the aircraft is drawn', () => {
+  const t0 = Date.UTC(2026, 10, 8, 0, 0);
+  const fixes = eastTrail(t0, 4);
+  const at = (lon) =>
+    trailTimeAt(fixes, Cesium.Cartesian3.fromDegrees(lon, 50, 10_000));
+  // Halfway between the second and third reports.
+  assert.ok(Math.abs(at(1.18) - (t0 + 1.5 * MINUTE)) < 2_000);
+  // On a report.
+  assert.ok(Math.abs(at(1.24) - (t0 + 2 * MINUTE)) < 2_000);
+  // Past the newest report the time runs on; before the oldest it runs back.
+  assert.ok(Math.abs(at(1.42) - (t0 + 3.5 * MINUTE)) < 2_000);
+  assert.ok(Math.abs(at(0.94) - (t0 - 0.5 * MINUTE)) < 2_000);
+  // Nothing to read without a pair of reports, or without a position.
+  assert.ok(Number.isNaN(trailTimeAt(fixes.slice(0, 1), fixes[0].position)));
+  assert.ok(Number.isNaN(trailTimeAt(fixes, null)));
+});
+
+test('the time on the trail is never read across a break', () => {
+  const t0 = Date.UTC(2026, 10, 8, 0, 0);
+  const fixes = eastTrail(t0, 2);
+  // An hour later, far on: a new segment.
+  insertTrailFix(
+    fixes,
+    Cesium.Cartesian3.fromDegrees(20, 50, 10_000),
+    t0 + HOUR,
+    TRAIL_MAX_POINTS,
+  );
+  insertTrailFix(
+    fixes,
+    Cesium.Cartesian3.fromDegrees(20.12, 50, 10_000),
+    t0 + HOUR + MINUTE,
+    TRAIL_MAX_POINTS,
+  );
+  assert.equal(fixes[2].breakBefore, true);
+  // Halfway along the gap is not on the trail: it is read on the newest pair.
+  const at = trailTimeAt(fixes, Cesium.Cartesian3.fromDegrees(10, 50, 10_000));
+  assert.ok(at <= t0 + HOUR, `read ${at - t0} ms in, across the break`);
+});
+
+test('a placed aircraft drawn ahead of the display delay keeps its trail joined to it', () => {
+  const t0 = Date.UTC(2026, 10, 8, 0, 0);
+  const liveFixes = [0, 1, 2, 3].map((i) => ({
+    timeMs: t0 + i * MINUTE,
+    lat: 50,
+    lon: 1 + i * 0.12,
+  }));
+  // The layer's own delay puts the aircraft before its first fix (warming
+  // up), but the placement draws it between the third and fourth reports.
+  const near = Cesium.Cartesian3.fromDegrees(1.3, 50, 10_000);
+  const placed = trackedHarness({
+    liveFixes,
+    nowMs: t0 + 3.5 * MINUTE,
+    head: near,
+    placed: true,
+    warmingUp: true,
+  });
+  placed.flightState._displayDelay = { currentMs: 10 * MINUTE };
+  placed.tracking._startTrail('abc123');
+  // The body runs to the last report behind the aircraft, none ahead of it.
+  assert.deepEqual(
+    placed.trail.last().map((segment) => segment.length > 0),
+    [true],
+  );
+  const body = placed.trail.last()[0];
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      body[body.length - 1],
+      Cesium.Cartesian3.fromDegrees(1.24, 50, 10_000),
+    ) < 1,
+  );
+  // The head joins it to the aircraft.
+  const drawn = headPositions(placed);
+  assert.ok(drawn.length >= 2);
+  assert.ok(Cesium.Cartesian3.distance(drawn[0], body[body.length - 1]) < 1);
+  assert.ok(Cesium.Cartesian3.distance(drawn[drawn.length - 1], near) < 1e-6);
+
+  // The layer's own motion, warming up, draws no head and no body.
+  const own = trackedHarness({
+    liveFixes,
+    nowMs: t0 + 3.5 * MINUTE,
+    head: near,
+    warmingUp: true,
+  });
+  own.flightState._displayDelay = { currentMs: 10 * MINUTE };
+  own.tracking._startTrail('abc123');
+  assert.deepEqual(own.trail.last(), []);
+  assert.deepEqual(headPositions(own), []);
+});
+
+test('a placed aircraft drawn behind the display delay has no trail ahead of it', () => {
+  const t0 = Date.UTC(2026, 10, 8, 0, 0);
+  const liveFixes = [0, 1, 2, 3].map((i) => ({
+    timeMs: t0 + i * MINUTE,
+    lat: 50,
+    lon: 1 + i * 0.12,
+  }));
+  // The layer's delay would draw every report; the placement holds the
+  // aircraft between the first and second.
+  const behind = Cesium.Cartesian3.fromDegrees(1.06, 50, 10_000);
+  const { trail, tracking, flightState } = trackedHarness({
+    liveFixes,
+    nowMs: t0 + 4 * MINUTE,
+    head: behind,
+    placed: true,
+  });
+  flightState._displayDelay = { currentMs: 0 };
+  tracking._startTrail('abc123');
+  // One report behind it: no line yet, and nothing ahead of the aircraft.
+  assert.deepEqual(trail.last(), []);
+  const drawn = headPositions({ tracking });
+  assert.equal(drawn.length, 2);
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      drawn[0],
+      Cesium.Cartesian3.fromDegrees(1, 50, 10_000),
+    ) < 1,
+  );
+  assert.ok(Cesium.Cartesian3.distance(drawn[1], behind) < 1e-6);
 });

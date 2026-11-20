@@ -5,6 +5,7 @@ import { createVoiceCommands } from './commands.js';
 import { cameraPoseKey, createPointerTracker } from './pointerContext.js';
 import { createPointerPicker } from './pointerPick.js';
 import { createReferentRegistry } from './referents.js';
+import { canvasOf } from '../render/rendererOf.js';
 export * from './realtimeController.js';
 
 const ACTION_NAMES = new Set(GEV_ACTION_SCHEMAS.map((schema) => schema.name));
@@ -32,7 +33,7 @@ export function withToolCatalog(runner, loadCatalog) {
 
 /** Compose the standalone action runner with the voice controls. */
 export function initGevVoiceCommands(options) {
-  const canvas = options.viewer?.scene?.canvas || null;
+  const canvas = canvasOf(options.viewer);
   const cameraKey = () => cameraPoseKey(options.viewer);
   // Point-and-ask: the tracker and referents are shared by the runner (which
   // resolves 'pointer' and referent:n) and the controls (which snapshot the

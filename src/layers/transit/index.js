@@ -20,7 +20,7 @@ import { TRANSIT_POLL_MS } from './policy.js';
  * and height maps, the in-flight requests, the manager handle and the overlay
  * host all live on the instance this returns, and `destroy()` releases every
  * shared registration it took (sprite collection, pick owner, render hold,
- * camera sensitivity).
+ * camera listener).
  *
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.

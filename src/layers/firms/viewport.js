@@ -1,10 +1,22 @@
-import * as Cesium from 'cesium';
+import {
+  rectangleCenter,
+  rectangleHeight,
+  rectangleWidth,
+} from '../../geo/rectangle.js';
+import { TWO_PI, toRadians } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 import {
   LOD_LEVELS,
   LOD_HYSTERESIS,
   VIEW_PADDING,
   LOD_CHECK_MS,
 } from './policy.js';
+
+/** Each component of `a` within `epsilon` of `b`'s. */
+const near = (a, b, epsilon) =>
+  Math.abs(a.x - b.x) <= epsilon &&
+  Math.abs(a.y - b.y) <= epsilon &&
+  Math.abs(a.z - b.z) <= epsilon;
 
 export function createViewport({
   layerState,
@@ -14,6 +26,7 @@ export function createViewport({
   feed,
 }) {
   const { governorRequestRender } = services.render;
+  const camera = () => findCamera(layerState._viewer);
 
   /**
    * Ambient labels are placed via screen-space projection, so they need a
@@ -23,16 +36,10 @@ export function createViewport({
   function installMoveEndWatcher() {
     if (layerState._moveEndRemover || !layerState._viewer) return;
     layerState._moveEndRemover =
-      layerState._viewer.camera.moveEnd.addEventListener(() => {
-        if (!layerState._enabled) return;
-        // Settled-camera exactness for the horizon pass (the throttled preRender
-        // watcher can last have run up to LOD_CHECK_MS before the camera
-        // stopped). Runs ahead of the `_loading` gate on purpose: the sprites on
-        // screen during a refresh are the ones that need culling.
-        components.rendering.refreshHorizonCulling();
-        if (layerState._loading) return;
+      camera()?.on('moveEnd', () => {
+        if (!layerState._enabled || layerState._loading) return;
         components.cards.rebuildAmbientLabels();
-      });
+      }) ?? null;
   }
 
   function removeMoveEndWatcher() {
@@ -43,10 +50,8 @@ export function createViewport({
   }
 
   function cameraHeight() {
-    return (
-      layerState._viewer?.camera?.positionCartographic?.height ??
-      Number.POSITIVE_INFINITY
-    );
+    const height = camera()?.pose().height;
+    return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
   }
 
   /** Raw LOD index for a camera height (0 = global ... 3 = close). */
@@ -84,15 +89,21 @@ export function createViewport({
     return index;
   }
 
-  /** Current camera view rectangle, or null when looking at sky/horizon. */
+  /**
+   * Current camera view rectangle, radians, or null when looking at
+   * sky/horizon.
+   */
 
   function computeViewRect() {
     try {
-      const rect = layerState._viewer?.camera?.computeViewRectangle(
-        layerState._viewer?.scene?.globe?.ellipsoid,
-        layerState.scratchViewRect,
-      );
-      return rect || null;
+      const rect = camera()?.viewRectangle();
+      if (!rect) return null;
+      return {
+        west: toRadians(rect.west),
+        south: toRadians(rect.south),
+        east: toRadians(rect.east),
+        north: toRadians(rect.north),
+      };
     } catch {
       return null;
     }
@@ -102,27 +113,25 @@ export function createViewport({
    * True when the camera view rectangle drifted far enough from the last
    * rendered one that the padding is at risk of being consumed (pan) or
    * the footprint changed notably (zoom within a band).
-   * @param {?Cesium.Rectangle} viewRect - Current view rectangle.
+   * @param {?{west: number, south: number, east: number, north: number}} viewRect
+   *   Current view rectangle, radians.
    * @returns {boolean}
    */
 
   function viewChangedEnough(viewRect) {
     if (!viewRect) return false; // sky/horizon — keep the current render
     if (!layerState._lastViewRect) return true; // previous render was global fallback
-    const lastWidth = Cesium.Rectangle.computeWidth(layerState._lastViewRect);
-    const lastHeight = Cesium.Rectangle.computeHeight(layerState._lastViewRect);
-    const width = Cesium.Rectangle.computeWidth(viewRect);
-    const height = Cesium.Rectangle.computeHeight(viewRect);
+    const lastWidth = rectangleWidth(layerState._lastViewRect);
+    const lastHeight = rectangleHeight(layerState._lastViewRect);
+    const width = rectangleWidth(viewRect);
+    const height = rectangleHeight(viewRect);
     if (width > lastWidth * 1.3 || width < lastWidth * 0.75) return true;
     if (height > lastHeight * 1.3 || height < lastHeight * 0.75) return true;
-    const lastCenter = Cesium.Rectangle.center(
-      layerState._lastViewRect,
-      layerState.scratchCenterA,
-    );
-    const center = Cesium.Rectangle.center(viewRect, layerState.scratchCenterB);
-    const latShift = Math.abs(center.latitude - lastCenter.latitude);
-    let lonShift = Math.abs(center.longitude - lastCenter.longitude);
-    if (lonShift > Math.PI) lonShift = Cesium.Math.TWO_PI - lonShift;
+    const lastCenter = rectangleCenter(layerState._lastViewRect);
+    const center = rectangleCenter(viewRect);
+    const latShift = Math.abs(center.lat - lastCenter.lat);
+    let lonShift = Math.abs(center.lon - lastCenter.lon);
+    if (lonShift > Math.PI) lonShift = TWO_PI - lonShift;
     return (
       latShift > lastHeight * VIEW_PADDING * 0.6 ||
       lonShift > lastWidth * VIEW_PADDING * 0.6
@@ -136,63 +145,45 @@ export function createViewport({
     // for a frame that idle mode never produces — schedule one. (perf wave 2)
     if (!layerState._moveEndSettleRemover) {
       layerState._moveEndSettleRemover =
-        layerState._viewer.camera.moveEnd.addEventListener(() => {
+        camera()?.on('moveEnd', () => {
           if (!layerState._enabled) return;
           setTimeout(
             () => governorRequestRender('firms-lod-settle'),
             LOD_CHECK_MS + 40,
           );
-        });
+        }) ?? null;
     }
-    layerState._preRenderRemover =
-      layerState._viewer.scene.preRender.addEventListener(() => {
-        // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
-        // A refresh has no timeout, and sprites from the previous payload stay
-        // on screen throughout it — so the horizon pass below must keep running
-        // while a fetch is in flight. Only the rebuild is gated on fresh data.
-        if (!layerState._enabled) return;
-        // Every frame, ahead of the throttle: a fast zoom crosses the whole
-        // hand-off between two band checks.
-        components.rendering.applyHandoffFade();
-        const now = performance.now();
-        if (now - layerState._lastLodCheck < LOD_CHECK_MS) return;
-        layerState._lastLodCheck = now;
-        // Idle camera: two scratch compares and out — no view-rect math, no
-        // aggregation, no allocation while the user is parked.
-        const camera = layerState._viewer.camera;
-        if (
-          layerState._camSnapValid &&
-          Cesium.Cartesian3.equalsEpsilon(
-            camera.positionWC,
-            layerState._camPos,
-            0,
-            0.5,
-          ) &&
-          Cesium.Cartesian3.equalsEpsilon(
-            camera.directionWC,
-            layerState._camDir,
-            0,
-            1e-7,
-          )
-        ) {
-          return;
-        }
-        Cesium.Cartesian3.clone(camera.positionWC, layerState._camPos);
-        Cesium.Cartesian3.clone(camera.directionWC, layerState._camDir);
-        layerState._camSnapValid = true;
-        // The camera moved, so the horizon moved. A rebuild culls its own fresh
-        // sprites (renderDetections); an early-out — same LOD band and view
-        // rect, or a refresh in flight — does not, so cull here instead.
-        // Exactly ONE occlusion walk per tick either way, bounded by the
-        // idle-gate + LOD_CHECK_MS throttle above: a parked camera costs
-        // nothing, a moving one pays one ≤maxDetections show-flip walk at
-        // ~1.5 Hz.
-        const rebuilt =
-          layerState._fires.length && !layerState._loading
-            ? components.rendering.renderCurrentLod(false)
-            : false;
-        if (!rebuilt) components.rendering.refreshHorizonCulling();
-      });
+    const { frame } = components.rendering.scenePorts();
+    if (!frame) return;
+    layerState._preRenderRemover = frame.on('preRender', () => {
+      // NOTE: `_loading`/empty-data are deliberately NOT part of this guard.
+      // A refresh has no timeout, and sprites from the previous payload stay
+      // on screen throughout it — so the hand-off fade below must keep running
+      // while a fetch is in flight. Only the rebuild is gated on fresh data.
+      if (!layerState._enabled) return;
+      // Every frame, ahead of the throttle: a fast zoom crosses the whole
+      // hand-off between two band checks.
+      components.rendering.applyHandoffFade();
+      const now = performance.now();
+      if (now - layerState._lastLodCheck < LOD_CHECK_MS) return;
+      layerState._lastLodCheck = now;
+      // Idle camera: two compares and out — no view-rect math and no
+      // aggregation while the user is parked.
+      const pose = camera()?.pose();
+      if (!pose) return;
+      if (
+        layerState._camSnapValid &&
+        near(pose.position, layerState._camPos, 0.5) &&
+        near(pose.direction, layerState._camDir, 1e-7)
+      ) {
+        return;
+      }
+      layerState._camPos = pose.position;
+      layerState._camDir = pose.direction;
+      layerState._camSnapValid = true;
+      if (layerState._fires.length && !layerState._loading)
+        components.rendering.renderCurrentLod(false);
+    });
   }
 
   function removeLodWatcher() {

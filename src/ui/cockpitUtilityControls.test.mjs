@@ -379,7 +379,7 @@ test('the layout pass’s measured fit hides the collapsed control and marks the
   app.unmount();
 });
 
-test('the real layout pass drives the mounted controls: compact hides the collapsed sibling, Cyber shows both', async (t) => {
+test('the real layout pass drives the mounted controls: compact hides the collapsed sibling, desktop shows both', async (t) => {
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -403,9 +403,6 @@ test('the real layout pass drives the mounted controls: compact hides the collap
   window.matchMedia = (query) => ({ matches: compact, media: query });
   t.after(() => {
     window.matchMedia = originalMatchMedia;
-    delete document.documentElement.dataset.uiTheme;
-    document.body.style.removeProperty('opacity');
-    document.documentElement.style.removeProperty('opacity');
     app.unmount();
   });
   const strip = document.getElementById('cockpit-utility-controls');
@@ -421,34 +418,13 @@ test('the real layout pass drives the mounted controls: compact hides the collap
   assert.equal(cockpit.utilityLayout.top, null);
   // Compact hides the sibling without marking the strip primary-only.
   assert.equal(strip.classList.contains('layout-primary-only'), false);
-  // Cyber aligns the strip with the Data panel and keeps both controls.
+  // The desktop pass anchors the strip in its own corridor and keeps both.
   compact = false;
-  document.documentElement.dataset.uiTheme = 'cyber';
-  const stack = document.body.appendChild(document.createElement('div'));
-  stack.id = 'left-panel-stack';
-  const dataPanel = stack.appendChild(document.createElement('section'));
-  dataPanel.id = 'data-panel';
-  for (const node of [
-    dataPanel,
-    stack,
-    document.body,
-    document.documentElement,
-  ])
-    node.style.opacity = '1';
-  dataPanel.getBoundingClientRect = () => ({
-    top: 120,
-    bottom: 400,
-    left: 0,
-    right: 200,
-    width: 200,
-    height: 280,
-  });
   syncSignalLayout.call(owner);
   await nextTick();
   assert.equal(display.getAttribute('aria-hidden'), 'false');
   assert.equal(radioControl.getAttribute('aria-hidden'), 'false');
-  assert.equal(cockpit.utilityLayout.top, '120.00px');
-  assert.equal(strip.classList.contains('layout-primary-only'), false);
+  assert.match(cockpit.utilityLayout.top, /^\d+(\.\d+)?px$/);
 });
 
 test('the rail opens one panel at a time and reads as a disclosure', async (t) => {

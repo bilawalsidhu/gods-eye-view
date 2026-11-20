@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { createWeatherRendering } from './rendering.js';
+import { createWeatherShell, globeImageryHost } from './shellRendering.js';
 import { weatherFrameSource } from './source.js';
 import { imageryHostStatus } from './imageryHost.js';
 import { weatherDisplay, weatherSourceName, insideExtent } from './display.js';
@@ -14,6 +14,13 @@ import {
 import { worldClock } from '../../time/worldClock.js';
 import { formatUtcDayMonth, t, msg } from '../../i18n/index.js';
 import { formatScaleLabel } from '../../ui/unitLabels.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCamera,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /**
  * A stored (English) failure in the language. HTTP failures from source.js
@@ -118,7 +125,6 @@ export function createWeatherLayer({
   feed,
   clock: sharedClock,
   id = 'weather-radar',
-  cesium = Cesium,
   createRendering = createWeatherRendering,
   documentRef = globalThis.document,
   eventTarget = globalThis.window,
@@ -201,8 +207,7 @@ export function createWeatherLayer({
   const maxGap = () => spacedTimes().gap;
   const clockState = () => clock?.getState() ?? IDLE_CLOCK;
   const isLatest = () => clockState().mode === 'latest';
-  const getHost = () =>
-    imageryHost?.() ?? { collection: viewer?.imageryLayers, kind: 'globe' };
+  const getHost = () => imageryHost?.() ?? globeImageryHost(viewer);
   const notify = () => listener?.();
   const shownTime = () => (noFrame ? null : rendering?.getDiagnostics().time);
   const onClock = () => {
@@ -217,9 +222,17 @@ export function createWeatherLayer({
     clock = ownClock;
     unsubscribeClock = clock.subscribe(onClock);
   };
+  // Ages and delays are measured from the time the layer shows: the world
+  // clock's time at a past time, the wall clock while live.
+  const worldNow = () => {
+    const shared = clockState();
+    return shared.mode === 'history' && shared.target
+      ? Date.parse(shared.target)
+      : Date.now();
+  };
   const observationDelayed = () =>
     manifest?.latest &&
-    Date.now() - Date.parse(manifest.latest) > spacedTimes().delay;
+    worldNow() - Date.parse(manifest.latest) > spacedTimes().delay;
   const suspended = () => hostHidden || documentRef?.hidden || motion?.matches;
   const onVisibility = () => {
     if (suspended()) rendering?.cancelPrefetch?.();
@@ -341,7 +354,7 @@ export function createWeatherLayer({
       viewer = nextViewer;
       rendering = createRendering({
         viewer,
-        cesium,
+        createShell: createWeatherShell,
         getHost,
         onChange: notify,
         frameSource: weatherFrameSource(feed),
@@ -375,10 +388,11 @@ export function createWeatherLayer({
       enabled = true;
       ensureClock();
       if (!removeCamera) {
-        removeCamera = viewer.camera.moveEnd?.addEventListener(() => {
-          checkHost();
-          notify();
-        });
+        removeCamera =
+          findCamera(viewer)?.on('moveEnd', () => {
+            checkHost();
+            notify();
+          }) ?? null;
       }
       registerClock();
     },
@@ -505,17 +519,19 @@ export function createWeatherLayer({
           (lightning
             ? { west: 110, south: -25, east: 0, north: 80 }
             : manifest.bounds);
-        runNavigation(() =>
-          viewer.camera.flyTo({
-            destination: cesium.Rectangle.fromDegrees(
-              b.west,
-              b.south,
-              b.east,
-              b.north,
-            ),
-            duration: motion?.matches ? 0 : 1.4,
-          }),
-        );
+        runNavigation(() => {
+          cameraOf(viewer).flyTo(
+            {
+              rect: {
+                west: b.west,
+                south: b.south,
+                east: b.east,
+                north: b.north,
+              },
+            },
+            { durationS: motion?.matches ? 0 : 1.4 },
+          );
+        });
       }
       // Time is the world's: these move the world clock as its timeline
       // does, and every layer that follows it moves along. A step goes
@@ -571,7 +587,7 @@ export function createWeatherLayer({
       const index = times.indexOf(time);
       const current = index >= 0;
       const age = time
-        ? Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 60000))
+        ? Math.max(0, Math.floor((worldNow() - Date.parse(time)) / 60000))
         : null;
       const lag =
         age === null
@@ -588,21 +604,16 @@ export function createWeatherLayer({
       const shownProblem = problem ? presentWeatherProblem(problem) : null;
       const shownHost = hostStatus ? t(hostStatus) : null;
       const b = manifest?.bounds;
-      const canvas = viewer?.scene?.canvas;
+      const canvas = canvasOf(viewer);
       const point =
         canvas &&
-        viewer.camera.pickEllipsoid?.(
-          new cesium.Cartesian2(
-            canvas.clientWidth / 2,
-            canvas.clientHeight / 2,
-          ),
-          viewer.scene.globe.ellipsoid,
+        findQuery(viewer)?.pickEllipsoid(
+          canvas.clientWidth / 2,
+          canvas.clientHeight / 2,
         );
-      const camera = point
-        ? cesium.Cartographic.fromCartesian(point, viewer.scene.globe.ellipsoid)
-        : null;
-      const lon = camera ? cesium.Math.toDegrees(camera.longitude) : 0;
-      const lat = camera ? cesium.Math.toDegrees(camera.latitude) : 0;
+      const camera = point ? toLonLatH(point) : null;
+      const lon = camera ? camera.lon : 0;
+      const lat = camera ? camera.lat : 0;
       const outside =
         b &&
         camera &&

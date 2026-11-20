@@ -219,14 +219,6 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   margin-top: 2px;
 }
 
-/* One primary action per step: CAPTURE SHOT and PLAY. The panel id keeps
-   this above Cyber's shared button surface. */
-#scene-panel .scene-btn-primary:not(:disabled) {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
 /* The file row is housekeeping; it stays quieter than the steps above. */
 #scene-panel .scene-file-controls .scene-btn {
   font-size: 9px;
@@ -236,12 +228,70 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   background: transparent;
 }
 
-/* Keep the shared hover on the restyled actions. */
+/* Keep the shared hover on the restyled actions; CAPTURE SHOT and PLAY take
+   their resting emphasis from action-button.css. */
 #scene-panel .scene-btn-primary:hover:not(:disabled),
 #scene-panel .scene-file-controls .scene-btn:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* Stories tags: small toggle chips that wrap; a pressed chip takes the
+   accent. */
+#scene-panel .scene-tag-chips {
+  gap: 4px;
+}
+
+#scene-panel .scene-tag-chip {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--scene-quiet);
+  font-size: 10px;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+#scene-panel .scene-tag-chip.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+#scene-panel .scene-tag-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The Stories card thumbnail, CAPTURE THUMBNAIL and SAVE TO STORIES share a
+   row; the preview keeps the card's 16:9. */
+#scene-panel .scene-story-controls {
+  align-items: center;
+}
+
+/* Two buttons beside the preview: a label that does not fit (REMOVE FROM
+   STORIES) wraps inside its button, in English too. */
+#scene-panel .scene-story-controls .scene-btn {
+  align-self: stretch;
+  padding: 8px 6px;
+  white-space: normal;
+  overflow-wrap: break-word;
+}
+
+.scene-thumb-preview {
+  flex: 0 0 64px;
+  width: 64px;
+  height: 36px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.scene-thumb-empty {
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  box-sizing: border-box;
 }
 
 .scene-shot-hint {
@@ -280,6 +330,9 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   border-radius: 8px;
   padding: 16px 12px;
   text-align: center;
+  /* A UiEmpty in the panel's weight, not the shared empty line's
+     (empty-state.css). */
+  font: inherit;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.3px;
@@ -288,6 +341,7 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 }
 
 .scene-shot-row {
+  cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 9px;
   padding: 8px 10px;
@@ -341,6 +395,11 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
   color: var(--scene-quiet);
 }
 
+.scene-shot-label:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .scene-shot-row.active .scene-shot-label::before {
   color: var(--accent);
 }
@@ -365,7 +424,18 @@ html:not([lang='en']) #scene-panel .scene-controls .scene-btn {
 
 .scene-shot-actions {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+/* Up and down: the glyph as tall as DEL's word. */
+.scene-shot-move {
+  padding: 3px 4px;
+}
+
+.scene-shot-move .ui-icon {
+  display: block;
+  line-height: 1;
 }
 
 .scene-progress {

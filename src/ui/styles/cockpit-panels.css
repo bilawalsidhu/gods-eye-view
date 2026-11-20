@@ -123,7 +123,7 @@
 }
 
 /* Display / Radio: the closed launchers and the open panels match too. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded {
   border-color: rgba(255, 255, 255, 0.08);
@@ -139,14 +139,14 @@
    person, Utilities has nothing to do there, and the cockpit's own Display
    panel stands in for Visual), one panel opens beside it, and the collapsed
    header strips the cockpit used instead are hidden. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left {
   display: block;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -155,7 +155,7 @@
     [data-rail-item='utilities-panel'],
     [data-rail-item='pp-toggles']
   ),
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -171,7 +171,7 @@
 
 /* With some icons hidden, the runs between them break up: with a panel
    open, each icon left is its own island. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -184,7 +184,7 @@
 
 /* Authoring, Utilities or Visual may still be open underneath; its hidden icon must
    not split the rail into islands. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -196,7 +196,7 @@
     )[aria-pressed='true']
   )
   > .ui-tooltip::before,
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -211,7 +211,7 @@
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > .gev-panel-rail--left
@@ -229,11 +229,11 @@
   -webkit-backdrop-filter: blur(20px);
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > [data-panel-id].collapsed,
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   #left-panel-stack
   > :is(
@@ -247,9 +247,7 @@
 /* Both rails start at one height, just under the top HUD text, so their top
    edges line up; the cockpit layout pass places Display and Radio at the
    same height (COCKPIT_UTILITY_MIN_TOP_PX / _RATIO in cockpitPresentation.js). */
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  #left-panel-stack {
+:root body.cockpit-mode:not(.mobile-shell) #left-panel-stack {
   top: max(206px, 22vh) !important;
 }
 
@@ -415,14 +413,14 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 
 /* ── Open Display / Radio panels: the main panels' header and size ───── */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded {
   min-width: 295px;
   box-sizing: border-box;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded
   .cockpit-utility-launcher {
@@ -435,7 +433,7 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   letter-spacing: 0.22em;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded
   .cockpit-utility-divider {
@@ -448,16 +446,14 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 
 /* The launcher's own toggle steps aside: the rail and "−" open and close
    the panel instead. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded
   .cockpit-utility-glyph {
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-collapse {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-collapse {
   display: grid;
   flex: none;
   place-items: center;
@@ -472,10 +468,8 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   cursor: pointer;
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-collapse:hover,
-:root:not([data-ui-theme='cyber'])
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-collapse:hover,
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-collapse:focus-visible {
   border-color: rgba(0, 212, 255, 0.45);
@@ -486,9 +480,7 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 /* ── Right rail as on the left: an icon column that stays, labels beside it
    while nothing is open, and the open panel to its left. The launchers'
    own strips give way to it. ─────────────────────────────────────────── */
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-controls {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
   display: grid;
   grid-template-columns: auto auto;
   align-items: start;
@@ -496,13 +488,13 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   column-gap: 6px;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control:not(.is-expanded) {
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-control.is-expanded {
   grid-column: 1;
@@ -510,16 +502,14 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   margin-top: 0 !important;
 }
 
-/* Cyber and the phone keep the launchers' own toggles, so the rail and "−"
-   are for the desktop look only. */
+/* The phone keeps the launchers' own toggles, so the rail and "−" are for
+   the desktop look only. */
 .cockpit-utility-rail,
 .cockpit-utility-collapse {
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-rail {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail {
   grid-column: 2;
   grid-row: 1;
   display: flex;
@@ -528,7 +518,7 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   pointer-events: auto;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   :is(.cockpit-utility-rail__labels, .cockpit-utility-rail__icons) {
   display: flex;
@@ -545,15 +535,13 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   -webkit-backdrop-filter: blur(20px);
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-rail__labels {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__labels {
   box-sizing: border-box;
   width: 170px;
   padding-inline: 14px;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail__labels
   > span {
@@ -569,16 +557,14 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   letter-spacing: 2.08px;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail.is-open
   .cockpit-utility-rail__labels {
   display: none;
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-rail__item {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item {
   display: grid;
   place-items: center;
   width: 32px;
@@ -595,24 +581,20 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
     border-color var(--transition-fast, 120ms);
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail__item
   .material-symbols-outlined {
   font-size: 18px;
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-rail__item:hover {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item:hover {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-primary, #fff);
 }
 
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-rail__item.is-on,
-:root:not([data-ui-theme='cyber'])
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item.is-on,
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail__item.is-on:hover {
   border-color: rgba(0, 212, 255, 0.15);
@@ -621,7 +603,7 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 
 /* With a panel open, each icon is its own island, as on the main rails. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail.is-open
   .cockpit-utility-rail__icons {
@@ -632,14 +614,14 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
   -webkit-backdrop-filter: none;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail.is-open
   .cockpit-utility-rail__item {
   position: relative;
 }
 
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail.is-open
   .cockpit-utility-rail__item::before {
@@ -657,12 +639,12 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 
 /* Hovering an icon lights its label too, as on the left. */
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail:has(.cockpit-utility-rail__item:nth-child(1):hover)
   .cockpit-utility-rail__labels
   > span:nth-child(1),
-:root:not([data-ui-theme='cyber'])
+:root
   body.cockpit-mode:not(.mobile-shell)
   .cockpit-utility-rail:has(.cockpit-utility-rail__item:nth-child(2):hover)
   .cockpit-utility-rail__labels
@@ -671,22 +653,18 @@ body.cockpit-mode #intel-hud .hud-bottom-right {
 }
 
 /* Mirror the left rail's 52px inset, clear of the HUD's vertical readouts. */
-:root:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-controls {
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
   right: 52px;
 }
 
 /* Like the cockpit's other windows (rtl.css), the rail keeps its physical
    side in a right-to-left language: icons at the screen edge, the open panel
    inside them. Only the text reads right to left. */
-html[dir='rtl']:not([data-ui-theme='cyber'])
-  body.cockpit-mode:not(.mobile-shell)
-  .cockpit-utility-controls {
+html[dir='rtl'] body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
   direction: ltr;
 }
 
-html[dir='rtl']:not([data-ui-theme='cyber'])
+html[dir='rtl']
   body.cockpit-mode:not(.mobile-shell)
   :is(.cockpit-utility-control.is-expanded, .cockpit-utility-rail__labels) {
   direction: rtl;
