@@ -1,3 +1,22 @@
+/** The last key handed out by `nextViewKey()`. */
+let viewKeys = 0;
+
+/**
+ * A key no viewer or picker was ever given: photo viewers key their mounts
+ * and canvases with it, and a presentation without a mount key is stamped
+ * with one when first seen, so both rank on one scale.
+ */
+export function nextViewKey() {
+  return ++viewKeys;
+}
+
+/**
+ * Each keyless viewer's current mount, `{actions, key}`: stamped once, by
+ * whichever picker sees it first, and kept until it presents null, so a
+ * picker made later ranks it the same.
+ */
+const keylessMounts = new WeakMap();
+
 /**
  * Receive the photo viewer to draw, out of several photo viewers mounting
  * in one host (see photoViewer.js): the one mounted last, whatever order
@@ -8,10 +27,10 @@
  *
  * Two fields of a presentation are read here (see ViewerAdapter.subscribeView
  * in registry.js):
- * - `mountKey`, a number larger for each later mount, orders the mounts. A
- *   presentation without one counts as mounted when it began presenting:
- *   after every mount presenting before it, before any later mount, keyed
- *   or not.
+ * - `mountKey`, a number larger for each later mount (from `nextViewKey()`),
+ *   orders the mounts. A presentation without one counts as mounted when
+ *   any picker first saw it present: it is stamped with a `nextViewKey()`
+ *   then, the same for every picker, however many are made later.
  * - `actions.supersede()`, where present, is called on each presentation
  *   not drawn, whenever more than one presents. It runs on a microtask,
  *   after the presentation that won has reached every subscriber: a
@@ -22,27 +41,21 @@
  * @returns {() => void} Unsubscribe.
  */
 export function subscribePhotoViewers(viewers, listener) {
-  // Each viewer's current presentation and its rank, {key, arrival}.
+  // Each viewer's current presentation and its rank, {view, key}.
   const shown = new Map();
-  let arrivals = 0;
-  /** The largest mount key seen: a keyless mount ranks just after it. */
-  let latestKey = -Infinity;
   let ready = false;
   let closed = false;
   let superseding = false;
   let last;
-  /** Whether `a` was mounted after `b`. */
-  const later = (a, b) =>
-    a.key !== b.key ? a.key > b.key : a.arrival > b.arrival;
-  /** A new mount's rank: its key, or, without one, the latest key seen. */
-  const rank = (view) => {
-    const keyed = Number.isFinite(view.mountKey);
-    if (keyed) latestKey = Math.max(latestKey, view.mountKey);
-    return {
-      key: keyed ? view.mountKey : latestKey,
-      // A keyed mount comes before a keyless one ranked on its key.
-      arrival: keyed ? 0 : ++arrivals,
-    };
+  /** A mount's rank: its key, or the stamp of its first presentation. */
+  const rank = (viewer, view) => {
+    if (Number.isFinite(view.mountKey)) return view.mountKey;
+    let mount = keylessMounts.get(viewer);
+    if (!mount || mount.actions !== view.actions) {
+      mount = { actions: view.actions, key: nextViewKey() };
+      keylessMounts.set(viewer, mount);
+    }
+    return mount.key;
   };
   // The others are not drawn: a mount still waiting on the view never
   // would be.
@@ -55,7 +68,7 @@ export function subscribePhotoViewers(viewers, listener) {
   const publish = () => {
     let next = null;
     for (const entry of shown.values())
-      if (!next || later(entry, next)) next = entry;
+      if (!next || entry.key > next.key) next = entry;
     next = next?.view ?? null;
     if (!ready) return;
     if (next !== last) {
@@ -71,11 +84,10 @@ export function subscribePhotoViewers(viewers, listener) {
   for (const viewer of viewers) {
     const unsubscribe = viewer?.subscribeView?.((view) => {
       if (closed) return;
-      const entry = shown.get(viewer);
-      if (!view) shown.delete(viewer);
-      else if (entry && entry.view.mountKey === view.mountKey)
-        entry.view = view;
-      else shown.set(viewer, { view, ...rank(view) });
+      if (!view) {
+        shown.delete(viewer);
+        keylessMounts.delete(viewer);
+      } else shown.set(viewer, { view, key: rank(viewer, view) });
       publish();
     });
     if (typeof unsubscribe === 'function') unsubscribes.push(unsubscribe);

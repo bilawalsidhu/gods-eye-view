@@ -79,6 +79,13 @@ test('the step buttons are not pressed toggles', () => {
  * the page: the one place a `.src` is written.
  */
 const LOADER = /^export function loadImage\([\s\S]*?^}$/m;
+// An assignment, plain or compound (`=`, `+=`, `||=`, `??=`, `**=`…), not
+// a comparison or an arrow.
+const ASSIGN = String.raw`\s*(?:[-+*/%&|^]|\*\*|<<|>>>?|&&|\|\||\?\?)?=(?![=>])`;
+const assigned = (target, flags = '') =>
+  new RegExp(String.raw`${target}${ASSIGN}`, flags);
+// A member or computed member: what a destructuring write must not target.
+const MEMBER = /[\w$)\]]\s*(?:\.\s*[\w$]|\[)/;
 
 test('the photo viewer is drawn by its view, and its layer needs no Vue', () => {
   const source = read(VIEWER);
@@ -96,19 +103,34 @@ test('the photo viewer is drawn by its view, and its layer needs no Vue', () => 
     /\.remove\(\)/,
     /\.(?:set|remove|toggle)Attribute(?:NS)?\(/,
     /\.(?:classList|className|dataset|style)\b/,
-    /\.(?:hidden|disabled|textContent|innerText|tabIndex|title|alt)\s*=[^=]/,
-    /\.(?:width|height|ariaLabel|id|value)\s*=[^=]/,
+    assigned(
+      String.raw`\.(?:hidden|disabled|textContent|innerText|tabIndex|title|alt)`,
+    ),
+    assigned(String.raw`\.(?:width|height|ariaLabel|id|value)`),
+    // Properties written in bulk or by reflection (an Error's own fields
+    // aside).
+    /\bObject\.assign\(\s*(?!new Error\()/,
+    /\bObject\.definePropert(?:y|ies)\(/,
+    /\bReflect\.(?:set|defineProperty)\(/,
     /from 'vue'|\.vue'/,
   ])
     assert.doesNotMatch(source, write);
   // No property written through brackets (`picture['src'] = …`,
-  // `el[name] = …`), outside array destructuring declarations.
+  // `el[name] ||= …`), outside array destructuring declarations.
   assert.doesNotMatch(
     source.replace(/\b(?:const|let|var)\s*\[/g, ''),
-    /[\w$)\]]\s*\[[^[\]]*\]\s*=(?![=>])/,
+    assigned(String.raw`[\w$)\]]\s*\[[^[\]]*\]`),
     'a bracket write',
   );
-  const SRC = /\.src\s*=(?![=>])/g;
+  // No destructuring write to a property (`[el.src] = …`,
+  // `({ a: el.id } = …)`); declarations bind names only.
+  for (const pattern of [
+    /(?<!\b(?:const|let|var)\s*)\[((?:[^[\]=;]|\[[^[\]=;]*\])*)\]\s*=(?![=>])/g,
+    /(?<!\b(?:const|let|var)\s*)\{((?:[^{}=;]|\{[^{}=;]*\})*)\}\s*\)?\s*=(?![=>])/g,
+  ])
+    for (const [write, targets] of source.matchAll(pattern))
+      assert.doesNotMatch(targets, MEMBER, write);
+  const SRC = assigned(String.raw`\.src`, 'g');
   assert.doesNotMatch(rest, SRC, 'a .src written on the page');
   // In loadImage, only on the off-page Image it creates: `image` is bound
   // once, to that Image, and never rebound or shadowed.
@@ -119,17 +141,18 @@ test('the photo viewer is drawn by its view, and its layer needs no Vue', () => 
     'one binding of image',
   );
   for (const rebinding of [
-    /(?<!\b(?:const|let|var)\s+)(?<![\w$.])image\s*=(?![=>])/,
+    assigned(String.raw`(?<!\b(?:const|let|var)\s+)(?<![\w$.])image`),
     /(?<![\w$.])image\s*=>/,
     /\((?:[^()]*[,{[\s(])?image\b[^()]*\)\s*=>/,
     /\bfunction\b[^(]*\((?:[^)]*[,{[\s(])?image\b[^)]*\)/,
     /\b(?:const|let|var)\s*[{[][^=]*\bimage\b/,
-    /\bcatch\s*\(\s*image\b/,
+    /\bcatch\s*\([^)]*\bimage\b/,
   ])
     assert.doesNotMatch(loader, rebinding, 'image rebound or shadowed');
   const writes = loader.match(SRC)?.length ?? 0;
   assert.equal(
-    loader.match(/(?<![\w$.)\]])image\.src\s*=(?![=>])/g)?.length ?? 0,
+    loader.match(assigned(String.raw`(?<![\w$.)\]])image\.src`, 'g'))?.length ??
+      0,
     writes,
     'a .src written on something other than the Image',
   );

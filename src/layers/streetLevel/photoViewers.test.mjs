@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createPhotoViewer } from './photoViewer.js';
-import { subscribePhotoViewers } from './photoViewers.js';
+import { nextViewKey, subscribePhotoViewers } from './photoViewers.js';
 
 /**
  * A photo viewer whose presentations the test sends; `superseded` counts.
@@ -10,6 +10,7 @@ import { subscribePhotoViewers } from './photoViewers.js';
  */
 function fakeViewer() {
   const listeners = new Set();
+  let current = null;
   const viewer = {
     superseded: 0,
     view(mountKey) {
@@ -19,11 +20,12 @@ function fakeViewer() {
       };
     },
     present(view) {
+      current = view;
       for (const listener of [...listeners]) listener(view);
     },
     subscribeView(listener) {
       listeners.add(listener);
-      listener(null);
+      listener(current);
       return () => listeners.delete(listener);
     },
   };
@@ -101,7 +103,7 @@ test('a presentation without a mount key counts as mounted when it began present
   const unsubscribe = subscribePhotoViewers([a, b, c], (view) =>
     shown.push(view),
   );
-  a.present(a.view(5));
+  a.present(a.view(nextViewKey()));
   const keyless = b.view(undefined);
   b.present(keyless);
   assert.equal(shown.at(-1), keyless, 'after the keyed one');
@@ -112,7 +114,7 @@ test('a presentation without a mount key counts as mounted when it began present
   b.present({ ...keyless, kind: 'flat' });
   assert.equal(shown.at(-1), newer, 'presenting again is not a new mount');
   // A keyed mount made after them wins.
-  const latest = a.view(6);
+  const latest = a.view(nextViewKey());
   a.present(latest);
   assert.equal(shown.at(-1), latest);
   await Promise.resolve();
@@ -184,5 +186,30 @@ test('a presentation without actions or supersede is drawn and passed over witho
   a.present({ mountKey: 3 });
   await Promise.resolve();
   assert.equal(shown.at(-1).mountKey, 3);
+  unsubscribe();
+});
+
+test('a keyless viewer on screen keeps its place when the picker is made again', async () => {
+  const keyed = fakeViewer();
+  const keyless = fakeViewer();
+  keyed.present(keyed.view(nextViewKey()));
+  const shown = [];
+  let unsubscribe = subscribePhotoViewers([keyless, keyed], (view) =>
+    shown.push(view),
+  );
+  const mounted = keyless.view(undefined);
+  keyless.present(mounted);
+  assert.equal(shown.at(-1), mounted);
+  await Promise.resolve();
+  unsubscribe();
+  // A new picker, the keyless viewer first: it is still the later mount.
+  const again = [];
+  unsubscribe = subscribePhotoViewers([keyless, keyed], (view) =>
+    again.push(view),
+  );
+  assert.equal(again.at(-1), mounted);
+  await Promise.resolve();
+  assert.equal(keyless.superseded, 0, 'never told it is not drawn');
+  assert.ok(keyed.superseded > 0);
   unsubscribe();
 });

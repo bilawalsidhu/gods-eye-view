@@ -828,3 +828,129 @@ test('a viewer left by an earlier test is not superseded by a later test’s', a
   earlier.viewer.unmount();
   later.viewer.unmount();
 });
+
+/** A panorama viewer whose renderers and flat loads the test reads. */
+function trackedViewer(options = {}) {
+  const renderers = [];
+  const loads = [];
+  const viewer = createPhotoViewer({
+    providerId: 'test',
+    name: 'Test',
+    sources: SOURCES,
+    getPhoto: async (id) => PHOTOS[id],
+    step: async () => null,
+    onStep() {},
+    load: async (url) => {
+      loads.push(url);
+      return { src: url };
+    },
+    createRenderer: (canvas) => {
+      const renderer = {
+        canvas,
+        images: [],
+        setImage: (image) => renderer.images.push(image.src),
+        setView() {},
+        getView: () => ({ yaw: 0, pitch: 0, fov: 80 }),
+        resize() {},
+        clear() {},
+        destroy() {},
+      };
+      renderers.push(renderer);
+      return renderer;
+    },
+    ...options,
+  });
+  return { viewer, renderers, loads };
+}
+
+/** Hand `parts` back to the viewer that presented `view`. */
+const attachAll = (view, parts) => {
+  for (const [name, element] of Object.entries(parts))
+    view.actions.attach(name, element);
+};
+
+test('a mount overtaken by a second mount of the same viewer closes, and the second stays', async () => {
+  const { viewer } = trackedViewer();
+  let latest = null;
+  const unsubscribe = viewer.subscribeView((view) => (latest = view));
+  const first = viewer.mount({ id: 1 });
+  const hostTwo = { id: 2 };
+  const second = viewer.mount(hostTwo);
+  // The view draws on a later macrotask.
+  setTimeout(() => latest && attachAll(latest, elements()), 0);
+  await assert.rejects(first, /viewer was closed/);
+  await second;
+  assert.equal(latest?.host, hostTwo, 'the second mount is presented');
+  viewer.unmount();
+  unsubscribe();
+});
+
+test('a mount whose view subscribes again in the same tick is drawn', async () => {
+  const { viewer } = trackedViewer();
+  let latest = null;
+  const view = (next) => (latest = next);
+  let unsubscribe = viewer.subscribeView(view);
+  const mounting = viewer.mount({});
+  // The view is replaced at once, and draws on a later macrotask.
+  unsubscribe();
+  unsubscribe = viewer.subscribeView(view);
+  setTimeout(() => latest && attachAll(latest, elements()), 0);
+  await mounting;
+  assert.ok(latest, 'still presented');
+  viewer.unmount();
+  unsubscribe();
+});
+
+test('a canvas handed back while a panorama’s open waits on its draw takes the panorama', async () => {
+  const { viewer, renderers, loads } = trackedViewer();
+  const first = elements();
+  const second = elements();
+  let latest = null;
+  let hold = false;
+  const unsubscribe = viewer.subscribeView((view) => {
+    latest = view;
+    if (view && !hold) attachAll(view, first);
+  });
+  await viewer.mount({});
+  hold = true;
+  const opening = viewer.open('a');
+  assert.ok(await until(() => latest?.kind === 'pano'), 'waiting on a draw');
+  // The view draws it with a canvas of its own.
+  attachAll(latest, second);
+  await opening;
+  assert.equal(latest.kind, 'pano', 'not the front view');
+  assert.deepEqual(loads, ['a-first'], 'no flat version loaded');
+  assert.equal(renderers.at(-1).canvas, second.canvas);
+  assert.deepEqual(renderers.at(-1).images, ['a-first']);
+  viewer.unmount();
+  unsubscribe();
+});
+
+test('two views handing back canvases of their own do not take the panorama in turns', async () => {
+  let reopened = 0;
+  const { viewer, renderers } = trackedViewer({
+    onReopen: (id) => {
+      reopened++;
+      if (reopened < 20) viewer.open(id).catch(() => {});
+    },
+  });
+  const one = elements();
+  const two = elements();
+  const unsubscribes = [
+    viewer.subscribeView((view) => view && attachAll(view, one)),
+    viewer.subscribeView((view) => view && attachAll(view, two)),
+  ];
+  await viewer.mount({});
+  await viewer.open('a');
+  const built = renderers.length;
+  // Each presentation is drawn by both views.
+  for (const mode of ['fill', 'letterbox', 'fill']) {
+    viewer.setRenderMode(mode);
+    for (let i = 0; i < 5; i++) await tick();
+  }
+  assert.equal(reopened, 0);
+  assert.equal(renderers.length, built, 'the panorama stays where it is');
+  assert.deepEqual(renderers.at(-1).images, ['a-first']);
+  viewer.unmount();
+  for (const unsubscribe of unsubscribes) unsubscribe();
+});
