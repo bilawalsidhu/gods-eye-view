@@ -15,6 +15,7 @@ import {
   NSW_IMAGE_ORIGIN,
   NSW_IMAGE_USER_AGENT,
   OTTAWA_IMAGE_ORIGIN,
+  SINGAPORE_IMAGE_ORIGIN,
   TALLINN_IMAGE_ORIGIN,
   TARKTEE_IMAGE_ORIGIN,
   ICELAND_IMAGE_ORIGIN,
@@ -148,6 +149,36 @@ const CCTV_RASTER_IMAGE_TYPES = new Set([
 export function cctvRasterImageType(contentType) {
   const essence = parseMediaType(contentType)?.essence;
   return CCTV_RASTER_IMAGE_TYPES.has(essence) ? essence : null;
+}
+
+/**
+ * Image directories whose frames come as `application/octet-stream`. The
+ * data.gov.sg traffic images do (checked 2026-11-11), so the raster-type rule
+ * alone would refuse every Singapore frame. A frame from a directory listed
+ * here is accepted only when its body starts with the JPEG signature, and it
+ * is sent as `image/jpeg`. Every other origin keeps the raster-type rule.
+ */
+const CCTV_OCTET_STREAM_JPEG_PREFIXES = Object.freeze([SINGAPORE_IMAGE_ORIGIN]);
+
+/**
+ * Whether an `application/octet-stream` frame from this URL may be read as a
+ * JPEG. Pinned by parsed URL (scheme, exact host, default port, no
+ * credentials, path inside the directory), never by a string match.
+ *
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function cctvOctetStreamJpegAllowed(url) {
+  return CCTV_OCTET_STREAM_JPEG_PREFIXES.some((prefix) =>
+    pinnedCameraUrl(url, prefix),
+  );
+}
+
+/** Whether a buffered body starts with the JPEG signature `FF D8 FF`. */
+function startsWithJpegSignature(body) {
+  return (
+    body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff
+  );
 }
 
 /**
@@ -539,6 +570,7 @@ for (const prefix of [
   A22_IMAGE_ORIGIN,
   TRIPCHECK_IMAGE_ORIGIN,
   MLIT_RIVER_IMAGE_ORIGIN,
+  SINGAPORE_IMAGE_ORIGIN,
   ...TAIWAN_HIGHWAY_IMAGE_ORIGINS,
 ]) {
   const host = new URL(prefix).hostname;
@@ -857,6 +889,9 @@ async function readFirstMjpegFrame(upstream, maxBytes) {
  *   answer and keep its first JPEG. Only sources registered as MJPEG stills
  *   (the Taiwan Highway Bureau feeds) set it; any other host answering
  *   multipart falls through to the next fallback.
+ * An `application/octet-stream` answer is read only for a directory in
+ * CCTV_OCTET_STREAM_JPEG_PREFIXES, and only when it starts with the JPEG
+ * signature.
  * @returns {Promise<{ok:true,body:Buffer,contentType:string}|null>}
  */
 export async function fetchCctvImageFromUpstream(
@@ -899,6 +934,16 @@ export async function fetchCctvImageFromUpstream(
       const body = await readCappedResponseBytes(upstream, maxBytes);
       if (!body) return null;
       return { ok: true, body, contentType };
+    }
+    // Redirects already stay inside the pinned directory (fetchWithinHost),
+    // so the requested URL decides which origin answered.
+    if (
+      parseMediaType(upstreamType)?.essence === 'application/octet-stream' &&
+      cctvOctetStreamJpegAllowed(url)
+    ) {
+      const body = await readCappedResponseBytes(upstream, maxBytes);
+      if (!body || !startsWithJpegSignature(body)) return null;
+      return { ok: true, body, contentType: 'image/jpeg' };
     }
     if (!allowMjpeg || !cctvLiveMediaType('mjpeg', upstreamType)) {
       try {

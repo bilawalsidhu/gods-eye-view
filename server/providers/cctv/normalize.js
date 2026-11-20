@@ -377,6 +377,21 @@ export function isLikelyCalgaryCoordinate(lat, lon) {
   );
 }
 
+/**
+ * Singapore: the main island and the southern islands, Tuas to Changi, with
+ * slack at each edge. The Johor Strait is narrow, so a box this size also
+ * covers the Johor shore; it only refuses points that are clearly elsewhere.
+ */
+export function isLikelySingaporeCoordinate(lat, lon) {
+  return (
+    isPlausibleLatLon(lat, lon) &&
+    lat >= 1.13 &&
+    lat <= 1.48 &&
+    lon >= 103.55 &&
+    lon <= 104.1
+  );
+}
+
 /** Florida statewide, Key West to Georgia state line, with slack at each edge */
 export function isLikelyFloridaCoordinate(lat, lon) {
   return (

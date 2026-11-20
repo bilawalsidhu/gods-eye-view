@@ -21,6 +21,10 @@ import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
 import { createHlsPuller } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
+import {
+  createSingaporeFrameResolver,
+  SINGAPORE_SOURCE_KIND,
+} from './cctv/singapore.js';
 import { googleServerApiKey } from './places/google-key.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
 /**
@@ -159,6 +163,24 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
       });
     worldFrameInflight.set(cameraId, request);
     return request;
+  }
+
+  /**
+   * Singapore frame links change with every snapshot, so the current link is
+   * looked up at frame time (one shared request at most once a minute; see
+   * ./cctv/singapore.js). The frame fetch gets what is left of the normal
+   * frame deadline, so a slow lookup cannot push the answer past it.
+   */
+  const resolveSingaporeFrameUrl = createSingaporeFrameResolver();
+  async function fetchSingaporeFrame(cameraId, catalogUrl) {
+    const startedAt = Date.now();
+    const frameUrl = await resolveSingaporeFrameUrl(cameraId, catalogUrl);
+    return fetchCctvImageFromUpstream(frameUrl, {
+      timeoutMs: Math.max(
+        1000,
+        CCTV_FRAME_FETCH_TIMEOUT_MS - (Date.now() - startedAt),
+      ),
+    });
   }
 
   /** Update the health entry for a camera, evicting the oldest entry if at capacity. */
@@ -662,9 +684,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 )
               : source?.sourceKind === 'txdot-its'
                 ? await fetchTxdotSnapshot(upstreamCandidate)
-                : await fetchCctvImageFromUpstream(upstreamCandidate, {
-                    allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
-                  });
+                : source?.sourceKind === SINGAPORE_SOURCE_KIND
+                  ? await fetchSingaporeFrame(cameraId, upstreamCandidate)
+                  : await fetchCctvImageFromUpstream(upstreamCandidate, {
+                      allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
+                    });
         if (
           source?.sourceKind === 'mlit-river' &&
           isMlitRiverAdjustmentImage(upstreamImage)
