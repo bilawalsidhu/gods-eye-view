@@ -82,8 +82,8 @@ test('frame and media URLs preserve registered camera identity and encoded metad
   );
   assert.equal(frame.searchParams.get('label'), camera.name);
   assert.equal(frame.searchParams.get('city'), camera.city);
-  assert.equal(frame.searchParams.get('lat'), '30.267000');
-  assert.equal(frame.searchParams.get('lon'), '-97.744000');
+  assert.equal(frame.searchParams.has('lat'), false);
+  assert.equal(frame.searchParams.has('lon'), false);
   assert.equal(frame.searchParams.get('heading'), '45');
   assert.equal(frame.searchParams.get('pitch'), '-12');
   assert.deepEqual([...media.searchParams.keys()], ['ts']);

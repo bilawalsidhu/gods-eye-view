@@ -1159,6 +1159,15 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   );
   assert.match(
     mobileCockpit[1],
+    /body\.cockpit-mode\.mobile-shell[^{]*?\.cockpit-utility-controls \{[^}]*?top:[^;]*?var\(--cockpit-visor-top\)/,
+  );
+  assert.match(
+    mobileCockpit[1],
+    /@media \(min-width: 390px\) and \(min-height: 240px\),\s*\(min-height: 450px\) \{\s*body\.cockpit-mode\.mobile-shell/,
+  );
+  assert.match(css, /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/);
+  assert.match(
+    mobileCockpit[1],
     /body\.cockpit-mode \.cockpit-utility-control\.is-expanded[\s\S]*?top:\s*96px;/,
   );
   assert.match(
@@ -1172,6 +1181,15 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode #view-switcher button \{[\s\S]*?padding-inline:\s*9px;/,
+  );
+});
+
+test('the unread Stories announcement waits until Cockpit closes', () => {
+  assert.match(css, /body\.cockpit-mode #gev-stories #hPop \{\s*display:\s*none;\s*\}/);
+  const storiesView = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'StoriesView.vue'), 'utf8');
+  assert.match(
+    storiesView,
+    /async function openExplore\(\) \{[^}]*?if \(await store\.controller\.open\(\)\) markPopSeen\(\);/,
   );
 });
 

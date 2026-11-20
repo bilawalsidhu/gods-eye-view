@@ -1,4 +1,5 @@
 import {
+  GOOGLE_DEFAULT_PER_MIN,
   googleServerApiKey,
   keylessGooglePlacesResponse,
   keylessGoogleGeocodeResponse,
@@ -15,17 +16,7 @@ import {
 // undefined = not built yet; null = the explicit 0 opt-out; fn = active limiter
 let _googleRateLimiter;
 
-/**
- * Requests/min/IP applied when GEV_RATELIMIT_GOOGLE_PER_MIN is unset. This is
- * the value the Pinokio build already ships (pinokio/_ENVIRONMENT), so the
- * packaged app keeps behaving exactly as it does today and only an
- * unconfigured server changes — from unlimited to what the product already
- * runs with. Places calls are user-driven (a search, a nearby lookup, an
- * installation probe) rather than polled, so this sits far above what the app
- * generates and bites only a caller enumerating the endpoint. `.env.example`
- * suggests a tighter 60 when the host is not localhost; that still applies.
- */
-export const GOOGLE_DEFAULT_PER_MIN = 120;
+export { GOOGLE_DEFAULT_PER_MIN };
 
 /** Google cost endpoints (nearby-places, text-search, geocoding). Null only when set to 0. */
 function googleRateLimiter() {
