@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, onUpdated, ref } from 'vue';
+import UiButton from '../kit/UiButton.vue';
 
 // An ordered list whose rows keep their identity, so a focused row stays.
 const props = defineProps({
@@ -10,7 +11,7 @@ const props = defineProps({
 const root = ref(null);
 
 const rowClass = (item) =>
-  `data-row-list-item${item.disabled ? ' note' : ''}${item.active ? ' active' : ''}${item.current ? ' current' : ''}`;
+  `data-row-list-item${item.disabled ? ' note' : ''}${item.current ? ' current' : ''}`;
 
 // Follow the flight, but never steal a scroll the reader is making
 // themselves: only when the step actually changed.
@@ -43,19 +44,19 @@ onUpdated(followCurrent);
       v-for="item in list?.items ?? []"
       :key="item.id"
       :data-list-item-id="item.id"
-      ><button
-        type="button"
+      ><UiButton
         :class="rowClass(item)"
         :data-list-item-id="item.id"
         :disabled="Boolean(item.disabled)"
         :aria-current="item.current ? 'step' : 'false'"
-        :aria-pressed="item.active ? 'true' : 'false'"
+        :pressed="Boolean(item.active)"
+        pressed-class="active"
         :title="String(item.text ?? '')"
         @click="onSelect(item)"
         ><span class="data-row-list-lead">{{ String(item.lead ?? '') }}</span
         ><span class="data-row-list-text">{{
           String(item.text ?? '')
-        }}</span></button
+        }}</span></UiButton
       ></li
     ></ol
   >

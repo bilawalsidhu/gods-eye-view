@@ -912,10 +912,12 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
     '#command-dock:has(#location-bar:not(.collapsed))',
     '#command-dock:has(#control-panel:not(.collapsed))',
   ];
-  assert.equal(
-    omnibarVar('--world-timeline-lift'),
-    '0px',
-    'the Omnibar layout holds the timeline lift at 0',
+  // The dock rises over the World Timeline by world-timeline.css's lift, as
+  // the plain dock does; the Omnibar scope leaves the lift alone.
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(ROOT, 'src/ui/styles/omnibar-dock.css'), 'utf8'),
+    /--world-timeline-lift\s*:/,
+    'the Omnibar layout leaves the timeline lift to world-timeline.css',
   );
   for (const width of WIDTHS.filter((w) => w >= OMNIBAR_MIN_WIDTH)) {
     for (const height of HEIGHTS) {
@@ -968,10 +970,21 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
           credit.part.startsWith(OMNIBAR_SCOPE),
           `the Omnibar owns the credit row at ${width}px`,
         );
-        const dockBottom = omnibarPx(
+        // The dock rises over the World Timeline from the dock's floor, and
+        // the bar takes that floor: the floor is what clears the credit.
+        assert.equal(
           dock.decl.value,
+          'var(--omnibar-dock-raised)',
+          `Omnibar dock bottom at ${width}px`,
+        );
+        assert.equal(
+          omnibarVar('--omnibar-dock-raised').replace(/\s+/g, ' '),
+          'calc( var(--omnibar-dock-bottom) + var(--world-timeline-lift, 0px) )',
+        );
+        const dockBottom = omnibarPx(
+          'var(--omnibar-dock-bottom)',
           height,
-          'Omnibar dock bottom',
+          'Omnibar dock floor',
         );
         const creditTop =
           omnibarPx(credit.decl.value, height, 'Omnibar credit bottom') +

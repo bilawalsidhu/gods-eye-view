@@ -162,7 +162,7 @@ export function initGeoFileImport({
               ? t('Hide {name}', { name: item.name })
               : t('Show {name}', { name: item.name }),
             action: 'toggle',
-            pressed: String(item.visible),
+            pressed: Boolean(item.visible),
           },
           {
             icon: 'my_location',
