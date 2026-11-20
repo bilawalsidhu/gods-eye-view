@@ -8,8 +8,9 @@ import { YOUTUBE_EMBED_HOST, youtubeLivePlayerVars } from './liveStreams.js';
  * never starts. The player cannot say "this broadcast is off air" in so
  * many words: a live stream that is off air is reported as a video that
  * cannot play, or that never reaches playing, so both read as offline here.
- * Embedding refused by the video's owner is `unavailable`, which no retry
- * will change.
+ * An API that does not load (blocked, or slower than its 5 s) is offline too,
+ * reason `api`: Try again loads it afresh. Embedding refused by the video's
+ * owner is `unavailable`, which no retry will change.
  */
 
 /** A stream that has not started playing this long after its player was ready is offline. */
@@ -102,7 +103,7 @@ export function createYouTubeLivePlayer({
       }
     },
     () => {
-      if (!destroyed) set('unavailable', 'api');
+      if (!destroyed) set('offline', 'api');
     },
   );
 

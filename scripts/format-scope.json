@@ -1666,6 +1666,7 @@
   "server/providers/space/issTelemetry.test.mjs",
   "src/data/liveStreams.test.mjs",
   "src/data/youtubeLivePlayer.test.mjs",
+  "src/data/youtubeApi.test.mjs",
   "src/layers/installations/labelBoxClick.test.mjs",
   "src/layers/satellites/cockpitSubject.test.mjs",
   "src/layers/satellites/issArticulation.test.mjs",

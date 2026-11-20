@@ -157,10 +157,10 @@ test('a timer that fires after playback began changes nothing', async () => {
   assert.deepEqual(states.at(-1), { state: 'playing', reason: null });
 });
 
-test('an API that does not load leaves the stream unavailable', async () => {
+test('an API that does not load reads as offline, which Try again can change', async () => {
   const { states, settle } = fixture({ apiFails: true });
   await settle();
-  assert.deepEqual(states.at(-1), { state: 'unavailable', reason: 'api' });
+  assert.deepEqual(states.at(-1), { state: 'offline', reason: 'api' });
 });
 
 test('destroy empties the host, destroys the player and silences later events', async () => {

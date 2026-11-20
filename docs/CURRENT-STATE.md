@@ -2185,8 +2185,9 @@ section leaving the page removes the player, so nothing plays unseen. ON AIR
 with a blinking red dot while it plays; LOADING with an amber dot while it
 starts; an offline card ("Stream is offline", with Try again) when
 the player reports the video ended, errored or did not start within 25 s,
-which is how an off-air broadcast shows; "This stream cannot play here" when
-the owner refuses embedding or the API does not load. Stepping to another
+which is how an off-air broadcast shows, or when YouTube's player API does not
+load (Try again loads it afresh); "This stream cannot play here" when the
+owner refuses embedding. Stepping to another
 stream hands a playing one over; a selection that moves to an object
 without that stream, clearing it or turning the layer off removes the
 player, while another entry of the same station (a module, a docked vehicle,
