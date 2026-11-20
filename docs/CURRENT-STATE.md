@@ -7626,7 +7626,7 @@ silently demoting every later lookup for the session.
   requires a developer key, so the pack needs `ONTARIO_511_API_KEY` and is skipped without one
   (#1228). All sources are RAW PRIOR
   poses, and the layer is stills-first.
-  sources. Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
+  Fintraffic Finland road weather cameras (2026-09-13; cap 300, `CCTV_FINTRAFFIC_MAX_SOURCES`,
   kill switch `CCTV_FINTRAFFIC_ENABLED=0`) are the fourth pack: one keyless GeoJSON station list
   covering the whole country, where one _preset_ (a station's fixed view) is one camera — 806
   GATHERING stations carry 2,256 in-collection presets, prioritized to 300 against seven anchors
@@ -7641,11 +7641,17 @@ silently demoting every later lookup for the session.
   empty keeps the old catalog and is retried after another 15 minutes, not on the next
   request. Estonia's Tarktee DATEX feeds, which answer in 2 to 16.6 s, get 30 s
   (`TARKTEE_FETCH_TIMEOUT_MS`) where other packs get 15 s.
-  Both Tarktee XML catalogs refuse redirects and have a 4 MiB per-document
-  limit, enforced against declared length and streamed bytes. A rejected fetch,
-  unsuccessful response, or body-read failure releases both available response
-  bodies; read failures also cancel an active sibling reader. Cameras sharing
-  an image number are deduplicated before the Tarktee pack cap is applied.
+  Ontario catalog requests refuse redirects and log only the error class and
+  system code for transport/JSON failures, never the request URL or key.
+  Both Tarktee XML catalogs share that 30 s deadline, refuse redirects and
+  have a 4 MiB per-document limit, enforced against declared length and
+  streamed bytes. A failed request, unsuccessful response or body read aborts
+  the other feed at once and releases every response body, including one that
+  arrives after the failure. The Lithuania pack reads its two catalogs
+  through the same helper (`readCatalogsTogether`,
+  `server/providers/cctv/catalogPair.js`) with its 15 s deadline. An Ontario
+  error response has its body released. Cameras sharing an image number are
+  deduplicated before the Tarktee pack cap is applied.
 - **CCTV v3 UX — viewshed + calibration gizmo** (built 2026-07-05 and field
   validated 2026-07-21): the COVERAGE toggle is a
   tri-state cycle `OFF → ON → VIEWSHED`; viewshed mode renders each visible camera's frustum

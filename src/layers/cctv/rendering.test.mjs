@@ -428,6 +428,80 @@ test('a pose with no perspective field of view is projected by the renderer', ()
   }
 });
 
+test('focus release restores video hue and alpha after the style throttle', () => {
+  const viewer = {};
+  const camera = fakeCameraPort({
+    pose: { position: { x: 6378137 + 1000, y: 0, z: 0 } },
+  });
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    query: { project: () => ({ x: 10, y: 20 }) },
+  });
+  let target = {};
+  const records = ['mp4', 'webm'].map((feedType) => ({
+    camera: { id: feedType, feedType },
+    position: { x: 6378137, y: 0, z: 0 },
+  }));
+  const state = {
+    _enabled: true,
+    _viewer: viewer,
+    _records: records,
+    _activeCameraId: null,
+    _activeFocusStyleCount: 0,
+    _lastFocusStyleAt: -Infinity,
+  };
+  const focus = {
+    focusNowMs: (nowMs) => nowMs,
+    getFocusTarget: () => target,
+    focusPassIsNeeded: (value, count) => !!value || count > 0,
+    advanceSpriteFocus: () => ({
+      factor: target ? FOCUS_FACTOR : 1,
+      active: !!target,
+      transitioning: false,
+    }),
+    focusAlphaNeedsWrite: (before, after) => before !== after,
+  };
+  const { createCameraIcons, addCameraIcon, refreshCctvFocusStyles } =
+    createRendering({
+      state,
+      services: { focus },
+      parts: {
+        model: {
+          isVideoFeedCamera: (camera) => isVideoFeedType(camera.feedType),
+        },
+      },
+      source: {},
+    });
+  try {
+    createCameraIcons(viewer);
+    for (const record of records) addCameraIcon(record);
+    const icons = state._icons;
+
+    refreshCctvFocusStyles(1000);
+    for (const record of records) {
+      assertKeepsColor(
+        icons,
+        record.camera.id,
+        LIVE_CAMERA_COLOR,
+        record.camera.id,
+      );
+    }
+    target = null;
+    refreshCctvFocusStyles(1050);
+    for (const record of records) {
+      assert.equal(icons.focus(record.camera.id), FOCUS_FACTOR, 'throttled');
+    }
+    refreshCctvFocusStyles(1100);
+    for (const record of records) {
+      assert.deepEqual(icons.item(record.camera.id).color, LIVE_CAMERA_COLOR);
+      assert.equal(icons.focus(record.camera.id), 1);
+    }
+    assert.equal(state._activeFocusStyleCount, 0);
+  } finally {
+    unbind();
+  }
+});
+
 test('hover picks the underlying camera only outside a painted count', () => {
   const viewer = {};
   const icon = { set: 'icons', id: 'camera' };
