@@ -181,6 +181,9 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       // The panel would otherwise keep the pre-load count and legend until the
       // next natural refresh — up to the 5-minute catalog interval.
       parts.controls._notifyRowControls();
+      // After a core rebuild a tracked Starlink is added again here, its dot
+      // shown and its ring gone: its dot is hidden again and its ring drawn.
+      parts.tracking._reconcileTrackedMarks();
       parts.tracking._applyPendingTrackingRestore();
       return { status: 'ready', added };
     } catch (e) {

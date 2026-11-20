@@ -82,7 +82,8 @@ export function createState({ services }) {
   state._trackedNorad = null;
   /**
    * The station the tracked satellite is docked to, by both orbits compared
-   * when tracking began (tracking.js): its NORAD number, or null.
+   * (tracking.js: when tracking begins, once a second, and after a catalog
+   * rebuild): its NORAD number, or null.
    */
   state._trackedDockedToStation = null;
   /** Whether that station is the ISS, whose ring stands for the entry's. */

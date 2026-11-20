@@ -77,6 +77,7 @@ function ingestionFor(catalogText, { source: sourceExtras = {} } = {}) {
     },
     tracking: {
       async _reconcileTrackedSubjectContext() {},
+      _reconcileTrackedMarks() {},
       _applyPendingTrackingRestore() {},
     },
     catalog: {},

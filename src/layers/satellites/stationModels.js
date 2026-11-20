@@ -28,9 +28,10 @@ export function stationModelFor(models, noradId) {
 /**
  * The station that is selected: the tracked satellite is the station
  * itself, or an object docked to it, judged by the dots sharing a position
- * (`dockedCompanions`), by both orbits compared when tracking began
- * (`trackedDockedToStation`, the station's NORAD or null), or by the
- * station's model standing in for its dot.
+ * (`dockedCompanions`), by both orbits compared (`trackedDockedToStation`,
+ * the station's NORAD or null, judged when tracking begins and again once a
+ * second and after a catalog rebuild), or by the station's model standing
+ * in for its dot.
  * @param {ReadonlyArray<{key: string, norad: number}>} stations
  * @param {Array<{norad: number, _standsInFor?: (noradId: number) => boolean}>} models
  * @param {{trackedNorad: number|null, dockedCompanions?: {has(id: number): boolean}|null,
