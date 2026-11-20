@@ -614,6 +614,13 @@ export const DATA_CREDITS = [
       '<a href="https://worldnewsapi.com/" target="_blank" rel="noopener">World News API</a>',
   },
   {
+    key: 'world-port-index',
+    html:
+      'Ports and terminals: <a href="https://msi.nga.mil/Publications/WPI" target="_blank" rel="noopener">National Geospatial-Intelligence Agency World Port Index (Pub 150)</a>' +
+      ' · Government-hosted snapshot via <a href="https://arcgis.netl.doe.gov/server/rest/services/Hosted/CCS_EJ_SJ_Data/FeatureServer/17" target="_blank" rel="noopener">US DOE NETL ArcGIS</a>' +
+      ' · Reference information only; listing does not establish operational status.',
+  },
+  {
     key: 'shipwrecks',
     html:
       'Shipwrecks (Europe): <a href="https://emodnet.ec.europa.eu/en/human-activities" target="_blank" rel="noopener">EMODnet Human Activities</a> ' +
