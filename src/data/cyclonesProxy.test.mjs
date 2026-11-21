@@ -569,7 +569,7 @@ test('JTWC reads go through the bounded fetch with no redirects', async () => {
   assert.equal(jtwc[0].options.redirect, 'error');
 });
 
-test('a failed JTWC read keeps its last storms, marks the answer stale and never hides NHC', async () => {
+test('a failed JTWC read keeps its last storms and leaves NHC’s answer fresh', async () => {
   let fail = false;
   let clock = NOW;
   const { request } = install({
@@ -583,10 +583,11 @@ test('a failed JTWC read keeps its last storms, marks the answer stale and never
   assert.equal(body(await request()).storms.length, 2);
   fail = true;
   clock += 6 * 60_000;
-  const stale = body(await request());
-  assert.equal(stale.stale, true);
+  const kept = body(await request());
+  assert.equal(kept.stale, false);
+  assert.equal(kept.reason, null);
   assert.deepEqual(
-    stale.storms.map((storm) => storm.id),
+    kept.storms.map((storm) => storm.id),
     ['ep152026', 'sh042027'],
   );
   // Past their use, both advisories leave the cached answer.
@@ -621,4 +622,31 @@ test('a cached answer drops each storm whose own advisory is past use, not all o
     cached.storms.map((storm) => storm.id),
     ['sh042027'],
   );
+});
+
+test('a JTWC that hangs or answers 500 leaves NHC’s answer unchanged', async (t) => {
+  const nhcOnly = body(await install({ fetchImpl: fetcher() }).request());
+  assert.equal(nhcOnly.stale, false);
+  const jtwcCalls = [];
+  for (const mode of ['500', 'hang']) {
+    const { request } = install({
+      readJtwc: undefined,
+      jtwcTimeoutMs: 20,
+      fetchImpl: async (url, options) => {
+        if (!String(url).includes('metoc.navy.mil'))
+          return fetcher()(url, options);
+        jtwcCalls.push(mode);
+        if (mode === '500') return new Response('down', { status: 500 });
+        // Hangs until its own deadline aborts it.
+        return new Promise((_, reject) =>
+          options.signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          ),
+        );
+      },
+    });
+    const answer = body(await request());
+    assert.deepEqual(answer, nhcOnly, `JTWC ${mode}`);
+  }
+  assert.deepEqual(jtwcCalls, ['500', 'hang']);
 });

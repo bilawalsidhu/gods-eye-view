@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateRawSync } from 'node:zlib';
 import {
+  wrapJtwcLongitude,
   JTWC_PRODUCTS_URL,
   JTWC_RSS_URL,
   jtwcStormId,
@@ -281,7 +282,8 @@ test('every listed storm is read with its overlay; an unreadable overlay leaves 
     'unavailable',
   );
 
-  // A warning past 13 hours is left out; a missing warning fails the read.
+  // A warning past 13 hours is left out; with every listed warning missing,
+  // the read fails.
   assert.deepEqual(
     await readJtwcStorms(good.read, NOW + 13 * 3600_000),
     [],
@@ -290,4 +292,41 @@ test('every listed storm is read with its overlay; an unreadable overlay leaves 
   await assert.rejects(readJtwcStorms(missing.read, NOW), /invalid_jtwc/);
   const down = reader({ [JTWC_RSS_URL]: new Error('down') });
   await assert.rejects(readJtwcStorms(down.read, NOW), /down/);
+});
+
+test('one storm whose warning cannot be read or parsed never stops the others', async () => {
+  const { read } = reader({
+    [JTWC_RSS_URL]: feed(['wp3026', 'sh0427', 'io0126']),
+    [`${JTWC_PRODUCTS_URL}/wp3026.tcw`]: new Error('HTTP 500'),
+    [`${JTWC_PRODUCTS_URL}/io0126.tcw`]: '<html>Access Denied</html>',
+    [`${JTWC_PRODUCTS_URL}/sh0427.tcw`]: TCW,
+    [`${JTWC_PRODUCTS_URL}/sh0427.kmz`]: zip({ 'doc.kml': kml() }),
+  });
+  const storms = await readJtwcStorms(read, NOW);
+  assert.deepEqual(
+    storms.map((storm) => [storm.id, storm.geometryStatus]),
+    [['sh042027', 'current']],
+  );
+});
+
+test('a danger swath crossing the antimeridian is kept, its longitudes wrapped', () => {
+  const crossing = kml().replace(
+    /<coordinates>\n[^<]*<\/coordinates>/,
+    '<coordinates>179.5,-15,0 181,-16,0 180.5,-18,0 179.5,-17,0</coordinates>',
+  );
+  assert.deepEqual(parseJtwcKml(crossing).dangerArea, {
+    type: 'Polygon',
+    coordinates: [
+      [
+        [179.5, -15],
+        [-179, -16],
+        [-179.5, -18],
+        [179.5, -17],
+        [179.5, -15],
+      ],
+    ],
+  });
+  assert.equal(wrapJtwcLongitude(-181.5), 178.5);
+  assert.equal(wrapJtwcLongitude(180), 180);
+  assert.equal(wrapJtwcLongitude(-164.2), -164.2);
 });

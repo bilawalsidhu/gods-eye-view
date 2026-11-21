@@ -332,6 +332,18 @@ export function parseJtwcKml(kml) {
   };
 }
 
+/**
+ * `longitude` in -180..180 (180 stays 180). JTWC writes a ring crossing the
+ * antimeridian with longitudes past ±180 (`181.5`); wrapped, the ring crosses
+ * 180° as NHC's cones that cross it do.
+ */
+export function wrapJtwcLongitude(longitude) {
+  if (Math.abs(longitude) <= 180) return longitude;
+  const wrapped = ((((longitude + 180) % 360) + 360) % 360) - 180;
+  // JTWC writes two decimals; this drops the float noise of the wrap.
+  return Math.round(wrapped * 1e6) / 1e6;
+}
+
 function ring(text) {
   const points = [];
   for (const tuple of text.trim().split(/\s+/)) {
@@ -339,11 +351,11 @@ function ring(text) {
     if (
       !Number.isFinite(lon) ||
       !Number.isFinite(lat) ||
-      Math.abs(lon) > 180 ||
+      Math.abs(lon) > 540 ||
       Math.abs(lat) > 90
     )
       return null;
-    points.push([lon, lat]);
+    points.push([wrapJtwcLongitude(lon), lat]);
   }
   if (!points.length) return null;
   const [a, b] = [points[0], points.at(-1)];
@@ -399,7 +411,9 @@ export function kmlFromKmz(bytes) {
 
 /**
  * Every storm JTWC lists, through `read(url, kind)` (kind `text` or
- * `bytes`). The feed or a warning that cannot be read throws; an overlay
+ * `bytes`). A feed that cannot be read throws. One storm never stops the
+ * others: a warning that cannot be read or parsed leaves that storm out,
+ * and only when every listed storm's fails does the read throw. An overlay
  * that cannot be read leaves its storm's geometry `unavailable`, and one
  * JTWC has not posted yet (`read` resolving null), or posted for another
  * warning, leaves it `pending`.
@@ -407,7 +421,7 @@ export function kmlFromKmz(bytes) {
 export async function readJtwcStorms(read, now = Date.now()) {
   const prefixes = parseJtwcFeed(await read(JTWC_RSS_URL, 'text'));
   // Each storm's warning and overlay are read at once, every storm alike.
-  const read1 = async (prefix) => {
+  const readStorm = async (prefix) => {
     const [text, overlay] = await Promise.all([
       read(`${JTWC_PRODUCTS_URL}/${prefix}.tcw`, 'text'),
       read(`${JTWC_PRODUCTS_URL}/${prefix}.kmz`, 'bytes')
@@ -430,9 +444,16 @@ export async function readJtwcStorms(read, now = Date.now()) {
       ? { ...warning.storm, geometryStatus: 'unavailable' }
       : withJtwcDangerArea(warning, overlay);
   };
+  const results = await Promise.allSettled(prefixes.map(readStorm));
+  const failed = results.filter((result) => result.status === 'rejected');
+  const aborted = failed.find((result) => result.reason?.name === 'AbortError');
+  if (aborted) throw aborted.reason;
+  if (failed.length && failed.length === results.length) throw failed[0].reason;
   const storms = [];
-  for (const storm of await Promise.all(prefixes.map(read1)))
+  for (const result of results) {
+    const storm = result.status === 'fulfilled' ? result.value : null;
     if (storm && !storms.some((held) => held.id === storm.id))
       storms.push(storm);
+  }
   return storms;
 }

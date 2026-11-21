@@ -275,6 +275,8 @@ export function cycloneProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
   timeoutMs = 12_000,
+  // JTWC's own deadline, inside NHC's: a slow JTWC never holds NHC's answer.
+  jtwcTimeoutMs = 8_000,
   readJtwc = readJtwcStorms,
 } = {}) {
   let cache = null;
@@ -325,26 +327,41 @@ export function cycloneProxy({
       ? readResponseBytesCapped(response, 4 * 1024 * 1024, signal)
       : readResponseTextCapped(response, 256 * 1024, signal);
   }
+  /**
+   * JTWC's storms, read under their own deadline. A read that fails or runs
+   * out of time gives JTWC's last good storms still usable, so it never fails,
+   * delays past its deadline or stales NHC's answer.
+   */
   async function jtwc(signal) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(abort, jtwcTimeoutMs);
     try {
-      const storms = await readJtwc(
-        (url, kind) => jtwcRead(url, kind, signal),
-        now(),
-      );
-      jtwcCache = { storms, fetchedAt: now() };
-      return { storms, stale: false };
-    } catch (error) {
-      if (signal.aborted) throw error;
-      const usable = (jtwcCache?.storms || []).filter(
+      const storms = await Promise.race([
+        readJtwc((url, kind) => jtwcRead(url, kind, controller.signal), now()),
+        new Promise((_, reject) =>
+          controller.signal.addEventListener(
+            'abort',
+            () => reject(new Error('jtwc_timeout')),
+            { once: true },
+          ),
+        ),
+      ]);
+      jtwcCache = storms;
+      return storms;
+    } catch {
+      return (jtwcCache || []).filter(
         (storm) => now() - Date.parse(storm.issuedAt) <= JTWC_USABLE_MS,
       );
-      return { storms: usable, stale: true };
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
     }
   }
   async function refresh(signal) {
-    // JTWC is read beside NHC; an NHC failure leaves it unawaited.
+    // JTWC is read beside NHC and never rejects.
     const pendingJtwc = jtwc(signal);
-    pendingJtwc.catch(() => {});
     let storms = parseCycloneStatus(
       await upstream(STATUS_URL, 128 * 1024, signal),
       now(),
@@ -387,10 +404,10 @@ export function cycloneProxy({
     const listed = new Set(storms.map((storm) => storm.id));
     storms = [
       ...storms,
-      ...fromJtwc.storms.filter((storm) => !listed.has(storm.id)),
+      ...fromJtwc.filter((storm) => !listed.has(storm.id)),
     ].slice(0, 32);
     signal.throwIfAborted();
-    cache = { storms, fetchedAt: now(), stale: fromJtwc.stale };
+    cache = { storms, fetchedAt: now() };
     return cache;
   }
   async function acquire(signal) {
@@ -429,7 +446,6 @@ export function cycloneProxy({
     }
   }
   function describe(value, stale = false) {
-    stale = stale || Boolean(value?.stale);
     return {
       schemaVersion: 1,
       source: SOURCE,

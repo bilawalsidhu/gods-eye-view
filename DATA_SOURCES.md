@@ -724,9 +724,11 @@ This implementation is original; those contributions have not been merged here.
   danger area is the swath of 34-knot winds widened by forecast track error, drawn as its own
   area and never as a cone; it comes only from the overlay of the same warning number, and the
   geometry waits for it.
-- **Delivery:** read in `/api/cyclones` beside NHC, bounded bodies, no redirects. A warning is
-  usable for 13 hours after issuance (some storms are on 12-hourly warnings); a failed read keeps
-  JTWC's last storms, marked stale.
+- **Delivery:** read in `/api/cyclones` beside NHC under its own 8-second deadline, bounded
+  bodies, no redirects. A warning is usable for 13 hours after issuance (some storms are on
+  12-hourly warnings). A storm whose warning cannot be read is left out and the others shown; a
+  failed or slow JTWC read keeps JTWC's last good storms and never delays or stales NHC's. Swath
+  longitudes past ±180 (a ring crossing the antimeridian) are wrapped, not dropped.
 
 ### Weather: observed lightning density
 
