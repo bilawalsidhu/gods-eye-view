@@ -12,6 +12,8 @@ import { createPinia } from 'pinia';
 import { useNavControlStore } from '../stores/navControl.js';
 import { readCameraTargetFrame } from '../cameraOrientationControls.js';
 import { TOP_DOWN_PITCH } from './navMath.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeSceneFrame, fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
 
 const DEG = Math.PI / 180;
 const GROUND = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 0);
@@ -35,7 +37,6 @@ function createViewer({ pick = GROUND, ground = GROUND } = {}) {
   };
   const camera = new Cesium.Camera(scene);
   scene.camera = camera;
-  camera.getPickRay = () => ({});
   camera.pickEllipsoid = () => ground;
   const viewer = {
     camera,
@@ -43,7 +44,10 @@ function createViewer({ pick = GROUND, ground = GROUND } = {}) {
     trackedEntity: undefined,
     trackedEntityChanged: new Cesium.Event(),
   };
-  return viewer;
+  return bindFakeCesiumCamera(viewer, {
+    query: fakeSceneQuery(viewer),
+    frame: fakeSceneFrame(viewer),
+  });
 }
 
 function orbit(viewer, { heading = 30, pitch = -45, range = 1_000 } = {}) {
