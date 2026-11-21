@@ -28,8 +28,20 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .hud-readout:has(> #hud-mode) {
     display: none;
   }
+  /* The globe actions sit on the title row, level with the title, with the
+     loading line under them (status.css). Narrower, where the row would reach
+     the title, they drop to the HUD's top rows and the loading line drops
+     with them, so it never covers the actions. */
   #top-center-actions {
-    top: clamp(86px, 9.55vh, 108px);
+    top: 32px;
+  }
+  @media (max-width: 1179px) {
+    #top-center-actions {
+      top: clamp(86px, 9.55vh, 108px);
+    }
+    #global-loading-status {
+      top: calc(clamp(86px, 9.55vh, 108px) + 42px);
+    }
   }
   #left-panel-stack.layout-focus {
     bottom: var(--left-stack-safe-bottom, 4vh);
