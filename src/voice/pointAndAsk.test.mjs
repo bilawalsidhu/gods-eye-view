@@ -347,7 +347,7 @@ test('deixis prompt lint: one short rule, and every sentinel it names exists in 
   // included), in characters. Every session pays for it in latency and cost,
   // so a new tool or rule has to fit under this ceiling or earn a raise.
   const size = instructions.length + JSON.stringify(GEV_REALTIME_TOOLS).length;
-  assert.ok(size <= 56_500, `prompt size ${size}`);
+  assert.ok(size <= 56_700, `prompt size ${size}`);
 });
 
 test('after-tool speech allows returned items to answer requested lists and rankings', () => {

@@ -63,9 +63,16 @@ const LOCAL_STEM_TIP_EPSILON_SQ = LOCAL_STEM_TIP_EPSILON_M ** 2;
  * Build the owner-approved local-infrastructure card copy.
  * @param {object} properties Unwrapped GeoJSON feature properties.
  * @param {string} layerId Local layer id.
+ * @param {function(object):string[]|null} [cardDetails] A layer's own detail
+ *   lines for a feature, when it is not one of the built-in layers. A hook
+ *   that returns anything but an array (null, undefined) adds no lines.
  * @returns {{title:string,details:string[]}}
  */
-export function localInfrastructureOverlayCopy(properties, layerId) {
+export function localInfrastructureOverlayCopy(
+  properties,
+  layerId,
+  cardDetails = null,
+) {
   const props = unwrapProperties(properties) || {};
   const tags = props.tags || {};
   const title = featureLabelFromProperties(props, layerId);
@@ -110,6 +117,11 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
       const clean = cleanLabel(line);
       if (clean) details.push(clampCardLine(clean));
     }
+  } else if (typeof cardDetails === 'function') {
+    const lines = cardDetails(props);
+    if (Array.isArray(lines)) {
+      for (const line of lines) details.push(clampCardLine(line));
+    }
   }
 
   return { title, details };
@@ -126,6 +138,8 @@ export function localInfrastructureOverlayCopy(properties, layerId) {
  * @param {object} options.properties Unwrapped feature properties.
  * @param {number} options.priority Source-owned importance score.
  * @param {string} options.accent Source accent color.
+ * @param {function(object):string[]|null} [options.cardDetails] The layer's
+ *   own detail lines for a feature (see localInfrastructureOverlayCopy).
  * @returns {object}
  */
 export function createLocalInfrastructureOverlayEntry({
@@ -135,8 +149,9 @@ export function createLocalInfrastructureOverlayEntry({
   properties,
   priority,
   accent,
+  cardDetails = null,
 }) {
-  const copy = localInfrastructureOverlayCopy(properties, layerId);
+  const copy = localInfrastructureOverlayCopy(properties, layerId, cardDetails);
   return createInfrastructureOverlayEntry({
     id,
     source: layerId,
@@ -538,7 +553,19 @@ export function createLocalGeoJsonLayer(
     labels = true,
     labelMax = DEFAULT_LABEL_MAX,
     labelGridPx = DEFAULT_LABEL_GRID_PX,
+    /**
+     * Optional loader `({ signal, viewer }) => Promise<object[]>` used instead
+     * of fetching `url`. `cacheLoadedFeatures: false` keeps its result out of
+     * the cross-enable cache so viewport-driven layers can call `reload()`.
+     */
     loadFeatures = null,
+    cacheLoadedFeatures = true,
+    /**
+     * Optional `(properties) => string[]|null` giving the detail lines of a
+     * feature's card, for layers whose cards show more than a name; a hook
+     * that returns nothing leaves the card with its title alone.
+     */
+    cardDetails = null,
     featureColor = null,
     inputFor = defaultInputFor,
     projectToWindow = (viewer, position) =>
@@ -580,6 +607,8 @@ export function createLocalGeoJsonLayer(
   let _destroyed = false;
   let _loadPromise = null;
   let _loadController = null;
+  /** A reload() requested while a load was in flight. */
+  let _reloadQueued = false;
   /**
    * The parsed bundled dataset, kept across disable/enable so a re-enable
    * rebuilds its sets without refetching. The sets themselves are NOT kept:
@@ -663,6 +692,19 @@ export function createLocalGeoJsonLayer(
     clearTimeout(_groundRetryTimer);
     _groundRetryTimer = null;
   }
+  /** The overlay card for a stem record, worded from its own properties. */
+  const buildCardEntry = (record) =>
+    labels
+      ? createLocalInfrastructureOverlayEntry({
+          id: record.id,
+          layerId: id,
+          position: record.tip,
+          properties: record.properties,
+          priority: record.priority,
+          accent: record.accent,
+          cardDetails,
+        })
+      : null;
   const _overlayPublisher = createLocalInfrastructureOverlayPublisher({
     sourceId: id,
     host: overlayHost,
@@ -857,17 +899,9 @@ export function createLocalGeoJsonLayer(
           priority,
           properties,
           rgba: own.rgba,
+          accent: own.css,
           visible: true,
-          entry: labels
-            ? createLocalInfrastructureOverlayEntry({
-                id: recordId,
-                layerId: id,
-                position: tip,
-                properties,
-                priority,
-                accent: own.css,
-              })
-            : null,
+          entry: null,
           context: {
             id: `${id}:${recordId}`,
             layerId: id,
@@ -882,6 +916,7 @@ export function createLocalGeoJsonLayer(
             targetPosition: base,
           },
         };
+        record.entry = buildCardEntry(record);
         carrier.record = record;
         // A context record is active while its feature shows.
         Object.defineProperty(carrier, 'show', {
@@ -952,7 +987,7 @@ export function createLocalGeoJsonLayer(
     );
   }
 
-  return {
+  const layer = {
     id,
     name,
     icon,
@@ -1058,11 +1093,12 @@ export function createLocalGeoJsonLayer(
                 // its own live dataset; this layer only draws it.
                 features = await loadFeatures({
                   signal: _loadController.signal,
+                  viewer,
                 });
                 if (_destroyed) return;
                 if (!Array.isArray(features))
                   throw new Error('dataset unavailable');
-                _cachedFeatures = features;
+                if (cacheLoadedFeatures) _cachedFeatures = features;
               } else if (!features) {
                 const response = await fetch(url, {
                   signal: _loadController.signal,
@@ -1476,6 +1512,44 @@ export function createLocalGeoJsonLayer(
       findFrame(viewer)?.requestRender('local-geojson');
     },
 
+    /**
+     * Word every card again from the features already loaded, with no
+     * request: the `cardDetails` hook runs once more and the next frame
+     * publishes the new cards. For a caller that words card text in a
+     * language that has just changed. Does nothing while the layer holds no
+     * loaded features (disabled, still loading, destroyed).
+     */
+    refreshCards: () => {
+      if (_destroyed || !_enabled || !labels || _stemRecords.length === 0)
+        return;
+      for (const record of _stemRecords) record.entry = buildCardEntry(record);
+      _lastVisibilityUpdate = Number.NEGATIVE_INFINITY;
+      governorRequestRender(`local-cards:${id}`);
+    },
+
+    /**
+     * Rebuild entities from a fresh `loadFeatures()` call while the
+     * layer stays enabled (viewport layers call this on camera settle). A
+     * reload while a load is in flight is coalesced into one follow-up.
+     * @param {object} viewer
+     * @returns {Promise<void>}
+     */
+    reload: async (viewer) => {
+      if (_destroyed || !_enabled) return;
+      if (_loadPromise) {
+        _reloadQueued = true;
+        return;
+      }
+      releaseDrawn();
+      _cachedFeatures = null;
+      await layer.enable(viewer);
+      if (_reloadQueued && _enabled && !_destroyed) {
+        _reloadQueued = false;
+        releaseDrawn();
+        await layer.enable(viewer);
+      }
+    },
+
     destroy: (viewer) => {
       if (_destroyed) return;
       _destroyed = true;
@@ -1495,6 +1569,7 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  return layer;
 }
 
 /**

@@ -4538,5 +4538,19 @@
   "JTWC warning ↗": "Aviso do JTWC ↗",
   "Active cyclone advisories and warnings": "Boletins e avisos de ciclones ativos",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Selecione uma tempestade no mapa ou escolha uma na lista para selecioná-la e mover a câmera. Clique em uma área vazia do mapa para limpar a seleção. Boletins da NOAA NHC/CPHC e avisos do JTWC. O cone do NHC descreve a incerteza da trajetória prevista do centro, não o tamanho da tempestade nem toda a área de perigo. A área de perigo de 34 nós do JTWC é onde ventos de 34 nós podem chegar, ampliada pelo erro da previsão de trajetória; não é um cone. Os rótulos dos pontos de previsão são horas de antecedência da fonte, não horários calculados a partir da emissão. A geometria acompanha a superfície; a altura não é altitude meteorológica. Consulte o boletim oficial ou o centro de alertas regional.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Aviso {number} · emitido {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Aviso {number} · emitido {time}",
+  "USGS Lakes & Reservoirs": "USGS: lagos e reservatórios",
+  "Water": "Água",
+  "USGS Rivers & Streams": "USGS: rios e riachos",
+  "Zoom in to a region to load river gauges": "Aproxime uma região para carregar os medidores de rios",
+  "USGS Springs": "USGS: nascentes",
+  "Discharge": "Vazão",
+  "USGS Water Data · refreshed hourly": "Dados hídricos do USGS · atualizados a cada hora",
+  "as of {time}": "em {time}",
+  "Gage height": "Altura linimétrica",
+  "Lake elevation above NGVD29": "Elevação do lago acima do NGVD29",
+  "Reading": "Leitura",
+  "Lake elevation above NAVD88": "Elevação do lago acima do NAVD88",
+  "Lake/reservoir stage": "Nível do lago/reservatório",
+  "No current reading": "Sem leitura atual"
 }
