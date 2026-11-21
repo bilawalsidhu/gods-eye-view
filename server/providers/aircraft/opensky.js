@@ -637,6 +637,18 @@ export function openSkyProxy() {
 
             const { upstream, body } = await fetchOpenSkyStates(headers);
 
+            // A token OpenSky rejects stays rejected: drop it so the next poll
+            // requests a fresh one instead of replaying it until it expires.
+            // The identity check spares a token a concurrent refresh installed.
+            if (
+              upstream.status === 401 &&
+              usedMode === 'oauth' &&
+              headers.Authorization === `Bearer ${_openskyToken}`
+            ) {
+              _openskyToken = null;
+              _openskyTokenExpiry = 0;
+            }
+
             const sourceEpochMs = upstream.ok
               ? openSkySourceEpochMs(body)
               : null;

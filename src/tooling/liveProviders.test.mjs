@@ -810,6 +810,56 @@ test('OpenSky auto mode never falls back to Basic, even when OAuth is rejected',
   assert.deepEqual(authorizations, ['Bearer fixture-token']);
 });
 
+test('OpenSky discards an OAuth token the snapshot rejects, so the next poll signs in again', async (t) => {
+  environment(t, {
+    OPENSKY_CLIENT_ID: 'fixture-client',
+    OPENSKY_CLIENT_SECRET: 'fixture-secret',
+    OPENSKY_CREDENTIALS_FILE: undefined,
+    OPENSKY_AUTH_MODE: 'oauth',
+    OPENSKY_USERNAME: undefined,
+    OPENSKY_PASSWORD: undefined,
+  });
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'error', () => {});
+  let issued = 0;
+  const authorizations = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (url.includes('/token'))
+      return Response.json({
+        access_token: `fixture-token-${++issued}`,
+        expires_in: 1800,
+      });
+    if (url.includes('/states/')) {
+      authorizations.push(options.headers.Authorization);
+      // The first token was revoked upstream; only its replacement works.
+      return options.headers.Authorization === 'Bearer fixture-token-1'
+        ? new Response('', { status: 401 })
+        : Response.json({ time: Math.floor(Date.now() / 1000), states: [] });
+    }
+    if (url.includes('/lat/')) return new Response('', { status: 503 });
+    throw Error(`Unexpected URL: ${url}`);
+  });
+  const fresh = await import(
+    `../../server/providers/aircraft/opensky.js?rejected-token=${Math.random()}`
+  );
+  const route = install(fresh.openSkyProxy());
+  const rejected = await route('/api/flights');
+  assert.equal(rejected.statusCode, 401);
+  assert.equal(
+    rejected.headers['x-opensky-auth-reason'],
+    'oauth_invalid_credentials',
+  );
+  const recovered = await route('/api/flights');
+  assert.equal(recovered.statusCode, 200);
+  assert.equal(recovered.headers['x-opensky-auth-reason'], 'oauth_ok');
+  assert.deepEqual(authorizations, [
+    'Bearer fixture-token-1',
+    'Bearer fixture-token-2',
+  ]);
+  assert.equal(issued, 2);
+});
+
 test('retired military history refuses without upstream I/O while validating identifiers', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     assert.fail('retired history must not contact the upstream');
