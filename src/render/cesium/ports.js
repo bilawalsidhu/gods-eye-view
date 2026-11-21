@@ -89,6 +89,8 @@ export function cesiumCapabilities(scene, only) {
     ...(scene?.context?.floatingPointTexture
       ? ['lineAgeFade', 'lineTimeWindow']
       : []),
+    // Lines in runs, a piece a run (`draw.js`).
+    'lineBreaks',
     'followFrame',
     'pointVisibility',
     // Cesium's AUTODETECT tracking frame (`follow.js`).

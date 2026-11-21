@@ -81,6 +81,7 @@
   "src/queries/heights.test.mjs",
   "src/render/cesium/heights.test.mjs",
   "src/render/cesium/drawLineAges.test.mjs",
+  "src/render/cesium/drawLineBreaks.test.mjs",
   "docs/CODE-BOUNDARIES.md",
   "src/main.js",
   "docs/APPLICATION.md",

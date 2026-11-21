@@ -3628,6 +3628,127 @@ export function portChecks() {
       { capability: 'lineTimeWindow' },
     ),
     check(
+      'draw.lines.breaks',
+      'a line in runs, draped or not, draws and picks each run, in its segment colours, and nothing between them',
+      async (h, r) => {
+        await overAustin(h, r);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-breaks' });
+        // Two runs, west and east, the second starting at position 2: the
+        // pair from position 1 to 2, across the break, is not drawn.
+        const lons = [-0.004, -0.002, 0.001, 0.004];
+        const line = (id, dLat, mode, segmentColors) => ({
+          id,
+          positions: lons.map((dLon) =>
+            at(dLon, dLat, mode === 'draped' ? 0 : 20),
+          ),
+          breaks: [2],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          ...(segmentColors
+            ? {
+                // The pair across the break has a colour, ignored.
+                segmentColors: [
+                  [1, 0, 0, 1],
+                  [0, 1, 0, 1],
+                  [0, 0, 1, 1],
+                ],
+              }
+            : {}),
+        });
+        const kinds = [
+          ['3d', 0.003, false],
+          ['draped', 0.001, false],
+          ['3d coloured', -0.001, true],
+          ['draped coloured', -0.003, true],
+        ];
+        const lat = new Map(kinds.map(([what, dLat]) => [what, dLat]));
+        lines.set(
+          kinds.map(([what, dLat, coloured]) =>
+            line(
+              what,
+              dLat,
+              what.startsWith('draped') ? 'draped' : '3d',
+              coloured,
+            ),
+          ),
+        );
+        const where = (what, dLon) =>
+          at(dLon, lat.get(what), what.startsWith('draped') ? 0 : 20);
+        // The colour drawn there, strongly: 'r', 'g', 'b', or null.
+        const colour = (what, dLon) => {
+          r.frame.renderNow();
+          const s = r.query.project(where(what, dLon));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, green, blue] = image.data;
+          if (red > green + 80 && red > blue + 80) return 'r';
+          if (green > red + 80 && green > blue + 80) return 'g';
+          if (blue > red + 80 && blue > green + 80) return 'b';
+          return null;
+        };
+        const picked = (what, dLon) => {
+          const s = r.query.project(where(what, dLon));
+          ok(s, `${what} projects`);
+          return r.query
+            .drillPick(s.x, s.y)
+            .filter((hit) => hit.set === 'conf:line-breaks')
+            .map((hit) => hit.id);
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, , coloured] of kinds) {
+            deepEqual(
+              picked(what, -0.003),
+              [what],
+              `${what}: its first run picks`,
+            );
+            deepEqual(
+              picked(what, -0.0005),
+              [],
+              `${what}: nothing between its runs`,
+            );
+            deepEqual(
+              picked(what, 0.0025),
+              [what],
+              `${what}: its second run picks`,
+            );
+            if (h.pixels === false) continue;
+            equal(
+              colour(what, -0.003),
+              coloured ? 'r' : 'g',
+              `${what}: its first run drawn`,
+            );
+            equal(
+              colour(what, -0.0005),
+              null,
+              `${what}: nothing drawn between its runs`,
+            );
+            equal(
+              colour(what, 0.0025),
+              coloured ? 'b' : 'g',
+              `${what}: its second run drawn`,
+            );
+          }
+          equal(lines.size(), kinds.length, 'one item a line');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineBreaks' },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {

@@ -604,6 +604,33 @@ function checkAgeFade(item) {
 }
 
 /**
+ * A line's `breaks`, checked: strictly increasing whole position indices,
+ * each past the first position and within the line (`0 < i < count`).
+ * Refused otherwise.
+ * @param {import('../contract/draw').LineItem} item
+ */
+function checkBreaks(item) {
+  const breaks = item.breaks;
+  if (breaks == null) return;
+  const count =
+    item.positions instanceof Float64Array
+      ? item.positions.length / 3
+      : item.positions.length;
+  let previous = 0;
+  const fits =
+    (Array.isArray(breaks) || breaks instanceof Uint32Array) &&
+    Array.prototype.every.call(breaks, (at) => {
+      const ok = Number.isInteger(at) && at > previous && at < count;
+      previous = at;
+      return ok;
+    });
+  if (!fits)
+    throw new TypeError(
+      'a line breaks at whole, increasing position indices after its first position and before its end',
+    );
+}
+
+/**
  * The `flow` lines' clock, seconds, for a line flowing at `speed` cells a
  * second: wrapped to one cell's time, which draws the same dashes, so the
  * single-precision uniform never runs out of digits over a long session.
@@ -683,6 +710,8 @@ export function createCesiumDraw({
   const ageFades = capabilities.has('lineAgeFade');
   // And draw only within a span of the scene clock (`LineAgeFade.showMs`).
   const timeWindows = ageFades && capabilities.has('lineTimeWindow');
+  // And as several runs, not joined across their breaks (`LineItem.breaks`).
+  const lineBreaks = capabilities.has('lineBreaks');
   // Fields share the sets' ids.
   const fieldPart = createCesiumFields({
     scene,
@@ -772,6 +801,7 @@ export function createCesiumDraw({
           if (item.style?.kind === 'split' && item.mode !== 'draped')
             throw new TypeError('a split line is draped');
           if (ageFades) checkAgeFade(item);
+          if (lineBreaks) checkBreaks(item);
         }
       if (kind !== 'shapes') return;
       for (const item of list) pulseOf(item);
@@ -3048,7 +3078,47 @@ export function createCesiumDraw({
         !revealed(item) &&
         !aged(item)
       )) ||
-    (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail);
+    (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail) ||
+    // A line in runs with no segments of its own: a piece a run.
+    (broken(item) && !segmented(item));
+
+  /** Whether a line is drawn in runs, not joined across its breaks. */
+  const broken = (item) =>
+    lineBreaks && item.breaks != null && item.breaks.length > 0;
+
+  /** The positions that start a run of a line in runs, or null. */
+  const runStarts = (item) => (broken(item) ? new Set(item.breaks) : null);
+
+  /**
+   * Where a line drawn piece by piece is cut into pieces, by position
+   * index: `[a, b]` from position `a` to `b`, `j` its segment (its pair of
+   * positions, for its colour and show), `last` whether it ends its run (an
+   * arrow's head is drawn there). A segmented line has a piece a segment,
+   * but for those across a break; one in runs a piece a run; any other one
+   * piece. A run of one position draws nothing, and has no piece.
+   */
+  function pieceSpans(item, count, bySegment) {
+    const starts = runStarts(item);
+    const spans = [];
+    if (bySegment) {
+      for (let j = 0; j + 1 < count; j++)
+        if (!starts?.has(j + 1))
+          spans.push({
+            a: j,
+            b: j + 1,
+            j,
+            last: j + 2 >= count || Boolean(starts?.has(j + 2)),
+          });
+      return spans;
+    }
+    if (!starts) return [{ a: 0, b: count - 1, j: 0, last: true }];
+    let a = 0;
+    for (const at of [...starts, count]) {
+      if (at - 1 > a) spans.push({ a, b: at - 1, j: -1, last: true });
+      a = at;
+    }
+    return spans;
+  }
 
   /**
    * The style a segment of a line draws in: the line's, in the segment's
@@ -3067,11 +3137,14 @@ export function createCesiumDraw({
    * A line drawn piece by piece: a segment a piece for a segmented line
    * (each its own primitive and material, under a pick id of its own that
    * reads as the line's, so a segment's colour and show change in place),
-   * else one piece for the whole line. A revealed line reveals each piece
-   * by its share of the line's length. Draped pieces are ground polylines.
-   * Inertial pieces turn with the sky (`turnInertial`).
+   * a run a piece for a line in runs (`pieceSpans`), else one piece for
+   * the whole line. A revealed line reveals each piece by its share of the
+   * line's length. Draped pieces are ground polylines; the undraped pieces
+   * of a line in runs with no depth-fail style, in the Earth's frame, are
+   * polylines in the set's collection (`polylines`), the rest primitives
+   * in `host`. Inertial pieces turn with the sky (`turnInertial`).
    */
-  function linePieces(record, item, host, groundOut) {
+  function linePieces(record, item, host, groundOut, polylines) {
     const id = pickId(record, item);
     // Its own positions: a geodesic piece is cut along its arc as it is drawn.
     const points = linePositions({ ...item, mode: '3d' });
@@ -3084,21 +3157,30 @@ export function createCesiumDraw({
       pieces: [],
     };
     const bySegment = segmented(item);
-    const spans = bySegment
-      ? points.slice(1).map((_, j) => [j, j + 1])
-      : [[0, points.length - 1]];
-    const lengths = spans.map(([a, b]) => {
+    const spans = pieceSpans(item, points.length, bySegment);
+    const lengths = spans.map(({ a, b }) => {
       let length = 0;
       for (let k = a; k < b; k++)
         length += Cesium.Cartesian3.distance(points[k], points[k + 1]);
       return length;
     });
+    // The revealed length runs along the pieces, the gaps between runs
+    // having none.
     const total = lengths.reduce((sum, length) => sum + length, 0);
+    // Several pieces of one line: each under a pick id of its own that
+    // reads as the line's.
+    const several = bySegment || spans.length > 1;
+    // Runs of a line drawn in the collection, as a line of one run is.
+    const inCollection =
+      broken(item) &&
+      item.mode !== 'draped' &&
+      !item.depthFail &&
+      item.frame !== 'inertial';
     let start = 0;
-    spans.forEach(([a, b], j) => {
+    spans.forEach(({ a, b, j, last }, k) => {
       const positions = points.slice(a, b + 1);
       const begins = start;
-      start += lengths[j];
+      start += lengths[k];
       if (!drawable(positions)) {
         part.pieces.push(null);
         return;
@@ -3109,16 +3191,16 @@ export function createCesiumDraw({
             1,
             Math.max(
               0,
-              (item.revealFraction * total - begins) / (lengths[j] || 1),
+              (item.revealFraction * total - begins) / (lengths[k] || 1),
             ),
           )
         : 1;
-      const pieceId = bySegment ? Object.create(id) : id;
-      if (bySegment) record.pickIds.push(pieceId);
+      const pieceId = several ? Object.create(id) : id;
+      if (several) record.pickIds.push(pieceId);
       const sub = {
         ...item,
         positions,
-        style: pieceStyle(item, j, j === spans.length - 1),
+        style: pieceStyle(item, j, last),
         ...(revealed(item) && shown < 1 ? { revealFraction: shown } : {}),
         // Its own points' times.
         ...(aged(item)
@@ -3130,6 +3212,7 @@ export function createCesiumDraw({
             }
           : {}),
       };
+      delete sub.breaks;
       if (!(revealed(item) && shown < 1)) delete sub.revealFraction;
       const draped = item.mode === 'draped';
       const showing = pieceShows(item, j, shown);
@@ -3138,17 +3221,33 @@ export function createCesiumDraw({
       // would never show. Showing it later needs no build.
       const primitive = draped
         ? groundPiece(record, sub, pieceId, true)
-        : depthFailLine(record, sub, pieceId);
+        : inCollection
+          ? addPolyline(record, polylines, sub, pieceId).polyline
+          : depthFailLine(record, sub, pieceId);
       if (!draped) primitive.show = showing;
       // Ground pieces swap in with the set's other ground primitives.
       if (draped) groundOut.push(primitive);
-      else host.add(primitive);
+      else if (!inCollection) host.add(primitive);
       if (item.frame === 'inertial' && item.mode !== 'draped')
         (record.inertialPieces ??= []).push(primitive);
+      // Drawn over the surface for a draped line: hidden past the horizon
+      // (`cullOverlayLines`), as a line of one run is.
+      const overlay =
+        item.overlaid && record.overlayLines
+          ? {
+              part: { deep: primitive },
+              shown: showing,
+              ends: overlayEnds(positions),
+            }
+          : undefined;
+      if (overlay) record.overlayLines.push(overlay);
       part.pieces.push({
         primitive,
+        // The collection it is drawn in, for a polyline there.
+        home: inCollection ? polylines : null,
+        overlay,
         j,
-        last: j === spans.length - 1,
+        last,
         shown,
         draped,
         id: pieceId,
@@ -3157,6 +3256,9 @@ export function createCesiumDraw({
     });
     return part;
   }
+
+  /** Whether a piece of a line is gone (with its viewer, say). */
+  const pieceGone = (piece) => (piece.home ?? piece.primitive).isDestroyed();
 
   /** Whether a piece shows: its line, its segment and some of it revealed. */
   const pieceShows = (item, j, shown = 1) =>
@@ -3196,12 +3298,15 @@ export function createCesiumDraw({
   /** A pieced line's colours and shows, written in place. */
   function writePieces(part, item) {
     for (const piece of part.pieces) {
-      if (!piece || piece.primitive.isDestroyed()) continue;
+      if (!piece || pieceGone(piece)) continue;
       const style = pieceStyle(item, piece.j, piece.last);
-      const material = piece.primitive.appearance.material;
+      const material = piece.home
+        ? piece.primitive.material
+        : piece.primitive.appearance.material;
       if (style.kind !== 'pattern') paintLine(material, style);
       const show = pieceShows(item, piece.j, piece.shown);
-      if (!piece.draped) piece.primitive.show = show;
+      if (piece.overlay) piece.overlay.shown = show;
+      else if (!piece.draped) piece.primitive.show = show;
       else if (piece.primitive.ready) {
         showOn(piece.primitive, piece.id, show);
         piece.pendingShow = undefined;
@@ -3235,6 +3340,11 @@ export function createCesiumDraw({
       if (first < 0) line.show = false;
       else if (first > 0 || last < segmentShow.length - 1) {
         line.positions = linePositions(item).slice(first, last + 2);
+        // Its runs' starts, among the positions it keeps.
+        if (broken(item))
+          line.breaks = Array.from(item.breaks)
+            .filter((at) => at > first && at < last + 2)
+            .map((at) => at - first);
         if (item.ageFade)
           line.ageFade = {
             ...item.ageFade,
@@ -3390,7 +3500,10 @@ export function createCesiumDraw({
     for (const item of items) {
       if (piecewise(item)) {
         if (item.mode !== 'draped') pieces ??= new Cesium.PrimitiveCollection();
-        parts.set(item.id, linePieces(record, item, pieces, groundPieces));
+        parts.set(
+          item.id,
+          linePieces(record, item, pieces, groundPieces, polylines),
+        );
         continue;
       }
       if (item.mode === 'draped') {
@@ -3626,6 +3739,8 @@ export function createCesiumDraw({
       item.segmentShow != null,
       revealed(item),
       item.frame,
+      // Where its runs start.
+      broken(item) ? Array.from(item.breaks) : null,
       // How it fades with age (its times change with its positions).
       aged(item)
         ? [
@@ -3652,6 +3767,7 @@ export function createCesiumDraw({
     (a.segmentShow != null) === (b.segmentShow != null) &&
     revealed(a) === revealed(b) &&
     a.frame === b.frame &&
+    (broken(a) ? a.breaks : null) === (broken(b) ? b.breaks : null) &&
     sameAgeLook(a, b);
 
   /** Whether two lines fade with age alike, but for their times. */
@@ -3864,7 +3980,7 @@ export function createCesiumDraw({
           !flatEquals(item.positions, was.from) ||
           !sameTimes(item, was.ageFrom) ||
           item.revealFraction !== was.reveal ||
-          was.pieces.some((piece) => piece?.primitive.isDestroyed())
+          was.pieces.some((piece) => piece && pieceGone(piece))
         )
           return false;
         looks.push(was.look);
@@ -4025,6 +4141,8 @@ export function createCesiumDraw({
     item.mode !== 'draped' &&
     item.frame !== 'inertial' &&
     !item.depthFail &&
+    // A line in runs draws a piece a run.
+    !broken(item) &&
     // A batch draws one colour per line, unfaded.
     !aged(item) &&
     item.style.kind === 'solid' &&
@@ -4475,10 +4593,15 @@ export function createCesiumDraw({
   function segmentInstances(record, item, part) {
     const points = linePositions(item);
     const instances = [];
+    const starts = runStarts(item);
     part.segments = [];
     part.drawn = [];
     for (let j = 0; j + 1 < points.length; j++) {
-      if (Cesium.Cartesian3.equals(points[j], points[j + 1])) {
+      // Nothing across a break, between two runs.
+      if (
+        starts?.has(j + 1) ||
+        Cesium.Cartesian3.equals(points[j], points[j + 1])
+      ) {
         part.segments.push(null);
         part.drawn.push(null);
         continue;

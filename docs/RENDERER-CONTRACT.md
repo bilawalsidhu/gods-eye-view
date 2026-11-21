@@ -149,6 +149,29 @@ optional:
   A renderer without the capability draws the whole line. The Cesium port
   lists it with `lineAgeFade` and discards by time in the same material;
   the check `draw.lines.timeWindow` covers it, draped and not.
+- `LineItem.breaks` (capability `lineBreaks`, `LineBreaks`) draws one line
+  as several runs, so many lines that share one style can be sent as one
+  item: thousands of moving objects' trails as one line, say, which the
+  renderer then handles as one item instead of thousands. Each break is the
+  index `i` of a position that starts a new run, sorted, with
+  `0 < i < positions.length`; the segment from position `i - 1` to `i` is
+  not drawn nor picked, and the line does not join across it: each run has
+  two ends of its own, capped and joined as a line of its own would be.
+  `segmentColors` and `segmentShow` stay one a pair of neighbouring
+  positions (`j`, from position `j` to `j + 1`), so the entry of a pair
+  across a break is ignored; `ageFade.times` stays one a position; and
+  `revealFraction` runs along all the runs, in order, as one length (the
+  gaps have none). It is an optimisation: a renderer without it is never
+  sent `breaks`, and is sent the same lines as an item a run instead,
+  drawing the same picture. The Cesium port lists it and draws a line
+  in runs a piece a run (a polyline each in the set's collection, undraped;
+  a ground polyline each, draped; a primitive each with a depth-fail style
+  or in the sky's frame), each taking its own points' times, share of the
+  reveal and segment colours, and picked as the line. A draped solid line
+  with segment colours stays one ground instance a segment, none across a
+  break. Colours and shows change in place; new positions, times, reveal or
+  breaks draw the line anew. The check `draw.lines.breaks` covers it,
+  draped and not, with segment colours and without.
 - A solid line's `outline.widthPx` is the outline's whole width, half on
   each side, inside the line's own width: an 8 px line with a 4 px outline
   is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws

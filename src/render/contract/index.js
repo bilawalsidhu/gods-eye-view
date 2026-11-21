@@ -43,6 +43,7 @@ export const CAPABILITIES = Object.freeze([
   'courseGlide',
   'lineAgeFade',
   'lineTimeWindow',
+  'lineBreaks',
   'cluster',
   'styles',
   'bloom',
