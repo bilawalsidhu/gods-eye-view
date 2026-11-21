@@ -1,0 +1,45 @@
+{
+  "id": "brandenburg-berlin-dop20",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Digitale Orthophotos Brandenburg mit Berlin (DOP 20 cm)",
+  "provider": "LGB Brandenburg",
+  "description": "Aerial orthophotos at 20 cm ground resolution covering all of Brandenburg and Berlin, from the state survey's tiled open-data service.",
+  "icon": "▣",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["DE"],
+    "bbox": [11.22, 51.3, 14.78, 53.58]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://isk.geobasis-bb.de/mapproxy/dop20c/service/wms?service=WMS&request=GetMap&version=1.3.0&layers=bebb_dop20c&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/jpeg",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 8,
+    "maxZoom": 20,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true,
+    "noDataColor": "#ffffff"
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "20 cm",
+    "resolutionM": 0.2,
+    "trueOrtho": true
+  },
+  "licence": {
+    "name": "Datenlizenz Deutschland – Namensnennung – Version 2.0",
+    "url": "https://www.govdata.de/dl-de/by-2-0"
+  },
+  "attribution": {
+    "text": "© GeoBasis-DE/LGB, dl-de/by-2-0; © Geoportal Berlin, dl-de/by-2-0",
+    "url": "https://geobasis-bb.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

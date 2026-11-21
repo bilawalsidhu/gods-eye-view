@@ -1,0 +1,76 @@
+{
+  "id": "emodnet-offshore-wind-farm-sites",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "Offshore wind farm sites, European seas (EMODnet)",
+  "provider": "EMODnet",
+  "description": "About 630 offshore wind farms in European seas that EMODnet holds as points, most of them planned, with capacity in MW where known. Coloured by status. EMODnet's outlined farms, mostly different ones, are in the areas entry.",
+  "icon": "✣",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": [
+      "BE",
+      "DE",
+      "DK",
+      "EE",
+      "ES",
+      "FI",
+      "FR",
+      "GB",
+      "GR",
+      "IE",
+      "IT",
+      "LT",
+      "LV",
+      "MT",
+      "NL",
+      "NO",
+      "PL",
+      "PT",
+      "RO",
+      "SE"
+    ],
+    "bbox": [-18.1, 27.6, 29.8, 65.8]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://ows.emodnet-humanactivities.eu/wfs",
+    "query": {
+      "service": "WFS",
+      "version": "2.0.0",
+      "request": "GetFeature",
+      "typeName": "emodnet:windfarms",
+      "outputFormat": "application/json"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxBytes": 4194304,
+    "maxFeatures": 2000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "name",
+    "fields": ["power_mw", "n_turbines", "status", "country"],
+    "colorBy": {
+      "field": "status",
+      "colors": {
+        "Production": "#0ca30c",
+        "Construction": "#fab219",
+        "Approved": "#63b3ed",
+        "Planned": "#a0aec0",
+        "Test site": "#b794f4",
+        "Dismantled": "#718096"
+      }
+    }
+  },
+  "licence": {
+    "name": "CC BY 4.0 (EMODnet Human Activities)",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "attribution": {
+    "text": "EMODnet Human Activities (data originator CETMAR), CC BY 4.0",
+    "url": "https://emodnet.ec.europa.eu/en/human-activities"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

@@ -1,0 +1,102 @@
+{
+  "id": "dwd-rain-radar",
+  "kind": "tiles",
+  "family": "weather",
+  "title": "Rain radar, Germany (DWD)",
+  "provider": "DWD",
+  "description": "The DWD's radar composite (WN): reflectivity in dBZ on a 1 km grid, new every 5 minutes. Tiles keep the time step they loaded with: switch off and on to refresh. A magenta line marks the edge of radar range; the grey veil beyond is no data.",
+  "icon": "☂",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["DE"],
+    "bbox": [1.0, 45.3, 19.2, 56.6]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://maps.dwd.de/geoserver/dwd/wms?service=WMS&request=GetMap&version=1.3.0&layers=dwd:Radar_wn-analysis_1x1km_ger&styles=&crs=EPSG:3857&bbox={bbox-epsg-3857}&width=256&height=256&format=image/png&transparent=true",
+    "fetch": "browser-direct",
+    "cacheSeconds": 300,
+    "minZoom": 3,
+    "maxZoom": 10,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 0.8,
+    "legend": [
+      {
+        "label": "7–9.5 dBZ",
+        "color": "#99ffff"
+      },
+      {
+        "label": "9.5–12 dBZ",
+        "color": "#33ffff"
+      },
+      {
+        "label": "12–14.5 dBZ",
+        "color": "#00caca"
+      },
+      {
+        "label": "14.5–19 dBZ",
+        "color": "#009934"
+      },
+      {
+        "label": "19–23.5 dBZ",
+        "color": "#4dbf1a"
+      },
+      {
+        "label": "23.5–28 dBZ",
+        "color": "#99cc00"
+      },
+      {
+        "label": "28–32.5 dBZ",
+        "color": "#cce600"
+      },
+      {
+        "label": "32.5–37 dBZ",
+        "color": "#ffff00"
+      },
+      {
+        "label": "37–41.5 dBZ",
+        "color": "#ffc400"
+      },
+      {
+        "label": "41.5–46 dBZ",
+        "color": "#ff8900"
+      },
+      {
+        "label": "46–50.5 dBZ",
+        "color": "#ff0000"
+      },
+      {
+        "label": "50.5–55 dBZ",
+        "color": "#b40000"
+      },
+      {
+        "label": "55–60 dBZ",
+        "color": "#4848ff"
+      },
+      {
+        "label": "60–65 dBZ",
+        "color": "#0000ca"
+      },
+      {
+        "label": "65–75 dBZ",
+        "color": "#990099"
+      },
+      {
+        "label": "75–85 dBZ",
+        "color": "#ff33ff"
+      }
+    ]
+  },
+  "licence": {
+    "name": "CC BY 4.0 (DWD open geodata and geodata services)",
+    "url": "https://www.dwd.de/copyright"
+  },
+  "attribution": {
+    "text": "Quelle: Deutscher Wetterdienst",
+    "url": "https://www.dwd.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

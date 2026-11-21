@@ -1,0 +1,59 @@
+{
+  "id": "dwd-weather-warnings",
+  "kind": "dataset",
+  "family": "weather",
+  "title": "Weather warnings, Germany (DWD)",
+  "provider": "DWD",
+  "description": "DWD warnings and advance notices, running or announced, on merged municipality areas with start and end time, in German. Coloured by CAP severity; advance notices, heat and UV look like ordinary warnings. A wide view draws only part.",
+  "icon": "⚠",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["DE"],
+    "bbox": [5.8, 47.2, 15.1, 55.1]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://maps.dwd.de/geoserver/dwd/ows",
+    "query": {
+      "service": "WFS",
+      "version": "2.0.0",
+      "request": "GetFeature",
+      "typeName": "dwd:Warnungen_Gemeinden_vereinigt",
+      "outputFormat": "application/json"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 300,
+    "maxBytes": 16777216,
+    "maxFeatures": 3000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "EVENT",
+    "fields": ["ONSET", "EXPIRES"],
+    "colorBy": {
+      "field": "SEVERITY",
+      "colors": {
+        "Extreme": "#d03b3b",
+        "Severe": "#ec835a",
+        "Moderate": "#fab219",
+        "Minor": "#0ca30c"
+      },
+      "labels": {
+        "Extreme": "Extreme",
+        "Severe": "Severe",
+        "Moderate": "Moderate",
+        "Minor": "Minor"
+      }
+    }
+  },
+  "licence": {
+    "name": "CC BY 4.0 (DWD open geodata and geodata services)",
+    "url": "https://www.dwd.de/copyright"
+  },
+  "attribution": {
+    "text": "Quelle: Deutscher Wetterdienst; Warngebiete © GeoBasis-DE / BKG 2021 (Daten modifiziert)",
+    "url": "https://www.dwd.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

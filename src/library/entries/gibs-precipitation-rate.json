@@ -1,0 +1,76 @@
+{
+  "id": "gibs-precipitation-rate",
+  "kind": "tiles",
+  "family": "weather",
+  "title": "Global precipitation, half-hourly (NASA IMERG)",
+  "provider": "NASA GIBS",
+  "description": "Rain and snow rate worldwide from NASA's GPM IMERG multi-satellite estimate on a roughly 10 km grid, in half-hour steps several hours behind real time. Tiles keep the step they loaded with: switch off and on to refresh.",
+  "icon": "☔",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/IMERG_Precipitation_Rate_30min/default/default/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png",
+    "fetch": "browser-direct",
+    "cacheSeconds": 1800,
+    "minZoom": 0,
+    "maxZoom": 6
+  },
+  "display": {
+    "opacity": 0.8,
+    "legend": [
+      {
+        "label": "Rain 0.1 mm/h",
+        "color": "#00764e"
+      },
+      {
+        "label": "Rain 0.3 mm/h",
+        "color": "#09aa00"
+      },
+      {
+        "label": "Rain 1 mm/h",
+        "color": "#c3e400"
+      },
+      {
+        "label": "Rain 3 mm/h",
+        "color": "#ff7a1a"
+      },
+      {
+        "label": "Rain 10 mm/h",
+        "color": "#e70000"
+      },
+      {
+        "label": "Rain 30 mm/h",
+        "color": "#710000"
+      },
+      {
+        "label": "Snow 0.1 mm/h",
+        "color": "#b1faee"
+      },
+      {
+        "label": "Snow 1 mm/h",
+        "color": "#4f73c4"
+      },
+      {
+        "label": "Snow 10 mm/h",
+        "color": "#770bd1"
+      },
+      {
+        "label": "Snow 30 mm/h",
+        "color": "#69056e"
+      }
+    ]
+  },
+  "licence": {
+    "name": "NASA data: U.S. public domain; no endorsement implied",
+    "url": "https://www.earthdata.nasa.gov/engage/open-data-services-software-policies"
+  },
+  "attribution": {
+    "text": "NASA GIBS — GPM IMERG precipitation rate",
+    "url": "https://gpm.nasa.gov/data/imerg"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

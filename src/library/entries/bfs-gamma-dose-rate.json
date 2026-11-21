@@ -1,0 +1,44 @@
+{
+  "id": "bfs-gamma-dose-rate",
+  "kind": "dataset",
+  "family": "environment",
+  "title": "Gamma dose rate, Germany (BfS ODL network)",
+  "provider": "BfS",
+  "description": "About 1,700 probes of Germany's ambient gamma dose rate network with their latest one-hour mean in µSv/h, partly still unchecked. Natural background varies by site; probes out of service report no value.",
+  "icon": "☢",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": ["DE"],
+    "bbox": [5.8, 47.2, 15.1, 55.1]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://www.imis.bfs.de/ogc/opendata/ows",
+    "query": {
+      "service": "WFS",
+      "version": "1.1.0",
+      "request": "GetFeature",
+      "typeName": "opendata:odlinfo_odl_1h_latest",
+      "outputFormat": "application/json"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 1800,
+    "maxBytes": 4194304,
+    "maxFeatures": 2500
+  },
+  "display": {
+    "color": "#b794f4",
+    "label": "name",
+    "fields": ["value", "end_measure"]
+  },
+  "licence": {
+    "name": "Datenlizenz Deutschland – Namensnennung – Version 2.0",
+    "url": "https://www.govdata.de/dl-de/by-2-0"
+  },
+  "attribution": {
+    "text": "© Bundesamt für Strahlenschutz (BfS), dl-de/by-2-0",
+    "url": "https://odlinfo.bfs.de/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}

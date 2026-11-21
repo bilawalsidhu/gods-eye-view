@@ -1,0 +1,70 @@
+{
+  "id": "emodnet-offshore-installations",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "Oil and gas installations, European seas (EMODnet)",
+  "provider": "EMODnet",
+  "description": "About 1,560 oil and gas installations around European seas from EMODnet's 2024 revision: platforms, subsea structures and onshore terminals, working or decommissioned, mostly North Sea, with operator and product. Buoy categories left out.",
+  "icon": "⛽",
+  "maintainer": "github:Herr-Enklo",
+  "coverage": {
+    "countries": [
+      "BG",
+      "DE",
+      "DK",
+      "ES",
+      "GB",
+      "HR",
+      "IE",
+      "IT",
+      "LY",
+      "NL",
+      "NO",
+      "PL",
+      "RU",
+      "UA"
+    ],
+    "bbox": [-11.1, 33.7, 32.8, 72.6]
+  },
+  "source": {
+    "format": "geojson",
+    "url": "https://ows.emodnet-humanactivities.eu/wfs",
+    "query": {
+      "service": "WFS",
+      "version": "2.0.0",
+      "request": "GetFeature",
+      "typeName": "emodnet:platforms",
+      "outputFormat": "application/json",
+      "cql_filter": "category IS NULL OR category NOT IN ('BUOY','MONITOR BUOY')"
+    },
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxBytes": 4194304,
+    "maxFeatures": 4000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "name",
+    "fields": ["operator", "primary_production"],
+    "colorBy": {
+      "field": "current_status",
+      "colors": {
+        "Operational": "#ffc23d",
+        "Under construction": "#63b3ed",
+        "Closed down": "#ec835a",
+        "Decommissioned": "#718096",
+        "Removed": "#4a5568"
+      }
+    }
+  },
+  "licence": {
+    "name": "CC BY 4.0 (EMODnet Human Activities)",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "attribution": {
+    "text": "EMODnet Human Activities (data originator Cogea), CC BY 4.0",
+    "url": "https://emodnet.ec.europa.eu/en/human-activities"
+  },
+  "status": "community",
+  "reviewed": "2026-11-17"
+}
