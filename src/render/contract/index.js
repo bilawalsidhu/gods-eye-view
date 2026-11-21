@@ -41,6 +41,7 @@ export const CAPABILITIES = Object.freeze([
   'meshes',
   'fields',
   'courseGlide',
+  'lineAgeFade',
   'cluster',
   'styles',
   'bloom',
