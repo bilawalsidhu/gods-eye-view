@@ -22,6 +22,8 @@ import {
 // commit-pinned raw URLs and kept on disk by blob sha.
 
 const DEFAULT_POLL_MS = 15_000;
+/** Polling stops this long after the last request or viewer. */
+const DEFAULT_IDLE_MS = 10 * 60_000;
 const MIN_POLL_MS = 5_000;
 const FAILURE_BACKOFF_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
 const TIMEOUT_MS = 15_000;
@@ -42,6 +44,17 @@ export function ghostMapsPollMs(raw = process.env.GHOSTMAPS_POLL_SECONDS) {
 }
 
 /**
+ * How long the watcher keeps polling with no viewer and no request, from
+ * GHOSTMAPS_IDLE_MS: 10 min by default, 0 to poll until the server stops.
+ */
+export function ghostMapsIdleMs(raw = process.env.GHOSTMAPS_IDLE_MS) {
+  if (raw === undefined || raw === null || String(raw).trim() === '')
+    return DEFAULT_IDLE_MS;
+  const ms = Number(raw);
+  return Number.isFinite(ms) && ms >= 0 ? Math.round(ms) : DEFAULT_IDLE_MS;
+}
+
+/**
  * The repository watcher and file cache, independent of HTTP routing.
  * @returns {{start: Function, stop: Function, catalog: Function,
  *   checkNow: Function, file: Function, subscribe: Function}}
@@ -50,6 +63,7 @@ export function createGhostMapsWatcher({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
   pollMs = ghostMapsPollMs(),
+  idleMs = ghostMapsIdleMs(),
   cacheDir = path.join(process.cwd(), '.gev-cache', 'ghostmaps'),
   token = () => String(process.env.GITHUB_TOKEN || '').trim(),
   log = (...args) => console.log(...args),
@@ -69,6 +83,8 @@ export function createGhostMapsWatcher({
   let checking = null;
   let failures = 0;
   let diskLoaded = false;
+  // When a request or a viewer last wanted the catalog.
+  let wantedAt = now();
   const listeners = new Set();
   const downloads = new Map();
 
@@ -231,6 +247,13 @@ export function createGhostMapsWatcher({
   function schedule() {
     clearTimeout(timer);
     if (!running) return;
+    // Nobody holds the event stream and no request came for idleMs: stop
+    // asking GitHub. The next request starts the watcher again.
+    if (idleMs > 0 && listeners.size === 0 && now() - wantedAt >= idleMs) {
+      running = false;
+      timer = null;
+      return;
+    }
     const delay = failures
       ? FAILURE_BACKOFF_MS[Math.min(failures, FAILURE_BACKOFF_MS.length) - 1]
       : pollMs;
@@ -243,6 +266,7 @@ export function createGhostMapsWatcher({
 
   /** Start watching (idempotent); the first check runs immediately. */
   function start() {
+    wantedAt = now();
     if (running) return checking || Promise.resolve(false);
     running = true;
     const first = checkNow();
@@ -340,7 +364,11 @@ export function createGhostMapsWatcher({
 
   function subscribe(listener) {
     listeners.add(listener);
-    return () => listeners.delete(listener);
+    return () => {
+      listeners.delete(listener);
+      // The idle window starts when the last viewer leaves.
+      wantedAt = now();
+    };
   }
 
   return {
@@ -366,7 +394,7 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
     res.end(JSON.stringify(value));
   };
 
-  function events(req, res) {
+  function events(res) {
     if (watcher.subscribers() >= MAX_SUBSCRIBERS)
       return json(res, 429, { error: 'too_many_subscribers' });
     res.writeHead(200, {
@@ -386,7 +414,8 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
       clearInterval(heartbeat);
       unsubscribe();
     };
-    req.on('close', close);
+    // IncomingMessage closes when the GET is complete, not when SSE disconnects.
+    res.on('close', close);
     res.on('error', close);
   }
 
@@ -404,7 +433,7 @@ export function ghostMapsProxy({ watcher = createGhostMapsWatcher() } = {}) {
       if (!watcher.catalog().commit) await first;
       return json(res, 200, watcher.catalog());
     }
-    if (url.pathname === '/events') return events(req, res);
+    if (url.pathname === '/events') return events(res);
     try {
       if (!watcher.catalog().commit) await first;
       const found = await watcher.file(match[1]);
