@@ -64,6 +64,7 @@ export function createTextChatHandler({
   // Returns { error, code } when the route must refuse before any key is used.
   refuse = () => null,
   now = Date.now,
+  // Milliseconds, or a function returning them, read per request.
   timeoutMs = 60000,
 } = {}) {
   let limiter;
@@ -95,7 +96,10 @@ export function createTextChatHandler({
     };
     req.once('aborted', disconnect);
     res.once('close', disconnect);
-    const timer = setTimeout(() => lifetime.abort(), timeoutMs);
+    const timer = setTimeout(
+      () => lifetime.abort(),
+      typeof timeoutMs === 'function' ? timeoutMs() : timeoutMs,
+    );
     timer.unref?.();
     let response;
     let usage = null;

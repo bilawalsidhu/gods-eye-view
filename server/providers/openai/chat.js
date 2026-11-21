@@ -65,6 +65,66 @@ function validMessages(messages) {
 }
 
 /**
+ * Where typed chat is sent. OPENAI_CHAT_BASE_URL points it at any server that
+ * speaks Chat Completions with tool calls (Ollama, LM Studio, vLLM, llama.cpp):
+ * `http://ollama.lan:11434/v1`. It must be a plain http(s) URL, without
+ * credentials, query or fragment; anything else is refused rather than
+ * guessed. Unset, chat goes to OpenAI.
+ * @returns {{url: string, local: boolean}|{invalid: true}}
+ */
+export function chatEndpoint(environment = process.env) {
+  const raw = String(environment.OPENAI_CHAT_BASE_URL ?? '').trim();
+  if (!raw)
+    return { url: 'https://api.openai.com/v1/chat/completions', local: false };
+  let base;
+  try {
+    base = new URL(raw);
+  } catch {
+    return { invalid: true };
+  }
+  if (
+    !['http:', 'https:'].includes(base.protocol) ||
+    base.username ||
+    base.password ||
+    base.search ||
+    base.hash
+  )
+    return { invalid: true };
+  const path = base.pathname.replace(/\/+$/, '');
+  return { url: `${base.origin}${path}/chat/completions`, local: true };
+}
+
+/**
+ * The key for typed chat. A chat server of your own needs none, so it gets
+ * OPENAI_CHAT_API_KEY when set and a placeholder otherwise; it never receives
+ * OPENAI_API_KEY, which stays with OpenAI voice and the HUD summary.
+ */
+export function chatApiKey(environment = process.env) {
+  const own = String(environment.OPENAI_CHAT_API_KEY ?? '').trim();
+  const endpoint = chatEndpoint(environment);
+  if (endpoint.local || endpoint.invalid) return own || 'local';
+  return own || environment.OPENAI_API_KEY;
+}
+
+/**
+ * A tool call with only the fields history keeps. Servers add their own
+ * (Ollama numbers each call with `index`); the shape check refuses any field
+ * it does not know, so extras are dropped here rather than failing the reply.
+ * Anything that is not a call object passes through for the check to refuse.
+ */
+function callFields(call) {
+  if (!object(call) || !object(call.function)) return call;
+  return {
+    id: call.id,
+    type: call.type,
+    function: { name: call.function.name, arguments: call.function.arguments },
+  };
+}
+
+/** A model's private reasoning, which some local servers leave in the reply. */
+const THINKING = /^\s*<think>[\s\S]*?<\/think>\s*/;
+
+/**
  * A tool schema without the `pattern`s Chat Completions refuses: it answers
  * 400 for a whole request whose tool uses Unicode property classes (`\p{L}`),
  * as `resolve_area`'s area ids do. Every argument is still checked against
@@ -94,20 +154,24 @@ export function createOpenAiChatHandler({
   // osm_query is offered, and the prompt names it, only with Overpass, as
   // for voice.
   overpassConfigured = () => resolveOverpassUpstreams().length > 0,
-  resolveApiKey = () => process.env.OPENAI_API_KEY,
+  environment = process.env,
+  resolveApiKey = () => chatApiKey(environment),
   resolveChatModel = () => process.env.OPENAI_CHAT_MODEL || 'gpt-4.1-mini',
   resolveProviderRateLimit = () => process.env.GEV_RATELIMIT_OPENAI_PER_MIN,
-  environment = process.env,
   ...options
 } = {}) {
   return createTextChatHandler({
+    // A model on your own hardware answers slower than OpenAI: two minutes.
+    timeoutMs: () => (chatEndpoint(environment).local ? 120_000 : 60_000),
     ...options,
     provider: 'openai',
     resolveApiKey,
     resolveProviderRateLimit,
     providerPerMin: OPENAI_DEFAULT_PER_MIN,
-    // Chat can only bill the API key, which this operator lock forbids.
+    // Chat can only bill the API key, which this operator lock forbids. A
+    // chat server of your own bills nothing, so the lock does not reach it.
     refuse() {
+      if (chatEndpoint(environment).local) return null;
       let error =
         'ChatGPT OAuth is required by GEV_PREFER_CODEX_OAUTH, and typed OpenAI chat needs an API key.';
       try {
@@ -118,6 +182,8 @@ export function createOpenAiChatHandler({
       return { error, code: 'CODEX_OAUTH_REQUIRED' };
     },
     prepare(input) {
+      const endpoint = chatEndpoint(environment);
+      if (endpoint.invalid) return { errorStatus: 503 };
       const model = String(resolveChatModel()).trim();
       if (
         !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,119}$/.test(model) ||
@@ -132,7 +198,7 @@ export function createOpenAiChatHandler({
         return null;
       const overpass = overpassConfigured();
       return {
-        endpoint: 'https://api.openai.com/v1/chat/completions',
+        endpoint: endpoint.url,
         headers: (key) => ({ Authorization: `Bearer ${key}` }),
         body: {
           model,
@@ -140,6 +206,8 @@ export function createOpenAiChatHandler({
           stream: false,
           store: false,
           max_completion_tokens: 4096,
+          // Older Chat Completions servers read only max_tokens.
+          ...(endpoint.local ? { max_tokens: 4096 } : {}),
           messages: [
             {
               role: 'system',
@@ -165,10 +233,16 @@ export function createOpenAiChatHandler({
       const choice = data?.choices?.[0];
       const raw = choice?.message;
       if (!raw) return null;
+      const text =
+        typeof raw.content === 'string'
+          ? raw.content.replace(THINKING, '')
+          : raw.content;
       const content = {
         role: raw.role,
-        content: raw.content ?? null,
-        ...(raw.tool_calls?.length ? { tool_calls: raw.tool_calls } : {}),
+        content: text || null,
+        ...(raw.tool_calls?.length
+          ? { tool_calls: raw.tool_calls.map(callFields) }
+          : {}),
       };
       if (
         !assistantShape(content) ||

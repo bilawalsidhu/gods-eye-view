@@ -1633,7 +1633,13 @@ Typed chat sits beside voice in the dock. Chat replies are silent and never
 request microphone access. The first message connects with the selected
 provider and runs the same map actions as voice through each provider's text
 API: OpenAI uses `OPENAI_CHAT_MODEL` (default `gpt-4.1-mini`) and needs an API
-key; Gemini sends a text-only `generateContent` request with
+key, unless `OPENAI_CHAT_BASE_URL` sends it to a Chat Completions server of
+the operator's own (Ollama, LM Studio, vLLM, llama.cpp; `docs/LOCAL-CHAT.md`).
+That server gets `OPENAI_CHAT_API_KEY` or a placeholder, never
+`OPENAI_API_KEY`; requests wait two minutes instead of one; a leading
+`<think>…</think>` block is dropped from replies; `GEV_PREFER_CODEX_OAUTH`
+does not apply to it; and an address that is not a plain http(s) URL is
+refused with `503`. Gemini sends a text-only `generateContent` request with
 `GEMINI_CHAT_MODEL` (default `gemini-3.5-flash-lite`) and never starts Live.
 Only one mode runs at a time: the microphone closes chat, and opening chat
 stops voice. Enter sends, Shift+Enter adds a line, and Up or Down at the start
