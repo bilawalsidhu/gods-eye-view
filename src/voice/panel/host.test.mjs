@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { createVoiceControl } from '../control.js';
 import { useVoiceStore } from '../../ui/stores/voice.js';
+import { useEntityCardStore } from '../../ui/stores/entityCard.js';
+import { applicationPinia } from '../../ui/vueRuntime.js';
 import { createGevActionRunner } from '../gevActions.js';
 import { createVoiceCommands as bind } from '../sessionCommands.js';
 import { createVoiceCommands as compose } from '../commands.js';
@@ -1447,6 +1449,36 @@ test('teardown inside sendText prevents appending the submitted message', async 
   );
 });
 
+// What the selection actions report, as the real runner does.
+const selectionRunner = async (name) =>
+  name === 'select_nearest_aircraft'
+    ? {
+        ok: true,
+        action: name,
+        layerId: 'flights',
+        label: 'UAL12',
+        aircraft: { id: 'a1b2c3', callsign: 'UAL12' },
+      }
+    : name === 'track_entity'
+      ? {
+          ok: true,
+          action: name,
+          layerId: 'military',
+          kind: 'aircraft',
+          id: 'ae01ce',
+          label: 'RCH401',
+          latitude: 42.3,
+          longitude: -71,
+        }
+      : { ok: true };
+// The Context panel's entity card, cleared for each test.
+function contextCard(t) {
+  const store = useEntityCardStore(applicationPinia());
+  store.clear();
+  t.after(() => store.clear());
+  return store;
+}
+
 // Docks the assistant panels into the right rail's lane for one test.
 async function dockIntoRail(t, f) {
   t.after(() => globalThis.localStorage.removeItem('gev.panel.docked'));
@@ -1455,8 +1487,9 @@ async function dockIntoRail(t, f) {
   await f.settle();
 }
 
-test('a voice selection steps the docked voice panel down to its bar and keeps the reply', async (t) => {
-  const f = mounted(t, { view: true });
+test('a voice selection opens its Context card, steps the docked voice panel down and keeps the reply', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
   await f.settle();
   await f.commands.session.start();
   f.commands.voicePanel.select('preview');
@@ -1474,7 +1507,11 @@ test('a voice selection steps the docked voice panel down to its bar and keeps t
   });
   await f.settle();
   assert.equal(panel.dataset.minimized, undefined);
+  assert.equal(context.card, null);
   await runAction('select_nearest_aircraft', { location: 'Boston' });
+  // Context shows the aircraft, as after a click on it.
+  assert.equal(context.card.layerId, 'flights');
+  assert.equal(context.card.key, 'flights:a1b2c3');
   emit({
     type: 'transcript',
     role: 'assistant',
@@ -1507,19 +1544,33 @@ test('a voice selection steps the docked voice panel down to its bar and keeps t
 });
 
 test('a voice selection leaves a voice panel above the dock as it is', async (t) => {
-  const f = mounted(t, { view: true });
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
   await f.settle();
   await f.commands.session.start();
   f.commands.voicePanel.select('preview');
   await f.settle();
   assert.equal($('#gev-voice-panel').dataset.placement, 'compact');
-  await f.instances[0].hooks.runAction('track_entity', { query: 'UAL12' });
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
   await f.settle();
+  assert.equal(context.card.key, 'military:ae01ce');
   assert.equal($('#gev-voice-panel').dataset.minimized, undefined);
 });
 
-test('a typed chat selection steps the docked chat panel down to its bar', async (t) => {
-  const f = mounted(t, { view: true });
+test('a voice selection in Cockpit leaves the hidden Context card alone', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
+  await f.settle();
+  await f.commands.session.start();
+  globalThis.document.body.classList.add('cockpit-mode');
+  t.after(() => globalThis.document.body.classList.remove('cockpit-mode'));
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card, null);
+});
+
+test('a typed chat selection opens its Context card and steps the docked chat panel down', async (t) => {
+  const context = contextCard(t);
+  const f = mounted(t, { view: true, runner: selectionRunner });
   typedChat(f);
   await f.settle();
   $('#gev-chat-button').click();
@@ -1527,10 +1578,9 @@ test('a typed chat selection steps the docked chat panel down to its bar', async
   await dockIntoRail(t, f);
   assert.equal($('#gev-chat-panel').dataset.placement, 'docked');
   await f.commands.session.start({ textOnly: true });
-  await f.instances[0].hooks.runAction('select_nearest_aircraft', {
-    location: 'Boston',
-  });
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
   await f.settle();
+  assert.equal(context.card.key, 'military:ae01ce');
   assert.equal($('#gev-chat-panel').dataset.minimized, 'true');
   assert.equal(f.ui.state.chat.open, true);
   assert.equal(globalThis.document.body.dataset.assistantDocked, undefined);

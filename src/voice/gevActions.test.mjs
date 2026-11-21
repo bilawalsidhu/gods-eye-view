@@ -144,6 +144,9 @@ test('track_entity runner narrates a callsign-less aircraft by its registration'
       `${layerId} narration must speak the registration, not the ICAO hex`,
     );
     assert.equal(trackedId, 'ae1fa4', `${layerId} must still TRACK by icao24`);
+    // The result names what it tracked, so Context can show it.
+    assert.equal(result.id, 'ae1fa4');
+    assert.equal(result.layerId, layerId);
   }
 });
 

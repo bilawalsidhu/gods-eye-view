@@ -477,3 +477,25 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     askAboutView,
   };
 });
+
+/**
+ * Show what a voice or chat action selected in the Context panel, as a click
+ * on it does (`src/ui/entityContextBridge.js` selects the same way): its card
+ * opens, and the panel with it. The action has already selected or followed
+ * it in its own layer, so the card does not follow it again (a click on a
+ * flight does not either). Cockpit has its own picks, and
+ * Context is hidden while it runs.
+ * @param {{layerId: string, id: string|number, label?: string, lat?: number, lon?: number}} identity
+ * @param {{pinia: import('pinia').Pinia}} options
+ * @returns {boolean} Whether a card opened.
+ */
+export function showSelectionInContext(identity, { pinia }) {
+  if (!identity?.layerId || identity.id == null || identity.id === '')
+    return false;
+  if (globalThis.document?.body?.classList.contains('cockpit-mode'))
+    return false;
+  return useEntityCardStore(pinia).select(
+    { ...identity, id: String(identity.id) },
+    { follow: false },
+  );
+}

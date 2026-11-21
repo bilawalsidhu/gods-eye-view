@@ -1,5 +1,6 @@
 import { nextTick } from 'vue';
 import { useOmnibarStore } from '../ui/stores/omnibar.js';
+import { showSelectionInContext } from '../ui/stores/entityCard.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
@@ -11,8 +12,30 @@ import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
 import { t, translateKnown } from '../i18n/index.js';
 
-/** Actions whose success selects an entity on the map. */
-const SELECTION_ACTIONS = new Set(['select_nearest_aircraft', 'track_entity']);
+/**
+ * Actions whose success selects an entity on the map, and the identity each
+ * result names it by.
+ */
+const SELECTION_ACTIONS = new Map([
+  [
+    'select_nearest_aircraft',
+    (result) => ({
+      layerId: result.layerId,
+      id: result.aircraft?.id,
+      label: result.label || result.aircraft?.callsign,
+    }),
+  ],
+  [
+    'track_entity',
+    (result) => ({
+      layerId: result.layerId,
+      id: result.id,
+      label: result.label,
+      lat: result.latitude,
+      lon: result.longitude,
+    }),
+  ],
+]);
 
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
@@ -287,9 +310,9 @@ export function createVoiceCommands({
       ]
     : [];
   // A voice or chat selection shows in the right rail's Context panel, as a
-  // click's does: the assistant panel docked over the rail steps down to its
-  // bar, where the latest reply stays readable. A panel above the dock leaves
-  // the rail in view, so it stays as it is.
+  // click's does: its card opens there, and the assistant panel docked over
+  // the rail steps down to its bar, where the latest reply stays readable. A
+  // panel above the dock leaves the rail in view, so it stays as it is.
   const dockedOverRail = (name) => {
     const panel = ui.element(name);
     return Boolean(
@@ -299,25 +322,28 @@ export function createVoiceCommands({
       !panel.dataset.minimized,
     );
   };
-  if (panelMount)
-    layouts.push(
-      session.subscribe((event) => {
-        if (
-          event.type !== 'action-result' ||
-          event.result?.ok !== true ||
-          !SELECTION_ACTIONS.has(event.name)
-        )
-          return;
-        if (adapter.getStartOptions?.().textOnly) {
-          if (ui.state.chat.open && dockedOverRail('chatPanel'))
-            chat?.minimize({ focus: false });
-        } else if (
-          panelMount.panel.snapshot().panelOpen &&
-          dockedOverRail('voicePanel')
-        )
-          minimizeVoicePanel();
-      }),
-    );
+  layouts.push(
+    session.subscribe((event) => {
+      if (
+        event.type !== 'action-result' ||
+        event.result?.ok !== true ||
+        !SELECTION_ACTIONS.has(event.name)
+      )
+        return;
+      showSelectionInContext(SELECTION_ACTIONS.get(event.name)(event.result), {
+        pinia: applicationPinia(),
+      });
+      if (!panelMount) return;
+      if (adapter.getStartOptions?.().textOnly) {
+        if (ui.state.chat.open && dockedOverRail('chatPanel'))
+          chat?.minimize({ focus: false });
+      } else if (
+        panelMount.panel.snapshot().panelOpen &&
+        dockedOverRail('voicePanel')
+      )
+        minimizeVoicePanel();
+    }),
+  );
   const unbindMiniPreview = panelMount
     ? bindVoiceMiniPreview({ ui, session })
     : null;

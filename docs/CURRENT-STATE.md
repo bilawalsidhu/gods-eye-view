@@ -1658,9 +1658,10 @@ and the chat shows a matching message.
 Chat and the voice panel sit above the dock or dock into the right rail's lane,
 which hides the rail until the panel minimizes or closes, or a rail panel opens.
 A voice or chat action that selects something (`select_nearest_aircraft`,
-`track_entity`) steps a panel docked in the lane down to its bar, so the rail
-and its Context panel show, as they do after a click; a panel above the dock
-leaves the rail in view and stays as it is.
+`track_entity`) opens its card in the Context panel as a click on it does
+(`showSelectionInContext` in `src/ui/stores/entityCard.js`), except in
+Cockpit, and steps a panel docked in the lane down to its bar so the rail
+shows it; a panel above the dock leaves the rail in view and stays as it is.
 Minimized panels always sit as a bar centred above the dock; restoring returns a
 docked panel to the lane. A centred panel steps down to its bar when the pointer
 reaches the Location or Visual Presets button and rests above an open tray,

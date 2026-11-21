@@ -3051,8 +3051,15 @@ async function trackEntity(
       'track_entity',
       () => {
         let trackedOk = false;
+        // The id the layer selects by, which also names it in Context.
+        const id =
+          family.kind === 'vessel'
+            ? (found.id ?? found.mmsi)
+            : family.kind === 'satellite'
+              ? found.noradId
+              : found.icao24;
         if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
+          trackedOk = !!module.selectById?.(id);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -3060,10 +3067,8 @@ async function trackEntity(
             buildingHeight: 0,
             duration: 2.0,
           });
-        } else if (family.kind === 'satellite') {
-          trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
         } else {
-          trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
+          trackedOk = !!module.trackById?.(id, { origin: 'voice' });
         }
 
         return {
@@ -3071,6 +3076,7 @@ async function trackEntity(
           action: 'track_entity',
           layerId: family.layerId,
           kind: family.kind,
+          id: id == null ? null : String(id),
           // Aircraft follow the flight layers' label convention (callsign →
           // registration → icao24) so the spoken name matches what the UI shows;
           // `registration` is absent on vessels/satellites and simply falls
