@@ -170,7 +170,10 @@ test('fMP4 HLS accepts a same-origin .m4s initialization segment', async () => {
       new URL('a.m4s', base).href,
       new URL('b.m4s', base).href,
     ]);
-    assert.equal(manager.getInit('m4s-init', entry.token).toString(), 'init bytes');
+    assert.equal(
+      manager.getInit('m4s-init', entry.token).toString(),
+      'init bytes',
+    );
     assert.equal(
       manager.getSegment('m4s-init', entry.token, 0).toString(),
       'segment a',
