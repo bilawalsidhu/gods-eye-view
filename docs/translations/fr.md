@@ -82,7 +82,6 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | Recent Imagery / box                                         | imagerie récente / zone                                                 |
 | Daily overview / overview (Recent Imagery VIIRS product)     | vue quotidienne (one name for the product, not « vue d'ensemble »)      |
 | pin (Draw tool) / pin (Recent Imagery)                       | épingle / épingler                                                      |
-| Cyber (HUD layout, effect)                                   | Cyber                                                                   |
 | heading / course (ground track) / altitude / ground speed    | cap / route / altitude / vitesse sol                                    |
 | HDG / BRG / CRS / FOV / DEST / SPD / ALT                     | unchanged                                                               |
 | RANGE / PITCH / HGT (CCTV calibration chips)                 | PORTÉE / INCL. / HAUT.                                                  |

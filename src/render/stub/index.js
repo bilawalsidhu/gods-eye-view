@@ -10,6 +10,7 @@
  * loop on a virtual clock, one frame at a time, in the contract's order.
  */
 import { horizonFrom } from '../../geo/horizon.js';
+import { headingPitchRollFrame } from '../../geo/quaternion.js';
 import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { createInputRouter } from '../input/router.js';
@@ -261,6 +262,8 @@ export function createStubRenderer(options = {}) {
   camera.setViewRectangle(viewRectangle);
   if (capabilities.has('followFrame'))
     camera.port.followFrame = camera.eyeFrame;
+  if (capabilities.has('pointVisibility'))
+    camera.port.visiblePoints = () => null;
   camera.port.setView({
     destination: { lon: -97.7431, lat: 30.2672, height: 15000000 },
   });
@@ -808,6 +811,7 @@ export function createStubRenderer(options = {}) {
   function itemPosition(set, item, aheadMs = 0) {
     if (!item.pos) return null;
     const base = toEcef(item.pos);
+    if (set.kind === 'models') return posedModelPosition(item, base);
     const p =
       set.kind === 'icons' && item.motion && capabilities.has('motionSegments')
         ? motionPosition(item.motion, base, motionTime(set) + aheadMs)
@@ -819,6 +823,46 @@ export function createStubRenderer(options = {}) {
     return c
       ? toEcef({ lon: toDegrees(c.lon), lat: toDegrees(c.lat), height: 0 })
       : p;
+  }
+
+  /**
+   * Where the stub draws a model. A stub model is one node, named after its
+   * file (`/models/c172.glb` is `c172`, `stub:model.glb` is `model`): with
+   * `modelNodes`, an item's
+   * `nodes` entry for that name moves it by the matrix's translation, on the
+   * model's axes and at its scale; any other name is one the model lacks.
+   */
+  function posedModelPosition(item, base) {
+    if (!capabilities.has('modelNodes') || !item.nodes) return base;
+    const file = String(item.url ?? '')
+      .split(/[?#]/)[0]
+      .split(/[/:]/)
+      .pop();
+    const name = file.replace(/\.[^.]*$/, '');
+    const m = name ? item.nodes[name] : null;
+    if (!m || m.length < 16) return base;
+    const k = item.scale ?? 1;
+    const frame = headingPitchRollFrame(base, {
+      heading: item.orientation?.heading ?? 0,
+      pitch: item.orientation?.pitch ?? 0,
+      roll: item.orientation?.roll ?? 0,
+    });
+    const along = (axis, t) => ({
+      x: axis.x * t * k,
+      y: axis.y * t * k,
+      z: axis.z * t * k,
+    });
+    let p = base;
+    for (const [axis, t] of [
+      [frame.x, m[12]],
+      [frame.y, m[13]],
+      [frame.z, m[14]],
+    ])
+      if (t) {
+        const d = along(axis, t);
+        p = { x: p.x + d.x, y: p.y + d.y, z: p.z + d.z };
+      }
+    return p;
   }
 
   /**
@@ -1574,8 +1618,12 @@ export function createStubRenderer(options = {}) {
     if (capabilities.has('imageryFrames')) {
       let source = null;
       let clockKind = 'scene';
-      /** The time the source shows for `ms`: the nearest frame, or within the videos. */
+      /** The time the source shows for `ms`: the nearest frame, within the videos, or a decoded source's slot. */
       const shownTime = (ms) => {
+        if (source?.kind === 'decoded') {
+          const slot = Number.isFinite(ms) ? source.slotAt(ms) : null;
+          return Number.isFinite(slot) ? slot : null;
+        }
         if (source?.kind === 'video') {
           let best = null;
           let bestOff = Infinity;
@@ -1609,10 +1657,22 @@ export function createStubRenderer(options = {}) {
         deliver(listeners.frameReady, drawnTime);
       });
       layer.setFrames = (next, opts = {}) => {
+        if (next.kind === 'decoded' && !capabilities.has('imageryDecoded'))
+          throw new TypeError('decoded imagery needs imageryDecoded');
+        if (
+          next.kind === 'decoded' &&
+          (typeof next.slotAt !== 'function' || typeof next.tile !== 'function')
+        )
+          throw new TypeError('a decoded source needs slotAt and tile');
         source =
-          next.kind === 'video'
-            ? { kind: 'video', segments: next.segments.map((s) => ({ ...s })) }
-            : { kind: 'frames', frames: next.frames.slice() };
+          next.kind === 'decoded'
+            ? next
+            : next.kind === 'video'
+              ? {
+                  kind: 'video',
+                  segments: next.segments.map((s) => ({ ...s })),
+                }
+              : { kind: 'frames', frames: next.frames.slice() };
         wanted = null;
         drawnTime = null;
         clockKind = opts.clock ?? 'scene';

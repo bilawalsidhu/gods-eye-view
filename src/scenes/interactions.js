@@ -1,6 +1,7 @@
 import { nextTick } from 'vue';
 import { isPointerFree } from '../data/inputOwnership.js';
 import { inputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from '../data/pickRegistry.js';
 import { createInteractionSession } from '../director/interactions/session.js';
 import { t } from '../i18n/index.js';
 import { useSceneInteractionsStore } from '../ui/stores/sceneInteractions.js';
@@ -119,6 +120,9 @@ export function createSceneInteractions(
       session.activate(items);
       unsubscribeClick = inputFor(viewer).onClick((event) => {
         if (panel?.owner !== owner || !shown() || !available()) return;
+        // Another layer's card or label painted on top takes the click: the item
+        // under it does not act, and the click is not empty space either.
+        if (isUnderOtherCard(event)) return;
         // A pack feature is its draw set's item (see dataPacks/presentation.js).
         const hit = event.drawHit;
         if (!hit) return;

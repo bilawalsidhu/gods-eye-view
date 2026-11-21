@@ -88,7 +88,8 @@ export function createTracking({
   const { trackedLabelModelFromText, refreshTrackedReadout } = services.readout;
   const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
     services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
+    services.picking;
   const flightsLayer = layer;
   /** The tracked contact's billboard (an icon set on the draw port). */
   const trackedIcon = createTrackedAircraftIcon({
@@ -340,15 +341,17 @@ export function createTracking({
    * @param {{x: number, y: number, z: number}} position - The report's ECEF position.
    * @param {number} [epochMs] - The report's time; defaults to the tracked
    *   aircraft's newest position-history fix, which every caller has just pushed.
-   * @param {{nullAltitude?: boolean, track?: number}} [options] - `nullAltitude`:
+   * @param {{nullAltitude?: boolean, track?: number, estimated?: boolean}} [options] - `nullAltitude`:
    *   the report had no altitude, so its position is not kept and the line
-   *   breaks there; `track`: its reported track, which the line leaves it along.
+   *   breaks there; `track`: its reported track, which the line leaves it along;
+   *   `estimated`: the feed estimated it, so it stands in only until the next
+   *   received report.
    */
 
   function _appendTrailFix(
     position,
     epochMs,
-    { nullAltitude = false, track = undefined } = {},
+    { nullAltitude = false, track = undefined, estimated = false } = {},
   ) {
     const history = flightState._positionHistory.get(flightState._trackedIcao);
     const timeMs = Number.isFinite(epochMs)
@@ -359,7 +362,7 @@ export function createTracking({
       position,
       timeMs,
       TRAIL_MAX_POINTS,
-      { nullAltitude, track },
+      { nullAltitude, track, estimated },
     );
     _refreshTrailDisplay();
   }
@@ -905,11 +908,13 @@ export function createTracking({
     // language ("0 фт · 1 уз").
     const quantity = (value, unit) =>
       `${formatNumber(value, { useGrouping: false })} ${unitLabel(unit)}`;
-    const altFt = Number.isFinite(info.altitude)
-      ? Math.round(info.altitude * 3.28084)
-      : null;
-    const fl =
-      altFt === null
+    const altFt =
+      !info.onGround && Number.isFinite(info.altitude)
+        ? Math.round(info.altitude * 3.28084)
+        : null;
+    const fl = info.onGround
+      ? t('On the ground')
+      : altFt === null
         ? t('Alt unknown')
         : altFt >= 18000
           ? `FL${Math.round(altFt / 100)}`
@@ -1173,7 +1178,9 @@ export function createTracking({
     // An unreported altitude frames by the height the plane is drawn at.
     const followRange = Math.min(
       Math.max(
-        ((info.altitude ?? info.renderAltitudeM) || 1500) * 1.1 + 2500,
+        (info.onGround ? 0 : (info.altitude ?? info.renderAltitudeM) || 1500) *
+          1.1 +
+          2500,
         3000,
       ),
       30000,
@@ -1328,6 +1335,9 @@ export function createTracking({
       // first-person reference. A globe click must not fall through to the
       // normal empty-space deselection path; cockpit has explicit exit controls.
       if (document.body.classList.contains('cockpit-mode')) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard?.(event)) return;
       const picked = event.hit;
 
       if (picked) {

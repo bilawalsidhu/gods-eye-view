@@ -210,6 +210,7 @@ test('advisory geometry keeps polygon parts, holes and geographic seam coordinat
     storms: 1,
     tracks: 1,
     cones: 2,
+    dangerAreas: 0,
     forecastPoints: 1,
     dataSources: 1,
     entities: 8,
@@ -375,6 +376,7 @@ test('clear empties the sets and a later advisory draws again', async () => {
     storms: 0,
     tracks: 0,
     cones: 0,
+    dangerAreas: 0,
     forecastPoints: 0,
     dataSources: 0,
     entities: 0,
@@ -450,4 +452,51 @@ test('labels publish committed anchors to the shared overlay and follow selectio
   ]);
   h.rendering.destroy();
   assert.equal(h.overlay.calls.at(-1), afterClear[1]);
+});
+
+test('a JTWC danger area is drawn apart from any cone, with a dashed edge and its name for the selected storm', async () => {
+  const h = harness();
+  const jtwc = {
+    ...storm(),
+    id: 'sh042027',
+    cone: null,
+    dangerArea: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [178, 10],
+          [-178, 10],
+          [-178, 20],
+          [178, 10],
+        ],
+      ],
+    },
+  };
+  assert.equal(await h.rendering.setSnapshot({ storms: [jtwc] }), true);
+  const [area] = [...h.sets.cones.items.values()];
+  assert.equal(area.id, 'cyclone:sh042027:danger:0');
+  assert.equal(area.fill, 'rgba(255,177,92,0.12)');
+  const outline = [...h.sets.lines.items.values()].find(
+    (line) => line.id === 'cyclone:sh042027:danger:0:outline:0',
+  );
+  assert.deepEqual(outline.style, {
+    kind: 'dash',
+    color: 'rgba(255,177,92,0.8)',
+    length: 16,
+  });
+  const diagnostics = h.rendering.getDiagnostics();
+  assert.equal(diagnostics.cones, 0);
+  assert.equal(diagnostics.dangerAreas, 1);
+  // A click on the area names its storm.
+  assert.equal(
+    h.rendering.pickStorm(h.hit('cones', 'cyclone:sh042027:danger:0')),
+    'sh042027',
+  );
+  assert.equal(h.overlay.entry('area:sh042027'), null, 'unselected: no name');
+  h.rendering.setSelection('sh042027');
+  const name = h.overlay.entry('area:sh042027');
+  assert.equal(name.title, '34-knot wind danger area');
+  // On the area's edge, at the vertex nearest the middle forecast point.
+  assert.deepEqual(name.position, fromDegrees(-178, 20, 0));
+  h.rendering.destroy();
 });

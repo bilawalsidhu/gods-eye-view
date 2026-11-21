@@ -1,4 +1,6 @@
 import { resolvePickedContext } from '../data/pickedContext.js';
+import { onScreen } from '../data/locate.js';
+import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
@@ -45,8 +47,6 @@ const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
  *   to the point under the camera without it.
  * @param {(lat: number, lon: number) => Promise<object>} [options.regionalBrief]
  *   The app's regional brief service, for the weather and news Context shows.
- * @param {(x: number, y: number) => object|null} [options.overlayHit]
- *   The overlay card under a screen point, if any (a vessel's, a fire's).
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -55,14 +55,13 @@ export function installEntityContext({
   pinia,
   pickWorld,
   regionalBrief,
-  overlayHit,
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
   const voice = useVoiceStore(pinia);
   const cockpitStore = useCockpitStore(pinia);
   const chrome = usePanelChromeStore(pinia);
-  /** Whether Context is open; a closed panel reads nothing. */
+  /** Whether Context is open. (readView also reads while the Omnibar is focused.) */
   const isOpen = () =>
     chrome.panels['global-context-panel']?.collapsed === false;
   const doc = globalThis.document;
@@ -138,6 +137,21 @@ export function installEntityContext({
     }
   }
 
+  // An item back in its feed after it left it is selected again in its layer,
+  // as the click that picked it: a vessel is highlighted with its trail, and
+  // an aircraft found again (`follow`) is followed.
+  function reselect(card, { follow: andFollow = false } = {}) {
+    const layer = getDataManager()?.layers?.get?.(card?.layerId)?.module;
+    const id = card?.identity?.id;
+    if (!layer || !id) return;
+    try {
+      if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
+      else if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+    } catch {
+      // A layer going away meanwhile has nothing to select.
+    }
+  }
+
   // Aircraft can be flown from, and a satellite ridden in the orbital view:
   // track the craft, then enter Cockpit on it. Only layers the tracking
   // action can follow are offered (local ADS-B cannot be tracked).
@@ -199,6 +213,14 @@ export function installEntityContext({
     flyTo,
     follow,
     letGo,
+    reselect,
+    // Whether the camera shows the card's item; null when it cannot tell.
+    onScreen: (card) => {
+      const pose = camera()?.pose();
+      if (!pose || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
+        return null;
+      return onScreen(pose, card.lat, card.lon, card.altitudeM ?? 0);
+    },
     isOpen,
     regionalBrief,
     // The renderer's card previews, when it has them.
@@ -223,7 +245,8 @@ export function installEntityContext({
   // the height. Read when the camera settles, not every frame.
   const readView = () => {
     const port = camera();
-    if (!port || !isOpen()) return;
+    if (!port || (!isOpen() && doc?.activeElement?.id !== 'gev-omnibar-input'))
+      return;
     const pose = port.pose();
     if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
@@ -272,6 +295,12 @@ export function installEntityContext({
     listen();
     readView();
   }, 0);
+  // The Omnibar's nearby suggestions also need a fresh center even with
+  // Context closed. Its focus event requests one camera read.
+  const onSearchFocus = (event) => {
+    if (event.target?.id === 'gev-omnibar-input') readView();
+  };
+  doc?.addEventListener('focusin', onSearchFocus);
   // Opening the panel describes the view as it is now.
   let wasOpen = isOpen();
   const offChrome = chrome.$subscribe(() => {
@@ -311,6 +340,10 @@ export function installEntityContext({
     // Cockpit has its own picks, and Context is hidden while it runs. A
     // camera drag never selects, even if it ends over something.
     if (inCockpit() || !isTrackingSelectionGesture(event.gesture)) return;
+    // A card or label painted on top is its layer's click, read once per
+    // click so every layer agrees: Context names nothing under it and keeps
+    // its own card as it is.
+    if (clickCard(event)) return;
     const identity = resolvePickedContext(event.hit, {
       dataManager: getDataManager(),
     });
@@ -324,14 +357,8 @@ export function installEntityContext({
     // A click on open ground, sea or sky lets go of what was selected. A
     // click on something else Context cannot describe (a label, a trail)
     // leaves the card as it is.
-    // Only a clean click lets go, as the layers' own clicks do; a card
-    // painted on the overlay (a vessel's, a fire's) is not open map.
-    if (
-      event.surface &&
-      isTrackingClickGesture(event.gesture) &&
-      !overlayHit?.(event.screenPosition?.x, event.screenPosition?.y)
-    )
-      store.clear();
+    // Only a clean click lets go, as the layers' own clicks do.
+    if (event.surface && isTrackingClickGesture(event.gesture)) store.clear();
   });
 
   // Layers that select through the context store (GeoJSON sites, fires,
@@ -340,7 +367,12 @@ export function installEntityContext({
     if (!record?.layerId || inCockpit()) return;
     store.select({
       layerId: record.layerId,
-      id: record.id,
+      // A vessel goes by its own id, as a click on it names it, not by the
+      // context store's (src/data/pickedContext.js).
+      id:
+        record.layerId === 'ais-live-vessels' && record.properties?.vesselId
+          ? String(record.properties.vesselId)
+          : record.id,
       label: record.label || record.properties?.name,
       lat: record.latitude,
       lon: record.longitude,
@@ -356,6 +388,7 @@ export function installEntityContext({
     clearTimeout(trailing);
     offFollow();
     offChrome();
+    doc?.removeEventListener('focusin', onSearchFocus);
     clearTimeout(followCheck);
     globalThis.removeEventListener?.('gev:entity-selected', onSelected);
     store.connect(null);

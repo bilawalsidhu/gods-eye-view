@@ -402,6 +402,208 @@ export function revealUniform(fraction, positions) {
 }
 
 /**
+ * The material a line's style draws with, inside the age and reveal
+ * materials wrapped round it.
+ */
+function styleMaterial(material) {
+  let drawn = material;
+  while (drawn.materials?.aged || drawn.materials?.revealed)
+    drawn = drawn.materials.aged ?? drawn.materials.revealed;
+  return drawn;
+}
+
+/** A line's material inside its age material: the one a reveal is set on. */
+const unaged = (material) => material.materials?.aged ?? material;
+
+/** The prefix of an age-faded line's material types (`LineItem.ageFade`). */
+const AGE_MATERIAL = 'DrawAgedLine';
+
+/** Points an age texture's row holds; a longer line takes more rows. */
+const AGE_TEXTURE_WIDTH = 1024;
+
+/**
+ * A line faded with the age of its points (`LineItem.ageFade`), in its own
+ * style otherwise. `ages` holds a texel a drawn point: where along the
+ * line's texture it lies (`st.s`) and its time, seconds after `ageNow`'s
+ * zero. A polyline's texture runs evenly per vertex, so its point is found
+ * at once; a ground polyline's runs along its length (`ageByLength`), so
+ * its point is searched for. Its time runs evenly to the next point's, and
+ * its recency eases the alpha (smoothstep to `ageAlphaFloor`, recency
+ * squared to `ageSquaredFloor` where that is not negative) and the width
+ * (to `ageWidthFloor` of it, about its middle: outside it is discarded, so
+ * it neither draws nor picks). With a window (`ageShow`, `LineAgeFade.showMs`,
+ * seconds; negative, no older bound; 0, none) a fragment whose time is after
+ * now, or older than the window, is discarded too.
+ */
+const AGE_SOURCE = `
+vec4 drawAgeTexel(float i) {
+  float row = floor(i / ageWidth);
+  return texture(ages, vec2((i - row * ageWidth + 0.5) / ageWidth, (row + 0.5) / ageRows));
+}
+
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  float s = clamp(materialInput.st.s, 0.0, 1.0);
+  float last = max(ageCount - 1.0, 0.0);
+  float lo = 0.0;
+  float hi = last;
+  float u = 0.0;
+  if (ageByLength > 0.5) {
+    for (int k = 0; k < 24; k++) {
+      if (hi - lo <= 1.0) break;
+      float mid = floor((lo + hi) * 0.5);
+      if (drawAgeTexel(mid).r <= s) lo = mid;
+      else hi = mid;
+    }
+    vec2 a = drawAgeTexel(lo).rg;
+    vec2 b = drawAgeTexel(hi).rg;
+    u = b.r > a.r ? clamp((s - a.r) / (b.r - a.r), 0.0, 1.0) : 0.0;
+  } else {
+    float f = s * last;
+    lo = min(floor(f), max(last - 1.0, 0.0));
+    hi = min(lo + 1.0, last);
+    u = clamp(f - lo, 0.0, 1.0);
+  }
+  float when = mix(drawAgeTexel(lo).g, drawAgeTexel(hi).g, u);
+  if (ageShow != 0.0 && (when > ageNow || (ageShow > 0.0 && ageNow - when > ageShow)))
+    discard;
+  float recency = 1.0 - clamp((ageNow - when) / ageWindow, 0.0, 1.0);
+  float fade = mix(ageAlphaFloor, 1.0, smoothstep(0.0, 1.0, recency));
+  if (ageSquaredFloor >= 0.0)
+    fade *= mix(ageSquaredFloor, 1.0, recency * recency);
+  float width = max(mix(ageWidthFloor, 1.0, recency), 0.001);
+  float across = (materialInput.st.t - 0.5) / width;
+  if (abs(across) > 0.5) discard;
+  materialInput.st.t = across + 0.5;
+  czm_material m = aged;
+  m.alpha *= fade;
+
+  return m;
+}`;
+
+/**
+ * What an age-faded line's material draws from: a texel a drawn point (see
+ * `AGE_SOURCE`), packed four floats each (where along the line, its time in
+ * seconds after `base`, and two unused), `width` to a row; and the fade's
+ * uniforms. `points` are the line as drawn and `times` theirs; a polyline
+ * drops a point at the place of the one before it, as Cesium does, and
+ * takes the rest evenly along its texture; `byLength`, the points lie along
+ * it by their distance over the ellipsoid, as a ground polyline's texture
+ * runs. `base` is the newest time, so the times a texel holds are small.
+ * `windowed`, the line draws only within its `showMs` of now (`ageShow`).
+ * @param {Array<{x: number, y: number, z: number}>} points
+ * @param {ArrayLike<number>} times Epoch ms, one a point.
+ * @param {import('../contract/draw').LineAgeFade} fade
+ * @param {boolean} [byLength]
+ * @param {boolean} [windowed]
+ */
+export function lineAgeData(
+  points,
+  times,
+  fade,
+  byLength = false,
+  windowed = false,
+) {
+  let kept = Array.from(times);
+  let along = points;
+  if (!byLength) {
+    const removed = [];
+    Cesium.arrayRemoveDuplicates(
+      points,
+      Cesium.Cartesian3.equalsEpsilon,
+      false,
+      removed,
+    );
+    if (removed.length) {
+      const gone = new Set(removed);
+      kept = kept.filter((_, i) => !gone.has(i));
+      along = points.filter((_, i) => !gone.has(i));
+    }
+  }
+  const count = kept.length;
+  const fractions = new Float64Array(count);
+  if (byLength) {
+    let total = 0;
+    let previous = null;
+    for (let i = 0; i < count; i++) {
+      const here = Cesium.Cartographic.fromCartesian(along[i]);
+      if (previous && here)
+        total += new Cesium.EllipsoidGeodesic(previous, here).surfaceDistance;
+      fractions[i] = total;
+      if (here) previous = here;
+    }
+    for (let i = 0; i < count; i++)
+      fractions[i] = total > 0 ? fractions[i] / total : 0;
+  } else
+    for (let i = 0; i < count; i++)
+      fractions[i] = count > 1 ? i / (count - 1) : 0;
+  let base = -Infinity;
+  for (const time of kept) if (time > base) base = time;
+  if (!Number.isFinite(base)) base = 0;
+  const width = Math.max(1, Math.min(count, AGE_TEXTURE_WIDTH));
+  const rows = Math.max(1, Math.ceil(count / width));
+  const data = new Float32Array(width * rows * 4);
+  for (let i = 0; i < count; i++) {
+    data[i * 4] = fractions[i];
+    data[i * 4 + 1] = (kept[i] - base) / 1000;
+  }
+  return {
+    data,
+    width,
+    rows,
+    count,
+    base,
+    uniforms: {
+      ageCount: count,
+      ageWidth: width,
+      ageRows: rows,
+      ageByLength: byLength ? 1 : 0,
+      ageWindow: fade.windowMs / 1000,
+      ageAlphaFloor: fade.alphaFloor,
+      ageSquaredFloor: fade.squaredAlphaFloor ?? -1,
+      ageWidthFloor: fade.widthFloor ?? 1,
+      ageShow: showUniform(windowed ? fade.showMs : undefined),
+    },
+  };
+}
+
+/**
+ * A window's `ageShow` uniform: its seconds; -1 for an endless one, cut at
+ * now alone; 0 for none.
+ * @param {number|undefined} showMs
+ */
+const showUniform = (showMs) =>
+  showMs === undefined ? 0 : Number.isFinite(showMs) ? showMs / 1000 : -1;
+
+/**
+ * A line's `ageFade`, checked: one finite time a position, over a positive
+ * window, its floors from 0 to 1, and a `showMs` positive where it has one.
+ * Refused otherwise.
+ * @param {import('../contract/draw').LineItem} item
+ */
+function checkAgeFade(item) {
+  const fade = item.ageFade;
+  if (fade == null) return;
+  const count =
+    item.positions instanceof Float64Array
+      ? item.positions.length / 3
+      : item.positions.length;
+  const floor = (value) => value === undefined || (value >= 0 && value <= 1);
+  if (
+    !fade.times ||
+    fade.times.length !== count ||
+    !Array.prototype.every.call(fade.times, Number.isFinite) ||
+    !(fade.windowMs > 0 && Number.isFinite(fade.windowMs)) ||
+    !(fade.alphaFloor >= 0 && fade.alphaFloor <= 1) ||
+    !floor(fade.squaredAlphaFloor) ||
+    !floor(fade.widthFloor) ||
+    !(fade.showMs === undefined || fade.showMs > 0)
+  )
+    throw new TypeError(
+      'a line fades with one finite time a position, over a positive window, with floors from 0 to 1, shown over a positive span',
+    );
+}
+
+/**
  * The `flow` lines' clock, seconds, for a line flowing at `speed` cells a
  * second: wrapped to one cell's time, which draws the same dashes, so the
  * single-precision uniform never runs out of digits over a long session.
@@ -477,6 +679,10 @@ export function createCesiumDraw({
   now = () => performance.now(),
 }) {
   const sets = new Map();
+  // Lines fade with the age of their points (`LineItem.ageFade`).
+  const ageFades = capabilities.has('lineAgeFade');
+  // And draw only within a span of the scene clock (`LineAgeFade.showMs`).
+  const timeWindows = ageFades && capabilities.has('lineTimeWindow');
   // Fields share the sets' ids.
   const fieldPart = createCesiumFields({
     scene,
@@ -562,9 +768,11 @@ export function createCesiumDraw({
     // changes.
     const checkPulses = (list) => {
       if (kind === 'lines')
-        for (const item of list)
+        for (const item of list) {
           if (item.style?.kind === 'split' && item.mode !== 'draped')
             throw new TypeError('a split line is draped');
+          if (ageFades) checkAgeFade(item);
+        }
       if (kind !== 'shapes') return;
       for (const item of list) pulseOf(item);
       if (list.some((item) => item.animate)) record.mayPulse = true;
@@ -2309,32 +2517,47 @@ export function createCesiumDraw({
    * (the route annotations' dashes, which run toward the line's end on the
    * clock `flowTime` keeps) is noted for the frame clock.
    */
-  function lineMaterial(record, style, reveal) {
+  function lineMaterial(record, style, reveal, age) {
     const fabric = lineFabric(style);
     // Built from its type, then given its values, as `fromType` does:
     // values in the fabric would be merged into copies of the type's.
     const template = ({ type, source, uniforms }) =>
       source ? { type, source, uniforms } : { type };
-    // A pattern's image carries its own alpha, and a split line's colours
-    // may each have one: drawn in the translucent pass, whatever its colour.
+    // A pattern's image carries its own alpha, a split line's colours may
+    // each have one, and an aged line fades: drawn in the translucent pass,
+    // whatever its colour.
     const translucent =
-      style.kind === 'pattern' || style.kind === 'split'
+      style.kind === 'pattern' || style.kind === 'split' || age
         ? { translucent: true }
         : {};
-    const material =
-      reveal === undefined
-        ? new Cesium.Material({ fabric: template(fabric), ...translucent })
-        : new Cesium.Material({
-            fabric: {
-              type: `${REVEAL_MATERIAL}_${style.kind}`,
-              materials: { revealed: template(fabric) },
-              uniforms: { reveal },
-              source: REVEAL_SOURCE,
-            },
-            ...translucent,
-          });
-    const drawn = reveal === undefined ? material : material.materials.revealed;
+    let built = template(fabric);
+    if (reveal !== undefined)
+      built = {
+        type: `${REVEAL_MATERIAL}_${style.kind}`,
+        materials: { revealed: built },
+        uniforms: { reveal },
+        source: REVEAL_SOURCE,
+      };
+    if (age)
+      built = {
+        type: `${AGE_MATERIAL}_${reveal === undefined ? '' : 'revealed_'}${style.kind}`,
+        materials: { aged: built },
+        uniforms: {
+          ...age.uniforms,
+          ages: Cesium.Material.DefaultImageId,
+          ageNow: 0,
+        },
+        source: AGE_SOURCE,
+      };
+    const material = new Cesium.Material({ fabric: built, ...translucent });
+    const drawn = styleMaterial(material);
     Object.assign(drawn.uniforms, fabric.uniforms);
+    if (age) {
+      // Translucent whatever its style's colour: a composite material is
+      // translucent only where all of its parts are.
+      material.translucent = true;
+      noteAge(record, material, age);
+    }
     const flow = flowOf(material, style);
     if (flow) record.flowMaterials.push(flow);
     if (style.kind === 'pattern') holdImage(material, style.image);
@@ -2346,11 +2569,7 @@ export function createCesiumDraw({
    * line draws), for the frame clock; null for other styles.
    */
   const flowOf = (material, style) =>
-    style.kind !== 'flow'
-      ? null
-      : material.type === FLOW_MATERIAL
-        ? material
-        : material.materials.revealed;
+    style.kind !== 'flow' ? null : styleMaterial(material);
 
   /** Stop running the clock of a line material that no longer draws. */
   function dropFlow(record, material, style) {
@@ -2361,6 +2580,125 @@ export function createCesiumDraw({
 
   /** Whether a line draws only the first part of its length. */
   const revealed = (item) => item.revealFraction !== undefined;
+
+  /**
+   * Note an age-faded line's material, which takes the scene's time each
+   * frame (`runAges`) and its points' times as a texture. `owner`, the
+   * primitive drawing it where that is not a polyline collection's (which
+   * destroys the materials of the lines it lets go): the material goes with
+   * it (`claimAges`).
+   */
+  function noteAge(record, material, age) {
+    (record.ages ??= new Map()).set(material, {
+      age,
+      texture: null,
+      dirty: true,
+      owner: null,
+    });
+    (record.unclaimedAges ??= []).push(material);
+    material.uniforms.ageNow = (sceneMs() - age.base) / 1000;
+  }
+
+  /** The aged materials made since the last claim are `owner`'s. */
+  function claimAges(record, owner) {
+    for (const material of record.unclaimedAges?.splice(0) ?? []) {
+      const entry = record.ages.get(material);
+      if (entry && owner) entry.owner = owner;
+    }
+  }
+
+  /** An aged line's material takes its line's new points and times. */
+  function writeAge(record, material, age) {
+    const entry = record.ages?.get(material);
+    if (!entry) return;
+    const was = entry.age;
+    Object.assign(material.uniforms, age.uniforms);
+    entry.age = age;
+    material.uniforms.ageNow = (sceneMs() - age.base) / 1000;
+    if (
+      was.width === age.width &&
+      was.rows === age.rows &&
+      was.data.every((value, i) => Object.is(value, age.data[i]))
+    )
+      return;
+    entry.dirty = true;
+    requestRender();
+  }
+
+  /** The scene's time now, epoch ms: the frame's, once one has drawn. */
+  const sceneMs = () =>
+    Cesium.JulianDate.toDate(
+      scene.frameState?.time ?? Cesium.JulianDate.now(),
+    ).getTime();
+
+  /**
+   * Each frame, before it draws: every aged line's material takes the
+   * scene's time, and its points' times where they changed (written into
+   * its texture, or a new one where it changed size). A material whose
+   * line is gone goes, with its texture.
+   */
+  function runAges() {
+    let ms = null;
+    for (const record of sets.values()) {
+      if (!record.ages?.size) continue;
+      ms ??= sceneMs();
+      for (const [material, entry] of record.ages) {
+        if (dropAge(record, material, entry)) continue;
+        material.uniforms.ageNow = (ms - entry.age.base) / 1000;
+        if (entry.dirty && scene.context) uploadAge(material, entry);
+      }
+    }
+  }
+
+  /** Let an aged material go if its line is gone; true if it went. */
+  function dropAge(record, material, entry) {
+    if (!material.isDestroyed() && !entry.owner?.isDestroyed()) return false;
+    if (!material.isDestroyed()) material.destroy();
+    // One handed over but never taken is no one's.
+    if (entry.texture && !entry.texture.isDestroyed()) entry.texture.destroy();
+    record.ages.delete(material);
+    return true;
+  }
+
+  /** Write an aged material's times into its texture, made as needed. */
+  function uploadAge(material, entry) {
+    const { data, width, rows } = entry.age;
+    const source = { width, height: rows, arrayBufferView: data };
+    entry.dirty = false;
+    const texture = entry.texture;
+    if (
+      texture &&
+      !texture.isDestroyed() &&
+      texture.width === width &&
+      texture.height === rows
+    ) {
+      texture.copyFrom({ source });
+      return;
+    }
+    if (
+      texture &&
+      !texture.isDestroyed() &&
+      materialTexture(material, 'ages') !== texture
+    )
+      texture.destroy();
+    entry.texture = new Cesium.Texture({
+      context: scene.context,
+      width,
+      height: rows,
+      pixelFormat: Cesium.PixelFormat.RGBA,
+      pixelDatatype: Cesium.PixelDatatype.FLOAT,
+      flipY: false,
+      source,
+      sampler: new Cesium.Sampler({
+        wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
+        wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+        minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+        magnificationFilter: Cesium.TextureMagnificationFilter.NEAREST,
+      }),
+    });
+    // The material destroys the texture it held once it takes this one.
+    material.uniforms.ages = entry.texture;
+  }
 
   /** The fabric of a line style's material. */
   function lineFabric(style) {
@@ -2440,7 +2778,12 @@ export function createCesiumDraw({
     }
   }
 
-  function linePositions(item) {
+  /**
+   * A line's positions as drawn: a geodesic one cut along its arc. With
+   * `times` (one a position), `timesOut` takes the time of each point drawn,
+   * running evenly between the positions'.
+   */
+  function linePositions(item, times = null, timesOut = null) {
     const flat = item.positions instanceof Float64Array;
     const points = [];
     const n = flat ? item.positions.length / 3 : item.positions.length;
@@ -2454,7 +2797,10 @@ export function createCesiumDraw({
             )
           : toCartesian(item.positions[i]),
       );
-    if (item.mode !== 'geodesic') return points;
+    if (item.mode !== 'geodesic') {
+      if (timesOut) for (let i = 0; i < n; i++) timesOut.push(times[i]);
+      return points;
+    }
     const dense = [];
     for (let i = 0; i + 1 < points.length; i++) {
       const a = Cesium.Cartographic.fromCartesian(points[i]);
@@ -2469,6 +2815,7 @@ export function createCesiumDraw({
       );
       for (let k = 0; k < steps; k++) {
         const s = k / steps;
+        if (timesOut) timesOut.push(times[i] + (times[i + 1] - times[i]) * s);
         const at = geodesic.interpolateUsingFraction(s);
         dense.push(
           Cesium.Cartesian3.fromRadians(
@@ -2480,7 +2827,30 @@ export function createCesiumDraw({
       }
     }
     dense.push(points.at(-1));
+    if (timesOut) timesOut.push(times[n - 1]);
     return dense;
+  }
+
+  /** Whether a line fades with age here: it asks, and the port lists it. */
+  const aged = (item) => ageFades && item.ageFade != null;
+
+  /**
+   * What an age-faded line's material draws from (`lineAgeData`), for the
+   * line drawn along `positions` (as `linePositions` made them from it, by
+   * default); undefined for a line that does not fade. A draped line, and
+   * one drawn over the surface for it, lies along its texture by length.
+   */
+  function ageOf(item, positions) {
+    if (!aged(item)) return undefined;
+    const times = [];
+    const drawn = linePositions(item, item.ageFade.times, times);
+    return lineAgeData(
+      positions ?? drawn,
+      times,
+      item.ageFade,
+      item.mode === 'draped' || item.overlaid === true,
+      timeWindows,
+    );
   }
 
   /**
@@ -2503,8 +2873,9 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction, positions)
       : undefined;
-    const material = lineMaterial(record, item.style, reveal);
-    return new Cesium.Primitive({
+    const age = ageOf(item, positions);
+    const material = lineMaterial(record, item.style, reveal, age);
+    const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
         geometry: new Cesium.PolylineGeometry({
           positions,
@@ -2522,7 +2893,7 @@ export function createCesiumDraw({
       appearance: new Cesium.PolylineMaterialAppearance({ material }),
       depthFailAppearance: item.depthFail
         ? new Cesium.PolylineMaterialAppearance({
-            material: lineMaterial(record, item.depthFail, reveal),
+            material: lineMaterial(record, item.depthFail, reveal, age),
           })
         : undefined,
       show: item.show !== false,
@@ -2530,6 +2901,8 @@ export function createCesiumDraw({
       // A set that never picks keeps these out of the pick pass too.
       allowPicking: record.spec.pickable !== false,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /**
@@ -2562,7 +2935,10 @@ export function createCesiumDraw({
    * colours only, so an outlined line draws by its own material.
    */
   const batchable = (item) =>
-    item.style.kind === 'solid' && !item.style.outline && !revealed(item);
+    item.style.kind === 'solid' &&
+    !item.style.outline &&
+    !revealed(item) &&
+    !aged(item);
 
   /**
    * A ground primitive of a draped line's own, drawn by a material (a
@@ -2582,18 +2958,21 @@ export function createCesiumDraw({
         record,
         item.style,
         revealed(item) ? revealUniform(item.revealFraction) : undefined,
+        ageOf(item, positions),
       );
       appearance = new Cesium.PolylineMaterialAppearance({
         material: part.material,
       });
     }
-    return new Cesium.GroundPolylinePrimitive({
+    const primitive = new Cesium.GroundPolylinePrimitive({
       geometryInstances: [drapedInstance(item, part, solid, positions)],
       appearance,
       classificationType: classificationOf(part.clampTo),
       allowPicking: record.spec.pickable !== false,
       asynchronous: !sync,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /**
@@ -2666,7 +3045,8 @@ export function createCesiumDraw({
         item.mode === 'draped' &&
         item.style.kind === 'solid' &&
         !item.style.outline &&
-        !revealed(item)
+        !revealed(item) &&
+        !aged(item)
       )) ||
     (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail);
 
@@ -2699,6 +3079,7 @@ export function createCesiumDraw({
       look: lineLook(item),
       id,
       from: flatPositions(item.positions),
+      ageFrom: aged(item) ? Array.from(item.ageFade.times) : null,
       reveal: item.revealFraction,
       pieces: [],
     };
@@ -2739,6 +3120,15 @@ export function createCesiumDraw({
         positions,
         style: pieceStyle(item, j, j === spans.length - 1),
         ...(revealed(item) && shown < 1 ? { revealFraction: shown } : {}),
+        // Its own points' times.
+        ...(aged(item)
+          ? {
+              ageFade: {
+                ...item.ageFade,
+                times: Array.prototype.slice.call(item.ageFade.times, a, b + 1),
+              },
+            }
+          : {}),
       };
       if (!(revealed(item) && shown < 1)) delete sub.revealFraction;
       const draped = item.mode === 'draped';
@@ -2779,7 +3169,7 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction)
       : undefined;
-    return new Cesium.GroundPolylinePrimitive({
+    const primitive = new Cesium.GroundPolylinePrimitive({
       geometryInstances: [
         new Cesium.GeometryInstance({
           geometry: new Cesium.GroundPolylineGeometry({
@@ -2792,13 +3182,15 @@ export function createCesiumDraw({
         }),
       ],
       appearance: new Cesium.PolylineMaterialAppearance({
-        material: lineMaterial(record, item.style, reveal),
+        material: lineMaterial(record, item.style, reveal, ageOf(item)),
       }),
       classificationType: classificationOf(
         item.clampTo ?? record.spec.clampTo ?? 'both',
       ),
       allowPicking: record.spec.pickable !== false,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /** A pieced line's colours and shows, written in place. */
@@ -2807,8 +3199,7 @@ export function createCesiumDraw({
       if (!piece || piece.primitive.isDestroyed()) continue;
       const style = pieceStyle(item, piece.j, piece.last);
       const material = piece.primitive.appearance.material;
-      if (style.kind !== 'pattern')
-        paintLine(material.materials?.revealed ?? material, style);
+      if (style.kind !== 'pattern') paintLine(material, style);
       const show = pieceShows(item, piece.j, piece.shown);
       if (!piece.draped) piece.primitive.show = show;
       else if (piece.primitive.ready) {
@@ -2842,8 +3233,18 @@ export function createCesiumDraw({
       const first = segmentShow.indexOf(true);
       const last = segmentShow.lastIndexOf(true);
       if (first < 0) line.show = false;
-      else if (first > 0 || last < segmentShow.length - 1)
+      else if (first > 0 || last < segmentShow.length - 1) {
         line.positions = linePositions(item).slice(first, last + 2);
+        if (item.ageFade)
+          line.ageFade = {
+            ...item.ageFade,
+            times: Array.prototype.slice.call(
+              item.ageFade.times,
+              first,
+              last + 2,
+            ),
+          };
+      }
     }
     return line;
   }
@@ -2855,11 +3256,12 @@ export function createCesiumDraw({
    */
   function overlayRecoloured(record, part, item) {
     const deep = part.deep;
-    if (!item.overlaid || !deep || revealed(item)) return false;
+    // An aged one may have new times: built anew.
+    if (!item.overlaid || !deep || revealed(item) || aged(item)) return false;
     if (!flatEquals(item.positions, part.overlayFrom)) return false;
     // Only its colour may have changed (`patchLines` checked its look).
     paintLine(deep.appearance.material, item.style);
-    deep.depthFailAppearance.material.uniforms.color = toColor(
+    styleMaterial(deep.depthFailAppearance.material).uniforms.color = toColor(
       item.style.color,
     );
     const line = record.overlayLines.find((entry) => entry.part === part);
@@ -3016,7 +3418,7 @@ export function createCesiumDraw({
           draped.get(clampTo).push(...instances);
           continue;
         }
-        if (item.style.kind === 'glow' && !revealed(item)) {
+        if (item.style.kind === 'glow' && !revealed(item) && !aged(item)) {
           if (!glows.has(part.look)) glows.set(part.look, []);
           glows.get(part.look).push({ item, part });
           continue;
@@ -3087,8 +3489,8 @@ export function createCesiumDraw({
         shape: settled ? looks.shape(item) : null,
         positions: settled ? flatPositions(item.positions) : null,
         // An outlined line, which never settles, takes its colours in
-        // place too: how it draws but for them.
-        outlined: item.style.outline ? looks.shape(item) : null,
+        // place too: how it draws but for them; and so does an aged one.
+        outlined: item.style.outline || aged(item) ? looks.shape(item) : null,
         id,
         polyline,
         reveal,
@@ -3192,6 +3594,7 @@ export function createCesiumDraw({
 
   /** Give a line's material its style's colours, its outline's too. */
   function paintLine(material, style) {
+    material = styleMaterial(material);
     material.uniforms.color = toColor(style.color);
     if (style.outline && 'outlineColor' in material.uniforms)
       material.uniforms.outlineColor = toColor(style.outline.color);
@@ -3223,6 +3626,16 @@ export function createCesiumDraw({
       item.segmentShow != null,
       revealed(item),
       item.frame,
+      // How it fades with age (its times change with its positions).
+      aged(item)
+        ? [
+            item.ageFade.windowMs,
+            item.ageFade.alphaFloor,
+            item.ageFade.squaredAlphaFloor,
+            item.ageFade.widthFloor,
+            showUniform(timeWindows ? item.ageFade.showMs : undefined),
+          ]
+        : null,
     ]);
 
   /**
@@ -3238,7 +3651,23 @@ export function createCesiumDraw({
     (a.segmentColors != null) === (b.segmentColors != null) &&
     (a.segmentShow != null) === (b.segmentShow != null) &&
     revealed(a) === revealed(b) &&
-    a.frame === b.frame;
+    a.frame === b.frame &&
+    sameAgeLook(a, b);
+
+  /** Whether two lines fade with age alike, but for their times. */
+  const sameAgeLook = (a, b) => {
+    if (aged(a) !== aged(b)) return false;
+    if (!aged(a)) return true;
+    const x = a.ageFade;
+    const y = b.ageFade;
+    return (
+      x.windowMs === y.windowMs &&
+      x.alphaFloor === y.alphaFloor &&
+      x.squaredAlphaFloor === y.squaredAlphaFloor &&
+      x.widthFloor === y.widthFloor &&
+      (!timeWindows || x.showMs === y.showMs)
+    );
+  };
 
   /**
    * `lineLook`, kept for the last item asked for: within one upsert, lines
@@ -3276,6 +3705,16 @@ export function createCesiumDraw({
       else flat.push(p.lon, p.lat, p.height ?? 0, NaN);
     return flat;
   }
+
+  /** Whether a line's age times are `times` (null: it does not fade). */
+  const sameTimes = (item, times) =>
+    aged(item)
+      ? times !== null &&
+        item.ageFade.times.length === times.length &&
+        Array.prototype.every.call(item.ageFade.times, (time, i) =>
+          Object.is(time, times[i]),
+        )
+      : times === null;
 
   const samePositions = (a, b) =>
     a === b ||
@@ -3423,6 +3862,7 @@ export function createCesiumDraw({
           !piecewise(item) ||
           lookOf.look(item) !== was.look ||
           !flatEquals(item.positions, was.from) ||
+          !sameTimes(item, was.ageFrom) ||
           item.revealFraction !== was.reveal ||
           was.pieces.some((piece) => piece?.primitive.isDestroyed())
         )
@@ -3446,6 +3886,9 @@ export function createCesiumDraw({
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
       if (!was.clampTo) continue;
+      // A draped line that fades with age is built anew: its times may
+      // have changed with or without its positions.
+      if (aged(item)) return false;
       const flat = flatEquals(item.positions, was.positions)
         ? was.positions
         : flatPositions(item.positions);
@@ -3515,7 +3958,9 @@ export function createCesiumDraw({
         continue;
       }
       if (was.material && revealed(item))
-        was.material.uniforms.reveal = revealUniform(item.revealFraction);
+        unaged(was.material).uniforms.reveal = revealUniform(
+          item.revealFraction,
+        );
       if (was.solo) {
         // Not yet drawn, it is built again showing as asked.
         if (was.ground && was.ground.ready) showPart(was, show);
@@ -3549,7 +3994,12 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction, positions)
       : undefined;
-    const material = lineMaterial(record, item.style, reveal);
+    const material = lineMaterial(
+      record,
+      item.style,
+      reveal,
+      ageOf(item, positions),
+    );
     const polyline = polylines.add({
       positions,
       width: item.widthPx,
@@ -3557,9 +4007,11 @@ export function createCesiumDraw({
       show: item.show !== false,
       id,
     });
+    // The collection destroys the material when it lets the line go.
+    claimAges(record, null);
     return {
       polyline,
-      reveal: reveal === undefined ? null : material,
+      reveal: reveal === undefined ? null : unaged(material),
       parked: false,
     };
   }
@@ -3573,6 +4025,8 @@ export function createCesiumDraw({
     item.mode !== 'draped' &&
     item.frame !== 'inertial' &&
     !item.depthFail &&
+    // A batch draws one colour per line, unfaded.
+    !aged(item) &&
     item.style.kind === 'solid' &&
     // A batch draws one colour per line, no outline.
     !item.style.outline &&
@@ -3680,6 +4134,9 @@ export function createCesiumDraw({
     if (!unmoved) was.polyline.positions = positions;
     was.polyline.show = show;
     if (recolour) paintLine(was.polyline.material, item.style);
+    // Its points' times, with its points.
+    if (aged(item))
+      writeAge(record, was.polyline.material, ageOf(item, positions));
     if (was.reveal)
       was.reveal.uniforms.reveal = revealUniform(
         item.revealFraction,
@@ -5451,6 +5908,7 @@ export function createCesiumDraw({
       cullHorizon();
       clusterIcons();
       runFlows();
+      runAges();
       for (const record of sets.values()) {
         if (record.inertialLines || record.inertialPieces?.length)
           turnInertial(record);
@@ -5501,6 +5959,10 @@ export function createCesiumDraw({
       fieldPart.dispose();
       // Part shaders and their textures go with it too.
       modelSets.dispose();
+      // Aged lines' materials whose lines are gone, with their textures.
+      for (const record of sets.values())
+        for (const [material, entry] of record.ages ?? [])
+          dropAge(record, material, entry);
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) {
         if (removeHosts && !scene.isDestroyed?.()) {

@@ -1790,6 +1790,43 @@ async function main() {
       gizmoStates.map((s, i) => `${GIZMO_PARTS[i]}=${s}`).join(' '),
     );
 
+    // Frame the actual gizmo for the drag fixture. Default autofocus can leave
+    // its shaft below the 10px interaction threshold; that distant view is not
+    // the drag-usability scenario this regression exercises. The gizmo is drawn
+    // through the renderer ports, so its arrow is read from the layer's drawn
+    // state (plain {x,y,z} points), not from viewer.entities.
+    const dragFraming = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const arrow = () =>
+        mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east']?.positions;
+      if (!arrow()?.length) return null;
+      const Cartesian3 = viewer.camera.positionWC.constructor;
+      const measure = () => {
+        const pts = arrow();
+        if (!pts?.length) return { shaftPx: null, rangeM: null };
+        const a = viewer.scene.cartesianToCanvasCoordinates(pts[0]);
+        const b = viewer.scene.cartesianToCanvasCoordinates(pts[pts.length - 1]);
+        return {
+          shaftPx: a && b ? Math.hypot(b.x - a.x, b.y - a.y) : null,
+          rangeM: Cartesian3.distance(viewer.camera.positionWC, pts[0]),
+        };
+      };
+      const before = measure();
+      const target = Cartesian3.clone(arrow()[0]);
+      viewer.camera.cancelFlight();
+      viewer.camera.lookAt(target, new Cartesian3(0, -200, 180));
+      viewer.camera.lookAtTransform(viewer.camera.transform.constructor.IDENTITY);
+      viewer.scene.requestRender();
+      const frames = await window.__qaRenderFrames(3, 10000);
+      return { before, after: measure(), frames };
+    });
+    record(
+      'drag fixture frames the east arrow above the 10px grab threshold',
+      dragFraming?.after?.shaftPx >= 10,
+      JSON.stringify(dragFraming),
+    );
+
     // Synthetic CDP drag on the EAST arrow — the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.

@@ -129,6 +129,97 @@ test('a click nobody reads is never picked', (t) => {
   assert.equal(h.calls.pick, 0);
 });
 
+test('a painted overlay can claim a click before its underlying owner', (t) => {
+  registerPickOwner('satellites', (id) => id === '25544');
+  t.after(() => unregisterPickOwner('satellites'));
+  const h = harness({ pick: () => ({ id: '25544' }) });
+  t.after(() => h.input.destroy());
+  const clicks = [];
+
+  h.input.onClick((event) => clicks.push(event.ownerId));
+  const offOverlay = h.input.onOverlayClick(({ screenPosition }) => {
+    if (screenPosition.x !== 10) return false;
+    clicks.push('mission label');
+    return true;
+  });
+  h.input.onPointer('click', () => clicks.push('ambient pointer'));
+
+  h.click();
+  // The click still reaches every subscriber, as one on the label.
+  assert.deepEqual(clicks, ['mission label', 'ambient pointer', null]);
+  assert.equal(h.calls.pick, 0);
+
+  h.click(11, 10);
+  offOverlay();
+  h.click();
+  assert.deepEqual(clicks, [
+    'mission label',
+    'ambient pointer',
+    null,
+    'ambient pointer',
+    'satellites',
+    'ambient pointer',
+    'satellites',
+  ]);
+});
+
+test('a click a painted overlay handles still reaches subscribers that clear selection', (t) => {
+  const h = harness({
+    pick: () => ({ set: 'flights', id: 'abc123' }),
+    drillPick: () => [{ set: 'flights', id: 'abc123' }],
+  });
+  t.after(() => h.input.destroy());
+  let seenByOverlay = null;
+  h.input.onOverlayClick((event) => {
+    seenByOverlay = event;
+    return true;
+  });
+  const seen = [];
+  h.input.onClick((event) => {
+    seen.push({
+      same: event === seenByOverlay,
+      overlay: event.overlay,
+      topHit: event.topHit,
+      drawHit: event.drawHit,
+      hit: event.hit,
+      id: event.id,
+      ownerId: event.ownerId,
+      surface: event.surface,
+      drill: event.drill(4),
+      windowHit: event.windowHit(8, 8),
+      pick: event.pick,
+    });
+  });
+  h.click();
+  assert.deepEqual(seen, [
+    {
+      same: true,
+      overlay: true,
+      topHit: { set: '', id: null, surface: false },
+      drawHit: null,
+      hit: { set: '', id: null, surface: false },
+      id: null,
+      ownerId: null,
+      surface: false,
+      drill: [],
+      windowHit: { id: null, drawHit: null, surface: false },
+      pick: undefined,
+    },
+  ]);
+  assert.equal(h.calls.pick, 0, 'the geometry beneath is not picked');
+  assert.equal(h.calls.drillPick, 0);
+
+  // Without an overlay target the same click picks the geometry.
+  seen.length = 0;
+  h.input.destroy();
+  const g = harness({ pick: () => ({ set: 'flights', id: 'abc123' }) });
+  t.after(() => g.input.destroy());
+  g.input.onClick((event) => seen.push([event.overlay, event.topHit]));
+  g.click();
+  assert.equal(seen[0][0], false);
+  assert.equal(g.calls.pick, 1);
+});
+
 test('the gesture carries summed travel and press time', (t) => {
   const h = harness();
   t.after(() => h.input.destroy());

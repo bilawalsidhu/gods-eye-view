@@ -295,6 +295,48 @@ export type LineStyle =
       rim?: { shade: number; widthFraction: number };
     };
 
+/**
+ * `lineAgeFade`: a line that fades with the age of its points, drawn by the
+ * renderer on the scene clock (`frame.setTime`), so a line whose points stay
+ * where they are is not sent again as time passes. A point's recency is
+ * `1 - clamp((now - time) / windowMs, 0, 1)`, its time running evenly
+ * between neighbouring positions, so the fade is smooth along the line, not
+ * stepped at its points. The line's colour (its style's, or a segment's from
+ * `segmentColors`) draws at its alpha times
+ * `mix(alphaFloor, 1, smoothstep(0, 1, recency))`, and with
+ * `squaredAlphaFloor` times `mix(squaredAlphaFloor, 1, recency²)` as well;
+ * with `widthFloor` it draws `widthPx` times `mix(widthFloor, 1, recency)`
+ * wide, about its path. A point at or past the window draws at the floors, a
+ * point at or after now at full strength. New `times` with new positions are
+ * an ordinary update.
+ *
+ * `lineTimeWindow`: with `showMs`, only the part of the line within `showMs`
+ * of now is drawn, cut along it where its interpolated time crosses: parts
+ * whose time is after now, or before `now - showMs`, are not drawn (nor
+ * picked). The cut follows the scene clock as the fade does, so a moving
+ * object's trail can be its whole track, sent once: drawn from `showMs` ago
+ * up to where the object is now. A renderer without the capability ignores
+ * `showMs` and draws the whole line.
+ */
+export interface LineAgeFade {
+  /** Each position's time, epoch ms on the scene clock: one per position. */
+  times: number[] | Float64Array;
+  /** The age a point fades over, ms; positive. */
+  windowMs: number;
+  /** A fully aged point's alpha multiplier, 0..1. */
+  alphaFloor: number;
+  /** A second alpha multiplier's floor, eased by recency squared, 0..1. */
+  squaredAlphaFloor?: number;
+  /** A fully aged point's width multiplier, 0..1 [1, no narrowing]. */
+  widthFloor?: number;
+  /**
+   * `lineTimeWindow`: draw only the part of the line from `showMs` before
+   * now up to now, ms; positive (`Infinity`: up to now, however old).
+   * [absent: the whole line]
+   */
+  showMs?: number;
+}
+
 export interface LineItem {
   id: string;
   /** ECEF positions, or packed `x, y, z` triples. */
@@ -321,6 +363,8 @@ export interface LineItem {
   segmentShow?: boolean[];
   /** Draw only the first fraction of the line, 0..1. */
   revealFraction?: number;
+  /** `lineAgeFade`: fade the line with the age of its points (`LineAgeFade`). */
+  ageFade?: LineAgeFade;
   /** Positions are in a frame rotating with the sky (orbits). */
   frame?: 'fixed' | 'inertial';
   meta?: Meta;
@@ -444,6 +488,15 @@ export interface ModelItem extends Placed {
    * would not hide what lies below it). Can change live.
    */
   clip?: 'belowOrigin';
+  /**
+   * Transforms of the model's named glTF nodes (an articulated model's
+   * joints): each a column-major 4×4 matrix in the node's parent frame that
+   * replaces the node's own transform. A node whose name leaves the map goes
+   * back to its authored pose; names the model lacks are ignored. Applied
+   * once the model is ready, on a renderer with the `modelNodes`
+   * capability; elsewhere the model draws as authored. Can change live.
+   */
+  nodes?: Readonly<Record<string, ArrayLike<number>>>;
   /**
    * Emphasis for a focused model, 0..1, 1 = none: the tint's alpha is
    * multiplied by it (in a set that recedes, as `RecedeSpec` says). Can
@@ -584,6 +637,8 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+      /** What the raster shows, as imagery's `shows`. */
+      shows?: string;
     };
 
 export interface FieldHandle extends Handle {

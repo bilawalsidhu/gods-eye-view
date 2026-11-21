@@ -40,3 +40,6 @@ export { createFirmsSource } from './source.js';
 export { createFireAnchors, FIRE_ANCHOR_LIFT_M } from './anchors.js';
 export * from '../../data/firmsAdapt.js';
 export * from '../../data/firmsLabels.js';
+// The layer's own FRP and Confidence filter, for an application drawing the same detections
+// another way: what it draws then matches the layer's markers under the same filter.
+export { DEFAULT_FIRE_FILTER, filterFires } from '../../data/firmsIntensity.js';

@@ -173,6 +173,18 @@ test('the NYC camera credit carries NYC DOT’s requested disclaimer', () => {
   assert.match(credit.html, /observe posted signage/);
 });
 
+test('the Ontario 511 camera credit carries the licence attribution statement', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'ontario-511-cctv');
+  assert.ok(credit, 'Ontario 511 camera frames must be credited');
+  assert.ok(
+    credit.html.includes(
+      'Contains information licensed under the <a href="https://www.ontario.ca/page/open-government-licence-ontario"',
+    ),
+  );
+  assert.match(credit.html, />Open Government Licence – Ontario<\/a>/);
+  assert.match(credit.html, /Provided as is, without warranty/);
+});
+
 test("the Houston camera credit names TranStar's terms and the permission they require", () => {
   const credit = DATA_CREDITS.find((entry) => entry.key === 'houston-cctv');
   assert.ok(credit, 'Houston TranStar camera frames must be credited');

@@ -157,6 +157,8 @@ export type Capability =
   | 'terrain'
   /** Atmosphere scattering applied to drawn models. */
   | 'modelAtmosphere'
+  /** A model item's `nodes` pose the model's named glTF nodes. */
+  | 'modelNodes'
   /** Clouds, fog, haze, rain and snow around the view (`globe.weather`). */
   | 'weather'
   /** Imagery draped onto 3D tiles as well as the globe. */
@@ -165,6 +167,8 @@ export type Capability =
   | 'splitSwipe'
   /** Timed imagery frames with hidden prefetch. */
   | 'imageryFrames'
+  /** Timed imagery the application hands over as finished tile images (`decoded`). */
+  | 'imageryDecoded'
   /** Wind-relief and similar shading of the globe surface. */
   | 'surfaceShading'
   /** A version of what surface heights answer against (`globe.surfaceVersion`). */
@@ -179,6 +183,8 @@ export type Capability =
   | 'pickPosition'
   /** Points tested against the frame's depth (`query.occlusionTest`). */
   | 'occlusionTest'
+  /** Conservative camera visibility of a point set (`camera.visiblePoints`). */
+  | 'pointVisibility'
   /** Outward user zooms that keep the Earth framed (`controls.keepEarthFramed`). */
   | 'keepEarthFramed'
   /** Height sampling against tiles and terrain. */
@@ -201,6 +207,10 @@ export type Capability =
   | 'fields'
   /** Rate-limited course easing (`IconItem.courseGlide`). */
   | 'courseGlide'
+  /** Lines that fade with the age of their points (`LineItem.ageFade`). */
+  | 'lineAgeFade'
+  /** Lines drawn only within a span of the scene clock (`LineAgeFade.showMs`). */
+  | 'lineTimeWindow'
   /** Screen-space clustering of icons. */
   | 'cluster'
   /** Post-processing styles. */

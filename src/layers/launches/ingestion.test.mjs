@@ -8,6 +8,7 @@ import { createLaunchSource } from './source.js';
 import { createState } from './state.js';
 import { createModel } from './model.js';
 import { createIngestion } from './ingestion.js';
+import { createSatelliteIntents } from './satelliteIntents.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { layerFeedState } from '../../data/feedState.js';
@@ -147,6 +148,7 @@ async function fixture({ legacySource = false } = {}) {
   const context = { state, services, parts, source };
   parts.model = createModel(context);
   parts.ingestion = createIngestion(context);
+  parts.satelliteIntents = createSatelliteIntents(context);
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   const current = () => {
@@ -326,7 +328,11 @@ test('destroy followed by actual init starts a clean instance with owned handler
     assert.equal(typeof f.state._inputSubscription, 'function');
     await f.destroy();
     assert.equal(f.state._inputSubscription, null);
-    assert.equal(input.subscriberCount(), before - 2, 'click and hover');
+    assert.equal(
+      input.subscriberCount(),
+      before - 3,
+      'label click, point click and hover',
+    );
 
     assert.equal(f.attachedSets(), 0);
     assert.equal(f.viewer.scene.preRender.numberOfListeners, 0);

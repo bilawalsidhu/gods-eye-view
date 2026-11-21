@@ -60,16 +60,37 @@ export const GEO_PROGRESS_NOTIFY_INTERVAL_MS = 300;
 
 export const GEO_PROGRESS_NOTIFY_BATCH_LIMIT = 10;
 
-// View thinning: camera icons show only on or near the screen, and each
-// camera competes for a world-anchored grid cell sized to about VIEW_CELL_PX
-// at its distance from the viewer (in power-of-two metre steps, so a pan
-// keeps the same winners until a camera's distance crosses a step). Cells
-// smaller than VIEW_MIN_CELL_M do not thin:
-// close up every camera shows, co-located ones included.
+// View thinning groups cameras into world-anchored cells of about VIEW_CELL_PX
+// at their distance. Power-of-two metre steps keep cells stable during a pan.
+// A cell with several cameras draws one count. Its best-ranked camera represents
+// it in the picker. Cells smaller than VIEW_MIN_CELL_M do not group, so
+// every camera shows close up.
 
 export const VIEW_CELL_PX = 40;
 
 export const VIEW_MIN_CELL_M = 60;
+
+// Cameras within this horizontal distance in metres share a mount.
+export const VIEW_SITE_M = 1.5;
+
+// Cameras on one mount (VIEW_SITE_M) draw side by side,
+// this many pixels apart, once they show as icons.
+export const VIEW_SITE_SPREAD_PX = 30;
+
+// Drawn-terrain reads per view pass for unanswered cameras and for re-reads
+// of drawn heights. Off-screen cameras can use at most half of the budget.
+// Remaining reads wait for the next pass.
+export const VIEW_GROUND_READS = 300;
+
+/**
+ * The camera icon's drawn size (px). Its SVG is 48 px: 1.25×
+ * near scale on a 2× display draws it at 60 device px, so it is rasterised
+ * past the drawn size to stay sharp there.
+ */
+export const CAMERA_ICON_PX = 24;
+
+// Minimum gap between the outer rims of two separate markers.
+export const COUNT_MERGE_GAP_PX = 4;
 
 // Icons this far past the screen edge (fraction of its size) still show, so
 // a pan does not reveal empty ground before the next view pass.
@@ -182,28 +203,51 @@ export const DEFAULT_CAMERA_CALIBRATION = Object.freeze({
 /**
  * Base64-encoded SVG camera icon for the camera icons. Icons rasterise an
  * SVG at its own size, so it is 48 px: drawn at 24 px, 1.25× near scale on a
- * 2× display draws it at 60 device px, and it stays sharp there.
+ * 2× display draws it at 60 device px, and it stays sharp there. Active and
+ * live cameras use cyan art with a billboard tint. Idle cameras use white
+ * and gray art so the billboard green shows true. The overlay draws the
+ * green variant directly.
  */
 
-export const CAMERA_ICON = (() => {
+function cameraIcon(tint = null) {
+  function tone(original, gray) {
+    if (!tint) return original;
+    const shade = parseInt(gray.slice(1, 3), 16) / 255;
+    return (
+      '#' +
+      tint
+        .slice(1)
+        .match(/../g)
+        .map((channel) =>
+          Math.round(parseInt(channel, 16) * shade)
+            .toString(16)
+            .padStart(2, '0'),
+        )
+        .join('')
+    );
+  }
+  const stroke = tone('#75e7ff', '#ffffff');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 36 36">
     <defs>
       <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0%" stop-color="#c9f6ff"/>
-        <stop offset="45%" stop-color="#6fd9ff"/>
-        <stop offset="100%" stop-color="#1a5f78"/>
+        <stop offset="0%" stop-color="${tone('#c9f6ff', '#ffffff')}"/>
+        <stop offset="45%" stop-color="${tone('#6fd9ff', '#dddddd')}"/>
+        <stop offset="100%" stop-color="${tone('#1a5f78', '#666666')}"/>
       </linearGradient>
     </defs>
     <g transform="translate(4 6)">
-      <rect x="0" y="8" width="20" height="9" rx="2.5" fill="#0e1720" stroke="#75e7ff" stroke-width="1.2"/>
-      <rect x="17" y="10" width="10" height="5" rx="1.5" fill="#132433" stroke="#75e7ff" stroke-width="1"/>
-      <circle cx="24" cy="12.5" r="3.1" fill="url(#lens)" stroke="#dbfbff" stroke-width="0.8"/>
-      <rect x="6.4" y="17" width="4.2" height="8.5" rx="1.2" fill="#10212d" stroke="#75e7ff" stroke-width="1"/>
-      <rect x="4.2" y="24" width="8.6" height="2.5" rx="1.1" fill="#0b151d" stroke="#4ecde7" stroke-width="0.8"/>
+      <rect x="0" y="8" width="20" height="9" rx="2.5" fill="${tone('#0e1720', '#181818')}" stroke="${stroke}" stroke-width="1.2"/>
+      <rect x="17" y="10" width="10" height="5" rx="1.5" fill="${tone('#132433', '#222222')}" stroke="${stroke}" stroke-width="1"/>
+      <circle cx="24" cy="12.5" r="3.1" fill="url(#lens)" stroke="${tone('#dbfbff', '#ffffff')}" stroke-width="0.8"/>
+      <rect x="6.4" y="17" width="4.2" height="8.5" rx="1.2" fill="${tone('#10212d', '#202020')}" stroke="${stroke}" stroke-width="1"/>
+      <rect x="4.2" y="24" width="8.6" height="2.5" rx="1.1" fill="${tone('#0b151d', '#151515')}" stroke="${tone('#4ecde7', '#cccccc')}" stroke-width="0.8"/>
     </g>
   </svg>`;
   return 'data:image/svg+xml;base64,' + btoa(svg);
-})();
+}
+
+export const CAMERA_ICON = cameraIcon();
+export const IDLE_CAMERA_ICON = cameraIcon('#ffffff');
 
 /**
  * Seed camera definitions used when no live sources are available.
@@ -441,7 +485,11 @@ export const CAMERA_SEEDS = [
 // Visual style constants: renderer colours, [r, g, b, a] in 0..1
 // ---------------------------------------------------------------------------
 
-export const IDLE_CAMERA_COLOR = hexColor('#6be8ff', 0.88);
+/** Shared accent for idle still cameras and grouped cameras. */
+export const CAMERA_GREEN = '#5dff8f';
+export const COUNT_CAMERA_ICON = cameraIcon(CAMERA_GREEN);
+
+export const IDLE_CAMERA_COLOR = hexColor(CAMERA_GREEN);
 
 export const ACTIVE_CAMERA_COLOR = hexColor('#ffd97a', 0.95);
 

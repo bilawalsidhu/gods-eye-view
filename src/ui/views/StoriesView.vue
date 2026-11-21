@@ -18,6 +18,7 @@ import {
   entryPlacement,
 } from '../../stories/format.js';
 import { guardStoriesKeyboard } from '../../stories/keyboard.js';
+import UiButton from '../kit/UiButton.vue';
 
 // The screens, their styles and the story data load with Stories (see
 // src/stories/boot.js); only the button, popup and toast load with GEV.
@@ -151,9 +152,9 @@ function markPopSeen() {
     /* storage off: the popup comes back next visit */
   }
 }
-function openExplore() {
-  markPopSeen();
-  store.controller.open();
+async function openExplore() {
+  // A refused open (Cockpit) leaves the announcement unread.
+  if (await store.controller.open()) markPopSeen();
 }
 
 // ── Opened in GEV: a toast that leads back to the story ──
@@ -318,18 +319,17 @@ watch([mode, storyId], () => nextTick(watchCredit));
 
     <!-- GEV: the Stories entry, its first-visit popup and the Opened-in-GEV toast -->
     <template v-if="mode === 'closed' && store.available">
-      <button
+      <UiButton
         id="hStories"
         class="tbtn accent gs-entry"
         :class="{ 'gs-entry-compact': entry.compact }"
-        type="button"
         :aria-label="entry.compact ? t('Stories') : undefined"
         :style="{ top: `${entry.top}px`, right: `${entry.right}px` }"
         @click="openExplore"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3" /><path d="M10 9.5v5l4.5-2.5z" fill="currentColor" /></svg>
         <span>{{ t('Stories') }}</span>
-      </button>
+      </UiButton>
       <div
         v-if="popOpen"
         id="hPop"
@@ -342,14 +342,14 @@ watch([mode, storyId], () => nextTick(watchCredit));
         <h2 id="hPopT">{{ t('GEV Stories') }}</h2>
         <p>{{ t('Curated, interactive views of what is happening on Earth. Play one, take over the map whenever you like, then pick the story back up.') }}</p>
         <div class="row">
-          <button class="tbtn solid" type="button" @click="openExplore">{{ t('Browse stories') }}</button>
-          <button class="tbtn" type="button" @click="markPopSeen">{{ t('Not now') }}</button>
+          <UiButton class="tbtn solid" @click="openExplore">{{ t('Browse stories') }}</UiButton>
+          <UiButton class="tbtn" @click="markPopSeen">{{ t('Not now') }}</UiButton>
         </div>
       </div>
       <div v-if="openedToast" id="hToast" class="h-toast glass gs-opened-toast" role="status">
         <b>{{ t('Opened in GEV') }}</b>
         <span>{{ openedToast.title }} · {{ openedWhen }}</span>
-        <button class="tbtn" type="button" @click="backToStory">{{ t('Back to story') }}</button>
+        <UiButton class="tbtn" @click="backToStory">{{ t('Back to story') }}</UiButton>
       </div>
     </template>
 
