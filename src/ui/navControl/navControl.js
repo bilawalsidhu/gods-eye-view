@@ -16,7 +16,30 @@
  * through the shell's navigation policy (`runNavigation`), which refuses while
  * the cockpit owns the camera and releases follow/orbit motion first.
  */
-import * as Cesium from 'cesium';
+import {
+  followedOf,
+  followedPosition,
+  isFollowing,
+  onFollowChanged,
+} from '../../data/followed.js';
+import {
+  clamp,
+  distance,
+  eastNorthUp,
+  framePoint,
+  inverseFramePoint,
+  magnitude,
+  toLonLatH,
+  toRadians,
+} from '../../geo/index.js';
+import { eyeZoomed } from '../../geo/eyeMoves.js';
+import { heightsOf } from '../../queries/heights.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../../render/rendererOf.js';
 import {
   readCameraTargetFrame,
   setCameraTargetFrame,
@@ -88,52 +111,35 @@ export function orbitCameraPosition(target, { heading, pitch, range }) {
   const east = range * -Math.sin(heading) * Math.cos(pitch);
   const north = range * -Math.cos(heading) * Math.cos(pitch);
   const up = range * -Math.sin(pitch);
-  return Cesium.Matrix4.multiplyByPoint(
-    Cesium.Transforms.eastNorthUpToFixedFrame(target),
-    new Cesium.Cartesian3(east, north, up),
-    new Cesium.Cartesian3(),
-  );
+  return framePoint(eastNorthUp(target), { x: east, y: north, z: up });
 }
 
 /** Whether a picked world position sits in the band the surface can occupy. */
 export function plausibleTarget(target) {
-  const carto = target && Cesium.Cartographic.fromCartesian(target);
+  const height = target ? toLonLatH(target)?.height : null;
   return Boolean(
-    carto &&
-    carto.height >= MIN_TARGET_HEIGHT_M &&
-    carto.height <= MAX_TARGET_HEIGHT_M,
+    Number.isFinite(height) &&
+    height >= MIN_TARGET_HEIGHT_M &&
+    height <= MAX_TARGET_HEIGHT_M,
   );
 }
 
-/** The orbit frame of a camera around `target`, in the same terms as upstream. */
-export function frameForTarget(camera, target) {
-  const inverse = Cesium.Matrix4.inverseTransformation(
-    Cesium.Transforms.eastNorthUpToFixedFrame(target),
-    new Cesium.Matrix4(),
-  );
-  const local = Cesium.Matrix4.multiplyByPoint(
-    inverse,
-    camera.positionWC,
-    new Cesium.Cartesian3(),
-  );
-  const range = Cesium.Cartesian3.magnitude(local);
+/**
+ * The orbit frame of a camera pose (`{position, heading}`) around `target`, in
+ * the same terms as upstream.
+ */
+export function frameForTarget(pose, target) {
+  const local = inverseFramePoint(eastNorthUp(target), pose.position);
+  const range = magnitude(local);
   if (!Number.isFinite(range) || range < 1) return null;
-  const pitch = -Math.asin(Cesium.Math.clamp(local.z / range, -1, 1));
+  const pitch = -Math.asin(clamp(local.z / range, -1, 1));
   const heading =
-    pitch < Cesium.Math.toRadians(-88.5)
-      ? camera.heading
-      : Math.atan2(-local.x, -local.y);
+    pitch < toRadians(-88.5) ? pose.heading : Math.atan2(-local.x, -local.y);
   return { target, range, heading: normalizeHeading(heading), pitch };
 }
 
 function tracked(viewer) {
-  const entity = viewer.trackedEntity;
-  if (!entity) return null;
-  return (
-    entity.gevDisplayPosition?.() ||
-    entity.position?.getValue(viewer.clock?.currentTime) ||
-    null
-  );
+  return followedPosition(viewer, followedOf(viewer));
 }
 
 /**
@@ -163,10 +169,11 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
     };
     const target = state?.frame || frame;
     cancel();
-    const entity = viewer.trackedEntity;
+    const followed = followedOf(viewer);
     const apply = (view, aim) =>
       setCameraTargetFrame(viewer, { ...target, target: aim, ...view });
-    if (duration <= 0 || !viewer.scene?.preUpdate?.addEventListener) {
+    const frames = findFrame(viewer);
+    if (duration <= 0 || !frames) {
       const done = apply(to, target.target);
       if (done) onSettled?.(to);
       return done;
@@ -179,18 +186,20 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
     };
     const start = now();
     const turn = shortestTurn(from.heading, to.heading);
-    remove = viewer.scene.preUpdate.addEventListener(() => {
-      if (viewer.isDestroyed?.() || viewer.trackedEntity !== entity) {
+    remove = frames.on('preUpdate', () => {
+      const camera = findCamera(viewer);
+      if (
+        !camera ||
+        viewer.isDestroyed?.() ||
+        followedOf(viewer) !== followed
+      ) {
         cancel();
         return;
       }
       // Someone else (a flight, a search, a drag) moved the camera since the
       // last step: they own it now, so stop instead of pulling it back.
-      if (state?.lastPosition && !entity) {
-        const moved = Cesium.Cartesian3.distance(
-          viewer.camera.positionWC,
-          state.lastPosition,
-        );
+      if (state?.lastPosition && !followed) {
+        const moved = distance(camera.pose().position, state.lastPosition);
         if (moved > Math.max(1, state.shown.range * 1e-3)) {
           cancel();
           return;
@@ -198,7 +207,7 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
       }
       const progress = Math.min(1, Math.max(0, (now() - start) / duration));
       const eased = easeInOut(progress);
-      const aim = entity ? tracked(viewer) : target.target;
+      const aim = followed ? tracked(viewer) : target.target;
       const view = {
         heading: normalizeHeading(from.heading + turn * eased),
         pitch: from.pitch + (to.pitch - from.pitch) * eased,
@@ -209,14 +218,14 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
         return;
       }
       state.shown = view;
-      state.lastPosition = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+      state.lastPosition = camera.pose().position;
       if (progress === 1) {
         const settled = state.to;
         cancel();
         onSettled?.(settled);
       }
     });
-    viewer.scene.requestRender?.();
+    frames.requestRender('nav-control');
     return true;
   }
 
@@ -239,7 +248,8 @@ function createOrbitAnimator(viewer, { now, onSettled }) {
 /**
  * Answer the navigation control's actions for one viewer.
  * @param {Object} options
- * @param {Cesium.Viewer} options.viewer Live viewer.
+ * @param {Object} options.viewer The scene object the shell holds (the camera,
+ *   frame and query ports are reached through it).
  * @param {{connect: Function, detach: Function, publish: Function}} options.store
  *   The `gev-nav-control` store the view renders and calls.
  * @param {Function} [options.runNavigation] `(noun, navigate) => result`; the
@@ -255,7 +265,9 @@ export function mountNavControl({
   now = () => globalThis.performance?.now?.() ?? Date.now(),
   timers = globalThis,
 } = {}) {
-  if (!viewer?.camera || !viewer?.scene)
+  const camera = findCamera(viewer);
+  const frames = findFrame(viewer);
+  if (!camera || !frames)
     throw new TypeError('A viewer with a camera and scene is required');
   if (!store?.connect || !store?.publish)
     throw new TypeError('The navigation control store is required');
@@ -278,26 +290,20 @@ export function mountNavControl({
   let drag = null;
   let token = null;
 
-  const camera = viewer.camera;
   const animator = createOrbitAnimator(viewer, {
     now,
     onSettled: () => refreshTilt(),
   });
 
-  const subscribe = (event, handler) => {
-    const remove = event?.addEventListener?.(handler);
-    if (typeof remove === 'function') removers.push(remove);
-  };
-
   /** Height of the camera over the surface for an orbit pitch, or NaN. */
   const clearanceProbe = (frame, view) => (pitch) => {
     try {
       const position = orbitCameraPosition(frame.target, { ...view, pitch });
-      const carto = Cesium.Cartographic.fromCartesian(position);
+      const carto = toLonLatH(position);
       if (!carto) return Number.NaN;
-      let ground = viewer.scene.sampleHeight?.(carto);
-      if (!Number.isFinite(ground))
-        ground = viewer.scene.globe?.getHeight?.(carto);
+      const heights = heightsOf(viewer);
+      const at = { lon: carto.lon, lat: carto.lat };
+      const ground = heights.now(at) ?? heights.now(at, { against: 'terrain' });
       return Number.isFinite(ground) ? carto.height - ground : Number.NaN;
     } catch {
       return Number.NaN;
@@ -311,16 +317,15 @@ export function mountNavControl({
    */
   const readFrame = () => {
     const frame = readCameraTargetFrame(viewer);
-    if (frame && (viewer.trackedEntity || plausibleTarget(frame.target)))
+    if (frame && (isFollowing(viewer) || plausibleTarget(frame.target)))
       return frame;
     try {
-      const canvas = viewer.scene.canvas;
-      const centre = new Cesium.Cartesian2(
+      const canvas = canvasOf(viewer);
+      const ground = findQuery(viewer)?.pickEllipsoid(
         (canvas.clientWidth || canvas.width) / 2,
         (canvas.clientHeight || canvas.height) / 2,
       );
-      const ground = camera.pickEllipsoid(centre, Cesium.Ellipsoid.WGS84);
-      return ground ? frameForTarget(camera, ground) : null;
+      return ground ? frameForTarget(camera.pose(), ground) : null;
     } catch {
       return null;
     }
@@ -330,10 +335,10 @@ export function mountNavControl({
   const lookInPlace = (heading, pitch) => {
     try {
       camera.setView({
-        destination: Cesium.Cartesian3.clone(camera.positionWC),
+        destination: camera.pose().position,
         orientation: { heading, pitch, roll: 0 },
       });
-      viewer.scene.requestRender?.();
+      frames.requestRender('nav-control');
       return true;
     } catch {
       return false;
@@ -344,10 +349,11 @@ export function mountNavControl({
   function perform(action) {
     const result = runNavigation('camera', () => {
       if (LOOK_ACTIONS.has(action)) {
-        if (viewer.trackedEntity) return false;
+        if (isFollowing(viewer)) return false;
         animator.cancel();
+        const pose = camera.pose();
         const next = planLook(
-          { heading: camera.heading, pitch: camera.pitch },
+          { heading: pose.heading, pitch: pose.pitch },
           action,
         );
         return lookInPlace(next.heading, next.pitch);
@@ -375,19 +381,18 @@ export function mountNavControl({
 
   /** No pick, no ellipsoid hit (looking at the sky): turn or move in place. */
   function performWithoutTarget(action) {
-    const heading = camera.heading;
-    const pitch = Number.isFinite(camera.pitch) ? camera.pitch : TOP_DOWN_PITCH;
+    const pose = camera.pose();
+    const heading = pose.heading;
+    const pitch = Number.isFinite(pose.pitch) ? pose.pitch : TOP_DOWN_PITCH;
     switch (action) {
       case 'zoom-in':
       case 'zoom-out': {
-        const height = Math.max(
-          1,
-          Number(camera.positionCartographic?.height) || 1_000,
-        );
+        const height = Math.max(1, Number(pose.height) || 1_000);
         const amount = height * ZOOM_FRACTION;
-        if (action === 'zoom-in') camera.zoomIn?.(amount);
-        else camera.zoomOut?.(amount);
-        viewer.scene.requestRender?.();
+        camera.setView(
+          eyeZoomed(pose, action === 'zoom-in' ? amount : -amount),
+        );
+        frames.requestRender('nav-control');
         return true;
       }
       case 'north':
@@ -459,7 +464,7 @@ export function mountNavControl({
   function ringStart({ centerX, centerY, clientX, clientY }) {
     const result = runNavigation('camera', () => {
       animator.cancel();
-      return readFrame() || { fallback: true, heading: camera.heading };
+      return readFrame() || { fallback: true, heading: camera.pose().heading };
     });
     if (!result) return false;
     drag = {
@@ -467,7 +472,7 @@ export function mountNavControl({
       centerX,
       centerY,
       startHeading: result.heading,
-      pitch: result.fallback ? camera.pitch : result.pitch,
+      pitch: result.fallback ? camera.pose().pitch : result.pitch,
       startAngle: pointerAngle(centerX, centerY, clientX, clientY),
     };
     present({ dragging: true });
@@ -519,7 +524,7 @@ export function mountNavControl({
     const pitchWanted = tiltDegToPitch(Number(value));
     runNavigation('camera', () => {
       const frame = animator.active ? animator.frame : readFrame();
-      if (!frame) return lookInPlace(camera.heading, pitchWanted);
+      if (!frame) return lookInPlace(camera.pose().heading, pitchWanted);
       const heading = animator.destination?.heading ?? frame.heading;
       const range = animator.destination?.range ?? frame.range;
       animator.cancel();
@@ -538,16 +543,16 @@ export function mountNavControl({
 
   // ── state shown on the control ───────────────────────────────────────
   function refreshHeading() {
-    present({ heading: headingDegrees(camera.heading) });
+    present({ heading: headingDegrees(camera.pose().heading) });
   }
   /** Exact tilt costs one depth read, so it refreshes once per gesture. */
   function refreshTilt() {
     if (destroyed || sliderDragging) return;
     const frame = animator.active ? null : readFrame();
-    const pitch = frame ? frame.pitch : camera.pitch;
+    const pitch = frame ? frame.pitch : camera.pose().pitch;
     present({
       tilt: pitchToTiltDeg(pitch),
-      following: Boolean(viewer.trackedEntity),
+      following: isFollowing(viewer),
     });
   }
 
@@ -563,25 +568,32 @@ export function mountNavControl({
     sliderInput,
     sliderEnd,
   });
-  subscribe(viewer.scene.preRender, refreshHeading);
+  const subscribe = (remove) => {
+    if (typeof remove === 'function') removers.push(remove);
+  };
+  subscribe(frames.on('preRender', refreshHeading));
   // The exact tilt costs a target pick, which may read the depth buffer. Do not
   // spend it inside `moveEnd`, nor in the frames that follow while other
   // observers re-aim: wait until the camera has been still for TILT_IDLE_MS,
   // and restart the wait on every further camera move.
-  subscribe(camera.moveEnd, () => {
-    if (deferredTilt !== null) timers.clearTimeout(deferredTilt);
-    deferredTilt = timers.setTimeout(() => {
-      deferredTilt = null;
+  subscribe(
+    camera.on('moveEnd', () => {
+      if (deferredTilt !== null) timers.clearTimeout(deferredTilt);
+      deferredTilt = timers.setTimeout(() => {
+        deferredTilt = null;
+        refreshTilt();
+      }, TILT_IDLE_MS);
+    }),
+  );
+  subscribe(
+    onFollowChanged(viewer, () => {
+      animator.cancel();
       refreshTilt();
-    }, TILT_IDLE_MS);
-  });
-  subscribe(viewer.trackedEntityChanged, () => {
-    animator.cancel();
-    refreshTilt();
-  });
+    }),
+  );
   // A gesture on the globe supersedes a step still easing: the animator
   // stops as soon as the camera has been moved by anything but itself.
-  published.heading = headingDegrees(camera.heading);
+  published.heading = headingDegrees(camera.pose().heading);
   refreshTilt(); // the first publish
 
   const handle = {

@@ -1443,6 +1443,7 @@
       "src/ui/railEdgeScroll.js",
       "src/ui/navControl/navMath.js",
       "src/ui/navControl/navControl.js",
+      "src/geo/eyeMoves.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",

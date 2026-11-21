@@ -12,8 +12,19 @@ import { createPinia } from 'pinia';
 import { useNavControlStore } from '../stores/navControl.js';
 import { readCameraTargetFrame } from '../cameraOrientationControls.js';
 import { TOP_DOWN_PITCH } from './navMath.js';
-import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
-import { fakeSceneFrame, fakeSceneQuery } from '../../testSupport/fakeCesiumScene.mjs';
+import {
+  createSceneHost,
+  findCamera,
+  rendererOf,
+} from '../../render/rendererOf.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+} from '../../testSupport/fakeCameraPort.mjs';
+import {
+  fakeSceneFrame,
+  fakeSceneQuery,
+} from '../../testSupport/fakeCesiumScene.mjs';
 
 const DEG = Math.PI / 180;
 const GROUND = Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 0);
@@ -42,6 +53,7 @@ function createViewer({ pick = GROUND, ground = GROUND } = {}) {
     camera,
     scene,
     trackedEntity: undefined,
+    entities: { contains: () => false },
     trackedEntityChanged: new Cesium.Event(),
   };
   return bindFakeCesiumCamera(viewer, {
@@ -194,8 +206,7 @@ test('the view follows the camera heading and a tracked entity', () => {
   settle();
   viewer.scene.preRender.raiseEvent(); // the next drawn frame
   assert.equal(nav.view.heading, 0);
-  viewer.trackedEntity = { position: undefined };
-  viewer.trackedEntityChanged.raiseEvent();
+  followEntity(viewer, { position: undefined });
   assert.equal(nav.view.following, true);
 });
 
@@ -458,7 +469,7 @@ test('a wild centre pick falls back to the ground under the centre', () => {
   settle();
   const height = viewer.camera.positionCartographic.height;
   assert.ok(height > 0, `camera stays above ground, height ${height}`);
-  const frame = frameForTarget(viewer.camera, GROUND);
+  const frame = frameForTarget(findCamera(viewer).pose(), GROUND);
   assert.ok(Math.abs(frame.range - 700) < 1, `range ${frame.range}`);
 });
 
@@ -587,5 +598,60 @@ test('a step stops, and leaves the camera where it was moved, when something els
   assert.ok(
     Cesium.Cartesian3.distance(moved, viewer.camera.positionWC) < 1e-6,
     'the step does not pull the camera back',
+  );
+});
+
+test('the control drives the camera through the scene object the shell holds', () => {
+  // The shell holds the application's scene object, not the Cesium viewer:
+  // it has no camera or scene of its own, only the renderer bound to it.
+  const viewer = createViewer();
+  orbit(viewer, { heading: 30, pitch: -45, range: 1_000 });
+  const scene = createSceneHost(rendererOf(viewer), { container: null });
+  const clock = createClock();
+  const nav = useNavControlStore(createPinia());
+  const handle = mountNavControl({
+    viewer: scene.host,
+    store: nav,
+    now: clock.now,
+    timers: clock.timers,
+  });
+  assert.equal(nav.view.heading, 30);
+  nav.act('activate', 'zoom-in');
+  clock.advance(1_000, () => viewer.scene.preUpdate.raiseEvent());
+  const range = readCameraTargetFrame(scene.host).range;
+  assert.ok(Math.abs(range - 700) < 1, `range ${range}`);
+  followEntity(viewer, { position: undefined });
+  assert.equal(nav.view.following, true, 'a follow through the port shows');
+  handle.destroy();
+  scene.release();
+});
+
+test('with no ground under the centre, zoom moves the eye along its view as Cesium zoomIn did', () => {
+  const { activate, viewer } = setup({
+    viewer: { pick: null, ground: null },
+    view: { heading: 90, pitch: -30, range: 2_000 },
+  });
+  // A twin camera standing where the control's camera stands.
+  const twin = createViewer({ pick: null, ground: null });
+  orbit(twin, { heading: 90, pitch: -30, range: 2_000 });
+  const height = twin.camera.positionCartographic.height;
+  twin.camera.zoomIn(height * 0.3);
+  activate('zoom-in');
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      twin.camera.positionWC,
+      viewer.camera.positionWC,
+    ) < 1e-3,
+    'the eye moves forward by 30 percent of its height',
+  );
+  const back = viewer.camera.positionCartographic.height;
+  twin.camera.zoomOut(back * 0.3);
+  activate('zoom-out');
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      twin.camera.positionWC,
+      viewer.camera.positionWC,
+    ) < 1e-3,
+    'and back out by 30 percent of its new height',
   );
 });
