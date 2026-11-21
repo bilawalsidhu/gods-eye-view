@@ -336,3 +336,40 @@ test('where the scene cannot drape, a draped line in runs draws a run over the s
     'past the horizon',
   );
 });
+
+test('a draped line in runs whose first run is later than its second times each run by its own points', () => {
+  const { scene, set } = brokenDraw([
+    'lineAgeFade',
+    'lineTimeWindow',
+    'lineBreaks',
+  ]);
+  set.set([
+    trails({
+      mode: 'draped',
+      positions: along(4, 0),
+      breaks: [2],
+      ageFade: {
+        times: [T0 + 110_000, T0 + 120_000, T0, T0 + 10_000],
+        windowMs: 60_000,
+        alphaFloor: 1,
+        showMs: 30_000,
+      },
+    }),
+  ]);
+  const ground = everything(scene).filter(
+    (p) => p instanceof Cesium.GroundPolylinePrimitive,
+  );
+  assert.equal(ground.length, 2, 'a ground piece a run');
+  const ages = ground.map((p) => p.appearance.material.uniforms);
+  assert.deepEqual(
+    ages.map((u) => [u.ageCount, u.ageByLength, u.ageShow]),
+    [
+      [2, 1, 30],
+      [2, 1, 30],
+    ],
+    'its own two points each, along its length, cut to the span',
+  );
+  // Each run's clock reads from its own newest point: the first's is
+  // 110 s later than the second's.
+  assert.equal(ages[1].ageNow - ages[0].ageNow, 110);
+});

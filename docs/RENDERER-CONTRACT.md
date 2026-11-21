@@ -171,7 +171,9 @@ optional:
   with segment colours stays one ground instance a segment, none across a
   break. Colours and shows change in place; new positions, times, reveal or
   breaks draw the line anew. The check `draw.lines.breaks` covers it,
-  draped and not, with segment colours and without.
+  draped and not, with segment colours and without, and
+  `draw.lines.breaks.timeWindow` a line in runs cut by time whose first
+  run is later than its second, each run cut by its own times.
 - A solid line's `outline.widthPx` is the outline's whole width, half on
   each side, inside the line's own width: an 8 px line with a 4 px outline
   is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws

@@ -604,6 +604,20 @@ function checkAgeFade(item) {
 }
 
 /**
+ * Make a material of `fabric`'s type on its own once, before one is a part
+ * of a composite material. Cesium keeps a type's uniform names, for all the
+ * page's materials of that type, from the first it makes, and a part has
+ * them numbered as the composite's: a plain material of that type made
+ * later then fails in a polyline collection (`material._uniforms[uniform]
+ * is not a function`), stopping the frame.
+ * @param {{type: string}} fabric
+ */
+function ownUniforms(fabric) {
+  if (!Cesium.Material._uniformList[fabric.type])
+    new Cesium.Material({ fabric }).destroy();
+}
+
+/**
  * A line's `breaks`, checked: strictly increasing whole position indices,
  * each past the first position and within the line (`0 < i < count`).
  * Refused otherwise.
@@ -2561,14 +2575,17 @@ export function createCesiumDraw({
         ? { translucent: true }
         : {};
     let built = template(fabric);
-    if (reveal !== undefined)
+    if (reveal !== undefined) {
+      ownUniforms(built);
       built = {
         type: `${REVEAL_MATERIAL}_${style.kind}`,
         materials: { revealed: built },
         uniforms: { reveal },
         source: REVEAL_SOURCE,
       };
-    if (age)
+    }
+    if (age) {
+      ownUniforms(built);
       built = {
         type: `${AGE_MATERIAL}_${reveal === undefined ? '' : 'revealed_'}${style.kind}`,
         materials: { aged: built },
@@ -2579,6 +2596,7 @@ export function createCesiumDraw({
         },
         source: AGE_SOURCE,
       };
+    }
     const material = new Cesium.Material({ fabric: built, ...translucent });
     const drawn = styleMaterial(material);
     Object.assign(drawn.uniforms, fabric.uniforms);
