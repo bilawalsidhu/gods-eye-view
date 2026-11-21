@@ -184,7 +184,7 @@ test('pointer input, camera holds and the stock clicks go through the one dispat
     fs
       .readdirSync(path.join(ROOT, dir), { withFileTypes: true })
       .flatMap((entry) => {
-        const rel = path.join(dir, entry.name);
+        const rel = path.posix.join(dir, entry.name);
         if (entry.isDirectory()) return walk(rel);
         return entry.name.endsWith('.js') ? [rel] : [];
       });

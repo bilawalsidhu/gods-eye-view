@@ -1,0 +1,34 @@
+{
+  "note": "File-only classification. Runtime reads ../cctv_sources.moscow.json. Short English map labels use RC for residential complexes; identifiers, positions and streams are unchanged.",
+  "activeSourceFile": "../cctv_sources.moscow.json",
+  "blocks": [
+    {
+      "order": 1,
+      "id": "developers",
+      "title": "Residential complexes & developers",
+      "file": "01-developers.json",
+      "description": "Outdoor views of residential developments and construction sites. RC means residential complex.",
+      "active": true,
+      "count": 87
+    },
+    {
+      "order": 3,
+      "id": "urban",
+      "title": "Streets & city panoramas",
+      "file": "03-urban-views.json",
+      "description": "Public streets, junctions and city views; includes three refreshing JPEG cameras.",
+      "active": true,
+      "count": 8
+    },
+    {
+      "order": 4,
+      "id": "parks-sports",
+      "title": "Outdoor sports",
+      "active": true,
+      "description": "Public outdoor slopes and sports areas.",
+      "file": "04-parks-sports.json",
+      "count": 5
+    }
+  ],
+  "verifiedNativeCount": 100
+}

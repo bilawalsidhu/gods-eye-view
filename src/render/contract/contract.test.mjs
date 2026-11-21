@@ -29,7 +29,7 @@ const program = ts.createProgram([INDEX], {
 const checker = program.getTypeChecker();
 const contractFiles = program
   .getSourceFiles()
-  .filter((file) => path.dirname(file.fileName) === DIR);
+  .filter((file) => path.resolve(path.dirname(file.fileName)) === DIR);
 
 /** The named interface or type alias declared in the contract files. */
 function declared(name) {
@@ -68,7 +68,8 @@ function nestedShape(type) {
   const symbol = type.aliasSymbol ?? type.getSymbol();
   const declaration = symbol?.declarations?.[0];
   if (!declaration) return null;
-  const inContract = path.dirname(declaration.getSourceFile().fileName) === DIR;
+  const inContract =
+    path.resolve(path.dirname(declaration.getSourceFile().fileName)) === DIR;
   if (!inContract) return null;
   if (ts.isTypeLiteralNode(declaration)) return type;
   if (ts.isInterfaceDeclaration(declaration))

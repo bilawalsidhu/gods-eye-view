@@ -260,12 +260,12 @@ function specifiersOf(file) {
 function resolve(from, specifier) {
   const bare = specifier.split('?')[0];
   if (!bare.startsWith('.')) return null;
-  const base = path.join(path.dirname(from), bare);
+  const base = path.posix.join(path.posix.dirname(from), bare);
   const candidates = ['', '.js', '.mjs', '.vue', '/index.js', '/index.mjs'];
   for (const suffix of candidates) {
     const full = path.join(root, base + suffix);
     if (existsSync(full) && statSync(full).isFile())
-      return path.normalize(base + suffix);
+      return path.posix.normalize(base + suffix);
   }
   // A subgraph dropped here would hide a missing factory.
   throw new Error(`${from}: cannot resolve ${specifier}`);
@@ -306,7 +306,7 @@ test('every public entry that reaches the renderer bridge loads the unbound came
   for (const [key, declaration] of Object.entries(pkg.exports)) {
     const target = browserTarget(declaration);
     if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
-    const entry = path.normalize(target.slice(2));
+    const entry = path.posix.normalize(target.slice(2));
     const graph = reachable(entry);
     // Any path to the bridge counts, lazy or not; only an eager one loads
     // the factory in time for the first `cameraOf`.
@@ -351,7 +351,7 @@ function checkLookupFactory(
   for (const [key, declaration] of Object.entries(pkg.exports)) {
     const target = browserTarget(declaration);
     if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
-    const entry = path.normalize(target.slice(2));
+    const entry = path.posix.normalize(target.slice(2));
     if (![...reachable(entry)].some(calls)) continue;
     reaching += 1;
     if (
@@ -442,7 +442,7 @@ test('every public entry that reaches a findDraw caller loads the unbound draw f
   for (const [key, declaration] of Object.entries(pkg.exports)) {
     const target = browserTarget(declaration);
     if (typeof target !== 'string' || !target.startsWith('./src/')) continue;
-    const entry = path.normalize(target.slice(2));
+    const entry = path.posix.normalize(target.slice(2));
     if (![...reachable(entry)].some(callsFindDraw)) continue;
     const carrier = INJECTED[key];
     const loads = (file) => reachable(file, { eager: true }).has(DRAW_FACTORY);

@@ -36,6 +36,12 @@ God’s Eye View™ is a trademark of Metaversity LLC, used under license by Hal
 
 ---
 
+## Moscow outdoor camera pack
+
+The optional [Moscow pack](config/cctv_sources.moscow.json) contains 100 outdoor cameras: 97 HLS streams and 3 refreshing street-camera JPEG feeds. Enable it locally with `CCTV_SOURCES_FILE=config/cctv_sources.moscow.json`. The default camera catalog is unchanged.
+
+Cameras use the existing on-map presentation. Public-stream resolvers support Exdesign, anonymous Ivideon and unrestricted RTSP.ME streams; the bounded media proxy also accepts clear fMP4 HLS. [File-only groups](config/moscow-camera-blocks/README.md) classify the cameras, whose short English labels use RC for residential complexes. See [verification and attribution notes](docs/MOSCOW_100_CAMERAS.md).
+
 ## 🌍 Why This Exists
 
 God's Eye View brings public signals into one explorable globe. Track the world live. Talk to it. Break it. Extend it.

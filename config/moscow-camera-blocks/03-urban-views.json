@@ -1,0 +1,91 @@
+{
+  "order": 3,
+  "id": "urban",
+  "title": "Streets & city panoramas",
+  "file": "03-urban-views.json",
+  "description": "Public streets, junctions and city views; includes three refreshing JPEG cameras.",
+  "active": true,
+  "count": 8,
+  "cameras": [
+    {
+      "id": "moscow-38d95caaed4d",
+      "name": "Bolshoy Palashevsky 11",
+      "provider": "33.rxmx.ru",
+      "lat": 55.7649577,
+      "lon": 37.5996351,
+      "sourceUrl": "https://cam-world.ru/cams/bolshoy-palashevskiy-pereulok-11-00018292",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.036Z"
+    },
+    {
+      "id": "moscow-804b1746dc33",
+      "name": "Luzhnetskaya Embankment",
+      "provider": "hls-spb03.timetechnology.ru",
+      "lat": 55.7147748,
+      "lon": 37.5764704,
+      "sourceUrl": "https://cam-world.ru/cams/luzhnetskaya-naberezhnaya-00018291",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:01:29.036Z"
+    },
+    {
+      "id": "moscow-nix-12",
+      "name": "Zvezdny Junction",
+      "provider": "NIX",
+      "lat": 55.812068,
+      "lon": 37.625971,
+      "sourceUrl": "https://probki.nix.ru/",
+      "feedType": "image",
+      "verifiedAt": "2026-11-10T10:09:42.280Z"
+    },
+    {
+      "id": "moscow-nix-13",
+      "name": "Mira Ave · VDNKh",
+      "provider": "NIX",
+      "lat": 55.812068,
+      "lon": 37.625971,
+      "sourceUrl": "https://probki.nix.ru/",
+      "feedType": "image",
+      "verifiedAt": "2026-11-10T10:09:42.280Z"
+    },
+    {
+      "id": "moscow-nix-14",
+      "name": "Zvezdny Blvd",
+      "provider": "NIX",
+      "lat": 55.812068,
+      "lon": 37.625971,
+      "sourceUrl": "https://probki.nix.ru/",
+      "feedType": "image",
+      "verifiedAt": "2026-11-10T10:09:42.280Z"
+    },
+    {
+      "id": "moscow-ivideon-ozernaya",
+      "name": "Ozernaya St",
+      "provider": "Ivideon",
+      "lat": 55.6784,
+      "lon": 37.4559,
+      "sourceUrl": "https://tvway.ru/index.php?file=10152",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:09:42.280Z"
+    },
+    {
+      "id": "moscow-city-panorama",
+      "name": "Moscow City · Panorama",
+      "provider": "TimeTechnology",
+      "lat": 55.7525,
+      "lon": 37.539,
+      "sourceUrl": "https://tvway.ru/index.php?file=10977",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:10:08.410Z"
+    },
+    {
+      "id": "moscow-reserve-minskaya",
+      "name": "Minskaya St · 1",
+      "provider": "28.rxmx.ru",
+      "lat": 55.7195,
+      "lon": 37.4972,
+      "sourceUrl": "https://cam-world.ru/cams/ulitsa-minskaya-1-00018297",
+      "feedType": "hls",
+      "verifiedAt": "2026-11-10T10:10:08.410Z"
+    }
+  ]
+}
