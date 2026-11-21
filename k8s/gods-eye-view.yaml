@@ -1,0 +1,122 @@
+# God's Eye View on Kubernetes: one file, no Kustomize needed.
+#
+# 1. Change the image below to the one you built (see k8s/README.md).
+# 2. Change GEV_ALLOWED_HOSTS to the hostname you will open the app at.
+# 3. Create the keys Secret (optional, see k8s/README.md).
+# 4. Deploy:  kubectl apply -f gods-eye-view.yaml
+#
+# Runs one copy of the app. Keep replicas at 1: the app keeps its state inside
+# the container, so two copies would not share it.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gods-eye-view
+  labels:
+    app.kubernetes.io/name: gods-eye-view
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gods-eye-view
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gods-eye-view
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gods-eye-view
+          # CHANGE THIS: the image you built, for example
+          # ghcr.io/your-github-name/gods-eye-view:latest
+          image: ghcr.io/OWNER/gods-eye-view:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4173
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "4173"
+            # CHANGE THIS: the hostname you open the app at. Use "localhost"
+            # when you reach it with kubectl port-forward.
+            - name: GEV_ALLOWED_HOSTS
+              value: "localhost"
+            # Leave empty: keys are set through the Secret, not the browser.
+            - name: GEV_KEY_SETUP_TRUSTED_PEERS
+              value: ""
+          # Provider keys (OPENAI_API_KEY, ...) come from the optional Secret
+          # gev-provider-keys. The pod starts without it; those features are
+          # simply unavailable until it exists.
+          envFrom:
+            - secretRef:
+                name: gev-provider-keys
+                optional: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          # The startup probe allows up to ~3 minutes for the first start.
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              memory: "4Gi"
+          volumeMounts:
+            # Scratch space that is rebuilt on each start.
+            - name: tmp
+              mountPath: /tmp
+            - name: vite-cache
+              mountPath: /app/node_modules/.vite
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: vite-cache
+          emptyDir: {}
+---
+# ClusterIP only: reach the app through your ingress or with kubectl
+# port-forward. Do not change this to LoadBalancer, because the server holds
+# your provider API keys.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gods-eye-view
+  labels:
+    app.kubernetes.io/name: gods-eye-view
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gods-eye-view
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
