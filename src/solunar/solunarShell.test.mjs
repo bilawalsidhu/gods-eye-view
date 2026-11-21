@@ -16,7 +16,36 @@ import {
 } from './solunarShell.js';
 
 const onGlobe = (x, y) => fromDegrees(-100 + x / 100, 30 + y / 100);
-function fakeViewer({ hit = onGlobe } = {}) {
+
+/** Give `viewer` the renderer the card draws and flies through. */
+function bindFakeRenderer(viewer, hit = onGlobe) {
+  let current = null;
+  bindRenderer(viewer, {
+    canvas: viewer.scene.canvas,
+    camera: { pose: () => ({ lat: 10, lon: 20 }) },
+    query: { pickPosition: () => null, pickEllipsoid: (x, y) => hit(x, y) },
+    draw: {
+      points: () => ({
+        clear() {
+          if (current) viewer.removed.push(current);
+          current = null;
+          viewer.renders.n++;
+        },
+        upsert(items) {
+          current = items[0];
+          viewer.added.push(current);
+          viewer.renders.n++;
+        },
+        size() {
+          return current ? 1 : 0;
+        },
+        dispose() {},
+      }),
+    },
+  });
+}
+
+function fakeViewer({ hit = onGlobe, bound = true } = {}) {
   const added = [];
   const removed = [];
   const canvas = new Window().document.createElement('canvas');
@@ -45,30 +74,7 @@ function fakeViewer({ hit = onGlobe } = {}) {
     },
   };
   viewer.scene.owner = viewer;
-  let current = null;
-  bindRenderer(viewer, {
-    canvas,
-    camera: { pose: () => ({ lat: 10, lon: 20 }) },
-    query: { pickPosition: () => null, pickEllipsoid: (x, y) => hit(x, y) },
-    draw: {
-      points: () => ({
-        clear() {
-          if (current) removed.push(current);
-          current = null;
-          viewer.renders.n++;
-        },
-        upsert(items) {
-          current = items[0];
-          added.push(current);
-          viewer.renders.n++;
-        },
-        size() {
-          return current ? 1 : 0;
-        },
-        dispose() {},
-      }),
-    },
-  });
+  if (bound) bindFakeRenderer(viewer, hit);
   return viewer;
 }
 
@@ -228,6 +234,53 @@ test('mounting twice does nothing; destroy removes listeners and the dot', async
   assert.equal(store.panel, null);
   assert.equal(viewer.added.length, 1, 'no dot comes back');
   assert.equal(root.dataset.solunarMounted, undefined);
+});
+
+test('an unbound viewer fails clearly, then mounts and marks once a renderer is bound', async () => {
+  const window = new Window();
+  const doc = window.document;
+  const root = doc.createElement('div');
+  root.id = SOLUNAR_ID;
+  root.className = 'collapsed';
+  doc.body.append(root);
+  const store = useSolunarStore(createPinia());
+  const viewer = fakeViewer({ bound: false });
+
+  assert.throws(
+    () => mountSolunarForShell({ viewer }, { document: doc, store }),
+    /no renderer to draw with[\s\S]*render\/cesium\/unbound/,
+    'the card says why it cannot mark the spot',
+  );
+  assert.equal(
+    root.dataset.solunarMounted,
+    undefined,
+    'a failed mount leaves the card free to mount again',
+  );
+  assert.equal(
+    store.panel,
+    null,
+    'nothing published for a card that did not mount',
+  );
+  assert.equal(viewer.added.length, 0, 'nothing drew without a renderer');
+
+  bindFakeRenderer(viewer);
+  const mount = mountSolunarForShell(
+    { viewer },
+    { document: doc, store, now: () => Date.UTC(2026, 10, 3, 18) },
+  );
+  assert.ok(mount, 'the retry mounts once a renderer is bound');
+  assert.equal(root.dataset.solunarMounted, '1');
+  root.classList.remove('collapsed');
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(viewer.added.length, 1, 'opening marks the spot');
+  assert.equal(viewer.added[0].id, SPOT_MARKER_ID);
+  assert.equal(root.dataset.solunarMarker, '1');
+
+  mount.destroy();
+  assert.equal(root.dataset.solunarMounted, undefined);
+  assert.equal(root.dataset.solunarMarker, undefined);
+  assert.equal(viewer.removed.length, 1, 'destroy lets the marker set go');
+  assert.equal(store.panel, null);
 });
 
 test('no card, no viewer or no store: nothing mounts', () => {

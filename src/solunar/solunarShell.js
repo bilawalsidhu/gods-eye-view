@@ -9,7 +9,7 @@
  */
 import { pickGroundPosition } from '../input/dispatcher.js';
 import { toLonLatH } from '../geo/ellipsoid.js';
-import { canvasOf, findCamera, findDraw } from '../render/rendererOf.js';
+import { canvasOf, drawOf, findCamera } from '../render/rendererOf.js';
 import { createSolunarPanel } from './panel.js';
 import { addDays, localDateOf, localDayStartMs } from './zone.js';
 
@@ -70,18 +70,23 @@ export function mountSolunarForShell(
   const viewer = shell?.viewer;
   if (!root || !store || !viewer) return null;
   if (root.dataset?.solunarMounted === '1') return null;
-  root.dataset.solunarMounted = '1';
 
   const isOpen = () => !root.classList.contains('collapsed');
-  const marker = findDraw(viewer)?.points({ id: SPOT_MARKER_ID });
+  // The spot marker draws through the renderer bound to the viewer, or the
+  // port its owner makes for a viewer with no renderer (`drawOf`). A viewer
+  // with neither fails here, before the card is marked mounted, so binding
+  // a renderer and mounting again marks the spot rather than leaving a card
+  // that silently never does.
+  const marker = drawOf(viewer).points({ id: SPOT_MARKER_ID });
+  root.dataset.solunarMounted = '1';
   const clearMarker = () => {
-    marker?.clear();
+    marker.clear();
     root.dataset.solunarMarker = '0';
   };
   const showMarker = (cartesian) => {
     clearMarker();
     if (!cartesian) return;
-    marker?.upsert([
+    marker.upsert([
       {
         id: SPOT_MARKER_ID,
         pos: cartesian,
@@ -93,7 +98,7 @@ export function mountSolunarForShell(
         disableDepthTest: Number.POSITIVE_INFINITY,
       },
     ]);
-    root.dataset.solunarMarker = marker?.size() ? '1' : '0';
+    root.dataset.solunarMarker = marker.size() ? '1' : '0';
   };
   let lastCartesian = null;
   const useSpot = (spot, source) => {
@@ -192,7 +197,7 @@ export function mountSolunarForShell(
       canvas?.removeEventListener('pointerdown', onDown);
       canvas?.removeEventListener('pointerup', onUp);
       clearMarker();
-      marker?.dispose();
+      marker.dispose();
       delete root.dataset.solunarMarker;
       stopMidnightTimer();
       panel.destroy();
