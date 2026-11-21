@@ -67,7 +67,7 @@ or data layers, new/changed access endpoints, or dependency/script/launcher/down
 changes introducing execution risk. Assess the diff, not the PR label. Use a
 disposable restricted environment without personal secrets, SSH agents, Keychain
 access, privileged mounts, or container-engine sockets; limit network access.
-A worktree alone is not isolation. Do not copy personal `.env`, Pinokio
+A worktree alone is not isolation. Do not copy personal `.env.local`, `.env`, Pinokio
 `ENVIRONMENT`, or browser profiles, or use launchers that import personal keys.
 If execution cannot be restricted, continue static review and mark required
 execution blocked.

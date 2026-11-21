@@ -51,17 +51,25 @@ test('keyless stays keyless', () => {
 test('the Street View tool resolves per-variable overrides before preferring the server key', () => {
   const root = mkdtempSync(path.join(tmpdir(), 'gev-streetview-key-'));
   const envPath = path.join(root, '.env');
+  const secretsPath = path.join(root, '.env.local');
+  const rootDir = root;
   try {
     writeFileSync(envPath, 'GOOGLE_MAPS_API_KEY=file-browser\nGOOGLE_MAPS_SERVER_API_KEY="file-server" # separate key\n');
-    assert.equal(loadApiKey(null, { envPath, environment: { GOOGLE_MAPS_API_KEY: 'shell-browser' } }), 'file-server');
-    assert.equal(loadApiKey(null, { envPath, environment: { GOOGLE_MAPS_SERVER_API_KEY: 'shell-server' } }), 'shell-server');
-    assert.equal(loadApiKey(null, { envPath, environment: { GOOGLE_MAPS_SERVER_API_KEY: '' } }), 'file-browser');
-    assert.equal(loadApiKey('explicit-key', { envPath, environment: {} }), 'explicit-key');
-    assert.equal(loadApiKey(null, { envPath: root, environment: { GOOGLE_MAPS_SERVER_API_KEY: 'shell-server' } }), 'shell-server');
+    assert.equal(loadApiKey(null, { rootDir, environment: { GOOGLE_MAPS_API_KEY: 'shell-browser' } }), 'file-server');
+    assert.equal(loadApiKey(null, { rootDir, environment: { GOOGLE_MAPS_SERVER_API_KEY: 'shell-server' } }), 'shell-server');
+    assert.equal(loadApiKey(null, { rootDir, environment: { GOOGLE_MAPS_SERVER_API_KEY: '' } }), 'file-browser');
+    assert.equal(loadApiKey('explicit-key', { rootDir, environment: {} }), 'explicit-key');
     writeFileSync(envPath, 'GOOGLE_MAPS_API_KEY=file-browser\n');
-    assert.equal(loadApiKey(null, { envPath, environment: {} }), 'file-browser');
+    assert.equal(loadApiKey(null, { rootDir, environment: {} }), 'file-browser');
+    // Keys live in .env.local: found there, and it overrides .env.
+    writeFileSync(envPath, 'PORT=4173\n');
+    writeFileSync(secretsPath, 'GOOGLE_MAPS_SERVER_API_KEY=secrets-server\n');
+    assert.equal(loadApiKey(null, { rootDir, environment: {} }), 'secrets-server');
+    writeFileSync(envPath, 'GOOGLE_MAPS_SERVER_API_KEY=stale-settings-copy\n');
+    assert.equal(loadApiKey(null, { rootDir, environment: {} }), 'secrets-server');
     writeFileSync(envPath, '');
-    assert.throws(() => loadApiKey(null, { envPath, environment: {} }), /No API key found/);
+    writeFileSync(secretsPath, '');
+    assert.throws(() => loadApiKey(null, { rootDir, environment: {} }), /No API key found/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

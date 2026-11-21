@@ -57,6 +57,33 @@ test('an inherited export never masks the value written in the file', async () =
   }
 });
 
+test('the launcher reads keys from .env.local, which overrides .env', async () => {
+  // Keys live in .env.local and settings in .env (npm run env:init), so the
+  // value dev-fresh resolves must come from the whole ladder, not .env alone.
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'gev-dotenv-'));
+  try {
+    await fs.writeFile(path.join(root, '.env'), 'PORT=4173\n');
+    await fs.writeFile(path.join(root, '.env.local'), 'OPENSKY_CLIENT_ID=from-secrets\n');
+    assert.equal(readDotenvValue('OPENSKY_CLIENT_ID', root), 'from-secrets');
+    assert.equal(readDotenvValue('PORT', root), '4173');
+    await fs.writeFile(path.join(root, '.env'), 'OPENSKY_CLIENT_ID=stale-settings-copy\n');
+    assert.equal(readDotenvValue('OPENSKY_CLIENT_ID', root), 'from-secrets');
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('neither launcher resolves or passes the retired OpenSky Basic credentials', async () => {
+  // OpenSky retired username/password sign-in on 2026-03-18 and the server no
+  // longer sends it; looking the values up (dotenv, Keychain) only moved an
+  // unused secret into the dev server's environment.
+  for (const name of ['dev-fresh.sh', 'dev-secure.sh']) {
+    const source = await fs.readFile(new URL(`../scripts/${name}`, import.meta.url), 'utf8');
+    const code = source.split('\n').filter((line) => !line.trimStart().startsWith('#')).join('\n');
+    assert.doesNotMatch(code, /OPENSKY_(USERNAME|PASSWORD)/, name);
+  }
+});
+
 test('dev-fresh gives explicit or dotenv Google configuration precedence over Keychain', async () => {
   const source = await fs.readFile(new URL('../scripts/dev-fresh.sh', import.meta.url), 'utf8');
   const precedence = source.indexOf('if [[ -n "${GOOGLE_MAPS_API_KEY_ENV}" ]]');

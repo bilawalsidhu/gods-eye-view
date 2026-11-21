@@ -32,7 +32,7 @@
  *   --sse        Max screen-space error, lower = sharper (default: 2)
  *   --timeout    Max total wait in seconds (default: 30)
  *   --outdir     Output directory (default: output/)
- *   --key        Google Maps API key (default: reads from .env)
+ *   --key        Google Maps API key (default: reads .env.local / .env)
  *
  * Strategy:
  *   1. Overhead pass (500m up, looking down) to sample ground elevation.
@@ -49,6 +49,7 @@ import { readFileSync, mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from '../scripts/project-root.mjs';
+import { readDotenvFiles } from '../scripts/read-dotenv-value.mjs';
 import { createServer } from 'node:http';
 import puppeteer from 'puppeteer';
 
@@ -156,20 +157,11 @@ function loadApiKey(overrideKey) {
   if (overrideKey) return overrideKey;
   if (process.env.GOOGLE_MAPS_API_KEY) return process.env.GOOGLE_MAPS_API_KEY;
 
-  try {
-    const envPath = join(PROJECT_ROOT, '.env');
-    const envContent = readFileSync(envPath, 'utf8');
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
-    }
-  } catch { /* ignore */ }
+  // Keys live in .env.local (settings in .env); read the whole dotenv ladder.
+  const fromFiles = readDotenvFiles(PROJECT_ROOT).GOOGLE_MAPS_API_KEY;
+  if (fromFiles) return fromFiles;
 
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
+  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env.local or pass --key.');
   process.exit(1);
 }
 

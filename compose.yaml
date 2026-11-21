@@ -1,7 +1,8 @@
 services:
   gods-eye-view:
     build: .
-    # Everything the app writes (.env with your keys, .gev-cache, .gev-logs)
+    # Everything the app writes (.env.local with your keys, .env, .gev-cache,
+    # .gev-logs)
     # lands in the bind-mounted repo, so run as you, not root. UID/GID are
     # unset on Docker Desktop, where the 1000 fallback is ignored anyway.
     user: "${UID:-1000}:${GID:-1000}"
@@ -19,7 +20,7 @@ services:
       - "127.0.0.1:4173:4173"
     volumes:
       # Bind the source so edits hot-reload and so keys pasted into the setup
-      # UI land in the .env on your host instead of vanishing with the
+      # UI land in .env.local on your host instead of vanishing with the
       # container. node_modules stays in the image: sharp and friends are
       # compiled for Linux and must not be shadowed by a host install.
       # `:z` relabels the checkout for containers on SELinux hosts (Fedora,

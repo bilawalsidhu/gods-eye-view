@@ -8,6 +8,7 @@ import {
   existsSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -730,17 +731,92 @@ test('key setup writes only the supplied application root, retains request guard
     ).status,
     403,
   );
-  assert.equal(existsSync(path.join(first, '.env')), false);
+  assert.equal(existsSync(path.join(first, '.env.local')), false);
   const saved = await request(handler, { method: 'POST', body });
   assert.equal(saved.status, 200);
   assert.match(
-    readFileSync(path.join(first, '.env'), 'utf8'),
+    readFileSync(path.join(first, '.env.local'), 'utf8'),
     /OPENAI_API_KEY=sk-fixture-only-not-a-real-key/,
   );
   if (process.platform !== 'win32')
-    assert.equal(statSync(path.join(first, '.env')).mode & 0o777, 0o600);
+    assert.equal(statSync(path.join(first, '.env.local')).mode & 0o777, 0o600);
+  assert.equal(
+    existsSync(path.join(first, '.env')),
+    false,
+    'keys never create .env',
+  );
   assert.equal(saved.body.includes('sk-fixture-only-not-a-real-key'), false);
-  assert.equal(existsSync(path.join(untouched, '.env')), false);
+  assert.equal(existsSync(path.join(untouched, '.env.local')), false);
+});
+
+test('key setup MOVES a key out of .env: no copy and no commented value stays behind', async (t) => {
+  const dir = root(t);
+  // A key from before the secrets split, as Vite would have loaded it from .env.
+  writeFileSync(
+    path.join(dir, '.env'),
+    'PORT=4173\nOPENAI_API_KEY=sk-old-fixture\n# OPENAI_API_KEY=sk-older-fixture\nHOST=localhost\n',
+  );
+  env(t, 'OPENAI_API_KEY', 'sk-old-fixture');
+  const routes = install(keySetupEndpoint({ sourceRoot: dir }));
+  // Still the panel's own key (file), not "external" read-only.
+  const before = JSON.parse(
+    (await request(routes.get('/api/setup/status'))).body,
+  );
+  assert.equal(
+    before.keys.find((k) => k.envVars.includes('OPENAI_API_KEY')).managed,
+    'file',
+  );
+  const saved = await request(routes.get('/api/setup/keys'), {
+    method: 'POST',
+    body: JSON.stringify({ OPENAI_API_KEY: 'sk-new-fixture' }),
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(JSON.parse(saved.body).legacyCleanup, 'removed');
+  assert.equal(
+    readFileSync(path.join(dir, '.env'), 'utf8'),
+    'PORT=4173\nHOST=localhost\n',
+  );
+  assert.match(
+    readFileSync(path.join(dir, '.env.local'), 'utf8'),
+    /^OPENAI_API_KEY=sk-new-fixture$/m,
+  );
+  assert.equal(/sk-(old|older|new)-fixture/.test(saved.body), false);
+});
+
+test('key setup removal leaves no value in either file', async (t) => {
+  const dir = root(t);
+  writeFileSync(path.join(dir, '.env.local'), 'GEMINI_API_KEY=g-fixture\n');
+  writeFileSync(
+    path.join(dir, '.env'),
+    'PORT=1\n# GEMINI_API_KEY=g-older-fixture\n',
+  );
+  env(t, 'GEMINI_API_KEY', 'g-fixture');
+  const routes = install(keySetupEndpoint({ sourceRoot: dir }));
+  const removed = await request(routes.get('/api/setup/keys'), {
+    method: 'POST',
+    body: JSON.stringify({ GEMINI_API_KEY: null }),
+  });
+  assert.equal(removed.status, 200);
+  assert.doesNotMatch(
+    readFileSync(path.join(dir, '.env.local'), 'utf8'),
+    /g-fixture/,
+  );
+  assert.equal(readFileSync(path.join(dir, '.env'), 'utf8'), 'PORT=1\n');
+});
+
+test('key setup leaves a .env without that key byte-identical', async (t) => {
+  const dir = root(t);
+  const settings = '# settings only\nPORT=4173\n';
+  writeFileSync(path.join(dir, '.env'), settings);
+  env(t, 'FIRMS_MAP_KEY', undefined);
+  const routes = install(keySetupEndpoint({ sourceRoot: dir }));
+  const saved = await request(routes.get('/api/setup/keys'), {
+    method: 'POST',
+    body: JSON.stringify({ FIRMS_MAP_KEY: 'firms-fixture' }),
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(JSON.parse(saved.body).legacyCleanup, undefined);
+  assert.equal(readFileSync(path.join(dir, '.env'), 'utf8'), settings);
 });
 
 test('Realtime sessions leave out the Unicode property patterns OpenAI refuses (#1618)', async (t) => {

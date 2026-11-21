@@ -16,15 +16,16 @@
  *   --zoom      Tile zoom level 0-5 (default: 3, full res = 5)
  *   --radius    Search radius in meters for nearest panorama (default: 50)
  *   --outdir    Output directory (default: output/)
- *   --key       Google Maps API key (default: reads GOOGLE_MAPS_API_KEY from .env or env)
+ *   --key       Google Maps API key (default: reads GOOGLE_MAPS_API_KEY from env, .env.local or .env)
  *
  * Requires: Map Tiles API enabled on the Google Cloud project.
  * Dependencies: sharp (npm install sharp)
  */
 
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { projectRoot } from '../scripts/project-root.mjs';
+import { readDotenvFiles } from '../scripts/read-dotenv-value.mjs';
 import sharp from 'sharp';
 
 const PROJECT_ROOT = projectRoot(import.meta.url);
@@ -72,21 +73,11 @@ function loadApiKey(overrideKey) {
   if (overrideKey) return overrideKey;
   if (process.env.GOOGLE_MAPS_API_KEY) return process.env.GOOGLE_MAPS_API_KEY;
 
-  // Try to load from .env
-  try {
-    const envPath = join(PROJECT_ROOT, '.env');
-    const envContent = readFileSync(envPath, 'utf8');
-    for (const line of envContent.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-      const eqIdx = trimmed.indexOf('=');
-      const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      if (key === 'GOOGLE_MAPS_API_KEY' && val) return val;
-    }
-  } catch { /* ignore */ }
+  // Keys live in .env.local (settings in .env); read the whole dotenv ladder.
+  const fromFiles = readDotenvFiles(PROJECT_ROOT).GOOGLE_MAPS_API_KEY;
+  if (fromFiles) return fromFiles;
 
-  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env or pass --key.');
+  console.error('Error: No API key found. Set GOOGLE_MAPS_API_KEY in .env.local or pass --key.');
   process.exit(1);
 }
 
