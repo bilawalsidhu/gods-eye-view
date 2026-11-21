@@ -1398,12 +1398,11 @@ were reused, and the study found no application licence granting reuse. Native
 hardware GPU behavior remains unverified; software-rendered checks do not
 establish native GPU performance or compatibility.
 
-The right-rail WEATHER panel owns active-product readouts, coverage badges,
-legends and the single observed-history timeline. The timeline appears with an
-active observed layer and at least two union times; wind alone does not show it.
-Dragging previews UTC and age locally and coalesces clock commits at 150 ms;
-release commits immediately. Latest selects the newest frame per product, and
-history labels the actual displayed frame as synced or nearest. Missing-frame
+The right-rail WEATHER panel shows active-product readouts, coverage badges,
+legends and the displayed frame's time. The world timeline controls observation
+history. Drag to a past time, use Play to advance, or choose Live for the newest
+frame per product. The WEATHER panel shows the frame's age while live and labels
+historical frames as synced or nearest. Missing-frame
 messages use each product's eligibility gap (30 minutes, or three hours for the
 global mosaic). Wind shows forecast valid and issue times and does not follow
 history. Satellite clouds uses Clouds only / Full controls, a continuous cloud

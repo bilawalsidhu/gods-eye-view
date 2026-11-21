@@ -277,8 +277,8 @@ within the resulting scroll range. The left pass notifies its caller after
 alignment so the right pass can follow. Neither pass installs listeners, timers
 or observers; construction/import does no work. Scheduling, preference writes,
 share restoration and movement of controls between containers remain caller-owned.
-Existing helper imports from `cockpitMath.js` and `rightRailPolicy.js` remain
-compatible through re-exports.
+Existing imports of `resolveHudRailLayout` from `cockpitMath.js` remain
+compatible through a re-export.
 
 ### Adding a right-rail readout panel
 
