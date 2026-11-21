@@ -22,7 +22,7 @@ import VisualPresets from './VisualPresets.vue';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal, groups, sky } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, groups, sky, cleanView } = storeToRefs(display);
 // Cockpit takes these controls first; otherwise, while a layer they act on is
 // on, they move into that layer's tab in Context.
 const inContext = (id) => availableTabs.value.some((tab) => tab.id === id);
@@ -199,7 +199,7 @@ const allocationOptions = computed(() => [
       <span class="pp-slider-value" id="scope-opacity-value">{{ pct(scopeOpacity) }}</span>
     </div>
   </div>
-  <UiButton class="pp-toggle-btn" id="clean-view-toggle" aria-pressed="false" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
+  <UiButton class="pp-toggle-btn" id="clean-view-toggle" :pressed="cleanView" @click="act('toggleCleanView')" :title="t('Hide UI chrome')">
     <span class="pp-icon">&#x25A1;</span>
     <span class="pp-label">{{ t('Clean UI') }}</span>
   </UiButton>

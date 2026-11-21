@@ -112,16 +112,26 @@ function loadToggleCleanView(documentRef) {
 function fakeShell(documentRef, timers) {
   const reads = new Set();
   const cleanViewBtn = new FakeElement('clean-view-toggle');
-  cleanViewBtn.setAttribute('aria-pressed', 'false'); // as in the markup
   const eyeBtn = new FakeElement('clean-view-eye');
   const exitBtn = new FakeElement('clean-view-exit');
   const toggle = loadToggleCleanView(documentRef);
   const layoutCalls = [];
+  // Stands in for the display store and the Display view: the kit buttons
+  // render aria-pressed from the published state
+  // (views/cleanViewEyeView.test.mjs proves the real view does).
+  const published = [];
+  const publishPressed = (enabled) => {
+    published.push(enabled);
+    for (const button of [cleanViewBtn, eyeBtn])
+      button.setAttribute('aria-pressed', String(enabled));
+  };
+  publishPressed(false); // the store's initial state
   const target = {
     _cleanViewBtn: cleanViewBtn,
     _cleanViewEye: bindCleanViewEye({
       button: eyeBtn,
       documentRef,
+      publishPressed,
       timers,
     }),
     // Clean view holds the hidden rails' layout instead of re-laying them.
@@ -138,7 +148,15 @@ function fakeShell(documentRef, timers) {
       return obj[key];
     },
   });
-  return { shell, reads, cleanViewBtn, eyeBtn, exitBtn, layoutCalls };
+  return {
+    shell,
+    reads,
+    cleanViewBtn,
+    eyeBtn,
+    exitBtn,
+    layoutCalls,
+    published,
+  };
 }
 
 /** Wire the real shortcuts + Display controls to the shell like DisplayBindings. */
@@ -191,18 +209,30 @@ function wiredApp() {
   return { ...f, documentRef, timers, key, state, on, off };
 }
 
-test('the eye mirrors clean view: aria-pressed, label and title', () => {
+test('the eye mirrors clean view: published pressed state, label and title', () => {
   const documentRef = new FakeDocument();
   const button = new FakeElement('clean-view-eye');
-  const eye = bindCleanViewEye({ button, documentRef, timers: fakeTimers() });
+  const published = [];
+  const eye = bindCleanViewEye({
+    button,
+    documentRef,
+    publishPressed: (enabled) => published.push(enabled),
+    timers: fakeTimers(),
+  });
   eye.sync(false);
-  assert.equal(button.getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(published, [false]);
+  // The kit button renders aria-pressed (from the store); the controller
+  // never writes it, so Vue stays its only owner.
+  assert.equal(button.getAttribute('aria-pressed'), null);
   assert.match(button.getAttribute('aria-label'), /hide the controls/);
   assert.match(button.getAttribute('title'), /\(V\)$/);
-  eye.sync(true);
-  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  eye.sync(1);
+  assert.deepEqual(published, [false, true], 'published as a boolean');
+  assert.equal(button.getAttribute('aria-pressed'), null);
   assert.match(button.getAttribute('aria-label'), /show the controls/);
   eye.destroy();
+  eye.sync(false);
+  assert.deepEqual(published, [false, true], 'nothing after destroy');
 });
 
 test('the eye fades after the idle time only while clean view is on', () => {
@@ -278,12 +308,22 @@ test('wake listeners are passive capture listeners and destroy removes them', ()
   assert.equal(button.getAttribute('data-idle'), null);
 });
 
-test('a missing button binds nothing', () => {
+test('a missing button binds nothing but still publishes the state', () => {
   const documentRef = new FakeDocument();
-  const eye = bindCleanViewEye({ button: null, documentRef });
+  const published = [];
+  const eye = bindCleanViewEye({
+    button: null,
+    documentRef,
+    publishPressed: (enabled) => published.push(enabled),
+  });
   eye.sync(true);
+  eye.sync(0);
   eye.destroy();
   assert.equal(documentRef.listenerLog.length, 0);
+  // The Clean UI toggle still shows clean view pressed without the eye.
+  assert.deepEqual(published, [true, false]);
+  // And with no publisher at all, sync is still safe.
+  bindCleanViewEye({ button: null, documentRef }).sync(true);
 });
 
 test('eye, V, Escape, Clean UI and EXIT drive one state and stay in sync', () => {

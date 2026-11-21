@@ -4,7 +4,7 @@
 import '../../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from 'vue';
+import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { useDisplayStore } from '../stores/display.js';
 import DisplayControlsView from './DisplayControlsView.vue';
@@ -21,7 +21,7 @@ function mount(t) {
   const app = createApp(DisplayControlsView).use(pinia);
   app.mount(document.body.appendChild(document.createElement('div')));
   t.after(() => app.unmount());
-  return calls;
+  return { calls, store };
 }
 const $ = (id) => document.getElementById(id);
 
@@ -41,7 +41,7 @@ test('the eye is a toggle button after EXIT CLEAN VIEW, and Clean UI carries ari
 });
 
 test('the eye, Clean UI and EXIT answer through the display store', (t) => {
-  const calls = mount(t);
+  const { calls } = mount(t);
   $('clean-view-eye').click();
   $('clean-view-toggle').click();
   $('clean-view-exit').click();
@@ -50,4 +50,26 @@ test('the eye, Clean UI and EXIT answer through the display store', (t) => {
     'toggleCleanView',
     'exitCleanView',
   ]);
+});
+
+test('the eye and Clean UI render the published clean view state as kit toggles', async (t) => {
+  const { store } = mount(t);
+  const pressed = () => [
+    $('clean-view-eye').getAttribute('aria-pressed'),
+    $('clean-view-toggle').getAttribute('aria-pressed'),
+  ];
+  assert.deepEqual(pressed(), ['false', 'false']);
+  // Classes other code adds (the shell's `active`) survive a press.
+  $('clean-view-toggle').classList.add('active');
+  store.publishCleanView(true);
+  await nextTick();
+  assert.deepEqual(pressed(), ['true', 'true']);
+  assert.ok($('clean-view-toggle').classList.contains('active'));
+  assert.ok($('clean-view-eye').classList.contains('ui-button--pressed'));
+  // A label the eye's controller wrote survives the re-render.
+  $('clean-view-eye').setAttribute('aria-label', 'controller label');
+  store.publishCleanView(false);
+  await nextTick();
+  assert.deepEqual(pressed(), ['false', 'false']);
+  assert.equal($('clean-view-eye').getAttribute('aria-label'), 'controller label');
 });

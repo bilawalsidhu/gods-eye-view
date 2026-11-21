@@ -18,12 +18,16 @@ const LABELS = Object.freeze({
 /**
  * Mirror clean-view state on the corner eye button and fade it while idle.
  * The shell owns the state (`toggleCleanView`) and the button's click; this
- * controller only reflects that state on the button. While clean view is on,
+ * controller only reflects that state: it hands it to `publishPressed` (the
+ * display store, so the Display view's kit buttons render aria-pressed) and
+ * writes the eye's label and title. While clean view is on,
  * the button fades after `idleMs` without input, and any pointer, touch,
  * wheel or key input brings it back. Wake listeners are passive and never stop an event.
  * @param {object} options
  * @param {HTMLElement} [options.button] The eye button.
  * @param {Document} [options.documentRef] Input event target.
+ * @param {(enabled: boolean) => void} [options.publishPressed] Receives the
+ *   state on every sync; the view draws the pressed state from it.
  * @param {number} [options.idleMs] Quiet time before fading.
  * @param {{setTimeout: Function, clearTimeout: Function}} [options.timers]
  * @returns {{sync(enabled: boolean): void, destroy(): void}}
@@ -31,10 +35,18 @@ const LABELS = Object.freeze({
 export function bindCleanViewEye({
   button,
   documentRef,
+  publishPressed = () => {},
   idleMs = CLEAN_VIEW_EYE_IDLE_MS,
   timers = globalThis,
 } = {}) {
-  if (!button || !documentRef) return { sync() {}, destroy() {} };
+  // Without the eye the pressed state still reaches the Clean UI toggle.
+  if (!button || !documentRef)
+    return {
+      sync(next) {
+        publishPressed(Boolean(next));
+      },
+      destroy() {},
+    };
   let enabled = false;
   let destroyed = false;
   let timer = null;
@@ -71,7 +83,7 @@ export function bindCleanViewEye({
     sync(next) {
       if (destroyed) return;
       enabled = Boolean(next);
-      button.setAttribute('aria-pressed', String(enabled));
+      publishPressed(enabled);
       updateLabels();
       button.removeAttribute('data-idle');
       if (enabled) arm();

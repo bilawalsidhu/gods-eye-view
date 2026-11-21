@@ -1397,7 +1397,6 @@ export class StyleManager extends ShellFacade {
     document.body.classList.toggle('ui-clean-view', shouldEnable);
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
-      this._cleanViewBtn.setAttribute('aria-pressed', String(shouldEnable));
     }
     this._cleanViewEye?.sync(shouldEnable);
     // The rails are hidden, not removed: keep their layout as it is so the
@@ -1415,6 +1414,9 @@ export class StyleManager extends ShellFacade {
     this._cleanViewEye = bindCleanViewEye({
       button: this._cleanViewEyeBtn,
       documentRef: document,
+      // The Display view draws the pressed state (Clean UI and the eye).
+      publishPressed: (enabled) =>
+        useDisplayStore(applicationPinia()).publishCleanView(enabled),
     });
     this._cleanViewEye.sync(document.body.classList.contains('ui-clean-view'));
   }

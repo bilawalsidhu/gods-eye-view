@@ -3607,8 +3607,9 @@ comparison/progression controls keep their specialized presentation and behavior
 `#clean-view-eye` (`src/ui/cleanViewEye.js`) is a 44 px, semi-transparent,
 safe-area aware corner button (bottom right; top right on short landscape
 screens) that calls the same `toggleCleanView()` as V, Display > Clean UI and
-EXIT CLEAN VIEW, so all of them share one state; the eye and Clean UI carry
-`aria-pressed`. In clean view the eye is the only control left and fades after
+EXIT CLEAN VIEW, so all of them share one state; the eye and Clean UI are kit
+toggles (`UiButton` with `pressed`) that render `aria-pressed` from the display
+store's `cleanView`, which the shell publishes on every toggle. In clean view the eye is the only control left and fades after
 3 s without input; any pointer, touch, wheel or key input brings it back
 (passive capture listeners). On phones (max-width 720 px or max-height 520 px)
 the eye replaces the EXIT CLEAN VIEW pill; larger screens keep the pill.
