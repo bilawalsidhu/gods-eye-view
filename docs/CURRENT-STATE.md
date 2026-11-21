@@ -2091,7 +2091,9 @@ camera that is already active counts. The picker shows the automatic camera
 as its own option, and a native list sends no change for the option it
 already shows, so the list cannot pick that camera: FOCUS does, and so does
 NEAREST when that camera is the nearest. Closing the list without a choice
-keeps automatic selection.
+keeps automatic selection. The layer owns opening selection. If enabling
+finishes after the active camera was cleared, the shell leaves the selection
+and the globe where they are.
 
 The active camera's pictures follow what can be seen. The monitor plane skips
 its 10 s still while the renderer reports it off screen or below the horizon,
