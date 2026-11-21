@@ -13,13 +13,20 @@ import {
   readCameraAzEl,
   restoreCamera,
   restoreScene,
+  skyFovy,
   snapshotCamera,
   skyTilesShown,
   snapshotScene,
   takeSkyControls,
   worldDirectionToAzEl,
 } from './skyCamera.js';
-import { EL_MAX_DEG, EL_MIN_DEG, makeView, normalizeAz } from './skyMath.js';
+import {
+  EL_MAX_DEG,
+  EL_MIN_DEG,
+  fovAngles,
+  makeView,
+  normalizeAz,
+} from './skyMath.js';
 import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 
 const DEG = Math.PI / 180;
@@ -104,7 +111,44 @@ test('applySkyCamera puts the eye at ground + 1.7 m and holds the fov', () => {
   assert.ok(Math.abs(pose.height - 16.7) < 1e-6, String(pose.height));
   assert.ok(Math.abs(pose.lat - 29.7604) < 1e-9);
   assert.ok(Math.abs(pose.lon + 95.3698) < 1e-9);
-  assert.ok(Math.abs(pose.fovy - 45 * DEG) < 1e-12);
+  // The stub's canvas is 1200 x 800: Sky's 45 deg spans the longer side.
+  const vertical = skyFovy(45, { width: 1200, height: 800 });
+  assert.ok(vertical < 45 * DEG);
+  assert.ok(Math.abs(pose.fovy - vertical) < 1e-12);
+});
+
+test('the camera and the overlay agree on the field of view: the longer side spans fovDeg, landscape or portrait', () => {
+  for (const [width, height] of [
+    [1200, 800],
+    [390, 844],
+    [800, 800],
+  ]) {
+    const { camera } = createSkyTestHost({ width, height });
+    const fovy = applySkyCamera(
+      camera,
+      HOUSTON,
+      makeView({ azDeg: 0, elDeg: 30, fovDeg: 60 }),
+      { width, height },
+    );
+    const pose = camera.pose();
+    assert.ok(Math.abs(pose.fovy - fovy) < 1e-12, `${width}x${height}`);
+    // What the overlay projects with (skyMath.fovAngles) is what is drawn.
+    const overlay = fovAngles(60, width, height);
+    assert.ok(
+      Math.abs(pose.fovy / DEG - overlay.verticalDeg) < 1e-9,
+      `vertical ${width}x${height}`,
+    );
+    const horizontalDeg =
+      (2 * Math.atan(Math.tan(pose.fovy / 2) * (width / height))) / DEG;
+    assert.ok(
+      Math.abs(horizontalDeg - overlay.horizontalDeg) < 1e-9,
+      `horizontal ${width}x${height}`,
+    );
+    assert.ok(
+      Math.abs(Math.max(horizontalDeg, pose.fovy / DEG) - 60) < 1e-9,
+      `the longer side spans 60 deg at ${width}x${height}`,
+    );
+  }
 });
 
 function poseDelta(camera, before) {
@@ -131,7 +175,10 @@ test('exit restore: camera position/orientation back to 1e-6 and the field of vi
     makeView({ azDeg: 200, elDeg: 70, fovDeg: 20 }),
   );
   assert.ok(poseDelta(camera, before) > 1);
-  assert.ok(Math.abs(camera.pose().fovy - 20 * DEG) < 1e-12);
+  assert.ok(
+    Math.abs(camera.pose().fovy - skyFovy(20, { width: 1200, height: 800 })) <
+      1e-12,
+  );
   restoreCamera(camera, before);
   assert.ok(
     poseDelta(camera, before) < 1e-6,

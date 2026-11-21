@@ -13,7 +13,12 @@
 import { eastNorthUp, inverseFrameVector } from '../geo/frames.js';
 import { heightsOf } from '../queries/heights.js';
 import { findCamera, findFrame, findGlobe } from '../render/rendererOf.js';
-import { DEG, azElToHeadingPitch, headingPitchToAzEl } from './skyMath.js';
+import {
+  DEG,
+  azElToHeadingPitch,
+  fovAngles,
+  headingPitchToAzEl,
+} from './skyMath.js';
 import { observerEyeHeight } from './observer.js';
 
 const copy = (v) => ({ x: v.x, y: v.y, z: v.z });
@@ -48,11 +53,32 @@ export function restoreCamera(camera, snap) {
   camera.setFov(null);
 }
 
-/** The camera at the observer's eye looking along the view. */
-export function applySkyCamera(camera, observer, view) {
+/**
+ * The camera's vertical field of view (radians) for a Sky view. Sky's
+ * `fovDeg` is the angle across the LONGER side of the canvas
+ * (skyMath.frustumTangents, which the overlay projects with), while the
+ * camera port holds the vertical angle, so a landscape canvas narrows it by
+ * its aspect.
+ * @param {number} fovDeg
+ * @param {{width: number, height: number}} size Canvas size, CSS pixels.
+ */
+export function skyFovy(fovDeg, { width, height }) {
+  return fovAngles(fovDeg, width, height).verticalDeg * DEG;
+}
+
+/**
+ * The camera at the observer's eye looking along the view, with the field of
+ * view the overlay draws with. `size` is the canvas size; without it the
+ * camera's own aspect ratio is used.
+ */
+export function applySkyCamera(camera, observer, view, size) {
   const orientation = azElToHeadingPitch(view.azDeg, view.elDeg, view.rollDeg);
   // The eye is placed in the world frame; leave a `lookAt` orbit first.
-  if (!camera.pose().frameIsIdentity) camera.release();
+  const pose = camera.pose();
+  if (!pose.frameIsIdentity) camera.release();
+  const aspect = Number.isFinite(pose.aspectRatio) ? pose.aspectRatio : 1;
+  const canvas =
+    size?.width > 0 && size?.height > 0 ? size : { width: aspect, height: 1 };
   camera.setView({
     destination: {
       lon: observer.lonDeg,
@@ -61,7 +87,9 @@ export function applySkyCamera(camera, observer, view) {
     },
     orientation,
   });
-  camera.setFov({ vertical: view.fovDeg * DEG });
+  const vertical = skyFovy(view.fovDeg, canvas);
+  camera.setFov({ vertical });
+  return vertical;
 }
 
 /**

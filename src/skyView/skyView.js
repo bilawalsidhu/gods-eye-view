@@ -569,6 +569,8 @@ export function mountSkyView({
   const appliedDirection = { x: 0, y: 0, z: 0 };
   const appliedUp = { x: 0, y: 0, z: 0 };
   let hasAppliedPose = false;
+  /** The vertical field of view Sky last held (radians), or null. */
+  let appliedFovy = null;
   let urlTimer = null;
   let autoTimer = null;
   let inertiaFrame = null;
@@ -1404,12 +1406,21 @@ export function mountSkyView({
     }
     view = makeView(next);
     if (!active || !observer) return;
-    const camera = cameraPort();
-    if (camera) applySkyCamera(camera, observer, view);
-    rememberAppliedPose();
+    placeCamera();
     findFrame(viewer)?.requestRender('sky');
     redraw();
     scheduleUrl();
+  }
+
+  /**
+   * Put the camera at the eye along `view`, with the field of view the
+   * overlay draws with for the canvas's size now.
+   */
+  function placeCamera() {
+    const camera = cameraPort();
+    if (camera)
+      appliedFovy = applySkyCamera(camera, observer, view, canvasSize());
+    rememberAppliedPose();
   }
 
   function scheduleUrl() {
@@ -1571,9 +1582,14 @@ export function mountSkyView({
       // A handoff keeps the other owner's camera but not Sky's field of
       // view: give it back to the renderer, unless that owner has set one.
       const camera = cameraPort();
-      if (camera && Math.abs(camera.pose().fovy - view.fovDeg * DEG) < 1e-9)
+      if (
+        camera &&
+        appliedFovy !== null &&
+        Math.abs(camera.pose().fovy - appliedFovy) < 1e-9
+      )
         camera.setFov(null);
     }
+    appliedFovy = null;
     // Normal exit already put the saved camera back, so every setting,
     // including collision, goes back with it. A handoff keeps the other
     // camera: defer only while that camera is actually under the terrain
@@ -2231,7 +2247,11 @@ export function mountSkyView({
     if (globeCanvas) {
       const resizeObserver = new globalThis.ResizeObserver(() => {
         dropSize();
-        if (active) redraw();
+        if (!active) return;
+        // The camera holds a vertical angle; the overlay's spans the longer
+        // side, so a new shape needs the camera's field of view again.
+        if (observer && !cameraTakenElsewhere()) placeCamera();
+        redraw();
       });
       resizeObserver.observe(globeCanvas);
       removers.push(() => resizeObserver.disconnect());

@@ -9,7 +9,7 @@ import {
   skyViewFor,
   toLocalInputValue,
 } from './skyView.js';
-import { worldDirectionToAzEl } from './skyCamera.js';
+import { skyFovy, worldDirectionToAzEl } from './skyCamera.js';
 import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 import { createObserver } from './observer.js';
 import { readFileSync } from 'node:fs';
@@ -456,7 +456,10 @@ test('drag, wheel and keys move the renderer camera; Escape leaves', async () =>
   );
   assert.ok(handle.view.fovDeg < fov0);
   assert.ok(
-    Math.abs(camera.pose().fovy - (handle.view.fovDeg * Math.PI) / 180) < 1e-12,
+    Math.abs(
+      camera.pose().fovy -
+        skyFovy(handle.view.fovDeg, { width: 1200, height: 800 }),
+    ) < 1e-12,
   );
   // pinch: two pointers spreading apart zoom in
   canvas.dispatchEvent(
