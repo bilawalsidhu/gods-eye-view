@@ -168,8 +168,7 @@ test('markup: the card nests inside the voice control with every element and a p
       'the card is part of the voice control',
     );
     assert.equal(document.querySelectorAll('#gev-voice-card').length, 1);
-    if (panel)
-      assert.equal(card.parentElement.id, 'gev-voice-preview-panel');
+    if (panel) assert.equal(card.parentElement.id, 'gev-voice-preview-panel');
     for (const id of [
       'gev-voice-card-phase',
       'gev-voice-card-dismiss',
@@ -531,7 +530,12 @@ test('additive presentation gates retain the current localized reducer labels', 
     const steps = card.state.steps;
     const result = card.state.result;
     const who = () => ui.state.card.user.label;
-    card.handle({ type: 'transcript', role: 'user', text: 'Same words', attribution: 'unverified' });
+    card.handle({
+      type: 'transcript',
+      role: 'user',
+      text: 'Same words',
+      attribution: 'unverified',
+    });
     assert.equal(card.state.userAttribution, 'unverified');
     assert.equal(card.snapshot().user.label, 'Habla reciente');
     assert.equal(who(), 'Habla reciente');
@@ -613,5 +617,33 @@ test('manual panel and preference compose with the actual card without changing 
   assert.equal(card.state, content);
   fields.dispose();
   panel.destroy();
+  card.destroy();
+});
+
+test('a card without an idle deadline keeps its reply until the next turn', () => {
+  const ui = createTestVoiceUi();
+  let timers = 0;
+  const card = new VoiceCardControls({
+    ui,
+    idleMs: null,
+    setTimer() {
+      timers++;
+      return timers;
+    },
+    clearTimer() {},
+  });
+  card.handle({ type: 'interruption' });
+  card.handle({
+    type: 'transcript',
+    role: 'assistant',
+    text: 'Tracking UAL12.',
+    final: true,
+    responseId: 'r1',
+  });
+  assert.equal(timers, 0);
+  assert.equal(card.hideTimer, null);
+  assert.equal(card.snapshot().visible, true);
+  card.handle({ type: 'interruption' });
+  assert.equal(card.snapshot().assistant.visible, false);
   card.destroy();
 });

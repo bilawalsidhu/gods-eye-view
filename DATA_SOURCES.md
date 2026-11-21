@@ -20,6 +20,7 @@ How to read this:
 | **NOAA nowCOAST observed weather** (`nowcoast.noaa.gov/geoserver/observations/{weather_radar,satellite}/ows`, WMS 1.1.1) | Rain radar (MRMS base reflectivity, contiguous US, about 4-minute updates) and Satellite clouds (GOES-19/18 Band 14 regional infrared, about 5-minute updates; global infrared mosaic, hourly). Keyless; layer metadata refreshed every 2 minutes, exact-time images cached for up to 24 hours | [NOAA disclaimer](https://oceanservice.noaa.gov/disclaimer.html) | "NOAA nowCOAST · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners" |
 | **NOAA nowCOAST lightning density** (`nowcoast.noaa.gov/geoserver/observations/lightning_detection/ows`) | Lightning density: 15-minute accumulated strike density on an approximately 8 km grid, Americas and Pacific. Keyless; layer metadata refreshed every 10 minutes, exact-time images cached for up to 24 hours | NOAA Level-5 derived product from Vaisala NLDN/GLD360; the [product description](https://ocean.weather.gov/lightning/lightning_pdd.php) permits public distribution of this density product, not of raw Vaisala detections | "NOAA/NWS nowCOAST; derived from Vaisala NLDN/GLD360" |
 | **NOAA NHC / CPHC advisories** (`www.nhc.noaa.gov/CurrentStorms.json` + the `mapservices.weather.noaa.gov` tropical weather summary MapServer) | Cyclone advisories: storm positions, forecast tracks, points and cones for the Atlantic and eastern/central North Pacific. Keyless through `/api/cyclones`; cached for 5 minutes | [NWS public-data terms](https://www.weather.gov/disclaimer); no endorsement implied | "NOAA/NWS NHC / CPHC" |
+| **Joint Typhoon Warning Center (JTWC) warnings** (`www.metoc.navy.mil/jtwc/rss/jtwc.rss`, each storm's `.tcw` and `.kmz`) | Cyclone advisories for the western North Pacific, North Indian Ocean and Southern Hemisphere: positions, forecast tracks and 34-knot wind danger areas. Keyless through `/api/cyclones`, read beside NHC | US government work (U.S. Navy / U.S. Air Force); not the official regional warning; no endorsement implied | "Joint Typhoon Warning Center" |
 | **Mapillary** (vector tiles, Graph API, MapillaryJS) | Street Level: coverage lines, image cones and the embedded viewer. Coverage tiles kept in server memory for 24 h | Imagery [CC BY-SA 4.0](https://www.mapillary.com/terms); API under the Mapillary terms with a client token | "© Mapillary contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
 | **Google Street View** (Maps JavaScript API) | Street Level, on the Google 3D map only (Google's terms): Google's panorama viewer and nearest-panorama lookups; panorama dates and addresses kept for the session only | Google Maps Platform ToS (your own key + billing; every panorama load is billed) | "Street View imagery © Google" on the globe while the provider is on, and Google's logo and terms in the viewer |
 | **KartaView** (`api.kartaview.org` coverage tiles and photo API, `cdn.kartaview.org` image proxy, `storage*.openstreetcam.org` photos) | Street Level: coverage lines (z13–14 JSON tiles; with the imagery filter on, KartaView's filtered PNG tiles as a mask), nearest-photo lookups, the photo's sequence and the photo itself, fetched by the browser. Keyless; nothing cached beyond the session | Imagery [CC BY-SA 4.0](https://kartaview.org/terms) (KartaView terms §4); the public API needs no token | "© KartaView contributors, CC BY-SA 4.0", shown on the globe while the provider is on |
@@ -708,6 +709,26 @@ This implementation is original; those contributions have not been merged here.
 - **Delivery:** keyless same-origin `/api/cyclones`, five-minute singleflight cache,
   fixed upstream endpoints, bounded bodies/geometry/deadline, explicit unavailable/stale states.
   Direct status fetching is unsuitable in browsers because NHC does not advertise CORS.
+
+### Weather: JTWC cyclone warnings
+
+- **Sources:** the [JTWC warnings feed](https://www.metoc.navy.mil/jtwc/rss/jtwc.rss), and for each
+  storm it lists, the warning's JMV 3.0 data (`products/<storm>.tcw`) and Google Earth overlay
+  (`products/<storm>.kmz`).
+- **Rights/credit:** Joint Typhoon Warning Center (U.S. Navy / U.S. Air Force), a US government
+  work. JTWC warns for US government interests; the official warning for each basin is its
+  regional centre's (for example JMA, IMD, RSMC Nadi, BoM, Météo-France La Réunion). No bundled
+  archive and no endorsement implied.
+- **Coverage/meaning:** western North Pacific, North Indian Ocean and Southern Hemisphere. Where
+  NHC or CPHC lists the same storm, theirs is shown. Winds are 1-minute averages. The 34-knot wind
+  danger area is the swath of 34-knot winds widened by forecast track error, drawn as its own
+  area and never as a cone; it comes only from the overlay of the same warning number, and the
+  geometry waits for it.
+- **Delivery:** read in `/api/cyclones` beside NHC under its own 8-second deadline, bounded
+  bodies, no redirects. A warning is usable for 13 hours after issuance (some storms are on
+  12-hourly warnings). A storm whose warning cannot be read is left out and the others shown; a
+  failed or slow JTWC read keeps JTWC's last good storms and never delays or stales NHC's. Swath
+  longitudes past ±180 (a ring crossing the antimeridian) are wrapped, not dropped.
 
 ### Weather: observed lightning density
 
