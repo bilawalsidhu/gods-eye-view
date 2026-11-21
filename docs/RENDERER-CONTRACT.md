@@ -139,6 +139,16 @@ optional:
   along their length, others per vertex), and an undraped one moves and
   recolours in place in its polyline collection. The check
   `draw.lines.ageFade` covers it, draped and not, narrowed too.
+- `LineAgeFade.showMs` (capability `lineTimeWindow`) draws only the part of
+  an aged line within `showMs` of the scene clock: where its time, running
+  evenly between positions as the fade's does, is after now or before
+  `now - showMs`, it is not drawn (nor picked), cut there along the line,
+  not at a position. The cut follows `frame.setTime` as the fade does, so a
+  moving object's trail can be its whole track, sent once and drawn from
+  `showMs` ago up to where the object is now; `Infinity` cuts at now alone.
+  A renderer without the capability draws the whole line. The Cesium port
+  lists it with `lineAgeFade` and discards by time in the same material;
+  the check `draw.lines.timeWindow` covers it, draped and not.
 - A solid line's `outline.widthPx` is the outline's whole width, half on
   each side, inside the line's own width: an 8 px line with a 4 px outline
   is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws

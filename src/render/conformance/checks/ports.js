@@ -3547,6 +3547,87 @@ export function portChecks() {
       { capability: 'lineAgeFade' },
     ),
     check(
+      'draw.lines.timeWindow',
+      'a line, draped or not, draws only its part within a span of scene time, cut as the time moves on, without being sent again',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const t0 = Date.UTC(2026, 0, 1, 18);
+        r.frame.setTime(t0);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-time-window' });
+        // West to east over two minutes, t0 at its middle; shown over the
+        // last 30 s, unfaded.
+        const line = (id, dLat, mode) => ({
+          id,
+          positions: [
+            at(-0.004, dLat, mode === 'draped' ? 0 : 20),
+            at(0.004, dLat, mode === 'draped' ? 0 : 20),
+          ],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          ageFade: {
+            times: [t0 - 60_000, t0 + 60_000],
+            windowMs: 60_000,
+            alphaFloor: 1,
+            showMs: 30_000,
+          },
+        });
+        lines.set([line('air', 0.002, '3d'), line('ground', -0.002, 'draped')]);
+        // Whether the line at `dLon` is drawn green there, strongly.
+        const green = (dLon, dLat) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat, dLat > 0 ? 20 : 0));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, g, blue] = image.data;
+          return g > red + 80 && g > blue + 80;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            // At t0 it shows from 30 s ago (a quarter along) to now (half).
+            ok(green(-0.001, dLat), `${what}: drawn within the span`);
+            ok(!green(0.002, dLat), `${what}: not drawn after now`);
+            ok(!green(-0.0035, dLat), `${what}: not drawn before the span`);
+          }
+          // 40 s on, it shows from 10 s to 40 s after t0.
+          r.frame.setTime(t0 + 40_000);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(0.002, dLat), `${what}: drawn where now reached`);
+            ok(!green(-0.001, dLat), `${what}: cut as it grew old`);
+          }
+          r.frame.setTime(t0);
+          await drawn(h, r);
+          ok(green(-0.001, 0.002), '3d: drawn again back at t0');
+          ok(!green(0.002, -0.002), 'draped: cut again back at t0');
+          equal(lines.size(), 2, 'never sent again');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineTimeWindow' },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {

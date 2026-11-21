@@ -209,6 +209,8 @@ export type Capability =
   | 'courseGlide'
   /** Lines that fade with the age of their points (`LineItem.ageFade`). */
   | 'lineAgeFade'
+  /** Lines drawn only within a span of the scene clock (`LineAgeFade.showMs`). */
+  | 'lineTimeWindow'
   /** Screen-space clustering of icons. */
   | 'cluster'
   /** Post-processing styles. */
