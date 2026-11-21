@@ -911,8 +911,10 @@ test('a voice entry asking for a military class follows the nearest match withou
   });
   assert.deepEqual(result, { ok: true, retargeted: true });
   assert.deepEqual(tracked, [['helo1', 'voice']]);
-  // Searched from the followed aircraft.
+  // Searched from the followed aircraft, among the aircraft the person's
+  // filters show: never the hidden ones.
   assert.deepEqual(searches[0][0], { x: 1, y: 2, z: 3 });
+  assert.equal(searches[0][3], undefined);
 });
 
 test('a voice entry whose followed aircraft already matches stays on it', (t) => {

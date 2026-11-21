@@ -8820,3 +8820,129 @@ test('a military voice Cockpit entry switches Military Flights on as a plain lay
     assert.deepEqual(entries, [['enter', 'military', 'helicopter']]);
   }
 });
+
+// A data manager whose Military Flights layer is off, switches on empty and
+// reports its first data only when the test lands it.
+function militaryOffManager({ militaryOn = false } = {}) {
+  const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
+  const activity = new Set();
+  const layerCalls = [];
+  let lastUpdate = militaryOn ? 1 : null;
+  const manager = {
+    layers: new Map([
+      ['flights', { module: {} }],
+      ['military', { module: { getStats: () => ({ lastUpdate }) } }],
+    ]),
+    isEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, on, options) {
+      layerCalls.push([layerId, on, options.origin]);
+      if (on) enabled.add(layerId);
+      else enabled.delete(layerId);
+      return true;
+    },
+    subscribeActivity(callback) {
+      activity.add(callback);
+      return () => activity.delete(callback);
+    },
+    getAll: () => [],
+  };
+  return {
+    manager,
+    layerCalls,
+    enabled,
+    listening: () => activity.size,
+    landFirstData() {
+      lastUpdate = 2;
+      for (const callback of [...activity])
+        callback({ type: 'data-updated', layerId: 'military' });
+    },
+  };
+}
+
+function militaryEntryRunner(manager, controlCockpit) {
+  return createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager: {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
+      controlCockpit,
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
+    },
+    dataManager: manager,
+  });
+}
+
+test('a military voice entry waits for a just-switched-on layer to report its first data', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const fixture = militaryOffManager();
+  let searchedWithData = null;
+  const runner = militaryEntryRunner(fixture.manager, () => {
+    searchedWithData =
+      fixture.manager.layers.get('military').module.getStats().lastUpdate !==
+      null;
+    return { ok: true, action: 'control_cockpit', state: { active: true } };
+  });
+  const pending = runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+  });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(searchedWithData, null, 'no search on an empty layer');
+  assert.equal(fixture.listening(), 1);
+  fixture.landFirstData();
+  const result = await pending;
+  assert.equal(result.ok, true, result.error);
+  assert.equal(searchedWithData, true);
+  assert.equal(fixture.listening(), 0, 'the wait lets go of the layer');
+});
+
+test('a failed military voice entry switches off only the layer it switched on', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const militaryOn of [false, true]) {
+    const fixture = militaryOffManager({ militaryOn });
+    const runner = militaryEntryRunner(fixture.manager, () => ({
+      ok: false,
+      action: 'control_cockpit',
+      error: 'No helicopter military contact is available to enter',
+      state: { active: false },
+    }));
+    const pending = runner('control_cockpit', {
+      action: 'enter',
+      targetLayer: 'military',
+      aircraftClass: 'helicopter',
+    });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    if (!militaryOn) fixture.landFirstData();
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.match(result.error, /No helicopter military contact/);
+    assert.deepEqual(
+      fixture.layerCalls,
+      militaryOn
+        ? []
+        : [
+            ['military', true, 'voice'],
+            ['military', false, 'voice'],
+          ],
+    );
+    assert.equal(fixture.enabled.has('military'), militaryOn);
+  }
+});

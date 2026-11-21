@@ -381,9 +381,10 @@ export class CockpitCoordinator {
 
   /**
    * Retarget a voice entry to the requested layer and class before entering.
-   * It searches that layer's own aircraft, nearest first, from the followed
-   * aircraft or the camera, and follows the nearest match; the aircraft
-   * already followed counts when it matches. It needs nothing from Contacts.
+   * It searches the aircraft that layer shows, under the person's own
+   * filters, nearest first, from the followed aircraft or the camera, and
+   * follows the nearest match; the aircraft already followed counts when it
+   * matches. It needs nothing from Contacts.
    */
   _retargetCockpitEntryLayer({
     targetLayer,
@@ -412,7 +413,6 @@ export class CockpitCoordinator {
             origin,
             AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
             targetLayer === 'military' ? 5000 : 25000,
-            { includeHidden: true },
           )
         : [];
     const match = nearby.find(

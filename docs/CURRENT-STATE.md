@@ -9096,12 +9096,14 @@ apply to `public/` assets or built-preview serving.
   Cockpit actions, double-click and voice use the same gate. Voice entry, like
   the COCKPIT button, never turns Contacts or detection on. A
   voice entry that names a layer or class ("a military helicopter") searches
-  that layer's own aircraft, nearest first, from the followed aircraft or the
-  ground under the camera, and follows the nearest match (the followed
-  aircraft counts when it matches) before it enters
-  (`_retargetCockpitEntryLayer` in `src/ui/cockpitCoordinator.js`). A military
-  request while Military Flights is off switches that layer on as a plain
-  layer the person can switch off; Contacts stays as it is.
+  the aircraft that layer shows under the person's filters, nearest first,
+  from the followed aircraft or the ground under the camera, and follows the
+  nearest match (the followed aircraft counts when it matches) before it
+  enters (`_retargetCockpitEntryLayer` in `src/ui/cockpitCoordinator.js`). A
+  military request while Military Flights is off switches that layer on as a
+  plain layer the person can switch off, waits for its first data before
+  searching, and switches it off again if entry then fails; a layer that was
+  already on stays on. Contacts stays as it is.
   The ship bridge and the orbital view have their own own-layer gates
   (`bridgeEntryAllowed`, `orbitEntryAllowed`; see
   [Ship bridge view](#ship-bridge-view) and [Orbital view](#orbital-view)).

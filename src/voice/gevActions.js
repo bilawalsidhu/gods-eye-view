@@ -1213,8 +1213,24 @@ export function createGevActionRunner({
       // Entry changes no Context mode, layer or detection setting, as the
       // COCKPIT button does not. The one exception is a military entry while
       // Military Flights is off: that layer is switched on as a plain layer
-      // the person can switch off, and Contacts stays as it is.
+      // the person can switch off, and switched off again if entry fails.
+      // Contacts stays as it is.
       let rollbackTarget;
+      let switchedOn = null;
+      // A switch-off undoing this action's own switch-on; it runs even for a
+      // turn that went stale, so a failed entry leaves no layer behind.
+      const switchBackOff = async () => {
+        if (!switchedOn) return null;
+        return runGevAction(
+          'set_layer_visibility',
+          { layerId: switchedOn, enabled: false },
+          {},
+        );
+      };
+      const failed = async (result) => {
+        const layerRollback = await switchBackOff();
+        return layerRollback ? { ...result, layerRollback } : result;
+      };
       if (action === 'enter') {
         if (!current()) {
           return {
@@ -1236,23 +1252,32 @@ export function createGevActionRunner({
             { layerId: 'military', enabled: true },
             runOptions,
           );
+          if (layer?.ok === true) switchedOn = 'military';
+          // The search needs the layer's aircraft, which arrive with its
+          // first data, not with the switch.
+          if (layer?.ok === true && current())
+            await waitForLayerFirstData(dataManager, 'military', runOptions);
           if (layer?.ok !== true || !current()) {
-            return {
+            return failed({
               ok: false,
               action: 'control_cockpit',
               cancelled: !current() || Boolean(layer?.cancelled),
               error:
-                layer?.error || 'Military Flights could not be switched on',
+                layer?.error ||
+                (layer?.ok === true
+                  ? 'Cockpit entry was cancelled before it could run'
+                  : 'Military Flights could not be switched on'),
               layer,
               state: styleManager.getCockpitState?.() || null,
-            };
+            });
           }
         }
       }
       const selectedTarget =
         action === 'enter' ? selectedCockpitTarget(dataManager) : null;
+      let cockpitResult;
       try {
-        return await styleManager.controlCockpit(action, {
+        cockpitResult = await styleManager.controlCockpit(action, {
           notificationToken,
           targetLayer,
           aircraftClass,
@@ -1260,13 +1285,14 @@ export function createGevActionRunner({
           rollbackTarget,
         });
       } catch (error) {
-        return {
+        cockpitResult = {
           ok: false,
           action: 'control_cockpit',
           error: error instanceof Error ? error.message : String(error),
           state: styleManager.getCockpitState?.() || null,
         };
       }
+      return cockpitResult?.ok === true ? cockpitResult : failed(cockpitResult);
     }
 
     if (name === 'show_data_layers_menu') {
@@ -2853,6 +2879,62 @@ export function formatTrackedEntityLabel(found, query = '') {
     text(found?.noradId) ||
     String(query)
   );
+}
+
+/**
+ * Wait for a layer just switched on to report its first data: its stats name
+ * an update, or its next update lands. Bounded by that update, the layer
+ * failing or going off, and the request's own cancellation.
+ * @returns {Promise<boolean>} Whether the layer has reported data.
+ */
+function waitForLayerFirstData(
+  dataManager,
+  layerId,
+  { signal = null, isCurrent = null } = {},
+) {
+  const reported = () => {
+    try {
+      const stats = dataManager.layers?.get?.(layerId)?.module?.getStats?.();
+      return stats?.lastUpdate != null;
+    } catch {
+      return false;
+    }
+  };
+  if (reported()) return Promise.resolve(true);
+  if (typeof dataManager.subscribeActivity !== 'function' || signal?.aborted)
+    return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const offs = [];
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      for (const off of offs) off?.();
+      resolve(value);
+    };
+    const onAbort = () => done(false);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    offs.push(() => signal?.removeEventListener?.('abort', onAbort));
+    offs.push(
+      dataManager.subscribeActivity((change) => {
+        if (
+          !dataManager.isEnabled?.(layerId) ||
+          (typeof isCurrent === 'function' && !isCurrent())
+        )
+          return done(false);
+        if (reported()) return done(true);
+        if (change?.type === 'data-updated' && change.layerId === layerId)
+          done(reported());
+      }),
+    );
+    offs.push(
+      dataManager.subscribe?.((change) => {
+        if (change?.layerId !== layerId) return;
+        if (change.type === 'refresh-failed' || change.enabled === false)
+          done(false);
+      }),
+    );
+  });
 }
 
 /** Finds and tracks/selects an entity by spoken query across layer families. */
