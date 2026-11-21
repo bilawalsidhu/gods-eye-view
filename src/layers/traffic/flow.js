@@ -50,6 +50,8 @@ export function createFlow({ state: layerState, services, parts, source }) {
     if (code === 'RATE_LIMITED') return msg('Traffic rate limit reached');
     if (status === 503 && code && code !== 'no_key')
       return msg('Traffic service unavailable');
+    // TomTom refused the key on both of its flow endpoints.
+    if (code === 'key_rejected') return msg('TomTom key rejected');
     if (status === 503) return msg('TomTom key unavailable');
     if (status === 429) return msg('TomTom daily budget reached');
     if (status === 502 || status === 504)

@@ -1086,6 +1086,7 @@
   "TomTom roads first; OpenStreetMap fills the rest, simulated (needs a TomTom key)": "כבישי TomTom קודם; OpenStreetMap משלים את היתר, מדומים (דורש מפתח TomTom)",
   "Hybrid": "היברידי",
   "TomTom key unavailable": "מפתח TomTom אינו זמין",
+  "TomTom key rejected": "מפתח TomTom נדחה",
   "TomTom daily budget reached": "תקציב TomTom היומי אזל",
   "TomTom upstream unreachable": "שירות TomTom אינו נגיש",
   "TomTom flow unavailable": "זרימת TomTom אינה זמינה",
