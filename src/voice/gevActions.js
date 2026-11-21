@@ -1210,13 +1210,28 @@ export function createGevActionRunner({
           args.type ||
           args.filterType,
       );
-      let contextChangedForEntry = false;
-      let priorContextMode = null;
-      let rollbackTarget = null;
-      if (
-        action === 'enter' &&
-        typeof styleManager.setContextMode === 'function'
-      ) {
+      // Entry changes no Context mode, layer or detection setting, as the
+      // COCKPIT button does not. The one exception is a military entry while
+      // Military Flights is off: that layer is switched on as a plain layer
+      // the person can switch off, and switched off again if entry fails.
+      // Contacts stays as it is.
+      let rollbackTarget;
+      let switchedOn = null;
+      // A switch-off undoing this action's own switch-on; it runs even for a
+      // turn that went stale, so a failed entry leaves no layer behind.
+      const switchBackOff = async () => {
+        if (!switchedOn) return null;
+        return runGevAction(
+          'set_layer_visibility',
+          { layerId: switchedOn, enabled: false },
+          {},
+        );
+      };
+      const failed = async (result) => {
+        const layerRollback = await switchBackOff();
+        return layerRollback ? { ...result, layerRollback } : result;
+      };
+      if (action === 'enter') {
         if (!current()) {
           return {
             ok: false,
@@ -1227,51 +1242,37 @@ export function createGevActionRunner({
           };
         }
         rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
-        const contextState =
-          typeof styleManager.getContextModeState === 'function'
-            ? styleManager.getContextModeState()
-            : {};
-        priorContextMode = contextState?.mode || null;
-        const contactsReady =
-          contextState?.mode === 'flights' &&
-          contextState?.active !== false &&
-          contextState?.changing !== true;
-        if (!contactsReady) {
-          const contextResult = await styleManager.setContextMode('flights', {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
-            // must stay inert: claiming here would cancel a pending shared
-            // style/detection restore the operator never overrode.
-            claimVisualAuthority: false,
-          });
-          contextChangedForEntry = contextResult?.ok === true;
-          if (contextResult?.ok !== true || !current()) {
-            const contextRollback = contextChangedForEntry
-              ? await styleManager.setContextMode(priorContextMode, {
-                  claimVisualAuthority: false,
-                })
-              : null;
-            return {
+        if (
+          targetLayer === 'military' &&
+          dataManager.layers?.has?.('military') &&
+          !dataManager.isEnabled?.('military')
+        ) {
+          const layer = await runGevAction(
+            'set_layer_visibility',
+            { layerId: 'military', enabled: true },
+            runOptions,
+          );
+          if (layer?.ok === true) switchedOn = 'military';
+          // The search needs the layer's aircraft, which arrive with its
+          // first data, not with the switch.
+          if (layer?.ok === true && current())
+            await waitForLayerFirstData(dataManager, 'military', runOptions);
+          if (layer?.ok !== true || !current()) {
+            return failed({
               ok: false,
               action: 'control_cockpit',
-              cancelled: !current() || Boolean(contextResult?.cancelled),
+              cancelled: !current() || Boolean(layer?.cancelled),
               error:
-                contextResult?.error ||
-                'Contacts context could not be established for Cockpit entry',
-              context: contextResult
-                ? withContextModeVocabulary(contextResult)
-                : null,
-              contextRollback: withContextModeVocabulary(contextRollback),
+                layer?.error ||
+                (layer?.ok === true
+                  ? 'Cockpit entry was cancelled before it could run'
+                  : 'Military Flights could not be switched on'),
+              layer,
               state: styleManager.getCockpitState?.() || null,
-            };
+            });
           }
         }
       }
-      // Contacts activation can adopt a newer explicit aircraft selection.
-      // Sample only after that transaction settles so an older voice snapshot
-      // cannot overwrite the operator's newer choice.
       const selectedTarget =
         action === 'enter' ? selectedCockpitTarget(dataManager) : null;
       let cockpitResult;
@@ -1291,30 +1292,7 @@ export function createGevActionRunner({
           state: styleManager.getCockpitState?.() || null,
         };
       }
-      if (
-        action === 'enter' &&
-        cockpitResult?.ok !== true &&
-        contextChangedForEntry
-      ) {
-        const contextRollback = await styleManager.setContextMode(
-          priorContextMode,
-          {
-            // Undoing this action's own precondition — still choreography.
-            claimVisualAuthority: false,
-            ...(current()
-              ? {
-                  signal: runOptions.signal,
-                  isCurrent: runOptions.isCurrent,
-                }
-              : {}),
-          },
-        );
-        return {
-          ...cockpitResult,
-          contextRollback: withContextModeVocabulary(contextRollback),
-        };
-      }
-      return cockpitResult;
+      return cockpitResult?.ok === true ? cockpitResult : failed(cockpitResult);
     }
 
     if (name === 'show_data_layers_menu') {
@@ -2901,6 +2879,62 @@ export function formatTrackedEntityLabel(found, query = '') {
     text(found?.noradId) ||
     String(query)
   );
+}
+
+/**
+ * Wait for a layer just switched on to report its first data: its stats name
+ * an update, or its next update lands. Bounded by that update, the layer
+ * failing or going off, and the request's own cancellation.
+ * @returns {Promise<boolean>} Whether the layer has reported data.
+ */
+function waitForLayerFirstData(
+  dataManager,
+  layerId,
+  { signal = null, isCurrent = null } = {},
+) {
+  const reported = () => {
+    try {
+      const stats = dataManager.layers?.get?.(layerId)?.module?.getStats?.();
+      return stats?.lastUpdate != null;
+    } catch {
+      return false;
+    }
+  };
+  if (reported()) return Promise.resolve(true);
+  if (typeof dataManager.subscribeActivity !== 'function' || signal?.aborted)
+    return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const offs = [];
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      for (const off of offs) off?.();
+      resolve(value);
+    };
+    const onAbort = () => done(false);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    offs.push(() => signal?.removeEventListener?.('abort', onAbort));
+    offs.push(
+      dataManager.subscribeActivity((change) => {
+        if (
+          !dataManager.isEnabled?.(layerId) ||
+          (typeof isCurrent === 'function' && !isCurrent())
+        )
+          return done(false);
+        if (reported()) return done(true);
+        if (change?.type === 'data-updated' && change.layerId === layerId)
+          done(reported());
+      }),
+    );
+    offs.push(
+      dataManager.subscribe?.((change) => {
+        if (change?.layerId !== layerId) return;
+        if (change.type === 'refresh-failed' || change.enabled === false)
+          done(false);
+      }),
+    );
+  });
 }
 
 /** Finds and tracks/selects an entity by spoken query across layer families. */
