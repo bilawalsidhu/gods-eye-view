@@ -211,6 +211,8 @@ export type Capability =
   | 'lineAgeFade'
   /** Lines drawn only within a span of the scene clock (`LineAgeFade.showMs`). */
   | 'lineTimeWindow'
+  /** Lines drawn as several runs, not joined across their breaks (`LineItem.breaks`). */
+  | 'lineBreaks'
   /** Screen-space clustering of icons. */
   | 'cluster'
   /** Post-processing styles. */
