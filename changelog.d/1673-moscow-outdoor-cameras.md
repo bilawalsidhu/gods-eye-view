@@ -7,3 +7,6 @@
 - Also accept same-origin `.m4s` HLS initialization objects as fMP4 maps,
   keeping Re-silic's public-stream scope and camera pinning (review follow-up
   to #1673).
+
+- Preserve public-player HLS health when a viewer receives a fallback frame
+  or the native media proxy refuses a session at capacity.

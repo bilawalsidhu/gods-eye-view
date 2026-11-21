@@ -3335,12 +3335,14 @@ segment measured 9,616,576 bytes); Giroc segments can exceed the former
 refusal, origin pinning, timeouts and lease expiry are unchanged.
 
 The native media path also accepts clear fMP4 playlists with a same-origin
-initialization segment, served under the existing viewer lease. Configured
+`.mp4` or `.m4s` initialization segment, served under the existing viewer lease. Configured
 public Exdesign players, anonymous Ivideon HLS endpoints and unrestricted
 RTSP.ME/RTSP.RU players resolve to camera-pinned upstream URLs. Deleted,
 password-protected and domain-restricted players are rejected. A playing
 upstream stays pinned across resolver cache expiry; a new session resolves a
 fresh URL after idle time. Empty variants force a master-playlist refresh.
+Fallback frame requests and session-capacity refusals preserve the stream's
+existing health; an actual upstream media failure still reports degradation.
 
 ## NYC DOT TMC CCTV source pack
 
