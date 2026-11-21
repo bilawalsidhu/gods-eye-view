@@ -1540,12 +1540,12 @@ export function createLocalGeoJsonLayer(
         _reloadQueued = true;
         return;
       }
-      releaseDataSource(viewer);
+      releaseDrawn();
       _cachedFeatures = null;
       await layer.enable(viewer);
       if (_reloadQueued && _enabled && !_destroyed) {
         _reloadQueued = false;
-        releaseDataSource(viewer);
+        releaseDrawn();
         await layer.enable(viewer);
       }
     },
