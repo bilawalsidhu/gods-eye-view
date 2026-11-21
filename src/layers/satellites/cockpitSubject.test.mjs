@@ -21,6 +21,11 @@ import { ISS_NORAD, TRACKED_ORBIT_COLOR } from './policy.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import {
+  clearFocusTarget,
+  getFocusTarget,
+  publishFocusTargetAt,
+} from '../../data/focusDeemphasis.js';
 
 const COMPANION = 25545;
 const GPS = 32711;
@@ -70,7 +75,14 @@ function fakeFollowCamera() {
       camera.flightsCancelled += 1;
     },
     flyTo() {},
-    pose: () => ({ lon: 0, lat: 0, height: 2e7, heading: 0, pitch: -1.57 }),
+    pose: () => ({
+      lon: 0,
+      lat: 0,
+      height: 2e7,
+      heading: 0,
+      pitch: -1.57,
+      position: { x: 2.6378e7, y: 0, z: 0 },
+    }),
     on(event, cb) {
       if (event !== 'followChanged') return () => {};
       listeners.add(cb);
@@ -135,7 +147,13 @@ const SENSORS = indexImagingSensors({
   ],
 });
 
-async function fixture(t) {
+/**
+ * @param {object} t The test context.
+ * @param {{realFocus?: boolean}} [options] `realFocus` publishes through the
+ *   shared focus rectangle, with a query port that projects every point to
+ *   the screen centre.
+ */
+async function fixture(t, { realFocus = false } = {}) {
   const source = {
     async readGroup(group) {
       const text = GROUP_TEXT[group] || '';
@@ -165,6 +183,9 @@ async function fixture(t) {
       getFocusTarget: () => null,
       focusNowMs: (now) => now,
       focusPassIsNeeded: () => false,
+      ...(realFocus
+        ? { clearFocusTarget, getFocusTarget, publishFocusTargetAt }
+        : {}),
     },
     context: {
       clearTrackedSubjectContext: noop,
@@ -203,7 +224,12 @@ async function fixture(t) {
   const viewer = { canvas: new EventTarget(), scene: {} };
   const camera = fakeFollowCamera();
   const frame = fakeFrame();
-  const { draw, unbind } = bindFakeDraw(viewer, { camera, frame });
+  const query = { project: () => ({ x: 720, y: 450 }) };
+  const { draw, unbind } = bindFakeDraw(viewer, {
+    camera,
+    frame,
+    ...(realFocus ? { query } : {}),
+  });
   const input = fakeInput(viewer);
   let frameNumber = 1;
   const { log, warn } = console;
@@ -221,6 +247,7 @@ async function fixture(t) {
     console.log = log;
     input.destroy();
     unbind();
+    if (realFocus) clearFocusTarget();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
   });
@@ -410,6 +437,27 @@ test('holding the subject hides its dot, ring, docked companions and bracket', a
   // The tracked point stays hidden: the tracked dot draws it.
   assert.equal(f.state._points.get(ISS_NORAD).show, false);
   assert.ok(f.detected().includes(ISS_NORAD));
+});
+
+test('releasing a satellite leaves no focus rectangle, even when a follow listener reads it', async (t) => {
+  const f = await fixture(t, { realFocus: true });
+  // As the Cockpit entry button does: every follow change asks for the subject.
+  let readsOnRelease = 0;
+  f.camera.on('followChanged', (followed) => {
+    if (followed) return;
+    readsOnRelease += 1;
+    f.methods.getCockpitSubject();
+  });
+  assert.equal(f.track(GPS), true);
+  f.nextFrame();
+  f.methods.getCockpitSubject();
+  assert.equal(getFocusTarget()?.ownerLayer, 'satellites');
+  assert.equal(getFocusTarget()?.id, GPS);
+
+  f.methods.stopTracking();
+  assert.equal(readsOnRelease, 1, 'the listener ran during the release');
+  assert.equal(f.methods.getCockpitSubject(), null);
+  assert.equal(getFocusTarget(), null);
 });
 
 test('a subject that is not tracked holds nothing', async (t) => {
