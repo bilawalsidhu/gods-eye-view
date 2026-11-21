@@ -5866,8 +5866,10 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `militaryFlights.js`) — tracked readout, detection card, `getNearby`,
 >   `getDetectableObjects`, `getAllPositions().label`, `getTrackedSubject`, the
 >   analyst record, the Context subject/nearest list, the Cockpit signal list,
->   and the `track_entity` voice narration. Registration is aircraft IDENTITY,
->   not route, so unlike origin/destination it is **not** routePlausible-gated.
+>   and the `track_entity` voice narration. Aircraft feed lookup reports
+>   `tracking:false`; only successful exact-ICAO follow reports `tracking:true`.
+>   Lookup success alone is never narrated as tracking. Registration is aircraft
+>   IDENTITY, not route, so unlike origin/destination it is **not** routePlausible-gated.
 >   Identity stays `icao24` on every keyed surface (`getNearby().icao24`, the
 >   detection `sourceId` declutter hashes, and the `id` that `trackById` and the
 >   Context cohorts resolve) — only the displayed string follows the chain.
@@ -8204,6 +8206,17 @@ and unreachable upstream (502/504) separately from road geometry.
 - **Session defaults** (env-tunable): model `gpt-realtime-2` (or `gpt-realtime-2.1-mini` when the MINI tier is selected — see the model-tier entry below), voice `marin`, reasoning effort `low`, semantic VAD with low eagerness, no response interruption, context window truncated to ~3,000 post-instruction tokens with 0.5 retention ratio — the conversational window stays short because map state is fetched live per turn.
 - **Thirty-five tools** (thirty-four in a session without `OVERPASS_UPSTREAMS`, which adds `osm_query`; argument schemas in `src/voice/actionSchemas.js`, served with their descriptions by `server/providers/openai/tools.js`, executed client-side in `src/voice/gevActions.js`): `fly_to_location`, `select_nearest_aircraft`, `show_street_level`, `adjust_camera_zoom`, `zoom_to_globe`, `set_layer_visibility`, `show_data_layers_menu`, `set_panel_open`, `set_voice_inactivity_timeout`, `set_visual_style`, `get_entity_context`, `get_current_view_state`, `set_hud`, `set_cyber_sonar`, `set_detection`, `set_map_stack`, `set_post_processing`, `control_scene`, `control_cctv`, `set_context_mode`, `control_cockpit`, `control_radio`, `track_entity`, `stop_tracking`, `frame_overhead`, `annotate_map`, `clear_annotations`, `move_camera`, `fly_route`, `analyst_query`, `resolve_area`, `find_imagery`, `osm_query`, `next_iss_pass`, and `next_satellite_pass`.
 
+- **Aircraft lookup** reuses `track_entity` (no new tool): optional `lookupOnly:true`
+  accepts aircraft flight numbers or ICAO identifiers, queries feeds independently
+  of loaded layers, and reports source, observation time and coverage without moving
+  the map. Non-aircraft kinds fail closed with a refusal and redirect to
+  `analyst_query` on loaded layers. Following enables/refreshes the required layer
+  and verifies the exact ICAO twice: after refresh and immediately before tracking.
+  Follow requires contact time within 120 seconds of the feed observation in
+  either direction; stale/unknown and future-dated times are refused separately.
+  Exact ICAO callsigns preserve every digit, while two-letter IATA flight
+  numbers are normalized through the explicit alias table.
+
 > **Reading `npm test` totals:** the count depends on the Node major. The two
 > GC-bracketed allocation microbenchmarks (`src/data/focusAllocations.test.mjs`
 > = 1 test, `src/overlays/worldOverlayAllocation.test.mjs` = 13) RUN on both
@@ -8225,7 +8238,7 @@ and unreachable upstream (502/504) separately from road geometry.
   - **Subject reconciliation across satellite catalog rebuilds** (2026-08-21). A dense↔core toggle or TLE refresh clears and repopulates the catalog, so the published subject is re-resolved against the new satrec; a subject that did NOT survive releases the slot. The per-frame refresh cannot do this itself — `_getTrackedFramePosition` returns early once the satellite has no catalog entry — so the reconcile runs at rebuild completion. An empty catalog is a rebuild in flight, not a disappearance.
   - **One aircraft-proximity snapshot** (2026-08-22; hardened 2026-09-30). `collectAircraftProximityWindow` (`src/data/militaryAwareness.js`) computes the Contacts panel cohort once. The voice analyst reads the exact retained snapshot and evaluation timestamp instead of re-scanning live layers, so the panel readout and spoken count for one centre cannot cross snapshots. **Invariant: do not re-derive a proximity count anywhere else.** Each layer retains 20,000 rows and samples one row beyond the cap; a saturated cohort reports `complete:false`, `truncated:true`, and is spoken as a lower bound. They diverged before because the panel read live billboard positions while the analyst used last-fix coordinates over a 2,000-record slice — 111 on screen, 15 spoken. Explicit regions, arbitrary points, and a radius different from the panel radius deliberately keep the general record engine. Entity-centred results carry `window: {engine:'contacts-window', centeredOn, radiusKm, flights, military, aircraft, complete, evaluatedAt}`.
   - **Centre precedence for nearby asks**: explicit place in the question > Contacts subject (a selected non-contact entity never silently becomes the centre) > an entity the user names > the current view, said aloud. Contacts active with no subject uses the view rather than reading an empty panel.
-  - **Contact-match ties break on hex ascending.** `track_entity` is a mutation fulfilling "follow that one", and the model's observed answer to a non-ok track result is to retry with guesses rather than ask, so the lookup always commits rather than returning an ambiguity. What it owes the caller is stability: hex is unique and always present, so the same query resolves to the same contact for as long as both are loaded.
+  - **Loaded contact ties break on hex ascending.** Outside the aircraft feed lookup above, `track_entity` is a mutation fulfilling "follow that one", and the model's observed answer to a non-ok track result is to retry with guesses rather than ask, so the lookup always commits rather than returning an ambiguity. What it owes the caller is stability: hex is unique and always present, so the same query resolves to the same contact for as long as both are loaded. Exact-tier callsign matching now deterministically normalizes known flight-number aliases and zero-padding via `flightIdentity`, and does not guess unknown airline codes.
 - **Visual grounding**: at `local` view scale with no structured identity, the client captures the Cesium canvas (≤1200px JPEG, black-frame detection, double-render for freshness) and sends it as `input_image` with a strict "do not invent labels" instruction.
 - **Context window**: only the latest viewport screenshot stays in context — the client deletes the prior image item (`conversation.item.delete`) before adding a new one (images are the most expensive item, re-billed every turn). Text history is bounded by the **server-side** `truncation: { type: 'retention_ratio', retention_ratio, token_limits.post_instructions }` set in `/api/realtime/token` (cache-friendly batched truncation). There is intentionally **no** client-side per-turn conversation-item cap — deleting from the front of history each turn busts the Realtime prompt cache. A spatially-aware summarize-and-prune policy is specced for a future iteration.
 - **Model tier + spend guard** (`src/voice/voiceCost.js`, August 2026): hosts without the voice panel keep the `STD`/`MINI` toggle and running session-cost readout (`~$0.42`) in the heading. Panel hosts place these controls in Voice Settings and mirror warning, capped or unknown cost states in the heading.

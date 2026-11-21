@@ -1090,6 +1090,12 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
     .parameters.properties.panelId;
   assert.ok(panels.enum.includes('space-missions-panel'));
   panels.enum = panels.enum.filter((id) => id !== 'space-missions-panel');
+  // Aircraft feed lookup is a later track_entity extension: strip lookupOnly
+  // and restore the wording from before feed time and uncertainty guidance.
+  const trackEntity = legacyTools.find((tool) => tool.name === 'track_entity');
+  delete trackEntity.parameters.properties.lookupOnly;
+  trackEntity.description =
+    'Find and follow a specific aircraft (callsign/ICAO hex), ship (name/MMSI), or satellite (name/NORAD id) on enabled layers. Camera follows the entity.';
   const block = JSON.stringify(legacyTools);
   // Re-derived for the voice layer manifest (generated layer enums, alias and
   // field hints), point-and-ask's pointer/referent arguments and the prompt

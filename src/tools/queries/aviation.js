@@ -1,5 +1,7 @@
 /** Aviation queries over the live aircraft sources (src/sources/live). */
 
+import { normalizeFlightIdentity } from '../../data/flightIdentity.js';
+
 import { suggestView } from '../views.js';
 import { defineTool, ToolError } from '../catalog.js';
 import {
@@ -232,7 +234,10 @@ export const findAircraft = defineTool({
         'Give exactly one of callsign, icao24 or registration',
       );
     const [key] = given;
-    const wanted = args[key].trim().toUpperCase();
+    const wanted =
+      key === 'callsign'
+        ? normalizeFlightIdentity(args[key])
+        : args[key].trim().toUpperCase();
     const field = {
       callsign: 'callsign',
       icao24: 'id',
@@ -271,9 +276,11 @@ export const findAircraft = defineTool({
       )
       .filter(
         ({ record }) =>
-          String(record[field] || '')
-            .trim()
-            .toUpperCase() === wanted,
+          (key === 'callsign'
+            ? normalizeFlightIdentity(record[field])
+            : String(record[field] || '')
+                .trim()
+                .toUpperCase()) === wanted,
       )
       .filter(({ record }) => !seen.has(record.id) && seen.add(record.id));
     const rows = matches.map(({ record }) => aircraftRow(record));

@@ -574,6 +574,7 @@ const schemas = [
       type: 'object',
       additionalProperties: false,
       properties: {
+        lookupOnly: { type: 'boolean' },
         query: {
           type: 'string',
           minLength: 1,

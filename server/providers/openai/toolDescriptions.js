@@ -389,7 +389,7 @@ export const ACTION_DESCRIPTIONS = {
   },
   track_entity: {
     description:
-      'Find and follow a specific aircraft (callsign/ICAO hex), ship (name/MMSI), or satellite (name/NORAD id) on enabled layers. Camera follows the entity.',
+      'lookupOnly:true: aircraft flight#/ICAO only, no map move. Report feed time/coverage/uncertainty. Refresh/follow exact ID; claim only if tracking:true. Ships/satellites: enabled layers.',
     $position: 1,
     parameters: {
       properties: {
