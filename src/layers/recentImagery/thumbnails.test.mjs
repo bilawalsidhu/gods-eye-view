@@ -1,13 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createThumbnailLoader } from './thumbnails.js';
-import { BOX, response, settle } from './testDoubles.mjs';
-
-const candidate = (product, day) => ({
-  key: `${product}:${day}`,
-  product,
-  day,
-});
+import { createRecentImagerySource } from './source.js';
+import { nonCrossingBoxes } from './model.js';
+import { BOX, FIJI_BOX, candidate, response, settle } from './testDoubles.mjs';
 
 /** A fetch whose responses the test releases, in any order. */
 function fakeFetch() {
@@ -68,6 +64,8 @@ test('Data-Present decides the day: present with an object URL and sensing time,
     status: 'present',
     objectUrl: 'blob:1',
     acquisitionTime: '2026-09-18T17:12:00Z',
+    availableBoxes: [BOX],
+    emptyBoxes: [],
     loading: false,
   });
   assert.equal(loader.get('L30:2026-09-16').status, 'empty');
@@ -335,6 +333,75 @@ test('injected thumbnail acquisition owns requests while the loader releases obj
   assert.equal(loader.get(entry.key).status, 'present');
   loader.destroy();
   assert.deepEqual(revoked, ['blob:1']);
+});
+
+test('the loader proves a dateline day present from one half and hands that half on', async () => {
+  const day = candidate('VIIRS', '2026-11-04');
+  const time = day.day + 'T22:10:00Z';
+  const { loader } = fixture({
+    fetchImpl: async (url) => {
+      const east =
+        new URL(url).searchParams.get('BBOX').split(',')[1] === '-180';
+      return response({
+        headers: east
+          ? { 'Data-Present': 'true', 'Acquisition-Time': time }
+          : { 'Data-Present': 'false' },
+      });
+    },
+  });
+  loader.request(day, FIJI_BOX);
+  await settle();
+  const entry = loader.get(day.key);
+  assert.equal(entry.status, 'present');
+  assert.equal(entry.acquisitionTime, time);
+  assert.ok(entry.objectUrl);
+  assert.deepEqual(entry.availableBoxes, [nonCrossingBoxes(FIJI_BOX)[1]]);
+  loader.destroy();
+});
+
+test('a dateline day whose halves both hang is an error, not "checking" forever', async () => {
+  const source = createRecentImagerySource({
+    fetchImpl: () => new Promise(() => {}),
+    halfDeadlineMs: 20,
+  });
+  const loader = createThumbnailLoader({
+    requestThumbnail: source.getThumbnail,
+  });
+  const day = candidate('VIIRS', '2026-11-04');
+  const settled = new Promise((resolve) => loader.subscribe(resolve));
+  loader.request(day, FIJI_BOX);
+  await settled;
+  assert.equal(loader.get(day.key).status, 'error');
+  loader.destroy();
+});
+
+test('a re-probe of a present day drops a half only when it is confirmed empty', async () => {
+  const box = { west: 179, south: 0, east: -179, north: 1 };
+  const [west, east] = nonCrossingBoxes(box);
+  const answers = [
+    { presentBoxes: [west, east], emptyBoxes: [] },
+    { presentBoxes: [west, east], emptyBoxes: [] },
+    { presentBoxes: [west], emptyBoxes: [east] },
+  ];
+  const { loader } = fixture({
+    maxDecoded: 1,
+    requestThumbnail: async () =>
+      Object.assign(
+        response({ headers: { 'Data-Present': 'true' } }),
+        answers.shift(),
+      ),
+  });
+  const day1 = candidate('VIIRS', '2026-11-04');
+  const day2 = candidate('VIIRS', '2026-11-05');
+  loader.request(day1, box);
+  await settle();
+  loader.request(day2, box);
+  await settle();
+  assert.equal(loader.get(day1.key).objectUrl, null);
+  loader.request(day1, box);
+  await settle();
+  assert.deepEqual(loader.get(day1.key).availableBoxes, [west]);
+  loader.destroy();
 });
 
 test('retain aborts stale acquisition while allowing the current intent to start', async () => {

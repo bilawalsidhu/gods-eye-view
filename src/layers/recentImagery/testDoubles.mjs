@@ -16,6 +16,13 @@ export const BOX = Object.freeze({
   north: 30.3,
 });
 
+export const FIJI_BOX = Object.freeze({
+  west: 179,
+  south: -18,
+  east: -177,
+  north: -17,
+});
+
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Timers that fire only when the test says so. */
