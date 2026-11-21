@@ -1,6 +1,11 @@
 import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import { readResponseJsonCapped } from '../common/http.js';
+import {
+  createAnacRab,
+  normalizeRegistration,
+  rabTypeName,
+} from './anacRab.js';
 
 /** Route and aircraft lookups are a few hundred bytes; 1 MiB is a hard bound. */
 const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
@@ -12,13 +17,55 @@ const ADSBDB_MAX_RESPONSE_BYTES = 1024 * 1024;
  * cached. Adapted from skylight
  * (MIT) server/src/enrich/routes.ts.
  */
-export function adsbdbProxy() {
+export function adsbdbProxy(options = {}) {
   const TTL_MS = 24 * 3600_000;
   const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'adsbdb.json');
   let cache = { routes: {}, aircraft: {} };
   let dirty = false;
   let loaded = false;
   const inflight = new Map();
+  // ANAC RAB details for Brazilian registrations (anacRab.js). The index is
+  // created on the first Brazilian lookup, so an install that never sees a
+  // PP/PR/PS/PT/PU aircraft never downloads the file. ANAC_RAB_ENABLED=0 opts out.
+  const RAB_WAIT_MS = 20_000;
+  let registry = null;
+
+  /**
+   * @param {object|null} data adsbdb's answer for `hex`.
+   * @param {string} hex Transponder address, lowercase.
+   * @param {string|null} tail The client's callsign when it is itself a
+   *   Brazilian mark ("PTTSI"), as general aviation flies. It stands in only
+   *   when adsbdb has no registration and the transponder is in Brazil's ICAO
+   *   block (E40000-E7FFFF); adsbdb's registration, tied to the hex, wins.
+   */
+  async function withRegistry(data, hex, tail) {
+    let reg = null;
+    if (data?.registration) reg = normalizeRegistration(data.registration);
+    else if (tail && /^e[4-7][0-9a-f]{4}$/.test(hex))
+      reg = normalizeRegistration(tail);
+    if (!reg) return data;
+    if (String(process.env.ANAC_RAB_ENABLED ?? '').trim() === '0') return data;
+    registry ??= (options.createRegistry ?? createAnacRab)();
+    // The first Brazilian lookup waits for the download (a few seconds); a
+    // slow ANAC answers without details rather than holding the type up.
+    let timer;
+    await Promise.race([
+      registry.ensureFresh(),
+      new Promise((resolve) => {
+        timer = setTimeout(resolve, RAB_WAIT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    const rab = registry.lookup(reg);
+    if (!rab) return data;
+    return {
+      ...data,
+      typeCode: data?.typeCode || rab.icaoType || null,
+      typeName: data?.typeName || rabTypeName(rab),
+      registration: data?.registration || `${reg.slice(0, 2)}-${reg.slice(2)}`,
+      rab: { year: rab.year, seats: rab.seats, operation: rab.operation },
+    };
+  }
 
   async function loadOnce() {
     if (loaded) return;
@@ -138,7 +185,14 @@ export function adsbdbProxy() {
           const hex = String(rawKey || '').toLowerCase();
           if (!/^[0-9a-f]{6}$/.test(hex))
             return send(400, { error: 'invalid hex' });
-          const data = await lookup('aircraft', hex);
+          const tail = new URLSearchParams(
+            String(req.url || '').split('?')[1] || '',
+          ).get('tail');
+          const data = await withRegistry(
+            await lookup('aircraft', hex),
+            hex,
+            tail,
+          );
           return send(200, data ? { found: true, ...data } : { found: false });
         }
         return send(404, { error: 'unknown endpoint' });

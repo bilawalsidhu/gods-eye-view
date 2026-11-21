@@ -405,6 +405,8 @@ export class FlightRecords {
       typeLookedUp,
       typeName: airframe?.typeName ?? null,
       registration: airframe?.registration ?? null,
+      // ANAC RAB build year, seats and operation for Brazilian registrations.
+      rab: airframe?.rab ?? null,
       airline: routeHeld ? (airframe.airline ?? null) : null,
       route: routeHeld ? (airframe.route ?? null) : null,
       routeCallsign: routeHeld ? airframe.routeCallsign : null,
@@ -460,7 +462,7 @@ export class FlightRecords {
 
   /**
    * Forget every observation, as when the world clock jumps to another time:
-   * what an airframe is (its type, registration, route and photo) is kept for
+   * what an airframe is (its type, registration, registry details, route and photo) is kept for
    * when it is seen again; where it was and when is not.
    */
   reset() {
@@ -470,6 +472,7 @@ export class FlightRecords {
         typeLookedUp: meta.typeLookedUp,
         typeName: meta.typeName,
         registration: meta.registration,
+        rab: meta.rab,
         airline: meta.airline,
         route: meta.route,
         routeCallsign: meta.routeCallsign,
