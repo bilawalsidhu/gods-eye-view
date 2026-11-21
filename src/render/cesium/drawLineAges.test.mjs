@@ -391,3 +391,26 @@ test('without the capability a line ignores its age fade; with it a bad fade is 
     );
   assert.equal(set.size(), 0, 'nothing changed');
 });
+
+test('an aged line made first leaves its style’s type named as a plain material of it is', () => {
+  const lists = Cesium.Material._uniformList;
+  const was = lists.Color;
+  delete lists.Color;
+  try {
+    const { part, scene } = agedDraw();
+    const set = part.port.lines({ id: 'trails' });
+    set.set([trail(along(2), [T0, T0 + 1])]);
+    assert.deepEqual(lists.Color, ['color_0'], 'as a plain Color material');
+    // A plain line beside it then draws with it in its collection.
+    set.upsert([
+      { ...trail(along(2), [T0, T0 + 1]), id: 'plain', ageFade: undefined },
+    ]);
+    const plain = collectionOf(scene).get(1).material;
+    assert.equal(plain.type, 'Color');
+    assert.ok(
+      lists.Color.every((name) => typeof plain._uniforms[name] === 'function'),
+    );
+  } finally {
+    if (was) lists.Color = was;
+  }
+});

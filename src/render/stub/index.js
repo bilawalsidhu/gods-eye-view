@@ -1331,8 +1331,18 @@ export function createStubRenderer(options = {}) {
   }
 
   /**
+   * The positions that start a run of a line in runs (`lineBreaks`), or
+   * null: nothing is drawn between two runs.
+   */
+  const runStarts = (item) =>
+    capabilities.has('lineBreaks') && item.breaks?.length
+      ? new Set(item.breaks)
+      : null;
+
+  /**
    * A line's positions as ECEF, cut at its `revealFraction` of length (as
-   * drawn straight between its positions).
+   * drawn straight between its positions, along its runs, the gaps between
+   * them having none).
    */
   function revealedLine(item) {
     const flat = item.positions instanceof Float64Array;
@@ -1350,7 +1360,10 @@ export function createStubRenderer(options = {}) {
       );
     const fraction = item.revealFraction;
     if (fraction === undefined || fraction >= 1) return points;
-    const at = alongLength(points, fraction);
+    const starts = runStarts(item);
+    const at = starts
+      ? alongRuns(points, starts, fraction)
+      : alongLength(points, fraction);
     if (!at) return [];
     const { index, t } = at;
     return [
@@ -1360,16 +1373,42 @@ export function createStubRenderer(options = {}) {
   }
 
   /**
+   * `alongLength` for a line in runs: the segment a fraction of its runs'
+   * length ends on, and how far along it, the segments between runs
+   * measuring nothing.
+   */
+  function alongRuns(points, starts, fraction) {
+    if (!(fraction > 0) || points.length < 2) return null;
+    const lengths = [];
+    for (let i = 0; i + 1 < points.length; i++)
+      lengths.push(
+        starts.has(i + 1) ? 0 : magnitude(sub(points[i + 1], points[i])),
+      );
+    const total = lengths.reduce((sum, length) => sum + length, 0);
+    if (!(total > 0)) return null;
+    let left = fraction * total;
+    for (let i = 0; i < lengths.length; i++) {
+      if (lengths[i] > 0 && left <= lengths[i])
+        return { index: i, t: left / lengths[i] };
+      left -= lengths[i];
+    }
+    return { index: lengths.length - 1, t: 1 };
+  }
+
+  /**
    * Where a line is under the pixel `(x, y)`: the nearest point of a
    * drawn segment within half its width (and `slack`) of it, or null.
    */
   function lineHit(item, x, y, slack) {
     const points = revealedLine(item);
+    const starts = runStarts(item);
     const reach = (item.widthPx ?? 1) / 2 + slack;
     let best = null;
     let bestDistance = Infinity;
     for (let i = 0; i + 1 < points.length; i++) {
       if (item.segmentShow?.[i] === false) continue;
+      // Nothing is drawn between two runs.
+      if (starts?.has(i + 1)) continue;
       const a = points[i];
       const b = points[i + 1];
       if (isOccluded(a) && isOccluded(b)) continue;
