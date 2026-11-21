@@ -374,7 +374,10 @@ test('a SATCAT failure never holds off the TLEs, but CelesTrak throttling holds 
       : new Response(tle);
   });
   const request = install(celestrakProxy());
-  assert.equal((await request('/api/celestrak-satcat', '/sar')).status, 502);
+  assert.equal(
+    (await request('/api/celestrak-satcat', '/science')).status,
+    502,
+  );
   const starlink = await request('/api/celestrak', '/starlink');
   assert.equal(starlink.status, 200, 'the TLE feed is not cooling down');
   assert.equal(starlink.body, tle);
