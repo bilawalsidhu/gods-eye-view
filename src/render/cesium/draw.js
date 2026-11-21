@@ -431,7 +431,9 @@ const AGE_TEXTURE_WIDTH = 1024;
  * its recency eases the alpha (smoothstep to `ageAlphaFloor`, recency
  * squared to `ageSquaredFloor` where that is not negative) and the width
  * (to `ageWidthFloor` of it, about its middle: outside it is discarded, so
- * it neither draws nor picks).
+ * it neither draws nor picks). With a window (`ageShow`, `LineAgeFade.showMs`,
+ * seconds; negative, no older bound; 0, none) a fragment whose time is after
+ * now, or older than the window, is discarded too.
  */
 const AGE_SOURCE = `
 vec4 drawAgeTexel(float i) {
@@ -462,6 +464,8 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
     u = clamp(f - lo, 0.0, 1.0);
   }
   float when = mix(drawAgeTexel(lo).g, drawAgeTexel(hi).g, u);
+  if (ageShow != 0.0 && (when > ageNow || (ageShow > 0.0 && ageNow - when > ageShow)))
+    discard;
   float recency = 1.0 - clamp((ageNow - when) / ageWindow, 0.0, 1.0);
   float fade = mix(ageAlphaFloor, 1.0, smoothstep(0.0, 1.0, recency));
   if (ageSquaredFloor >= 0.0)
@@ -485,12 +489,20 @@ czm_material czm_getMaterial(czm_materialInput materialInput) {
  * takes the rest evenly along its texture; `byLength`, the points lie along
  * it by their distance over the ellipsoid, as a ground polyline's texture
  * runs. `base` is the newest time, so the times a texel holds are small.
+ * `windowed`, the line draws only within its `showMs` of now (`ageShow`).
  * @param {Array<{x: number, y: number, z: number}>} points
  * @param {ArrayLike<number>} times Epoch ms, one a point.
  * @param {import('../contract/draw').LineAgeFade} fade
  * @param {boolean} [byLength]
+ * @param {boolean} [windowed]
  */
-export function lineAgeData(points, times, fade, byLength = false) {
+export function lineAgeData(
+  points,
+  times,
+  fade,
+  byLength = false,
+  windowed = false,
+) {
   let kept = Array.from(times);
   let along = points;
   if (!byLength) {
@@ -549,13 +561,23 @@ export function lineAgeData(points, times, fade, byLength = false) {
       ageAlphaFloor: fade.alphaFloor,
       ageSquaredFloor: fade.squaredAlphaFloor ?? -1,
       ageWidthFloor: fade.widthFloor ?? 1,
+      ageShow: showUniform(windowed ? fade.showMs : undefined),
     },
   };
 }
 
 /**
+ * A window's `ageShow` uniform: its seconds; -1 for an endless one, cut at
+ * now alone; 0 for none.
+ * @param {number|undefined} showMs
+ */
+const showUniform = (showMs) =>
+  showMs === undefined ? 0 : Number.isFinite(showMs) ? showMs / 1000 : -1;
+
+/**
  * A line's `ageFade`, checked: one finite time a position, over a positive
- * window, its floors from 0 to 1. Refused otherwise.
+ * window, its floors from 0 to 1, and a `showMs` positive where it has one.
+ * Refused otherwise.
  * @param {import('../contract/draw').LineItem} item
  */
 function checkAgeFade(item) {
@@ -573,10 +595,11 @@ function checkAgeFade(item) {
     !(fade.windowMs > 0 && Number.isFinite(fade.windowMs)) ||
     !(fade.alphaFloor >= 0 && fade.alphaFloor <= 1) ||
     !floor(fade.squaredAlphaFloor) ||
-    !floor(fade.widthFloor)
+    !floor(fade.widthFloor) ||
+    !(fade.showMs === undefined || fade.showMs > 0)
   )
     throw new TypeError(
-      'a line fades with one finite time a position, over a positive window, with floors from 0 to 1',
+      'a line fades with one finite time a position, over a positive window, with floors from 0 to 1, shown over a positive span',
     );
 }
 
@@ -658,6 +681,8 @@ export function createCesiumDraw({
   const sets = new Map();
   // Lines fade with the age of their points (`LineItem.ageFade`).
   const ageFades = capabilities.has('lineAgeFade');
+  // And draw only within a span of the scene clock (`LineAgeFade.showMs`).
+  const timeWindows = ageFades && capabilities.has('lineTimeWindow');
   // Fields share the sets' ids.
   const fieldPart = createCesiumFields({
     scene,
@@ -2824,6 +2849,7 @@ export function createCesiumDraw({
       times,
       item.ageFade,
       item.mode === 'draped' || item.overlaid === true,
+      timeWindows,
     );
   }
 
@@ -3607,6 +3633,7 @@ export function createCesiumDraw({
             item.ageFade.alphaFloor,
             item.ageFade.squaredAlphaFloor,
             item.ageFade.widthFloor,
+            showUniform(timeWindows ? item.ageFade.showMs : undefined),
           ]
         : null,
     ]);
@@ -3637,7 +3664,8 @@ export function createCesiumDraw({
       x.windowMs === y.windowMs &&
       x.alphaFloor === y.alphaFloor &&
       x.squaredAlphaFloor === y.squaredAlphaFloor &&
-      x.widthFloor === y.widthFloor
+      x.widthFloor === y.widthFloor &&
+      (!timeWindows || x.showMs === y.showMs)
     );
   };
 

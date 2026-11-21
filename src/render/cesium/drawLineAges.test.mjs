@@ -116,7 +116,25 @@ test('a polyline’s age texels: a point at the place of the one before it is dr
     ageAlphaFloor: 0.06,
     ageSquaredFloor: 0.14,
     ageWidthFloor: 1,
+    ageShow: 0,
   });
+});
+
+test('a windowed line’s age texels carry its span, in seconds; an endless one cuts at now alone', () => {
+  const points = along(2);
+  const fade = (showMs) => ({
+    times: [],
+    windowMs: 30_000,
+    alphaFloor: 0.06,
+    showMs,
+  });
+  const at = (showMs, windowed = true) =>
+    lineAgeData(points, [T0, T0 + 1000], fade(showMs), false, windowed).uniforms
+      .ageShow;
+  assert.equal(at(45_000), 45);
+  assert.equal(at(Infinity), -1);
+  assert.equal(at(undefined), 0, 'no span, no cut');
+  assert.equal(at(45_000, false), 0, 'not cut where the port does not');
 });
 
 test('a draped line’s age texels lie along it by distance, and a long line takes more rows', () => {
@@ -298,6 +316,49 @@ test('an aged line built anew lets its old material go once its primitive is gon
   void scene;
 });
 
+test('a windowed line is cut on the scene clock: time passing changes its material, never its line', () => {
+  const { part, scene, frameAt } = agedDraw(fakeScene(), [
+    'lineAgeFade',
+    'lineTimeWindow',
+  ]);
+  const set = part.port.lines({ id: 'trails' });
+  // A whole track, an hour of it, shown over its last minute.
+  const positions = along(61);
+  const times = positions.map((_, i) => T0 + i * 60_000);
+  set.set([trail(positions, times, { alphaFloor: 1, showMs: 60_000 })]);
+  const polylines = collectionOf(scene);
+  const polyline = polylines.get(0);
+  const material = polyline.material;
+  assert.equal(material.type, 'DrawAgedLine_solid');
+  assert.equal(material.uniforms.ageShow, 60);
+  assert.equal(material.uniforms.ageCount, 61);
+  const before = polyline.positions;
+  for (let k = 1; k <= 120; k++) {
+    frameAt(T0 + k * 30_000);
+    assert.equal(
+      material.uniforms.ageNow,
+      (k * 30_000 - 3_600_000) / 1000,
+      `seconds after its newest point, frame ${k}`,
+    );
+  }
+  assert.equal(collectionOf(scene), polylines, 'the same collection');
+  assert.equal(polylines.get(0), polyline, 'the same line');
+  assert.equal(polyline.material, material, 'the same material');
+  assert.equal(polyline.positions, before, 'its points untouched');
+  // A new span is a new look: drawn anew, with it.
+  set.upsert([trail(positions, times, { alphaFloor: 1, showMs: 120_000 })]);
+  assert.equal(collectionOf(scene).get(0).material.uniforms.ageShow, 120);
+});
+
+test('without the window’s capability a line ignores its span and draws whole', () => {
+  const { part, scene } = agedDraw();
+  const set = part.port.lines({ id: 'trails' });
+  set.set([trail(along(3), [T0, T0 + 1, T0 + 2], { showMs: 60_000 })]);
+  const material = collectionOf(scene).get(0).material;
+  assert.equal(material.type, 'DrawAgedLine_solid', 'still faded');
+  assert.equal(material.uniforms.ageShow, 0, 'never cut');
+});
+
 test('without the capability a line ignores its age fade; with it a bad fade is refused', () => {
   const plain = agedDraw(fakeScene(), []);
   const lines = plain.part.port.lines({ id: 'trails' });
@@ -322,5 +383,11 @@ test('without the capability a line ignores its age fade; with it a bad fade is 
     TypeError,
     'floors from 0 to 1',
   );
+  for (const showMs of [0, -1, Number.NaN])
+    assert.throws(
+      () => set.set([trail(along(2), [T0, T0], { showMs })]),
+      TypeError,
+      'a positive span',
+    );
   assert.equal(set.size(), 0, 'nothing changed');
 });

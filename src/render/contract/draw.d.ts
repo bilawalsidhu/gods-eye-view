@@ -309,6 +309,14 @@ export type LineStyle =
  * wide, about its path. A point at or past the window draws at the floors, a
  * point at or after now at full strength. New `times` with new positions are
  * an ordinary update.
+ *
+ * `lineTimeWindow`: with `showMs`, only the part of the line within `showMs`
+ * of now is drawn, cut along it where its interpolated time crosses: parts
+ * whose time is after now, or before `now - showMs`, are not drawn (nor
+ * picked). The cut follows the scene clock as the fade does, so a moving
+ * object's trail can be its whole track, sent once: drawn from `showMs` ago
+ * up to where the object is now. A renderer without the capability ignores
+ * `showMs` and draws the whole line.
  */
 export interface LineAgeFade {
   /** Each position's time, epoch ms on the scene clock: one per position. */
@@ -321,6 +329,12 @@ export interface LineAgeFade {
   squaredAlphaFloor?: number;
   /** A fully aged point's width multiplier, 0..1 [1, no narrowing]. */
   widthFloor?: number;
+  /**
+   * `lineTimeWindow`: draw only the part of the line from `showMs` before
+   * now up to now, ms; positive (`Infinity`: up to now, however old).
+   * [absent: the whole line]
+   */
+  showMs?: number;
 }
 
 export interface LineItem {
