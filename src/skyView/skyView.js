@@ -27,6 +27,7 @@
 import * as Cesium from 'cesium';
 import { observerSolarElevation } from '../data/satellitePass.js';
 import { geocodeKeyless } from '../keylessGeocoder.js';
+import { viewerBehind } from '../render/cesium/viewers.js';
 import { t } from '../i18n/index.js';
 import {
   computeHorizonProfile,
@@ -2399,11 +2400,13 @@ export function skyViewFor(viewer) {
 
 /**
  * The one call the application shell makes (beside its nav control mount):
- * wires the shell's viewer, lifetime, navigation policy and toast.
+ * wires the shell's lifetime, navigation policy and toast; the shell holds
+ * the application's scene object, and the Sky view draws on the Cesium
+ * viewer behind it.
  */
 export function mountSkyViewForShell(shell) {
   return mountSkyView({
-    viewer: shell.viewer,
+    viewer: viewerBehind(shell.viewer),
     lifetime: shell._lifetime,
     runNavigation: (noun, navigate) =>
       shell._navigation?.runOrientation
