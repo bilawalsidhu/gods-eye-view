@@ -4538,5 +4538,38 @@
   "JTWC warning ↗": "Avviso JTWC ↗",
   "Active cyclone advisories and warnings": "Bollettini e avvisi attivi sui cicloni",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Seleziona una tempesta sulla mappa o sceglila nell’elenco per selezionarla e spostare la telecamera. Fai clic su un punto vuoto della mappa per annullare la selezione. Bollettini NOAA NHC/CPHC e avvisi JTWC. Il cono NHC descrive l’incertezza della traccia prevista del centro, non le dimensioni della tempesta né l’intera area di pericolo. L’area di pericolo a 34 nodi del JTWC è dove possono arrivare venti a 34 nodi, ampliata dall’errore di previsione della traccia; non è un cono. Le etichette dei punti di previsione sono ore di anticipo della fonte, non orari calcolati dall’emissione. La geometria segue la superficie; l’altezza non è quota meteorologica. Consulta il bollettino ufficiale o il centro di allerta regionale.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}",
+  "Local AIS": "AIS locale",
+  "Local AIS receiver unavailable": "Ricevitore AIS locale non disponibile",
+  "not configured": "non configurato",
+  "no recent messages": "nessun messaggio recente",
+  "Position approximate (AIS type 27)": "Posizione approssimativa (AIS tipo 27)",
+  "Position not yet validated by the receiver": "Posizione non ancora convalidata dal ricevitore",
+  "{count} vessels heard": {
+    "one": "{count} nave ricevuta",
+    "many": "{count} di navi ricevute",
+    "other": "{count} navi ricevute"
+  },
+  "feeds {names} rejected": {
+    "one": "feed {names} rifiutato",
+    "many": "feed {names} rifiutati",
+    "other": "feed {names} rifiutati"
+  },
+  "Validated": "Convalidata",
+  "AIS-SART beacon": "Radioboa AIS-SART",
+  "Man-overboard (MOB) beacon": "Radioboa uomo in mare (MOB)",
+  "EPIRB beacon": "Radioboa EPIRB",
+  "AIS distress beacon": "Radioboa di emergenza AIS",
+  "Distress or test beacon heard by your receiver": "Radioboa di emergenza o di prova ricevuta dal tuo ricevitore",
+  "Test transmissions are common. This is not a verified emergency.": "Le trasmissioni di prova sono comuni. Non è un’emergenza verificata.",
+  "Active or test status: unknown": "Stato (attivo o di prova): sconosciuto",
+  "{count} beacons heard": {
+    "one": "{count} radioboa ricevuta",
+    "many": "{count} di radioboe ricevute",
+    "other": "{count} radioboe ricevute"
+  },
+  "beacon": "radioboa",
+  "Beacon type": "Tipo di radioboa",
+  "Note": "Nota",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Ricevuto dal tuo ricevitore. Le trasmissioni di prova sono frequenti, non è un’emergenza confermata e non si sa se sia attivo o in prova."
 }

@@ -32,6 +32,12 @@ const KINDS = Object.freeze({
   flights: AIRCRAFT,
   military: AIRCRAFT,
   'local-adsb': AIRCRAFT,
+  'local-ais': {
+    kind: msg('vessel'),
+    icon: 'directions_boat',
+    moving: true,
+    headline: ['speedKts', 'courseDeg'],
+  },
   'ais-live-vessels': {
     kind: msg('vessel'),
     icon: 'directions_boat',
@@ -243,6 +249,8 @@ const FACT_LABELS = Object.freeze({
   shipType: msg('Ship type'),
   destination: msg('Destination'),
   navStatus: msg('Status'),
+  validated: msg('Validated'),
+  beaconType: msg('Beacon type'),
   magnitude: msg('Magnitude'),
   depthKm: msg('Depth'),
   timeMs: msg('Time'),
@@ -319,6 +327,31 @@ const finite = (value) =>
 /** What a layer's items are, and the glyph that stands for them. */
 export function entityKind(layerId) {
   return KINDS[layerId] || { kind: msg('feature'), icon: 'location_on' };
+}
+
+// A distress or test beacon heard by Local AIS is not a vessel, whatever its
+// layer holds. It keeps the layer's `moving` so its position never goes to
+// the context store.
+const BEACON_CAVEAT = msg(
+  'Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.',
+);
+const BEACON_KIND = Object.freeze({
+  kind: msg('beacon'),
+  icon: 'warning',
+  moving: true,
+  headline: [],
+});
+
+/** Like entityKind, for one record: a beacon is a beacon, not a vessel. */
+export function recordKind(layerId, record) {
+  return layerId === 'local-ais' && record?.beaconType
+    ? BEACON_KIND
+    : entityKind(layerId);
+}
+
+/** Whether a record is a distress or test beacon, never a vessel. */
+function isBeacon(layerId, record) {
+  return layerId === 'local-ais' && Boolean(record?.beaconType);
 }
 
 /** Latitude and longitude of a record, whichever names it uses. */
@@ -444,6 +477,12 @@ const CODE_WORDS = Object.freeze({
     unknown: msg('Unknown'),
   },
   aircraftClass: AIRCRAFT_CLASS_LABELS,
+  // Distress or test beacon kinds (Local AIS), named as its card names them.
+  beaconType: {
+    sart: msg('AIS-SART beacon'),
+    mob: msg('Man-overboard (MOB) beacon'),
+    epirb: msg('EPIRB beacon'),
+  },
 });
 /**
  * A feed code in English words (`classification` `HU` → `Hurricane`), for the
@@ -690,17 +729,41 @@ function enabledLayers(dataManager) {
  * is off or keeps no list.
  */
 export function layerRecords(dataManager, layerId, maxCount = ALL_RECORDS) {
+  return allLayerRecords(dataManager, layerId, maxCount).filter((record) =>
+    recordPosition(record),
+  );
+}
+
+/** Every record a layer hands out, including those with no usable position. */
+function allLayerRecords(dataManager, layerId, maxCount = ALL_RECORDS) {
   if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return [];
-  let records = [];
   try {
-    records =
+    return (
       dataManager?.layers
         ?.get?.(layerId)
-        ?.module?.getAnalystRecords?.(maxCount) || [];
+        ?.module?.getAnalystRecords?.(maxCount) || []
+    );
   } catch {
-    records = [];
+    return [];
   }
-  return records.filter((record) => recordPosition(record));
+}
+
+/**
+ * The beacon record behind an identity whose position is withheld: such a
+ * record is not in layerRecords (it has no position), but the Context card
+ * still has to say it is a beacon and not a vessel.
+ */
+function withheldBeacon(dataManager, identity) {
+  const { layerId } = identity || {};
+  if (layerId !== 'local-ais') return null;
+  const id = text(identity.id);
+  const bare = id.startsWith(`${layerId}:`) ? id.slice(layerId.length + 1) : id;
+  if (!bare) return null;
+  return (
+    allLayerRecords(dataManager, layerId).find(
+      (record) => isBeacon(layerId, record) && text(record.mmsi) === bare,
+    ) || null
+  );
 }
 
 function layerName(dataManager, layerId) {
@@ -986,8 +1049,13 @@ export function describeEntity(
 ) {
   if (!identity?.layerId) return null;
   const { layerId } = identity;
-  const kind = entityKind(layerId);
   const record = identity.record || findRecord(dataManager, identity);
+  const beacon = isBeacon(layerId, record)
+    ? record
+    : record
+      ? null
+      : withheldBeacon(dataManager, identity);
+  const kind = recordKind(layerId, record || beacon);
   // Sites drawn from GeoJSON keep their full tags in the context store; the
   // layer's record holds only a summary of them.
   const stored =
@@ -1016,6 +1084,21 @@ export function describeEntity(
         known.value.toLowerCase() === fact.value.toLowerCase(),
     );
     if (!same) facts.push(fact);
+  }
+  // A beacon is only something the receiver heard: say so in the facts, which
+  // the Context card shows (voice does not read them). A withheld beacon has no
+  // record, so its kind and the caveat come from its own record.
+  if (beacon) {
+    if (!record)
+      for (const fact of recordFacts({ beaconType: beacon.beaconType }).facts)
+        if (facts.length < MAX_FACTS) facts.push(fact);
+    if (facts.length >= MAX_FACTS) facts.length = MAX_FACTS - 1;
+    facts.push({
+      field: 'beaconCaveat',
+      label: msg('Note'),
+      value: BEACON_CAVEAT,
+      words: words(BEACON_CAVEAT),
+    });
   }
   // An item with only a database number goes by what it is.
   const ownTitle = recordTitle(record);
@@ -1135,8 +1218,8 @@ export function nearbyEntities(
     key: recordKey(layerId, record),
     layerId,
     layerName: layerName(dataManager, layerId),
-    icon: entityKind(layerId).icon,
-    kind: entityKind(layerId).kind,
+    icon: recordKind(layerId, record).icon,
+    kind: recordKind(layerId, record).kind,
     title: recordTitle(record) || layerName(dataManager, layerId),
     distanceKm: km,
     identity: {
@@ -1208,11 +1291,11 @@ export function nearbyByKind(
   const other = [];
   for (const layer of enabledLayers(dataManager)) {
     if (excludeLayers.includes(layer.id)) continue;
-    const kind = entityKind(layer.id).kind;
-    const group = found[kind];
     let closest = null;
     for (const record of layerRecords(dataManager, layer.id)) {
       if (excludeKey && recordKey(layer.id, record) === excludeKey) continue;
+      // A beacon is its own kind: never counted or listed with the vessels.
+      const group = found[recordKind(layer.id, record).kind];
       const km = distanceKm(here, recordPosition(record));
       if (!(km <= radiusKm)) continue;
       if (needle && !recordMatches(record, needle, layer.name)) continue;
@@ -1228,7 +1311,7 @@ export function nearbyByKind(
     key: recordKey(layerId, record),
     layerId,
     layerName: layerName(dataManager, layerId),
-    icon: entityKind(layerId).icon,
+    icon: recordKind(layerId, record).icon,
     title: recordTitle(record) || layerName(dataManager, layerId),
     distanceKm: km,
     identity: {
@@ -1308,7 +1391,10 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
     !['aircraft', 'vessel', 'satellite', 'earthquake', 'vehicle'].includes(kind)
   )
     return null;
-  let records = layerRecords(dataManager, layerId);
+  // Beacons are not counted as ship types.
+  let records = layerRecords(dataManager, layerId).filter(
+    (record) => !isBeacon(layerId, record),
+  );
   if (rect) {
     const wraps = rect.west > rect.east;
     records = records.filter((record) => {
@@ -1482,7 +1568,7 @@ export function searchEntities(
         key: recordKey(layer.id, record),
         layerId: layer.id,
         layerName: layerName(dataManager, layer.id),
-        icon: entityKind(layer.id).icon,
+        icon: recordKind(layer.id, record).icon,
         title: recordTitle(record) || layer.id,
         identity: {
           layerId: layer.id,
@@ -1533,6 +1619,8 @@ export function viewSummary(
   for (const layer of enabledLayers(dataManager)) {
     const found = [];
     for (const record of layerRecords(dataManager, layer.id)) {
+      // A beacon is not one of the layer's vessels: left out of its tally.
+      if (isBeacon(layer.id, record)) continue;
       const at = recordPosition(record);
       if (!inside(at)) continue;
       if (needle && !recordMatches(record, needle, layer.name)) continue;
@@ -1603,7 +1691,7 @@ export function layerMatches(
     items: found.slice(0, limit).map(({ record, km }) => ({
       key: recordKey(layerId, record),
       title: recordTitle(record) || layerName(dataManager, layerId),
-      icon: entityKind(layerId).icon,
+      icon: recordKind(layerId, record).icon,
       distanceKm: km,
       identity: {
         layerId,

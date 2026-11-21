@@ -25,6 +25,7 @@ const KIND_BY_LAYER = Object.freeze({
   flights: 'aircraft',
   military: 'aircraft',
   'local-adsb': 'aircraft',
+  'local-ais': 'vessel',
   'ais-live-vessels': 'vessel',
   satellites: 'satellite',
   'local-firms': 'fire',
@@ -45,6 +46,29 @@ function finite(value) {
 /** Kind of thing a layer holds, for deixis ("this aircraft", "this place"). */
 export function pickedKindForLayer(layerId) {
   return KIND_BY_LAYER[layerId] || 'feature';
+}
+
+/**
+ * A Local AIS pick is a beacon, not a vessel, when its record says so: the
+ * voice model must never be told a distress or test beacon is a ship. The
+ * record is read with no cap (the layer holds at most a few thousand, and the
+ * Context card reads them all), so a beacon late in the list is still found.
+ * When the record cannot be found, the kind is the neutral "feature": never
+ * "vessel" for something that might be a beacon.
+ */
+const ALL_LOCAL_AIS_RECORDS = 100_000;
+
+function localAisKind(layer, pickId) {
+  const mmsi = String(pickId).replace(/^local-ais:/, '');
+  try {
+    const record = layer?.module
+      ?.getAnalystRecords?.(ALL_LOCAL_AIS_RECORDS)
+      ?.find((row) => String(row.mmsi) === mmsi);
+    if (!record) return 'feature';
+    return record.beaconType ? 'beacon' : 'vessel';
+  } catch {
+    return 'feature';
+  }
 }
 
 function contextCarrierRecord(hit, dataManager) {
@@ -117,7 +141,10 @@ export function resolvePickedContext(picked, { dataManager = null } = {}) {
     layerId,
     id: pickId,
     label: descriptorLabel(found, text(layer?.name) || pickId),
-    kind: pickedKindForLayer(layerId),
+    kind:
+      layerId === 'local-ais'
+        ? localAisKind(layer, pickId)
+        : pickedKindForLayer(layerId),
     lat: finite(found?.latitude),
     lon: finite(found?.longitude),
     altitudeM: finite(found?.altitudeM),

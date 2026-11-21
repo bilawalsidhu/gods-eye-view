@@ -4326,5 +4326,32 @@
   "JTWC warning ↗": "JTWC警報 ↗",
   "Active cyclone advisories and warnings": "発表中のサイクロン情報と警報",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "地図上の嵐を選ぶか、リストから嵐を選ぶと選択され、カメラが移動します。地図の何もない場所をクリックすると選択を解除します。NOAA NHC/CPHCの情報とJTWCの警報です。NHCの予報円は中心の予報進路の不確かさを表すもので、嵐の大きさや危険域全体ではありません。JTWCの34ノット風の危険域は、34ノットの風が及ぶおそれのある範囲を進路予報の誤差分だけ広げたもので、予報円ではありません。予報点のラベルは情報源の予報時間で、発表時刻から計算した時刻ではありません。形状は地表に沿って描かれ、高さは気象上の高度ではありません。公式の情報または地域の警報センターを確認してください。",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第{number}号警報 · {time} 発表"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第{number}号警報 · {time} 発表",
+  "Local AIS": "ローカルAIS",
+  "Local AIS receiver unavailable": "ローカルAIS受信機を利用できません",
+  "not configured": "未設定",
+  "no recent messages": "最近のメッセージなし",
+  "Position approximate (AIS type 27)": "位置は概略(AISタイプ27)",
+  "Position not yet validated by the receiver": "受信機による位置の検証はまだ済んでいません",
+  "{count} vessels heard": {
+    "other": "受信 {count}隻"
+  },
+  "feeds {names} rejected": {
+    "other": "フィード{names}が拒否されました"
+  },
+  "Validated": "検証済み",
+  "AIS-SART beacon": "AIS-SARTビーコン",
+  "Man-overboard (MOB) beacon": "落水者(MOB)ビーコン",
+  "EPIRB beacon": "EPIRBビーコン",
+  "AIS distress beacon": "AIS遭難ビーコン",
+  "Distress or test beacon heard by your receiver": "遭難またはテスト用のビーコンを受信機で受信",
+  "Test transmissions are common. This is not a verified emergency.": "テスト送信はよくあります。確認された緊急事態ではありません。",
+  "Active or test status: unknown": "状態(作動中またはテスト):不明",
+  "{count} beacons heard": {
+    "other": "受信 {count}個のビーコン"
+  },
+  "beacon": "ビーコン",
+  "Beacon type": "ビーコンの種類",
+  "Note": "注記",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "受信機で受信しました。テスト送信はよくあり、確認済みの緊急事態ではなく、作動中かテストかは不明です。"
 }

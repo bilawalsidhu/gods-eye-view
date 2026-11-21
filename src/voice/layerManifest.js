@@ -126,6 +126,22 @@ const layers = [
     },
   },
   {
+    id: 'local-ais',
+    aliases: ['local ais'],
+    context: true,
+    query: {
+      fields: {
+        speedKts: ['n', 'kn'],
+        courseDeg: ['n', 'deg'],
+        name: ['t'],
+        mmsi: ['t'],
+        // sart, mob or epirb for a distress or test beacon; null for a
+        // vessel.
+        beaconType: ['t'],
+      },
+    },
+  },
+  {
     id: 'ais-live-vessels',
     track: true,
     aliases: ['ships', 'vessels', 'boats', 'ais', 'live vessels'],

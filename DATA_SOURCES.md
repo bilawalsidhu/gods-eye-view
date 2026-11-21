@@ -764,3 +764,31 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+
+**AIS-catcher local vessel input.** The opt-in **Local AIS** layer reads the
+operator's own AIS-catcher `ships.json` from `LOCAL_AIS_FEEDS` on the GEV
+server, with no remote service or API key. Its separate
+`/api/local-receivers/vessels` route fetches only allowlisted local/private
+hosts with pinned name resolution, no redirects, a 4 MiB response cap and a
+brief memory cache. The server relays only validated vessel observations, not
+AIS-catcher's `station` coordinates, receiver address, or raw samples. Public
+AISStream remains separate. The server proxy and the layer keep no history and
+the layer is local-only in serialization. AIS-SART, man-overboard and EPIRB
+beacons are drawn as a distress or test beacon heard by the receiver, apart
+from vessels and never as a verified emergency. With voice on, the hosted voice
+model can read local vessels and beacons through the voice tools, pointer
+context and screenshots. The text tools do not hand an unvalidated or
+approximate fix to the model as coordinates (only `validated === true &&
+approx === false` sends a position; any other is given to the analyst with its
+position null, and the pointer paths keep its id but withhold the cursor's
+ground coordinates). Flagged vessels are still drawn on the map, so
+screenshots, the pointer's screen position (which `annotate_map` can resolve),
+a cursor next to the marker, the view's camera position and
+`get_entity_context` (camera, view-centre point and nearby visible items with
+coordinates), if you centre a flagged vessel, can still locate them. The
+beacon caveat is on the Context card; voice is told a pick is a beacon but
+is not given the caveat. The HUD summary (layer name, count, data age and error text, no
+positions) goes to OpenAI whenever `OPENAI_API_KEY` is set, with voice on or off,
+and MCP `panel_request` can reach the vessels route whenever `LOCAL_AIS_FEEDS`
+is set, even with the layer off; see `docs/LOCAL-RECEIVERS.md`.

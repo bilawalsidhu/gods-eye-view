@@ -1701,5 +1701,10 @@
   "src/ui/livePanel.test.mjs",
   "src/ui/stationPanel.test.mjs",
   "src/ui/styles/live.css",
-  "src/ui/styles/station.css"
+  "src/ui/styles/station.css",
+  "src/sources/aisCatcherRecords.test.mjs",
+  "server/providers/local-ais.test.mjs",
+  "src/layers/localAis/index.test.mjs",
+  "src/layers/localAis/status.test.mjs",
+  "src/layers/localAis/card.test.mjs"
 ]

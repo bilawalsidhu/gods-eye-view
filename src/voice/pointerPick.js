@@ -1,6 +1,7 @@
 import { pickAt as defaultPickAt } from '../input/dispatcher.js';
 import { canvasOf, findCamera } from '../render/rendererOf.js';
 import { resolvePickedContext } from '../data/pickedContext.js';
+import { positionWithheld } from '../data/positionTrust.js';
 import { cameraPoseKey } from './pointerContext.js';
 import * as defaultAnnotationResolver from '../annotations/annotationResolver.js';
 
@@ -43,11 +44,22 @@ export function createPointerPicker({
     const height = canvas.clientHeight || canvas.height || 0;
     if (!width || !height) return null;
     const picked = pickAt(viewer, x, y);
-    const entity = resolvePickedContext(picked, { dataManager });
+    let entity = resolvePickedContext(picked, { dataManager });
+    // Default-deny: a thing whose own position is not trustworthy (a Local AIS
+    // fix that is unvalidated or approximate) is named, but the cursor's
+    // ground point, which is where its marker is drawn, is not sent.
+    const withheld =
+      entity && positionWithheld(dataManager, entity.layerId, entity.id);
+    if (withheld) entity = { ...entity, lat: null, lon: null, withheld: true };
     let ground = null;
     try {
       const hit = pickWorldFromScreen(viewer, x / width, y / height);
-      if (hit && Number.isFinite(hit.lat) && Number.isFinite(hit.lon))
+      if (
+        !withheld &&
+        hit &&
+        Number.isFinite(hit.lat) &&
+        Number.isFinite(hit.lon)
+      )
         ground = {
           lat: hit.lat,
           lon: hit.lon,

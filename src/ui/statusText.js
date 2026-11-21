@@ -194,6 +194,8 @@ const FEED_PROBLEM_FORMS = Object.freeze({
     }),
   invalid: (count, names) =>
     tn(count, 'feed {names} invalid', 'feeds {names} invalid', { names }),
+  rejected: (count, names) =>
+    tn(count, 'feed {names} rejected', 'feeds {names} rejected', { names }),
 });
 
 // Working texts with a number or a name in them arrive as English data, one
@@ -206,6 +208,20 @@ const STATUS_PIECE_PATTERNS = [
     /^(\d+) heard$/,
     ([, heard]) =>
       tn(Number(heard), '{count} heard', '{count} heard', {
+        count: formatNumber(Number(heard)),
+      }),
+  ],
+  [
+    /^(\d+) vessels? heard$/,
+    ([, heard]) =>
+      tn(Number(heard), '{count} vessel heard', '{count} vessels heard', {
+        count: formatNumber(Number(heard)),
+      }),
+  ],
+  [
+    /^(\d+) beacons? heard$/,
+    ([, heard]) =>
+      tn(Number(heard), '{count} beacon heard', '{count} beacons heard', {
         count: formatNumber(Number(heard)),
       }),
   ],
@@ -224,7 +240,7 @@ const STATUS_PIECE_PATTERNS = [
       }),
   ],
   [
-    /^feeds? (.+) (stale|unreachable|invalid)$/,
+    /^feeds? (.+) (stale|unreachable|invalid|rejected)$/,
     ([, names, status]) => {
       const list = names.split(', ');
       return FEED_PROBLEM_FORMS[status](
