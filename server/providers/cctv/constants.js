@@ -574,6 +574,25 @@ export const A22_GROUND_ELEVATION_BY_KM = Object.freeze({
 });
 export const A22_DEFAULT_GROUND_ELEVATION_M = 200;
 
+/** BayernInfo (VIZ-BY) traffic webcams: the public web map's keyless camera
+ * list, a nested JSON of categories, roads and cameras. It also carries ASFINAG
+ * (Austria) cameras under an `asfinag/` image path; this pack keeps only the
+ * Bavarian cameras, whose image paths sit under `.../cam/bi/`. Each Bavarian
+ * camera carries a numeric viewing bearing. Frames are stills, refreshed about
+ * once a minute. BayernInfo publishes no reuse licence for the images and
+ * documents the feed only through the Mobilithek (registration), so the pack is
+ * opt-in (CCTV_BAYERN_ENABLED) and off by default; see DATA_SOURCES.md. */
+export const DEFAULT_BAYERN_CCTV_URL =
+  'https://map.bayerninfo.de/cam/listOfWebcamsV3.json';
+/** The only origin and directory Bavarian camera frames may come from. The
+ * ASFINAG images under `.../cam/asfinag/` are a different operator and are not
+ * served by this pack. */
+export const BAYERN_IMAGE_ORIGIN = 'https://map.bayerninfo.de/cam/bi/';
+/** Hard ceiling on the catalog body. The whole list is ~200 KB. */
+export const BAYERN_MAX_CATALOG_BYTES = 4 * 1024 * 1024;
+/** Bound on the number of Bavarian cameras this pack contributes. */
+export const DEFAULT_BAYERN_MAX_SOURCES = 500;
+
 /** DelDOT CCTV: one keyless statewide JSON catalog; live video via RTMP-over-HTTP (rtmpt:80). */
 export const DELDOT_CCTV_URL = 'https://tmc.deldot.gov/json/videocamera.json';
 export const DEFAULT_DELDOT_MAX_SOURCES = 300;

@@ -497,6 +497,13 @@ export const DATA_CREDITS = [
       'camera list via the <a href="https://opendatahub.com/" target="_blank" rel="noopener">Open Data Hub</a> (NOI Techpark)',
   },
   {
+    key: 'bayern-cctv',
+    html:
+      'Road webcams (Bavaria, when enabled): ' +
+      '<a href="https://www.bayerninfo.de/" target="_blank" rel="noopener">BayernInfo</a>, ' +
+      'Bayerische Straßenbauverwaltung',
+  },
+  {
     key: 'gbfs',
     html:
       'Bikeshare availability: GBFS operator feeds ' +
