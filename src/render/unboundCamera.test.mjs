@@ -145,6 +145,15 @@ const DRAW_FROM_CALLER = new Set([
   // The application's tools (scene director, annotations, embed views,
   // Import): they draw, fly and take clicks through the ports.
   './application/tools',
+  // The application shell loads the SOLUNAR card lazily, and the card marks
+  // its spot through `drawOf`, so a viewer with no renderer bound draws
+  // once its owner has loaded `./render/cesium/unbound`; until then the
+  // mount fails, naming the export, rather than showing a card that never
+  // marks. Composition and controls reach the card through the shell and
+  // load no factory themselves.
+  './ui/shell',
+  './application/controls',
+  './ui/composition',
 ]);
 
 /**

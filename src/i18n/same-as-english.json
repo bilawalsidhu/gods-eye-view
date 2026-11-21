@@ -299,7 +299,9 @@
     "ON AIR",
     "Stream",
     "{seconds} s",
-    "Mode"
+    "Mode",
+    "SOLUNAR",
+    "Solunar"
   ],
   "es": [
     "1 min/s",
@@ -495,7 +497,11 @@
     "3D",
     "KT",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "fr": [
     "1 min/s",
@@ -753,7 +759,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "12 h",
+    "24 h"
   ],
   "it": [
     "1 min/s",
@@ -987,7 +995,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "12 h",
+    "24 h"
   ],
   "ja": [
     "1090 MHz",
@@ -1267,7 +1277,11 @@
     "3D",
     "KT",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "SOLUNAR",
+    "Solunar",
+    "12 h",
+    "24 h"
   ],
   "ru": [
     "1900–1945",
@@ -1379,11 +1393,9 @@
     "NORMAL",
     "ANIME",
     "NOIR",
-    "view band|GLOBAL",
     "1090 MHz",
     "978 MHz UAT",
     "POSITION {age}",
-    "fire behavior|Minimal",
     "{county} County",
     "Sentinel-2",
     "Sentinel-2 via HLS",
@@ -1407,8 +1419,6 @@
     "SQUAWK {code} · {status}",
     "S2 GhostMaps",
     "NASA FIRMS · LIVE",
-    "feed status|live",
-    "DSP {count} blocks",
     "Austin",
     "San Francisco",
     "New York",
@@ -1449,7 +1459,6 @@
     "STARLINK",
     "STARLINK ···",
     "STARLINK ✕",
-    "{range} NM",
     "OFF-NADIR {angle}°",
     "OFF-NADIR {angle}° · {offset}",
     "HOME NADIR",
@@ -1505,7 +1514,16 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "12 h",
+    "24 h",
+    "SOLUNAR",
+    "Solunar",
+    "view band|GLOBAL",
+    "fire behavior|Minimal",
+    "feed status|live",
+    "DSP {count} blocks",
+    "{range} NM"
   ],
   "uk": [
     "1900–1945",
@@ -1805,7 +1823,6 @@
     "STARLINK",
     "STARLINK ···",
     "STARLINK ✕",
-    "{range} NM",
     "NORAD {id}",
     "EPOCH {time}",
     "TLE",
@@ -1831,6 +1848,7 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "{range} NM"
   ]
 }

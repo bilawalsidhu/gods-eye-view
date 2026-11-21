@@ -651,6 +651,8 @@ const ZH_HANT_CORRECTIONS = [
   [' 周/秒', ' 週/秒'],
   // 后 as "behind" after a module name (问天, 梦天), not 天后 (empress).
   ['天后側', '天後側'],
+  // Solunar is a calendar (曆), not a history (歷).
+  ['獵釣歷', '獵釣曆', /^Solunar$/],
 ];
 
 let s2tw;
