@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { readFileSync } from 'node:fs';
 import { mountSkyView } from './skyView.js';
+import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 import { parseBoundaries, parseSkyData } from './starData.js';
 
 const read = (name) =>
@@ -125,79 +125,10 @@ function fakeTimers() {
   };
 }
 
-class FakeHandler {
-  static last = null;
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.actions = new Map();
-    this.destroyed = false;
-    FakeHandler.last = this;
-  }
-  setInputAction(fn, type) {
-    this.actions.set(type, fn);
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-}
-
-const SkyCesium = { ...Cesium, ScreenSpaceEventHandler: FakeHandler };
-
+/** The stub renderer bound to a scene host (skyTestHost.mjs). */
 function fakeViewer({ width = 1200, height = 800, pickHeight = 20 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
-    globe: {
-      ellipsoid: Cesium.Ellipsoid.WGS84,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    renders: 0,
-    requestRender() {
-      this.renders += 1;
-    },
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: { enableInputs: true },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: true,
-    pickPosition: () =>
-      Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, pickHeight),
-  };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 3000),
-    orientation: { heading: 0.4, pitch: -0.7, roll: 0 },
-  });
-  camera.frustum.fov = 1;
-  camera.pickEllipsoid = () =>
-    Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 0);
-  scene.camera = camera;
-  return {
-    scene,
-    camera,
-    container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  const container = new FakeElement('div');
+  return createSkyTestHost({ container, width, height, pickHeight });
 }
 
 function fakeHistory(location) {
@@ -213,7 +144,8 @@ function fakeHistory(location) {
 
 function setup(options = {}) {
   const doc = fakeDocument();
-  const viewer = fakeViewer(options.viewer);
+  const fixture = fakeViewer(options.viewer);
+  const viewer = fixture.host;
   const timers = fakeTimers();
   const location = {
     href: options.href || 'https://gev.test/#v=2&lat=30&lon=-97',
@@ -226,7 +158,6 @@ function setup(options = {}) {
     timers,
     location,
     history,
-    CesiumApi: SkyCesium,
     now: () => Date.parse('2026-10-12T03:30:00Z'),
     showToast: (m) => toasts.push(m),
     geolocation: options.geolocation,
@@ -242,7 +173,16 @@ function setup(options = {}) {
       ...options.skyContentOptions,
     },
   });
-  return { doc, viewer, timers, location, history, handle };
+  return {
+    doc,
+    viewer,
+    globe: fixture.globe,
+    camera: fixture.camera,
+    timers,
+    location,
+    history,
+    handle,
+  };
 }
 
 const click = (node) => node.dispatchEvent(new Event('click'));
@@ -386,14 +326,14 @@ const SWITCH_NAMES = [
 ];
 
 function assertFlat(env, label) {
-  const { doc, viewer, handle, location } = env;
+  const { doc, globe, handle, location } = env;
   assert.equal(handle.flags.flatHorizon, true, `${label}: flag`);
   assert.equal(
     doc.body.find('flat').getAttribute('aria-pressed'),
     'true',
     `${label}: button`,
   );
-  assert.equal(viewer.scene.globe.show, false, `${label}: scene`);
+  assert.equal(globe.isGlobeVisible(), false, `${label}: scene`);
   const svf = Number(/[?&]svf=(\d+)/.exec(location.href)?.[1] ?? 0);
   assert.equal(svf & 1, 1, `${label}: svf bit 1 in ${location.href}`);
 }
@@ -426,7 +366,7 @@ test('R1: Flat horizon survives every layer switch, the time refresh and the sha
   click(doc.body.find('flat'));
   timers.flush();
   assert.equal(handle.flags.flatHorizon, false);
-  assert.equal(env.viewer.scene.globe.show, true);
+  assert.equal(env.globe.isGlobeVisible(), true);
 });
 
 test('R1: a link with Flat horizon (svf bit 1) keeps it through layer switches', async () => {

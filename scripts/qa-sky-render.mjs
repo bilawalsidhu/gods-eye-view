@@ -117,8 +117,8 @@ async function openSky(profile) {
   let state = null;
   for (let i = 0; i < 60; i++) {
     state = await page.evaluate(async (orion) => {
-      const m = await import('/src/skyView/skyView.js');
-      const h = m.mountSkyView({ viewer: window.__godsEyeView.viewer });
+      const h = window.__gevSky?.handle;
+      if (!h) return { error: 'Sky is not mounted yet' };
       if (!h.active) {
         h.clock.setFixed(Date.parse(orion.time));
         await h.enterAt({
@@ -156,9 +156,12 @@ async function openSky(profile) {
 }
 
 /** In-page: the sky handle. */
+// The shell mounts Sky on its scene object (the renderer-neutral host); the
+// viewer QA reads is the renderer's own, so the handle comes from the hook.
 const HANDLE = `(async () => {
-  const m = await import('/src/skyView/skyView.js');
-  return m.mountSkyView({ viewer: window.__godsEyeView.viewer });
+  for (let i = 0; i < 200 && !window.__gevSky?.handle; i++)
+    await new Promise((r) => setTimeout(r, 50));
+  return window.__gevSky.handle;
 })()`;
 
 async function orionChecks(page) {

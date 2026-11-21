@@ -585,8 +585,7 @@ export function renderSatPanel(
     let slot = dom.rows[i];
     if (!slot) {
       const li = doc.createElement('li');
-      const button = doc.createElement('button');
-      button.setAttribute('type', 'button');
+      const button = el(doc, 'button', { type: 'button' });
       li.append(button);
       dom.list.append(li);
       slot = { li, button };
@@ -646,8 +645,7 @@ function renderPasses(dom, passes, { doc, selectedPassKey, nowMs }) {
     let slot = dom.passRows[i];
     if (!slot) {
       const li = doc.createElement('li');
-      const button = doc.createElement('button');
-      button.setAttribute('type', 'button');
+      const button = el(doc, 'button', { type: 'button' });
       const name = doc.createElement('span');
       name.className = 'gev-sky-pass-name';
       const chip = doc.createElement('span');

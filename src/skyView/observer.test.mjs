@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { createSceneHost } from '../render/rendererOf.js';
 import {
   GEO_MESSAGES,
   GEO_OPTIONS,
@@ -9,7 +9,6 @@ import {
   createGeolocator,
   createObserver,
   geoReduce,
-  hasRealTerrain,
   observerEyeHeight,
   parseLatLon,
   sampleGroundHeight,
@@ -259,82 +258,81 @@ test('geolocator: insecure context and missing API never call the browser', () =
   assert.equal(timing.state.status, 'idle');
 });
 
-test('hasRealTerrain: ellipsoid provider is not terrain', () => {
-  assert.equal(
-    hasRealTerrain(Cesium, new Cesium.EllipsoidTerrainProvider()),
-    false,
-  );
-  assert.equal(hasRealTerrain(Cesium, undefined), false);
-  assert.equal(hasRealTerrain(Cesium, { requestTileGeometry() {} }), true);
+/**
+ * A scene host bound to a renderer whose query port answers heights from
+ * `answer(points, options)` (a list of `{height, source}` or null per point):
+ * what the height service asks.
+ */
+function heightHost(answer) {
+  const query = {
+    sampleHeightNow: () => null,
+    sampleHeight: async (points, options) => answer(points, options),
+  };
+  return createSceneHost({ query }, { container: null }).host;
+}
+
+const sample = (height, source) => ({
+  height,
+  confidence: 1,
+  source,
+  lod: 'finest',
 });
 
-test('sampleGroundHeight: terrain first, then 3D tiles, else 0 flagged unknown', async () => {
-  const terrain = { requestTileGeometry() {} };
-  const C = {
-    ...Cesium,
-    sampleTerrainMostDetailed: async (provider, cartos) => {
-      assert.equal(provider, terrain);
-      cartos[0].height = 15.5;
-      return cartos;
-    },
-  };
+test('sampleGroundHeight: terrain first (the bare ellipsoid is not terrain), then 3D tiles, else 0 flagged unknown', async () => {
+  const asked = [];
+  const terrain = heightHost((points, options) => {
+    asked.push(options);
+    return points.map(() => sample(15.5, 'terrain'));
+  });
   assert.deepEqual(
     await sampleGroundHeight({
-      Cesium: C,
-      viewer: { terrainProvider: terrain, scene: {} },
+      viewer: terrain,
       latDeg: 29.76,
       lonDeg: -95.37,
     }),
     { heightM: 15.5, known: true, via: 'terrain' },
   );
-  const tilesViewer = {
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    scene: {
-      sampleHeightMostDetailed: async (cartos) =>
-        cartos.map((c) => ({ ...c, height: 22 })),
-    },
-  };
+  assert.deepEqual(asked, [{ against: 'terrain', mostDetailed: true }]);
+
+  // No terrain here (the ellipsoid answers): a miss, so 3D tiles are asked.
+  const tiles = heightHost((points, { against }) =>
+    points.map(() =>
+      against === 'terrain' ? sample(0, 'ellipsoid') : sample(22, 'tiles'),
+    ),
+  );
   assert.deepEqual(
     await sampleGroundHeight({
-      Cesium,
-      viewer: tilesViewer,
+      viewer: tiles,
       latDeg: 29.76,
       lonDeg: -95.37,
     }),
     { heightM: 22, known: true, via: 'tiles' },
   );
   // unknown everywhere -> 0 + flag
-  const nothing = {
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    scene: {
-      sampleHeightMostDetailed: async (cartos) =>
-        cartos.map((c) => ({ ...c, height: undefined })),
-    },
-  };
+  const nothing = heightHost((points) => points.map(() => null));
   assert.deepEqual(
-    await sampleGroundHeight({ Cesium, viewer: nothing, latDeg: 1, lonDeg: 2 }),
+    await sampleGroundHeight({ viewer: nothing, latDeg: 1, lonDeg: 2 }),
     { heightM: 0, known: false, via: 'none' },
   );
-  const failing = {
-    ...C,
-    sampleTerrainMostDetailed: async () => {
-      throw new Error('tile 404');
-    },
-  };
+  const ellipsoidOnly = heightHost((points) =>
+    points.map(() => sample(0, 'ellipsoid')),
+  );
   assert.deepEqual(
-    await sampleGroundHeight({
-      Cesium: failing,
-      viewer: { terrainProvider: terrain, scene: {} },
-      latDeg: 1,
-      lonDeg: 2,
-    }),
+    await sampleGroundHeight({ viewer: ellipsoidOnly, latDeg: 1, lonDeg: 2 }),
+    { heightM: 0, known: false, via: 'none' },
+    'an ellipsoid answer is no terrain and no tiles',
+  );
+  const failing = heightHost(() => {
+    throw new Error('tile 404');
+  });
+  assert.deepEqual(
+    await sampleGroundHeight({ viewer: failing, latDeg: 1, lonDeg: 2 }),
     { heightM: 0, known: false, via: 'none' },
   );
-  const slow = { ...C, sampleTerrainMostDetailed: () => new Promise(() => {}) };
+  const slow = heightHost(() => new Promise(() => {}));
   assert.deepEqual(
     await sampleGroundHeight({
-      Cesium: slow,
-      viewer: { terrainProvider: terrain, scene: {} },
+      viewer: slow,
       latDeg: 1,
       lonDeg: 2,
       timeoutMs: 20,
@@ -342,12 +340,11 @@ test('sampleGroundHeight: terrain first, then 3D tiles, else 0 flagged unknown',
     { heightM: 0, known: false, via: 'none' },
   );
   assert.deepEqual(
-    await sampleGroundHeight({ Cesium, viewer: null, latDeg: 1, lonDeg: 2 }),
+    await sampleGroundHeight({ viewer: null, latDeg: 1, lonDeg: 2 }),
     { heightM: 0, known: false, via: 'none' },
   );
   // the resulting observer carries the flag
   const sampled = await sampleGroundHeight({
-    Cesium,
     viewer: nothing,
     latDeg: 1,
     lonDeg: 2,

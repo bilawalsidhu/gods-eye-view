@@ -1,7 +1,7 @@
 /**
  * Sky time. One clock is the only time source for the sky
  * overlay, the satellite worker ticks, the Sun/Moon/planet ephemeris and
- * Cesium's viewer.clock (so the sun lighting and the atmosphere follow it).
+ * the renderer's scene time (so the sun lighting and the atmosphere follow it).
  *
  * Built-in provider (createSkyClock), three modes:
  *   'live'   Date.now() on every read (no drift)

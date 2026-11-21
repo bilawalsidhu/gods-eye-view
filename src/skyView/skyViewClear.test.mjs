@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { readFileSync } from 'node:fs';
 import { mountSkyView } from './skyView.js';
+import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 import { bindApplicationShortcuts } from '../ui/applicationShortcuts.js';
 import { createSatWorkerHandler } from './satWorker.js';
 import {
@@ -131,79 +131,10 @@ function fakeTimers() {
   };
 }
 
-class FakeHandler {
-  static last = null;
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.actions = new Map();
-    this.destroyed = false;
-    FakeHandler.last = this;
-  }
-  setInputAction(fn, type) {
-    this.actions.set(type, fn);
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-}
-
-const SkyCesium = { ...Cesium, ScreenSpaceEventHandler: FakeHandler };
-
+/** The stub renderer bound to a scene host (skyTestHost.mjs). */
 function fakeViewer({ width = 1200, height = 800, pickHeight = 20 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
-    globe: {
-      ellipsoid: Cesium.Ellipsoid.WGS84,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    renders: 0,
-    requestRender() {
-      this.renders += 1;
-    },
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: { enableInputs: true },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: true,
-    pickPosition: () =>
-      Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, pickHeight),
-  };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 3000),
-    orientation: { heading: 0.4, pitch: -0.7, roll: 0 },
-  });
-  camera.frustum.fov = 1;
-  camera.pickEllipsoid = () =>
-    Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 0);
-  scene.camera = camera;
-  return {
-    scene,
-    camera,
-    container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  const container = new FakeElement('div');
+  return createSkyTestHost({ container, width, height, pickHeight });
 }
 
 function fakeHistory(location) {
@@ -255,7 +186,8 @@ class InlineSatWorker extends EventTarget {
 
 function setup(options = {}) {
   const doc = options.document ?? fakeDocument();
-  const viewer = fakeViewer(options.viewer);
+  const fixture = fakeViewer(options.viewer);
+  const viewer = fixture.host;
   const timers = fakeTimers();
   const location = { href: 'https://gev.test/#v=2&lat=30&lon=-97' };
   const history = fakeHistory(location);
@@ -269,7 +201,6 @@ function setup(options = {}) {
     timers,
     location,
     history,
-    CesiumApi: SkyCesium,
     now: () => clock.t,
     showToast: () => {},
     isSecureContext: options.isSecureContext ?? true,
@@ -301,6 +232,10 @@ function setup(options = {}) {
   return {
     doc,
     viewer,
+    fixture,
+    camera: fixture.camera,
+    globe: fixture.globe,
+    renderer: fixture.renderer,
     timers,
     history,
     handle,
@@ -349,16 +284,16 @@ function tap(env, x, y, id = 1) {
 
 /** Everything a Clear view toggle must leave alone. */
 function skyState(env) {
-  const { viewer, handle, worker, fetched, history } = env;
-  const cam = viewer.camera;
+  const { viewer, camera, fixture, handle, worker, fetched, history } = env;
+  const pose = camera.pose();
   return {
     view: handle.view,
     flags: JSON.stringify(handle.flags),
-    position: Cesium.Cartesian3.clone(cam.position),
-    direction: Cesium.Cartesian3.clone(cam.direction),
-    up: Cesium.Cartesian3.clone(cam.up),
-    fov: cam.frustum.fov,
-    renders: viewer.scene.renders,
+    position: { ...pose.position },
+    direction: { ...pose.direction },
+    up: { ...pose.up },
+    fov: pose.fovy,
+    renders: fixture.renderRequests(),
     drawCalls: viewer.container.find('canvas').drawCalls,
     canvasHidden: viewer.container.find('canvas').hidden,
     worker: worker.posted.length,
@@ -372,16 +307,9 @@ function assertSkyUnchanged(env, before, what) {
   assert.equal(after.view, before.view, `${what}: same view object`);
   assert.equal(after.flags, before.flags, `${what}: flags`);
   for (const k of ['position', 'direction', 'up'])
-    assert.ok(
-      Cesium.Cartesian3.equals(after[k], before[k]),
-      `${what}: camera ${k} unchanged`,
-    );
+    assert.deepEqual(after[k], before[k], `${what}: camera ${k} unchanged`);
   assert.equal(after.fov, before.fov, `${what}: fov`);
-  assert.equal(
-    after.renders,
-    before.renders,
-    `${what}: no Cesium render request`,
-  );
+  assert.equal(after.renders, before.renders, `${what}: no render request`);
   assert.equal(after.drawCalls, before.drawCalls, `${what}: no overlay redraw`);
   assert.equal(after.canvasHidden, false, `${what}: sky canvas shown`);
   assert.equal(after.worker, before.worker, `${what}: no worker message`);
@@ -760,7 +688,11 @@ test('clear view R1: holding H in the sky toggles Clear view once and never reac
   const ctrl = press('h', { ctrlKey: true });
   assert.equal(ctrl.stopped, 0, 'Ctrl+H not taken by the Sky view');
   assert.equal(handle.clearView.on, false);
-  assert.equal(hudToggles, 0, 'Ctrl+H runs no shell shortcut (chords go to the browser)');
+  assert.equal(
+    hudToggles,
+    0,
+    'Ctrl+H runs no shell shortcut (chords go to the browser)',
+  );
   assert.equal(hudVisible, hud0);
   hudToggles = 0;
   // holding H while typing in the search box is just typing
@@ -1082,9 +1014,9 @@ test('clear view: calibration figure 8 is shown over the clear sky while the com
   assert.match(env.doc.body.find('clear-text').textContent, /figure 8/);
 });
 
-test('clear view attribution: body.gev-sky-tiles while map tiles are drawn (real horizon), off with the flat horizon and when leaving the sky; the view does not move', async () => {
+test('clear view attribution: body.gev-sky-tiles while map tiles may be drawn (the ports cannot hide 3D tiles, so the flat horizon keeps it too), off when leaving the sky; the view does not move', async () => {
   const env = setup();
-  const { doc, handle } = env;
+  const { doc, handle, globe } = env;
   const tiles = () => doc.body.classList.contains('gev-sky-tiles');
   assert.equal(tiles(), false, 'not on the map');
   await handle.enterAt(HOUSTON);
@@ -1095,22 +1027,27 @@ test('clear view attribution: body.gev-sky-tiles while map tiles are drawn (real
   const before = skyState(env);
   assert.equal(tiles(), true, 'still drawn in Clear view');
   click(doc.body.find('flat'));
-  assert.equal(env.viewer.scene.globe.show, false);
-  assert.equal(tiles(), false, 'flat horizon: only the sky is drawn');
+  assert.equal(globe.isGlobeVisible(), false);
+  assert.equal(
+    tiles(),
+    true,
+    'flat horizon hides the globe surface only: 3D tiles may stay, so attribution stays',
+  );
   click(doc.body.find('flat'));
-  assert.equal(env.viewer.scene.globe.show, true);
+  assert.equal(globe.isGlobeVisible(), true);
   assert.equal(tiles(), true);
   // the flag follows the scene; the camera and the view do not move
   const after = skyState(env);
   assert.equal(after.view, before.view, 'same view');
   for (const k of ['position', 'direction', 'up'])
-    assert.ok(Cesium.Cartesian3.equals(after[k], before[k]), `camera ${k}`);
+    assert.deepEqual(after[k], before[k], `camera ${k}`);
   handle.exit();
   assert.equal(tiles(), false, 'left the sky');
-  // a map that already had its globe off and no tilesets: nothing to credit
-  env.viewer.scene.globe.show = false;
+  // a map whose globe surface is already hidden (photoreal tiles): the tiles
+  // are what is drawn, and Sky leaves them
+  globe.setGlobeVisible(false);
   await handle.enterAt(HOUSTON);
-  assert.equal(tiles(), false, 'globe off before entering');
+  assert.equal(tiles(), true, 'globe off before entering: tiles may be drawn');
   handle.destroy();
   assert.equal(tiles(), false);
 });

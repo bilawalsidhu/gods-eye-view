@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { createSceneHost } from '../render/rendererOf.js';
 import {
   EARTH_RADIUS_M,
   PROFILE_AZ_COUNT,
@@ -152,65 +152,74 @@ test('horizonAt interpolates between bins and wraps at north', () => {
   assert.equal(horizonAt(profile, -90), 12);
 });
 
-test('computeHorizonProfile: ONE batch of 4,320 samples, null without real terrain or on failure/timeout', async () => {
-  const terrain = { requestTileGeometry() {} };
-  let calls = 0;
-  let size = 0;
-  const sample = async (provider, cartos) => {
-    calls += 1;
-    size = cartos.length;
-    assert.equal(provider, terrain);
-    for (const c of cartos) c.height = 0;
-    return cartos;
+/** A scene host whose query port answers heights from `answer(points, options)`. */
+function heightHost(answer) {
+  const query = {
+    sampleHeightNow: () => null,
+    sampleHeight: async (points, options) => answer(points, options),
   };
-  const profile = await computeHorizonProfile({
-    Cesium,
-    terrainProvider: terrain,
-    observer: OBS,
-    sample,
+  return createSceneHost({ query }, { container: null }).host;
+}
+
+test('computeHorizonProfile: ONE batch of 4,320 terrain samples, null without real terrain or on failure/timeout', async () => {
+  const calls = [];
+  const flat = heightHost((points, options) => {
+    calls.push({ size: points.length, options });
+    return points.map(() => ({
+      height: 0,
+      confidence: 1,
+      source: 'terrain',
+      lod: 'finest',
+    }));
   });
-  assert.equal(calls, 1);
-  assert.equal(size, 4320);
+  const profile = await computeHorizonProfile({ viewer: flat, observer: OBS });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].size, 4320);
+  assert.deepEqual(calls[0].options, {
+    against: 'terrain',
+    mostDetailed: true,
+  });
   assert.equal(profile.azCount, 180);
   assert.ok(profile.anglesDeg.every((a) => a < 0 && a > -1));
+  // No real terrain: the renderer answers the bare ellipsoid, or nothing.
+  const ellipsoid = heightHost((points) =>
+    points.map(() => ({
+      height: 0,
+      confidence: 1,
+      source: 'ellipsoid',
+      lod: 'finest',
+    })),
+  );
   assert.equal(
-    await computeHorizonProfile({
-      Cesium,
-      terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-      observer: OBS,
-      sample,
-    }),
+    await computeHorizonProfile({ viewer: ellipsoid, observer: OBS }),
+    null,
+    'an ellipsoid answer is a miss: no profile',
+  );
+  const nothing = heightHost((points) => points.map(() => null));
+  assert.equal(
+    await computeHorizonProfile({ viewer: nothing, observer: OBS }),
     null,
   );
-  assert.equal(calls, 1, 'no sampling without real terrain');
   assert.equal(
     await computeHorizonProfile({
-      Cesium,
-      terrainProvider: terrain,
-      observer: OBS,
-      sample: async () => {
+      viewer: heightHost(() => {
         throw new Error('x');
-      },
+      }),
+      observer: OBS,
     }),
     null,
   );
   assert.equal(
     await computeHorizonProfile({
-      Cesium,
-      terrainProvider: terrain,
+      viewer: heightHost(() => new Promise(() => {})),
       observer: OBS,
-      sample: () => new Promise(() => {}),
       timeoutMs: 20,
     }),
     null,
   );
   assert.equal(
-    await computeHorizonProfile({
-      Cesium,
-      terrainProvider: terrain,
-      observer: null,
-      sample,
-    }),
+    await computeHorizonProfile({ viewer: flat, observer: null }),
     null,
   );
+  assert.equal(calls.length, 1, 'no sampling without an observer');
 });

@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { inspect } from 'node:util';
+import { createSceneHost } from '../render/rendererOf.js';
+import { createStubRenderer } from '../render/stub/index.js';
 import { StyleManager } from './applicationShell.js';
 
 test('Sky mount failure does not log its exception or credentials', async () => {
@@ -27,14 +29,15 @@ test('Sky mount failure does not log its exception or credentials', async () => 
     logs.push(inspect(args, { depth: 8 }));
     resolveWarning();
   };
+  // The scene object the shell holds, with a renderer bound (Sky finds its
+  // ports through it), in a page whose DOM refuses to build the Sky controls.
+  const { host, release } = createSceneHost(createStubRenderer(), {
+    container: { append() {} },
+  });
   try {
     StyleManager.prototype._initSkyView.call({
       _disposed: false,
-      viewer: {
-        camera: { position: {} },
-        scene: { canvas: {} },
-        container: { append() {} },
-      },
+      viewer: host,
       _lifetime: null,
       _navigation: null,
       _showToast() {},
@@ -52,6 +55,7 @@ test('Sky mount failure does not log its exception or credentials', async () => 
     assert.match(logs[0], /Sky.*view unavailable/);
     assert.doesNotMatch(logs[0], /SECRETKEY123|user:pass|Bearer/);
   } finally {
+    release();
     clearTimeout(timer);
     console.warn = previousWarn;
     if (previousDocument === undefined) delete globalThis.document;

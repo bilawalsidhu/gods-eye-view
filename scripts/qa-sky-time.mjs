@@ -69,9 +69,12 @@ const browser = await puppeteer.launch({
 const errors = [];
 const unrelated = [];
 
+// The shell mounts Sky on its scene object (the renderer-neutral host); the
+// viewer QA reads is the renderer's own, so the handle comes from the hook.
 const HANDLE = `(async () => {
-  const m = await import('/src/skyView/skyView.js');
-  return m.mountSkyView({ viewer: window.__godsEyeView.viewer });
+  for (let i = 0; i < 200 && !window.__gevSky?.handle; i++)
+    await new Promise((r) => setTimeout(r, 50));
+  return window.__gevSky.handle;
 })()`;
 
 const DESKTOP = { width: 1280, height: 800, deviceScaleFactor: 1 };

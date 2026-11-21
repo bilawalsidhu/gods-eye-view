@@ -6,7 +6,7 @@
  * The control only talks to the clock and reports what
  * happened; skyView.js owns what a time change does (one subscriber on the
  * time source applies it to the overlay, the worker, the ephemeris and
- * viewer.clock). All controls are native buttons, a select and an input, so
+ * the renderer's scene time). All controls are native buttons, a select and an input, so
  * keyboard and screen readers work without extra code.
  */
 import { SKY_RATES } from './skyClock.js';

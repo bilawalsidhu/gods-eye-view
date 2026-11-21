@@ -58,9 +58,12 @@ await page.waitForSelector('.gev-sky-btn', { timeout: 180000 });
 await sleep(SETTLE_MS);
 await page.keyboard.press('Escape');
 
+// The shell mounts Sky on its scene object (the renderer-neutral host); the
+// viewer QA reads is the renderer's own, so the handle comes from the hook.
 const HANDLE = `(async () => {
-  const m = await import('/src/skyView/skyView.js');
-  return m.mountSkyView({ viewer: window.__godsEyeView.viewer });
+  for (let i = 0; i < 200 && !window.__gevSky?.handle; i++)
+    await new Promise((r) => setTimeout(r, 50));
+  return window.__gevSky.handle;
 })()`;
 
 let state = null;

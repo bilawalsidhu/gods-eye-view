@@ -3,10 +3,11 @@
  *
  * Observer = { latDeg, lonDeg, groundHeightM, heightKnown, eyeHeightM, source,
  * accuracyM }. Pure parts (parsing, the geolocation state machine, observer
- * construction) are tested without a browser; the two async helpers take their
- * platform objects (navigator.geolocation, the Cesium module, the viewer) as
+ * construction) are tested without a browser; the async helpers take their
+ * platform objects (navigator.geolocation, the application's scene object) as
  * arguments so tests can drive them.
  */
+import { heightsOf } from '../queries/heights.js';
 import { EYE_HEIGHT_M } from './skyMath.js';
 
 export const OBSERVER_SOURCES = Object.freeze(['map', 'gps', 'manual', 'url']);
@@ -238,64 +239,34 @@ const withTimeout = (promise, ms) =>
     );
   });
 
-/** True for a terrain provider that has real heights (not the bare ellipsoid). */
-export function hasRealTerrain(Cesium, provider) {
-  if (!provider) return false;
-  if (
-    Cesium?.EllipsoidTerrainProvider &&
-    provider instanceof Cesium.EllipsoidTerrainProvider
-  )
-    return false;
-  return typeof provider.requestTileGeometry === 'function';
-}
-
 /**
- * Ground height under a point: the globe's terrain provider first (the same
- * provider the map already uses), then a 3D-tiles height sample (Google 3D),
- * else 0 flagged unknown. Never throws.
+ * Ground height under a point: the terrain first (the same the map already
+ * draws; the height service answers a miss, or the bare ellipsoid with
+ * `ellipsoidMisses`, when there is no real terrain there), then a 3D-tiles
+ * height (Google 3D), else 0 flagged unknown. Never throws.
+ * @param {object} options
+ * @param {object} options.viewer The application's scene object.
  * @returns {Promise<{heightM:number, known:boolean, via:string}>}
  */
 export async function sampleGroundHeight({
-  Cesium,
   viewer,
   latDeg,
   lonDeg,
   timeoutMs = 8000,
 }) {
   const unknown = { heightM: 0, known: false, via: 'none' };
-  if (!Cesium || !viewer) return unknown;
-  let carto;
-  try {
-    carto = Cesium.Cartographic.fromDegrees(lonDeg, latDeg);
-  } catch {
+  if (!viewer || !Number.isFinite(latDeg) || !Number.isFinite(lonDeg))
     return unknown;
-  }
-  const provider =
-    viewer.terrainProvider ?? viewer.scene?.globe?.terrainProvider;
-  if (
-    hasRealTerrain(Cesium, provider) &&
-    typeof Cesium.sampleTerrainMostDetailed === 'function'
-  ) {
+  const heights = heightsOf(viewer);
+  const point = [{ lon: lonDeg, lat: latDeg }];
+  for (const against of ['terrain', 'tiles']) {
     try {
-      const [sample] = await withTimeout(
-        Cesium.sampleTerrainMostDetailed(provider, [carto.clone()]),
+      const [height] = await withTimeout(
+        heights.batch(point, { against, ellipsoidMisses: true }),
         timeoutMs,
       );
-      if (Number.isFinite(sample?.height))
-        return { heightM: sample.height, known: true, via: 'terrain' };
-    } catch {
-      /* fall through */
-    }
-  }
-  const scene = viewer.scene;
-  if (typeof scene?.sampleHeightMostDetailed === 'function') {
-    try {
-      const [sample] = await withTimeout(
-        scene.sampleHeightMostDetailed([carto.clone()]),
-        timeoutMs,
-      );
-      if (Number.isFinite(sample?.height))
-        return { heightM: sample.height, known: true, via: 'tiles' };
+      if (Number.isFinite(height))
+        return { heightM: height, known: true, via: against };
     } catch {
       /* fall through */
     }

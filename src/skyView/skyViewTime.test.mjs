@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { readFileSync } from 'node:fs';
 import { mountSkyView } from './skyView.js';
+import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 import { parseBoundaries, parseSkyData } from './starData.js';
 
 const read = (name) =>
@@ -125,79 +125,10 @@ function fakeTimers() {
   };
 }
 
-class FakeHandler {
-  static last = null;
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.actions = new Map();
-    this.destroyed = false;
-    FakeHandler.last = this;
-  }
-  setInputAction(fn, type) {
-    this.actions.set(type, fn);
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-}
-
-const SkyCesium = { ...Cesium, ScreenSpaceEventHandler: FakeHandler };
-
+/** The stub renderer bound to a scene host (skyTestHost.mjs). */
 function fakeViewer({ width = 1200, height = 800, pickHeight = 20 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
-    globe: {
-      ellipsoid: Cesium.Ellipsoid.WGS84,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    renders: 0,
-    requestRender() {
-      this.renders += 1;
-    },
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: { enableInputs: true },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: true,
-    pickPosition: () =>
-      Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, pickHeight),
-  };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 3000),
-    orientation: { heading: 0.4, pitch: -0.7, roll: 0 },
-  });
-  camera.frustum.fov = 1;
-  camera.pickEllipsoid = () =>
-    Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 0);
-  scene.camera = camera;
-  return {
-    scene,
-    camera,
-    container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  const container = new FakeElement('div');
+  return createSkyTestHost({ container, width, height, pickHeight });
 }
 
 function fakeHistory(location) {
@@ -276,7 +207,9 @@ function runIntervals(timers) {
 
 function setup(options = {}) {
   const doc = fakeDocument();
-  const viewer = fakeViewer(options.viewer);
+  const fixture = fakeViewer(options.viewer);
+  const viewer = fixture.host;
+  sceneOf.set(viewer, fixture);
   const timers = fakeTimers();
   const location = {
     href: options.href || 'https://gev.test/#v=2&lat=30&lon=-97',
@@ -292,7 +225,6 @@ function setup(options = {}) {
     timers,
     location,
     history,
-    CesiumApi: SkyCesium,
     now: () => wall.t,
     requestFrame: frames.request,
     cancelFrame: frames.cancel,
@@ -313,6 +245,10 @@ function setup(options = {}) {
   return {
     doc,
     viewer,
+    fixture,
+    renderer: fixture.renderer,
+    camera: fixture.camera,
+    globe: fixture.globe,
     timers,
     location,
     history,
@@ -329,8 +265,10 @@ const click = (node, props = {}) =>
 const key = (node, k, props = {}) =>
   node.dispatchEvent(Object.assign(new Event('keydown'), { key: k, ...props }));
 const settle = () => new Promise((resolve) => setImmediate(resolve));
-const viewerMs = (viewer) =>
-  Cesium.JulianDate.toDate(viewer.clock.currentTime).getTime();
+/** The test fixture (renderer and ports) behind each mounted scene host. */
+const sceneOf = new WeakMap();
+/** Scene time, epoch ms: what the sun and the sky draw at (the frame port). */
+const viewerMs = (viewer) => sceneOf.get(viewer).frame.time();
 async function pump(worker) {
   for (let i = 0; i < 6; i++) {
     await settle();
@@ -359,7 +297,7 @@ test('time control: fixed time set through the handle shows in the picker and Li
   assert.equal(viewerMs(viewer), NOW);
 });
 
-test('play/pause, speed, reverse, step buttons and sky keys drive the single clock; viewer.clock, ephemeris and worker ticks follow it', async () => {
+test('play/pause, speed, reverse, step buttons and sky keys drive the single clock; scene time, ephemeris and worker ticks follow it', async () => {
   const worker = new InlineSatWorker();
   const env = setup({ worker });
   const { doc, handle, viewer, wall, frames, timers } = env;
@@ -756,4 +694,69 @@ test('narrow screens: the time rows fold behind a summary button (Live / Paused 
   assert.match(fold.textContent, /· Paused$/);
   click(fold);
   assert.equal(fold.getAttribute('aria-expanded'), 'false');
+});
+
+test('Sky time is stamped on the scene every frame while Sky is active, after the application’s own per-frame time, and never after exit', async () => {
+  const { handle, fixture } = setup();
+  const { frame, renderer } = fixture;
+  // The application's world time (src/time/viewerClock.js followWorldTime):
+  // a preUpdate listener registered before Sky's.
+  const WORLD = Date.parse('2026-10-11T12:00:00Z');
+  frame.on('preUpdate', () => frame.setTime(WORLD));
+  renderer.testing.tick();
+  assert.equal(frame.time(), WORLD, 'not in Sky: the application’s time');
+  await handle.enterAt({
+    ...HOUSTON,
+    heightM: 15,
+    heightKnown: true,
+    source: 'manual',
+  });
+  const T = Date.parse('2026-12-01T03:00:00Z');
+  handle.clock.setFixed(T);
+  for (let i = 0; i < 3; i++) {
+    renderer.testing.tick();
+    assert.equal(frame.time(), T, `frame ${i}: Sky time`);
+  }
+  handle.exit();
+  for (let i = 0; i < 2; i++) {
+    renderer.testing.tick();
+    assert.equal(frame.time(), WORLD, `frame ${i} after exit: the world's`);
+  }
+  // entering again stamps again, and destroy ends it for good
+  await handle.enterAt({
+    ...HOUSTON,
+    heightM: 15,
+    heightKnown: true,
+    source: 'manual',
+  });
+  renderer.testing.tick();
+  assert.equal(frame.time(), T);
+  handle.destroy();
+  renderer.testing.tick();
+  assert.equal(frame.time(), WORLD);
+});
+
+test('an exit that throws part-way still stops stamping Sky time and gives the camera input back', async () => {
+  const { handle, fixture } = setup();
+  const { frame, renderer, camera, globe } = fixture;
+  const WORLD = Date.parse('2026-10-11T12:00:00Z');
+  frame.on('preUpdate', () => frame.setTime(WORLD));
+  await handle.enterAt({
+    ...HOUSTON,
+    heightM: 15,
+    heightKnown: true,
+    source: 'manual',
+  });
+  renderer.testing.tick();
+  assert.notEqual(frame.time(), WORLD);
+  assert.equal(camera.controls.enabled, false);
+  // putting the globe's look back fails part-way through the exit
+  globe.sky.set = () => {
+    throw new Error('globe gone');
+  };
+  assert.throws(() => handle.exit(), /globe gone/);
+  assert.equal(handle.active, false);
+  renderer.testing.tick();
+  assert.equal(frame.time(), WORLD, 'Sky no longer stamps time');
+  assert.equal(camera.controls.enabled, true, 'camera input given back');
 });

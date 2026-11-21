@@ -19,16 +19,29 @@
  * phone (true north via the WMM declination), Align on the Sun/Moon/selected
  * object, calibration hint; a drag always takes over.
  * the Sky time source (skyClock.js: live/fixed/play) is the ONLY time for the overlay, the worker
- * ticks, the ephemeris and viewer.clock; the time control, presets and
+ * ticks, the ephemeris and the renderer's scene time (the frame port; Sky
+ * stamps it each frame while active); the time control, presets and
  * validity banners live in skyTimeControl.js.
  * Clear view (clearView.js): the eye button, a double-tap on the sky or H
  * hides every control so only the sky is left; Escape brings them back.
  */
-import * as Cesium from 'cesium';
 import { observerSolarElevation } from '../data/satellitePass.js';
+import { fromDegreesInto, toLonLatH } from '../geo/ellipsoid.js';
+import {
+  acosClamped,
+  copyInto,
+  distance as ecefDistance,
+  dot,
+} from '../geo/vector.js';
 import { geocodeKeyless } from '../keylessGeocoder.js';
-import { viewerBehind } from '../render/cesium/viewers.js';
 import { t } from '../i18n/index.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findInput,
+  findQuery,
+} from '../render/rendererOf.js';
 import {
   computeHorizonProfile,
   occlusion as profileOcclusion,
@@ -52,11 +65,13 @@ import {
   applySkyScene,
   applySkyTime,
   collisionRestoreLifts,
+  holdSkyTime,
   restoreCamera,
   restoreScene,
   skyTilesShown,
   snapshotCamera,
   snapshotScene,
+  takeSkyControls,
 } from './skyCamera.js';
 import { createSatSky, fetchCelestrakText } from './satSky.js';
 import {
@@ -471,7 +486,6 @@ export function mountSkyView({
   geocode = (query) => geocodeKeyless(query),
   timers = globalThis,
   now = () => Date.now(),
-  CesiumApi = Cesium,
   autoEnterDelayMs = 2500,
   createSatWorker,
   fetchCelestrak,
@@ -500,7 +514,9 @@ export function mountSkyView({
   /** Window that receives __gevSky. Defaults to the document's window. */
   voiceWindow,
 } = {}) {
-  if (!viewer?.camera || !viewer?.scene || !doc?.createElement) return null;
+  // `viewer` is the application's scene object: every port is found from it.
+  if (!viewer || !findCamera(viewer) || !doc?.createElement) return null;
+  const cameraPort = () => findCamera(viewer);
   const existing = mounted.get(viewer);
   if (existing && !existing.destroyed) return existing;
   const host = parent || doc.body;
@@ -540,13 +556,18 @@ export function mountSkyView({
   let sceneSnap = null;
   let profile = null;
   let profileToken = 0;
+  /** {lease, off} while a map pick is waiting for its click. */
   let picker = null;
   let tickTimer = null;
   let dropCameraWatch = null;
   let dropCollisionRestore = null;
-  const scratchEye = new CesiumApi.Cartesian3();
-  const appliedDirection = new CesiumApi.Cartesian3();
-  const appliedUp = new CesiumApi.Cartesian3();
+  /** Gives the camera input back; set while Sky holds it. */
+  let releaseControls = null;
+  /** Stops stamping Sky time on each frame; set while Sky is active. */
+  let dropSkyTime = null;
+  const scratchEye = { x: 0, y: 0, z: 0 };
+  const appliedDirection = { x: 0, y: 0, z: 0 };
+  const appliedUp = { x: 0, y: 0, z: 0 };
   let hasAppliedPose = false;
   let urlTimer = null;
   let autoTimer = null;
@@ -872,7 +893,7 @@ export function mountSkyView({
   let sizeCache = null;
   const canvasSize = () => {
     if (sizeCache) return sizeCache;
-    const c = viewer.scene.canvas;
+    const c = canvasOf(viewer);
     const size = {
       width: c?.clientWidth || c?.width || 1,
       height: c?.clientHeight || c?.height || 1,
@@ -1285,7 +1306,7 @@ export function mountSkyView({
   }
 
   /**
-   * The one place Sky time is applied: viewer.clock (Cesium sun lighting and
+   * The one place Sky time is applied: the scene time (sun lighting and
    * atmosphere), Sun altitude / magnitude limit, stars + ephemeris, picker,
    * banners, then a redraw. Satellites read the same time source.
    */
@@ -1305,7 +1326,7 @@ export function mountSkyView({
   function applyTime() {
     if (!active || !observer) return;
     const t = time.getTime();
-    applySkyTime(CesiumApi, viewer, t);
+    applySkyTime(viewer, t);
     lastSunAlt = observerSolarElevation(observer.latDeg, observer.lonDeg, t);
     content.update(t, observer);
     applySkyScene(viewer, sceneSnap, {
@@ -1383,9 +1404,10 @@ export function mountSkyView({
     }
     view = makeView(next);
     if (!active || !observer) return;
-    applySkyCamera(CesiumApi, viewer.camera, observer, view);
+    const camera = cameraPort();
+    if (camera) applySkyCamera(camera, observer, view);
     rememberAppliedPose();
-    viewer.scene.requestRender?.();
+    findFrame(viewer)?.requestRender('sky');
     redraw();
     scheduleUrl();
   }
@@ -1428,7 +1450,6 @@ export function mountSkyView({
     if (!ground.known) {
       setStatus('Reading the ground height...');
       const sampled = await sampleGroundHeight({
-        Cesium: CesiumApi,
         viewer,
         latDeg,
         lonDeg,
@@ -1461,15 +1482,14 @@ export function mountSkyView({
         // collision off again before the next controller update, so the
         // eye is not lifted, and the next exit still has the original flag.
         dropCollisionRestore?.({ apply: true });
-        cameraSnap = snapshotCamera(CesiumApi, viewer.camera);
-        sceneSnap = snapshotScene(CesiumApi, viewer, { nowMs: now() });
-        // Flag is back only so the snapshot records it. Turn it off before
-        // anything can call controller.update().
-        if (
-          'enableCollisionDetection' in
-          (viewer.scene?.screenSpaceCameraController ?? {})
-        )
-          viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
+        cameraSnap = snapshotCamera(cameraPort());
+        sceneSnap = snapshotScene(viewer);
+        // The mode is back only so the snapshot records it. Take the camera
+        // (input held, collision off) before anything can lift the eye.
+        releaseControls = takeSkyControls(viewer);
+        // Sky owns scene time while active: stamped each frame after the
+        // application's own listener. Off() hands time back by itself.
+        dropSkyTime = holdSkyTime(viewer, () => time.getTime());
       }
       observer = next;
       active = true;
@@ -1512,8 +1532,21 @@ export function mountSkyView({
    * Leave the sky. `keepCamera` is for when another navigation (a search,
    * a fly-to) already took the camera: put the scene back but do not fight it.
    */
-  function exit({ keepCamera = false } = {}) {
+  function exit(options) {
     if (!active) return;
+    // Time first: however the rest goes, Sky time stops being stamped and the
+    // application's own time resumes by itself (no clock to put back).
+    dropSkyTime?.();
+    dropSkyTime = null;
+    try {
+      leaveSky(options);
+    } finally {
+      releaseControls?.();
+      releaseControls = null;
+    }
+  }
+
+  function leaveSky({ keepCamera = false } = {}) {
     if (orientation.running) orientation.stop();
     setNote('');
     view = makeView({ ...view, rollDeg: 0 });
@@ -1532,20 +1565,22 @@ export function mountSkyView({
     selectedPass = null;
     press = null;
     satDom.root.hidden = true;
-    const savedCollision = sceneSnap?.enableCollisionDetection;
-    if (!keepCamera) restoreCamera(CesiumApi, viewer.camera, cameraSnap);
-    const controller = viewer.scene?.screenSpaceCameraController;
-    // Normal exit already put the saved camera back, so every flag,
+    const savedCollision = sceneSnap?.collision;
+    if (!keepCamera) restoreCamera(cameraPort(), cameraSnap);
+    else {
+      // A handoff keeps the other owner's camera but not Sky's field of
+      // view: give it back to the renderer, unless that owner has set one.
+      const camera = cameraPort();
+      if (camera && Math.abs(camera.pose().fovy - view.fovDeg * DEG) < 1e-9)
+        camera.setFov(null);
+    }
+    // Normal exit already put the saved camera back, so every setting,
     // including collision, goes back with it. A handoff keeps the other
     // camera: defer only while that camera is actually under the terrain
     // floor (or the surface height is still unknown).
     const deferCollision =
-      keepCamera &&
-      collisionRestoreLifts(viewer.camera, controller, savedCollision);
-    restoreScene(CesiumApi, viewer, sceneSnap, {
-      nowMs: now(),
-      deferCollision,
-    });
+      keepCamera && collisionRestoreLifts(viewer, savedCollision);
+    restoreScene(viewer, sceneSnap, { deferCollision });
     if (deferCollision) armCollisionRestore(savedCollision);
     cameraSnap = null;
     sceneSnap = null;
@@ -1563,18 +1598,13 @@ export function mountSkyView({
     timers.clearTimeout?.(urlTimer);
     urlTimer = null;
     writeUrlNow();
-    viewer.scene.requestRender?.();
+    findFrame(viewer)?.requestRender('sky-exit');
   }
 
   async function refreshProfile() {
     const token = ++profileToken;
     profile = null;
-    const result = await computeHorizonProfile({
-      Cesium: CesiumApi,
-      terrainProvider:
-        viewer.terrainProvider ?? viewer.scene.globe?.terrainProvider,
-      observer,
-    });
+    const result = await computeHorizonProfile({ viewer, observer });
     if (token === profileToken && active) {
       profile = result;
       redraw();
@@ -1599,23 +1629,18 @@ export function mountSkyView({
    * diverges from it; applyView refreshes it, so Sky's own look does not.
    */
   function rememberAppliedPose() {
-    const camera = viewer.camera;
-    const direction = camera?.directionWC ?? camera?.direction;
-    const up = camera?.upWC ?? camera?.up;
-    if (!direction || !up) {
+    const pose = cameraPort()?.pose();
+    if (!pose?.direction || !pose.up) {
       hasAppliedPose = false;
       return;
     }
-    CesiumApi.Cartesian3.clone(direction, appliedDirection);
-    CesiumApi.Cartesian3.clone(up, appliedUp);
+    copyInto(pose.direction, appliedDirection);
+    copyInto(pose.up, appliedUp);
     hasAppliedPose = true;
   }
   function turnedPast(live, applied) {
     if (!live || !applied) return false;
-    return (
-      CesiumApi.Math.acosClamped(CesiumApi.Cartesian3.dot(live, applied)) >
-      HANDOFF_TURN_RAD
-    );
+    return acosClamped(dot(live, applied)) > HANDOFF_TURN_RAD;
   }
   /**
    * True when something else (search, fly-to, voice) took the camera.
@@ -1626,33 +1651,33 @@ export function mountSkyView({
    */
   function cameraTakenElsewhere() {
     if (!observer) return false;
-    const eye = CesiumApi.Cartesian3.fromDegrees(
+    const pose = cameraPort()?.pose();
+    if (!pose) return false;
+    const eye = fromDegreesInto(
       observer.lonDeg,
       observer.latDeg,
       observer.groundHeightM + observer.eyeHeightM,
-      CesiumApi.Ellipsoid.WGS84,
       scratchEye,
     );
-    const camera = viewer.camera;
-    const at = camera.positionWC ?? camera.position;
-    if (CesiumApi.Cartesian3.distance(eye, at) > 100) return true;
+    if (ecefDistance(eye, pose.position) > 100) return true;
     if (!hasAppliedPose) return false;
     return (
-      turnedPast(camera.directionWC ?? camera.direction, appliedDirection) ||
-      turnedPast(camera.upWC ?? camera.up, appliedUp)
+      turnedPast(pose.direction, appliedDirection) ||
+      turnedPast(pose.up, appliedUp)
     );
   }
   /**
    * Ask the same question from every signal that can see a turn.
    *
-   * `changed` fires only from Camera#_updateCameraChanged, only past
-   * percentageChanged, and the first call after subscribe stores a baseline
-   * and does not fire. One update can raise it twice. `moveStart` fires once
-   * per gesture from the render loop; `moveEnd` waits 500 ms of stillness, so
-   * a rapid tilt never ends the gesture while steps are still arriving.
-   * preRender covers drawn frames under that threshold. clock.onTick covers
-   * a voice tilt that has not drawn a frame yet. None of these is the
-   * decision — cameraTakenElsewhere is — so Sky's own pose is not a handoff.
+   * The camera port's `changed` fires only past a fraction of change (and can
+   * fire twice in a frame); `moveStart` fires once per gesture; `moveEnd`
+   * waits 500 ms of stillness, so a rapid tilt never ends the gesture while
+   * steps are still arriving. The frame's `preUpdate` runs on every tick
+   * (drawn or not), so it covers frames under that threshold and a voice tilt
+   * that has not drawn a frame yet. A camera command that is not Sky's (a
+   * search's flight, a voice tilt) is asked about once it has run. None of
+   * these is the decision — cameraTakenElsewhere is, by comparing the pose
+   * with the one Sky applied — so Sky's own commands are not a handoff.
    */
   function handoffIfTaken() {
     if (!active) return;
@@ -1660,14 +1685,15 @@ export function mountSkyView({
   }
   function watchCamera() {
     const remove = [];
-    const sub = (event) => {
-      const off = event?.addEventListener?.(handoffIfTaken);
+    const add = (off) => {
       if (typeof off === 'function') remove.push(off);
     };
-    sub(viewer.scene?.preRender);
-    sub(viewer.camera?.changed);
-    sub(viewer.camera?.moveStart);
-    sub(viewer.clock?.onTick);
+    const camera = cameraPort();
+    add(findFrame(viewer)?.on('preUpdate', handoffIfTaken));
+    add(camera?.on('changed', handoffIfTaken));
+    add(camera?.on('moveStart', handoffIfTaken));
+    // Runs before the command: ask after it has moved the camera.
+    add(camera?.onCommand(() => queueMicrotask(handoffIfTaken)));
     dropCameraWatch = () => {
       for (const off of remove.splice(0)) off();
       dropCameraWatch = null;
@@ -1680,115 +1706,116 @@ export function mountSkyView({
   }
 
   /**
-   * Hold a saved collision flag until the kept camera is safe: at or above
-   * `globeHeight + minimumZoomDistance`, or above the controller ceiling.
-   * An unknown globeHeight keeps waiting. preUpdate and onTick run every
-   * widget frame, so the flag is on before the next update that could lift.
+   * Hold a saved collision mode back until the kept camera is safe: at or
+   * above the ground plus the minimum distance, or above the ceiling. An
+   * unknown ground height keeps waiting. `preUpdate` runs on every frame the
+   * loop ticks, so the mode is back before the next frame that could lift.
    */
   function armCollisionRestore(value) {
     dropCollisionRestore?.();
-    const controller = viewer.scene?.screenSpaceCameraController;
-    if (!controller || value !== true) return;
+    const camera = cameraPort();
+    if (!camera || !value || value === 'none') return;
     const putBack = () => {
-      if ('enableCollisionDetection' in controller)
-        controller.enableCollisionDetection = value;
+      camera.controls.collision = value;
     };
-    const offs = [];
+    let off = null;
     const release = ({ apply = false } = {}) => {
-      for (const off of offs.splice(0)) off();
+      off?.();
+      off = null;
       if (dropCollisionRestore === release) dropCollisionRestore = null;
       if (apply) putBack();
     };
     const tick = () => {
-      if (collisionRestoreLifts(viewer.camera, controller, value)) return;
+      if (collisionRestoreLifts(viewer, value)) return;
       release();
       putBack();
     };
-    const sub = (event) => {
-      const off = event?.addEventListener?.(tick);
-      if (typeof off === 'function') offs.push(off);
-    };
-    sub(viewer.scene?.preUpdate);
-    sub(viewer.scene?.preRender);
-    sub(viewer.clock?.onTick);
+    off = findFrame(viewer)?.on('preUpdate', tick) ?? null;
     dropCollisionRestore = release;
     tick();
   }
 
   // ── picking on the map ───────────────────────────────────────────────────
+  /** The ground under a screen point (`{x, y}`, CSS pixels), or null. */
   function pickAt(position) {
-    const scene = viewer.scene;
-    let cartesian;
+    const query = findQuery(viewer);
+    if (!query) return null;
+    let point = null;
     let known = false;
-    if (
-      scene.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
-      try {
-        cartesian = scene.pickPosition(position);
-        known = Boolean(cartesian);
-      } catch {
-        cartesian = undefined;
-      }
+    try {
+      const picked = query.pickPosition(position.x, position.y);
+      point = picked ? toLonLatH(picked) : null;
+      known = Boolean(point);
+    } catch {
+      point = null;
     }
-    let carto = cartesian
-      ? CesiumApi.Cartographic.fromCartesian(cartesian)
-      : undefined;
     if (
-      carto &&
+      point &&
       !(
-        carto.height > PLAUSIBLE_GROUND_M[0] &&
-        carto.height < PLAUSIBLE_GROUND_M[1]
+        point.height > PLAUSIBLE_GROUND_M[0] &&
+        point.height < PLAUSIBLE_GROUND_M[1]
       )
     ) {
-      carto = undefined;
+      point = null;
       known = false;
     }
-    if (!carto) {
-      const ellipsoidPoint = viewer.camera.pickEllipsoid?.(position);
-      carto = ellipsoidPoint
-        ? CesiumApi.Cartographic.fromCartesian(ellipsoidPoint)
-        : undefined;
+    if (!point) {
+      let onEllipsoid = null;
+      try {
+        onEllipsoid = query.pickEllipsoid(position.x, position.y);
+      } catch {
+        onEllipsoid = null;
+      }
+      point = onEllipsoid ? toLonLatH(onEllipsoid) : null;
       known = false;
     }
-    if (!carto) return null;
+    if (!point) return null;
     return {
-      latDeg: CesiumApi.Math.toDegrees(carto.latitude),
-      lonDeg: CesiumApi.Math.toDegrees(carto.longitude),
-      heightM: known ? carto.height : 0,
+      latDeg: point.lat,
+      lonDeg: point.lon,
+      heightM: known ? point.height : 0,
       heightKnown: known,
     };
   }
 
   function stopPicking() {
-    picker?.destroy?.();
+    const waiting = picker;
     picker = null;
+    waiting?.off();
+    waiting?.lease.release();
     doc.body?.classList?.remove('gev-sky-picking');
   }
 
+  /** One click on the map: a pointer lease so the camera does not take it. */
   function startPicking() {
     stopPicking();
-    if (!CesiumApi.ScreenSpaceEventHandler || !viewer.scene.canvas) {
+    const input = findInput(viewer);
+    if (!input) {
       setStatus('Map picking is not available here.');
       return;
     }
-    picker = new CesiumApi.ScreenSpaceEventHandler(viewer.scene.canvas);
+    const lease = input.claimPointer('sky', { onLost: () => stopPicking() });
+    const off = input.on(
+      'click',
+      (event) => {
+        const hit = pickAt(event.position);
+        stopPicking();
+        if (!hit) {
+          setStatus('No ground under that point. Try again on the globe.');
+          return;
+        }
+        enterAt({ ...hit, source: 'map' });
+      },
+      { lease },
+    );
+    picker = { lease, off };
     doc.body?.classList?.add('gev-sky-picking');
     setStatus('Click a point on the globe to stand there (Esc cancels).');
-    picker.setInputAction((event) => {
-      const hit = pickAt(event.position);
-      stopPicking();
-      if (!hit) {
-        setStatus('No ground under that point. Try again on the globe.');
-        return;
-      }
-      enterAt({ ...hit, source: 'map' });
-    }, CesiumApi.ScreenSpaceEventType.LEFT_CLICK);
   }
 
   function screenCentre() {
     const { width, height } = canvasSize();
-    const hit = pickAt(new CesiumApi.Cartesian2(width / 2, height / 2));
+    const hit = pickAt({ x: width / 2, y: height / 2 });
     if (!hit) {
       setStatus(
         'No ground at the screen centre. Pick a point on the map instead.',
@@ -1805,7 +1832,7 @@ export function mountSkyView({
     if (opening) return opening;
     opening = (async () => {
       const { width, height } = canvasSize();
-      const hit = pickAt(new CesiumApi.Cartesian2(width / 2, height / 2));
+      const hit = pickAt({ x: width / 2, y: height / 2 });
       if (!hit)
         return {
           ok: false,
@@ -2200,12 +2227,13 @@ export function mountSkyView({
     const barObserver = new globalThis.ResizeObserver(() => syncSkyLayout());
     barObserver.observe(dom.bar);
     removers.push(() => barObserver.disconnect());
-    if (viewer.scene.canvas) {
+    const globeCanvas = canvasOf(viewer);
+    if (globeCanvas) {
       const resizeObserver = new globalThis.ResizeObserver(() => {
         dropSize();
         if (active) redraw();
       });
-      resizeObserver.observe(viewer.scene.canvas);
+      resizeObserver.observe(globeCanvas);
       removers.push(() => resizeObserver.disconnect());
     }
   }
@@ -2213,13 +2241,13 @@ export function mountSkyView({
   // Hidden while the camera follows an entity (CSS hides it in cockpit,
   // playback, recording and clean-view modes, like the nav control).
   const syncFollowing = () => {
-    const following = Boolean(viewer.trackedEntity);
+    const following = Boolean(cameraPort()?.followed);
     dom.button.hidden = following && !active;
     if (following) togglePanel(false);
   };
-  const removeTracked =
-    viewer.trackedEntityChanged?.addEventListener?.(syncFollowing);
-  if (typeof removeTracked === 'function') removers.push(removeTracked);
+  const stopWatchingFollow = cameraPort()?.on('followChanged', syncFollowing);
+  if (typeof stopWatchingFollow === 'function')
+    removers.push(stopWatchingFollow);
   syncFollowing();
 
   // A shared `sv` link opens straight into the sky once startup settles.
@@ -2387,7 +2415,15 @@ export function mountSkyView({
     getHandle: () => (handle.destroyed ? null : handle),
   });
   handle.voice = skyVoice;
-  if (hookWindow) hookWindow.__gevSky = { voice: skyVoice };
+  // The shell's mount, for the voice tools and the QA scripts (which hold the
+  // renderer's own viewer, not the scene object Sky is keyed by).
+  if (hookWindow)
+    hookWindow.__gevSky = {
+      voice: skyVoice,
+      get handle() {
+        return handle.destroyed ? null : handle;
+      },
+    };
   lifetime?.removers?.add?.(() => handle.destroy());
   return handle;
 }
@@ -2401,12 +2437,12 @@ export function skyViewFor(viewer) {
 /**
  * The one call the application shell makes (beside its nav control mount):
  * wires the shell's lifetime, navigation policy and toast; the shell holds
- * the application's scene object, and the Sky view draws on the Cesium
- * viewer behind it.
+ * the application's scene object (the renderer-neutral host), and the Sky
+ * view reaches the renderer's ports through it.
  */
 export function mountSkyViewForShell(shell) {
   return mountSkyView({
-    viewer: viewerBehind(shell.viewer),
+    viewer: shell.viewer,
     lifetime: shell._lifetime,
     runNavigation: (noun, navigate) =>
       shell._navigation?.runOrientation

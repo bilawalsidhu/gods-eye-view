@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import * as Cesium from 'cesium';
 import { createSceneHost } from '../render/rendererOf.js';
-import { recordViewer } from '../render/cesium/viewers.js';
+import { createStubRenderer } from '../render/stub/index.js';
 import { mountSkyViewForShell, skyViewFor } from './skyView.js';
 
 // ── a very small DOM (the fake skyView.test.mjs mounts against) ────────────
@@ -61,6 +61,17 @@ class FakeElement extends EventTarget {
       },
     );
   }
+  *descendants() {
+    for (const child of this.children) {
+      yield child;
+      yield* child.descendants();
+    }
+  }
+  find(name) {
+    for (const node of this.descendants())
+      if (node.getAttribute('data-sky') === name) return node;
+    return null;
+  }
 }
 
 function fakeDocument() {
@@ -76,103 +87,119 @@ function fakeDocument() {
   return doc;
 }
 
-function fakeViewer({ width = 1200, height = 800, pickHeight = 20 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
-    globe: {
-      ellipsoid: Cesium.Ellipsoid.WGS84,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    requestRender() {},
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: { enableInputs: true },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: true,
-    pickPosition: () =>
-      Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, pickHeight),
-  };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 3000),
-    orientation: { heading: 0.4, pitch: -0.7, roll: 0 },
-  });
-  camera.frustum.fov = 1;
-  camera.pickEllipsoid = () =>
-    Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 0);
-  scene.camera = camera;
-  return {
-    scene,
-    camera,
+/**
+ * As the application starts (src/app/scene.js): a renderer bound to the scene
+ * object `createSceneHost` makes, which holds nothing of the engine. The stub
+ * renderer stands in for the one the application chose.
+ */
+function shellScene() {
+  const renderer = createStubRenderer();
+  renderer.query.pickPosition = () => null;
+  const { host, release } = createSceneHost(renderer, {
     container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  });
+  return { renderer, host, release };
 }
 
 /** The shell hands over the scene object; mount reads the global document. */
 function mountOnShell(viewer) {
   const previousDocument = globalThis.document;
-  globalThis.document = fakeDocument();
+  const doc = fakeDocument();
+  globalThis.document = doc;
   try {
-    return mountSkyViewForShell({
+    const handle = mountSkyViewForShell({
       viewer,
       _lifetime: { removers: new Set() },
       _navigation: null,
       _showToast: () => {},
     });
+    return { handle, doc };
   } finally {
     globalThis.document = previousDocument;
   }
 }
 
-test('shell mount: draws on the Cesium viewer behind the scene object', () => {
-  const viewer = fakeViewer();
-  // As the application starts (src/app/scene.js): the shell is handed the
-  // scene object createSceneHost makes, which holds nothing of the engine.
-  const renderer = {};
-  recordViewer(renderer, viewer);
-  const { host, release } = createSceneHost(renderer, {
-    container: new FakeElement('div'),
-  });
-  assert.equal(host.camera, undefined);
+test('shell mount: on the scene object createSceneHost makes, with a renderer bound, the Sky button appears', () => {
+  const { host, release } = shellScene();
+  assert.deepEqual(
+    Object.keys(host).sort(),
+    ['container', 'isDestroyed'],
+    'the scene object holds nothing of the engine',
+  );
 
-  const handle = mountOnShell(host);
+  const { handle, doc } = mountOnShell(host);
 
   assert.ok(handle);
-  assert.equal(skyViewFor(viewer), handle);
+  const button = doc.body.find('open');
+  assert.ok(button, 'the Sky button is in the page');
+  assert.equal(button.textContent, 'Sky');
+  assert.equal(skyViewFor(host), handle, 'keyed by the scene object itself');
+  assert.ok(host.container.find('canvas'), 'overlay canvas in the container');
   handle.destroy();
-  assert.equal(skyViewFor(viewer), null);
+  assert.equal(skyViewFor(host), null);
+  assert.equal(doc.body.find('open'), null);
   release();
 });
 
-test('shell mount: a Cesium viewer with no renderer bound still mounts', () => {
-  const viewer = fakeViewer();
-
-  const handle = mountOnShell(viewer);
-
-  assert.ok(handle);
-  assert.equal(skyViewFor(viewer), handle);
+test('shell mount: Sky enters and leaves through the renderer ports alone', async () => {
+  const { renderer, host, release } = shellScene();
+  const { handle } = mountOnShell(host);
+  const before = renderer.camera.pose();
+  assert.equal(
+    await handle.enterAt({
+      latDeg: 29.7604,
+      lonDeg: -95.3698,
+      source: 'manual',
+      heightM: 15,
+      heightKnown: true,
+    }),
+    true,
+  );
+  const eye = renderer.camera.pose();
+  assert.ok(Math.abs(eye.height - 16.7) < 1e-6, String(eye.height));
+  assert.equal(renderer.camera.controls.enabled, false);
+  handle.exit();
+  assert.equal(renderer.camera.controls.enabled, true);
+  const after = renderer.camera.pose();
+  assert.ok(Math.abs(after.height - before.height) < 1e-3);
   handle.destroy();
-  assert.equal(skyViewFor(viewer), null);
+  release();
+});
+
+test('shell mount: a scene with no renderer bound mounts nothing', () => {
+  const { handle, doc } = mountOnShell({
+    container: new FakeElement('div'),
+    isDestroyed: () => false,
+  });
+  assert.equal(handle, null);
+  assert.equal(doc.body.find('open'), null);
+});
+
+test('shell mount: Sky does not reach Cesium: no import of the engine or its adapter, no Cesium name', () => {
+  for (const file of [
+    'skyView.js',
+    'skyCamera.js',
+    'observer.js',
+    'horizonProfile.js',
+  ]) {
+    const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
+      // comments may name the engine; code may not
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    assert.doesNotMatch(
+      source,
+      /from\s+['"]cesium['"]/,
+      `${file} imports cesium`,
+    );
+    assert.doesNotMatch(
+      source,
+      /render\/cesium\//,
+      `${file} imports the Cesium adapter`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\b[Cc]esium(?:Api)?\b/,
+      `${file} names Cesium`,
+    );
+  }
 });

@@ -2,15 +2,17 @@
  * Terrain horizon profile for one observer: the highest terrain elevation
  * angle in each azimuth bin, used to dim (or hide) sky objects that are behind
  * a hill. 180 azimuths x 24 log-spaced distances (100 m .. 60 km) = 4,320
- * points sampled in ONE sampleTerrainMostDetailed batch, then the maximum
- * elevation angle per azimuth including the Earth-curvature drop d^2 / 2R.
+ * points sampled in ONE terrain-height batch (`heightsOf(viewer).batch`), then
+ * the maximum elevation angle per azimuth including the Earth-curvature drop
+ * d^2 / 2R.
  *
  * Buildings and trees in Google 3D tiles are not terrain and are not in the
- * profile (documented limitation). With no real terrain
- * provider the profile is skipped (null) and callers hide objects below 0 deg.
+ * profile (documented limitation). With no real terrain the profile is
+ * skipped (null) and callers hide objects below 0 deg.
  */
+import { heightsOf } from '../queries/heights.js';
 import { DEG, normalizeAz } from './skyMath.js';
-import { hasRealTerrain, observerEyeHeight } from './observer.js';
+import { observerEyeHeight } from './observer.js';
 
 export const EARTH_RADIUS_M = 6_371_008.8;
 export const PROFILE_AZ_COUNT = 180;
@@ -138,43 +140,37 @@ export function occlusion(profile, azDeg, elDeg) {
 }
 
 /**
- * Sample the real terrain once and build the profile. Resolves null (skip)
- * when there is no real terrain provider, sampling fails or exceeds the time
- * budget. Never throws.
+ * Sample the real terrain once (one batch through the height service) and
+ * build the profile. Resolves null (skip) when there is no real terrain (a
+ * point the terrain does not answer, or the bare ellipsoid answers, is a
+ * miss, and no valid sample builds no profile), sampling fails or exceeds the
+ * time budget. Never throws.
+ * @param {object} options
+ * @param {object} options.viewer The application's scene object.
  */
 export async function computeHorizonProfile({
-  Cesium,
-  terrainProvider,
+  viewer,
   observer,
   timeoutMs = 8000,
   azCount = PROFILE_AZ_COUNT,
   distances = profileDistances(),
-  sample = Cesium?.sampleTerrainMostDetailed,
 }) {
-  if (!observer || typeof sample !== 'function') return null;
-  if (Cesium && !hasRealTerrain(Cesium, terrainProvider)) return null;
+  if (!observer || !viewer) return null;
   const points = profileSamplePoints(observer.latDeg, observer.lonDeg, {
     azCount,
     distances,
   });
-  const cartos = points.map((p) =>
-    Cesium
-      ? Cesium.Cartographic.fromDegrees(p.lonDeg, p.latDeg)
-      : {
-          longitude: p.lonDeg * DEG,
-          latitude: p.latDeg * DEG,
-          height: undefined,
-        },
-  );
   let timer;
   try {
-    const sampled = await Promise.race([
-      sample(terrainProvider, cartos),
+    const heights = await Promise.race([
+      heightsOf(viewer).batch(
+        points.map((p) => ({ lon: p.lonDeg, lat: p.latDeg })),
+        { against: 'terrain', ellipsoidMisses: true },
+      ),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
       }),
     ]);
-    const heights = (sampled || cartos).map((c) => c?.height);
     return buildProfile(points, heights, observerEyeHeight(observer), azCount);
   } catch {
     return null;

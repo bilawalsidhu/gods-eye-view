@@ -3,26 +3,36 @@
  *
  * Voice tilt turns the camera in place (zero displacement). The old handoff
  * only noticed a move of more than 100 m, so the overlay kept the entry az/el.
- * These tests drive Cesium's real camera signals, not a stand-in:
+ * These tests drive the renderer's real camera signals through the camera and
+ * frame ports of the in-memory stub renderer (skyTestHost.mjs), not a
+ * stand-in:
  *
- *  - `changed` is raised only from `Camera#_updateCameraChanged`, only past
- *    `percentageChanged` (default 0.5), and the first call after a listener
- *    appears stores a baseline and does not fire. One update can raise it
- *    twice (heading/roll, then direction).
- *  - `moveStart` fires once per gesture from the render loop. `moveEnd` waits
- *    `cameraEventWaitTime` (500 ms) of stillness, so a rapid tilt never ends
- *    the gesture while steps are still arriving.
- *  - Sky's own `setView` moves the same camera and will raise those signals
- *    on the next frame. That must not leave the sky.
+ *  - the camera port's `changed` fires only past a listener's threshold
+ *    (default 0.5), and a listener's first step only stores a baseline. One
+ *    step can fire it twice (heading/roll, then direction).
+ *  - `moveStart` fires once per gesture. `moveEnd` waits 500 ms of
+ *    stillness, so a rapid tilt never ends the gesture while steps are still
+ *    arriving.
+ *  - the frame port's `preUpdate` runs on every tick, drawn or not.
+ *  - `onCommand` runs before each camera command, Sky's own included.
+ *  - Sky's own `setView` moves the same camera and will raise those signals on
+ *    the next frame. That must not leave the sky.
+ *
+ * Collision is the camera port's `controls.collision`: Sky turns it off while
+ * active, and a handoff that leaves the camera under the terrain floor
+ * (ground height from the height service, or unknown) keeps it off until the
+ * camera clears the floor.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { acosClamped, distance, dot } from '../geo/vector.js';
 import { mountSkyView } from './skyView.js';
-import { worldDirectionToAzEl } from './skyCamera.js';
+import { COLLISION_CEILING_M, worldDirectionToAzEl } from './skyCamera.js';
+import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 
-const radians = Cesium.Math.toRadians;
-const degrees = Cesium.Math.toDegrees;
+const radians = (deg) => (deg * Math.PI) / 180;
+const degrees = (rad) => (rad * 180) / Math.PI;
+const HOUSTON_POINT = { lon: -95.3698, lat: 29.7604 };
 
 class FakeElement extends EventTarget {
   constructor(tagName) {
@@ -119,62 +129,50 @@ function fakeTimers() {
   };
 }
 
-function skyScene({ width = 1200, height = 800 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const ellipsoid = Cesium.Ellipsoid.WGS84;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(ellipsoid),
-    globe: {
-      ellipsoid,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    frameState: { mode: Cesium.SceneMode.SCENE3D },
-    pixelRatio: 1,
-    requestRender() {},
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: {
-      enableInputs: true,
-      enableCollisionDetection: true,
-    },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: false,
-    pickPosition: () => undefined,
+/**
+ * Count the listeners that are registered now (not ever) on the camera and
+ * frame ports, by kind: `changed`, `moveStart`, `followChanged`, `command`,
+ * `preUpdate`, `preRender`. Installed before Sky is mounted.
+ */
+function trackListeners({ camera, frame }) {
+  const live = {
+    changed: 0,
+    moveStart: 0,
+    followChanged: 0,
+    command: 0,
+    preUpdate: 0,
+    preRender: 0,
   };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.frustum.fov = 1;
-  scene.camera = camera;
-  camera.pickEllipsoid = () => undefined;
-  return {
-    scene,
-    camera,
-    container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
+  const counted = (kind, off) => {
+    live[kind] += 1;
+    let done = false;
+    return () => {
+      if (done) return;
+      done = true;
+      live[kind] -= 1;
+      off();
+    };
   };
+  const onCamera = camera.on;
+  camera.on = (event, cb, options) =>
+    counted(event, onCamera(event, cb, options));
+  const onCommand = camera.onCommand;
+  camera.onCommand = (cb) => counted('command', onCommand(cb));
+  const onFrame = frame.on;
+  frame.on = (phase, cb) => counted(phase, onFrame(phase, cb));
+  return live;
 }
 
-function mount() {
+/**
+ * Sky on the stub renderer. `collision` is the camera's collision mode as the
+ * map left it (Sky turns it off and puts it back).
+ */
+function mount({ collision = 'none' } = {}) {
   const doc = fakeDocument();
-  const viewer = skyScene();
+  const fixture = createSkyTestHost({ container: new FakeElement('div') });
+  const { host: viewer, camera, frame, renderer } = fixture;
+  camera.controls.collision = collision;
+  const live = trackListeners({ camera, frame });
   const timers = fakeTimers();
   const handle = mountSkyView({
     viewer,
@@ -192,20 +190,29 @@ function mount() {
     fetchRcs: async () => ({ rcs: {} }),
     requestFrame: () => null,
   });
-  return { doc, viewer, timers, handle };
+  return {
+    doc,
+    viewer,
+    fixture,
+    camera,
+    frame,
+    renderer,
+    live,
+    timers,
+    handle,
+  };
 }
 
+const ENTRY = {
+  latDeg: 29.7604,
+  lonDeg: -95.3698,
+  source: 'map',
+  heightM: 20,
+  heightKnown: true,
+};
+
 async function enter(env) {
-  assert.equal(
-    await env.handle.enterAt({
-      latDeg: 29.7604,
-      lonDeg: -95.3698,
-      source: 'map',
-      heightM: 20,
-      heightKnown: true,
-    }),
-    true,
-  );
+  assert.equal(await env.handle.enterAt(ENTRY), true);
   assert.equal(env.handle.active, true);
   return env;
 }
@@ -215,753 +222,614 @@ function interval(timers) {
 }
 
 function look(camera) {
-  return worldDirectionToAzEl(Cesium, camera.positionWC, camera.directionWC);
+  const pose = camera.pose();
+  return worldDirectionToAzEl(pose.position, pose.direction);
+}
+
+/** Another owner turns the camera in place by `rad`, looking down (voice tilt). */
+function tilt(camera, rad) {
+  const pose = camera.pose();
+  camera.setView({
+    destination: pose.position,
+    orientation: {
+      heading: pose.heading,
+      pitch: pose.pitch - rad,
+      roll: pose.roll,
+    },
+  });
+}
+
+/** Another owner places the camera `height` metres over Houston. */
+function park(camera, height) {
+  camera.setView({
+    destination: { ...HOUSTON_POINT, height },
+    orientation: { heading: 0.2, pitch: -0.4, roll: 0 },
+  });
+}
+
+/** The ground height the height service now knows under Houston. */
+function settleSurface(env, height = 138) {
+  env.renderer.testing.cacheHeight(HOUSTON_POINT, height, 'terrain');
 }
 
 function turn(camera, before) {
-  return degrees(
-    Cesium.Math.acosClamped(Cesium.Cartesian3.dot(camera.directionWC, before)),
-  );
-}
-
-/** How many times Cesium's own `changed` event actually raises. */
-function countChanged(camera) {
-  let fires = 0;
-  const remove = camera.changed.addEventListener(() => {
-    fires += 1;
-  });
-  return {
-    get fires() {
-      return fires;
-    },
-    remove,
-  };
+  return degrees(acosClamped(dot(camera.pose().direction, before)));
 }
 
 test('in-place external rotation hands Sky back on the 1 Hz tick', async () => {
   const env = await enter(mount());
-  const { viewer, timers, handle } = env;
-  const before = Cesium.Cartesian3.clone(viewer.camera.directionWC);
-  const position = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  const { camera, viewer, timers, handle } = env;
+  const before = camera.pose().direction;
+  const position = camera.pose().position;
   const overlayEl = handle.view.elDeg;
-  viewer.camera.lookDown(radians(8));
-  assert.ok(turn(viewer.camera, before) > 5, 'camera turned in place');
+  tilt(camera, radians(8));
+  assert.ok(turn(camera, before) > 5, 'camera turned in place');
   assert.ok(
-    Cesium.Cartesian3.distance(position, viewer.camera.positionWC) < 1,
+    distance(position, camera.pose().position) < 1,
     'voice-style tilt does not move the eye',
   );
   assert.ok(Math.abs(handle.view.elDeg - overlayEl) < 1e-6);
   interval(timers).fn();
   assert.equal(handle.active, false, 'Sky yielded the in-place turn');
   assert.equal(viewer.container.find('canvas').hidden, true);
-  assert.equal(
-    viewer.scene.screenSpaceCameraController.enableInputs,
-    true,
-    'map controls come back',
-  );
+  assert.equal(camera.controls.enabled, true, 'map controls come back');
   assert.ok(
-    Cesium.Cartesian3.distance(position, viewer.camera.positionWC) < 1,
+    distance(position, camera.pose().position) < 1,
     'handoff must not fight the camera back to the eye pose',
   );
   assert.ok(
-    Math.abs(look(viewer.camera).elDeg - overlayEl) > 5,
+    Math.abs(look(camera).elDeg - overlayEl) > 5,
     'camera kept the external turn',
   );
   handle.destroy();
 });
 
-test('a turn below percentageChanged still hands Sky back on the next frame', async () => {
-  const { viewer, handle } = await enter(mount());
-  const camera = viewer.camera;
-  assert.equal(camera.percentageChanged, 0.5);
-  const probe = countChanged(camera);
-  // Establish Cesium's baseline while the pose is still Sky's.
-  camera._updateCameraChanged();
-  const before = Cesium.Cartesian3.clone(camera.directionWC);
-  camera.lookDown(radians(2));
+test('a turn below the changed threshold still hands Sky back on the next frame', async () => {
+  const { camera, renderer, handle } = await enter(mount());
+  let fires = 0;
+  const off = camera.on('changed', () => {
+    fires += 1;
+  });
+  // The listener's baseline, while the pose is still Sky's.
+  renderer.testing.tick();
+  const before = camera.pose().direction;
+  tilt(camera, radians(2));
   const turned = turn(camera, before);
   assert.ok(turned > 1 && turned < 3, turned);
-  camera._updateCameraChanged();
-  assert.equal(
-    probe.fires,
-    0,
-    '2° is under percentageChanged, so changed must not fire',
-  );
-  // preRender is the per-frame signal. moveEnd would still be 500 ms away.
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  renderer.testing.tick();
+  assert.equal(fires, 0, '2° is under the threshold, so changed must not fire');
+  // preUpdate is the per-frame signal. moveEnd would still be 500 ms away.
   assert.equal(handle.active, false, 'sub-threshold turn still yields');
-  assert.equal(camera.percentageChanged, 0.5, 'sensitivity was not rewritten');
-  probe.remove();
+  off();
   handle.destroy();
 });
 
-test('the first changed update after subscribe is a baseline and does not fire', async () => {
-  const { viewer, timers, handle } = await enter(mount());
-  const camera = viewer.camera;
-  const probe = countChanged(camera);
-  camera.lookDown(radians(25));
-  camera._updateCameraChanged();
-  assert.equal(
-    probe.fires,
-    0,
-    'first _updateCameraChanged only stores the baseline',
-  );
-  assert.equal(handle.active, true, 'baseline swallow is not itself a handoff');
-  interval(timers).fn();
+test('the first changed step after subscribe is a baseline and does not fire', async () => {
+  const { camera, renderer, handle } = await enter(mount());
+  let fires = 0;
+  const off = camera.on('changed', () => {
+    fires += 1;
+  });
+  tilt(camera, radians(25));
+  assert.equal(handle.active, true, 'no signal has run yet');
+  renderer.testing.tick();
+  assert.equal(fires, 0, 'the first changed step only stores the baseline');
   assert.equal(
     handle.active,
     false,
-    'the no-render tick still notices the turn changed swallowed',
+    'the frame still notices the turn changed swallowed',
   );
-  probe.remove();
+  off();
   handle.destroy();
+
+  // and the no-render 1 Hz tick notices it too
+  const other = await enter(mount());
+  tilt(other.camera, radians(25));
+  interval(other.timers).fn();
+  assert.equal(other.handle.active, false);
+  other.handle.destroy();
 });
 
-test('changed hands Sky back once, including a heading-and-direction double raise', async () => {
-  const { viewer, handle } = await enter(mount());
-  const camera = viewer.camera;
-  const position = Cesium.Cartesian3.clone(camera.positionWC);
-  // A listener has to be present for the baseline call to record anything.
-  // With none, _updateCameraChanged returns before storing a pose.
-  const probe = countChanged(camera);
-  camera._updateCameraChanged();
-  assert.equal(probe.fires, 0, 'baseline call does not fire');
-  camera.lookRight(radians(120));
-  camera._updateCameraChanged();
-  assert.ok(
-    probe.fires >= 2,
-    `expected heading plus direction raises, got ${probe.fires}`,
-  );
+test('changed hands Sky back once, including a heading-and-direction double fire', async () => {
+  const { camera, renderer, viewer, handle } = await enter(mount());
+  const position = camera.pose().position;
+  let fires = 0;
+  const off = camera.on('changed', () => {
+    fires += 1;
+  });
+  // A listener's first step only records a baseline.
+  renderer.testing.tick();
+  assert.equal(fires, 0, 'baseline step does not fire');
+  const pose = camera.pose();
+  camera.setView({
+    destination: pose.position,
+    orientation: {
+      heading: pose.heading + radians(120),
+      pitch: pose.pitch,
+      roll: pose.roll,
+    },
+  });
+  renderer.testing.tick();
+  assert.ok(fires >= 2, `expected heading plus direction fires, got ${fires}`);
   assert.equal(handle.active, false);
   assert.equal(viewer.container.find('canvas').hidden, true);
-  assert.ok(Cesium.Cartesian3.distance(position, camera.positionWC) < 1);
-  camera.changed.raiseEvent(1);
-  camera.moveStart.raiseEvent();
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  assert.ok(distance(position, camera.pose().position) < 1);
+  for (let frame = 0; frame < 3; frame += 1) renderer.testing.tick();
   assert.equal(
     handle.active,
     false,
-    'a second raise must not throw or re-enter',
+    'further frames must not throw or re-enter',
   );
-  probe.remove();
+  off();
   handle.destroy();
 });
 
 test('rapid sub-threshold steps hand Sky back before the gesture ends', async () => {
-  const { viewer, timers, handle } = await enter(mount());
-  const camera = viewer.camera;
-  const position = Cesium.Cartesian3.clone(camera.positionWC);
+  const { camera, renderer, timers, handle, live } = await enter(mount());
+  const position = camera.pose().position;
   const waits = [...timers.pending.values()].map((timer) => timer.ms);
   let handedAt = null;
   for (let step = 1; step <= 20 && handle.active; step += 1) {
-    camera.lookDown(radians(0.2));
-    viewer.clock.onTick.raiseEvent(viewer.clock);
+    tilt(camera, radians(0.2));
+    renderer.testing.tick();
     if (!handle.active) handedAt = step;
   }
   assert.ok(
     handedAt != null && handedAt <= 3,
     `rapid tilt still active after ${handedAt ?? '20'} steps`,
   );
-  assert.ok(Cesium.Cartesian3.distance(position, camera.positionWC) < 1);
-  assert.ok(
-    !waits.includes(500),
-    'handoff must not wait out cameraEventWaitTime',
-  );
-  const changedAfter = camera.changed.numberOfListeners;
-  const preAfter = viewer.scene.preRender.numberOfListeners;
-  const tickAfter = viewer.clock.onTick.numberOfListeners;
-  viewer.clock.onTick.raiseEvent(viewer.clock);
-  assert.equal(camera.changed.numberOfListeners, changedAfter);
-  assert.equal(viewer.scene.preRender.numberOfListeners, preAfter);
-  assert.equal(viewer.clock.onTick.numberOfListeners, tickAfter);
+  assert.ok(distance(position, camera.pose().position) < 1);
+  assert.ok(!waits.includes(500), 'handoff must not wait out moveEnd');
+  const after = { ...live };
+  renderer.testing.tick();
+  assert.deepEqual(live, after, 'no listener added or left over');
   handle.destroy();
 });
 
 test("Sky's own camera updates do not hand the view back", async () => {
-  const { viewer, handle } = await enter(mount());
-  const camera = viewer.camera;
-  const probe = countChanged(camera);
-  camera._updateCameraChanged();
+  const { camera, renderer, handle } = await enter(mount());
+  let fires = 0;
+  const off = camera.on('changed', () => {
+    fires += 1;
+  });
+  renderer.testing.tick();
   for (let i = 0; i < 12; i += 1) {
     handle.setView({ azDeg: 15 * i, elDeg: 20 + (i % 4), rollDeg: i - 6 });
-    viewer.clock.onTick.raiseEvent(viewer.clock);
-    viewer.scene.preRender.raiseEvent(viewer.scene);
-    viewer.camera.moveStart.raiseEvent();
-    camera._updateCameraChanged();
+    renderer.testing.tick();
     assert.equal(handle.active, true, `own update ${i} exited`);
   }
   handle.setView({ azDeg: 200, elDeg: 35, rollDeg: 12 });
-  camera._updateCameraChanged();
-  assert.ok(probe.fires >= 1, 'own turn was large enough for changed to fire');
-  assert.equal(handle.active, true, 'own changed raise must not exit');
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  renderer.testing.tick();
+  assert.ok(fires >= 1, 'own turns were large enough for changed to fire');
+  assert.equal(handle.active, true, 'own changed fire must not exit');
+  renderer.testing.tick();
   assert.equal(handle.active, true);
   const seen = look(camera);
   assert.ok(Math.abs(seen.elDeg - handle.view.elDeg) < 0.05, seen.elDeg);
   assert.ok(
     Math.abs(((seen.azDeg - handle.view.azDeg + 540) % 360) - 180) < 0.05,
   );
-  assert.equal(camera.percentageChanged, 0.5);
-  probe.remove();
+  // the commands Sky itself issued are not a handoff once they have run
+  await Promise.resolve();
+  assert.equal(handle.active, true, 'own commands are not a handoff');
+  off();
   handle.destroy();
 });
 
-test('exit and destroy drop the camera watch and leave percentageChanged', async () => {
+test('a foreign camera command hands Sky back once it has moved the camera', async () => {
+  const { camera, handle } = await enter(mount());
+  const pose = camera.pose();
+  camera.setView({
+    destination: { lon: -74, lat: 40.7, height: 5000 },
+    orientation: { heading: pose.heading, pitch: -0.3, roll: 0 },
+  });
+  assert.equal(handle.active, true, 'asked after the command, not before');
+  await Promise.resolve();
+  assert.equal(handle.active, false);
+  assert.equal(camera.controls.enabled, true);
+  handle.destroy();
+});
+
+test('exit and destroy drop the camera watch', async () => {
   const env = await enter(mount());
-  const { viewer, handle } = env;
-  const camera = viewer.camera;
-  assert.ok(camera.changed.numberOfListeners >= 1);
-  assert.ok(viewer.scene.preRender.numberOfListeners >= 1);
-  assert.ok(camera.moveStart.numberOfListeners >= 1);
-  assert.ok(viewer.clock.onTick.numberOfListeners >= 1);
-  assert.equal(camera.percentageChanged, 0.5);
+  const { renderer, handle, live } = env;
+  assert.ok(live.changed >= 1);
+  assert.ok(live.moveStart >= 1);
+  assert.ok(live.command >= 1);
+  assert.ok(live.preUpdate >= 1);
+  assert.equal(live.followChanged, 1, 'the button watches follows');
   handle.exit();
-  assert.equal(camera.changed.numberOfListeners, 0);
-  assert.equal(viewer.scene.preRender.numberOfListeners, 0);
-  assert.equal(camera.moveStart.numberOfListeners, 0);
-  assert.equal(viewer.clock.onTick.numberOfListeners, 0);
-  assert.equal(camera.percentageChanged, 0.5);
-  camera.changed.raiseEvent(1);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  assert.equal(live.changed, 0);
+  assert.equal(live.moveStart, 0);
+  assert.equal(live.command, 0);
+  assert.equal(live.preUpdate, 0);
+  assert.equal(live.preRender, 0);
+  renderer.testing.tick();
 
   await enter(env);
-  assert.ok(camera.changed.numberOfListeners >= 1);
+  assert.ok(live.changed >= 1);
   handle.destroy();
   assert.equal(handle.destroyed, true);
-  assert.equal(camera.changed.numberOfListeners, 0);
-  assert.equal(viewer.scene.preRender.numberOfListeners, 0);
-  assert.equal(camera.moveStart.numberOfListeners, 0);
-  assert.equal(viewer.clock.onTick.numberOfListeners, 0);
-  assert.equal(camera.percentageChanged, 0.5);
+  assert.deepEqual(live, {
+    changed: 0,
+    moveStart: 0,
+    followChanged: 0,
+    command: 0,
+    preUpdate: 0,
+    preRender: 0,
+  });
 });
 
 test('a pure roll and a position move still hand Sky back without fighting the camera', async () => {
   const rolled = await enter(mount());
-  const camera = rolled.viewer.camera;
-  const position = Cesium.Cartesian3.clone(camera.positionWC);
-  const direction = Cesium.Cartesian3.clone(camera.directionWC);
-  const up = Cesium.Cartesian3.clone(camera.upWC);
-  camera.twistRight(radians(5));
-  const rolledUp = degrees(
-    Cesium.Math.acosClamped(Cesium.Cartesian3.dot(camera.upWC, up)),
-  );
+  const camera = rolled.camera;
+  const start = camera.pose();
+  camera.setView({
+    destination: start.position,
+    orientation: {
+      heading: start.heading,
+      pitch: start.pitch,
+      roll: start.roll + radians(5),
+    },
+  });
+  const rolledUp = degrees(acosClamped(dot(camera.pose().up, start.up)));
   assert.ok(rolledUp > 4, `twist only moved up by ${rolledUp}°`);
-  assert.ok(Cesium.Cartesian3.dot(camera.directionWC, direction) > 0.999);
-  rolled.viewer.scene.preRender.raiseEvent(rolled.viewer.scene);
+  assert.ok(dot(camera.pose().direction, start.direction) > 0.999);
+  rolled.renderer.testing.tick();
   assert.equal(rolled.handle.active, false, 'roll handed Sky back');
-  assert.ok(Cesium.Cartesian3.distance(position, camera.positionWC) < 1);
+  assert.ok(distance(start.position, camera.pose().position) < 1);
   assert.ok(
-    Cesium.Cartesian3.dot(camera.directionWC, direction) > 0.999,
+    dot(camera.pose().direction, start.direction) > 0.999,
     'handoff left the twisted look direction alone',
   );
   rolled.handle.destroy();
 
   const moved = await enter(mount());
-  const away = Cesium.Cartesian3.fromDegrees(-74, 40.7, 5000);
-  moved.viewer.camera.setView({ destination: away });
+  moved.camera.setView({ destination: { lon: -74, lat: 40.7, height: 5000 } });
+  const away = moved.camera.pose().position;
   interval(moved.timers).fn();
   assert.equal(moved.handle.active, false);
-  assert.ok(
-    Cesium.Cartesian3.distance(moved.viewer.camera.positionWC, away) < 1,
-  );
+  assert.ok(distance(moved.camera.pose().position, away) < 1);
   moved.handle.destroy();
 });
 
-/**
- * A real ScreenSpaceCameraController, not the flag stub. Cesium lifts in
- * `update()` only when collision is on, the camera is under
- * `globeHeight + minimumZoomDistance`, and that height is also under
- * `minimumCollisionTerrainHeight` (15 km). Above the terrain floor there
- * is no lift, even at a few hundred metres. A missing `globeHeight` does
- * not lift this frame, but it can once a sample arrives. A converged
- * surface lifts on the first update; a cold `_lastGlobeHeight` of 0 lifts
- * about 24 frames later. Setting the flag itself does not move the camera.
- */
-function mountReal() {
-  const env = mount();
-  const { scene } = env.viewer;
-  scene.canvas.disableRootEvents = true;
-  scene.canvas.onwheel = null;
-  scene.canvas.style = {};
-  scene.canvas.getBoundingClientRect = () => ({
-    left: 0,
-    top: 0,
-    width: 1200,
-    height: 800,
-  });
-  scene.verticalExaggeration = 1;
-  scene.verticalExaggerationRelativeHeight = 0;
-  scene.globeHeight = 138;
-  scene.preUpdate = new Cesium.Event();
-  const controller = new Cesium.ScreenSpaceCameraController(scene);
-  controller.enableCollisionDetection = true;
-  scene.screenSpaceCameraController = controller;
-  return env;
-}
+// Collision. The renderer lifts a camera under the terrain floor while the
+// camera port's `controls.collision` is on. Sky turns it off, and a handoff
+// that keeps a camera under the floor (the ground height from the height
+// service, or unknown) leaves it off until the camera is clear of it:
+// at or above ground + minDistance, or above the 15 km ceiling.
 
-function settleSurface(viewer, globeHeight = 138) {
-  viewer.scene.globeHeight = globeHeight;
-  viewer.scene.screenSpaceCameraController._lastGlobeHeight = globeHeight;
-}
-
-test('handoff at eye height does not let a real controller lift the camera', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  const position = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  const direction = Cesium.Cartesian3.clone(viewer.camera.directionWC);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+test('handoff at eye height keeps collision off, so the renderer cannot lift the camera', async () => {
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle } = env;
+  settleSurface(env, 138);
+  assert.equal(camera.controls.collision, 'none', 'Sky turned collision off');
+  tilt(camera, radians(8));
+  const position = camera.pose().position;
+  const direction = camera.pose().direction;
+  renderer.testing.tick();
   assert.equal(handle.active, false, 'in-place tilt hands Sky back');
-  for (let frame = 0; frame < 30; frame += 1) controller.update();
-  const lifted = Cesium.Cartesian3.distance(position, viewer.camera.positionWC);
+  assert.equal(camera.controls.collision, 'none');
+  for (let frame = 0; frame < 30; frame += 1) renderer.testing.tick();
+  assert.equal(camera.controls.collision, 'none');
+  assert.ok(distance(position, camera.pose().position) < 1);
   assert.ok(
-    lifted < 1,
-    `real controller lifted the handoff camera by ${lifted} m`,
-  );
-  assert.ok(
-    Cesium.Cartesian3.dot(viewer.camera.directionWC, direction) > 0.999,
+    dot(camera.pose().direction, direction) > 0.999,
     'handoff left the external tilt alone',
   );
   handle.destroy();
-  controller.destroy();
+  assert.equal(camera.controls.collision, 'terrain', 'destroy puts it back');
 });
 
-test('collision stays off at eye height and returns above the controller safe height without a lift', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+test('collision stays off at eye height and returns above the safe height without a lift', async () => {
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
   assert.equal(handle.active, false);
   assert.equal(
-    controller.enableCollisionDetection,
-    false,
+    camera.controls.collision,
+    'none',
     'collision must stay off while the handoff camera is below the safe height',
   );
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  assert.equal(controller.enableCollisionDetection, false);
-  controller.minimumZoomDistance = 25;
-  const floor = viewer.scene.globeHeight + controller.minimumZoomDistance;
+  renderer.testing.tick();
+  renderer.testing.tick();
+  assert.equal(camera.controls.collision, 'none');
+  camera.controls.minDistance = 25;
+  const floor = 138 + camera.controls.minDistance;
   const safe = floor + 10;
-  assert.ok(safe < controller.minimumCollisionTerrainHeight);
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, safe),
-    orientation: {
-      heading: viewer.camera.heading,
-      pitch: viewer.camera.pitch,
-      roll: viewer.camera.roll,
-    },
+  assert.ok(safe < COLLISION_CEILING_M);
+  const pose = camera.pose();
+  camera.setView({
+    destination: { ...HOUSTON_POINT, height: safe },
+    orientation: { heading: pose.heading, pitch: pose.pitch, roll: pose.roll },
   });
-  const parked = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  const parked = camera.pose().position;
+  renderer.testing.tick();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
-    'collision returns once the camera clears globeHeight + minimumZoomDistance',
+    camera.controls.collision,
+    'terrain',
+    'collision returns once the camera clears ground + minDistance',
   );
-  assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    'a restored watch must drop',
-  );
-  for (let frame = 0; frame < 5; frame += 1) controller.update();
-  const moved = Cesium.Cartesian3.distance(parked, viewer.camera.positionWC);
+  assert.equal(live.preUpdate, 0, 'a restored watch must drop');
+  for (let frame = 0; frame < 5; frame += 1) renderer.testing.tick();
+  const moved = distance(parked, camera.pose().position);
   assert.ok(moved < 1, `restoring collision moved the camera ${moved} m`);
   handle.destroy();
-  controller.destroy();
 });
 
 test('re-entering drops the deferred collision watch', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
   assert.equal(handle.active, false);
-  assert.equal(controller.enableCollisionDetection, false);
-  assert.ok(
-    viewer.scene.preUpdate.numberOfListeners >= 1,
-    'handoff armed a collision watch',
-  );
+  assert.equal(camera.controls.collision, 'none');
+  assert.equal(live.preUpdate, 1, 'handoff armed a collision watch');
 
+  assert.equal(await handle.enterAt(ENTRY), true);
+  // Sky's own two frame listeners (time, camera watch) and no collision watch
+  assert.equal(live.preUpdate, 2, 're-enter must drop the deferred watch');
+  assert.equal(camera.controls.collision, 'none', 'Sky keeps collision off');
+  // A stale watch would put collision back as soon as the ground is under the eye.
+  settleSurface(env, 0);
+  renderer.testing.tick();
   assert.equal(
-    await handle.enterAt({
-      latDeg: 29.7604,
-      lonDeg: -95.3698,
-      source: 'map',
-      heightM: 20,
-      heightKnown: true,
-    }),
-    true,
-  );
-  assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    're-enter must drop the deferred collision watch',
-  );
-  assert.equal(controller.enableCollisionDetection, false, 'Sky keeps collision off');
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(
-      -95.3698,
-      29.7604,
-      controller.minimumCollisionTerrainHeight + 10,
-    ),
-    orientation: {
-      heading: viewer.camera.heading,
-      pitch: viewer.camera.pitch,
-      roll: viewer.camera.roll,
-    },
-  });
-  // preUpdate is the collision watch, not a handoff signal. onTick and
-  // preRender would be a real handoff: the camera is now >100 m from the eye.
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  assert.equal(
-    controller.enableCollisionDetection,
-    false,
+    camera.controls.collision,
+    'none',
     'a stale watch must not turn collision on during Sky',
   );
+  assert.equal(handle.active, true);
   handle.destroy();
-  controller.destroy();
 });
 
-test('re-entering keeps the original collision flag for the next exit', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  assert.equal(controller.enableCollisionDetection, false);
+test('re-entering keeps the original collision mode for the next exit', async () => {
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
+  assert.equal(camera.controls.collision, 'none');
 
-  assert.equal(
-    await handle.enterAt({
-      latDeg: 29.7604,
-      lonDeg: -95.3698,
-      source: 'map',
-      heightM: 20,
-      heightKnown: true,
-    }),
-    true,
-  );
+  assert.equal(await handle.enterAt(ENTRY), true);
   handle.exit();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
-    'normal exit restores the original collision flag immediately',
+    camera.controls.collision,
+    'terrain',
+    'normal exit restores the original collision mode immediately',
   );
   assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
+    live.preUpdate,
     0,
     'normal exit must not leave a deferred watch',
   );
   handle.destroy();
-  controller.destroy();
 });
 
-test('destroy restores a deferred collision flag and drops the watch', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  const position = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+test('destroy restores a deferred collision mode and drops the watch', async () => {
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  tilt(camera, radians(8));
+  const position = camera.pose().position;
+  renderer.testing.tick();
   assert.equal(handle.active, false);
-  assert.equal(controller.enableCollisionDetection, false);
-  assert.ok(viewer.scene.preUpdate.numberOfListeners >= 1);
-  const tickListeners = viewer.clock.onTick.numberOfListeners;
-  const preListeners = viewer.scene.preRender.numberOfListeners;
+  assert.equal(camera.controls.collision, 'none');
+  assert.equal(live.preUpdate, 1);
   handle.destroy();
   assert.equal(handle.destroyed, true);
   assert.ok(
-    Cesium.Cartesian3.distance(position, viewer.camera.positionWC) < 1,
-    'destroy restores the flag without moving the handoff camera',
+    distance(position, camera.pose().position) < 1,
+    'destroy restores the mode without moving the handoff camera',
   );
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
+    camera.controls.collision,
+    'terrain',
     'destroy must restore collision instead of leaving it off',
   );
+  assert.equal(live.preUpdate, 0, 'destroy must drop the deferred watch');
+  assert.equal(live.changed + live.moveStart + live.command, 0);
+  renderer.testing.tick();
   assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    'destroy must drop the deferred collision watch',
+    camera.controls.collision,
+    'terrain',
+    'no watcher remains to flip the restored mode',
   );
-  assert.equal(viewer.clock.onTick.numberOfListeners, tickListeners - 1);
-  assert.equal(viewer.scene.preRender.numberOfListeners, preListeners - 1);
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  assert.equal(
-    controller.enableCollisionDetection,
-    true,
-    'no watcher remains to flip the restored flag',
-  );
-  controller.destroy();
 });
 
-test('handoff does not lift when the surface height has not settled yet', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  viewer.scene.globeHeight = 138;
-  controller._lastGlobeHeight = 0;
-  viewer.camera.lookDown(radians(8));
-  const position = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+test('handoff does not lift when the surface height is not known yet', async () => {
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle } = env;
+  // no height known under the camera: not settled
+  tilt(camera, radians(8));
+  const position = camera.pose().position;
+  renderer.testing.tick();
   assert.equal(handle.active, false);
-  assert.equal(controller.enableCollisionDetection, false);
-  for (let frame = 0; frame < 30; frame += 1) controller.update();
-  const lifted = Cesium.Cartesian3.distance(position, viewer.camera.positionWC);
-  assert.ok(
-    lifted < 1,
-    `unsettled surface still lifted the handoff camera by ${lifted} m`,
-  );
+  assert.equal(camera.controls.collision, 'none');
+  for (let frame = 0; frame < 30; frame += 1) renderer.testing.tick();
+  assert.equal(camera.controls.collision, 'none', 'unknown is not safe');
+  assert.ok(distance(position, camera.pose().position) < 1);
   handle.destroy();
-  controller.destroy();
 });
 
 test('a handoff already above the terrain floor restores collision immediately', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  controller.minimumZoomDistance = 40;
-  const safe = viewer.scene.globeHeight + controller.minimumZoomDistance + 50;
-  assert.ok(safe < controller.minimumCollisionTerrainHeight);
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, safe),
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  camera.controls.minDistance = 40;
+  const safe = 138 + camera.controls.minDistance + 50;
+  assert.ok(safe < COLLISION_CEILING_M);
+  camera.setView({
+    destination: { ...HOUSTON_POINT, height: safe },
     orientation: { heading: 0.2, pitch: -0.4, roll: 0 },
   });
-  const parked = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
-  assert.equal(handle.active, false, 'a move of more than 100 m hands Sky back');
+  const parked = camera.pose().position;
+  renderer.testing.tick();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
+    handle.active,
+    false,
+    'a move of more than 100 m hands Sky back',
+  );
+  assert.equal(
+    camera.controls.collision,
+    'terrain',
     'collision is safe to restore above the terrain floor',
   );
-  assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    'a safe handoff must not leave a deferred watch',
-  );
-  for (let frame = 0; frame < 5; frame += 1) controller.update();
-  const moved = Cesium.Cartesian3.distance(parked, viewer.camera.positionWC);
+  assert.equal(live.preUpdate, 0, 'a safe handoff must not leave a watch');
+  for (let frame = 0; frame < 5; frame += 1) renderer.testing.tick();
+  const moved = distance(parked, camera.pose().position);
   assert.ok(moved < 1, `restoring collision moved a safe camera ${moved} m`);
   handle.destroy();
-  controller.destroy();
 });
 
-function park(viewer, height) {
-  viewer.camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, height),
-    orientation: { heading: 0.2, pitch: -0.4, roll: 0 },
-  });
-}
-
 test('ordinary low-altitude exit restores collision immediately', async () => {
-  const env = mountReal();
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  park(viewer, 400);
-  assert.ok(400 < controller.minimumCollisionTerrainHeight);
-  assert.ok(400 > viewer.scene.globeHeight + controller.minimumZoomDistance);
-  const parked = Cesium.Cartesian3.clone(viewer.camera.positionWC);
+  const env = mount({ collision: 'terrain' });
+  const { camera, handle, live } = env;
+  settleSurface(env, 138);
+  park(camera, 400);
+  assert.ok(400 < COLLISION_CEILING_M);
+  const parked = camera.pose().position;
   await enter(env);
-  assert.equal(controller.enableCollisionDetection, false);
+  assert.equal(camera.controls.collision, 'none');
   handle.exit();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
+    camera.controls.collision,
+    'terrain',
     'ordinary exit must not wait for 15 km',
   );
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  assert.equal(viewer.scene.preRender.numberOfListeners, 0);
-  assert.equal(viewer.clock.onTick.numberOfListeners, 0);
-  assert.ok(Cesium.Cartesian3.distance(parked, viewer.camera.positionWC) < 1);
-  for (let frame = 0; frame < 5; frame += 1) controller.update();
-  const moved = Cesium.Cartesian3.distance(parked, viewer.camera.positionWC);
-  assert.ok(moved < 1, `ordinary exit let the controller lift ${moved} m`);
+  assert.equal(live.preUpdate, 0);
+  assert.equal(live.changed, 0);
+  assert.equal(live.command, 0);
+  assert.ok(distance(parked, camera.pose().position) < 1);
   handle.destroy();
-  controller.destroy();
 });
 
 test('ordinary exit restores collision even under the terrain floor', async () => {
-  const env = mountReal();
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  park(viewer, 16.7);
+  const env = mount({ collision: 'terrain' });
+  const { camera, handle, live } = env;
+  settleSurface(env, 138);
+  park(camera, 16.7);
   await enter(env);
   handle.exit();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
-    'normal exit puts every flag back after the camera is restored',
+    camera.controls.collision,
+    'terrain',
+    'normal exit puts every setting back after the camera is restored',
   );
-  assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    'normal exit must not defer collision',
-  );
+  assert.equal(live.preUpdate, 0, 'normal exit must not defer collision');
   handle.destroy();
-  controller.destroy();
 });
 
 test('unknown surface defers a handoff and restores once the floor is known', async () => {
-  const env = await enter(mountReal());
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  viewer.scene.globeHeight = undefined;
-  controller._lastGlobeHeight = 0;
-  park(viewer, 400);
-  const parked = Cesium.Cartesian3.clone(viewer.camera.positionWC);
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  const env = await enter(mount({ collision: 'terrain' }));
+  const { camera, renderer, handle, live } = env;
+  park(camera, 400);
+  const parked = camera.pose().position;
+  renderer.testing.tick();
   assert.equal(handle.active, false);
   assert.equal(
-    controller.enableCollisionDetection,
-    false,
+    camera.controls.collision,
+    'none',
     'an unknown surface must defer collision',
   );
-  assert.ok(viewer.scene.preUpdate.numberOfListeners >= 1);
-  for (let frame = 0; frame < 30; frame += 1) controller.update();
-  assert.ok(Cesium.Cartesian3.distance(parked, viewer.camera.positionWC) < 1);
-  settleSurface(viewer, 138);
-  viewer.scene.preUpdate.raiseEvent(viewer.scene);
+  assert.ok(live.preUpdate >= 1);
+  for (let frame = 0; frame < 30; frame += 1) renderer.testing.tick();
+  assert.ok(distance(parked, camera.pose().position) < 1);
+  assert.equal(camera.controls.collision, 'none');
+  settleSurface(env, 138);
+  renderer.testing.tick();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
+    camera.controls.collision,
+    'terrain',
     'collision returns once the known floor is below the camera',
   );
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+  assert.equal(live.preUpdate, 0);
   handle.destroy();
-  controller.destroy();
 });
 
-test('repeated reentry keeps the original collision flag', async () => {
-  const env = mountReal();
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  settleSurface(viewer, 138);
-  park(viewer, 400);
+test('repeated reentry keeps the original collision mode', async () => {
+  const env = mount({ collision: 'terrain' });
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  park(camera, 400);
   await enter(env);
   handle.exit();
-  assert.equal(controller.enableCollisionDetection, true);
+  assert.equal(camera.controls.collision, 'terrain');
 
   await enter(env);
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
   assert.equal(handle.active, false);
-  assert.equal(controller.enableCollisionDetection, false);
+  assert.equal(camera.controls.collision, 'none');
 
-  assert.equal(
-    await handle.enterAt({
-      latDeg: 29.7604,
-      lonDeg: -95.3698,
-      source: 'map',
-      heightM: 20,
-      heightKnown: true,
-    }),
-    true,
-  );
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
-  assert.equal(controller.enableCollisionDetection, false, 'Sky keeps collision off');
+  assert.equal(await handle.enterAt(ENTRY), true);
+  assert.equal(live.preUpdate, 2, 're-enter drops the deferred watch');
+  assert.equal(camera.controls.collision, 'none', 'Sky keeps collision off');
 
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
   assert.equal(handle.active, false);
   assert.equal(
-    controller.enableCollisionDetection,
-    false,
-    'a second handoff under the floor still defers the original flag',
+    camera.controls.collision,
+    'none',
+    'a second handoff under the floor still defers the original mode',
   );
-  assert.ok(viewer.scene.preUpdate.numberOfListeners >= 1);
+  assert.ok(live.preUpdate >= 1);
 
-  assert.equal(
-    await handle.enterAt({
-      latDeg: 29.7604,
-      lonDeg: -95.3698,
-      source: 'map',
-      heightM: 20,
-      heightKnown: true,
-    }),
-    true,
-  );
+  assert.equal(await handle.enterAt(ENTRY), true);
   handle.exit();
   assert.equal(
-    controller.enableCollisionDetection,
-    true,
-    'normal exit after repeated reentry restores the original flag',
+    camera.controls.collision,
+    'terrain',
+    'normal exit after repeated reentry restores the original mode',
   );
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+  assert.equal(live.preUpdate, 0);
   handle.destroy();
-  controller.destroy();
 });
 
-test('a saved collision-off flag stays off through exit, handoff, and destroy', async () => {
-  const env = mountReal();
-  const { viewer, handle } = env;
-  const controller = viewer.scene.screenSpaceCameraController;
-  controller.enableCollisionDetection = false;
-  settleSurface(viewer, 138);
-  park(viewer, 16.7);
+test('a saved collision-off mode stays off through exit, handoff, and destroy', async () => {
+  const env = mount({ collision: 'none' });
+  const { camera, renderer, handle, live } = env;
+  settleSurface(env, 138);
+  park(camera, 16.7);
   await enter(env);
   handle.exit();
-  assert.equal(controller.enableCollisionDetection, false);
-  assert.equal(viewer.scene.preUpdate.numberOfListeners, 0);
+  assert.equal(camera.controls.collision, 'none');
+  assert.equal(live.preUpdate, 0);
 
   await enter(env);
-  settleSurface(viewer, 138);
-  viewer.camera.lookDown(radians(8));
-  viewer.scene.preRender.raiseEvent(viewer.scene);
+  tilt(camera, radians(8));
+  renderer.testing.tick();
   assert.equal(handle.active, false);
-  assert.equal(controller.enableCollisionDetection, false);
-  assert.equal(
-    viewer.scene.preUpdate.numberOfListeners,
-    0,
-    'an off flag must not arm a restore watch',
-  );
+  assert.equal(camera.controls.collision, 'none');
+  assert.equal(live.preUpdate, 0, 'an off mode must not arm a restore watch');
   handle.destroy();
-  assert.equal(controller.enableCollisionDetection, false);
-  controller.destroy();
+  assert.equal(camera.controls.collision, 'none');
 });
 
 test('applyView does not overwrite an in-place external tilt before the tick', async () => {
-  const { viewer, handle } = await enter(mount());
-  const camera = viewer.camera;
+  const { camera, renderer, handle } = await enter(mount());
   handle.setView(handle.view);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  renderer.testing.tick();
   assert.equal(
     handle.active,
     true,
     "reapplying Sky's own pose is not a handoff",
   );
 
-  const position = Cesium.Cartesian3.clone(camera.positionWC);
+  const position = camera.pose().position;
   const overlayEl = handle.view.elDeg;
-  camera.lookDown(radians(8));
+  tilt(camera, radians(8));
   const tiltedEl = look(camera).elDeg;
   assert.ok(Math.abs(tiltedEl - overlayEl) > 5, tiltedEl);
-  assert.ok(Cesium.Cartesian3.distance(position, camera.positionWC) < 1);
+  assert.ok(distance(position, camera.pose().position) < 1);
 
   // Identity setView is the race: Sky reapplies its stored view before
-  // changed, preRender, onTick, or the 1 Hz interval can see the tilt.
+  // changed, preUpdate, or the 1 Hz interval can see the tilt.
   handle.setView(handle.view);
-  viewer.clock.onTick.raiseEvent(viewer.clock);
+  renderer.testing.tick();
 
   assert.equal(
     handle.active,
@@ -969,7 +837,7 @@ test('applyView does not overwrite an in-place external tilt before the tick', a
     'Sky must yield instead of staying up on the old orientation',
   );
   assert.ok(
-    Cesium.Cartesian3.distance(position, camera.positionWC) < 1,
+    distance(position, camera.pose().position) < 1,
     'handoff must not move the eye',
   );
   assert.ok(

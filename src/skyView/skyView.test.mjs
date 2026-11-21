@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ENTRIES, entryOf, tle } from '../testSupport/skyTleFixture.mjs';
-import * as Cesium from 'cesium';
+import { distance } from '../geo/vector.js';
+import { findInput } from '../render/rendererOf.js';
 import {
   describeObserver,
   mountSkyView,
@@ -9,6 +10,7 @@ import {
   toLocalInputValue,
 } from './skyView.js';
 import { worldDirectionToAzEl } from './skyCamera.js';
+import { createSkyTestHost } from '../testSupport/skyTestHost.mjs';
 import { createObserver } from './observer.js';
 import { readFileSync } from 'node:fs';
 import { createSatWorkerHandler } from './satWorker.js';
@@ -128,79 +130,15 @@ function fakeTimers() {
   };
 }
 
-class FakeHandler {
-  static last = null;
-  constructor(canvas) {
-    this.canvas = canvas;
-    this.actions = new Map();
-    this.destroyed = false;
-    FakeHandler.last = this;
-  }
-  setInputAction(fn, type) {
-    this.actions.set(type, fn);
-  }
-  destroy() {
-    this.destroyed = true;
-  }
-}
-
-const SkyCesium = { ...Cesium, ScreenSpaceEventHandler: FakeHandler };
-
+/**
+ * The stub renderer bound to a scene host (`skyTestHost.mjs`): the host is the
+ * application's scene object Sky is mounted on; the fixture also holds the
+ * renderer and its ports for the test to drive and read. The globe canvas is
+ * the stub's stand-in canvas (it reports the viewport as its size).
+ */
 function fakeViewer({ width = 1200, height = 800, pickHeight = 20 } = {}) {
-  const canvas = new FakeElement('canvas');
-  canvas.clientWidth = width;
-  canvas.clientHeight = height;
-  const scene = {
-    canvas,
-    drawingBufferWidth: width,
-    drawingBufferHeight: height,
-    mapProjection: new Cesium.GeographicProjection(Cesium.Ellipsoid.WGS84),
-    globe: {
-      ellipsoid: Cesium.Ellipsoid.WGS84,
-      show: true,
-      enableLighting: false,
-      dynamicAtmosphereLighting: true,
-      dynamicAtmosphereLightingFromSun: false,
-    },
-    ellipsoid: Cesium.Ellipsoid.WGS84,
-    mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
-    mode: Cesium.SceneMode.SCENE3D,
-    pixelRatio: 1,
-    renders: 0,
-    requestRender() {
-      this.renders += 1;
-    },
-    preRender: new Cesium.Event(),
-    skyBox: { show: true },
-    skyAtmosphere: { show: true },
-    screenSpaceCameraController: { enableInputs: true },
-    primitives: { length: 0, get: () => undefined },
-    pickPositionSupported: true,
-    pickPosition: () =>
-      Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, pickHeight),
-  };
-  const camera = new Cesium.Camera(scene);
-  camera.frustum.aspectRatio = width / height;
-  camera.setView({
-    destination: Cesium.Cartesian3.fromDegrees(-97.7431, 30.2672, 3000),
-    orientation: { heading: 0.4, pitch: -0.7, roll: 0 },
-  });
-  camera.frustum.fov = 1;
-  camera.pickEllipsoid = () =>
-    Cesium.Cartesian3.fromDegrees(-95.3698, 29.7604, 0);
-  scene.camera = camera;
-  return {
-    scene,
-    camera,
-    container: new FakeElement('div'),
-    terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-    clock: new Cesium.Clock({
-      currentTime: Cesium.JulianDate.fromIso8601('2026-10-11T12:00:00Z'),
-      shouldAnimate: false,
-    }),
-    trackedEntity: undefined,
-    trackedEntityChanged: new Cesium.Event(),
-  };
+  const container = new FakeElement('div');
+  return createSkyTestHost({ container, width, height, pickHeight });
 }
 
 function fakeHistory(location) {
@@ -216,7 +154,8 @@ function fakeHistory(location) {
 
 function setup(options = {}) {
   const doc = fakeDocument();
-  const viewer = fakeViewer(options.viewer);
+  const fixture = fakeViewer(options.viewer);
+  const { host: viewer, renderer, camera, globe, frame } = fixture;
   const timers = fakeTimers();
   const location = {
     href: options.href || 'https://gev.test/#v=2&lat=30&lon=-97',
@@ -229,7 +168,6 @@ function setup(options = {}) {
     timers,
     location,
     history,
-    CesiumApi: SkyCesium,
     now: options.now ?? (() => Date.parse('2026-10-12T03:30:00Z')),
     showToast: (m) => toasts.push(m),
     geolocation: options.geolocation,
@@ -255,7 +193,18 @@ function setup(options = {}) {
       ? { voiceWindow: options.voiceWindow }
       : {}),
   });
-  return { doc, viewer, timers, location, history, handle };
+  return {
+    doc,
+    viewer,
+    renderer,
+    camera,
+    globe,
+    frame,
+    timers,
+    location,
+    history,
+    handle,
+  };
 }
 
 const click = (node) => node.dispatchEvent(new Event('click'));
@@ -263,11 +212,12 @@ const pointer = (type, props) => Object.assign(new Event(type), props);
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
 function poseDelta(camera, before) {
+  const now = camera.pose();
   return Math.max(
-    Cesium.Cartesian3.distance(camera.position, before.position),
-    Cesium.Cartesian3.distance(camera.direction, before.direction),
-    Cesium.Cartesian3.distance(camera.up, before.up),
-    Cesium.Cartesian3.distance(camera.right, before.right),
+    distance(now.position, before.position),
+    distance(now.direction, before.direction),
+    distance(now.up, before.up),
+    distance(now.right, before.right),
   );
 }
 
@@ -282,7 +232,15 @@ test('mount: Sky button, panel, toolbar, overlay canvas; once per viewer; null w
   assert.equal(mountSkyView({ viewer, document: doc }), handle);
   assert.equal(skyViewFor(viewer), handle);
   assert.equal(skyViewFor(null), null);
-  assert.equal(mountSkyView({ viewer: fakeViewer(), document: null }), null);
+  assert.equal(
+    mountSkyView({ viewer: fakeViewer().host, document: null }),
+    null,
+  );
+  assert.equal(
+    mountSkyView({ viewer: {}, document: doc }),
+    null,
+    'a scene with no renderer bound has no camera port',
+  );
   assert.equal(mountSkyView({ viewer: null, document: doc }), null);
   click(button);
   assert.equal(doc.body.find('panel').hidden, false);
@@ -323,10 +281,19 @@ test('openHere shares one enter when a second call overlaps the first', async ()
     release = resolve;
   });
   let samples = 0;
-  const { handle, viewer } = setup({ viewer: { pickHeight: 20000 } });
-  viewer.scene.sampleHeightMostDetailed = () => {
+  const { handle, renderer } = setup({ viewer: { pickHeight: 20000 } });
+  renderer.query.sampleHeight = (points) => {
+    // the horizon profile samples a whole grid: no terrain there
+    if (points.length !== 1) return Promise.resolve(points.map(() => null));
     samples += 1;
-    return gate.then(() => [{ height: 12 }]);
+    return gate.then(() =>
+      points.map(() => ({
+        height: 12,
+        confidence: 1,
+        source: 'terrain',
+        lod: 'finest',
+      })),
+    );
   };
   const first = handle.openHere();
   const second = handle.openHere();
@@ -388,18 +355,23 @@ test('voice: look at Jupiter uses the real search index', async () => {
 });
 
 test('enter at typed lat, lon: eye at 1.7 m over unknown ground (0, flagged), inputs off, URL written; exit restores the camera to 1e-6', async () => {
-  const { doc, viewer, timers, location, handle } = setup();
-  const before = {
-    position: Cesium.Cartesian3.clone(viewer.camera.position),
-    direction: Cesium.Cartesian3.clone(viewer.camera.direction),
-    up: Cesium.Cartesian3.clone(viewer.camera.up),
-    right: Cesium.Cartesian3.clone(viewer.camera.right),
-    heading: viewer.camera.heading,
-    pitch: viewer.camera.pitch,
-    roll: viewer.camera.roll,
-    fov: viewer.camera.frustum.fov,
-    time: Cesium.JulianDate.clone(viewer.clock.currentTime),
-  };
+  const {
+    doc,
+    viewer,
+    renderer,
+    camera,
+    globe,
+    frame,
+    timers,
+    location,
+    handle,
+  } = setup();
+  // The application's per-frame world time (src/time/viewerClock.js): set
+  // first, so Sky's own stamp runs after it while Sky is active.
+  const WORLD = Date.parse('2026-10-11T12:00:00Z');
+  frame.on('preUpdate', () => frame.setTime(WORLD));
+  const before = camera.pose();
+  const lookBefore = globe.sky.get();
   click(doc.body.find('open'));
   doc.body.find('query').value = '29.7604 N 95.3698 W';
   doc.body.find('form').dispatchEvent(new Event('submit'));
@@ -409,10 +381,15 @@ test('enter at typed lat, lon: eye at 1.7 m over unknown ground (0, flagged), in
   assert.equal(handle.observer.source, 'manual');
   assert.equal(handle.observer.heightKnown, false);
   assert.equal(handle.observer.groundHeightM, 0);
-  const carto = viewer.camera.positionCartographic;
-  assert.ok(Math.abs(carto.height - 1.7) < 1e-6);
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, false);
-  assert.equal(viewer.scene.globe.enableLighting, true);
+  assert.ok(Math.abs(camera.pose().height - 1.7) < 1e-6);
+  assert.equal(camera.controls.enabled, false, 'camera input held');
+  assert.equal(globe.sky.get().lighting, true);
+  renderer.testing.tick();
+  assert.equal(
+    frame.time(),
+    handle.time.getTime(),
+    'Sky time drives the scene',
+  );
   assert.equal(doc.body.find('bar').hidden, false);
   assert.equal(viewer.container.find('canvas').hidden, false);
   assert.ok(viewer.container.find('canvas').drawCalls > 0, 'overlay drawn');
@@ -429,24 +406,30 @@ test('enter at typed lat, lon: eye at 1.7 m over unknown ground (0, flagged), in
   click(doc.body.find('back'));
   assert.equal(handle.active, false);
   assert.ok(
-    poseDelta(viewer.camera, before) < 1e-6,
-    `pose delta ${poseDelta(viewer.camera, before)}`,
+    poseDelta(camera, before) < 1e-6,
+    `pose delta ${poseDelta(camera, before)}`,
   );
-  assert.ok(Math.abs(viewer.camera.heading - before.heading) < 1e-6);
-  assert.ok(Math.abs(viewer.camera.pitch - before.pitch) < 1e-6);
-  assert.ok(Math.abs(viewer.camera.roll - before.roll) < 1e-6);
-  assert.equal(viewer.camera.frustum.fov, before.fov);
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, true);
-  assert.equal(viewer.scene.globe.enableLighting, false);
-  assert.equal(viewer.scene.skyBox.show, true);
-  assert.ok(Cesium.JulianDate.equals(viewer.clock.currentTime, before.time));
+  const after = camera.pose();
+  assert.ok(Math.abs(after.heading - before.heading) < 1e-6);
+  assert.ok(Math.abs(after.pitch - before.pitch) < 1e-6);
+  assert.ok(Math.abs(after.roll - before.roll) < 1e-6);
+  assert.ok(Math.abs(after.fovy - before.fovy) < 1e-12, 'fov back');
+  assert.equal(camera.controls.enabled, true, 'camera input back');
+  assert.deepEqual(globe.sky.get(), lookBefore, 'globe look back');
+  assert.equal(globe.isGlobeVisible(), true);
+  renderer.testing.tick();
+  assert.equal(
+    frame.time(),
+    WORLD,
+    'Sky stops stamping time; the world’s resumes',
+  );
   assert.equal(doc.body.find('bar').hidden, true);
   assert.ok(!doc.body.classList.contains('gev-sky-active'));
   assert.ok(!/[?&]sv=/.test(location.href), 'sv removed on exit');
 });
 
-test('drag, wheel and keys move the real Cesium camera; Escape leaves', async () => {
-  const { viewer, handle } = setup();
+test('drag, wheel and keys move the renderer camera; Escape leaves', async () => {
+  const { viewer, camera, handle } = setup();
   await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
   const canvas = viewer.container.find('canvas');
   const az0 = handle.view.azDeg;
@@ -464,11 +447,8 @@ test('drag, wheel and keys move the real Cesium camera; Escape leaves', async ()
     'drag right turns left',
   );
   assert.ok(handle.view.elDeg > 20, 'drag down looks up');
-  const look = worldDirectionToAzEl(
-    Cesium,
-    viewer.camera.positionWC,
-    viewer.camera.directionWC,
-  );
+  const pose = camera.pose();
+  const look = worldDirectionToAzEl(pose.position, pose.direction);
   assert.ok(Math.abs(look.elDeg - handle.view.elDeg) < 1e-6);
   const fov0 = handle.view.fovDeg;
   canvas.dispatchEvent(
@@ -476,8 +456,7 @@ test('drag, wheel and keys move the real Cesium camera; Escape leaves', async ()
   );
   assert.ok(handle.view.fovDeg < fov0);
   assert.ok(
-    Math.abs(viewer.camera.frustum.fov - (handle.view.fovDeg * Math.PI) / 180) <
-      1e-12,
+    Math.abs(camera.pose().fovy - (handle.view.fovDeg * Math.PI) / 180) < 1e-12,
   );
   // pinch: two pointers spreading apart zoom in
   canvas.dispatchEvent(
@@ -502,21 +481,50 @@ test('drag, wheel and keys move the real Cesium camera; Escape leaves', async ()
 });
 
 test('pick on map: one click on the globe sets the observer with the picked ground height', async () => {
-  const { doc, viewer, handle } = setup({ viewer: { pickHeight: 20 } });
+  const { doc, renderer, camera, viewer, handle } = setup({
+    viewer: { pickHeight: 20 },
+  });
+  const input = findInput(viewer);
   click(doc.body.find('open'));
+  assert.equal(input.isPointerFree(), true);
   click(doc.body.find('pick'));
   assert.ok(doc.body.classList.contains('gev-sky-picking'));
-  const picker = FakeHandler.last;
-  const action = picker.actions.get(Cesium.ScreenSpaceEventType.LEFT_CLICK);
-  action({ position: new Cesium.Cartesian2(10, 10) });
+  assert.equal(input.isPointerFree(), false, 'Sky holds the pointer lease');
+  // a click anywhere on the globe, through the input port
+  renderer.testing.pointer('click', 10, 10);
   await settle();
-  assert.equal(picker.destroyed, true, 'one click only');
+  assert.equal(input.isPointerFree(), true, 'one click only: lease released');
   assert.ok(!doc.body.classList.contains('gev-sky-picking'));
   assert.equal(handle.active, true);
   assert.equal(handle.observer.source, 'map');
   assert.equal(handle.observer.heightKnown, true);
   assert.ok(Math.abs(handle.observer.groundHeightM - 20) < 1e-6);
-  assert.ok(Math.abs(viewer.camera.positionCartographic.height - 21.7) < 1e-6);
+  assert.ok(Math.abs(camera.pose().height - 21.7) < 1e-6);
+  // the click was heard once: a second one does nothing
+  const observer = handle.observer;
+  renderer.testing.pointer('click', 30, 30);
+  await settle();
+  assert.equal(handle.observer, observer);
+});
+
+test('pick on map: Escape cancels and gives the pointer back; a newer claim ends the pick', () => {
+  const { doc, renderer, viewer, handle } = setup();
+  const input = findInput(viewer);
+  click(doc.body.find('open'));
+  click(doc.body.find('pick'));
+  assert.equal(input.isPointerFree(), false);
+  doc.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }));
+  assert.equal(input.isPointerFree(), true);
+  assert.ok(!doc.body.classList.contains('gev-sky-picking'));
+  renderer.testing.pointer('click', 10, 10);
+  assert.equal(handle.active, false, 'no pick is waiting');
+
+  click(doc.body.find('pick'));
+  const other = input.claimPointer('draw');
+  assert.ok(!doc.body.classList.contains('gev-sky-picking'), 'told it lost');
+  other.release();
+  handle.destroy();
+  assert.equal(input.isPointerFree(), true);
 });
 
 test('a wild pick (tile glitch) falls back to the ellipsoid and samples the height', async () => {
@@ -597,10 +605,10 @@ test('place search uses the existing keyless geocoder', async () => {
 });
 
 test('flat horizon hides the globe; grid and live/fixed time go to the URL flags', async () => {
-  const { doc, viewer, timers, location, handle } = setup();
+  const { doc, globe, timers, location, handle } = setup();
   await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
   click(doc.body.find('flat'));
-  assert.equal(viewer.scene.globe.show, false);
+  assert.equal(globe.isGlobeVisible(), false);
   assert.equal(doc.body.find('flat').getAttribute('aria-pressed'), 'true');
   click(doc.body.find('grid'));
   const time = doc.body.find('time');
@@ -611,17 +619,32 @@ test('flat horizon hides the globe; grid and live/fixed time go to the URL flags
   assert.match(location.href, /svf=3/);
   assert.match(location.href, /sv=[^&#]*,\d{4}-\d\d-\d\dT\d\d:\d\d:00Z/);
   click(doc.body.find('flat'));
-  assert.equal(viewer.scene.globe.show, true);
+  assert.equal(globe.isGlobeVisible(), true);
   click(doc.body.find('live'));
   assert.equal(handle.clock.mode, 'live');
   handle.exit();
-  assert.equal(viewer.scene.globe.show, true);
+  assert.equal(globe.isGlobeVisible(), true);
+});
+
+test("the flat horizon's hidden globe comes back on exit, and a map that was hidden stays hidden", async () => {
+  const { doc, globe, handle } = setup();
+  await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
+  click(doc.body.find('flat'));
+  assert.equal(globe.isGlobeVisible(), false);
+  handle.exit();
+  assert.equal(globe.isGlobeVisible(), true, 'back on exit');
+  // photoreal: the surface is already hidden; Sky leaves it so
+  globe.setGlobeVisible(false);
+  await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
+  assert.equal(globe.isGlobeVisible(), false);
+  handle.exit();
+  assert.equal(globe.isGlobeVisible(), false);
 });
 
 test('a shared sv link opens straight into the sky with its view, time and flags', async () => {
   const href =
     'https://gev.test/?sv=29.7604,-95.3698,250,12.5,40,2026-10-12T00:15:00Z&svf=2#v=2&lat=1&lon=2';
-  const { viewer, timers, handle } = setup({ href });
+  const { frame, timers, handle } = setup({ href });
   assert.equal(handle.active, false);
   timers.flush();
   await settle();
@@ -634,55 +657,60 @@ test('a shared sv link opens straight into the sky with its view, time and flags
   assert.equal(handle.flags.grid, true);
   assert.equal(handle.clock.mode, 'fixed');
   assert.equal(
-    Cesium.JulianDate.toIso8601(viewer.clock.currentTime, 0),
-    '2026-10-12T00:15:00Z',
+    new Date(frame.time()).toISOString(),
+    '2026-10-12T00:15:00.000Z',
   );
 });
 
 test('the shell navigation policy can refuse (cockpit); following hides the button', async () => {
-  const { doc, viewer, handle } = setup({ runNavigation: () => false });
+  const { doc, camera, handle } = setup({ runNavigation: () => false });
   await handle.enterAt({ latDeg: 1, lonDeg: 2, source: 'manual' });
   assert.equal(handle.active, false);
   assert.match(
     doc.body.find('status').textContent,
     /not available in this mode/,
   );
-  viewer.trackedEntity = {};
-  viewer.trackedEntityChanged.raiseEvent();
+  const target = {
+    key: 'flights:a1',
+    position: () => null,
+    frame: 'enu',
+    viewFrom: { x: 0, y: -100, z: 50 },
+  };
+  camera.follow(target);
   assert.equal(doc.body.find('open').hidden, true);
-  viewer.trackedEntity = undefined;
-  viewer.trackedEntityChanged.raiseEvent();
+  camera.follow(null);
   assert.equal(doc.body.find('open').hidden, false);
 });
 
 test('the shell lifetime destroys the view (and restores the camera if active)', async () => {
   const removers = new Set();
-  const { doc, viewer, handle } = setup({ lifetime: { removers } });
+  const { doc, camera, handle } = setup({ lifetime: { removers } });
   assert.equal(removers.size, 1);
-  const pos = Cesium.Cartesian3.clone(viewer.camera.position);
+  const pos = camera.pose().position;
   await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
+  assert.equal(camera.controls.enabled, false);
   for (const remove of removers) remove();
   assert.equal(handle.destroyed, true);
-  assert.ok(Cesium.Cartesian3.distance(viewer.camera.position, pos) < 1e-6);
+  assert.ok(distance(camera.pose().position, pos) < 1e-6);
   assert.equal(doc.body.find('open'), null);
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, true);
+  assert.equal(camera.controls.enabled, true);
 });
 
 test('another navigation taking the camera ends Sky mode without fighting it', async () => {
-  const { viewer, timers, handle } = setup();
+  const { camera, timers, handle } = setup();
   await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
   const tick = [...timers.pending.values()].find((t) => t.every);
   tick.fn();
   assert.equal(handle.active, true, 'camera still at the eye');
-  const away = Cesium.Cartesian3.fromDegrees(-74, 40.7, 5000);
-  viewer.camera.setView({ destination: away });
+  camera.setView({ destination: { lon: -74, lat: 40.7, height: 5000 } });
+  const away = camera.pose().position;
   tick.fn();
   assert.equal(handle.active, false);
   assert.ok(
-    Cesium.Cartesian3.distance(viewer.camera.position, away) < 1e-6,
+    distance(camera.pose().position, away) < 1e-6,
     'camera left where the other navigation put it',
   );
-  assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, true);
+  assert.equal(camera.controls.enabled, true);
 });
 
 test('describeObserver and toLocalInputValue', () => {
@@ -918,10 +946,10 @@ test('redraws reuse the cached canvas size (no forced layout per frame); a resiz
     }
   };
   try {
-    const { viewer, handle } = setup();
+    const { renderer, handle } = setup();
     // one on the globe canvas (size cache); adds one on the toolbar
     const canvasObserver = observers.find(
-      (o) => o.targets[0] === viewer.scene.canvas,
+      (o) => o.targets[0] === renderer.canvas,
     );
     assert.ok(canvasObserver, 'the globe canvas is observed');
     await handle.enterAt({
@@ -929,7 +957,7 @@ test('redraws reuse the cached canvas size (no forced layout per frame); a resiz
       lonDeg: -95.3698,
       source: 'manual',
     });
-    const globe = viewer.scene.canvas;
+    const globe = renderer.canvas;
     let width = 1200;
     let reads = 0;
     Object.defineProperty(globe, 'clientWidth', {
@@ -1176,9 +1204,9 @@ test('ACCEPT: permission denied (iOS) shows the message and drag still works; LA
   );
 });
 
-test('the phone drives the real Cesium camera (true north via declination, roll in phone mode); a tap keeps pointing, a drag takes over and levels the roll', async () => {
+test('the phone drives the renderer camera (true north via declination, roll in phone mode); a tap keeps pointing, a drag takes over and levels the roll', async () => {
   const win = sensorWindow();
-  const { doc, viewer, handle } = pointingSetup(win);
+  const { doc, viewer, camera, handle } = pointingSetup(win);
   await handle.enterAt({ latDeg: 29.7604, lonDeg: -95.3698, source: 'manual' });
   const point = doc.body.find('point');
   click(point);
@@ -1196,11 +1224,8 @@ test('the phone drives the real Cesium camera (true north via declination, roll 
   );
   assert.ok(Math.abs(handle.view.azDeg - 90) < 1e-6, `az ${handle.view.azDeg}`);
   assert.ok(Math.abs(handle.view.elDeg) < 1e-6);
-  let look = worldDirectionToAzEl(
-    Cesium,
-    viewer.camera.positionWC,
-    viewer.camera.directionWC,
-  );
+  let pose = camera.pose();
+  let look = worldDirectionToAzEl(pose.position, pose.direction);
   assert.ok(Math.abs(look.azDeg - 90) < 1e-6 && Math.abs(look.elDeg) < 1e-6);
   const status = doc.body.find('orient-status').textContent;
   assert.match(status, /declination 2\.0° E/);
@@ -1212,19 +1237,15 @@ test('the phone drives the real Cesium camera (true north via declination, roll 
   // tilted up 30 deg and rolled sideways: roll reaches the camera
   win.fire('deviceorientationabsolute', portraitPose(88, 30, 15));
   assert.ok(Math.abs(handle.view.rollDeg) > 5, `roll ${handle.view.rollDeg}`);
+  const roll = camera.pose().roll;
   assert.ok(
-    Math.abs(viewer.camera.roll - (handle.view.rollDeg * Math.PI) / 180) <
-      1e-6 ||
+    Math.abs(roll - (handle.view.rollDeg * Math.PI) / 180) < 1e-6 ||
       Math.abs(
-        Math.abs(viewer.camera.roll - (handle.view.rollDeg * Math.PI) / 180) -
-          2 * Math.PI,
+        Math.abs(roll - (handle.view.rollDeg * Math.PI) / 180) - 2 * Math.PI,
       ) < 1e-6,
   );
-  look = worldDirectionToAzEl(
-    Cesium,
-    viewer.camera.positionWC,
-    viewer.camera.directionWC,
-  );
+  pose = camera.pose();
+  look = worldDirectionToAzEl(pose.position, pose.direction);
   assert.ok(Math.abs(look.elDeg - handle.view.elDeg) < 1e-6);
   // a tap (no movement) does not stop pointing
   const canvas = viewer.container.find('canvas');

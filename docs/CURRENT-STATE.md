@@ -3500,10 +3500,17 @@ The **Sky** button puts the camera at eye height on a chosen point (a
 picked point on the globe, the browser location, or typed `lat, lon` / a
 place name through the keyless geocoder) and looks up. Drag, pinch, wheel
 and arrow keys look around; zoom changes the field of view. **Back to map**
-restores the previous camera, inputs, clock and scene flags. Code is in
+restores the previous camera pose, field of view, camera input, collision
+mode and the globe's look (lighting, stars, globe surface). Code is in
 `src/skyView/`, mounted from `ApplicationShell._initSkyView()` as a lazy
 `import()` so the sky catalogues and the satellite worker stay out of the
-startup bundle.
+startup bundle. Sky reaches the renderer only through its ports, found from
+the application's scene object (`src/render/rendererOf.js`): the camera,
+frame, query, input and globe ports and the height service
+(`src/queries/heights.js`); it imports no engine. A flat horizon hides the
+globe surface only: 3D tiles cannot be hidden through the ports, so Clear
+view keeps the attribution line. A camera orbiting a `lookAt` target comes
+back in the world frame at the same pose.
 
 - **Horizon.** The real terrain profile when terrain is loaded, a flat
   painted ground otherwise; the sky brightness follows the Sun's altitude
@@ -3527,8 +3534,10 @@ startup bundle.
   requested inside the tap. A drag always takes over. Needs a secure
   (`https://`) page; otherwise the view explains why and keeps dragging.
 - **Sky time.** `skyClock.js` is the only time for the overlay, the
-  satellite ticks, the ephemeris and `viewer.clock`: live, fixed, or
-  playing at a chosen rate. The control has step, play, reverse and a rate selector, plus
+  satellite ticks, the ephemeris and the renderer's scene time (Sky stamps
+  it in a frame-port `preUpdate` listener after the application's own, while
+  active; exiting drops the listener and the world's time resumes): live,
+  fixed, or playing at a chosen rate. The control has step, play, reverse and a rate selector, plus
   the presets Sunset, Twilight end, Midnight, Moonrise and ISS pass. The
   state is shared as `?sv=` (and `svf=`); banners explain stale elements
   and out-of-range times.
