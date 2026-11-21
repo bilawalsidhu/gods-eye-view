@@ -14,6 +14,8 @@ _The window through which we see our world._
 
 Click any satellite, plane, ship or public camera and you can track it. Turn on FLIR mode and suddenly you're wondering, holy crap, is this real? And it's free, and open source.
 
+God’s Eye View™ is a trademark of Metaversity LLC, used under license by Halfpixel, Inc. [Official download page](https://godseyeview.ai/download/).
+
 **[One-click install with Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view)** · **[Run it from the terminal](#-quick-start)** · **[Hosted version waitlist](https://godseyeview.ai/online/)**
 
 🏆 **#1 on GitHub Trending**, daily and weekly · **[#8 Product of the Day](https://www.producthunt.com/products/god-s-eye-view?launch=god-s-eye-view)**, hunted by Chris Messina · _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
