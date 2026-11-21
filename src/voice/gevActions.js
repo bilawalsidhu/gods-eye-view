@@ -1210,13 +1210,12 @@ export function createGevActionRunner({
           args.type ||
           args.filterType,
       );
-      let contextChangedForEntry = false;
-      let priorContextMode = null;
-      let rollbackTarget = null;
-      if (
-        action === 'enter' &&
-        typeof styleManager.setContextMode === 'function'
-      ) {
+      // Entry changes no Context mode, layer or detection setting, as the
+      // COCKPIT button does not. The one exception is a military entry while
+      // Military Flights is off: that layer is switched on as a plain layer
+      // the person can switch off, and Contacts stays as it is.
+      let rollbackTarget;
+      if (action === 'enter') {
         if (!current()) {
           return {
             ok: false,
@@ -1227,56 +1226,33 @@ export function createGevActionRunner({
           };
         }
         rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
-        const contextState =
-          typeof styleManager.getContextModeState === 'function'
-            ? styleManager.getContextModeState()
-            : {};
-        priorContextMode = contextState?.mode || null;
-        const contactsReady =
-          contextState?.mode === 'flights' &&
-          contextState?.active !== false &&
-          contextState?.changing !== true;
-        if (!contactsReady) {
-          const contextResult = await styleManager.setContextMode('flights', {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
-            // must stay inert: claiming here would cancel a pending shared
-            // style/detection restore the operator never overrode.
-            claimVisualAuthority: false,
-          });
-          contextChangedForEntry = contextResult?.ok === true;
-          if (contextResult?.ok !== true || !current()) {
-            const contextRollback = contextChangedForEntry
-              ? await styleManager.setContextMode(priorContextMode, {
-                  claimVisualAuthority: false,
-                })
-              : null;
+        if (
+          targetLayer === 'military' &&
+          dataManager.layers?.has?.('military') &&
+          !dataManager.isEnabled?.('military')
+        ) {
+          const layer = await runGevAction(
+            'set_layer_visibility',
+            { layerId: 'military', enabled: true },
+            runOptions,
+          );
+          if (layer?.ok !== true || !current()) {
             return {
               ok: false,
               action: 'control_cockpit',
-              cancelled: !current() || Boolean(contextResult?.cancelled),
+              cancelled: !current() || Boolean(layer?.cancelled),
               error:
-                contextResult?.error ||
-                'Contacts context could not be established for Cockpit entry',
-              context: contextResult
-                ? withContextModeVocabulary(contextResult)
-                : null,
-              contextRollback: withContextModeVocabulary(contextRollback),
+                layer?.error || 'Military Flights could not be switched on',
+              layer,
               state: styleManager.getCockpitState?.() || null,
             };
           }
         }
       }
-      // Contacts activation can adopt a newer explicit aircraft selection.
-      // Sample only after that transaction settles so an older voice snapshot
-      // cannot overwrite the operator's newer choice.
       const selectedTarget =
         action === 'enter' ? selectedCockpitTarget(dataManager) : null;
-      let cockpitResult;
       try {
-        cockpitResult = await styleManager.controlCockpit(action, {
+        return await styleManager.controlCockpit(action, {
           notificationToken,
           targetLayer,
           aircraftClass,
@@ -1284,37 +1260,13 @@ export function createGevActionRunner({
           rollbackTarget,
         });
       } catch (error) {
-        cockpitResult = {
+        return {
           ok: false,
           action: 'control_cockpit',
           error: error instanceof Error ? error.message : String(error),
           state: styleManager.getCockpitState?.() || null,
         };
       }
-      if (
-        action === 'enter' &&
-        cockpitResult?.ok !== true &&
-        contextChangedForEntry
-      ) {
-        const contextRollback = await styleManager.setContextMode(
-          priorContextMode,
-          {
-            // Undoing this action's own precondition — still choreography.
-            claimVisualAuthority: false,
-            ...(current()
-              ? {
-                  signal: runOptions.signal,
-                  isCurrent: runOptions.isCurrent,
-                }
-              : {}),
-          },
-        );
-        return {
-          ...cockpitResult,
-          contextRollback: withContextModeVocabulary(contextRollback),
-        };
-      }
-      return cockpitResult;
     }
 
     if (name === 'show_data_layers_menu') {

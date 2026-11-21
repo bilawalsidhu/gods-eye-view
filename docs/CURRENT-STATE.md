@@ -9093,8 +9093,15 @@ apply to `public/` assets or built-preview serving.
   ending, by its own switch or one of its layers going off, restores the
   pre-Contacts layers but keeps the ridden one and the view; Live Signals then
   drops the rows Contacts built and shows `CONTEXT STANDBY`. The visible
-  Cockpit actions, double-click and voice use the same gate; voice entry still
-  opens Contacts first, as its layer-targeted entry navigates through Contacts.
+  Cockpit actions, double-click and voice use the same gate. Voice entry, like
+  the COCKPIT button, never turns Contacts or detection on. A
+  voice entry that names a layer or class ("a military helicopter") searches
+  that layer's own aircraft, nearest first, from the followed aircraft or the
+  ground under the camera, and follows the nearest match (the followed
+  aircraft counts when it matches) before it enters
+  (`_retargetCockpitEntryLayer` in `src/ui/cockpitCoordinator.js`). A military
+  request while Military Flights is off switches that layer on as a plain
+  layer the person can switch off; Contacts stays as it is.
   The ship bridge and the orbital view have their own own-layer gates
   (`bridgeEntryAllowed`, `orbitEntryAllowed`; see
   [Ship bridge view](#ship-bridge-view) and [Orbital view](#orbital-view)).

@@ -1165,7 +1165,10 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
     mobileCockpit[1],
     /@media \(min-width: 390px\) and \(min-height: 240px\),\s*\(min-height: 450px\) \{\s*body\.cockpit-mode\.mobile-shell/,
   );
-  assert.match(css, /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/);
+  assert.match(
+    css,
+    /\.cockpit-visor-shell \{[^}]*?inset:\s*var\(--cockpit-visor-top\)/,
+  );
   assert.match(
     mobileCockpit[1],
     /body\.cockpit-mode \.cockpit-utility-control\.is-expanded[\s\S]*?top:\s*96px;/,
@@ -1185,8 +1188,14 @@ test('mobile Cockpit prioritizes flight instruments and collision-safe controls'
 });
 
 test('the unread Stories announcement waits until Cockpit closes', () => {
-  assert.match(css, /body\.cockpit-mode #gev-stories #hPop \{\s*display:\s*none;\s*\}/);
-  const storiesView = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'views', 'StoriesView.vue'), 'utf8');
+  assert.match(
+    css,
+    /body\.cockpit-mode #gev-stories #hPop \{\s*display:\s*none;\s*\}/,
+  );
+  const storiesView = fs.readFileSync(
+    path.join(ROOT, 'src', 'ui', 'views', 'StoriesView.vue'),
+    'utf8',
+  );
   assert.match(
     storiesView,
     /async function openExplore\(\) \{[^}]*?if \(await store\.controller\.open\(\)\) markPopSeen\(\);/,
@@ -1374,12 +1383,17 @@ test('voice Cockpit entry honours a requested contact layer before it enters', (
 
   const retarget = ui.slice(
     ui.indexOf('  _retargetCockpitEntryLayer({'),
-    ui.indexOf('   * Controls cockpit entry/exit and context navigation.'),
+    ui.indexOf('  controlCockpit(\n'),
   );
   assert.match(
     retarget,
-    /militaryAwarenessLayer\.navigateNext\(\{\s*targetLayer,\s*aircraftClass,\s*origin: 'voice',\s*\}\)/,
-    'retargeting reuses filtered navigation with durable voice selection authority',
+    /layer\.trackById\?\.\(match\.icao24, \{ origin: 'voice' \}\)/,
+    'retargeting follows the match with durable voice selection authority',
+  );
+  assert.doesNotMatch(
+    retarget,
+    /militaryAwarenessLayer/,
+    'retargeting needs nothing from Contacts',
   );
   assert.match(
     retarget,
