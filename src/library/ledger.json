@@ -91,5 +91,6 @@
   ["kartverket-topo", "2h"],
   ["kartverket-toporaster", "2i"],
   ["mapterhorn-terrain", "2j"],
-  ["amsterdam-traffic-cameras", "2k"]
+  ["amsterdam-traffic-cameras", "2k"],
+  ["spc-day1-convective-outlook", "2l"]
 ]
