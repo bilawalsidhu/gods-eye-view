@@ -156,10 +156,10 @@ function services() {
   };
 }
 
-// Polygons, not Points: Cesium's GeoJsonDataSource builds a PinBuilder
-// billboard for a Point, which needs a DOM canvas the node test env lacks
-// (same workaround as upstream src/data/localGeojson.test.mjs). The layer
-// anchors polygons at their centre, so loading behaves the same.
+// Polygons, not Points: a Point is drawn on a pin whose symbol image the
+// layer's pin maker loads first, which the node test env has no canvas for
+// (src/data/localGeojson.test.mjs uses a polygon too). The layer anchors a
+// polygon's stem at its centre, so loading behaves the same.
 const feature = (id, lon, lat) =>
   JSON.stringify({
     type: 'Feature',
