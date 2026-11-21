@@ -1,7 +1,6 @@
 // USGS water layers: split by class, streams loaded by viewport tile.
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import {
   USGS_WATER_LAYERS,
   STREAM_MAX_VIEW_DEG,
@@ -21,6 +20,13 @@ import {
 } from '../../i18n/index.js';
 import { localGeoJsonServices } from '../../app/localGeojsonServices.js';
 import { sourceLabel } from '../../ui/layerNames.js';
+import { bindFakeGroundRenderer } from '../../testSupport/fakeGroundRenderer.mjs';
+
+// Every renderer double a test binds is unbound after that test.
+const unbinders = [];
+afterEach(() => {
+  while (unbinders.length) unbinders.pop()();
+});
 
 const tile = (x, y) => ({
   bounds: [x * 4 - 180, y * 4 - 90, x * 4 - 176, y * 4 - 86],
@@ -62,14 +68,17 @@ test('edge-touching tiles are excluded (no needless fetch)', () => {
 });
 
 test('dateline-crossing viewport selects stream tiles on both sides', () => {
-  const viewer = {
-    camera: {
-      computeViewRectangle: () => Cesium.Rectangle.fromDegrees(178, 50, -178, 54),
-    },
-    scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
-  };
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer);
+  unbinders.push(fake.unbind);
+  fake.renderer.camera.viewRectangle = () => ({
+    west: 178,
+    south: 50,
+    east: -178,
+    north: 54,
+  });
   const box = viewBoxDegrees(viewer);
-  assert.ok(box, 'a narrow wrapped Cesium viewport must be valid');
+  assert.ok(box, 'a narrow wrapped viewport must be valid');
   const datelineTiles = {
     '89_35': tile(89, 35),
     '0_35': tile(0, 35),
@@ -181,47 +190,18 @@ const MANIFEST = {
   },
 };
 
-/** Minimal Cesium-viewer stand-in whose view rectangle the test controls. */
+/**
+ * A renderer double bound to a fresh viewer, whose view rectangle (degrees)
+ * the test controls through `boxRef.box`. Unbound after the test.
+ */
 function fakeViewer(boxRef) {
-  const moveEnd = new Cesium.Event();
-  const sources = [];
-  return {
-    moveEnd,
-    sources,
-    camera: {
-      moveEnd,
-      computeViewRectangle: () =>
-        boxRef.box
-          ? Cesium.Rectangle.fromDegrees(
-              boxRef.box.west,
-              boxRef.box.south,
-              boxRef.box.east,
-              boxRef.box.north,
-            )
-          : undefined,
-      positionWC: new Cesium.Cartesian3(0, 0, 1e7),
-      positionCartographic: { height: 1e6 },
-      flyTo() {},
-    },
-    scene: {
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      preRender: new Cesium.Event(),
-      requestRender() {},
-      canvas: { clientWidth: 800, clientHeight: 600 },
-      screenSpaceCameraController: {},
-    },
-    dataSources: {
-      add: async (s) => {
-        sources.push(s);
-        return s;
-      },
-      remove: (s) => {
-        const i = sources.indexOf(s);
-        if (i >= 0) sources.splice(i, 1);
-        return true;
-      },
-    },
-  };
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer);
+  unbinders.push(fake.unbind);
+  fake.renderer.camera.viewRectangle = () =>
+    boxRef.box ? { ...boxRef.box } : null;
+  viewer.fake = fake;
+  return viewer;
 }
 
 function fakeFetch(log) {
@@ -244,7 +224,7 @@ function fakeFetch(log) {
 
 const opts = (log) => ({
   fetchImpl: fakeFetch(log),
-  screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
+  inputFor: () => ({ onClick: () => () => {}, suspendCamera: () => () => {} }),
 });
 
 test('rivers layer loads only the in-view tiles, then reloads on camera settle', async (t) => {
@@ -259,6 +239,7 @@ test('rivers layer loads only the in-view tiles, then reloads on camera settle',
     ['stream/20_30.geojsonl'],
   );
   assert.equal(rivers.getStats().count, 1);
+  const liveSetsAfterLoad = viewer.fake.liveSets().length;
   assert.deepEqual(rivers.getViewportDiagnostics(), {
     status: 'ok',
     tiles: ['20_30'],
@@ -267,7 +248,7 @@ test('rivers layer loads only the in-view tiles, then reloads on camera settle',
   // Pan east: settle -> only the newly visible tile set is fetched.
   log.length = 0;
   boxRef.box = { west: -96, south: 33, east: -94, north: 35 };
-  viewer.moveEnd.raiseEvent();
+  viewer.fake.moveEnd.raise();
   t.mock.timers.tick(400);
   await new Promise((r) => setImmediate(r));
   await new Promise((r) => setImmediate(r));
@@ -277,14 +258,19 @@ test('rivers layer loads only the in-view tiles, then reloads on camera settle',
   );
   assert.deepEqual(rivers.getViewportDiagnostics().tiles, ['21_31']);
   assert.equal(
-    viewer.sources.length,
+    rivers.getStats().count,
     1,
-    'old tile entities released, not stacked',
+    'old tile features released, not stacked',
+  );
+  assert.equal(
+    viewer.fake.liveSets().length,
+    liveSetsAfterLoad,
+    'old tile draw sets released, not stacked',
   );
 
   // Same view again: no refetch.
   log.length = 0;
-  viewer.moveEnd.raiseEvent();
+  viewer.fake.moveEnd.raise();
   t.mock.timers.tick(400);
   await new Promise((r) => setImmediate(r));
   assert.equal(log.length, 0);
@@ -491,19 +477,18 @@ async function openWaterLayer(cls, overrides = {}) {
         ? { west: -100, south: 30, east: -96, north: 34 }
         : null,
   });
-  viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(-97, 32, 2_000_000);
-  viewer.camera.frustum = { fov: Math.PI / 3 };
+  viewer.fake.setEye(-97, 32, 2_000_000);
   const layers = createUsgsWaterLayers(host, {
     fetchImpl,
-    screenSpaceEventHandlerFactory: () => ({
-      setInputAction() {},
-      destroy() {},
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
     }),
     projectToWindow: () => ({ x: 400, y: 300 }),
   });
   const layer = layers[cls === 'stream' ? 0 : 1];
   await layer.enable(viewer);
-  viewer.scene.preRender.raiseEvent();
+  viewer.fake.preRender.raise();
   assert.equal(published.length, 1, 'the gauge card is published');
   assert.equal(published[0].title, 'Gauge Test');
   return {
@@ -513,7 +498,7 @@ async function openWaterLayer(cls, overrides = {}) {
     renders,
     fetched,
     /** One rendered frame, as the render request after a language change causes. */
-    frame: () => viewer.scene.preRender.raiseEvent(),
+    frame: () => viewer.fake.preRender.raise(),
     latest: () => published[published.length - 1],
   };
 }

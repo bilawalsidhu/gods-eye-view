@@ -12,9 +12,9 @@
  * The small classes (lakes/reservoirs, springs) load whole, but still
  * re-fetch on every enable so the hourly refresh shows up without a reload.
  */
-import * as Cesium from 'cesium';
 import { msg } from '../../i18n/marker.js';
 import { createLocalGeoJsonLayer } from '../../data/localGeojsonCore.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { usgsWaterCardDetails } from './copy.js';
 
 export const USGS_WATER_BASE = '/api/usgs-water';
@@ -61,18 +61,17 @@ export function parseJsonl(text) {
 
 /**
  * The camera view as a degree box, or null when it cannot be expressed as one
- * (looking at space / horizon). A west > east box crosses the antimeridian.
+ * (looking at space / horizon). The camera port's view rectangle is already
+ * in degrees; a west > east box crosses the antimeridian.
  */
 export function viewBoxDegrees(viewer) {
-  const rect = viewer?.camera?.computeViewRectangle?.(
-    viewer.scene?.globe?.ellipsoid,
-  );
+  const rect = findCamera(viewer)?.viewRectangle?.();
   if (!rect) return null;
   const box = {
-    west: Cesium.Math.toDegrees(rect.west),
-    south: Cesium.Math.toDegrees(rect.south),
-    east: Cesium.Math.toDegrees(rect.east),
-    north: Cesium.Math.toDegrees(rect.north),
+    west: rect.west,
+    south: rect.south,
+    east: rect.east,
+    north: rect.north,
   };
   if (!Object.values(box).every(Number.isFinite)) return null;
   if (box.north <= box.south || box.east === box.west) return null;
@@ -103,9 +102,10 @@ export function selectStreamTiles(tiles, box) {
         ]
       : [[box.west, box.east]];
   const picked = [];
-  // Degrees round-trip through radians (Cesium rectangles), so a view that
-  // stops exactly on a tile edge comes back a hair inside it. Without a
-  // tolerance that sliver fetches a whole neighbouring tile for nothing.
+  // Degrees round-trip through radians (renderers convert from radians), so a
+  // view that stops exactly on a tile edge comes back a hair inside it.
+  // Without a tolerance that sliver fetches a whole neighbouring tile for
+  // nothing.
   const EPS = 1e-6;
   for (const [key, tile] of Object.entries(tiles || {})) {
     const [w, s, e, n] = tile.bounds || [];
@@ -143,18 +143,18 @@ async function fetchText(url, signal, fetchImpl) {
  *   global `fetch`).
  * @param {string} [options.base] URL prefix of the server's water files
  *   (default `/api/usgs-water`).
- * @param {Function} [options.screenSpaceEventHandlerFactory] Passed to each
- *   local GeoJSON layer: `(canvas) => handler` for the click handler.
+ * @param {Function} [options.inputFor] Passed to each local GeoJSON layer:
+ *   `(viewer) => input` with `onClick` and `suspendCamera`, the click input.
  * @param {Function} [options.projectToWindow] Passed to each local GeoJSON
- *   layer: `(scene, position) => {x, y}|undefined`, how a card position is
- *   projected to the screen (default: Cesium's world-to-window transform).
+ *   layer: `(viewer, position) => {x, y}|undefined`, how a card position is
+ *   projected to the screen (default: the layer core's own projection).
  */
 export function createUsgsWaterLayers(
   services,
   {
     fetchImpl = (...a) => fetch(...a),
     base = USGS_WATER_BASE,
-    screenSpaceEventHandlerFactory,
+    inputFor,
     projectToWindow,
   } = {},
 ) {
@@ -218,9 +218,7 @@ export function createUsgsWaterLayers(
         // application's translator when the services carry one.
         cardDetails: (props) =>
           usgsWaterCardDetails(props, { i18n: services.i18n }),
-        ...(screenSpaceEventHandlerFactory
-          ? { screenSpaceEventHandlerFactory }
-          : {}),
+        ...(inputFor ? { inputFor } : {}),
         ...(projectToWindow ? { projectToWindow } : {}),
       },
       services,
@@ -251,8 +249,9 @@ export function createUsgsWaterLayers(
     layer.enable = async (viewer) => {
       watchLocale();
       await baseEnable(viewer);
-      if (!spec.viewport || moveRemover || !viewer?.camera?.moveEnd) return;
-      moveRemover = viewer.camera.moveEnd.addEventListener(() => {
+      const camera = findCamera(viewer);
+      if (!spec.viewport || moveRemover || !camera) return;
+      moveRemover = camera.on('moveEnd', () => {
         clearTimeout(reloadTimer);
         // Settle briefly so a fling does not fetch every intermediate view.
         reloadTimer = setTimeout(() => {

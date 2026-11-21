@@ -987,7 +987,7 @@ export function createLocalGeoJsonLayer(
     );
   }
 
-  return {
+  const layer = {
     id,
     name,
     icon,
@@ -1569,6 +1569,7 @@ export function createLocalGeoJsonLayer(
       _error = null;
     },
   };
+  return layer;
 }
 
 /**
