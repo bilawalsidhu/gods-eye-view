@@ -11,6 +11,9 @@ import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
 import { t, translateKnown } from '../i18n/index.js';
 
+/** Actions whose success selects an entity on the map. */
+const SELECTION_ACTIONS = new Set(['select_nearest_aircraft', 'track_entity']);
+
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
   if (!element?.ownerDocument) return null;
@@ -147,10 +150,14 @@ export function createVoiceCommands({
     });
   });
   // Captions, plan and result card nested in the control; it only reads
-  // provider-neutral session events.
+  // provider-neutral session events. In the voice panel the card is the
+  // Preview's content, so the last reply stays until the next turn replaces
+  // it; only the card floating on the control hides when idle.
   const card = createCard({
     ui,
-    ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+    ...(panelHost
+      ? { onRender: () => panelMount?.panel.sync(), idleMs: null }
+      : {}),
   });
   panelMount = panelHost?.mount({
     ui,
@@ -279,6 +286,38 @@ export function createVoiceCommands({
         }),
       ]
     : [];
+  // A voice or chat selection shows in the right rail's Context panel, as a
+  // click's does: the assistant panel docked over the rail steps down to its
+  // bar, where the latest reply stays readable. A panel above the dock leaves
+  // the rail in view, so it stays as it is.
+  const dockedOverRail = (name) => {
+    const panel = ui.element(name);
+    return Boolean(
+      panel &&
+      !panel.hidden &&
+      panel.dataset?.placement === 'docked' &&
+      !panel.dataset.minimized,
+    );
+  };
+  if (panelMount)
+    layouts.push(
+      session.subscribe((event) => {
+        if (
+          event.type !== 'action-result' ||
+          event.result?.ok !== true ||
+          !SELECTION_ACTIONS.has(event.name)
+        )
+          return;
+        if (adapter.getStartOptions?.().textOnly) {
+          if (ui.state.chat.open && dockedOverRail('chatPanel'))
+            chat?.minimize({ focus: false });
+        } else if (
+          panelMount.panel.snapshot().panelOpen &&
+          dockedOverRail('voicePanel')
+        )
+          minimizeVoicePanel();
+      }),
+    );
   const unbindMiniPreview = panelMount
     ? bindVoiceMiniPreview({ ui, session })
     : null;

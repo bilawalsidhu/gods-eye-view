@@ -1627,7 +1627,7 @@ warning, capped and unknown cost states also appear in the dock heading when
 Settings is closed. The existing hard cost cap still stops the session and
 announces the reason.
 
-Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. Display events do not grant command authority.
+Automatic Voice Preview uses output from the active mounted provider, including late replies that may answer an older request. Manual panel choices remain until genuine local input rearms automatic presentation. Preview stays off when disabled, remains hidden in Cockpit, and retires on Stop or provider replacement. In the panel, the last reply stays until the next turn replaces it; only the voice card floating on a control without the panel hides 14 s after its last update. Display events do not grant command authority.
 
 Typed chat sits beside voice in the dock. Chat replies are silent and never
 request microphone access. The first message connects with the selected
@@ -1657,6 +1657,10 @@ and the chat shows a matching message.
 
 Chat and the voice panel sit above the dock or dock into the right rail's lane,
 which hides the rail until the panel minimizes or closes, or a rail panel opens.
+A voice or chat action that selects something (`select_nearest_aircraft`,
+`track_entity`) steps a panel docked in the lane down to its bar, so the rail
+and its Context panel show, as they do after a click; a panel above the dock
+leaves the rail in view and stays as it is.
 Minimized panels always sit as a bar centred above the dock; restoring returns a
 docked panel to the lane. A centred panel steps down to its bar when the pointer
 reaches the Location or Visual Presets button and rests above an open tray,
