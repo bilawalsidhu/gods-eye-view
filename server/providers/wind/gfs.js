@@ -125,6 +125,7 @@ export async function loadOptionalScalar({
   fetchImpl,
   decodeImpl,
   signal,
+  targetDx = 1,
   timeoutMs = 12_000,
 }) {
   if (!range) return undefined;
@@ -140,7 +141,13 @@ export async function loadOptionalScalar({
       fetchImpl,
       signal: controller.signal,
     });
-    const value = await decodeImpl(bytes);
+    // Sampling here keeps an unusable companion on the same wind-only path as
+    // an undecodable one. The decoder gets the signal so a timeout or a
+    // cancelled refresh stops waiting for a decode that runs off this thread.
+    const value = sampleWindField(
+      await decodeImpl(bytes, { targetDx, signal: controller.signal }),
+      targetDx,
+    );
     controller.signal.throwIfAborted();
     return value;
   } catch {
@@ -158,17 +165,80 @@ import {
   selectLatestGfsCycle,
   nearestGfsStep,
 } from './catalog.js';
-import { decodeWindGribMessage } from './decode.js';
-import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
+import { decodeWindGribInWorker } from './decoder.js';
+import {
+  resampleWeatherSnapshot,
+  sampleWindField,
+  weatherScalarMetadata,
+} from './grid.js';
+
+/**
+ * Load U, V and the optional companion from one forecast object and resample
+ * them to the display grid.
+ *
+ * `windCache` (a Map owned by one `windProxy`) retains the sampled U/V of the
+ * last object loaded per model. A later request for the same object and byte
+ * ranges, such as an overlay change or a refresh within the same forecast
+ * step, then fetches and decodes only the companion. It holds two Float64
+ * display grids per model (2 x 65,160 x 8 B = 1.04 MB at 1 degree) and is
+ * written only after the pair has passed every wind check.
+ */
+export async function loadWeatherSnapshot({
+  model,
+  url,
+  ranges,
+  scalarRange,
+  overlay,
+  targetDx,
+  fetchImpl,
+  decodeImpl,
+  signal,
+  windCache,
+}) {
+  const key = [
+    url,
+    `${ranges.u.start}-${ranges.u.end}`,
+    `${ranges.v.start}-${ranges.v.end}`,
+    targetDx,
+  ].join('|');
+  const kept = windCache?.get(model);
+  const wind = kept?.key === key ? kept : null;
+  // All selected messages come from this one issue/valid-time object.
+  const load = async (range) =>
+    sampleWindField(
+      await decodeImpl(await fetchRange({ url, ...range, fetchImpl, signal }), {
+        targetDx,
+        signal,
+      }),
+      targetDx,
+    );
+  const [u, v, scalar] = await Promise.all([
+    wind ? wind.u : load(ranges.u),
+    wind ? wind.v : load(ranges.v),
+    loadOptionalScalar({
+      range: scalarRange,
+      url,
+      fetchImpl,
+      decodeImpl,
+      signal,
+      targetDx,
+    }),
+  ]);
+  signal?.throwIfAborted();
+  const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
+  if (!wind) windCache?.set(model, { key, u, v });
+  return fields;
+}
 
 /** Fetch and decode the GFS 10 m wind field valid closest to now. */
 export async function fetchGfsWind({
   fetchImpl = fetch,
   now = () => Date.now(),
   targetDx = 1,
-  decodeImpl = decodeWindGribMessage,
+  decodeImpl = decodeWindGribInWorker,
   signal,
   overlay = 'none',
+  windCache,
 } = {}) {
   weatherScalarMetadata(overlay);
   const nowMs = now();
@@ -194,22 +264,18 @@ export async function fetchGfsWind({
       /* A missing optional field does not discard valid wind. */
     }
   }
-  // All selected messages come from this one issue/valid-time object.
-  const load = async (range) =>
-    decodeImpl(await fetchRange({ url: base, ...range, fetchImpl, signal }));
-  const [u, v, scalar] = await Promise.all([
-    load(ranges.u),
-    load(ranges.v),
-    loadOptionalScalar({
-      range: scalarRange,
-      url: base,
-      fetchImpl,
-      decodeImpl,
-      signal,
-    }),
-  ]);
-  signal?.throwIfAborted();
-  const fields = resampleWeatherSnapshot({ u, v, scalar, overlay, targetDx });
+  const fields = await loadWeatherSnapshot({
+    model: 'gfs',
+    url: base,
+    ranges,
+    scalarRange,
+    overlay,
+    targetDx,
+    fetchImpl,
+    decodeImpl,
+    signal,
+    windCache,
+  });
   const runIso = new Date(runMs).toISOString();
   const validIso = new Date(runMs + forecastHour * 3600_000).toISOString();
   return {
