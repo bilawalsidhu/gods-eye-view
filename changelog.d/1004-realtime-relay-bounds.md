@@ -1,1 +1,0 @@
-* Cap OpenAI-compatible Realtime SDP relay replies at 64 KiB, discard gateway error bodies without buffering, and share the existing OpenAI per-IP throttle with the relay (follow-up to marcobox's gateway support in #1004).
