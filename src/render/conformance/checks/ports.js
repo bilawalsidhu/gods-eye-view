@@ -3454,6 +3454,99 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.ageFade',
+      'a line, draped or not, fades with the age of its points as scene time moves on, without being sent again',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const t0 = Date.UTC(2026, 0, 1, 18);
+        r.frame.setTime(t0);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-age-fade' });
+        const line = (id, dLat, mode) => ({
+          id,
+          positions: [
+            at(-0.004, dLat, mode === 'draped' ? 0 : 20),
+            at(0.004, dLat, mode === 'draped' ? 0 : 20),
+          ],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          // Its west end a minute old at t0, its east end new.
+          ageFade: {
+            times: [t0 - 60_000, t0],
+            windowMs: 60_000,
+            alphaFloor: 0,
+          },
+        });
+        // Unfaded but narrowed to a quarter of its width where it is old.
+        const narrowed = {
+          ...line('narrowed', 0.0035, '3d'),
+          ageFade: {
+            times: [t0 - 60_000, t0],
+            windowMs: 60_000,
+            alphaFloor: 1,
+            widthFloor: 0.25,
+          },
+        };
+        lines.set([
+          line('air', 0.002, '3d'),
+          line('ground', -0.002, 'draped'),
+          narrowed,
+        ]);
+        // Whether the line at `dLon` is drawn green there, strongly, `dy`
+        // pixels off its middle.
+        const green = (dLon, dLat, dy = 0) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat, dLat > 0 ? 20 : 0));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y) + dy,
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, g, blue] = image.data;
+          return g > red + 80 && g > blue + 80;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(0.0035, dLat), `${what}: its new end drawn`);
+            ok(!green(-0.0035, dLat), `${what}: its old end faded`);
+          }
+          ok(green(-0.0035, 0.0035), 'narrowed: its old end drawn, unfaded');
+          ok(green(0.0035, 0.0035, 6), 'narrowed: its new end full width');
+          ok(
+            !green(-0.0035, 0.0035, 6),
+            'narrowed: its old end a quarter as wide',
+          );
+          // Two minutes on, all of it is old; back at t0 its new end is new.
+          r.frame.setTime(t0 + 120_000);
+          await drawn(h, r);
+          ok(!green(0.0035, 0.002), '3d: faded as time moved on');
+          ok(!green(0.0035, -0.002), 'draped: faded as time moved on');
+          r.frame.setTime(t0);
+          await drawn(h, r);
+          ok(green(0.0035, 0.002), '3d: new again back at t0');
+          ok(green(0.0035, -0.002), 'draped: new again back at t0');
+          equal(lines.size(), 3, 'never sent again');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineAgeFade' },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {
