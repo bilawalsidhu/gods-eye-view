@@ -135,9 +135,9 @@ export function createRendering({
       visualRecords.set(record, visual);
     }
     const { lat, lon } = drawnAt(record);
-    visual.position = anchorAt(lat, lon);
-    // A ship model's origin is its waterline: the sea surface, unlifted.
-    visual.waterline = anchorAt(lat, lon, 0);
+    visual.position = anchorAt(lat, lon, VESSEL_LIFT_M, record);
+    // A ship model's origin is its waterline: the water surface, unlifted.
+    visual.waterline = anchorAt(lat, lon, 0, record);
     visual.drawnLat = lat;
     visual.drawnLon = lon;
     // The world time it is drawn at, while it follows the clock.
@@ -163,18 +163,21 @@ export function createRendering({
   }
 
   /**
-   * Where an icon at `lat`/`lon` is anchored: VESSEL_LIFT_M above the sea
-   * surface (the geoid, once its grid has loaded).
+   * Where an icon at `lat`/`lon` is anchored: VESSEL_LIFT_M above the water
+   * surface (a lake's or river's own level where the terrain shows one, else
+   * the sea: the geoid, once its grid has loaded).
    * @param {number} lat
    * @param {number} lon
-   * @param {number} [liftM] Height above the sea surface (the icon's lift by
-   *   default; 0 for a ship model's waterline).
+   * @param {number} [liftM] Height above the water surface (the icon's lift
+   *   by default; 0 for a ship model's waterline).
+   * @param {Object|null} [record] The vessel drawn there: where the terrain
+   *   is not fetched yet, its last known water level stands in.
    * @returns {{x: number, y: number, z: number}} ECEF metres: icon items,
    *   focus and the layer's queries take it as it is.
    */
-  function anchorAt(lat, lon, liftM = VESSEL_LIFT_M) {
+  function anchorAt(lat, lon, liftM = VESSEL_LIFT_M, record = null) {
     const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(lat, lon),
+      components.tracking.currentWaterSurfaceM(lat, lon, record),
       liftM,
     );
     return fromDegrees(lon, lat, heightM);
@@ -183,12 +186,12 @@ export function createRendering({
   /**
    * Where a record's icon is anchored (see drawnAt and anchorAt).
    * @param {Object} record - Vessel record with a finite lat/lon.
-   * @param {number} [liftM] Height above the sea surface.
+   * @param {number} [liftM] Height above the water surface.
    * @returns {{x: number, y: number, z: number}} ECEF metres.
    */
   function anchorPosition(record, liftM = VESSEL_LIFT_M) {
     const { lat, lon } = drawnAt(record);
-    return anchorAt(lat, lon, liftM);
+    return anchorAt(lat, lon, liftM, record);
   }
 
   /**
@@ -199,7 +202,7 @@ export function createRendering({
    */
   function moveRecordVisual(record, visual, lat, lon) {
     const heightM = components.queries.vesselDatumHeightM(
-      components.tracking.currentGeoidN(lat, lon),
+      components.tracking.currentWaterSurfaceM(lat, lon, record),
       VESSEL_LIFT_M,
     );
     fromDegreesInto(lon, lat, heightM, visual.position);
@@ -332,7 +335,7 @@ export function createRendering({
       }
       return {
         motion: null,
-        pos: anchorAt(span.lat, span.lon),
+        pos: anchorAt(span.lat, span.lon, VESSEL_LIFT_M, record),
         expiresAt: untilMs,
         validFrom: fromMs,
       };
@@ -358,12 +361,12 @@ export function createRendering({
           : greatCircleAt(span.lat0, span.lon0, span.lat1, span.lon1, i / n);
     const a = at(k);
     const b = at(k + 1);
-    const to = anchorAt(b.lat, b.lon);
+    const to = anchorAt(b.lat, b.lon, VESSEL_LIFT_M, record);
     const courseDeg = vesselCourseDeg(record);
     return {
       motion: {
         kind: 'lerp',
-        from: anchorAt(a.lat, a.lon),
+        from: anchorAt(a.lat, a.lon, VESSEL_LIFT_M, record),
         to,
         t0,
         t1,

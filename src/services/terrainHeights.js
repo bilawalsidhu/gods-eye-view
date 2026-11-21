@@ -82,7 +82,7 @@ export function createTerrainHeights({
    * `resolveEllipsoidalGround`. Bounded at CACHE_MAX_ENTRIES; write through
    * `cacheStore` and read a consumer-facing hit through `cacheTouch` so the
    * eviction order stays least-recently-used.
-   * @type {Map<string, {ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}>}
+   * @type {Map<string, {ellipsoid: number, source: 'reearth'|'geoid-fallback', elevation?: number, retryAt?: number}>}
    */
   const cache = new Map();
 
@@ -96,7 +96,7 @@ export function createTerrainHeights({
    * cell it is parked on must not be evicted merely for having been resolved
    * early.
    * @param {string} key
-   * @param {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}} entry
+   * @param {{ellipsoid: number, source: 'reearth'|'geoid-fallback', elevation?: number, retryAt?: number}} entry
    */
   function cacheStore(key, entry) {
     cache.delete(key);
@@ -112,7 +112,7 @@ export function createTerrainHeights({
    * Read an entry and promote it to newest, so a coordinate a consumer keeps
    * asking about survives eviction. Returns undefined on a miss.
    * @param {string} key
-   * @returns {{ellipsoid: number, source: 'reearth'|'geoid-fallback', retryAt?: number}|undefined}
+   * @returns {{ellipsoid: number, source: 'reearth'|'geoid-fallback', elevation?: number, retryAt?: number}|undefined}
    */
   function cacheTouch(key) {
     const entry = cache.get(key);
@@ -164,13 +164,34 @@ export function createTerrainHeights({
   }
 
   /**
+   * The terrain service's own height above sea level (orthometric, against
+   * its own geoid) for a warm real entry, or null: a fallback entry, a cold
+   * point, or a service that sent no elevation. Comparing this with a
+   * threshold avoids the bundled geoid's difference from the service's
+   * (±1–2 m), which `cachedRealEllipsoidalGround` minus the bundled geoid
+   * would carry.
+   * @param {number} lat
+   * @param {number} lon
+   * @returns {number|null}
+   */
+  function cachedRealOrthometricGround(lat, lon) {
+    const entry = cacheTouch(cacheKey(lat, lon));
+    return entry &&
+      entry.source === 'reearth' &&
+      Number.isFinite(entry.elevation)
+      ? entry.elevation
+      : null;
+  }
+
+  /**
    * Fetches one chunk (<=CHUNK_SIZE points) from the `/api/terrain/heights`
    * proxy. Returns a Map keyed by the same rounded cache key so callers can
    * look results up positionally-independent of upstream response ordering.
    * Throws on any failure (non-ok response, network error, malformed body) —
    * callers decide the fallback behavior per point.
    * @param {Array<{key: string, lat: number, lon: number}>} chunk
-   * @returns {Promise<Map<string, number>>} key -> ellipsoid height (m)
+   * @returns {Promise<Map<string, {ellipsoid: number, source: 'reearth', elevation?: number}>>}
+   *   key -> the cache entry for that point
    */
   async function fetchChunk(chunk, requestSignal = signal) {
     // lon,lat order (matches the proxy's documented `points=lon,lat;…` contract
@@ -197,7 +218,7 @@ export function createTerrainHeights({
       const ellipsoid = body.results[i]?.ellipsoid;
       if (!Number.isFinite(ellipsoid))
         throw new Error(`non-finite ellipsoid height at index ${i}`);
-      out.set(chunk[i].key, ellipsoid);
+      out.set(chunk[i].key, realEntry(body.results[i]));
     }
     return out;
   }
@@ -302,15 +323,14 @@ export function createTerrainHeights({
         const resolved = await fetchChunk(chunk, requestSignal);
         requestSignal?.throwIfAborted();
         for (const item of chunk) {
-          const ellipsoid = resolved.get(item.key);
+          const entry = resolved.get(item.key);
           // Round 6: only a FINITE value may be cached as 'reearth'. A point
           // the upstream response omitted used to cache {ellipsoid: undefined,
           // source: 'reearth'} — permanently "warm" yet empty, so its floor
           // read null forever and every later warm skipped it (ATL verify:
           // one contact frozen at the geoid while its neighbors resolved).
           // An omitted point now caches nothing and retries on the next warm.
-          if (Number.isFinite(ellipsoid)) {
-            const entry = { ellipsoid, source: 'reearth' };
+          if (Number.isFinite(entry?.ellipsoid)) {
             resolvedThisCall.set(item.key, entry);
             cacheStore(item.key, entry);
           }
@@ -330,12 +350,11 @@ export function createTerrainHeights({
             : [];
         const fallback = [];
         chunk.forEach((item, index) => {
-          const ellipsoid = partial[index]?.ellipsoid;
-          if (!Number.isFinite(ellipsoid)) {
+          if (!Number.isFinite(partial[index]?.ellipsoid)) {
             fallback.push(item);
             return;
           }
-          const entry = { ellipsoid, source: 'reearth' };
+          const entry = realEntry(partial[index]);
           resolvedThisCall.set(item.key, entry);
           cacheStore(item.key, entry);
         });
@@ -374,6 +393,19 @@ export function createTerrainHeights({
   return {
     cachedEllipsoidalGround,
     cachedRealEllipsoidalGround,
+    cachedRealOrthometricGround,
     resolveEllipsoidalGround,
   };
+}
+
+/**
+ * A cache entry for one real terrain answer: its ellipsoidal height, and its
+ * height above sea level when the service sent one (`elevation`).
+ * @param {{ellipsoid: number, elevation?: number}} result
+ * @returns {{ellipsoid: number, source: 'reearth', elevation?: number}}
+ */
+function realEntry(result) {
+  const entry = { ellipsoid: result.ellipsoid, source: 'reearth' };
+  if (Number.isFinite(result.elevation)) entry.elevation = result.elevation;
+  return entry;
 }

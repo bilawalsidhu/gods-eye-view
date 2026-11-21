@@ -202,6 +202,8 @@ export function createLifecycle({
         state.feed.removeViewListener = camera.on('moveEnd', () => {
           components.ingestion.refreshIfMoved(activeViewer);
         });
+      // Vessels are drawn on the surface the globe shows: at 0 on a flat one.
+      components.tracking.watchSurface(activeViewer);
       vesselState.timeline?.start();
       return components.ingestion.loadLivePositions(activeViewer);
     },
@@ -209,6 +211,7 @@ export function createLifecycle({
     disable() {
       vesselState.timeline?.stop();
       removeViewListener();
+      components.tracking.unwatchSurface();
       state.feed.enabled = false;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels');
@@ -231,6 +234,7 @@ export function createLifecycle({
     destroy(viewer) {
       vesselState.timeline?.stop();
       removeViewListener();
+      components.tracking.unwatchSurface();
       const activeViewer = viewer || state.viewer;
       invalidateAisSession();
       releaseContinuousRender('ais-vessels'); // direct-destroy path (perf wave 2 fix)

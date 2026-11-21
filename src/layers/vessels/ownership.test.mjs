@@ -658,3 +658,107 @@ test('a feed with no AISStream key reports its key as required, and a live one d
   await layer.update();
   assert.equal(layer.getStats().keyRequired, false);
 });
+
+test('a poll asks the terrain for the water under the vessels in view, and a lake vessel moves onto it', async () => {
+  // Lake Michigan: water 176.8 m above sea level, 140.4 m ellipsoidal.
+  const cache = new Map();
+  const requested = [];
+  const ground = {
+    cachedRealEllipsoidalGround: (lat, lon) =>
+      cache.get(`${lat},${lon}`) ?? null,
+    cachedRealOrthometricGround: (lat, lon) =>
+      cache.has(`${lat},${lon}`) ? cache.get(`${lat},${lon}`) + 36.4 : null,
+    async resolveEllipsoidalGround(cells) {
+      requested.push(...cells.map((c) => `${c.lat},${c.lon}`));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      for (const c of cells) cache.set(`${c.lat},${c.lon}`, 140.4);
+    },
+  };
+  const viewer = {
+    camera: {
+      positionCartographic: {
+        latitude: (44 * Math.PI) / 180,
+        longitude: (-87 * Math.PI) / 180,
+        height: 5000,
+      },
+    },
+  };
+  bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
+  const lake = { ...observation('367000001'), latitude: 44, longitude: -87 };
+  const layer = createVesselLayer({
+    source: { getSnapshot: async () => snapshot([lake]) },
+    services: { ...services(), ground },
+  });
+  layer.testing._setVesselStateForTest({
+    viewer,
+    icons: createVesselIconBook(),
+  });
+  layer.testing._setAisRuntimeForTest({
+    now: () => 1000,
+    setTimeout,
+    clearTimeout,
+  });
+  await layer.update();
+  for (let i = 0; i < 10; i += 1)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.ok(requested.includes('44,-87'), 'the poll asked for its cell');
+  // Its own cell and the one it is heading into, each with the eight around.
+  assert.equal(requested.length, 18);
+  const [drawn] = layer.getAllPositions();
+  const height = Cesium.Cartographic.fromCartesian(drawn.position).height;
+  assert.ok(Math.abs(height - (140.4 + 3)) < 0.01, `drawn at ${height}`);
+});
+
+test('the bridge reads the lake under its ship, and its floor is the lower of sea and lake', async () => {
+  const cache = new Map();
+  const ground = {
+    cachedRealEllipsoidalGround: (lat, lon) =>
+      cache.get(`${lat},${lon}`) ?? null,
+    cachedRealOrthometricGround: (lat, lon) =>
+      cache.has(`${lat},${lon}`) ? cache.get(`${lat},${lon}`) + 36.4 : null,
+    async resolveEllipsoidalGround(cells) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      for (const c of cells) cache.set(`${c.lat},${c.lon}`, 140.4);
+    },
+  };
+  const viewer = {
+    camera: {
+      positionCartographic: {
+        latitude: (44 * Math.PI) / 180,
+        longitude: (-87 * Math.PI) / 180,
+        height: 5000,
+      },
+    },
+  };
+  bindFakeCesiumCamera(viewer, { query: offscreen, draw: fakeDrawPort() });
+  const lake = {
+    ...observation('367000002'),
+    latitude: 44,
+    longitude: -87,
+    speedMps: 0,
+  };
+  const layer = createVesselLayer({
+    source: { getSnapshot: async () => snapshot([lake]) },
+    services: { ...services(), ground },
+  });
+  layer.testing._setVesselStateForTest({
+    viewer,
+    icons: createVesselIconBook(),
+  });
+  layer.testing._setAisRuntimeForTest({
+    now: () => 1000,
+    setTimeout,
+    clearTimeout,
+  });
+  await layer.update();
+  for (let i = 0; i < 10; i += 1)
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  layer.selectById('367000002');
+  const subject = layer.getCockpitSubject();
+  assert.ok(subject, 'a selected vessel describes its bridge');
+  // The grid of the bundled geoid is not loaded in this test: the floor is
+  // the lower of what is known, the water it is drawn on.
+  assert.ok(Math.abs(subject.seaSurfaceHeightM - 140.4) < 0.01);
+  // The sprite is drawn 3 m above the lake.
+  assert.ok(Math.abs(subject.markHeightM - 143.4) < 0.01);
+});
