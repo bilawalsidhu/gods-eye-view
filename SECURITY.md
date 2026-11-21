@@ -117,6 +117,18 @@ The dev server is a **key broker**: every server-side key above is spendable by 
   `none` when widening the publish: it becomes an explicit empty list before
   Vite loads configuration, so the gateway cannot regain Provider Settings
   access. Unset or blank values preserve automatic gateway discovery.
+- **Headless installs can name the operator's own devices.** A server with no
+  local browser (a Proxmox container or a NAS, see
+  [docs/PROXMOX.md](docs/PROXMOX.md)) can list the operator's devices in
+  `GEV_KEY_SETUP_TRUSTED_PEERS` and the names they browse to in
+  `GEV_KEY_SETUP_TRUSTED_HOSTS`. Both take exact entries only. The host list
+  is consulted only for a request from a listed peer, never for loopback or
+  any other address, and the Origin must still equal that Host exactly; the
+  sharing, Content-Type and proxy-header checks are unchanged. **Limit:** a
+  listed device can read which keys are set and replace them, and the gate
+  trusts the address a request comes from, so list only devices you control,
+  on a network where addresses cannot be taken over, and give them fixed
+  addresses.
 - **Provider-side budgets are the real backstop.** For hard spend protection, configure limits where the money is: OpenAI platform usage limits, Google Cloud budget alerts + per-API quotas, and equivalent controls for any other keyed provider.
 - **Pinokio LAN and Cloudflare sharing are refused.** The current supported
   Pinokio release re-reads sharing state when an app registers its Open URL and

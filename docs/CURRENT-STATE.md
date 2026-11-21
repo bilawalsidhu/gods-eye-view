@@ -46,6 +46,16 @@ Docker Compose mounts the checkout with the shared SELinux `:z` label so
 containers can read it on enforcing SELinux hosts. The separate image-owned
 `node_modules` volume and loopback-only port publishing remain unchanged.
 
+Provider Settings admits a request from an exact `GEV_KEY_SETUP_TRUSTED_PEERS`
+address when its Host is local (`localhost`, `127.0.0.1`, `::1`) or an exact
+entry in `GEV_KEY_SETUP_TRUSTED_HOSTS`, so a headless server can be configured
+from the operator's own device by its LAN name or address. Loopback requests
+accept only the local names, whatever the list holds, and every other check
+(sharing, proxy headers, exact Origin, JSON Content-Type) is unchanged.
+`scripts/proxmox-lxc.sh` installs the app headless in a Proxmox VE container as
+the `gods-eye-view` systemd service and writes both settings when given
+`TRUSTED_PEERS`; see `docs/PROXMOX.md`.
+
 The HUD's AI summary line looks up place names for the view only when the
 summary can use them. The page asks `GET /api/openai/hud-summary/status` once;
 a server without an OpenAI key answers `{ configured: false }`, and the HUD then
