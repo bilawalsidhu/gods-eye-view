@@ -4358,8 +4358,8 @@
   "Stars = points, at least 1 and at most 4.": "星級 = 得分，最低 1 星，最高 4 星。",
   "Computed in your browser from the Sun and Moon positions. No outside data is used.": "在瀏覽器中根據太陽和月亮的位置計算，不使用任何外部數據。",
   "SOLUNAR": "日月獵釣",
-  "Solunar": "日月獵釣歷",
+  "Solunar": "日月獵釣曆",
   "12 h": "12 小時",
   "24 h": "24 小時",
-  "Solunar fishing": "釣魚"
+  "solunar|Fishing": "釣魚"
 }

@@ -4559,7 +4559,7 @@
   "Times are local to the spot ({zone})": "הזמנים הם לפי השעון המקומי במיקום ({zone})",
   "{percent}% lit": "{percent}% מואר",
   "Hunting": "ציד",
-  "Solunar fishing": "דיג",
+  "solunar|Fishing": "דיג",
   "{label}: {stars} of {max} stars": "{label}: {stars} מתוך {max} כוכבים",
   "Major window": "חלון ראשי",
   "Minor window": "חלון משני",

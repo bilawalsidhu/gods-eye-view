@@ -29,7 +29,7 @@ const SOLUNAR_STRINGS = Object.freeze([
   'Times are local to the spot ({zone})',
   '{percent}% lit',
   'Hunting',
-  'Solunar fishing',
+  'solunar|Fishing',
   '{label}: {stars} of {max} stars',
   'Major window',
   'Minor window',
@@ -82,7 +82,7 @@ test('the Swedish solunar wording is the one the style guide asks for', () => {
   assert.equal(catalog.Sunrise, 'Soluppgång');
   assert.equal(catalog.Sunset, 'Solnedgång');
   assert.equal(catalog.Hunting, 'Jakt');
-  assert.equal(catalog['Solunar fishing'], 'Fiske');
+  assert.equal(catalog['solunar|Fishing'], 'Fiske');
   assert.equal(catalog.none, 'ingen');
   assert.equal(catalog['Moon overhead'], 'Månen i zenit');
   assert.equal(catalog['Moon underfoot'], 'Månen i nadir');

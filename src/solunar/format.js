@@ -148,7 +148,7 @@ export function dayCard(day, zone, hour12, maxStars) {
     phase: `${phaseLabel(day.phase)} · ${t('{percent}% lit', { percent: Math.round(day.illumination * 100) })}`,
     stars: [
       rate('hunting', t('Hunting'), day.huntingStars),
-      rate('fishing', t('Solunar fishing'), day.fishingStars),
+      rate('fishing', t('Fishing', { context: 'solunar' }), day.fishingStars),
     ],
     windows: [
       windowRow('major', t('Major window'), 'gev-sl-major'),

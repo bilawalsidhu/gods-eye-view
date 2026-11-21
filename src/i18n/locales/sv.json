@@ -4453,7 +4453,7 @@
   "Times are local to the spot ({zone})": "Tiderna är lokala för platsen ({zone})",
   "{percent}% lit": "{percent} % upplyst",
   "Hunting": "Jakt",
-  "Solunar fishing": "Fiske",
+  "solunar|Fishing": "Fiske",
   "{label}: {stars} of {max} stars": "{label}: {stars} av {max} stjärnor",
   "Major window": "Huvudfönster",
   "Minor window": "Mindre fönster",
