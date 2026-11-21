@@ -403,8 +403,8 @@ export class FlightRecords {
       // across polls; the type is the feed's own until a lookup answers:
       typeCode,
       typeLookedUp,
-      typeName: airframe?.typeName ?? null,
-      registration: airframe?.registration ?? null,
+      typeName: airframe?.typeName ?? observation.typeName ?? null,
+      registration: airframe?.registration ?? observation.registration ?? null,
       airline: routeHeld ? (airframe.airline ?? null) : null,
       route: routeHeld ? (airframe.route ?? null) : null,
       routeCallsign: routeHeld ? airframe.routeCallsign : null,

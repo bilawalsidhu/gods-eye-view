@@ -6,6 +6,7 @@ import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
+import { aircraftTypesProxy } from './aircraft/types.js';
 import { overpassProxy } from './overpass.js';
 import { militaryInstallationsProxy } from './military-installations.js';
 import { regionalBriefProxy } from './regional/briefing.js';
@@ -65,6 +66,7 @@ function localProviderPlugins({
     rocketLaunchesProxy(),
     terrainHeightsProxy(),
     adsbdbProxy(),
+    aircraftTypesProxy(),
     overpassProxy(),
     militaryInstallationsProxy(),
     regionalBriefProxy(),
