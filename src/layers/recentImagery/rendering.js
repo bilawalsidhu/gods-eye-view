@@ -1,22 +1,28 @@
 /**
  * Draped-imagery renderer for the Recent Imagery layer: at most two GIBS
- * imagery layers (slot `a`, left of a swipe; slot `b`, right) on whichever
- * host the map stack offers. Against the basemap slot `a` splits left and
- * slot `b` stays empty. Every layer is removed from the collection that owns it, so a
- * host switch or a replaced image never strands one. Tile requests pass a
- * small semaphore of our own; Cesium's global request limits stay untouched.
+ * imagery layers (slot `a`, left of a swipe; slot `b`, right) through the
+ * renderer's globe port, draped on whichever surface the map stack draws.
+ * Against the basemap slot `a` splits left and slot `b` stays empty. Tile
+ * requests pass a small semaphore of our own, shared by both slots, through
+ * each layer's admission hook; the renderer's own request limits stay
+ * untouched.
  */
-import * as Cesium from 'cesium';
+// The imagery drapes through the globe port and the box preview draws
+// through `drawOf`, both on the renderer's ports: a viewer with no renderer
+// bound gets them once its owner has loaded the package's
+// `./render/cesium/unbound` export. A tileset host is marked as a base the
+// globe port drapes on (`markBaseTileset`).
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { markBaseTileset } from '../../render/baseTilesets.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { PRODUCTS, gibsTemplate } from './model.js';
 
 const SLOT_IDS = ['a', 'b'];
-const SPLIT_ENUM = { left: 'LEFT', right: 'RIGHT', none: 'NONE' };
-const NO_HOST = Object.freeze({ collection: null, kind: 'none' });
+const SPLITS = new Set(['left', 'right', 'none']);
+const NO_HOST = Object.freeze({ collection: null, kind: 'none', globe: null });
 
-/** Render reason for a deferred or settled tile request. */
+/** Render reason for a settled tile request. */
 export const TILE_RENDER_REASON = 'recent-imagery-tiles';
-/** Delay before the one frame that retries tiles Cesium itself deferred. */
-export const TILE_RETRY_DELAY_MS = 250;
 
 function clampAlpha(value) {
   const alpha = Number(value);
@@ -27,18 +33,13 @@ const boxKey = (box) =>
   [box.west, box.south, box.east, box.north].map(Number).join(',');
 
 /**
- * Gate a provider's `requestImage` through the semaphore. Returning
- * `undefined` tells Cesium to retry on a later frame, but under
- * `requestRenderMode` there is no later frame unless something asks — and a
- * deferral must never ask for one itself: the retried tile would defer again
- * and ask again, keeping the scene rendering every frame. So a request that
- * finds our semaphore full asks for nothing (the request holding the slot
- * asks for one frame when it settles), and a request the provider itself
- * deferred goes through the one coalesced delayed retry.
+ * Admit a tile request while the semaphore has room. A request that finds
+ * it full is deferred and asks for no frame itself: the request holding the
+ * slot asks for one as it settles. One the renderer itself defers frees its
+ * slot at once, and the renderer asks again on a later frame.
  */
-function admitTileRequests(provider, admission, requestRender, retry) {
-  const original = provider.requestImage.bind(provider);
-  provider.requestImage = (x, y, level, request) => {
+function admitTileRequests(admission, requestRender) {
+  return (_tile, issue) => {
     if (admission.inFlight >= admission.limit) return undefined;
     admission.inFlight += 1;
     const release = () => {
@@ -46,14 +47,13 @@ function admitTileRequests(provider, admission, requestRender, retry) {
     };
     let promise;
     try {
-      promise = original(x, y, level, request);
+      promise = issue();
     } catch (error) {
       release();
       throw error;
     }
     if (!promise) {
       release();
-      retry.schedule();
       return undefined;
     }
     return Promise.resolve(promise).finally(() => {
@@ -61,95 +61,62 @@ function admitTileRequests(provider, admission, requestRender, retry) {
       requestRender(TILE_RENDER_REASON);
     });
   };
-  return provider;
 }
 
 /**
- * Create the renderer.
- * @param {{ cesium?: object, maxTileRequests?: number, requestRender?: (reason: string) => void, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} [options]
+ * Create the renderer. The host it is bound to (`rebind`) carries the
+ * viewer's globe port.
+ * @param {{ tileTemplate?: Function, credit?: string, maxTileRequests?: number, requestRender?: (reason: string) => void }} [options]
  */
 export function createRecentImageryRenderer({
-  cesium = Cesium,
   tileTemplate = gibsTemplate,
   credit = 'NASA GIBS',
   maxTileRequests = 6,
   requestRender = () => {},
-  setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
-  clearTimeoutImpl = (id) => globalThis.clearTimeout(id),
 } = {}) {
   let host = NO_HOST;
   let destroyed = false;
   const admission = { limit: maxTileRequests, inFlight: 0 };
-  /** @type {Record<'a'|'b', null | { layer: object, collection: object, candidate: object, box: object, alpha: number, split: string }>} */
+  /** @type {Record<'a'|'b', null | { layer: object, globe: object, candidate: object, box: object, alpha: number, split: string }>} */
   const owned = { a: null, b: null };
+  const admit = admitTileRequests(admission, requestRender);
 
-  // One timer for both slots: any number of upstream deferrals while it is
-  // armed share the same single retry frame.
-  let retryTimer = null;
-  const retry = {
-    schedule() {
-      if (retryTimer !== null) return;
-      retryTimer = setTimeoutImpl(() => {
-        retryTimer = null;
-        if (!destroyed) requestRender(TILE_RENDER_REASON);
-      }, TILE_RETRY_DELAY_MS);
-    },
-    cancel() {
-      if (retryTimer !== null) clearTimeoutImpl(retryTimer);
-      retryTimer = null;
-    },
-  };
-
-  function createProvider(candidate, box) {
-    const spec = PRODUCTS[candidate.product];
-    const provider = new cesium.UrlTemplateImageryProvider({
+  function specFor(candidate, box) {
+    const product = PRODUCTS[candidate.product];
+    return {
+      kind: 'xyz',
       url: tileTemplate(candidate.product, candidate.day),
       subdomains: ['a', 'b', 'c'],
-      minimumLevel: 0,
-      maximumLevel: spec.maxLevel,
-      tilingScheme: new cesium.WebMercatorTilingScheme(),
-      rectangle: cesium.Rectangle.fromDegrees(
-        box.west,
-        box.south,
-        box.east,
-        box.north,
-      ),
-      credit,
-      hasAlphaChannel: spec.format === 'png',
-    });
-    return admitTileRequests(provider, admission, requestRender, retry);
+      tiling: 'webMercator',
+      minLevel: 0,
+      maxLevel: product.maxLevel,
+      rectangle: {
+        west: box.west,
+        south: box.south,
+        east: box.east,
+        north: box.north,
+      },
+      credit: { text: credit },
+      admit,
+    };
   }
 
   function removeOwned(slotId) {
     const record = owned[slotId];
     if (!record) return false;
     owned[slotId] = null;
-    try {
-      record.collection.remove(record.layer, true);
-    } catch {
-      /* the collection is already gone */
-    }
+    record.layer.remove();
     return true;
   }
 
   function applyLook(record) {
     record.layer.alpha = record.alpha;
-    record.layer.splitDirection =
-      cesium.SplitDirection?.[SPLIT_ENUM[record.split] || 'NONE'] ?? 0;
+    record.layer.split = SPLITS.has(record.split) ? record.split : 'none';
   }
 
   function mount(slotId, { candidate, box, alpha, split }) {
-    const layer = host.collection.addImageryProvider(
-      createProvider(candidate, box),
-    );
-    owned[slotId] = {
-      layer,
-      collection: host.collection,
-      candidate,
-      box,
-      alpha,
-      split,
-    };
+    const layer = host.globe.imagery.add(specFor(candidate, box));
+    owned[slotId] = { layer, globe: host.globe, candidate, box, alpha, split };
     applyLook(owned[slotId]);
   }
 
@@ -170,7 +137,7 @@ export function createRecentImageryRenderer({
       { alpha = 1, splitDirection = 'none' } = {},
     ) {
       if (destroyed || !candidate?.key || !box) return false;
-      if (!host.collection) {
+      if (!host.globe) {
         removeOwned(slotId);
         return false;
       }
@@ -178,7 +145,7 @@ export function createRecentImageryRenderer({
       const look = { alpha: clampAlpha(alpha), split: splitDirection };
       if (
         current &&
-        current.collection === host.collection &&
+        current.globe === host.globe &&
         current.candidate.key === candidate.key &&
         boxKey(current.box) === boxKey(box)
       ) {
@@ -214,19 +181,25 @@ export function createRecentImageryRenderer({
     },
 
     /**
-     * Move every owned layer to a new host. Layers are rebuilt there, never
-     * re-parented, so the old collection is left as it was found.
-     * @param {{ collection: object | null, kind: string }} nextHost
+     * Follow the map stack's host. The globe port moves the owned layers
+     * between the globe and the 3D tiles itself; without a host they go,
+     * and a new globe port gets them rebuilt.
+     * @param {{ collection: object | null, kind: string, globe?: object | null, tileset?: object | null }} nextHost
      */
     rebind(nextHost) {
-      host = nextHost || NO_HOST;
-      let changed = false;
+      const previous = host;
+      host =
+        nextHost && nextHost.kind !== 'none' && nextHost.globe
+          ? nextHost
+          : NO_HOST;
+      if (host.kind === 'tileset') markBaseTileset(host.tileset);
+      let changed = host.kind !== previous.kind && Boolean(owned.a || owned.b);
       for (const slotId of SLOT_IDS) {
         const record = owned[slotId];
-        if (!record || record.collection === host.collection) continue;
+        if (!record || record.globe === host.globe) continue;
         removeOwned(slotId);
         changed = true;
-        if (host.collection && !destroyed) mount(slotId, record);
+        if (host.globe && !destroyed) mount(slotId, record);
       }
       if (changed) requestRender('recent-imagery-rebind');
     },
@@ -257,11 +230,135 @@ export function createRecentImageryRenderer({
     destroy() {
       if (destroyed) return;
       destroyed = true;
-      retry.cancel();
       let changed = false;
       for (const slotId of SLOT_IDS) changed = removeOwned(slotId) || changed;
       host = NO_HOST;
       if (changed) requestRender('recent-imagery-destroy');
+    },
+  };
+}
+
+const PREVIEW_STROKE = Object.freeze([139 / 255, 233 / 255, 1]);
+/** Fill alpha and outline alpha of the box being dragged. */
+const PREVIEW_FILL_ALPHA = 0.12;
+const PREVIEW_LINE_ALPHA = 0.95;
+/** Each preview's draw sets have ids of their own. */
+let previewSeq = 0;
+
+/** A box with no area has no fill: a press, or a drag along one axis. */
+const hasArea = (box) =>
+  Boolean(box) && box.east > box.west && box.north > box.south;
+
+/** A box with no extent draws nothing: a press that has not moved yet. */
+const hasExtent = (box) =>
+  Boolean(box) && (box.east > box.west || box.north > box.south);
+
+/**
+ * The box tool's preview: the box being dragged, a translucent fill and a
+ * dashed outline on the ground, drawn through the draw port. Each change
+ * moves them where they are (the port draws a moved ground fill and a moved
+ * draped line in the frame they move), so the box shows every frame of a
+ * drag.
+ * @param {object} viewer
+ * @param {() => ({west: number, south: number, east: number, north: number}|null)} dragBox
+ *   Degrees, or null while no drag is live.
+ * @param {{draw?: import('../../render/contract/draw').DrawPort}} [options]
+ *   The draw port (tests pass a double); the viewer's by default.
+ * @returns {{setVisible: (visible: boolean) => void, changed: () => void, destroy: () => Promise<void>}}
+ */
+export function createImageryBoxPreview(
+  viewer,
+  dragBox,
+  { draw = drawOf(viewer) } = {},
+) {
+  previewSeq += 1;
+  const fills = draw.shapes({
+    id: `recent-imagery-box:${previewSeq}:fill`,
+    pickable: false,
+  });
+  const outlines = draw.lines({
+    id: `recent-imagery-box:${previewSeq}:outline`,
+    pickable: false,
+  });
+  let visible = false;
+  let destroyed = false;
+  // The sets go at once; every caller gets the same settled promise.
+  const gone = Promise.resolve();
+  // The last box drawn, and the last with an area: a box without one keeps
+  // it, hidden, so the next one moves it rather than draw it anew.
+  let drawn = null;
+  let filled = null;
+
+  function drawFill(box, show) {
+    const { west, south, east, north } = box;
+    fills.upsert([
+      {
+        id: 'box',
+        geometry: { kind: 'rectangle', rect: { west, south, east, north } },
+        fill: [...PREVIEW_STROKE, PREVIEW_FILL_ALPHA],
+        height: 'clampGround',
+        clampTo: 'both',
+        show,
+      },
+    ]);
+  }
+
+  function drawEdge(box, show) {
+    const { west, south, east, north } = box;
+    // A rectangle has no dashed edge on the ground, so the outline is a
+    // draped line traced round the same corners; a drag along one axis
+    // draws it as a line along the drag, as the fill has no area.
+    outlines.upsert([
+      {
+        id: 'edge',
+        positions: [
+          fromDegrees(west, south),
+          fromDegrees(east, south),
+          fromDegrees(east, north),
+          fromDegrees(west, north),
+          fromDegrees(west, south),
+        ],
+        widthPx: 2,
+        mode: 'draped',
+        clampTo: 'both',
+        style: {
+          kind: 'dash',
+          color: [...PREVIEW_STROKE, PREVIEW_LINE_ALPHA],
+          length: 12,
+        },
+        show,
+      },
+    ]);
+  }
+
+  function update() {
+    if (destroyed) return;
+    const box = visible ? dragBox() : null;
+    if (hasArea(box)) {
+      filled = { ...box };
+      drawFill(filled, true);
+    } else if (filled) drawFill(filled, false);
+    if (hasExtent(box)) {
+      drawn = { ...box };
+      drawEdge(drawn, true);
+    } else if (drawn) drawEdge(drawn, false);
+  }
+
+  return {
+    setVisible(on) {
+      visible = Boolean(on);
+      update();
+    },
+    /** The box moved: draw it again. */
+    changed: update,
+    /** Take the preview away; resolves once it is gone. */
+    destroy() {
+      if (!destroyed) {
+        destroyed = true;
+        fills.dispose();
+        outlines.dispose();
+      }
+      return gone;
     },
   };
 }

@@ -905,6 +905,30 @@ html:not([lang='en'])
   outline: none;
 }
 
+/* An icon action chip (RailChips.vue `icon`): a square button sized to the
+   text chips beside it. */
+.data-toggle-chip.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 4px;
+  letter-spacing: 0;
+  /* A glyph alone needs more contrast than a text chip to read. */
+  color: var(--text-secondary);
+}
+
+.data-toggle-chip.chip-icon:hover,
+.data-toggle-chip.chip-icon:focus-visible {
+  color: var(--text-primary);
+}
+
+.data-toggle-chip.chip-icon .material-symbols-outlined {
+  font-size: 15px;
+  line-height: 1;
+}
+
 .data-toggle-chip:hover,
 .data-toggle-chip:focus-visible {
   border-color: var(--glass-border-hover);

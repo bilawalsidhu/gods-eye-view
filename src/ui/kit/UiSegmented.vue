@@ -7,7 +7,9 @@ import { computed } from 'vue';
 // stop that arrows move) or `radio` (arrows plus Home and
 // End). Each option may carry `attrs` (an id, data attributes, a tip), and
 // Core's classes sit beside the kit's: `gev-segmented`, `gev-segment` and the
-// selected option's `activeClass`. An option with an `icon` shows the glyph,
+// selected option's `activeClass`. The kit's classes wear Core's segmented
+// skin (segmented-control.css) as Core's do; `stacked` carries no style yet.
+// An option with an `icon` shows the glyph,
 // and its label becomes the button's accessible name and tooltip, unless its
 // `attrs` carry a tip of their own.
 const props = defineProps({

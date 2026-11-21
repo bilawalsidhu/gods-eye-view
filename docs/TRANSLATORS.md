@@ -1,6 +1,6 @@
 # Translating God's Eye View
 
-Shipped languages: **English** (source and fallback), **Arabic** (`ar`), **German** (`de`), **Spanish** (`es`), **French** (`fr`), **Hebrew** (`he`), **Italian** (`it`), **Japanese** (`ja`), **Brazilian Portuguese** (`pt`), **Russian** (`ru`), **Ukrainian** (`uk`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
+Shipped languages: **English** (source and fallback), **Arabic** (`ar`), **German** (`de`), **Spanish** (`es`), **French** (`fr`), **Hebrew** (`he`), **Italian** (`it`), **Japanese** (`ja`), **Brazilian Portuguese** (`pt`), **Russian** (`ru`), **Swedish** (`sv`), **Ukrainian** (`uk`), **Simplified Chinese** (`zh-CN`) and **Traditional Chinese** (`zh-Hant`).
 
 ## How it works
 
@@ -36,6 +36,8 @@ npm run i18n -- --prune           # drop entries the code no longer uses
 
 Changing English text changes its key: the old translation becomes unused and the new text shows as missing. Translate it and prune.
 
+Do not translate `zh-Hant`: it is generated. Translate `zh-CN`, then run `npm run i18n -- --zh-hant` (see [zh-Hant.md](./translations/zh-Hant.md)).
+
 ## Fixing a translation
 
 Edit `src/i18n/locales/<code>.json` and run `npm run i18n`. To see your change, open the app with `?lang=<code>`.
@@ -64,4 +66,4 @@ These are contracts, not copy: layer ids and registry keys, status enums and oth
 
 ## Language notes
 
-Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Arabic](./translations/ar.md), [German](./translations/de.md), [Spanish](./translations/es.md), [French](./translations/fr.md), [Hebrew](./translations/he.md), [Italian](./translations/it.md), [Japanese](./translations/ja.md), [Brazilian Portuguese](./translations/pt.md), [Russian](./translations/ru.md), [Ukrainian](./translations/uk.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.
+Each language keeps its glossary, plural forms, units and style in its own file, `docs/translations/<code>.md`: [Arabic](./translations/ar.md), [German](./translations/de.md), [Spanish](./translations/es.md), [French](./translations/fr.md), [Hebrew](./translations/he.md), [Italian](./translations/it.md), [Japanese](./translations/ja.md), [Brazilian Portuguese](./translations/pt.md), [Russian](./translations/ru.md), [Swedish](./translations/sv.md), [Ukrainian](./translations/uk.md), [Simplified Chinese](./translations/zh-CN.md), [Traditional Chinese](./translations/zh-Hant.md). Read it before translating, and add a term there when you settle on one.

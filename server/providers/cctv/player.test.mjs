@@ -11,6 +11,68 @@ const source = {
 const html = (token) =>
   `<script>playhls('live', '//stream3.exdesign.ru/hls/ostrov-9/index.m3u8?token=${token}');</script>`;
 
+test('public-player HLS fallback frames leave stream health unchanged', async (t) => {
+  const urls = [
+    'https://openapi-alpha.ivideon.com/cameras/100-example:0/live_stream?access_token=public&format=hls',
+    'https://rtsp.me/embed/Example1/',
+  ];
+  for (const [key, value] of Object.entries({
+    CCTV_SOURCES_JSON: JSON.stringify(
+      urls.map((url, index) => ({
+        id: `public-${index}`,
+        name: 'Public player',
+        url,
+        lat: 55.75,
+        lon: 37.62,
+        feedType: 'hls',
+      })),
+    ),
+    CCTV_SOURCES_FILE: 'missing.json',
+    CCTV_FORCE_AUSTIN: '0',
+    GOOGLE_MAPS_SERVER_API_KEY: '',
+    GOOGLE_MAPS_API_KEY: '',
+  })) {
+    const previous = process.env[key];
+    process.env[key] = value;
+    t.after(() =>
+      previous === undefined
+        ? delete process.env[key]
+        : (process.env[key] = previous),
+    );
+  }
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('A fallback frame must not contact the video publisher');
+  });
+  let handler;
+  const httpServer = new EventEmitter();
+  cctvProxy().configureServer({
+    httpServer,
+    middlewares: {
+      use(_route, callback) {
+        handler = callback;
+      },
+    },
+  });
+  t.after(() => httpServer.emit('close'));
+  const request = async (url) => {
+    const response = new EventEmitter();
+    response.writeHead = (status) => {
+      response.statusCode = status;
+    };
+    response.end = (body) => {
+      response.body = body;
+      response.writableEnded = true;
+    };
+    await handler({ url, method: 'GET', headers: {} }, response);
+    return response;
+  };
+  assert.deepEqual(JSON.parse((await request('/health')).body).cameras, []);
+  for (let index = 0; index < urls.length; index++) {
+    assert.equal((await request(`/frame/public-${index}`)).statusCode, 200);
+    assert.deepEqual(JSON.parse((await request('/health')).body).cameras, []);
+  }
+});
+
 test('resolves only public Ivideon HLS redirects on the operator CDN', async () => {
   const camera = {
     url: 'https://openapi-alpha.ivideon.com/cameras/100-example:0/live_stream?access_token=public&format=hls',

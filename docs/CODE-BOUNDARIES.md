@@ -33,12 +33,13 @@ export inventory. Use declared exports rather than reaching into internal files.
 | `src/layers/<family>/` | Source acquisition, records and Cesium resources with explicit controller/renderer owners               |
 | `src/sources/`         | Portable protocols and source contracts; request state belongs to each factory instance                 |
 | `src/services/`        | Supplied application operations; scene construction owns caches and cancellation                        |
+| `src/render/`          | The renderer contract, the stub renderer, the conformance suite and Cesium renderer pieces              |
 | `src/voice/`           | Portable action schemas/session, common controls, action execution and separate protocol adapters       |
 | `server/providers/`    | Node route factories, process-scoped provider caches and shutdown cleanup                               |
 | `server/standalone/`   | Environment, local settings writes and server composition                                               |
 
 See [application construction](APPLICATION.md) and the
-[infrastructure contract](INFRASTRUCTURE-LAYERS.md) for construction interfaces.
+[infrastructure contract](INFRASTRUCTURE-LAYERS.md) for construction interfaces, and the [renderer contract](RENDERER-CONTRACT.md) for what a renderer provides.
 
 ## Import direction gates
 
@@ -149,7 +150,8 @@ Google credentials are resolved on each request; the default uses the existing
 server-key precedence, and callers may supply `resolveApiKey`.
 
 `gods-eye-view/sources/places` exports portable response projections for Google
-place results and OSRM route results/profile aliases. These functions own no
+place results and OSRM route results/profile aliases, and the turn-by-turn
+steps (`normalizeOsrmSteps`) Core's `/api/route` serves with `steps=1`. These functions own no
 credentials, requests, caches, environment loading, or rendering. Callers retain
 input validation and upstream-response acceptance. The boundary check builds
 this entry independently and rejects Node imports.
@@ -293,9 +295,9 @@ the user's later collapse choice, including body remounts. Mark the body
 `max-height` and puts the scroll offset back afterwards. Panel bodies only
 scroll on an open-card change, with one write, never on a refresh.
 
-Compose `createRailCards({ container, document, onParams, onOpen })` and
-`createRailTimeline({ container, document, onCommit, onPreview, onStep,
-onLatest, onPlay })`. Cards reconcile `{ id, title, badge, open, compact,
+Compose `createRailCards({ container, document, onParams, onOpen })`. Rails
+have no time controls of their own; the world timeline moves time. Cards
+reconcile `{ id, title, badge, open, compact,
 compactStatus, blocks }` in place. Their full-width native button headers expose
 `aria-expanded` and `aria-controls`; articles expose `data-open`. The feature
 adapter owns accordion state. Generic cards do not select data or enable layers.
@@ -330,10 +332,9 @@ consumers. They expose `summary.settings`, `summary.actions` and optional
 subscriptions still refresh the cards. Cards own configuration and readings.
 
 Weather orders cyclones, wind, then a bordered Observed history group containing
-the timeline and active radar, satellite and lightning cards. The group heading
-and scope name its active products. The timeline stays visible whenever any
-observed product is enabled; fewer than two ticks disables transport. Pass
-`heading: false` to the timeline when the containing group owns the heading.
+the frame time and active radar, satellite and lightning cards. The group
+heading and scope name its active products. The frame time shows whenever any
+observed product is enabled and has a frame; the world timeline moves time.
 Exactly one active card is open. Header clicks and newly enabled ids choose it
 (the last new entry wins a batch); refreshes and clock ticks retain it. First
 appearance uses cyclones with storms, otherwise the first card. Disabling the
@@ -341,7 +342,7 @@ open layer falls back to the first remaining card. A WeakMap per document keeps
 explicit choices through body remounts without adding share state. Card opening,
 storm selection and layer enabling remain independent.
 
-Optional card/badge/slider class names provide feature styling. Card titles use
+Optional card/badge class names provide feature styling. Card titles use
 `.data-name` typography; meta/time/badges use `.data-toggle-meta` typography;
 setting/result labels use `.panel-title`; chips retain `.data-toggle-chip`.
 Reserve one status line, even without a legend. Use app tokens. Wind's footer
@@ -471,6 +472,13 @@ release listeners; pending action feedback is limited to its current owner.
 rendering, HUD and share operations. `src/standalone/controls.js` provides the running
 application's instances. The shell
 imports no standalone bootstrap or concrete live layer implementation.
+The shell reaches the renderer through its ports alone, and loads no
+renderer: given a viewer with no renderer bound, load
+`./render/cesium/unbound` once first, which also provides the celestial
+ring's precise ICRF rotation (`src/sky/icrf.js`; until then the ring uses
+the TEME approximation). Whether Cockpit's aircraft is an entity of the
+viewer's own is the `viewerDrawsEntity` service's to say; the application
+scene supplies it.
 Panel layout, position/drag, notices, recording and deferred UI work have separate
 owners with synchronous cleanup. Existing scene, share and HUD engines retain
 their entry points. `ui/styles` loads the ordered stylesheet entry; component
@@ -507,6 +515,15 @@ perform no network requests and discover no additional modules.
 `maps/terrain` and `maps/3d` supply constructors; `maps/defaults` selects the
 standard sources and their setup/fallback policy. The standalone facade wires
 these to the application's render governor.
+
+`maps/imagery`, `maps/terrain` and `maps/3d` are the Cesium renderer's
+(`src/render/cesium/`). `maps/controller` and `maps/defaults` are
+Cesium-free: they make their scene changes and build their providers
+through the map engine the renderer provides as it loads
+(`src/maps/engine.js`). The application's renderer provides it; with a
+viewer with no renderer bound, load `./render/cesium/unbound` once first, or pass the
+engine as the controller's and `createDefaultMapSources`' `engine` option.
+Without one, constructing a controller throws, naming that export.
 
 A registry supplies `sources`, `defaultId`, `unknownId` and optional `recoveryId`.
 Each source has a user-facing `descriptor`, availability/reason, and either an
@@ -571,6 +588,13 @@ annotation resolver without selecting upstream providers. Its checked graph is
 separate from standalone setup. Scene construction returns these operations; the
 catalog and controls use the same surface owner. Layers still own their individual
 ground-snap caches and model resources.
+
+The entry is Cesium-free: ground snapping and mesh floor sampling ask the
+renderer's globe (`isSettled`), camera (`pose`) and query (heights) ports, and
+see through the caller's draw sets by id. A viewer with no renderer bound needs
+the Cesium adapter's factories loaded (`gods-eye-view/render/cesium/unbound`)
+first; until then the snap and the sampler answer nothing and location framing
+throws, naming that export.
 
 Terrain cancellation rejects late replies before caching, clears floor queues and
 removes the map-stack listener. Annotation lookup caches are instance-owned and
@@ -757,8 +781,7 @@ palettes use `--gev-field-background`, `--gev-field-border-color`,
 `--gev-field-color` and `--gev-field-disabled-opacity`. Radio retains its own
 compact density and arrow space. CCTV owns calibration editor width in
 `cctv.css`; the shared inline density does not impose a feature-specific width.
-Cyber supplies a shared-field palette explicitly and keeps its legacy native
-field rules separate, so Radio's palette remains an intentional exception.
+Radio's palette remains an intentional exception.
 
 ### Read-only status badges
 

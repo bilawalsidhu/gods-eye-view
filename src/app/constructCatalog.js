@@ -1,10 +1,12 @@
 import { resolveCatalogSources } from './sourceComposition.js';
 import { createWeatherClock } from '../layers/weather/clock.js';
 import { worldClock } from '../time/worldClock.js';
+import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
+import { layerPlacement } from '../data/placementProvider.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -18,6 +20,7 @@ import { createApplicationDirections } from './layers/directions.js';
 import { createApplicationRecentImagery } from './layers/recentImagery.js';
 import { createApplicationOsmPlaces } from './layers/osmPlaces.js';
 import { createApplicationTransit } from './layers/transit.js';
+import { createApplicationRail } from './layers/rail.js';
 import { createApplicationInstallations } from './layers/militaryInstallations.js';
 import { createApplicationSatellites } from './layers/satellites.js';
 import { createApplicationLaunches } from './layers/rocketLaunches.js';
@@ -61,6 +64,9 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 /** Construct the current catalog without choosing any source provider.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
+ * `placement`, a host-supplied placement provider (../data/placementProvider.js),
+ * places live aircraft, vessels, transit and trains; without one each layer
+ * uses its own motion.
  */
 export function createApplicationCatalog({
   surface,
@@ -68,9 +74,11 @@ export function createApplicationCatalog({
   signal,
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
+  newsOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
+  placement = null,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -94,18 +102,23 @@ export function createApplicationCatalog({
     const flights = createApplicationFlights({
       surface,
       source: sources.flights,
+      placement: layerPlacement(placement, 'aircraft'),
       militaryRegistry,
       resolveAsset,
     });
     const military = createApplicationMilitary({
       surface,
       source: sources.military,
+      placement: layerPlacement(placement, 'military'),
       militaryRegistry,
       resolveAsset,
     });
     const vessels = createApplicationVessels({
       source: sources.vessels,
+      placement: layerPlacement(placement, 'vessels'),
       options: vesselOptions,
+      displayParams: () => flights.getParams(),
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const installations = createApplicationInstallations({
       surface,
@@ -113,6 +126,7 @@ export function createApplicationCatalog({
     });
     const satellites = createApplicationSatellites({
       source: sources.satellites,
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const catalog = createLayerCatalog(
       [
@@ -142,7 +156,13 @@ export function createApplicationCatalog({
         createApplicationDroneAirspace({
           source: sources['drone-airspace'],
         }),
-        createApplicationNews({ source: sources.news }),
+        // Ages, the window and the counts read the world clock: a host that
+        // follows it for the layer shows the news at the time on the timeline.
+        createApplicationNews({
+          now: worldClock.timeFor(NEWS_LAYER_ID),
+          ...newsOptions,
+          source: sources.news,
+        }),
         createApplicationWildlifeSightings({
           source: sources['wildlife-sightings'],
           groundFloor: surface.groundFloor,
@@ -158,7 +178,13 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic, surface }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
+        createApplicationTransit({
+          surface,
+          source: sources.transit,
+          placement: layerPlacement(placement, 'transit'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
@@ -191,6 +217,13 @@ export function createApplicationCatalog({
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationRail({
+          surface,
+          source: sources.rail,
+          placement: layerPlacement(placement, 'rail'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationFirms({
           surface,
           id: 'local-firms',

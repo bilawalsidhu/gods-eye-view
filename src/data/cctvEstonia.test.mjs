@@ -12,6 +12,14 @@ import {
   parseTarkteeDatexLocations,
 } from '../../server/providers/cctv/sources.js';
 
+/**
+ * Disarm the 30 s deadline, so a loader that only stops at that deadline
+ * fails at the test timeout instead of passing late.
+ */
+function withoutDeadline(t) {
+  t.mock.method(AbortSignal, 'timeout', () => new AbortController().signal);
+}
+
 /** Silence the loaders' progress and failure logging. */
 function quiet(t) {
   t.mock.method(console, 'log', () => {});
@@ -97,6 +105,29 @@ test('Tarktee DATEX image parser rejects non-official hosts', () => {
   assert.equal(images.size, 0);
 });
 
+test('Tarktee DATEX requests wait 30 s, past the slow answers measured live', async (t) => {
+  const timeouts = [];
+  const timeout = AbortSignal.timeout;
+  t.mock.method(AbortSignal, 'timeout', (ms) => {
+    timeouts.push(ms);
+    return timeout.call(AbortSignal, ms);
+  });
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async (url) =>
+      new Response(
+        String(url).includes('roadCameraLocations')
+          ? SAMPLE_LOCATIONS_XML
+          : SAMPLE_IMAGES_XML,
+      ),
+  );
+  const cameras = await loadTarkteeSourcesFromDatex();
+  assert.deepEqual(timeouts, [30_000]);
+  assert.equal(cameras.length, 1);
+});
+
 test('Tarktee loader deduplicates cameras sharing an image number before the cap', async (t) => {
   quiet(t);
   const dupLocationsXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -168,46 +199,6 @@ test('Tarktee loader refuses a redirect and cancels both response bodies', async
   assert.equal(cancelled.images, true, 'sibling 200 body is also cancelled');
 });
 
-test('Tarktee loader cancels fulfilled bodies when either fetch rejects', async (t) => {
-  for (const failedUrl of [TARKTEE_LOCATIONS_URL, TARKTEE_IMAGES_URL]) {
-    for (const delayedSibling of [false, true]) {
-      await t.test(
-        `${failedUrl}, delayed sibling: ${delayedSibling}`,
-        async (t) => {
-          quiet(t);
-          let cancelled = false;
-          const response = new Response(
-            new ReadableStream({
-              start(controller) {
-                controller.enqueue(new TextEncoder().encode('<xml/>'));
-              },
-              cancel() {
-                cancelled = true;
-              },
-            }),
-          );
-          t.mock.method(globalThis, 'fetch', async (url) => {
-            if (String(url) === failedUrl) throw new TypeError('fetch failed');
-            if (delayedSibling) await new Promise(setImmediate);
-            return response;
-          });
-
-          try {
-            assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
-            assert.equal(
-              cancelled,
-              true,
-              'fulfilled sibling body is cancelled',
-            );
-          } finally {
-            await response.body.cancel();
-          }
-        },
-      );
-    }
-  }
-});
-
 test('Tarktee loader cancels the sibling body when one feed fails or overflows the byte cap', async (t) => {
   quiet(t);
   let siblingCancelled = false;
@@ -264,25 +255,135 @@ test('Tarktee loader cancels the sibling body when one feed fails or overflows t
   );
 });
 
-test('Tarktee DATEX requests wait 30 s, past the slow answers measured live', async (t) => {
-  const timeouts = [];
-  const timeout = AbortSignal.timeout;
-  t.mock.method(AbortSignal, 'timeout', (ms) => {
-    timeouts.push(ms);
-    return timeout.call(AbortSignal, ms);
-  });
-  t.mock.method(console, 'log', () => {});
+for (const failingUrl of [TARKTEE_LOCATIONS_URL, TARKTEE_IMAGES_URL]) {
+  for (const lateSibling of [false, true]) {
+    test(
+      `Tarktee cancels a ${lateSibling ? 'late' : 'received'} sibling when ${failingUrl} rejects before headers`,
+      { timeout: 2000 },
+      async (t) => {
+        quiet(t);
+        withoutDeadline(t);
+        let cancelled = false;
+        let siblingSignal;
+        let release;
+        const gate = new Promise((resolve) => {
+          release = resolve;
+        });
+        t.mock.method(globalThis, 'fetch', async (url, init) => {
+          if (String(url) === failingUrl)
+            throw new Error('headers unavailable');
+          siblingSignal = init.signal;
+          // A late transport answers once the sibling is aborted, or on release.
+          if (lateSibling)
+            await Promise.race([
+              gate,
+              new Promise((resolve) =>
+                init.signal.addEventListener('abort', resolve, { once: true }),
+              ),
+            ]);
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode('<xml/>'));
+              },
+              cancel() {
+                cancelled = true;
+              },
+            }),
+          );
+        });
+        assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
+        // Also exercise a response arriving after abort, as a queued transport
+        // completion can race the rejection owner even when fetch honors abort.
+        if (lateSibling) {
+          release();
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+        assert.equal(cancelled, true, 'every obtained body must be cancelled');
+        assert.equal(
+          siblingSignal.aborted,
+          true,
+          'a pending transport is aborted immediately',
+        );
+      },
+    );
+  }
+  test(
+    `Tarktee aborts a pending sibling when ${failingUrl} rejects`,
+    { timeout: 2000 },
+    async (t) => {
+      quiet(t);
+      withoutDeadline(t);
+      let aborted = false;
+      t.mock.method(globalThis, 'fetch', async (url, init) => {
+        if (String(url) === failingUrl) throw new Error('headers unavailable');
+        return new Promise((resolve, reject) => {
+          init.signal.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              reject(init.signal.reason);
+            },
+            { once: true },
+          );
+        });
+      });
+      assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
+      assert.equal(aborted, true, 'do not wait for the 30-second deadline');
+    },
+  );
+}
+
+test('Tarktee cancels both lengthless streams when one exceeds the byte cap', async (t) => {
+  quiet(t);
+  const cancelled = [];
   t.mock.method(
     globalThis,
     'fetch',
     async (url) =>
       new Response(
-        String(url).includes('roadCameraLocations')
-          ? SAMPLE_LOCATIONS_XML
-          : SAMPLE_IMAGES_XML,
+        new ReadableStream({
+          start(controller) {
+            const oversized = String(url) === TARKTEE_LOCATIONS_URL;
+            controller.enqueue(
+              new Uint8Array(oversized ? TARKTEE_MAX_CATALOG_BYTES + 1 : 1),
+            );
+          },
+          cancel() {
+            cancelled.push(String(url));
+          },
+        }),
       ),
   );
-  const cameras = await loadTarkteeSourcesFromDatex();
-  assert.deepEqual(timeouts, [30_000, 30_000]);
-  assert.equal(cameras.length, 1);
+  assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
+  assert.deepEqual(
+    cancelled.sort(),
+    [TARKTEE_LOCATIONS_URL, TARKTEE_IMAGES_URL].sort(),
+  );
 });
+
+test(
+  'Tarktee aborts pending headers as soon as its sibling returns an HTTP error',
+  { timeout: 2000 },
+  async (t) => {
+    quiet(t);
+    withoutDeadline(t);
+    let aborted = false;
+    t.mock.method(globalThis, 'fetch', async (url, init) => {
+      if (String(url) === TARKTEE_LOCATIONS_URL)
+        return new Response('unavailable', { status: 503 });
+      return new Promise((resolve, reject) => {
+        init.signal.addEventListener(
+          'abort',
+          () => {
+            aborted = true;
+            reject(init.signal.reason);
+          },
+          { once: true },
+        );
+      });
+    });
+    assert.deepEqual(await loadTarkteeSourcesFromDatex(), []);
+    assert.equal(aborted, true);
+  },
+);

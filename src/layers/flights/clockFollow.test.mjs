@@ -174,6 +174,8 @@ test('a failed snapshot at a time reports it without holding the live backoff', 
 
 test('a jump forgets how contacts moved; clearing drops every contact', () => {
   const calls = [];
+  // The contacts' icon rows.
+  const icons = new Set(['abc123']);
   const flightState = {
     records: records(),
     _positionHistory: new Map([['abc123', []]]),
@@ -182,9 +184,7 @@ test('a jump forgets how contacts moved; clearing drops every contact', () => {
     _displayFloorState: new Map([['abc123', {}]]),
     _drReconcileValid: true,
     _cachedDRFrame: 7,
-    _billboards: new Map([['abc123', { id: 'abc123' }]]),
-    _billboardCollection: { remove: () => calls.push('remove') },
-    _cullPositions: new Map([['abc123', null]]),
+    _icons: { ids: () => [...icons] },
     _detectionObjects: new Map([['abc123', {}]]),
     _trackedIcao: 'abc123',
     feed: { _count: 1, _lastUpdate: T },
@@ -197,7 +197,13 @@ test('a jump forgets how contacts moved; clearing drops every contact', () => {
         flightState._trackedIcao = null;
       },
     },
-    rendering: { _releaseModel: (id) => calls.push(`model:${id}`) },
+    icons: {
+      // A contact's row goes, and its 3D model with it.
+      _forgetContact: (id) => {
+        icons.delete(id);
+        calls.push(`model:${id}`);
+      },
+    },
   };
   const follow = createClockFollow({ flightState, parts });
   flightState.records.receive(observation(), view());
@@ -207,14 +213,33 @@ test('a jump forgets how contacts moved; clearing drops every contact', () => {
   assert.equal(flightState._displayCourse.size, 0);
   assert.equal(flightState._displayFloorState.size, 0);
   assert.equal(flightState._drReconcileValid, false);
-  assert.equal(flightState._billboards.size, 1, 'contacts stay until replaced');
+  assert.equal(icons.size, 1, 'contacts stay until replaced');
   follow.clear();
-  assert.equal(flightState._billboards.size, 0);
+  assert.equal(icons.size, 0);
   assert.equal(flightState._detectionObjects.size, 0);
   assert.equal(flightState.feed._count, 0);
   assert.equal(flightState.feed._lastUpdate, null);
   assert.ok(calls.includes('untrack:true'));
   assert.ok(calls.includes('model:abc123'));
+});
+
+test('leaving the live edge forgets every contact a host placement was told of', () => {
+  const forgotten = [];
+  const flightState = {
+    records: records(),
+    _positionHistory: new Map([
+      ['abc123', []],
+      ['def456', []],
+    ]),
+    _displayCourse: new Map(),
+    _groundSnap: { clear() {} },
+    _displayFloorState: new Map(),
+  };
+  const parts = { tracking: { _clearTrail() {} } };
+  const services = { placement: { forget: (id) => forgotten.push(id) } };
+  createClockFollow({ flightState, services, parts }).resetMotion();
+  assert.deepEqual(forgotten, ['abc123', 'def456']);
+  assert.equal(flightState._positionHistory.size, 0);
 });
 
 test('a snapshot at a time the source drops for a newer one sets no error', async () => {
