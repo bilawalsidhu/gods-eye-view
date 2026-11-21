@@ -3752,9 +3752,10 @@ that misses onto the map surface, it searches at most eight hits in a 14px squar
 and accepts the first registered layer hit, stopping at non-map objects. Civil
 and military aircraft and vessels share this rule; fine pointers stay exact.
 
-Manually opening Context with a tracked civilian or military aircraft enters
-the existing Contacts mode when Context is off. Contacts adopts that aircraft
-without restarting its tracking. Programmatic sheet changes and closing the tab do not activate a mode.
+Opening the Context tab only presents the Context panel, as on desktop: with
+an aircraft tracked it shows that aircraft's card (a click on it opened the card
+whether or not the panel was open). It never switches Contacts or any other
+Context mode on, and changes no layer or detection.
 
 Sheets borrow panels. Opening one expands its panels without persisting them or
 claiming a user choice, and share links keep reporting each borrowed panel's
