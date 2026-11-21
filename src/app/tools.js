@@ -42,6 +42,7 @@ import {
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
+import { getResolutionDiagnostics } from './resolutionGovernor.js';
 import { entityRecord, readEntityRecord } from '../data/entityRecords.js';
 import { overlayHost } from './layers/overlayHost.js';
 
@@ -318,6 +319,7 @@ export function createApplicationTools({
       weatherEffects,
       cockpitCloudEffects,
       getRenderGovernorDiagnostics,
+      getResolutionDiagnostics,
       surfaceServices: operations.surface,
       requestRender: governorRequestRender,
       entityRecords: { read: readEntityRecord, write: entityRecord },

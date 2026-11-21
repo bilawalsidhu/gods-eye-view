@@ -365,7 +365,8 @@
       "src/sky/assets.js",
       "src/globeInView.js",
       "src/render/cesium/imageryLookAhead.js",
-      "src/cockpitOrbital.js"
+      "src/cockpitOrbital.js",
+      "src/render/cesium/drawingBuffer.js"
     ],
     "external": ["cesium"]
   },
@@ -2416,6 +2417,7 @@
       "src/i18n/index.js",
       "src/app/atmosphereCompat.js",
       "src/render/cesium/imageryLookAhead.js",
+      "src/render/cesium/drawingBuffer.js",
       "src/render/cesium/starrySky.js",
       "src/geo/ellipsoid.js",
       "src/data/followed.js",
@@ -4331,6 +4333,7 @@
       "src/ui/styles/stories.css",
       "src/sky/stars.js",
       "src/app/atmosphereCompat.js",
+      "src/app/resolutionGovernor.js",
       "src/bloom.js",
       "src/camera.js",
       "src/cameraGroundGuard.js",
@@ -5547,6 +5550,7 @@
       "src/data/ucsSatellites.js",
       "src/data/imagingSensors.js",
       "src/render/cesium/imageryLookAhead.js",
+      "src/render/cesium/drawingBuffer.js",
       "src/render/applicationHooks.js",
       "src/maps/globeEngine.js",
       "src/render/cesium/viewers.js",
