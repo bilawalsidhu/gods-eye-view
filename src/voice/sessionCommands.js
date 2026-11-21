@@ -1,6 +1,9 @@
 import { nextTick } from 'vue';
 import { useOmnibarStore } from '../ui/stores/omnibar.js';
-import { showSelectionInContext } from '../ui/stores/entityCard.js';
+import {
+  showSelectionInContext,
+  useEntityCardStore,
+} from '../ui/stores/entityCard.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
@@ -64,6 +67,8 @@ export function createVoiceCommands({
   onSessionEvent,
   canStartVoice,
   createCard = (options) => new VoiceCardControls(options),
+  // Cockpit's own state; Context stays hidden while it runs.
+  styleManager = null,
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
@@ -322,16 +327,32 @@ export function createVoiceCommands({
       !panel.dataset.minimized,
     );
   };
+  // The Context card generation each selection was asked at, by call, so a
+  // slow selection never replaces a card picked since.
+  const askedAt = new Map();
+  const callKey = (event) => event.callId ?? event.name;
+  const cockpitActive = () =>
+    typeof styleManager?.getCockpitState === 'function'
+      ? styleManager.getCockpitState()?.active === true
+      : globalThis.document?.body?.classList?.contains('cockpit-mode') === true;
   layouts.push(
     session.subscribe((event) => {
-      if (
-        event.type !== 'action-result' ||
-        event.result?.ok !== true ||
-        !SELECTION_ACTIONS.has(event.name)
-      )
+      if (!SELECTION_ACTIONS.has(event.name)) return;
+      if (event.type === 'action-call') {
+        askedAt.set(
+          callKey(event),
+          useEntityCardStore(applicationPinia()).selectionGeneration(),
+        );
         return;
+      }
+      if (event.type !== 'action-result') return;
+      const since = askedAt.get(callKey(event)) ?? null;
+      askedAt.delete(callKey(event));
+      if (event.result?.ok !== true) return;
       showSelectionInContext(SELECTION_ACTIONS.get(event.name)(event.result), {
         pinia: applicationPinia(),
+        since,
+        cockpitActive: cockpitActive(),
       });
       if (!panelMount) return;
       if (adapter.getStartOptions?.().textOnly) {

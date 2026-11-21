@@ -140,6 +140,7 @@ function mounted(t, options = {}) {
     createSession: factory(instances, options),
     createControl: (control) => createTestVoiceUi({ ...control, pinia }),
     panelHost: host,
+    styleManager: options.styleManager ?? null,
     nativePanelProvider: options.native
       ? (options.nativeProvider ?? 'gemini')
       : null,
@@ -1613,4 +1614,57 @@ test('the voice panel keeps the last reply until the next turn starts', async (t
     responseId: 'r2',
   });
   assert.equal(f.commands.voiceCard.state.assistant, 'Now following DAL4.');
+});
+
+test('a voice selection in Cockpit, as Cockpit reports it, leaves the Context card alone', async (t) => {
+  const context = contextCard(t);
+  let cockpit = true;
+  const f = mounted(t, {
+    view: true,
+    runner: selectionRunner,
+    styleManager: { getCockpitState: () => ({ active: cockpit }) },
+  });
+  await f.settle();
+  await f.commands.session.start();
+  // Cockpit's own state decides, not the page's classes.
+  assert.equal(
+    globalThis.document.body.classList.contains('cockpit-mode'),
+    false,
+  );
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card, null);
+  cockpit = false;
+  await f.instances[0].hooks.runAction('track_entity', { query: 'RCH401' });
+  assert.equal(context.card.key, 'military:ae01ce');
+});
+
+test('a slow voice selection never replaces a card clicked since it was asked', async (t) => {
+  const context = contextCard(t);
+  let finish;
+  const f = mounted(t, {
+    view: true,
+    runner: (name) =>
+      name === 'track_entity'
+        ? new Promise((resolve) => {
+            finish = () => resolve(selectionRunner(name));
+          })
+        : selectionRunner(name),
+  });
+  await f.settle();
+  await f.commands.session.start();
+  const pending = f.instances[0].hooks.runAction('track_entity', {
+    query: 'RCH401',
+  });
+  await Promise.resolve();
+  // The person clicks another aircraft while the lookup runs.
+  context.select({ layerId: 'flights', id: 'click1', label: 'CLICKED' });
+  const clicked = context.card.key;
+  finish();
+  await pending;
+  assert.equal(context.card.key, clicked);
+  // A selection with no newer pick still opens its card.
+  await f.instances[0].hooks.runAction('select_nearest_aircraft', {
+    location: 'Boston',
+  });
+  assert.equal(context.card.key, 'flights:a1b2c3');
 });
