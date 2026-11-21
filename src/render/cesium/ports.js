@@ -83,6 +83,9 @@ export function cesiumCapabilities(scene, only) {
     'meshes',
     // Raster shells; other field kinds are refused.
     'fields',
+    // Lines faded with age in their material, from a floating-point
+    // texture of their points' times (`draw.js`).
+    ...(scene?.context?.floatingPointTexture ? ['lineAgeFade'] : []),
     'followFrame',
     'pointVisibility',
     // Cesium's AUTODETECT tracking frame (`follow.js`).
