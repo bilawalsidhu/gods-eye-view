@@ -191,7 +191,7 @@ test('a layer supplies its own card detail lines through the cardDetails hook', 
   const entry = createLocalInfrastructureOverlayEntry({
     id: 'a',
     layerId: 'local-example',
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 2000),
+    position: fromDegrees(-97.7, 30.2, 2000),
     properties: { name: 'Site A' },
     priority: 1,
     accent: '#fff',
@@ -211,7 +211,7 @@ test('a cardDetails hook that returns nothing adds no lines and does not fail th
   const entry = createLocalInfrastructureOverlayEntry({
     id: 'a',
     layerId: 'local-example',
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 2000),
+    position: fromDegrees(-97.7, 30.2, 2000),
     properties: { name: 'Site A' },
     priority: 1,
     accent: '#fff',
