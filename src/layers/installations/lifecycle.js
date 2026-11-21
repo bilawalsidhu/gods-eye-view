@@ -1,9 +1,5 @@
-import * as Cesium from 'cesium';
-import { LAYER_ID } from './policy.js';
-import {
-  claimCameraSensitivity,
-  releaseCameraSensitivity,
-} from '../../data/cameraSensitivity.js';
+import { cameraOf } from '../../render/rendererOf.js';
+import { CAMERA_CHANGED_THRESHOLD, LAYER_ID } from './policy.js';
 
 export function createLifecycle({
   state: layerState,
@@ -17,17 +13,16 @@ export function createLifecycle({
   const methods = {
     init(viewer) {
       layerState.viewer = viewer;
-      layerState.dataSource = new Cesium.CustomDataSource(
-        'military-installations',
-      );
-      viewer.dataSources.add(layerState.dataSource);
+      parts.rendering.attach(viewer);
       const cameraChanged = () => {
         if (!layerState.contextAnchor) parts.viewport.scheduleLoad();
       };
-      layerState.moveEndRemove =
-        viewer.camera.moveEnd.addEventListener(cameraChanged);
-      layerState.changedRemove =
-        viewer.camera.changed?.addEventListener(cameraChanged);
+      const camera = cameraOf(viewer);
+      layerState.moveEndRemove = camera.on('moveEnd', cameraChanged);
+      // Measured for this listener alone; off, a load is never scheduled.
+      layerState.changedRemove = camera.on('changed', cameraChanged, {
+        threshold: CAMERA_CHANGED_THRESHOLD,
+      });
       parts.selection.installInteraction(viewer);
     },
 
@@ -51,9 +46,8 @@ export function createLifecycle({
         });
       parts.namedMarkers?.enable();
       parts.namedMarkers?.sync(layerState.records || []);
-      claimCameraSensitivity(layerState.viewer.camera, LAYER_ID, 0.01);
       registerPickOwner(LAYER_ID, (id) => layerState.recordById.has(id));
-      layerState.dataSource.show = true;
+      parts.rendering.setShown(true);
       // DataLayerManager invokes update() immediately after enable(), which owns
       // the first fetch. Avoid racing it with a second aborting request here.
     },
@@ -62,7 +56,6 @@ export function createLifecycle({
       layerState.enabled = false;
       services.credits?.hideOsmCredit?.(layerState.viewer, LAYER_ID);
       parts.namedMarkers?.hide();
-      releaseCameraSensitivity(layerState.viewer?.camera, LAYER_ID);
       layerState.contextAnchor = null;
       layerState.contextPosition = null;
       layerState.coverage = { kind: 'viewport' };
@@ -74,7 +67,7 @@ export function createLifecycle({
       layerState.abort?.abort();
       layerState.abort = null;
       layerState.loading = false;
-      if (layerState.dataSource) layerState.dataSource.show = false;
+      parts.rendering.setShown(false);
       clearSelectedEntityContextForLayer(LAYER_ID);
       layerState.selectedId = null;
       parts.rendering.clearSelectionFill?.();
@@ -93,13 +86,11 @@ export function createLifecycle({
       layerState.moveEndRemove?.();
       layerState.changedRemove?.();
       parts.selection.destroy?.();
-      layerState.clickHandler?.destroy();
-      layerState.clickHandler = null;
+      layerState.clickSubscription?.();
+      layerState.clickSubscription = null;
       parts.namedMarkers?.destroy();
       parts.rendering.clearRendered();
-      if (layerState.dataSource && viewer)
-        viewer.dataSources.remove(layerState.dataSource, true);
-      layerState.dataSource = null;
+      parts.rendering.detach(viewer);
     },
   };
 

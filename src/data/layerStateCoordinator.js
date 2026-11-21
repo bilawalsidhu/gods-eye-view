@@ -103,12 +103,11 @@ export class LayerStateCoordinator {
     shareLayerState = null,
     allowLocalState = true,
     shareCreatedAtMs = null,
+    startLayerIds = [],
   } = {}) {
     if (this._destroyed)
       throw new Error('Layer-state coordinator is destroyed');
-    let selected = shareLayerState
-      ? normalizeLayerState(shareLayerState)
-      : null;
+    let selected = shareLayerState ? this._normalize(shareLayerState) : null;
     if (selected) {
       this._source = 'share';
       this._shareCreatedAtMs = Number.isFinite(shareCreatedAtMs)
@@ -124,10 +123,16 @@ export class LayerStateCoordinator {
         /* best effort */
       }
       if (stored) {
-        selected = stored;
+        selected = this._normalize(stored);
         this._source = 'local';
       }
-    } else {
+    }
+    if (!selected && startLayerIds.length) {
+      // The layers the application starts with when nothing names any:
+      // restored passively, so they are never written as the user's choice.
+      selected = this._normalize({ enabledLayerIds: startLayerIds });
+      this._source = 'start';
+    } else if (!selected && !allowLocalState) {
       // A valid historical camera/style share with no v2 layer payload keeps
       // the exact legacy default-layer behavior. It must not inherit an
       // unrelated recipient's saved local layer preferences.
@@ -163,9 +168,7 @@ export class LayerStateCoordinator {
     for (const controller of this._restoreControllers.values())
       controller.abort('superseded-by-share-navigation');
     this._revokePendingTrackingWatch('superseded-by-share-navigation');
-    const selected = shareLayerState
-      ? normalizeLayerState(shareLayerState)
-      : null;
+    const selected = shareLayerState ? this._normalize(shareLayerState) : null;
     this._source = selected ? 'share' : 'legacy-share';
     this._shareCreatedAtMs =
       selected && Number.isFinite(shareCreatedAtMs) ? shareCreatedAtMs : null;
@@ -180,6 +183,25 @@ export class LayerStateCoordinator {
 
   get source() {
     return this._source;
+  }
+
+  /**
+   * Canonical layer state holding only the layers this application
+   * registered. An application built without a layer never restores, stores
+   * or shares it, even when a link or saved state from a build that has it
+   * names it. Filtering before normalizing lets normalization drop options
+   * that depend on a layer that is not here (a tracked selection).
+   */
+  _normalize(candidate) {
+    const input = candidate && typeof candidate === 'object' ? candidate : {};
+    return normalizeLayerState({
+      ...input,
+      enabledLayerIds: Array.isArray(input.enabledLayerIds)
+        ? input.enabledLayerIds.filter((id) =>
+            this.dataManager.layers.has(String(id)),
+          )
+        : [],
+    });
   }
 
   getDurableState() {
@@ -345,7 +367,7 @@ export class LayerStateCoordinator {
   }
 
   _commitExplicit(candidate) {
-    this._durableState = normalizeLayerState(candidate);
+    this._durableState = this._normalize(candidate);
     const serialized = serializeStoredLayerState(this._durableState);
     try {
       if (this.storage?.getItem?.(LAYER_STATE_STORAGE_KEY) !== serialized) {
@@ -478,7 +500,7 @@ export class LayerStateCoordinator {
       ...this._durableState.options[selected.optionOwner],
       [selected.optionKey]: null,
     };
-    this._durableState = normalizeLayerState({
+    this._durableState = this._normalize({
       ...this._durableState,
       options: {
         ...this._durableState.options,

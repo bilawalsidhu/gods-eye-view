@@ -1,12 +1,18 @@
+import { followedOf } from '../data/followed.js';
 import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import {
   COCKPIT_AIRCRAFT_LAYER_IDS,
+  bridgeEntryAllowed,
   cockpitEntryAllowed,
+  orbitEntryAllowed,
+  subjectEntryAllowed,
 } from '../contextModePolicy.js';
+import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
 import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** Own Cockpit entry/rollback, readouts and the single Display portal. */
 export class CockpitCoordinator {
@@ -40,6 +46,9 @@ export class CockpitCoordinator {
     const {
       flightsLayer,
       militaryFlightsLayer,
+      aisLiveVesselsLayer,
+      satellitesLayer,
+      militaryInstallationsLayer,
       isTr3b,
       toggleTr3b,
       militaryAwarenessLayer,
@@ -49,17 +58,25 @@ export class CockpitCoordinator {
       meshFloorPreferred,
       warmGroundFloor,
       sampleMeshFloorCells,
+      trackedEntityDrawn,
       holdContinuousRender,
       releaseContinuousRender,
       fetchRegionalBrief,
       regionalDistanceM,
       weatherCodeLabel,
+      acquireOrbitImagery,
+      cockpitSubjects,
     } = services;
     this._cockpitDisplayPortal = null;
+    // The application's own subjects (services.cockpitSubjects), checked once.
+    const subjectProviders = cockpitSubjectProviders(cockpitSubjects ?? []);
     this.cockpitView = new CockpitViewController(viewer, {
       services: {
         flightsLayer,
         militaryFlightsLayer,
+        aisLiveVesselsLayer,
+        satellitesLayer,
+        militaryInstallationsLayer,
         isTr3b,
         toggleTr3b,
         militaryAwarenessLayer,
@@ -70,11 +87,13 @@ export class CockpitCoordinator {
         meshFloorPreferred,
         warmGroundFloor,
         sampleMeshFloorCells,
+        trackedEntityDrawn,
         holdContinuousRender,
         releaseContinuousRender,
         fetchRegionalBrief,
         regionalDistanceM,
         weatherCodeLabel,
+        acquireOrbitImagery,
         // The Contact card and Live Signals say which feeds are off.
         isLayerEnabled: (layerId) => this._isLayerEnabled(layerId),
       },
@@ -93,15 +112,43 @@ export class CockpitCoordinator {
           contextModeChanging: this._contextModeChanging,
         });
       },
+      isBridgeEntryAllowed: () =>
+        bridgeEntryAllowed({
+          vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
+          contextModeChanging: this._contextModeChanging,
+        }),
+      subjectProviders,
+      // A provider's subject needs its own layer on, no Context change in
+      // flight, and the provider's own say.
+      isSubjectEntryAllowed: (provider, candidate) =>
+        subjectEntryAllowed({
+          layerEnabled: this._isLayerEnabled(provider.layerId),
+          contextModeChanging: this._contextModeChanging,
+          providerAllows:
+            this.cockpitView?.callSubject(
+              provider,
+              'isEntryAllowed',
+              [candidate],
+              false,
+            ) === true,
+        }),
+      isOrbitEntryAllowed: () =>
+        orbitEntryAllowed({
+          satellitesEnabled: !!this._dataManager?.isEnabled('satellites'),
+          contextModeChanging: this._contextModeChanging,
+          // The layer says whether its class may be ridden.
+          subjectEnterable:
+            satellitesLayer?.getCockpitSubject?.()?.enterable !== false,
+        }),
       publish: this.publishCockpit,
       isUtilityDisclosureOpen: () => !!this.readUtilityDisclosureOpen?.(),
       onEntered: () => this.enterPanels(),
       onExited: () => this.exitPanels(),
       onRide: (layerId) => this._adoptRiddenLayer(layerId),
       restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
+        const [layerId, ...idParts] = String(
+          readEntityRecord(entity)?.trackedId || '',
+        ).split(':');
         const trackedId = idParts.join(':');
         if (!trackedId) return false;
         if (layerId === 'flights')
@@ -129,15 +176,21 @@ export class CockpitCoordinator {
     return Boolean(layerId) && !!this._dataManager?.isEnabled(layerId);
   }
   /**
-   * Make the ridden aircraft's layer the user's own while Contacts is on.
-   * Contacts may have turned that layer on, and it releases the layers it
-   * owns when it goes off; the Cockpit must outlive Contacts, so riding an
-   * aircraft adopts its layer as a direct selection does. Contacts then stops
-   * owning it and the Context restore keeps it (session `userAdded`).
-   * @param {string|null} layerId The ridden aircraft's layer.
+   * Make the ridden layer the user's own while Contacts is on. Contacts may
+   * have turned that layer on (an aircraft layer, or Live AIS Vessels), and
+   * it releases the layers it owns when it goes off; the Cockpit must outlive
+   * Contacts, so riding an aircraft or a vessel adopts its layer as a direct
+   * selection does. Contacts then stops owning it and the Context restore
+   * keeps it (session `userAdded`).
+   * @param {string|null} layerId The ridden aircraft's layer, or
+   *   'ais-live-vessels' on a bridge.
    */
   _adoptRiddenLayer(layerId) {
-    if (!COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId)) return;
+    if (
+      !COCKPIT_AIRCRAFT_LAYER_IDS.includes(layerId) &&
+      layerId !== 'ais-live-vessels'
+    )
+      return;
     if (!this._isLayerEnabled('military-awareness')) return;
     this._dataManager?.adoptLayerVisibility?.(layerId, true, {
       origin: 'user',
@@ -158,6 +211,19 @@ export class CockpitCoordinator {
   _cockpitEntryRefusal() {
     if (this._contextModeChanging)
       return 'Context is still changing — try Cockpit again in a moment';
+    // Tracking an aircraft from the bridge ends the bridge and clears the
+    // vessel selection before the entry can run, leaving neither.
+    if (this.cockpitView?.active && this.cockpitView.subjectKind === 'vessel')
+      return 'Cockpit is on a vessel bridge — exit the bridge first, then track an aircraft to enter Cockpit';
+    // Likewise in orbit: the aircraft's tracking takes the satellite's.
+    if (
+      this.cockpitView?.active &&
+      this.cockpitView.subjectKind === 'satellite'
+    )
+      return 'Cockpit is in an orbital view — exit it first, then track an aircraft to enter Cockpit';
+    // And in an application's own first-person view.
+    if (this.cockpitView?.active && this.cockpitView.subjectProvider)
+      return 'Cockpit is in another first-person view — exit it first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;
@@ -167,15 +233,36 @@ export class CockpitCoordinator {
     const snapshot = militaryAwarenessLayer.getContextSnapshot?.();
     const info = this.cockpitView?.readAircraftInfo?.();
     const active = Boolean(this.cockpitView?.active);
+    // Voice enters aircraft only; a bridge in use is still reported as it is.
+    const vessel =
+      active && this.cockpitView?.subjectKind === 'vessel'
+        ? this.cockpitView.readVesselInfo?.()
+        : null;
+    // Likewise an orbital view in use: its satellite, never an aircraft.
+    const satellite =
+      active && this.cockpitView?.subjectKind === 'satellite'
+        ? this.cockpitView.readSatelliteInfo?.()
+        : null;
+    // And a provider's subject in use.
+    const provided =
+      active && this.cockpitView?.subjectProvider
+        ? {
+            kind: this.cockpitView.subjectProvider.kind,
+            id: this.cockpitView.subjectId,
+            layerId: this.cockpitView.subjectProvider.layerId,
+            callsign: null,
+            name: this.cockpitView.lastSubjectFrame?.name ?? null,
+          }
+        : null;
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
+    // the camera's follow on entry and NEXT puts one back, which made this
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
       !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      Boolean(gateOpen && info && followedOf(this.viewer)?.entity?.position);
     // Entry needs only the ridden aircraft's own layer: with one tracked,
     // that layer; with none, any aircraft layer to track one from.
     const subjectLayerOff = info
@@ -195,13 +282,32 @@ export class CockpitCoordinator {
               ? 'subject-layer-off'
               : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
-      subject: info
-        ? {
-            id: info.icao24 || info.id || null,
-            layerId: info.layerId || null,
-            callsign: info.callsign || null,
-          }
-        : null,
+      subject: provided
+        ? provided
+        : satellite
+          ? {
+              kind: 'satellite',
+              id: satellite.id,
+              layerId: satellite.layerId,
+              callsign: null,
+              name: satellite.name,
+            }
+          : vessel
+            ? {
+                kind: 'vessel',
+                id: vessel.id,
+                layerId: vessel.layerId,
+                callsign: null,
+                name: vessel.name,
+              }
+            : info
+              ? {
+                  kind: 'aircraft',
+                  id: info.icao24 || info.id || null,
+                  layerId: info.layerId || null,
+                  callsign: info.callsign || null,
+                }
+              : null,
       navigation: snapshot
         ? {
             canPrevious: Boolean(snapshot.navigation?.canPrevious),

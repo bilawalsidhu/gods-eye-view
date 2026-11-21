@@ -4,14 +4,63 @@ import {
   presetDotRgba,
   presetDotOutline,
 } from '../../data/trafficPresetStyle.js';
-import * as Cesium from 'cesium';
 import {
   SIZE_BY_TYPE,
   STYLED_MIN_BASE_PX,
   FLOW_BUCKET_COLORS,
+  JAM_DOT_FAR_SCALE,
+  SIM_DOT_COLOR,
 } from './policy.js';
 
 export function createStyle({ state: layerState, services, parts, source }) {
+  /** The colour of a dot in `bucket` (null: simulated white). */
+  function dotColor(bucket) {
+    return bucket ? layerState._activeBucketColors[bucket] : SIM_DOT_COLOR;
+  }
+
+  /** Paint a dot's point in its bucket's colour, as a late flow update does. */
+  function paintDot(dot, bucket) {
+    dot.point.color = dotColor(bucket);
+  }
+
+  /** Show or hide a dot's point. */
+  function showDot(dot, show) {
+    dot.point.show = show;
+  }
+
+  /** Keep a prominent jam dot larger at range. */
+  function emphasizeJamDot(dot) {
+    dot.point.scaleByDistance = Object.freeze({
+      near: 100,
+      nearValue: 1.5,
+      far: layerState._fadeScaleFar,
+      farValue: JAM_DOT_FAR_SCALE,
+    });
+  }
+
+  /**
+   * The preset's dark-halo outline for a coloured dot, as the point item's
+   * members, or null for the shipped no-outline state.
+   * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
+   * @returns {{outlineColor: number[], outlineWidth: number}|null}
+   */
+  function outlineOf(bucket) {
+    const spec =
+      layerState._presetDots === 'on'
+        ? presetDotOutline(layerState._stylePreset, bucket)
+        : null;
+    return spec
+      ? {
+          outlineColor: Object.freeze([
+            spec.rgba[0] / 255,
+            spec.rgba[1] / 255,
+            spec.rgba[2] / 255,
+            spec.rgba[3],
+          ]),
+          outlineWidth: spec.width,
+        }
+      : null;
+  }
   /** @returns {boolean} A non-normal preset profile is active and enabled. */
 
   function presetProfileActive() {
@@ -58,7 +107,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
           ? presetDotRgba(layerState._stylePreset, bucket)
           : null;
       layerState._activeBucketColors[bucket] = rgba
-        ? new Cesium.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3])
+        ? Object.freeze([rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]])
         : FLOW_BUCKET_COLORS[bucket];
     }
   }
@@ -68,26 +117,14 @@ export function createStyle({ state: layerState, services, parts, source }) {
    * it back to the shipped no-outline state). NVG's auto-gain saturates the
    * scene, so brightness alone cannot separate a dot from a bright road —
    * the dark ring restores local contrast through every luma-mapping shader.
-   * @param {Cesium.PointPrimitive} point - The dot primitive.
+   * @param {object} point - The dot's point item.
    * @param {'free'|'slow'|'jam'|null} bucket - Flow bucket (null = sim).
    */
 
   function applyOutline(point, bucket) {
-    const spec =
-      layerState._presetDots === 'on'
-        ? presetDotOutline(layerState._stylePreset, bucket)
-        : null;
-    if (spec) {
-      point.outlineColor = new Cesium.Color(
-        spec.rgba[0] / 255,
-        spec.rgba[1] / 255,
-        spec.rgba[2] / 255,
-        spec.rgba[3],
-      );
-      point.outlineWidth = spec.width;
-    } else {
-      point.outlineWidth = 0;
-    }
+    const outline = outlineOf(bucket);
+    if (outline) Object.assign(point, outline);
+    else point.outlineWidth = 0;
   }
 
   /**
@@ -103,7 +140,7 @@ export function createStyle({ state: layerState, services, parts, source }) {
     for (const dot of layerState._dots) {
       const bucket = dot.bucket;
       if (!bucket) continue; // sim/uncovered dots stay byte-identical
-      dot.point.color = layerState._activeBucketColors[bucket];
+      dot.point.color = dotColor(bucket);
       dot.nominalSize = dot.point.pixelSize =
         baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
@@ -137,12 +174,21 @@ export function createStyle({ state: layerState, services, parts, source }) {
     return layerState._jamViz === 'density' || layerState._jamViz === 'both';
   }
 
-  /** @returns {boolean} Heat-line prototype active. */
+  /** @returns {boolean} Road lines drawn: the `lines` toggle or the heat-line prototype. */
 
   function heatlineOn() {
-    return layerState._jamViz === 'heatline' || layerState._jamViz === 'both';
+    return (
+      layerState._showLines ||
+      layerState._jamViz === 'heatline' ||
+      layerState._jamViz === 'both'
+    );
   }
   return {
+    dotColor,
+    outlineOf,
+    paintDot,
+    showDot,
+    emphasizeJamDot,
     presetProfileActive,
     activeSizeDelta,
     baseDotSize,

@@ -22,8 +22,6 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
   const params = new URLSearchParams({
     label: camera.name,
     city: camera.city,
-    lat: camera.lat.toFixed(6),
-    lon: camera.lon.toFixed(6),
     heading: String(Math.round(camera.headingDeg)),
     fov: String(Math.round(camera.fovDeg)),
     pitch: String(Math.round(camera.pitchDeg || -10)),

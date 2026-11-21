@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  bridgeEntryAllowed,
+  orbitEntryAllowed,
   cockpitEntryAllowed,
   contextAllowedLayerIds,
-  contextLayerEnableBlockReason,
   contextRestoreLayerIds,
   isExplicitUserIntentOrigin,
   mergeContextTransitionErrors,
@@ -15,9 +16,7 @@ import {
   settleContextIntentReplay,
   settleUserFacingContextAction,
   shouldCaptureContextSession,
-  shouldDeferContextEntryDuringClear,
   shouldExitContextForLayerChange,
-  spaceMissionEntryCancellationDisposition,
 } from './contextModePolicy.js';
 
 test('Context transition errors preserve primary identity and aggregate failed layers', () => {
@@ -118,11 +117,6 @@ test('user-enabled layers are additive and do not exit Context', () => {
     change: userEnable('earthquakes'),
   }), false);
   assert.equal(shouldExitContextForLayerChange({
-    contextMode: 'space-missions',
-    globalContextEnabled: false,
-    change: userEnable('traffic'),
-  }), false);
-  assert.equal(shouldExitContextForLayerChange({
     contextMode: null,
     globalContextEnabled: true,
     change: userEnable('earthquakes'),
@@ -131,48 +125,16 @@ test('user-enabled layers are additive and do not exit Context', () => {
 
 test('programmatic Context dependencies and direct mode setup remain allowed', () => {
   assert.equal(shouldExitContextForLayerChange({
-    contextMode: 'space-missions',
+    contextMode: 'flights',
     globalContextEnabled: true,
-    change: { ...userEnable('satellites'), origin: 'programmatic' },
+    change: { ...userEnable('military'), enabled: false, origin: 'programmatic' },
   }), false);
-});
-
-test('Space Missions cancellation retains only a newer authoritative ON entry', () => {
-  const cancelledEntry = {
-    type: 'visibility-cancelled',
-    layerId: 'rocket-launches',
-    enabled: true,
-    intentEpoch: 8,
-    cancellationReason: 'superseded',
-    successorIntentEpoch: 9,
-    successorEnabled: true,
-    successorOrigin: 'programmatic',
-  };
-  assert.equal(spaceMissionEntryCancellationDisposition({
-    change: cancelledEntry,
-  }), 'replacement');
-  assert.equal(spaceMissionEntryCancellationDisposition({
-    change: { ...cancelledEntry, successorEnabled: false },
-  }), 'restore', 'a newer OFF releases the entry shell');
-  assert.equal(spaceMissionEntryCancellationDisposition({
-    change: {
-      ...cancelledEntry,
-      cancellationReason: 'caller-abort',
-      successorIntentEpoch: undefined,
-      successorEnabled: undefined,
-    },
-  }), 'restore', 'caller abort at the same epoch restores the isolated session');
-  assert.equal(spaceMissionEntryCancellationDisposition({
-    change: { ...cancelledEntry, enabled: false },
-    currentIntentEpoch: 9,
-    effectivelyEnabled: true,
-  }), 'ignore');
 });
 
 test('only explicit user-owned shell enables capture a Context restoration snapshot', () => {
   const userMissionEnable = {
     type: 'visibility-requested',
-    layerId: 'rocket-launches',
+    layerId: 'military-awareness',
     enabled: true,
     origin: 'user',
   };
@@ -184,40 +146,25 @@ test('only explicit user-owned shell enables capture a Context restoration snaps
   assert.equal(shouldCaptureContextSession({ ...userMissionEnable, origin: 'context-restore' }), false);
   assert.equal(shouldCaptureContextSession({ ...userMissionEnable, enabled: false }), false);
   assert.equal(shouldCaptureContextSession({ ...userMissionEnable, layerId: 'satellites' }), false);
+  assert.equal(
+    shouldCaptureContextSession({ ...userMissionEnable, layerId: 'rocket-launches' }),
+    false,
+    'Space Missions is an ordinary layer, not a Context entry',
+  );
 });
 
-test('voice dependency OFF exits Space Missions like the equivalent UI action', () => {
+test('voice dependency OFF exits Contacts like the equivalent UI action', () => {
   assert.equal(shouldExitContextForLayerChange({
-    contextMode: 'space-missions',
+    contextMode: 'flights',
     globalContextEnabled: false,
-    change: { type: 'visibility', layerId: 'satellites', enabled: false, origin: 'voice' },
+    change: { type: 'visibility', layerId: 'flights', enabled: false, origin: 'voice' },
   }), true);
-});
-
-test('only a newer explicit mission request is deferred during Clear All', () => {
-  const change = {
-    type: 'visibility-requested',
-    layerId: 'rocket-launches',
-    enabled: true,
-    origin: 'voice',
-    intentEpoch: 12,
-  };
-  assert.equal(shouldDeferContextEntryDuringClear({ change, clearInFlight: true }), true);
-  assert.equal(shouldDeferContextEntryDuringClear({ change, clearInFlight: false }), false);
-  assert.equal(shouldDeferContextEntryDuringClear({
-    change: { ...change, origin: 'programmatic' },
-    clearInFlight: true,
-  }), false);
-  assert.equal(shouldDeferContextEntryDuringClear({
-    change: { ...change, enabled: false },
-    clearInFlight: true,
-  }), false);
 });
 
 test('a rapid re-entry snapshots the settled restore target, not partial manager state', () => {
   assert.deepEqual(
     [...contextSnapshotLayerIds(
-      new Set(['rocket-launches', 'earthquakes']),
+      new Set(['cctv', 'earthquakes']),
       new Set(['flights', 'traffic']),
     )],
     ['flights', 'traffic'],
@@ -228,29 +175,13 @@ test('a rapid re-entry snapshots the settled restore target, not partial manager
   );
   assert.deepEqual(
     [...contextSnapshotLayerIds(
-      new Set(['rocket-launches', 'satellites']),
+      new Set(['military-awareness', 'cctv']),
       null,
-      ['rocket-launches'],
+      ['military-awareness'],
     )],
-    ['satellites'],
+    ['cctv'],
     'the synchronous entry intent is not part of the pre-entry snapshot',
   );
-});
-
-test('Space Missions blocks unrelated layer enables before replay data can mix', () => {
-  const change = { layerId: 'flights', enabled: true, origin: 'user' };
-  assert.match(
-    contextLayerEnableBlockReason({ contextMode: 'space-missions', change, layerName: 'Live Flights' }),
-    /Exit the mode to enable Live Flights/,
-  );
-  assert.equal(contextLayerEnableBlockReason({
-    contextMode: 'space-missions',
-    change: { ...change, layerId: 'satellites' },
-  }), null);
-  assert.equal(contextLayerEnableBlockReason({
-    contextMode: 'flights',
-    change,
-  }), null, 'live cockpit keeps additive user layers');
 });
 
 test('the Global Context shell and layers selected while Context is off remain allowed', () => {
@@ -273,14 +204,38 @@ test('manually disabling a mode dependency exits that Context bundle', () => {
     change: { ...userEnable('military'), enabled: false },
   }), true);
   assert.equal(shouldExitContextForLayerChange({
-    contextMode: 'space-missions',
+    contextMode: 'flights',
     globalContextEnabled: false,
     change: { ...userEnable('satellites'), enabled: false },
-  }), true);
+  }), false, 'Satellites is not a Contacts dependency');
+});
+
+test('Context never isolates, snapshots, restores or bookkeeps Space Missions and Satellites', () => {
+  for (const layerId of ['rocket-launches', 'satellites']) {
+    assert.equal(contextAllowedLayerIds('flights').has(layerId), true);
+    const snapshot = { userAdded: new Set(), userRemoved: new Set() };
+    for (const enabled of [true, false]) {
+      assert.equal(recordContextSessionUserChange({
+        snapshot,
+        change: { type: 'visibility', origin: 'user', layerId, enabled },
+        effectiveContextMode: 'flights',
+      }), false);
+      const restoreState = { enabledLayerIds: new Set() };
+      assert.equal(recordContextRestoreExplicitChange({
+        restoreState,
+        change: { type: 'visibility', origin: 'user', layerId, enabled },
+      }), false);
+    }
+    assert.equal(snapshot.userAdded.size + snapshot.userRemoved.size, 0);
+  }
+  assert.deepEqual(
+    [...contextSnapshotLayerIds(new Set(['rocket-launches', 'satellites', 'cctv']))],
+    ['cctv'],
+  );
 });
 
 test('Radio remains an independent companion across Context transitions', () => {
-  for (const contextMode of ['flights', 'space-missions']) {
+  for (const contextMode of ['flights', null]) {
     for (const enabled of [true, false]) {
       assert.equal(shouldExitContextForLayerChange({
         contextMode,
@@ -290,21 +245,17 @@ test('Radio remains an independent companion across Context transitions', () => 
     }
     assert.equal(contextAllowedLayerIds(contextMode).has('radio'), true);
   }
-  assert.equal(contextLayerEnableBlockReason({
-    contextMode: 'space-missions',
-    change: { type: 'visibility', origin: 'user', layerId: 'radio', enabled: true },
-    layerName: 'Radio',
-  }), null);
 });
 
 test('each Context mode exposes only its shell and dependencies', () => {
   assert.deepEqual(
     [...contextAllowedLayerIds(null)],
-    ['military-awareness', 'radio'],
+    ['military-awareness', 'radio', 'rocket-launches', 'satellites'],
   );
   assert.deepEqual(
     [...contextAllowedLayerIds('space-missions')],
-    ['rocket-launches', 'satellites', 'radio'],
+    ['military-awareness', 'radio', 'rocket-launches', 'satellites'],
+    'Space Missions is not a Context mode',
   );
 });
 
@@ -330,7 +281,7 @@ test('Context restoration honors an explicit companion disable', () => {
 });
 
 test('the latest explicit Radio state wins across a Context session', () => {
-  for (const effectiveContextMode of [null, 'flights', 'space-missions']) {
+  for (const effectiveContextMode of [null, 'flights']) {
     for (const origin of ['user', 'voice']) {
       const snapshot = { userAdded: new Set(), userRemoved: new Set() };
       const record = (enabled) => recordContextSessionUserChange({
@@ -366,7 +317,7 @@ test('only direct UI and voice origins count as explicit Context intent', () => 
     assert.equal(recordContextSessionUserChange({
       snapshot,
       change: { type: 'visibility', origin, layerId: 'radio', enabled: true },
-      effectiveContextMode: 'space-missions',
+      effectiveContextMode: 'flights',
     }), false);
     assert.equal(snapshot.userAdded.size, 0);
   }
@@ -426,6 +377,30 @@ test("cockpit entry needs only the tracked aircraft's own layer", () => {
     subjectLayerEnabled: false,
     contextModeChanging: false,
   }), false, 'there is no aircraft to ride');
+  assert.equal(cockpitEntryAllowed({
+    subjectLayerId: 'ais-live-vessels',
+    subjectLayerEnabled: true,
+    contextModeChanging: false,
+  }), false, "a vessel is the bridge gate's subject, not Cockpit's");
+});
+
+test('bridge entry needs only Live AIS Vessels', () => {
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: false }), true);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: false, contextModeChanging: false }), false);
+  assert.equal(bridgeEntryAllowed({ vesselsEnabled: true, contextModeChanging: true }), false);
+});
+
+test('orbital entry needs only Satellites', () => {
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: true, contextModeChanging: false }), true);
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: false, contextModeChanging: false }), false);
+  assert.equal(orbitEntryAllowed({ satellitesEnabled: true, contextModeChanging: true }), false);
+});
+
+test('debris can be tracked but never ridden in orbit', () => {
+  const on = { satellitesEnabled: true, contextModeChanging: false };
+  assert.equal(orbitEntryAllowed({ ...on, subjectEnterable: false }), false);
+  assert.equal(orbitEntryAllowed({ ...on, subjectEnterable: true }), true);
+  assert.equal(orbitEntryAllowed(on), true, 'no subject read yet');
 });
 
 test('context teardown guard restores coordination state after success and failure', async () => {
@@ -500,16 +475,8 @@ test('the teardown guard re-publishes on the way out, so a mid-flight exit is no
 
 test('the session-starting entry layer is never bookkept as user-added (chip ON→OFF restores exactly)', () => {
   const snapshot = { enabledLayerIds: new Set(['flights', 'ais-live-vessels']), userAdded: new Set() };
-  // The exact left-panel regression: the rockets enable event lands while the
-  // mode is still being entered (or even null); it must not survive its own exit.
-  for (const effectiveContextMode of ['space-missions', null]) {
-    recordContextSessionUserChange({
-      snapshot,
-      change: { type: 'visibility', layerId: 'rocket-launches', enabled: true, origin: 'user' },
-      effectiveContextMode,
-    });
-    assert.equal(snapshot.userAdded.has('rocket-launches'), false);
-  }
+  // The entry layer's enable event lands while the mode is still being
+  // entered; it must not survive its own exit.
   recordContextSessionUserChange({
     snapshot,
     change: { type: 'visibility', layerId: 'military-awareness', enabled: true, origin: 'user' },
@@ -533,10 +500,21 @@ test('mid-session user additions are recorded, removed on disable, and judged ag
   // A dependency of the mode being ENTERED is not a user addition.
   recordContextSessionUserChange({
     snapshot,
-    change: { type: 'visibility', layerId: 'satellites', enabled: true, origin: 'user' },
-    effectiveContextMode: 'space-missions',
+    change: { type: 'visibility', layerId: 'military', enabled: true, origin: 'user' },
+    effectiveContextMode: 'flights',
   });
-  assert.equal(snapshot.userAdded.has('satellites'), false);
+  assert.equal(snapshot.userAdded.has('military'), false);
+  // Space Missions is not Context's: it is never bookkept.
+  recordContextSessionUserChange({
+    snapshot,
+    change: { type: 'visibility', layerId: 'rocket-launches', enabled: true, origin: 'user' },
+    effectiveContextMode: 'flights',
+  });
+  assert.equal(
+    snapshot.userAdded.has('rocket-launches'),
+    false,
+    'Space Missions is not Context state',
+  );
   // Disabling a recorded addition removes it before any exit restore reads it.
   recordContextSessionUserChange({
     snapshot,

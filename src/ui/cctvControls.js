@@ -1,3 +1,5 @@
+import { watch } from 'vue';
+import { MOBILE_SHEET_ATTR } from './mobileSheets.js';
 import {
   EMPTY_CCTV_FRAME,
   _clearCctvFrame,
@@ -23,6 +25,7 @@ import { useCctvStore } from './stores/cctv.js';
 import { useStatusStore } from './stores/status.js';
 import { applicationPinia } from './vueRuntime.js';
 import { onLocaleChange } from '../i18n/index.js';
+import { createQuebecCctvOverlay } from './quebecCctvOverlay.js';
 
 /**
  * Own camera-panel interaction and presentation; receive the camera port and
@@ -34,6 +37,7 @@ export class CctvControls {
   constructor({
     elements,
     cctv,
+    viewer = null,
     actions,
     store = useCctvStore(applicationPinia()),
     statusStore = useStatusStore(applicationPinia()),
@@ -42,14 +46,17 @@ export class CctvControls {
     this.store = store;
     this.statusStore = statusStore;
     this.cctv = cctv;
+    this._quebecCctvOverlay = createQuebecCctvOverlay(viewer);
     this.actions = actions;
     this.destroyed = false;
     this.listeners = new AbortController();
     this._cctvUnsubscribe = null;
     this._cctvState = null;
+    this._lastQuebecSelectionRevision = null;
     this._cctvSummaryTypingTimer = null;
     this._lastCctvSummaryText = '';
     this._lastSeenCctvActiveId = null;
+    this._wasCctvEnabled = false;
     this._cctvChipHideTimer = null;
     this._cctvChipWasBusy = false;
     // The camera grid chip as last published; its label stays while hidden.
@@ -68,7 +75,10 @@ export class CctvControls {
       if (state) this._renderCctvState(state);
       if (this._cctvChip) this._publishCctvChip({});
     });
-    if (this._cctvVideo && typeof MutationObserver !== 'undefined') {
+    if (
+      (this._cctvVideo || this._cctvFrame) &&
+      typeof MutationObserver !== 'undefined'
+    ) {
       this._videoVisibilityObserver = new MutationObserver(() =>
         this._renderCctvState(this._cctvState),
       );
@@ -77,6 +87,15 @@ export class CctvControls {
           attributes: true,
           attributeFilter: ['class', 'hidden'],
         });
+      // On phones the panel is on screen only while the Cameras sheet is open.
+      this._videoVisibilityObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', MOBILE_SHEET_ATTR],
+      });
+      this._offPreviewCards = watch(
+        () => this.store.previewCards,
+        () => this._renderCctvState(this._cctvState),
+      );
       this.listen(document, 'visibilitychange', () =>
         this._renderCctvState(this._cctvState),
       );
@@ -146,8 +165,10 @@ export class CctvControls {
     if (this.destroyed) return;
     this.destroyed = true;
     this._offLocale();
+    this._quebecCctvOverlay?.dispose();
     this._cctvVideoSurface?.stop();
     this._videoVisibilityObserver?.disconnect();
+    this._offPreviewCards?.();
     this._actionGeneration++;
     this.listeners.abort();
     this._cctvUnsubscribe?.();

@@ -11,9 +11,9 @@ import { StyleManager } from './applicationShell.js';
 import { VisualSettings } from './visualSettings.js';
 import { readFileSync } from 'node:fs';
 
-function fixture(theme = 'cyber') {
+function fixture(layout = 'tactical') {
   const root = {
-    dataset: { uiTheme: theme, cyberSonarGpu: 'supported' },
+    dataset: { cyberSonarGpu: 'supported' },
     style: { setProperty() {} },
   };
   const flags = new Set();
@@ -27,7 +27,7 @@ function fixture(theme = 'cyber') {
   };
   const calls = [];
   const owner = {
-    hud: { getVariant: () => theme },
+    hud: { getVariant: () => layout },
     _setCyberSonarSetting(name, value) {
       calls.push([name, value]);
       const suffix = name[0].toUpperCase() + name.slice(1);
@@ -50,31 +50,45 @@ test('real runner and facade use visual settings, preserve visibility and return
   visual.services = { governorRequestRender: (reason) => renders.push(reason) };
   // No Display panel here: the controls' render is not under test.
   visual._publishDisplay = () => {};
+  // The shell's share sync; a sonar change keeps the link current.
+  const shares = [];
+  visual._syncShareState = () => shares.push(true);
   const owner = Object.create(StyleManager.prototype);
   owner._visualSettings = visual;
+  const claims = [];
+  Object.defineProperty(owner, 'shareLinkManager', { value: {
+    claimRestoreLane: (lane) => claims.push({ lane, renders: renders.length }),
+  } });
   Object.defineProperty(owner, 'hud', { value: f.owner.hud });
   const viewer = {
     camera: { moveEnd: { addEventListener() {} } },
     clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: new EventTarget() },
+    get canvas() {
+      return this.scene.canvas;
+    },
   };
   try {
     const runner = createGevActionRunner({ styleManager: owner, viewer, dataManager: {} });
     const result = await runner('set_cyber_sonar', { enabled: false, intensityPct: 73, sectorDeg: 9 });
     assert.equal(result.ok, true);
+    assert.deepEqual(claims, [{ lane: 'visual', renders: 0 }]);
     assert.equal(result.sonar.intensityPct, 73);
     assert.equal(result.sonar.sectorDeg, 9);
     assert.equal(result.sonar.enabled, false);
-    assert.equal(f.root.dataset.uiTheme, 'cyber');
+    assert.equal(f.owner.hud.getVariant(), 'tactical');
     assert.equal(f.hudFlags.has('active'), true);
     assert.equal(renders.length, 3);
+    assert.equal(shares.length, 1);
     const before = getCyberSonarControlState();
     const invalid = await runner('set_cyber_sonar', { rings: 6, opacityPct: 0 });
     assert.equal(invalid.ok, false);
+    assert.deepEqual(claims, [{ lane: 'visual', renders: 0 }], 'invalid requests claim no authority');
     assert.deepEqual(getCyberSonarControlState(), before);
     assert.equal(renders.length, 3);
     const zero = await runner('set_cyber_sonar', { intensityPct: 0 });
     assert.equal(zero.sonar.intensityPct, 0);
+    assert.deepEqual(claims.map(({ lane }) => lane), ['visual', 'visual']);
     assert.equal(zero.sonar.enabled, false);
     const unavailable = createGevActionRunner({ styleManager: {}, viewer, dataManager: {} });
     assert.equal((await unavailable('set_cyber_sonar', { enabled: true })).ok, false);
@@ -133,11 +147,11 @@ test('rejects the whole invalid request before any mutation', () => {
   }
 });
 
-test('requires Cyber and preserves off state and every omitted setting', () => {
-  for (const theme of ['tactical', 'minimal']) {
-    const f = fixture(theme);
-    assert.equal(setCyberSonarControls(f.owner, { enabled: true }, f.doc).ok, false);
-    assert.deepEqual(f.calls, []);
+test('works under every HUD layout and preserves off state and every omitted setting', () => {
+  for (const layout of ['tactical', 'minimal']) {
+    const f = fixture(layout);
+    assert.equal(setCyberSonarControls(f.owner, { enabled: true }, f.doc).ok, true);
+    assert.deepEqual(f.calls, [['enabled', true]]);
   }
   const f = fixture();
   f.root.dataset.cyberSonar = 'off';

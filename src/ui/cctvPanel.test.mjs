@@ -20,7 +20,7 @@ const BUTTONS = {
   _cctvProjectionBtn: 'cctv-projection-btn',
 };
 
-function panel(t) {
+function panel(t, { video = false } = {}) {
   document.body.replaceChildren();
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
@@ -32,6 +32,7 @@ function panel(t) {
       document.getElementById(id),
     ]),
   );
+  if (video) elements._cctvVideo = document.getElementById('cctv-video');
   const controls = new CctvControls({
     elements: {
       ...elements,
@@ -377,17 +378,10 @@ test('a second edit of the same chip gets a fresh input', async (t) => {
 });
 
 test('the frame preview renders each step of a camera frame request', async (t) => {
-  const prior = globalThis.Image;
-  const requests = [];
-  globalThis.Image = class {
-    constructor() {
-      requests.push(this);
-    }
-  };
-  t.after(() => {
-    globalThis.Image = prior;
-  });
+  const requests = mockImages(t);
   const { controls, byId } = panel(t);
+  // The preview loads while the panel is open; the panel starts collapsed.
+  byId('cctv-panel').classList.remove('collapsed');
   const frame = byId('cctv-frame');
   const wrap = byId('cctv-frame-wrap');
   const badge = byId('cctv-source-badge');
@@ -512,4 +506,244 @@ test('the panel meta line reads a bearing that rounds to north as HDG 0°', () =
   };
   assert.match(meta(359.4), /· HDG 359° ·/);
   assert.match(meta(359.6), /· HDG 0° ·/);
+});
+
+/** The panel collapses the test asked for, as `[panelId, collapsed]` pairs. */
+function collapseCalls(controls) {
+  const calls = [];
+  controls.actions.setPanelCollapsed = (panelId, collapsed) => {
+    calls.push([panelId, collapsed]);
+    // The panel chrome owns the class the controls read back.
+    controls._cctvPanel.classList.toggle('collapsed', collapsed);
+  };
+  return calls;
+}
+
+const activeState = {
+  enabled: true,
+  count: 1,
+  cameraIndex: [],
+  activeCameraId: camera.id,
+  activeCamera: camera,
+};
+
+test('switching the layer off collapses the panel it opened', (t) => {
+  const { controls } = panel(t);
+  const calls = collapseCalls(controls);
+  controls._renderCctvState(activeState);
+  assert.deepEqual(calls, [['cctv-panel', false]]);
+  // The layer keeps its active camera while off.
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
+  // A panel reopened by hand stays open through later notifications while
+  // the layer is off: only the on → off change collapses.
+  controls._cctvPanel.classList.remove('collapsed');
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.equal(calls.length, 2);
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
+});
+
+test('a layer that was never on leaves an open panel alone', (t) => {
+  const { controls } = panel(t);
+  const calls = collapseCalls(controls);
+  controls._renderCctvState({ enabled: false, count: 3, cameraIndex: [] });
+  controls._renderCctvState({ enabled: false, count: 3, cameraIndex: [] });
+  assert.deepEqual(calls, []);
+});
+
+test('the data manager switching the layer off collapses the panel too', (t) => {
+  const { controls } = panel(t);
+  const calls = collapseCalls(controls);
+  let on = true;
+  controls.actions.isEnabled = () => on;
+  controls._renderCctvState(activeState);
+  on = false;
+  controls._renderCctvState(activeState);
+  assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
+});
+
+test('a layer the application suspends keeps its panel through the round trip', (t) => {
+  const { controls } = panel(t);
+  const calls = collapseCalls(controls);
+  // Clear selected data layers and Context isolation both answer true.
+  let suspended = true;
+  controls.actions.preservePanelState = () => suspended;
+  controls._renderCctvState(activeState);
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
+  suspended = false;
+  controls._renderCctvState(activeState);
+  assert.equal(controls._cctvPanel.classList.contains('collapsed'), false);
+  assert.ok(calls.every(([, collapsed]) => collapsed === false));
+  // The next switch-off is the user's again.
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.deepEqual(calls.at(-1), ['cctv-panel', true]);
+});
+
+test('a panel the accordion folded still has its saved state closed', (t) => {
+  const { controls } = panel(t);
+  controls._renderCctvState(activeState);
+  const calls = [];
+  controls.actions.setPanelCollapsed = (...args) => calls.push(args);
+  // Folded for layout only: the class is there, the saved state is open. The
+  // panel chrome tells the two apart, so the controls always ask it.
+  controls._cctvPanel.classList.add('collapsed');
+  controls._renderCctvState({ ...activeState, enabled: false });
+  assert.deepEqual(calls, [['cctv-panel', true]]);
+});
+
+test('the meta line of a disabled layer does not describe its last camera', () => {
+  const off = { ...activeState, enabled: false, count: 3 };
+  assert.equal(
+    presentCctvPanel(off, false).meta,
+    '3 cameras loaded · enable CCTV to activate',
+  );
+  assert.match(presentCctvPanel(activeState, true).meta, /^Austin · HDG /);
+});
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+function mockImages(t) {
+  const prior = globalThis.Image;
+  const requests = [];
+  globalThis.Image = class {
+    constructor() {
+      requests.push(this);
+    }
+  };
+  t.after(() => {
+    globalThis.Image = prior;
+  });
+  return requests;
+}
+
+const stillState = (frameUrl, id = 'a') => ({
+  enabled: true,
+  count: 2,
+  cameraIndex: [camera, { ...camera, id: 'b' }],
+  activeCameraId: id,
+  activeCamera: { ...camera, id, frameUrl, sourceKind: 'snapshot' },
+});
+
+test('the still preview is fetched only while the tab and the panel are shown', async (t) => {
+  const requests = mockImages(t);
+  const hidden = Object.getOwnPropertyDescriptor(document, 'hidden');
+  let tabHidden = false;
+  Object.defineProperty(document, 'hidden', {
+    configurable: true,
+    get: () => tabHidden,
+  });
+  t.after(() => {
+    if (hidden) Object.defineProperty(document, 'hidden', hidden);
+    else delete document.hidden;
+  });
+  const { controls, byId } = panel(t);
+  assert.equal(controls._cctvVideo, undefined);
+  const panelElement = byId('cctv-panel');
+  const state = stillState;
+
+  // Collapsed panel: nothing is requested, however often the state arrives.
+  assert.equal(panelElement.classList.contains('collapsed'), true);
+  controls._renderCctvState(state('a1.jpg'));
+  controls._renderCctvState(state('a2.jpg'));
+  assert.equal(requests.length, 0, 'collapsed panel');
+
+  // Opening it resumes through the class observer, with no manual render.
+  panelElement.classList.remove('collapsed');
+  await settle();
+  assert.equal(requests.length, 1, 'expanded panel');
+  assert.equal(requests[0].src, 'a2.jpg');
+  requests[0].onload();
+
+  // A background tab: refreshed URLs are not requested.
+  tabHidden = true;
+  document.dispatchEvent(new Event('visibilitychange'));
+  controls._renderCctvState(state('a3.jpg'));
+  assert.equal(requests.length, 1, 'hidden tab');
+
+  // Back in the tab: visibilitychange alone fetches the current URL.
+  tabHidden = false;
+  document.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(requests.length, 2, 'visible tab');
+  assert.equal(requests[1].src, 'a3.jpg');
+});
+
+test('the still preview waits for the Cameras sheet on phones', async (t) => {
+  const requests = mockImages(t);
+  t.after(() => {
+    document.body.classList.remove('mobile-shell');
+    document.body.removeAttribute('data-mobile-sheet');
+  });
+  const { controls, byId } = panel(t);
+  byId('cctv-panel').classList.remove('collapsed');
+  document.body.classList.add('mobile-shell');
+  document.body.setAttribute('data-mobile-sheet', 'layers');
+  controls._renderCctvState(stillState('a1.jpg'));
+  assert.equal(requests.length, 0, 'another sheet is open');
+
+  document.body.removeAttribute('data-mobile-sheet');
+  controls._renderCctvState(stillState('a1.jpg'));
+  assert.equal(requests.length, 0, 'no sheet is open');
+
+  document.body.setAttribute('data-mobile-sheet', 'cameras');
+  await settle();
+  assert.equal(requests.length, 1, 'Cameras sheet opened');
+  assert.equal(requests[0].src, 'a1.jpg');
+
+  // Off a phone the sheet attribute means nothing.
+  requests[0].onload();
+  document.body.classList.remove('mobile-shell');
+  document.body.setAttribute('data-mobile-sheet', 'layers');
+  controls._renderCctvState(stillState('a2.jpg'));
+  assert.equal(requests.length, 2, 'desktop ignores the sheet');
+});
+
+test('a camera picked while the panel is collapsed shows its own still on expanding', async (t) => {
+  const requests = mockImages(t);
+  const { controls, byId } = panel(t);
+  const panelElement = byId('cctv-panel');
+  panelElement.classList.remove('collapsed');
+  controls._renderCctvState(stillState('a1.jpg'));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].src, 'a1.jpg');
+  panelElement.classList.add('collapsed');
+  await settle();
+  controls._renderCctvState(stillState('b1.jpg', 'b'));
+  assert.equal(requests.length, 1);
+  requests[0].onload();
+  panelElement.classList.remove('collapsed');
+  await settle();
+  await nextTick();
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].src, 'b1.jpg');
+  assert.equal(byId('cctv-frame').dataset.cameraId, 'b');
+  assert.notEqual(byId('cctv-frame').getAttribute('src'), 'a1.jpg');
+});
+
+test('leaving the Cameras sheet stops the live video and coming back starts it again', async (t) => {
+  const { controls, byId } = panel(t, { video: true });
+  byId('cctv-panel').classList.remove('collapsed');
+  document.body.classList.add('mobile-shell');
+  document.body.setAttribute('data-mobile-sheet', 'cameras');
+  t.after(() => {
+    document.body.classList.remove('mobile-shell');
+    document.body.removeAttribute('data-mobile-sheet');
+  });
+  controls._renderCctvState({
+    enabled: true,
+    count: 1,
+    cameraIndex: [camera],
+    activeCameraId: 'a',
+    activeCamera: { ...camera, isVideo: true },
+  });
+  const first = controls._cctvVideoSurface;
+  assert.ok(first);
+  const stop = t.mock.method(first, 'stop');
+  document.body.setAttribute('data-mobile-sheet', 'layers');
+  await settle();
+  assert.equal(stop.mock.callCount(), 1);
+  assert.equal(controls._cctvVideoSurface, null);
+  document.body.setAttribute('data-mobile-sheet', 'cameras');
+  await settle();
+  assert.ok(controls._cctvVideoSurface);
+  assert.notEqual(controls._cctvVideoSurface, first);
 });

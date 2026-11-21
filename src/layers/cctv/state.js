@@ -1,5 +1,3 @@
-import * as Cesium from 'cesium';
-
 export function createState({ services }) {
   const {
     clearOverlaySource,
@@ -15,7 +13,9 @@ export function createState({ services }) {
 
   layerState._viewer = null;
 
-  layerState._billboards = null;
+  /** The catalog's camera icons: the icon book over their draw set. */
+  layerState._icons = null;
+  layerState._counts = null;
 
   layerState._records = [];
 
@@ -29,12 +29,22 @@ export function createState({ services }) {
 
   layerState._activeCameraId = null;
 
+  // Advances when a user reselects the already-active camera. The geometry
+  // activation remains a no-op, but browser-only camera UI can retry playback.
+  layerState._activeCameraReselection = 0;
+
   layerState._coverageMode = 'on';
   // 'off' | 'on' (wireframes) | 'viewshed' (color-coded volumes)
 
   layerState._showProjection = true;
 
   layerState._autoHop = false;
+
+  // True while the active camera is the one enable() opened on and nobody has
+  // chosen a camera since: each settled move then re-picks the one nearest
+  // the view, so a share flight that lands after enable still opens nearby.
+
+  layerState._openingCameraProvisional = false;
 
   // An explicit empty-space deselect keeps AUTO HOP configured but prevents its
   // timer from silently choosing a replacement. A later explicit activation or
@@ -48,7 +58,7 @@ export function createState({ services }) {
 
   layerState._lastViewContext = '';
 
-  layerState._clickHandler = null;
+  layerState._clickSubscription = null;
 
   layerState._count = 0;
 
@@ -74,11 +84,8 @@ export function createState({ services }) {
 
   layerState._activeFocusStyleCount = 0;
 
-  layerState._scratchFocusScreen = new Cesium.Cartesian2();
-
-  layerState._scratchViewScreen = new Cesium.Cartesian2();
-
-  layerState._scratchViewProjection = new Cesium.Matrix4();
+  // The view pass's screen-point scratch: its projection writes only x and y.
+  layerState._scratchViewScreen = { x: 0, y: 0 };
 
   // Counts view passes; a record shown by the latest pass carries its number.
 
@@ -89,10 +96,14 @@ export function createState({ services }) {
   // work over these, not the whole catalog.
 
   layerState._viewRecords = [];
+  // The view records plus the best-ranked camera of each visible cell.
+  layerState._pickerRecords = [];
 
-  // Coverage ids refreshCoverageStyles last drew: part of the geometry
-  // working set even when their icons are thinned out.
-
+  // The active camera's coverage neighbours, including grouped ones. A
+  // grouping change in this cohort requires a coverage refresh.
+  layerState._coverageCohort = null;
+  // The cohort minus grouped cameras, last drawn by refreshCoverageStyles.
+  // These belong to the geometry working set even off screen.
   layerState._coverageVisibleIds = new Set();
 
   // View pass triggers besides camera settle: an interval while the camera
@@ -104,9 +115,12 @@ export function createState({ services }) {
 
   layerState._viewResizeCanvas = null;
 
-  // The camera the moveStart/moveEnd listeners are attached to.
+  // The camera port the moveStart/moveEnd listeners are on.
 
   layerState._viewListenerCamera = null;
+  // Reruns the view pass when terrain loads or the surface changes.
+  layerState._surfaceListener = null;
+  layerState._surfaceListenerGlobe = null;
 
   // A motion pass changed the shown set and the settle pass has not yet told
   // subscribers; the camera pose the last view pass ran at.
@@ -164,16 +178,9 @@ export function createState({ services }) {
 
   layerState._lastTransientNotifyAt = 0;
 
-  // Cached handle on the active Google Photorealistic 3D Tileset, discovered
-  // lazily from scene.primitives. Shared mesh-floor sampling is gated on its
-  // tilesLoaded flag so a coarse-LOD miss is never baked in. Cleared when the
-  // tileset is destroyed / the layer tears down.
-
-  layerState._activeTileset = null;
-
   // Task 5: last surface regime the record geometry was recomputed for. The
   // map-stack change listener compares the CURRENT regime (derived live from
-  // scene.globe.show) against this so bing→osm switches (same 'terrain-globe'
+  // whether the renderer shows the globe) against this so bing→osm switches (same 'terrain-globe'
   // regime) don't trigger a pointless full-catalog rewrite.
 
   layerState._lastAppliedRegime = null;
@@ -183,8 +190,8 @@ export function createState({ services }) {
 
   layerState._mapStackListener = null;
 
-  // Field-test fix (2026-07-06): camera.moveEnd handle for the horizon-culling
-  // pass (removed in destroy). Event-driven only — never a per-frame loop, so
+  // Field-test fix (2026-07-06): the Off of the camera's moveEnd listener for
+  // the horizon-culling pass (called in destroy). Event-driven only — never a per-frame loop, so
   // the zero-steady-state-work invariant holds.
 
   layerState._horizonCullListener = null;
@@ -259,6 +266,7 @@ export function createState({ services }) {
 
   layerState._cameraMoving = false;
 
+  // The Off of the camera's moveStart listener.
   layerState._moveStartListener = null;
   layerState._sourceAbort = null;
   return layerState;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WILDLIFE_BADGE_GLYPHS } from './layers/wildlifeSightings/sprites.js';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
@@ -59,6 +60,8 @@ function sourceFiles(directory = SRC_ROOT) {
  */
 function referencedGlyphs() {
   const found = new Map();
+  for (const glyph of Object.values(WILDLIFE_BADGE_GLYPHS))
+    found.set(glyph, 'src/layers/wildlifeSightings/sprites.js');
   for (const file of sourceFiles()) {
     const source = readFileSync(file, 'utf8');
     const relative = path.relative(REPO_ROOT, file).split(path.sep).join('/');

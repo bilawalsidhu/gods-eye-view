@@ -2,10 +2,11 @@
  * Resolution governor: draw the globe in device pixels on high-DPI screens,
  * and give pixels back only while the GPU cannot keep up.
  *
- * Cesium's default `useBrowserRecommendedResolution: true` draws at one
- * drawing-buffer pixel per CSS pixel, so a 2x screen pixel-doubles a half-size
- * frame and lines look stair-stepped. The viewer now draws at `ratio` device
- * pixels per CSS pixel, where
+ * The renderer draws at its browser-recommended resolution, one
+ * drawing-buffer pixel per CSS pixel, until its quality port's `pixelRatio`
+ * says otherwise (`src/render/contract/quality.d.ts`). A 2x screen then
+ * pixel-doubles a half-size frame and lines look stair-stepped. The governor
+ * sets `pixelRatio` to `ratio` device pixels per CSS pixel, where
  *
  *   floor <= ratio <= ceiling = max(floor, min(devicePixelRatio,
  *     maxPixelRatio, sqrt(maxDrawingPixels / CSS pixels), textureLimit))
@@ -15,13 +16,12 @@
  * GPU can hold it. Below that, Cesium throws "Width must be less than or equal
  * to the maximum texture size" and stops rendering (#905), so the texture
  * limit wins over the floor. The pixel budget bounds framebuffer memory on
- * large displays. Tile
- * detail does not change with the ratio: Cesium divides screen-space error by
- * `frameState.pixelRatio`.
+ * large displays. Tile detail does not change with the ratio: Cesium divides
+ * screen-space error by `frameState.pixelRatio`.
  *
  * The policy watches the smoothed frame interval while frames are
- * back-to-back (continuous render, or the camera is moving). Discrete
- * request-mode frames and pauses longer than `gapMs` say nothing about GPU
+ * back-to-back: the frame signal's `continuous` mode, which a moving camera
+ * holds too. On-demand frames and pauses longer than `gapMs` say nothing about GPU
  * cost and are skipped, so an idle globe never changes resolution. Its
  * windows count sampled frame time, not wall time: on-time frames from
  * several short pans add up to a step back up. The first `warmupMs` after
@@ -47,12 +47,13 @@
  *   new floor and ceiling, and follows the ceiling when it was not stepped
  *   down.
  *
- * The viewport is read in `cesiumWidget.resize()`, before Cesium sizes the
- * canvas for the frame. Read any later, a window grown past the texture limit
- * has already thrown.
+ * The viewport is read on each frame signal. The Cesium renderer keeps its
+ * drawing buffer inside the GPU limit at every resize on its own
+ * (`src/render/cesium/drawingBuffer.js`), so a window grown past the limit
+ * never throws before the policy sees it.
  *
- * The governor has no timers. Its listeners live on the viewer's scene and
- * camera and end with the viewer.
+ * The governor has no timers and talks only to the renderer's quality and
+ * frame ports. It sets the quality only when the ratio changes.
  */
 
 /** Tuning shared by the policy, the viewer and the tests. */
@@ -320,35 +321,40 @@ export function createResolutionPolicy(options = {}) {
   };
 }
 
-const installed = new WeakMap();
+let installed = null;
 
 /**
- * Drive `viewer.resolutionScale` and `scene.msaaSamples` from the policy.
- * The viewer must be created with `useBrowserRecommendedResolution: false`.
- * @param {object} viewer Cesium viewer.
- * @param {{maxPixelRatio?: number, maxTextureSize?: number,
- *   windowRef?: {devicePixelRatio?: number}, now?: () => number}} [options]
- *   `maxTextureSize` is the GPU's limit for a framebuffer side; 0 skips it.
- * @returns {() => void} Disposer.
+ * Drive a renderer's quality port from its frame signals: `pixelRatio`, and
+ * `msaa` where the renderer lists it. A renderer without a `pixelRatio` knob
+ * draws as it does.
+ * @param {{quality: object, frame?: object,
+ *   container?: {clientWidth?: number, clientHeight?: number},
+ *   maxPixelRatio?: number, windowRef?: {devicePixelRatio?: number},
+ *   now?: () => number}} ports `quality` and `frame` are the renderer's
+ *   ports; `container` is the element the scene fills.
+ * @returns {() => void} Disposer; the quality stays as last set.
  */
-export function installResolutionGovernor(
-  viewer,
-  {
-    maxPixelRatio = RESOLUTION_POLICY.maxPixelRatio,
-    maxTextureSize = 0,
-    windowRef = globalThis.window,
-    now = () => performance.now(),
-  } = {},
-) {
-  const scene = viewer?.scene;
-  const camera = scene?.camera;
-  const widget = viewer?.cesiumWidget;
-  if (!scene?.postRender || !camera?.moveStart || !widget?.resize)
-    throw new TypeError('installResolutionGovernor requires a Cesium viewer');
-  installed.get(viewer)?.dispose();
+export function installResolutionGovernor({
+  quality,
+  frame = null,
+  container = null,
+  maxPixelRatio = RESOLUTION_POLICY.maxPixelRatio,
+  windowRef = globalThis.window,
+  now = () => performance.now(),
+} = {}) {
+  if (
+    typeof quality?.set !== 'function' ||
+    typeof quality.signals?.on !== 'function'
+  )
+    throw new TypeError('installResolutionGovernor requires a quality port');
+  installed?.dispose();
+  const knobs = quality.knobs?.() ?? [];
+  const pixelKnob = knobs.find((knob) => knob.key === 'pixelRatio');
+  if (!pixelKnob) return () => {};
+  const multisamples = knobs.some((knob) => knob.key === 'msaa');
   const readDpr = () => Number(windowRef?.devicePixelRatio) || 1;
-  const readWidth = () => Number(viewer.canvas?.clientWidth) || 0;
-  const readHeight = () => Number(viewer.canvas?.clientHeight) || 0;
+  const readWidth = () => Number(container?.clientWidth) || 0;
+  const readHeight = () => Number(container?.clientHeight) || 0;
   let dpr = readDpr();
   let cssWidth = readWidth();
   let cssHeight = readHeight();
@@ -356,29 +362,22 @@ export function installResolutionGovernor(
     devicePixelRatio: dpr,
     cssWidth,
     cssHeight,
-    maxPixelRatio,
-    maxTextureSize,
+    maxPixelRatio: Math.min(maxPixelRatio, pixelKnob.max ?? Infinity),
+    maxTextureSize: Number(quality.device?.().maxTextureSize) || 0,
   });
 
-  // Cesium asks for nearest-neighbour upscaling. That is exact at a
-  // whole-number factor; at a fractional one (a step of 1.5 on a 2x screen)
-  // it doubles every third row, so the browser filters instead.
-  const canvasStyle = viewer.canvas?.style;
-  const crispRendering = canvasStyle?.imageRendering || '';
+  let applied = null;
   const apply = () => {
-    const scale = policy.ratio / dpr;
-    if (viewer.resolutionScale !== scale) viewer.resolutionScale = scale;
-    if (canvasStyle)
-      canvasStyle.imageRendering = Number.isInteger(dpr / policy.ratio)
-        ? crispRendering
-        : 'auto';
-    const samples = msaaSamplesForRatio(policy.ratio);
-    if (scene.msaaSamples !== samples) scene.msaaSamples = samples;
+    if (policy.ratio === applied) return;
+    applied = policy.ratio;
+    quality.set({
+      pixelRatio: applied,
+      ...(multisamples ? { msaa: msaaSamplesForRatio(applied) } : {}),
+    });
   };
   apply();
 
   const startedAt = now();
-  let cameraMoving = false;
   let lastFrameAt = null;
   let lastCapMs = 0;
 
@@ -395,74 +394,62 @@ export function installResolutionGovernor(
     lastFrameAt = null;
     apply();
   };
-  // Both of Cesium's resize paths (the render loop and Viewer.resize) end here.
-  const resize = widget.resize;
-  const resizeInBounds = function () {
-    syncViewport();
-    return resize.call(this);
-  };
-  widget.resize = resizeInBounds;
 
+  // The loop draws at the lower of the application's rate and the quality
+  // port's cap.
   const frameRateCapMs = () => {
-    const rate = Number(viewer.targetFrameRate);
-    return rate > 0 ? 1000 / rate : 0;
+    const rates = [frame?.diagnostics?.().targetFps, quality.get?.().targetFps]
+      .map(Number)
+      .filter((fps) => fps > 0);
+    return rates.length > 0 ? 1000 / Math.min(...rates) : 0;
   };
 
-  const removers = [
-    camera.moveStart.addEventListener(() => {
-      cameraMoving = true;
-    }),
-    camera.moveEnd.addEventListener(() => {
-      cameraMoving = false;
+  const off = quality.signals.on('frame', (signals) => {
+    const at = now();
+    syncViewport();
+    // On-demand frames come when asked; their spacing is not cost.
+    if (signals?.mode !== 'continuous') {
       lastFrameAt = null;
-    }),
-    scene.postRender.addEventListener(() => {
-      const at = now();
-      // Request-mode frames arrive on demand; their spacing is not cost.
-      if (scene.requestRenderMode && !cameraMoving) {
-        lastFrameAt = null;
-        policy.pause();
-        return;
-      }
-      // A cap that starts or lifts changes the interval, not the cost.
-      const capMs = frameRateCapMs();
-      if (capMs !== lastCapMs) {
-        lastCapMs = capMs;
-        lastFrameAt = null;
-        policy.pause();
-      }
-      const previous = lastFrameAt;
-      lastFrameAt = at;
-      if (previous === null || at - startedAt < RESOLUTION_POLICY.warmupMs)
-        return;
-      if (policy.frame(at - previous, capMs)) {
-        lastFrameAt = null;
-        apply();
-      }
-    }),
-  ];
+      policy.pause();
+      return;
+    }
+    // A cap that starts or lifts changes the interval, not the cost.
+    const capMs = frameRateCapMs();
+    if (capMs !== lastCapMs) {
+      lastCapMs = capMs;
+      lastFrameAt = null;
+      policy.pause();
+    }
+    const previous = lastFrameAt;
+    lastFrameAt = at;
+    if (previous === null || at - startedAt < RESOLUTION_POLICY.warmupMs)
+      return;
+    if (policy.frame(at - previous, capMs)) {
+      lastFrameAt = null;
+      apply();
+    }
+  });
 
-  const dispose = () => {
-    if (installed.get(viewer) !== entry) return;
-    installed.delete(viewer);
-    for (const remove of removers) remove();
-    if (widget.resize === resizeInBounds) widget.resize = resize;
+  const entry = {
+    policy,
+    quality,
+    dispose() {
+      if (installed !== entry) return;
+      installed = null;
+      off?.();
+    },
   };
-  const entry = { policy, dispose };
-  installed.set(viewer, entry);
-  return dispose;
+  installed = entry;
+  return entry.dispose;
 }
 
-/**
- * Current ratio and policy state for a viewer, or null without a governor.
- * @param {object} viewer
- */
-export function getResolutionDiagnostics(viewer) {
-  const entry = installed.get(viewer);
-  if (!entry) return null;
+/** Ratio, policy state and the quality applied, or null without a governor. */
+export function getResolutionDiagnostics() {
+  if (!installed) return null;
+  const settings = installed.quality.get?.() ?? {};
   return {
-    ...entry.policy.diagnostics(),
-    resolutionScale: viewer.resolutionScale,
-    msaaSamples: viewer.scene.msaaSamples,
+    ...installed.policy.diagnostics(),
+    pixelRatio: settings.pixelRatio,
+    msaa: settings.msaa,
   };
 }

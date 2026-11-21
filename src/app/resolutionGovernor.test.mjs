@@ -287,293 +287,245 @@ test('a resize keeps a stepped-down ratio and follows an unthrottled one', () =>
   assert.equal(policy.ratio, 1.25, 'but never above the new ceiling');
 });
 
-function makeEvent() {
+/**
+ * A renderer's quality and frame ports, as the Cesium renderer gives them:
+ * `pixelRatio` up to 4, MSAA where the context multisamples.
+ */
+function makePorts({ msaa = true, maxTextureSize = 16384 } = {}) {
   const listeners = new Set();
-  return {
-    listeners,
-    addEventListener(fn) {
-      listeners.add(fn);
-      return () => listeners.delete(fn);
+  const settings = { pixelRatio: 0, msaa: 4, targetFps: 0 };
+  const sets = [];
+  const quality = {
+    knobs: () => [
+      { key: 'pixelRatio', kind: 'number', min: 0, max: 4, default: 0 },
+      ...(msaa
+        ? [{ key: 'msaa', kind: 'enum', options: [0, 2, 4, 8], default: 4 }]
+        : []),
+    ],
+    get: () => ({ ...settings }),
+    set(patch) {
+      sets.push(patch);
+      Object.assign(settings, patch);
+      return [];
     },
-    raise() {
-      for (const fn of [...listeners]) fn();
-    },
-  };
-}
-
-function makeViewer() {
-  const scene = {
-    requestRenderMode: false,
-    msaaSamples: 4,
-    postRender: makeEvent(),
-    camera: { moveStart: makeEvent(), moveEnd: makeEvent() },
-  };
-  const viewer = {
-    scene,
-    resolutionScale: 1,
-    targetFrameRate: 60,
-    canvas: {
-      clientWidth: 1200,
-      clientHeight: 800,
-      style: { imageRendering: 'pixelated' },
-    },
-    // What Cesium's resize() sizes the canvas from, one entry per call.
-    resizes: [],
-    cesiumWidget: {
-      resize() {
-        viewer.resizes.push({
-          cssWidth: viewer.canvas.clientWidth,
-          scale: viewer.resolutionScale,
-        });
+    device: () => ({ maxTextureSize }),
+    signals: {
+      gpuTiming: 'none',
+      on(event, cb) {
+        listeners.add(cb);
+        return () => listeners.delete(cb);
       },
     },
   };
-  return viewer;
+  const frame = {
+    targetFps: 0,
+    diagnostics: () => ({ targetFps: frame.targetFps }),
+  };
+  const container = { clientWidth: 1200, clientHeight: 800 };
+  return {
+    quality,
+    frame,
+    container,
+    settings,
+    sets,
+    listeners,
+    mode: 'continuous',
+    install(options = {}) {
+      return installResolutionGovernor({
+        quality,
+        frame,
+        container,
+        ...options,
+      });
+    },
+  };
 }
 
 /** Frames that land inside the start-up warm-up; they never count. */
-function warmUp(viewer, clock) {
-  frames(viewer, clock, SLOW, RESOLUTION_POLICY.warmupMs);
+function warmUp(ports, clock) {
+  frames(ports, clock, SLOW, RESOLUTION_POLICY.warmupMs);
 }
 
-function frames(viewer, clock, interval, ms) {
+function frames(ports, clock, interval, ms) {
   const end = clock.t + ms;
   while (clock.t < end) {
     clock.t += interval;
-    // Cesium's order: resize, render, then postRender.
-    viewer.cesiumWidget.resize();
-    viewer.scene.postRender.raise();
+    for (const cb of [...ports.listeners]) cb({ mode: ports.mode });
   }
 }
 
-test('install applies the ceiling, MSAA and diagnostics at DPR 2', () => {
-  const viewer = makeViewer();
-  const windowRef = { devicePixelRatio: 2 };
+test('install sets the ceiling, MSAA and diagnostics at DPR 2', () => {
+  const ports = makePorts();
   const clock = { t: 0 };
-  const dispose = installResolutionGovernor(viewer, {
-    windowRef,
+  const dispose = ports.install({
+    windowRef: { devicePixelRatio: 2 },
     now: () => clock.t,
   });
-  assert.equal(viewer.resolutionScale, 1, 'ratio 2 on a DPR 2 screen');
-  assert.equal(viewer.scene.msaaSamples, 2);
-  assert.equal(getResolutionDiagnostics(viewer).ratio, 2);
+  assert.deepEqual(ports.sets, [{ pixelRatio: 2, msaa: 2 }]);
+  const diagnostics = getResolutionDiagnostics();
+  assert.equal(diagnostics.ratio, 2);
+  assert.equal(diagnostics.pixelRatio, 2);
   dispose();
-  assert.equal(getResolutionDiagnostics(viewer), null);
-  assert.equal(viewer.scene.postRender.listeners.size, 0);
-  assert.equal(viewer.scene.camera.moveStart.listeners.size, 0);
+  assert.equal(getResolutionDiagnostics(), null);
+  assert.equal(ports.listeners.size, 0);
 });
 
-test('install at DPR 1 leaves the old 1x drawing and 4x MSAA', () => {
-  const viewer = makeViewer();
+test('install at DPR 1 keeps the old 1x drawing and 4x MSAA', () => {
+  const ports = makePorts();
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 1 },
-    now: () => clock.t,
-  });
-  assert.equal(viewer.resolutionScale, 1);
-  assert.equal(viewer.scene.msaaSamples, 4);
-  frames(viewer, clock, SLOW, 20_000);
-  assert.equal(viewer.resolutionScale, 1);
+  ports.install({ windowRef: { devicePixelRatio: 1 }, now: () => clock.t });
+  assert.deepEqual(ports.sets, [{ pixelRatio: 1, msaa: 4 }]);
+  frames(ports, clock, SLOW, 20_000);
+  assert.equal(ports.sets.length, 1, 'nothing set again');
 });
 
-test('a cap below the screen ratio scales the drawing buffer down', () => {
-  const viewer = makeViewer();
-  installResolutionGovernor(viewer, {
+test('a renderer without MSAA gets only the pixel ratio', () => {
+  const ports = makePorts({ msaa: false });
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => 0 });
+  assert.deepEqual(ports.sets, [{ pixelRatio: 2 }]);
+});
+
+test('a renderer without a pixelRatio knob is left alone', () => {
+  const ports = makePorts();
+  ports.quality.knobs = () => [];
+  const dispose = ports.install({ windowRef: { devicePixelRatio: 2 } });
+  assert.deepEqual(ports.sets, []);
+  assert.equal(ports.listeners.size, 0);
+  dispose();
+});
+
+test('a cap below the screen ratio lowers the pixel ratio', () => {
+  const ports = makePorts();
+  ports.install({
     windowRef: { devicePixelRatio: 2 },
     maxPixelRatio: 1,
     now: () => 0,
   });
-  assert.equal(viewer.resolutionScale, 0.5);
-  assert.equal(viewer.scene.msaaSamples, 4);
+  assert.deepEqual(ports.sets, [{ pixelRatio: 1, msaa: 4 }]);
 });
 
-test('slow continuous frames step the viewer down', () => {
-  const viewer = makeViewer();
+test('slow continuous frames step the pixel ratio down', () => {
+  const ports = makePorts();
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  warmUp(viewer, clock);
-  assert.equal(viewer.resolutionScale, 1, 'start-up frames do not count');
-  frames(viewer, clock, SLOW, 2_300);
-  assert.equal(viewer.resolutionScale, 0.875);
-  frames(viewer, clock, SLOW, 30_000);
-  assert.equal(viewer.resolutionScale, 0.5);
-  assert.equal(viewer.scene.msaaSamples, 4);
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  warmUp(ports, clock);
+  assert.equal(ports.settings.pixelRatio, 2, 'start-up frames do not count');
+  frames(ports, clock, SLOW, 2_300);
+  assert.equal(ports.settings.pixelRatio, 1.75);
+  frames(ports, clock, SLOW, 30_000);
+  assert.equal(ports.settings.pixelRatio, 1);
+  assert.equal(ports.settings.msaa, 4);
 });
 
-test('idle request-mode frames never change the ratio; camera motion does', () => {
-  const viewer = makeViewer();
-  viewer.scene.requestRenderMode = true;
+test('on-demand frames never change the ratio; continuous ones do', () => {
+  const ports = makePorts();
+  ports.mode = 'demand';
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  warmUp(viewer, clock);
-  frames(viewer, clock, SLOW, 30_000);
-  assert.equal(viewer.resolutionScale, 1, 'request-mode spacing is not cost');
-  viewer.scene.camera.moveStart.raise();
-  frames(viewer, clock, SLOW, 2_300);
-  assert.equal(
-    viewer.resolutionScale,
-    0.875,
-    'a moving camera renders back-to-back',
-  );
-  viewer.scene.camera.moveEnd.raise();
-  frames(viewer, clock, SLOW, 30_000);
-  assert.equal(viewer.resolutionScale, 0.875);
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  warmUp(ports, clock);
+  frames(ports, clock, SLOW, 30_000);
+  assert.equal(ports.settings.pixelRatio, 2, 'on-demand spacing is not cost');
+  // A moving camera holds the loop continuous.
+  ports.mode = 'continuous';
+  frames(ports, clock, SLOW, 2_300);
+  assert.equal(ports.settings.pixelRatio, 1.75);
+  ports.mode = 'demand';
+  frames(ports, clock, SLOW, 30_000);
+  assert.equal(ports.settings.pixelRatio, 1.75);
 });
 
 test('a devicePixelRatio change is followed on the next frame', () => {
-  const viewer = makeViewer();
+  const ports = makePorts();
   const windowRef = { devicePixelRatio: 2 };
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, { windowRef, now: () => clock.t });
+  ports.install({ windowRef, now: () => clock.t });
   windowRef.devicePixelRatio = 1;
-  frames(viewer, clock, ON_TIME, ON_TIME);
-  assert.equal(viewer.resolutionScale, 1);
-  assert.equal(viewer.scene.msaaSamples, 4);
+  frames(ports, clock, ON_TIME, ON_TIME);
+  assert.deepEqual(ports.sets.at(-1), { pixelRatio: 1, msaa: 4 });
   windowRef.devicePixelRatio = 3;
-  frames(viewer, clock, ON_TIME, ON_TIME);
-  assert.equal(viewer.resolutionScale, 2 / 3);
-  assert.equal(viewer.scene.msaaSamples, 2);
+  frames(ports, clock, ON_TIME, ON_TIME);
+  assert.deepEqual(ports.sets.at(-1), { pixelRatio: 2, msaa: 2 });
 });
 
-test('nearest-neighbour upscaling only at whole-number factors', () => {
-  const viewer = makeViewer();
+test('a container resize past the pixel budget lowers the ratio', () => {
+  const ports = makePorts();
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  const { style } = viewer.canvas;
-  assert.equal(style.imageRendering, 'pixelated', '2x on a 2x screen');
-  warmUp(viewer, clock);
-  frames(viewer, clock, SLOW, 4_500);
-  assert.equal(viewer.resolutionScale, 0.75);
-  assert.equal(style.imageRendering, 'auto', '1.5x on a 2x screen');
-  frames(viewer, clock, SLOW, 30_000);
-  assert.equal(viewer.resolutionScale, 0.5);
-  assert.equal(style.imageRendering, 'pixelated', 'the old 1x drawing');
-  const phone = makeViewer();
-  installResolutionGovernor(phone, { windowRef: { devicePixelRatio: 3 } });
-  assert.equal(phone.canvas.style.imageRendering, 'auto', 'capped 2x on 3x');
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  ports.container.clientWidth = 2560;
+  ports.container.clientHeight = 1440;
+  frames(ports, clock, ON_TIME, ON_TIME);
+  assert.equal(ports.settings.pixelRatio, 1.5);
+  assert.equal(getResolutionDiagnostics().ceiling, 1.5);
 });
 
-test('a canvas resize past the pixel budget lowers the ratio', () => {
-  const viewer = makeViewer();
+test('the device texture limit bounds the ratio, below 1x if it must (#905)', () => {
+  const ports = makePorts({ maxTextureSize: 2048 });
+  ports.container.clientWidth = 2560;
+  ports.container.clientHeight = 1440;
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  assert.equal(viewer.resolutionScale, 1);
-  viewer.canvas.clientWidth = 2560;
-  viewer.canvas.clientHeight = 1440;
-  frames(viewer, clock, ON_TIME, ON_TIME);
-  assert.equal(viewer.resolutionScale, 0.75);
-  assert.equal(viewer.canvas.style.imageRendering, 'auto');
-  assert.equal(getResolutionDiagnostics(viewer).ceiling, 1.5);
-});
-
-test('install keeps the drawing buffer inside the texture limit', () => {
-  const viewer = makeViewer();
-  viewer.canvas.clientWidth = 2560;
-  viewer.canvas.clientHeight = 1440;
-  const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 1 },
-    maxTextureSize: 2048,
-    now: () => clock.t,
-  });
-  assert.equal(viewer.resolutionScale, 0.8);
-  assert.ok(2560 * viewer.resolutionScale <= 2048);
-  assert.equal(getResolutionDiagnostics(viewer).floor, 0.8);
+  ports.install({ windowRef: { devicePixelRatio: 1 }, now: () => clock.t });
+  assert.equal(ports.settings.pixelRatio, 0.8);
+  assert.equal(getResolutionDiagnostics().floor, 0.8);
   // A narrower window gets the old 1x back.
-  viewer.canvas.clientWidth = 1920;
-  viewer.canvas.clientHeight = 1080;
-  frames(viewer, clock, ON_TIME, ON_TIME);
-  assert.equal(viewer.resolutionScale, 1);
-});
-
-test('a window grown past the texture limit is clamped before Cesium resizes', () => {
-  const viewer = makeViewer();
-  viewer.canvas.clientWidth = 1900;
-  viewer.canvas.clientHeight = 1000;
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 1 },
-    maxTextureSize: 2048,
-    now: () => 0,
-  });
-  assert.equal(viewer.resolutionScale, 1);
-  viewer.canvas.clientWidth = 2560;
-  viewer.canvas.clientHeight = 1440;
-  viewer.cesiumWidget.resize();
-  const { cssWidth, scale } = viewer.resizes.at(-1);
-  assert.equal(cssWidth, 2560);
-  assert.ok(cssWidth * scale <= 2048, 'in bounds on the first resize');
+  ports.container.clientWidth = 1920;
+  ports.container.clientHeight = 1080;
+  frames(ports, clock, ON_TIME, ON_TIME);
+  assert.equal(ports.settings.pixelRatio, 1);
 });
 
 test('a frame-rate cap under the budget is not read as a slow GPU (#1422)', () => {
-  const viewer = makeViewer();
+  const ports = makePorts();
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  warmUp(viewer, clock);
-  viewer.targetFrameRate = 30;
-  frames(viewer, clock, SLOW, 30_000);
-  assert.equal(viewer.resolutionScale, 1, '33 ms is the cap, not the cost');
-  assert.equal(getResolutionDiagnostics(viewer).stepsDown, 0);
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  warmUp(ports, clock);
+  ports.frame.targetFps = 30;
+  frames(ports, clock, SLOW, 30_000);
+  assert.equal(ports.settings.pixelRatio, 2, '33 ms is the cap, not the cost');
+  assert.equal(getResolutionDiagnostics().stepsDown, 0);
   // Once the cap lifts, slow frames count again.
-  viewer.targetFrameRate = 60;
-  frames(viewer, clock, SLOW, 2_300);
-  assert.equal(viewer.resolutionScale, 0.875);
+  ports.frame.targetFps = 0;
+  frames(ports, clock, SLOW, 2_300);
+  assert.equal(ports.settings.pixelRatio, 1.75);
+});
+
+test("the quality port's own frame-rate cap counts as a cap", () => {
+  const ports = makePorts();
+  const clock = { t: 0 };
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  warmUp(ports, clock);
+  ports.settings.targetFps = 30;
+  frames(ports, clock, SLOW, 30_000);
+  assert.equal(ports.settings.pixelRatio, 2);
 });
 
 test('under a frame-rate cap the budget follows the cap interval', () => {
-  const viewer = makeViewer();
+  const ports = makePorts();
   const clock = { t: 0 };
-  installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-    now: () => clock.t,
-  });
-  warmUp(viewer, clock);
-  viewer.targetFrameRate = 30;
+  ports.install({ windowRef: { devicePixelRatio: 2 }, now: () => clock.t });
+  warmUp(ports, clock);
+  ports.frame.targetFps = 30;
   // A GPU that cannot hold the cap: 20 fps is over 1.2 x 33 ms.
-  frames(viewer, clock, 50, 2_300);
-  assert.equal(viewer.resolutionScale, 0.875, 'steps down while capped');
+  frames(ports, clock, 50, 2_300);
+  assert.equal(ports.settings.pixelRatio, 1.75, 'steps down while capped');
   // Frames on the cap: after the recovery wait, probe the ratio back up.
-  frames(viewer, clock, SLOW, RESOLUTION_POLICY.recoverMs + 1_000);
-  assert.equal(viewer.resolutionScale, 1, 'probes back up on the cap');
+  frames(ports, clock, SLOW, RESOLUTION_POLICY.recoverMs + 1_000);
+  assert.equal(ports.settings.pixelRatio, 2, 'probes back up on the cap');
   // The probe is still too slow: step down again, and wait twice as long.
-  frames(viewer, clock, 50, 2_300);
-  assert.equal(viewer.resolutionScale, 0.875);
-  const { stepsDown, stepsUp, recoverMs } = getResolutionDiagnostics(viewer);
+  frames(ports, clock, 50, 2_300);
+  assert.equal(ports.settings.pixelRatio, 1.75);
+  const { stepsDown, stepsUp, recoverMs } = getResolutionDiagnostics();
   assert.deepEqual(
     { stepsDown, stepsUp, recoverMs },
     { stepsDown: 2, stepsUp: 1, recoverMs: RESOLUTION_POLICY.recoverMs * 2 },
   );
 });
 
-test('dispose gives Cesium its own resize back', () => {
-  const viewer = makeViewer();
-  const { resize } = viewer.cesiumWidget;
-  const dispose = installResolutionGovernor(viewer, {
-    windowRef: { devicePixelRatio: 2 },
-  });
-  assert.notEqual(viewer.cesiumWidget.resize, resize);
-  dispose();
-  assert.equal(viewer.cesiumWidget.resize, resize);
-});
-
-test('install rejects a non-viewer and replaces an earlier governor', () => {
-  assert.throws(() => installResolutionGovernor({}), /Cesium viewer/);
-  const viewer = makeViewer();
-  installResolutionGovernor(viewer, { windowRef: { devicePixelRatio: 2 } });
-  installResolutionGovernor(viewer, { windowRef: { devicePixelRatio: 2 } });
-  assert.equal(viewer.scene.postRender.listeners.size, 1);
+test('install rejects a missing quality port and replaces an earlier governor', () => {
+  assert.throws(() => installResolutionGovernor({}), /quality port/);
+  const ports = makePorts();
+  const first = ports.install({ windowRef: { devicePixelRatio: 2 } });
+  ports.install({ windowRef: { devicePixelRatio: 2 } });
+  assert.equal(ports.listeners.size, 1);
+  first();
+  assert.equal(ports.listeners.size, 1, 'an old disposer leaves the new one');
 });

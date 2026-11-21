@@ -2,6 +2,7 @@
 import { t } from '../../../i18n/index.js';
 import { ASSISTANT_NAME } from '../../../voice/control.js';
 import UiChip from '../../kit/UiChip.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
 // Captions, plan and result, as VoiceCardControls (src/voice/voiceCard.js)
 // presents them. Captions update silently; the polite live region carries
@@ -15,7 +16,7 @@ const emit = defineEmits(['dismiss']);
         <div class="gev-voice-card-header">
           <span class="gev-voice-card-kicker">{{ t('VOICE') }}</span>
           <span id="gev-voice-card-phase" class="gev-voice-card-phase">{{ card.phase }}</span>
-          <button id="gev-voice-card-dismiss" class="gev-voice-card-dismiss" type="button" :aria-label="t('Dismiss voice card')" @click="emit('dismiss')">×</button>
+          <UiCloseButton id="gev-voice-card-dismiss" class="gev-voice-card-dismiss" :label="t('Dismiss voice card')" @click="emit('dismiss')" />
         </div>
         <p id="gev-voice-card-user" class="gev-voice-card-caption" data-role="user" :hidden="!card.user.visible"><span id="gev-voice-card-user-who" class="gev-voice-card-who">{{ card.user.label }}</span><span id="gev-voice-card-user-text" class="gev-voice-card-text">{{ card.user.text }}</span></p>
         <p id="gev-voice-card-pointer" class="gev-voice-card-pointer" :hidden="!card.pointer.visible"><span id="gev-voice-card-pointer-kind" class="gev-voice-card-who">{{ card.pointer.kind }}</span><span class="gev-voice-card-sr">: </span><span id="gev-voice-card-pointer-text" class="gev-voice-card-pointer-label">{{ card.pointer.text }}</span></p>

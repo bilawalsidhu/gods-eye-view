@@ -1,0 +1,65 @@
+{
+  "id": "wri-global-power-plants",
+  "kind": "dataset",
+  "family": "infrastructure",
+  "title": "Global power plants (WRI)",
+  "provider": "WRI",
+  "description": "The 10,000 largest of about 35,000 power plants worldwide, with fuel and capacity, from the WRI Global Power Plant Database (v1.3, 2021).",
+  "icon": "ϟ",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "global": true
+  },
+  "source": {
+    "format": "csv",
+    "url": "https://raw.githubusercontent.com/wri/global-power-plant-database/master/output_database/global_power_plant_database.csv",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "maxBytes": 16777216,
+    "maxFeatures": 10000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "name",
+    "fields": ["primary_fuel", "capacity_mw"],
+    "rank": {
+      "field": "capacity_mw",
+      "order": "desc"
+    },
+    "colorBy": {
+      "field": "primary_fuel",
+      "colors": {
+        "Coal": "#d55181",
+        "Gas": "#d55181",
+        "Oil": "#d55181",
+        "Petcoke": "#d55181",
+        "Cogeneration": "#d55181",
+        "Nuclear": "#c98500",
+        "Hydro": "#3987e5",
+        "Wind": "#008300",
+        "Solar": "#008300"
+      },
+      "labels": {
+        "Coal": "Fossil (coal, gas, oil)",
+        "Gas": "Fossil (coal, gas, oil)",
+        "Oil": "Fossil (coal, gas, oil)",
+        "Petcoke": "Fossil (coal, gas, oil)",
+        "Cogeneration": "Fossil (coal, gas, oil)",
+        "Nuclear": "Nuclear",
+        "Hydro": "Hydro",
+        "Wind": "Wind and solar",
+        "Solar": "Wind and solar"
+      }
+    }
+  },
+  "licence": {
+    "name": "CC BY 4.0",
+    "url": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "attribution": {
+    "text": "World Resources Institute, Global Power Plant Database (2021)",
+    "url": "https://datasets.wri.org/dataset/globalpowerplantdatabase"
+  },
+  "status": "community",
+  "reviewed": "2026-10-22"
+}

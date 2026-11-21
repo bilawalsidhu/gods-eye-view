@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
+import { issTelemetryProxy } from './space/issTelemetry.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
@@ -16,6 +17,7 @@ import { radioBrowserProxy } from './radio.js';
 import { gbfsProxy } from './gbfs.js';
 import { localReceiversProxy } from './local-receivers.js';
 import { transitProxy } from './transit.js';
+import { railProxy } from './rail.js';
 import { adsbLolProxy } from './aircraft/adsb-lol.js';
 import { aisLiveProxy } from './vessels/ais-live.js';
 import { trackBackfillProxies } from './aircraft/tracks.js';
@@ -28,9 +30,14 @@ import { weatherProxy } from './weather.js';
 import { firePerimetersProxy } from './firePerimeters.js';
 import { gnssIntegrityProxy } from './gnssIntegrity.js';
 import { ghostMapsProxy } from './ghostMaps.js';
+import { shipwrecksProxy } from './shipwrecks.js';
 import { droneAirspaceProxy } from './droneAirspace.js';
+import { newsProxy } from './news.js';
+import { inaturalistProxy } from './inaturalist/observations.js';
+import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { libraryProxy } from './library.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -52,6 +59,7 @@ function localProviderPlugins({
   return [
     openSkyProxy(),
     celestrakProxy(),
+    issTelemetryProxy(),
     tomtomProxy(),
     firmsProxy(),
     rocketLaunchesProxy(),
@@ -67,6 +75,7 @@ function localProviderPlugins({
     gbfsProxy(),
     localReceiversProxy(),
     transitProxy(),
+    railProxy(),
     adsbLolProxy(),
     aisLiveProxy(),
     trackBackfillProxies(),
@@ -79,8 +88,13 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    libraryProxy(),
     ghostMapsProxy(),
+    shipwrecksProxy(),
     droneAirspaceProxy(),
+    newsProxy(),
+    inaturalistProxy(),
+    acartiaProxy(),
     keySetupEndpoint(),
   ];
 }

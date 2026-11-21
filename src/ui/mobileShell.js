@@ -18,26 +18,29 @@ import {
   readPanelState,
 } from './rail/panelState.js';
 
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+} from './mobileSheets.js';
+
+export {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
-export const MOBILE_SHELL_CLASS = 'mobile-shell';
-export const MOBILE_SHEET_ATTR = 'data-mobile-sheet';
-
-/**
- * Panels each sheet expands. A sheet also shows its rail's other panels
- * collapsed (Scenes under Layers), per styles/mobile-shell.css.
- */
-export const MOBILE_SHEET_PANELS = Object.freeze({
-  layers: Object.freeze(['data-panel']),
-  cameras: Object.freeze(['cctv-panel', 'street-level-panel']),
-  context: Object.freeze(['global-context-panel']),
-  search: Object.freeze(['location-bar']),
-  more: Object.freeze(['control-panel', 'pp-toggles']),
-});
-
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
   Object.freeze({ sheet: 'context', label: msg('Context'), icon: 'radar' }),
+  Object.freeze({
+    sheet: 'missions',
+    label: msg('Space Missions'),
+    icon: 'rocket_launch',
+  }),
   Object.freeze({ sheet: 'search', label: msg('Search'), icon: 'search' }),
   Object.freeze({ sheet: 'more', label: msg('More'), icon: 'more_horiz' }),
 ]);
@@ -57,17 +60,6 @@ const BORROWED_PANELS = Object.freeze([
 ]);
 
 const BORROW_OPTIONS = Object.freeze({ persist: false, syncShare: false });
-
-/**
- * @param {string} panelId
- * @returns {string|null} The sheet that presents `panelId`.
- */
-export function sheetForPanelId(panelId) {
-  for (const [sheet, ids] of Object.entries(MOBILE_SHEET_PANELS)) {
-    if (ids.includes(panelId)) return sheet;
-  }
-  return null;
-}
 
 /**
  * The sheet after a tab press: the same tab closes its sheet, another opens.
@@ -142,6 +134,7 @@ export function initMobileShell({
     .map(element)
     .filter(Boolean);
   const dock = element('command-dock');
+  const missionsPanel = element('space-missions-panel');
   const shown = (node) =>
     node && globalThis.getComputedStyle?.(node).display !== 'none';
 
@@ -254,7 +247,9 @@ export function initMobileShell({
   const setSheet = (requested) => {
     swipe = null;
     if (!body.classList.contains(MOBILE_SHELL_CLASS)) return;
-    const sheet = sheetBlocked(body) ? null : requested;
+    const unavailableMissions =
+      requested === 'missions' && missionsPanel?.hidden;
+    const sheet = sheetBlocked(body) || unavailableMissions ? null : requested;
     const previous = currentSheetOf(body);
     if (previous === sheet) return;
     if (!previous) {
@@ -368,7 +363,8 @@ export function initMobileShell({
         : sheet === 'search'
           ? [dock]
           : sheet === 'more'
-            ? [element('right-context-rail'), dock]
+            ? // Visual lives in the left stack; the dock holds the presets.
+              [element('left-panel-stack'), dock]
             : [element('right-context-rail')];
     return roots.find((root) => root?.contains(target));
   };
@@ -486,9 +482,21 @@ export function initMobileShell({
 
   if (typeof MutationObserverImpl === 'function') {
     const observer = new MutationObserverImpl(() => {
-      if (currentSheetOf(body) && sheetBlocked(body)) setSheet(null);
+      const sheet = currentSheetOf(body);
+      if (!sheet) return;
+      if (sheet === 'missions' && missionsPanel?.hidden) {
+        returnFocus = tabFor('layers') ?? returnFocus;
+        setSheet(null);
+      } else if (sheetBlocked(body)) {
+        setSheet(null);
+      }
     });
     observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+    if (missionsPanel)
+      observer.observe(missionsPanel, {
+        attributes: true,
+        attributeFilter: ['hidden'],
+      });
     removers.push(() => observer.disconnect());
   }
 

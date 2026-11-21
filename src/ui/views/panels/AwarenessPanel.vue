@@ -3,14 +3,23 @@ import { storeToRefs } from 'pinia';
 import { onBeforeUpdate, onUpdated, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useContextStore } from '../../stores/context.js';
+import UiButton from '../../kit/UiButton.vue';
 import AwarenessNames from './AwarenessNames.vue';
 
 // The Contacts panel inside Context. The Contacts layer publishes its view
 // (standby, results or empty); until it does, the panel shows its initial
 // markup. Buttons call the layer's navigation as the person's own.
+const props = defineProps({ compact: Boolean });
 const { awareness: view, awarenessLayer: layer } = storeToRefs(useContextStore());
 const user = { origin: 'user' };
 const root = ref(null);
+// A photo whose image failed to load stays hidden until another one arrives.
+// The failing image's own src is recorded, so a late error from a previous
+// photo never hides the current one.
+const failedPhoto = ref('');
+const fail = (event) => {
+  failedPhoto.value = event.target.getAttribute('src');
+};
 
 // A live repaint keeps focus on the same control by identity: browsers drop
 // focus from a node Vue moves, removes or disables, so the control is found
@@ -51,19 +60,23 @@ onUpdated(() => {
       <span>{{ view.text }}</span>
     </div>
     <template v-else-if="view.kind === 'results'">
-      <div class="military-awareness-subject">{{ view.subject }}</div>
+      <div v-if="!props.compact" class="military-awareness-subject">{{ view.subject }}</div>
+      <a v-if="!props.compact && view.photo && view.photo.src !== failedPhoto" class="military-awareness-photo" :href="view.photo.link" target="_blank" rel="noopener">
+        <img :src="view.photo.src" :width="view.photo.width ?? undefined" :height="view.photo.height ?? undefined" alt="" @error="fail" />
+        <small v-if="view.photo.credit">{{ view.photo.credit }}</small>
+      </a>
       <AwarenessNames v-if="view.subjectNames" :names="view.subjectNames" />
       <div class="military-awareness-controls" role="group" :aria-label="view.navigation.label">
-        <button type="button" data-awareness-action="previous" :title="view.navigation.previous.title" :disabled="view.navigation.previous.disabled" @click="layer?.navigatePrevious(user)">{{ view.navigation.previous.text }}</button>
-        <button type="button" data-awareness-action="focus" @click="layer?.focusCurrent(user)">{{ view.navigation.focus.text }}</button>
-        <button type="button" data-awareness-action="next" :title="view.navigation.next.title" :disabled="view.navigation.next.disabled" @click="layer?.navigateNext(user)">{{ view.navigation.next.text }}</button>
+        <UiButton data-awareness-action="previous" :title="view.navigation.previous.title" :disabled="view.navigation.previous.disabled" @click="layer?.navigatePrevious(user)">{{ view.navigation.previous.text }}</UiButton>
+        <UiButton data-awareness-action="focus" @click="layer?.focusCurrent(user)">{{ view.navigation.focus.text }}</UiButton>
+        <UiButton data-awareness-action="next" :title="view.navigation.next.title" :disabled="view.navigation.next.disabled" @click="layer?.navigateNext(user)">{{ view.navigation.next.text }}</UiButton>
       </div>
       <section v-for="row in view.rows" :key="row.id" :class="['military-awareness-row', row.relationship]">
         <div><strong>{{ row.label }}</strong><b aria-live="polite">{{ row.count }}</b></div>
         <small>{{ row.detail }}</small>
         <ul v-if="row.nearest.length">
           <li v-for="item in row.nearest" :key="item.key">
-            <button v-if="item.targetId" type="button" class="military-awareness-target" :data-awareness-layer="item.layer" :data-awareness-id="item.targetId" :aria-label="item.ariaLabel" @click="layer?.focusTarget(item.layer, item.targetId, user)">{{ item.label }} <span>{{ item.distance }}</span></button>
+            <UiButton v-if="item.targetId" class="military-awareness-target" :data-awareness-layer="item.layer" :data-awareness-id="item.targetId" :aria-label="item.ariaLabel" @click="layer?.focusTarget(item.layer, item.targetId, user)">{{ item.label }} <span>{{ item.distance }}</span></UiButton>
             <span v-else class="military-awareness-target unavailable" :aria-label="item.ariaLabel">{{ item.label }} <span>{{ item.distance }}</span></span>
             <AwarenessNames v-if="item.names" :names="item.names" />
           </li>

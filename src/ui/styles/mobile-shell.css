@@ -36,7 +36,8 @@ body.mobile-shell #mobile-tab-bar {
   left: 0;
   z-index: 170;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   height: var(--mobile-tab-space);
   padding: 0 max(4px, env(safe-area-inset-right, 0px))
     var(--mobile-bottom-inset) max(4px, env(safe-area-inset-left, 0px));
@@ -60,6 +61,14 @@ body.mobile-shell .mobile-tab {
   font: 500 10px/1.2 var(--font-sans);
   letter-spacing: 0.04em;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Long locales clip to one line instead of widening their column. */
+body.mobile-shell .mobile-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 body.mobile-shell .mobile-tab-icon {
@@ -129,7 +138,10 @@ body.mobile-shell #right-context-rail {
 body.mobile-shell[data-mobile-sheet='layers'] #left-panel-stack,
 body.mobile-shell[data-mobile-sheet='cameras'] #right-context-rail,
 body.mobile-shell[data-mobile-sheet='context'] #right-context-rail,
-body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
+body.mobile-shell[data-mobile-sheet='missions'] #right-context-rail,
+/* Visual opens from the left rail on wider screens, so it lives in the left
+   stack and the More sheet is that stack showing Visual alone. */
+body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack {
   position: fixed;
   top: auto;
   right: 0;
@@ -156,9 +168,10 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail {
 
 body.mobile-shell #left-panel-stack > *,
 body.mobile-shell #right-context-rail > *,
-/* Rail rules show expanded Weather and Recent Imagery by id; on phones they
-   belong to the Context sheet only. */
+/* Rail rules show expanded Weather, News and Recent Imagery by id; on phones
+   they belong to the Context sheet only. */
 body.mobile-shell #right-context-rail > #weather-panel,
+body.mobile-shell #right-context-rail > #news-panel,
 body.mobile-shell #right-context-rail > #recent-imagery-panel {
   display: none;
 }
@@ -184,8 +197,14 @@ body.mobile-shell[data-mobile-sheet='context']
   > #weather-panel:not([hidden]),
 body.mobile-shell[data-mobile-sheet='context']
   #right-context-rail
+  > #news-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='context']
+  #right-context-rail
   > #recent-imagery-panel:not([hidden]),
-body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
+body.mobile-shell[data-mobile-sheet='missions']
+  #right-context-rail
+  > #space-missions-panel:not([hidden]),
+body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack > #pp-toggles {
   position: relative;
   inset: auto;
   display: block;
@@ -195,12 +214,18 @@ body.mobile-shell[data-mobile-sheet='more'] #right-context-rail > #pp-toggles {
   transform: none;
 }
 
+/* The sheet scrolls: News keeps its height instead of shrinking under the
+   panel below it, as the rail makes it do on a desktop. */
+body.mobile-shell #right-context-rail > #news-panel:not(.collapsed) {
+  flex-shrink: 0;
+}
+
 /* ── Dock: voice floats above the tab bar; search and presets are sheets ─ */
 body.mobile-shell #command-dock {
   /* The dock's tray rules size voice by this basis; a column makes it a height. */
   --dock-voice-width: auto;
   top: auto;
-  bottom: calc(var(--mobile-tab-space) + 10px);
+  bottom: calc(var(--mobile-tab-space) + 10px + var(--world-timeline-lift, 0px));
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -380,7 +405,7 @@ body.mobile-shell #command-dock #gev-voice-control {
 body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
   #cesium-credits {
   right: auto;
-  bottom: calc(var(--mobile-tab-space) + 106px) !important;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
   left: 10px;
   /* With the base rule's nowrap the credits run off the right edge, and a
      max-width alone wrapped them into a narrow column: the line needs wrapping
@@ -388,6 +413,18 @@ body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
      scaled line 10px from the right edge, so every credit and "Data
      attribution" stay on screen. Like the offset above, it must beat the
      dock's width: auto !important. */
+  width: calc((100vw - 20px) / 0.8) !important;
+  max-width: none !important;
+  white-space: normal;
+  transform-origin: left bottom;
+  scale: 0.8;
+}
+
+body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view)
+  #gev-credits {
+  right: auto;
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)) !important;
+  left: 10px;
   width: calc((100vw - 20px) / 0.8) !important;
   max-width: none !important;
   white-space: normal;
@@ -404,10 +441,18 @@ body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
   z-index: 166;
 }
 
+body.mobile-shell[data-mobile-sheet]:not(.recording-mode):not(
+    .cockpit-mode
+  ):not(.ui-clean-view)
+  #gev-credits {
+  bottom: calc(var(--mobile-sheet-cover, 0px) + 6px) !important;
+  z-index: 166;
+}
+
 /* The view switcher clears the tab bar and the voice bar, opposite the credit. */
 body.mobile-shell:not(.cockpit-mode) #view-switcher {
   right: 12px;
-  bottom: calc(var(--mobile-tab-space) + 106px);
+  bottom: calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px));
 }
 
 body.mobile-shell #corner-actions {
