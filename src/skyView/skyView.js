@@ -4,8 +4,9 @@
  * or type "lat, lon" / a place; the camera drops to eye height there and
  * looks UP. Drag/pinch/wheel/keys look around (zoom = field of view), the
  * horizon is the real terrain (or a flat painted ground), the sky follows the
- * Sun at Sky time, and "Back to map" restores the previous camera, inputs,
- * clock and scene flags exactly.
+ * Sun at Sky time, and "Back to map" restores the previous camera pose,
+ * field of view, camera input, collision and globe look. Sky stamps the
+ * scene time only while it is open, so there is no clock to put back.
  *
  * scope: observer, camera, horizon, sky brightness, `sv` URL.
  * satellites above the horizon (module worker, states, labels, the
