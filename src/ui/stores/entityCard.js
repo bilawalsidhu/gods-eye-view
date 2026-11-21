@@ -357,6 +357,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * @param {boolean} [options.fly] Also fly the camera to it.
    * @returns {boolean} Whether a card could be made.
    */
+  /**
+   * Counts card selections and clears, so a selection that was asked for
+   * before a newer one can tell it came too late.
+   */
+  let generation = 0;
+  const selectionGeneration = () => generation;
+
   /** Things that move are followed as soon as they are picked. */
   const AUTO_FOLLOW = new Set(['flights', 'military', 'satellites']);
   /**
@@ -374,6 +381,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    */
   function select(identity, { fly = false, follow: autoFollow = true } = {}) {
     if (!read(identity)) return false;
+    generation++;
     stopLocating();
     away.value = false;
     reference =
@@ -403,6 +411,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   function clear() {
+    generation++;
     if (following.value) shell.value?.letGo?.(card.value);
     following.value = null;
     asked = null;
@@ -451,6 +460,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     locate,
     connect,
     select,
+    selectionGeneration,
     clear,
     refresh,
     flyTo,
@@ -477,3 +487,33 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     askAboutView,
   };
 });
+
+/**
+ * Opens what a voice or chat action selected in the Context panel, as a click
+ * on it does (`src/ui/entityContextBridge.js` selects the same way): its card
+ * opens, and the panel with it. The app hands it to voice, which reads
+ * `generation()` when a selection is asked and passes it back as `since`.
+ * The action has already selected or followed the item in its own layer, so
+ * the card does not follow it again (a click on a flight does not either). A
+ * card picked or cleared since the action was asked stays, and nothing opens
+ * in Cockpit, where Context is hidden.
+ * @param {import('pinia').Pinia} pinia
+ * @returns {{generation: () => number, show: (identity: {layerId: string, id: string|number, label?: string, lat?: number, lon?: number}, options?: {since?: number|null, cockpitActive?: boolean}) => boolean}}
+ */
+export function createContextCardOpener(pinia) {
+  const store = () => useEntityCardStore(pinia);
+  return {
+    generation: () => store().selectionGeneration(),
+    show(identity, { since = null, cockpitActive = false } = {}) {
+      if (!identity?.layerId || identity.id == null || identity.id === '')
+        return false;
+      if (cockpitActive) return false;
+      if (since !== null && store().selectionGeneration() !== since)
+        return false;
+      return store().select(
+        { ...identity, id: String(identity.id) },
+        { follow: false },
+      );
+    },
+  };
+}
