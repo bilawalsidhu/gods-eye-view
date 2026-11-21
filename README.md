@@ -16,6 +16,8 @@ Click any satellite, plane, ship or public camera and you can track it. Turn on 
 
 **[One-click install with Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view)** · **[Run it from the terminal](#-quick-start)** · **[Hosted version waitlist](https://godseyeview.ai/online/)**
 
+God’s Eye View™ is a trademark of Metaversity LLC, used under license by Halfpixel, Inc. [Official download page](https://godseyeview.ai/download/).
+
 🏆 **#1 on GitHub Trending**, daily and weekly · **[#8 Product of the Day](https://www.producthunt.com/products/god-s-eye-view?launch=god-s-eye-view)**, hunted by Chris Messina · _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
 
 ▶️ **From the project behind the God's Eye View series** _(formerly WorldView)_ — [25M+ views on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q)
@@ -94,7 +96,7 @@ We've got a plurality of sensor systems watching the planet right now. Satellite
 - **🎥 Scene director:** Capture cinematic camera tours for clips and demos.
 - **🔗 Share Links:** Camera, style, layers, and even one tracked target serialize into a URL — a live target is a handoff, not a bookmark.
 - **🏠 Reset Globe:** One control — or one sentence — back to the full Earth.
-- **🌦️ Weather:** Animate GFS or ECMWF forecast wind, replay observed radar, satellite clouds and lightning on one timeline, and follow NHC/CPHC cyclone tracks. No key needed.
+- **🌦️ Weather:** Animate GFS or ECMWF forecast wind, replay observed radar, satellite clouds and lightning on one timeline, and follow NHC/CPHC and JTWC cyclone tracks. No key needed.
 - **📷 Mapped ALPR cameras:** License-plate-reader camera locations tagged in OpenStreetMap, one city at a time. Locations and tags only; no key needed.
 - **🔭 Satellite passes:** Ask by voice when any loaded satellite next rises over you: rise, peak and set times, and whether you can see it.
 - **🔎 Analyst answers:** Count, filter and rank satellites, datacenters and dams by voice, alongside flights, ships, fires and quakes; answers say when a feed is stale or on a fallback.
@@ -464,11 +466,11 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some of
 | 🦉 **Wildlife Sightings** | Wildlife observed within 48 h (whales 7 d): density glow, taxon badges and anchored photo cards with creator/licence credit. Salish Sea marine mammals via Acartia; sensitive locations shown as 0.2° cells. Not a census | iNaturalist, Acartia | 🟢 |
 | 🌬️ **Wind**                 | Animated 10 m forecast wind with an optional speed, temperature or pressure color field and a reading at map center                                                                                                                                                                                                                                                                 | NOAA GFS / ECMWF IFS                    | 🟢                                                                                                  |
 | 🌦️ **Observed Weather**     | Rain radar (contiguous US), Satellite clouds (GOES regional or global infrared, Clouds only or Full image) and Lightning density (Americas and Pacific) on one history timeline                                                                                                                                                                                                     | NOAA nowCOAST                           | 🟢                                                                                                  |
-| 🌀 **Cyclones**             | Advisory positions, forecast tracks and uncertainty cones for the Atlantic and eastern/central North Pacific                                                                                                                                                                                                                                                                        | NOAA NHC / CPHC                         | 🟢                                                                                                  |
+| 🌀 **Cyclones**             | Advisory positions, forecast tracks and uncertainty cones (Atlantic, eastern/central North Pacific); warnings with 34-knot wind danger areas elsewhere                                                                                                                                                                                                                             | NOAA NHC / CPHC · JTWC                  | 🟢                                                                                                  |
 
 </details>
 
-**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
+**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline in the **WEATHER** panel (step back, **Play**, **Latest**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones, and JTWC warnings with their 34-knot wind danger areas for the other basins. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
 
