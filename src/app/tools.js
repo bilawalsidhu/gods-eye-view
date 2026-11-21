@@ -17,6 +17,7 @@ import {
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { createContextCardOpener } from '../ui/stores/entityCard.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createDataLibrary } from '../library/controller.js';
@@ -349,6 +350,8 @@ export function createApplicationTools({
     dataManager,
     sceneDirector,
     annotations,
+    // A voice or chat selection opens its card in Context, as a click does.
+    contextCard: createContextCardOpener(applicationPinia()),
   });
   defer(() => {
     voiceCommands.stop({ removeUi: true });

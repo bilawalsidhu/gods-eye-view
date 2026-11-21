@@ -1,9 +1,5 @@
 import { nextTick } from 'vue';
 import { useOmnibarStore } from '../ui/stores/omnibar.js';
-import {
-  showSelectionInContext,
-  useEntityCardStore,
-} from '../ui/stores/entityCard.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { bindAssistantPanelLayout, bindLayoutDock } from './panelLayout.js';
 import { bindChatControl } from './chatControl.js';
@@ -69,6 +65,10 @@ export function createVoiceCommands({
   createCard = (options) => new VoiceCardControls(options),
   // Cockpit's own state; Context stays hidden while it runs.
   styleManager = null,
+  // Opens a selection's card in the Context panel, as a click does
+  // (`createContextCardOpener` in src/ui/stores/entityCard.js); the app
+  // hands it in. Without one, selections open no card.
+  contextCard = null,
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
@@ -339,18 +339,14 @@ export function createVoiceCommands({
     session.subscribe((event) => {
       if (!SELECTION_ACTIONS.has(event.name)) return;
       if (event.type === 'action-call') {
-        askedAt.set(
-          callKey(event),
-          useEntityCardStore(applicationPinia()).selectionGeneration(),
-        );
+        askedAt.set(callKey(event), contextCard?.generation?.() ?? null);
         return;
       }
       if (event.type !== 'action-result') return;
       const since = askedAt.get(callKey(event)) ?? null;
       askedAt.delete(callKey(event));
       if (event.result?.ok !== true) return;
-      showSelectionInContext(SELECTION_ACTIONS.get(event.name)(event.result), {
-        pinia: applicationPinia(),
+      contextCard?.show?.(SELECTION_ACTIONS.get(event.name)(event.result), {
         since,
         cockpitActive: cockpitActive(),
       });

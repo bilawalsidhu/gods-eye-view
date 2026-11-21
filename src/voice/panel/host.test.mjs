@@ -5,7 +5,10 @@ import { readFileSync } from 'node:fs';
 import { createPinia } from 'pinia';
 import { createVoiceControl } from '../control.js';
 import { useVoiceStore } from '../../ui/stores/voice.js';
-import { useEntityCardStore } from '../../ui/stores/entityCard.js';
+import {
+  createContextCardOpener,
+  useEntityCardStore,
+} from '../../ui/stores/entityCard.js';
 import { applicationPinia } from '../../ui/vueRuntime.js';
 import { createGevActionRunner } from '../gevActions.js';
 import { createVoiceCommands as bind } from '../sessionCommands.js';
@@ -141,6 +144,7 @@ function mounted(t, options = {}) {
     createControl: (control) => createTestVoiceUi({ ...control, pinia }),
     panelHost: host,
     styleManager: options.styleManager ?? null,
+    contextCard: createContextCardOpener(applicationPinia()),
     nativePanelProvider: options.native
       ? (options.nativeProvider ?? 'gemini')
       : null,
