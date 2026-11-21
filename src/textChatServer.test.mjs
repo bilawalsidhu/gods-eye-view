@@ -690,6 +690,16 @@ test('the ChatGPT OAuth lock refuses OpenAI chat but not Gemini chat', async (t)
   }
 });
 
+test('OpenAI chat goes to the OPENAI_BASE_URL gateway when one is set', async (t) => {
+  const f = await fixture(t, providers.openai, undefined, {
+    environment: { OPENAI_BASE_URL: 'https://gateway.example/v1/' },
+  });
+  await f.send();
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].url, 'https://gateway.example/v1/chat/completions');
+  assert.equal(f.calls[0].options.headers.Authorization, 'Bearer fixture-only');
+});
+
 test('OpenAI empty tool arrays are removed before history is returned', async (t) => {
   const f = await fixture(t, providers.openai, async () =>
     Response.json({
