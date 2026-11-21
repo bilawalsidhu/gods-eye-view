@@ -16,6 +16,8 @@ Click any satellite, plane, ship or public camera and you can track it. Turn on 
 
 **[One-click install with Pinokio](https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view)** · **[Run it from the terminal](#-quick-start)** · **[Hosted version waitlist](https://godseyeview.ai/online/)**
 
+God’s Eye View™ is a trademark of Metaversity LLC, used under license by Halfpixel, Inc. [Official download page](https://godseyeview.ai/download/).
+
 🏆 **#1 on GitHub Trending**, daily and weekly · **[#8 Product of the Day](https://www.producthunt.com/products/god-s-eye-view?launch=god-s-eye-view)**, hunted by Chris Messina · _“pretty cool”_ — [Brendan Eich](https://x.com/BrendanEich/status/2094592096401490266), creator of JavaScript · Featured on **[Pinokio](https://pinokio.co/posts/01m1m4p9xxm3qw7dnnpj2wr93g)**
 
 ▶️ **From the project behind the God's Eye View series** _(formerly WorldView)_ — [25M+ views on YouTube](https://youtube.com/playlist?list=PL6qSg2I-7_koPbDnSMo0QeeHX_RknA2uv&si=nBGYMoHWQw41v93Q)
