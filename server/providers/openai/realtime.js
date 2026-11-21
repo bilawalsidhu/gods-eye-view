@@ -13,6 +13,12 @@ import {
   OPENAI_REALTIME_TRANSCRIBE_MODEL_DEFAULT,
 } from './constants.js';
 import { realtimeInstructions } from './instructions.js';
+import {
+  REALTIME_CALLS_RELAY_PATH,
+  openAiEndpoint,
+  usesCustomOpenAiBaseUrl,
+} from './endpoints.js';
+import { readRequestBody } from '../common/request.js';
 import { GEV_REALTIME_TOOLS, offeredTools } from './tools.js';
 import { chatSchema } from './chat.js';
 import { resolveOverpassUpstreams } from '../overpass/constants.js';
@@ -144,7 +150,9 @@ function realtimeSessionTools(tools, { overpass = false } = {}) {
 
 function createRealtimeTokenHandler({
   annotationGuidance,
-  endpoint = 'https://api.openai.com/v1/realtime/client_secrets',
+  // Override for tests; otherwise resolved per request from OPENAI_BASE_URL
+  // (API key) or the OpenAI default (ChatGPT OAuth) — see endpoints.js.
+  endpoint,
   fetchImpl = (...args) => fetch(...args),
   resolveApiKey = () => process.env.OPENAI_API_KEY,
   resolveOAuthAccessToken = () => readCodexOAuthAccessToken(),
@@ -327,8 +335,12 @@ function createRealtimeTokenHandler({
       },
     };
 
+    const oauth = authMode === 'oauth';
     try {
-      const response = await fetchImpl(endpoint, {
+      const target =
+        endpoint ??
+        openAiEndpoint('realtime/client_secrets', { environment, oauth });
+      const response = await fetchImpl(target, {
         method: 'POST',
         redirect: 'error',
         signal: AbortSignal.timeout(30_000),
@@ -359,6 +371,11 @@ function createRealtimeTokenHandler({
       if (requestedTier && !isKnownVoiceTier(requestedTier)) {
         res.setHeader('X-GEV-Voice-Tier-Fallback', '1');
       }
+      // A secret minted by a gateway is only valid at that gateway, so the
+      // browser must send its SDP offer back through this server's relay.
+      if (!oauth && usesCustomOpenAiBaseUrl(environment)) {
+        res.setHeader('X-GEV-Realtime-Calls', REALTIME_CALLS_RELAY_PATH);
+      }
       if (!response.ok) {
         console.warn(`[realtime-token] upstream HTTP ${response.status}`);
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -385,7 +402,110 @@ function createRealtimeTokenHandler({
   };
 }
 
+const SDP_MAX_BYTES = 64 * 1024;
+
+// Bound the gateway's return path as tightly as the incoming SDP offer.
+// Read incrementally so an oversized response is never fully buffered.
+async function readCappedSdpAnswer(response) {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > SDP_MAX_BYTES) {
+        await reader.cancel();
+        throw new Error('Realtime SDP answer too large');
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks, bytes).toString('utf8');
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+/**
+ * Relay the browser's Realtime SDP offer to `${OPENAI_BASE_URL}/realtime/calls`.
+ *
+ * Installed only when OPENAI_BASE_URL is set: a gateway-minted secret is only
+ * valid at that gateway, and the gateway need not be reachable from browsers.
+ * The bearer is the short-lived secret this server minted; the relay adds no
+ * credential of its own. Only the WebRTC signalling passes through here — the
+ * audio itself flows between the browser and the provider's media servers.
+ */
+function createRealtimeCallsRelayHandler({
+  endpoint,
+  environment = process.env,
+  fetchImpl = (...args) => fetch(...args),
+} = {}) {
+  const fail = (res, status, error) => {
+    res.statusCode = status;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error }));
+  };
+  return async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    if (req.method !== 'POST') return fail(res, 405, 'Method not allowed');
+    // application/sdp is not a CORS-safelisted type, so a cross-site page
+    // cannot send this without a preflight the server never answers.
+    const contentType = String(req.headers?.['content-type'] || '')
+      .split(';')[0]
+      .trim()
+      .toLowerCase();
+    if (contentType !== 'application/sdp')
+      return fail(res, 415, 'Expected application/sdp');
+    const authorization = String(req.headers?.authorization || '');
+    if (!/^Bearer \S+$/.test(authorization))
+      return fail(res, 401, 'Missing Realtime client secret');
+    // Share the token and HUD per-IP budget with the relay. A bearer with
+    // the right syntax is not proof that the gateway will accept it.
+    if (!enforceRateLimit(openAiRateLimiter(), req, res)) return;
+
+    let offer;
+    try {
+      offer = await readRequestBody(req, SDP_MAX_BYTES);
+    } catch (error) {
+      if (error?.code === 'BODY_TOO_LARGE')
+        return fail(res, 413, 'SDP offer too large');
+      return fail(res, 400, 'Could not read SDP offer');
+    }
+
+    try {
+      const target =
+        endpoint ?? openAiEndpoint('realtime/calls', { environment });
+      const response = await fetchImpl(target, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          Authorization: authorization,
+          'Content-Type': 'application/sdp',
+        },
+        body: offer,
+      });
+      if (!response.ok) {
+        // Discard untrusted gateway error bodies without buffering them.
+        await response.body?.cancel().catch(() => {});
+        console.warn(`[realtime-calls] upstream HTTP ${response.status}`);
+        return fail(res, response.status, 'Realtime SDP exchange failed');
+      }
+      const answer = await readCappedSdpAnswer(response);
+      res.statusCode = response.status;
+      res.setHeader('Content-Type', 'application/sdp');
+      res.end(answer);
+    } catch {
+      console.warn('[realtime-calls] relay failed');
+      fail(res, 502, 'Realtime SDP exchange failed');
+    }
+  };
+}
+
 export {
+  createRealtimeCallsRelayHandler,
   createRealtimeOAuthLoginHandler,
   createRealtimeOAuthStatusHandler,
   createRealtimeTokenHandler,
