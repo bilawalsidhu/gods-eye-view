@@ -1,4 +1,4 @@
-import { greatCircleKm } from '../geoDistance.js';
+import { deepestCircle, greatCircleKm } from '../geoDistance.js';
 import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
 
 /**
@@ -28,6 +28,24 @@ import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
  * Pure data + pure helpers: imported by the browser layer, the Vite proxy, and
  * node:test. No Cesium, no Node built-ins.
  */
+
+/**
+ * Entur Vehicles API query: every field `decodeEnturVehicles` reads, and
+ * nothing more. Lives here so the registry stays free of decoder imports.
+ * `maxDataAge` matches the layer's 10-minute VEHICLE_MAX_FIX_AGE_MS (layers/transit/policy.js).
+ */
+export const ENTUR_VEHICLES_QUERY = `{
+  vehicles(maxDataAge: "PT10M") {
+    vehicleId
+    mode
+    lastUpdatedEpochSecond
+    bearing
+    location { latitude longitude }
+    line { lineRef }
+    serviceJourney { id }
+    monitoredCall { stopPointRef }
+  }
+}`;
 
 /**
  * Transit modes the layer colors: the GTFS basic route types, by name. A
@@ -804,10 +822,16 @@ function transitFeed(fields) {
 /**
  * Registry of feeds. Order is presentation order in the stats/credit text.
  * `loadRadiusKm` is the distance from `center` inside which the feed is polled.
+ * A feed whose region no single circle fits lists `coverage` circles instead:
+ * it is polled inside any of them, and `center`/`loadRadiusKm` only describe
+ * its extent.
  * @type {ReadonlyArray<Readonly<{
  *   id: string, name: string, operator: string, region: string,
  *   center: {lat: number, lon: number}, loadRadiusKm: number,
+ *   coverage?: ReadonlyArray<{lat: number, lon: number, radiusKm: number}>,
  *   url: string, headers?: Record<string, string>,
+ *   format?: 'entur-vehicles',
+ *   request?: {method: string, body: string},
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
  *   routeCorrections?: Readonly<Record<string, string>>,
@@ -930,14 +954,33 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     name: 'Entur',
     operator: 'Entur AS (Norwegian national transit data)',
     region: 'Norway',
-    // Circle chosen to hold Oslo, Bergen, Bodø and Tromsø while leaving
-    // Helsinki (≈820 km) out — a national feed must not poll from next door.
-    center: Object.freeze({ lat: 64.0, lon: 11.5 }),
-    loadRadiusKm: 720,
-    url: 'https://api.entur.io/realtime/v1/gtfs-rt/vehicle-positions',
-    headers: Object.freeze({ 'ET-Client-Name': 'gods-eye-view-transit' }),
+    center: Object.freeze({ lat: 67.0, lon: 7.0 }),
+    loadRadiusKm: 1000,
+    // No one circle holds Norway without Sweden, Finland or the islands to
+    // the west: these three reach from Lindesnes to Vardø and Grense
+    // Jakobselv, and the tested neighbouring cities (Lerwick, Östersund,
+    // Kiruna, Karlstad, Uddevalla nearest) stay over 50 km out, past the range
+    // slack — a national feed must not poll from next door.
+    coverage: Object.freeze([
+      Object.freeze({ lat: 61.3, lon: 6.5, radiusKm: 380 }),
+      Object.freeze({ lat: 67.3, lon: 4.5, radiusKm: 600 }),
+      Object.freeze({ lat: 71.3, lon: 23.0, radiusKm: 340 }),
+    ]),
+    // The v2 Vehicles API, not the v1 GTFS-RT feed: Skyss, Vestfold og
+    // Telemark, Innlandet and others publish their positions only here.
+    url: 'https://api.entur.io/realtime/v2/vehicles/graphql',
+    format: 'entur-vehicles',
+    request: Object.freeze({
+      method: 'POST',
+      body: JSON.stringify({ query: ENTUR_VEHICLES_QUERY }),
+    }),
+    headers: Object.freeze({
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      'ET-Client-Name': 'gods-eye-view-transit',
+    }),
     license: 'Norwegian Licence for Open Government Data (NLOD)',
-    licenseUrl: 'https://developer.entur.org/pages-intro-authentication',
+    licenseUrl: 'https://data.norge.no/nlod/en/2.0',
     attribution: 'Entur — data under NLOD',
     defaultEnabled: true,
     terms: Object.freeze({
@@ -1915,6 +1958,19 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
   return greatCircleKm({ lat: aLat, lon: aLon }, { lat: bLat, lon: bLon });
 }
 
+/** A feed's coverage circles: its `coverage`, else its one load circle. */
+function coverageCircles(feed) {
+  return (
+    feed.coverage ?? [
+      {
+        lat: feed.center.lat,
+        lon: feed.center.lon,
+        radiusKm: feed.loadRadiusKm,
+      },
+    ]
+  );
+}
+
 /**
  * Feeds whose coverage circle contains the point, nearest first.
  * @param {number} lat
@@ -1925,13 +1981,128 @@ export function haversineKm(aLat, aLon, bLat, bLon) {
  */
 export function transitFeedsInRange(lat, lon, slackKm = 0) {
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-  return TRANSIT_ENABLED_FEEDS.map((feed) => ({
-    feed,
-    km: haversineKm(lat, lon, feed.center.lat, feed.center.lon),
-  }))
-    .filter(({ feed, km }) => km <= feed.loadRadiusKm + Math.max(0, slackKm))
+  const slack = Math.max(0, slackKm);
+  return TRANSIT_ENABLED_FEEDS.map((feed) => {
+    const { depthKm, km } = deepestCircle({ lat, lon }, coverageCircles(feed));
+    return { feed, km, depthKm };
+  })
+    .filter(({ depthKm }) => depthKm + slack >= 0)
     .sort((a, b) => a.km - b.km)
     .map(({ feed }) => feed);
+}
+
+/** Longitude in [-180, 180). */
+function wrapLon(lon) {
+  return ((((lon + 180) % 360) + 360) % 360) - 180;
+}
+
+/** Longitude `lon` normalised into [west, west + 360). */
+function unwrapLon(lon, west) {
+  return west + ((((lon - west) % 360) + 360) % 360);
+}
+
+/**
+ * Great-circle distance (km) from a point to the nearest point of one edge of
+ * a view rectangle, the edge given as a function of t in [0, 1]. A coarse pass
+ * finds the nearest sample, then a ternary search refines between its
+ * neighbours: distance along a meridian or a parallel of a bounded view is
+ * unimodal around its minimum.
+ */
+function edgeDistanceKm(lat, lon, edgeAt) {
+  const SAMPLES = 16;
+  const at = (t) => {
+    const p = edgeAt(t);
+    return haversineKm(lat, lon, p.lat, p.lon);
+  };
+  let best = 0;
+  let bestKm = Infinity;
+  for (let i = 0; i <= SAMPLES; i++) {
+    const km = at(i / SAMPLES);
+    if (km < bestKm) {
+      bestKm = km;
+      best = i;
+    }
+  }
+  let lo = Math.max(0, best - 1) / SAMPLES;
+  let hi = Math.min(SAMPLES, best + 1) / SAMPLES;
+  for (let i = 0; i < 40; i++) {
+    const a = lo + (hi - lo) / 3;
+    const b = hi - (hi - lo) / 3;
+    if (at(a) <= at(b)) hi = b;
+    else lo = a;
+  }
+  return Math.min(bestKm, at((lo + hi) / 2));
+}
+
+/**
+ * Whether a coverage circle reaches into a view rectangle (degrees; `west` may
+ * be greater than `east` when the view crosses the antimeridian).
+ * @param {{lat:number, lon:number, radiusKm:number}} circle
+ * @param {{south:number, north:number, west:number, east:number}} rect
+ * @param {number} [slackKm=0]
+ * @returns {boolean}
+ */
+export function circleIntersectsViewRect(circle, rect, slackKm = 0) {
+  const { south, north, west } = rect;
+  const east = rect.east < west ? rect.east + 360 : rect.east;
+  const lon = unwrapLon(circle.lon, west);
+  if (circle.lat >= south && circle.lat <= north && lon <= east) return true;
+  const reach = circle.radiusKm + Math.max(0, slackKm);
+  const edges = [
+    (t) => ({ lat: south + (north - south) * t, lon: west }),
+    (t) => ({ lat: south + (north - south) * t, lon: wrapLon(east) }),
+    (t) => ({ lat: south, lon: wrapLon(west + (east - west) * t) }),
+    (t) => ({ lat: north, lon: wrapLon(west + (east - west) * t) }),
+  ];
+  return edges.some(
+    (edgeAt) => edgeDistanceKm(circle.lat, circle.lon, edgeAt) <= reach,
+  );
+}
+
+/**
+ * Feeds with a coverage circle that reaches into the view rectangle, nearest
+ * to the view's centre first. For wide views, where the centre of the screen
+ * can sit outside a feed's coverage while the feed's region fills the screen.
+ * @param {{south:number, north:number, west:number, east:number}} rect Degrees.
+ * @param {number} [slackKm=0] Extra radius (hysteresis), as in
+ *   transitFeedsInRange.
+ * @returns {object[]}
+ */
+export function transitFeedsInView(rect, slackKm = 0) {
+  if (
+    ![rect?.south, rect?.north, rect?.west, rect?.east].every(Number.isFinite)
+  )
+    return [];
+  const centerLat = (rect.south + rect.north) / 2;
+  const east = rect.east < rect.west ? rect.east + 360 : rect.east;
+  const centerLon = wrapLon((rect.west + east) / 2);
+  return TRANSIT_ENABLED_FEEDS.map((feed) => {
+    const circles = coverageCircles(feed);
+    const hit = circles.some((circle) =>
+      circleIntersectsViewRect(circle, rect, slackKm),
+    );
+    const km = Math.min(
+      ...circles.map((c) => haversineKm(centerLat, centerLon, c.lat, c.lon)),
+    );
+    return { feed, hit, km };
+  })
+    .filter(({ hit }) => hit)
+    .sort((a, b) => a.km - b.km)
+    .map(({ feed }) => feed);
+}
+
+/**
+ * A mode the feed itself reported for the vehicle (Entur's Vehicles API does),
+ * or null when it is absent or not one the layer knows.
+ * @param {unknown} reported
+ * @returns {string|null}
+ */
+function reportedTransitMode(reported) {
+  return typeof reported === 'string' &&
+    reported !== 'unknown' &&
+    TRANSIT_MODES.includes(reported)
+    ? reported
+    : null;
 }
 
 /**
@@ -1961,12 +2132,14 @@ function hintedMode(feed, routeId, vehicleId, routeType) {
 }
 
 /**
- * Mode for a vehicle: its fleet hint, route type or route hint when one
- * knows ({@link hintedMode}), else its feed's default.
+ * Mode for a vehicle: the mode the feed reported for it, else its fleet
+ * hint, route type or route hint when one knows ({@link hintedMode}), else
+ * its feed's default.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId GTFS route_id from the vehicle's trip.
  * @param {string|null} [vehicleId] GTFS-RT vehicle id.
  * @param {unknown} [routeType] GTFS `route_type` of the route, when known.
+ * @param {string|null} [reported] Mode reported on the vehicle record.
  * @returns {string} One of TRANSIT_MODES.
  */
 export function transitModeFor(
@@ -1974,7 +2147,10 @@ export function transitModeFor(
   routeId,
   vehicleId = null,
   routeType = null,
+  reported = null,
 ) {
+  const own = reportedTransitMode(reported);
+  if (own) return own;
   const hinted = hintedMode(feed, routeId, vehicleId, routeType);
   const mode =
     hinted && hinted !== 'unknown' ? hinted : feed?.defaultMode || 'unknown';
@@ -1982,15 +2158,16 @@ export function transitModeFor(
 }
 
 /**
- * Whether the mode came from the vehicle, its route type or its route id
- * rather than the feed's default. A default is a guess about a fleet —
- * TransLink's is "bus" while it publishes rail in the same feed — so a
- * consumer judging physical plausibility must not hold a defaulted vehicle
- * to a bus's limits.
+ * Whether the mode came from the feed's report, the vehicle, its route type
+ * or its route id rather than the feed's default. A default is a guess about
+ * a fleet — TransLink's is "bus" while it publishes rail in the same feed —
+ * so a consumer judging physical plausibility must not hold a defaulted
+ * vehicle to a bus's limits.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId
  * @param {string|null} [vehicleId]
  * @param {unknown} [routeType]
+ * @param {string|null} [reported] Mode reported on the vehicle record.
  * @returns {boolean}
  */
 export function transitModeResolved(
@@ -1998,7 +2175,9 @@ export function transitModeResolved(
   routeId,
   vehicleId = null,
   routeType = null,
+  reported = null,
 ) {
+  if (reportedTransitMode(reported)) return true;
   const hinted = hintedMode(feed, routeId, vehicleId, routeType);
   return (
     Boolean(hinted) && hinted !== 'unknown' && TRANSIT_MODES.includes(hinted)
@@ -2047,6 +2226,9 @@ export function publicTransitCatalog() {
     region: feed.region,
     center: { ...feed.center },
     loadRadiusKm: feed.loadRadiusKm,
+    ...(feed.coverage
+      ? { coverage: feed.coverage.map((circle) => ({ ...circle })) }
+      : {}),
     license: feed.license,
     licenseUrl: feed.licenseUrl,
     attribution: feed.attribution,

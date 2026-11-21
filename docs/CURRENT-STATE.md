@@ -1819,6 +1819,8 @@ Nepal Flood Incident is available in Authoring, with a 25-shot sequence, geograp
 
 Transit snapshot and selected-history reads use an explicit source interface. The standalone source selects the existing routes; rendering, playback and selection retain their existing owners. A portable request service owns registered-feed admission, bounded decoding, cache/revalidation, backoff and history; development and preview use the same thin adapter. Compatibility exports and source attribution are preserved.
 
+The Norway transit feed reads Entur's Vehicles GraphQL API (realtime v2) rather than its GTFS-Realtime feed, which omits several operators. The feed registry marks it `format: 'entur-vehicles'` with a fixed POST query; the request service sends that body and the snapshot builder decodes the JSON into the same vehicle records protobuf feeds produce. Each record carries Entur's reported mode, which takes precedence over route-id hints. Entur's coverage is three circles that keep the tested neighbouring cities out of range, so a whole-country view is centred outside all of them: above 400 km (`WIDE_VIEW_ALTITUDE_M`, on at 440 km and off at 360 km) the transit layer also polls any feed with a circle reaching into the ground on screen, the bounds of the screen's corners and edge midpoints picked on the ellipsoid (`transitFeedsInView`). Close views keep the centre-of-view rule, and so does a view in which any of those points is sky, so a camera tilted to the horizon does not poll the continent. The proxy's global admission (`TRANSIT_ADMISSION_MAX_GLOBAL`, 64 upstream requests a minute) covers the twelve feeds the widest of these views, over the Great Lakes, activates.
+
 Place search accepts an explicit Nominatim provider with independently configured search and reverse endpoints. The default offline/Google/Photon/local-fallback order is unchanged when no provider is selected. Provider adapters share normalized coordinates, viewport framing and reverse labels; roads and boundary geometry remain separate services. Portable capped-response and Overpass lexical helpers are exported independently of the Node server.
 
 Reference feed construction is exported through `sources/reference`; the cable source also has a dedicated `layers/submarine-cables/source` entry. Standalone catalog compatibility remains available. Source choices, data and attribution are unchanged.
@@ -6948,8 +6950,9 @@ Burlington, Barrie and Kingston. Mode silhouettes
 identify buses, trolleybuses, trams, cable cars, subways, monorails, trains,
 funiculars, gondolas (aerial lifts), ferries and unclassified vehicles.
 
-A vehicle's mode comes from, in order: the feed's fleet-number hint
-(`vehicleMode`, which knows a bus standing in on a streetcar route); the feed's
+A vehicle's mode comes from, in order: the mode the feed itself reports for
+the vehicle, when it reports one (Entur's Vehicles API does); the feed's
+fleet-number hint (`vehicleMode`, which knows a bus standing in on a streetcar route); the feed's
 correction for a route its own routes.txt mistypes (`routeCorrections`: Le
 Havre's funicular `8-FUNI`, which LiA's routes.txt types as a bus); the GTFS
 `route_type` of its route, when its record carries one as `routeType` (basic

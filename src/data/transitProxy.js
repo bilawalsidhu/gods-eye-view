@@ -18,6 +18,7 @@ import {
   GTFS_INCREMENTALITY_FULL_DATASET,
   decodeVehiclePositions,
 } from './gtfsRealtime.js';
+import { decodeEnturVehicles } from './enturVehicles.js';
 import { getTransitFeed } from './transitFeeds.js';
 export { transitModeFor, transitRouteType } from './transitFeeds.js';
 
@@ -27,7 +28,7 @@ export const TRANSIT_PROXY_TTL_MS = 15_000;
 export const TRANSIT_PROXY_STALE_MAX_MS = 10 * 60_000;
 /** Upstream fetch timeout. National feeds (Entur ≈ 1.4 MB) need headroom. */
 export const TRANSIT_PROXY_TIMEOUT_MS = 15_000;
-/** Hard cap on upstream bytes: the largest registered feed is well under 1 MB. */
+/** Hard cap on upstream bytes: the largest registered feed, Entur's Vehicles JSON, is about 1.4 MB. */
 export const TRANSIT_PROXY_MAX_BODY_BYTES = 8 * 1024 * 1024;
 /** Redirect hops followed before a feed is declared unreachable. */
 export const TRANSIT_MAX_REDIRECTS = 3;
@@ -51,12 +52,14 @@ export function isTransitRedirectStatus(status) {
 }
 /**
  * Admission window for upstream requests. One browser polls a feed every 15 s
- * (4/min); the allowance leaves room for a second tab and a manual reload, and
- * the global figure bounds what this process can ask of ALL operators at once.
+ * (4/min); the per-feed allowance leaves room for a second tab and a manual
+ * reload. The global figure bounds what this process can ask of all operators
+ * at once: sixteen feeds at 4/min, above the twelve one wide view of the Great
+ * Lakes activates.
  */
 export const TRANSIT_ADMISSION_WINDOW_MS = 60_000;
 export const TRANSIT_ADMISSION_MAX_PER_FEED = 8;
-export const TRANSIT_ADMISSION_MAX_GLOBAL = 40;
+export const TRANSIT_ADMISSION_MAX_GLOBAL = 64;
 /**
  * Cooldown ladder after consecutive upstream failures, in ms. A cold feed that
  * is simply down must not be re-asked once per poll for the whole session: the
@@ -234,14 +237,20 @@ export function repairVehicleTimestamps(vehicles, headerTimestamp, fetchedAtS) {
  * not implemented, so the honest answer is to decline the feed, not to render
  * a wrong one.
  *
+ * A feed registered with `format: 'entur-vehicles'` is Entur's Vehicles
+ * GraphQL answer rather than protobuf, and decodes to the same shape.
+ *
  * @param {object} feed Registry entry.
- * @param {Uint8Array|ArrayBuffer} bytes Raw GTFS-RT FeedMessage.
+ * @param {Uint8Array|ArrayBuffer} bytes Raw GTFS-RT FeedMessage (or Entur JSON).
  * @param {number} [now=Date.now()] Fetch time (ms epoch).
  * @returns {{ feedId: string, name: string, fetchedAt: number, feedTimestamp: number|null,
  *   version: string|null, entityCount: number, truncated: boolean, count: number, vehicles: object[] }}
  */
 export function buildTransitSnapshot(feed, bytes, now = Date.now()) {
-  const decoded = decodeVehiclePositions(bytes);
+  const decoded =
+    feed?.format === 'entur-vehicles'
+      ? decodeEnturVehicles(bytes)
+      : decodeVehiclePositions(bytes);
   if (decoded.incrementality !== GTFS_INCREMENTALITY_FULL_DATASET) {
     throw new TransitFeedShapeError(
       `feed is differential (incrementality ${decoded.incrementality})`,

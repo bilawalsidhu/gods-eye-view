@@ -21,6 +21,7 @@ import {
   getRegisteredRailFeed,
   railFeedPositions,
 } from './railFeeds.js';
+import { TRANSIT_ADMISSION_MAX_GLOBAL } from './transitProxy.js';
 
 /** A minimal TripUpdates FeedMessage: `[tripId, routeId, delay]` rows. */
 function encodeTripUpdates(rows, { incrementality = null } = {}) {
@@ -456,7 +457,11 @@ test('the global admission cap scales with the registry', () => {
     cap >= natural * 1.5,
     'room for retries on top of the natural load',
   );
-  assert.equal(railAdmissionGlobalMax([]), 40, 'never below the Transit floor');
+  assert.equal(
+    railAdmissionGlobalMax([]),
+    TRANSIT_ADMISSION_MAX_GLOBAL,
+    'never below the Transit floor',
+  );
   const one = [{ defaultEnabled: true, url: 'https://x.test/vp' }];
   assert.equal(railNaturalRequestsPerMinute(one), 4, 'one feed at 15 s');
   const updatesOnly = [
