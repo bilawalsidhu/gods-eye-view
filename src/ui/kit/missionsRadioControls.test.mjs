@@ -50,7 +50,8 @@ const VIEWS = {
   'panels/AwarenessDirection.vue': [0, 0, 0, 0, 0],
   'panels/AwarenessNames.vue': [0, 0, 0, 0, 0],
   // Connect, Locate, Change device, FM, ADS-B, Tune and the two seeks.
-  'panels/SdrCard.vue': [8, 0, 0, 1, 1],
+  // Receiver, RTL gain, the shared HackRF LNA/VGA template and AMP.
+  'panels/SdrCard.vue': [8, 0, 0, 4, 1],
   // Enable, PREV, PLAY, NEXT and STOP.
   'panels/RadioPanel.vue': [5, 0, 0, 1, 1],
   'panels/RadioTuner.vue': [0, 0, 0, 0, 0],
