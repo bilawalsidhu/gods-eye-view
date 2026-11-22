@@ -56,7 +56,8 @@
     "{n} hPa",
     "{kind} {name}",
     "{speed} {direction}",
-    "3D"
+    "3D",
+    "{utc} UTC"
   ],
   "de": [
     "1090 MHz",
@@ -296,10 +297,13 @@
     "Route",
     "3D",
     "KT",
+    "{utc} UTC",
     "ON AIR",
     "Stream",
     "{seconds} s",
-    "Mode"
+    "Mode",
+    "UTC",
+    "Radius"
   ],
   "es": [
     "1 min/s",
@@ -476,7 +480,6 @@
     "Inspector",
     "{n} m",
     "{n} km",
-    "Error",
     "Squawk",
     "MMSI",
     "ICAO24",
@@ -494,8 +497,10 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "UTC"
   ],
   "fr": [
     "1 min/s",
@@ -753,9 +758,11 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
     "{seconds} s",
     "contact",
-    "train"
+    "train",
+    "UTC"
   ],
   "it": [
     "1 min/s",
@@ -989,7 +996,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{utc} UTC",
+    "{seconds} s",
+    "UTC"
   ],
   "ja": [
     "1090 MHz",
@@ -1268,8 +1277,10 @@
     "{n} mm",
     "3D",
     "KT",
+    "{utc} UTC",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "UTC"
   ],
   "ru": [
     "1900–1945",
@@ -1314,7 +1325,9 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "{utc} UTC",
+    "UTC"
   ],
   "sv": [
     "STATION",
@@ -1507,7 +1520,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{utc} UTC",
+    "{seconds} s",
+    "UTC"
   ],
   "uk": [
     "1900–1945",
@@ -1546,7 +1561,9 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "{utc} UTC",
+    "UTC"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1833,6 +1850,7 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "{utc} UTC"
   ]
 }

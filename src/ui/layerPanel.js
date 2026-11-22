@@ -1,4 +1,9 @@
 import { h, render as renderVue } from 'vue';
+import {
+  createLayerFinder,
+  filterLayerRows,
+  layerFindersByContainer,
+} from './layerFinderFilter.js';
 import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
@@ -283,7 +288,9 @@ export class LayerPanel {
     subscribeRowControls,
     onHiddenRefresh = () => {},
     weatherClock,
+    finder,
   }) {
+    this._providedFinder = finder;
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -315,6 +322,10 @@ export class LayerPanel {
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
+    this.finder =
+      this._providedFinder ??
+      layerFindersByContainer.get(container) ??
+      (this._standaloneFinder ??= createLayerFinder());
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();
@@ -390,6 +401,7 @@ export class LayerPanel {
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
+    this._removers.push(this.finder.onInputs(() => this._paint()));
     // The rows are fixed here, in panel order under their group headings;
     // refreshes repaint them. A layer whose row is a rail readout keeps only
     // its toggle and metadata.
@@ -461,11 +473,17 @@ export class LayerPanel {
       }
       if (item) lists.get(row.container ?? null).push(item);
     }
+    const { filtered, groups, shown } = filterLayerRows(
+      lists.get(null),
+      this.finder.inputs(),
+    );
+    this.finder.publish(groups, shown);
     const generation = this._generation;
     for (const [id, items] of lists)
       renderVue(
         h(LayerRows, {
           items,
+          filtered: id === null ? filtered : undefined,
           onToggle: (layerId) => this._toggle(layerId, generation),
           onChip: (layerId, chipId) =>
             this._selectChip(layerId, chipId, generation),

@@ -45,6 +45,8 @@ export function createApplicationControls({
   // Initialize the style manager (post-processing, HUD, locations, share links)
   const styleManager = new Controls(viewer, {
     services: {
+      fetchSpotWeather: (...args) =>
+        operations.requests.weather.getConditions(...args),
       ...services,
       ...operations.surface.controlServices,
       searchAndFlyTo: operations.searchAndFlyTo,

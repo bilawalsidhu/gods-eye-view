@@ -1,3 +1,4 @@
+import { ref, shallowRef, watch } from 'vue';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
@@ -11,10 +12,18 @@ import {
 import { applicationHooksOf } from '../render/applicationHooks.js';
 import { findCamera, rendererOf } from '../render/rendererOf.js';
 import { useCockpitStore } from './stores/cockpit.js';
-import { useEntityCardStore } from './stores/entityCard.js';
+import { isGlobeView, useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useVoiceStore } from './stores/voice.js';
+import {
+  inspectorHasLayers,
+  inspectorLayerRows,
+  presentLayerRow,
+  shownApart,
+} from './layerRowState.js';
+import { createViewWeather } from './viewWeather.js';
 
 /** Camera distance (m) that frames an item of each kind. */
 const FRAME_RANGE = Object.freeze({
@@ -45,8 +54,12 @@ const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
  * @param {(viewer: object, x: number, y: number) => ({lat: number, lon: number}|null)} [options.pickWorld]
  *   The ground under a normalized screen point; the view's centre falls back
  *   to the point under the camera without it.
- * @param {(lat: number, lon: number) => Promise<object>} [options.regionalBrief]
- *   The app's regional brief service, for the weather and news Context shows.
+ * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.regionalBrief]
+ *   The app's regional brief service, for a selected item's weather and local
+ *   news; the unselected view's weather uses it only without spotWeather.
+ * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.spotWeather]
+ *   The weather-only service for the unselected view.
+ * @param {object} [options.inspector] The Inspector count owner and optional weather clock.
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -55,6 +68,8 @@ export function installEntityContext({
   pinia,
   pickWorld,
   regionalBrief,
+  spotWeather,
+  inspector,
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
@@ -223,6 +238,7 @@ export function installEntityContext({
     },
     isOpen,
     regionalBrief,
+    spotWeather,
     // The renderer's card previews, when it has them.
     previews: () => applicationHooksOf(rendererOf(viewer)).cardPreviews ?? null,
     ask,
@@ -242,8 +258,11 @@ export function installEntityContext({
 
   // What the camera shows, for the Context panel to describe when nothing is
   // picked: the ground under the middle of the screen, the view's bounds and
-  // the height. Read when the camera settles, not every frame.
-  const readView = () => {
+  // the height. Read when the camera settles, not every frame. `settled` is
+  // false for a read taken while the camera is still moving.
+  let hasCameraSnapshot = false;
+  const motionPending = ref(false);
+  const readView = ({ settled = !moving && quiet === null } = {}) => {
     const port = camera();
     if (!port || (!isOpen() && doc?.activeElement?.id !== 'gev-omnibar-input'))
       return;
@@ -259,27 +278,57 @@ export function installEntityContext({
       east: 180,
       north: 90,
     };
-    store.setView({ center, rect, heightM: pose.height });
+    // The ground under the camera (eye) bounds what it can see over the
+    // horizon; on a tilted view that is not the middle of the screen.
+    hasCameraSnapshot = true;
+    store.setView(
+      {
+        center,
+        rect,
+        heightM: pose.height,
+        eye: { lat: pose.lat, lon: pose.lon },
+      },
+      { settled },
+    );
+    // Invalid camera reads leave the previous published pose in place.
+    // Release the weather motion fence only after a valid settled snapshot.
+    if (settled) motionPending.value = false;
   };
   // Read when the camera settles. A camera that keeps moving (following an
   // aircraft, a long fly-to) never settles, and a jump (a share link, a
   // restored view) raises no moveEnd, so also read it on large changes: at
   // most once a second, and once more after the last change, so the view it
-  // stops at is the one described.
+  // stops at is the one described. Those reads are of a camera still moving;
+  // a jump without movement events is read again as settled after a quiet
+  // spell. A known move lasts until moveEnd even between change events.
   let lastRead = 0;
   let trailing = null;
+  let quiet = null;
+  let moving = false;
+  const stopQuiet = () => {
+    clearTimeout(quiet);
+    quiet = null;
+  };
   const onChanged = () => {
+    motionPending.value = true;
     clearTimeout(trailing);
+    stopQuiet();
+    if (!moving) {
+      quiet = setTimeout(() => {
+        quiet = null;
+        readView();
+      }, 1200);
+    }
     const now = performance.now();
     if (now - lastRead >= 1000) {
       lastRead = now;
-      readView();
+      readView({ settled: false });
       return;
     }
     trailing = setTimeout(
       () => {
         lastRead = performance.now();
-        readView();
+        readView({ settled: false });
       },
       1000 - (now - lastRead),
     );
@@ -288,7 +337,22 @@ export function installEntityContext({
   const listen = () => {
     const port = camera();
     if (!port || cameraOff.length) return;
-    cameraOff = [port.on('moveEnd', readView), port.on('changed', onChanged)];
+    cameraOff = [
+      port.on('moveStart', () => {
+        moving = true;
+        motionPending.value = true;
+        stopQuiet();
+        readView();
+      }),
+      port.on('moveEnd', () => {
+        moving = false;
+        motionPending.value = true;
+        clearTimeout(trailing);
+        stopQuiet();
+        readView();
+      }),
+      port.on('changed', onChanged),
+    ];
   };
   listen();
   const firstRead = setTimeout(() => {
@@ -308,6 +372,120 @@ export function installEntityContext({
     if (open && !wasOpen) readView();
     wasOpen = open;
   });
+
+  const stopInspectorWatchers = [];
+  let weather;
+  if (inspector) {
+    const missions = useSpaceMissionsStore(pinia);
+    const shown = () => store.inspector.shown;
+    const mountId = () => store.inspector.mountId;
+    const manager = () => {
+      // A replacement can reveal a new registry without a feed update.
+      void store.managerVersion;
+      return getDataManager?.() ?? null;
+    };
+    const globe = () => isGlobeView(store.view);
+    const countInputs = [
+      shown,
+      () => store.layerRevision,
+      () => missions.enabled,
+      () => store.inspectorPulse,
+    ];
+    const metadataInputs = [...countInputs, manager, globe];
+    const metadataReady = ref(false);
+    const countSample = shallowRef(null);
+    let appliedSample = { inputs: metadataInputs.map((read) => read()) };
+    const readCurrentInput = () => ({
+      center: hasCameraSnapshot && !globe() ? store.view?.center : null,
+      moving: motionPending.value || store.viewMoving,
+      shown: store.readViewContextShown(),
+      mountId: mountId(),
+    });
+    store.publishInspectorRows([]);
+    store.publishViewWeather(null);
+    weather = createViewWeather({
+      ...inspector.weatherClock,
+      read: store.readWeather,
+      readCurrentInput,
+      publish: store.publishViewWeather,
+    });
+
+    stopInspectorWatchers.push(
+      watch(
+        [countSample, ...metadataInputs],
+        ([sample, ...live]) => {
+          if (!sample || sample === appliedSample) return;
+          const { inputs, rows } = sample;
+          // A preceding post-flush callback may make the sample stale.
+          // Let the pre-flush publisher sample the latest inputs first.
+          if (inputs.some((value, index) => value !== live[index])) return;
+          const [visible, , missionsEnabled] = inputs;
+          const changed = inputs
+            .slice(1, countInputs.length)
+            .some((value, index) => value !== appliedSample.inputs[index + 1]);
+          appliedSample = sample;
+          if (!visible || !store.readViewContextShown()) {
+            inspector.counts.update({ shown: false, nothingOn: false });
+            return;
+          }
+          inspector.counts.update({
+            shown: true,
+            nothingOn: !inspectorHasLayers(rows, missionsEnabled),
+          });
+          if (changed) {
+            inspector.counts.note(
+              inspectorLayerRows(rows)
+                .filter((row) => !shownApart(row.id, missionsEnabled))
+                .map(presentLayerRow),
+            );
+          }
+        },
+        { flush: 'post' },
+      ),
+      // Render and focus recovery use one pre-flush sample. A globe-only
+      // refresh updates suggestions without admitting or noting counts.
+      watch(
+        [metadataReady, ...metadataInputs],
+        ([, ...inputs], [initialized, ...previous]) => {
+          const rows = inputs[0] ? store.allLayers() : [];
+          if (inputs[0]) store.publishInspectorRows(rows);
+          const pending =
+            countSample.value && countSample.value !== appliedSample;
+          if (
+            !initialized ||
+            pending ||
+            inputs
+              .slice(0, countInputs.length)
+              .some((value, index) => value !== previous[index])
+          )
+            countSample.value = { inputs, rows };
+        },
+      ),
+      watch(
+        [
+          shown,
+          mountId,
+          () => store.view,
+          () => store.viewMoving,
+          motionPending,
+          () => store.inspectorPulse,
+        ],
+        (current, previous) => {
+          const input = readCurrentInput();
+          weather.update(input);
+          if (
+            input.shown &&
+            previous.length &&
+            current.at(-1) !== previous.at(-1)
+          )
+            weather.pulse();
+        },
+        { immediate: true, flush: 'post' },
+      ),
+    );
+    // Let a manager attached later in setup join the first pre-flush sample.
+    metadataReady.value = true;
+  }
 
   /** Layers whose own map click already follows what was clicked. */
   const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites']);
@@ -381,11 +559,20 @@ export function installEntityContext({
   globalThis.addEventListener?.('gev:entity-selected', onSelected);
 
   return () => {
+    if (disposed) return;
     disposed = true;
+    for (const stop of stopInspectorWatchers) stop();
+    weather?.stop();
+    inspector?.counts.stop();
+    if (inspector) {
+      store.publishInspectorRows([]);
+      store.publishViewWeather(null);
+    }
     clearTimeout(firstRead);
     offClick();
     for (const off of cameraOff) off?.();
     clearTimeout(trailing);
+    clearTimeout(quiet);
     offFollow();
     offChrome();
     doc?.removeEventListener('focusin', onSearchFocus);

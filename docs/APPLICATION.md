@@ -343,13 +343,34 @@ name is read once, when the layer is built, and held to the same rule as a
 manifest's `display.source`. The map credit still comes from each manifest's
 `display.credit`, so a source that is not nowCOAST sets that too.
 
-`application/services` accepts boundary, terrain, regional-context, weather and
-summary services; its weather service supplies cockpit local conditions, not the
-Weather layers. `application/requests` supplies the existing HTTP protocols
-with configurable endpoints and a scoped transport. Changing an endpoint works
-only for a compatible protocol; another protocol supplies a service adapter.
+`createApplicationScene({ requestServices })` supplies local conditions to the
+Cockpit and to the Context Inspector when no card is selected. Its
+`weather.getConditions(latitude, longitude, { signal })` resolves to an object
+with a normalized `weather` observation and optional `retrievedAt` and `status`
+fields. Return `null` for a missing reading and honor the request's abort signal.
+The Inspector credits Open-Meteo when the observation carries
+`weather.source: 'open-meteo'`, as the bundled provider does.
+A selected card gets its weather from `requestServices.regional.getBrief`.
+The Weather layers use the separate frame and snapshot sources above.
+`createApplicationControls` accepts an Inspector override in
+`services.fetchSpotWeather` with the same contract.
+
+`application/services` accepts boundary, terrain, regional-context, weather,
+summary and layer count services. The standalone Inspector and the
+`ui/composition` StyleManager use the page-scoped weather service by default.
+The bare `ui/shell` takes the host's `services.fetchSpotWeather` and falls
+back to a supplied `services.fetchRegionalBrief`.
+`application/requests` supplies the existing HTTP protocols with
+configurable endpoints and a scoped transport. Changing an endpoint works only
+for a compatible protocol; another protocol supplies a service adapter.
 Cancellation discards late response bodies, and replacing a source invalidates
 its pending results. Source disposal does not silently reinstate a default.
+Inspector worldwide counts use the page-scoped
+`configureApplicationServices({ layerCounts })` adapter. To use another host
+with the same count protocol, build that adapter with
+`createApplicationRequestServices({ endpoints: { layerCounts: url } }).layerCounts`
+and configure it before mounting the app. Scene request services supply scene
+operations such as weather, while the page-scoped adapter owns these counts.
 
 `ui/composition` supplies the default engines to the shell. Applications can
 supply a HUD implementation or request policy through control services. The
@@ -360,7 +381,9 @@ screen (`#loading-screen` with a `.loader-status` line) as static markup so it
 paints before any script runs. `createApplication()` renders the views before
 anything reads the page; `omitViews` names views the application leaves out,
 such as `provider-settings`, and their hosts are removed. Leaving out
-`layer-panels` also leaves out the scene sharing dialogs it draws, and leaving
+`layer-panels` also leaves out the scene sharing dialogs it draws. If the host
+supplies its own Data Layers markup, Context opens it without applying the
+stock Suggestions filter. Leaving
 out `scene-chrome` the before/after imagery dividers (the imagery still splits,
 with no line or handle to move it), the status chips, the toast, the ORBIT
 indicator, the FPS readout, the Scene actions panel, the data-pack attribution

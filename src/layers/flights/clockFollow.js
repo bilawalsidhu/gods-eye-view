@@ -91,6 +91,7 @@ export function createClockFollow({ flightState, services, parts }) {
       parts.icons._forgetContact(icao24);
     flightState._detectionObjects.clear();
     flightState.feed._count = 0;
+    flightState.feed._snapshotCount = 0;
     flightState.feed._lastUpdate = null;
   }
 

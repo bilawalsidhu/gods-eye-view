@@ -1,4 +1,10 @@
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { layerFindersByContainer } from '../layerFinderFilter.js';
+import {
+  LAYER_FINDER_CLEAR_EVENT,
+  useLayerFinderStore,
+} from '../stores/layerFinder.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -19,6 +25,26 @@ import UiSelect from '../kit/UiSelect.js';
 import LayerSectionIndex from './panels/LayerSectionIndex.vue';
 import LayerFinder from './panels/LayerFinder.vue';
 import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
+
+const finder = useLayerFinderStore();
+const toggleList = ref(null);
+let detachFinderControls;
+onMounted(() => {
+  const list = toggleList.value;
+  layerFindersByContainer.set(list, finder);
+  detachFinderControls = finder.attachControls();
+  list.ownerDocument.addEventListener(LAYER_FINDER_CLEAR_EVENT, finder.clearAll);
+});
+onBeforeUnmount(() => {
+  detachFinderControls?.();
+  const list = toggleList.value;
+  if (layerFindersByContainer.get(list) === finder)
+    layerFindersByContainer.delete(list);
+  list.ownerDocument.removeEventListener(
+    LAYER_FINDER_CLEAR_EVENT,
+    finder.clearAll,
+  );
+});
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.
@@ -55,7 +81,7 @@ async function importChosen(event) {
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <template #actions><LayerFinder part="buttons" /></template>
     <LayerFinder part="bar" />
-    <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+    <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll" v-class-toggle="{ 'is-filtering': finder.narrowed }"></div>
     <LayerSectionIndex />
     <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->
     <DataLibraryBrowse />

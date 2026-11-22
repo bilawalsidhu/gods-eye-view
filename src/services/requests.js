@@ -1,5 +1,11 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { createJsonRequest, requireOk } from './jsonRequest.js';
+import {
+  createLayerCountService,
+  LAYER_COUNTS_ENDPOINT,
+} from './layerCountService.js';
+
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -12,7 +18,7 @@ function retryAfterMs(value) {
 
 /** Construct independent request services for compatible application protocols. */
 export function createApplicationRequestServices({
-  fetchImpl = (...args) => fetch(...args),
+  fetchImpl,
   signal: lifetime,
   endpoints = {},
   features,
@@ -23,32 +29,11 @@ export function createApplicationRequestServices({
     terrain: '/api/terrain/heights',
     regional: '/api/regional-brief',
     weather: '/api/weather-effects',
+    layerCounts: LAYER_COUNTS_ENDPOINT,
     summary: '/api/openai/hud-summary',
     ...endpoints,
   };
-  async function request(endpoint, { signal, ...init } = {}) {
-    signal = AbortSignal.any([lifetime, signal].filter(Boolean));
-    signal.throwIfAborted();
-    const response = await fetchImpl(endpoint, {
-      ...init,
-      signal,
-      redirect: 'error',
-    });
-    signal.throwIfAborted();
-    let data = null;
-    try {
-      data = await response.json();
-    } catch {
-      /* Status remains authoritative for non-JSON errors. */
-    }
-    signal.throwIfAborted();
-    return {
-      ok: response.ok,
-      status: response.status,
-      headers: response.headers,
-      data,
-    };
-  }
+  const request = createJsonRequest({ fetchImpl, signal: lifetime });
   function pointUrl(endpoint, latitude, longitude) {
     if (
       !Number.isFinite(latitude) ||
@@ -60,11 +45,6 @@ export function createApplicationRequestServices({
     )
       throw new TypeError('Valid coordinates are required');
     return `${endpoint}?${new URLSearchParams({ latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) })}`;
-  }
-  function requireOk(response, label) {
-    if (!response.ok)
-      throw new Error(`${label} unavailable (${response.status})`);
-    return response.data;
   }
   // Remember valid capability decisions for the page, so an
   // unconfigured server is never asked (and never answers with an error).
@@ -188,6 +168,7 @@ export function createApplicationRequestServices({
         );
       },
     },
+    layerCounts: createLayerCountService(request, urls.layerCounts),
     summary: {
       // The capability probe, asked once per page: true or false from a
       // server that answers it, null (unknown) from one that does not.

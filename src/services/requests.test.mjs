@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { applicationServices, configureApplicationServices } from './application.js';
+import { getConfiguredLayerCounts } from './layerCountService.js';
 import { createApplicationRequestServices } from './requests.js';
 
 test('independent compatible endpoints receive normalized requests without changing global fetch', async () => {
@@ -34,6 +36,80 @@ test('lifetime cancellation discards a late response body even from an uncoopera
   finish({ weather: { temperatureC: 10 } });
   await assert.rejects(pending, { name: 'AbortError' });
   await assert.rejects(services.regional.getBrief(30, -97), { name: 'AbortError' });
+});
+
+test('scoped layer counts use the supplied endpoint and respect both cancellation signals', async () => {
+  for (const end of ['lifetime', 'call']) {
+    const lifetime = new AbortController();
+    const caller = new AbortController();
+    let receive;
+    let request;
+    const services = createApplicationRequestServices({
+      endpoints: { layerCounts: '/custom/counts' },
+      signal: lifetime.signal,
+      fetchImpl: async (url, init) => {
+        request = { url, init };
+        return {
+          ok: true,
+          status: 200,
+          json: () => new Promise((resolve) => { receive = resolve; }),
+        };
+      },
+    });
+    const pending = services.layerCounts.getCounts({ signal: caller.signal });
+    while (!receive) await Promise.resolve();
+    assert.equal(request.url, '/custom/counts');
+    assert.equal(request.init.method, undefined);
+    assert.equal(request.init.redirect, 'error');
+    assert.deepEqual(request.init.headers, { Accept: 'application/json' });
+    assert.equal(request.init.signal.aborted, false);
+    (end === 'lifetime' ? lifetime : caller).abort();
+    assert.ok(request.init.signal.aborted);
+    receive({ counts: [{ layerId: 'satellites', count: 1272, at: 1 }] });
+    await assert.rejects(pending, { name: 'AbortError' });
+  }
+});
+
+test('the bounded operation reads the configured count slot through replacement and release', async (t) => {
+  const body = { counts: [{ layerId: 'satellites', count: 1272, at: 1 }] };
+  const fetchImpl = t.mock.method(globalThis, 'fetch', async () => Response.json(body));
+  assert.deepEqual(await getConfiguredLayerCounts(), body);
+  const [url, init] = fetchImpl.mock.calls[0].arguments;
+  assert.equal(url, '/api/layer-counts');
+  assert.equal(init.redirect, 'error');
+  assert.deepEqual(init.headers, { Accept: 'application/json' });
+
+  let finish;
+  const releaseFirst = configureApplicationServices({
+    layerCounts: {
+      getCounts: () => new Promise((resolve) => { finish = resolve; }),
+    },
+  });
+  t.after(releaseFirst);
+  const pending = getConfiguredLayerCounts();
+  const replacement = { counts: [{ layerId: 'satellites', count: 1300, at: 2 }] };
+  const releaseReplacement = configureApplicationServices({
+    layerCounts: { getCounts: async () => replacement },
+  });
+  t.after(releaseReplacement);
+  releaseFirst();
+  finish(body);
+  await assert.rejects(pending, { name: 'AbortError' });
+  assert.deepEqual(await applicationServices.layerCounts.getCounts(), replacement);
+  assert.deepEqual(await getConfiguredLayerCounts(), replacement);
+  assert.equal(fetchImpl.mock.callCount(), 1);
+  releaseReplacement();
+  await assert.rejects(getConfiguredLayerCounts(), /not configured/);
+});
+
+test('an unsuccessful count response preserves its HTTP status', async () => {
+  const services = createApplicationRequestServices({
+    fetchImpl: async () => new Response('unavailable', { status: 503 }),
+  });
+  await assert.rejects(
+    services.layerCounts.getCounts(),
+    /Layer counts unavailable \(503\)/,
+  );
 });
 
 test('boundary throttle status survives empty or invalid error bodies', async () => {

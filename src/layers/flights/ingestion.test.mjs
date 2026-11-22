@@ -64,6 +64,8 @@ test('civil acquisition publishes source time and uses a replaced source on the 
   await probe.update(null);
   assert.equal(probe.feed._lastUpdate, 1234);
   assert.equal(probe.feed._count, 2);
+  // The snapshot's own size, beside the drawn count.
+  assert.equal(probe.feed._snapshotCount, 1);
   assert.deepEqual([...probe.feed._lastTrackingRefreshOutcome.ids], ['abc123']);
   probe.feed._source = {
     async getSnapshot() {

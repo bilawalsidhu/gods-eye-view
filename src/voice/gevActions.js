@@ -3964,7 +3964,7 @@ function findDataLayerRow(layerId) {
 
 function focusDataLayerRow(row, layerId) {
   // A row the Data Layers finder hides could not be seen: show every row
-  // again (LAYER_FINDER_CLEAR_EVENT in LayerFinder.vue).
+  // again (LAYER_FINDER_CLEAR_EVENT in ui/stores/layerFinder.js).
   if (row.classList.contains('is-filtered'))
     document.dispatchEvent(new CustomEvent('gev:layer-finder-clear'));
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });

@@ -1737,6 +1737,7 @@ export function createNewsLayer({
     setRowControlsListener(value) {
       listener = typeof value === 'function' ? value : null;
     },
+    supportsAnalystRecords: false,
     getAnalystRecords() {
       return [];
     },

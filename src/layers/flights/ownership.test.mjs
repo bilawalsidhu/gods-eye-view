@@ -59,6 +59,16 @@ test('constructing independent flight layers performs no source request and isol
   assert.equal(requests, 0);
 });
 
+test('a worldwide source claims no world count before a snapshot is in', () => {
+  const layer = createCivilFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: services(),
+  });
+  assert.equal(layer.getStats().coverage, 'worldwide upstream snapshot');
+  assert.equal(layer.getStats().scope, undefined);
+  assert.equal(layer.getStats().scopeCount, undefined);
+});
+
 test('a layer without a source fails before touching the viewer', () => {
   const layer = createCivilFlightLayer({ services: services() });
   assert.throws(() => layer.init({}), /snapshot source/);
