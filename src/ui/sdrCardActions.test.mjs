@@ -4,7 +4,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from 'vue';
+import { createApp, nextTick } from 'vue';
 import { createPinia } from 'pinia';
 import { localSdrGainOptionLabel } from './localSdrPresentation.js';
 import { useRadioStore } from './stores/radio.js';
@@ -94,4 +94,16 @@ test('gain options keep numeric values and read as decibels', (t) => {
   assert.match(options[2].textContent, /^0\.9\sdB$/u);
   assert.equal(options[2].getAttribute('translate'), 'no');
   assert.equal(options.at(-1).value, '49.6');
+});
+
+test('the HackRF check button dispatches its action and displays the board ID', async (t) => {
+  const calls = mount(t);
+  const store = useRadioStore();
+  store.publishSdr({ webUsbSupported: true, hackrfSupported: true, stats: {} });
+  await nextTick();
+  $('sdr-check-hackrf').click();
+  assert.deepEqual(calls, [['checkHackrfOne']]);
+  store.publishSdr({ ...store.sdr, hackrfBoardId: 2 });
+  await nextTick();
+  assert.match(document.body.textContent, /USB check passed · Board ID 2/);
 });

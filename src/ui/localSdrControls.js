@@ -85,6 +85,7 @@ export class LocalSdrControls {
   /** What the card's controls ask for, by the names the view acts with. */
   _actions() {
     return {
+      checkHackrfOne: () => this.receiver.checkHackrfOne(),
       toggleSdrConnection: async () => {
         const before = this.receiver.getState();
         if (before.connected) {
@@ -179,6 +180,10 @@ export class LocalSdrControls {
     // they are.
     this._publish({
       ...view,
+      hackrfSupported: this._state.webUsbSupported,
+      hackrfChecking: this._state.hackrfChecking,
+      hackrfBoardId: this._state.hackrfBoardId,
+      hackrfError: this._state.hackrfError,
       gain: view.gainValue,
       frequency: view.frequencyValue,
       volume: view.volumePercent,

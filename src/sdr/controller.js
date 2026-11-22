@@ -11,6 +11,8 @@ import {
   RTL_SDR_USB_FILTERS,
   createRememberingWebUsb,
   createSdrDeviceMemory,
+  requestHackrfOne,
+  readHackrfBoardId,
   sameSdrDevice,
   sdrDeviceIdentity,
   sdrDeviceLabel,
@@ -364,6 +366,9 @@ export class SdrController {
     this._deviceMemory = createSdrDeviceMemory(storage);
     this.state = {
       webUsbSupported,
+      hackrfChecking: false,
+      hackrfBoardId: null,
+      hackrfError: null,
       connected: false,
       status: webUsbSupported ? 'idle' : 'unsupported',
       message: '',
@@ -486,6 +491,29 @@ export class SdrController {
     this._sampleWindowSamples = 0;
     this._messageWindowStartedAt = 0;
     this._messageWindowCount = 0;
+  }
+
+  async checkHackrfOne() {
+    if (!this._webUsb || this._destroyed || this.state.hackrfChecking) return;
+    this._setState({
+      hackrfChecking: true,
+      hackrfBoardId: null,
+      hackrfError: null,
+    });
+    let hackrfBoardId = null;
+    let hackrfError = null;
+    try {
+      const device = await requestHackrfOne(
+        createRememberingWebUsb(this._webUsb),
+      );
+      if (!this._destroyed) hackrfBoardId = await readHackrfBoardId(device);
+    } catch (error) {
+      if (error.name !== 'NotFoundError')
+        hackrfError = error.message || String(error);
+    } finally {
+      if (!this._destroyed)
+        this._setState({ hackrfChecking: false, hackrfBoardId, hackrfError });
+    }
   }
 
   getState() {
