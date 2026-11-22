@@ -3,7 +3,7 @@ import { formatNumber, msg, t, tn } from '../i18n/index.js';
 import { formatQuantity } from './unitLabels.js';
 
 /**
- * Pure presentation of the Local RTL-SDR card in the Radio panel. Receives the
+ * Pure presentation of the Local SDR card in the Radio panel. Receives the
  * receiver session snapshot and returns what each control should show.
  */
 
@@ -148,6 +148,8 @@ export function localSdrCardView(state) {
         : t('CONNECT'),
     connectDisabled: transitional || !state.webUsbSupported,
     connectPressed: Boolean(state.connected),
+    receiverKind: state.receiverKind || 'rtl',
+    receiverDisabled: transitional || state.connected || !state.webUsbSupported,
     fmActive,
     adsbActive,
     modeDisabled: transitional,

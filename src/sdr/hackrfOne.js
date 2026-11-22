@@ -3,7 +3,6 @@ const REQUEST = {
   SET_MODE: 1,
   SET_SAMPLE_RATE: 6,
   SET_FILTER: 7,
-  READ_BOARD_ID: 14,
   SET_FREQUENCY: 16,
   SET_AMP: 17,
   SET_LNA_GAIN: 19,
@@ -29,21 +28,6 @@ async function claim(device) {
   } catch (error) {
     await device.close().catch(() => {});
     throw error;
-  }
-}
-
-export async function readHackrfBoardId(device) {
-  await claim(device);
-  try {
-    const result = await device.controlTransferIn(
-      vendorRequest(REQUEST.READ_BOARD_ID),
-      1,
-    );
-    if (result.status !== 'ok' || result.data?.byteLength !== 1)
-      throw new Error('HackRF One board ID read failed');
-    return result.data.getUint8(0);
-  } finally {
-    await device.close();
   }
 }
 
@@ -157,8 +141,14 @@ export async function openHackrfOne(device) {
       return { data: samples.buffer };
     },
 
+    // The controller has a bounded close deadline and keeps the raw USB handle
+    // for recovery. A late adapter close must not reach a newly opened session.
+    fenceUsb() {
+      device = null;
+    },
+
     close() {
-      closing ??= stopRx().finally(() => device.close());
+      closing ??= stopRx().finally(() => device?.close());
       return closing;
     },
   };

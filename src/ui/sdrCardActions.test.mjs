@@ -96,14 +96,22 @@ test('gain options keep numeric values and read as decibels', (t) => {
   assert.equal(options.at(-1).value, '49.6');
 });
 
-test('the HackRF check button dispatches its action and displays the board ID', async (t) => {
+test('the receiver selector offers HackRF and hides RTL gain controls when selected', async (t) => {
   const calls = mount(t);
   const store = useRadioStore();
-  store.publishSdr({ webUsbSupported: true, hackrfSupported: true, stats: {} });
+  store.publishSdr({ receiverKind: 'rtl', receiverDisabled: false, stats: {} });
   await nextTick();
-  $('sdr-check-hackrf').click();
-  assert.deepEqual(calls, [['checkHackrfOne']]);
-  store.publishSdr({ ...store.sdr, hackrfBoardId: 2 });
+  const receiver = $('sdr-receiver-select');
+  receiver.value = 'hackrf';
+  fire(receiver, 'change');
+  assert.deepEqual(calls, [['selectSdrReceiver', 'hackrf']]);
+  store.publishSdr({
+    ...store.sdr,
+    receiverKind: 'hackrf',
+    receiverDisabled: true,
+  });
   await nextTick();
-  assert.match(document.body.textContent, /USB check passed · Board ID 2/);
+  assert.equal(receiver.value, 'hackrf');
+  assert.equal(receiver.disabled, true);
+  assert.equal($('sdr-gain-select'), null);
 });

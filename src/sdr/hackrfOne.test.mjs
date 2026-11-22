@@ -1,31 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { openHackrfOne, readHackrfBoardId } from './hackrfOne.js';
+import { openHackrfOne } from './hackrfOne.js';
 
-test('HackRF board ID probe reads one byte and releases USB even on a stall', async () => {
-  const calls = [];
+test('HackRF releases USB if claiming its interface fails', async () => {
+  let closed = false;
   const device = {
-    open: async () => calls.push('open'),
-    selectConfiguration: async (n) => calls.push(['configure', n]),
-    claimInterface: async (n) => calls.push(['claim', n]),
-    controlTransferIn: async (setup, length) => {
-      assert.deepEqual(setup, {
-        requestType: 'vendor',
-        recipient: 'device',
-        request: 14,
-        value: 0,
-        index: 0,
-      });
-      assert.equal(length, 1);
-      return { status: 'ok', data: new DataView(Uint8Array.of(2).buffer) };
+    open: async () => {},
+    selectConfiguration: async () => {},
+    claimInterface: async () => {
+      throw new Error('claim failed');
     },
-    close: async () => calls.push('close'),
+    close: async () => {
+      closed = true;
+    },
   };
-  assert.equal(await readHackrfBoardId(device), 2);
-  assert.deepEqual(calls, ['open', ['configure', 1], ['claim', 0], 'close']);
-  device.controlTransferIn = async () => ({ status: 'stall' });
-  await assert.rejects(readHackrfBoardId(device), /board ID read failed/);
-  assert.equal(calls.at(-1), 'close');
+  await assert.rejects(openHackrfOne(device), /claim failed/);
+  assert.equal(closed, true);
 });
 
 test('HackRF configures the wire protocol and returns transferable unsigned IQ', async () => {

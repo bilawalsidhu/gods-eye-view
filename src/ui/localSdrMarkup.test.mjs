@@ -14,13 +14,14 @@ const css = readFileSync(
   'utf8',
 );
 
-test('the Local RTL-SDR card lives inside the Radio panel with every control', () => {
+test('the Local SDR card lives inside the Radio panel with every control', () => {
   const radioStart = html.indexOf('id="radio-panel"');
   const cardStart = html.indexOf('id="sdr-radio-card"');
   const radioEnd = html.indexOf('</section>', radioStart);
   assert.ok(radioStart >= 0 && cardStart > radioStart && cardStart < radioEnd);
   for (const id of [
     'sdr-connection-state',
+    'sdr-receiver-select',
     'sdr-connect-btn',
     'sdr-locate-btn',
     'sdr-change-device-btn',

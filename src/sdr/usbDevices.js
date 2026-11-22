@@ -130,14 +130,13 @@ export function selectAuthorizedSdrDevice(
 /**
  * Per-mode remembered receiver identities in browser storage.
  * @param {Storage|null} storage Browser storage or a test double.
+ * @param {string} [key] Storage key for the receiver family.
  * @returns {{get(mode:string):object|null, set(mode:string, device:object):void}}
  */
-export function createSdrDeviceMemory(storage) {
+export function createSdrDeviceMemory(storage, key = SDR_DEVICE_STORAGE_KEY) {
   const read = () => {
     try {
-      const value = JSON.parse(
-        storage?.getItem?.(SDR_DEVICE_STORAGE_KEY) || 'null',
-      );
+      const value = JSON.parse(storage?.getItem?.(key) || 'null');
       return value && typeof value === 'object' ? value : {};
     } catch {
       return {};
@@ -152,7 +151,7 @@ export function createSdrDeviceMemory(storage) {
       if (!identity) return;
       try {
         storage?.setItem?.(
-          SDR_DEVICE_STORAGE_KEY,
+          key,
           JSON.stringify({ ...read(), [mode]: identity }),
         );
       } catch {

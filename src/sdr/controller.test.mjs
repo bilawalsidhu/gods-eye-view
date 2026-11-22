@@ -1287,3 +1287,79 @@ test("a rebuilt decoder worker's spectra are accepted before its first reset", a
   });
   assert.equal(controller._spectrumSequence, before + 1);
 });
+
+test('the controller opens HackRF through WebUSB, feeds IQ to the worker and closes it', async (t) => {
+  const frequencyWrites = [];
+  const modes = [];
+  let closeCount = 0;
+  let sampleBlock;
+  const received = new Promise((resolve) => {
+    sampleBlock = resolve;
+  });
+  t.after(
+    replaceGlobal(
+      'Worker',
+      class extends FakeWorker {
+        postMessage(message) {
+          super.postMessage(message);
+          if (message.type === 'samples') sampleBlock(message.buffer);
+        }
+      },
+    ),
+  );
+  const device = {
+    vendorId: 0x1d50,
+    productId: 0x6089,
+    configuration: { configurationValue: 1 },
+    async open() {
+      this.opened = true;
+    },
+    async claimInterface(n) {
+      assert.equal(n, 0);
+    },
+    async controlTransferOut({ request, value }, data) {
+      if (request === 1) modes.push(value);
+      if (request === 16) frequencyWrites.push(data.getUint32(0, true));
+      return { status: 'ok', bytesWritten: data?.byteLength ?? 0 };
+    },
+    async controlTransferIn() {
+      return { status: 'ok', data: new DataView(Uint8Array.of(1).buffer) };
+    },
+    async transferIn(endpoint, length) {
+      assert.equal(endpoint, 1);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return { status: 'ok', data: new DataView(new ArrayBuffer(length)) };
+    },
+    async close() {
+      this.opened = false;
+      closeCount++;
+    },
+  };
+  const controller = new SdrController({
+    webUsb: {
+      getDevices: async () => [],
+      requestDevice: async ({ filters }) => {
+        assert.deepEqual(filters, [{ vendorId: 0x1d50, productId: 0x6089 }]);
+        return device;
+      },
+    },
+    storage: null,
+  });
+  t.after(() => controller.destroy());
+  controller.selectReceiver('hackrf');
+  assert.equal(await controller.connect('adsb'), true);
+  const state = controller.getState();
+  assert.equal(state.deviceLabel, 'HackRF One');
+  assert.equal(state.sampleRate, 2_000_000);
+  assert.deepEqual(frequencyWrites, [1090]);
+  assert.equal(new Uint8Array(await received)[0], 128);
+
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'hackrf');
+  await controller.stop();
+  assert.deepEqual(modes, [1, 0]);
+  assert.equal(closeCount, 1);
+  assert.equal(device.opened, false);
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'rtl');
+});
