@@ -1,5 +1,6 @@
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { findDirectionalFmPeak } from './spectrum.js';
+import { readHackrfBoardId } from './hackrfOne.js';
 import {
   SDR_GAIN_DEFAULTS,
   normalizeSdrGain,
@@ -12,7 +13,6 @@ import {
   createRememberingWebUsb,
   createSdrDeviceMemory,
   requestHackrfOne,
-  readHackrfBoardId,
   sameSdrDevice,
   sdrDeviceIdentity,
   sdrDeviceLabel,
