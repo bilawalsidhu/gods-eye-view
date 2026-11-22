@@ -491,6 +491,38 @@ test('terrain: quantized mesh at its url, asked again when its host is busy', as
   );
 });
 
+test('terrain: quantized mesh tiles through fetchTile', async (t) => {
+  const { scene, port } = setup();
+  const made = new Cesium.EllipsoidTerrainProvider();
+  const own = made.requestTileGeometry;
+  const asked = [];
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async (...args) => {
+    asked.push(args);
+    return made;
+  });
+  const fetchTile = async () => ({ missing: true });
+  await port.setTerrain({
+    kind: 'quantizedMesh',
+    url: 'https://terrain.example/mesh',
+    fetchTile,
+  });
+  assert.equal(scene.terrainProvider, made);
+  const [[resource]] = asked;
+  assert.equal(resource.url, 'https://terrain.example/mesh');
+  assert.ok(resource.retryAttempts > 0, 'layer.json keeps its retry policy');
+  assert.ok(resource instanceof Cesium.Resource);
+  assert.notEqual(resource.constructor, Cesium.Resource);
+  assert.notEqual(made.requestTileGeometry, own, 'tile requests are tracked');
+  await assert.rejects(
+    port.setTerrain({
+      kind: 'quantizedMesh',
+      url: 'https://terrain.example/mesh',
+      fetchTile: 'nope',
+    }),
+    /fetchTile is a function/,
+  );
+});
+
 test('setBase replaces the imagery and says what it drew', async () => {
   const { scene, port } = setup();
   const overlay = port.imagery.add({ kind: 'xyz', url: url('overlay') });

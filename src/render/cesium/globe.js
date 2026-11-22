@@ -23,6 +23,7 @@ import { createCesiumImagery } from './imagery.js';
 import { attributionText } from './vectorBase.js';
 import { loadVectorStyle } from '../vectorBase/index.js';
 import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
+import { tileFetchResource, trackTileRequests } from './terrainTiles.js';
 
 // The base marks live outside the adapter, so code that is not Cesium's can
 // mark a base; they are re-exported here for the code that still is.
@@ -68,15 +69,26 @@ async function terrainProvider(spec, { worldDataToken }) {
           );
       },
     });
-    const resource = new Cesium.Resource({
+    const options = {
       url: spec.url,
       retryCallback: policy.retryCallback,
       retryAttempts: policy.retryAttempts,
-    });
-    return Cesium.CesiumTerrainProvider.fromUrl(resource, {
+    };
+    if (spec.fetchTile !== undefined && typeof spec.fetchTile !== 'function')
+      throw new TypeError('Quantized-mesh terrain fetchTile is a function');
+    // With `fetchTile`, Cesium still reads `layer.json` at the url; each
+    // tile's bytes come from `fetchTile`.
+    const tiles = new WeakMap();
+    const resource = spec.fetchTile
+      ? tileFetchResource(options, spec.fetchTile, (request) =>
+          request ? tiles.get(request) : undefined,
+        )
+      : new Cesium.Resource(options);
+    const provider = await Cesium.CesiumTerrainProvider.fromUrl(resource, {
       requestVertexNormals: spec.requestVertexNormals ?? false,
       requestWaterMask: false,
     });
+    return spec.fetchTile ? trackTileRequests(provider, tiles) : provider;
   }
   throw new TypeError(`Unknown terrain kind: ${spec.kind}`);
 }

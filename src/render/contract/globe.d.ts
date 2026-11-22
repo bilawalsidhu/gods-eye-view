@@ -40,7 +40,24 @@ export type TerrainSpec = (
    * Quantized-mesh terrain (Cesium's tile format) in the folder `url`,
    * holding `layer.json` and its tiles; heights above the ellipsoid.
    */
-  | { kind: 'quantizedMesh'; url: string; requestVertexNormals?: boolean }
+  | {
+      kind: 'quantizedMesh';
+      url: string;
+      requestVertexNormals?: boolean;
+      /**
+       * Fetches a tile in place of the renderer, as imagery's `fetchTile`
+       * does, with the tile's URL as the renderer resolved it (`layer.json`
+       * is still read from `url`). `tile` is in the terrain's tiling scheme,
+       * rows counted from the north; `bytes` are the tile uncompressed.
+       * `missing` draws the parent tile's terrain there; `defer` asks
+       * again shortly. `signal` aborts when the tile is no longer wanted.
+       */
+      fetchTile?: (request: {
+        tile: TileRequest;
+        url: string;
+        signal: AbortSignal;
+      }) => Promise<TileFetch>;
+    }
 ) & {
   /** Vertical exaggeration of the drawn terrain; default 1. */
   exaggeration?: number;

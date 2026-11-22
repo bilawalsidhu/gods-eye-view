@@ -10040,7 +10040,12 @@ unless its plugin hands the application a map engine of its own
   terrain as `quantizedMesh` terrain at its URL (`src/maps/keylessTerrain.js`);
   while the keyless terrain does not answer, the ellipsoid stands in and the
   map stack tries it again behind it. A renderer without the `terrain`
-  capability keeps the ellipsoid.
+  capability keeps the ellipsoid. A `quantizedMesh` terrain source can supply
+  its tiles through `fetchTile`, like `xyz` imagery: Cesium still reads
+  `layer.json` at the source's URL, schedules, cancels and decodes the tiles,
+  and only each tile's bytes come from `fetchTile`; a `missing` tile draws its
+  parent's terrain, a `defer`red one is asked for again shortly
+  (`src/render/cesium/terrainTiles.js`).
 
 A viewer with no renderer bound gets the Cesium engine
 (`src/render/cesium/mapEngine.js`), with the other unbound ports, from the
