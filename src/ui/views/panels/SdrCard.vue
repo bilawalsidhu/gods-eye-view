@@ -69,4 +69,15 @@ const tune = () => act('tuneSdr', frequency.value.value);
   <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>
   <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" :hidden="sdr ? sdr.feedLine === null : true">{{ sdr?.feedLine ?? '' }}</div>
 </div>
+<div v-if="sdr?.hackrfSupported" class="sdr-radio-card">
+  <div class="sdr-radio-heading">
+    <strong translate="no">HackRF One</strong>
+    <UiButton id="sdr-check-hackrf" @click="act('checkHackrfOne')" :disabled="sdr.hackrfChecking">{{ t('Check USB connection') }}</UiButton>
+  </div>
+  <div role="status" class="radio-playback-state" :class="{ error: sdr.hackrfError }">
+    <template v-if="sdr.hackrfChecking">{{ t('Checking USB connection…') }}</template>
+    <template v-else-if="sdr.hackrfError">{{ sdr.hackrfError }}</template>
+    <template v-else-if="sdr.hackrfBoardId != null">{{ t('USB check passed · Board ID {id}', { id: sdr.hackrfBoardId }) }}</template>
+  </div>
+</div>
 </template>

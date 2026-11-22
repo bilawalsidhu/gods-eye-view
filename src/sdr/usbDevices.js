@@ -26,6 +26,33 @@ export function requestHackrfOne(webUsb) {
   return webUsb.requestDevice({ filters: [HACKRF_ONE_FILTER] });
 }
 
+/** Read the firmware board ID with the libhackrf BOARD_ID_READ vendor request. */
+export async function readHackrfBoardId(device) {
+  if (device.opened) throw new Error('HackRF One is already open');
+  await device.open();
+  try {
+    if (device.configuration?.configurationValue !== 1)
+      await device.selectConfiguration(1);
+    await device.claimInterface(0);
+    const result = await device.controlTransferIn(
+      {
+        requestType: 'vendor',
+        recipient: 'device',
+        request: 14,
+        value: 0,
+        index: 0,
+      },
+      1,
+    );
+    if (result.status !== 'ok' || result.data?.byteLength !== 1)
+      throw new Error('HackRF One board ID read failed');
+    return result.data.getUint8(0);
+  } finally {
+    // Closing also releases the claimed interface.
+    await device.close();
+  }
+}
+
 function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
