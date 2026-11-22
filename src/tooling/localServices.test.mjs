@@ -150,6 +150,7 @@ test('weather-only requests share upstream work and retain fresh and stale respo
     'INFLIGHT',
     'MISS',
   ]);
+  assert.equal(pair[0].json().weather.source, 'open-meteo');
   assert.equal(calls, 1);
   assert.equal(
     (await request(handler, query)).headers['x-weather-effects'],
