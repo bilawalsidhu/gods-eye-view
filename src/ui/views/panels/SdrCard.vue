@@ -11,7 +11,7 @@ import { useRadioStore } from '../../stores/radio.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
-// The local RTL-SDR card in the Radio panel. LocalSdrControls presents it and
+// The local SDR card in the Radio panel. LocalSdrControls presents it and
 // publishes it; until it does, the card shows its initial markup. Its
 // controls call LocalSdrControls through the store. The numeric gain
 // options read in the page language; their values stay numeric.
@@ -24,22 +24,29 @@ const tune = () => act('tuneSdr', frequency.value.value);
 </script>
 
 <template>
-<div id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local RTL-SDR receiver')">
+<div id="sdr-radio-card" class="sdr-radio-card" role="group" :aria-label="t('Local SDR receiver')">
   <div class="sdr-radio-heading">
-    <strong>{{ t('LOCAL RTL-SDR') }}</strong>
+    <strong>{{ t('LOCAL SDR') }}</strong>
     <span id="sdr-connection-state" v-class-toggle="{ active: sdr?.connectionActive }">{{ sdr ? sdr.connectionLabel : 'NO USB' }}</span>
   </div>
   <p>{{ t('Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.') }}</p>
+  <div class="sdr-gain-row">
+    <label for="sdr-receiver-select">{{ t('Receiver') }}</label>
+    <UiSelect class="gev-field" id="sdr-receiver-select" :model-value="sdr?.receiverKind ?? 'rtl'" @update:model-value="act('selectSdrReceiver', $event)" :disabled="sdr?.receiverDisabled ?? true">
+      <option value="rtl" translate="no">RTL-SDR</option>
+      <option value="hackrf" translate="no">HackRF One</option>
+    </UiSelect>
+  </div>
   <div class="sdr-radio-actions">
     <UiButton id="sdr-connect-btn" @click="act('toggleSdrConnection')" class="panel-layer-toggle" :pressed="sdr?.connectPressed ?? false" pressed-class="active" :disabled="sdr?.connectDisabled">{{ sdr ? sdr.connectLabel : t('CONNECT') }}</UiButton>
     <UiButton id="sdr-locate-btn" @click="act('locateSdr')" v-class-toggle="{ active: sdr?.locateActive }" :title="t('Use your location for faster ADS-B position decoding')" :disabled="sdr?.locateDisabled">{{ sdr ? sdr.locateLabel : t('LOCATE') }}</UiButton>
-    <UiButton id="sdr-change-device-btn" @click="act('changeSdrDevice')" :title="t('Choose a different RTL-SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</UiButton>
+    <UiButton id="sdr-change-device-btn" @click="act('changeSdrDevice')" :title="t('Choose a different SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</UiButton>
   </div>
-  <div class="sdr-mode-row" role="group" :aria-label="t('RTL-SDR receiver mode')">
+  <div class="sdr-mode-row" role="group" :aria-label="t('SDR receiver mode')">
     <UiButton id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" :pressed="sdr ? sdr.fmActive : true" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">FM</UiButton>
     <UiButton id="sdr-mode-adsb-btn" @click="act('setSdrMode', 'adsb')" :pressed="sdr?.adsbActive ?? false" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">ADS-B · 1090</UiButton>
   </div>
-  <div class="sdr-gain-row">
+  <div v-if="sdr?.receiverKind !== 'hackrf'" class="sdr-gain-row">
     <label for="sdr-gain-select">{{ t('GAIN') }}</label>
     <UiSelect class="gev-field" id="sdr-gain-select" hold :model-value="sdr ? sdr.gain : 'auto'" @update:model-value="act('setSdrGain', $event)" :aria-label="t('RTL-SDR tuner gain for the current mode')" :disabled="sdr?.gainDisabled">
       <option value="auto">{{ t('AUTO') }}</option>
@@ -68,16 +75,5 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </label>
   <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>
   <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" :hidden="sdr ? sdr.feedLine === null : true">{{ sdr?.feedLine ?? '' }}</div>
-</div>
-<div v-if="sdr?.hackrfSupported" class="sdr-radio-card">
-  <div class="sdr-radio-heading">
-    <strong translate="no">HackRF One</strong>
-    <UiButton id="sdr-check-hackrf" @click="act('checkHackrfOne')" :disabled="sdr.hackrfChecking">{{ t('Check USB connection') }}</UiButton>
-  </div>
-  <div role="status" class="radio-playback-state" :class="{ error: sdr.hackrfError }">
-    <template v-if="sdr.hackrfChecking">{{ t('Checking USB connection…') }}</template>
-    <template v-else-if="sdr.hackrfError">{{ sdr.hackrfError }}</template>
-    <template v-else-if="sdr.hackrfBoardId != null">{{ t('USB check passed · Board ID {id}', { id: sdr.hackrfBoardId }) }}</template>
-  </div>
 </div>
 </template>
