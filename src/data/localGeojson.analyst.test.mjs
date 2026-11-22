@@ -195,3 +195,259 @@ test('infra getAnalystRecords: enabled layer snapshots loaded stems; disable ret
     else globalThis.window = originalWindow;
   }
 });
+
+test('infra getAnalystRecords: line features are listed at their middle vertex, as counted', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const features = [
+    {
+      type: 'Feature',
+      id: 'crest-dam',
+      properties: { name: 'Crest Dam' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [-97.9, 30.39],
+          [-97.91, 30.392],
+          [-97.92, 30.394],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      id: 'pin-dam',
+      properties: { name: 'Pin Dam' },
+      geometry: { type: 'Point', coordinates: [-97.79, 30.29] },
+    },
+  ];
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => features.map((f) => JSON.stringify(f)).join('\n'),
+  });
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: -97.8, lat: 30.3, height: 100_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    url: '/line-dam.geojsonl',
+    name: 'Line Dams',
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 400, y: 300 }),
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
+    }),
+  });
+  try {
+    await layer.enable(viewer);
+    const rows = layer.getAnalystRecords();
+    assert.equal(rows.length, layer.getStats().count);
+    const crest = rows.find((row) => row.name === 'Crest Dam');
+    assert.ok(crest, 'the line dam is listed');
+    assert.equal(crest.lat, 30.392);
+    assert.equal(crest.lon, -97.91);
+    assert.ok(rows.some((row) => row.name === 'Pin Dam'));
+    assert.equal(layer.getAnalystRecords(1).length, 1);
+  } finally {
+    layer.destroy(viewer);
+    assert.deepEqual(layer.getAnalystRecords(), []);
+    globalThis.fetch = originalFetch;
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test('infra getAnalystRecords: a multi-part line feature is listed once', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const plant = { name: 'Two Crest Plant' };
+  const features = [
+    // A dam mapped as its outline and again as its crest lines, under one id.
+    {
+      type: 'Feature',
+      id: 'outlined-dam',
+      properties: plant,
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [14.29, 46.168],
+            [14.293, 46.168],
+            [14.293, 46.17],
+            [14.29, 46.17],
+            [14.29, 46.168],
+          ],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      id: 'outlined-dam',
+      properties: plant,
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [14.291, 46.169],
+            [14.292, 46.169],
+          ],
+          [
+            [14.291, 46.1695],
+            [14.292, 46.1695],
+          ],
+        ],
+      },
+    },
+    // Crest lines alone: listed at the middle vertex of the longest part.
+    {
+      type: 'Feature',
+      id: 'split-crest',
+      properties: { name: 'Split Crest Dam' },
+      geometry: {
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [-97.9, 30.39],
+            [-97.91, 30.39],
+          ],
+          [
+            [-97.8, 30.3],
+            [-97.81, 30.302],
+            [-97.82, 30.304],
+          ],
+        ],
+      },
+    },
+  ];
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => features.map((f) => JSON.stringify(f)).join('\n'),
+  });
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: -97.8, lat: 30.3, height: 100_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    url: '/multi-part-dam.geojsonl',
+    name: 'Multi-part Dams',
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 400, y: 300 }),
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
+    }),
+  });
+  try {
+    await layer.enable(viewer);
+    const rows = layer.getAnalystRecords();
+    const plants = rows.filter((row) => row.name === 'Two Crest Plant');
+    assert.equal(plants.length, 1, 'the outlined dam is listed once');
+    const crests = rows.filter((row) => row.name === 'Split Crest Dam');
+    assert.equal(crests.length, 1, 'the split crest is listed once');
+    assert.equal(crests[0].lat, 30.302);
+    assert.equal(crests[0].lon, -97.81);
+    assert.equal(rows.length, 2);
+  } finally {
+    layer.destroy(viewer);
+    globalThis.fetch = originalFetch;
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});
+
+test('infra getAnalystRecords: multi-part polygon and point features are listed and counted once', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const square = (lon, lat) => [
+    [
+      [lon, lat],
+      [lon + 0.01, lat],
+      [lon + 0.01, lat + 0.01],
+      [lon, lat + 0.01],
+      [lon, lat],
+    ],
+  ];
+  const features = [
+    {
+      type: 'Feature',
+      id: 'campus',
+      properties: { name: 'Split Campus' },
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: [square(-97.8, 30.3), square(-97.5, 30.6)],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: { name: 'Twin Pins' },
+      geometry: {
+        type: 'MultiPoint',
+        coordinates: [
+          [-97.7, 30.2],
+          [-97.6, 30.25],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      id: 'single',
+      properties: { name: 'Single Hall' },
+      geometry: { type: 'Polygon', coordinates: square(-97.9, 30.4) },
+    },
+  ];
+  globalThis.fetch = async () => ({
+    ok: true,
+    status: 200,
+    text: async () => features.map((f) => JSON.stringify(f)).join('\n'),
+  });
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: -97.8, lat: 30.3, height: 100_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-datacenters',
+    url: '/multi-part-sites.geojsonl',
+    name: 'Multi-part Sites',
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    projectToWindow: () => ({ x: 400, y: 300 }),
+    inputFor: () => ({
+      onClick: () => () => {},
+      suspendCamera: () => () => {},
+    }),
+  });
+  try {
+    await layer.enable(viewer);
+    const rows = layer.getAnalystRecords();
+    assert.deepEqual(
+      rows.map((row) => row.name).sort(),
+      ['Single Hall', 'Split Campus', 'Twin Pins'],
+      'one row per feature, not per part',
+    );
+    assert.equal(layer.getStats().count, 3, 'counted per feature');
+    const campus = rows.find((row) => row.name === 'Split Campus');
+    assert.equal(campus.parts.length, 2, 'each part keeps its point');
+    assert.equal(rows.find((row) => row.name === 'Twin Pins').parts.length, 2);
+    assert.equal(
+      rows.find((row) => row.name === 'Single Hall').parts,
+      undefined,
+    );
+  } finally {
+    layer.destroy(viewer);
+    globalThis.fetch = originalFetch;
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  }
+});

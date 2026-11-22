@@ -753,7 +753,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "contact",
+    "train"
   ],
   "it": [
     "1 min/s",

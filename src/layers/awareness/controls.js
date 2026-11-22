@@ -1,4 +1,5 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;
@@ -48,6 +49,43 @@ export function createControls({ state: layerState, services, parts, source }) {
         error: null,
         status: layerState.enabled ? 'ready' : 'idle',
       };
+    },
+
+    /**
+     * The contact Contacts is centred on, as one plain record for the analyst
+     * and the Context panel, with how many items each cohort counts within
+     * the awareness radius. The cohorts' own items stay with their layers
+     * (flights, military, vessels, installations), so they are not repeated
+     * here. Empty while off, passive or with no contact chosen.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!layerState.enabled || !layerState.subject || !(maxCount >= 1))
+        return [];
+      const subject = layerState.subject;
+      const at = subject.position ? toLonLatH(subject.position) : null;
+      if (!at || !Number.isFinite(at.lat) || !Number.isFinite(at.lon))
+        return [];
+      const results = layerState.results;
+      const contacts = {};
+      for (const cohort of results?.cohorts || []) {
+        if (cohort?.id && Number.isFinite(cohort.summary?.count))
+          contacts[cohort.id] = cohort.summary.count;
+      }
+      return [
+        {
+          id: `${subject.layerId}:${subject.id}`,
+          name: subject.label || null,
+          subjectLayer: subject.layerId || null,
+          lat: at.lat,
+          lon: at.lon,
+          radiusKm: (results?.radiusM ?? AWARENESS_RADIUS_M) / 1000,
+          ...contacts,
+          lost: layerState.subjectMissing === true,
+          evaluatedAtMs: results?.evaluatedAt ?? null,
+        },
+      ];
     },
 
     /** Return the latest read-only context result for compact HUD consumers. */

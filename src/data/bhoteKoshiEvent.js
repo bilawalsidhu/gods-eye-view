@@ -1016,6 +1016,48 @@ function createPanelRecords(event) {
   });
 }
 
+/**
+ * Plain analyst records for an event pack's evidence spine: one per
+ * observation with a finite position, in pack order.
+ * @param {Array<object>} spine
+ * @param {number} [maxCount]
+ * @returns {Array<object>}
+ */
+export function bhoteKoshiEvidenceRecords(spine, maxCount = Infinity) {
+  const limit = Number.isFinite(maxCount)
+    ? Math.max(0, Math.floor(maxCount))
+    : Infinity;
+  const clean = (value) =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
+  const result = [];
+  for (const observation of Array.isArray(spine) ? spine : []) {
+    if (result.length >= limit) break;
+    const lat = typeof observation?.lat === 'number' ? observation.lat : NaN;
+    const lon = typeof observation?.lon === 'number' ? observation.lon : NaN;
+    if (
+      !clean(observation?.id) ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon)
+    )
+      continue;
+    const captured = Date.parse(observation.timing?.capturedAt ?? '');
+    result.push({
+      id: observation.id,
+      name: clean(observation.shortTitle) || clean(observation.title),
+      summary: clean(observation.summary),
+      phase: clean(observation.phase),
+      lat,
+      lon,
+      capturedAtMs: Number.isFinite(captured) ? captured : null,
+      locationConfidence: clean(observation.confidence?.location),
+      timeConfidence: clean(observation.confidence?.time),
+      platform: clean(observation.media?.platform),
+      source: 'Vantor + GeoPera',
+    });
+  }
+  return result;
+}
+
 export function createBhoteKoshiEventLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   renderHost = DEFAULT_RENDER_HOST,
@@ -4037,6 +4079,17 @@ export function createBhoteKoshiEventLayer({
     getSceneShotMediaHold,
     sceneShotRestartsMedia,
     setSceneMediaPlayback,
+    /**
+     * The event pack's geolocated evidence (its evidence spine), as plain
+     * records for the analyst and the Context panel. Each stands where the
+     * pack geolocated it; empty while the layer is off or the pack unloaded.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!_enabled || !Array.isArray(_event?.evidenceSpine)) return [];
+      return bhoteKoshiEvidenceRecords(_event.evidenceSpine, maxCount);
+    },
     getStats() {
       return {
         count: _enabled ? 1 : 0,

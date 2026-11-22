@@ -1677,6 +1677,9 @@
   "src/layers/satellites/interaction.test.mjs",
   "server/providers/common/layerCounts.test.mjs",
   "server/providers/common/layerCounts.js",
+  "src/layers/traffic/records.test.mjs",
+  "src/layers/submarineCables/records.js",
+  "src/layers/traffic/records.js",
   "server/providers/space/issTelemetry.test.mjs",
   "src/data/liveStreams.test.mjs",
   "src/data/youtubeLivePlayer.test.mjs",
@@ -1705,5 +1708,16 @@
   "src/ui/livePanel.test.mjs",
   "src/ui/stationPanel.test.mjs",
   "src/ui/styles/live.css",
-  "src/ui/styles/station.css"
+  "src/ui/styles/station.css",
+  "src/layers/wind/valueAt.test.mjs",
+  "src/layers/weather/valueAt.test.mjs",
+  "src/layers/gnss/valueAt.test.mjs",
+  "src/layers/recentImagery/valueAt.test.mjs",
+  "src/layers/airQuality/valueAt.test.mjs",
+  "src/layers/submarineCables/records.test.mjs",
+  "src/layers/wildlifeSightings/analystRecords.test.mjs",
+  "src/data/bhoteKoshiRecords.test.mjs",
+  "src/layers/rail/analystRecords.test.mjs",
+  "src/layers/awareness/analystRecords.test.mjs",
+  "src/ui/aircraftCardModel.test.mjs"
 ]

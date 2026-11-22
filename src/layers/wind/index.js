@@ -4,8 +4,10 @@ import {
   formatWindReading,
   windReadingResult,
   windUnitChips,
+  windValueText,
 } from './presentation.js';
-import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import { inspectWindAtCenter, windFrom, WIND_UNITS } from './inspection.js';
+import { sampleWind, windSpeed } from './model.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
 import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
@@ -256,6 +258,42 @@ export function createWindLayer({
     },
     getParams() {
       return { model, overlay, paused, units };
+    },
+    /**
+     * The forecast surface wind at a point, from the field already loaded:
+     * `{value: "12,0 km/h from NW", detail, at}` in the active language,
+     * or null while the layer is off or has no field.
+     */
+    getValueAt(lat, lon) {
+      if (!enabled || !Number.isFinite(lat) || !Number.isFinite(lon))
+        return null;
+      if (
+        !manifest?.u ||
+        !manifest?.v ||
+        !manifest.grid ||
+        manifest.unavailable
+      )
+        return null;
+      const vector = sampleWind(
+        { ...manifest.grid, u: manifest.u, v: manifest.v },
+        lon,
+        lat,
+      );
+      if (!Number.isFinite(vector.u) || !Number.isFinite(vector.v)) return null;
+      const valid = Date.parse(manifest.cycle?.validIso);
+      return {
+        value: windValueText(
+          windSpeed(vector.u, vector.v),
+          windFrom(vector.u, vector.v),
+          units,
+        ),
+        detail: t('{model} forecast · {time}', {
+          model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
+          time:
+            formatWindValidTime(manifest.cycle?.validIso) || t('Unavailable'),
+        }),
+        ...(Number.isFinite(valid) ? { at: valid } : {}),
+      };
     },
     getRowControls() {
       // A source that follows the timeline shows the wind at its time.

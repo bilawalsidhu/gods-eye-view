@@ -269,6 +269,9 @@
       "src/ui/views/panels/CctvPreview.vue",
       "src/data/contextStore.js",
       "src/data/entityContext.js",
+      "src/geo/horizon.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/vector.js",
       "src/ui/stores/entityCard.js",
       "src/ui/contextRadius.js",
       "src/layers/firms/source.js",
@@ -3237,6 +3240,7 @@
       "src/geo/ellipsoid.js",
       "src/geo/vector.js",
       "src/layers/traffic/policy.js",
+      "src/layers/traffic/records.js",
       "src/render/color.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
@@ -3893,6 +3897,7 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/render/color.js",
@@ -3929,7 +3934,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/geoDistance.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -4693,6 +4699,7 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/geo/horizon.js",
@@ -4710,6 +4717,7 @@
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
+      "src/layers/traffic/records.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
@@ -6011,6 +6019,7 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/geo/horizon.js",
@@ -6028,6 +6037,7 @@
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
+      "src/layers/traffic/records.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
@@ -8262,6 +8272,7 @@
     "exports": ["./layers/air-quality"],
     "modules": [
       "src/layers/airQuality/index.js",
+      "src/geoDistance.js",
       "src/geo/ellipsoid.js",
       "src/render/rendererOf.js",
       "src/geo/vector.js",
@@ -8286,7 +8297,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/statusText.js",
-      "src/ui/layerNames.js"
+      "src/ui/layerNames.js",
+      "src/ui/unitLabels.js"
     ],
     "external": ["cesium"]
   },

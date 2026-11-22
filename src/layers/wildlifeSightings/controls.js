@@ -189,6 +189,40 @@ export function createControls({ state, services, parts }) {
         : t('iNaturalist contributors · licences per record');
       return { chips, legend, info };
     },
+    /**
+     * The loaded sightings as plain records, for the analyst and the Context
+     * panel. Positions are as drawn: an obscured iNaturalist record stands at
+     * the centre of its coarse cell, never at the hidden exact point.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!state.enabled) return [];
+      const limit = Number.isFinite(maxCount)
+        ? Math.max(0, Math.floor(maxCount))
+        : Infinity;
+      const result = [];
+      for (const row of state.rows.values()) {
+        if (result.length >= limit) break;
+        if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
+        result.push({
+          id: row.stableId,
+          name: row.commonName || row.scientificName || null,
+          scientificName: row.scientificName || null,
+          lat: row.lat,
+          lon: row.lon,
+          taxonGroup: row.iconic || null,
+          observedAtMs: Number.isFinite(row.observedAt) ? row.observedAt : null,
+          observedOn: row.observedOn || null,
+          quality: row.quality || null,
+          threatened: row.threatened === true,
+          obscured: row.obscured === true,
+          source: row.origin === 'acartia' ? 'Acartia' : 'iNaturalist',
+          link: row.link || null,
+        });
+      }
+      return result;
+    },
     /** Report the visible count, feed state and retry guidance. */
     getStats() {
       const grid = state.gridAvailable === true;

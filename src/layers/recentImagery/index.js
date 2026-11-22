@@ -21,7 +21,10 @@ import {
   boxCentre,
   boxFromPin,
   boxFromDegrees,
+  boxContains,
   boxSideKm,
+  candidateAtPoint,
+  dayTime,
   dequantizeBox,
   fitViewHeightM,
   formatCandidateReadout,
@@ -1512,6 +1515,64 @@ export function createRecentImageryLayer({
         mode: MODES.indexOf(_mode),
         split: Math.round(_split * 100),
         viirs: _sources.viirs,
+      };
+    },
+
+    /**
+     * The latest imagery day over a point, from the catalog already
+     * searched for the chosen box: the newest Sentinel-2 or Landsat day
+     * whose footprints hold the point, else the newest daily overview known
+     * to have pixels. `value` is the day; `detail` the sensor, resolution
+     * and scene cloud. Null while off, outside the box, or with no day.
+     */
+    getValueAt(lat, lon) {
+      if (!_enabled) return null;
+      // Imagery is searched inside the chosen area only: outside it there is
+      // nothing to read, which is not the same as no pass.
+      if (!_box) return { value: null, reason: t('No area chosen') };
+      if (!boxContains(_box, lon, lat))
+        return { value: null, reason: t('Outside the chosen area') };
+      const usable = (candidate) =>
+        sourceOn(candidate) &&
+        PRODUCTS[candidate.product] &&
+        availability(candidate) !== 'empty';
+      const newest = (list) =>
+        list.reduce(
+          (best, candidate) =>
+            !best || candidate.day > best.day ? candidate : best,
+          null,
+        );
+      const hls = newest(
+        _candidates
+          .filter(
+            (candidate) =>
+              usable(candidate) && !PRODUCTS[candidate.product].overview,
+          )
+          .map((candidate) => candidateAtPoint(candidate, lon, lat))
+          .filter(Boolean),
+      );
+      const found =
+        hls ||
+        newest(
+          _candidates.filter(
+            (candidate) =>
+              usable(candidate) &&
+              PRODUCTS[candidate.product].overview &&
+              availability(candidate) === 'present',
+          ),
+        );
+      if (!found) return null;
+      const product = PRODUCTS[found.product];
+      const end = Date.parse(found.timeRange?.end);
+      const at = Number.isFinite(end) ? end : dayTime(found.day);
+      return {
+        value: READOUT_WORDS.date(found.day),
+        detail: [
+          t(product.name),
+          displayMetres(product.resolutionM),
+          ...(product.overview ? [] : [READOUT_WORDS.cloud(found.cloud)]),
+        ].join(' · '),
+        ...(Number.isFinite(at) ? { at } : {}),
       };
     },
 

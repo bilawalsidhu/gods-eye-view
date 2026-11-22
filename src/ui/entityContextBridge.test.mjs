@@ -140,3 +140,85 @@ test('a vessel announced by its layer is named by its own id', (t) => {
   );
   assert.deepEqual(named, ['5fdca702', 'fire:1']);
 });
+
+// Nearby opens a cable laid in pieces at its nearest piece: the card stays
+// there and the camera flies there, not to the cable's first piece.
+test('opening a far piece of a multi-piece cable from Nearby flies to that piece', async (t) => {
+  const { readFileSync } = await import('node:fs');
+  const { bindFakeDraw } = await import('../testSupport/fakeDrawPort.mjs');
+  const { toLonLatH } = await import('../geo/ellipsoid.js');
+  const { cableAnalystRecords } =
+    await import('../layers/submarineCables/records.js');
+  const { nearbyByLayer } = await import('../data/entityContext.js');
+  const cableJson = JSON.parse(
+    readFileSync(
+      new URL(
+        '../data/local_data/telegeography_submarine_cables/cable-geo.json',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+  );
+  const state = {
+    _enabled: true,
+    _loaded: true,
+    _cachedCableJson: cableJson,
+    _cachedLandingJson: { features: [] },
+  };
+  const layerId = 'telegeography-submarine-cables';
+  const layer = {
+    id: layerId,
+    name: 'Submarine Cables',
+    enabled: true,
+    module: { getAnalystRecords: () => cableAnalystRecords(state) },
+  };
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map([[layerId, layer]]),
+    getAll: () => [layer],
+  };
+  const flown = [];
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const { unbind } = bindFakeDraw(viewer, {
+    camera: {
+      pose: () => ({ heading: 0, pitch: -1, roll: 0 }),
+      on: () => () => {},
+      followed: null,
+      flyToBounds: (bounds) => flown.push(bounds),
+    },
+  });
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    store.clear();
+    disconnect();
+    input.destroy();
+    unbind();
+  });
+  const topaz = cableAnalystRecords(state).find(
+    (record) => record.name === 'Topaz',
+  );
+  const far = topaz.parts[1];
+  assert.notDeepEqual(
+    far,
+    { lat: topaz.lat, lon: topaz.lon },
+    'not its first piece',
+  );
+  const [list] = nearbyByLayer(dataManager, far, {
+    radiusKm: 25,
+    query: 'topaz',
+  });
+  assert.ok(store.select(list.items[0].identity, { fly: true }));
+  assert.equal(store.card.lat, far.lat, 'the card stays at that piece');
+  assert.equal(store.card.lon, far.lon);
+  assert.equal(flown.length, 1, 'the camera flew once');
+  const landed = toLonLatH(flown[0].center);
+  assert.ok(Math.abs(landed.lat - far.lat) < 1e-6, `lat ${landed.lat}`);
+  assert.ok(Math.abs(landed.lon - far.lon) < 1e-6, `lon ${landed.lon}`);
+});

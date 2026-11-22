@@ -10,6 +10,7 @@ import {
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import { findFrame } from '../../render/rendererOf.js';
+import { trafficAnalystRecords } from './records.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
@@ -367,6 +368,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         movingWaypoints,
         maxResidualM,
       };
+    },
+
+    /** The drawn road segments as plain records (records.js). */
+    getAnalystRecords(maxCount = Infinity) {
+      return trafficAnalystRecords(layerState, maxCount);
     },
 
     getStats() {

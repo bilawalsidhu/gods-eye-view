@@ -1,10 +1,13 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import { cssColor } from '../../render/color.js';
 import { drawOf, findCamera } from '../../render/rendererOf.js';
-import { msg, t, tn } from '../../i18n/index.js';
+import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
+import { formatQuantity } from '../../ui/unitLabels.js';
 import {
   AIR_QUALITY_BANDS,
+  airQualityBandById,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
@@ -23,6 +26,9 @@ export { createEcccAirQualitySource } from './source.js';
 const STATION_MARKER_RADIUS_M = 6_000;
 /** Readings listed in the readout card. */
 const READOUT_LIMIT = 5;
+/** Farthest a station's reading stands for a point, in kilometres. */
+export const AIR_QUALITY_VALUE_RADIUS_KM = 50;
+const VALUE_RADIUS_KM = AIR_QUALITY_VALUE_RADIUS_KM;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -271,6 +277,44 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       return _readings
         .slice(0, limit)
         .map((reading, index) => mapAnalystRecord(reading, index));
+    },
+
+    /**
+     * The nearest station's reading to a point, from the readings already
+     * loaded: `{value: "AQHI 3 · Low", detail: "Toronto · 4 km", at}`. Null
+     * while off, or with no station within VALUE_RADIUS_KM (the network is
+     * Canada only, so most of the world has none).
+     */
+    getValueAt(lat, lon) {
+      if (!_enabled || !_readings.length) return null;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      let nearest = null;
+      let nearestKm = Infinity;
+      for (const reading of _readings) {
+        if (!Number.isFinite(reading?.lat) || !Number.isFinite(reading?.lon))
+          continue;
+        const km = greatCircleKm({ lat, lon }, reading);
+        if (km < nearestKm) {
+          nearest = reading;
+          nearestKm = km;
+        }
+      }
+      if (!nearest || nearestKm > VALUE_RADIUS_KM)
+        return {
+          value: null,
+          reason: t('No station within {n} km', {
+            n: formatNumber(VALUE_RADIUS_KM),
+          }),
+        };
+      const band = airQualityBandById(nearest.band);
+      const shown = `${nearest.scale} ${nearest.label ?? nearest.value}`;
+      return {
+        value: band ? `${shown} · ${t(band.label)}` : shown,
+        detail: `${nearest.name} · ${formatQuantity(Math.round(nearestKm), 'km')}`,
+        ...(Number.isFinite(nearest.observedMs)
+          ? { at: nearest.observedMs }
+          : {}),
+      };
     },
 
     getStats() {

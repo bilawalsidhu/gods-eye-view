@@ -435,6 +435,47 @@ function pointInPolygon(lon, lat, ring) {
 }
 
 /**
+ * Whether a point lies in a box, across the antimeridian too.
+ * @param {object} box Degrees box.
+ * @param {number} lon
+ * @param {number} lat
+ * @returns {boolean}
+ */
+export function boxContains(box, lon, lat) {
+  const normalized = normalizeBox(box);
+  if (!normalized || !Number.isFinite(lon) || !Number.isFinite(lat))
+    return false;
+  const { west, south, east, north } = normalized;
+  if (lat < south || lat > north) return false;
+  return west <= east ? lon >= west && lon <= east : lon >= west || lon <= east;
+}
+
+/**
+ * The part of a day candidate whose known footprints contain the point.
+ * @param {object} candidate
+ * @param {number} lon
+ * @param {number} lat
+ * @returns {?object}
+ */
+export function candidateAtPoint(candidate, lon, lat) {
+  const granules = (candidate?.granules || []).filter((granule) => {
+    const ring = granule?.footprint;
+    if (!Array.isArray(ring) || ring.length < 3) return false;
+    const crossesDateline = ring.some(
+      ([x], i) => Math.abs(x - ring[(i + 1) % ring.length][0]) > 180,
+    );
+    if (!crossesDateline) return pointInPolygon(lon, lat, ring);
+    // Shift the cut to Greenwich so a granule around ±180° stays together.
+    const shift = (value) => (value < 0 ? value + 360 : value);
+    const unwrapped = ring.map(([x, y]) => [shift(x), y]);
+    return pointInPolygon(shift(lon), lat, unwrapped);
+  });
+  return granules.length
+    ? buildCandidate(candidate.product, candidate.day, granules)
+    : null;
+}
+
+/**
  * How much of the box a candidate's granule footprints cover, sampled at the
  * four corners and the centre: `full`, `partial`, or `unknown` without
  * footprints.

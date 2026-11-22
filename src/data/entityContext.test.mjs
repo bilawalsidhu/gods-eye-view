@@ -1,11 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { twoline2satrec } from 'satellite.js';
+import { createOrbits } from '../layers/satellites/orbits.js';
+import { createRecords } from '../layers/satellites/records.js';
 import {
   aircraftInsights,
   describeEntity,
   findRecord,
   formatFact,
   layerBreakdown,
+  nearbyByKind,
+  nearbyByLayer,
   nearbyEntities,
   recordTitle,
   recordWarnings,
@@ -178,6 +183,38 @@ test('nearby lists the closest of the same kind and one of each other layer', ()
   assert.equal(other[0].layerId, 'flights');
 });
 
+test('selected-card nearby rows open a cable at the point used for its distance', () => {
+  const layerId = 'telegeography-submarine-cables';
+  const here = { lat: 21, lon: -160 };
+  const cable = {
+    id: 'cable:example',
+    name: 'Example Cable',
+    feature: 'cable',
+    lat: 21,
+    lon: -150,
+    parts: [here],
+  };
+  const layers = manager({ [layerId]: { name: 'Cables', records: [cable] } });
+  const rows = [
+    nearbyEntities(layers, { layerId, ...here }).same[0],
+    nearbyByKind(layers, here).other[0],
+    nearbyByKind(layers, here, { query: 'example' }).other[0],
+  ];
+  assert.deepEqual(
+    rows.map((row) => [
+      row.identity.id,
+      row.distanceKm,
+      row.identity.lat,
+      row.identity.lon,
+    ]),
+    rows.map(() => [cable.id, 0, here.lat, here.lon]),
+  );
+  for (const row of rows) {
+    const { lat, lon } = describeEntity(layers, row.identity);
+    assert.deepEqual({ lat, lon }, here);
+  }
+});
+
 test('search ranks an exact name first and needs two characters', () => {
   assert.deepEqual(searchEntities(dm, 'f'), []);
   const [first] = searchEntities(dm, 'FLT12');
@@ -267,6 +304,197 @@ test('the view summary counts each layer inside the view, closest to the middle 
   assert.equal(groups[0].layerId, 'flights');
   assert.equal(groups[0].count, 501);
   assert.equal(groups[0].items[0].title, 'FLT100');
+});
+
+test('the view summary counts a multipart cable once at its closest visible piece', () => {
+  const first = { lat: 0, lon: 0 };
+  const closest = { lat: 0, lon: -179 };
+  const cable = {
+    id: 'cable:test',
+    ...first,
+    parts: [first, { lat: 0, lon: 175 }, closest],
+  };
+  const cables = manager({
+    'telegeography-submarine-cables': { name: 'Cables', records: [cable] },
+  });
+  const center = { lat: 0, lon: 179 };
+  const rect = { west: 174, east: -178, south: -2, north: 2 };
+
+  for (const [view, options] of [
+    [null, { hemisphere: true }],
+    [rect, {}],
+  ]) {
+    const [group] = viewSummary(cables, view, center, options);
+    assert.ok(group, 'the cable is in view even though its first piece is not');
+    assert.equal(group.count, 1);
+    assert.equal(group.items.length, 1);
+    const { id, lat, lon } = group.items[0].identity;
+    assert.equal(id, cable.id);
+    assert.deepEqual({ lat, lon }, closest);
+  }
+});
+
+test('the globe view counts only the cap a camera at its height can see', () => {
+  // From 10,000 km up the horizon is acos(6371/16371), about 67 degrees
+  // from the centre: 60 degrees away is in view, 80 is over the horizon.
+  const places = manager({
+    'local-datacenters': {
+      name: 'Data centers',
+      records: [
+        { id: 'near', name: 'Near', lat: 0, lon: 60 },
+        { id: 'far', name: 'Far', lat: 0, lon: 80 },
+      ],
+    },
+  });
+  const center = { lat: 0, lon: 0 };
+  const [group] = viewSummary(places, null, center, {
+    hemisphere: true,
+    heightM: 10_000_000,
+  });
+  assert.equal(group.count, 1);
+  assert.equal(group.items[0].title, 'Near');
+  assert.equal(
+    viewSummary(places, null, center, { hemisphere: true })[0].count,
+    2,
+    'without a height, the hemisphere',
+  );
+});
+
+test('an elevated satellite beyond the surface horizon can still be in view', () => {
+  const center = { lat: 0, lon: 0 };
+  const layers = manager({
+    satellites: {
+      name: 'Satellites',
+      records: [
+        { id: 'front', lat: 0, lon: 70, altitudeM: 550_000 },
+        { id: 'over-limb', lat: 0, lon: 80, altitudeM: 550_000 },
+        { id: 'occluded', lat: 0, lon: 110, altitudeM: 550_000 },
+      ],
+    },
+    'local-datacenters': {
+      name: 'Data centers',
+      records: [{ id: 'ground', lat: 0, lon: 80 }],
+    },
+  });
+  // From 20,000 km, the surface horizon is at 76 degrees. The satellite
+  // above longitude 80 clears the limb while the one at 110 is hidden.
+  const groups = viewSummary(layers, null, center, {
+    hemisphere: true,
+    heightM: 20_000_000,
+  });
+  assert.deepEqual(
+    groups.map(({ layerId, count, items }) => ({
+      layerId,
+      count,
+      ids: items.map((item) => item.identity.id),
+    })),
+    [{ layerId: 'satellites', count: 2, ids: ['front', 'over-limb'] }],
+  );
+});
+
+test("on a tilted globe view the horizon is the camera's, while rows rank from the centre", () => {
+  // A camera 5,000 km above (0, 0) whose middle of the screen falls on
+  // (0, 25): its horizon is about 56 degrees from (0, 0), so a place at
+  // longitude 70 is behind the Earth, though only 45 degrees from the centre.
+  const places = manager({
+    'local-datacenters': {
+      name: 'Data centers',
+      records: [
+        { id: 'near', name: 'Near', lat: 0, lon: 25 },
+        { id: 'under', name: 'Under', lat: 0, lon: 0 },
+        { id: 'behind', name: 'Behind', lat: 0, lon: 70 },
+      ],
+    },
+  });
+  const [group] = viewSummary(
+    places,
+    null,
+    { lat: 0, lon: 25 },
+    {
+      hemisphere: true,
+      heightM: 5_000_000,
+      eye: { lat: 0, lon: 0 },
+    },
+  );
+  assert.equal(group.count, 2);
+  assert.deepEqual(
+    group.items.map((item) => item.title),
+    ['Near', 'Under'],
+    'nearest the centre first',
+  );
+  assert.ok(group.items[0].distanceKm < 1, 'measured from the centre');
+});
+
+test('the view summary with no rows wanted still counts, and never throws', () => {
+  const groups = viewSummary(
+    dm,
+    null,
+    { lat: 34.1, lon: -118 },
+    {
+      perLayer: 0,
+      hemisphere: true,
+    },
+  );
+  assert.equal(groups[0].layerId, 'flights');
+  assert.ok(groups[0].count > 0);
+  assert.deepEqual(groups[0].items, []);
+});
+
+test('in-view satellites stand at their SGP4 catalogue positions (the layer records), not the renderer', () => {
+  const satrec = twoline2satrec(
+    '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927',
+    '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.72125391563537',
+  );
+  const at = new Date(Date.UTC(2008, 8, 20, 12));
+  const orbits = createOrbits({
+    state: {},
+    services: {},
+    parts: {},
+    source: {},
+  });
+  let rendererAsked = 0;
+  const records = createRecords({
+    state: {
+      _enabled: true,
+      _catalog: new Map([
+        [25544, { name: 'ISS (ZARYA)', group: 'stations', satrec }],
+      ]),
+      now: () => at.getTime(),
+    },
+    parts: {
+      orbits,
+      rendering: {
+        _pointPosition: () => {
+          rendererAsked++;
+          return null;
+        },
+      },
+    },
+  });
+  const layer = {
+    id: 'satellites',
+    name: 'Satellites',
+    enabled: true,
+    module: { getAnalystRecords: records.getAnalystRecords },
+  };
+  const layers = {
+    layers: new Map([['satellites', layer]]),
+    getAll: () => [layer],
+    isEnabled: () => true,
+  };
+  const sgp4 = orbits.propagatePosition(satrec, at);
+  const [group] = viewSummary(
+    layers,
+    null,
+    { lat: sgp4.latitude, lon: sgp4.longitude },
+    { hemisphere: true },
+  );
+  const item = group.items[0];
+  assert.equal(item.title, 'ISS (ZARYA)');
+  assert.equal(item.identity.lat, sgp4.latitude);
+  assert.equal(item.identity.lon, sgp4.longitude);
+  assert.ok(item.distanceKm < 0.01, 'centred on its propagated point');
+  assert.equal(rendererAsked, 0, 'no renderer position is read');
 });
 
 test('flight insights work out phase, flight level, Mach, squawk meaning and signal age', () => {
@@ -503,4 +731,90 @@ test('a card shows the photo its layer looked up: the tracked airliner, the sele
       .photo.licence,
     'CC BY 4.0',
   );
+});
+
+test('nearbyByLayer: one list per layer that is on, nearest first, with a count of what is in range', () => {
+  const here = { lat: 30, lon: -97 };
+  const layers = manager({
+    flights: {
+      name: 'Live Flights',
+      records: [
+        { icao24: 'far', callsign: 'FAR', lat: 31, lon: -97 },
+        { icao24: 'near', callsign: 'NEAR', lat: 30.05, lon: -97 },
+        { icao24: 'out', callsign: 'OUT', lat: 40, lon: -97 },
+      ],
+    },
+    earthquakes: { name: 'Earthquakes', records: [] },
+  });
+  // A layer with no list of items (a weather map) has no list at all.
+  layers.layers.set('weather-radar', {
+    id: 'weather-radar',
+    name: 'Radar',
+    enabled: true,
+    module: {},
+  });
+  // A layer that is off is never read.
+  layers.layers.set('vessels-off', {
+    id: 'vessels-off',
+    name: 'Vessels',
+    enabled: false,
+    module: {
+      getAnalystRecords: () => [{ mmsi: '1', name: 'BOAT', lat: 30, lon: -97 }],
+    },
+  });
+  const lists = nearbyByLayer(layers, here, { radiusKm: 250, limit: 1 });
+  assert.deepEqual(
+    lists.map((list) => [list.layerId, list.count]),
+    [
+      ['flights', 2],
+      ['earthquakes', 0],
+    ],
+  );
+  assert.deepEqual(
+    lists[0].items.map((item) => item.title),
+    ['NEAR'],
+    'the nearest leads, up to the limit',
+  );
+  assert.equal(lists[0].items[0].identity.layerId, 'flights');
+  assert.deepEqual(
+    nearbyByLayer(layers, here, {
+      query: 'far',
+      excludeLayers: ['earthquakes'],
+    }).map((list) => [list.layerId, list.count]),
+    [['flights', 1]],
+  );
+  assert.equal(
+    nearbyByLayer(layers, here, { excludeKey: 'flights:near' })[0].items[0]
+      .title,
+    'FAR',
+  );
+  assert.deepEqual(nearbyByLayer(layers, null), []);
+});
+
+test('Nearby keeps counts and stable nearest rows when only a few of many matches are shown', () => {
+  const records = Array.from({ length: 300 }, (_, i) => ({
+    icao24: `plane-${i}`,
+    callsign: i % 3 ? 'Keep' : 'Other',
+    lat: 30 + ((i * 17) % 50) / 100,
+    lon: -97,
+  }));
+  const layers = manager({ flights: { name: 'Flights', records } });
+  const expected = records
+    .filter(
+      (record) => record.callsign === 'Keep' && record.icao24 !== 'plane-1',
+    )
+    .sort((a, b) => a.lat - b.lat);
+  const options = { query: 'keep', excludeKey: 'flights:plane-1' };
+  for (const limit of [0, 3, 12]) {
+    const [list] = nearbyByLayer(
+      layers,
+      { lat: 30, lon: -97 },
+      { ...options, limit },
+    );
+    assert.equal(list.count, expected.length);
+    assert.deepEqual(
+      list.items.map((item) => item.identity.record),
+      expected.slice(0, limit),
+    );
+  }
 });

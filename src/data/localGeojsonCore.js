@@ -418,6 +418,19 @@ export function rhumbPositions(coordinates) {
 const RADIANS = Math.PI / 180;
 
 /**
+ * What a feature is known by: its id, or the feature itself when it has
+ * none. A feature drawn in several parts (a MultiPolygon, or a dam mapped as
+ * its outline and again as its crest lines under one id) is one feature.
+ * @param {object} feature
+ * @returns {string|object}
+ */
+function localFeatureKey(feature) {
+  return feature.id === undefined || feature.id === null
+    ? feature
+    : String(feature.id);
+}
+
+/**
  * The drawn parts of a feature collection, one per thing the GeoJSON loader
  * made an entity of, in its order and under its ids: a polygon, line or
  * point per part of a multi-geometry, the feature's id taking `_2`, `_3`…
@@ -748,7 +761,13 @@ export function createLocalGeoJsonLayer(
     };
     const parts = localGeojsonParts(features);
     const sets = {};
-    const built = { sets, parts: new Map(), records: [], count: parts.length };
+    // The count is of features, not parts: a multi-part feature is one item.
+    const built = {
+      sets,
+      parts: new Map(),
+      records: [],
+      count: new Set(parts.map((part) => localFeatureKey(part.feature))).size,
+    };
     const prefix = `${setPrefix}:${++builds}`;
     try {
       sets.fills = draw.shapes({ id: `${prefix}:fills`, show: false });
@@ -1003,21 +1022,78 @@ export function createLocalGeoJsonLayer(
      * @returns {Array<Object>} See mapAnalystRecord for the record shape.
      */
     getAnalystRecords(maxCount = 2000) {
-      if (!_enabled || !_stemRecords.length) return [];
+      if (!_enabled || (!_stemRecords.length && !_drawn)) return [];
       const limit = Number.isFinite(maxCount)
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
+      // One record per feature (localFeatureKey), as the layer counts them.
+      // A multi-part polygon or point feature is listed at its first part,
+      // with every part's point in `parts`, so Nearby measures it to the
+      // nearest part. Line features below give one record per feature too.
+      const listed = new Map();
       for (let i = 0; i < _stemRecords.length; i++) {
-        if (result.length >= limit) break;
         const record = _stemRecords[i];
+        const key = record.part?.feature
+          ? localFeatureKey(record.part.feature)
+          : null;
+        const first = key === null ? null : listed.get(key);
+        if (first) {
+          first.parts.push({ lat: record.lat, lon: record.lon });
+          continue;
+        }
+        if (result.length >= limit) break;
+        const mapped = mapAnalystRecord(
+          {
+            id: record.id,
+            lat: record.lat,
+            lon: record.lon,
+            properties: record.properties,
+          },
+          id,
+        );
+        if (key !== null) {
+          mapped.parts = [{ lat: record.lat, lon: record.lon }];
+          listed.set(key, mapped);
+        }
+        result.push(mapped);
+      }
+      // A one-part feature needs no list of parts.
+      for (const mapped of listed.values())
+        if (mapped.parts.length < 2) delete mapped.parts;
+      // Line features (a dam drawn as its crest line) carry no stem, so they
+      // are not stem records; list each once, at the middle vertex of its
+      // longest part (the part with the most vertices, not the greatest
+      // length): a point on the line itself. A feature already listed by its
+      // stem is not listed again.
+      const lines = new Map();
+      for (const part of _drawn?.parts?.values() || []) {
+        if (part.kind !== 'line') continue;
+        const key = localFeatureKey(part.feature);
+        if (listed.has(key)) continue;
+        const middle =
+          part.coordinates[Math.floor(part.coordinates.length / 2)];
+        if (!Number.isFinite(middle?.[0]) || !Number.isFinite(middle?.[1]))
+          continue;
+        // The feature keeps its first part's id.
+        const longest = lines.get(key);
+        if (longest && longest.size >= part.coordinates.length) continue;
+        lines.set(key, {
+          id: longest?.id ?? part.id,
+          size: part.coordinates.length,
+          feature: part.feature,
+          middle,
+        });
+      }
+      for (const { id: recordId, feature, middle } of lines.values()) {
+        if (result.length >= limit) break;
         result.push(
           mapAnalystRecord(
             {
-              id: record.id,
-              lat: record.lat,
-              lon: record.lon,
-              properties: record.properties,
+              id: recordId,
+              lat: middle[1],
+              lon: middle[0],
+              properties: unwrapProperties(feature.properties ?? {}),
             },
             id,
           ),

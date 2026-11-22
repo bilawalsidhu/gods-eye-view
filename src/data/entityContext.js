@@ -2,6 +2,8 @@ import { getContextStore } from './contextStore.js';
 import { msg } from '../i18n/marker.js';
 import { AIRCRAFT_CLASS_LABELS } from './aircraftClass.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
+import { fromDegrees, fromRadians } from '../geo/ellipsoid.js';
+import { horizonFrom } from '../geo/horizon.js';
 
 /**
  * One way to read any thing on the map, whichever layer holds it.
@@ -92,12 +94,38 @@ const KINDS = Object.freeze({
   },
   'alpr-cameras': { kind: msg('plate reader'), icon: 'videocam' },
   cctv: { kind: msg('camera'), icon: 'videocam' },
+  // A photo opened in Street Level.
+  'street-level': {
+    kind: msg('street photo'),
+    icon: 'streetview',
+    name: msg('Street-level photo'),
+  },
   'drone-airspace': {
     kind: msg('airspace'),
     icon: 'pentagon',
     headline: ['lowerAltitude', 'upperAltitude'],
   },
   'wildlife-sightings': { kind: msg('sighting'), icon: 'pets' },
+  rail: {
+    kind: msg('train'),
+    icon: 'train',
+    moving: true,
+    headline: ['speedMps', 'courseDeg'],
+  },
+  traffic: {
+    kind: msg('road segment'),
+    icon: 'traffic',
+    headline: ['flow', 'flowPct'],
+  },
+  'telegeography-submarine-cables': {
+    kind: msg('submarine cable'),
+    icon: 'timeline',
+  },
+  'bhote-koshi-2026': { kind: msg('evidence'), icon: 'photo_camera' },
+  'bhote-koshi-locator': { kind: msg('place'), icon: 'location_on' },
+  'military-awareness': { kind: msg('contact'), icon: 'radar' },
+  news: { kind: msg('news report'), icon: 'newspaper' },
+  shipwrecks: { kind: msg('shipwreck'), icon: 'directions_boat' },
 });
 
 /** Fields a record may name itself by, best first. */
@@ -162,6 +190,9 @@ const HIDDEN_FACTS = new Set([
   'emergencyKind',
   'military',
   // Repeats of what another fact already says, and feed bookkeeping.
+  'parts',
+  'roads',
+  'link',
   'vesselId',
   'typeCode',
   'group',
@@ -293,6 +324,16 @@ const FACT_LABELS = Object.freeze({
   landuse: msg('Land use'),
   power: msg('Power'),
   telecom: msg('Telecom'),
+  flow: msg('Traffic'),
+  flowPct: msg('Speed vs free flow'),
+  roadType: msg('Road type'),
+  simulated: msg('Simulated'),
+  source: msg('Source'),
+  scientificName: msg('Scientific name'),
+  taxonGroup: msg('Group'),
+  observedAtMs: msg('Observed'),
+  phase: msg('Phase'),
+  elevationM: msg('Elevation'),
 });
 
 /** OSM bookkeeping tags that say nothing about the place itself. */
@@ -316,9 +357,23 @@ const finite = (value) =>
       ? Number(value)
       : null;
 
-/** What a layer's items are, and the glyph that stands for them. */
-export function entityKind(layerId) {
-  return KINDS[layerId] || { kind: msg('feature'), icon: 'location_on' };
+/** Items a layer lists beside its main kind, told apart by a record field. */
+const RECORD_KINDS = Object.freeze({
+  'telegeography-submarine-cables': (record) =>
+    record?.feature === 'landing point'
+      ? { kind: msg('cable landing point'), icon: 'location_on' }
+      : null,
+});
+
+/**
+ * What a layer's items are, and the glyph that stands for them. A record,
+ * when given, can name a kind of its own (a cable's landing points).
+ * @param {string} layerId
+ * @param {object} [record]
+ */
+export function entityKind(layerId, record) {
+  const own = record ? RECORD_KINDS[layerId]?.(record) : null;
+  return own || KINDS[layerId] || { kind: msg('feature'), icon: 'location_on' };
 }
 
 /** Latitude and longitude of a record, whichever names it uses. */
@@ -421,6 +476,20 @@ const CODE_WORDS = Object.freeze({
     PTC: msg('Post-tropical cyclone'),
   },
   category: { WF: msg('Wildfire'), RX: msg('Prescribed burn') },
+  // Traffic flow buckets (data/trafficFlowStyle.js flowBucket).
+  flow: {
+    free: msg('Flowing freely'),
+    slow: msg('Slow traffic'),
+    jam: msg('Traffic jam'),
+    closed: msg('Road closed'),
+  },
+  // Where a traffic segment's flow comes from (traffic/records.js).
+  source: {
+    'tomtom-live': msg('TomTom live flow'),
+    'simulated-unmatched': msg('Simulated (no live flow on this road)'),
+    'simulated-unavailable': msg('SIMULATED — traffic service unreachable'),
+    'simulated-keyless': msg('Simulated (no TomTom key)'),
+  },
   basin: {
     AL: msg('Atlantic'),
     EP: msg('Eastern Pacific'),
@@ -547,7 +616,7 @@ export function formatFact(
     // Orbital speeds read in km/s, road and rail in km/h, the rest in knots.
     if (field === 'speedMps' && number >= 2000)
       return figure(number / 1000, 2, msg('{n} km/s'), '{n} km/s');
-    if (field === 'speedMps' && kind === 'vehicle')
+    if (field === 'speedMps' && (kind === 'vehicle' || kind === 'train'))
       return figure(number * 3.6, 0, msg('{n} km/h'), '{n} km/h');
     if (field === 'speedMps')
       return figure(number * 1.94384, 0, msg('{n} kt'), '{n} kt');
@@ -986,8 +1055,8 @@ export function describeEntity(
 ) {
   if (!identity?.layerId) return null;
   const { layerId } = identity;
-  const kind = entityKind(layerId);
   const record = identity.record || findRecord(dataManager, identity);
+  const kind = entityKind(layerId, record);
   // Sites drawn from GeoJSON keep their full tags in the context store; the
   // layer's record holds only a summary of them.
   const stored =
@@ -999,7 +1068,17 @@ export function describeEntity(
         });
   if (!record && !stored && !identity.label) return null;
 
+  // An item drawn in parts (a cable laid in pieces) opened from one part,
+  // as Nearby opens it at its nearest part, stays at that part.
+  const pickedPart = recordPosition(identity);
+  const onPart =
+    pickedPart &&
+    Array.isArray(record?.parts) &&
+    record.parts.some(
+      (part) => part.lat === pickedPart.lat && part.lon === pickedPart.lon,
+    );
   const at =
+    (onPart ? pickedPart : null) ||
     recordPosition(record) ||
     recordPosition(stored) ||
     recordPosition(identity);
@@ -1114,6 +1193,27 @@ export function describeEntity(
 }
 
 /**
+ * How far a record is from a point, and where it is nearest: a record drawn
+ * in several parts (a submarine cable laid in pieces) lists each part's
+ * point in `parts`, and the nearest part stands for it.
+ * @param {{lat: number, lon: number}} here
+ * @param {object} record
+ * @returns {{at: ?{lat: number, lon: number}, km: number}}
+ */
+function nearestPart(here, record) {
+  let at = recordPosition(record);
+  let km = distanceKm(here, at);
+  for (const part of Array.isArray(record?.parts) ? record.parts : []) {
+    const partKm = distanceKm(here, part);
+    if (partKm < km) {
+      at = { lat: part.lat, lon: part.lon };
+      km = partKm;
+    }
+  }
+  return { at, km };
+}
+
+/**
  * What is near an item: the closest items of its own layer, and the closest
  * item of each other enabled layer.
  * @param {object} dataManager
@@ -1131,19 +1231,19 @@ export function nearbyEntities(
   const empty = { same: [], other: [] };
   if (!card || card.lat === null || card.lon === null) return empty;
   const here = { lat: card.lat, lon: card.lon };
-  const row = (layerId, record, km) => ({
+  const row = (layerId, record, km, at) => ({
     key: recordKey(layerId, record),
     layerId,
     layerName: layerName(dataManager, layerId),
-    icon: entityKind(layerId).icon,
-    kind: entityKind(layerId).kind,
+    icon: entityKind(layerId, record).icon,
+    kind: entityKind(layerId, record).kind,
     title: recordTitle(record) || layerName(dataManager, layerId),
     distanceKm: km,
     identity: {
       layerId,
       id: recordKey(layerId, record).slice(layerId.length + 1),
       label: recordTitle(record),
-      ...recordPosition(record),
+      ...at,
       record,
     },
   });
@@ -1152,14 +1252,14 @@ export function nearbyEntities(
     for (const record of layerRecords(dataManager, layerId)) {
       const key = recordKey(layerId, record);
       if (key === card.key) continue;
-      const km = distanceKm(here, recordPosition(record));
+      const { at, km } = nearestPart(here, record);
       if (km > radiusKm) continue;
-      found.push({ record, km });
+      found.push({ record, km, at });
     }
     return found
       .sort((a, b) => a.km - b.km)
       .slice(0, count)
-      .map(({ record, km }) => row(layerId, record, km));
+      .map(({ record, km, at }) => row(layerId, record, km, at));
   };
   const same = nearest(card.layerId, limit);
   const other = enabledLayers(dataManager)
@@ -1213,18 +1313,18 @@ export function nearbyByKind(
     let closest = null;
     for (const record of layerRecords(dataManager, layer.id)) {
       if (excludeKey && recordKey(layer.id, record) === excludeKey) continue;
-      const km = distanceKm(here, recordPosition(record));
+      const { at, km } = nearestPart(here, record);
       if (!(km <= radiusKm)) continue;
       if (needle && !recordMatches(record, needle, layer.name)) continue;
-      if (group) group.push({ layerId: layer.id, record, km });
+      if (group) group.push({ layerId: layer.id, record, km, at });
       // A search lists every match, not only each layer's closest item.
-      else if (needle) other.push({ layerId: layer.id, record, km });
+      else if (needle) other.push({ layerId: layer.id, record, km, at });
       else if (!closest || km < closest.km)
-        closest = { layerId: layer.id, record, km };
+        closest = { layerId: layer.id, record, km, at };
     }
     if (closest) other.push(closest);
   }
-  const row = ({ layerId, record, km }) => ({
+  const row = ({ layerId, record, km, at }) => ({
     key: recordKey(layerId, record),
     layerId,
     layerName: layerName(dataManager, layerId),
@@ -1235,7 +1335,7 @@ export function nearbyByKind(
       layerId,
       id: recordKey(layerId, record).slice(layerId.length + 1),
       label: recordTitle(record),
-      ...recordPosition(record),
+      ...at,
       record,
     },
   });
@@ -1253,6 +1353,84 @@ export function nearbyByKind(
     .slice(0, limit)
     .map(row);
   return groups;
+}
+
+/**
+ * What each layer that is on has within a radius of a point: one list per
+ * layer, in the order the layers are listed, each sorted by distance so its
+ * first row is the nearest. A layer that keeps no list of items (imagery,
+ * weather maps) has none; a layer that keeps one but has nothing in range
+ * has a count of 0 and no rows.
+ * @param {object} dataManager
+ * @param {{lat: number, lon: number}} here
+ * @param {object} [options]
+ * @param {number} [options.radiusKm]
+ * @param {number} [options.limit] Rows per layer.
+ * @param {string} [options.query] Only items that hold this text.
+ * @param {string} [options.excludeKey] A record to leave out (the selected one).
+ * @param {string[]} [options.excludeLayers] Layers shown elsewhere.
+ * @returns {Array<{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}>}
+ */
+export function nearbyByLayer(
+  dataManager,
+  here,
+  {
+    radiusKm = 250,
+    limit = 3,
+    query = '',
+    excludeKey = '',
+    excludeLayers = [],
+  } = {},
+) {
+  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon))
+    return [];
+  const needle = text(query).toLowerCase();
+  const keep = Math.max(0, Math.floor(limit));
+  const lists = [];
+  for (const layer of enabledLayers(dataManager)) {
+    if (excludeLayers.includes(layer.id)) continue;
+    const module = dataManager?.layers?.get?.(layer.id)?.module;
+    if (typeof module?.getAnalystRecords !== 'function') continue;
+    const found = [];
+    let count = 0;
+    for (const record of layerRecords(dataManager, layer.id)) {
+      if (excludeKey && recordKey(layer.id, record) === excludeKey) continue;
+      const { at, km } = nearestPart(here, record);
+      if (!(km <= radiusKm)) continue;
+      if (needle && !recordMatches(record, needle, layer.name)) continue;
+      count++;
+      // Count every match, but retain only the few rows Context can show.
+      // Strict comparisons keep equally distant records in source order.
+      if (found.length < keep || km < found[found.length - 1]?.km) {
+        let index = found.length;
+        while (index > 0 && found[index - 1].km > km) index--;
+        found.splice(index, 0, { record, km, at });
+        if (found.length > keep) found.pop();
+      }
+    }
+    const name = layerName(dataManager, layer.id);
+    lists.push({
+      layerId: layer.id,
+      layerName: name,
+      icon: entityKind(layer.id).icon,
+      count,
+      items: found.map(({ record, km, at }) => ({
+        key: recordKey(layer.id, record),
+        layerId: layer.id,
+        title: recordTitle(record) || name,
+        distanceKm: km,
+        identity: {
+          layerId: layer.id,
+          id: recordKey(layer.id, record).slice(layer.id.length + 1),
+          label: recordTitle(record),
+          // Its nearest part, so opening it goes where it is near.
+          ...at,
+          record,
+        },
+      })),
+    });
+  }
+  return lists;
 }
 
 /** Counts of records by a label, largest first, the tail folded into "Other". */
@@ -1501,59 +1679,152 @@ export function searchEntities(
     .slice(0, limit);
 }
 
+/** A point on the unit sphere, for comparing distances with one dot product. */
+function unitVector(lat, lon) {
+  const phi = (lat * Math.PI) / 180;
+  const lambda = (lon * Math.PI) / 180;
+  const cosPhi = Math.cos(phi);
+  return [cosPhi * Math.cos(lambda), cosPhi * Math.sin(lambda), Math.sin(phi)];
+}
+
+/**
+ * A layer's analyst records for "in view" lists, positions unchecked: the
+ * caller checks them in its single pass.
+ */
+function layerViewRecords(dataManager, layerId) {
+  if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return [];
+  const module = dataManager?.layers?.get?.(layerId)?.module;
+  try {
+    return module?.getAnalystRecords?.(ALL_RECORDS) || [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * What the loaded layers have inside a view: for each enabled layer with
- * anything in the rectangle, how many and the few closest to the view's
- * centre, as rows the Context panel can open. Layers with the most in view
+ * anything in view, how many and the few nearest the view's centre, as rows
+ * the Context panel and the omnibar can open. Layers with the most in view
  * come first.
+ *
+ * One pass per layer: each item is scored by the dot product of its unit
+ * vector with the centre's (higher is nearer), the best few are kept as it
+ * goes, and nothing is sorted or measured by haversine in the loop. At
+ * globe view (`hemisphere`), the horizon is a surface cap centred on `eye`
+ * (the ground under the camera, or the view centre when no eye is given).
+ * A satellite above the cap can still clear the WGS84 limb at its altitude.
+ * The horizon check is independent of the screen edges. Items are ranked
+ * from the view centre even when the camera is tilted. Zoomed in, the
+ * view's rectangle sets the bounds. A multipart record counts once at its
+ * closest visible point.
  * @param {object} dataManager
- * @param {{west: number, south: number, east: number, north: number}} rect Degrees.
+ * @param {?{west: number, south: number, east: number, north: number}} rect Degrees.
  * @param {{lat: number, lon: number}} center
  * @param {object} [options]
- * @param {number} [options.perLayer] Closest items to list for each layer.
+ * @param {number} [options.perLayer] Nearest items to list for each layer.
+ * @param {string} [options.query] Only items whose text holds this.
+ * @param {boolean} [options.hemisphere] Globe view: the visible cap.
+ * @param {number} [options.heightM] Camera height, for the globe view's cap.
+ * @param {{lat: number, lon: number}} [options.eye] The ground under the
+ *   camera, where the globe view's cap is centred.
  * @returns {Array<{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}>}
  */
 export function viewSummary(
   dataManager,
   rect,
   center,
-  { perLayer = 3, query = '' } = {},
+  { perLayer = 3, query = '', hemisphere = false, heightM, eye } = {},
 ) {
-  if (!rect || !center) return [];
+  if (!center || (!rect && !hemisphere)) return [];
+  // Over the horizon: a point's angle from the ground under the camera has
+  // a cosine of at most R/(R+h) for a camera h above it.
+  const hasCameraHeight = Number.isFinite(heightM) && heightM > 0;
+  const horizon = hasCameraHeight
+    ? EARTH_RADIUS_KM / (EARTH_RADIUS_KM + heightM / 1000)
+    : 0;
   const needle = text(query).toLowerCase();
-  const wraps = rect.west > rect.east;
+  const wraps = rect ? rect.west > rect.east : false;
   const inside = (at) =>
-    at &&
     at.lat >= rect.south &&
     at.lat <= rect.north &&
     (wraps
       ? at.lon >= rect.west || at.lon <= rect.east
       : at.lon >= rect.west && at.lon <= rect.east);
+  const [cx, cy, cz] = unitVector(center.lat, center.lon);
+  const seenFrom =
+    Number.isFinite(eye?.lat) && Number.isFinite(eye?.lon) ? eye : center;
+  const [ex, ey, ez] = unitVector(seenFrom.lat, seenFrom.lon);
+  const satelliteHorizon =
+    hemisphere && hasCameraHeight
+      ? horizonFrom(fromDegrees(seenFrom.lon, seenFrom.lat, heightM))
+      : null;
+  const scoreInView = (at, altitudeM) => {
+    if (!at || (!hemisphere && !inside(at))) return -Infinity;
+    const phi = (at.lat * Math.PI) / 180;
+    const lambda = (at.lon * Math.PI) / 180;
+    const cosPhi = Math.cos(phi);
+    const x = cosPhi * Math.cos(lambda);
+    const y = cosPhi * Math.sin(lambda);
+    const z = Math.sin(phi);
+    if (hemisphere && ex * x + ey * y + ez * z <= horizon) {
+      if (
+        !satelliteHorizon ||
+        !Number.isFinite(altitudeM) ||
+        altitudeM <= 0 ||
+        !satelliteHorizon.isPointVisible(fromRadians(lambda, phi, altitudeM))
+      )
+        return -Infinity;
+    }
+    return cx * x + cy * y + cz * z;
+  };
+  const keep = Math.max(0, Math.floor(perLayer));
   const groups = [];
   for (const layer of enabledLayers(dataManager)) {
-    const found = [];
-    for (const record of layerRecords(dataManager, layer.id)) {
-      const at = recordPosition(record);
-      if (!inside(at)) continue;
+    // The best few so far, nearest first.
+    const best = [];
+    let count = 0;
+    const isSatelliteLayer = layer.id === 'satellites';
+    for (const record of layerViewRecords(dataManager, layer.id)) {
+      let at = recordPosition(record);
+      let score = scoreInView(at, isSatelliteLayer ? record?.altitudeM : null);
+      if (Array.isArray(record?.parts)) {
+        for (const part of record.parts) {
+          const point = recordPosition(part);
+          const partScore = scoreInView(point);
+          if (partScore > score) {
+            at = point;
+            score = partScore;
+          }
+        }
+      }
+      if (score === -Infinity) continue;
       if (needle && !recordMatches(record, needle, layer.name)) continue;
-      found.push({ record, km: distanceKm(center, at) });
+      count++;
+      if (
+        keep > 0 &&
+        (best.length < keep || score > best[best.length - 1].score)
+      ) {
+        let index = best.length;
+        while (index > 0 && best[index - 1].score < score) index--;
+        best.splice(index, 0, { record, at, score });
+        if (best.length > keep) best.pop();
+      }
     }
-    if (!found.length) continue;
-    found.sort((a, b) => a.km - b.km);
+    if (!count) continue;
     groups.push({
       layerId: layer.id,
       layerName: layerName(dataManager, layer.id),
       icon: entityKind(layer.id).icon,
-      count: found.length,
-      items: found.slice(0, perLayer).map(({ record, km }) => ({
+      count,
+      items: best.map(({ record, at, score }) => ({
         key: recordKey(layer.id, record),
         title: recordTitle(record) || layerName(dataManager, layer.id),
-        distanceKm: km,
+        distanceKm: Math.acos(Math.min(1, Math.max(-1, score))) * 6371,
         identity: {
           layerId: layer.id,
           id: recordKey(layer.id, record).slice(layer.id.length + 1),
           label: recordTitle(record),
-          ...recordPosition(record),
+          ...at,
           record,
         },
       })),

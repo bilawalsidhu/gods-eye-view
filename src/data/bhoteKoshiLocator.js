@@ -273,6 +273,42 @@ export function largestGeoJsonRing(geojson) {
  * the local OpenStreetMap boundary proxy and deliberately avoids the full
  * reconstruction layer's imagery, panel, playback, and camera ownership.
  */
+/** The presentations that pin the incident's key places. */
+const PLACE_PRESENTATIONS = new Set([
+  BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,
+  BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
+  BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
+  BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
+]);
+
+/**
+ * Plain analyst records for the incident's key places. Their map labels are
+ * capitals; the records name them in title case ("Syabru Besi").
+ * @param {ReadonlyArray<{id: string, title: string, lat: number, lon: number, heightM: number}>} places
+ * @param {number} [maxCount]
+ * @returns {Array<object>}
+ */
+export function bhoteKoshiPlaceRecords(places, maxCount = Infinity) {
+  const limit = Number.isFinite(maxCount)
+    ? Math.max(0, Math.floor(maxCount))
+    : Infinity;
+  return (Array.isArray(places) ? places : [])
+    .filter(
+      (place) => Number.isFinite(place?.lat) && Number.isFinite(place?.lon),
+    )
+    .slice(0, limit)
+    .map((place) => ({
+      id: place.id,
+      name: String(place.title || place.id)
+        .toLowerCase()
+        .replace(/(^|\s)\p{L}/gu, (letter) => letter.toUpperCase()),
+      lat: place.lat,
+      lon: place.lon,
+      elevationM: Number.isFinite(place.heightM) ? place.heightM : null,
+      source: 'OpenStreetMap + GeoPera',
+    }));
+}
+
 export function createBhoteKoshiLocatorLayer({
   boundaryResolver = DEFAULT_BOUNDARY_RESOLVER,
   overlayHost = DEFAULT_OVERLAY_HOST,
@@ -1292,6 +1328,17 @@ export function createBhoteKoshiLocatorLayer({
         ],
         legend: [],
       };
+    },
+    /**
+     * The incident's key places, as plain records for the analyst and the
+     * Context panel, while a presentation that pins them is showing. The
+     * Nepal and city presentations pin no places, so they list none.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!_enabled || !PLACE_PRESENTATIONS.has(_presentation)) return [];
+      return bhoteKoshiPlaceRecords(INCIDENT_OVERVIEW_PLACES, maxCount);
     },
     getStats() {
       return {
