@@ -1,5 +1,5 @@
 /**
- * WebUSB receiver selection for the local RTL-SDR.
+ * WebUSB receiver selection for local SDRs.
  *
  * Dual-channel boards such as the Nooelec FlyCatcher enumerate as two USB
  * devices (an ADS-B 1090 MHz channel and a UAT 978 MHz channel) that can share
@@ -16,6 +16,15 @@ export const RTL_SDR_USB_FILTERS = Object.freeze([
 ]);
 const ADSB_PRODUCT_PATTERN = /ads.?b|1090/i;
 const NON_FM_PRODUCT_PATTERN = /ads.?b|1090|uat|978/i;
+const HACKRF_ONE_FILTER = Object.freeze({
+  vendorId: 0x1d50,
+  productId: 0x6089,
+});
+
+/** Request a HackRF One through the same WebUSB selection path as the RTL provider. */
+export function requestHackrfOne(webUsb) {
+  return webUsb.requestDevice({ filters: [HACKRF_ONE_FILTER] });
+}
 
 function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -63,7 +72,10 @@ export function sameSdrDevice(a, b) {
 export function sdrDeviceLabel(device) {
   const identity = sdrDeviceIdentity(device);
   if (!identity) return 'RTL-SDR';
-  return identity.productName || 'RTL-SDR';
+  if (identity.productName) return identity.productName;
+  return filterMatchesDevice(HACKRF_ONE_FILTER, identity)
+    ? 'HackRF One'
+    : 'RTL-SDR';
 }
 
 function filterMatchesDevice(filter, device) {
