@@ -1,0 +1,165 @@
+// USB requests and payloads follow Great Scott Gadgets' libhackrf.
+const REQUEST = {
+  SET_MODE: 1,
+  SET_SAMPLE_RATE: 6,
+  SET_FILTER: 7,
+  READ_BOARD_ID: 14,
+  SET_FREQUENCY: 16,
+  SET_AMP: 17,
+  SET_LNA_GAIN: 19,
+  SET_VGA_GAIN: 20,
+};
+const RX_ENDPOINT = 1;
+const MODE_OFF = 0;
+const MODE_RX = 1;
+// The narrowest analog baseband filter on HackRF One.
+const RX_BANDWIDTH_HZ = 1_750_000;
+
+function vendorRequest(request, value = 0, index = 0) {
+  return { requestType: 'vendor', recipient: 'device', request, value, index };
+}
+
+async function claim(device) {
+  if (device.opened) throw new Error('HackRF One is already open');
+  await device.open();
+  try {
+    if (device.configuration?.configurationValue !== 1)
+      await device.selectConfiguration(1);
+    await device.claimInterface(0);
+  } catch (error) {
+    await device.close().catch(() => {});
+    throw error;
+  }
+}
+
+export async function readHackrfBoardId(device) {
+  await claim(device);
+  try {
+    const result = await device.controlTransferIn(
+      vendorRequest(REQUEST.READ_BOARD_ID),
+      1,
+    );
+    if (result.status !== 'ok' || result.data?.byteLength !== 1)
+      throw new Error('HackRF One board ID read failed');
+    return result.data.getUint8(0);
+  } finally {
+    await device.close();
+  }
+}
+
+function pairOfUint32(first, second) {
+  const data = new DataView(new ArrayBuffer(8));
+  data.setUint32(0, first, true);
+  data.setUint32(4, second, true);
+  return data;
+}
+
+/** Open a selected WebUSB device for reception. Drain reads before reconfiguring. */
+export async function openHackrfOne(device) {
+  await claim(device);
+  let receiving = false;
+  let closing = null;
+
+  async function write(request, { value = 0, index = 0, data } = {}) {
+    const result = await device.controlTransferOut(
+      vendorRequest(request, value, index),
+      data,
+    );
+    if (
+      result.status !== 'ok' ||
+      result.bytesWritten !== (data?.byteLength ?? 0)
+    )
+      throw new Error(`HackRF One USB request ${request} failed`);
+  }
+
+  async function setGain(request, gain) {
+    const result = await device.controlTransferIn(
+      vendorRequest(request, 0, gain),
+      1,
+    );
+    if (
+      result.status !== 'ok' ||
+      result.data?.byteLength !== 1 ||
+      !result.data.getUint8(0)
+    )
+      throw new Error(`HackRF One gain request ${request} failed`);
+  }
+
+  async function stopRx() {
+    if (!receiving) return;
+    await write(REQUEST.SET_MODE, { value: MODE_OFF });
+    receiving = false;
+  }
+
+  return {
+    async configure({ sampleRate, frequencyHz }) {
+      if (closing) throw new Error('HackRF One is closed');
+      // Match the sample rates of the existing ADS-B and FM decoders.
+      if (sampleRate !== 2_000_000 && sampleRate !== 2_048_000)
+        throw new RangeError('Unsupported HackRF One sample rate');
+      if (
+        !Number.isSafeInteger(frequencyHz) ||
+        frequencyHz < 0 ||
+        frequencyHz > 6_000_000_000
+      )
+        throw new RangeError('Invalid HackRF One frequency');
+
+      await stopRx();
+      await write(REQUEST.SET_SAMPLE_RATE, {
+        data: pairOfUint32(sampleRate, 1),
+      });
+      await write(REQUEST.SET_FILTER, {
+        value: RX_BANDWIDTH_HZ & 0xffff,
+        index: RX_BANDWIDTH_HZ >>> 16,
+      });
+      await write(REQUEST.SET_FREQUENCY, {
+        data: pairOfUint32(
+          Math.floor(frequencyHz / 1_000_000),
+          frequencyHz % 1_000_000,
+        ),
+      });
+      await write(REQUEST.SET_AMP);
+      await setGain(REQUEST.SET_LNA_GAIN, 16);
+      await setGain(REQUEST.SET_VGA_GAIN, 16);
+      // If the USB response fails after the command took effect, close still
+      // attempts to stop reception.
+      receiving = true;
+      try {
+        await write(REQUEST.SET_MODE, { value: MODE_RX });
+      } catch (error) {
+        await stopRx().catch(() => {});
+        throw error;
+      }
+    },
+
+    async readSamples(sampleCount) {
+      if (closing || !receiving) throw new Error('HackRF One is not receiving');
+      if (
+        !Number.isSafeInteger(sampleCount) ||
+        sampleCount <= 0 ||
+        sampleCount > 131_072
+      )
+        throw new RangeError('Invalid HackRF One sample block size');
+      const byteLength = sampleCount * 2;
+      const result = await device.transferIn(RX_ENDPOINT, byteLength);
+      if (result.status !== 'ok' || result.data?.byteLength !== byteLength)
+        throw new Error('HackRF One IQ transfer failed');
+
+      const { buffer, byteOffset } = result.data;
+      const view = new Uint8Array(buffer, byteOffset, byteLength);
+      const samples =
+        byteOffset === 0 && buffer.byteLength === byteLength
+          ? view
+          : view.slice();
+      // HackRF uses signed 8-bit I/Q. The worker expects offset binary.
+      for (let index = 0; index < samples.length; index++)
+        samples[index] ^= 0x80;
+      return { data: samples.buffer };
+    },
+
+    close() {
+      closing ??= stopRx().finally(() => device.close());
+      return closing;
+    },
+  };
+}

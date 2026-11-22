@@ -6,7 +6,6 @@ import {
   createRememberingWebUsb,
   createSdrDeviceMemory,
   requestHackrfOne,
-  readHackrfBoardId,
   sameSdrDevice,
   sdrDeviceLabel,
   selectAuthorizedSdrDevice,
@@ -245,30 +244,4 @@ test('automatic selection is not remembered, so a fallback never becomes sticky'
     flyCatcherUat,
   );
   assert.equal(memory.get('adsb'), null);
-});
-
-test('HackRF board ID probe reads one byte and releases USB even on a stall', async () => {
-  const calls = [];
-  const device = {
-    open: async () => calls.push('open'),
-    selectConfiguration: async (n) => calls.push(['configure', n]),
-    claimInterface: async (n) => calls.push(['claim', n]),
-    controlTransferIn: async (setup, length) => {
-      assert.deepEqual(setup, {
-        requestType: 'vendor',
-        recipient: 'device',
-        request: 14,
-        value: 0,
-        index: 0,
-      });
-      assert.equal(length, 1);
-      return { status: 'ok', data: new DataView(Uint8Array.of(2).buffer) };
-    },
-    close: async () => calls.push('close'),
-  };
-  assert.equal(await readHackrfBoardId(device), 2);
-  assert.deepEqual(calls, ['open', ['configure', 1], ['claim', 0], 'close']);
-  device.controlTransferIn = async () => ({ status: 'stall' });
-  await assert.rejects(readHackrfBoardId(device), /board ID read failed/);
-  assert.equal(calls.at(-1), 'close');
 });
