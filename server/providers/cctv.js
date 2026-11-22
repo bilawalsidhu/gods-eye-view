@@ -1,4 +1,5 @@
 import { createCctvCatalog } from './cctv/catalog.js';
+import { registerLayerCount } from './common/layerCounts.js';
 import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
@@ -47,6 +48,9 @@ const isPullableHlsUrl = (url) =>
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const getCctvSources = createCctvCatalog({ sourceRoot });
+  // Context's nothing-on count: the catalog's size once it has been built
+  // (open data, no key); before that, no count.
+  registerLayerCount('cctv', getCctvSources.cachedCount);
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
   /** Cap on health map entries to prevent unbounded growth. Sized to the

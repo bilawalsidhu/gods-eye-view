@@ -10,7 +10,9 @@ import {
   readAisTrack,
   aisStreamRows,
   newestAisPositionAt,
+  aisStreamVesselCount,
 } from './ais-store.js';
+import { registerLayerCount } from '../common/layerCounts.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
 // ---------------------------------------------------------------------------
@@ -72,6 +74,12 @@ let _aisWebSocketImpl;
  * JSON snapshot to the Cesium layer.
  */
 export function aisLiveProxy() {
+  // Context's nothing-on count: what the live store already holds. Asking
+  // for it never opens the stream. A narrower subscription than the world
+  // gives no count, since the count is shown as worldwide.
+  registerLayerCount('ais-live-vessels', () =>
+    aisSubscriptionIsWorldwide() ? aisStreamVesselCount() : null,
+  );
   function install(middlewares) {
     middlewares.use('/api/vessels', async (req, res) => {
       try {
@@ -381,6 +389,23 @@ function aisStreamSubscription() {
       AISSTREAM_DEFAULT_MESSAGE_TYPES,
     ),
   };
+}
+
+/**
+ * Whether the stream subscribes to the default worldwide box. Unset or
+ * unreadable AISSTREAM_BOUNDING_BOXES falls back to that box.
+ */
+function aisSubscriptionIsWorldwide() {
+  const value = process.env.AISSTREAM_BOUNDING_BOXES;
+  if (!value) return true;
+  try {
+    return (
+      JSON.stringify(JSON.parse(value)) ===
+      JSON.stringify(AISSTREAM_DEFAULT_BBOXES)
+    );
+  } catch {
+    return true;
+  }
 }
 
 function parseJsonEnv(key, fallback) {

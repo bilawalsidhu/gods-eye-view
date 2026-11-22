@@ -4,9 +4,26 @@ import {
   celestrakSatcatUrl,
   celestrakTleUrl,
 } from '../../../src/data/spaceProviderRequests.js';
+import { parseTleText, tleCatalogNumber } from '../../../src/sources/tle.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
+import { registerLayerCount } from '../common/layerCounts.js';
+
+/**
+ * How many satellites a set of TLE bodies holds: unique NORAD catalogue
+ * numbers from the same paired records as the layer, so a satellite in two groups
+ * counts once.
+ * @param {Iterable<string>} bodies
+ * @returns {number}
+ */
+export function uniqueNoradCount(bodies) {
+  const ids = new Set();
+  for (const body of bodies)
+    for (const { line1 } of parseTleText(body || ''))
+      ids.add(tleCatalogNumber(line1));
+  return ids.size;
+}
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -98,15 +115,20 @@ export function celestrakProxy() {
     const inflight = new Map(); // group -> Promise<{at, body}|null>
     const diskPath = (group) => path.join(CACHE_DIR, feed.diskName(group));
 
-    async function readDisk(group) {
+    async function restoreFromDisk(group) {
+      let diskEntry = null;
       try {
         const parsed = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
         if (typeof parsed?.body === 'string' && Number.isFinite(parsed?.at))
-          return parsed;
+          diskEntry = parsed;
       } catch {
         /* no disk cache yet */
       }
-      return null;
+      // A feed refresh can finish while this disk read is pending.
+      const current = mem.get(group);
+      if (current) return current;
+      if (diskEntry) mem.set(group, diskEntry);
+      return diskEntry;
     }
 
     async function writeDisk(group, entry) {
@@ -149,7 +171,31 @@ export function celestrakProxy() {
       return { at: Date.now(), body };
     }
 
-    return async (req, res) => {
+    /**
+     * How many satellites the cached core groups hold (unique NORAD numbers),
+     * and the oldest group's age: Context's nothing-on count. Read
+     * from memory or the disk cache only, never upstream; null when nothing
+     * is cached. Remembered until a group's cache changes.
+     */
+    let counted = null;
+    async function cachedCount() {
+      const entries = [];
+      for (const group of coreGroups) {
+        const entry = mem.get(group) ?? (await restoreFromDisk(group));
+        if (entry) entries.push(entry);
+      }
+      if (!entries.length) return null;
+      const stamp = entries.map((entry) => entry.at).join(',');
+      if (counted?.stamp === stamp) return counted.value;
+      const count = uniqueNoradCount(entries.map((entry) => entry.body));
+      const value = count
+        ? { count, at: Math.min(...entries.map((entry) => entry.at)) }
+        : null;
+      counted = { stamp, value };
+      return value;
+    }
+
+    const handler = async (req, res) => {
       const group = String(req.url || '')
         .replace(/^\//, '')
         .split('?')[0];
@@ -190,11 +236,7 @@ export function celestrakProxy() {
       };
       try {
         const now = Date.now();
-        let entry = mem.get(group);
-        if (!entry) {
-          entry = await readDisk(group);
-          if (entry) mem.set(group, entry);
-        }
+        const entry = mem.get(group) ?? (await restoreFromDisk(group));
         if (entry && now - entry.at < feed.ttlMs) {
           send(200, entry.body, 'HIT', entry);
           return;
@@ -242,9 +284,16 @@ export function celestrakProxy() {
         send(500, 'celestrak proxy error', 'ERROR');
       }
     };
+    handler.cachedCount = cachedCount;
+    return handler;
   }
 
   const handlers = feeds.map((feed) => [feed.route, createFeedHandler(feed)]);
+  // The TLE feed's cache counts the satellites layer (generous, keyless).
+  registerLayerCount(
+    'satellites',
+    new Map(handlers).get('/api/celestrak').cachedCount,
+  );
   const installMiddleware = (server) => {
     for (const [route, handler] of handlers)
       server.middlewares.use(route, handler);

@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
+import { registerLayerCount } from './common/layerCounts.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -169,6 +170,9 @@ export function firmsProxy() {
   const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
+  // The cache's fire count and time beside it, so the layer counts can be
+  // read without parsing the whole cache into memory.
+  const COUNT_PATH = path.join(CACHE_DIR, 'firms-count.json');
 
   /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
   let mem = null;
@@ -203,6 +207,11 @@ export function firmsProxy() {
     try {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
       await fsp.writeFile(CACHE_PATH, JSON.stringify(entry), 'utf8');
+      await fsp.writeFile(
+        COUNT_PATH,
+        JSON.stringify({ at: entry.at, count: entry.fires.length }),
+        'utf8',
+      );
     } catch (err) {
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
     }
@@ -316,6 +325,24 @@ export function firmsProxy() {
     }
     return statusInflight;
   }
+
+  // Context's nothing-on count: the fires the memory cache holds, else the
+  // count saved beside the disk cache (FIRMS allows 5,000 transactions per
+  // 10 minutes per key). The disk cache itself is never parsed for it. Only
+  // with a key, since without one the layer cannot load them; never fetched.
+  registerLayerCount('local-firms', async () => {
+    if (!mapKey()) return null;
+    if (mem)
+      return mem.fires.length ? { count: mem.fires.length, at: mem.at } : null;
+    try {
+      const saved = JSON.parse(await fsp.readFile(COUNT_PATH, 'utf8'));
+      return Number.isFinite(saved?.at) && saved.count > 0
+        ? { count: saved.count, at: saved.at }
+        : null;
+    } catch {
+      return null;
+    }
+  });
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {

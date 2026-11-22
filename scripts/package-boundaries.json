@@ -389,6 +389,7 @@
     "modules": [
       "src/sources/adsbFields.js",
       "server/providers/live.js",
+      "server/providers/common/layerCounts.js",
       "server/providers/common/compress.js",
       "server/providers/common/http.js",
       "server/providers/common/query.js",
@@ -468,8 +469,10 @@
     "runtime": "node",
     "exports": ["./server/providers/space"],
     "modules": [
+      "server/providers/common/layerCounts.js",
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
+      "src/sources/tle.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
       "server/providers/space/cooldown.js",
@@ -533,6 +536,9 @@
     "runtime": "node",
     "exports": ["./server/providers/firms"],
     "modules": [
+      "server/providers/common/layerCounts.js",
+      "server/providers/common/same-site.js",
+      "src/localRequestGate.mjs",
       "server/providers/firms.js",
       "server/providers/common/http.js",
       "src/sources/httpBody.js",
@@ -564,6 +570,7 @@
     "runtime": "node",
     "exports": ["./server/providers/cctv"],
     "modules": [
+      "server/providers/common/layerCounts.js",
       "server/providers/cctv.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",

@@ -310,6 +310,24 @@ function vesselTypeFromAis(message, staticData = {}) {
 }
 
 /**
+ * Context's nothing-on count: the vessels (not aids to navigation) the live
+ * store holds that are still fresh, and the newest position's time. Null
+ * when the stream has given none, as before it ever connected.
+ * @returns {?{count: number, at: number}}
+ */
+export function aisStreamVesselCount() {
+  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+  let count = 0;
+  let at = 0;
+  for (const row of _aisStreamVessels.values()) {
+    if (row._updatedAt < cutoff || isAidToNavigation(row)) continue;
+    count++;
+    if (row._updatedAt > at) at = row._updatedAt;
+  }
+  return count ? { count, at } : null;
+}
+
+/**
  * The current rows, newest first, with every vessel ahead of every aid to
  * navigation: a capped request never gives up a ship for a buoy.
  */

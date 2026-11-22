@@ -6,10 +6,11 @@ import {
   epoch,
   finite,
 } from './contract.js';
-import { readAdsbVerticalRateFpm } from '../adsbFields.js';
-
-const openSkyId = (row) =>
-  Array.isArray(row) ? cleanText(row[0]).toLowerCase() : '';
+import {
+  openSkyAircraftId,
+  positionedOpenSkyAircraftId,
+  readAdsbVerticalRateFpm,
+} from '../adsbFields.js';
 
 /** The aircraft (lowercase ICAO) a state-vector snapshot's `estimatedByIcao` names. */
 const estimatedCache = new WeakMap();
@@ -27,8 +28,8 @@ const EMPTY_IDS = new Set();
 
 /** Normalize the OpenSky state-vector route, including its regional fallback. */
 export function normalizeOpenSkyAircraft(row) {
-  const id = openSkyId(row);
-  if (!id || !coordinates(row[6], row[5])) return null;
+  const id = positionedOpenSkyAircraftId(row);
+  if (!id) return null;
   return {
     id,
     reference: id,
@@ -103,7 +104,7 @@ export function normalizeReadsbAircraft(row, snapshotTimeMs) {
  */
 function openSkyUnpositionedId(row) {
   return Array.isArray(row) && row[5] === null && row[6] === null
-    ? openSkyId(row)
+    ? openSkyAircraftId(row)
     : '';
 }
 

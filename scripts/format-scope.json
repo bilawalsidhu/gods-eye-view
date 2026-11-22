@@ -1675,6 +1675,8 @@
   "src/layers/vessels/selection.test.mjs",
   "src/layers/bikeshare/selection.test.mjs",
   "src/layers/satellites/interaction.test.mjs",
+  "server/providers/common/layerCounts.test.mjs",
+  "server/providers/common/layerCounts.js",
   "server/providers/space/issTelemetry.test.mjs",
   "src/data/liveStreams.test.mjs",
   "src/data/youtubeLivePlayer.test.mjs",
