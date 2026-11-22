@@ -76,6 +76,55 @@ test('something drawn outside the draw port resolves through its pick owner', ()
   unregisterPickOwner('flights');
 });
 
+test("a camera's projected image and view rays resolve to the camera", async () => {
+  const { createControls } = await import('../layers/cctv/controls.js');
+  const { CCTV_HELPER_PICK_ID } = await import('../layers/cctv/pickIds.js');
+  const camera = { id: 'drivebc-17', name: 'Hwy 1 at Main', lat: 49.2, lon: -123.1 };
+  const state = { _recordById: new Map([[camera.id, { camera }]]) };
+  const cctv = createControls({ state, services: { render: {}, activation: {} }, parts: {}, source: {} }).methods;
+  registerPickOwner('cctv', (id) => state._recordById.has(id) || state._recordById.has(CCTV_HELPER_PICK_ID.exec(id)?.[1]));
+  const dataManager = manager({ enabled: new Set(['cctv']), modules: { cctv } });
+  for (const pickId of ['drivebc-17', 'cctv-drivebc-17-plane', 'cctv-drivebc-17-ray-tl', 'cctv-drivebc-17-plane-label']) {
+    const out = resolvePickedContext({ set: '', id: pickId, surface: false }, { dataManager });
+    assert.equal(out?.id, 'drivebc-17', pickId);
+    assert.equal(out?.label, 'Hwy 1 at Main', pickId);
+    assert.equal(out?.lat, 49.2, pickId);
+  }
+  unregisterPickOwner('cctv');
+});
+
+test('a failing layer pick mapper falls back to the original pick', (t) => {
+  const pickId = 'cctv-sample-plane';
+  registerPickOwner('cctv', (id) => id === pickId);
+  t.after(() => unregisterPickOwner('cctv'));
+  const dataManager = manager({
+    enabled: new Set(['cctv']),
+    modules: {
+      cctv: {
+        recordIdForPick() {
+          throw new Error('camera mapping unavailable');
+        },
+        findByQuery(id) {
+          assert.equal(id, pickId);
+          return { name: 'Camera A', latitude: 49.2, longitude: -123.1 };
+        },
+      },
+    },
+  });
+  assert.deepEqual(
+    resolvePickedContext({ set: '', id: pickId, surface: false }, { dataManager }),
+    {
+      layerId: 'cctv',
+      id: pickId,
+      label: 'Camera A',
+      kind: 'feature',
+      lat: 49.2,
+      lon: -123.1,
+      altitudeM: null,
+    },
+  );
+});
+
 test('a part of an item drawn in parts resolves as the id its parts pick as', () => {
   registerPickOwner('flights', (id) => String(id).startsWith('seq:'));
   const out = resolvePickedContext(

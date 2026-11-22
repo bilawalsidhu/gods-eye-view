@@ -1035,8 +1035,8 @@ export function createRendering({
    * Creates the five lines that visualize a camera's pitched frustum: 4
    * corner rays (mount → far-plane corner) + the closed far-plane rectangle,
    * as line handles the layer restyles and then writes to its coverage set.
-   * Item ids stay in the `cctv-<id>-<role>` scheme (pick-owner regex depends
-   * on it): ray-tl / ray-tr / ray-br / ray-bl / cap.
+   * Item ids use the `cctv-<id>-<role>` scheme in pickIds.js:
+   * ray-tl / ray-tr / ray-br / ray-bl / cap.
    * @param {Object} record - Camera record.
    * @returns {Object[]} Array of five coverage line handles.
    */
