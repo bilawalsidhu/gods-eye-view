@@ -1288,9 +1288,10 @@ test("a rebuilt decoder worker's spectra are accepted before its first reset", a
   assert.equal(controller._spectrumSequence, before + 1);
 });
 
-test('the controller opens HackRF through WebUSB, feeds IQ to the worker and closes it', async (t) => {
+test('HackRF applies saved and live gain settings through the controller', async (t) => {
   const frequencyWrites = [];
   const modes = [];
+  const gainWrites = [];
   let closeCount = 0;
   let sampleBlock;
   const received = new Promise((resolve) => {
@@ -1320,9 +1321,12 @@ test('the controller opens HackRF through WebUSB, feeds IQ to the worker and clo
     async controlTransferOut({ request, value }, data) {
       if (request === 1) modes.push(value);
       if (request === 16) frequencyWrites.push(data.getUint32(0, true));
+      if (request === 17) gainWrites.push(['amp', value]);
       return { status: 'ok', bytesWritten: data?.byteLength ?? 0 };
     },
-    async controlTransferIn() {
+    async controlTransferIn({ request, index }) {
+      if (request === 19) gainWrites.push(['lna', index]);
+      if (request === 20) gainWrites.push(['vga', index]);
       return { status: 'ok', data: new DataView(Uint8Array.of(1).buffer) };
     },
     async transferIn(endpoint, length) {
@@ -1335,6 +1339,7 @@ test('the controller opens HackRF through WebUSB, feeds IQ to the worker and clo
       closeCount++;
     },
   };
+  const storage = memoryStorage();
   const controller = new SdrController({
     webUsb: {
       getDevices: async () => [],
@@ -1343,16 +1348,46 @@ test('the controller opens HackRF through WebUSB, feeds IQ to the worker and clo
         return device;
       },
     },
-    storage: null,
+    storage,
   });
   t.after(() => controller.destroy());
   controller.selectReceiver('hackrf');
+  assert.equal(await controller.setHackrfGain('lna', '24'), true);
+  assert.equal(await controller.setHackrfGain('amp', true), true);
+  assert.equal(await controller.setHackrfGain('lna', '25'), false);
   assert.equal(await controller.connect('adsb'), true);
   const state = controller.getState();
   assert.equal(state.deviceLabel, 'HackRF One');
   assert.equal(state.sampleRate, 2_000_000);
   assert.deepEqual(frequencyWrites, [1090]);
   assert.equal(new Uint8Array(await received)[0], 128);
+  assert.deepEqual(gainWrites, [
+    ['amp', 1],
+    ['lna', 24],
+    ['vga', 16],
+  ]);
+
+  await Promise.all([
+    controller.setHackrfGain('vga', '30'),
+    controller.setHackrfGain('amp', false),
+  ]);
+  assert.deepEqual(gainWrites.slice(3), [
+    ['vga', 30],
+    ['amp', 0],
+  ]);
+  assert.deepEqual(modes, [1], 'live gain changes keep RX running');
+  assert.deepEqual(controller.getState().hackrfGain, {
+    lna: 24,
+    vga: 30,
+    amp: false,
+  });
+  const reopened = new SdrController({ storage, webUsb: null });
+  assert.deepEqual(
+    reopened.getState().hackrfGain,
+    controller.getState().hackrfGain,
+  );
+  await reopened.destroy();
+  assert.equal(storage.getItem(SDR_GAIN_STORAGE_KEY), null);
 
   controller.selectReceiver('rtl');
   assert.equal(controller.getState().receiverKind, 'hackrf');

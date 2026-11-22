@@ -3,9 +3,12 @@ import { findDirectionalFmPeak } from './spectrum.js';
 import { openHackrfOne } from './hackrfOne.js';
 import {
   SDR_GAIN_DEFAULTS,
+  normalizeHackrfGain,
   normalizeSdrGain,
+  readHackrfGainSettings,
   readSdrGainSettings,
   tunerGainValue,
+  writeHackrfGainSettings,
   writeSdrGainSettings,
 } from './gain.js';
 import {
@@ -387,6 +390,7 @@ export class SdrController {
     this.state = {
       webUsbSupported,
       receiverKind: 'rtl',
+      hackrfGain: readHackrfGainSettings(storage),
       connected: false,
       status: webUsbSupported ? 'idle' : 'unsupported',
       message: '',
@@ -1146,7 +1150,11 @@ export class SdrController {
       let actualFrequency = tunedFrequency;
       if (this.state.receiverKind === 'hackrf') {
         if (!this._owns(token, device)) return false;
-        await device.configure({ sampleRate, frequencyHz: tunedFrequency });
+        await device.configure({
+          sampleRate,
+          frequencyHz: tunedFrequency,
+          gain: this.state.hackrfGain,
+        });
       } else {
         const steps = [
           () => device.setSampleRate(sampleRate),
@@ -1774,6 +1782,46 @@ export class SdrController {
     return this._gainByMode[target] ?? SDR_GAIN_DEFAULTS[target];
   }
 
+  async setHackrfGain(stage, value) {
+    const setting = normalizeHackrfGain(stage, value);
+    if (
+      setting === null ||
+      this._destroyed ||
+      this.state.receiverKind !== 'hackrf' ||
+      this.state.status === 'connecting' ||
+      this.state.status === 'tuning'
+    )
+      return false;
+
+    const save = () => {
+      const hackrfGain = Object.freeze({
+        ...this.state.hackrfGain,
+        [stage]: setting,
+      });
+      writeHackrfGainSettings(this._storage, hackrfGain);
+      this._setState({ hackrfGain });
+      return true;
+    };
+    const device = this._device;
+    if (!device) return save();
+
+    const token = this._sessionToken;
+    try {
+      return await this._queueUsb(async () => {
+        if (!this._owns(token, device)) return false;
+        if (this.state.hackrfGain[stage] === setting) return true;
+        await device.setRxGain(stage, setting);
+        return this._owns(token, device) && save();
+      });
+    } catch (error) {
+      if (!this._owns(token, device)) return false;
+      console.warn('[SDR] HackRF One gain change failed:', error);
+      this._setState(errorState(msg('HackRF One gain change failed')));
+      await this.stop({ preserveMessage: true });
+      return false;
+    }
+  }
+
   async tuneFm(frequencyHz, { quiet = false } = {}) {
     const frequency = clampFmFrequency(frequencyHz);
     this._fmFrequencyHz = frequency;
@@ -1802,6 +1850,7 @@ export class SdrController {
           await device.configure({
             sampleRate: FM_SAMPLE_RATE,
             frequencyHz: frequency,
+            gain: this.state.hackrfGain,
           });
         } else {
           const tuned = await device.setCenterFrequency(frequency);

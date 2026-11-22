@@ -2,7 +2,7 @@
 import { storeToRefs } from 'pinia';
 import { ref } from 'vue';
 import { t } from '../../../i18n/index.js';
-import { R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
+import { HACKRF_GAIN_STEPS_DB, R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
 import { localSdrGainOptionLabel } from '../../localSdrPresentation.js';
 import { vClassToggle } from '../../rail/classToggle.js';
 import { vFieldValue } from '../../rail/fieldValue.js';
@@ -53,6 +53,21 @@ const tune = () => act('tuneSdr', frequency.value.value);
       <option v-for="gain in GAINS" :key="gain" :value="gain" translate="no">{{ localSdrGainOptionLabel(gain) }}</option>
     </UiSelect>
   </div>
+  <template v-else>
+    <div v-for="(steps, stage) in HACKRF_GAIN_STEPS_DB" :key="stage" class="sdr-gain-row">
+      <label :for="'sdr-hackrf-' + stage" translate="no">{{ stage.toUpperCase() }}</label>
+      <UiSelect class="gev-field" :id="'sdr-hackrf-' + stage" hold :model-value="sdr.hackrfGain?.[stage]" @update:model-value="act('setHackrfGain', stage, $event)" :disabled="sdr.gainDisabled">
+        <option v-for="gain in steps" :key="gain" :value="gain" translate="no">{{ localSdrGainOptionLabel(gain) }}</option>
+      </UiSelect>
+    </div>
+    <div class="sdr-gain-row">
+      <label for="sdr-hackrf-amp" translate="no">AMP</label>
+      <UiSelect class="gev-field" id="sdr-hackrf-amp" hold :model-value="sdr.hackrfGain?.amp ? 'on' : 'off'" @update:model-value="act('setHackrfGain', 'amp', $event === 'on')" :disabled="sdr.gainDisabled">
+        <option value="off">{{ t('OFF') }}</option>
+        <option value="on">{{ t('ON') }}</option>
+      </UiSelect>
+    </div>
+  </template>
   <div id="sdr-adsb-stats" class="sdr-adsb-stats" role="status" aria-live="off" :hidden="sdr ? sdr.statsHidden : true">
     <span><output id="sdr-stat-rate">{{ sdr ? sdr.stats.rate : '--' }}</output> <span>{{ t('MSG/S') }}</span></span>
     <span><output id="sdr-stat-heard">{{ sdr ? sdr.stats.heard : '0' }}</output> <span>{{ t('HEARD') }}</span></span>

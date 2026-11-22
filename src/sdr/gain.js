@@ -26,6 +26,56 @@ export const SDR_GAIN_DEFAULTS = Object.freeze({
 
 export const SDR_GAIN_STORAGE_KEY = 'gev:sdr:gain:v1';
 
+const HACKRF_GAIN_STORAGE_KEY = 'gev:sdr:hackrf:gain:v1';
+
+export const HACKRF_GAIN_DEFAULTS = Object.freeze({
+  lna: 16,
+  vga: 16,
+  amp: false,
+});
+
+export const HACKRF_GAIN_STEPS_DB = Object.freeze({
+  lna: Object.freeze([0, 8, 16, 24, 32, 40]),
+  vga: Object.freeze(Array.from({ length: 32 }, (_, step) => step * 2)),
+});
+
+/** Accept only hardware-supported settings. Select inputs provide strings. */
+export function normalizeHackrfGain(stage, value) {
+  if (stage === 'amp') return typeof value === 'boolean' ? value : null;
+  if (
+    !Object.hasOwn(HACKRF_GAIN_STEPS_DB, stage) ||
+    (typeof value !== 'number' && !(typeof value === 'string' && value.trim()))
+  )
+    return null;
+  const gain = Number(value);
+  return HACKRF_GAIN_STEPS_DB[stage].includes(gain) ? gain : null;
+}
+
+export function readHackrfGainSettings(storage) {
+  let stored;
+  try {
+    stored = JSON.parse(storage?.getItem?.(HACKRF_GAIN_STORAGE_KEY) || 'null');
+  } catch {
+    /* Ignore unavailable storage or invalid JSON. */
+  }
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(HACKRF_GAIN_DEFAULTS).map(([stage, fallback]) => [
+        stage,
+        normalizeHackrfGain(stage, stored?.[stage]) ?? fallback,
+      ]),
+    ),
+  );
+}
+
+export function writeHackrfGainSettings(storage, settings) {
+  try {
+    storage?.setItem?.(HACKRF_GAIN_STORAGE_KEY, JSON.stringify(settings));
+  } catch {
+    /* Gain remains available for this session. */
+  }
+}
+
 /**
  * Normalize a requested gain to `'auto'` or the nearest listed R820T step.
  * @param {*} value `'auto'`, a dB number or a numeric string.
