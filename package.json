@@ -45,6 +45,7 @@
     "changelog": "node scripts/assemble-changelog.mjs --write",
     "changelog:check": "node scripts/assemble-changelog.mjs --check",
     "dev": "vite",
+    "dev:light": "node scripts/dev-light.mjs",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
