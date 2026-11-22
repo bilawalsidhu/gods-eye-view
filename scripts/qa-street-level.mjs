@@ -1026,8 +1026,7 @@ async function main() {
               metres <= 250,
               `within 250 m of the link point: ${Math.round(metres)} m`,
             );
-            // Back to Mapillary: the keyless page restores the saved layer
-            // and expects its KEY REQUIRED.
+            // Back to Mapillary, the main page's source before this step.
             await press(page, '#sl-provider-chips [data-chip-id="mapillary"]');
             await uiUntil(page, litAlone, 'mapillary');
           } finally {
@@ -1037,14 +1036,22 @@ async function main() {
       );
 
       await fixtureStep(
-        // This page restores the Mapillary choice the main page saved, and the
-        // server answers "no Mapillary token" for it: a chosen source is kept
-        // and gated on its key.
+        // A bare address starts from the default layers, so this page is
+        // given the Mapillary choice a link or the main page carries (Mapillary
+        // on, the others off), and the server answers "no Mapillary token"
+        // for it: a chosen source is kept and gated on its key.
         'keyless server (second page): KEY REQUIRED gates the controls',
         async () => {
           const keylessFixture = newFixture({ configured: false });
           const keyless = await open('keyless', keylessFixture);
           await expandPanel(keyless);
+          await keyless.evaluate(() =>
+            window.__godsEyeView.dataManager.setLayerParams(
+              'street-level',
+              { mapillary: true, kartaview: false, panoramax: false },
+              { origin: 'user' },
+            ),
+          );
           await assertKeyRequired(keyless);
           await collectRenderErrors(keyless, 'keyless');
           await keyless.close();
