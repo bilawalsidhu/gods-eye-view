@@ -164,6 +164,7 @@ export function localSdrCardView(state) {
     changeDeviceDisabled: transitional || !state.webUsbSupported,
     gainValue: formatGain(state.gain),
     gainDisabled: transitional,
+    hackrfGain: state.hackrfGain,
     statsHidden: !(adsbActive && state.connected),
     stats: {
       rate: Number.isFinite(state.messagesPerSecond)

@@ -117,6 +117,9 @@ export class LocalSdrControls {
       setSdrGain: (value) => {
         void this.receiver.setGain(value);
       },
+      setHackrfGain: (stage, value) => {
+        void this.receiver.setHackrfGain(stage, value);
+      },
       tuneSdr: (value) => {
         const mhz = Number(value);
         if (!Number.isFinite(mhz)) return;

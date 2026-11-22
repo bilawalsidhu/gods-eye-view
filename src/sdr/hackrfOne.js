@@ -1,3 +1,5 @@
+import { HACKRF_GAIN_DEFAULTS, normalizeHackrfGain } from './gain.js';
+
 // USB requests and payloads follow Great Scott Gadgets' libhackrf.
 const REQUEST = {
   SET_MODE: 1,
@@ -69,6 +71,20 @@ export async function openHackrfOne(device) {
       throw new Error(`HackRF One gain request ${request} failed`);
   }
 
+  async function setRxGain(stage, value) {
+    if (closing) throw new Error('HackRF One is closed');
+    const gain = normalizeHackrfGain(stage, value);
+    if (gain === null) throw new RangeError('Invalid HackRF One gain setting');
+    if (stage === 'amp') {
+      await write(REQUEST.SET_AMP, { value: Number(gain) });
+    } else {
+      await setGain(
+        stage === 'lna' ? REQUEST.SET_LNA_GAIN : REQUEST.SET_VGA_GAIN,
+        gain,
+      );
+    }
+  }
+
   async function stopRx() {
     if (!receiving) return;
     await write(REQUEST.SET_MODE, { value: MODE_OFF });
@@ -76,7 +92,7 @@ export async function openHackrfOne(device) {
   }
 
   return {
-    async configure({ sampleRate, frequencyHz }) {
+    async configure({ sampleRate, frequencyHz, gain = HACKRF_GAIN_DEFAULTS }) {
       if (closing) throw new Error('HackRF One is closed');
       // Match the sample rates of the existing ADS-B and FM decoders.
       if (sampleRate !== 2_000_000 && sampleRate !== 2_048_000)
@@ -102,9 +118,9 @@ export async function openHackrfOne(device) {
           frequencyHz % 1_000_000,
         ),
       });
-      await write(REQUEST.SET_AMP);
-      await setGain(REQUEST.SET_LNA_GAIN, 16);
-      await setGain(REQUEST.SET_VGA_GAIN, 16);
+      await setRxGain('amp', gain.amp);
+      await setRxGain('lna', gain.lna);
+      await setRxGain('vga', gain.vga);
       // If the USB response fails after the command took effect, close still
       // attempts to stop reception.
       receiving = true;
@@ -115,6 +131,8 @@ export async function openHackrfOne(device) {
         throw error;
       }
     },
+
+    setRxGain,
 
     async readSamples(sampleCount) {
       if (closing || !receiving) throw new Error('HackRF One is not receiving');
