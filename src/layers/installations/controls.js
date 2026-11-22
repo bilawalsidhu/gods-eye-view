@@ -10,7 +10,13 @@ import { surfaceDistance } from '../../geo/geodesic.js';
 import { toDegrees, toRadians } from '../../geo/vector.js';
 import { cameraOf } from '../../render/rendererOf.js';
 
-export function createControls({ state: layerState, services, parts, source }) {
+export function createControls({
+  state: layerState,
+  services,
+  parts,
+  source,
+  overlayHost,
+}) {
   const methods = {
     id: LAYER_ID,
 
@@ -168,6 +174,29 @@ export function createControls({ state: layerState, services, parts, source }) {
         parts.rendering.ownsSet(hit?.set)
           ? hit.meta?.installationId
           : null;
+      return id ? methods.getById(id) : null;
+    },
+
+    /**
+     * The mapped installation whose label box the shared overlay paints at a
+     * canvas position: what a click lands on from far out, where the dot is
+     * 7 px. Another layer's card or label that takes clicks there wins, so
+     * this answers null. The dot, outline and fill themselves are query port
+     * hits, read with {@link findByPick}. Null for anything else.
+     * @param {{x: number, y: number}|null|undefined} position Canvas CSS px.
+     * @returns {object|null} As {@link getById}.
+     */
+    findAt(position) {
+      if (!Number.isFinite(position?.x) || !Number.isFinite(position?.y))
+        return null;
+      let top = null;
+      try {
+        top = overlayHost?.hitTest?.(position.x, position.y) ?? null;
+      } catch {
+        top = null;
+      }
+      if (top) return null;
+      const id = parts.namedMarkers?.labelAt?.(position) ?? null;
       return id ? methods.getById(id) : null;
     },
 

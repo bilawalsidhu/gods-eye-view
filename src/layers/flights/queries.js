@@ -546,7 +546,9 @@ export function createQueries({
           object._labelCallsign = callsign;
           object._labelRegistration = registration;
         }
-        const altitude = info?.altitude;
+        // A grounded contact shows no flight level: its sticky `altitude` may
+        // still be the approach height.
+        const altitude = info?.onGround ? 0 : info?.altitude;
         if (object._altitude !== altitude) {
           object._altitude = altitude;
           object.metric = formatFlightLevel(altitude); // altitude is metres

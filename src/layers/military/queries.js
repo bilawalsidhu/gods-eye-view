@@ -194,9 +194,12 @@ export function createQueries({
       lon: num(info?.rawLon),
       // altitudeFt is the sticky barometric/MSL aviation field — converted to
       // meters here for shape parity with the flights layer.
-      altitudeM: Number.isFinite(info?.altitudeFt)
-        ? info.altitudeFt * 0.3048
-        : null,
+      // A grounded contact reports only an altitude it gave on the ground.
+      altitudeM: info?.onGround
+        ? (info.groundAltitudeM ?? null)
+        : Number.isFinite(info?.altitudeFt)
+          ? info.altitudeFt * 0.3048
+          : null,
       speedMps: num(info?.speedMps),
       heading: num(info?.track),
       verticalRateMps: num(info?.verticalRateMps),
@@ -510,7 +513,9 @@ export function createQueries({
         // TR-3B, not the airframe underneath it.
         const klass = tr3bTypeLabel(icao24, info?.type || 'MIL');
         if (object.klass !== klass) object.klass = klass;
-        const altitudeFt = info?.altitudeFt ?? 0;
+        // A grounded contact shows no flight level, like the civil layer; its
+        // sticky altitudeFt may still be the approach height.
+        const altitudeFt = info?.onGround ? 0 : (info?.altitudeFt ?? 0);
         if (object._altitudeFt !== altitudeFt) {
           object._altitudeFt = altitudeFt;
           // military metadata stores altitudeFt (feet); the helper takes metres

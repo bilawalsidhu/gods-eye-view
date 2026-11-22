@@ -869,3 +869,79 @@ test('a malformed provider is left out and the built-in kinds are unchanged', as
   assert.equal(cockpit.enter(), true);
   assert.equal(cockpit.subjectKind, 'aircraft');
 });
+
+// A requested-layer entry finds its aircraft in that layer, from the
+// aircraft the camera follows; it never asks Contacts.
+function retargetFixture(t, nearby) {
+  const { coordinator } = fixture(t, {
+    enabled: ['flights', 'military'],
+    tracked: { layerId: 'flights', info: CIVIL },
+  });
+  const tracked = [];
+  const searches = [];
+  coordinator.services.militaryAwarenessLayer.navigateNext = () =>
+    assert.fail('entry must not navigate through Contacts');
+  coordinator.services.flightsLayer.getTrackedSubject = () => ({
+    layerId: 'flights',
+    id: CIVIL.icao24,
+    position: { x: 1, y: 2, z: 3 },
+  });
+  coordinator.services.militaryFlightsLayer.getNearby = (...args) => {
+    searches.push(args);
+    return nearby;
+  };
+  coordinator.services.militaryFlightsLayer.trackById = (id, options) => {
+    tracked.push([id, options.origin]);
+    return true;
+  };
+  return { coordinator, tracked, searches };
+}
+
+test('a voice entry asking for a military class follows the nearest match without Contacts', (t) => {
+  const { coordinator, tracked, searches } = retargetFixture(t, [
+    { icao24: 'jet1', aircraftClass: 'fighter', distance: 10 },
+    { icao24: 'helo1', aircraftClass: 'helicopter', distance: 20 },
+    { icao24: 'helo2', aircraftClass: 'helicopter', distance: 30 },
+  ]);
+  const result = coordinator._retargetCockpitEntryLayer({
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+    currentTarget: { layerId: 'flights', id: CIVIL.icao24 },
+    selectedTarget: null,
+  });
+  assert.deepEqual(result, { ok: true, retargeted: true });
+  assert.deepEqual(tracked, [['helo1', 'voice']]);
+  // Searched from the followed aircraft, among the aircraft the person's
+  // filters show: never the hidden ones.
+  assert.deepEqual(searches[0][0], { x: 1, y: 2, z: 3 });
+  assert.equal(searches[0][3], undefined);
+});
+
+test('a voice entry whose followed aircraft already matches stays on it', (t) => {
+  const { coordinator, tracked } = retargetFixture(t, [
+    { icao24: 'helo1', aircraftClass: 'helicopter', distance: 0 },
+  ]);
+  const result = coordinator._retargetCockpitEntryLayer({
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+    currentTarget: { layerId: 'military', id: 'helo1' },
+    selectedTarget: null,
+  });
+  assert.deepEqual(result, { ok: true, retargeted: false });
+  assert.deepEqual(tracked, []);
+});
+
+test('a voice entry with no matching aircraft says so and follows nothing', (t) => {
+  const { coordinator, tracked } = retargetFixture(t, [
+    { icao24: 'jet1', aircraftClass: 'fighter', distance: 10 },
+  ]);
+  const result = coordinator._retargetCockpitEntryLayer({
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+    currentTarget: { layerId: 'flights', id: CIVIL.icao24 },
+    selectedTarget: null,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /No helicopter military contact is available/);
+  assert.deepEqual(tracked, []);
+});

@@ -295,7 +295,11 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode"
   ],
   "es": [
     "1 min/s",
@@ -489,7 +493,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "fr": [
     "1 min/s",
@@ -535,7 +541,7 @@
     "Conversation",
     "Country",
     "Cyan",
-    "Cyclones · NHC / CPHC",
+    "Cyclones · NHC / CPHC · JTWC",
     "DENSE",
     "DEST ---°",
     "DEST {bearing}",
@@ -746,7 +752,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "it": [
     "1 min/s",
@@ -979,7 +986,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "ja": [
     "1090 MHz",
@@ -1257,7 +1265,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "ru": [
     "1900–1945",
@@ -1494,7 +1504,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "uk": [
     "1900–1945",

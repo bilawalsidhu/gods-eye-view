@@ -153,3 +153,21 @@ test('the nearby sites search is busy, without native disable, until it settles'
   assert.equal(button.getAttribute('aria-busy'), 'false');
   assert.equal(button.getAttribute('aria-disabled'), 'false');
 });
+
+test('with Context closed, the collapsible sections are already in the page for PanelChrome', (t) => {
+  // PanelChrome finds collapsible panels once, at startup, by their collapse
+  // buttons; Context starts closed, so a section that mounts only while it
+  // is open would never be registered and its +/- would do nothing.
+  fixture(t);
+  assert.equal(
+    document
+      .getElementById('global-context-panel')
+      .classList.contains('collapsed'),
+    true,
+  );
+  const targets = [
+    ...document.querySelectorAll('.panel-collapse-btn[data-collapse-target]'),
+  ].map((button) => button.dataset.collapseTarget);
+  for (const id of ['station-panel', 'live-panel', 'radio-panel'])
+    assert.ok(targets.includes(id), `${id} is there to be registered`);
+});

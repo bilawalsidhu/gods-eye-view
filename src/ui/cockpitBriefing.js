@@ -9,8 +9,9 @@ import {
   formatCockpitWindDirection,
 } from './cockpitPresentation.js';
 import {
-  COCKPIT_BRIEF_PAGES,
   CYCLE_HELP_KEYS,
+  briefCycleTarget,
+  cockpitBriefPages,
   createBriefState,
   newsWindowFooter,
 } from './cockpitBriefPages.js';
@@ -48,11 +49,17 @@ export function publishBriefView() {
   });
 }
 
+/** The pages on offer now: three, or four with LIVE while a stream is. */
+function briefPages() {
+  return cockpitBriefPages(this.briefLiveOffered === true);
+}
+
 export function showBriefPage(index, { manual = false } = {}) {
   if (this.destroyed) return;
-  const count = COCKPIT_BRIEF_PAGES.length;
+  const pages = briefPages.call(this);
+  const count = pages.length;
   this.briefPageIndex = ((Number(index) % count) + count) % count;
-  const page = COCKPIT_BRIEF_PAGES[this.briefPageIndex];
+  const page = pages[this.briefPageIndex];
   Object.assign(this.brief, {
     pageIndex: this.briefPageIndex,
     pageId: page.id,
@@ -101,6 +108,20 @@ export function relocalizeBrief() {
     this.renderRegionalBriefStatus(this.brief.news.state, this.lastSubjectInfo);
 }
 
+/**
+ * Offer or withdraw the LIVE page, as the ridden subject's stream comes and
+ * goes. A LIVE page shown as its stream goes falls back to Live Signals;
+ * otherwise the shown page stays and its position counts the pages anew.
+ */
+export function setBriefLiveOffered(offered) {
+  if (this.destroyed) return;
+  const next = offered === true;
+  if (next === this.briefLiveOffered) return;
+  this.briefLiveOffered = next;
+  const count = cockpitBriefPages(next).length;
+  this.showBriefPage(this.briefPageIndex < count ? this.briefPageIndex : 0);
+}
+
 export function setBriefAutoRotate(enabled) {
   if (this.destroyed) return;
   this.briefAutoRotateEnabled = Boolean(enabled);
@@ -129,7 +150,13 @@ export function startBriefRotation({ reset = false } = {}) {
       this.signalStream?.contains(document.activeElement) === true;
     const isInteracting = hasPointer || hasFocus;
     if (!isInteracting) {
-      this.showBriefPage(this.briefPageIndex + 1);
+      // The cycle never turns to the LIVE page, and waits while it is shown:
+      // video starts and stops on request only.
+      const target = briefCycleTarget(
+        briefPages.call(this),
+        this.briefPageIndex,
+      );
+      if (target !== null) this.showBriefPage(target);
     }
     this.startBriefRotation();
   }, COCKPIT_BRIEF_ROTATE_MS);
