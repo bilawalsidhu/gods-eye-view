@@ -429,12 +429,13 @@ test('a late rejection cannot settle a newer turn card', async () => {
   f.session.destroy();
 });
 
-function startReentrancyFixture() {
+function startReentrancyFixture(canStart) {
   let starts = 0;
   let stops = 0;
   const settings = [];
   const session = createVoiceSession({
     runner: async () => ({ ok: true }),
+    canStart,
     createAdapter: ({ emit }) => ({
       async start(options) {
         starts++;
@@ -518,6 +519,28 @@ test('Stop and explicit reentrant successor start acquire only for the successor
 test('ordinary start forwards caller settings once and remains stoppable', async () => {
   const f = startReentrancyFixture();
   const settings = { pushToTalk: true };
+  await f.session.start(settings);
+  assert.equal(f.settings.length, 1);
+  assert.equal(f.settings[0], settings);
+  assert.equal(f.starts(), 1);
+  assert.equal(f.session.state, 'listening');
+  f.session.stop();
+  assert.equal(f.session.state, 'idle');
+  f.session.destroy();
+});
+
+test('start admission rejects microphone use before connecting and allows typed chat', async () => {
+  const f = startReentrancyFixture((options) => options?.textOnly === true);
+  const states = [];
+  f.session.subscribe((event) => {
+    if (event.type === 'state') states.push(event.state);
+  });
+  await f.session.start({ pushToTalk: true });
+  assert.equal(f.starts(), 0);
+  assert.equal(f.session.state, 'idle');
+  assert.equal(states.includes('connecting'), false);
+
+  const settings = { textOnly: true };
   await f.session.start(settings);
   assert.equal(f.settings.length, 1);
   assert.equal(f.settings[0], settings);

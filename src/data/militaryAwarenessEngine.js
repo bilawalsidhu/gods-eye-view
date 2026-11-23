@@ -15,6 +15,35 @@ export const AWARENESS_RELATIONSHIP = Object.freeze({
 });
 
 /**
+ * Whether an aircraft matches a spoken class filter ("helicopter", "tanker"),
+ * on its class or type fields. No filter matches everything; an aircraft
+ * with no class or type matches no filter.
+ * @param {object} item Aircraft summary (`getNearby` row or cohort item).
+ * @param {string|null} aircraftClass Requested class.
+ * @returns {boolean}
+ */
+export function aircraftClassMatches(item, aircraftClass) {
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+  const requested = normalize(aircraftClass);
+  if (!requested) return true;
+  return [
+    item?.aircraftClass,
+    item?.klass,
+    item?.type,
+    item?.typeCode,
+    item?.typeName,
+  ]
+    .map(normalize)
+    .filter(Boolean)
+    .some(
+      (candidate) => candidate === requested || candidate.includes(requested),
+    );
+}
+
+/**
  * Search an expanding area synchronously, doubling the radius after each miss.
  * The maximum covers the farthest possible Earth-surface chord while keeping
  * an empty feed bounded.
@@ -61,9 +90,9 @@ export function formatAwarenessLabel(value) {
       value.callsign,
       value.name,
       value.label,
+      value.mmsi,
       value.id,
       value.icao24,
-      value.mmsi,
     ]) {
       const label = formatAwarenessLabel(candidate);
       if (label !== '—') return label;
@@ -154,7 +183,7 @@ export function getAwarenessNavigationTargets(
         ? cohort.summary.nearest
         : [];
     for (const item of sourceItems) {
-      const id = item?.icao24 || item?.mmsi || item?.id;
+      const id = item?.icao24 || item?.id || item?.mmsi;
       if (!id) continue;
       const key = `${layerId}:${id}`;
       if (key === `${subject?.layerId}:${subject?.id}`) continue;

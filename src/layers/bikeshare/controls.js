@@ -25,7 +25,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     /**
      * Return a sampled array of detectable station objects for HUD overlay rendering.
      * @param {Object} [options] - Sampling options (maxCount, seed).
-     * @returns {Array<{ position: Cesium.Cartesian3, id: string, type: string, skipLabel: boolean }>}
+     * @returns {Array<{ position: {x: number, y: number, z: number}, id: string, type: string, skipLabel: boolean }>}
      */
     getDetectableObjects(options = {}) {
       return parts.queries.collectDetectableStations(options);

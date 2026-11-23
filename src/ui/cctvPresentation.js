@@ -1,9 +1,22 @@
 import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
-import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
+import {
+  cctvSourceLabelText,
+  cctvSourceMessageText,
+  isCctvLiveFrameFallback,
+} from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
 import { roundHeadingDegrees } from '../data/headingDegrees.js';
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
+const CAMERAS_SHEET = sheetForPanelId('cctv-panel');
+const CONTEXT_SHEET = sheetForPanelId('global-context-panel');
+
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -90,13 +103,16 @@ export function presentCctvPanel(state, enabled) {
 }
 
 function metaText(state, enabled, activeCamera, catalogCount) {
-  if (activeCamera) {
+  // The layer keeps its active camera while off: a disabled panel must not
+  // describe a feed it no longer shows.
+  if (enabled && activeCamera) {
     const provider = cctvSourceLabelText(
       activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
     );
-    const statusMsg = activeCamera.sourceMessage
-      ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
-      : '';
+    const statusMsg =
+      activeCamera.sourceMessage && !isCctvLiveFrameFallback(activeCamera)
+        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
+        : '';
     // A partner-supplied feed inside a pack names its owner here.
     const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
     const calBadge = activeCamera.calBadge
@@ -188,6 +204,20 @@ export function _renderCctvState(state) {
     });
   }
   this._lastSeenCctvActiveId = effectiveActiveId;
+  // Switching the layer off closes the panel it opened: nothing is left to
+  // show. Only the on → off change collapses, so a panel the user opens
+  // while the layer is off stays open. Clear selected data layers and
+  // Context isolation keep the panel: the layer comes back with it. The
+  // panel chrome decides whether anything changes: a panel the desktop
+  // accordion only folded still has an open saved state to close.
+  if (
+    this._wasCctvEnabled &&
+    !enabled &&
+    !this.actions.preservePanelState?.()
+  ) {
+    this.actions.setPanelCollapsed('cctv-panel', true);
+  }
+  this._wasCctvEnabled = enabled;
 
   this._updateCctvSyncChip(state?.loading, enabled);
 
@@ -258,11 +288,25 @@ export function _renderCctvState(state) {
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
   this.store.setLive(liveIntent);
+  // A background tab, a collapsed panel or a closed phone sheet shows no
+  // picture; the observers and visibilitychange render again on showing.
+  const body = globalThis.document?.body;
+  const phone = body?.classList.contains(MOBILE_SHELL_CLASS);
+  const sheet = body?.getAttribute(MOBILE_SHEET_ATTR);
+  const tabShown = !!body && !document.hidden;
+  const panelShown =
+    tabShown &&
+    !this._cctvPanel?.classList.contains('collapsed') &&
+    (!phone || sheet === CAMERAS_SHEET);
+  // Context's camera card shows the same still.
+  const cardShown =
+    tabShown &&
+    this.store.previewCards > 0 &&
+    (!phone || sheet === CONTEXT_SHEET);
+  // Its bigger view is a popup over the map, shown on any phone sheet.
+  const popupShown = tabShown && this.store.previewPopups > 0;
   if (this._cctvVideo) {
-    const visible =
-      liveIntent &&
-      !document.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed');
+    const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;
@@ -287,6 +331,7 @@ export function _renderCctvState(state) {
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
+      (panelShown || cardShown || popupShown) &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);

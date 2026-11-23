@@ -6,7 +6,6 @@
 // row text (LayerPanel._buildMetaText) at every refreshLayerStats() call.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { CITY_BY_ID, GBFS_CITY_REGISTRY } from './registry.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -16,6 +15,7 @@ import { createViewport } from './viewport.js';
 import { createRendering } from './rendering.js';
 import { createLifecycle } from './lifecycle.js';
 import { LayerPanel, layerFeedState } from '../../ui/layerPanel.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const BOSTON_ID = 'boston-bluebikes';
 const TORONTO_ID = 'toronto-bike-share';
@@ -149,20 +149,14 @@ function makeLiveLayer() {
   const { methods: controls } = createControls(context);
 
   const camera = { ...LONDON, height: LOW_M };
-  const viewer = {
+  const viewer = {};
+  bindFakeDraw(viewer, {
     camera: {
-      get positionCartographic() {
-        return Cesium.Cartographic.fromDegrees(
-          camera.lon,
-          camera.lat,
-          camera.height,
-        );
-      },
-      computeViewRectangle: () => undefined,
-      changed: { addEventListener() {}, removeEventListener() {} },
+      pose: () => ({ lon: camera.lon, lat: camera.lat, height: camera.height }),
+      viewRectangle: () => null,
+      on: () => () => {},
     },
-    scene: { globe: {}, primitives: { add() {}, remove() {} } },
-  };
+  });
   parts.lifecycle.methods.init(viewer);
 
   const painted = [];

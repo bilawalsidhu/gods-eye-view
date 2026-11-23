@@ -1,0 +1,671 @@
+/* ── Cockpit side windows in the app's panel look ───────────────────────
+   Contact (left), the briefing carousel (right) and the Display / Radio
+   controls get the same smoked glass, 16px corners and card rows as the
+   main panels. They keep cockpit.css's slight 3D slant toward the centre,
+   and stand the same height. The text glow goes; the state colours on the
+   top edge (uncertain, lost) stay. */
+
+.cockpit-context-window,
+.cockpit-signal-window {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top-color: rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(12, 12, 20, 0.72);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  text-shadow: none;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Open, both windows share one compact size; their lists scroll. */
+.cockpit-context-window:not([data-collapsed='true']),
+.cockpit-signal-window:not([data-collapsed='true']) {
+  width: min(280px, 23vw);
+  height: min(27vh, 260px);
+}
+
+/* Contact's header: the buttons share the kicker's row, so the subject runs
+   the full width on at most two lines instead of wrapping beside them. */
+.cockpit-context-window:not([data-collapsed='true'])
+  .cockpit-context-header
+  > div {
+  display: contents;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) .cockpit-context-kicker {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) .cockpit-context-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.cockpit-context-window:not([data-collapsed='true']) #cockpit-context-subject {
+  display: -webkit-box;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Their foot sits just above the bottom HUD readouts (MGRS / GSD), which
+   stand at clamp(84px, 11vh, 118px) and are about 38px tall. */
+.cockpit-context-window,
+.cockpit-signal-window {
+  bottom: calc(clamp(84px, 11vh, 118px) + 54px);
+}
+
+.cockpit-context-window[data-state='uncertain'] {
+  border-top-color: rgba(116, 219, 255, 0.72);
+}
+
+.cockpit-context-window[data-state='lost'] {
+  border-top-color: rgba(213, 168, 99, 0.72);
+}
+
+.cockpit-context-window[data-collapsed='true'],
+.cockpit-signal-window[data-collapsed='true'] {
+  border-radius: 12px;
+  background: rgba(12, 12, 20, 0.66);
+}
+
+/* Headers: a quiet hairline like the panel headers. */
+.cockpit-card-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.cockpit-card-actions button {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(224, 236, 242, 0.82);
+}
+
+.cockpit-card-actions button:hover,
+.cockpit-card-actions button:focus-visible {
+  border-color: rgba(0, 212, 255, 0.45);
+  background: rgba(0, 212, 255, 0.1);
+  color: #fff;
+}
+
+/* Rows and tiles inside: the card style used in Context and Visual. */
+.cockpit-context-cohorts > div,
+.cockpit-signal-list li,
+.cockpit-news-list li,
+.cockpit-local-grid > div {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+/* The weather tiles stand apart as cards, with no lit grid behind them,
+   and are short enough to fit the shorter window. */
+.cockpit-local-grid {
+  gap: 5px;
+  background: none;
+}
+
+.cockpit-local-grid > div {
+  min-height: 0;
+  gap: 2px;
+  padding: 6px 9px;
+}
+
+.cockpit-route-card {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Display / Radio: the closed launchers and the open panels match too. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded {
+  border-color: rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(12, 12, 20, 0.72);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ── Cockpit uses the main page's rails ───────────────────────────────
+   The left rail shows Data Layers only (Authoring has no place in first
+   person, Utilities has nothing to do there, and the cockpit's own Display
+   panel stands in for Visual), one panel opens beside it, and the collapsed
+   header strips the cockpit used instead are hidden. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left {
+  display: block;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  :is(
+    [data-rail-item='scene-panel'],
+    [data-rail-item='utilities-panel'],
+    [data-rail-item='pp-toggles']
+  ),
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-tooltip:has(
+    > :is(
+      [data-rail-item='scene-panel'],
+      [data-rail-item='utilities-panel'],
+      [data-rail-item='pp-toggles']
+    )
+  ) {
+  display: none;
+}
+
+/* With some icons hidden, the runs between them break up: with a panel
+   open, each icon left is its own island. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail--collapsible:not(.ui-rail--expanded):has(.ui-rail__item--on)
+  > .ui-tooltip::before {
+  inset: -4px -5px;
+  border-width: 1px;
+  border-radius: 14px;
+}
+
+/* Authoring, Utilities or Visual may still be open underneath; its hidden icon must
+   not split the rail into islands. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(
+    :is(
+      [data-rail-item='scene-panel'],
+      [data-rail-item='utilities-panel'],
+      [data-rail-item='pp-toggles']
+    )[aria-pressed='true']
+  )
+  > .ui-tooltip::before,
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(
+    :is(
+      [data-rail-item='scene-panel'],
+      [data-rail-item='utilities-panel'],
+      [data-rail-item='pp-toggles']
+    )[aria-pressed='true']
+  )::before {
+  /* Nor may the sliding highlight stay where the hidden icon was. */
+  display: none;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > .gev-panel-rail--left
+  .ui-rail:has(
+    :is(
+      [data-rail-item='scene-panel'],
+      [data-rail-item='utilities-panel'],
+      [data-rail-item='pp-toggles']
+    )[aria-pressed='true']
+  ) {
+  background: rgba(16, 20, 28, 0.82) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > [data-panel-id].collapsed,
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  #left-panel-stack
+  > :is(
+    [data-panel-id='scene-panel'],
+    [data-panel-id='utilities-panel'],
+    [data-panel-id='pp-toggles']
+  ) {
+  display: none;
+}
+
+/* Both rails start at one height, just under the top HUD text, so their top
+   edges line up; the cockpit layout pass places Display and Radio at the
+   same height (COCKPIT_UTILITY_MIN_TOP_PX / _RATIO in cockpitPresentation.js). */
+:root body.cockpit-mode:not(.mobile-shell) #left-panel-stack {
+  top: max(206px, 22vh) !important;
+}
+
+/* Bottom HUD readouts: scale from their foot, and drop the three-line right
+   block (GSD / ALT / AIS) by one scaled line so both start level, as on the
+   main page. */
+body.cockpit-mode #intel-hud .hud-bottom-left {
+  transform-origin: left bottom;
+}
+
+body.cockpit-mode #intel-hud .hud-bottom-right {
+  bottom: calc(clamp(84px, 11vh, 118px) - 20px);
+  transform-origin: right bottom;
+}
+
+/* ── Live signals rows ──────────────────────────────────────────────────
+   Callsign on the left, time small at the top right, the detail under it.
+   The status colour is a slim inset bar (cyan for the aircraft you ride,
+   white for nearby, amber for military / warnings), not a bent border. */
+.cockpit-signal-list {
+  gap: 4px;
+}
+
+.cockpit-signal-list li {
+  position: relative;
+  display: block;
+  padding: 5px 10px 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 2px 0 0 rgba(244, 251, 255, 0.22);
+}
+
+.cockpit-signal-list li:is(.track, .current) {
+  border-color: rgba(0, 212, 255, 0.22);
+  background: rgba(0, 212, 255, 0.06);
+  box-shadow: inset 2px 0 0 var(--cockpit-accent, #00d4ff);
+}
+
+.cockpit-signal-list li:is(.nearby) {
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 2px 0 0 rgba(244, 251, 255, 0.55);
+}
+
+.cockpit-signal-list li:is(.military, .warning) {
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 2px 0 0 #d5a863;
+}
+
+.cockpit-signal-list li.actionable:is(:hover, :focus-within) {
+  border-color: rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.08);
+}
+
+.cockpit-signal-list time {
+  position: absolute;
+  top: 6px;
+  inset-inline-end: 28px;
+  color: rgba(224, 236, 242, 0.4);
+  font: 7px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cockpit-signal-list li > div {
+  gap: 1px;
+}
+
+.cockpit-signal-target {
+  grid-template-columns: minmax(0, 1fr) 14px;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+}
+
+.cockpit-signal-target-rule {
+  display: none;
+}
+
+.cockpit-signal-target-chevron {
+  justify-self: end;
+  color: rgba(224, 236, 242, 0.5) !important;
+}
+
+.cockpit-signal-list
+  li.actionable:is(:hover, :focus-within)
+  .cockpit-signal-target-chevron {
+  color: #fff !important;
+}
+
+.cockpit-signal-list span:not([class]) {
+  color: rgba(224, 236, 242, 0.62);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+/* Keep a long callsign clear of the time at the row's end. */
+.cockpit-signal-list .cockpit-signal-target-label {
+  margin-inline-end: 50px;
+}
+
+/* ── Briefing content fits the narrower window ────────────────────────── */
+.cockpit-signal-window {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cockpit-signal-window > *,
+.cockpit-brief-stage,
+.cockpit-brief-stage > section,
+.cockpit-signal-list,
+.cockpit-signal-list li {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Route: a quiet heading, endpoints that truncate. */
+.cockpit-route-card {
+  padding-inline: 4px;
+}
+
+.cockpit-route-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+#cockpit-route-status {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-route-airport strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Header: the title on one line, the controls on the row under it. */
+.cockpit-signal-window:not([data-collapsed='true']) .cockpit-signal-header {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding-inline: 4px;
+}
+
+.cockpit-signal-window:not([data-collapsed='true']) .cockpit-brief-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.cockpit-signal-window:not([data-collapsed='true']) .cockpit-signal-kicker {
+  white-space: nowrap;
+}
+
+.cockpit-signal-window:not([data-collapsed='true']) .cockpit-brief-actions {
+  justify-content: flex-start;
+}
+
+.cockpit-signal-window:not([data-collapsed='true']) #cockpit-signal-toggle {
+  margin-inline-start: auto;
+}
+
+/* ── Open Display / Radio panels: the main panels' header and size ───── */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded {
+  min-width: 295px;
+  box-sizing: border-box;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-launcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 10px 8px;
+  color: rgba(224, 236, 242, 0.78);
+  font: 9px/1 var(--font-mono);
+  letter-spacing: 0.22em;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-divider {
+  flex: 0 1 22px;
+  height: 1px;
+  margin-right: auto;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
+}
+
+/* The launcher's own toggle steps aside: the rail and "−" open and close
+   the panel instead. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded
+  .cockpit-utility-glyph {
+  display: none;
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-collapse {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(206, 232, 239, 0.75);
+  font: 13px/1 var(--font-mono);
+  cursor: pointer;
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-collapse:hover,
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-collapse:focus-visible {
+  border-color: rgba(0, 212, 255, 0.45);
+  color: #fff;
+  outline: none;
+}
+
+/* ── Right rail as on the left: an icon column that stays, labels beside it
+   while nothing is open, and the open panel to its left. The launchers'
+   own strips give way to it. ─────────────────────────────────────────── */
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: start;
+  justify-content: end;
+  column-gap: 6px;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control:not(.is-expanded) {
+  display: none;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-control.is-expanded {
+  grid-column: 1;
+  grid-row: 1;
+  margin-top: 0 !important;
+}
+
+/* The phone keeps the launchers' own toggles, so the rail and "−" are for
+   the desktop look only. */
+.cockpit-utility-rail,
+.cockpit-utility-collapse {
+  display: none;
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  gap: 4px;
+  align-items: stretch;
+  pointer-events: auto;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  :is(.cockpit-utility-rail__labels, .cockpit-utility-rail__icons) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(16, 20, 28, 0.82);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__labels {
+  box-sizing: border-box;
+  width: 170px;
+  padding-inline: 14px;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail__labels
+  > span {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  color: rgba(225, 236, 242, 0.82);
+  font:
+    500 9.28px/1 Inter,
+    -apple-system,
+    system-ui,
+    sans-serif;
+  letter-spacing: 2.08px;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail.is-open
+  .cockpit-utility-rail__labels {
+  display: none;
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary, rgba(206, 232, 239, 0.75));
+  cursor: pointer;
+  transition:
+    color var(--transition-fast, 120ms),
+    background var(--transition-fast, 120ms),
+    border-color var(--transition-fast, 120ms);
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail__item
+  .material-symbols-outlined {
+  font-size: 18px;
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary, #fff);
+}
+
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-rail__item.is-on,
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail__item.is-on:hover {
+  border-color: rgba(0, 212, 255, 0.15);
+  background: rgba(0, 212, 255, 0.15);
+  color: #00d4ff;
+}
+
+/* With a panel open, each icon is its own island, as on the main rails. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail.is-open
+  .cockpit-utility-rail__icons {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail.is-open
+  .cockpit-utility-rail__item {
+  position: relative;
+}
+
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail.is-open
+  .cockpit-utility-rail__item::before {
+  position: absolute;
+  inset: -5px;
+  z-index: -1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(16, 20, 28, 0.82);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  content: '';
+  pointer-events: none;
+}
+
+/* Hovering an icon lights its label too, as on the left. */
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail:has(.cockpit-utility-rail__item:nth-child(1):hover)
+  .cockpit-utility-rail__labels
+  > span:nth-child(1),
+:root
+  body.cockpit-mode:not(.mobile-shell)
+  .cockpit-utility-rail:has(.cockpit-utility-rail__item:nth-child(2):hover)
+  .cockpit-utility-rail__labels
+  > span:nth-child(2) {
+  color: var(--text-primary, #fff);
+}
+
+/* Mirror the left rail's 52px inset, clear of the HUD's vertical readouts. */
+:root body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
+  right: 52px;
+}
+
+/* Like the cockpit's other windows (rtl.css), the rail keeps its physical
+   side in a right-to-left language: icons at the screen edge, the open panel
+   inside them. Only the text reads right to left. */
+html[dir='rtl'] body.cockpit-mode:not(.mobile-shell) .cockpit-utility-controls {
+  direction: ltr;
+}
+
+html[dir='rtl']
+  body.cockpit-mode:not(.mobile-shell)
+  :is(.cockpit-utility-control.is-expanded, .cockpit-utility-rail__labels) {
+  direction: rtl;
+}

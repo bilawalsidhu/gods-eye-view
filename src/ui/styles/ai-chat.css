@@ -366,15 +366,12 @@
   flex-basis: 1.25rem;
 }
 /* At this width main shows the wings' icons only (command-dock-trays.css);
-   centre them in the slim wings. Cyber keeps its labels. */
+   centre them in the slim wings. */
 @media (max-width: 900px) {
-  :root:not([data-ui-theme='cyber'])
-    #command-dock
-    > :is(#location-bar, #control-panel)
-    .dock-tray-toggle {
+  :root #command-dock > :is(#location-bar, #control-panel) .dock-tray-toggle {
     justify-content: center;
   }
-  :root:not([data-ui-theme='cyber'])
+  :root
     #command-dock
     :is(#location-bar, #control-panel)
     :is(.location-toolbar-label, .panel-title) {
@@ -382,7 +379,7 @@
     min-width: 0;
     justify-content: center;
   }
-  :root:not([data-ui-theme='cyber']) #command-dock .dock-label-icon {
+  :root #command-dock .dock-label-icon {
     width: 1.25rem;
     height: 1.25rem;
     flex-basis: 1.25rem;
@@ -1448,16 +1445,15 @@ body[data-assistant-docked='true'] #right-context-rail {
   box-shadow: 0 0 0 1px currentColor;
 }
 
-/* Assistant panels share the left panels' glass surface (layers.css). Cyber
-   keeps its own surfaces. */
-:root:not([data-ui-theme='cyber']) #gev-voice-control {
+/* Assistant panels share the left panels' glass surface (layers.css). */
+:root #gev-voice-control {
   --assistant-glass: var(--glass-bg);
   --assistant-glass-border: var(--glass-border);
   --assistant-glass-shadow:
     0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03) inset,
     0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
-:root:not([data-ui-theme='cyber'])
+:root
   #command-dock
   #gev-voice-control
   :is(
@@ -1472,14 +1468,14 @@ body[data-assistant-docked='true'] #right-context-rail {
 }
 /* The mini reply sits inside the chat panel, whose own blur makes it the
    backdrop root: a blur on the reply could not reach the map. */
-:root:not([data-ui-theme='cyber'])
+:root
   #command-dock
   #gev-voice-control
   :is(#gev-chat-panel, #gev-voice-panel, #gev-voice-panel[data-minimized]) {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   backdrop-filter: blur(24px) saturate(1.4);
 }
-:root:not([data-ui-theme='cyber'])
+:root
   #command-dock
   #gev-voice-control
   #gev-chat-panel[data-minimized='true']:focus-within {
@@ -1488,12 +1484,12 @@ body[data-assistant-docked='true'] #right-context-rail {
 
 /* A backdrop-filter on the voice control would stop the panels inside it
    from blurring the map, so its own blur moves to a layer behind it. */
-:root:not([data-ui-theme='cyber']) #command-dock > #gev-voice-control {
+:root #command-dock > #gev-voice-control {
   isolation: isolate;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-:root:not([data-ui-theme='cyber']) #command-dock > #gev-voice-control::before {
+:root #command-dock > #gev-voice-control::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -1696,5 +1692,13 @@ body[data-assistant-docked='true'] #right-context-rail {
 @media (max-width: 620px) {
   #command-dock {
     --dock-side-compact: 3.25rem;
+  }
+}
+
+/* From 1200px the dock sits 74px up (command-dock.css), 74px - 2vh higher
+   than the bottom-edge dock this height budget was written for. */
+@media (min-width: 1200px) {
+  #gev-chat-panel {
+    max-height: min(34rem, calc(100dvh - 10rem - 74px + 2vh));
   }
 }

@@ -18,6 +18,7 @@
  */
 
 import { createAreaStore, summarizeArea } from '../data/areaStore.js';
+import { findCamera } from '../render/rendererOf.js';
 import { createAreaResolver, foldLatinMarks } from '../data/areaResolver.js';
 import { circleRing, displayParts } from '../data/areaGeometry.js';
 import { findNaturalRegion } from '../data/naturalEarthRegions.js';
@@ -176,12 +177,9 @@ export function createVoiceAreas({
     const picked = annotationResolver?.pickWorldFromScreen?.(viewer, 0.5, 0.5);
     if (Number.isFinite(picked?.lat) && Number.isFinite(picked?.lon))
       return picked;
-    const carto = viewer?.camera?.positionCartographic;
-    return carto
-      ? {
-          lat: (carto.latitude * 180) / Math.PI,
-          lon: (carto.longitude * 180) / Math.PI,
-        }
+    const pose = findCamera(viewer)?.pose();
+    return Number.isFinite(pose?.lat) && Number.isFinite(pose?.lon)
+      ? { lat: pose.lat, lon: pose.lon }
       : null;
   }
 

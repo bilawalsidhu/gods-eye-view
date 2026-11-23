@@ -1,6 +1,7 @@
 <script setup>
 import { storeToRefs } from 'pinia';
 import { useCelestialRingStore } from '../../stores/celestialRing.js';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The full-globe sun/moon ring, inside the viewer's container, as the ring
 // owner (src/celestialRing.js) presents it.
@@ -44,6 +45,6 @@ const markerStyle = (marker) =>
 
 <template>
   <Teleport v-if="ring" :to="ring.container">
-    <div :key="ring.id" id="celestial-ring-overlay" class="celestial-ring-overlay" :class="{ visible: ring.visible, disabled: !ring.enabled }" aria-hidden="true" :data-globe-visible="ring.globeVisible ?? undefined" :data-ephemeris-updates="ring.ephemerisUpdates ?? undefined"><div class="celestial-ring-outline" :style="outlineStyle(ring.outline)"></div><canvas v-ring-canvas="{ owner: ring.owner, kind: 'sun' }" class="celestial-ring-canvas celestial-sun-canvas" :style="layerStyle(ring.sun)"></canvas><canvas v-ring-canvas="{ owner: ring.owner, kind: 'moon' }" class="celestial-ring-canvas celestial-moon-canvas" :style="layerStyle(ring.moon)"></canvas><span class="celestial-marker celestial-sun material-symbols-outlined" :style="markerStyle(ring.sunMarker)">light_mode</span><span class="celestial-marker celestial-moon material-symbols-outlined" :style="markerStyle(ring.moonMarker)">dark_mode</span></div>
+    <div :key="ring.id" id="celestial-ring-overlay" class="celestial-ring-overlay" :class="{ visible: ring.visible, disabled: !ring.enabled }" aria-hidden="true" :data-globe-visible="ring.globeVisible ?? undefined" :data-ephemeris-updates="ring.ephemerisUpdates ?? undefined"><div class="celestial-ring-outline" :style="outlineStyle(ring.outline)"></div><canvas v-ring-canvas="{ owner: ring.owner, kind: 'sun' }" class="celestial-ring-canvas celestial-sun-canvas" :style="layerStyle(ring.sun)"></canvas><canvas v-ring-canvas="{ owner: ring.owner, kind: 'moon' }" class="celestial-ring-canvas celestial-moon-canvas" :style="layerStyle(ring.moon)"></canvas><UiIcon class="celestial-marker celestial-sun" name="light_mode" :size="null" :style="markerStyle(ring.sunMarker)" /><UiIcon class="celestial-marker celestial-moon" name="dark_mode" :size="null" :style="markerStyle(ring.moonMarker)" /></div>
   </Teleport>
 </template>

@@ -3,6 +3,7 @@ import { computed, shallowRef, useTemplateRef, watch } from 'vue';
 import { formatDate, t, translateKnown } from '../../../i18n/index.js';
 import { photoCreator, formatAge } from '../../../layers/wildlifeSightings/photoText.js';
 import { ACARTIA_SITE, inatLicenceLabel, inatPhotoUrl, isOpenPhoto } from '../../../layers/wildlifeSightings/records.js';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 
 const props = defineProps({
   sighting: { type: Object, required: true },
@@ -71,7 +72,7 @@ watch([() => props.sighting.stableId, () => photo.value?.src], () => { loaded.va
 
 <template>
   <section class="wildlife-sighting-card" data-wildlife-sighting-card tabindex="-1" :aria-label="name" @keydown.stop @keyup.stop>
-    <button type="button" class="wildlife-sighting-card-close" :aria-label="t('Close sighting')" @click="emit('close')">×</button>
+    <UiCloseButton class="wildlife-sighting-card-close" :label="t('Close sighting')" @click="emit('close')" />
     <component :is="link ? 'a' : 'div'" class="wildlife-sighting-card-content" :href="link || undefined" :target="link ? '_blank' : undefined" :rel="link ? 'noopener noreferrer' : undefined" :aria-label="link ? actionLabel : undefined">
       <div v-if="photo" class="wildlife-sighting-card-photo" :aria-busy="!loaded && !failed">
         <p v-if="!loaded && !failed" role="status">{{ t('Loading photo...') }}</p>
@@ -115,7 +116,7 @@ watch([() => props.sighting.stableId, () => photo.value?.src], () => { loaded.va
 .wildlife-sighting-card-content:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 3px; }
 /* Script focus starts inside the card; tab focus still outlines its controls. */
 .wildlife-sighting-card:focus-visible { outline: none !important; }
-.wildlife-sighting-card-close { position: absolute; z-index: 1; inset-block-start: 4px; inset-inline-end: 4px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--btn-radius); background: transparent; color: inherit; font: 20px/1 var(--font-sans); cursor: pointer; }
+.wildlife-sighting-card-close { position: absolute; z-index: 1; inset-block-start: 4px; inset-inline-end: 4px; width: 24px; height: 24px; border-radius: var(--btn-radius); color: inherit; font: 20px/1 var(--font-sans); }
 .wildlife-sighting-card-close:hover { background: var(--menu-bg); }
 .wildlife-sighting-card-close:focus-visible { outline: 2px solid var(--text-primary); outline-offset: 2px; }
 .wildlife-sighting-card-photo { position: relative; width: 100%; height: 180px; }

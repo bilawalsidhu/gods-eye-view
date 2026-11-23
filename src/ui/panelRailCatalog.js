@@ -7,27 +7,29 @@ export const PANEL_RAIL_HOST_CLASS = 'gev-panel-rail';
 export const PANEL_RAIL_FALLBACK_ICON = 'more_horiz';
 
 /**
- * How each side panel appears on its rail. Labels are the panels' own titles.
- * `shownBy` names a class the panel needs to be shown at all (`f` toggles
- * Data Layers' `active`).
+ * How each side panel appears on its rail. Labels are the panels' own titles;
+ * `context` is the label's translation context.
  */
 export const PANEL_RAIL_ITEMS = Object.freeze({
-  'data-panel': {
-    icon: 'layers',
-    label: msg('DATA LAYERS'),
-    shownBy: 'active',
-  },
+  'data-panel': { icon: 'layers', label: msg('DATA LAYERS') },
   'utilities-panel': { icon: 'handyman', label: msg('UTILITIES') },
   'scene-panel': { icon: 'movie', label: msg('AUTHORING') },
-  'pp-toggles': { icon: 'tune', label: msg('DISPLAY') },
+  // `context` keeps the panel's name apart from the satellite class of the
+  // same English word.
+  'pp-toggles': { icon: 'palette', label: msg('VISUAL'), context: 'panel' },
   'cctv-panel': { icon: 'videocam', label: msg('CCTV') },
   'weather-panel': { icon: 'partly_cloudy_day', label: msg('WEATHER') },
+  'news-panel': { icon: 'public', label: msg('NEWS') },
   'recent-imagery-panel': {
     icon: 'satellite_alt',
     label: msg('RECENT IMAGERY'),
   },
   'street-level-panel': { icon: 'streetview', label: msg('STREET LEVEL') },
   'global-context-panel': { icon: 'radar', label: msg('CONTEXT') },
+  'space-missions-panel': {
+    icon: 'rocket_launch',
+    label: msg('Space Missions'),
+  },
 });
 
 /**

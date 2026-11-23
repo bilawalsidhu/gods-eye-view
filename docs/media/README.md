@@ -1,39 +1,36 @@
 # README media provenance
 
-## Capture GIFs
+## Site clips
 
-Bilawal Sidhu created and owns the following 17 GIFs and has authorized their inclusion and redistribution as part of this public repository and its project documentation. Any appearance by Bilawal Sidhu in these captures is included with his permission.
+The following animated images in `site/` are the clips shown on [godseyeview.ai](https://godseyeview.ai), converted to animated WebP for the README. Bilawal Sidhu and Halfpixel, Inc. created them and have authorized their inclusion and redistribution as part of this public repository and its project documentation.
 
-- `hero-open-source-reveal.gif`
-- `06-cockpit-ar.gif`
-- `start-here/airport-ground-traffic-google-3d.gif`
-- `03-austin-cctv.gif`
-- `14-iss-over-ukraine.gif`
-- `01-style-sweep.gif`
-- `12-switch-aircraft-cockpit.gif`
-- `start-here/military-cockpit-dense-google-3d.gif`
-- `01-voice-annotate-zilker.gif`
-- `04-airport-distance.gif`
-- `15-global-radio-layer.gif`
-- `08-falcon9-replay.gif`
-- `09-undersea-cables.gif`
-- `07-helicopter-loops.gif`
-- `10-walking-route-flythrough.gif`
-- `08-boneyard.gif`
-- `05-traffic-to-cctv.gif`
+- `site/hero.webp`
+- `site/voice.webp`
+- `site/flights.webp`
+- `site/satellites.webp`
+- `site/cameras.webp`
+- `site/cockpit.webp`
+- `site/weather.webp`
+- `site/imagery.webp`
+- `site/transit.webp`
+- `site/sdr.webp`
+- `site/radio.webp`
+- `site/mcp.webp`
+- `site/director.webp`
 
-Copyright © Bilawal Sidhu. These files are not covered by the project's MIT License. Permission is limited to their inclusion and redistribution with this repository and its project documentation. No permission is granted for standalone reuse or modification. Commercial reuse outside this repository requires separate permission. No share-alike license applies.
+Copyright © Bilawal Sidhu and Halfpixel, Inc. These files are not covered by the project's MIT License. Permission is limited to their inclusion and redistribution with this repository and its project documentation. No permission is granted for standalone reuse or modification. Commercial reuse outside this repository requires separate permission. No share-alike license applies.
 
-The GIFs are promotional captures of God's Eye View. They include Google Photorealistic 3D Tiles and public or third-party data layers with in-frame attribution. Bilawal Sidhu's ownership and permission cover the captures and his likeness; they do not replace the terms of Google Maps Platform or any displayed data provider. Keep the visible attribution intact.
+The clips are promotional captures and renders of God's Eye View. Some include Google Photorealistic 3D Tiles and public or third-party data layers with in-frame attribution. The permission above covers the clips; it does not replace the terms of Google Maps Platform or any displayed data provider. Keep the visible attribution intact.
+
+The launch-era capture GIFs that this page listed before were removed from the README and from the repository in November 2026. They remain in the Git history under the terms stated for them at the time.
 
 ## Public README PNGs
 
-Bilawal Sidhu published the following PNGs in the existing public `bilawalsidhu/gods-eye-view` repository and authorized their continued inclusion and redistribution with this repository and its project documentation:
+Bilawal Sidhu published the following PNG in the existing public `bilawalsidhu/gods-eye-view` repository and authorized their continued inclusion and redistribution with this repository and its project documentation:
 
-- `youtube-popular-videos.png`
 - `open-source-survey.png`
 
-Source: [`assets/youtube-popular-videos.png`](https://github.com/bilawalsidhu/gods-eye-view/blob/7afb3beefb2dd39110ed117c8f06825e9ca2ada4/assets/youtube-popular-videos.png) and [`assets/open-source-survey.png`](https://github.com/bilawalsidhu/gods-eye-view/blob/7afb3beefb2dd39110ed117c8f06825e9ca2ada4/assets/open-source-survey.png) in public repository commit [`7afb3beefb2dd39110ed117c8f06825e9ca2ada4`](https://github.com/bilawalsidhu/gods-eye-view/commit/7afb3beefb2dd39110ed117c8f06825e9ca2ada4). The localized files preserve the source bytes unchanged.
+Source: [`assets/open-source-survey.png`](https://github.com/bilawalsidhu/gods-eye-view/blob/7afb3beefb2dd39110ed117c8f06825e9ca2ada4/assets/open-source-survey.png) in public repository commit [`7afb3beefb2dd39110ed117c8f06825e9ca2ada4`](https://github.com/bilawalsidhu/gods-eye-view/commit/7afb3beefb2dd39110ed117c8f06825e9ca2ada4). The localized files preserve the source bytes unchanged.
 
 These files are not covered by the project's MIT License. No permission is granted for standalone reuse or modification. Commercial reuse outside this repository requires separate permission. No share-alike license applies.
 

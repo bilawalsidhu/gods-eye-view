@@ -1,3 +1,4 @@
+import { followedOf } from '../data/followed.js';
 import { nextTick } from 'vue';
 import { CockpitViewController, CockpitDisplayPortal } from './cockpit.js';
 import {
@@ -5,10 +6,19 @@ import {
   bridgeEntryAllowed,
   cockpitEntryAllowed,
   orbitEntryAllowed,
+  subjectEntryAllowed,
 } from '../contextModePolicy.js';
-import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
+import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
+import {
+  AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
+  aircraftClassMatches,
+  formatAwarenessLabel,
+} from '../data/militaryAwarenessEngine.js';
+import { fromDegreesInto } from '../geo/ellipsoid.js';
+import { findCamera } from '../render/rendererOf.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
+import { readEntityRecord } from '../data/entityRecords.js';
 
 /** Own Cockpit entry/rollback, readouts and the single Display portal. */
 export class CockpitCoordinator {
@@ -54,14 +64,18 @@ export class CockpitCoordinator {
       meshFloorPreferred,
       warmGroundFloor,
       sampleMeshFloorCells,
+      trackedEntityDrawn,
       holdContinuousRender,
       releaseContinuousRender,
       fetchRegionalBrief,
       regionalDistanceM,
       weatherCodeLabel,
       acquireOrbitImagery,
+      cockpitSubjects,
     } = services;
     this._cockpitDisplayPortal = null;
+    // The application's own subjects (services.cockpitSubjects), checked once.
+    const subjectProviders = cockpitSubjectProviders(cockpitSubjects ?? []);
     this.cockpitView = new CockpitViewController(viewer, {
       services: {
         flightsLayer,
@@ -79,6 +93,7 @@ export class CockpitCoordinator {
         meshFloorPreferred,
         warmGroundFloor,
         sampleMeshFloorCells,
+        trackedEntityDrawn,
         holdContinuousRender,
         releaseContinuousRender,
         fetchRegionalBrief,
@@ -108,6 +123,21 @@ export class CockpitCoordinator {
           vesselsEnabled: !!this._dataManager?.isEnabled('ais-live-vessels'),
           contextModeChanging: this._contextModeChanging,
         }),
+      subjectProviders,
+      // A provider's subject needs its own layer on, no Context change in
+      // flight, and the provider's own say.
+      isSubjectEntryAllowed: (provider, candidate) =>
+        subjectEntryAllowed({
+          layerEnabled: this._isLayerEnabled(provider.layerId),
+          contextModeChanging: this._contextModeChanging,
+          providerAllows:
+            this.cockpitView?.callSubject(
+              provider,
+              'isEntryAllowed',
+              [candidate],
+              false,
+            ) === true,
+        }),
       isOrbitEntryAllowed: () =>
         orbitEntryAllowed({
           satellitesEnabled: !!this._dataManager?.isEnabled('satellites'),
@@ -122,9 +152,9 @@ export class CockpitCoordinator {
       onExited: () => this.exitPanels(),
       onRide: (layerId) => this._adoptRiddenLayer(layerId),
       restoreTrackingFrame: (entity) => {
-        const [layerId, ...idParts] = String(entity?.gevTrackedId || '').split(
-          ':',
-        );
+        const [layerId, ...idParts] = String(
+          readEntityRecord(entity)?.trackedId || '',
+        ).split(':');
         const trackedId = idParts.join(':');
         if (!trackedId) return false;
         if (layerId === 'flights')
@@ -197,6 +227,9 @@ export class CockpitCoordinator {
       this.cockpitView.subjectKind === 'satellite'
     )
       return 'Cockpit is in an orbital view — exit it first, then track an aircraft to enter Cockpit';
+    // And in an application's own first-person view.
+    if (this.cockpitView?.active && this.cockpitView.subjectProvider)
+      return 'Cockpit is in another first-person view — exit it first, then track an aircraft to enter Cockpit';
     if (!this._aircraftLayerEnabled)
       return 'No aircraft layer is on — turn on Flights or Military Flights and track an aircraft to enter Cockpit';
     return null;
@@ -216,15 +249,26 @@ export class CockpitCoordinator {
       active && this.cockpitView?.subjectKind === 'satellite'
         ? this.cockpitView.readSatelliteInfo?.()
         : null;
+    // And a provider's subject in use.
+    const provided =
+      active && this.cockpitView?.subjectProvider
+        ? {
+            kind: this.cockpitView.subjectProvider.kind,
+            id: this.cockpitView.subjectId,
+            layerId: this.cockpitView.subjectProvider.layerId,
+            callsign: null,
+            name: this.cockpitView.lastSubjectFrame?.name ?? null,
+          }
+        : null;
     const gateOpen = Boolean(this.cockpitView?.isEntryAllowed?.());
     // "Could Cockpit be ENTERED right now" — so it is false while already
     // inside, unconditionally. Cockpit takes the entity off
-    // `viewer.trackedEntity` on entry and NEXT puts one back, which made this
+    // the camera's follow on entry and NEXT puts one back, which made this
     // flip true/false between calls while `active` stayed true; readers
     // (including the voice model) read that as a broken half-entered state.
     const entryAllowed =
       !active &&
-      Boolean(gateOpen && info && this.viewer?.trackedEntity?.position);
+      Boolean(gateOpen && info && followedOf(this.viewer)?.entity?.position);
     // Entry needs only the ridden aircraft's own layer: with one tracked,
     // that layer; with none, any aircraft layer to track one from.
     const subjectLayerOff = info
@@ -244,30 +288,32 @@ export class CockpitCoordinator {
               ? 'subject-layer-off'
               : 'no-tracked-aircraft',
       visionMode: this.cockpitView?.visionMode || null,
-      subject: satellite
-        ? {
-            kind: 'satellite',
-            id: satellite.id,
-            layerId: satellite.layerId,
-            callsign: null,
-            name: satellite.name,
-          }
-        : vessel
+      subject: provided
+        ? provided
+        : satellite
           ? {
-              kind: 'vessel',
-              id: vessel.mmsi,
-              layerId: vessel.layerId,
+              kind: 'satellite',
+              id: satellite.id,
+              layerId: satellite.layerId,
               callsign: null,
-              name: vessel.name,
+              name: satellite.name,
             }
-          : info
+          : vessel
             ? {
-                kind: 'aircraft',
-                id: info.icao24 || info.id || null,
-                layerId: info.layerId || null,
-                callsign: info.callsign || null,
+                kind: 'vessel',
+                id: vessel.id,
+                layerId: vessel.layerId,
+                callsign: null,
+                name: vessel.name,
               }
-            : null,
+            : info
+              ? {
+                  kind: 'aircraft',
+                  id: info.icao24 || info.id || null,
+                  layerId: info.layerId || null,
+                  callsign: info.callsign || null,
+                }
+              : null,
       navigation: snapshot
         ? {
             canPrevious: Boolean(snapshot.navigation?.canPrevious),
@@ -312,13 +358,41 @@ export class CockpitCoordinator {
     };
   }
 
+  /**
+   * Where a requested-layer entry searches from: the aircraft the camera
+   * follows, else the ground under the camera.
+   * @param {{layerId: string}|null} currentTarget The tracked aircraft.
+   * @returns {{x: number, y: number, z: number}|null}
+   */
+  _cockpitEntrySearchOrigin(currentTarget) {
+    const { flightsLayer, militaryFlightsLayer } = this.services;
+    const layer =
+      currentTarget?.layerId === 'military'
+        ? militaryFlightsLayer
+        : currentTarget?.layerId === 'flights'
+          ? flightsLayer
+          : null;
+    const subject = layer?.getTrackedSubject?.();
+    if (subject?.position) return subject.position;
+    const pose = findCamera(this.viewer)?.pose?.();
+    if (!Number.isFinite(pose?.lat) || !Number.isFinite(pose?.lon)) return null;
+    return fromDegreesInto(pose.lon, pose.lat, 0, { x: 0, y: 0, z: 0 });
+  }
+
+  /**
+   * Retarget a voice entry to the requested layer and class before entering.
+   * It searches the aircraft that layer shows, under the person's own
+   * filters, nearest first, from the followed aircraft or the camera, and
+   * follows the nearest match; the aircraft already followed counts when it
+   * matches. It needs nothing from Contacts.
+   */
   _retargetCockpitEntryLayer({
     targetLayer,
     aircraftClass,
     currentTarget,
     selectedTarget,
   }) {
-    const { militaryAwarenessLayer } = this.services;
+    const { flightsLayer, militaryFlightsLayer } = this.services;
     if (!['flights', 'military'].includes(targetLayer)) {
       return {
         ok: false,
@@ -330,12 +404,27 @@ export class CockpitCoordinator {
     const alreadyOnLayer = activeLayer === targetLayer;
     if (alreadyOnLayer && !aircraftClass)
       return { ok: true, retargeted: false };
-    const moved = militaryAwarenessLayer?.navigateNext
-      ? !!militaryAwarenessLayer.navigateNext({
-          targetLayer,
-          aircraftClass,
-          origin: 'voice',
-        })
+    const layer =
+      targetLayer === 'military' ? militaryFlightsLayer : flightsLayer;
+    const origin = this._cockpitEntrySearchOrigin(currentTarget);
+    const nearby =
+      origin && typeof layer?.getNearby === 'function'
+        ? layer.getNearby(
+            origin,
+            AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
+            targetLayer === 'military' ? 5000 : 25000,
+          )
+        : [];
+    const match = nearby.find(
+      (item) => item?.icao24 && aircraftClassMatches(item, aircraftClass),
+    );
+    const followed =
+      match &&
+      currentTarget?.layerId === targetLayer &&
+      String(currentTarget.id) === String(match.icao24);
+    if (followed) return { ok: true, retargeted: false };
+    const moved = match
+      ? !!layer.trackById?.(match.icao24, { origin: 'voice' })
       : false;
     if (moved) return { ok: true, retargeted: true };
     // A filter that matched nothing still enters, as long as the layer is

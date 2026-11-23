@@ -2,13 +2,9 @@ import {
   formatAwarenessLabel,
   AWARENESS_RADIUS_M,
 } from '../../data/militaryAwarenessEngine.js';
-import {
-  formatNumber,
-  onLocaleChange,
-  t,
-  translateKnown,
-} from '../../i18n/index.js';
+import { formatNumber, onLocaleChange, t } from '../../i18n/index.js';
 import { sourceStatusLabel } from '../../ui/layerNames.js';
+import { translateStatusMessage } from '../../ui/statusText.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
 import { AWARENESS_PAGE_SIZE, AWARENESS_PAGE_ROTATE_MS } from './policy.js';
 import { distanceParts } from '../../data/distanceFormat.js';
@@ -45,7 +41,7 @@ export function presentAwarenessDistance(meters) {
 function presentAwarenessReason(summary = {}) {
   return summary.reasonTemplate
     ? t(summary.reasonTemplate, summary.reasonValues)
-    : translateKnown(summary.reason || '');
+    : translateStatusMessage(summary.reason || '');
 }
 
 /**
@@ -117,7 +113,7 @@ export function createPanel({ state: layerState, parts }) {
       .slice(page, page + AWARENESS_PAGE_SIZE)
       .map((item, index) => {
         const label = formatAwarenessLabel(item);
-        const targetId = item.icao24 || item.mmsi || item.id;
+        const targetId = item.icao24 || item.id || item.mmsi;
         const distance = presentAwarenessDistance(item.distanceM);
         if (!targetId)
           return {
@@ -182,7 +178,22 @@ export function createPanel({ state: layerState, parts }) {
       : null;
   }
 
-  /** The tracked airliner's photo with its credit, or null. The subject
+  /** The credit line: the photographer, and an open photo's licence. A
+   *  photo whose answer names no photographer shows no photographer. */
+  function photoCredit(photo) {
+    if (photo.licence)
+      return photo.photographer
+        ? t('Photo: {photographer} · {licence}', {
+            photographer: photo.photographer,
+            licence: photo.licence,
+          })
+        : t('Photo · {licence}', { licence: photo.licence });
+    return photo.photographer
+      ? t('Photo © {photographer}', { photographer: photo.photographer })
+      : '';
+  }
+
+  /** The subject's photo with its credit, or null. The subject
    *  refresh resolves it; only the subject it was resolved for shows it. */
   function presentPhoto(subject) {
     const held = layerState.subjectPhoto;
@@ -198,9 +209,7 @@ export function createPanel({ state: layerState, parts }) {
       width: photo.width ?? null,
       height: photo.height ?? null,
       link: photo.link,
-      credit: t('Photo © {photographer}', {
-        photographer: photo.photographer,
-      }),
+      credit: photoCredit(photo),
     };
   }
 
@@ -209,9 +218,14 @@ export function createPanel({ state: layerState, parts }) {
     ensurePanel();
     layerState.panelRenders += 1;
     const { subject, cohorts } = layerState.results;
+    const windowLabel = t('{distance} FLIGHT / VESSEL WINDOW', {
+      distance: presentAwarenessDistance(AWARENESS_RADIUS_M),
+    });
     publish({
       kind: 'results',
-      subject: `${subject.label} · ${t('{distance} FLIGHT / VESSEL WINDOW', { distance: presentAwarenessDistance(AWARENESS_RADIUS_M) })}`,
+      subject: `${subject.label} · ${windowLabel}`,
+      subjectIdentity: { layerId: subject.layerId, id: subject.id },
+      subjectLabel: subject.label,
       subjectNames: presentNames(subject.memberNames),
       photo: presentPhoto(subject),
       navigation: presentNavigation(),

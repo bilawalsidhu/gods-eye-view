@@ -238,7 +238,12 @@ function createRealtimeTokenHandler({
       if (!bearer) {
         res.statusCode = 503;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'OPENAI_API_KEY is not set' }));
+        res.end(
+          JSON.stringify({
+            error: 'OPENAI_API_KEY is not set',
+            code: 'API_KEY_MISSING',
+          }),
+        );
         return;
       }
     }

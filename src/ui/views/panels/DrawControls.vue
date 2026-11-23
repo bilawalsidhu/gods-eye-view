@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import { useDisplayStore } from '../../stores/display.js';
 import DrawMarkList from './DrawMarkList.vue';
@@ -27,7 +28,7 @@ const shapeOptions = computed(() => [
 <template>
   <div class="pp-toggle-group" id="draw-group">
     <UiButton class="pp-toggle-btn" :pressed="draw?.active ?? false" pressed-class="active" id="draw-toggle" @click="act('toggleDraw')" :title="t('Draw on the world — click vertices, double-click or Enter to finish, Esc to cancel')">
-      <span class="pp-icon material-symbols-outlined" aria-hidden="true">draw</span>
+      <UiIcon class="pp-icon" name="draw" :size="null" />
       <span class="pp-label">{{ t('Draw') }}</span>
     </UiButton>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-mode-row">
@@ -36,7 +37,7 @@ const shapeOptions = computed(() => [
     </div>
     <div class="pp-slider-row" :class="{ visible: draw?.active }" id="draw-label-row">
       <span class="draw-hint" id="draw-hint" aria-live="polite">{{ draw?.hint ?? '' }}</span>
-      <button class="pp-mode-btn draw-clear-btn" id="draw-clear" type="button" @click="act('clearDraw')" :title="t('Remove every mark from the board')">{{ t('Clear') }}</button>
+      <UiButton class="pp-mode-btn draw-clear-btn" id="draw-clear" @click="act('clearDraw')" :title="t('Remove every mark from the board')">{{ t('Clear') }}</UiButton>
     </div>
     <DrawMarkList />
   </div>
