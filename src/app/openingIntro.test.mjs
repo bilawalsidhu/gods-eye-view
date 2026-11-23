@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import {
   OPENING,
+  eyeCoverScale,
   globeRadiusPx,
   heightForGlobeRadius,
   openingPlaying,
@@ -17,23 +18,45 @@ const TARGET = { lon: 10.4, lat: 51.1, height: 23e6, heading: 0, pitch: -1 };
 const LANDED = { lon: TARGET.lon, lat: TARGET.lat, height: TARGET.height };
 const END_MS = OPENING.centreMs + OPENING.flightStartMs + OPENING.flightMs + 1;
 
-test('the arcs fly out and the words fade before the globe arrives', () => {
+test('the words fade, then the eye opens past the screen before the globe arrives', () => {
   const start = openingStage(0);
   assert.equal(start.text, 1);
-  assert.equal(start.veil, 1);
+  assert.equal(start.shut, false);
   assert.equal(start.pupilOpacity, 1);
   assert.equal(start.flight, 0);
   const centred = openingStage(OPENING.centreMs);
   assert.equal(centred.text, 0);
   assert.equal(centred.centre, 1);
-  const arcsGone = openingStage(OPENING.centreMs + OPENING.arcsMs);
-  assert.equal(arcsGone.arcsOpacity, 0);
-  assert.ok(arcsGone.arcsScale > 5);
+  assert.equal(centred.shut, true, 'shut but for the eye');
+  assert.equal(centred.eyeGrowth, 0);
+  const half = openingStage(OPENING.centreMs + OPENING.eyeMs / 2);
+  assert.ok(half.eyeGrowth > 0 && half.eyeGrowth < 0.5, 'it speeds up');
+  assert.equal(half.pupilOpacity, 1, 'the planet stays in the pupil');
+  const open = openingStage(OPENING.centreMs + OPENING.eyeMs);
+  assert.equal(open.eyeGrowth, 1);
+  assert.equal(open.eyeOpen, true);
+  assert.equal(open.eyeOpacity, 0);
+  assert.equal(open.shutterOpacity, 0);
   const real = openingStage(OPENING.centreMs + OPENING.pupilMs[1]);
   assert.equal(real.pupilOpacity, 0);
-  assert.equal(real.veil, 0);
   assert.ok(real.flight > 0 && real.flight < 1);
   assert.equal(openingStage(END_MS).done, true);
+});
+
+test('the open eye reaches past the corners of any screen', () => {
+  const eye = { width: 128, height: 80 };
+  for (const view of [
+    { width: 1280, height: 720 },
+    { width: 375, height: 812 },
+    { width: 3840, height: 1600 },
+  ]) {
+    const scale = eyeCoverScale(eye, view);
+    // The eye's opening, taken as the ellipse inside its outline, holds
+    // the corners.
+    const a = (eye.width / 2) * scale;
+    const b = (eye.height / 2) * scale;
+    assert.ok((view.width / 2 / a) ** 2 + (view.height / 2 / b) ** 2 < 1);
+  }
 });
 
 test('the flight turns west to east, slows and stops over the target', () => {
@@ -92,7 +115,8 @@ function stage() {
   doc.body.innerHTML = `
     <div id="cesiumContainer"></div>
     <div id="loading-screen"><span class="loader-logo"><svg>
-      <path id="outer_eye"/><path id="inner_eye"/>
+      <path id="outer_eye" d="M0,10C0,0,20,0,20,10C20,20,0,20,0,10ZM5,10h1"/>
+      <path id="inner_eye"/>
       <path id="globe"/><path id="globe_cage"/>
     </svg></span></div>`;
   const screen = doc.getElementById('loading-screen');
@@ -149,7 +173,16 @@ test('the opening runs to the start view, then hides the cover', async () => {
   assert.equal(openingPlaying(), true);
   assert.ok(s.screen.classList.contains('opening'));
   assert.ok(s.views[0].destination.height > TARGET.height * 2, 'far start');
-  s.advance(OPENING.centreMs + OPENING.pupilMs[1]);
+  const shutter = s.screen.querySelector('[data-opening-shutter]');
+  assert.ok(shutter, 'the cover around the eye');
+  assert.match(
+    shutter.getAttribute('d'),
+    /ZM0,10C0,0,20,0,20,10C20,20,0,20,0,10Z$/,
+  );
+  assert.equal(shutter.getAttribute('fill-rule'), 'evenodd');
+  s.advance(OPENING.centreMs);
+  assert.equal(s.screen.style.getPropertyValue('--opening-veil'), '0');
+  s.advance(Math.max(OPENING.eyeMs, OPENING.pupilMs[1]));
   assert.ok(s.screen.classList.contains('hidden'));
   s.advance(OPENING.flightMs);
   await opening.done;

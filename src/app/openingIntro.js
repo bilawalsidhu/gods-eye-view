@@ -2,22 +2,24 @@ import { cameraOf } from '../render/rendererOf.js';
 
 /**
  * The opening: once the world has loaded, the loading screen's logo turns
- * into the globe. The words fade and the logo glides to the centre; the eye's
- * arcs fly at the viewer; the drawn planet in the pupil gives way to the real
- * one, drawn the same size behind it; the real one spins and grows, slowing
- * until it stops, the whole planet in view, over the start view (the
- * visitor's country). Everything is timed from one clock, in ms.
+ * into the globe. The words fade and the logo glides to the centre. The
+ * screen is then shut except inside the eye, which flies at the viewer and
+ * opens onto the application as it grows past the screen's edges. The drawn
+ * planet in the pupil (its blue disc) gives way to the real one, drawn the
+ * same size behind it; the real one spins and grows, slowing until it stops,
+ * the whole planet in view, over the start view (the visitor's country).
+ * Everything is timed from one clock, in ms.
  */
 export const OPENING = Object.freeze({
   /** The words fade and the logo moves to the centre. */
   centreMs: 450,
   // The rest is timed from the end of the move.
-  /** The arcs grow and fade. */
-  arcsMs: 700,
-  /** The background clears to the globe. */
+  /** The eye grows past the screen's edges. */
+  eyeMs: 1100,
+  /** Without the logo's own parts (an <img>): the background clears. */
   veilMs: Object.freeze([200, 700]),
   /** The drawn planet fades into the real one. */
-  pupilMs: Object.freeze([500, 1100]),
+  pupilMs: Object.freeze([600, 1200]),
   /** The camera's flight in. */
   flightStartMs: 300,
   flightMs: 4200,
@@ -26,9 +28,13 @@ export const OPENING = Object.freeze({
 });
 
 const EARTH_RADIUS_M = 6371000;
-// logo.svg: its viewBox width and the drawn planet's radius, in its units.
+// logo.svg: its viewBox width, the drawn planet's radius (the blue disc) and
+// the eye's centre, in its units.
 const LOGO_WIDTH = 775;
-const PUPIL_RADIUS = 120.33;
+const PUPIL_RADIUS = 195;
+const EYE_CENTRE = Object.freeze({ x: 568.8, y: 379 });
+/** How far past the screen's corners the eye opens. */
+const EYE_COVER_MARGIN = 1.6;
 /** Never start further out than this, metres. */
 const MAX_FAR_HEIGHT_M = 4e8;
 
@@ -57,16 +63,22 @@ const span = (t, [from, to]) => clamp01((t - from) / (to - from));
 export function openingStage(t, timing = OPENING) {
   const move = clamp01(t / timing.centreMs);
   const after = t - timing.centreMs;
-  const arcs = easeInCubic(clamp01(after / timing.arcsMs));
+  const eye = clamp01(after / timing.eyeMs);
   const flight = clamp01((after - timing.flightStartMs) / timing.flightMs);
   return {
     /** The words' opacity. */
     text: 1 - move,
     /** How far the logo has moved to the centre, 0–1. */
     centre: easeInOutCubic(move),
-    arcsScale: 1 + 5 * arcs,
-    arcsOpacity: 1 - arcs,
-    /** The loading screen's background opacity. */
+    /** Whether the screen is shut except inside the eye. */
+    shut: move >= 1,
+    /** How far the eye has grown towards covering the screen, 0–1. */
+    eyeGrowth: easeInCubic(eye),
+    /** The eye's own opacity, and that of the shutter around it. */
+    eyeOpacity: 1 - span(eye, [0.6, 1]),
+    shutterOpacity: 1 - span(eye, [0.85, 1]),
+    eyeOpen: eye >= 1,
+    /** The background's opacity where the logo is an <img>. */
     veil: 1 - span(after, timing.veilMs),
     pupilOpacity: 1 - span(after, timing.pupilMs),
     /** The flight's progress, 0–1. */
@@ -112,6 +124,44 @@ export function globeRadiusPx(height, { fovy, viewportHeight }) {
 export function heightForGlobeRadius(radiusPx, { fovy, viewportHeight }) {
   const tangent = (radiusPx * Math.tan(fovy / 2)) / (viewportHeight / 2);
   return EARTH_RADIUS_M / Math.sin(Math.atan(tangent)) - EARTH_RADIUS_M;
+}
+
+/**
+ * How much the eye of `eye` size must grow, about its centre at the centre
+ * of `view`, for its opening to reach past the view's corners.
+ */
+export function eyeCoverScale(eye, view) {
+  const across = view.width / eye.width;
+  const down = view.height / eye.height;
+  return EYE_COVER_MARGIN * Math.hypot(across, down);
+}
+
+/**
+ * The cover around the eye: a shape the loading screen's colour, as large as
+ * any screen, with the eye's outline cut out of it. It sits under the logo's
+ * parts and grows with the eye, so the screen is shut outside the eye and
+ * open inside it.
+ */
+function eyeShutter(eye, loadingScreen, win) {
+  const outline = eye.getAttribute('d')?.match(/^[^Zz]*[Zz]/)?.[0];
+  if (!outline) return null;
+  const colour =
+    win.getComputedStyle?.(loadingScreen).backgroundColor || '#000';
+  const far = 1e5;
+  const { x, y } = EYE_CENTRE;
+  const shutter = eye.ownerDocument.createElementNS(
+    'http://www.w3.org/2000/svg',
+    'path',
+  );
+  shutter.setAttribute(
+    'd',
+    `M${x - far},${y - far}H${x + far}V${y + far}H${x - far}Z${outline}`,
+  );
+  shutter.setAttribute('fill', colour);
+  shutter.setAttribute('fill-rule', 'evenodd');
+  shutter.dataset.openingShutter = '';
+  eye.parentNode.insertBefore(shutter, eye.parentNode.firstElementChild);
+  return shutter;
 }
 
 /**
@@ -162,18 +212,21 @@ export function playOpeningIntro({
   const logo = loadingScreen.querySelector('.loader-logo');
   const svg = logo?.querySelector('svg');
   const part = (id) => svg?.querySelector(`#${id}`);
-  const arcs = [part('outer_eye'), part('inner_eye')].filter(Boolean);
-  // The drawn planet; the whole logo where it is an <img>.
+  const eye = part('outer_eye');
+  // The drawn planet: its blue disc, continents and grid; the whole logo
+  // where it is an <img>.
+  const disc = part('inner_eye');
   const pupil = svg
-    ? [part('globe'), part('globe_cage')].filter(Boolean)
+    ? [disc, part('globe'), part('globe_cage')].filter(Boolean)
     : [logo].filter(Boolean);
+  const shutter = eye ? eyeShutter(eye, loadingScreen, win) : null;
 
   loadingScreen.classList.add('opening');
   playing += 1;
   // The planet looks out of the middle of the eye again.
   for (const element of pupil) element.style.transform = 'none';
-  const globe = part('globe');
-  const pupilRect = (globe ?? logo)?.getBoundingClientRect();
+  const pupilRect = (disc ?? logo)?.getBoundingClientRect();
+  const eyeRect = eye?.getBoundingClientRect();
   const view = (
     doc.getElementById('cesiumContainer') ?? doc.documentElement
   ).getBoundingClientRect();
@@ -187,10 +240,10 @@ export function playOpeningIntro({
       : Math.PI / 3;
   const lens = { fovy, viewportHeight };
   const pupilRadius = pupilRect
-    ? globe
+    ? disc
       ? pupilRect.width / 2
       : (pupilRect.width * PUPIL_RADIUS) / LOGO_WIDTH
-    : 20;
+    : 32;
   const farHeight = Math.min(
     MAX_FAR_HEIGHT_M,
     Math.max(target.height * 2, heightForGlobeRadius(pupilRadius, lens)),
@@ -202,6 +255,12 @@ export function playOpeningIntro({
       }
     : { x: 0, y: 0 };
   const startRadius = globeRadiusPx(farHeight, lens);
+  const eyeCover = eyeRect?.width
+    ? eyeCoverScale(
+        { width: eyeRect.width, height: eyeRect.height },
+        { width: view.width || win.innerWidth, height: viewportHeight },
+      )
+    : 1;
 
   let driving = false;
   const place = (pose, heading = 0, pitch = -Math.PI / 2) => {
@@ -263,17 +322,26 @@ export function playOpeningIntro({
     place(pose);
     const scale = globeRadiusPx(pose.height, lens) / startRadius;
     loadingScreen.style.setProperty('--opening-text', stage.text);
-    loadingScreen.style.setProperty('--opening-veil', stage.veil);
+    // Once the logo is centred, the shutter around the eye is the cover.
+    loadingScreen.style.setProperty(
+      '--opening-veil',
+      shutter ? (stage.shut ? 0 : 1) : stage.veil,
+    );
     if (logo)
       logo.style.transform = `translate(${toCentre.x * stage.centre}px, ${
         toCentre.y * stage.centre
       }px) scale(${scale})`;
-    for (const element of arcs) {
-      element.style.transform = `scale(${stage.arcsScale})`;
-      element.style.opacity = stage.arcsOpacity;
+    const eyeScale = `scale(${1 + (eyeCover - 1) * stage.eyeGrowth})`;
+    if (eye) {
+      eye.style.transform = eyeScale;
+      eye.style.opacity = stage.eyeOpacity;
+    }
+    if (shutter) {
+      shutter.style.transform = eyeScale;
+      shutter.style.opacity = stage.shutterOpacity;
     }
     for (const element of pupil) element.style.opacity = stage.pupilOpacity;
-    if (stage.pupilOpacity === 0) hide();
+    if (stage.pupilOpacity === 0 && (stage.eyeOpen || !shutter)) hide();
     frame = win.requestAnimationFrame(step);
   };
   step();
