@@ -23,6 +23,7 @@ const API_URL =
       'attr_IncidentTypeCategory',
       'attr_FireDiscoveryDateTime',
       'poly_DateCurrent',
+      'poly_PolygonDateTime',
       'attr_FireCause',
       'attr_FireBehaviorGeneral',
       'attr_TotalIncidentPersonnel',

@@ -1643,11 +1643,6 @@
   "Unnamed incident": "Namnlös händelse",
   "Open {title} on InciWeb": "Öppna {title} på InciWeb",
   "Perimeter source unavailable": "Källa för brandgränser otillgänglig",
-  "Not contained or unknown": "Inte under kontroll eller okänt",
-  "Under 50% contained": "Mindre än 50 % under kontroll",
-  "50–99% contained": "50–99 % under kontroll",
-  "Fully contained": "Helt under kontroll",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Färgen visar rapporterad kontrollgrad. Brandgränserna är förenklade till cirka 100 m.",
   "Malformed perimeter snapshot": "Felformaterad ögonblicksbild av brandgränser",
   "radio tag|All": "Alla",
   "Directory refresh degraded; showing the previous station catalog.": "Uppdateringen av katalogen är begränsad; visar den tidigare stationskatalogen.",
@@ -4432,5 +4427,12 @@
   "JTWC warning ↗": "JTWC-varning ↗",
   "Active cyclone advisories and warnings": "Aktiva cyklonbulletiner och varningar",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Välj en storm på kartan, eller välj en storm i listan för att markera den och flytta kameran. Klicka på en tom plats på kartan för att rensa markeringen. Bulletiner från NOAA NHC/CPHC och varningar från JTWC. NHC:s kon beskriver osäkerheten i centrums prognosbana, inte stormens storlek eller hela riskområdet. JTWC:s riskområde för 34 knop är där vindar på 34 knop kan nå, vidgat med felet i banprognosen; det är ingen kon. Etiketterna på prognospunkterna är källans prognostimmar, inte tider räknade från utgivningen. Geometrin följer ytan; höjden är inte väderhöjd. Läs den officiella bulletinen eller den regionala varningscentralen.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Varning {number} · utfärdad {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Varning {number} · utfärdad {time}",
+  "last growth {age} ago": "senaste tillväxt för {age} sedan",
+  "Last 6 hours": "Senaste 6 timmarna",
+  "6–24 hours": "6–24 timmar",
+  "1–3 days": "1–3 dagar",
+  "Older or unknown": "Äldre eller okänt",
+  "Colour shows the age of each area.": "Färgen visar åldern på varje område.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m."
 }
