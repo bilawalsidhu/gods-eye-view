@@ -61,6 +61,28 @@ test('normalizeFireballSnapshot: rejects the whole snapshot on malformed input',
   assert.equal(normalizeFireballSnapshot({ fields: FIELDS, data: [badDir] }), null);
 });
 
+test('normalizeFireballSnapshot: a missing coordinate rejects the snapshot instead of becoming 0 degrees', () => {
+  const at = (lat, lon) => ['2026-01-01 00:00:00', '1', '1', lat, 'N', lon, 'E', '1', '1'];
+  const parse = (row) => normalizeFireballSnapshot({ fields: FIELDS, data: [row] });
+  for (const missing of [null, undefined, '', '   ', true, false, []]) {
+    assert.equal(parse(at(missing, '10')), null, `lat ${JSON.stringify(missing)}`);
+    assert.equal(parse(at('10', missing)), null, `lon ${JSON.stringify(missing)}`);
+  }
+  // A genuine 0 degrees is real data and stays valid, padded numbers still parse.
+  const zero = parse(at('0.0', '0'));
+  assert.equal(zero[0].lat, 0);
+  assert.equal(zero[0].lon, 0);
+  assert.equal(parse(at(' 54.4 ', '10'))[0].lat, 54.4);
+  assert.equal(parse(at(12, 10))[0].lat, 12);
+});
+
+test('normalizeFireballSnapshot: blank optional numbers are null, not 0', () => {
+  const row = ['2026-01-01 00:00:00', '1', '1', '10', 'N', '10', 'E', '', '  '];
+  const rows = normalizeFireballSnapshot({ fields: FIELDS, data: [row] });
+  assert.equal(rows[0].altitudeKm, null);
+  assert.equal(rows[0].velocityKmS, null);
+});
+
 test('normalizeFireballSnapshot: duplicate identity within a snapshot rejects the whole payload', () => {
   const rows = normalizeFireballSnapshot({ fields: FIELDS, data: [ROW, ROW] });
   assert.equal(rows, null);
@@ -225,9 +247,12 @@ test('malformed fireball refresh preserves prior entities, overlays, count and t
     const entity = dataSources[0].entities.values[0];
     const stats = layer.getStats();
 
+    const noLatitude = [...ROW];
+    noLatitude[3] = null;
     for (const bad of [
       { fields: FIELDS, data: 'nope' },
       { fields: ['date'], data: [ROW] },
+      { fields: FIELDS, data: [noLatitude] },
       null,
     ]) {
       respond(bad);

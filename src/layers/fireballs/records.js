@@ -16,8 +16,11 @@ function columnIndex(fields) {
 }
 
 function signedCoordinate(magnitude, dir, positiveDir) {
-  const value = Number(magnitude);
-  if (!Number.isFinite(value)) return null;
+  // A missing coordinate must be rejected, not read as 0 degrees: Number(null),
+  // Number('') and Number('  ') are all 0 and would paint the event on the equator
+  // or the prime meridian.
+  const value = finiteOrNull(magnitude);
+  if (value === null) return null;
   const normalizedDir = typeof dir === 'string' ? dir.trim().toUpperCase() : '';
   if (
     normalizedDir !== positiveDir &&
@@ -50,10 +53,14 @@ function parseUtcTimestamp(text) {
 }
 
 function finiteOrNull(value) {
-  // Number(null) is 0 and Number('') is 0 — both are the API's actual
-  // "not reported" spellings, so they must fail this check explicitly
-  // rather than surviving Number() coercion as a false zero.
-  if (value === null || value === undefined || value === '') return null;
+  // Number(null), Number(''), Number('  '), Number(false) and Number([]) are all 0.
+  // The API reports "not reported" as null or an empty string, so only real numbers
+  // and non-blank numeric strings may reach Number(), never a false zero.
+  if (typeof value === 'string') {
+    if (value.trim() === '') return null;
+  } else if (typeof value !== 'number') {
+    return null;
+  }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 }
