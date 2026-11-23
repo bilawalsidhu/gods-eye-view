@@ -1,13 +1,23 @@
 // The model field drawn through the renderer's ports: globe imagery on the
 // globe, the draw port's raster shell over photorealistic 3D tiles.
-import { findDraw } from '../../render/rendererOf.js';
+import { findDraw, findFrame, findGlobe } from '../../render/rendererOf.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   followShellLift,
   WEATHER_SHELL_HEIGHTS,
 } from '../weather/shellPlacement.js';
+import { FIELD_FADE } from './field.js';
+
+/** The global image's and the Europe inset's slots, under wind's. */
+const SLOTS = Object.freeze({
+  global: 'air-quality',
+  europe: 'air-quality-inset',
+});
+/** Replaced globe images go once the new ones are drawn, or after this long. */
+const RETIRE_AFTER_MS = 1500;
 
 let shells = 0;
+let paints = 0;
 
 /** One painted image (`field.js` `paintField`) on a canvas, or null without a page. */
 function canvasFor({ width, height, rgba }) {
@@ -24,20 +34,100 @@ function canvasFor({ width, height, rgba }) {
 
 /**
  * The colour field on whichever surface the map shows, as wind's colour
- * field is: one `single-image` imagery layer per image on the globe, in the
- * weather imagery's order, or over 3D tiles a raised shell per image that
- * rises with the camera. The images are drawn in order, the Europe inset
- * over the global field.
+ * field is: one `single-image` imagery layer per image on the globe, or over
+ * 3D tiles a raised shell per image that rises with the camera, each in the
+ * air-quality slot under wind (the Europe inset over the global field).
+ *
+ * A new step never blinks: shells take the new image in place (the port
+ * keeps drawing the old one until the new one can be drawn whole), and on
+ * the globe the new images are added before the old ones go, once the
+ * globe's imagery has settled or after `RETIRE_AFTER_MS`. `setStrength`
+ * scales every image's opacity (the fade by camera height); 0 hides them.
  * @param {{getViewer: () => object | null, getHost: () => {collection: object | null, kind: string}}} options
  */
 export function createFieldDrawing({ getViewer, getHost }) {
-  let handles = [];
+  /** What is drawn: `{ name, imagery }` on the globe, `{ name, field, offLift }` as shells. */
+  let entries = [];
+  let drawnOn = null;
   let shownKey = null;
-  /** The last painted images, by their key, so a new host draws them again unpainted. */
+  let strength = FIELD_FADE.maxAlpha;
+  /** The last painted images, as canvases (their pixels let go), by key. */
   let painted = null;
+  /** Globe images replaced by newer ones, drawn until those are. */
+  const outgoing = [];
+  let retireTimer = null;
+  let offRetire = null;
+
+  const applyStrength = (entry) => {
+    const show = strength > 0;
+    if (entry.imagery) {
+      entry.imagery.alpha = strength;
+      entry.imagery.show = show;
+      return;
+    }
+    entry.field.update({ alpha: strength });
+    entry.field.show = show;
+  };
+  const dropEntry = (entry) => {
+    entry.offLift?.();
+    entry.field?.dispose();
+    entry.imagery?.remove();
+  };
+  const retire = () => {
+    clearTimeout(retireTimer);
+    retireTimer = null;
+    offRetire?.();
+    offRetire = null;
+    for (const entry of outgoing.splice(0)) dropEntry(entry);
+  };
+  /** Let the replaced globe images go once the new ones can be seen. */
+  const retireLater = (viewer) => {
+    const globe = findGlobe(viewer);
+    const frame = findFrame(viewer);
+    if (typeof globe?.isSettled !== 'function' || !frame?.on) {
+      retire();
+      return;
+    }
+    clearTimeout(retireTimer);
+    offRetire?.();
+    retireTimer = setTimeout(retire, RETIRE_AFTER_MS);
+    offRetire = frame.on('postRender', () => {
+      if (globe.isSettled('imagery')) retire();
+    });
+    frame.requestRender?.('air-quality');
+  };
   const remove = () => {
-    for (const dispose of handles.splice(0)) dispose();
+    retire();
+    for (const entry of entries.splice(0)) dropEntry(entry);
+    drawnOn = null;
     shownKey = null;
+  };
+  const addImagery = (host, { name, canvas, rectangle }) => {
+    const imagery = host.collection.add({
+      kind: 'single-image',
+      url: canvas.toDataURL('image/png'),
+      rectangle,
+      zOrder: WEATHER_IMAGERY_Z[SLOTS[name]],
+    });
+    imagery.drapeOn = 'surface';
+    const entry = { name, imagery };
+    applyStrength(entry);
+    return entry;
+  };
+  const addShell = (viewer, draw, { name, canvas, rectangle, key }) => {
+    const seq = (shells += 1);
+    const field = draw.field({
+      kind: 'rasterShell',
+      id: `air-quality-shell:${name}:${seq}`,
+      image: { canvas, key },
+      rectangle,
+      heightM: WEATHER_SHELL_HEIGHTS[SLOTS[name]],
+      alpha: strength,
+    });
+    const offLift = followShellLift(viewer, (liftM) => field.update({ liftM }));
+    const entry = { name, field, offLift };
+    applyStrength(entry);
+    return entry;
   };
   return {
     remove,
@@ -51,53 +141,66 @@ export function createFieldDrawing({ getViewer, getHost }) {
       const host = getHost();
       const hostKey = `${key}|${host?.kind}`;
       if (hostKey === shownKey) return true;
-      remove();
-      if (!viewer || !host || host.kind === 'none') return false;
-      const draw = host.kind === 'tileset' ? findDraw(viewer) : null;
-      if (host.kind === 'tileset' ? !draw?.field : !host.collection?.add)
+      const draw = host?.kind === 'tileset' ? findDraw(viewer) : null;
+      if (
+        !viewer ||
+        !host ||
+        host.kind === 'none' ||
+        (host.kind === 'tileset' ? !draw?.field : !host.collection?.add)
+      ) {
+        remove();
         return false;
-      if (painted?.key !== key) {
-        const canvases = paint().map((image) => ({
-          ...image,
-          canvas: canvasFor(image),
-        }));
-        painted = { key, canvases };
       }
-      if (painted.canvases.some(({ canvas }) => !canvas)) return false;
-      painted.canvases.forEach(({ name, canvas, rectangle }, index) => {
-        if (host.kind === 'tileset') {
-          const seq = (shells += 1);
-          const field = draw.field({
-            kind: 'rasterShell',
-            id: `air-quality-shell:${name}:${seq}`,
-            image: { canvas, key: `air-quality-shell:${name}:${seq}` },
+      if (painted?.key !== key) {
+        const version = (paints += 1);
+        painted = {
+          key,
+          // Only the canvases are kept: the pixels go once painted.
+          images: paint().map(({ name, rectangle, ...pixels }) => ({
+            name,
             rectangle,
-            // The inset a little above the global field, so it draws over it.
-            heightM: WEATHER_SHELL_HEIGHTS.wind + index * 150,
-            alpha: 1,
+            canvas: canvasFor(pixels),
+            key: `air-quality-field:${name}:${version}`,
+          })),
+        };
+      }
+      if (painted.images.some(({ canvas }) => !canvas)) {
+        remove();
+        return false;
+      }
+      if (host.kind === 'tileset') {
+        if (drawnOn !== 'tileset') remove();
+        // A shell already drawn takes its new image in place.
+        const next = painted.images.map((image) => {
+          const entry = entries.find(({ name }) => name === image.name);
+          if (!entry) return addShell(viewer, draw, image);
+          entry.field.update({
+            image: { canvas: image.canvas, key: image.key },
+            rectangle: image.rectangle,
           });
-          const offLift = followShellLift(viewer, (liftM) =>
-            field.update({ liftM }),
-          );
-          handles.push(() => {
-            offLift();
-            field.dispose();
-          });
-          return;
-        }
-        const imagery = host.collection.add({
-          kind: 'single-image',
-          url: canvas.toDataURL('image/png'),
-          rectangle,
-          zOrder: WEATHER_IMAGERY_Z.wind,
+          return entry;
         });
-        imagery.drapeOn = 'surface';
-        // Each pixel carries its own opacity.
-        imagery.alpha = 1;
-        handles.push(() => imagery.remove());
-      });
+        for (const entry of entries)
+          if (!next.includes(entry)) dropEntry(entry);
+        entries = next;
+      } else {
+        const replaced = drawnOn === 'globe' ? entries : [];
+        if (drawnOn !== 'globe') remove();
+        entries = painted.images.map((image) => addImagery(host, image));
+        if (replaced.length) {
+          outgoing.push(...replaced);
+          retireLater(viewer);
+        }
+      }
+      drawnOn = host.kind;
       shownKey = hostKey;
       return true;
+    },
+    /** Every image's share of its own opacity (0 hides them). */
+    setStrength(value) {
+      if (value === strength) return;
+      strength = value;
+      for (const entry of entries) applyStrength(entry);
     },
     /** Let go of what is drawn and of the painted images. */
     dispose() {

@@ -10192,19 +10192,34 @@ With a field, a station view (the US AQI or a pollutant, not Canada's AQHI)
 draws that view's field under the stations, in the same bands as the stations:
 each band's colour at its middle, opacity `min(0.82, 0.05 + 0.26 · p)` for scale
 position `p`. It is one `single-image` imagery layer per image on the globe (the
-weather imagery host, wind's order) and a raised raster shell over
-photorealistic 3D tiles (`src/layers/airQuality/fieldDrawing.js`). The Europe
-inset blends into the global field over `blendDeg` (default 3°) inside its edge
-with a smoothstep weight, in value and in a cross-fade of the two images;
-the card reads the same blended value. The forecast is on the timeline: the
-layer registers the run's first step to its last with the world clock, follows
-the clock while the field is on and draws the step nearest its time, asking the
-host for the run covering a time outside the one it holds (`atMs`). Stations are
+weather imagery host) and a raised raster shell over photorealistic 3D tiles
+(`src/layers/airQuality/fieldDrawing.js`), in its own slot just under wind's
+(`WEATHER_IMAGERY_Z`, `WEATHER_SHELL_HEIGHTS`); a new step replaces the
+images without a gap. Its strength follows the camera: 0.85 of the painted
+opacity from 600 km up, fading on a log scale to nothing at 60 km
+(`FIELD_FADE`); below that the map shows stations only and the card still reads
+the model. The Europe inset blends into the global field over `blendDeg`
+(default 3°) inside its edge with a smoothstep weight. Where the inset is drawn
+both images carry that blended value, the value the tiles read, so the map's
+colour is the tiles' value everywhere; over the blend band they cross-fade
+(the inset at its share `w` of its opacity, the global image under it at
+`(1 − w) / (1 − w · a)`), together exactly as opaque as one image, so neither
+has an edge to show. The map shows
+only the step and view the card names: while a step loads, the field drawn
+stays only if it is of the same run and view, and a step that failed is not
+drawn. The forecast is on the timeline: the layer registers the run's first
+step to its last with the world clock, follows the clock while the field is on
+and draws the step nearest its time; playing, the clock waits for the next
+step for at most 20 s. A time outside the run held asks the host for the run
+covering it (`atMs`), once per three hours of time (a failed ask again after a
+minute); at now a run that no longer covers now is let go. Stations are
 readings of now and are hidden away from now (their labels, list and count
 too). The tiles read the model at the view centre ("model at view centre"),
 a selected station its own values at now ("measured at the station"), and the
-card's one time line names the model from the manifest's `source`: "updated
-{age}" at now, "forecast for {time}" ahead of it, the time behind it.
+card's one time line names the model by the manifest's `sourceShort`, else
+`source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
+behind it (in Canada's AQHI view too, whose tiles read the model at now).
+Switched off, the layer keeps no grids or images.
 
 Development and self-hosting option: `AIR_QUALITY_FIELD_DIR` names a local
 folder of baked grids (`manifest.json`, then `<region>/<step>/<id>.u16`), which

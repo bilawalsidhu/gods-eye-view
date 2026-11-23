@@ -1,5 +1,6 @@
 {
-  "source": "CAMS",
+  "source": "CAMS forecast (Copernicus Atmosphere Monitoring Service)",
+  "sourceShort": "CAMS",
   "credit": "Generated using Copernicus Atmosphere Monitoring Service information 2026",
   "run": "2026-11-20T00:00:00Z",
   "scale": {

@@ -276,6 +276,7 @@ async function checkField(page) {
         aqi: tile('index', 'aqi'),
         pm25: tile('pollutants', 'PM2.5'),
         coverage: worldClock.coverage(),
+        own: layer.getClockCoverage(),
         follows: worldClock.follows('air-quality'),
         supported: worldClock.getState().supported,
         imagery: window.__godsEyeView.viewer.imageryLayers?.length ?? null,
@@ -297,18 +298,21 @@ async function checkField(page) {
     Number.isInteger(before) && now?.imagery - before === 2,
     `imagery layers ${before} -> ${now?.imagery}`,
   );
-  // Other layers on the timeline may widen it; the forecast must be inside.
+  // The layer gives the clock exactly its run's span; other layers on the
+  // timeline may widen the timeline's, which must hold the forecast.
   const spans =
-    now?.coverage?.start <= FIELD_RUN &&
-    now?.coverage?.end >= FIELD_RUN + 24 * HOUR &&
+    now?.own?.start === FIELD_RUN &&
+    now?.own?.end === FIELD_RUN + 24 * HOUR &&
+    now.coverage?.start <= now.own.start &&
+    now.coverage?.end >= now.own.end &&
     now.follows === true &&
     now.supported === true;
   record(
     'the timeline spans the forecast',
     spans,
-    now?.coverage
-      ? `${new Date(now.coverage.start).toISOString()} .. ${new Date(now.coverage.end).toISOString()} follows=${now.follows}`
-      : 'no coverage',
+    now?.own
+      ? `layer ${new Date(now.own.start).toISOString()} .. ${new Date(now.own.end).toISOString()}, timeline ${new Date(now.coverage?.start).toISOString()} .. ${new Date(now.coverage?.end).toISOString()}, follows=${now.follows}`
+      : 'no coverage from the layer',
   );
   await page.evaluate(async (at) => {
     const { worldClock } = await import('/src/time/worldClock.js');

@@ -16,9 +16,11 @@
  *   Grids }>`: one forecast step (hours after `run`) of the run `run`, with
  *   `europe` when `europe.steps` lists the step.
  *
- * `Manifest = { source?, run, scale, global: Region, europe?: Region &
- * { rectangle, blendDeg? } }`:
- * - `source`: the model's name as the card shows it (e.g. `'CAMS'`).
+ * `Manifest = { source?, sourceShort?, run, scale, global: Region, europe?:
+ * Region & { rectangle, blendDeg? } }`:
+ * - `source`: the model's name; `sourceShort` a short form of it (e.g.
+ *   `'CAMS'`). The card's time line names the model by `sourceShort`, else
+ *   `source`.
  * - `run`: the run's start, an ISO time; steps are hours after it.
  * - `scale`: per field id, what a grid's integers are divided by.
  * - `Region = { width, height, lon0, lat0, step, wrap, steps }`: `width` ×
@@ -49,9 +51,21 @@ export const FIELD_IDS = Object.freeze([
 export const FIELD_MISSING = 65535;
 /** The Europe inset blends into the global field over this many degrees. */
 export const EUROPE_BLEND_DEG = 3;
+/**
+ * The field's strength by camera height: full (this share of each pixel's
+ * own opacity) from `FIELD_FULL_M` up, fading on a log scale to nothing at
+ * `FIELD_NONE_M`; below that the map shows stations only.
+ */
+export const FIELD_FADE = Object.freeze({
+  maxAlpha: 0.85,
+  fullM: 600_000,
+  noneM: 60_000,
+});
 /** The most grid points a region may have (a 0.1° world is 6.5 million). */
 const MAX_REGION_POINTS = 8_000_000;
 const HOUR_MS = 3600_000;
+/** Grid cells within this of a grid point read as on it. */
+const SNAP = 1e-9;
 
 /** The field id of a layer view (`'aqi'`, `'PM2.5'`, ...), or null. */
 export const fieldIdOf = (view) =>
@@ -130,12 +144,13 @@ export function readFieldManifest(raw) {
     if (!Number.isFinite(value) || value <= 0) throw malformed();
     scale[id] = value;
   }
-  const source =
-    typeof raw.source === 'string' && raw.source.trim()
-      ? raw.source.trim().slice(0, 80)
+  const text = (value, length) =>
+    typeof value === 'string' && value.trim()
+      ? value.trim().slice(0, length)
       : '';
   return Object.freeze({
-    source,
+    source: text(raw.source, 80),
+    sourceShort: text(raw.sourceShort, 24),
     run: raw.run,
     runMs,
     scale: Object.freeze(scale),
@@ -185,10 +200,18 @@ export function sampleRegion(region, values, scale, lon, lat) {
   if (!region || !values) return null;
   const { width, height, lon0, lat0, step, wrap } = region;
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  // A point on the grid's last row or column reads as on it, whatever the
+  // float rounding of its coordinates.
+  const snap = (g, last) =>
+    g < 0 && g > -SNAP ? 0 : g > last && g < last + SNAP ? last : g;
   let gx = eastOf(lon, lon0) / step;
   if (wrap) gx %= width;
-  else if (gx > width - 1) return null;
-  const gy = (lat0 - lat) / step;
+  else {
+    if (gx > 360 / step - SNAP) gx = 0;
+    gx = snap(gx, width - 1);
+    if (gx > width - 1) return null;
+  }
+  const gy = snap((lat0 - lat) / step, height - 1);
   if (!(gy >= 0 && gy <= height - 1)) return null;
   const x0 = Math.min(width - 1, Math.floor(gx));
   const x1 = wrap ? (x0 + 1) % width : Math.min(width - 1, x0 + 1);
@@ -292,23 +315,50 @@ const rgbOf = (bands) => {
 };
 
 /**
- * A value's colour on a scale, `[r, g, b, alpha]` (0–255, alpha 0–1): each
- * band's own colour sits at the middle of the band, so the field and a
+ * Write a value's colour on a scale into `rgba` at `offset` (0–255 each):
+ * each band's own colour sits at the middle of the band, so the field and a
  * station dot of that value agree there, and runs into its neighbours'
- * between two middles.
+ * between two middles; the opacity is `fieldOpacity`, times `share`. No
+ * allocation: it runs once a pixel.
  */
-export function fieldColor(bands, limits, value) {
+function writeColor(rgba, offset, rgb, limits, value, share = 1) {
   const p = scalePosition(limits, value);
-  const rgb = rgbOf(bands);
   const q = Math.min(rgb.length - 1, Math.max(0, p - 0.5));
   const i = Math.min(rgb.length - 2, Math.floor(q));
   const f = q - i;
+  const low = rgb[i];
+  const high = rgb[i + 1];
+  rgba[offset] = Math.round(low[0] + (high[0] - low[0]) * f);
+  rgba[offset + 1] = Math.round(low[1] + (high[1] - low[1]) * f);
+  rgba[offset + 2] = Math.round(low[2] + (high[2] - low[2]) * f);
+  rgba[offset + 3] = Math.round(255 * fieldOpacity(p) * share);
+}
+
+/**
+ * A value's colour on a scale, `[r, g, b, alpha]` (0–255, alpha 0–1), as the
+ * field paints it (`writeColor`).
+ */
+export function fieldColor(bands, limits, value) {
+  const rgba = [0, 0, 0, 0];
+  writeColor(rgba, 0, rgbOf(bands), limits, value);
   return [
-    ...[0, 1, 2].map((channel) =>
-      Math.round(rgb[i][channel] + (rgb[i + 1][channel] - rgb[i][channel]) * f),
-    ),
-    fieldOpacity(p),
+    rgba[0],
+    rgba[1],
+    rgba[2],
+    fieldOpacity(scalePosition(limits, value)),
   ];
+}
+
+/**
+ * The share of each pixel's opacity the field is drawn with for a camera
+ * `heightM` above the ellipsoid (`FIELD_FADE`); full where the height is
+ * not known.
+ */
+export function fieldStrength(heightM) {
+  const { maxAlpha, fullM, noneM } = FIELD_FADE;
+  if (!Number.isFinite(heightM) || heightM >= fullM) return maxAlpha;
+  if (heightM <= noneM) return 0;
+  return (maxAlpha * Math.log(heightM / noneM)) / Math.log(fullM / noneM);
 }
 
 /** The rectangle a region's grid points cover, each the middle of its cell. */
@@ -323,21 +373,21 @@ function regionRectangle(region) {
   };
 }
 
-/** One image's pixels: `valueAt(x, y)` painted, `alphaAt` adjusting opacity. */
-function paintImage(width, height, valueAt, colorOf, alphaAt = null) {
+/**
+ * One image's pixels, row by row: `valueAt(x, y)` painted (null left
+ * clear), at `shareAt(x, y, alpha)` of its own opacity `alpha`.
+ */
+function paintImage(width, height, valueAt, rgb, limits, shareAt = null) {
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) {
       const value = valueAt(x, y);
       if (value === null) continue;
-      const [r, g, b, alpha] = colorOf(value);
-      const offset = (y * width + x) * 4;
-      rgba[offset] = r;
-      rgba[offset + 1] = g;
-      rgba[offset + 2] = b;
-      rgba[offset + 3] = Math.round(
-        255 * (alphaAt ? alphaAt(x, y, alpha) : alpha),
-      );
+      const share = shareAt
+        ? shareAt(x, y, fieldOpacity(scalePosition(limits, value)))
+        : 1;
+      if (share > 0)
+        writeColor(rgba, (y * width + x) * 4, rgb, limits, value, share);
     }
   return rgba;
 }
@@ -348,15 +398,19 @@ function paintImage(width, height, valueAt, colorOf, alphaAt = null) {
  * north-west. A wrapping global region is resampled onto the whole world
  * from 180° W; any other region is one pixel per grid point.
  *
- * Where the Europe inset is drawn the two images cross-fade over its blend
- * band rather than stack: the inset's opacity is multiplied by its share
- * `w` and the global image's under it by `(1 − w) / (1 − w · a)` (`a` that
- * pixel's own opacity), which makes the pair as opaque as one image.
+ * Where the Europe inset is drawn, both images carry the value the tiles
+ * read there (`sampleField`: the global value blended into the inset's over
+ * `blendDeg`), so the map's colour is the tiles' value everywhere. Over the
+ * blend band they cross-fade rather than meet at an edge: the inset's
+ * opacity is its share `w` of its own, the global image's under it
+ * `(1 − w) / (1 − w · a)` of its own (`a`), which makes the pair exactly as
+ * opaque as one image of that value. The inset is clear at its edge and the
+ * global image clear where `w` is 1, so neither has an edge to show.
  * @param {{bands: Array<{color: string}>, limits: number[]}} scale
  */
 export function paintField(manifest, grids, id, { bands, limits }) {
   const scale = manifest.scale[id];
-  const colorOf = (value) => fieldColor(bands, limits, value);
+  const rgb = rgbOf(bands);
   const global = manifest.global;
   const europe = grids.europe ? manifest.europe : null;
   const wrapped = global.wrap;
@@ -371,6 +425,7 @@ export function paintField(manifest, grids, id, { bands, limits }) {
   const latAt = wrapped
     ? (y) => 90 - ((y + 0.5) / height) * 180
     : (y) => global.lat0 - y * global.step;
+  const wide = grids.global[id];
   const images = [
     {
       name: 'global',
@@ -380,27 +435,28 @@ export function paintField(manifest, grids, id, { bands, limits }) {
       rgba: paintImage(
         width,
         height,
-        (x, y) =>
-          wrapped
-            ? sampleRegion(global, grids.global[id], scale, lonAt(x), latAt(y))
-            : grids.global[id][y * width + x] === FIELD_MISSING
-              ? null
-              : grids.global[id][y * width + x] / scale,
-        colorOf,
+        (x, y) => {
+          if (europe)
+            return sampleField(manifest, grids, id, lonAt(x), latAt(y));
+          if (wrapped)
+            return sampleRegion(global, wide, scale, lonAt(x), latAt(y));
+          const raw = wide[y * width + x];
+          return raw === FIELD_MISSING ? null : raw / scale;
+        },
+        rgb,
+        limits,
         europe &&
           ((x, y, alpha) => {
             const w = europeWeight(europe, lonAt(x), latAt(y));
-            return w > 0 ? ((1 - w) * alpha) / (1 - w * alpha) : alpha;
+            return w > 0 ? (1 - w) / (1 - w * alpha) : 1;
           }),
       ),
     },
   ];
   if (europe) {
     const values = grids.europe[id];
-    const at = (x, y) => [
-      europe.lon0 + x * europe.step,
-      europe.lat0 - y * europe.step,
-    ];
+    const lonOf = (x) => europe.lon0 + x * europe.step;
+    const latOf = (y) => europe.lat0 - y * europe.step;
     images.push({
       name: 'europe',
       rectangle: regionRectangle(europe),
@@ -410,17 +466,19 @@ export function paintField(manifest, grids, id, { bands, limits }) {
         europe.width,
         europe.height,
         (x, y) => {
+          const lon = lonOf(x);
+          const lat = latOf(y);
           const raw = values[y * europe.width + x];
-          if (raw === FIELD_MISSING) return null;
-          const fine = raw / scale;
-          const [lon, lat] = at(x, y);
+          const fine = raw === FIELD_MISSING ? null : raw / scale;
           const w = europeWeight(europe, lon, lat);
-          if (w >= 1) return fine;
-          const wide = sampleRegion(global, grids.global[id], scale, lon, lat);
-          return wide === null ? fine : wide + (fine - wide) * w;
+          if (fine !== null && w >= 1) return fine;
+          const coarse = sampleRegion(global, wide, scale, lon, lat);
+          if (fine === null) return coarse;
+          return coarse === null ? fine : coarse + (fine - coarse) * w;
         },
-        colorOf,
-        (x, y, alpha) => alpha * europeWeight(europe, ...at(x, y)),
+        rgb,
+        limits,
+        (x, y) => europeWeight(europe, lonOf(x), latOf(y)),
       ),
     });
   }

@@ -15,8 +15,14 @@ export function globeImageryHost(viewer) {
   return { collection: findGlobe(viewer)?.imagery ?? null, kind: 'globe' };
 }
 
-/** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
+/**
+ * Metres above the ellipsoid. Lower shells draw first, so lightning draws
+ * last; an air-quality model field (its Europe inset over it) draws under
+ * wind.
+ */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
+  'air-quality': 4_700,
+  'air-quality-inset': 4_850,
   wind: 5_000,
   clouds: 5_500,
   'clouds-regional': 5_800,

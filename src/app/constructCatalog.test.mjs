@@ -285,9 +285,19 @@ test("a host's air-quality field source reaches the layer; standalone asks its o
   layer.enable();
   await flush();
   assert.equal(asked.length, 1);
-  // Removed, the layer has none to ask.
+  // The standalone default asks the local server's field route; removed,
+  // the layer has none to ask.
+  const fieldAsks = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).startsWith('/api/air-quality/field')) fieldAsks.push(url);
+    throw new Error('offline');
+  });
+  airQuality(undefined).enable();
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
   airQuality(null).enable();
-  // The standalone default is the local server's field route.
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
   const standalone = createStandaloneLayerSources()['air-quality-field'];
   assert.equal(typeof standalone.getManifest, 'function');
   assert.equal(typeof standalone.getStep, 'function');

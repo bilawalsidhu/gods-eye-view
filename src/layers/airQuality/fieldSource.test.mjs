@@ -44,7 +44,11 @@ test('the local field source reads the configured folder: its manifest, then eve
   const { urls, fetchImpl } = fixtureFetch();
   const source = createLocalAirQualityFieldSource({ fetchImpl });
   const manifest = await source.getManifest();
-  assert.equal(manifest.source, 'CAMS');
+  assert.equal(
+    manifest.source,
+    'CAMS forecast (Copernicus Atmosphere Monitoring Service)',
+  );
+  assert.equal(manifest.sourceShort, 'CAMS');
   assert.equal(manifest.run, '2026-11-20T00:00:00Z');
   assert.deepEqual(manifest.global.steps, [0, 24]);
   assert.equal(manifest.europe.blendDeg, 1);
