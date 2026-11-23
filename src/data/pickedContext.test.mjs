@@ -76,13 +76,17 @@ test('something drawn outside the draw port resolves through its pick owner', ()
   unregisterPickOwner('flights');
 });
 
-test("a camera's projected image and view rays resolve to the camera", async () => {
+test("a camera's projected image and view rays resolve to the camera", async (t) => {
   const { createControls } = await import('../layers/cctv/controls.js');
-  const { CCTV_HELPER_PICK_ID } = await import('../layers/cctv/pickIds.js');
+  const { ownsCctvPick } = await import('../layers/cctv/pickIds.js');
+  const { GIZMO_ID_PREFIX } = await import('./cctvGizmo.js');
   const camera = { id: 'drivebc-17', name: 'Hwy 1 at Main', lat: 49.2, lon: -123.1 };
   const state = { _recordById: new Map([[camera.id, { camera }]]) };
   const cctv = createControls({ state, services: { render: {}, activation: {} }, parts: {}, source: {} }).methods;
-  registerPickOwner('cctv', (id) => state._recordById.has(id) || state._recordById.has(CCTV_HELPER_PICK_ID.exec(id)?.[1]));
+  registerPickOwner('cctv', (id) => ownsCctvPick(id, state._recordById, GIZMO_ID_PREFIX));
+  t.after(() => unregisterPickOwner('cctv'));
+  assert.equal(findPickOwner(`${GIZMO_ID_PREFIX}ring-heading`), 'cctv');
+  assert.equal(findPickOwner('cctv-unknown-plane'), null);
   const dataManager = manager({ enabled: new Set(['cctv']), modules: { cctv } });
   for (const pickId of ['drivebc-17', 'cctv-drivebc-17-plane', 'cctv-drivebc-17-ray-tl', 'cctv-drivebc-17-plane-label']) {
     const out = resolvePickedContext({ set: '', id: pickId, surface: false }, { dataManager });
@@ -90,7 +94,6 @@ test("a camera's projected image and view rays resolve to the camera", async () 
     assert.equal(out?.label, 'Hwy 1 at Main', pickId);
     assert.equal(out?.lat, 49.2, pickId);
   }
-  unregisterPickOwner('cctv');
 });
 
 test('a failing layer pick mapper falls back to the original pick', (t) => {

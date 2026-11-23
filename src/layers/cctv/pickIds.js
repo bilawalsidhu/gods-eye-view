@@ -4,3 +4,11 @@
  */
 export const CCTV_HELPER_PICK_ID =
   /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/;
+
+export function ownsCctvPick(pickedId, recordsById, gizmoPrefix) {
+  if (recordsById.has(pickedId)) return true;
+  if (typeof pickedId === 'string' && pickedId.startsWith(gizmoPrefix))
+    return true;
+  const coverage = CCTV_HELPER_PICK_ID.exec(pickedId);
+  return Boolean(coverage && recordsById.has(coverage[1]));
+}
