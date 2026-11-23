@@ -5,8 +5,9 @@
   --world-timeline-lift: 0px;
 }
 
-/* The bar and the time's bubble over its handle. */
-body:has(#world-timeline) {
+/* The bar and the time's bubble over its handle. `.has-world-timeline` is a
+   page-root class (src/ui/rail/rootClass.js). */
+body:is(.has-world-timeline *, #world-timeline) {
   --world-timeline-lift: 66px;
 }
 
@@ -324,7 +325,7 @@ body.cockpit-mode #world-timeline {
 
 /* On phones the bar sits just above the tab bar, under the voice dock, with
    the track and the speed on a row of their own beneath play and live. */
-body.mobile-shell:has(#world-timeline) {
+body.mobile-shell:is(.has-world-timeline *, #world-timeline) {
   --world-timeline-lift: 80px;
 }
 
