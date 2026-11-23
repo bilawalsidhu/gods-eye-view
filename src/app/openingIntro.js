@@ -11,25 +11,25 @@ import { isEmbedded } from './embed.js';
  */
 export const OPENING = Object.freeze({
   /** The words under the logo fade. */
-  textMs: 150,
+  textMs: 105,
   /** The logo moves to the centre. */
-  centreMs: 900,
+  centreMs: 630,
   // The rest is timed from the end of the move.
   /** The eye grows past the screen's edges. */
-  eyeMs: 1100,
+  eyeMs: 770,
   /** The drawn planet fades into the real one. */
-  pupilMs: Object.freeze([600, 1200]),
+  pupilMs: Object.freeze([420, 840]),
   /** The camera's flight starts. */
-  flightStartMs: 300,
+  flightStartMs: 210,
   /** The globe grows to the whole planet's size. */
-  zoomMs: 1600,
+  zoomMs: 1120,
   /** It turns there, slowing to a stop over the view it ends at: the turn
    * starts halfway through the zoom and ends this long after it. */
-  spinMs: 2600,
+  spinMs: 1820,
   /** Then the camera closes in on a closer view (a shared one), per tenfold
    * change of height, within `approachMs`. */
-  approachPerDecadeMs: 1100,
-  approachMs: Object.freeze([1200, 4000]),
+  approachPerDecadeMs: 770,
+  approachMs: Object.freeze([840, 2800]),
   /** How far the globe turns, degrees. */
   spinDeg: 360,
 });

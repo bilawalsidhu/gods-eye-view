@@ -371,7 +371,9 @@ test("the logo's grid fades from its own opacity", () => {
   const cage = s.doc.getElementById('globe_cage');
   const opening = s.play();
   assert.equal(Number(s.window.getComputedStyle(cage).opacity), 0.63);
-  s.advance(1800);
+  // Halfway through the drawn planet's fade.
+  const [from, to] = OPENING.pupilMs;
+  s.advance(OPENING.centreMs + (from + to) / 2);
   assert.ok(
     Math.abs(Number(s.window.getComputedStyle(cage).opacity) - 0.315) < 0.01,
   );
