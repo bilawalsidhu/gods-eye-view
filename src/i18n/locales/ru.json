@@ -4644,5 +4644,8 @@
   "JTWC warning ↗": "Предупреждение JTWC ↗",
   "Active cyclone advisories and warnings": "Действующие сводки и предупреждения о циклонах",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Выберите шторм на карте или в списке, чтобы выделить его и переместить камеру. Щелчок по пустому месту карты снимает выделение. Сводки NOAA NHC/CPHC и предупреждения JTWC. Конус NHC показывает неопределённость прогнозного трека центра, а не размер шторма или всю опасную зону. Опасная зона ветра 34 узла JTWC — это область, куда может дойти ветер 34 узла, расширенная на ошибку прогноза трека; это не конус. Подписи прогнозных точек — заблаговременность источника в часах, а не время, рассчитанное от выпуска. Геометрия следует поверхности; высота не является метеорологической высотой. Сверяйтесь с официальной сводкой или региональным центром предупреждений.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Предупреждение № {number} · выпущено {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Предупреждение № {number} · выпущено {time}",
+  "Clean view: hide the controls": "Чистый вид: скрыть элементы управления",
+  "Exit clean view: show the controls": "Выйти из чистого вида: показать элементы управления",
+  "{label} (V)": "{label} (V)"
 }

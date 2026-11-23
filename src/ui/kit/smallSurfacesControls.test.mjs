@@ -1,7 +1,7 @@
 // The small surfaces' buttons and Material glyphs are the kit's: the locale
 // picker, the phone tab bar, the globe actions and compass, the imagery
 // divider, the scene sharing dialog, the layer group index, the celestial
-// ring, the title logo, Exit clean view, the HUD's cockpit entry, the News
+// ring, the title logo, Exit clean view and its corner eye, the HUD's cockpit entry, the News
 // cards, the rail cards, the layer rows' toggles, the credits line and the
 // camera calibration chips hand-write no <button> and no Material Symbols
 // span. The Omnibar guide's extra rings are its template's, not built in
@@ -39,7 +39,8 @@ const SURFACES = {
   'views/panels/OmnibarGuide.vue': [3, 1, 0],
   // The overlay targets' buttons and the title logo.
   'views/SceneChromeView.vue': [2, 0, 0],
-  'views/DisplayControlsView.vue': [1, 0, 0],
+  // Exit clean view and the clean view eye.
+  'views/DisplayControlsView.vue': [2, 0, 0],
   'views/IntelHudView.vue': [1, 0, 1],
   // The card's face and the selected card's clear chip.
   'news/NewsCard.vue': [2, 0, 0],

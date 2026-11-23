@@ -135,6 +135,17 @@ export const useDisplayStore = defineStore('gev-display', () => {
     cockpitPortal.value = next && markRaw(next);
   }
 
+  /**
+   * Whether clean view is on. The shell publishes it on every toggle; the
+   * Clean UI toggle and the corner eye show it as their pressed state.
+   */
+  const cleanView = shallowRef(false);
+
+  /** @param {boolean} enabled Whether clean view is now on. */
+  function publishCleanView(enabled) {
+    cleanView.value = Boolean(enabled);
+  }
+
   /** The phone shell's tab bar; null until the shell first presents it. */
   const phoneShell = shallowRef(null);
 
@@ -164,6 +175,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishCockpitPortal,
     phoneShell,
     publishPhoneShell,
+    cleanView,
+    publishCleanView,
     mapSource,
     publishMapSource,
     mapSourceControls,

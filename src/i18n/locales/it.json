@@ -4538,5 +4538,8 @@
   "JTWC warning ↗": "Avviso JTWC ↗",
   "Active cyclone advisories and warnings": "Bollettini e avvisi attivi sui cicloni",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Seleziona una tempesta sulla mappa o sceglila nell’elenco per selezionarla e spostare la telecamera. Fai clic su un punto vuoto della mappa per annullare la selezione. Bollettini NOAA NHC/CPHC e avvisi JTWC. Il cono NHC descrive l’incertezza della traccia prevista del centro, non le dimensioni della tempesta né l’intera area di pericolo. L’area di pericolo a 34 nodi del JTWC è dove possono arrivare venti a 34 nodi, ampliata dall’errore di previsione della traccia; non è un cono. Le etichette dei punti di previsione sono ore di anticipo della fonte, non orari calcolati dall’emissione. La geometria segue la superficie; l’altezza non è quota meteorologica. Consulta il bollettino ufficiale o il centro di allerta regionale.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}",
+  "Clean view: hide the controls": "Vista pulita: nascondi i controlli",
+  "Exit clean view: show the controls": "Esci dalla vista pulita: mostra i controlli",
+  "{label} (V)": "{label} (V)"
 }

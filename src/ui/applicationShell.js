@@ -15,6 +15,7 @@ import { VisualSettings } from './visualSettings.js';
 import { NavigationController } from './navigationController.js';
 import { ShareRestoration } from './shareRestoration.js';
 import { DisplayBindings } from './displayBindings.js';
+import { bindCleanViewEye } from './cleanViewEye.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { UiLifetime } from './uiLifetime.js';
 import { RecordingControls } from './recordingControls.js';
@@ -705,6 +706,7 @@ export class StyleManager extends ShellFacade {
     this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
+    this._initCleanViewEye();
     this._initClearSelectedLayersButton();
     this._initHUDToggle();
     this._initModels3dToggle();
@@ -1396,7 +1398,27 @@ export class StyleManager extends ShellFacade {
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
     }
-    this._scheduleLeftPanelLayout();
+    this._cleanViewEye?.sync(shouldEnable);
+    // The rails are hidden, not removed: keep their layout as it is so the
+    // toggle does not re-measure or resize them (no ResizeObserver churn).
+    this._panelChrome.holdPanelLayout(shouldEnable);
+  }
+
+  /**
+   * Binds the corner eye that mirrors clean view and fades while idle in it.
+   * Its click is answered by the Display view (toggleCleanView).
+   * @returns {void}
+   */
+  _initCleanViewEye() {
+    this._cleanViewEye?.destroy();
+    this._cleanViewEye = bindCleanViewEye({
+      button: this._cleanViewEyeBtn,
+      documentRef: document,
+      // The Display view draws the pressed state (Clean UI and the eye).
+      publishPressed: (enabled) =>
+        useDisplayStore(applicationPinia()).publishCleanView(enabled),
+    });
+    this._cleanViewEye.sync(document.body.classList.contains('ui-clean-view'));
   }
 
   // ── Public control facade ──────────────────────────────────────────────
@@ -1982,6 +2004,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
     this._releaseGlobeActions();
+    this._cleanViewEye?.destroy();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
