@@ -12,6 +12,7 @@ import { createPinia } from 'pinia';
 import { registerHooks } from 'node:module';
 import { presentSelectedVessel } from '../../hudReadouts.js';
 import { useHudStore } from '../stores/hud.js';
+import { setLocale, t as t_ } from '../../i18n/index.js';
 import IntelHudView from './IntelHudView.vue';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { toDegrees as deg } from '../../geo/index.js';
@@ -162,7 +163,7 @@ test('the selected vessel readout shows while a vessel is selected', async (t) =
  * IntelHUD over a fake camera, with every publish counted. Mock timers are
  * on, so the cadences run when the test ticks them.
  */
-function countedHud(t) {
+function countedHud(t, { summaryService } = {}) {
   t.mock.timers.enable({ apis: ['setInterval', 'setTimeout', 'Date'] });
   const camera = fakeCameraPort({
     pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 },
@@ -172,13 +173,37 @@ function countedHud(t) {
     {},
     {
       camera: camera.port,
-      summaryService: { configured: async () => false },
+      summaryService: summaryService ?? { configured: async () => false },
       publish: (view) => published.push(view),
     },
   );
   t.after(() => hud.destroy());
   return { hud, camera, published };
 }
+
+/** Count IntelHUD's view changes: every timer and readout goes through one. */
+function countPresents(hud) {
+  const present = hud._present.bind(hud);
+  const counted = { calls: 0 };
+  hud._present = (patch) => {
+    counted.calls += 1;
+    present(patch);
+  };
+  return counted;
+}
+
+/** Let pending promise work run. */
+async function flush() {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+}
+
+const TIMERS = [
+  '_timestampInterval',
+  '_recBlinkInterval',
+  '_updateInterval',
+  '_summaryInterval',
+  '_summaryTypingInterval',
+];
 
 test('a HUD that is not displayed works out and publishes no readouts', (t) => {
   const { hud, camera, published } = countedHud(t);
@@ -228,6 +253,165 @@ test('a HUD shown while not displayed refreshes when it is displayed', (t) => {
   assert.equal(published.at(-1).alt, 'ALT: --m   SUN: --° EL');
   hud.setDisplayed(true);
   assert.match(published.at(-1).alt, /^ALT: 700m/);
+});
+
+test('a HUD not displayed runs no timers, and a reply typing out is shown whole', (t) => {
+  const { hud, published } = countedHud(t);
+  hud.setMode('on');
+  const reply = 'Over the river, the old town and its bridges.';
+  hud._setSummaryText(reply, true);
+  t.mock.timers.tick(48);
+  assert.ok(published.at(-1).summary.length < reply.length, 'typing out');
+  hud.setDisplayed(false);
+  for (const timer of TIMERS)
+    assert.equal(hud[timer], null, `${timer} stopped`);
+  const counted = countPresents(hud);
+  const before = published.length;
+  t.mock.timers.tick(60_000);
+  assert.equal(counted.calls, 0, 'no timer works out a readout');
+  assert.equal(published.length, before, 'nothing is published');
+  hud.setDisplayed(true);
+  assert.equal(published.at(-1).summary, reply, 'the whole reply at once');
+  const after = published.length;
+  t.mock.timers.tick(1_000);
+  assert.ok(published.slice(after).every((view) => view.summary === reply));
+  assert.ok(published.length > after, 'the timers run again');
+});
+
+test('a summary being worked out when the HUD goes is dropped and asked again', async (t) => {
+  const replies = [];
+  const { hud, published } = countedHud(t, {
+    summaryService: {
+      configured: async () => true,
+      summarize: () => new Promise((resolve) => replies.push(resolve)),
+    },
+  });
+  const contexts = [];
+  hud._summaryContext = () => new Promise((resolve) => contexts.push(resolve));
+  const context = { placeLabels: ['Paris'], locale: 'en' };
+  hud.setMode('on');
+  await flush();
+  assert.equal(contexts.length, 1, 'shown: a summary is worked out');
+  // Its context arrives after the HUD went: no request, nothing shown.
+  hud.setDisplayed(false);
+  const counted = countPresents(hud);
+  const before = published.length;
+  contexts[0](context);
+  await flush();
+  assert.equal(replies.length, 0, 'no request for a view not displayed');
+  assert.equal(counted.calls, 0);
+  assert.equal(published.length, before);
+  hud.setDisplayed(true);
+  await flush();
+  assert.equal(contexts.length, 2, 'asked again once displayed');
+  contexts[1](context);
+  await flush();
+  assert.equal(replies.length, 1);
+  // Its reply arrives after the HUD went: nothing typed or shown.
+  hud.setDisplayed(false);
+  const presents = counted.calls;
+  const count = published.length;
+  replies[0]({ ok: true, status: 200, data: { summary: 'Over Paris.' } });
+  await flush();
+  t.mock.timers.tick(1_000);
+  assert.equal(counted.calls, presents, 'the dropped reply is not presented');
+  assert.equal(published.length, count);
+  assert.equal(hud._summaryTypingInterval, null);
+  hud.setDisplayed(true);
+  await flush();
+  assert.equal(contexts.length, 3, 'asked again once displayed');
+});
+
+test('the vessel and language wait while the HUD is not displayed', (t) => {
+  const { hud, published } = countedHud(t);
+  t.after(() => setLocale('en'));
+  hud.setMode('on');
+  hud.setDisplayed(false);
+  const before = published.length;
+  presentSelectedVessel({ text: 'AIS: TEST' });
+  setLocale('fr');
+  assert.equal(published.length, before, 'nothing is published');
+  hud.setVariant('minimal');
+  assert.equal(published.length, before + 1, 'its own attributes still are');
+  assert.equal(published.at(-1).variant, 'minimal');
+  assert.equal(
+    published.at(-1).vessel.text,
+    published[before - 1].vessel.text,
+    'the readouts as they were',
+  );
+  hud.setDisplayed(true);
+  const view = published.at(-1);
+  assert.equal(view.vessel.text, 'AIS: TEST');
+  assert.equal(view.summaryLabel, t_('SUMMARY'));
+  presentSelectedVessel(null);
+});
+
+test('a view unmounted leaves the HUD at rest until a mounted view says', async (t) => {
+  const observers = [];
+  const previous = globalThis.window.ResizeObserver;
+  class FakeObserver {
+    constructor(callback) {
+      this.callback = callback;
+      observers.push(this);
+    }
+    observe(target) {
+      this.target = target;
+    }
+    disconnect() {}
+  }
+  globalThis.window.ResizeObserver = FakeObserver;
+  t.after(() => {
+    globalThis.window.ResizeObserver = previous;
+  });
+  document.body.replaceChildren();
+  const pinia = createPinia();
+  const store = useHudStore(pinia);
+  const apps = [];
+  const view = () => {
+    const app = createApp(IntelHudView).use(pinia);
+    app.mount(document.body.appendChild(document.createElement('div')));
+    apps.push(app);
+    return app;
+  };
+  const report = (boxes) => {
+    const observer = observers.at(-1);
+    observer.target.getClientRects = () => Array.from({ length: boxes });
+    observer.callback([]);
+  };
+  const first = view();
+  const hud = new IntelHUD(
+    {},
+    {
+      camera: fakeCameraPort({ pose: { lat: 0.1, lon: 0.1, height: 500 } })
+        .port,
+      summaryService: { configured: async () => false },
+      publish: (next) => store.publish(next),
+    },
+  );
+  t.after(() => {
+    hud.destroy();
+    for (const app of apps.splice(0)) app.unmount();
+  });
+  store.connect(hud);
+  report(0);
+  assert.equal(hud._displayed, false);
+  first.unmount();
+  apps.splice(apps.indexOf(first), 1);
+  assert.equal(
+    hud._displayed,
+    false,
+    'a hidden HUD whose view goes stays at rest',
+  );
+  view();
+  assert.equal(hud._displayed, false, 'until the new view reports');
+  report(1);
+  assert.equal(hud._displayed, true);
+  apps.pop().unmount();
+  assert.equal(hud._displayed, false, 'a displayed HUD whose view goes rests');
+  // A window that cannot tell: the mounted view says displayed.
+  globalThis.window.ResizeObserver = undefined;
+  view();
+  assert.equal(hud._displayed, true);
 });
 
 test('the view reports whether #intel-hud is displayed, and IntelHUD follows', async (t) => {

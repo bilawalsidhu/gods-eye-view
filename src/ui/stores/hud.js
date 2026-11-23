@@ -18,7 +18,8 @@ export const useHudStore = defineStore('gev-hud', () => {
 
   /**
    * Whether the view is on screen: false while a stylesheet gives
-   * `#intel-hud` or a parent `display: none`. True until the view says.
+   * `#intel-hud` or a parent `display: none`, and once the view is
+   * unmounted. True until a view first says.
    */
   const displayed = shallowRef(true);
 

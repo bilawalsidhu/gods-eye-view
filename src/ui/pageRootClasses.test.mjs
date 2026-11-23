@@ -315,6 +315,79 @@ test('Stories without a loading screen holds no class', async (t) => {
   assert.ok(!on('loading-screen-shown'));
 });
 
+/** Whether `body:has(#loading-screen:not(.hidden))` holds. */
+const loadingShown = () =>
+  Boolean(document.body.querySelector('#loading-screen:not(.hidden)'));
+
+test('Stories follows a loading screen removed, added later, nested or renamed', async (t) => {
+  document.body.replaceChildren();
+  const cover = document.body.appendChild(document.createElement('div'));
+  cover.id = 'loading-screen';
+  const host = document.body.appendChild(document.createElement('div'));
+  const app = createApp(StoriesView).use(createPinia());
+  app.mount(host);
+  t.after(() => {
+    app.unmount();
+    localStorage.removeItem('gevStoriesPopSeen');
+    document.body.replaceChildren();
+  });
+  const agree = async (message) => {
+    await settle();
+    assert.equal(on('loading-screen-shown'), loadingShown(), message);
+  };
+  await agree('shown');
+  assert.ok(on('loading-screen-shown'));
+  cover.remove();
+  await agree('a shown loading screen removed');
+  assert.ok(!on('loading-screen-shown'));
+  const wrap = document.body.appendChild(document.createElement('section'));
+  const late = document.createElement('div');
+  late.id = 'loading-screen';
+  late.className = 'hidden';
+  wrap.append(late);
+  await agree('a hidden one added later, inside another element');
+  late.classList.remove('hidden');
+  await agree('the later one shown');
+  assert.ok(on('loading-screen-shown'));
+  late.id = 'cover';
+  await agree('renamed away');
+  late.id = 'loading-screen';
+  await agree('renamed back');
+  const second = document.body.appendChild(document.createElement('div'));
+  second.id = 'loading-screen';
+  second.className = 'hidden';
+  late.classList.add('hidden');
+  await agree('two, both hidden');
+  second.classList.remove('hidden');
+  await agree('the second one shown');
+  assert.ok(on('loading-screen-shown'));
+  wrap.remove();
+  second.remove();
+  await agree('both gone');
+  assert.ok(!on('loading-screen-shown'));
+});
+
+test('Stories mounted before the loading screen follows it once it is added', async (t) => {
+  document.body.replaceChildren();
+  const host = document.body.appendChild(document.createElement('div'));
+  const app = createApp(StoriesView).use(createPinia());
+  app.mount(host);
+  t.after(() => {
+    app.unmount();
+    localStorage.removeItem('gevStoriesPopSeen');
+    document.body.replaceChildren();
+  });
+  await settle();
+  assert.ok(!on('loading-screen-shown'));
+  const cover = document.body.appendChild(document.createElement('div'));
+  cover.id = 'loading-screen';
+  await settle();
+  assert.ok(on('loading-screen-shown'));
+  cover.classList.add('hidden');
+  await settle();
+  assert.ok(!on('loading-screen-shown'));
+});
+
 // ── The stylesheets ─────────────────────────────────────────────────────────
 
 const STYLESHEETS = [

@@ -6328,9 +6328,11 @@ Historical planning documents may not match runtime behavior.
 
 - Vite + CesiumJS app with Google Photorealistic 3D Tiles
 - Scene/HUD/style systems in `src/ui/` and `src/hud.js`. While `#intel-hud` is
-  not displayed (it or a parent has `display: none`), the Intel HUD reads no
-  camera telemetry and publishes no clock, REC blink or summary refresh; it
-  shows current readouts as soon as it is displayed again.
+  not displayed (it or a parent has `display: none`, or its view is
+  unmounted), the Intel HUD runs no timers, drops a summary it was working
+  out and publishes no readouts, only its own `active`, variant and colors,
+  which stylesheets and layout elsewhere read; it shows current readouts, and
+  a reply that was typing out in full, as soon as it is displayed again.
 - Layer management in `src/data/manager.js`
 - Map stack switching in `src/mapStackController.js`
 - Voice control in `src/voice/` (OpenAI Realtime over WebRTC)

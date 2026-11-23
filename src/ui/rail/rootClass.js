@@ -128,3 +128,34 @@ export function followRootClass(doc, name, test, observe) {
     entry.release();
   };
 }
+
+/**
+ * Hold `name` on `doc`'s root element while an element in body matches
+ * `selector`, as `body:has(selector)` would: elements that match coming and
+ * going anywhere in body, and the class attribute of each element matching
+ * `watched` (the elements whose classes `selector` tests), are followed.
+ * @param {Document} doc
+ * @param {string} name
+ * @param {string} selector
+ * @param {string} watched
+ * @returns {() => void} Stops following and lets go of the class.
+ */
+export function followSelectorRootClass(doc, name, selector, watched) {
+  return followRootClass(
+    doc,
+    name,
+    () => Boolean(doc.body?.querySelector(selector)),
+    (observer) => {
+      const body = doc.body;
+      if (!body) return;
+      observer.observe(body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['id'],
+      });
+      for (const el of body.querySelectorAll(watched))
+        observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+    },
+  );
+}

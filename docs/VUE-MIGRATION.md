@@ -630,9 +630,10 @@ slot whenever its view is drawn.
    readouts, the typing summary, the REC blink, visibility, layout variant
    and style colors; the vessel layer presents the selected vessel's
    readout through `src/hudReadouts.js` instead of writing into the HUD;
-   the view reports through the store whether `#intel-hud` is displayed, and
-   IntelHUD works out and publishes no readouts while it is not, then shows
-   current ones as soon as it is; the readouts that change many times a
+   the view reports through the store whether `#intel-hud` is displayed
+   (not displayed once it is unmounted), and while it is not IntelHUD runs
+   no timers and publishes only the root's `active`, variant and colors,
+   then shows current readouts as soon as it is; the readouts that change many times a
    second keep their text node through `v-text-data`),
    the first-run mission launcher (the welcome view renders the card's
    visibility, busy state, status line, copy and scroll fade from the
@@ -715,9 +716,10 @@ does; a class changes only with the state it names. `src/ui/rail/rootClass.js`
 holds them: `v-root-class` on the element whose presence or state it names
 (the Omnibar, the voice control in the dock, `#intel-hud`, the first-run
 launcher, the World Timeline, the language picker), its hooks running inside
-Vue's patch so the class changes with the element; and `followRootClass()`
-where the state is markup Vue does not render or nodes that move at run time
-(the loading screen, followed by the Stories view; the left panel stack's
+Vue's patch so the class changes with the element; `followSelectorRootClass()`
+for markup Vue does not render (the loading screen, followed by the Stories
+view wherever in body it is added, removed or shown, as `:has()` would); and
+`followRootClass()` for nodes that move at run time (the left panel stack's
 own panels, followed by the layer panels view). They live on `<html>`, not
 `<body>`, whose class changes several owners follow to lay the page out
 again. A rule selects one as `body:is(.has-omnibar *, #gev-omnibar)`: the

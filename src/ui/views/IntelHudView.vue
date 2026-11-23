@@ -35,16 +35,22 @@ let observer = null;
 onMounted(() => {
   const el = root.value;
   const Observer = el?.ownerDocument?.defaultView?.ResizeObserver;
-  if (!Observer) return;
+  // Without one there is no telling: the HUD works as if displayed.
+  if (!Observer) {
+    hudStore.setDisplayed(true);
+    return;
+  }
   observer = new Observer(() =>
     hudStore.setDisplayed(el.getClientRects().length > 0),
   );
   observer.observe(el);
 });
+// A view that goes leaves the HUD at rest until a mounted view reports it
+// displayed.
 onBeforeUnmount(() => {
   observer?.disconnect();
   observer = null;
-  hudStore.setDisplayed(true);
+  hudStore.setDisplayed(false);
 });
 </script>
 
