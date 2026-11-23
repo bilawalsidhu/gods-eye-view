@@ -56,6 +56,8 @@ test('toZhHant converts characters, not vocabulary, and fixes what s2tw picks wr
   assert.equal(toZhHant('1 周/秒'), '1 週/秒');
   assert.equal(toZhHant('已宣布紧急情况'), '已宣布緊急情況');
   assert.equal(toZhHant('全部 {n} 个中'), '全部 {n} 個中');
+  assert.equal(toZhHant('日月猎钓历', 'Solunar'), '日月獵釣曆');
+  assert.equal(toZhHant('日月猎钓历', 'Other'), '日月獵釣歷');
   // 併道 only where the English key is about merging.
   assert.equal(toZhHant('前方并道路段', 'Merge ahead'), '前方併道路段');
   assert.equal(

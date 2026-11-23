@@ -12,7 +12,7 @@ npm run i18n -- --zh-hant        # rewrite zh-Hant.json from zh-CN.json
 
 The command converts with OpenCC `s2tw` ([opencc-js](https://github.com/nk2028/opencc-js), `cn` → `tw`), which changes characters only. Never `s2twp`: it also swaps in Taiwan vocabulary (影片, 伺服器, 載入, 圖示), which this catalog does not use. After the conversion it fixes the characters OpenCC picks wrongly here: 年曆史 → 年歷史, 下遊 → 下游, 並道 → 併道 (only in entries whose English key says merge), 發佈 → 發布, 公佈 → 公布, 宣佈 → 宣布, 控制檯 → 控制台, 箇中 → 個中 (全部 {n} 個中), and 周 → 週 in ` 周/秒` (1 週/秒, weeks per second). OpenCC writes 週 itself in 每週, 本週, 上週, 一週 and 兩週, but not after a number (過去 2 周, {count} 周前): a new string like that needs its own pair. The list is `ZH_HANT_CORRECTIONS` in `scripts/i18n.mjs`; when the conversion picks another wrong character, add the pair there (with a key pattern if it is right only in some entries) and run the command.
 
-An entry `zh-CN` keeps in English on purpose needs the same line under `zh-Hant` in `src/i18n/same-as-english.json`.
+An entry `zh-CN` keeps in English on purpose needs the same line under `zh-Hant` in `src/i18n/same-as-english.json`. The Solunar calendar's name also corrects 獵釣歷 → 獵釣曆 for the `Solunar` key only.
 
 ## Style
 

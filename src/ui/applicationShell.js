@@ -67,6 +67,7 @@ import { useLiveStore } from './stores/live.js';
 import { useStationStore } from './stores/station.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { SpaceMissionsControls } from './spaceMissionsControls.js';
+import { useSolunarStore } from './stores/solunar.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
 import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
@@ -1836,6 +1837,15 @@ export class StyleManager extends ShellFacade {
       showToast: (message) => this._showToast(message),
     });
     this._cameraOrientationControls = controls;
+    import('../solunar/solunarShell.js')
+      .then((solunar) => {
+        if (this._disposed) return; // shell torn down while the module loaded
+        this._solunar?.destroy();
+        this._solunar = solunar.mountSolunarForShell(this, {
+          store: useSolunarStore(applicationPinia()),
+        });
+      })
+      .catch(() => console.warn('[Solunar] card unavailable'));
   }
 
   // ── Share Button ─────────────────────────────
@@ -1981,6 +1991,7 @@ export class StyleManager extends ShellFacade {
     useDisplayStore(applicationPinia()).connectMapSource(null);
     useDisplayStore(applicationPinia()).publishMapSource(null);
     this._cameraOrientationControls?.destroy();
+    this._solunar?.destroy();
     this._releaseGlobeActions();
     this._cctvControls?.destroy();
     this.services?.streetLevelLayer?.attachNavigation?.(null);

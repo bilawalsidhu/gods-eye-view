@@ -1,0 +1,176 @@
+/* Solunar: a right-rail card laid out by the rail like TIME TRAVEL and
+   DRONE FLIGHT PLAN (position, width and the collapsed size come from
+   layers.css). It holds the 7-day hunting and fishing windows for one map
+   spot (src/solunar/). */
+.solunar-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--panel-radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 212, 255, 0.46) rgba(255, 255, 255, 0.06);
+}
+#solunar-panel .panel-glow {
+  position: absolute;
+  inset: -18px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 212, 255, 0.16) 0%,
+    transparent 65%
+  );
+  filter: blur(16px);
+  opacity: 0.25;
+  pointer-events: none;
+}
+#solunar-panel .panel-header {
+  flex: 0 0 auto;
+}
+#solunar-panel[hidden],
+#solunar-panel.collapsed .gev-sl-body {
+  display: none !important;
+}
+
+/* The collapsed launcher is narrow: SOLUNAR wraps onto two lines
+   (in every language) instead of pushing the disclosure arrow out of the
+   card. Beats the generic nowrap/ellipsis rules for rail titles. */
+#right-context-rail #solunar-panel .panel-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+  /* two 9px lines must fit the 22px content height of the 50px launcher */
+  line-height: 1.2;
+}
+#right-context-rail #solunar-panel .panel-collapse-btn {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+/* Collapsed, the divider's gap is the room the second word needs. */
+#right-context-rail #solunar-panel.collapsed .panel-divider {
+  display: none;
+}
+
+/* Solunar content (src/solunar/panel.js) */
+.gev-sl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.gev-sl-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gev-sl-spot {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.gev-sl-hint,
+.gev-sl-zone {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.gev-sl-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gev-sl-day {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  background: rgba(255, 255, 255, 0.03);
+}
+.gev-sl-day-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 8px;
+}
+.gev-sl-phase {
+  color: var(--text-secondary);
+}
+.gev-sl-stars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.gev-sl-rate {
+  display: inline-flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.gev-sl-star-glyphs {
+  color: #ffd24a;
+  letter-spacing: 1px;
+}
+.gev-sl-windows,
+.gev-sl-times {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.gev-sl-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.gev-sl-label {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+}
+.gev-sl-value {
+  min-width: 0;
+  text-align: end;
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.gev-sl-major .gev-sl-value,
+.gev-sl-minor .gev-sl-value {
+  white-space: pre-line;
+}
+.gev-sl-none {
+  color: var(--text-dim);
+  font-style: italic;
+}
+.gev-sl-rule {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.gev-sl-rule summary {
+  cursor: pointer;
+}
+.gev-sl-rule ul {
+  margin: 6px 0 0;
+  padding-inline-start: 16px;
+}
+@media (max-width: 720px), (pointer: coarse) {
+  .gev-sl-controls .data-toggle-chip,
+  .gev-sl-rule summary {
+    min-height: 44px;
+  }
+}
