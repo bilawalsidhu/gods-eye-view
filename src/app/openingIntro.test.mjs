@@ -43,19 +43,15 @@ test('the words fade, then the eye opens past the screen before the globe arrive
   assert.equal(openingStage(END_MS).done, true);
 });
 
-test('the open eye reaches past the corners of any screen', () => {
-  const eye = { width: 128, height: 80 };
+test("the eye's window reaches past the corners of any screen", () => {
+  const radius = 40;
   for (const view of [
     { width: 1280, height: 720 },
     { width: 375, height: 812 },
     { width: 3840, height: 1600 },
   ]) {
-    const scale = eyeCoverScale(eye, view);
-    // The eye's opening, taken as the ellipse inside its outline, holds
-    // the corners.
-    const a = (eye.width / 2) * scale;
-    const b = (eye.height / 2) * scale;
-    assert.ok((view.width / 2 / a) ** 2 + (view.height / 2 / b) ** 2 < 1);
+    const scale = eyeCoverScale(radius, view);
+    assert.ok(radius * scale > Math.hypot(view.width, view.height) / 2);
   }
 });
 
@@ -177,7 +173,8 @@ test('the opening runs to the start view, then hides the cover', async () => {
   assert.ok(shutter, 'the cover around the eye');
   assert.match(
     shutter.getAttribute('d'),
-    /ZM0,10C0,0,20,0,20,10C20,20,0,20,0,10Z$/,
+    /ZM341,382a226,226 0 1,0 452,0a226,226 0 1,0 -452,0Z$/,
+    'the empty circle inside the ring',
   );
   assert.equal(shutter.getAttribute('fill-rule'), 'evenodd');
   s.advance(OPENING.centreMs);

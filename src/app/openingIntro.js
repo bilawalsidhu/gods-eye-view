@@ -3,8 +3,9 @@ import { cameraOf } from '../render/rendererOf.js';
 /**
  * The opening: once the world has loaded, the loading screen's logo turns
  * into the globe. The words fade and the logo glides to the centre. The
- * screen is then shut except inside the eye, which flies at the viewer and
- * opens onto the application as it grows past the screen's edges. The drawn
+ * screen is then shut but for the empty circle inside the eye's ring, which
+ * flies at the viewer and opens onto the application as it grows past the
+ * screen's edges. The drawn
  * planet in the pupil (its blue disc) gives way to the real one, drawn the
  * same size behind it; the real one spins and grows, slowing until it stops,
  * the whole planet in view, over the start view (the visitor's country).
@@ -33,8 +34,11 @@ const EARTH_RADIUS_M = 6371000;
 const LOGO_WIDTH = 775;
 const PUPIL_RADIUS = 195;
 const EYE_CENTRE = Object.freeze({ x: 568.8, y: 379 });
-/** How far past the screen's corners the eye opens. */
-const EYE_COVER_MARGIN = 1.6;
+const EYE_WIDTH = 726.3;
+/** The empty circle inside the eye's ring, the app's window. */
+const WINDOW = Object.freeze({ x: 567, y: 382, r: 226 });
+/** How far past the screen's corners the window opens. */
+const WINDOW_COVER_MARGIN = 1.15;
 /** Never start further out than this, metres. */
 const MAX_FAR_HEIGHT_M = 4e8;
 
@@ -127,35 +131,39 @@ export function heightForGlobeRadius(radiusPx, { fovy, viewportHeight }) {
 }
 
 /**
- * How much the eye of `eye` size must grow, about its centre at the centre
- * of `view`, for its opening to reach past the view's corners.
+ * How much the eye must grow, about its centre at the centre of `view`, for
+ * its window (the empty circle inside its ring, `windowRadius` pixels) to
+ * reach past the view's corners.
  */
-export function eyeCoverScale(eye, view) {
-  const across = view.width / eye.width;
-  const down = view.height / eye.height;
-  return EYE_COVER_MARGIN * Math.hypot(across, down);
+export function eyeCoverScale(windowRadius, view) {
+  return (
+    (WINDOW_COVER_MARGIN * Math.hypot(view.width, view.height)) /
+    2 /
+    windowRadius
+  );
 }
 
 /**
- * The cover around the eye: a shape the loading screen's colour, as large as
- * any screen, with the eye's outline cut out of it. It sits under the logo's
- * parts and grows with the eye, so the screen is shut outside the eye and
- * open inside it.
+ * The cover around the eye's window: a shape the loading screen's colour, as
+ * large as any screen, with the empty circle inside the eye's ring cut out of
+ * it. It sits under the logo's parts and grows with the eye, so the screen is
+ * shut but for that circle.
  */
 function eyeShutter(eye, loadingScreen, win) {
-  const outline = eye.getAttribute('d')?.match(/^[^Zz]*[Zz]/)?.[0];
-  if (!outline) return null;
   const colour =
     win.getComputedStyle?.(loadingScreen).backgroundColor || '#000';
   const far = 1e5;
+  // Centred where the eye grows from, so the two grow as one.
   const { x, y } = EYE_CENTRE;
+  const { x: cx, y: cy, r } = WINDOW;
   const shutter = eye.ownerDocument.createElementNS(
     'http://www.w3.org/2000/svg',
     'path',
   );
   shutter.setAttribute(
     'd',
-    `M${x - far},${y - far}H${x + far}V${y + far}H${x - far}Z${outline}`,
+    `M${x - far},${y - far}H${x + far}V${y + far}H${x - far}Z` +
+      `M${cx - r},${cy}a${r},${r} 0 1,0 ${2 * r},0a${r},${r} 0 1,0 ${-2 * r},0Z`,
   );
   shutter.setAttribute('fill', colour);
   shutter.setAttribute('fill-rule', 'evenodd');
@@ -256,10 +264,10 @@ export function playOpeningIntro({
     : { x: 0, y: 0 };
   const startRadius = globeRadiusPx(farHeight, lens);
   const eyeCover = eyeRect?.width
-    ? eyeCoverScale(
-        { width: eyeRect.width, height: eyeRect.height },
-        { width: view.width || win.innerWidth, height: viewportHeight },
-      )
+    ? eyeCoverScale((eyeRect.width * WINDOW.r) / EYE_WIDTH, {
+        width: view.width || win.innerWidth,
+        height: viewportHeight,
+      })
     : 1;
 
   let driving = false;
