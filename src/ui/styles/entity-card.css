@@ -800,15 +800,6 @@
   gap: 0.35rem;
 }
 
-.aircraft-atc__airport {
-  margin-top: 0.5rem;
-}
-
-.aircraft-atc__airport .entity-card__action-row {
-  flex-wrap: wrap;
-  margin-top: 0.25rem;
-}
-
 #entity-card .entity-card__action--ask {
   width: 100%;
   height: 2.1rem;

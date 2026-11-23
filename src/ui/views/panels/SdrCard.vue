@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { ref } from 'vue';
+import { defineAsyncComponent, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { HACKRF_GAIN_STEPS_DB, R820T_GAIN_STEPS_DB } from '../../../sdr/gain.js';
 import { localSdrGainOptionLabel } from '../../localSdrPresentation.js';
@@ -21,6 +21,7 @@ const { act } = radio;
 const frequency = ref(null);
 const GAINS = R820T_GAIN_STEPS_DB.map((gain) => gain.toFixed(1));
 const tune = () => act('tuneSdr', frequency.value.value);
+const AircraftAtcChannels = defineAsyncComponent(() => import('./AircraftAtcChannels.vue'));
 </script>
 
 <template>
@@ -93,5 +94,6 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </label>
   <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>
   <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" :hidden="sdr ? sdr.feedLine === null : true">{{ sdr?.feedLine ?? '' }}</div>
+  <AircraftAtcChannels v-if="sdr?.atcActive" />
 </div>
 </template>

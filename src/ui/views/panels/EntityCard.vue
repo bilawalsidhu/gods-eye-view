@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatNumber, t } from '../../../i18n/index.js';
 import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
@@ -14,6 +14,7 @@ import UiButton from '../../kit/UiButton.vue';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import { useCctvStore } from '../../stores/cctv.js';
+import { useRadioStore } from '../../stores/radio.js';
 import SpotConditions from './SpotConditions.vue';
 import { shownLayerName } from '../../layerNames.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
@@ -27,7 +28,7 @@ const props = defineProps({
 });
 const store = useEntityCardStore();
 const { card, lost, tick, away, finding, located } = storeToRefs(store);
-const AircraftAtcChannels = defineAsyncComponent(() => import('./AircraftAtcChannels.vue'));
+const radio = useRadioStore();
 // Cameras carry only an id; the CCTV panel's store knows the picked one's name.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -438,7 +439,6 @@ watch(
         <span>{{ routePlaces.from }}</span>
         <span>{{ routePlaces.to }}</span>
       </p>
-      <AircraftAtcChannels v-if="card.kind === 'aircraft'" :aircraft="card" :lost="lost" />
       <AltitudeGraph v-if="altitudeGraphed" v-show="!props.withContacts" :key="`altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" />
       <template v-if="orbitGraphed">
         <AltitudeGraph :key="`orbit-altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" unit="km" />
@@ -485,6 +485,9 @@ watch(
           </UiButton>
           <UiButton v-if="store.canFollow()" class="entity-card__action" :pressed="Boolean(store.isFollowing())" pressed-class="entity-card__action--on" @click="store.follow()">
             <UiIcon name="navigation" :size="null" />{{ store.isFollowing() ? t('Following') : t('Follow') }}
+          </UiButton>
+          <UiButton v-if="card.kind === 'aircraft' && radio.sdr" class="entity-card__action" :disabled="radio.sdr.connectDisabled" @click="radio.act('openManualAtc')">
+            {{ t('ATC channels') }}
           </UiButton>
         </div>
         <!-- The chat bubble is no Material symbol the page loads, so it stays drawn. -->

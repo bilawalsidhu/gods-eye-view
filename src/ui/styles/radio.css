@@ -1371,3 +1371,29 @@ html:not([lang='en']) .data-row-list-text {
 .sdr-feed-status[hidden] {
   display: none;
 }
+
+.sdr-atc-channels {
+  display: grid;
+  gap: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255, 183, 82, 0.28);
+  color: #ddbe86;
+  font: 9px/1.4 var(--font-mono);
+}
+
+.sdr-atc-channels h4 {
+  margin: 0;
+  font-size: inherit;
+  text-transform: uppercase;
+}
+
+.sdr-atc-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+.sdr-atc-airport a {
+  color: inherit;
+}

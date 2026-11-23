@@ -33,9 +33,9 @@ test('the entity card hand-writes no button; each is a UiButton', () => {
   for (const markup of [card, camera, atc, nearby, ...heroViews])
     assert.deepEqual(markup.match(/<button\b/gi) ?? [], []);
   // Photos, Route, 3D, Cockpit view, Find it, the cockpit entry, Fly to,
-  // Follow and Ask GEV.
-  assert.equal(card.match(/<UiButton\b/g)?.length, 9);
-  assert.equal(atc.match(/<UiButton\b/g)?.length, 2);
+  // Follow, ATC channels and Ask GEV.
+  assert.equal(card.match(/<UiButton\b/g)?.length, 10);
+  assert.equal(atc.match(/<UiButton\b/g)?.length, 1);
   assert.equal(card.match(/<UiCloseButton\b/g)?.length, 1);
   // A camera's bigger view and More info; its popup closes with a UiCloseButton.
   assert.equal(camera.match(/<UiButton\b/g)?.length, 2);

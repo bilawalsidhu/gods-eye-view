@@ -37,13 +37,13 @@ designators, such as `118.005`. Volume and receiver gain remain available while
 listening. An SDR tuned to ATC pauses that device's USB ADS-B reception.
 Configured ADS-B decoder feeds continue while the Local ADS-B layer is enabled.
 
-Under **ATC channels**, aircraft cards with a position-checked route offer
-Tower and Approach presets for airports in the bundled OurAirports catalogue.
-When neither endpoint matches, the card can suggest the closest catalogued
-airport within 100 km of the aircraft. **Manual tuning** opens the Radio panel
-from any aircraft card. Choosing a preset retunes an open SDR, or prepares the
-channel for **Connect**. The presets tune shared airport channels. The channels
-available to a particular receiver depend on its location and antenna.
+**ATC channels** on an aircraft card opens **Radio → Local SDR** in ATC mode.
+Presets appear at the bottom of the receiver card while ATC mode is selected.
+A position-checked route supplies available Tower and Approach channels for
+its airports. When neither endpoint matches, the list can suggest the closest
+catalogued airport within 100 km of the aircraft. Choosing a preset retunes
+an open SDR or prepares the channel for **Connect**. The presets tune shared
+airport channels. Reception depends on the receiver's location and antenna.
 
 The catalogue is a snapshot of the public-domain OurAirports database.
 To refresh it, download `airports.csv` and `airport-frequencies.csv` from

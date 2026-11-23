@@ -124,12 +124,10 @@ export class LocalSdrControls {
       setHackrfGain: (stage, value) => {
         void this.receiver.setHackrfGain(stage, value);
       },
-      tuneAirportAtc: async (channel) => {
+      tuneAirportAtc: (channel) => {
         this._invalidAtcChannel = false;
         this._scheduleRender();
-        const tuned = await this.receiver.tuneAtcChannel(channel);
-        this.actions.revealAtc?.();
-        return tuned;
+        return this.receiver.tuneAtcChannel(channel);
       },
       openManualAtc: async () => {
         if (this.receiver.getState().mode !== 'atc')
