@@ -154,7 +154,7 @@ test('readout leads with the highest selected-pollutant category and distinguish
   assert.match(controls.summary.overview[0].text, /Poor · Z concern/);
   assert.match(controls.summary.overview.at(-1).text, /this pollutant only/);
   assert.equal(controls.list.items[0].badge, 'Poor');
-  assert.match(controls.list.items[0].text, /Calculated comparison/);
+  assert.match(controls.list.items[0].title, /Calculated comparison/);
   assert.equal(controls.legend.length, 7);
   assert.equal(layer.getAnalystRecords()[0].assessment.basis, 'calculated');
   layer.destroy();

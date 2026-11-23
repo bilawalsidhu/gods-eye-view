@@ -4871,7 +4871,6 @@
   "Provider request budget reached. Cached data will refresh later.": "تم بلوغ حد طلبات المزوِّد. ستُحدَّث البيانات المخزنة مؤقتًا لاحقًا.",
   "Air quality provider unavailable": "مزوِّد بيانات جودة الهواء غير متاح",
   "Partial coverage · discovery continues": "تغطية جزئية · البحث مستمر",
-  "Pollutant": "الملوِّث",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} محطة في الدليل · {reporting} مُبلِّغة · {visible} في العرض",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "تركيز CO₂ ليس معدل انبعاثات ولا توجد له فئة في هذا المقياس.",
   "This pollutant has no category on the EEA hourly scale.": "لا توجد لهذا الملوِّث فئة في مقياس EEA الساعي.",
@@ -4954,5 +4953,17 @@
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "محطات الرصد المتاحة حول العالم. لا تتوفر تغطية مقاسة للمناطق غير المرصودة.",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "يقارن GEV الملوِّث المختار بفئات EEA الساعية. هذا ليس مؤشر AQI شاملًا للمحطة ولا مؤشرًا رسميًا محليًا.",
   "Unknown air quality provider": "مزوِّد جودة هواء غير معروف",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "وحدات هذه الشبكة أو فترة حساب متوسطها غير مؤكدة؛ لا تُحدَّد فئة صحية."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "وحدات هذه الشبكة أو فترة حساب متوسطها غير مؤكدة؛ لا تُحدَّد فئة صحية.",
+  "Air Quality Health Index, Canada only": "مؤشر جودة الهواء الصحي، كندا فقط",
+  "measured at the station": "مقيسة في المحطة",
+  "model at view centre": "النموذج في مركز العرض",
+  "nearest station · {name}": "أقرب محطة · {name}",
+  "Pollutants": "الملوِّثات",
+  "{network}: add a key in Provider Settings": "{network}: أضف مفتاحًا في «إعدادات المزوّدين»",
+  "{network} unavailable": "{network} غير متاح",
+  "{network}: request budget reached; cached data will refresh later": "{network}: تم بلوغ حد الطلبات؛ ستُحدَّث البيانات المخزنة مؤقتًا لاحقًا",
+  "Measured · {provider} · {age}": "مقيسة · {provider} · {age}",
+  "HIGHEST IN VIEW": "الأعلى في العرض",
+  "EEA hourly quality|Extreme": "سيئة للغاية",
+  "air quality monitors|STATIONS": "المحطات"
 }

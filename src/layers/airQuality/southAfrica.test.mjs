@@ -300,8 +300,8 @@ test('a Canada-only injected source offers only the AQHI view', () => {
   assert.deepEqual(
     layer
       .getRowControls()
-      .summary.settings.map((row) => row.chips.map((chip) => chip.id)),
-    [['aqhi']],
+      .sublists.map((group) => group.tiles.map((tile) => tile.id)),
+    [['aqhi'], []],
   );
 });
 
@@ -481,7 +481,13 @@ test('viewport rate limits are explicit and do not disable the layer', async () 
   });
   layer.enable();
   assert.equal(await layer.update(), true);
-  assert.match(layer.getRowControls().summary.status, /request budget reached/);
+  // The budget is the network's own line; the status says what the map has.
+  const controls = layer.getRowControls();
+  assert.match(controls.summary.status, /provider unavailable/);
+  assert.match(
+    controls.summary.lines.find((line) => line.id === 'provider-openaq').text,
+    /^OpenAQ: request budget reached/,
+  );
   layer.destroy();
 });
 

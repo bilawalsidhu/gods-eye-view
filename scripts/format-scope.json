@@ -1725,5 +1725,6 @@
   "src/layers/airQuality/merge.js",
   "src/layers/airQuality/merge.test.mjs",
   "src/layers/airQuality/groups.js",
-  "src/layers/airQuality/groups.test.mjs"
+  "src/layers/airQuality/groups.test.mjs",
+  "src/layers/airQuality/card.test.mjs"
 ]

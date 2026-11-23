@@ -4659,7 +4659,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Досягнуто ліміту запитів постачальника. Кешовані дані оновляться пізніше.",
   "Air quality provider unavailable": "Постачальник даних про якість повітря недоступний",
   "Partial coverage · discovery continues": "Часткове покриття · пошук триває",
-  "Pollutant": "Забруднювач",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} станцій у каталозі · {reporting} передають дані · {visible} у видимій області",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "Концентрація CO₂ не є швидкістю викидів і не має категорії за цією шкалою.",
   "This pollutant has no category on the EEA hourly scale.": "Цей забруднювач не має категорії за погодинною шкалою ЄЕА.",
@@ -4742,5 +4741,17 @@
   "implausible": "неправдоподібно",
   "above PM10": "вище PM10",
   "too old": "застаріле",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Одиниці вимірювання або період усереднення цієї мережі не підтверджено; категорію впливу на здоров’я не призначено."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Одиниці вимірювання або період усереднення цієї мережі не підтверджено; категорію впливу на здоров’я не призначено.",
+  "Air Quality Health Index, Canada only": "Індекс якості повітря для здоров’я, лише Канада",
+  "measured at the station": "виміряно на станції",
+  "model at view centre": "модель у центрі карти",
+  "nearest station · {name}": "найближча станція · {name}",
+  "Pollutants": "Забруднювачі",
+  "{network}: add a key in Provider Settings": "{network}: додайте ключ у «Налаштуваннях постачальників»",
+  "{network} unavailable": "{network} недоступний",
+  "{network}: request budget reached; cached data will refresh later": "{network}: досягнуто ліміту запитів; кешовані дані оновляться пізніше",
+  "Measured · {provider} · {age}": "Виміряно · {provider} · {age}",
+  "HIGHEST IN VIEW": "НАЙВИЩІ У ВИДИМІЙ ОБЛАСТІ",
+  "EEA hourly quality|Extreme": "Надзвичайна",
+  "air quality monitors|STATIONS": "СТАНЦІЇ"
 }

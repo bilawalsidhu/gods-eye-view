@@ -4547,7 +4547,6 @@
   "Air quality · South Africa": "Calidad del aire · Sudáfrica",
   "South Africa · SAAQIS": "Sudáfrica · SAAQIS",
   "South Africa": "Sudáfrica",
-  "Pollutant": "Contaminante",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Observaciones de estaciones en las nueve provincias. Los municipios sin monitores no tienen cobertura medida.",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} estaciones registradas · {reporting} con datos · {visible} en la vista",
   "No current observations for this pollutant in the map view.": "No hay observaciones actuales de este contaminante en la vista del mapa.",
@@ -4636,5 +4635,17 @@
   "implausible": "inverosímil",
   "above PM10": "por encima de PM10",
   "too old": "demasiado antiguo",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Las unidades o el periodo de promedio de esta red no están confirmados; no se asigna ninguna categoría de salud."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Las unidades o el periodo de promedio de esta red no están confirmados; no se asigna ninguna categoría de salud.",
+  "Air Quality Health Index, Canada only": "Índice de Calidad del Aire y Salud, solo Canadá",
+  "measured at the station": "medido en la estación",
+  "model at view centre": "modelo en el centro de la vista",
+  "nearest station · {name}": "estación más cercana · {name}",
+  "Pollutants": "Contaminantes",
+  "{network}: add a key in Provider Settings": "{network}: añade una clave en Ajustes de proveedores",
+  "{network} unavailable": "{network} no disponible",
+  "{network}: request budget reached; cached data will refresh later": "{network}: se alcanzó el límite de solicitudes; los datos en caché se actualizarán más tarde",
+  "Measured · {provider} · {age}": "Medido · {provider} · {age}",
+  "HIGHEST IN VIEW": "MÁS ALTOS EN LA VISTA",
+  "EEA hourly quality|Extreme": "Extrema",
+  "air quality monitors|STATIONS": "ESTACIONES"
 }

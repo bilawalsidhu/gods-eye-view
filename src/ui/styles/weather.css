@@ -415,3 +415,123 @@ html:not([lang='en']) .rail-card-setting {
   grid-row: 1;
   white-space: nowrap;
 }
+
+/* Tiles inside a card: the Globe view's worldwide tiles
+   (view-context__world-tile, entity-card.css), each a choice that shows its
+   value, with a band-colour bar where that tile has its icon. */
+.rail-card-tiles.view-context__world {
+  margin: 0.6rem 0 0.15rem;
+}
+
+.rail-card-tiles h4 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.rail-card-tiles-sub {
+  overflow: hidden;
+  color: rgba(199, 214, 222, 0.45);
+  letter-spacing: 0.04rem;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.rail-card-tile {
+  width: 100%;
+  cursor: pointer;
+}
+
+.rail-card-tile:hover,
+.rail-card-tile:focus-visible {
+  background: rgba(54, 220, 255, 0.08);
+  border-color: rgba(54, 220, 255, 0.3);
+}
+
+.rail-card-tile.is-active {
+  background: rgba(54, 220, 255, 0.1);
+  border-color: rgba(54, 220, 255, 0.75);
+}
+
+.rail-card-tile-swatch {
+  grid-row: 1 / 3;
+  width: 6px;
+  height: 1.7rem;
+  background: rgba(199, 214, 222, 0.3);
+  border-radius: 3px;
+}
+
+.rail-card-tile strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The band in words beside a tile's value. */
+.rail-card-tile strong small {
+  color: rgba(199, 214, 222, 0.78);
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.02rem;
+}
+
+/* A one-button switch row. */
+.rail-card-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.rail-card-switch {
+  position: relative;
+  flex: none;
+  width: 30px;
+  min-width: 0;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.rail-card-switch i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  background: rgba(199, 214, 222, 0.6);
+  border-radius: 50%;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+
+.rail-card-switch[aria-checked='true'] {
+  background: rgba(54, 220, 255, 0.22);
+  border-color: rgba(54, 220, 255, 0.7);
+}
+
+.rail-card-switch[aria-checked='true'] i {
+  background: #36dcff;
+  transform: translateX(14px);
+}
+
+/* A result that heads its card (a selected station): framed, its name in
+   full. */
+.rail-card-result[data-block-id='station'] {
+  margin-top: 6px;
+  border-color: rgba(54, 220, 255, 0.45);
+}
+
+.rail-card-result[data-block-id='station'] .panel-title {
+  color: #e8feff;
+  font: 600 12px/1.3 var(--font-mono);
+  letter-spacing: 0.2px;
+  text-transform: none;
+}

@@ -4553,7 +4553,6 @@
   "Provider request budget reached. Cached data will refresh later.": "מכסת הבקשות של הספק נוצלה. הנתונים השמורים יעודכנו מאוחר יותר.",
   "Air quality provider unavailable": "ספק נתוני איכות האוויר אינו זמין",
   "Partial coverage · discovery continues": "כיסוי חלקי · החיפוש נמשך",
-  "Pollutant": "מזהם",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} תחנות בקטלוג · {reporting} מדווחות · {visible} בתצוגה",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "ריכוז CO₂ אינו קצב פליטות ואין לו קטגוריה בסולם זה.",
   "This pollutant has no category on the EEA hourly scale.": "למזהם זה אין קטגוריה בסולם השעתי של EEA.",
@@ -4636,5 +4635,17 @@
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "תחנות ניטור זמינות ברחבי העולם. באזורים ללא ניטור אין כיסוי מדוד.",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV משווה את המזהם הנבחר לקטגוריות השעתיות של EEA. זה אינו מדד AQI כולל לתחנה או מדד רשמי מקומי.",
   "Unknown air quality provider": "ספק איכות אוויר לא מוכר",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "היחידות או תקופת המיצוע של רשת זו אינן מאומתות; לא מוקצית קטגוריה בריאותית."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "היחידות או תקופת המיצוע של רשת זו אינן מאומתות; לא מוקצית קטגוריה בריאותית.",
+  "Air Quality Health Index, Canada only": "מדד בריאות איכות האוויר, קנדה בלבד",
+  "measured at the station": "נמדד בתחנה",
+  "model at view centre": "מודל במרכז התצוגה",
+  "nearest station · {name}": "התחנה הקרובה · {name}",
+  "Pollutants": "מזהמים",
+  "{network}: add a key in Provider Settings": "{network}: הוסף מפתח בהגדרות הספקים",
+  "{network} unavailable": "{network} אינו זמין",
+  "{network}: request budget reached; cached data will refresh later": "{network}: מכסת הבקשות נוצלה; הנתונים השמורים יעודכנו מאוחר יותר",
+  "Measured · {provider} · {age}": "נמדד · {provider} · {age}",
+  "HIGHEST IN VIEW": "הגבוהים בתצוגה",
+  "EEA hourly quality|Extreme": "קיצונית",
+  "air quality monitors|STATIONS": "תחנות"
 }

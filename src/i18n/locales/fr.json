@@ -4553,7 +4553,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Limite de requêtes du fournisseur atteinte. Les données en cache seront actualisées plus tard.",
   "Air quality provider unavailable": "Fournisseur de qualité de l’air indisponible",
   "Partial coverage · discovery continues": "Couverture partielle · recherche en cours",
-  "Pollutant": "Polluant",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} stations répertoriées · {reporting} avec données · {visible} dans la vue",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "La concentration en CO₂ n’est pas un taux d’émission et n’a pas de catégorie sur cette échelle.",
   "This pollutant has no category on the EEA hourly scale.": "Ce polluant n’a pas de catégorie sur l’échelle horaire de l’AEE.",
@@ -4636,5 +4635,17 @@
   "implausible": "invraisemblable",
   "above PM10": "au-dessus de PM10",
   "too old": "trop ancien",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Les unités ou la période de moyenne de ce réseau ne sont pas confirmées ; aucune catégorie sanitaire n’est attribuée."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Les unités ou la période de moyenne de ce réseau ne sont pas confirmées ; aucune catégorie sanitaire n’est attribuée.",
+  "Air Quality Health Index, Canada only": "Cote air santé, Canada uniquement",
+  "measured at the station": "mesuré à la station",
+  "model at view centre": "modèle au centre de la vue",
+  "nearest station · {name}": "station la plus proche · {name}",
+  "Pollutants": "Polluants",
+  "{network}: add a key in Provider Settings": "{network} : ajoutez une clé dans les paramètres des fournisseurs",
+  "{network} unavailable": "{network} indisponible",
+  "{network}: request budget reached; cached data will refresh later": "{network} : limite de requêtes atteinte ; les données en cache seront actualisées plus tard",
+  "Measured · {provider} · {age}": "Mesuré · {provider} · {age}",
+  "HIGHEST IN VIEW": "LES PLUS ÉLEVÉS DANS LA VUE",
+  "EEA hourly quality|Extreme": "Extrême",
+  "air quality monitors|STATIONS": "STATIONS"
 }

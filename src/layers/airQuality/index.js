@@ -27,16 +27,18 @@ import {
 } from './groups.js';
 import {
   AQI_PARAMETERS,
+  AQI_POLLUTANTS,
   US_AQI_BANDS,
   aqiStations,
   stationIndex,
   usAqiBand,
   usAqiRange,
 } from './usAqi.js';
-import { layerUnits } from './units.js';
+import { concentrationIn, layerUnits } from './units.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
+  AIR_QUALITY_UNKNOWN_COLOR,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
@@ -89,6 +91,19 @@ export const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
 const UNRATED_COLOR = '#8cb4ce';
 /** Index acronyms: the same text in every language. */
 const INDEX_VIEW_NAMES = Object.freeze({ aqi: 'US AQI', aqhi: 'AQHI' });
+/** Pollutant names on the tiles, chemical formulas as written. */
+const POLLUTANT_TILE_LABELS = Object.freeze({
+  'PM2.5': 'PM2.5',
+  PM10: 'PM10',
+  O3: 'O₃',
+  NO2: 'NO₂',
+  SO2: 'SO₂',
+  CO: 'CO',
+});
+/** The pollutant tiles' units, said once in their heading. */
+const POLLUTANT_UNITS = 'µg/m³ · CO mg/m³';
+/** A tile with no value. */
+const NO_VALUE = '—';
 /** Why a station value is not part of its index (`stationIndex`). */
 const EXCLUSION_REASONS = Object.freeze({
   units: msg('unrated units'),
@@ -108,12 +123,31 @@ const NO_EEA_CATEGORY = msg(
   'This pollutant has no category on the EEA hourly scale.',
 );
 
+/** A concentration in the layer's units as a number, without its unit. */
+function concentrationText(parameter, value) {
+  return value.toFixed(parameter === 'CO' ? 2 : value < 10 ? 1 : 0);
+}
+
 /** One station value as text, in the layer's units. */
 function valueText(key, value) {
   const parameter = AQI_PARAMETERS[key];
-  const digits = key === 'co' ? 2 : value < 10 ? 1 : 0;
-  return `${parameter} ${value.toFixed(digits)} ${layerUnits(parameter)}`;
+  return `${parameter} ${concentrationText(parameter, value)} ${layerUnits(parameter)}`;
 }
+
+/** How long ago `ms` was, as the card says it. */
+function ago(ms) {
+  const minutes = Math.max(0, Math.floor((Date.now() - ms) / 60_000));
+  return minutes >= 60
+    ? t('{hours}h {minutes}m ago', {
+        hours: Math.floor(minutes / 60),
+        minutes: minutes % 60,
+      })
+    : t('{minutes}m ago', { minutes });
+}
+
+/** One station across views: its provider and the provider's station id. */
+const stationKey = (reading) =>
+  `${reading.provider}:${reading.stationId ?? reading.id}`;
 
 /**
  * Own one air-quality display, its refresh lifecycle, and its readout card.
@@ -186,6 +220,8 @@ export function createAirQualityLayer({
   let view = views[0];
   let showStations = true;
   let selectedStation = null;
+  /** The selected station across views (`stationKey`), once it is known. */
+  let selectedKey = null;
   /** The providers the current view asks. */
   const asked = () =>
     view === 'aqhi'
@@ -237,6 +273,11 @@ export function createAirQualityLayer({
       .join(' · ');
   const isLoading = () =>
     asked().some((entry) => stateOf(entry).status === 'loading');
+  /** Whether a provider's answer counts: it answered, or drew readings. */
+  const answered = (entry) => {
+    const state = stateOf(entry);
+    return state.status === 'ok' || state.readings.length > 0;
+  };
   /** A layer error only when no asked provider answered. */
   const lastError = () => {
     const list = asked().map(stateOf);
@@ -475,6 +516,166 @@ export function createAirQualityLayer({
       EEA_HOURLY_BANDS[hourlyBandIndex(view, value)]?.color ?? UNRATED_COLOR
     );
   };
+  /** A reading's number on the view's scale as text; unrated, its label. */
+  const scaleText = (reading) => {
+    const value = scaleValue(reading);
+    if (value === null) return reading.label;
+    return view === 'aqi' ? String(value) : concentrationText(view, value);
+  };
+  /** The view centre in degrees, or null when the camera has no view. */
+  const viewCentre = () => {
+    const values = currentView();
+    return values ? { lon: values[4], lat: values[5] } : null;
+  };
+  /**
+   * The observation station nearest the view centre, one rated on the view's
+   * scale before any unrated one; null without a view.
+   */
+  const nearestStation = () => {
+    const centre = viewCentre();
+    if (!centre) return null;
+    const cos = Math.cos((centre.lat * Math.PI) / 180);
+    let best = null;
+    for (const reading of _stations) {
+      const rated = isRatedReading(reading, view);
+      const dLon = ((reading.lon - centre.lon + 540) % 360) - 180;
+      const distance = (reading.lat - centre.lat) ** 2 + (dLon * cos) ** 2;
+      if (
+        !best ||
+        (rated && !best.rated) ||
+        (rated === best.rated && distance < best.distance)
+      )
+        best = { reading, rated, distance };
+    }
+    return best?.reading ?? null;
+  };
+  /**
+   * Values at the view centre from a model field, `{ aqi, values }` with
+   * `values` by pollutant view id, or null. Stand-alone Core has no field.
+   */
+  const fieldValues = () => null;
+  /**
+   * A station's value of one pollutant in the layer's units, or null: in the
+   * AQI view the values its index used, in a pollutant view its reading of
+   * that pollutant.
+   */
+  const stationValue = (reading, parameter) => {
+    if (!reading || reading.rated === false) return null;
+    if (reading.aqiValues) {
+      const value = reading.aqiValues[AQI_POLLUTANTS[parameter]];
+      return Number.isFinite(value) ? value : null;
+    }
+    if (reading.parameter !== parameter || reading.qualityFlagged) return null;
+    return concentrationIn(parameter, reading.value, reading.units);
+  };
+  /**
+   * A pollutant value's EEA hourly band, or null. The reading the map shows
+   * keeps the map's own rating, which needs an hourly average.
+   */
+  const pollutantBand = (reading, parameter, value) => {
+    if (reading && !reading.aqiValues && reading.parameter === parameter)
+      return isRatedReading(reading, view)
+        ? (EEA_HOURLY_BANDS[reading.assessment.severity] ?? null)
+        : null;
+    return EEA_HOURLY_BANDS[hourlyBandIndex(parameter, value)] ?? null;
+  };
+  /**
+   * The card's two groups of tiles: the indices, then the pollutants. Each
+   * tile is a view: its value at the selected station, else from a model
+   * field at the view centre, else at the station nearest it; a click puts
+   * that view on the map.
+   */
+  const tileGroups = (selected) => {
+    const field = selected ? null : fieldValues();
+    const station = selected ?? (field ? null : nearestStation());
+    const tile = (id, label, value, band, context, text) => {
+      const category = band ? bandLabel(band.label, context) : '';
+      return {
+        id,
+        value: value === null ? NO_VALUE : text(value),
+        // The band in words rides beside the value; long names shortened.
+        note: band ? bandLabel(band.short ?? band.label, context) : '',
+        label,
+        title: category ? `${label} · ${category}` : label,
+        accent:
+          band?.color ??
+          (value === null ? AIR_QUALITY_UNKNOWN_COLOR : UNRATED_COLOR),
+        active: view === id,
+        params: { view: id },
+      };
+    };
+    const aqi = field
+      ? (field.aqi ?? null)
+      : view === 'aqi' && Number.isFinite(station?.aqi?.index)
+        ? station.aqi.index
+        : null;
+    const indexTiles = [
+      ...(views.includes('aqi')
+        ? [
+            tile(
+              'aqi',
+              INDEX_VIEW_NAMES.aqi,
+              aqi,
+              usAqiBand(aqi),
+              'US AQI category',
+              String,
+            ),
+          ]
+        : []),
+      ...(views.includes('aqhi')
+        ? [
+            {
+              id: 'aqhi',
+              value: t('Canada'),
+              note: '',
+              label: INDEX_VIEW_NAMES.aqhi,
+              title: t('Air Quality Health Index, Canada only'),
+              accent: AIR_QUALITY_UNKNOWN_COLOR,
+              active: view === 'aqhi',
+              params: { view: 'aqhi' },
+            },
+          ]
+        : []),
+    ];
+    const pollutantTiles = AIR_QUALITY_POLLUTANT_VIEWS.filter((id) =>
+      views.includes(id),
+    ).map((id) => {
+      const value = field
+        ? (field.values?.[id] ?? null)
+        : stationValue(station, id);
+      return tile(
+        id,
+        POLLUTANT_TILE_LABELS[id],
+        value,
+        value === null ? null : pollutantBand(station, id, value),
+        'EEA hourly quality',
+        (number) => concentrationText(id, number),
+      );
+    });
+    return [
+      {
+        id: 'index',
+        title: t('Index'),
+        // Where the numbers come from: a station's instruments, a model at
+        // the middle of the view, or the station nearest it.
+        subtitle: selected
+          ? t('measured at the station')
+          : field
+            ? t('model at view centre')
+            : station
+              ? t('nearest station · {name}', { name: station.name })
+              : '',
+        tiles: indexTiles,
+      },
+      {
+        id: 'pollutants',
+        title: t('Pollutants'),
+        // The units live here once, not on every tile.
+        subtitle: POLLUTANT_UNITS,
+        tiles: pollutantTiles,
+      },
+    ];
+  };
   /** The view's size and ellipsoid pick, or null when it cannot be measured. */
   const screen = () => {
     const canvas = _viewer ? canvasOf(_viewer) : null;
@@ -614,6 +815,23 @@ export function createAirQualityLayer({
       layer.setParams({ station: null });
   };
 
+  /**
+   * Keep the selected station selected across views: its reading id names
+   * the view, so it is found again by its station (`stationKey`).
+   */
+  const followSelection = () => {
+    if (selectedStation === null) return;
+    const current = _readings.find((reading) => reading.id === selectedStation);
+    if (current) {
+      selectedKey = stationKey(current);
+      return;
+    }
+    const same =
+      selectedKey &&
+      _readings.find((reading) => stationKey(reading) === selectedKey);
+    if (same) selectedStation = same.id;
+  };
+
   /** Merge every asked provider's readings into the drawn set. */
   const apply = () => {
     owners = new WeakMap();
@@ -628,6 +846,7 @@ export function createAirQualityLayer({
     }));
     _readings = mergeObservations(lists, { view });
     _count = _readings.length;
+    followSelection();
     layer._render();
   };
 
@@ -840,6 +1059,8 @@ export function createAirQualityLayer({
             : null;
         if (station !== selectedStation) {
           selectedStation = station;
+          selectedKey = null;
+          followSelection();
           changed = true;
         }
       }
@@ -1000,20 +1221,27 @@ export function createAirQualityLayer({
     },
 
     /**
-     * Readout descriptor for the Weather panel: the band legend, and the worst
-     * readings currently in view.
+     * Readout descriptor for the Weather panel: the selected station, the
+     * scale, two groups of tiles (the indices, the pollutants), each the
+     * value at one place and a click away from the map, and the highest
+     * readings in view.
      *
-     * `readout: true` renders the toggle and source line only; the card owns
-     * the rest. Coverage is stated plainly because this layer is not global.
+     * The tiles read the selected station, else the station nearest the view
+     * centre. Coverage is stated plainly because this layer is not global,
+     * and only for the networks that answered; a network that needs a key or
+     * failed says so in a line of its own.
      */
     getRowControls() {
       const isObservation = isObservationView();
       const entries = asked();
       const single = entries.length === 1 ? entries[0] : null;
       const units = scale();
-      const network = entries.map((entry) => entry.network).join(' · ');
-      const loading = isLoading();
+      // Coverage, legend and source come from the networks that answered.
+      const covering = entries.filter(answered);
+      const network = covering.map((entry) => entry.network).join(' · ');
       const error = lastError();
+      // The card waits only until the first network answers.
+      const loading = !covering.length && isLoading();
       const coverage = combinedCoverage();
       const retryAt = nextRetryAt();
       const rectangle = viewRectangle();
@@ -1101,16 +1329,25 @@ export function createAirQualityLayer({
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
       );
-      const chip = (id) => ({
-        id,
-        label: INDEX_VIEW_NAMES[id] || id,
-        active: view === id,
-        params: { view: id },
+      // One line for each network that needs a key, failed, or is out of
+      // requests for now; the card's status stays the map's.
+      const providerLines = entries.flatMap((entry) => {
+        const state = stateOf(entry);
+        const text =
+          state.status === 'no-key'
+            ? t('{network}: add a key in Provider Settings', {
+                network: entry.network,
+              })
+            : state.status === 'failed'
+              ? t('{network} unavailable', { network: entry.network })
+              : state.coverage?.failureStatus === 429
+                ? t(
+                    '{network}: request budget reached; cached data will refresh later',
+                    { network: entry.network },
+                  )
+                : '';
+        return text ? [{ id: `provider-${entry.id}`, text }] : [];
       });
-      const indexChips = views.filter((id) => INDEX_VIEW_NAMES[id]).map(chip);
-      const pollutantChips = views
-        .filter((id) => !INDEX_VIEW_NAMES[id])
-        .map(chip);
       // One scale per view: the US AQI categories, the pollutant's EEA hourly
       // bands, or the index providers' own bands for the AQHI.
       const notRated = { color: UNRATED_COLOR, label: t('Not rated') };
@@ -1124,7 +1361,7 @@ export function createAirQualityLayer({
               notRated,
             ]
           : view === 'aqhi'
-            ? entries.flatMap((entry) =>
+            ? covering.flatMap((entry) =>
                 (entry.legend ?? []).map((band) => ({
                   color: band.color,
                   label: `${bandLabel(band.label, entry.bandContext)}${band.range ? ` ${band.range}` : ''}`,
@@ -1137,6 +1374,10 @@ export function createAirQualityLayer({
                 })),
                 notRated,
               ];
+      const selected = isObservation
+        ? (_readings.find((reading) => reading.id === selectedStation) ?? null)
+        : null;
+      const tiles = tileGroups(selected);
       // Readings and errors stay English data (analyst records, stats); the
       // card translates them as the Layers panel row does. A provider's own
       // error text has no catalog entry and shows as it came.
@@ -1144,57 +1385,76 @@ export function createAirQualityLayer({
         readout: true,
         summary: {
           label: single ? t(single.label) : t('Air quality'),
-          coverage: entries.map((entry) => t(entry.coverage)).join(' · '),
+          coverage: covering.map((entry) => t(entry.coverage)).join(' · '),
           validTime: newest ? new Date(newest).toISOString() : undefined,
-          detail: `${network} · ${units}`,
+          detail: network ? `${network} · ${units}` : units,
           status: loading
             ? t('Loading observations for this view…')
             : error
               ? translateFeedError(error)
-              : coverage?.failureStatus === 429
-                ? t(
-                    'Provider request budget reached. Cached data will refresh later.',
-                  )
-                : coverage?.stale
-                  ? t('Air quality provider unavailable')
-                  : category
-                    ? `${units} · ${category}`
-                    : coverage?.partial
-                      ? t('Partial coverage · discovery continues')
-                      : _count === 0
-                        ? _lastUpdate === null
-                          ? t('No readings available')
-                          : t('No current readings')
-                        : tn(
-                            _count,
-                            '{count} station reporting',
-                            '{count} stations reporting',
-                          ),
+              : coverage?.stale
+                ? t('Air quality provider unavailable')
+                : category
+                  ? `${units} · ${category}`
+                  : coverage?.partial
+                    ? t('Partial coverage · discovery continues')
+                    : _count === 0
+                      ? _lastUpdate === null
+                        ? t('No readings available')
+                        : t('No current readings')
+                      : tn(
+                          _count,
+                          '{count} station reporting',
+                          '{count} stations reporting',
+                        ),
           units,
           overview: assessmentLines,
-          settings: [
-            ...(indexChips.length
-              ? [{ id: 'index', label: t('Index'), chips: indexChips }]
-              : []),
-            ...(pollutantChips.length
-              ? [
-                  {
-                    id: 'pollutant',
-                    label: t('Pollutant'),
-                    chips: pollutantChips,
-                  },
-                ]
-              : []),
+          toggles: [
+            {
+              id: 'stations',
+              label: t('STATIONS', { context: 'air quality monitors' }),
+              on: showStations,
+              params: { stations: !showStations },
+            },
           ],
+          // The selected station heads the card: its name, who measures it
+          // and how old the reading is, with a close button to let it go.
+          result: selected
+            ? {
+                id: 'station',
+                lead: true,
+                label: selected.name,
+                clear: { params: { station: null } },
+                lines: [
+                  {
+                    id: 'station-source',
+                    muted: true,
+                    text: t('Measured · {provider} · {age}', {
+                      provider: selected.network || ownerOf(selected).network,
+                      age: Number.isFinite(selected.observedMs)
+                        ? ago(selected.observedMs)
+                        : t('Unavailable'),
+                    }),
+                  },
+                ],
+              }
+            : null,
           ...(isObservation
             ? {
                 lines: [
-                  {
-                    id: 'coverage',
-                    text: entries
-                      .map((entry) => t(entry.coverageNote || entry.coverage))
-                      .join(' '),
-                  },
+                  ...(covering.length
+                    ? [
+                        {
+                          id: 'coverage',
+                          text: covering
+                            .map((entry) =>
+                              t(entry.coverageNote || entry.coverage),
+                            )
+                            .join(' '),
+                        },
+                      ]
+                    : []),
+                  ...providerLines,
                   {
                     id: 'counts',
                     text: t(
@@ -1282,30 +1542,38 @@ export function createAirQualityLayer({
             ) === index,
         ),
         legendCategorical: true,
+        sublists: tiles,
         list: {
+          title: t('HIGHEST IN VIEW'),
           ariaLabel: isObservation
             ? t('Observations in view')
             : t('Highest air-quality readings in view'),
           items: inView.map((reading, index) => {
             const owner = ownerOf(reading);
+            if (!isObservation)
+              return {
+                id: reading.id,
+                ordinal: index + 1,
+                lead: `${reading.scale} ${reading.label}`,
+                text: `${reading.name} · ${t(reading.risk)}`,
+                accent: reading.color,
+              };
+            // Value and name; the station's details are the row's tooltip.
             return {
               id: reading.id,
               ordinal: index + 1,
-              lead: `${reading.scale} ${reading.label}`,
-              ...(isObservation
-                ? {
-                    badge:
-                      categoryText(reading) ||
-                      (reading.assessment || view === 'aqi'
-                        ? t('Not rated')
-                        : t('Index unavailable')),
-                    badgeColor: reading.color,
-                  }
-                : {}),
-              text: isObservation
-                ? `${reading.name} · ${reading.zone} · ${reading.owner || owner.network} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${new Date(reading.observedMs).toISOString()} · ${view === 'aqi' ? aqiDetails(reading, owner) : pollutantDetails(reading, owner)} · ${Date.now() - reading.observedMs > 2 * 3600_000 ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${reading.network || owner.network} · ${(reading.licenses || []).map((item) => item.attribution || item.name).join(', ')}`
-                : `${reading.name} · ${t(reading.risk)}`,
+              lead: scaleText(reading),
+              text: reading.name,
+              title: `${reading.name} · ${reading.zone} · ${reading.owner || owner.network} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${new Date(reading.observedMs).toISOString()} · ${view === 'aqi' ? aqiDetails(reading, owner) : pollutantDetails(reading, owner)} · ${Date.now() - reading.observedMs > 2 * 3600_000 ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${reading.network || owner.network}`,
+              badge:
+                categoryText(reading) ||
+                (reading.assessment || view === 'aqi'
+                  ? t('Not rated')
+                  : t('Index unavailable')),
+              badgeColor: reading.color,
               accent: reading.color,
+              active: reading.id === selectedStation,
+              params: { station: reading.id },
             };
           }),
         },
@@ -1386,6 +1654,8 @@ function bandLabel(label, context) {
         return t('Very poor', { context: 'EEA hourly quality' });
       case 'Extremely poor':
         return t('Extremely poor', { context: 'EEA hourly quality' });
+      case 'Extreme':
+        return t('Extreme', { context: 'EEA hourly quality' });
     }
   } else if (context === 'US AQI category') {
     switch (label) {

@@ -82,7 +82,7 @@ test('an injected provider controls source, parameters and UI without renderer e
   // The provider's pollutants decide the views on offer: the AQI and NO2.
   const controls = layer.getRowControls();
   assert.deepEqual(
-    controls.summary.settings.map((row) => row.chips.map((chip) => chip.id)),
+    controls.sublists.map((group) => group.tiles.map((tile) => tile.id)),
     [['aqi'], ['NO2']],
   );
   assert.equal(layer.setParams({ view: 'PM2.5' }), false);

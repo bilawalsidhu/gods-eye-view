@@ -4341,7 +4341,6 @@
   "Provider request budget reached. Cached data will refresh later.": "已達到數據提供方的請求額度。緩存數據將在稍後刷新。",
   "Air quality provider unavailable": "空氣質量數據提供方不可用",
   "Partial coverage · discovery continues": "部分覆蓋 · 正在繼續查找",
-  "Pollutant": "汙染物",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "目錄中有 {catalog} 個監測站 · {reporting} 個正在上報 · 視野內有 {visible} 個",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "CO₂ 濃度並非排放速率，此分級標準不對其評級。",
   "This pollutant has no category on the EEA hourly scale.": "歐洲環境署的小時分級標準不對該汙染物評級。",
@@ -4424,5 +4423,17 @@
   "implausible": "不合理",
   "above PM10": "高於 PM10",
   "too old": "過舊",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "該監測網絡的單位或平均時段尚未確認，因此不分配健康類別。"
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "該監測網絡的單位或平均時段尚未確認，因此不分配健康類別。",
+  "Air Quality Health Index, Canada only": "空氣質量健康指數（僅限加拿大）",
+  "measured at the station": "監測站實測",
+  "model at view centre": "視野中心的模型值",
+  "nearest station · {name}": "最近的監測站 · {name}",
+  "Pollutants": "汙染物",
+  "{network}: add a key in Provider Settings": "{network}：請在服務商設置中添加密鑰",
+  "{network} unavailable": "{network} 不可用",
+  "{network}: request budget reached; cached data will refresh later": "{network}：已達到請求額度，緩存數據將在稍後刷新",
+  "Measured · {provider} · {age}": "實測 · {provider} · {age}",
+  "HIGHEST IN VIEW": "視野內最高值",
+  "EEA hourly quality|Extreme": "極差",
+  "air quality monitors|STATIONS": "監測站"
 }

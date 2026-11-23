@@ -4341,7 +4341,6 @@
   "Provider request budget reached. Cached data will refresh later.": "提供元へのリクエスト上限に達しました。キャッシュされたデータは後で更新されます。",
   "Air quality provider unavailable": "大気質データの提供元を利用できません",
   "Partial coverage · discovery continues": "一部の範囲のみ · 検索を継続中",
-  "Pollutant": "汚染物質",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "登録観測所 {catalog} · 報告中 {reporting} · 表示範囲内 {visible}",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "CO₂濃度は排出率ではなく、この尺度には区分がありません。",
   "This pollutant has no category on the EEA hourly scale.": "この汚染物質にはEEAの時間別尺度の区分がありません。",
@@ -4424,5 +4423,17 @@
   "implausible": "不自然な値",
   "above PM10": "PM10を超過",
   "too old": "古すぎる",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "このネットワークの単位または平均化期間は確認されていないため、健康区分は割り当てられません。"
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "このネットワークの単位または平均化期間は確認されていないため、健康区分は割り当てられません。",
+  "Air Quality Health Index, Canada only": "大気質健康指数（カナダのみ）",
+  "measured at the station": "測定局での実測",
+  "model at view centre": "表示中心のモデル値",
+  "nearest station · {name}": "最寄りの測定局 · {name}",
+  "Pollutants": "汚染物質",
+  "{network}: add a key in Provider Settings": "{network}：プロバイダー設定でキーを追加してください",
+  "{network} unavailable": "{network}を利用できません",
+  "{network}: request budget reached; cached data will refresh later": "{network}：リクエスト上限に達しました。キャッシュされたデータは後で更新されます",
+  "Measured · {provider} · {age}": "実測 · {provider} · {age}",
+  "HIGHEST IN VIEW": "表示範囲内の上位",
+  "EEA hourly quality|Extreme": "極めて不良",
+  "air quality monitors|STATIONS": "測定局"
 }

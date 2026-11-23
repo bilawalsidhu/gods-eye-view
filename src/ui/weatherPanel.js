@@ -146,7 +146,7 @@ export function createWeatherPanel({
           : historyTime(shownTime)
         : '';
     const models = active.map((entry) => {
-      const { id, icon, summary, legend = [], list } = entry;
+      const { id, icon, summary, legend = [], list, sublists = [] } = entry;
       // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
@@ -198,20 +198,64 @@ export function createWeatherPanel({
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
+      const overviewBlocks = summary.overview?.length
+        ? [{ id: 'overview', type: 'lines', lines: summary.overview }]
+        : [];
+      // A titled list says what it ranks in a muted line above it.
+      const listBlocks = list?.items?.length
+        ? [
+            ...(list.title
+              ? [
+                  {
+                    id: 'list-title',
+                    type: 'lines',
+                    lines: [
+                      { id: 'list-title', text: list.title, muted: true },
+                    ],
+                  },
+                ]
+              : []),
+            { id: 'list', type: 'list', list },
+          ]
+        : [];
+      // Groups of Globe-view tiles (each a choice with its value), and
+      // switches, each one row.
+      const tileBlocks = sublists
+        .filter((group) => group?.tiles?.length)
+        .map((group) => ({
+          id: `tiles-${group.id}`,
+          type: 'tiles',
+          title: group.title,
+          subtitle: group.subtitle,
+          tiles: group.tiles,
+        }));
+      const toggleBlocks = (summary.toggles || []).map((toggle) => ({
+        ...toggle,
+        id: `toggle-${toggle.id}`,
+        type: 'toggle',
+      }));
+      // A result marked `lead` (a selected station) heads the card.
+      const lead = summary.result?.lead === true;
+      const resultBlocks = summary.result
+        ? [{ ...summary.result, type: 'result' }]
+        : [];
       const blocks = [
-        ...(summary.overview?.length
-          ? [{ id: 'overview', type: 'lines', lines: summary.overview }]
-          : []),
-        ...(list?.items?.length ? [{ id: 'list', type: 'list', list }] : []),
+        ...(lead ? resultBlocks : []),
+        // A card with tiles reads top down: what it shows, its scale, the
+        // tiles, then what stands out in view.
+        ...(tileBlocks.length ? [] : [...overviewBlocks, ...listBlocks]),
         { id: 'details', type: 'lines', lines },
+        ...toggleBlocks,
         ...(legend.length ? [legendBlock] : []),
+        ...tileBlocks,
+        ...(tileBlocks.length ? [...overviewBlocks, ...listBlocks] : []),
         ...(summary.settings?.length
           ? [{ id: 'settings', type: 'settings', settings: summary.settings }]
           : []),
         ...(actions.length
           ? [{ id: 'actions', type: 'actions', actions }]
           : []),
-        ...(summary.result ? [{ ...summary.result, type: 'result' }] : []),
+        ...(lead ? [] : resultBlocks),
       ];
       return {
         id,

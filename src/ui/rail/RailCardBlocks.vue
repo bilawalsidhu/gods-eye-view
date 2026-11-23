@@ -29,6 +29,13 @@ function dispatch(descriptor, block) {
   else descriptor.onClick?.();
 }
 
+// A tile's band colour, as a bar where the Globe view tile has its icon; an
+// unreadable colour draws no bar.
+const tileAccent = (tile) =>
+  /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i.test(tile.accent || '')
+    ? `background: ${tile.accent}`
+    : undefined;
+
 const rootTag = (block) =>
   block.type === 'list' ? 'ol' : block.type === 'actions' ? 'footer' : 'div';
 const lines = (block) => block.lines || [{ id: block.id, text: block.text }];
@@ -80,7 +87,10 @@ function legendView(legend) {
     /><component
       :is="rootTag(block)"
       v-else
-      :class="`rail-card-${block.type}`"
+      :class="[
+        `rail-card-${block.type}`,
+        block.type === 'tiles' ? 'view-context__world' : null,
+      ]"
       :data-block-id="block.id"
       :hidden="
         block.type === 'legend' ? !legendView(block.legend).visible : undefined
@@ -188,6 +198,45 @@ function legendView(legend) {
             action.hint || ''
           }}</span></template
         ></template
+      ><template v-else-if="block.type === 'tiles'"
+        ><h4
+          >{{ block.title || ''
+          }}<span class="rail-card-tiles-sub" :hidden="!block.subtitle">{{
+            block.subtitle || ''
+          }}</span></h4
+        ><div class="view-context__world-grid"
+          ><UiButton
+            v-for="tile in block.tiles || []"
+            :key="tile.id"
+            class="view-context__world-tile rail-card-tile"
+            :data-tile-id="tile.id"
+            :title="tile.title || undefined"
+            :pressed="Boolean(tile.active)"
+            pressed-class="is-active"
+            @click="dispatch(tile, block)"
+            ><i
+              class="rail-card-tile-swatch"
+              aria-hidden="true"
+              :style="tileAccent(tile)"
+            ></i
+            ><strong
+              >{{ String(tile.value ?? '')
+              }}<small v-if="tile.note"> ({{ tile.note }})</small></strong
+            ><span>{{ tile.label || '' }}</span></UiButton
+          ></div
+        ></template
+      ><template v-else-if="block.type === 'toggle'"
+        ><span class="rail-card-setting-label panel-title">{{
+          block.label
+        }}</span
+        ><UiButton
+          class="rail-card-switch"
+          role="switch"
+          :aria-checked="block.on ? 'true' : 'false'"
+          :aria-label="block.label"
+          :data-toggle-id="block.id"
+          @click="dispatch(block, block)"
+          ><i aria-hidden="true"></i></UiButton></template
       ><template v-else
         ><div
           v-for="line in lines(block)"

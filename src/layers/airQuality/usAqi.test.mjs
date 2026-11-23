@@ -424,15 +424,20 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
     card.list.items.map((item) => item.badge),
     ['Unhealthy', 'Good', 'Not rated'],
   );
-  assert.equal(card.list.items[0].lead, 'US AQI 154');
-  assert.match(card.list.items[0].text, /PM2\.5/);
+  // Value and name; the details are the row's tooltip.
+  assert.equal(card.list.items[0].lead, '154');
+  assert.equal(card.list.items[0].text, 'openaq 1');
+  assert.match(card.list.items[0].title, /PM2\.5/);
   assert.match(card.summary.status, /US AQI · Unhealthy/);
   assert.match(
     card.summary.overview[0].text,
     /Highest US AQI category in view: Unhealthy · openaq 1/,
   );
   // SAAQIS's own index stays in its station's details in the AQI view too.
-  assert.match(card.list.items[1].text, /SAAQIS index PM2\.5 4\/10 · Moderate/);
+  assert.match(
+    card.list.items[1].title,
+    /SAAQIS index PM2\.5 4\/10 · Moderate/,
+  );
   const record = layer
     .getAnalystRecords()
     .find((row) => row.provider === 'openaq');
@@ -487,7 +492,7 @@ test('the AQI view runs its values through plausible()', async () => {
   assert.deepEqual(point().meta.aqi.index, 69);
   assert.equal(point().meta.aqi.leading, 'pm10');
   assert.match(
-    layer.getRowControls().list.items[0].text,
+    layer.getRowControls().list.items[0].title,
     /Not used: PM2\.5 \(above PM10\)/,
   );
   layer.destroy();
@@ -497,7 +502,7 @@ test('the AQI view runs its values through plausible()', async () => {
   assert.equal(point().meta.aqi.index, 53);
   assert.deepEqual(point().meta.aqiExcluded, { no2: 'implausible' });
   assert.match(
-    layer.getRowControls().list.items[0].text,
+    layer.getRowControls().list.items[0].title,
     /PM2\.5 10 µg\/m³ · Not used: NO2 \(implausible\)/,
   );
   layer.destroy();
@@ -513,8 +518,8 @@ test('an old leading value dates the station and reads as older', async () => {
   assert.equal(point().meta.aqi.leading, 'pm25');
   assert.ok(Math.abs(point().meta.observedMs - minutesAgo(150)) < 60_000);
   const [item] = layer.getRowControls().list.items;
-  assert.match(item.text, /Older observation/);
-  assert.match(item.text, /Not used: O3 \(unrated units\)/);
+  assert.match(item.title, /Older observation/);
+  assert.match(item.title, /Not used: O3 \(unrated units\)/);
   layer.destroy();
 });
 
@@ -575,7 +580,7 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
     card.list.items.map((item) => item.badge),
     ['Extremely poor', 'Fair'],
   );
-  assert.match(card.list.items[1].text, /SAAQIS index 4\/10/);
+  assert.match(card.list.items[1].title, /SAAQIS index 4\/10/);
   assert.match(card.summary.status, /Extremely poor/);
   // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C: "Fair" on the EEA NO2 bands.
   const national = () =>

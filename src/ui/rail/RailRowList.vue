@@ -52,7 +52,7 @@ onUpdated(followCurrent);
         :aria-current="item.current ? 'step' : 'false'"
         :pressed="Boolean(item.active)"
         pressed-class="active"
-        :title="String(item.text ?? '')"
+        :title="String(item.title ?? item.text ?? '')"
         @click="onSelect(item)"
         ><span class="data-row-list-lead">{{ String(item.lead ?? '') }}</span
         ><span class="data-row-list-text">{{ String(item.text ?? '') }}</span

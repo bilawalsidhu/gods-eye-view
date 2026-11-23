@@ -4653,7 +4653,6 @@
   "Air quality · South Africa": "Качество воздуха · ЮАР",
   "South Africa · SAAQIS": "ЮАР · SAAQIS",
   "South Africa": "ЮАР",
-  "Pollutant": "Загрязняющее вещество",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Наблюдения станций во всех девяти провинциях. В муниципалитетах без станций нет измерений.",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "Станций в каталоге: {catalog} · С данными: {reporting} · В области карты: {visible}",
   "No current observations for this pollutant in the map view.": "В области карты нет текущих наблюдений этого загрязняющего вещества.",
@@ -4742,5 +4741,17 @@
   "implausible": "неправдоподобно",
   "above PM10": "выше PM10",
   "too old": "слишком старое",
-  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Единицы измерения или период усреднения этой сети не подтверждены; категория воздействия на здоровье не присваивается."
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Единицы измерения или период усреднения этой сети не подтверждены; категория воздействия на здоровье не присваивается.",
+  "Air Quality Health Index, Canada only": "Индекс качества воздуха для здоровья, только Канада",
+  "measured at the station": "измерено на станции",
+  "model at view centre": "модель в центре карты",
+  "nearest station · {name}": "ближайшая станция · {name}",
+  "Pollutants": "Загрязняющие вещества",
+  "{network}: add a key in Provider Settings": "{network}: добавьте ключ в «Настройках провайдеров»",
+  "{network} unavailable": "{network} недоступен",
+  "{network}: request budget reached; cached data will refresh later": "{network}: лимит запросов достигнут; кэшированные данные обновятся позже",
+  "Measured · {provider} · {age}": "Измерено · {provider} · {age}",
+  "HIGHEST IN VIEW": "САМЫЕ ВЫСОКИЕ В ОБЛАСТИ",
+  "EEA hourly quality|Extreme": "Крайне плохое",
+  "air quality monitors|STATIONS": "СТАНЦИИ"
 }

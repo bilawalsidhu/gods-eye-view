@@ -249,10 +249,10 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
         assert.ok(overlays[0].title.endsWith(` · ${label}`));
         if (provider === 'saaqis')
           assert.ok(
-            card.list.items[0].text.includes(
+            card.list.items[0].title.includes(
               `Индекс SAAQIS ${band.max}/10 · ${saaqisRussian[SA_INDEX_BANDS.indexOf(band)]}`,
             ),
-            card.list.items[0].text,
+            card.list.items[0].title,
           );
         if (view !== 'aqi')
           assert.equal(

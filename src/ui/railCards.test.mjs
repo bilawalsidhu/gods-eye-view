@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { nextTick } from 'vue';
 import { createRailCards } from './railCards.js';
+import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
 const legend = {
@@ -445,4 +446,178 @@ test('row lists render and update shared status badges without replacing the foc
   assert.equal(row.querySelector('.data-row-list-badge'), null);
   assertSameNode(f.container.querySelector('.data-row-list-item'), row);
   view.destroy();
+});
+
+const tilesBlock = (active = 'aqi') => ({
+  id: 'tiles-index',
+  type: 'tiles',
+  title: 'Index',
+  subtitle: 'nearest station · Cape Town',
+  tiles: [
+    {
+      id: 'aqi',
+      value: '56',
+      note: 'Moderate',
+      label: 'US AQI',
+      title: 'US AQI · Moderate',
+      accent: '#ffff00',
+      active: active === 'aqi',
+      params: { view: 'aqi' },
+    },
+    {
+      id: 'aqhi',
+      value: 'Canada',
+      label: 'AQHI',
+      accent: '#6b7785',
+      active: active === 'aqhi',
+      params: { view: 'aqhi' },
+    },
+  ],
+});
+
+test('a tiles block draws one button per tile with its value, bracketed note and label', () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  const block = f.find((n) => n.dataset.blockId === 'tiles-index');
+  // The Globe view's worldwide tiles, two to a row.
+  assert.ok(block.classList.contains('view-context__world'));
+  assert.equal(block.querySelector('h4').firstChild.textContent, 'Index');
+  assert.equal(
+    block.querySelector('.rail-card-tiles-sub').textContent,
+    'nearest station · Cape Town',
+  );
+  const tiles = [...block.querySelectorAll('button')];
+  assert.deepEqual(
+    tiles.map((tile) => tile.dataset.tileId),
+    ['aqi', 'aqhi'],
+  );
+  assert.ok(
+    tiles.every((tile) => tile.classList.contains('view-context__world-tile')),
+  );
+  const [aqi, aqhi] = tiles;
+  assert.equal(aqi.querySelector('strong').textContent, '56 (Moderate)');
+  assert.equal(aqi.querySelector('span').textContent, 'US AQI');
+  assert.equal(aqi.title, 'US AQI · Moderate');
+  // A band-colour bar stands where the Globe view tile has its icon.
+  assert.match(
+    aqi.querySelector('.rail-card-tile-swatch').style.background,
+    /^(#ffff00|rgb\(255, 255, 0\))$/,
+  );
+  assert.equal(aqhi.querySelector('strong').textContent, 'Canada');
+  assert.equal(aqi.getAttribute('aria-pressed'), 'true');
+  assert.ok(aqi.classList.contains('is-active'));
+  assert.equal(aqhi.getAttribute('aria-pressed'), 'false');
+  f.writes();
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  assert.equal(f.writes(), 0);
+  view.destroy();
+});
+
+test('a tile click dispatches its params', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  f.find((n) => n.dataset.tileId === 'aqhi').click();
+  assert.deepEqual(calls, [['a', { view: 'aqhi' }]]);
+  view.update([{ ...card, blocks: [tilesBlock('aqhi')] }]);
+  assert.ok(
+    f.find((n) => n.dataset.tileId === 'aqhi').classList.contains('is-active'),
+  );
+  view.destroy();
+});
+
+test('a toggle block flips aria-checked and dispatches its params', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const toggle = (on) => ({
+    id: 'toggle-stations',
+    type: 'toggle',
+    label: 'STATIONS',
+    on,
+    params: { stations: !on },
+  });
+  view.update([{ ...card, blocks: [toggle(true)] }]);
+  const block = f.find((n) => n.dataset.blockId === 'toggle-stations');
+  assert.equal(block.textContent.trim(), 'STATIONS');
+  const button = block.querySelector('button');
+  assert.equal(button.getAttribute('role'), 'switch');
+  assert.equal(button.getAttribute('aria-checked'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'STATIONS');
+  button.click();
+  assert.deepEqual(calls, [['a', { stations: false }]]);
+  view.update([{ ...card, blocks: [toggle(false)] }]);
+  assertSameNode(block.querySelector('button'), button);
+  assert.equal(button.getAttribute('aria-checked'), 'false');
+  button.click();
+  assert.deepEqual(calls.at(-1), ['a', { stations: true }]);
+  view.destroy();
+});
+
+test('a lead result renders first', () => {
+  const f = railFixture();
+  const entry = (lead) => ({
+    id: 'air-quality',
+    icon: '◍',
+    summary: {
+      label: 'Air quality',
+      status: '2 stations reporting',
+      toggles: [{ id: 'stations', label: 'STATIONS', on: true, params: {} }],
+      result: {
+        id: 'station',
+        lead,
+        label: 'Cape Town',
+        clear: { params: { station: null } },
+        lines: [{ id: 'station-source', muted: true, text: 'Measured' }],
+      },
+    },
+    legend: [
+      { color: '#00e400', label: 'Good' },
+      { color: '#ffff00', label: 'Moderate' },
+    ],
+    legendCategorical: true,
+    sublists: [
+      { ...tilesBlock(), id: 'index' },
+      { id: 'empty', title: 'None', tiles: [] },
+    ],
+    list: {
+      title: 'HIGHEST IN VIEW',
+      ariaLabel: 'Observations in view',
+      items: [{ id: 'cape-town', lead: '56', text: 'Cape Town' }],
+    },
+  });
+  const panel = createWeatherPanel({ container: f.container });
+  const order = () =>
+    [
+      ...f.container.querySelectorAll(
+        '[data-card-id="air-quality"] [data-block-id]',
+      ),
+    ]
+      .map((node) => node.dataset.blockId)
+      .filter((id, index, all) => all.indexOf(id) === index);
+  panel.update([entry(true)]);
+  // The selected station heads the card; the tiles follow the details and
+  // legend; the ranked list, under its title, comes last.
+  assert.deepEqual(order(), [
+    'station',
+    'result-lines',
+    'details',
+    'toggle-stations',
+    'legend',
+    'tiles-index',
+    'list-title',
+    'list',
+  ]);
+  panel.update([entry(false)]);
+  assert.equal(order()[0], 'details');
+  assert.equal(order().at(-2), 'station');
+  panel.destroy();
 });

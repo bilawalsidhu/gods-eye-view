@@ -17,7 +17,13 @@ export const EEA_HOURLY_BANDS = Object.freeze([
   { label: msg('Moderate'), color: '#f2d45c' },
   { label: msg('Poor'), color: '#f29457' },
   { label: msg('Very poor'), color: '#e96070' },
-  { label: msg('Extremely poor'), color: '#bb6bbd' },
+  {
+    label: msg('Extremely poor'),
+    // The tile card shows this short form; the legend the label.
+    // i18n-ignore: EEA category; translated in layer presentation
+    short: 'Extreme',
+    color: '#bb6bbd',
+  },
 ]);
 const usual = msg('Usual outdoor activities are appropriate.');
 const symptomatic = msg(
