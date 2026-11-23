@@ -423,7 +423,7 @@ export function createGnssIntegrityLayer({
         value: t(LEVEL_LABELS[cell.level]),
         detail: tn(
           cell.aircraft,
-          '{degraded} of {count} aircraft reported low accuracy',
+          'Aircraft reporting low accuracy: {degraded} of {count}',
           '{degraded} of {count} aircraft reported low accuracy',
           { degraded: formatNumber(cell.degraded) },
         ),

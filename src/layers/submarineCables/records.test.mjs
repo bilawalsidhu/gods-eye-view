@@ -105,6 +105,25 @@ test("a cable's points follow every line, no more than 40 km apart", () => {
   assert.deepEqual(kept.at(-1), { lat: 0, lon: 1 });
 });
 
+test('a cable crossing the dateline is sampled along the short leg', () => {
+  const points = cableLinePoints({
+    geometry: {
+      type: 'LineString',
+      coordinates: [
+        [179, 0],
+        [-179, 0],
+      ],
+    },
+  });
+  assert.deepEqual(points[0], { lat: 0, lon: 179 });
+  assert.deepEqual(points.at(-1), { lat: 0, lon: -179 });
+  assert.ok(points.length > 2);
+  for (let i = 1; i < points.length; i++) {
+    assert.ok(Math.abs(points[i].lon) >= 179);
+    assert.ok(greatCircleKm(points[i - 1], points[i]) <= 40.01);
+  }
+});
+
 test('nothing while off or before the data loads', () => {
   assert.deepEqual(cableAnalystRecords(loaded({ _enabled: false })), []);
   assert.deepEqual(cableAnalystRecords(loaded({ _loaded: false })), []);

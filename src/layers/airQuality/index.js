@@ -281,9 +281,9 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
     /**
      * The nearest station's reading to a point, from the readings already
-     * loaded: `{value: "AQHI 3 · Low", detail: "Toronto · 4 km", at}`. Null
-     * while off, or with no station within VALUE_RADIUS_KM (the network is
-     * Canada only, so most of the world has none).
+     * loaded: `{value: "AQHI 3 · Low", detail: "Toronto · 4 km", at}`. Returns
+     * null while off, with no readings, or for invalid coordinates. Returns
+     * `{value: null, reason}` when no station is within VALUE_RADIUS_KM.
      */
     getValueAt(lat, lon) {
       if (!_enabled || !_readings.length) return null;

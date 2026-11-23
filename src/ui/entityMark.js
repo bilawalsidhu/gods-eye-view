@@ -42,22 +42,21 @@ const text = (value) =>
  */
 export function markKind(layerId, source) {
   if (!source) return '';
-  const subject = source;
   if (AIRCRAFT_LAYERS.has(layerId)) {
     const own = text(source.aircraftClass);
     if (AIRCRAFT_KINDS.has(own)) return own;
     return classifyAircraft({
-      typeCode: text(subject.typeCode ?? subject.type),
-      category: subject.category ?? null,
+      typeCode: text(source.typeCode ?? source.type),
+      category: source.category ?? null,
     });
   }
   if (VESSEL_LAYERS.has(layerId)) {
-    const type = subject.shipType ?? subject.type;
+    const type = source.shipType ?? source.type;
     if (
       isAidToNavigation({
         type,
-        mmsi: subject.mmsi,
-        virtual: subject.virtual,
+        mmsi: source.mmsi,
+        virtual: source.virtual,
       })
     )
       return AID_MARK;

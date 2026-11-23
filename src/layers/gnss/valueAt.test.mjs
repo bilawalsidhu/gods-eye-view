@@ -54,3 +54,17 @@ test('getValueAt reads the binned cell under a point', async () => {
   assert.equal(layer.getValueAt(50, 30), null);
   layer.destroy();
 });
+
+test('getValueAt reads the same populated cell on either side of the dateline', async (t) => {
+  const layer = layerWith([
+    row('a1', 0, 179.999, false),
+    row('a2', 0, -179.999, true),
+  ]);
+  t.after(() => layer.destroy());
+  layer.enable();
+  assert.equal(await layer.update(), true);
+  assert.equal(layer.getStats().count, 1);
+  const east = layer.getValueAt(0, 179.999);
+  assert.equal(east?.at, 9_500);
+  assert.deepEqual(layer.getValueAt(0, -179.999), east);
+});

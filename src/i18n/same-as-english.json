@@ -57,7 +57,8 @@
     "{kind} {name}",
     "{speed} {direction}",
     "3D",
-    "{utc} UTC"
+    "{utc} UTC",
+    "UTC"
   ],
   "de": [
     "1090 MHz",
@@ -1082,7 +1083,8 @@
     "{n} hPa",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "UTC"
   ],
   "pt": [
     "1 min/s",
@@ -1648,7 +1650,8 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "UTC"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1733,7 +1736,8 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "UTC"
   ],
   "he": [
     "{speed} kn",
@@ -1851,6 +1855,7 @@
     "{kind} {name}",
     "3D",
     "KT",
-    "{utc} UTC"
+    "{utc} UTC",
+    "UTC"
   ]
 }

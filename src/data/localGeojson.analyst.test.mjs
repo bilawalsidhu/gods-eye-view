@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { nearbyByLayer } from './entityContext.js';
 import {
   createLocalGeoJsonLayer as createLayer,
   mapAnalystRecord,
@@ -365,7 +366,7 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
   }
 });
 
-test('infra getAnalystRecords: multi-part polygon and point features are listed and counted once', async () => {
+test('infra records list and count multi-part features across the dateline once', async () => {
   const originalFetch = globalThis.fetch;
   const originalWindow = globalThis.window;
   globalThis.window = { dispatchEvent() {} };
@@ -385,7 +386,7 @@ test('infra getAnalystRecords: multi-part polygon and point features are listed 
       properties: { name: 'Split Campus' },
       geometry: {
         type: 'MultiPolygon',
-        coordinates: [square(-97.8, 30.3), square(-97.5, 30.6)],
+        coordinates: [square(179.7, 30.3), square(-179.99, 30.3)],
       },
     },
     {
@@ -394,8 +395,8 @@ test('infra getAnalystRecords: multi-part polygon and point features are listed 
       geometry: {
         type: 'MultiPoint',
         coordinates: [
-          [-97.7, 30.2],
-          [-97.6, 30.25],
+          [179.7, 30.2],
+          [-179.9, 30.2],
         ],
       },
     },
@@ -403,7 +404,7 @@ test('infra getAnalystRecords: multi-part polygon and point features are listed 
       type: 'Feature',
       id: 'single',
       properties: { name: 'Single Hall' },
-      geometry: { type: 'Polygon', coordinates: square(-97.9, 30.4) },
+      geometry: { type: 'Polygon', coordinates: square(179.7, 30.4) },
     },
   ];
   globalThis.fetch = async () => ({
@@ -413,7 +414,7 @@ test('infra getAnalystRecords: multi-part polygon and point features are listed 
   });
   const viewer = {};
   const fake = bindFakeGroundRenderer(viewer, {
-    eye: { lon: -97.8, lat: 30.3, height: 100_000 },
+    eye: { lon: 179.995, lat: 30.305, height: 100_000 },
   });
   const layer = createLocalGeoJsonLayer({
     id: 'local-datacenters',
@@ -442,6 +443,26 @@ test('infra getAnalystRecords: multi-part polygon and point features are listed 
     assert.equal(
       rows.find((row) => row.name === 'Single Hall').parts,
       undefined,
+    );
+    // The first campus part is outside the radius. Its other part is just
+    // across the dateline, so Nearby must list the campus at that part.
+    const row = {
+      id: 'local-datacenters',
+      name: 'Multi-part Sites',
+      enabled: true,
+      module: layer,
+    };
+    const dm = { getAll: () => [row], layers: new Map([[row.id, row]]) };
+    const center = { lat: 30.305, lon: 179.995 };
+    const [nearby] = nearbyByLayer(dm, center, { radiusKm: 5 });
+    assert.equal(nearby?.count, 1);
+    assert.equal(nearby.items[0].title, 'Split Campus');
+    assert.equal(nearby.items[0].identity.lon, campus.parts[1].lon);
+    const [wider] = nearbyByLayer(dm, center, { radiusKm: 40 });
+    assert.equal(
+      wider.count,
+      3,
+      'still one row per feature when both parts qualify',
     );
   } finally {
     layer.destroy(viewer);
