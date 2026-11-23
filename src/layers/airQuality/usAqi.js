@@ -15,9 +15,10 @@
  * The table is defined on 24-hour (PM, SO2 above 200), 8-hour (O3, CO) and
  * 1-hour (NO2, SO2 up to 200) averages; a station's latest values stand in
  * for them. Where the document gives 1-hour rules they are followed: ozone
- * takes the higher of its 8-hour and 1-hour rows where both apply, and only
- * the 1-hour rows above 0.200 ppm; a 1-hour SO2 value of 305 ppb or more
- * gives exactly 200.
+ * takes the higher of its 8-hour rows (held at 300 above 0.200 ppm, where
+ * they end) and its 1-hour rows (from 0.125 ppm), so its index never falls as
+ * the concentration rises; a 1-hour SO2 value of 305 ppb or more gives
+ * exactly 200.
  *
  * Values are in µg/m³, CO in mg/m³: the layer's units (`units.js`). Gases
  * convert back to ppb (CO to ppm) at 25 °C, the EPA's reference conditions.
@@ -188,12 +189,13 @@ function tableConcentration(key, value) {
 function subIndex(key, value) {
   const c = tableConcentration(key, value);
   if (key === 'o3') {
-    // The higher of the 8-hour rows (to 0.200 ppm) and the 1-hour rows (from
-    // 0.125 ppm), where each is defined.
-    const candidates = [];
-    if (c <= 0.2) candidates.push(onRows(c, TABLE.o3.rows));
-    if (c >= OZONE_HOURLY[0][0]) candidates.push(onRows(c, OZONE_HOURLY));
-    return Math.max(...candidates);
+    // The higher of the 8-hour rows, held at 300 above 0.200 ppm where they
+    // end, and the 1-hour rows from 0.125 ppm: the index never falls as the
+    // concentration rises.
+    const eightHour = c <= 0.2 ? onRows(c, TABLE.o3.rows) : 300;
+    return c >= OZONE_HOURLY[0][0]
+      ? Math.max(eightHour, onRows(c, OZONE_HOURLY))
+      : eightHour;
   }
   // 1-hour SO2 values do not define 200 and above: fixed at 200.
   if (key === 'so2' && c >= 305) return 200;

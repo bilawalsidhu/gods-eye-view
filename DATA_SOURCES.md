@@ -852,8 +852,8 @@ highest sub-index, with the EPA's category names and standard colours
 (`src/layers/airQuality/usAqi.js`). Latest values stand in for the 24-hour and
 8-hour averages the table is defined on, so the result is GEV's calculation,
 not an official reading, in the US or elsewhere. Ozone takes the higher of its
-8-hour and 1-hour rows where both apply, and only the 1-hour rows above
-0.200 ppm. A value above its pollutant's plausibility ceiling, PM2.5 above the
+8-hour rows (held at 300 above 0.200 ppm, where they end) and its 1-hour rows
+(from 0.125 ppm), so its index never falls as the concentration rises. A value above its pollutant's plausibility ceiling, PM2.5 above the
 same station's PM10, a value more than three hours older than the station's
 newest value kept, and a value whose units do not convert are left out and
 named in the station's details; the station's time is that of the pollutant

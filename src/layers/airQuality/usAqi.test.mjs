@@ -55,18 +55,23 @@ test('above the table the index runs on past 500 in the hazardous row (EPA)', ()
   assert.equal(usAqiBand(699).id, 'hazardous');
 });
 
-test('ozone above 0.200 ppm is on the EPA 1-hour rows', () => {
+test('the ozone index never falls as the concentration rises', () => {
   const at = (ppb) => usAqi({ o3: ppb * 1.963 }).index;
-  // Both rows apply from 0.125 to 0.200 ppm: the higher (8-hour) wins.
+  // Every step of 0.001 ppm from 0.100 to 0.700 ppm.
+  let previous = -Infinity;
+  for (let ppb = 100; ppb <= 700; ppb++) {
+    assert.ok(at(ppb) >= previous, `${ppb} ppb: ${at(ppb)} < ${previous}`);
+    previous = at(ppb);
+  }
+  // Below 0.125 ppm only the 8-hour rows; to 0.200 ppm the higher of both.
+  assert.equal(at(100), 187);
   assert.equal(at(162), 260);
   assert.equal(at(200), 300);
-  // Above 0.200 ppm only the 1-hour rows are defined (TAD footnote 2).
-  assert.equal(at(201), 196);
-  assert.equal(at(205), 201);
-  assert.equal(at(300), 248);
-  assert.notEqual(at(205), at(300));
-  for (const ppb of [205, 300])
-    assert.equal(usAqiBand(at(ppb)).id, 'very-unhealthy', `${ppb} ppb`);
+  // Above 0.200 ppm the 8-hour part holds at 300 until the 1-hour rows pass it.
+  assert.equal(at(201), 300);
+  assert.equal(at(300), 300);
+  assert.equal(at(404), 300);
+  assert.equal(usAqiBand(at(300)).id, 'very-unhealthy');
   assert.equal(at(405), 301);
   assert.equal(at(604), 500);
 });
