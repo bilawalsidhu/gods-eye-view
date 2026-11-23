@@ -291,12 +291,6 @@ export function usAqiBand(index) {
   return US_AQI_BANDS[US_AQI_LIMITS.filter((limit) => index > limit).length];
 }
 
-/** The EPA's number range of each category, for the legend. */
-export function usAqiRange(position) {
-  if (position === US_AQI_LIMITS.length) return `${US_AQI_LIMITS.at(-1) + 1}+`;
-  return `${position ? US_AQI_LIMITS[position - 1] + 1 : 0}–${US_AQI_LIMITS[position]}`;
-}
-
 /** Per-pollutant fields a station reading in the AQI view does not carry. */
 const POLLUTANT_FIELDS = [
   'id',
@@ -328,7 +322,8 @@ const POLLUTANT_FIELDS = [
  * that already carries `values` passes through.
  *
  * `values` holds every pollutant the station reports, in the layer's units,
- * with `valueTimes` and `valueAveraging` per value; `excluded` names the
+ * with `valueTimes`, `valueAveraging` and (where given) `valueCoverage` per
+ * value; `excluded` names the
  * readings left out (`'units'` when their units do not convert, `'flagged'`
  * when their source flagged them), and `ratings` keeps a network's own
  * index per pollutant. A reading its provider leaves unrated
@@ -361,6 +356,7 @@ export function aqiStations(readings) {
         values: {},
         valueTimes: {},
         valueAveraging: {},
+        valueCoverage: {},
         excluded: {},
         ratings: {},
         observedMs: null,
@@ -393,6 +389,8 @@ export function aqiStations(readings) {
     station.values[key] = value;
     station.valueTimes[key] = at;
     station.valueAveraging[key] = reading.averagingMinutes ?? null;
+    if (reading.coveragePercent !== undefined)
+      station.valueCoverage[key] = reading.coveragePercent;
   }
   for (const station of stations.values()) {
     const { reportedMs, anyRated } = station;

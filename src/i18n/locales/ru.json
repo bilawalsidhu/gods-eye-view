@@ -4731,5 +4731,7 @@
     "few": "{count} станции",
     "many": "{count} станций",
     "other": "{count} станции"
-  }
+  },
+  "Deselect station": "Снять выбор станции",
+  "{network}: showing cached data": "{network}: показаны кэшированные данные"
 }

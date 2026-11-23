@@ -2,7 +2,7 @@
  * EEA revised hourly bands: https://airindex.eea.europa.eu/AQI/
  * Upper bounds are inclusive; decimal values are not rounded into a lower band.
  */
-import { concentrationFactor } from './units.js';
+import { concentrationFactor, layerUnits } from './units.js';
 const msg = (text) => text;
 export const EEA_HOURLY_LIMITS = Object.freeze({
   'PM2.5': [5, 15, 50, 90, 140],
@@ -10,6 +10,10 @@ export const EEA_HOURLY_LIMITS = Object.freeze({
   NO2: [10, 25, 60, 100, 150],
   O3: [60, 100, 120, 160, 180],
   SO2: [20, 40, 125, 190, 275],
+  // CO is not in the EEA index. Its steps, in mg/m³, are the WHO 24-hour
+  // guideline and interim target, then the 8-hour, 1-hour and 15-minute
+  // guidelines, on the same six bands.
+  CO: [4, 7, 10, 35, 100],
 });
 export const EEA_HOURLY_BANDS = Object.freeze([
   { label: msg('Good'), color: '#50c9b5' },
@@ -49,12 +53,13 @@ export const EEA_SENSITIVE_GUIDANCE = [
 export function hourlyLegend(parameter) {
   const limits = EEA_HOURLY_LIMITS[parameter];
   if (!limits) return [];
+  const units = layerUnits(parameter);
   return EEA_HOURLY_BANDS.map((band, i) => ({
     ...band,
     range:
       i === 5
-        ? `>${limits[4]} µg/m³`
-        : `${i ? `>${limits[i - 1]}` : '0'}–${limits[i]} µg/m³`,
+        ? `>${limits[4]} ${units}`
+        : `${i ? `>${limits[i - 1]}` : '0'}–${limits[i]} ${units}`,
   }));
 }
 /**
@@ -118,7 +123,7 @@ export function interpretHourly(reading) {
       method: msg('EEA hourly pollutant bands'),
       basis: 'calculated',
       concentration: value,
-      units: 'µg/m³',
+      units: layerUnits(reading.parameter),
       range: hourlyLegend(reading.parameter)[severity].range,
       general: EEA_GENERAL_GUIDANCE[severity],
       sensitive: EEA_SENSITIVE_GUIDANCE[severity],

@@ -4519,5 +4519,7 @@
   "{count} stations": {
     "one": "{count} Station",
     "other": "{count} Stationen"
-  }
+  },
+  "Deselect station": "Station abwählen",
+  "{network}: showing cached data": "{network}: zwischengespeicherte Daten"
 }

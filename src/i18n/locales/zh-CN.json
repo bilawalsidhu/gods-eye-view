@@ -4413,5 +4413,7 @@
   "air quality monitors|STATIONS": "监测站",
   "{count} stations": {
     "other": "{count} 个站点"
-  }
+  },
+  "Deselect station": "取消选择监测站",
+  "{network}: showing cached data": "{network}：显示缓存数据"
 }

@@ -4519,5 +4519,7 @@
   "{count} stations": {
     "one": "{count} station",
     "other": "{count} stationer"
-  }
+  },
+  "Deselect station": "Avmarkera station",
+  "{network}: showing cached data": "{network}: visar cachade data"
 }

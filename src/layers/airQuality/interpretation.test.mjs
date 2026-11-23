@@ -19,14 +19,17 @@ const base = {
 };
 test('all published pollutant boundaries classify inclusively without rounding down', () => {
   for (const [parameter, limits] of Object.entries(EEA_HOURLY_LIMITS)) {
+    // Each pollutant in the layer's unit: µg/m³, CO mg/m³.
+    const units = parameter === 'CO' ? 'mg/m³' : 'µg/m³';
     for (const [i, value] of limits.entries()) {
       assert.equal(
-        interpretHourly({ ...base, parameter, value }).assessment.severity,
+        interpretHourly({ ...base, parameter, units, value }).assessment
+          .severity,
         i,
       );
       assert.equal(
-        interpretHourly({ ...base, parameter, value: value + 0.01 }).assessment
-          .severity,
+        interpretHourly({ ...base, parameter, units, value: value + 0.01 })
+          .assessment.severity,
         i + 1,
       );
     }
@@ -46,7 +49,6 @@ test('unknown periods, incomplete or flagged hours, unsupported units and CO2 ne
     { qualityFlagged: true },
     { units: 'ppb' },
     { parameter: 'CO2' },
-    { parameter: 'CO' },
     { value: null },
     { value: -1 },
     { value: Infinity },
@@ -57,6 +59,29 @@ test('unknown periods, incomplete or flagged hours, unsupported units and CO2 ne
     assert.equal(result.color, '#8cb4ce');
   }
   assert.deepEqual(hourlyLegend('CO2'), []);
+});
+
+test('CO is banded in mg/m³ on the same six bands', () => {
+  assert.deepEqual(EEA_HOURLY_LIMITS.CO, [4, 7, 10, 35, 100]);
+  const co = (value, units = 'mg/m³') =>
+    interpretHourly({ ...base, parameter: 'CO', units, value }).assessment;
+  assert.equal(co(0.4).label, 'Good');
+  assert.equal(co(8).label, 'Moderate');
+  assert.equal(co(120).label, 'Extremely poor');
+  // 9000 µg/m³ is 9 mg/m³.
+  assert.equal(co(9000, 'µg/m³').label, 'Moderate');
+  assert.equal(co(0.4).units, 'mg/m³');
+  assert.deepEqual(
+    hourlyLegend('CO').map((band) => band.range),
+    [
+      '0–4 mg/m³',
+      '>4–7 mg/m³',
+      '>7–10 mg/m³',
+      '>10–35 mg/m³',
+      '>35–100 mg/m³',
+      '>100 mg/m³',
+    ],
+  );
 });
 const sensor = { id: 100, parameter: 'PM2.5', units: 'µg/m³' };
 const station = {

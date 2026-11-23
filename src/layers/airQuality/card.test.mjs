@@ -20,6 +20,7 @@ const definition = (id, extra = {}) => ({
 });
 const OPENAQ = definition('openaq', {
   viewDriven: true,
+  worldwide: true,
   direct: false,
   requiresKeyId: 'openaq',
 });
@@ -32,6 +33,7 @@ const ECCC = {
 };
 
 const CAPE_TOWN = { lat: -33.92, lon: 18.42, name: 'Cape Town' };
+const PARIS = { lat: 48.85, lon: 2.35, name: 'Paris' };
 const DURBAN = { lat: -29.86, lon: 31.03, name: 'Durban' };
 
 /** One pollutant reading at a station, as a provider answers it. */
@@ -126,8 +128,10 @@ function cardHarness(
   layer.init(viewer);
   if (view) layer.setParams({ view });
   layer.enable();
-  const moveTo = (place) => {
+  /** Look at `place`; `rect`, when given, is the new view rectangle. */
+  const moveTo = (place, rect = camera.rect) => {
     camera.center = { lon: place.lon, lat: place.lat };
+    camera.rect = rect;
     for (const listener of moveEnd) listener();
   };
   return { layer, calls, camera, moveTo };
@@ -199,7 +203,8 @@ test('the card has an index group and a six-tile pollutant group', async () => {
     (({ value, note, accent }) => ({ value, note, accent }))(
       tile(controls, 'pollutants', 'CO'),
     ),
-    { value: '0.40', note: '', accent: '#8cb4ce' },
+    // CO in mg/m³ on its own steps (WHO), the same six bands.
+    { value: '0.40', note: 'Good', accent: '#50c9b5' },
   );
   // #1291's view chips are gone: the tiles are the picker.
   assert.equal(controls.summary.settings, undefined);
@@ -310,7 +315,7 @@ test('a selected station heads the card and the tiles read it', async () => {
     id: 'station',
     lead: true,
     label: 'Durban',
-    clear: { params: { station: null } },
+    clear: { label: 'Deselect station', params: { station: null } },
     lines: [
       {
         id: 'station-source',
@@ -401,7 +406,9 @@ test('the card is slim: one time line, a station count, the key lines and nothin
   await layer.update();
   await flush();
   const { summary } = layer.getRowControls();
-  assert.equal(summary.coverage, 'Global');
+  // The badge names where the drawn stations are: here South Africa's
+  // network only (its title), not the world.
+  assert.equal(summary.coverage, 'saaqis');
   // The networks drawn, and how fresh the newest reading is.
   assert.equal(summary.detail, 'SAAQIS · updated 10m ago');
   assert.equal(summary.status, '1 station');
@@ -468,10 +475,15 @@ test('the AQI and pollutant views show a ramp with its range; the AQHI view keep
   );
   assert.equal(controls.summary.units, 'µg/m³');
   assert.equal(controls.summary.unitsVerbatim, true);
-  // CO has no EEA bands, so no scale.
+  // CO in mg/m³ on its own steps.
   layer.setParams({ view: 'CO' });
   await flush();
-  assert.deepEqual(layer.getRowControls().legend, []);
+  controls = layer.getRowControls();
+  assert.deepEqual(
+    controls.legend.map((band) => band.label),
+    ['0', '4', '7', '10', '35', '100+'],
+  );
+  assert.equal(controls.summary.units, 'mg/m³');
   layer.setParams({ view: 'aqhi' });
   await flush();
   controls = layer.getRowControls();
@@ -739,4 +751,323 @@ test('a provider without its key is not asked again on scheduled updates for ten
     'openaq',
     'saaqis',
   ]);
+});
+
+// ── fix round 1 ────────────────────────────────────────────────────────────
+
+test('the tiles read only stations in view: with none in view they read nothing', async () => {
+  const { layer, moveTo } = cardHarness({
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  await layer.update();
+  await flush();
+  moveTo(PARIS, { west: 1, south: 47, east: 4, north: 50 });
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(group(controls, 'index').subtitle, '');
+  assert.equal(tile(controls, 'index', 'aqi').value, '—');
+  assert.equal(tile(controls, 'pollutants', 'PM2.5').value, '—');
+});
+
+test('an unrated station at the view centre beats a rated one out of view', async () => {
+  const { layer, camera } = cardHarness({
+    saaqis: [
+      ...station('saaqis', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
+        ...row,
+        rated: false,
+      })),
+      ...station('saaqis', DURBAN, { 'PM2.5': 40 }),
+    ],
+  });
+  camera.rect = { west: 17, south: -35, east: 20, north: -33 };
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(
+    group(controls, 'index').subtitle,
+    'nearest station · Cape Town',
+  );
+  assert.equal(tile(controls, 'index', 'aqi').value, '—');
+});
+
+test('a tile bands a value only as the map would: a one-hour average, unflagged', async () => {
+  const { layer } = cardHarness({
+    saaqis: [
+      // A 24-hour mean, and a latest value with no stated period (as
+      // OpenAQ's latest values come): shown, not banded.
+      pollutant('saaqis', CAPE_TOWN, 'PM2.5', 12, { averagingMinutes: 1440 }),
+      pollutant('saaqis', CAPE_TOWN, 'NO2', 20, { averagingMinutes: null }),
+      pollutant('saaqis', CAPE_TOWN, 'O3', 80),
+    ],
+  });
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  const shown = (id) =>
+    (({ value, note, accent }) => ({ value, note, accent }))(
+      tile(controls, 'pollutants', id),
+    );
+  assert.deepEqual(shown('PM2.5'), {
+    value: '12',
+    note: '',
+    accent: '#8cb4ce',
+  });
+  assert.deepEqual(shown('NO2'), { value: '20', note: '', accent: '#8cb4ce' });
+  assert.deepEqual(shown('O3'), {
+    value: '80',
+    note: 'Fair',
+    accent: '#a3cf62',
+  });
+  // The US AQI itself keeps the latest-value method.
+  assert.equal(tile(controls, 'index', 'aqi').value, '56');
+  assert.equal(tile(controls, 'index', 'aqi').note, 'Moderate');
+});
+
+test('a network serving cached data says so in its line; partial coverage alone does not', async () => {
+  const stale = cardHarness(
+    { saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES) },
+    { coverage: { saaqis: { stale: true } } },
+  );
+  await stale.layer.update();
+  await flush();
+  assert.deepEqual(
+    stale.layer
+      .getRowControls()
+      .summary.lines.filter((line) => line.id === 'provider-saaqis'),
+    [
+      {
+        id: 'provider-saaqis',
+        muted: true,
+        text: 'SAAQIS: showing cached data',
+      },
+    ],
+  );
+  const partial = cardHarness(
+    { saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES) },
+    { coverage: { saaqis: { partial: true } } },
+  );
+  await partial.layer.update();
+  await flush();
+  assert.equal(
+    lineText(partial.layer.getRowControls(), 'provider-saaqis'),
+    undefined,
+  );
+});
+
+/** Cape Town and Durban for the AQI view; one pollutant otherwise. */
+const twoStations = (request) => {
+  const rows = [
+    ...station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+    ...station('saaqis', DURBAN, { 'PM2.5': 40, NO2: 30 }),
+  ];
+  return request.mode === 'aqi'
+    ? rows
+    : rows
+        .filter((row) => row.parameter === request.parameter)
+        .map(interpretHourly);
+};
+
+test('a selected station stays across tile clicks, from its remembered values where the view has none', async () => {
+  let release;
+  const { layer } = cardHarness({
+    saaqis: (request) =>
+      request.parameter === 'SO2'
+        ? new Promise((resolve) => {
+            release = () => resolve(twoStations(request));
+          })
+        : twoStations(request),
+  });
+  await layer.update();
+  await flush();
+  layer.setParams({ station: 'saaqis:durban:aqi' });
+  // Durban has no SO2: while the view loads and after, the header and the
+  // subtitle stay, and the tiles read its AQI-view values.
+  layer.setParams({ view: 'SO2' });
+  for (const moment of ['loading', 'loaded']) {
+    if (moment === 'loaded') {
+      release();
+      await flush();
+    }
+    const controls = layer.getRowControls();
+    assert.equal(controls.summary.result?.label, 'Durban', moment);
+    assert.equal(
+      group(controls, 'index').subtitle,
+      'measured at the station',
+      moment,
+    );
+    assert.equal(tile(controls, 'index', 'aqi').value, '112', moment);
+    assert.equal(tile(controls, 'pollutants', 'PM2.5').value, '40', moment);
+    assert.equal(tile(controls, 'pollutants', 'SO2').value, '—', moment);
+  }
+  // The AQHI view keeps the station and its values too.
+  layer.setParams({ view: 'aqhi' });
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(controls.summary.result?.label, 'Durban');
+  assert.equal(tile(controls, 'index', 'aqi').value, '112');
+});
+
+test('the AQHI view tiles read the nearest remembered station in view', async () => {
+  const { layer } = cardHarness({ saaqis: twoStations });
+  await layer.update();
+  await flush();
+  layer.setParams({ view: 'aqhi' });
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(
+    group(controls, 'index').subtitle,
+    'nearest station · Cape Town',
+  );
+  assert.equal(tile(controls, 'index', 'aqi').value, '56');
+  assert.equal(tile(controls, 'pollutants', 'NO2').value, '20');
+});
+
+test('remembered AQI-view values older than an hour are not shown', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
+  const { layer } = cardHarness({ saaqis: twoStations });
+  await layer.update();
+  await flush();
+  layer.setParams({ view: 'NO2' });
+  await flush();
+  assert.equal(tile(layer.getRowControls(), 'index', 'aqi').value, '56');
+  t.mock.timers.tick(61 * 60_000);
+  const controls = layer.getRowControls();
+  assert.equal(tile(controls, 'index', 'aqi').value, '—');
+  assert.equal(tile(controls, 'pollutants', 'PM2.5').value, '—');
+  // The view's own reading still reads.
+  assert.equal(tile(controls, 'pollutants', 'NO2').value, '20');
+});
+
+test('with the stations off the count and the list are hidden', async () => {
+  const { layer } = cardHarness({ saaqis: twoStations });
+  await layer.update();
+  await flush();
+  layer.setParams({ stations: false });
+  const controls = layer.getRowControls();
+  assert.equal(controls.summary.status, '');
+  assert.deepEqual(controls.list.items, []);
+});
+
+test('the badge reads Global when a worldwide network drew, else the networks drawn', async () => {
+  const world = cardHarness({
+    openaq: station('openaq', DURBAN, { 'PM2.5': 40 }),
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  await world.layer.update();
+  await flush();
+  assert.equal(world.layer.getRowControls().summary.coverage, 'Global');
+  const local = cardHarness({
+    openaq: [],
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  await local.layer.update();
+  await flush();
+  assert.equal(local.layer.getRowControls().summary.coverage, 'saaqis');
+});
+
+test('an unrated row shows its value in the view unit when it converts, else a dash', async () => {
+  const { layer } = cardHarness(
+    {
+      saaqis: [
+        // 10 ppb NO2, no stated period: unrated, 18.82 µg/m³ at 25 °C.
+        pollutant('saaqis', CAPE_TOWN, 'NO2', 10, {
+          units: 'ppb',
+          averagingMinutes: null,
+        }),
+        pollutant('saaqis', DURBAN, 'NO2', 7, {
+          units: 'index',
+          averagingMinutes: null,
+        }),
+      ].map(interpretHourly),
+    },
+    { view: 'NO2' },
+  );
+  await layer.update();
+  await flush();
+  const leads = Object.fromEntries(
+    layer.getRowControls().list.items.map((item) => [item.text, item.lead]),
+  );
+  assert.deepEqual(leads, { 'Cape Town': '19', Durban: '—' });
+});
+
+test('a camera move folded into a scheduled update leaves a provider without its key alone', async () => {
+  const regional = definition('regional', { viewDriven: true });
+  const { layer, calls, moveTo } = cardHarness(
+    {
+      openaq: noKey(),
+      regional: station('regional', CAPE_TOWN, CAPE_TOWN_VALUES),
+    },
+    { definitions: [OPENAQ, regional] },
+  );
+  await layer.update();
+  await flush();
+  calls.length = 0;
+  // The move waits 400 ms; the scheduled update takes it in at once.
+  moveTo(DURBAN, { west: 25, south: -35, east: 35, north: -25 });
+  await layer.update();
+  await flush();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['regional'],
+  );
+  layer.disable();
+});
+
+test('the stats say loading while a slower provider is still asking', async () => {
+  const { layerFeedState } = await import('../../data/feedState.js');
+  let release;
+  const { layer } = cardHarness({
+    openaq: () =>
+      new Promise((resolve) => {
+        release = () => resolve([]);
+      }),
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  await layer.update();
+  assert.equal(layer.getStats().loading, true);
+  assert.equal(layerFeedState(layer.getStats()), 'loading');
+  release();
+  await flush();
+  assert.equal(layer.getStats().loading, false);
+  assert.equal(layerFeedState(layer.getStats()), 'nominal');
+});
+
+test('a collapsed card with no status shows the first network line', async () => {
+  const { layer } = cardHarness({ openaq: noKey() }, { definitions: [OPENAQ] });
+  await layer.update();
+  await flush();
+  const { summary } = layer.getRowControls();
+  assert.equal(summary.status, '');
+  assert.equal(summary.compact, 'OPENAQ: add a key in Provider Settings');
+});
+
+test('the AQHI legend lists each band once across index providers', async () => {
+  const second = { ...ECCC, id: 'eccc-2', network: 'ECCC 2' };
+  const answer = (provider) => [
+    {
+      id: `${provider}:a`,
+      provider,
+      stationId: 'a',
+      name: 'Toronto',
+      zone: 'ON',
+      lat: 43.65,
+      lon: -79.38,
+      value: 2,
+      label: '2',
+      scale: 'AQHI',
+      color: '#00ccff',
+      risk: 'Low health risk',
+      observedMs: Date.now(),
+    },
+  ];
+  const { layer } = cardHarness(
+    { eccc: answer('eccc'), 'eccc-2': answer('eccc-2') },
+    { definitions: [ECCC, second] },
+  );
+  await layer.update();
+  await flush();
+  assert.deepEqual(
+    layer.getRowControls().legend.map((band) => band.label),
+    ['Low 1–3'],
+  );
 });

@@ -426,28 +426,43 @@ test('view-driven providers debounce navigation, abort old requests, and separat
   layer.destroy();
 });
 
-test('partial or stale coverage does not label visible observations unavailable', async () => {
+test('stale coverage says the network shows cached data; partial alone says nothing', async () => {
   const definition = createAirQualitySource().definitions.find(
     (p) => p.id === 'saaqis',
   );
-  const layer = createAirQualityLayer({
-    source: {
-      definitions: [definition],
-      getSnapshot: async () =>
-        selectSaReadings(snapshot([channel()]), 'PM2.5', now),
-      getCoverage: () => ({ partial: true, stale: true }),
-    },
-    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
-  });
-  initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
-  layer.setParams({ view: 'PM2.5' });
-  layer.enable();
-  await layer.update();
-  assert.equal(layer.getStats().count, 1);
-  const { summary } = layer.getRowControls();
-  assert.equal(summary.status, '1 station');
-  assert.deepEqual(summary.lines, []);
-  layer.destroy();
+  for (const [coverage, lines] of [
+    [
+      { partial: true, stale: true },
+      [
+        {
+          id: 'provider-saaqis',
+          muted: true,
+          text: 'SAAQIS: showing cached data',
+        },
+      ],
+    ],
+    [{ partial: true }, []],
+  ]) {
+    const layer = createAirQualityLayer({
+      source: {
+        definitions: [definition],
+        getSnapshot: async () =>
+          selectSaReadings(snapshot([channel()]), 'PM2.5', now),
+        getCoverage: () => coverage,
+      },
+      overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    });
+    initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
+    layer.setParams({ view: 'PM2.5' });
+    layer.enable();
+    await layer.update();
+    // The stations stay on the map and in the count either way.
+    assert.equal(layer.getStats().count, 1);
+    const { summary } = layer.getRowControls();
+    assert.equal(summary.status, '1 station');
+    assert.deepEqual(summary.lines, lines);
+    layer.destroy();
+  }
 });
 
 test('viewport rate limits are explicit and do not disable the layer', async () => {

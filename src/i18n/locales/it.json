@@ -4625,5 +4625,7 @@
     "one": "{count} stazione",
     "many": "{count} di stazioni",
     "other": "{count} stazioni"
-  }
+  },
+  "Deselect station": "Deseleziona stazione",
+  "{network}: showing cached data": "{network}: dati in cache"
 }

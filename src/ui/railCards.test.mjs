@@ -575,7 +575,7 @@ test('a lead result renders first', () => {
         id: 'station',
         lead,
         label: 'Cape Town',
-        clear: { params: { station: null } },
+        clear: { label: 'Deselect station', params: { station: null } },
         lines: [{ id: 'station-source', muted: true, text: 'Measured' }],
       },
     },
@@ -616,7 +616,20 @@ test('a lead result renders first', () => {
     'list-title',
     'list',
   ]);
+  // The heading result is framed by its class, and its close button says
+  // what it lets go of.
+  const head = f.container.querySelector(
+    '[data-card-id="air-quality"] .rail-card-result',
+  );
+  assert.ok(head.classList.contains('is-lead'));
+  const close = head.querySelector('[data-action-id="clear"]');
+  assert.equal(close.getAttribute('aria-label'), 'Deselect station');
   panel.update([entry(false)]);
+  assert.ok(
+    !f.container
+      .querySelector('[data-card-id="air-quality"] .rail-card-result')
+      .classList.contains('is-lead'),
+  );
   assert.equal(order()[0], 'details');
   assert.equal(order().at(-2), 'station');
   panel.destroy();

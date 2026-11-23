@@ -187,6 +187,8 @@ export function createDefaultAirQualityProviders({
     {
       id: 'openaq',
       viewDriven: true,
+      // Its stations span the world: the card's badge reads Global.
+      worldwide: true,
       title: msg('Worldwide · OpenAQ'),
       label: msg('Air quality · Worldwide'),
       coverage: msg('Worldwide · available OpenAQ stations'),

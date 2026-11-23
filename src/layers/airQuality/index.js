@@ -18,6 +18,7 @@ import {
   EEA_HOURLY_BANDS,
   EEA_HOURLY_LIMITS,
   hourlyBandIndex,
+  interpretHourly,
 } from './interpretation.js';
 import {
   cellDegAt,
@@ -41,7 +42,6 @@ import {
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
   AIR_QUALITY_OVERLAY_COLLISION_CAPACITY,
-  OBSERVATION_MAX_AGE_MS,
   createAirQualityOverlayEntry,
   mapAnalystRecord,
   newestObservation,
@@ -77,6 +77,8 @@ const GROUP_FLIGHT_S = 1.4;
 const NO_KEY_RETRY_MS = 10 * 60_000;
 /** An update resolves on the first provider's answer, or after this long. */
 const FIRST_ANSWER_CAP_MS = 5_000;
+/** Remembered AQI-view values fill other views' tiles for this long. */
+const REMEMBERED_MS = 3600_000;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -130,17 +132,6 @@ function concentrationText(parameter, value) {
 function valueText(key, value) {
   const parameter = AQI_PARAMETERS[key];
   return `${parameter} ${concentrationText(parameter, value)} ${layerUnits(parameter)}`;
-}
-
-/** How long ago `ms` was, as the card says it. */
-function ago(ms) {
-  const minutes = Math.max(0, Math.floor((Date.now() - ms) / 60_000));
-  return minutes >= 60
-    ? t('{hours}h {minutes}m ago', {
-        hours: Math.floor(minutes / 60),
-        minutes: minutes % 60,
-      })
-    : t('{minutes}m ago', { minutes });
 }
 
 /** How fresh `ms` is, in the card's short form ("5m ago", "3h ago"). */
@@ -231,10 +222,17 @@ export function createAirQualityLayer({
   /** When each provider last answered that it has no key, by provider id. */
   const noKeyAt = new Map();
   /**
-   * Each provider's latest AQI-view station readings: in a pollutant view
-   * the tiles of the other pollutants read them, without asking again.
+   * Each provider's latest AQI-view station readings and when they came:
+   * the tiles of the other views read them, without asking again.
    */
   const aqiMemory = new Map();
+  /**
+   * The selected station as last seen (its reading and its network): it
+   * heads the card in every view, also one where it has no reading.
+   */
+  let selectedSeen = null;
+  /** The station the tiles last read, kept while a new view loads. */
+  let lastNearest = null;
   /** The providers the current view asks. */
   const asked = () =>
     view === 'aqhi'
@@ -509,11 +507,20 @@ export function createAirQualityLayer({
       EEA_HOURLY_BANDS[hourlyBandIndex(view, value)]?.color ?? UNRATED_COLOR
     );
   };
-  /** A reading's number on the view's scale as text; unrated, its label. */
+  /**
+   * A reading's number on the view's scale as text; unrated, its value in
+   * the view's unit when that converts, else a dash.
+   */
   const scaleText = (reading) => {
     const value = scaleValue(reading);
-    if (value === null) return reading.label;
-    return view === 'aqi' ? String(value) : concentrationText(view, value);
+    if (value !== null)
+      return view === 'aqi' ? String(value) : concentrationText(view, value);
+    if (view === 'aqhi') return reading.label;
+    const converted =
+      view === 'aqi'
+        ? null
+        : concentrationIn(view, reading.value, reading.units);
+    return converted === null ? NO_VALUE : concentrationText(view, converted);
   };
   /** The view centre in degrees, or null when the camera has no view. */
   const viewCentre = () => {
@@ -521,15 +528,16 @@ export function createAirQualityLayer({
     return values ? { lon: values[4], lat: values[5] } : null;
   };
   /**
-   * The observation station nearest the view centre, one rated on the view's
-   * scale before any unrated one; null without a view.
+   * Of `candidates` (the stations in view), the one nearest the view
+   * centre, one rated on the view's scale before any unrated one; null
+   * without a view or a candidate.
    */
-  const nearestStation = () => {
+  const nearestStation = (candidates) => {
     const centre = viewCentre();
     if (!centre) return null;
     const cos = Math.cos((centre.lat * Math.PI) / 180);
     let best = null;
-    for (const reading of _stations) {
+    for (const reading of candidates) {
       const rated = isRatedReading(reading, view);
       const dLon = ((reading.lon - centre.lon + 540) % 360) - 180;
       const distance = (reading.lat - centre.lat) ** 2 + (dLon * cos) ** 2;
@@ -547,68 +555,97 @@ export function createAirQualityLayer({
    * `values` by pollutant view id, or null. Stand-alone Core has no field.
    */
   const fieldValues = () => null;
+  /** The remembered AQI-view stations no older than `REMEMBERED_MS`. */
+  const rememberedStations = () =>
+    [...aqiMemory.values()]
+      .filter(({ at }) => Date.now() - at <= REMEMBERED_MS)
+      .flatMap(({ readings }) => readings);
   /**
-   * A station's value of one pollutant in the layer's units, or null: in the
-   * AQI view the values its index used, in a pollutant view its reading of
-   * that pollutant.
-   */
-  const stationValue = (reading, parameter) => {
-    if (!reading || reading.rated === false) return null;
-    if (reading.aqiValues) {
-      const value = reading.aqiValues[AQI_POLLUTANTS[parameter]];
-      return Number.isFinite(value) ? value : null;
-    }
-    if (reading.parameter !== parameter || reading.qualityFlagged) return null;
-    return concentrationIn(parameter, reading.value, reading.units);
-  };
-  /**
-   * A station's index and values from the latest AQI-view readings
-   * (`aqiMemory`), as the AQI view computes them, or null: not remembered,
-   * unrated, or older than any reading drawn.
+   * A station's latest AQI-view reading (`aqiMemory`) with its index as the
+   * AQI view computes it, or null: not remembered, too old or unrated.
    */
   const rememberedStation = (reading) => {
     if (!reading) return null;
     const key = stationKey(reading);
-    for (const list of aqiMemory.values())
-      for (const station of list) {
-        if (stationKey(station) !== key) continue;
-        if (station.rated === false) return null;
-        const result = stationIndex(station);
-        if (
-          !Number.isFinite(result.observedMs) ||
-          Date.now() - result.observedMs > OBSERVATION_MAX_AGE_MS
-        )
-          return null;
-        return { aqi: result.aqi?.index ?? null, values: result.used };
-      }
-    return null;
+    const station = rememberedStations().find(
+      (item) => stationKey(item) === key,
+    );
+    if (!station || station.rated === false) return null;
+    const result = stationIndex(station);
+    return { station, aqi: result.aqi?.index ?? null, used: result.used };
   };
   /**
-   * A pollutant value's EEA hourly band, or null. The reading the map shows
-   * keeps the map's own rating, which needs an hourly average.
+   * A pollutant value's EEA hourly band by the map's own rule
+   * (`interpretHourly`): only a one-hour average, complete, unflagged and
+   * from a network that vouches for it; otherwise null.
    */
-  const pollutantBand = (reading, parameter, value) => {
-    if (reading && !reading.aqiValues && reading.parameter === parameter)
-      return isRatedReading(reading, view)
-        ? (EEA_HOURLY_BANDS[reading.assessment.severity] ?? null)
-        : null;
-    return EEA_HOURLY_BANDS[hourlyBandIndex(parameter, value)] ?? null;
+  const tileBand = (parameter, value, facts) => {
+    const { assessment } = interpretHourly({
+      parameter,
+      value,
+      units: layerUnits(parameter),
+      averagingMinutes: facts.averagingMinutes ?? null,
+      coveragePercent: facts.coveragePercent,
+      qualityFlagged: facts.qualityFlagged === true,
+      rated: facts.rated,
+    });
+    return assessment?.label ? EEA_HOURLY_BANDS[assessment.severity] : null;
+  };
+  /**
+   * One pollutant at a station: its value in the layer's units and the
+   * facts its band needs, from the station's reading in this view (`live`)
+   * or else its latest AQI-view values (`remembered`); null when neither
+   * has it.
+   */
+  const pollutantAt = (id, live, remembered) => {
+    const key = AQI_POLLUTANTS[id];
+    if (live?.aqiValues && Number.isFinite(live.aqiValues[key]))
+      return {
+        value: live.aqiValues[key],
+        averagingMinutes: live.valueAveraging?.[key],
+        coveragePercent: live.valueCoverage?.[key],
+        rated: live.rated,
+      };
+    if (live && live.parameter === id && !live.qualityFlagged) {
+      const value =
+        live.rated === false
+          ? null
+          : concentrationIn(id, live.value, live.units);
+      if (value !== null)
+        return {
+          value,
+          averagingMinutes: live.averagingMinutes,
+          coveragePercent: live.coveragePercent,
+          rated: live.rated,
+        };
+    }
+    const value = remembered?.used?.[key];
+    if (!Number.isFinite(value)) return null;
+    return {
+      value,
+      averagingMinutes: remembered.station.valueAveraging?.[key],
+      coveragePercent: remembered.station.valueCoverage?.[key],
+      rated: remembered.station.rated,
+    };
   };
   /**
    * The card's two groups of tiles: the indices, then the pollutants. Each
    * tile is a view: its value at the selected station, else from a model
-   * field at the view centre, else at the station nearest it; a click puts
-   * that view on the map.
+   * field at the view centre, else at the station in view nearest the
+   * centre (`candidates`); a click puts that view on the map. A station's
+   * reading in this view comes first, its latest AQI-view values fill the
+   * rest. While a view loads, the station shown before stays.
    */
-  const tileGroups = (selected) => {
+  const tileGroups = (selected, candidates, loading) => {
     const field = selected ? null : fieldValues();
-    const station = selected ?? (field ? null : nearestStation());
-    // In a pollutant view a station's reading holds that pollutant only;
-    // the other tiles read its latest AQI-view values when remembered.
-    const memory =
-      !field && view !== 'aqi' && view !== 'aqhi'
-        ? rememberedStation(station)
-        : null;
+    let station = selected;
+    if (!station && !field) {
+      station = nearestStation(candidates);
+      if (!station && loading) station = lastNearest;
+      lastNearest = station;
+    }
+    const live = station && _readings.includes(station) ? station : null;
+    const remembered = rememberedStation(station);
     const tile = (id, label, value, band, context, text) => {
       const category = band ? bandLabel(band.label, context) : '';
       return {
@@ -625,11 +662,12 @@ export function createAirQualityLayer({
         params: { view: id },
       };
     };
+    // The US AQI keeps its latest-value method (`usAqi.js`).
     const aqi = field
       ? (field.aqi ?? null)
-      : view === 'aqi' && Number.isFinite(station?.aqi?.index)
-        ? station.aqi.index
-        : (memory?.aqi ?? null);
+      : view === 'aqi' && Number.isFinite(live?.aqi?.index)
+        ? live.aqi.index
+        : (remembered?.aqi ?? null);
     const indexTiles = [
       ...(views.includes('aqi')
         ? [
@@ -661,18 +699,29 @@ export function createAirQualityLayer({
     const pollutantTiles = AIR_QUALITY_POLLUTANT_VIEWS.filter((id) =>
       views.includes(id),
     ).map((id) => {
-      const value = field
-        ? (field.values?.[id] ?? null)
-        : (stationValue(station, id) ??
-          memory?.values?.[AQI_POLLUTANTS[id]] ??
-          null);
+      const text = (number) => concentrationText(id, number);
+      if (field) {
+        // A model's value is an hourly field: banded as it stands.
+        const value = field.values?.[id] ?? null;
+        return tile(
+          id,
+          POLLUTANT_TILE_LABELS[id],
+          value,
+          value === null
+            ? null
+            : (EEA_HOURLY_BANDS[hourlyBandIndex(id, value)] ?? null),
+          'EEA hourly quality',
+          text,
+        );
+      }
+      const at = pollutantAt(id, live, remembered);
       return tile(
         id,
         POLLUTANT_TILE_LABELS[id],
-        value,
-        value === null ? null : pollutantBand(station, id, value),
+        at?.value ?? null,
+        at ? tileBand(id, at.value, at) : null,
         'EEA hourly quality',
-        (number) => concentrationText(id, number),
+        text,
       );
     });
     return [
@@ -843,16 +892,29 @@ export function createAirQualityLayer({
    * the view, so it is found again by its station (`stationKey`).
    */
   const followSelection = () => {
-    if (selectedStation === null) return;
+    if (selectedStation === null) {
+      selectedSeen = null;
+      return;
+    }
+    const seen = (reading) => {
+      selectedKey = stationKey(reading);
+      selectedSeen = {
+        reading,
+        network: reading.network || ownerOf(reading).network,
+      };
+    };
     const current = _readings.find((reading) => reading.id === selectedStation);
     if (current) {
-      selectedKey = stationKey(current);
+      seen(current);
       return;
     }
     const same =
       selectedKey &&
       _readings.find((reading) => stationKey(reading) === selectedKey);
-    if (same) selectedStation = same.id;
+    if (same) {
+      selectedStation = same.id;
+      seen(same);
+    }
   };
 
   /** Merge every asked provider's readings into the drawn set. */
@@ -897,7 +959,8 @@ export function createAirQualityLayer({
       const list = Array.isArray(readings) ? readings : [];
       // The AQI view draws one reading per station with all its values.
       state.readings = asking.mode === 'aqi' ? aqiStations(list) : list;
-      if (asking.mode === 'aqi') aqiMemory.set(entry.id, state.readings);
+      if (asking.mode === 'aqi')
+        aqiMemory.set(entry.id, { at: Date.now(), readings: state.readings });
       state.coverage = source.getCoverage?.(entry.id) ?? null;
       setRetry(entry, state.coverage?.retryAt);
       _lastUpdate = Date.now();
@@ -963,7 +1026,10 @@ export function createAirQualityLayer({
       clearTimeout(moveTimer);
       moveTimer = null;
       entries = [
-        ...new Set([...entries, ...asked().filter((e) => e.viewDriven)]),
+        ...new Set([
+          ...entries,
+          ...asked().filter((e) => e.viewDriven && !keyStillMissing(e)),
+        ]),
       ];
     }
     const rect = currentView();
@@ -1126,6 +1192,7 @@ export function createAirQualityLayer({
         if (station !== selectedStation) {
           selectedStation = station;
           selectedKey = null;
+          selectedSeen = null;
           followSelection();
           changed = true;
         }
@@ -1297,6 +1364,8 @@ export function createAirQualityLayer({
       overlayEntries = [];
       states = new Map(asked().map((entry) => [entry.id, freshState()]));
       aqiMemory.clear();
+      selectedSeen = null;
+      lastNearest = null;
       owners = new WeakMap();
       _readings = [];
       _count = 0;
@@ -1337,14 +1406,18 @@ export function createAirQualityLayer({
         !covering.length && (isLoading() || (waitingForView && !error));
       const rectangle = viewRectangle();
       const query = findQuery(_viewer);
-      const visible = readingsInView(
-        _readings,
-        rectangle,
-        _readings.length,
-      ).filter(
-        (reading) =>
-          !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
-      );
+      /** Of `list`, the readings inside the view and this side of the globe. */
+      const inViewNow = (list) =>
+        readingsInView(list, rectangle, list.length).filter(
+          (reading) =>
+            !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
+        );
+      const visible = inViewNow(_readings);
+      // The stations the tiles may read: the observation stations in view;
+      // in the AQHI view, the remembered AQI-view stations in view.
+      const candidates = isObservation
+        ? visible.filter((reading) => ownerOf(reading).observation === true)
+        : inViewNow(rememberedStations());
       const inView = (
         isObservation
           ? visible
@@ -1362,8 +1435,8 @@ export function createAirQualityLayer({
         (max, reading) => Math.max(max, reading.observedMs || 0),
         0,
       );
-      // One short line for each network that needs a key, failed, or is
-      // out of requests for now.
+      // One short line for each network that needs a key, failed, is out of
+      // requests for now, or serves cached data.
       const providerLines = entries.flatMap((entry) => {
         const state = stateOf(entry);
         const text =
@@ -1378,7 +1451,11 @@ export function createAirQualityLayer({
                     '{network}: request budget reached; cached data will refresh later',
                     { network: entry.network },
                   )
-                : '';
+                : state.coverage?.stale === true
+                  ? t('{network}: showing cached data', {
+                      network: entry.network,
+                    })
+                  : '';
         return text ? [{ id: `provider-${entry.id}`, muted: true, text }] : [];
       });
       // The view's scale: a ramp from the first band to the open top one
@@ -1389,12 +1466,21 @@ export function createAirQualityLayer({
       const bands = view === 'aqi' ? US_AQI_BANDS : EEA_HOURLY_BANDS;
       const legend =
         view === 'aqhi'
-          ? covering.flatMap((entry) =>
-              (entry.legend ?? []).map((band) => ({
-                color: band.color,
-                label: `${bandLabel(band.label, entry.bandContext)}${band.range ? ` ${band.range}` : ''}`,
-              })),
-            )
+          ? covering
+              .flatMap((entry) =>
+                (entry.legend ?? []).map((band) => ({
+                  color: band.color,
+                  label: `${bandLabel(band.label, entry.bandContext)}${band.range ? ` ${band.range}` : ''}`,
+                })),
+              )
+              // Index providers on one scale list its bands once.
+              .filter(
+                (band, index, all) =>
+                  all.findIndex(
+                    (other) =>
+                      other.color === band.color && other.label === band.label,
+                  ) === index,
+              )
           : limits
             ? bands.map((band, position) => ({
                 color: band.color,
@@ -1403,14 +1489,20 @@ export function createAirQualityLayer({
                   : `${limits[position - 1]}${position === limits.length ? '+' : ''}`,
               }))
             : [];
-      const selected = isObservation
-        ? (_readings.find((reading) => reading.id === selectedStation) ?? null)
-        : null;
+      // The selected station as last seen: it stays while views change.
+      const selected =
+        selectedStation === null ? null : (selectedSeen?.reading ?? null);
       return {
         readout: true,
         summary: {
           label: single ? t(single.label) : t('Air quality'),
-          coverage: isObservation ? t('Global') : t('Canada'),
+          // Where the drawn stations are: worldwide, or the networks'
+          // countries; Canada for its index.
+          coverage: !isObservation
+            ? t('Canada')
+            : drawing.some((entry) => entry.worldwide === true)
+              ? t('Global')
+              : drawing.map((entry) => t(entry.title)).join(' · '),
           validTime: newest ? new Date(newest).toISOString() : undefined,
           // Who measured what is drawn, and how fresh the newest reading is.
           detail:
@@ -1422,9 +1514,11 @@ export function createAirQualityLayer({
               : '',
           status: loading
             ? t('Loading')
-            : covering.length
+            : covering.length && showStations
               ? tn(visible.length, '{count} station', '{count} stations')
               : '',
+          // A collapsed card with no status shows what needs doing.
+          compact: providerLines[0]?.text,
           units: view === 'aqi' ? '' : layerUnits(view),
           unitsVerbatim: true,
           lines: providerLines,
@@ -1443,15 +1537,18 @@ export function createAirQualityLayer({
                 id: 'station',
                 lead: true,
                 label: selected.name,
-                clear: { params: { station: null } },
+                clear: {
+                  label: t('Deselect station'),
+                  params: { station: null },
+                },
                 lines: [
                   {
                     id: 'station-source',
                     muted: true,
                     text: t('Measured · {provider} · {age}', {
-                      provider: selected.network || ownerOf(selected).network,
+                      provider: selected.network || selectedSeen.network,
                       age: Number.isFinite(selected.observedMs)
-                        ? ago(selected.observedMs)
+                        ? shortAgo(selected.observedMs)
                         : t('Unavailable'),
                     }),
                   },
@@ -1461,7 +1558,7 @@ export function createAirQualityLayer({
         },
         legend,
         legendCategorical: view === 'aqhi',
-        sublists: tileGroups(selected),
+        sublists: tileGroups(selected, candidates, loading),
         list: {
           title: t('HIGHEST IN VIEW'),
           ariaLabel: isObservation
@@ -1469,7 +1566,8 @@ export function createAirQualityLayer({
             : t('Highest air-quality readings in view'),
           // One line a row: rank, band colour, value, name. The station's
           // details are the row's tooltip.
-          items: inView.map((reading, index) => {
+          // Hidden with the stations.
+          items: (showStations ? inView : []).map((reading, index) => {
             const owner = ownerOf(reading);
             return {
               id: reading.id,
@@ -1521,6 +1619,8 @@ export function createAirQualityLayer({
         count: _count,
         source: this.source,
         lastUpdate: _lastUpdate,
+        // A slower provider still asking: the Layers row shows progress.
+        loading: _enabled && isLoading(),
         error: lastError(),
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.

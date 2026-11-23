@@ -90,6 +90,7 @@ function legendView(legend) {
       :class="[
         `rail-card-${block.type}`,
         block.type === 'tiles' ? 'view-context__world' : null,
+        block.type === 'result' && block.lead ? 'is-lead' : null,
       ]"
       :data-block-id="block.id"
       :hidden="
@@ -115,8 +116,8 @@ function legendView(legend) {
           ><UiCloseButton
             class="data-toggle-chip"
             data-action-id="clear"
-            :label="t('Clear reading')"
-            :title="t('Clear reading')"
+            :label="block.clear?.label || t('Clear reading')"
+            :title="block.clear?.label || t('Clear reading')"
             :hidden="!block.clear"
             @click="dispatch(block.clear, block)" /></div
         ><div class="rail-card-result-lines"

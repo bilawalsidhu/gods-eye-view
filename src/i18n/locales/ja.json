@@ -4413,5 +4413,7 @@
   "air quality monitors|STATIONS": "測定局",
   "{count} stations": {
     "other": "{count}局"
-  }
+  },
+  "Deselect station": "測定局の選択を解除",
+  "{network}: showing cached data": "{network}：キャッシュされたデータを表示中"
 }

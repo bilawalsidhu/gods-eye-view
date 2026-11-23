@@ -4625,5 +4625,7 @@
     "one": "תחנה {count}",
     "two": "{count} תחנות",
     "other": "{count} תחנות"
-  }
+  },
+  "Deselect station": "ביטול בחירת התחנה",
+  "{network}: showing cached data": "{network}: מוצגים נתונים שמורים"
 }
