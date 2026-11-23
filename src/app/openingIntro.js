@@ -1,3 +1,4 @@
+import { START_VIEW } from '../camera.js';
 import { cameraOf } from '../render/rendererOf.js';
 
 /**
@@ -5,10 +6,10 @@ import { cameraOf } from '../render/rendererOf.js';
  * into the globe. The words fade and the logo glides to the centre. The
  * screen is then shut but for the empty circle inside the eye's ring, which
  * flies at the viewer and opens onto the application as it grows past the
- * screen's edges. The drawn
- * planet in the pupil (its blue disc) gives way to the real one, drawn the
- * same size behind it; the real one spins and grows, slowing until it stops,
- * the whole planet in view, over the start view (the visitor's country).
+ * screen's edges. The drawn planet in the pupil (its blue disc) gives way to
+ * the real one, drawn the same size behind it, which grows to the whole
+ * planet's size, turns there to a stop over the start view (the visitor's
+ * country), and only then closes in on a closer view a link opened.
  * Everything is timed from one clock, in ms.
  */
 export const OPENING = Object.freeze({
@@ -23,10 +24,17 @@ export const OPENING = Object.freeze({
   veilMs: Object.freeze([200, 700]),
   /** The drawn planet fades into the real one. */
   pupilMs: Object.freeze([600, 1200]),
-  /** The camera's flight in. */
+  /** The camera's flight starts. */
   flightStartMs: 300,
-  flightMs: 6000,
-  /** How far the globe turns on the way in, degrees. */
+  /** The globe grows to the whole planet's size. */
+  zoomMs: 1600,
+  /** It turns there, slowing to a stop over the start view. */
+  spinMs: 2600,
+  /** Then the camera closes in on a closer view (a shared one), per tenfold
+   * change of height, within `approachMs`. */
+  approachPerDecadeMs: 1100,
+  approachMs: Object.freeze([1200, 4000]),
+  /** How far the globe turns, degrees. */
   spinDeg: 360,
 });
 
@@ -43,6 +51,8 @@ const WINDOW = Object.freeze({ x: 567, y: 382, r: 226 });
 const WINDOW_COVER_MARGIN = 1.15;
 /** Never start further out than this, metres. */
 const MAX_FAR_HEIGHT_M = 4e8;
+/** The whole planet in view. */
+const PLANET_HEIGHT_M = START_VIEW.height;
 
 /** Openings in progress on this page. */
 let playing = 0;
@@ -67,11 +77,11 @@ const span = (t, [from, to]) => clamp01((t - from) / (to - from));
  * Where each part of the opening stands `t` ms after it starts.
  * @param {number} t
  */
-export function openingStage(t, timing = OPENING) {
+export function openingStage(t, timing = OPENING, flightMs = flightLength()) {
   const move = clamp01(t / timing.centreMs);
   const after = t - timing.centreMs;
   const eye = clamp01(after / timing.eyeMs);
-  const flight = clamp01((after - timing.flightStartMs) / timing.flightMs);
+  const flight = clamp01((after - timing.flightStartMs) / flightMs);
   return {
     /** The words' opacity. */
     text: 1 - clamp01(t / timing.textMs),
@@ -94,38 +104,71 @@ export function openingStage(t, timing = OPENING) {
   };
 }
 
+/** How long the flight takes, ms, for a closing-in of `decades` (log10). */
+function flightLength(decades = 0, turns = false, timing = OPENING) {
+  const [shortest, longest] = timing.approachMs;
+  const approach =
+    decades > 0.05 || turns
+      ? Math.min(
+          longest,
+          Math.max(shortest, decades * timing.approachPerDecadeMs),
+        )
+      : 0;
+  return timing.zoomMs + timing.spinMs + approach;
+}
+
 /**
- * The camera `flight` (0–1) of the way in: from `farHeight` over the
- * equator, looking straight down, a turn of `spinDeg` west to east that
- * slows to a stop over `target`, closing in on `target.height`. Over the
- * last part it turns to `target`'s heading and pitch (radians), so a view
- * at an angle (a shared one) is reached without a jump.
+ * The camera's flight in, from `farHeight` over the equator, looking straight
+ * down. The globe first grows to the whole planet's size (`planetHeight`, or
+ * `target.height` when that is further out), turns `spinDeg` west to east
+ * there, slowing to a stop over `target`, and only then closes in on a closer
+ * `target`, turning to its heading and pitch (radians) on the way.
+ * Returns its length, ms, and its pose `ms` into it.
  */
-export function openingPose(
-  flight,
-  { target, farHeight, spinDeg = OPENING.spinDeg },
-) {
-  const f = clamp01(flight);
-  // Half the peak speed of a cubic ease, so the imagery keeps up as the
-  // globe grows.
-  const closing = smoothstep(f);
-  const height = Math.exp(
-    Math.log(farHeight) +
-      (Math.log(target.height) - Math.log(farHeight)) * closing,
-  );
-  const lon = target.lon + spinDeg * (1 - easeOutCubic(f));
-  const turning = easeInOutCubic(span(f, [0.6, 1]));
+export function openingFlight({
+  target,
+  farHeight,
+  planetHeight = PLANET_HEIGHT_M,
+  timing = OPENING,
+}) {
   const heading = target.heading ?? 0;
   // The short way round to the target's heading.
-  const headingFrom =
-    heading - 2 * Math.PI * Math.round(heading / (2 * Math.PI));
-  const pitch = target.pitch ?? -Math.PI / 2;
+  const headingTo = heading - 2 * Math.PI * Math.round(heading / (2 * Math.PI));
+  const pitchTo = target.pitch ?? -Math.PI / 2;
+  const turns =
+    Math.abs(headingTo) > 1e-3 || Math.abs(pitchTo + Math.PI / 2) > 1e-3;
+  const planet = Math.max(planetHeight, target.height);
+  const decades = Math.log10(planet / target.height);
+  const ms = flightLength(decades, turns, timing);
+  const approachMs = ms - timing.zoomMs - timing.spinMs;
+  const logLerp = (from, to, k) =>
+    Math.exp(Math.log(from) + (Math.log(to) - Math.log(from)) * k);
+  // The turn starts halfway through the zoom, while the drawn planet has
+  // given way to the real one.
+  const spinFrom = timing.zoomMs / 2;
+  const spinLength = timing.zoomMs + timing.spinMs - spinFrom;
   return {
-    lon: ((((lon + 180) % 360) + 360) % 360) - 180,
-    lat: target.lat * closing,
-    height,
-    heading: headingFrom * turning,
-    pitch: -Math.PI / 2 + (pitch + Math.PI / 2) * turning,
+    ms,
+    pose(at) {
+      const t = Math.min(Math.max(at, 0), ms);
+      const zoom = smoothstep(clamp01(t / timing.zoomMs));
+      const spin = easeOutCubic(clamp01((t - spinFrom) / spinLength));
+      const approach = approachMs
+        ? clamp01((t - timing.zoomMs - timing.spinMs) / approachMs)
+        : 0;
+      const turning = easeInOutCubic(approach);
+      const lon = target.lon + timing.spinDeg * (1 - spin);
+      return {
+        lon: ((((lon + 180) % 360) + 360) % 360) - 180,
+        lat: target.lat * spin,
+        height:
+          approach > 0
+            ? logLerp(planet, target.height, smoothstep(approach))
+            : logLerp(farHeight, planet, zoom),
+        heading: headingTo * turning,
+        pitch: -Math.PI / 2 + (pitchTo + Math.PI / 2) * turning,
+      };
+    },
   };
 }
 
@@ -336,16 +379,21 @@ export function playOpeningIntro({
     resolveDone();
   }
 
+  const flight = openingFlight({ target, farHeight });
   const start = win.performance.now();
   const step = () => {
     frame = 0;
     if (finished) return;
-    const stage = openingStage(win.performance.now() - start);
+    const stage = openingStage(
+      win.performance.now() - start,
+      OPENING,
+      flight.ms,
+    );
     if (stage.done) {
       finish({ land: true });
       return;
     }
-    const pose = openingPose(stage.flight, { target, farHeight });
+    const pose = flight.pose(stage.flight * flight.ms);
     place(pose);
     const scale = globeRadiusPx(pose.height, lens) / startRadius;
     loadingScreen.style.setProperty('--opening-text', stage.text);

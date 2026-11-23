@@ -1,7 +1,9 @@
 - The app opens with the loading screen's logo turning into the globe: the eye
   flies at you and opens onto the app as it grows, and the planet in the pupil
-  becomes the real globe, which spins, grows and stops with the whole planet in
-  view over your country, taken from the browser's time zone. The title's logo
-  goes back to that view. A link to only a view plays it too and stops at that
-  view; a link that follows or selects something, a Stories link, reduced
-  motion and `?intro=0` open as before (gekh, #1909).
+  becomes the real globe, which grows to the whole planet, turns and stops over
+  your country, taken from the browser's time zone. The title's logo goes back
+  to that view. A link to only a view plays it too, closing in on that view
+  after the turn; a link that follows or selects something, a Stories link,
+  reduced motion and `?intro=0` open as before. The address no longer follows
+  the flight, so a reload during it reopens on the view it ends at (gekh,
+  #1909).

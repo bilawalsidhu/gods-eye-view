@@ -35,15 +35,26 @@ export function startApplicationChrome({
     .then(([restored] = []) => {
       if (disposed || signal.aborted) return;
       // A bare address, or a share of only a view, opens with the opening
-      // (it ends where the camera stands); welcome waits for its end.
-      opening =
-        !styleManager.hasShareState || sharesOnlyAView(restored)
-          ? playOpening?.({ viewer: styleManager.viewer, loadingScreen })
-          : null;
+      // (it ends where the camera stands); welcome waits for its end. Its
+      // frames stay out of the address, held before the first one: a reload
+      // or a copied link mid-flight would open on a speck of a planet.
+      const shareLink = styleManager.shareLinkManager;
+      const wanted =
+        !!playOpening &&
+        (!styleManager.hasShareState || sharesOnlyAView(restored));
+      if (wanted) shareLink?.holdWrites?.(true, 'opening');
+      opening = wanted
+        ? playOpening({ viewer: styleManager.viewer, loadingScreen })
+        : null;
+      const release = () => shareLink?.holdWrites?.(false, 'opening');
       if (opening) {
-        void opening.done.then(revealFirstRun);
+        void opening.done.then(() => {
+          release();
+          revealFirstRun();
+        });
         return;
       }
+      if (wanted) release();
       loadingScreen.classList.add('hidden');
       loadingScreen.addEventListener('transitionend', revealFirstRun, {
         once: true,

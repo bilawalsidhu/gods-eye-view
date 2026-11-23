@@ -10,7 +10,7 @@ const source = readFileSync(
   .replace(/^import .*;\n/gm, '')
   .replace('export function', 'function');
 
-function fixture({ playOpening, hasShareState = false } = {}) {
+function fixture({ playOpening, hasShareState = false, shareLink } = {}) {
   const timers = new Map();
   const listeners = new Map();
   const events = [];
@@ -48,6 +48,7 @@ function fixture({ playOpening, hasShareState = false } = {}) {
     styleManager: {
       hasShareState,
       viewer: 'viewer',
+      shareLinkManager: shareLink,
       initialRestorePromise: new Promise((resolve) => {
         restored = resolve;
       }),
@@ -161,6 +162,44 @@ test('a bare address plays the opening, and welcome waits for its end', async ()
   assert.deepEqual(events, ['opening', 'welcome']);
   await f.stop();
   assert.ok(events.includes('opening:cancel'));
+});
+
+test("the opening's frames stay out of the address until it ends", async () => {
+  const events = [];
+  const holds = [];
+  const opening = openingStub(events);
+  const f = fixture({
+    playOpening: opening.play,
+    shareLink: { holdWrites: (held, owner) => holds.push([held, owner]) },
+  });
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.deepEqual(holds, [[true, 'opening']]);
+  opening.land();
+  await flush();
+  assert.deepEqual(holds, [
+    [true, 'opening'],
+    [false, 'opening'],
+  ]);
+  await f.stop();
+});
+
+test('an opening that does not play releases the address at once', async () => {
+  const holds = [];
+  const f = fixture({
+    playOpening: () => null,
+    shareLink: { holdWrites: (held, owner) => holds.push([held, owner]) },
+  });
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.deepEqual(holds, [
+    [true, 'opening'],
+    [false, 'opening'],
+  ]);
+  assert.ok(f.events.includes('hidden'));
+  await f.stop();
 });
 
 const VIEW_ONLY = Object.freeze({

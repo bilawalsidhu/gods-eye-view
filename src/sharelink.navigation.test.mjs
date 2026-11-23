@@ -193,6 +193,21 @@ test('holding writes first writes a view change still waiting for its debounce',
   manager.destroy();
 });
 
+test('each owner releases only its own hold on writes', (t) => {
+  installTab(t, SHARE_A);
+  const timers = installManualTimers(t);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  manager.holdWrites(true, 'opening');
+  manager.holdWrites(true);
+  manager.holdWrites(false, 'opening');
+  manager._scheduleUpdate();
+  assert.equal(timers.size, 0, 'Stories still holds them');
+  manager.holdWrites(false);
+  assert.equal(timers.size, 1, 'written again once none holds');
+  manager.destroy();
+});
+
 test('a hash write keeps the state another owner stored on the entry', (t) => {
   installTab(t, SHARE_A);
   const written = [];
@@ -526,7 +541,9 @@ test('a copied link carries the Data Library selection to a clean recipient', (t
   sharer.setLibraryParamsEncoder((params) => params.set('lib', '03.0a'));
   const code = new URL(sharer.buildLink()).pathname.split('/').at(-1);
   sharer.destroy();
-  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), { initialShareCode: code });
+  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
+    initialShareCode: code,
+  });
   assert.deepEqual(opener.parseInitialHash().library, ['03', '0a']);
   assert.deepEqual(opener.initialLibraryTokens, ['03', '0a']);
   opener.destroy();

@@ -6,8 +6,8 @@ import {
   eyeCoverScale,
   globeRadiusPx,
   heightForGlobeRadius,
+  openingFlight,
   openingPlaying,
-  openingPose,
   openingStage,
   openingWanted,
   playOpeningIntro,
@@ -16,7 +16,8 @@ import {
 const LENS = { fovy: Math.PI / 4, viewportHeight: 800 };
 const TARGET = { lon: 10.4, lat: 51.1, height: 23e6, heading: 0, pitch: -1 };
 const LANDED = { lon: TARGET.lon, lat: TARGET.lat, height: TARGET.height };
-const END_MS = OPENING.centreMs + OPENING.flightStartMs + OPENING.flightMs + 1;
+const PLANET_FLIGHT_MS = OPENING.zoomMs + OPENING.spinMs;
+const END_MS = OPENING.centreMs + OPENING.flightStartMs + PLANET_FLIGHT_MS + 1;
 
 test('the words fade, then the eye opens past the screen before the globe arrives', () => {
   const start = openingStage(0);
@@ -57,35 +58,46 @@ test("the eye's window reaches past the corners of any screen", () => {
   }
 });
 
-test('the flight turns west to east, slows and stops over the target', () => {
-  const far = 4e8;
-  const start = openingPose(0, { target: TARGET, farHeight: far });
-  assert.ok(Math.abs(start.height - far) < 1);
+const FAR = 4e8;
+const PLANET = { lon: 10.4, lat: 51.1, height: 23e6 };
+const unwrap = (lon, near) => lon + 360 * Math.round((near - lon) / 360);
+
+test('the globe grows to the planet first, then turns there to a stop', () => {
+  const flight = openingFlight({ target: PLANET, farHeight: FAR });
+  assert.equal(flight.ms, PLANET_FLIGHT_MS, 'nothing to close in on');
+  const start = flight.pose(0);
+  assert.ok(Math.abs(start.height - FAR) < 1);
   assert.equal(start.lat, 0);
-  const end = openingPose(1, { target: TARGET, farHeight: far });
-  assert.ok(Math.abs(end.lon - TARGET.lon) < 1e-9);
-  assert.ok(Math.abs(end.lat - TARGET.lat) < 1e-9);
-  assert.ok(Math.abs(end.height - TARGET.height) < 1e-3);
+  assert.ok(
+    Math.abs(flight.pose(OPENING.zoomMs).height - PLANET.height) < 1,
+    'the whole planet first',
+  );
   // Unwrapped longitude falls all the way (the camera moves west, so the
-  // surface turns east), fastest at first.
-  let previous = Infinity;
+  // surface turns east), from halfway through the zoom, slowing to a stop.
+  const spinFrom = OPENING.zoomMs / 2;
+  let previous = PLANET.lon + OPENING.spinDeg;
   let previousStep = Infinity;
-  for (let i = 0; i <= 10; i++) {
-    const f = i / 10;
-    const unwrapped = TARGET.lon + OPENING.spinDeg * (1 - (1 - (1 - f) ** 3));
-    assert.ok(unwrapped <= previous);
-    if (i > 0) {
-      const step = previous - unwrapped;
-      assert.ok(step <= previousStep + 1e-9, 'the turn slows');
-      previousStep = step;
-    }
-    previous = unwrapped;
-    const pose = openingPose(f, { target: TARGET, farHeight: far });
+  for (let i = 0; i <= 100; i++) {
+    const at = spinFrom + ((flight.ms - spinFrom) * i) / 100;
+    const pose = flight.pose(at);
+    if (at >= OPENING.zoomMs)
+      assert.ok(Math.abs(pose.height - PLANET.height) < 1, 'turns at size');
     assert.ok(pose.lon >= -180 && pose.lon < 180);
+    const lon = unwrap(pose.lon, previous);
+    const step = previous - lon;
+    assert.ok(step >= -1e-9, 'west to east');
+    if (i > 1) assert.ok(step <= previousStep + 1e-9, 'the turn slows');
+    previous = lon;
+    previousStep = step;
   }
+  assert.ok(Math.abs(previous - PLANET.lon) < 1e-9, 'one whole turn');
+  const end = flight.pose(flight.ms);
+  assert.ok(Math.abs(end.lon - PLANET.lon) < 1e-9);
+  assert.ok(Math.abs(end.lat - PLANET.lat) < 1e-9);
+  assert.equal(end.pitch, -Math.PI / 2);
 });
 
-test('a view at an angle is reached by turning over the last part', () => {
+test('a closer view at an angle is closed in on after the turn', () => {
   const angled = {
     lon: 2.35,
     lat: 48.86,
@@ -93,15 +105,29 @@ test('a view at an angle is reached by turning over the last part', () => {
     heading: 5.5,
     pitch: -0.5,
   };
-  const far = 4e8;
-  const early = openingPose(0.5, { target: angled, farHeight: far });
-  assert.ok(Math.abs(early.heading) < 1e-12);
-  assert.equal(early.pitch, -Math.PI / 2, 'straight down while far out');
-  const end = openingPose(1, { target: angled, farHeight: far });
+  const flight = openingFlight({ target: angled, farHeight: FAR });
+  assert.ok(flight.ms > PLANET_FLIGHT_MS);
+  assert.ok(flight.ms <= PLANET_FLIGHT_MS + OPENING.approachMs[1]);
+  const turned = flight.pose(PLANET_FLIGHT_MS);
+  assert.ok(Math.abs(turned.height - 23e6) < 1, 'over the whole planet');
+  assert.ok(Math.abs(turned.lon - angled.lon) < 1e-9);
+  assert.ok(Math.abs(turned.lat - angled.lat) < 1e-9);
+  assert.ok(Math.abs(turned.heading) < 1e-12);
+  assert.equal(turned.pitch, -Math.PI / 2, 'straight down until then');
+  const end = flight.pose(flight.ms);
   // 5.5 rad turns the short way round: -0.78 rad.
   assert.ok(Math.abs(end.heading - (5.5 - 2 * Math.PI)) < 1e-9);
   assert.ok(Math.abs(end.pitch - angled.pitch) < 1e-9);
   assert.ok(Math.abs(end.height - angled.height) < 1e-6);
+  assert.ok(Math.abs(end.lon - angled.lon) < 1e-9);
+});
+
+test('a view further out than the planet turns at that height', () => {
+  const far = { lon: -97.74, lat: 0, height: 2.8e8 };
+  const flight = openingFlight({ target: far, farHeight: FAR });
+  assert.equal(flight.ms, PLANET_FLIGHT_MS);
+  assert.ok(Math.abs(flight.pose(OPENING.zoomMs).height - far.height) < 1);
+  assert.ok(Math.abs(flight.pose(flight.ms).height - far.height) < 1);
 });
 
 test('the far start draws the globe the size of the pupil', () => {
@@ -202,7 +228,7 @@ test('the opening runs to the start view, then hides the cover', async () => {
   assert.equal(s.screen.style.getPropertyValue('--opening-veil'), '0');
   s.advance(Math.max(OPENING.eyeMs, OPENING.pupilMs[1]));
   assert.ok(s.screen.classList.contains('hidden'));
-  s.advance(OPENING.flightMs);
+  s.advance(10000);
   await opening.done;
   const last = s.views.at(-1);
   assert.deepEqual(last.destination, LANDED);
