@@ -4,12 +4,7 @@ import { promises as fsp } from 'node:fs';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import {
-  _resetLayerCountsForTest,
-  layerCountsEndpoint,
-  readLayerCounts,
-  registerLayerCount,
-} from './layerCounts.js';
+import { layerCountsEndpoint } from './layerCounts.js';
 import { openSkyProxy, openSkyStateCount } from '../aircraft/opensky.js';
 import { celestrakProxy, uniqueNoradCount } from '../space/celestrak.js';
 import { createCctvCatalog } from '../cctv/catalog.js';
@@ -20,29 +15,28 @@ import {
 } from '../vessels/ais-store.js';
 import { firmsProxy } from '../firms.js';
 import { aisLiveProxy } from '../vessels/ais-live.js';
+import { localProviderPlugins } from '../local.js';
 
-test('layer counts come only from registered cache readers, and empty or failing ones are left out', async (t) => {
-  t.after(_resetLayerCountsForTest);
-  registerLayerCount('satellites', () => ({ count: 1272.4, at: 100 }));
-  registerLayerCount('cctv', () => null);
-  registerLayerCount('flights', async () => ({ count: 0, at: 5 }));
-  registerLayerCount('local-firms', () => {
-    throw new Error('disk gone');
+test('layer counts come only from configured cache readers, and empty or failing ones are left out', async () => {
+  const handler = endpointHandler({
+    satellites: () => ({ count: 1272.4, at: 100 }),
+    cctv: () => null,
+    flights: async () => ({ count: 0, at: 5 }),
+    'local-firms': () => {
+      throw new Error('disk gone');
+    },
+    'ais-live-vessels': async () => ({ count: 9, at: Number.NaN }),
   });
-  registerLayerCount('ais-live-vessels', async () => ({
-    count: 9,
-    at: Number.NaN,
-  }));
-  assert.deepEqual(await readLayerCounts(), [
+  assert.deepEqual(await countRows(handler), [
     { layerId: 'satellites', count: 1272, at: 100 },
     { layerId: 'ais-live-vessels', count: 9, at: null },
   ]);
 });
 
 /** The endpoint's middleware, as a dev or preview server installs it. */
-function endpointHandler(hook = 'configureServer') {
+function endpointHandler(readers, hook = 'configureServer') {
   let handler = null;
-  layerCountsEndpoint()[hook]({
+  layerCountsEndpoint(readers)[hook]({
     middlewares: {
       use(route, fn) {
         assert.equal(route, '/api/layer-counts');
@@ -84,12 +78,19 @@ async function ask(handler, { method = 'GET', headers = {}, url = '/' } = {}) {
   return sent;
 }
 
-test('the endpoint answers GET with the counts, uncached, on dev and preview servers', async (t) => {
-  t.after(_resetLayerCountsForTest);
-  registerLayerCount('satellites', () => ({ count: 12, at: 100 }));
-  registerLayerCount('ais-live-vessels', () => ({ count: 9, at: null }));
+async function countRows(handler) {
+  const response = await ask(handler);
+  assert.equal(response.status, 200);
+  return JSON.parse(response.body).counts;
+}
+
+test('the endpoint answers GET with the counts, uncached, on dev and preview servers', async () => {
+  const readers = {
+    satellites: () => ({ count: 12, at: 100 }),
+    'ais-live-vessels': () => ({ count: 9, at: null }),
+  };
   for (const hook of ['configureServer', 'configurePreviewServer']) {
-    const sent = await ask(endpointHandler(hook));
+    const sent = await ask(endpointHandler(readers, hook));
     assert.equal(sent.status, 200, hook);
     assert.equal(sent.headers['cache-control'], 'no-store');
     assert.match(sent.headers['content-type'], /application\/json/);
@@ -102,14 +103,14 @@ test('the endpoint answers GET with the counts, uncached, on dev and preview ser
   }
 });
 
-test('the endpoint answers HEAD with no body, refuses other methods and cross-site requests', async (t) => {
-  t.after(_resetLayerCountsForTest);
+test('the endpoint answers HEAD with no body, refuses other methods and cross-site requests', async () => {
   let reads = 0;
-  registerLayerCount('satellites', () => {
-    reads++;
-    return { count: 12, at: 100 };
+  const handler = endpointHandler({
+    satellites: () => {
+      reads++;
+      return { count: 12, at: 100 };
+    },
   });
-  const handler = endpointHandler();
   const head = await ask(handler, { method: 'HEAD' });
   assert.equal(head.status, 200);
   assert.equal(head.headers['cache-control'], 'no-store');
@@ -146,7 +147,6 @@ test('OpenSky: the count endpoint reports when the aircraft were observed', asyn
   t.after(() => {
     if (savedMode === undefined) delete process.env.OPENSKY_AUTH_MODE;
     else process.env.OPENSKY_AUTH_MODE = savedMode;
-    _resetLayerCountsForTest();
   });
   let now = 1_800_000_000_000;
   const observedAt = now - 300_000;
@@ -164,7 +164,8 @@ test('OpenSky: the count endpoint reports when the aircraft were observed', asyn
     });
   });
   let flights;
-  openSkyProxy().configureServer({
+  const plugin = openSkyProxy();
+  plugin.configureServer({
     middlewares: {
       use(route, handler) {
         assert.equal(route, '/api/flights');
@@ -172,15 +173,15 @@ test('OpenSky: the count endpoint reports when the aircraft were observed', asyn
       },
     },
   });
-  const counts = endpointHandler();
+  const counts = endpointHandler({ flights: plugin.api.readLayerCount });
   assert.equal((await ask(flights)).status, 200);
-  assert.deepEqual(JSON.parse((await ask(counts)).body).counts, [
+  assert.deepEqual(await countRows(counts), [
     { layerId: 'flights', count: 1, at: observedAt },
   ]);
 
   now += 60_000;
   assert.equal((await ask(flights)).status, 200);
-  assert.deepEqual(JSON.parse((await ask(counts)).body).counts, [
+  assert.deepEqual(await countRows(counts), [
     { layerId: 'flights', count: 2, at: null },
   ]);
   assert.equal(upstream.mock.callCount(), 2);
@@ -188,6 +189,49 @@ test('OpenSky: the count endpoint reports when the aircraft were observed', asyn
 
 const tle = (norad) =>
   `SAT ${norad}\n1 ${norad}U 98067A   26001.00000000  .00000000  00000-0  00000-0 0  9990\n2 ${norad}  51.6400 000.0000 0000000   0.0000   0.0000 15.50000000    00\n`;
+
+test('each local composition reads counts from its own CelesTrak cache', async (t) => {
+  const now = 1_800_000_000_000;
+  const expected = { layerId: 'satellites', count: 2, at: now };
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(fsp, 'readFile', async () => {
+    throw new Error('fixture cache missing');
+  });
+  t.mock.method(fsp, 'mkdir', async () => {});
+  t.mock.method(fsp, 'writeFile', async () => {});
+  const upstream = t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(tle('25544') + tle('20580')),
+  );
+
+  function compose() {
+    const routes = new Map();
+    const server = {
+      middlewares: { use: (route, handler) => routes.set(route, handler) },
+    };
+    for (const plugin of localProviderPlugins()) {
+      if (plugin.name === 'celestrak-proxy' || plugin.name === 'layer-counts')
+        plugin.configureServer(server);
+    }
+    return routes;
+  }
+
+  async function satelliteCount(routes) {
+    const rows = await countRows(routes.get('/api/layer-counts'));
+    return rows.find(({ layerId }) => layerId === 'satellites');
+  }
+
+  const first = compose();
+  const warmed = await ask(first.get('/api/celestrak'), { url: '/stations' });
+  assert.equal(warmed.status, 200);
+  assert.deepEqual(await satelliteCount(first), expected);
+
+  const second = compose();
+  assert.equal(await satelliteCount(second), undefined);
+  assert.deepEqual(await satelliteCount(first), expected);
+  assert.equal(upstream.mock.callCount(), 1);
+});
 
 test('CelesTrak: matching TLE pairs count once across cached groups', () => {
   assert.equal(
@@ -202,7 +246,6 @@ test('CelesTrak: matching TLE pairs count once across cached groups', () => {
 });
 
 test('CelesTrak: a count reading disk keeps a concurrent feed refresh', async (t) => {
-  t.after(_resetLayerCountsForTest);
   const now = 1_800_000_000_000;
   const stale = JSON.stringify({
     at: now - 7 * 3600_000,
@@ -225,21 +268,21 @@ test('CelesTrak: a count reading disk keeps a concurrent feed refresh', async (t
     async () => new Response(fresh),
   );
   const routes = new Map();
-  celestrakProxy().configureServer({
+  const plugin = celestrakProxy();
+  plugin.configureServer({
     middlewares: { use: (route, handler) => routes.set(route, handler) },
   });
   const feed = () => ask(routes.get('/api/celestrak'), { url: '/stations' });
 
-  const pendingCount = ask(endpointHandler());
+  const counts = endpointHandler({ satellites: plugin.api.readLayerCount });
+  const pendingCount = countRows(counts);
   const refresh = await feed();
   firstRead.resolve(stale);
   const count = await pendingCount;
   const nextFeed = await feed();
 
   assert.equal(refresh.body, fresh);
-  assert.deepEqual(JSON.parse(count.body).counts, [
-    { layerId: 'satellites', count: 2, at: now },
-  ]);
+  assert.deepEqual(count, [{ layerId: 'satellites', count: 2, at: now }]);
   assert.equal(nextFeed.body, fresh);
   assert.equal(nextFeed.headers['x-tle-cache'], 'HIT');
   assert.equal(upstream.mock.callCount(), 1);
@@ -350,7 +393,6 @@ test('AIS: a subscription narrower than the world gives no count', async (t) => 
   t.after(() => {
     if (saved === undefined) delete process.env.AISSTREAM_BOUNDING_BOXES;
     else process.env.AISSTREAM_BOUNDING_BOXES = saved;
-    _resetLayerCountsForTest();
   });
   const start = Date.now() + 2 * 365 * 86_400_000;
   t.mock.method(Date, 'now', () => start);
@@ -364,19 +406,21 @@ test('AIS: a subscription narrower than the world gives no count', async (t) => 
       time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
     },
   });
-  aisLiveProxy();
+  const handler = endpointHandler({
+    'ais-live-vessels': aisLiveProxy().api.readLayerCount,
+  });
   delete process.env.AISSTREAM_BOUNDING_BOXES;
-  assert.deepEqual(await readLayerCounts(), [
+  assert.deepEqual(await countRows(handler), [
     { layerId: 'ais-live-vessels', count: 1, at: start },
   ]);
   process.env.AISSTREAM_BOUNDING_BOXES = '[[[-90,-180],[90,180]]]';
   assert.equal(
-    (await readLayerCounts()).length,
+    (await countRows(handler)).length,
     1,
     'the default box, spelt out',
   );
   process.env.AISSTREAM_BOUNDING_BOXES = '[[[50,0],[55,10]]]';
-  assert.deepEqual(await readLayerCounts(), [], 'one region, no count');
+  assert.deepEqual(await countRows(handler), [], 'one region, no count');
 });
 
 test('FIRMS: no count without a key, and with one the count saved beside the cache, never the cache itself', async (t) => {
@@ -387,7 +431,6 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
     process.chdir(savedCwd);
     if (savedKey === undefined) delete process.env.FIRMS_MAP_KEY;
     else process.env.FIRMS_MAP_KEY = savedKey;
-    _resetLayerCountsForTest();
     await rm(dir, { recursive: true, force: true });
   });
   process.chdir(dir);
@@ -398,13 +441,15 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
     path.join(dir, '.gev-cache', 'firms-count.json'),
     JSON.stringify({ at: 1234, count: 4321 }),
   );
-  firmsProxy();
+  const handler = endpointHandler({
+    'local-firms': firmsProxy().api.readLayerCount,
+  });
   delete process.env.FIRMS_MAP_KEY;
-  assert.deepEqual(await readLayerCounts(), [], 'no key, no count');
+  assert.deepEqual(await countRows(handler), [], 'no key, no count');
   process.env.FIRMS_MAP_KEY = 'fixture';
-  assert.deepEqual(await readLayerCounts(), [
+  assert.deepEqual(await countRows(handler), [
     { layerId: 'local-firms', count: 4321, at: 1234 },
   ]);
   await rm(path.join(dir, '.gev-cache', 'firms-count.json'));
-  assert.deepEqual(await readLayerCounts(), [], 'no saved count, no count');
+  assert.deepEqual(await countRows(handler), [], 'no saved count, no count');
 });

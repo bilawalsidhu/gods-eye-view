@@ -31,8 +31,6 @@ function fixture(name, overrides = {}, preview = false) {
     // terrain.js gates cross-site requests first; fixture requests carry no
     // browser headers, so admit them like a loopback tool.
     admitSameSiteKeyless: () => false,
-    // Context's nothing-on counts read the caches; nothing to register here.
-    registerLayerCount: () => {},
     path, process: { cwd: () => '/fixture', env: {} },
     fsp: {
       readFile: async () => { throw new Error('cache absent'); },

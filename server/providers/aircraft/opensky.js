@@ -9,7 +9,6 @@ import {
   readResponseTextCapped,
 } from '../common/http.js';
 import { requiredFiniteQueryNumber } from '../common/query.js';
-import { registerLayerCount } from '../common/layerCounts.js';
 // ---------------------------------------------------------------------------
 // OpenSky OAuth2 token + response cache state
 // ---------------------------------------------------------------------------
@@ -528,7 +527,6 @@ function cachedOpenSkyCount() {
  * @returns {import('vite').Plugin}
  */
 export function openSkyProxy() {
-  registerLayerCount('flights', cachedOpenSkyCount);
   const installMiddleware = (server) => {
     server.middlewares.use('/api/flights', async (req, res, next) => {
       try {
@@ -880,6 +878,7 @@ export function openSkyProxy() {
   };
   return {
     name: 'opensky-proxy',
+    api: { readLayerCount: cachedOpenSkyCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

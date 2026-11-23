@@ -5,7 +5,6 @@ import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
-import { registerLayerCount } from './common/layerCounts.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -330,7 +329,7 @@ export function firmsProxy() {
   // count saved beside the disk cache (FIRMS allows 5,000 transactions per
   // 10 minutes per key). The disk cache itself is never parsed for it. Only
   // with a key, since without one the layer cannot load them; never fetched.
-  registerLayerCount('local-firms', async () => {
+  async function readLayerCount() {
     if (!mapKey()) return null;
     if (mem)
       return mem.fires.length ? { count: mem.fires.length, at: mem.at } : null;
@@ -342,7 +341,7 @@ export function firmsProxy() {
     } catch {
       return null;
     }
-  });
+  }
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
@@ -432,6 +431,7 @@ export function firmsProxy() {
   };
   return {
     name: 'firms-proxy',
+    api: { readLayerCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

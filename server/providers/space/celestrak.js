@@ -8,7 +8,6 @@ import { parseTleText, tleCatalogNumber } from '../../../src/sources/tle.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
-import { registerLayerCount } from '../common/layerCounts.js';
 
 /**
  * How many satellites a set of TLE bodies holds: unique NORAD catalogue
@@ -288,11 +287,8 @@ export function celestrakProxy() {
     return handler;
   }
 
-  const handlers = feeds.map((feed) => [feed.route, createFeedHandler(feed)]);
-  // The TLE feed's cache counts the satellites layer (generous, keyless).
-  registerLayerCount(
-    'satellites',
-    new Map(handlers).get('/api/celestrak').cachedCount,
+  const handlers = new Map(
+    feeds.map((feed) => [feed.route, createFeedHandler(feed)]),
   );
   const installMiddleware = (server) => {
     for (const [route, handler] of handlers)
@@ -300,6 +296,8 @@ export function celestrakProxy() {
   };
   return {
     name: 'celestrak-proxy',
+    // The TLE feed's cache counts the satellites layer (generous, keyless).
+    api: { readLayerCount: handlers.get('/api/celestrak').cachedCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

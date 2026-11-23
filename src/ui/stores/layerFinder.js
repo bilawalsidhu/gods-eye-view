@@ -9,12 +9,17 @@ export const useLayerFinderStore = defineStore('gev-layer-finder', () => {
   const controlsMounted = ref(false);
   let owner = null;
 
-  function attachControls() {
-    const mount = Symbol('Layer Finder controls');
+  function attachControls(target) {
+    owner?.abort();
+    const mount = new AbortController();
     owner = mount;
+    target?.addEventListener(LAYER_FINDER_CLEAR_EVENT, finder.clearAll, {
+      signal: mount.signal,
+    });
     controlsMounted.value = true;
     return () => {
       if (owner !== mount) return;
+      mount.abort();
       owner = null;
       controlsMounted.value = false;
       finder.clearAll();

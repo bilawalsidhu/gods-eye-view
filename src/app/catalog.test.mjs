@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayerCatalog, catalogControlServices } from './catalog.js';
 import { createApplicationData } from './data.js';
+import { createLayerFinder } from '../ui/layerFinderFilter.js';
 
 const metadata = (layers) =>
   layers.map(({ id }) => ({ id, disposition: 'enabled-only' }));
@@ -54,10 +55,13 @@ test('data setup seals the caller catalog before controls can restore and drains
     { id: 'two' },
   ];
   const releases = [];
+  const finder = createLayerFinder();
+  finder.select({ query: 'two' });
   let observed;
-  const { dataManager } = createApplicationData({
+  const { dataManager, presentation } = createApplicationData({
     scene: { viewer: {} },
     controls: {
+      finder,
       styleManager: {
         attachDataManager(manager) {
           assert.equal(manager.registrationsFinalized, true);
@@ -81,6 +85,7 @@ test('data setup seals the caller catalog before controls can restore and drains
     },
   });
   assert.equal(observed, dataManager);
+  assert.equal(presentation.panel.finder.inputs().query, 'two');
   assert.equal(await dataManager.setEnabled('one', true), false);
   assert.equal(dataManager.layers.get('one').initialized, false);
   assert.equal(

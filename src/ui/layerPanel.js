@@ -1,9 +1,5 @@
 import { h, render as renderVue } from 'vue';
-import {
-  createLayerFinder,
-  filterLayerRows,
-  layerFindersByContainer,
-} from './layerFinderFilter.js';
+import { createLayerFinder, filterLayerRows } from './layerFinderFilter.js';
 import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
@@ -290,7 +286,7 @@ export class LayerPanel {
     weatherClock,
     finder,
   }) {
-    this._providedFinder = finder;
+    this.finder = finder ?? createLayerFinder();
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -322,10 +318,6 @@ export class LayerPanel {
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
-    this.finder =
-      this._providedFinder ??
-      layerFindersByContainer.get(container) ??
-      (this._standaloneFinder ??= createLayerFinder());
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();

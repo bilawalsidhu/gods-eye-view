@@ -8,6 +8,7 @@ import { createPinia } from 'pinia';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { createApp, nextTick } from 'vue';
 import { LayerPanel } from 'gods-eye-view/ui/layers';
+import { applicationPinia } from './vueRuntime.js';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import { mountApplicationViews } from './views/index.js';
 import {
@@ -81,7 +82,7 @@ function fixture(t) {
   return { list, panel, shown, search, openFilter, finder, rows, layers };
 }
 
-test('the public panel uses the mounted view finder without explicit injection', async (t) => {
+test('an explicit app finder filters its panel and leaves a standalone panel alone', async (t) => {
   document.body.innerHTML = '<div data-gev-view="layer-panels"></div>';
   mountApplicationViews(document);
   const list = document.getElementById('data-toggles');
@@ -100,7 +101,10 @@ test('the public panel uses the mounted view finder without explicit injection',
     getRowControls: () => null,
     hasRowControls: () => false,
   };
-  const rows = new LayerPanel(options);
+  const rows = new LayerPanel({
+    ...options,
+    finder: useLayerFinderStore(applicationPinia()),
+  });
   const standalone = new LayerPanel(options);
   t.after(() => {
     document.dispatchEvent(new CustomEvent(LAYER_FINDER_CLEAR_EVENT));
@@ -125,6 +129,33 @@ test('the public panel uses the mounted view finder without explicit injection',
   assert.deepEqual(shown(list), ['ais-live-vessels']);
   assert.equal(document.querySelector('.layer-finder__empty'), null);
   assert.deepEqual(shown(standaloneList), ['flights', 'ais-live-vessels']);
+  standalone.finder.select({ query: 'flights' });
+  const next = document.createElement('div');
+  standalone.mount(next);
+  assert.deepEqual(shown(standaloneList), []);
+  assert.deepEqual(shown(next), ['flights']);
+  assert.deepEqual(shown(list), ['ais-live-vessels']);
+});
+
+test('unmounting the old controls leaves the replacement able to clear the Finder', (t) => {
+  const pinia = createPinia();
+  const first = document.body.appendChild(document.createElement('div'));
+  const next = document.body.appendChild(document.createElement('div'));
+  const oldApp = createApp(LayerPanelsView).use(pinia);
+  const newApp = createApp(LayerPanelsView).use(pinia);
+  oldApp.mount(first);
+  newApp.mount(next);
+  t.after(() => {
+    newApp.unmount();
+    first.remove();
+    next.remove();
+  });
+  oldApp.unmount();
+
+  const finder = useLayerFinderStore(pinia);
+  finder.select({ query: 'flights' });
+  document.dispatchEvent(new CustomEvent(LAYER_FINDER_CLEAR_EVENT));
+  assert.equal(finder.inputs().query, '');
 });
 
 test('search finds a layer by the name on screen or its English name', async (t) => {
@@ -163,8 +194,14 @@ test('On and Off follow whether the layer is enabled', async (t) => {
 });
 
 test('Show all layers restores the full list from a further-filtered suggestion', async (t) => {
-  const { shown, finder, openFilter } = fixture(t);
+  const { shown, finder, openFilter, search } = fixture(t);
+  await search('flights');
   finder.pick(['ais-live-vessels']);
+  await nextTick();
+  assert.ok(
+    !document.getElementById('layer-finder-input'),
+    'the old Finder search closes',
+  );
   const menu = await openFilter();
   [...menu.querySelectorAll('button')]
     .find((button) => button.textContent.trim().endsWith('Off'))

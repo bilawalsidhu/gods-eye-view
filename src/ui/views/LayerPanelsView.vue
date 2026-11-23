@@ -1,10 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { layerFindersByContainer } from '../layerFinderFilter.js';
-import {
-  LAYER_FINDER_CLEAR_EVENT,
-  useLayerFinderStore,
-} from '../stores/layerFinder.js';
+import { useLayerFinderStore } from '../stores/layerFinder.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -30,21 +26,9 @@ const finder = useLayerFinderStore();
 const toggleList = ref(null);
 let detachFinderControls;
 onMounted(() => {
-  const list = toggleList.value;
-  layerFindersByContainer.set(list, finder);
-  detachFinderControls = finder.attachControls();
-  list.ownerDocument.addEventListener(LAYER_FINDER_CLEAR_EVENT, finder.clearAll);
+  detachFinderControls = finder.attachControls(toggleList.value.ownerDocument);
 });
-onBeforeUnmount(() => {
-  detachFinderControls?.();
-  const list = toggleList.value;
-  if (layerFindersByContainer.get(list) === finder)
-    layerFindersByContainer.delete(list);
-  list.ownerDocument.removeEventListener(
-    LAYER_FINDER_CLEAR_EVENT,
-    finder.clearAll,
-  );
-});
+onBeforeUnmount(() => detachFinderControls?.());
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.

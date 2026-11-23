@@ -12,7 +12,6 @@ import {
   newestAisPositionAt,
   aisStreamVesselCount,
 } from './ais-store.js';
-import { registerLayerCount } from '../common/layerCounts.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
 // ---------------------------------------------------------------------------
@@ -74,12 +73,6 @@ let _aisWebSocketImpl;
  * JSON snapshot to the Cesium layer.
  */
 export function aisLiveProxy() {
-  // Context's nothing-on count: what the live store already holds. Asking
-  // for it never opens the stream. A narrower subscription than the world
-  // gives no count, since the count is shown as worldwide.
-  registerLayerCount('ais-live-vessels', () =>
-    aisSubscriptionIsWorldwide() ? aisStreamVesselCount() : null,
-  );
   function install(middlewares) {
     middlewares.use('/api/vessels', async (req, res) => {
       try {
@@ -165,6 +158,12 @@ export function aisLiveProxy() {
 
   return {
     name: 'ais-live-proxy',
+    api: {
+      // Reading the store leaves the stream alone. Only worldwide coverage
+      // matches the scope of the count Context shows.
+      readLayerCount: () =>
+        aisSubscriptionIsWorldwide() ? aisStreamVesselCount() : null,
+    },
     configureServer(server) {
       install(server.middlewares);
       startAisStreamWatchdogTick();

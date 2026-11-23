@@ -1,10 +1,10 @@
 import { layerFeedState } from '../data/feedState.js';
 
-export const CONTEXT_EXEMPT = new Set(['radio', 'directions']);
+export const CONTEXT_EXEMPT = Object.freeze(['radio', 'directions']);
 export const MISSIONS_LAYER = 'rocket-launches';
 
 export function inspectorLayerRows(rows) {
-  return rows.filter((row) => row.enabled && !CONTEXT_EXEMPT.has(row.id));
+  return rows.filter((row) => row.enabled && !CONTEXT_EXEMPT.includes(row.id));
 }
 
 export function shownApart(id, missionsEnabled) {

@@ -1396,6 +1396,7 @@
   "src/ui/panelNavigation.test.mjs",
   "src/ui/stores/owners.js",
   "src/ui/stores/owners.test.mjs",
+  "src/moduleState.test.mjs",
   "src/ui/stores/panels.test.mjs",
   "src/ui/stores/status.js",
   "src/stories/catalog.js",

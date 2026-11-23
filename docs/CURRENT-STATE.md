@@ -1127,7 +1127,9 @@ Category (the list's groups, kept by their key, so a language change keeps
 the choice). The arrows, Home and End move through it and Escape closes it.
 Rows and groups that are left out hide; chips under the header show the
 active filters and clear them, and "No layers match" says when nothing is
-left. Each app keeps its own filters. The layer list renders row and group visibility from those filters. Neither the search nor the filter is saved or put in share links. A
+left. The application passes its Finder store's filter to the layer list.
+A standalone layer panel keeps its own filter through remounts. Neither
+the search nor the filter is saved or put in share links. A
 voice request that points at a hidden layer clears the finder first
 (`gev:layer-finder-clear`).
 

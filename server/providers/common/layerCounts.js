@@ -7,33 +7,25 @@ import { admitSameSiteKeyless } from './same-site.js';
  * registry never asks an upstream: a provider whose cache is empty has no
  * count, and its layer gets no tile.
  *
- * Only layers whose feed is not billed per request register (see each
- * provider). Metered feeds (TomTom, Google) stay out even when cached.
+ * The local provider composition supplies the readers for feeds that do
+ * not bill per request. Metered feeds (TomTom, Google) stay out even when cached.
  * Reading a count never spends quota, since nothing is fetched.
  */
 
-/** @type {Map<string, () => (?{count: number, at: ?number}|Promise<?{count: number, at: ?number}>)>} */
-const readers = new Map();
-
 /**
- * Register how a layer's last-known count is read from its provider's cache.
- * The reader returns null when the cache is empty; it must not fetch.
- * @param {string} layerId The app's layer id.
- * @param {() => (?{count: number, at: ?number}|Promise<?{count: number, at: ?number}>)} read
+ * @typedef {{count: number, at: number|null}} CachedLayerCount
+ * @typedef {() => (CachedLayerCount|null|Promise<CachedLayerCount|null>)} LayerCountReader
  */
-export function registerLayerCount(layerId, read) {
-  if (!layerId || typeof read !== 'function') return;
-  readers.set(layerId, read);
-}
 
 /**
  * Every registered layer that has a count: `[{layerId, count, at}]`.
  * A reader that throws or has nothing is left out.
+ * @param {Array<[string, LayerCountReader]>} readers
  * @returns {Promise<Array<{layerId: string, count: number, at: ?number}>>}
  */
-export async function readLayerCounts() {
+async function readLayerCounts(readers) {
   const rows = await Promise.all(
-    [...readers].map(async ([layerId, read]) => {
+    readers.map(async ([layerId, read]) => {
       try {
         const found = await read();
         const count = Number(found?.count);
@@ -52,16 +44,13 @@ export async function readLayerCounts() {
   return rows.filter(Boolean);
 }
 
-/** Forget every reader (tests). */
-export function _resetLayerCountsForTest() {
-  readers.clear();
-}
-
 /**
  * `GET /api/layer-counts` → `{now, counts: [{layerId, count, at}]}`. Read
  * from the providers' caches only; same-site, no key, no upstream request.
+ * @param {Record<string, LayerCountReader>} readers
  */
-export function layerCountsEndpoint() {
+export function layerCountsEndpoint(readers) {
+  const entries = Object.entries(readers);
   const install = (server) => {
     server.middlewares.use('/api/layer-counts', async (req, res) => {
       if (admitSameSiteKeyless(req, res)) return;
@@ -73,7 +62,7 @@ export function layerCountsEndpoint() {
         res.end(JSON.stringify({ error: 'method not allowed' }));
         return;
       }
-      const counts = await readLayerCounts();
+      const counts = await readLayerCounts(entries);
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',

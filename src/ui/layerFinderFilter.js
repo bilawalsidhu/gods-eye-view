@@ -1,8 +1,5 @@
 import { computed, ref, shallowRef, watch } from 'vue';
 
-/** Finder owned by a mounted Data Layers view's row container. */
-export const layerFindersByContainer = new WeakMap();
-
 const allLayers = () => ({ query: '', show: 'all', category: '', picked: [] });
 
 /** Shared by a page's finder controls and row presenter, or local to a standalone panel. */
@@ -21,6 +18,7 @@ export function createLayerFinder() {
     selection.value = { ...selection.value, ...patch };
   }
   function pick(ids) {
+    searching.value = false;
     selection.value = {
       ...allLayers(),
       picked: [...new Set(ids.filter(Boolean))],

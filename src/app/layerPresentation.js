@@ -7,12 +7,14 @@ export class LayerPresentation {
   constructor(
     manager,
     {
+      finder,
       weatherClock,
       requestRender = governorRequestRender,
       invalidateDetection = markDetectionSourcesChanged,
     } = {},
   ) {
     this.manager = manager;
+    this.finder = finder;
     this.weatherClock = weatherClock;
     this._panel = null;
     this.pendingVisible = false;
@@ -38,6 +40,7 @@ export class LayerPresentation {
   get panel() {
     if (!this._panel)
       this._panel = new LayerPanel({
+        finder: this.finder,
         weatherClock: this.weatherClock,
         getLayers: () => this.manager.getAll(),
         isEnabled: (id) => this.manager.isEnabled(id),
