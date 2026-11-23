@@ -5,4 +5,4 @@
   oblique angle looks solid. Flights, Military Flights (fleet and tracked
   contact) and Local ADS-B use it; the TR-3B, airport vehicles, ground
   stations and Cockpit's far pips stay flat, and a renderer without view
-  sheets draws the flat glyphs as before (Mazeyar Moeini Feizabadi, #0000).
+  sheets draws the flat glyphs as before (Mazeyar Moeini Feizabadi, #1903).
