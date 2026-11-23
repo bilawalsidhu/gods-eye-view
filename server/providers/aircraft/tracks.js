@@ -11,7 +11,9 @@ import { makeRateLimiter, clientKey } from '../common/rate-limit.js';
  *   client can fall back to its accumulated trail silently. It has its own
  *   per-IP limiter, and a 429 from /tracks starts a cooldown for that
  *   bucket — the per-icao cache bounds memory, not spend, since a different
- *   `icao24` is simply a different key.
+ *   `icao24` is simply a different key. The limiter counts upstream calls
+ *   only: a malformed request or one answered from the cache costs OpenSky
+ *   nothing and is not charged.
  * /api/military/track?hex=<hex> — compatibility refusal for the retired,
  *   undocumented ADSB.lol trace route. The standalone military source uses
  *   locally accumulated trails; provider-supplied history remains optional.
@@ -75,19 +77,32 @@ export function trackBackfillProxies() {
   }
 
   /**
-   * @param {{remainingMs: () => number, arm: (upstream: Response) => void}} [governor]
+   * @param {object} [options]
+   * @param {() => Promise<object>|object} [options.headers] Request headers,
+   *   resolved only when the upstream is actually called.
+   * @param {{remainingMs: () => number, arm: (upstream: Response) => void}} [options.governor]
    *   Credit cooldown for a metered upstream. While it is cooling the upstream
-   *   is not called, though an already-fetched body may still be served (it
+   *   is not called, though an already-fetched track may still be served (it
    *   costs nothing further); an upstream 429 arms it.
+   * @param {() => boolean} [options.admit] Asked once, immediately before an
+   *   upstream call; false refuses the request with a 429.
    */
-  async function proxyJson(res, key, upstreamUrl, headers = {}, governor) {
+  async function proxyJson(
+    res,
+    key,
+    upstreamUrl,
+    { headers = () => ({}), governor, admit } = {},
+  ) {
     const blockedMs = governor?.remainingMs() ?? 0;
     const cached = cache.get(key);
     const fresh = cached && Date.now() - cached.at < TRACK_CACHE_MS;
     // Serve-stale while the account is cooling, the way `/api/flights` does:
     // a stale trail beats no trail, and replaying a cached body spends no
-    // credits.
-    if (cached && (fresh || blockedMs > 0)) {
+    // credits. Only a track is worth replaying past its window: an old error
+    // says nothing about now, so it gives way to the cooldown refusal.
+    const replayable =
+      cached && (fresh || (blockedMs > 0 && cached.status === 200));
+    if (replayable) {
       res.statusCode = cached.status;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
@@ -98,11 +113,26 @@ export function trackBackfillProxies() {
       refuse(res, blockedMs / 1000);
       return;
     }
+    if (admit && !admit()) {
+      refuse(res, TRACK_RATE_WINDOW_MS / 1000);
+      return;
+    }
     const upstream = await fetch(upstreamUrl, {
-      headers,
+      headers: await headers(),
       signal: AbortSignal.timeout(12000),
     });
-    if (upstream.status === 429) governor?.arm(upstream);
+    if (upstream.status === 429 && governor) {
+      // The cooldown now answers for every key, with the time left; caching
+      // this 429 would replay it for the key without one.
+      governor.arm(upstream);
+      try {
+        await upstream.body?.cancel();
+      } catch {
+        /* nothing left to release */
+      }
+      refuse(res, governor.remainingMs() / 1000);
+      return;
+    }
     const { tooLarge, text } = await readCappedResponseText(
       upstream,
       RESPONSE_CAP_BYTES,
@@ -130,10 +160,6 @@ export function trackBackfillProxies() {
   function install(middlewares) {
     middlewares.use('/api/flights/track', async (req, res) => {
       try {
-        if (!allowOpenSky(clientKey(req))) {
-          refuse(res, TRACK_RATE_WINDOW_MS / 1000);
-          return;
-        }
         const incoming = new URL(req.url || '', 'http://localhost');
         const icao24 = String(incoming.searchParams.get('icao24') || '')
           .trim()
@@ -146,17 +172,20 @@ export function trackBackfillProxies() {
           );
           return;
         }
-        // While the /tracks bucket is cooling, do not mint a token either.
-        const token =
-          openSkyTracksGovernor.remainingMs() > 0
-            ? null
-            : await getOpenSkyToken();
         await proxyJson(
           res,
           `osky:${icao24}`,
           `https://opensky-network.org/api/tracks/all?icao24=${icao24}&time=0`,
-          token ? { Authorization: `Bearer ${token}` } : {},
-          openSkyTracksGovernor,
+          {
+            // Resolved only for a live call: no token is minted for a cached
+            // answer, a refusal, or while the /tracks bucket is cooling.
+            headers: async () => {
+              const token = await getOpenSkyToken();
+              return token ? { Authorization: `Bearer ${token}` } : {};
+            },
+            governor: openSkyTracksGovernor,
+            admit: () => allowOpenSky(clientKey(req)),
+          },
         );
       } catch (error) {
         res.statusCode = 502;

@@ -246,6 +246,90 @@ test('a malformed icao24 is still rejected before any upstream call', async (t) 
 });
 
 // --- LAST: arming the /states/all cooldown is one-way for this process.
+test('only upstream calls are charged: cached answers and malformed requests are free', async (t) => {
+  let upstreamCalls = 0;
+  stubFetch(t, async () => {
+    upstreamCalls += 1;
+    return trackOk();
+  });
+  const track = install(trackBackfillProxies()).get('/api/flights/track');
+
+  // Re-selecting one aircraft, and a burst of malformed requests: more than a
+  // window's worth of each, none of which costs OpenSky anything.
+  for (let i = 0; i < 40; i += 1) {
+    const repeat = await request(track, { url: '/?icao24=73c000' });
+    assert.equal(repeat.statusCode, 200);
+    const malformed = await request(track, { url: '/?icao24=nothex' });
+    assert.equal(malformed.statusCode, 400);
+  }
+  assert.equal(upstreamCalls, 1, 'one live call, 39 answers from the cache');
+
+  // The window still holds 29 more live calls for this client.
+  for (let i = 1; i < 30; i += 1) {
+    const icao24 = (0x73c000 + i).toString(16);
+    const live = await request(track, { url: `/?icao24=${icao24}` });
+    assert.equal(live.statusCode, 200, `live lookup ${i + 1} of 30 is allowed`);
+  }
+  const refused = await request(track, { url: '/?icao24=73cfff' });
+  assert.equal(refused.statusCode, 429, 'the 31st live lookup is refused');
+  assert.equal(upstreamCalls, 30);
+});
+
+test('the request that trips the cooldown, and repeats of it, carry the time left', async (t) => {
+  let upstreamCalls = 0;
+  stubFetch(t, async () => {
+    upstreamCalls += 1;
+    return new Response('{}', {
+      status: 429,
+      headers: { 'x-rate-limit-retry-after-seconds': '120' },
+    });
+  });
+  const track = install(trackBackfillProxies()).get('/api/flights/track');
+
+  for (const attempt of ['first', 'repeat']) {
+    const refused = await request(track, { url: '/?icao24=74d001' });
+    assert.equal(refused.statusCode, 429);
+    const retryAfter = Number(refused.headers['retry-after']);
+    assert.ok(
+      retryAfter > 60 && retryAfter <= 120,
+      `the ${attempt} refusal names OpenSky's cooldown (got ${retryAfter})`,
+    );
+  }
+  assert.equal(upstreamCalls, 1, 'the repeat was answered by the cooldown');
+});
+
+test('an error cached before the cooldown is not replayed as stale', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 });
+  let mode = 'missing';
+  stubFetch(t, async () =>
+    mode === 'missing'
+      ? new Response('{}', { status: 404 })
+      : new Response('{}', {
+          status: 429,
+          headers: { 'x-rate-limit-retry-after-seconds': '600' },
+        }),
+  );
+  const track = install(trackBackfillProxies()).get('/api/flights/track');
+
+  assert.equal(
+    (await request(track, { url: '/?icao24=75e001' })).statusCode,
+    404,
+  );
+  t.mock.timers.tick(61_000); // the 404 has left its 60 s window
+  mode = 'cooling';
+  assert.equal(
+    (await request(track, { url: '/?icao24=75e002' })).statusCode,
+    429,
+  );
+  const later = await request(track, { url: '/?icao24=75e001' });
+  assert.equal(
+    later.statusCode,
+    429,
+    'the old 404 is not served as if it were current',
+  );
+  assert.ok(Number(later.headers['retry-after']) > 60);
+});
+
 test('a /states/all 429 does not block track backfill: separate OpenSky buckets', async (t) => {
   let trackUpstreamCalls = 0;
   stubFetch(t, async (url) => {
