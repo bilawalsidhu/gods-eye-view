@@ -614,13 +614,23 @@ const pm25 = (id, lat, lon, concentration) =>
     assessment: { label: 'Fair', severity: 1, concentration },
   });
 
-/** A layer over a camera that sees `degPerPx` degrees per pixel around Paris. */
-async function zoomHarness(rows, { view } = {}) {
+/**
+ * A layer over a camera that sees `degPerPx` degrees per pixel around Paris
+ * (the view centre, 400 × 300 on an 800 × 600 canvas).
+ */
+async function zoomHarness(
+  rows,
+  { view, picking = null, pointer = null, viewRect = null } = {},
+) {
   const { fromDegrees } = await import('../../geo/ellipsoid.js');
   const zoom = { degPerPx: 0.5 };
+  const camera = {
+    rect: viewRect ?? { west: -180, south: -85, east: 180, north: 85 },
+  };
   const moveEnd = [];
   const flights = [];
   const clicks = [];
+  const labels = [];
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
   const { draw } = bindFakeDraw(viewer, {
     camera: {
@@ -628,7 +638,7 @@ async function zoomHarness(rows, { view } = {}) {
         if (event === 'moveEnd') moveEnd.push(listener);
         return () => {};
       },
-      viewRectangle: () => ({ west: -180, south: -85, east: 180, north: 85 }),
+      viewRectangle: () => camera.rect,
       flyTo(destination, options) {
         flights.push({ destination, options });
       },
@@ -637,7 +647,7 @@ async function zoomHarness(rows, { view } = {}) {
       pickEllipsoid: (x, y) =>
         fromDegrees(
           2.35 + (x - 400) * zoom.degPerPx,
-          48.85 + (300 - y) * zoom.degPerPx * 0.1,
+          48.85 + (300 - y) * zoom.degPerPx,
         ),
       isOccluded: () => false,
     },
@@ -647,19 +657,28 @@ async function zoomHarness(rows, { view } = {}) {
       definitions: [definition('saaqis', { parameters: ['PM2.5'] })],
       getSnapshot: async () => rows,
     },
-    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    overlayHost: {
+      setEntries(source, entries) {
+        labels.push(entries.map((entry) => entry.id));
+      },
+      setVisible() {},
+      clearSource() {},
+    },
     input: () => ({
       onClick(fn) {
         clicks.push(fn);
         return () => clicks.splice(clicks.indexOf(fn), 1);
       },
     }),
+    picking,
+    pointer,
   });
   layer.init(viewer);
   if (view) layer.setParams({ view });
   layer.enable();
   await layer.update();
   const points = () => draw.find('air-quality:points:');
+  /** A click on a drawn item by id, or (null) on open map at `at`. */
   const click = (id, extra = {}) => {
     for (const fn of [...clicks])
       fn({
@@ -674,7 +693,19 @@ async function zoomHarness(rows, { view } = {}) {
     zoom.degPerPx = degPerPx;
     for (const listener of moveEnd) listener();
   };
-  return { layer, points, click, zoomTo, flights, clicks };
+  const bubbles = () =>
+    [...points().items.values()].filter((item) => item.outlineWidth === 1.5);
+  return {
+    layer,
+    points,
+    bubbles,
+    click,
+    zoomTo,
+    flights,
+    clicks,
+    camera,
+    labels,
+  };
 }
 
 const parisAndCapeTown = () => [
@@ -685,13 +716,12 @@ const parisAndCapeTown = () => [
 ];
 
 test('a dense view draws groups, a close view draws singles', async () => {
-  const { points, zoomTo } = await zoomHarness(parisAndCapeTown(), {
+  const { points, bubbles, zoomTo } = await zoomHarness(parisAndCapeTown(), {
     view: 'PM2.5',
   });
-  // About 23 degrees in 46 px: Paris's three stations are one bubble.
-  const far = [...points().items.values()];
-  assert.equal(far.length, 2);
-  const bubble = far.find((item) => item.id !== 'air-quality:saaqis:cape-town');
+  // About 15 degrees in 46 px at Paris: its three stations are one bubble.
+  assert.equal(points().items.size, 2);
+  const [bubble] = bubbles();
   assert.equal(bubble.pixelSize, Math.round(12 + 6 * Math.log10(3)));
   assert.deepEqual(bubble.outlineColor, [1, 1, 1, 0.85]);
   assert.equal(bubble.outlineWidth, 1.5);
@@ -714,7 +744,7 @@ test('a dense view draws groups, a close view draws singles', async () => {
   assert.equal(points().items.size, 2, 'groups follow the camera back out');
 });
 
-test('a group of unrated stations takes the unrated colour; the AQI view colours by the mean index', async () => {
+test('unrated stations draw on their own; the AQI view colours by the mean index', async () => {
   const unrated = (id, lat, lon) => ({
     ...pm25(id, lat, lon, 10),
     color: '#8cb4ce',
@@ -724,27 +754,38 @@ test('a group of unrated stations takes the unrated colour; the AQI view colours
     [unrated('a', 48.85, 2.35), unrated('b', 48.9, 2.4)],
     { view: 'PM2.5' },
   );
-  const [greyBubble] = [...grey.points().items.values()];
-  assert.equal(greyBubble.color, '#8cb4ce');
+  assert.equal(grey.points().items.size, 2);
+  assert.equal(grey.bubbles().length, 0);
   // PM2.5 12 µg/m³ is a US AQI of 56 at each station: Moderate.
   const aqi = await zoomHarness([
     observed('saaqis', 'a', 48.85, 2.35),
     observed('saaqis', 'b', 48.9, 2.4),
   ]);
-  const [aqiBubble] = [...aqi.points().items.values()];
+  const [aqiBubble] = aqi.bubbles();
   assert.equal(aqiBubble.pixelSize, Math.round(12 + 6 * Math.log10(2)));
   assert.equal(aqiBubble.color, '#ffff00');
 });
 
+test('only single and selected stations keep their labels', async () => {
+  const { layer, labels, zoomTo } = await zoomHarness(parisAndCapeTown(), {
+    view: 'PM2.5',
+  });
+  assert.deepEqual(labels.at(-1), ['saaqis:cape-town']);
+  layer.setParams({ station: 'saaqis:paris-2' });
+  assert.deepEqual(labels.at(-1).sort(), [
+    'saaqis:cape-town',
+    'saaqis:paris-2',
+  ]);
+  zoomTo(0.0001);
+  assert.equal(labels.at(-1).length, 4);
+});
+
 test('a click on a group flies to its stations and selects nothing', async () => {
-  const { layer, points, click, flights } = await zoomHarness(
+  const { layer, bubbles, click, flights } = await zoomHarness(
     parisAndCapeTown(),
     { view: 'PM2.5' },
   );
-  const bubble = [...points().items.keys()].find(
-    (id) => id !== 'air-quality:saaqis:cape-town',
-  );
-  click(bubble);
+  click(bubbles()[0].id);
   assert.equal(flights.length, 1);
   const { rect } = flights[0].destination;
   // 2.3–2.4 and 48.8–48.9, padded by at least 0.15 degrees.
@@ -756,28 +797,141 @@ test('a click on a group flies to its stations and selects nothing', async () =>
   assert.equal(layer.getParams().station, null);
 });
 
+test('a group click keeps a station already selected', async () => {
+  const { layer, bubbles, click, flights } = await zoomHarness(
+    parisAndCapeTown(),
+    { view: 'PM2.5' },
+  );
+  layer.setParams({ station: 'saaqis:cape-town' });
+  click(bubbles()[0].id);
+  assert.equal(flights.length, 1);
+  assert.equal(layer.getParams().station, 'saaqis:cape-town');
+});
+
+test('stations that cannot come apart: a click selects the higher and the camera stays', async () => {
+  // About 10 m apart: one bubble at every zoom.
+  const { layer, bubbles, click, flights } = await zoomHarness(
+    [pm25('low', 48.85, 2.35, 20), pm25('high', 48.8501, 2.35, 80)],
+    { view: 'PM2.5' },
+  );
+  click(bubbles()[0].id);
+  assert.equal(flights.length, 0);
+  assert.equal(layer.getParams().station, 'saaqis:high');
+});
+
+test('a group larger than the view is not flown out to', async () => {
+  const { layer, bubbles, click, flights } = await zoomHarness(
+    parisAndCapeTown(),
+    {
+      view: 'PM2.5',
+      viewRect: { west: 2.3, south: 48.82, east: 2.4, north: 48.88 },
+    },
+  );
+  click(bubbles()[0].id);
+  assert.equal(flights.length, 0);
+  assert.equal(layer.getParams().station, 'saaqis:paris-2');
+});
+
 test('a click on a station selects it, drawn large and never grouped', async () => {
-  const { layer, points, click, flights, zoomTo } = await zoomHarness(
+  const { layer, points, bubbles, click, flights, zoomTo } = await zoomHarness(
     parisAndCapeTown(),
     { view: 'PM2.5' },
   );
   click('air-quality:saaqis:cape-town');
   assert.equal(layer.getParams().station, 'saaqis:cape-town');
   assert.equal(flights.length, 0);
-  assert.equal(
-    points().items.get('air-quality:saaqis:cape-town').pixelSize,
-    13,
-  );
+  const selected = points().items.get('air-quality:saaqis:cape-town');
+  assert.equal(selected.pixelSize, 13);
+  // Not a group's white ring: the UI accent.
+  assert.equal(selected.outlineColor, '#36dcff');
+  assert.equal(selected.outlineWidth, 2);
   // A Paris station selected close in stays apart from its neighbours when
   // the camera goes back out.
   layer.setParams({ station: 'saaqis:paris-2' });
   zoomTo(0.5);
-  const items = [...points().items.values()];
   assert.equal(points().items.get('air-quality:saaqis:paris-2').pixelSize, 13);
   assert.equal(points().items.get('air-quality:saaqis:cape-town').pixelSize, 7);
-  const bubble = items.find((item) => item.outlineWidth === 1.5);
-  assert.equal(bubble.pixelSize, Math.round(12 + 6 * Math.log10(2)));
+  assert.equal(bubbles()[0].pixelSize, Math.round(12 + 6 * Math.log10(2)));
   // Empty map lets go of it.
   click(null);
   assert.equal(layer.getParams().station, null);
+});
+
+test('a click a few pixels off a station still selects it', async () => {
+  const { layer, click, zoomTo } = await zoomHarness(parisAndCapeTown(), {
+    view: 'PM2.5',
+  });
+  zoomTo(0.0001);
+  // paris-1 is drawn at the centre, 400 × 300; 3 px to its right.
+  click(null, { screenPosition: { x: 403, y: 300 } });
+  assert.equal(layer.getParams().station, 'saaqis:paris-1');
+  // 30 px away is open map.
+  click(null, { screenPosition: { x: 430, y: 300 } });
+  assert.equal(layer.getParams().station, null);
+});
+
+test('a click is ignored while disabled, with stations hidden, under a card, or with the pointer held', async () => {
+  const id = 'air-quality:saaqis:cape-town';
+  const card = { over: false };
+  const pointer = { free: true, isPointerFree: () => pointer.free };
+  const { layer, click } = await zoomHarness(parisAndCapeTown(), {
+    view: 'PM2.5',
+    pointer,
+    picking: {
+      clickCard: () => (card.over ? { sourceId: 'x', entryId: 'y' } : null),
+    },
+  });
+  layer.disable();
+  click(id);
+  assert.equal(layer.getParams().station, null);
+  layer.enable();
+  layer.setParams({ stations: false });
+  click(id);
+  assert.equal(layer.getParams().station, null);
+  layer.setParams({ stations: true });
+  card.over = true;
+  click(id);
+  assert.equal(layer.getParams().station, null, 'the card takes the click');
+  card.over = false;
+  pointer.free = false;
+  click(id);
+  assert.equal(layer.getParams().station, null);
+  pointer.free = true;
+  click(id);
+  assert.equal(layer.getParams().station, 'saaqis:cape-town');
+});
+
+test('destroy removes the click subscription', async () => {
+  const { layer, clicks } = await zoomHarness(parisAndCapeTown());
+  assert.equal(clicks.length, 1);
+  layer.destroy();
+  assert.equal(clicks.length, 0);
+});
+
+test('stations and groups are air quality picks: other layers leave them alone, Context names nothing', async () => {
+  const picking = await import('../../data/pickRegistry.js');
+  const { resolvePickedContext } = await import('../../data/pickedContext.js');
+  const { layer, points, bubbles } = await zoomHarness(parisAndCapeTown(), {
+    view: 'PM2.5',
+    picking,
+  });
+  const station = 'air-quality:saaqis:cape-town';
+  const group = bubbles()[0].id;
+  assert.equal(picking.isOwnedByOtherLayer('flights', station), true);
+  assert.equal(picking.isOwnedByOtherLayer('flights', group), true);
+  assert.equal(picking.isOwnedByOtherLayer('air-quality', station), false);
+  assert.equal(picking.isOwnedByOtherLayer('flights', 'something-else'), false);
+  assert.equal(
+    resolvePickedContext(
+      { set: points().spec.id, id: station, surface: false },
+      { dataManager: { isEnabled: () => true, layers: new Map() } },
+    ),
+    null,
+  );
+  layer.disable();
+  assert.equal(picking.isOwnedByOtherLayer('flights', station), false);
+  layer.enable();
+  assert.equal(picking.isOwnedByOtherLayer('flights', station), true);
+  layer.destroy();
+  assert.equal(picking.isOwnedByOtherLayer('flights', station), false);
 });

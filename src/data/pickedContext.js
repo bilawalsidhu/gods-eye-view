@@ -16,9 +16,10 @@ import { findPickOwner, resolvePickId } from './pickRegistry.js';
  *     ownership predicate in `pickRegistry`; the owning layer's
  *     `findByQuery` turns the pick id into a live descriptor.
  *
- * Trails claim their pick ids only to make clicks inert, so they never
- * resolve. Disabled layers never resolve: what the user cannot see is not
- * what they are pointing at.
+ * Trails claim their pick ids only to make clicks inert, and air-quality
+ * stations select through their layer's card, so neither resolves. Disabled
+ * layers never resolve: what the user cannot see is not what they are
+ * pointing at.
  */
 
 const KIND_BY_LAYER = Object.freeze({
@@ -30,7 +31,12 @@ const KIND_BY_LAYER = Object.freeze({
   'local-firms': 'fire',
 });
 
-const IGNORED_OWNERS = new Set(['trails']);
+/**
+ * Owners whose picks Context never names: trails claim theirs only to make
+ * clicks inert; air-quality stations and groups select through the layer's
+ * own card.
+ */
+const IGNORED_OWNERS = new Set(['trails', 'air-quality']);
 
 function text(value) {
   return String(value ?? '').trim();

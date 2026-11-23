@@ -19,7 +19,12 @@ import {
   hourlyBandIndex,
   hourlyLegend,
 } from './interpretation.js';
-import { cellDegAt, groupRect, groupStations } from './groups.js';
+import {
+  cellDegAt,
+  groupStations,
+  groupTarget,
+  nearestItem,
+} from './groups.js';
 import {
   AQI_PARAMETERS,
   US_AQI_BANDS,
@@ -53,6 +58,9 @@ const READOUT_LIMIT = 5;
 /** Station dots, CSS pixels: plain and selected. */
 const STATION_PX = 7;
 const SELECTED_STATION_PX = 13;
+/** The selected station's ring: the UI accent, not a group's white. */
+const SELECTED_OUTLINE = '#36dcff';
+const SELECTED_OUTLINE_WIDTH = 2;
 /** A group's light outline, which tells it from a station's dark one. */
 const GROUP_OUTLINE = Object.freeze([1, 1, 1, 0.85]);
 const GROUP_OUTLINE_WIDTH = 1.5;
@@ -125,16 +133,20 @@ function valueText(key, value) {
  *
  * At far zoom, stations that would overlap on screen draw as one group
  * (`groups.js`) in the band colour of their members' mean; a click on a group
- * flies to its stations, a click on a station selects it (`station`). Canada's
- * AQHI discs are never grouped. Without `input` (the input dispatcher's
- * `inputFor`) the layer takes no clicks; `clickCard` names a card painted on
- * top of a click (`src/data/pickRegistry.js`), which then takes it.
+ * flies in to its stations, a click on a station selects it (`station`).
+ * Canada's AQHI discs are never grouped. Without `input` (the input
+ * dispatcher's `inputFor`) the layer takes no clicks. `picking` is the pick
+ * registry (`src/data/pickRegistry.js`): the drawn stations and groups are
+ * registered as this layer's picks while it is on, and a card painted on top
+ * of a click (`clickCard`) takes it. `pointer.isPointerFree` holds clicks
+ * off while a tool has the pointer.
  */
 export function createAirQualityLayer({
   source,
   overlayHost,
   input = null,
-  clickCard = null,
+  picking = null,
+  pointer = null,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
@@ -142,9 +154,14 @@ export function createAirQualityLayer({
   let _viewer = null;
   let _markers = null;
   let _points = null;
-  /** Observation readings drawn as points, and each drawn point by item id. */
+  /**
+   * Observation readings drawn as points; each drawn point by item id, with
+   * where it is drawn and its size; the readings drawn on their own, which
+   * keep their labels.
+   */
   let _stations = [];
   let _drawn = new Map();
+  let _labelled = new Set();
   let _offClick = null;
   let _readings = [];
   let _count = 0;
@@ -478,6 +495,7 @@ export function createAirQualityLayer({
   const drawPoints = () => {
     if (!_points) return;
     _drawn = new Map();
+    _labelled = new Set();
     const measured = view === 'aqhi' ? null : screen();
     const groups = measured
       ? groupStations(
@@ -498,14 +516,16 @@ export function createAirQualityLayer({
         const { reading } = group.members[0];
         const selected = reading.id === selectedStation;
         const id = `air-quality:${reading.id}`;
-        _drawn.set(id, { reading });
+        const px = selected ? SELECTED_STATION_PX : STATION_PX;
+        _drawn.set(id, { reading, lon: reading.lon, lat: reading.lat, px });
+        _labelled.add(reading.id);
         items.push({
           id,
           pos: { lon: reading.lon, lat: reading.lat, height: 0 },
-          pixelSize: selected ? SELECTED_STATION_PX : STATION_PX,
+          pixelSize: px,
           color: reading.color,
-          outlineColor: selected ? '#ffffff' : '#000000',
-          outlineWidth: selected ? 3 : 1,
+          outlineColor: selected ? SELECTED_OUTLINE : '#000000',
+          outlineWidth: selected ? SELECTED_OUTLINE_WIDTH : 1,
           height: 'clampGround',
           meta: { ...reading },
         });
@@ -514,11 +534,12 @@ export function createAirQualityLayer({
       // One bubble: the band colour of its members' mean, its size growing
       // with their number.
       const id = `air-quality-group:${group.members[0].id}:${group.members.length}`;
-      _drawn.set(id, { group });
+      const px = Math.round(12 + 6 * Math.log10(group.members.length));
+      _drawn.set(id, { group, lon: group.lon, lat: group.lat, px });
       items.push({
         id,
         pos: { lon: group.lon, lat: group.lat, height: 0 },
-        pixelSize: Math.round(12 + 6 * Math.log10(group.members.length)),
+        pixelSize: px,
         color: bandColor(group.mean),
         outlineColor: GROUP_OUTLINE,
         outlineWidth: GROUP_OUTLINE_WIDTH,
@@ -528,12 +549,39 @@ export function createAirQualityLayer({
     _points.set(items);
   };
 
-  /** Fly to where a group's stations come apart; nothing is selected. */
-  const openGroup = (group) =>
-    findCamera(_viewer)?.flyTo(
-      { rect: groupRect(group.members) },
-      { durationS: GROUP_FLIGHT_S },
+  /**
+   * Fly in to where a group's stations come apart, selecting nothing; when
+   * that would zoom out, or they never come apart, select the highest of
+   * them instead (`groupTarget`).
+   */
+  const openGroup = (group) => {
+    const target = groupTarget(group.members, viewRectangle());
+    if (target.rect)
+      findCamera(_viewer)?.flyTo(
+        { rect: target.rect },
+        { durationS: GROUP_FLIGHT_S },
+      );
+    else layer.setParams({ station: target.station.id });
+  };
+
+  /** One of this layer's drawn points, by a hit on it. */
+  const drawnOf = (hit) =>
+    hit && !hit.surface && hit.set === _points?.id
+      ? (_drawn.get(hit.id) ?? null)
+      : null;
+  /** The drawn point within its radius and a few pixels of a click. */
+  const drawnNear = (event) => {
+    const at = event.position ?? event.screenPosition;
+    const query = findQuery(_viewer);
+    if (!at || typeof query?.pickEllipsoid !== 'function') return null;
+    const here = query.pickEllipsoid(at.x, at.y);
+    const side = here ? query.pickEllipsoid(at.x + 10, at.y) : null;
+    return nearestItem(
+      [..._drawn.values()],
+      here && toLonLatH(here),
+      side && toLonLatH(side),
     );
+  };
 
   /**
    * A click on a group flies to it; on a station, selects it; on open map,
@@ -541,10 +589,15 @@ export function createAirQualityLayer({
    */
   const onClick = (event) => {
     if (!_enabled || !showStations || !_points || !_viewer) return;
+    if (pointer && !pointer.isPointerFree()) return;
     if (!isTrackingSelectionGesture(event?.gesture)) return;
-    if (clickCard?.(event)) return;
-    const hit = event.drawHit;
-    const item = hit && hit.set === _points.id ? _drawn.get(hit.id) : null;
+    if (picking?.clickCard?.(event)) return;
+    // The renderer's exact pick, a touch's widened one, then, over open map,
+    // a station or group within a few pixels: a 7 px dot is a small target.
+    const item =
+      drawnOf(event.drawHit) ??
+      drawnOf(event.hit) ??
+      (event.surface ? drawnNear(event) : null);
     if (item?.group) {
       openGroup(item.group);
       return;
@@ -743,6 +796,8 @@ export function createAirQualityLayer({
 
     enable() {
       _enabled = true;
+      // Other layers' clicks leave a station or group alone (pickRegistry).
+      picking?.registerPickOwner?.(layer.id, (id) => _drawn.has(id));
       drawPoints();
       syncVisibility();
       notify();
@@ -752,6 +807,9 @@ export function createAirQualityLayer({
       // Abort in flight: a response arriving after disable must not redraw.
       halt();
       _enabled = false;
+      picking?.unregisterPickOwner?.(layer.id);
+      // The click and moveEnd listeners stay until destroy: each returns at
+      // once while the layer is off, so enable needs no new subscriptions.
       if (_markers) _markers.show = false;
       if (_points) _points.show = false;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
@@ -890,11 +948,13 @@ export function createAirQualityLayer({
         overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
         return;
       }
+      // A station inside a group has no label of its own: only the stations
+      // drawn on their own (and the selected one) keep theirs.
       const visibleIds = isObservationView()
         ? new Set(
-            readingsInView(_readings, viewRectangle(), _readings.length).map(
-              (row) => row.id,
-            ),
+            readingsInView(_readings, viewRectangle(), _readings.length)
+              .map((row) => row.id)
+              .filter((id) => _labelled.has(id)),
           )
         : null;
       overlayHost.setEntries(
@@ -923,8 +983,10 @@ export function createAirQualityLayer({
       _points = null;
       _offClick?.();
       _offClick = null;
+      picking?.unregisterPickOwner?.(layer.id);
       _stations = [];
       _drawn = new Map();
+      _labelled = new Set();
       removeMoveEnd?.();
       removeMoveEnd = null;
       _viewer = null;
