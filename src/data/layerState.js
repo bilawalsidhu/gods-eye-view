@@ -298,46 +298,24 @@ function satelliteFilterOption() {
   });
 }
 
-const AIR_QUALITY_PROVIDER_TOKENS = new Map([
-  ['eccc', 'c'],
-  ['saaqis', 's'],
-  ['openaq', 'o'],
-]);
-const AIR_QUALITY_PROVIDER_IDS = new Map(
-  [...AIR_QUALITY_PROVIDER_TOKENS].map(([id, token]) => [token, id]),
-);
-
 const OPTION_GROUPS = Object.freeze({
+  // One view for every observation provider together: the US AQI (default),
+  // Canada's AQHI, or one rated pollutant. Providers are not part of the state.
   'air-quality': Object.freeze([
-    Object.freeze({
-      key: 'provider',
-      token: 'p',
-      defaultValue: 'eccc',
-      normalize: (value) =>
-        typeof value === 'string' && /^[a-z][a-z0-9-]{0,39}$/.test(value)
-          ? value
-          : null,
-      encode: (value) => AIR_QUALITY_PROVIDER_TOKENS.get(value) || `x-${value}`,
-      decode: (value) =>
-        AIR_QUALITY_PROVIDER_IDS.get(value) ||
-        (/^x-[a-z][a-z0-9-]{0,39}$/.test(value) ? value.slice(2) : null),
-    }),
     enumOption(
-      'parameter',
-      'm',
-      'PM2.5',
-      ['PM2.5', 'PM10', 'NO2', 'SO2', 'O3', 'CO', 'CO2', 'NO', 'NOX', 'H2S'],
+      'view',
+      'v',
+      'aqi',
+      ['aqi', 'aqhi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'],
       {
+        aqi: 'a',
+        aqhi: 'k',
         'PM2.5': 'p',
         PM10: 'q',
+        O3: 'o',
         NO2: 'n',
         SO2: 's',
-        O3: 'o',
         CO: 'c',
-        CO2: 'd',
-        NO: 'i',
-        NOX: 'x',
-        H2S: 'h',
       },
     ),
   ]),

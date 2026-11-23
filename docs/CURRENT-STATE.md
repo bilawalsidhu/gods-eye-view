@@ -10095,9 +10095,9 @@ when their footprints touch or contain one another, never across a seam toleranc
 
 ### South African air-quality observations
 
-Weather → Air quality supports provider and pollutant selection. Canada remains
-the historical default; South Africa discovers the national SAAQIS catalog with
-no municipal allowlist. Invalid calendar dates and hour 24 are rejected before
+Weather → Air quality draws every observation provider together, de-duplicated,
+for one view: the US AQI (default), Canada's AQHI, or one pollutant. South Africa
+discovers the national SAAQIS catalog with no municipal allowlist. Invalid calendar dates and hour 24 are rejected before
 readings or provider indexes can use them. Observations retain original units and channel timestamps,
 with neutral markers rather than inferred AQI bands. No reporting station in the
 view is displayed as a coverage gap. See [the source audit and adapter contract](SOUTH-AFRICA-AIR-QUALITY.md).

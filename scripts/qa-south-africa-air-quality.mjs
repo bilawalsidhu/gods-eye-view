@@ -93,9 +93,9 @@ const snapshot = {
               datetime: new Date(now).toISOString(),
             },
             {
-              name: 'CO2',
-              value: 420,
-              units: 'ppm',
+              name: 'NO2',
+              value: 20,
+              units: 'µg/m³',
               active: true,
               valid: true,
               datetime: new Date(now).toISOString(),
@@ -171,10 +171,7 @@ try {
   );
   await page.evaluate(async () => {
     const { dataManager: dm, viewer } = window.__godsEyeView;
-    dm.setLayerParams('air-quality', {
-      provider: 'saaqis',
-      parameter: 'PM2.5',
-    });
+    dm.setLayerParams('air-quality', { view: 'PM2.5' });
     await dm.setEnabled('air-quality', true);
     await dm.layers.get('air-quality').module.update();
     const { cameraOf } = await import('/src/render/rendererOf.js');
@@ -200,7 +197,9 @@ try {
   assert.equal(result.records[0].units, 'µg/m³');
   assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
-  assert.equal(result.controls.legend.length, 6);
+  // SAAQIS's index bands (6) beside OpenAQ's EEA bands and "Not rated" (7):
+  // the PM2.5 view draws both networks together.
+  assert.equal(result.controls.legend.length, 13);
   assert.equal(result.controls.list.items[0].badge, 'Moderate · 4/10');
   assert.ok(
     result.controls.summary.lines.some((row) =>
@@ -229,8 +228,8 @@ try {
     },
     { timeout: 90_000 },
   );
-  const co2 = await page.$('[data-chip-id="CO2"]');
-  assert.ok(co2, 'real Weather card exposes the pollutant controls');
+  const no2 = await page.$('[data-chip-id="NO2"]');
+  assert.ok(no2, 'real Weather card exposes the pollutant controls');
   // Camera restoration and Vue publication may settle after the layer data.
   await page.waitForFunction(
     () =>
@@ -242,20 +241,20 @@ try {
     await page.$eval('.data-row-list-badge', (el) => el.textContent),
     'Moderate · 4/10',
   );
-  await co2.click();
+  await no2.click();
 
   await page.waitForFunction(
     () =>
       window.__godsEyeView.dataManager.layers
         .get('air-quality')
-        .module.getAnalystRecords()[0]?.parameter === 'CO2',
+        .module.getAnalystRecords()[0]?.parameter === 'NO2',
   );
   result = await state();
-  assert.equal(result.records[0].value, 420);
-  assert.equal(result.records[0].units, 'ppm');
-  assert.equal(result.params.parameter, 'CO2');
+  assert.equal(result.records[0].value, 20);
+  assert.equal(result.records[0].units, 'µg/m³');
+  assert.equal(result.params.view, 'NO2');
   console.log(
-    'PASS: real CO2 control selects concentration, with an unavailable index badge',
+    'PASS: real NO2 control selects concentration, with an unavailable index badge',
   );
   if (process.env.QA_SA_SCREENSHOT)
     await page.screenshot({ path: process.env.QA_SA_SCREENSHOT });

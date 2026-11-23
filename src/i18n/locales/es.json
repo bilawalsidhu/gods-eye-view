@@ -4548,7 +4548,6 @@
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} estaciones registradas · {reporting} con datos · {visible} en la vista",
   "No current observations for this pollutant in the map view.": "No hay observaciones actuales de este contaminante en la vista del mapa.",
   "Unknown air quality provider": "Proveedor de calidad del aire desconocido",
-  "Network": "Red",
   "Good": "Buena",
   "Unhealthy": "Insalubre",
   "Very Unhealthy": "Muy insalubre",

@@ -2953,39 +2953,34 @@ test('explicit provider switches reach durable state without adopting unrelated 
   }
 });
 
-test('South African provider options round-trip while old air-quality links remain Canada', () => {
-  const state = normalizeLayerState({
-    enabledLayerIds: ['air-quality'],
-    options: {
-      'air-quality': { provider: 'saaqis', parameter: 'CO2' },
-    },
-  });
-  assert.deepEqual(
-    decodeLayerStateParams(new URLSearchParams(encode(state))),
-    state,
-  );
-  assert.deepEqual(
-    decodeLayerStateParams(new URLSearchParams('v=2&l=4')).options[
-      'air-quality'
-    ],
-    {
-      provider: 'eccc',
-      parameter: 'PM2.5',
-    },
-  );
-});
-
-test('OpenAQ and injected provider identities round-trip without changing old aliases', () => {
-  for (const provider of ['openaq', 'community-network', 'constructor']) {
+for (const view of ['aqi', 'aqhi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+  test(`air-quality view round-trips through a share token: ${view}`, () => {
     const state = normalizeLayerState({
       enabledLayerIds: ['air-quality'],
-      options: { 'air-quality': { provider, parameter: 'NO2' } },
+      options: { 'air-quality': { view } },
     });
+    assert.deepEqual(state.options['air-quality'], { view });
     assert.deepEqual(
       decodeLayerStateParams(new URLSearchParams(encode(state))),
       state,
     );
-  }
+  });
+}
+
+test('the plain token 4 opens the layer on the US AQI', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=4'));
+  assert.deepEqual(decoded.enabledLayerIds, ['air-quality']);
+  assert.deepEqual(decoded.options['air-quality'], { view: 'aqi' });
+  // Retired selectors and unknown views fall back to the default view.
+  assert.deepEqual(
+    normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: {
+        'air-quality': { provider: 'saaqis', parameter: 'CO2', view: 'CO2' },
+      },
+    }).options['air-quality'],
+    { view: 'aqi' },
+  );
 });
 
 function enabledLayerParam(sink) {

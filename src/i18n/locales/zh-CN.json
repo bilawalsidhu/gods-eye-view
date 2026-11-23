@@ -4336,7 +4336,6 @@
   "Provider request budget reached. Cached data will refresh later.": "已达到数据提供方的请求额度。缓存数据将在稍后刷新。",
   "Air quality provider unavailable": "空气质量数据提供方不可用",
   "Partial coverage · discovery continues": "部分覆盖 · 正在继续查找",
-  "Network": "监测网络",
   "Pollutant": "污染物",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "目录中有 {catalog} 个监测站 · {reporting} 个正在上报 · 视野内有 {visible} 个",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "CO₂ 浓度并非排放速率，此分级标准不对其评级。",

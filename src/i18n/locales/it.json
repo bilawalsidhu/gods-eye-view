@@ -4548,7 +4548,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Limite di richieste del fornitore raggiunto. I dati in cache saranno aggiornati più tardi.",
   "Air quality provider unavailable": "Fornitore della qualità dell’aria non disponibile",
   "Partial coverage · discovery continues": "Copertura parziale · ricerca in corso",
-  "Network": "Rete",
   "Pollutant": "Inquinante",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} stazioni in catalogo · {reporting} con dati · {visible} nella vista",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "La concentrazione di CO₂ non è un tasso di emissione e non ha una categoria su questa scala.",

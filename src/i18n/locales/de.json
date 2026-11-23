@@ -4442,7 +4442,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Anfragelimit des Anbieters erreicht. Zwischengespeicherte Daten werden später aktualisiert.",
   "Air quality provider unavailable": "Luftqualitätsanbieter nicht verfügbar",
   "Partial coverage · discovery continues": "Teilweise Abdeckung · Suche läuft weiter",
-  "Network": "Netzwerk",
   "Pollutant": "Schadstoff",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} Katalogstationen · {reporting} melden Daten · {visible} im Kartenausschnitt",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "Die CO₂-Konzentration ist keine Emissionsrate und hat auf dieser Skala keine Kategorie.",

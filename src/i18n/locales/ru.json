@@ -4654,7 +4654,6 @@
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "Станций в каталоге: {catalog} · С данными: {reporting} · В области карты: {visible}",
   "No current observations for this pollutant in the map view.": "В области карты нет текущих наблюдений этого загрязняющего вещества.",
   "Unknown air quality provider": "Неизвестный поставщик данных о качестве воздуха",
-  "Network": "Сеть",
   "Good": "Хорошо",
   "Unhealthy": "Вредно",
   "Very Unhealthy": "Очень вредно",

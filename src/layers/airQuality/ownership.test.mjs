@@ -346,6 +346,7 @@ test('injected observations use point markers and dispose both render sets', asy
     ],
     getSnapshot: async () => [row],
   });
+  layer.setParams({ view: 'PM2.5' });
   await layer.update();
   const points = [...draw.sets.values()].find((set) => set.kind === 'points');
   const shapes = [...draw.sets.values()].find((set) => set.kind === 'shapes');
@@ -411,4 +412,183 @@ test('viewport discovery takes degree bounds and map focus from renderer ports',
   assert.deepEqual(picks[0], [400, 300]);
   layer.destroy();
   assert.equal(removed, true);
+});
+
+// ── one station view across providers ──────────────────────────────────────
+
+const definition = (id, extra = {}) => ({
+  id,
+  title: id,
+  label: `Air quality · ${id}`,
+  network: id.toUpperCase(),
+  coverage: id,
+  observation: true,
+  direct: true,
+  parameters: ['PM2.5', 'NO2'],
+  ...extra,
+});
+
+const observed = (provider, id, lat, lon) =>
+  reading(id, 12, {
+    id: `${provider}:${id}`,
+    provider,
+    scale: 'PM2.5',
+    parameter: 'PM2.5',
+    kind: 'observation',
+    units: 'µg/m³',
+    lat,
+    lon,
+    observedMs: Date.now() - 10 * 60_000,
+    color: '#50f0e6',
+    assessment: { label: 'Good', severity: 0 },
+  });
+
+function multiProvider(answers) {
+  const calls = [];
+  const pending = new Map();
+  const { layer, draw } = harness({
+    definitions: [
+      definition('openaq', { direct: false, requiresKeyId: 'openaq' }),
+      definition('saaqis'),
+      definition('regional', { parameters: ['PM2.5'] }),
+      { ...definition('eccc'), observation: false, parameters: [] },
+    ],
+    getSnapshot: (request) => {
+      calls.push(request);
+      return new Promise((resolve, reject) =>
+        pending.set(request.provider, () =>
+          answers[request.provider] instanceof Error
+            ? reject(answers[request.provider])
+            : resolve(answers[request.provider] ?? []),
+        ),
+      );
+    },
+  });
+  const settle = () => {
+    for (const [id, release] of pending) {
+      pending.delete(id);
+      release();
+    }
+  };
+  const drawn = (kind) =>
+    [...draw.sets.values()].find((set) => set.kind === kind && !set.disposed);
+  return { layer, calls, settle, drawn };
+}
+
+test('every observation provider is asked in parallel and drawn as one de-duplicated set', async () => {
+  const { layer, calls, settle, drawn } = multiProvider({
+    openaq: [
+      observed('openaq', 'copy', -33.9249, 18.4241),
+      observed('openaq', 'paris', 48.85, 2.35),
+    ],
+    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    regional: [observed('regional', 'durban', -29.86, 31.03)],
+  });
+  assert.equal(layer.getParams().view, 'aqi');
+  const pending = layer.update();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['openaq', 'saaqis', 'regional'],
+    'all asked before any answers; Canada is not a station provider',
+  );
+  settle();
+  assert.equal(await pending, true);
+  assert.deepEqual([...drawn('points').items.keys()].sort(), [
+    'air-quality:openaq:paris',
+    'air-quality:regional:durban',
+    'air-quality:saaqis:cape-town',
+  ]);
+  assert.equal(layer.getStats().count, 3);
+  // Until the US AQI is computed, the AQI view draws every station unrated.
+  assert.ok(
+    [...drawn('points').items.values()].every(
+      (point) => point.color === '#8cb4ce' && !point.meta.assessment,
+    ),
+  );
+});
+
+test('a provider without its key, or failing, does not blank the others', async () => {
+  const { layer, settle } = multiProvider({
+    openaq: Object.assign(new Error('Provider API key required'), {
+      code: 'no_key',
+    }),
+    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    regional: new Error('Air quality provider unavailable'),
+  });
+  const pending = layer.update();
+  settle();
+  assert.equal(await pending, true);
+  assert.equal(layer.getStats().count, 1);
+  assert.equal(layer.getStats().error, null);
+  const states = Object.fromEntries(
+    layer.getProviderStates().map((state) => [state.id, state]),
+  );
+  assert.equal(states.openaq.status, 'no-key');
+  assert.match(states.openaq.error, /Provider Settings/);
+  assert.equal(states.saaqis.status, 'ok');
+  assert.equal(states.saaqis.count, 1);
+  assert.equal(states.regional.status, 'failed');
+  assert.match(layer.getRowControls().summary.status, /1 station reporting/);
+});
+
+test('when every provider fails the layer reports the error', async () => {
+  const failure = new Error('Air quality provider unavailable');
+  const { layer, settle } = multiProvider({
+    openaq: failure,
+    saaqis: failure,
+    regional: failure,
+  });
+  const pending = layer.update();
+  settle();
+  assert.equal(await pending, false);
+  assert.equal(layer.getStats().error, 'Air quality provider unavailable');
+});
+
+test('the AQHI view asks only Canada, and a pollutant view only its networks', async () => {
+  const { layer, calls, settle, drawn } = multiProvider({
+    eccc: [reading('A', 2)],
+    openaq: [observed('openaq', 'paris', 48.85, 2.35)],
+    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+  });
+  layer.setParams({ view: 'aqhi' });
+  settle();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['eccc'],
+  );
+  assert.deepEqual([...drawn('shapes').items.keys()], ['air-quality:eccc:A']);
+  assert.equal(drawn('points').items.size, 0);
+  calls.length = 0;
+  layer.setParams({ view: 'NO2' });
+  settle();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(
+    calls.map((call) => [call.provider, call.parameter]),
+    [
+      ['openaq', 'NO2'],
+      ['saaqis', 'NO2'],
+    ],
+  );
+  assert.equal(drawn('shapes').items.size, 0);
+  assert.equal(drawn('points').items.size, 2);
+  assert.deepEqual(layer.getParams(), {
+    view: 'NO2',
+    stations: true,
+    station: null,
+  });
+});
+
+test('the stations switch hides and shows the station markers', async () => {
+  const { layer, settle, drawn } = multiProvider({
+    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+  });
+  const pending = layer.update();
+  settle();
+  await pending;
+  layer.setParams({ stations: false });
+  assert.equal(drawn('points').show, false);
+  assert.equal(layer.getParams().stations, false);
+  layer.setParams({ stations: true });
+  assert.equal(drawn('points').show, true);
 });

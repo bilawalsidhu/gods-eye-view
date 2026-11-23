@@ -66,6 +66,8 @@ async function main() {
 
     const stats = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
+      // Canada's AQHI is a view of its own; the default view is the US AQI.
+      dm.setLayerParams('air-quality', { view: 'aqhi' });
       await dm.setEnabled('air-quality', true);
       const mod = dm.layers.get('air-quality')?.module;
       if (!mod) return { missing: true };

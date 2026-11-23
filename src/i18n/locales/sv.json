@@ -4442,7 +4442,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Leverantörens anropsgräns har nåtts. Cachade data uppdateras senare.",
   "Air quality provider unavailable": "Luftkvalitetsleverantören är inte tillgänglig",
   "Partial coverage · discovery continues": "Delvis täckning · sökningen fortsätter",
-  "Network": "Nätverk",
   "Pollutant": "Förorenande ämne",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} katalogstationer · {reporting} rapporterar · {visible} i vyn",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "CO₂-koncentration är inte en utsläppstakt och saknar kategori på denna skala.",

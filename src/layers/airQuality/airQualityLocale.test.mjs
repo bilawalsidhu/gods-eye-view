@@ -147,6 +147,7 @@ for (const [providerId, expected] of Object.entries(russianScales)) {
       },
     });
     initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
+    layer.setParams({ view: providerId === 'eccc' ? 'aqhi' : 'PM2.5' });
     layer.enable();
     setLocale('ru');
     try {

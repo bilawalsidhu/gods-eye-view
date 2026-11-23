@@ -1717,5 +1717,7 @@
   "src/layers/airQuality/interpretation.js",
   "src/layers/airQuality/interpretation.test.mjs",
   "server/providers/openAqBudget.test.mjs",
-  "src/testSupport/airQualityViewer.mjs"
+  "src/testSupport/airQualityViewer.mjs",
+  "src/layers/airQuality/merge.js",
+  "src/layers/airQuality/merge.test.mjs"
 ]

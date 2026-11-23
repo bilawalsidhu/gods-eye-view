@@ -219,7 +219,7 @@ test('provider composition preserves Canada, propagates errors and rechecks cach
   );
 });
 
-test('provider switch clears old markers and ignores late requests; view changes unsubscribe on destroy', async () => {
+test('view switch clears old markers and ignores late requests; camera changes unsubscribe on destroy', async () => {
   let resolveCanada;
   let removed = false;
   let listener;
@@ -261,9 +261,10 @@ test('provider switch clears old markers and ignores late requests; view changes
       },
     },
   });
+  layer.setParams({ view: 'aqhi' });
   layer.enable();
   const old = layer.update();
-  layer.setParams({ provider: 'saaqis' });
+  layer.setParams({ view: 'PM2.5' });
   await layer.update();
   resolveCanada([]);
   assert.equal(await old, true);
@@ -286,14 +287,21 @@ test('provider switch clears old markers and ignores late requests; view changes
   assert.equal(removed, true);
 });
 
-test('a Canada-only injected source cannot be labelled South African', () => {
+test('a Canada-only injected source offers only the AQHI view', () => {
   const layer = createAirQualityLayer({
     source: { getSnapshot: async () => [] },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
-  assert.equal(layer.setParams({ provider: 'saaqis' }), false);
-  assert.equal(layer.getParams().provider, 'eccc');
-  assert.equal(layer.getRowControls().summary.settings[0].chips.length, 1);
+  assert.equal(layer.getParams().view, 'aqhi');
+  for (const view of ['aqi', 'PM2.5', 'NO2'])
+    assert.equal(layer.setParams({ view }), false);
+  assert.equal(layer.getParams().view, 'aqhi');
+  assert.deepEqual(
+    layer
+      .getRowControls()
+      .summary.settings.map((row) => row.chips.map((chip) => chip.id)),
+    [['aqhi']],
+  );
 });
 
 test('provider index requires matching time, pollutant, category and supported scale', async () => {
@@ -435,6 +443,7 @@ test('partial or stale coverage does not label visible observations unavailable'
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
+  layer.setParams({ view: 'PM2.5' });
   layer.enable();
   await layer.update();
   assert.equal(layer.getStats().count, 1);

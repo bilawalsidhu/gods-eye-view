@@ -6,7 +6,14 @@ import { hourlyLegend, interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
-/** Descriptor for a legacy ECCC-only injected snapshot source. */
+/**
+ * Descriptor for a legacy ECCC-only injected snapshot source.
+ *
+ * `observation: false` makes a provider an index view of its own (Canada's
+ * AQHI); every `observation: true` provider is drawn together in the station
+ * views. `direct: true` marks a network publishing its own monitors, which
+ * wins over an aggregator's copy of the same site (`merge.js`).
+ */
 export const ECCC_DEFINITION = Object.freeze({
   ...AIR_QUALITY_PROVIDERS.eccc,
   title: msg('Canada'),
@@ -15,6 +22,7 @@ export const ECCC_DEFINITION = Object.freeze({
   legend: AIR_QUALITY_BANDS,
   bandContext: 'air quality risk',
   observation: false,
+  direct: true,
   refreshMs: 1_200_000,
 });
 
@@ -115,6 +123,7 @@ export function createDefaultAirQualityProviders({
       title: msg('South Africa'),
       sourceLabel: 'SAAQIS · South Africa',
       observation: true,
+      direct: true,
       parameters: SA_POLLUTANTS,
       averagingLabel: msg('Hourly average'),
       indexLabel: msg('SAAQIS index'),
@@ -148,6 +157,7 @@ export function createDefaultAirQualityProviders({
       network: 'OpenAQ',
       sourceLabel: 'OpenAQ · Worldwide',
       observation: true,
+      direct: false,
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
       averagingLabel: msg('Hourly average'),
@@ -197,31 +207,41 @@ export function createAirQualitySource(options = {}) {
       }),
     );
   }
+  // Providers are asked in parallel, so request order and coverage are kept
+  // per provider: one provider's answer never stands in for another's.
   let coverage = null;
-  let generation = 0;
+  const coverageByProvider = new Map();
+  const generations = new Map();
   const cache = new Map();
   const clock = options.now || Date.now;
   return {
     providers: Object.freeze([...registry.keys()]),
     definitions: Object.freeze([...registry.values()]),
-    getCoverage: () => coverage,
+    /** The named provider's coverage, or the last answer from any provider. */
+    getCoverage: (provider) =>
+      provider === undefined
+        ? coverage
+        : (coverageByProvider.get(provider) ?? null),
     async getSnapshot({
       provider = registry.keys().next().value,
       ...request
     } = {}) {
       const entry = registry.get(provider);
       if (!entry) throw new Error(msg('Unknown air quality provider'));
-      const ticket = ++generation;
+      const ticket = (generations.get(provider) || 0) + 1;
+      generations.set(provider, ticket);
       const cacheKey = `${provider}:${request.parameter || ''}:${request.view?.join(',') || ''}`;
       const previous = cache.get(cacheKey);
       if (previous && clock() - previous.at < (entry.refreshMs || 0)) {
         coverage = previous.coverage;
+        coverageByProvider.set(provider, previous.coverage);
         return previous.readings;
       }
       const readings = await entry.source.getSnapshot(request);
       request.signal?.throwIfAborted();
-      if (ticket === generation) {
+      if (ticket === generations.get(provider)) {
         coverage = entry.source.getCoverage?.() ?? null;
+        coverageByProvider.set(provider, coverage);
         if (entry.refreshMs > 0) {
           cache.delete(cacheKey);
           cache.set(cacheKey, { readings, coverage, at: clock() });

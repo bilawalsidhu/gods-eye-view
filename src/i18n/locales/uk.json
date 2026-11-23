@@ -4654,7 +4654,6 @@
   "Provider request budget reached. Cached data will refresh later.": "Досягнуто ліміту запитів постачальника. Кешовані дані оновляться пізніше.",
   "Air quality provider unavailable": "Постачальник даних про якість повітря недоступний",
   "Partial coverage · discovery continues": "Часткове покриття · пошук триває",
-  "Network": "Мережа",
   "Pollutant": "Забруднювач",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} станцій у каталозі · {reporting} передають дані · {visible} у видимій області",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "Концентрація CO₂ не є швидкістю викидів і не має категорії за цією шкалою.",

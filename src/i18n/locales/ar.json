@@ -4866,7 +4866,6 @@
   "Provider request budget reached. Cached data will refresh later.": "تم بلوغ حد طلبات المزوِّد. ستُحدَّث البيانات المخزنة مؤقتًا لاحقًا.",
   "Air quality provider unavailable": "مزوِّد بيانات جودة الهواء غير متاح",
   "Partial coverage · discovery continues": "تغطية جزئية · البحث مستمر",
-  "Network": "الشبكة",
   "Pollutant": "الملوِّث",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "{catalog} محطة في الدليل · {reporting} مُبلِّغة · {visible} في العرض",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "تركيز CO₂ ليس معدل انبعاثات ولا توجد له فئة في هذا المقياس.",

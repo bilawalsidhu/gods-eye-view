@@ -5252,6 +5252,7 @@
       "src/data/geoImportImages.js",
       "src/app/layers/airQuality.js",
       "src/layers/airQuality/index.js",
+      "src/layers/airQuality/merge.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
@@ -6340,6 +6341,7 @@
       "src/data/cameraFraming.js",
       "src/app/layers/airQuality.js",
       "src/layers/airQuality/index.js",
+      "src/layers/airQuality/merge.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/ui/statusText.js",
@@ -8270,6 +8272,7 @@
     "exports": ["./layers/air-quality"],
     "modules": [
       "src/layers/airQuality/index.js",
+      "src/layers/airQuality/merge.js",
       "src/geo/ellipsoid.js",
       "src/render/rendererOf.js",
       "src/geo/vector.js",

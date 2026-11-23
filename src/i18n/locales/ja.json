@@ -4336,7 +4336,6 @@
   "Provider request budget reached. Cached data will refresh later.": "提供元へのリクエスト上限に達しました。キャッシュされたデータは後で更新されます。",
   "Air quality provider unavailable": "大気質データの提供元を利用できません",
   "Partial coverage · discovery continues": "一部の範囲のみ · 検索を継続中",
-  "Network": "ネットワーク",
   "Pollutant": "汚染物質",
   "{catalog} catalog stations · {reporting} reporting · {visible} in view": "登録観測所 {catalog} · 報告中 {reporting} · 表示範囲内 {visible}",
   "CO₂ concentration is not an emissions rate and has no category on this scale.": "CO₂濃度は排出率ではなく、この尺度には区分がありません。",

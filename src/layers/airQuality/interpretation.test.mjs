@@ -146,6 +146,7 @@ test('readout leads with the highest selected-pollutant category and distinguish
       }),
     },
   });
+  layer.setParams({ view: 'PM2.5' });
   layer.enable();
   await layer.update();
   const controls = layer.getRowControls();
@@ -197,6 +198,7 @@ test('the overview excludes stations beyond the horizon and suppresses guidance 
     },
     scene: { globe: { ellipsoid: Cesium.Ellipsoid.WGS84 } },
   });
+  layer.setParams({ view: 'PM2.5' });
   layer.enable();
   await layer.update();
   assert.equal(layer.getRowControls().summary.status, 'PM2.5 · Good');

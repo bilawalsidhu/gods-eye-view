@@ -79,10 +79,16 @@ test('an injected provider controls source, parameters and UI without renderer e
     source,
     overlayHost: { setVisible() {}, clearSource() {}, setEntries() {} },
   });
+  // The provider's pollutants decide the views on offer: the AQI and NO2.
   const controls = layer.getRowControls();
-  assert.equal(controls.summary.settings[0].chips.length, 1);
-  assert.equal(controls.summary.settings[0].chips[0].id, 'community-network');
-  assert.equal(layer.setParams({ provider: 'openaq' }), false);
+  assert.deepEqual(
+    controls.summary.settings.map((row) => row.chips.map((chip) => chip.id)),
+    [['aqi'], ['NO2']],
+  );
+  assert.equal(layer.setParams({ view: 'PM2.5' }), false);
+  assert.equal(layer.setParams({ view: 'aqhi' }), false);
+  assert.equal(layer.setParams({ view: 'NO2' }), undefined);
+  assert.equal(layer.getParams().view, 'NO2');
   assert.throws(
     () => createAirQualitySource({ providers: [definition, definition] }),
     /Invalid/,
@@ -158,4 +164,43 @@ test('snapshot adapter carries bounded cooldown metadata and tolerates malformed
       (error) => error.retryAt === expected,
     );
   }
+});
+
+test('providers asked in parallel keep their own coverage and cache', async () => {
+  const calls = [];
+  const provider = (id, slow) => ({
+    id,
+    title: id,
+    label: id,
+    network: id,
+    coverage: id,
+    observation: true,
+    parameters: ['PM2.5'],
+    refreshMs: 60_000,
+    source: {
+      getCoverage: () => ({ network: id }),
+      async getSnapshot() {
+        calls.push(id);
+        await new Promise((resolve) => setTimeout(resolve, slow ? 20 : 1));
+        return [{ id: `${id}:1` }];
+      },
+    },
+  });
+  const source = createAirQualitySource({
+    providers: [provider('slow', true), provider('fast', false)],
+  });
+  const ask = () =>
+    Promise.all(
+      ['slow', 'fast'].map((id) =>
+        source.getSnapshot({ provider: id, parameter: 'PM2.5' }),
+      ),
+    );
+  assert.deepEqual(
+    (await ask()).map((rows) => rows[0].id),
+    ['slow:1', 'fast:1'],
+  );
+  assert.equal(source.getCoverage('slow').network, 'slow');
+  assert.equal(source.getCoverage('fast').network, 'fast');
+  await ask();
+  assert.deepEqual(calls, ['slow', 'fast'], 'both answers were cached');
 });
