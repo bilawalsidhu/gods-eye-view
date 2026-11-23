@@ -1,6 +1,7 @@
 // Live HLS through the real /api/cctv middleware. Leases are random
 // per-playback ids, not bound to the socket address, and a viewer refused for
-// capacity leaves the camera's health as it was.
+// capacity leaves the camera's health as it was. Opening a playlist needs the
+// grant the catalog returns, which only same-origin code can read.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { HLS_LIMITS } from '../../server/providers/cctv/stream.js';
@@ -21,6 +22,16 @@ const PLAYLIST =
 const lease = (index) =>
   `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
 
+/** The live-HLS grant the catalog hands the app. */
+async function grantOf(call) {
+  return JSON.parse((await call('/sources', SAME_ORIGIN)).body).hlsGrant;
+}
+
+/** A playlist path carrying the lease and the catalog's grant. */
+async function mediaPath(call, cameraId, leaseId) {
+  return `/media/${cameraId}?lease=${leaseId}&grant=${await grantOf(call)}`;
+}
+
 /** Mount the provider over three HLS cameras; `failing` upstreams answer 500. */
 function mount(t, failing = []) {
   const upstream = [];
@@ -39,7 +50,7 @@ function mount(t, failing = []) {
 /** Open a playlist and return the first segment path it lists. */
 async function openPlaylist(call, cameraId, leaseId, remoteAddress) {
   const res = await call(
-    `/media/${cameraId}?lease=${leaseId}`,
+    await mediaPath(call, cameraId, leaseId),
     SAME_ORIGIN,
     'GET',
     remoteAddress,
@@ -73,7 +84,7 @@ test('viewers behind one shared address get every slot, and no more', async (t) 
   // without reporting a camera whose upstream is fine as degraded.
   for (const cameraId of ['cam-a', 'cam-c']) {
     const refused = await call(
-      `/media/${cameraId}?lease=${lease(2 * perSession)}`,
+      await mediaPath(call, cameraId, lease(2 * perSession)),
       SAME_ORIGIN,
       'GET',
       shared,
@@ -124,7 +135,7 @@ test('ninth viewer frame fallback preserves active camera health', async (t) => 
   const before = await health('cam-a');
   assert.equal(before.status, 'ok');
   const refused = await call(
-    `/media/cam-a?lease=${lease(perSession)}`,
+    await mediaPath(call, 'cam-a', lease(perSession)),
     SAME_ORIGIN,
   );
   assert.equal(refused.statusCode, 503);
@@ -145,7 +156,10 @@ test('third camera frame fallback keeps absent health', async (t) => {
   const { call, health, upstream } = mount(t);
   await openPlaylist(call, 'cam-a', lease(0));
   await openPlaylist(call, 'cam-b', lease(1));
-  const refused = await call(`/media/cam-c?lease=${lease(2)}`, SAME_ORIGIN);
+  const refused = await call(
+    await mediaPath(call, 'cam-c', lease(2)),
+    SAME_ORIGIN,
+  );
   assert.equal(refused.statusCode, 503);
   assert.equal(await health('cam-c'), undefined);
   const frame = await call(
@@ -163,7 +177,7 @@ test('third camera frame fallback keeps absent health', async (t) => {
 
 test('a failing HLS upstream with free slots is still reported degraded', async (t) => {
   const { call, health } = mount(t, ['cam-c']);
-  const res = await call(`/media/cam-c?lease=${lease(0)}`, SAME_ORIGIN);
+  const res = await call(await mediaPath(call, 'cam-c', lease(0)), SAME_ORIGIN);
   assert.equal(res.statusCode, 503);
   assert.equal(res.headers['Retry-After'], '2');
   const row = await health('cam-c');
@@ -184,4 +198,35 @@ test('a cross-site request can neither read nor release a live HLS lease', async
     403,
   );
   assert.equal((await call(segment, SAME_ORIGIN)).statusCode, 200);
+});
+
+test('a page without the catalog grant cannot take a live HLS session', async (t) => {
+  // Plain HTTP on a LAN address: the browser sends no Sec-Fetch-Site, and a
+  // <video> or <img> carries no Origin, so the same-site gate admits it.
+  const lan = { host: '192.168.1.5:4173' };
+  const { call, upstream } = mount(t);
+  for (const [index, cameraId] of ['cam-a', 'cam-b'].entries()) {
+    for (const grant of ['', '&grant=00000000-0000-4000-8000-000000000000']) {
+      const res = await call(
+        `/media/${cameraId}?lease=${lease(index)}${grant}`,
+        lan,
+        'GET',
+        '192.168.1.66',
+      );
+      assert.equal(res.statusCode, 403, `${cameraId} ${grant || 'no grant'}`);
+    }
+  }
+  assert.deepEqual(upstream, [], 'a refused request starts no upstream pull');
+  // The app read the grant from the catalog and still gets both sessions.
+  const grant = JSON.parse((await call('/sources', lan)).body).hlsGrant;
+  assert.match(grant, /^[a-f0-9-]{36}$/);
+  for (const [index, cameraId] of ['cam-a', 'cam-b'].entries()) {
+    const res = await call(
+      `/media/${cameraId}?lease=${lease(index)}&grant=${grant}`,
+      lan,
+      'GET',
+      '192.168.1.20',
+    );
+    assert.equal(res.statusCode, 200, cameraId);
+  }
 });

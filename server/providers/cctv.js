@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { createCctvCatalog } from './cctv/catalog.js';
 import { quebec511VideoUrl, quebecBrowserVideoEnabled } from './cctv/quebec.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
@@ -55,6 +56,14 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   const HEALTH_MAX_ENTRIES = CCTV_MAX_SOURCES_CEILING;
   /** Live HLS strategies (see ./cctv/stream.js). Shared across dev and preview. */
   const puller = createHlsPuller();
+  /**
+   * Opening a live HLS playlist takes one of the two sessions, so it needs this
+   * grant, which `/sources` returns. Plain HTTP on a LAN address carries no
+   * Sec-Fetch-Site and a <video> carries no Origin, so the same-site gate can't
+   * refuse a foreign page there; that page can request a URL but can't read the
+   * catalog's response, so it never learns the grant.
+   */
+  const hlsGrant = randomUUID();
   /**
    * Bounded transient image reuse keeps cadence-limited providers (World
    * stills, Ottawa's once-a-minute API) inside their refresh floor. The byte
@@ -297,6 +306,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         if (url.pathname === '/sources') {
           const quebecVideo = quebecBrowserVideoEnabled();
           const body = {
+            hlsGrant,
             trimmedPacks: getCctvSources.trimmedPacks?.(sources) ?? [],
             sources: sources.map((source) => ({
               id: source.id,
@@ -411,6 +421,14 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (feedType === 'hls') {
+            if (!match[2] && url.searchParams.get('grant') !== hlsGrant) {
+              res.writeHead(403, {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+              });
+              res.end(JSON.stringify({ error: 'Live stream grant required' }));
+              return;
+            }
             if (!isPullableHlsUrl(mediaUrl)) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(

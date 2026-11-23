@@ -89,6 +89,25 @@ test('frame and media URLs preserve registered camera identity and encoded metad
   assert.deepEqual([...media.searchParams.keys()], ['ts']);
 });
 
+test('media URLs carry the live-stream grant from the latest catalog', async () => {
+  let grant = '00000000-0000-4000-8000-000000000001';
+  const source = createCctvSource({
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ sources: [], hlsGrant: grant })),
+  });
+  const grantIn = () =>
+    new URL(
+      source.getMediaUrl(camera),
+      'https://example.test',
+    ).searchParams.get('grant');
+  await source.getCatalog();
+  assert.equal(grantIn(), grant);
+  // A restarted server issues a new grant; the next catalog read picks it up.
+  grant = '00000000-0000-4000-8000-000000000002';
+  await source.getCatalog();
+  assert.equal(grantIn(), grant);
+});
+
 test('camera construction is inert and destruction cancels a pending catalog and its visibility listener', async (t) => {
   const original = globalThis.document;
   const listeners = new Set();
