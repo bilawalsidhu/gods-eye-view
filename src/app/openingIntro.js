@@ -12,7 +12,9 @@ import { cameraOf } from '../render/rendererOf.js';
  * Everything is timed from one clock, in ms.
  */
 export const OPENING = Object.freeze({
-  /** The words fade and the logo moves to the centre. */
+  /** The words under the logo fade. */
+  textMs: 150,
+  /** The logo moves to the centre. */
   centreMs: 450,
   // The rest is timed from the end of the move.
   /** The eye grows past the screen's edges. */
@@ -71,7 +73,7 @@ export function openingStage(t, timing = OPENING) {
   const flight = clamp01((after - timing.flightStartMs) / timing.flightMs);
   return {
     /** The words' opacity. */
-    text: 1 - move,
+    text: 1 - clamp01(t / timing.textMs),
     /** How far the logo has moved to the centre, 0–1. */
     centre: easeInOutCubic(move),
     /** Whether the screen is shut except inside the eye. */

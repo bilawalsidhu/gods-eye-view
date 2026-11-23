@@ -24,6 +24,8 @@ test('the words fade, then the eye opens past the screen before the globe arrive
   assert.equal(start.shut, false);
   assert.equal(start.pupilOpacity, 1);
   assert.equal(start.flight, 0);
+  assert.equal(openingStage(OPENING.textMs).text, 0, 'the words go first');
+  assert.ok(openingStage(OPENING.textMs).centre < 0.5);
   const centred = openingStage(OPENING.centreMs);
   assert.equal(centred.text, 0);
   assert.equal(centred.centre, 1);
