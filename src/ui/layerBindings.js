@@ -152,6 +152,14 @@ export class LayerBindings {
       fires.attachShellServices({ imageryHost: this.services.imageryHost });
       this._weatherShellModules.push(fires);
     }
+    // Air quality drapes a host's model field on it too.
+    const airQuality = this._dataManager?.layers?.get('air-quality')?.module;
+    if (typeof airQuality?.attachShellServices === 'function') {
+      airQuality.attachShellServices({
+        imageryHost: this.services.imageryHost,
+      });
+      this._weatherShellModules.push(airQuality);
+    }
     // News flies to a chosen report or hotspot through the same release.
     const news = this._dataManager?.layers?.get('news')?.module;
     if (typeof news?.attachShellServices === 'function') {

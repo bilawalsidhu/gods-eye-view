@@ -1,0 +1,106 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+import { FIELD_IDS, sampleField } from './field.js';
+import { createLocalAirQualityFieldSource } from './fieldSource.js';
+
+// A 10° box of a CAMS run over northern Italy (global 0.4°, an inset 0.1°),
+// steps 0 and 24, cut from baked grids in this format.
+const FIXTURE = new URL('./fixtures/field/', import.meta.url);
+const read = (name) => readFileSync(new URL(name, FIXTURE));
+
+/** The local server's field routes, answered from the fixture folder. */
+function fixtureFetch({ configured = true, sizes = {} } = {}) {
+  const urls = [];
+  const fetchImpl = async (url, options = {}) => {
+    urls.push(url);
+    assert.equal(options.redirect, 'error');
+    const path = url.split('?')[0];
+    if (path === '/api/air-quality/field/manifest') {
+      const body = configured
+        ? read('manifest.json')
+        : JSON.stringify({
+            unavailable: true,
+            code: 'not_configured',
+            reason: 'Model field not configured',
+          });
+      return new Response(body, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    const grid =
+      /^\/api\/air-quality\/field\/grid\/(\w+)\/(\d{3})\/(\w+)\.u16$/.exec(
+        path,
+      );
+    if (!grid) return new Response('{}', { status: 404 });
+    const bytes = read(`${grid[1]}/${grid[2]}/${grid[3]}.u16`);
+    const cut = sizes[`${grid[1]}/${grid[3]}`];
+    return new Response(cut === undefined ? bytes : bytes.subarray(0, cut));
+  };
+  return { urls, fetchImpl };
+}
+
+test('the local field source reads the configured folder: its manifest, then every grid of a step', async () => {
+  const { urls, fetchImpl } = fixtureFetch();
+  const source = createLocalAirQualityFieldSource({ fetchImpl });
+  const manifest = await source.getManifest();
+  assert.equal(manifest.source, 'CAMS');
+  assert.equal(manifest.run, '2026-11-20T00:00:00Z');
+  assert.deepEqual(manifest.global.steps, [0, 24]);
+  assert.equal(manifest.europe.blendDeg, 1);
+  const step = await source.getStep(24, { run: manifest.run });
+  assert.deepEqual(Object.keys(step.global), FIELD_IDS);
+  assert.deepEqual(Object.keys(step.europe), FIELD_IDS);
+  assert.equal(step.global.pm25.length, 26 * 26);
+  assert.equal(step.europe.pm25.length, 50 * 50);
+  // Each grid once, for the run the manifest names.
+  const grids = urls.slice(1);
+  assert.equal(grids.length, 14);
+  assert.ok(
+    grids.every((url) =>
+      url.endsWith(`.u16?run=${encodeURIComponent(manifest.run)}`),
+    ),
+  );
+  assert.ok(
+    grids.includes(
+      `/api/air-quality/field/grid/global/024/aqi.u16?run=${encodeURIComponent(manifest.run)}`,
+    ),
+  );
+  // Read as the map reads it: a value inside the inset, one outside it.
+  const milan = sampleField(manifest, step, 'pm25', 9.19, 45.46);
+  const munich = sampleField(manifest, step, 'pm25', 11.58, 48.14);
+  assert.ok(Number.isFinite(milan) && milan > 0, `Milan ${milan}`);
+  assert.ok(Number.isFinite(munich) && munich > 0, `Munich ${munich}`);
+});
+
+test('a server with no field configured says so, and the source passes it on', async () => {
+  const { urls, fetchImpl } = fixtureFetch({ configured: false });
+  const source = createLocalAirQualityFieldSource({ fetchImpl });
+  await assert.rejects(source.getManifest(), { code: 'not_configured' });
+  assert.deepEqual(urls, ['/api/air-quality/field/manifest']);
+  // A server without the route at all (another host's) has none either.
+  const elsewhere = createLocalAirQualityFieldSource({
+    fetchImpl: async () => new Response('{}', { status: 404 }),
+  });
+  await assert.rejects(elsewhere.getManifest(), { code: 'not_configured' });
+  // Any other failure is a failure, tried again later.
+  const failing = createLocalAirQualityFieldSource({
+    fetchImpl: async () => new Response('{}', { status: 502 }),
+  });
+  await assert.rejects(failing.getManifest(), (error) => {
+    assert.notEqual(error.code, 'not_configured');
+    return true;
+  });
+});
+
+test('a grid of the wrong size is refused', async () => {
+  const { fetchImpl } = fixtureFetch({ sizes: { 'europe/no2': 100 } });
+  const source = createLocalAirQualityFieldSource({ fetchImpl });
+  const manifest = await source.getManifest();
+  await assert.rejects(
+    source.getStep(0, { run: manifest.run }),
+    /Malformed air-quality field/,
+  );
+  // A step the manifest does not list is not asked for.
+  await assert.rejects(source.getStep(3, { run: manifest.run }), /step/);
+});

@@ -9,10 +9,27 @@
  * returns the underlying decimal, so a reading arriving as 1.08 — or a station
  * with no reading surfacing as a confident 1 — is a real defect this catches.
  *
+ * The model field a host may give the layer is checked against a small cut of
+ * baked grids (src/layers/airQuality/fixtures/field: a 10° box over northern
+ * Italy with a Europe inset, steps 0 and 24 h), served in place of the local
+ * server's /api/air-quality/field routes with the run moved to the present:
+ * the field draws, the timeline spans its forecast, and the step 24 h ahead
+ * changes the tiles. It reads the world clock as the app's own module, so it
+ * needs the dev server (npm run dev).
+ *
  * Run:  node scripts/qa-air-quality.mjs --url http://localhost:4173
  */
 
+import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer';
+
+const FIELD_FIXTURE = new URL(
+  '../src/layers/airQuality/fixtures/field/',
+  import.meta.url,
+);
+const HOUR = 3600_000;
+/** The fixture's run, moved to the start of the present three hours. */
+const FIELD_RUN = Math.floor(Date.now() / (3 * HOUR)) * 3 * HOUR;
 
 const argv = process.argv.slice(2);
 const getOpt = (name, dflt) => {
@@ -52,6 +69,43 @@ async function main() {
       }
     });
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
+    // The model field: the fixture's grids, its run moved to now.
+    const cdp = await page.createCDPSession();
+    await cdp.send('Fetch.enable', {
+      patterns: [{ urlPattern: '*/api/air-quality/field/*' }],
+    });
+    cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+      const path = new URL(request.url).pathname;
+      let body = null;
+      let type = 'application/octet-stream';
+      if (path.endsWith('/manifest')) {
+        const manifest = JSON.parse(
+          readFileSync(new URL('manifest.json', FIELD_FIXTURE), 'utf8'),
+        );
+        manifest.run = new Date(FIELD_RUN).toISOString();
+        body = Buffer.from(JSON.stringify(manifest));
+        type = 'application/json';
+      } else {
+        const grid = /\/grid\/(global|europe)\/(\d{3})\/(\w+)\.u16$/.exec(path);
+        try {
+          body = grid
+            ? readFileSync(
+                new URL(`${grid[1]}/${grid[2]}/${grid[3]}.u16`, FIELD_FIXTURE),
+              )
+            : null;
+        } catch {
+          body = null;
+        }
+      }
+      await cdp
+        .send('Fetch.fulfillRequest', {
+          requestId,
+          responseCode: body ? 200 : 404,
+          responseHeaders: [{ name: 'Content-Type', value: type }],
+          body: (body ?? Buffer.from('{}')).toString('base64'),
+        })
+        .catch(() => {}); // A disabled layer may have cancelled it.
+    });
     page.on('console', (m) => {
       if (m.type() !== 'error') return;
       const sourceUrl = m.location()?.url || '';
@@ -164,6 +218,8 @@ async function main() {
         : 'no descriptor');
     if (!readoutOk) exitCode = 1;
 
+    await checkField(page);
+
     record('no console errors', consoleErrors.length === 0,
       consoleErrors.length ? consoleErrors.slice(0, 2).join(' | ') : 'clean');
     if (consoleErrors.length) exitCode = 1;
@@ -180,6 +236,101 @@ async function main() {
   console.log(`  RESULT: ${pass} passed, ${fail} failed`);
   console.log('─'.repeat(60) + '\n');
   process.exit(exitCode || (fail > 0 ? 1 : 0));
+}
+
+/**
+ * The model field over the fixture's box: drawn on the globe, its forecast on
+ * the timeline, and a later step read by the tiles.
+ */
+async function checkField(page) {
+  const before = await page.evaluate(
+    () => window.__godsEyeView.viewer.imageryLayers?.length ?? null,
+  );
+  await page.evaluate(() => {
+    const gev = window.__godsEyeView;
+    gev.dataManager.setLayerParams('air-quality', { view: 'PM2.5' });
+    const d2r = Math.PI / 180;
+    gev.viewer.camera.setView({
+      destination: gev.viewer.scene.globe.ellipsoid.cartographicToCartesian({
+        longitude: 10.5 * d2r,
+        latitude: 45.3 * d2r,
+        height: 1_200_000,
+      }),
+      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    });
+    gev.viewer.scene.requestRender?.();
+  });
+  const read = () =>
+    page.evaluate(async () => {
+      const { worldClock } = await import('/src/time/worldClock.js');
+      const layer =
+        window.__godsEyeView.dataManager.layers.get('air-quality').module;
+      const controls = layer.getRowControls();
+      const tile = (group, id) =>
+        controls.sublists
+          .find((entry) => entry.id === group)
+          ?.tiles.find((entry) => entry.id === id)?.value;
+      return {
+        subtitle: controls.sublists[0]?.subtitle,
+        detail: controls.summary.detail,
+        aqi: tile('index', 'aqi'),
+        pm25: tile('pollutants', 'PM2.5'),
+        coverage: worldClock.coverage(),
+        follows: worldClock.follows('air-quality'),
+        supported: worldClock.getState().supported,
+        imagery: window.__godsEyeView.viewer.imageryLayers?.length ?? null,
+      };
+    });
+  let now = null;
+  for (let i = 0; i < 40; i++) {
+    await sleep(500);
+    now = await read();
+    if (now.subtitle === 'model at view centre' && now.pm25 !== '—') break;
+  }
+  record(
+    'with a field the tiles read the model at the view centre',
+    now?.subtitle === 'model at view centre' && now.pm25 !== '—',
+    `subtitle="${now?.subtitle}" PM2.5=${now?.pm25} US AQI=${now?.aqi} detail="${now?.detail}"`,
+  );
+  record(
+    'the field draws on the globe: the global image and the Europe inset',
+    Number.isInteger(before) && now?.imagery - before === 2,
+    `imagery layers ${before} -> ${now?.imagery}`,
+  );
+  // Other layers on the timeline may widen it; the forecast must be inside.
+  const spans =
+    now?.coverage?.start <= FIELD_RUN &&
+    now?.coverage?.end >= FIELD_RUN + 24 * HOUR &&
+    now.follows === true &&
+    now.supported === true;
+  record(
+    'the timeline spans the forecast',
+    spans,
+    now?.coverage
+      ? `${new Date(now.coverage.start).toISOString()} .. ${new Date(now.coverage.end).toISOString()} follows=${now.follows}`
+      : 'no coverage',
+  );
+  await page.evaluate(async (at) => {
+    const { worldClock } = await import('/src/time/worldClock.js');
+    worldClock.seek(at);
+  }, FIELD_RUN + 24 * HOUR);
+  let later = null;
+  for (let i = 0; i < 40; i++) {
+    await sleep(500);
+    later = await read();
+    if (/forecast for/.test(later.detail) && later.pm25 !== now?.pm25) break;
+  }
+  record(
+    'scrubbing to +24 h draws that step: the tiles change',
+    /forecast for/.test(later?.detail) &&
+      later.pm25 !== now?.pm25 &&
+      later.pm25 !== '—',
+    `PM2.5 ${now?.pm25} -> ${later?.pm25}, US AQI ${now?.aqi} -> ${later?.aqi}, detail="${later?.detail}"`,
+  );
+  await page.evaluate(async () => {
+    const { worldClock } = await import('/src/time/worldClock.js');
+    worldClock.goLive();
+  });
 }
 
 main().catch((e) => {

@@ -10179,6 +10179,46 @@ at most every 20 minutes. See DATA_SOURCES.md for attribution, freshness,
 caching and the outstanding unit and averaging check. Browser fixture gate:
 `node scripts/qa-india-air-quality.mjs --url http://localhost:4173`.
 
+### Air-quality model field
+
+A host may give the Air quality layer a model field: a forecast of the six
+pollutants and the US AQI on regular grids, one global and an optional finer
+Europe inset (`fieldSource`, `sources['air-quality-field']`; the contract is in
+`src/layers/airQuality/field.js`: `getManifest({ atMs? })` and `getStep(step)`,
+16-bit grids with a per-id scale and 65535 for no data). Stand-alone Core has
+none unless one is configured (below), and then shows stations only.
+
+With a field, a station view (the US AQI or a pollutant, not Canada's AQHI)
+draws that view's field under the stations, in the same bands as the stations:
+each band's colour at its middle, opacity `min(0.82, 0.05 + 0.26 · p)` for scale
+position `p`. It is one `single-image` imagery layer per image on the globe (the
+weather imagery host, wind's order) and a raised raster shell over
+photorealistic 3D tiles (`src/layers/airQuality/fieldDrawing.js`). The Europe
+inset blends into the global field over `blendDeg` (default 3°) inside its edge
+with a smoothstep weight, in value and in a cross-fade of the two images;
+the card reads the same blended value. The forecast is on the timeline: the
+layer registers the run's first step to its last with the world clock, follows
+the clock while the field is on and draws the step nearest its time, asking the
+host for the run covering a time outside the one it holds (`atMs`). Stations are
+readings of now and are hidden away from now (their labels, list and count
+too). The tiles read the model at the view centre ("model at view centre"),
+a selected station its own values at now ("measured at the station"), and the
+card's one time line names the model from the manifest's `source`: "updated
+{age}" at now, "forecast for {time}" ahead of it, the time behind it.
+
+Development and self-hosting option: `AIR_QUALITY_FIELD_DIR` names a local
+folder of baked grids (`manifest.json`, then `<region>/<step>/<id>.u16`), which
+the local server serves under `/api/air-quality/field/manifest` and
+`/api/air-quality/field/grid/<global|europe>/<step>/<id>.u16`
+(`server/providers/airQualityField.js`); standalone sources read it through
+`src/layers/airQuality/fieldSource.js`. Unset (the default), the manifest route
+answers `{ unavailable: true, code: 'not_configured' }` and the layer asks once
+and shows stations only. Only files already in the folder are served; nothing
+is downloaded. The browser gate `scripts/qa-air-quality.mjs` serves a small cut
+of such grids (`src/layers/airQuality/fixtures/field/`, CAMS, CC BY 4.0) to
+check that the field draws, the timeline spans its forecast and a later step
+changes the tiles.
+
 ### Shared native dropdowns and numeric fields
 
 - CCTV selects use the default `gev-field` surface. HUD layout

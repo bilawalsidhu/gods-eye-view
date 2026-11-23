@@ -1726,5 +1726,13 @@
   "src/layers/airQuality/merge.test.mjs",
   "src/layers/airQuality/groups.js",
   "src/layers/airQuality/groups.test.mjs",
-  "src/layers/airQuality/card.test.mjs"
+  "src/layers/airQuality/card.test.mjs",
+  "src/layers/airQuality/field.js",
+  "src/layers/airQuality/field.test.mjs",
+  "src/layers/airQuality/fieldSource.js",
+  "src/layers/airQuality/fieldSource.test.mjs",
+  "src/layers/airQuality/fieldDrawing.js",
+  "server/providers/airQualityField.js",
+  "server/providers/airQualityField.test.mjs",
+  "src/layers/weather/shellPlacement.js"
 ]

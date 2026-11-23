@@ -4627,5 +4627,7 @@
     "other": "{count} stations"
   },
   "Deselect station": "Désélectionner la station",
-  "{network}: showing cached data": "{network} : données en cache"
+  "{network}: showing cached data": "{network} : données en cache",
+  "forecast for {time}": "prévision pour {time}",
+  "Model field unavailable": "Champ du modèle indisponible"
 }

@@ -4415,5 +4415,7 @@
     "other": "{count} 个站点"
   },
   "Deselect station": "取消选择监测站",
-  "{network}: showing cached data": "{network}：显示缓存数据"
+  "{network}: showing cached data": "{network}：显示缓存数据",
+  "forecast for {time}": "{time} 的预报",
+  "Model field unavailable": "模型场不可用"
 }

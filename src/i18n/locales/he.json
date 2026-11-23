@@ -4627,5 +4627,7 @@
     "other": "{count} תחנות"
   },
   "Deselect station": "ביטול בחירת התחנה",
-  "{network}: showing cached data": "{network}: מוצגים נתונים שמורים"
+  "{network}: showing cached data": "{network}: מוצגים נתונים שמורים",
+  "forecast for {time}": "תחזית ל-{time}",
+  "Model field unavailable": "שדה המודל אינו זמין"
 }

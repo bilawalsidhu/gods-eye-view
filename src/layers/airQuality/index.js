@@ -4,9 +4,23 @@ import {
   canvasOf,
   drawOf,
   findCamera,
+  findFrame,
   findQuery,
   rendererOf,
 } from '../../render/rendererOf.js';
+import { worldClock } from '../../time/worldClock.js';
+import { globeImageryHost } from '../weather/shellPlacement.js';
+import {
+  fieldCoverage,
+  fieldIdOf,
+  fieldStepAt,
+  fieldStepTime,
+  paintField,
+  readFieldManifest,
+  readFieldStep,
+  sampleField,
+} from './field.js';
+import { createFieldDrawing } from './fieldDrawing.js';
 import {
   isTrackingClickGesture,
   isTrackingSelectionGesture,
@@ -36,7 +50,7 @@ import {
   usAqiBand,
 } from './usAqi.js';
 import { concentrationIn, layerUnits } from './units.js';
-import { msg, t, tn } from '../../i18n/index.js';
+import { formatUtcDayMonth, msg, t, tn } from '../../i18n/index.js';
 import {
   AIR_QUALITY_UNKNOWN_COLOR,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
@@ -79,6 +93,14 @@ const NO_KEY_RETRY_MS = 10 * 60_000;
 const FIRST_ANSWER_CAP_MS = 5_000;
 /** Remembered AQI-view values fill other views' tiles for this long. */
 const REMEMBERED_MS = 3600_000;
+/** The layer's id on the world clock. */
+const CLOCK_ID = 'air-quality';
+/** At now a model field's manifest is asked again this often, for a newer run. */
+const FIELD_MANIFEST_MS = 10 * 60_000;
+/** A model field request that failed is tried again after this long. */
+const FIELD_RETRY_MS = 60_000;
+/** Away from now, the run covering a time is asked once per this much of it. */
+const FIELD_ASK_BUCKET_MS = 3 * 3600_000;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -146,6 +168,16 @@ function shortAgo(ms) {
 const stationKey = (reading) =>
   `${reading.provider}:${reading.stationId ?? reading.id}`;
 
+/** A time on the card, "11-24 12:00 UTC" in English. */
+const utcText = (ms) =>
+  `${formatUtcDayMonth(ms)} ${new Date(ms).toISOString().slice(11, 16)} UTC`;
+
+/** The bands and limits a view's values are coloured on. */
+const scaleOf = (view) =>
+  view === 'aqi'
+    ? { bands: US_AQI_BANDS, limits: US_AQI_LIMITS }
+    : { bands: EEA_HOURLY_BANDS, limits: EEA_HOURLY_LIMITS[view] };
+
 /**
  * Own one air-quality display, its refresh lifecycle, and its readout card.
  *
@@ -171,6 +203,19 @@ const stationKey = (reading) =>
  * registered as this layer's picks while it is on, and a card painted on top
  * of a click (`clickCard`) takes it. `pointer.isPointerFree` holds clicks
  * off while a tool has the pointer.
+ *
+ * A host may give a model field (`fieldSource`, its contract in `field.js`):
+ * a forecast grid of the six pollutants and the US AQI. In a station view
+ * the layer then draws the view's field under the stations (`fieldDrawing.js`,
+ * through the weather imagery host the shell attaches), puts the forecast on
+ * the world clock's timeline (`clock.register`, the run's first step to its
+ * last) and follows the clock while the field is on (`clock.hold`), drawing
+ * the step nearest the clock's time. Stations are measurements of now: away
+ * from now they are hidden. The tiles then read the model at the view centre
+ * (said so: "model at view centre"), a selected station's own values at now,
+ * and the card's time line names the model and the time it shows. Without a
+ * field, or when the source says none is configured, nothing is registered
+ * and the layer shows stations only.
  */
 export function createAirQualityLayer({
   source,
@@ -178,10 +223,20 @@ export function createAirQualityLayer({
   input = null,
   picking = null,
   pointer = null,
+  fieldSource = null,
+  clock = worldClock,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
+  if (
+    fieldSource != null &&
+    (typeof fieldSource.getManifest !== 'function' ||
+      typeof fieldSource.getStep !== 'function')
+  )
+    throw new TypeError(
+      'An air-quality field source needs getManifest and getStep',
+    );
   let _viewer = null;
   let _markers = null;
   let _points = null;
@@ -272,6 +327,37 @@ export function createAirQualityLayer({
   let removeMoveEnd = null;
   let moveTimer = null;
   let retryTimer = null;
+  /**
+   * The model field: the run held (`manifest`, read by `readFieldManifest`),
+   * the step loaded (`data`), what is being asked, and whether the host has
+   * no field to give (`absent`). See `syncField`.
+   */
+  const field = {
+    manifest: null,
+    data: null,
+    absent: !fieldSource,
+    failed: false,
+    manifestRequest: null,
+    stepRequest: null,
+    /** What the last manifest request was for: 'now', or a time's bucket. */
+    askedFor: null,
+    nextAskAt: 0,
+    /** The step that failed to load, `run|step`, and when to try again. */
+    failedStep: null,
+    retryStepAt: 0,
+  };
+  /** The time the layer draws at: the world clock's while it follows it. */
+  const layerTime = clock.timeFor(CLOCK_ID);
+  let releaseHold = null;
+  let releaseWait = null;
+  let uncover = null;
+  let offClock = null;
+  let offMapStack = null;
+  let coverageKey = 'null';
+  let clockKey = null;
+  let syncing = false;
+  let imageryHost = null;
+  let fieldDrawing = null;
 
   const isObservationView = () => view !== 'aqhi';
   const sourceLabel = () =>
@@ -551,10 +637,33 @@ export function createAirQualityLayer({
     return best?.reading ?? null;
   };
   /**
-   * Values at the view centre from a model field, `{ aqi, values }` with
-   * `values` by pollutant view id, or null. Stand-alone Core has no field.
+   * Values at the view centre from the model field, as the map shows them
+   * (`sampleField`), `{ aqi, values }` with `values` by pollutant view id;
+   * null without a field step for the time shown, without a view, or where
+   * the field has no value at all.
    */
-  const fieldValues = () => null;
+  const fieldValues = () => {
+    if (!fieldSource || !fieldReady()) return null;
+    const centre = viewCentre();
+    if (!centre) return null;
+    const read = (id) => {
+      const value = sampleField(
+        field.manifest,
+        field.data.grids,
+        id,
+        centre.lon,
+        centre.lat,
+      );
+      return Number.isFinite(value) ? value : null;
+    };
+    const aqi = read('aqi');
+    const values = Object.fromEntries(
+      AIR_QUALITY_POLLUTANT_VIEWS.map((id) => [id, read(fieldIdOf(id))]),
+    );
+    if (aqi === null && Object.values(values).every((value) => value === null))
+      return null;
+    return { aqi: aqi === null ? null : Math.round(aqi), values };
+  };
   /** The remembered AQI-view stations no older than `REMEMBERED_MS`. */
   const rememberedStations = () =>
     [...aqiMemory.values()]
@@ -637,9 +746,9 @@ export function createAirQualityLayer({
    * rest. While a view loads, the station shown before stays.
    */
   const tileGroups = (selected, candidates, loading) => {
-    const field = selected ? null : fieldValues();
+    const model = selected ? null : fieldValues();
     let station = selected;
-    if (!station && !field) {
+    if (!station && !model) {
       station = nearestStation(candidates);
       if (!station && loading) station = lastNearest;
       lastNearest = station;
@@ -663,8 +772,8 @@ export function createAirQualityLayer({
       };
     };
     // The US AQI keeps its latest-value method (`usAqi.js`).
-    const aqi = field
-      ? (field.aqi ?? null)
+    const aqi = model
+      ? (model.aqi ?? null)
       : view === 'aqi' && Number.isFinite(live?.aqi?.index)
         ? live.aqi.index
         : (remembered?.aqi ?? null);
@@ -700,9 +809,9 @@ export function createAirQualityLayer({
       views.includes(id),
     ).map((id) => {
       const text = (number) => concentrationText(id, number);
-      if (field) {
+      if (model) {
         // A model's value is an hourly field: banded as it stands.
-        const value = field.values?.[id] ?? null;
+        const value = model.values?.[id] ?? null;
         return tile(
           id,
           POLLUTANT_TILE_LABELS[id],
@@ -732,7 +841,7 @@ export function createAirQualityLayer({
         // the middle of the view, or the station nearest it.
         subtitle: selected
           ? t('measured at the station')
-          : field
+          : model
             ? t('model at view centre')
             : station
               ? t('nearest station · {name}', { name: station.name })
@@ -862,6 +971,8 @@ export function createAirQualityLayer({
    */
   const onClick = (event) => {
     if (!_enabled || !showStations || !_points || !_viewer) return;
+    // Away from now no station is drawn, so none takes a click.
+    if (!atNow()) return;
     if (pointer && !pointer.isPointerFree()) return;
     if (!isTrackingSelectionGesture(event?.gesture)) return;
     if (picking?.clickCard?.(event)) return;
@@ -1064,8 +1175,274 @@ export function createAirQualityLayer({
     return firstAnswer(jobs, !entries.length || waiting);
   };
 
+  // ── the model field ─────────────────────────────────────────────────────
+
+  /** Whether the layer draws the present: the clock is live, or it does not follow it. */
+  const liveTime = () => !clock.follows(CLOCK_ID) || clock.isLive();
+  /** The step drawn at the layer's time, or null (no run, or outside it). */
+  const shownStep = () =>
+    field.manifest ? fieldStepAt(field.manifest, layerTime()) : null;
+  /**
+   * Whether the layer shows now: the stations' time. Following the clock, the
+   * step it shows must be the one nearest now.
+   */
+  const atNow = () => {
+    if (liveTime()) return true;
+    const step = shownStep();
+    return (
+      step !== null && step === fieldStepAt(field.manifest, clock.wallNow())
+    );
+  };
+  /** Whether the model field is on the map: a run held, in a station view. */
+  const fieldOn = () =>
+    _enabled && field.manifest !== null && isObservationView();
+  /** The loaded step, when it is the one the layer's time shows. */
+  const fieldReady = () => {
+    const step = shownStep();
+    return (
+      step !== null &&
+      field.data?.run === field.manifest.run &&
+      field.data.step === step
+    );
+  };
+  /** The span the timeline can show: the run's first step to its last. */
+  const coverage = () => (fieldOn() ? fieldCoverage(field.manifest) : null);
+
+  /** Follow the clock while the field is on; tell it of a new span. */
+  const syncClock = () => {
+    const on = fieldOn();
+    // Registered once a field is first on the map; off, it covers no time.
+    if (on && !uncover) uncover = clock.register({ id: CLOCK_ID, coverage });
+    if (on && !releaseHold) releaseHold = clock.hold(CLOCK_ID);
+    else if (!on && releaseHold) {
+      releaseHold();
+      releaseHold = null;
+    }
+    const key = JSON.stringify(coverage());
+    if (key === coverageKey) return;
+    coverageKey = key;
+    clock.coverageChanged();
+  };
+
+  /**
+   * Ask the host for the run to show: at now the newest, asked again every
+   * `FIELD_MANIFEST_MS`; away from now, when the run held does not cover the
+   * layer's time, the run covering it (`atMs`), once per three hours of it.
+   */
+  const askManifest = () => {
+    if (field.absent || !_enabled || field.manifestRequest) return;
+    const live = liveTime();
+    const time = layerTime();
+    const held = field.manifest;
+    const covered = held !== null && fieldStepAt(held, time) !== null;
+    const want = live ? 'now' : Math.floor(time / FIELD_ASK_BUCKET_MS);
+    if (covered) {
+      const due =
+        live && (field.askedFor !== 'now' || Date.now() >= field.nextAskAt);
+      if (!due) return;
+    } else if (
+      want === field.askedFor &&
+      (want !== 'now' || Date.now() < field.nextAskAt)
+    )
+      return;
+    field.askedFor = want;
+    const request = new AbortController();
+    field.manifestRequest = request;
+    Promise.resolve()
+      .then(() =>
+        fieldSource.getManifest({
+          signal: request.signal,
+          ...(live ? {} : { atMs: time }),
+        }),
+      )
+      .then((raw) => {
+        if (field.manifestRequest !== request) return;
+        const manifest = readFieldManifest(raw);
+        field.manifest = manifest;
+        field.failed = false;
+        field.nextAskAt = Date.now() + FIELD_MANIFEST_MS;
+        // A step of another run is no longer drawn once this run's lands.
+        if (field.stepRequest && field.stepRequest.run !== manifest.run)
+          cancelStep();
+      })
+      .catch((error) => {
+        if (field.manifestRequest !== request) return;
+        if (error?.code === 'not_configured') {
+          // The host has no field: the layer is as without one.
+          field.absent = true;
+          return;
+        }
+        field.failed = true;
+        field.nextAskAt = Date.now() + FIELD_RETRY_MS;
+        console.warn(
+          '[Data:AirQuality] Model field manifest failed:',
+          error?.message || error,
+        );
+      })
+      .finally(() => {
+        if (field.manifestRequest !== request) return;
+        field.manifestRequest = null;
+        syncField();
+        notify();
+      });
+  };
+
+  const cancelStep = () => {
+    field.stepRequest?.controller.abort();
+    field.stepRequest = null;
+    releaseWait?.();
+    releaseWait = null;
+  };
+
+  /** Load the step the layer's time shows, if it is not loaded or loading. */
+  const askStep = () => {
+    const manifest = field.manifest;
+    if (!_enabled || !manifest) return;
+    const step = shownStep();
+    if (step === null || fieldReady()) {
+      cancelStep();
+      return;
+    }
+    const pending = field.stepRequest;
+    if (pending?.run === manifest.run && pending.step === step) return;
+    const key = `${manifest.run}|${step}`;
+    if (field.failedStep === key && Date.now() < field.retryStepAt) return;
+    cancelStep();
+    const request = {
+      run: manifest.run,
+      step,
+      controller: new AbortController(),
+    };
+    field.stepRequest = request;
+    // Playing, the clock waits for the step it is about to show.
+    if (clock.follows(CLOCK_ID) && clock.isPlaying())
+      releaseWait = clock.wait(CLOCK_ID);
+    Promise.resolve()
+      .then(() =>
+        fieldSource.getStep(step, {
+          signal: request.controller.signal,
+          run: request.run,
+        }),
+      )
+      .then((raw) => {
+        if (field.stepRequest !== request) return;
+        field.data = {
+          run: request.run,
+          step,
+          grids: readFieldStep(manifest, step, raw),
+        };
+        field.failed = false;
+        field.failedStep = null;
+      })
+      .catch((error) => {
+        if (field.stepRequest !== request) return;
+        field.failed = true;
+        field.failedStep = key;
+        field.retryStepAt = Date.now() + FIELD_RETRY_MS;
+        console.warn(
+          '[Data:AirQuality] Model field step failed:',
+          error?.message || error,
+        );
+      })
+      .finally(() => {
+        if (field.stepRequest !== request) return;
+        field.stepRequest = null;
+        releaseWait?.();
+        releaseWait = null;
+        syncField();
+        notify();
+      });
+  };
+
+  /**
+   * Draw the view's field for the step shown. While the next step loads the
+   * one drawn stays; outside the run, or off, nothing is drawn.
+   */
+  const drawField = () => {
+    if (!fieldDrawing) return;
+    const id = fieldIdOf(view);
+    if (!fieldOn() || !id || shownStep() === null) {
+      fieldDrawing.remove();
+      return;
+    }
+    if (!fieldReady()) return;
+    const { manifest } = field;
+    const { data } = field;
+    if (
+      fieldDrawing.show(`${data.run}|${data.step}|${id}`, () =>
+        paintField(manifest, data.grids, id, scaleOf(view)),
+      )
+    )
+      findFrame(_viewer)?.requestRender?.('air-quality');
+  };
+
+  /**
+   * Bring the field in step with the layer and the clock: the clock's
+   * registration and hold, the run and step to load, what is drawn, and
+   * whether the stations show (only at now).
+   */
+  const syncField = () => {
+    if (!fieldSource || syncing) return;
+    syncing = true;
+    try {
+      syncClock();
+      askManifest();
+      askStep();
+      drawField();
+      clockKey = `${shownStep()}|${atNow()}|${liveTime()}`;
+      syncVisibility();
+      layer._publishOverlays();
+    } finally {
+      syncing = false;
+    }
+  };
+
+  /** The clock moved: only a new step, or leaving or reaching now, matters. */
+  const onClock = () => {
+    if (!_enabled || !field.manifest || syncing) return;
+    if (`${shownStep()}|${atNow()}|${liveTime()}` === clockKey) return;
+    syncField();
+    notify();
+  };
+
+  /** Let go of the field's requests, hold and drawing; the run is kept. */
+  const haltField = () => {
+    field.manifestRequest?.abort();
+    field.manifestRequest = null;
+    cancelStep();
+    fieldDrawing?.remove();
+    if (releaseHold) {
+      releaseHold();
+      releaseHold = null;
+    }
+    const key = JSON.stringify(null);
+    if (coverageKey !== key) {
+      coverageKey = key;
+      clock.coverageChanged();
+    }
+  };
+
+  /**
+   * The card's one line of time with a field: the model, and how old its run
+   * is at now, the forecast time ahead of now, or the time behind it.
+   */
+  const modelLine = () => {
+    const { manifest } = field;
+    const step = shownStep();
+    let text = '';
+    if (step !== null) {
+      const ms = fieldStepTime(manifest, step);
+      text = atNow()
+        ? t('updated {age}', { age: shortAgo(manifest.runMs) })
+        : ms > clock.wallNow()
+          ? t('forecast for {time}', { time: utcText(ms) })
+          : utcText(ms);
+    }
+    return [manifest.source, text].filter(Boolean).join(' · ');
+  };
+
   const syncVisibility = () => {
-    const shown = _enabled && showStations;
+    const shown = _enabled && showStations && atNow();
     if (_markers) _markers.show = shown;
     if (_points) _points.show = shown;
     overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, shown);
@@ -1095,10 +1472,30 @@ export function createAirQualityLayer({
         // A scene with no renderer input takes no clicks.
         _offClick = null;
       }
+      if (fieldSource) {
+        fieldDrawing = createFieldDrawing({
+          getViewer: () => _viewer,
+          getHost: () => imageryHost?.() ?? globeImageryHost(_viewer),
+        });
+        // The forecast moves with the timeline: a new step, or leaving now.
+        offClock = clock.subscribe(onClock);
+        // A new map source may move the field to another surface.
+        const target = globalThis.window;
+        if (typeof target?.addEventListener === 'function') {
+          const onMapStack = () => {
+            if (_enabled) drawField();
+          };
+          target.addEventListener('gev:map-stack-changed', onMapStack);
+          offMapStack = () =>
+            target.removeEventListener('gev:map-stack-changed', onMapStack);
+        }
+      }
       removeMoveEnd = findCamera(viewer)?.on('moveEnd', () => {
         if (!_enabled) return;
         drawPoints();
         this._publishOverlays();
+        // The surface may have changed (globe imagery or 3D tiles).
+        drawField();
         const key = JSON.stringify(currentView());
         // Only providers that fetch per view follow the camera; one still
         // waiting for a key is asked again by a scheduled refresh, once
@@ -1146,13 +1543,24 @@ export function createAirQualityLayer({
       picking?.registerPickOwner?.(layer.id, (id) => _drawn.has(id));
       drawPoints();
       syncVisibility();
+      syncField();
       notify();
+    },
+
+    /** The shell's imagery host (globe or 3D tiles), where the field drapes. */
+    attachShellServices(services) {
+      imageryHost =
+        typeof services?.imageryHost === 'function'
+          ? services.imageryHost
+          : null;
+      if (_enabled) drawField();
     },
 
     disable() {
       // Abort in flight: a response arriving after disable must not redraw.
       halt();
       _enabled = false;
+      haltField();
       picking?.unregisterPickOwner?.(layer.id);
       // The click and moveEnd listeners stay until destroy: each returns at
       // once while the layer is off, so enable needs no new subscriptions.
@@ -1219,6 +1627,8 @@ export function createAirQualityLayer({
 
     async update() {
       if (!_enabled || !_markers) return false;
+      // The field's run (a newer one now and then) and step.
+      syncField();
       // A provider that said it has no key is left alone for a while; the
       // card keeps saying what it needs.
       const entries = asked().filter((entry) => {
@@ -1315,7 +1725,8 @@ export function createAirQualityLayer({
 
     _publishOverlays() {
       if (!_enabled) return;
-      if (!showStations) {
+      // Hidden with the stations, and away from now.
+      if (!showStations || !atNow()) {
         overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
         return;
       }
@@ -1346,6 +1757,17 @@ export function createAirQualityLayer({
     destroy() {
       halt();
       _enabled = false;
+      haltField();
+      fieldDrawing?.dispose();
+      fieldDrawing = null;
+      uncover?.();
+      uncover = null;
+      offClock?.();
+      offClock = null;
+      offMapStack?.();
+      offMapStack = null;
+      field.manifest = null;
+      field.data = null;
       overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
       _markers?.dispose();
@@ -1413,11 +1835,17 @@ export function createAirQualityLayer({
             !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
         );
       const visible = inViewNow(_readings);
+      // Stations are readings of now: away from now (a forecast or a past
+      // step of the model field) they are hidden, and the card leaves them
+      // out too.
+      const now = atNow();
       // The stations the tiles may read: the observation stations in view;
       // in the AQHI view, the remembered AQI-view stations in view.
-      const candidates = isObservation
-        ? visible.filter((reading) => ownerOf(reading).observation === true)
-        : inViewNow(rememberedStations());
+      const candidates = !now
+        ? []
+        : isObservation
+          ? visible.filter((reading) => ownerOf(reading).observation === true)
+          : inViewNow(rememberedStations());
       const inView = (
         isObservation
           ? visible
@@ -1458,6 +1886,17 @@ export function createAirQualityLayer({
                   : '';
         return text ? [{ id: `provider-${entry.id}`, muted: true, text }] : [];
       });
+      // A model field the host gives but could not be read.
+      if (fieldSource && !field.absent && field.failed)
+        providerLines.push({
+          id: 'model-field',
+          muted: true,
+          text: t('Model field unavailable'),
+        });
+      const modelShown = fieldOn();
+      // The next step of the field is on its way.
+      const fieldLoading =
+        modelShown && !fieldReady() && field.stepRequest !== null;
       // The view's scale: a ramp from the first band to the open top one
       // (the US AQI, or the pollutant's EEA hourly bands), or Canada's AQHI
       // bands by name.
@@ -1489,34 +1928,41 @@ export function createAirQualityLayer({
                   : `${limits[position - 1]}${position === limits.length ? '+' : ''}`,
               }))
             : [];
-      // The selected station as last seen: it stays while views change.
+      // The selected station as last seen: it stays while views change. Away
+      // from now it is not shown, and comes back at now.
       const selected =
-        selectedStation === null ? null : (selectedSeen?.reading ?? null);
+        selectedStation === null || !now
+          ? null
+          : (selectedSeen?.reading ?? null);
       return {
         readout: true,
         summary: {
           label: single ? t(single.label) : t('Air quality'),
           // Where the drawn stations are: worldwide, or the networks'
-          // countries; Canada for its index.
+          // countries; Canada for its index. A worldwide field is global.
           coverage: !isObservation
             ? t('Canada')
-            : drawing.some((entry) => entry.worldwide === true)
+            : (modelShown && field.manifest.global.wrap) ||
+                drawing.some((entry) => entry.worldwide === true)
               ? t('Global')
               : drawing.map((entry) => t(entry.title)).join(' · '),
           validTime: newest ? new Date(newest).toISOString() : undefined,
-          // Who measured what is drawn, and how fresh the newest reading is.
-          detail:
-            drawing.length && newest
+          // With a field: the model and the time it shows. Without one: who
+          // measured what is drawn, and how fresh the newest reading is.
+          detail: modelShown
+            ? modelLine()
+            : drawing.length && newest
               ? `${drawing.map((entry) => entry.network).join(', ')} · ${t(
                   'updated {age}',
                   { age: shortAgo(newest) },
                 )}`
               : '',
-          status: loading
-            ? t('Loading')
-            : covering.length && showStations
-              ? tn(visible.length, '{count} station', '{count} stations')
-              : '',
+          status:
+            loading || fieldLoading
+              ? t('Loading')
+              : covering.length && showStations && now
+                ? tn(visible.length, '{count} station', '{count} stations')
+                : '',
           // A collapsed card with no status shows what needs doing.
           compact: providerLines[0]?.text,
           units: view === 'aqi' ? '' : layerUnits(view),
@@ -1558,7 +2004,7 @@ export function createAirQualityLayer({
         },
         legend,
         legendCategorical: view === 'aqhi',
-        sublists: tileGroups(selected, candidates, loading),
+        sublists: tileGroups(selected, candidates, loading && now),
         list: {
           title: t('HIGHEST IN VIEW'),
           ariaLabel: isObservation
@@ -1567,7 +2013,7 @@ export function createAirQualityLayer({
           // One line a row: rank, band colour, value, name. The station's
           // details are the row's tooltip.
           // Hidden with the stations.
-          items: (showStations ? inView : []).map((reading, index) => {
+          items: (showStations && now ? inView : []).map((reading, index) => {
             const owner = ownerOf(reading);
             return {
               id: reading.id,

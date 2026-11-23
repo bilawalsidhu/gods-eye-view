@@ -4521,5 +4521,7 @@
     "other": "{count} stationer"
   },
   "Deselect station": "Avmarkera station",
-  "{network}: showing cached data": "{network}: visar cachade data"
+  "{network}: showing cached data": "{network}: visar cachade data",
+  "forecast for {time}": "prognos för {time}",
+  "Model field unavailable": "Modellfältet är inte tillgängligt"
 }

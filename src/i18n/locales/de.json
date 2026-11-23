@@ -4521,5 +4521,7 @@
     "other": "{count} Stationen"
   },
   "Deselect station": "Station abwählen",
-  "{network}: showing cached data": "{network}: zwischengespeicherte Daten"
+  "{network}: showing cached data": "{network}: zwischengespeicherte Daten",
+  "forecast for {time}": "Vorhersage für {time}",
+  "Model field unavailable": "Modellfeld nicht verfügbar"
 }

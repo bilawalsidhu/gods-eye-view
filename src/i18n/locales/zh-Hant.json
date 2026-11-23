@@ -4415,5 +4415,7 @@
     "other": "{count} 個站點"
   },
   "Deselect station": "取消選擇監測站",
-  "{network}: showing cached data": "{network}：顯示緩存數據"
+  "{network}: showing cached data": "{network}：顯示緩存數據",
+  "forecast for {time}": "{time} 的預報",
+  "Model field unavailable": "模型場不可用"
 }

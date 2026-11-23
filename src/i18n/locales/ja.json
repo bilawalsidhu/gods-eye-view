@@ -4415,5 +4415,7 @@
     "other": "{count}局"
   },
   "Deselect station": "測定局の選択を解除",
-  "{network}: showing cached data": "{network}：キャッシュされたデータを表示中"
+  "{network}: showing cached data": "{network}：キャッシュされたデータを表示中",
+  "forecast for {time}": "{time}の予報",
+  "Model field unavailable": "モデル場を利用できません"
 }

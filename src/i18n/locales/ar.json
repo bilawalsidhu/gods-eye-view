@@ -4945,5 +4945,7 @@
     "other": "{count} محطة"
   },
   "Deselect station": "إلغاء تحديد المحطة",
-  "{network}: showing cached data": "{network}: عرض البيانات المخزنة مؤقتًا"
+  "{network}: showing cached data": "{network}: عرض البيانات المخزنة مؤقتًا",
+  "forecast for {time}": "توقع لـ {time}",
+  "Model field unavailable": "حقل النموذج غير متاح"
 }

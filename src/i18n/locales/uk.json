@@ -4733,5 +4733,7 @@
     "other": "{count} станції"
   },
   "Deselect station": "Скасувати вибір станції",
-  "{network}: showing cached data": "{network}: показано кешовані дані"
+  "{network}: showing cached data": "{network}: показано кешовані дані",
+  "forecast for {time}": "прогноз на {time}",
+  "Model field unavailable": "Поле моделі недоступне"
 }

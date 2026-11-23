@@ -7,6 +7,7 @@ import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
 import { worldClock } from '../time/worldClock.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 const flush = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -253,4 +254,45 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
       30,
       `${String(windowMs)} falls back to the default`,
     );
+});
+
+test("a host's air-quality field source reaches the layer; standalone asks its own server", async (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const airQuality = (field) => {
+    const sources = fixtureSources([], []);
+    sources['air-quality'] = { getSnapshot: async () => [] };
+    if (field !== undefined) sources['air-quality-field'] = field;
+    const layer = createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('air-quality');
+    const viewer = {};
+    bindFakeDraw(viewer);
+    layer.init(viewer);
+    t.after(() => layer.destroy());
+    return layer;
+  };
+  const asked = [];
+  const layer = airQuality({
+    getManifest: async (options) => {
+      asked.push(options);
+      throw Object.assign(new Error('none'), { code: 'not_configured' });
+    },
+    getStep: async () => assert.fail('no step without a run'),
+  });
+  layer.enable();
+  await flush();
+  assert.equal(asked.length, 1);
+  // Removed, the layer has none to ask.
+  airQuality(null).enable();
+  // The standalone default is the local server's field route.
+  const standalone = createStandaloneLayerSources()['air-quality-field'];
+  assert.equal(typeof standalone.getManifest, 'function');
+  assert.equal(typeof standalone.getStep, 'function');
+  assert.throws(
+    () => airQuality({ getManifest: async () => ({}) }),
+    /getManifest and getStep/,
+  );
 });
