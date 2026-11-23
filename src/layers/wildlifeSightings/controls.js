@@ -219,6 +219,8 @@ export function createControls({ state, services, parts }) {
           obscured: row.obscured === true,
           source: row.origin === 'acartia' ? 'Acartia' : 'iNaturalist',
           link: row.link || null,
+          acartiaProvider:
+            row.origin === 'acartia' ? (row.provider ?? null) : null,
         });
       }
       return result;

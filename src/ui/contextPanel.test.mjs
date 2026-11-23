@@ -31,6 +31,7 @@ import { useDisplayStore } from './stores/display.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { activeTab } from './contextLayerTabs.js';
 import { ContextControls } from './contextControls.js';
+import { createControls as createWildlifeControls } from '../layers/wildlifeSightings/controls.js';
 
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -438,6 +439,75 @@ test('nothing picked: one list per layer that is on, nearest first; its first ro
   await nextTick();
   assert.equal(cards.card?.identity.id, 'near01');
   assert.deepEqual(followed, [cards.card.key], 'one tap selects and follows');
+});
+
+test('filtered Nearby keeps Acartia attribution visible on selection', async (t) => {
+  contextSearchStyles(t);
+  const center = { lat: 48.5, lon: -123.1 };
+  const sighting = {
+    ...center,
+    stableId: 'acartia:9',
+    origin: 'acartia',
+    commonName: 'Orca',
+    observedAt: Date.now(),
+    provider: { name: 'Synthetic Whale Network', entity: 'Partner' },
+    link: 'https://acartia.io/',
+  };
+  const { methods } = createWildlifeControls({
+    state: { enabled: true, rows: new Map([[sighting.stableId, sighting]]) },
+    services: { now: Date.now },
+    parts: {},
+  });
+  const { $, cards, flown } = fixture(t, [
+    {
+      id: 'wildlife-sightings',
+      name: 'Wildlife Sightings',
+      enabled: true,
+      module: {
+        getAnalystRecords: (...args) =>
+          methods.getAnalystRecords(...args).map((record) => ({
+            ...record,
+            website: 'https://example.com/',
+          })),
+      },
+    },
+  ]);
+  cards.setView({ center, heightM: 40_000 });
+  contextSearchOpen.value = true;
+  contextSearchText.value = 'orca';
+  await nextTick();
+  assert.ok($('#context-tab-view').classList.contains('context-searching'));
+
+  const button = $('.nearby-lists [data-row-layer="wildlife-sightings"]');
+  assert.match(button.textContent, /Orca/);
+  button.click();
+  await nextTick();
+
+  assert.equal(cards.card.identity.id, sighting.stableId);
+  assert.deepEqual(flown, [cards.card.key]);
+  const card = $('.entity-card');
+  const credit = [...card.querySelectorAll('p')].find((paragraph) =>
+    paragraph.textContent.includes(
+      'Reported by Synthetic Whale Network (Partner)',
+    ),
+  );
+  assert.match(credit.textContent, /CC BY 4\.0/);
+  assert.notEqual(getComputedStyle(credit).display, 'none');
+  const source = card.querySelector('a[href="https://acartia.io/"]');
+  const guidance = card.querySelector('a[href="https://www.bewhalewise.org"]');
+  assert.match(source.textContent, /Acartia/);
+  assert.equal(guidance.textContent, 'Be Whale Wise');
+  for (const link of [source, guidance]) {
+    for (let node = link; node !== card; node = node.parentElement) {
+      assert.notEqual(getComputedStyle(node).display, 'none', link.textContent);
+    }
+  }
+  const website = card.querySelector('a[href="https://example.com/"]');
+  assert.equal(getComputedStyle(website.parentElement).display, 'none');
+  card.querySelector('button[aria-label="Close card"]').click();
+  await nextTick();
+  assert.equal(contextSearchText.value, 'orca');
+  assert.ok($('.nearby-lists [data-row-layer="wildlife-sightings"]'));
 });
 
 test('the radius sits above the counts it sets; a layer with nothing in range shows only its 0', async (t) => {

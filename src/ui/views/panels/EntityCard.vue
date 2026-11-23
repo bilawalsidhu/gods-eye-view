@@ -94,6 +94,12 @@ const source = computed(() => {
   void tick.value;
   return store.sourceOf(card.value);
 });
+const acartiaCredit = computed(() => {
+  const provider = card.value?.acartiaProvider;
+  if (!provider?.name) return '';
+  const { name, entity } = provider;
+  return entity ? t('Reported by {name} ({entity})', { name, entity }) : t('Reported by {name}', { name });
+});
 const ageText = computed(() => {
   void tick.value;
   const age = card.value?.observedAgeMs;
@@ -468,6 +474,13 @@ watch(
         </dl>
       </section>
 
+      <p v-if="acartiaCredit" class="entity-card__source">
+        {{ acartiaCredit }} · {{ t('CC BY 4.0') }}
+      </p>
+      <div v-if="acartiaCredit" class="entity-card__attribution-links">
+        <a href="https://acartia.io/" target="_blank" rel="noopener noreferrer">{{ t('Acartia') }} ↗</a>
+        <a href="https://www.bewhalewise.org" target="_blank" rel="noopener noreferrer">{{ t('Be Whale Wise') }}</a>
+      </div>
       <div v-if="card.links.length" class="entity-card__links">
         <a v-for="link in card.links" :key="link.kind" :href="link.href" target="_blank" rel="noopener noreferrer">{{ t(link.label) }} ↗</a>
       </div>

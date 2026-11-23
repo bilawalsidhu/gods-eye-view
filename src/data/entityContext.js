@@ -1176,6 +1176,10 @@ export function describeEntity(
           : null,
     observedAgeMs: fromRecord?.observedAgeMs ?? null,
     links: recordLinks(record, stored?.properties),
+    acartiaProvider:
+      layerId === 'wildlife-sightings'
+        ? (record?.acartiaProvider ?? null)
+        : null,
     source: text(stored?.source) || null,
     // What the card was built from: the layer's own record, the store's
     // properties, or only the click's identity.

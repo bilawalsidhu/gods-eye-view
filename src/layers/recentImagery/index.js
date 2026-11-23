@@ -22,12 +22,14 @@ import {
   boxFromPin,
   boxFromDegrees,
   boxContains,
+  boxKey,
   boxSideKm,
   candidateAtPoint,
   dayTime,
   dequantizeBox,
   fitViewHeightM,
   formatCandidateReadout,
+  nonCrossingBoxes,
   parseCandidateKey,
   quantizeBox,
   rankLatest,
@@ -1527,16 +1529,28 @@ export function createRecentImageryLayer({
      * The latest imagery day over a point, from the catalog already
      * searched for the chosen box: the newest Sentinel-2 or Landsat day
      * whose footprints hold the point, else the newest daily overview known
-     * to have pixels. `value` is the day; `detail` the sensor, resolution
-     * and scene cloud. Null while off, outside the box, or with no day.
+     * to have pixels in the point's part of the box. `value` is the day;
+     * `detail` is the sensor, resolution and scene cloud. Null while off or
+     * with no day.
      */
     getValueAt(lat, lon) {
       if (!_enabled) return null;
       // Imagery is searched inside the chosen area only: outside it there is
       // nothing to read, which is not the same as no pass.
       if (!_box) return { value: null, reason: t('No area chosen') };
-      if (!boxContains(_box, lon, lat))
+      // The dateline is a shared edge. Use each intersecting part's own
+      // longitude so either spelling of the edge gives the same lookup.
+      const longitudes = lon === 180 || lon === -180 ? [180, -180] : [lon];
+      const points = nonCrossingBoxes(_box).flatMap((part) =>
+        longitudes
+          .filter((pointLon) => boxContains(part, pointLon, lat))
+          .map((pointLon) => ({ lon: pointLon, key: boxKey(part) })),
+      );
+      if (!points.length)
         return { value: null, reason: t('Outside the chosen area') };
+      const crossesDateline = _box.west > _box.east;
+      const hasPointBox = (boxes, key) =>
+        boxes?.some((box) => boxKey(box) === key);
       const usable = (candidate) =>
         sourceOn(candidate) &&
         PRODUCTS[candidate.product] &&
@@ -1553,18 +1567,31 @@ export function createRecentImageryLayer({
             (candidate) =>
               usable(candidate) && !PRODUCTS[candidate.product].overview,
           )
-          .map((candidate) => candidateAtPoint(candidate, lon, lat))
+          .map((candidate) => {
+            const empty = thumbnails.get(candidate.key)?.emptyBoxes;
+            for (const point of points) {
+              if (hasPointBox(empty, point.key)) continue;
+              const match = candidateAtPoint(candidate, point.lon, lat);
+              if (match) return match;
+            }
+            return null;
+          })
           .filter(Boolean),
       );
       const found =
         hls ||
         newest(
-          _candidates.filter(
-            (candidate) =>
-              usable(candidate) &&
-              PRODUCTS[candidate.product].overview &&
-              availability(candidate) === 'present',
-          ),
+          _candidates.filter((candidate) => {
+            if (
+              !sourceOn(candidate) ||
+              !PRODUCTS[candidate.product]?.overview ||
+              availability(candidate) !== 'present'
+            )
+              return false;
+            if (!crossesDateline) return true;
+            const present = thumbnails.get(candidate.key)?.availableBoxes;
+            return points.some((point) => hasPointBox(present, point.key));
+          }),
         );
       if (!found) return null;
       const product = PRODUCTS[found.product];

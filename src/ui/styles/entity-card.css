@@ -181,14 +181,16 @@
   font-size: 0.68rem;
 }
 
-.entity-card__links {
+.entity-card__links,
+.entity-card__attribution-links {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   margin: 0 0 0.55rem;
 }
 
-.entity-card__links a {
+.entity-card__links a,
+.entity-card__attribution-links a {
   padding: 0.15rem 0.5rem;
   color: #36dcff;
   font-size: 0.64rem;
@@ -198,7 +200,9 @@
 }
 
 .entity-card__links a:hover,
-.entity-card__links a:focus-visible {
+.entity-card__links a:focus-visible,
+.entity-card__attribution-links a:hover,
+.entity-card__attribution-links a:focus-visible {
   background: rgba(48, 194, 224, 0.12);
 }
 

@@ -168,3 +168,21 @@ test('getValueAt finds a dateline-crossing granule from either side', async () =
   assert.equal(candidateAtPoint(crossing, 0, 51.9), null);
   layer.destroy();
 });
+
+test('getValueAt accepts either sign on the dateline edge of a noncrossing box', async () => {
+  const { layer, catalog } = fixture();
+  const day = candidate('S30', '2026-09-18');
+  day.granules[0].footprint = [
+    [-180, 51.7],
+    [-179.7, 51.7],
+    [-179.7, 52.1],
+    [-180, 52.1],
+  ];
+  layer.enable();
+  layer.setBox({ west: -180, south: 51.8, east: -179.8, north: 52 });
+  catalog.resolveLast([day]);
+  await settle();
+  assert.equal(layer.getValueAt(51.9, -180)?.at, Date.parse(day.timeRange.end));
+  assert.deepEqual(layer.getValueAt(51.9, 180), layer.getValueAt(51.9, -180));
+  layer.destroy();
+});
