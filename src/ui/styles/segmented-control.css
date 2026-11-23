@@ -1,3 +1,5 @@
+/* Sky view styles load at this cascade slot (after panel-surfaces). They are imported here, not in style.css, because that shim is capped under 40 lines. */
+@import '../../skyView/skyView.css';
 /* Shared one-of-many control. Feature classes retain surrounding placement.
    The kit's UiSegmented (.ui-segmented, .ui-segmented__item) wears it. */
 .ui-segmented,

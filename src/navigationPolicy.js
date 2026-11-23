@@ -48,6 +48,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   frame: msg('Exit cockpit to frame contacts'),
   // Opening Stories (src/stories/controller.js) takes the camera.
   stories: msg('Exit cockpit to open Stories'),
+  'sky view': msg('Exit cockpit to open the sky view'),
 });
 
 /** The destination nouns with their own Cockpit refusal (for tests). */

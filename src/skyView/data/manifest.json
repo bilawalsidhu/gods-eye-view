@@ -1,0 +1,42 @@
+{
+  "format": "gev-sky-manifest/1",
+  "generator": "scripts/build-sky-data.mjs",
+  "inputs": {
+    "hyg": {
+      "file": "hyg_v44.csv.gz",
+      "sha256": "00b349893b9a53106dd488d8371e8d2fa586043e500bb3cdb8bff3931682197d"
+    },
+    "western": {
+      "file": "western/index.json",
+      "sha256": "a861accd345249a185a5ecfc2a516f34291c0aa52f4bb8d8337ffc53e9cef6b9"
+    }
+  },
+  "magLimit": 6.5,
+  "counts": {
+    "stars": 8920,
+    "starsBrighterThanLimit": 8920,
+    "lineStars": 691,
+    "constellations": 88,
+    "lineSegments": 674,
+    "properNames": 440,
+    "boundaryEdges": 781,
+    "boundaryPoints": 5624
+  },
+  "outputs": {
+    "stars.json": {
+      "sha256": "572e42e945046675236617453c135222acebc2901ec76dc2b6d7b4d57c61c852",
+      "bytes": 443602,
+      "gzipBytes": 164629
+    },
+    "constellations.json": {
+      "sha256": "ce489d162785eb0ecff07dcb6ce77ea6304b9ad4bb60d784be28ad35ca3339c2",
+      "bytes": 11489,
+      "gzipBytes": 4424
+    },
+    "boundaries.json": {
+      "sha256": "267ab3241162145737cfc1cddd370d463e4323611ed313aaddc2b4122d3bb025",
+      "bytes": 98190,
+      "gzipBytes": 29450
+    }
+  }
+}
