@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  CPCB_AVERAGING_MINUTES,
   CPCB_POLLUTANTS,
   CPCB_UNITS_VERIFIED,
   cpcbObservationTime,
+  cpcbRated,
   normalizeCpcbRecords,
 } from './cpcb.js';
 import { createAirQualitySource } from './providers.js';
@@ -129,14 +131,37 @@ test('current OGD avg_value schema is accepted alongside legacy pollutant_avg', 
   );
 });
 
-test('unverified India readings carry no units, no rating and no AQI', () => {
+test('India is rated only with verified units and a known averaging period', () => {
+  // Neither is confirmed yet.
   assert.equal(CPCB_UNITS_VERIFIED, false);
+  assert.equal(CPCB_AVERAGING_MINUTES, null);
+  assert.equal(cpcbRated(), false);
   const [reading] = readingsOf([row()]);
   assert.equal(reading.units, null);
+  assert.equal(reading.averagingMinutes, undefined);
   assert.equal(reading.rated, false);
   assert.equal(reading.aqi, null);
   assert.equal(reading.color, '#8cb4ce');
   assert.equal(reading.label, '123');
+  const first = (options, patch) =>
+    normalizeCpcbRecords({ records: [row(patch)] }, { now, ...options })
+      .readings[0];
+  assert.equal(first({ unitsVerified: true }).rated, false);
+  assert.equal(first({ unitsVerified: true }).units, 'µg/m³');
+  assert.equal(first({ averagingMinutes: 60 }).rated, false);
+  const both = first({ unitsVerified: true, averagingMinutes: 60 });
+  assert.equal(both.rated, true);
+  assert.equal(both.units, 'µg/m³');
+  assert.equal(both.averagingMinutes, 60);
+  assert.equal(both.label, '123 µg/m³');
+  assert.equal(both.aqi, null);
+  assert.equal(
+    first(
+      { unitsVerified: true, averagingMinutes: 60 },
+      { pollutant_id: 'CO', pollutant_avg: '1.2' },
+    ).units,
+    'mg/m³',
+  );
 });
 
 // ── India in the layer, through the default providers ─────────────────────
@@ -154,8 +179,8 @@ const snapshot = (body = {}) => ({
   ...body,
 });
 /** What the local India route answers for these OGD rows. */
-const indiaSnapshot = (records) =>
-  snapshot(normalizeCpcbRecords({ records }, { now: Date.now() }));
+const indiaSnapshot = (records, options = {}) =>
+  snapshot(normalizeCpcbRecords({ records }, { now: Date.now(), ...options }));
 const openAqCopy = (lat, lon) => ({
   id: 'openaq:9:PM2.5',
   provider: 'openaq',
@@ -217,12 +242,17 @@ test('India readings are drawn as one more observation provider', async () => {
   assert.equal(await layer.update(), true);
   assert.ok(requests.includes('/api/air-quality/india'));
   assert.ok(requests.some((url) => url.startsWith('/api/air-quality/openaq?')));
-  const drawn = [...points().items.values()];
-  assert.equal(drawn.length, 1);
-  assert.equal(drawn[0].meta.provider, 'cpcb');
+  const drawn = () =>
+    [...points().items.values()].map((point) => point.meta.provider);
+  // The AQI view rates nobody yet: both unrated, the direct network wins.
+  assert.deepEqual(drawn(), ['cpcb']);
   const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
   assert.equal(india.status, 'ok');
   assert.equal(india.requiresKeyId, 'data-gov-in');
+  // In PM2.5 OpenAQ's copy is rated and India's is not: the rated copy wins.
+  layer.setParams({ view: 'PM2.5' });
+  await layer.update();
+  assert.deepEqual(drawn(), ['openaq']);
   layer.destroy();
 });
 
@@ -247,6 +277,59 @@ test('unverified India readings are unrated and leave the AQI alone', async () =
     assert.equal(station.meta.rated, false, view);
     assert.equal(station.meta.assessment?.label, undefined, view);
   }
+  assert.match(
+    [...points().items.values()][0].meta.assessment.reason,
+    /units or averaging period .* not confirmed/,
+  );
+  layer.destroy();
+});
+
+test('the rating gate decides the colour of India stations through the layer', async () => {
+  const stationIn = async (options) => {
+    const { layer, points } = indiaLayer({
+      '/api/air-quality/india': indiaSnapshot(
+        [row({ last_update: recent() })],
+        options,
+      ),
+      '/api/air-quality/openaq': snapshot(),
+      '/api/air-quality/south-africa': snapshot(),
+    });
+    layer.setParams({ view: 'PM2.5' });
+    await layer.update();
+    const [station] = [...points().items.values()];
+    layer.destroy();
+    return station;
+  };
+  // 123 µg/m³ of PM2.5 over one hour: "Very poor" on the EEA hourly bands.
+  const rated = await stationIn({ unitsVerified: true, averagingMinutes: 60 });
+  assert.equal(rated.meta.rated, true);
+  assert.equal(rated.meta.assessment.label, 'Very poor');
+  assert.equal(rated.color, '#e96070');
+  assert.equal(rated.meta.aqi, null);
+  for (const options of [
+    {},
+    { unitsVerified: true },
+    { averagingMinutes: 60 },
+  ]) {
+    const station = await stationIn(options);
+    const name = JSON.stringify(options);
+    assert.equal(station.meta.rated, false, name);
+    assert.equal(station.color, '#8cb4ce', name);
+    assert.equal(station.meta.assessment.label, undefined, name);
+  }
+});
+
+test('a rejected data.gov.in key is reported as a key problem', async () => {
+  const { layer } = indiaLayer({
+    '/api/air-quality/india': () =>
+      Response.json({ error: 'key_rejected' }, { status: 403 }),
+    '/api/air-quality/openaq': snapshot(),
+    '/api/air-quality/south-africa': snapshot(),
+  });
+  await layer.update();
+  const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
+  assert.equal(india.status, 'failed');
+  assert.match(india.error, /Provider key rejected/);
   layer.destroy();
 });
 
@@ -331,6 +414,40 @@ function heldLayer(answers) {
   layer.init(viewer);
   return { layer, release: (provider, rows) => pending.get(provider)(rows) };
 }
+
+/**
+ * Default provider definitions; every India request is held until released,
+ * and the stub ignores the abort signal, as a slow network answer would.
+ */
+function queuedLayer() {
+  const india = [];
+  const source = {
+    definitions: createAirQualitySource().definitions,
+    getSnapshot: ({ provider }) =>
+      provider === 'cpcb'
+        ? new Promise((resolve) => india.push(resolve))
+        : Promise.resolve([]),
+  };
+  const layer = createAirQualityLayer({
+    source,
+    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
+  });
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  layer.init(viewer);
+  const drawnIds = () => {
+    const set = [...draw.sets.values()].find(
+      (candidate) => candidate.kind === 'points' && !candidate.disposed,
+    );
+    return [...(set?.items.values() ?? [])].map((point) => point.meta.id);
+  };
+  return { layer, india, drawnIds };
+}
+const indiaStation = (station) =>
+  normalizeCpcbRecords(
+    { records: [row({ station, last_update: recent() })] },
+    { now: Date.now() },
+  ).readings;
 const indiaRows = () =>
   normalizeCpcbRecords(
     { records: [row({ last_update: recent() })] },
@@ -381,5 +498,37 @@ test('a late India response after the view changes is dropped', async () => {
     ['eccc'],
   );
   assert.ok(layer.getRowControls().legend.length > 0);
+  layer.destroy();
+});
+
+test('in one view, a superseded India answer never replaces the newer one', async () => {
+  const { layer, india, drawnIds } = queuedLayer();
+  layer.setParams({ view: 'PM2.5' });
+  layer.enable();
+  const first = layer.update();
+  const second = layer.update();
+  assert.equal(india.length, 2);
+  india[1](indiaStation('Newer station'));
+  await second;
+  const newer = drawnIds();
+  assert.equal(newer.length, 1);
+  assert.match(newer[0], /Newer station/);
+  india[0](indiaStation('Older station'));
+  await first;
+  assert.deepEqual(drawnIds(), newer);
+  assert.equal(layer.getStats().count, 1);
+  layer.destroy();
+});
+
+test('an India answer that lands after the layer is switched off draws nothing', async () => {
+  const { layer, india, drawnIds } = queuedLayer();
+  layer.setParams({ view: 'PM2.5' });
+  layer.enable();
+  const pending = layer.update();
+  layer.disable();
+  india[0](indiaStation('Late station'));
+  await pending;
+  assert.deepEqual(drawnIds(), []);
+  assert.equal(layer.getStats().count, 0);
   layer.destroy();
 });

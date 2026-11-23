@@ -6,11 +6,28 @@ import { OBSERVATION_MAX_AGE_MS } from './model.js';
 
 /**
  * Whether the feed's units are confirmed to follow CPCB's convention
- * (`CPCB_UNITS`). Until a live response is checked against another copy of
- * the same stations, India's readings carry no units and are unrated: no
- * colour, no category and no contribution to any index.
+ * (`CPCB_UNITS`), checked against another copy of the same stations.
  */
 export const CPCB_UNITS_VERIFIED = false;
+
+/**
+ * The averaging period of the feed's `avg_value`, in minutes, or null while
+ * it is not confirmed. The resource does not state it.
+ */
+export const CPCB_AVERAGING_MINUTES = null;
+
+/**
+ * Whether India's readings may be rated: only with verified units AND a known
+ * averaging period. Unrated readings (`rated: false`) keep the neutral colour,
+ * get no category and contribute to no index (`aqi: null`); units are shown
+ * only once verified.
+ */
+export function cpcbRated({
+  unitsVerified = CPCB_UNITS_VERIFIED,
+  averagingMinutes = CPCB_AVERAGING_MINUTES,
+} = {}) {
+  return unitsVerified === true && Number.isFinite(averagingMinutes);
+}
 
 /** CPCB's convention for these pollutants; applied only once verified. */
 export const CPCB_UNITS = Object.freeze({
@@ -35,7 +52,7 @@ const POLLUTANT_IDS = Object.freeze({
 /** The pollutants India offers to the layer's views. */
 export const CPCB_POLLUTANTS = Object.freeze(Object.values(POLLUTANT_IDS));
 
-/** The colour of a station no index rates. */
+/** The colour of a station no index rates; the layer recolours rated ones. */
 const UNRATED_COLOR = '#8cb4ce';
 
 /** OGD timestamps have no offset: interpret DD-MM-YYYY HH:mm:ss as IST. */
@@ -71,12 +88,22 @@ function number(value) {
  * one reading per station and pollutant (the newest).
  *
  * Preserves OGD avg_value (legacy pollutant_avg) as a reported value, without
- * inventing an AQI or a health category. The resource's last_update is a
- * publication timestamp, not a sampling time, and the averaging period is not
- * stated. Returns null for a malformed payload.
+ * inventing an AQI. The resource's last_update is a publication timestamp, not
+ * a sampling time. A reading is marked rated only when `cpcbRated` allows it;
+ * its colour and category then come from the layer's normal interpretation.
+ * `unitsVerified` and `averagingMinutes` default to the module settings.
+ * Returns null for a malformed payload.
  */
-export function normalizeCpcbRecords(payload, { now = Date.now() } = {}) {
+export function normalizeCpcbRecords(
+  payload,
+  {
+    now = Date.now(),
+    unitsVerified = CPCB_UNITS_VERIFIED,
+    averagingMinutes = CPCB_AVERAGING_MINUTES,
+  } = {},
+) {
   if (!Array.isArray(payload?.records)) return null;
+  const rated = cpcbRated({ unitsVerified, averagingMinutes });
   const stations = new Map();
   const readings = new Map();
   for (const row of payload.records) {
@@ -122,7 +149,7 @@ export function normalizeCpcbRecords(payload, { now = Date.now() } = {}) {
       continue;
     const id = `cpcb:${stationId}:${parameter}`;
     if ((readings.get(id)?.observedMs ?? -Infinity) >= observedMs) continue;
-    const units = CPCB_UNITS_VERIFIED ? CPCB_UNITS[parameter] : null;
+    const units = unitsVerified === true ? CPCB_UNITS[parameter] : null;
     readings.set(id, {
       ...stations.get(stationId),
       id,
@@ -131,12 +158,12 @@ export function normalizeCpcbRecords(payload, { now = Date.now() } = {}) {
       scale: parameter,
       value,
       units,
+      ...(Number.isFinite(averagingMinutes) ? { averagingMinutes } : {}),
       observedMs,
       kind: 'observation',
       band: null,
       risk: null,
-      // Unrated while the units are unverified, and never part of an index.
-      rated: CPCB_UNITS_VERIFIED,
+      rated,
       aqi: null,
       color: UNRATED_COLOR,
       label: units ? `${value} ${units}` : String(value),

@@ -10149,14 +10149,19 @@ grammatical forms.
 
 CPCB's stations reach the layer through OGD India (`/api/air-quality/india`, dev and
 preview), as one more observation provider beside SAAQIS and OpenAQ: India's
-readings are drawn in the same de-duplicated station set, and a CPCB station
-replaces an OpenAQ copy of it within 150 m. The `DATA_GOV_IN_API_KEY` key is a
+readings are drawn in the same de-duplicated station set. Of two readings of
+one site within 150 m (`merge.js`), a rated one wins over an unrated one, then
+the direct network's (CPCB) over the aggregator's (OpenAQ), then the newer one;
+"rated" is `isRatedReading` in `merge.js`. The `DATA_GOV_IN_API_KEY` key is a
 normal Provider Settings entry, like OpenAQ's, and is never returned to the
 browser; without it the provider reports that it needs a key and the other
-providers keep drawing. India's readings stay neutral (unrated colour, no AQI
-contribution) until the field units are verified (`CPCB_UNITS_VERIFIED` in
-`src/layers/airQuality/cpcb.js`). See DATA_SOURCES.md for attribution,
-freshness, caching and the outstanding unit check. Browser fixture gate:
+providers keep drawing, and a key OGD rejects is shown as rejected. India's
+readings stay neutral (unrated colour, no category, no AQI contribution) until
+both the field units are verified and the averaging period is known
+(`CPCB_UNITS_VERIFIED`, `CPCB_AVERAGING_MINUTES` in
+`src/layers/airQuality/cpcb.js`); the layer asks for India's national snapshot
+at most every 20 minutes. See DATA_SOURCES.md for attribution, freshness,
+caching and the outstanding unit and averaging check. Browser fixture gate:
 `node scripts/qa-india-air-quality.mjs --url http://localhost:4173`.
 
 ### Shared native dropdowns and numeric fields

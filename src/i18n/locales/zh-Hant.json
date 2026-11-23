@@ -4409,5 +4409,6 @@
   "SAAQIS category|Moderate": "中等",
   "SAAQIS category|Unhealthy": "不健康",
   "SAAQIS category|Very Unhealthy": "非常不健康",
-  "SAAQIS category|Hazardous": "危險"
+  "SAAQIS category|Hazardous": "危險",
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "該監測網絡的單位或平均時段尚未確認，因此不分配健康類別。"
 }

@@ -161,8 +161,11 @@ export function createDefaultAirQualityProviders({
       direct: true,
       parameters: CPCB_POLLUTANTS,
       requiresKeyId: 'data-gov-in',
+      // The India route refreshes its national snapshot every 20 minutes.
+      refreshMs: 1_200_000,
       indexLabel: msg('Index unavailable'),
-      // Unrated until the feed's units are verified (CPCB_UNITS_VERIFIED).
+      // Unrated until both the units and the averaging period are confirmed
+      // (CPCB_UNITS_VERIFIED, CPCB_AVERAGING_MINUTES).
       interpretation: msg('Reported pollutant average · not an overall AQI'),
       legend: [{ color: '#8cb4ce', label: msg('Not rated') }],
       source: createAirQualitySnapshotSource({

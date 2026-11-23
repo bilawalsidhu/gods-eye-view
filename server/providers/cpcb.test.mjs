@@ -160,3 +160,44 @@ test('the snapshot carries the current OGD avg_value as the reading value', asyn
   assert.equal(reading.value, 42);
   assert.equal(reading.observedMs, NOW);
 });
+
+test('a key OGD rejects is answered as rejected, without the key', async () => {
+  for (const status of [401, 403]) {
+    let clock = NOW;
+    let reject = true;
+    const request = harness({
+      apiKey: () => 'secret-key',
+      now: () => clock,
+      fetchImpl: async () =>
+        reject
+          ? new Response('Invalid key secret-key', { status })
+          : Response.json({ total: 1, records: [ogdRow()] }),
+    });
+    const rejected = await request();
+    assert.equal(rejected.status, status);
+    assert.equal(rejected.body.error, 'key_rejected');
+    assert.equal(JSON.stringify(rejected).includes('secret'), false);
+    // Still rejected during the retry pause; a good refresh clears it.
+    assert.equal((await request()).status, status);
+    reject = false;
+    clock += 61_000;
+    assert.equal((await request()).status, 200);
+  }
+});
+
+test('the rating settings reach the normalizer', async () => {
+  const request = harness({
+    apiKey: () => 'test-key',
+    unitsVerified: true,
+    averagingMinutes: 60,
+    fetchImpl: async () => Response.json({ total: 1, records: [ogdRow()] }),
+  });
+  const [reading] = (await request()).body.readings;
+  assert.equal(reading.rated, true);
+  assert.equal(reading.units, 'µg/m³');
+  const unrated = harness({
+    apiKey: () => 'test-key',
+    fetchImpl: async () => Response.json({ total: 1, records: [ogdRow()] }),
+  });
+  assert.equal((await unrated()).body.readings[0].rated, false);
+});

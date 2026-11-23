@@ -8,7 +8,7 @@ import {
 } from '../../render/rendererOf.js';
 import { keyRequirementText } from '../../ui/keyGuidance.js';
 import { ECCC_DEFINITION } from './providers.js';
-import { mergeObservations } from './merge.js';
+import { isRatedReading, mergeObservations } from './merge.js';
 import { msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
@@ -678,7 +678,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             )
           : visible
       ).slice(0, READOUT_LIMIT);
-      const worst = inView.find((row) => row.assessment?.label || row.rating);
+      const worst = inView.find(isRatedReading);
       const category = worst?.assessment?.label || worst?.rating?.label;
       const categoryText = category
         ? bandLabel(category, ownerOf(worst).bandContext)

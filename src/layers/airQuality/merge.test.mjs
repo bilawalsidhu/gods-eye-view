@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeObservations } from './merge.js';
+import { isRatedReading, mergeObservations } from './merge.js';
 
 const reading = (provider, id, lat, lon, overrides = {}) => ({
   id: `${provider}:${id}`,
@@ -30,6 +30,34 @@ test('a direct reading replaces an OpenAQ copy within 150 m', () => {
   ]);
   assert.equal(merged.length, 1);
   assert.equal(merged[0].provider, 'saaqis');
+});
+
+test('a rated copy beats an unrated direct reading, and then the newer one loses to direct', () => {
+  const site = (provider, overrides) =>
+    reading(provider, '1', 28.6, 77.2, overrides);
+  const rated = { assessment: { label: 'Poor', severity: 3 } };
+  const older = { observedMs: Date.parse('2026-11-23T09:00:00Z') };
+  const unrated = { rated: false, assessment: { reason: 'not confirmed' } };
+  const merge = (cpcb, openaq) =>
+    mergeObservations([
+      { provider: 'cpcb', direct: true, readings: [site('cpcb', cpcb)] },
+      { provider: 'openaq', direct: false, readings: [site('openaq', openaq)] },
+    ]).map((kept) => kept.provider);
+  assert.deepEqual(merge({ ...unrated, ...older }, rated), ['openaq']);
+  // Neither rated: the direct reading wins even when it is older.
+  assert.deepEqual(merge({ ...unrated, ...older }, {}), ['cpcb']);
+  assert.deepEqual(merge({ ...rated, ...older }, rated), ['cpcb']);
+});
+
+test('rated means a category or a provider index, never a reading marked rated: false', () => {
+  assert.equal(isRatedReading({ assessment: { label: 'Good' } }), true);
+  assert.equal(isRatedReading({ rating: { label: 'Good', score: 2 } }), true);
+  assert.equal(isRatedReading({ assessment: { reason: 'No usable' } }), false);
+  assert.equal(isRatedReading({ rating: null }), false);
+  assert.equal(
+    isRatedReading({ rated: false, assessment: { label: 'Good' } }),
+    false,
+  );
 });
 
 test('readings 200 m apart both stay', () => {

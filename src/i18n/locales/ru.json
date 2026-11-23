@@ -4727,5 +4727,6 @@
   "SAAQIS category|Moderate": "Умеренно",
   "SAAQIS category|Unhealthy": "Вредно",
   "SAAQIS category|Very Unhealthy": "Очень вредно",
-  "SAAQIS category|Hazardous": "Опасно"
+  "SAAQIS category|Hazardous": "Опасно",
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Единицы измерения или период усреднения этой сети не подтверждены; категория воздействия на здоровье не присваивается."
 }

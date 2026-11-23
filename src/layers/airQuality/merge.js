@@ -6,9 +6,10 @@
  * monitor can arrive twice: once from its own network (a direct provider) and
  * once as the aggregator's copy, with coordinates rounded a little
  * differently. Two readings from different providers closer than `dedupeM`
- * are one site: the direct provider's reading wins, and between two of the
- * same standing the newer observation wins. A provider's own neighbouring
- * stations are never merged with each other.
+ * are one site. The reading kept is, in order: a rated one over an unrated one
+ * (`isRatedReading`), then the direct provider's over the aggregator's, then
+ * the newer observation. A provider's own neighbouring stations are never
+ * merged with each other.
  */
 
 /** Grid cell edge in degrees: about 2.2 km, well above any dedupe distance. */
@@ -28,6 +29,17 @@ function metres(a, b) {
     (a.lat - b.lat) * METRES_PER_DEGREE,
     (a.lon - b.lon) * METRES_PER_DEGREE * Math.cos((a.lat * Math.PI) / 180),
   );
+}
+
+/**
+ * Whether a reading carries a rating on the view's scale: a category from the
+ * layer's interpretation (`assessment.label`) or a provider index (`rating`).
+ * A reading its provider marks `rated: false` is never rated. The one
+ * definition of "rated" for the merge and the card.
+ */
+export function isRatedReading(reading) {
+  if (reading?.rated === false) return false;
+  return Boolean(reading?.assessment?.label || reading?.rating);
 }
 
 const placed = (reading) =>
@@ -50,16 +62,21 @@ export function mergeObservations(lists, { dedupeM = 150 } = {}) {
         reading,
         provider: list.provider,
         direct: list.direct === true,
+        rated: isRatedReading(reading),
         at: observedAt(reading),
         order: candidates.length,
       });
   }
-  // Best first: direct before aggregated, then newer before older; stable.
+  // Best first: rated before unrated, direct before aggregated, then newer
+  // before older; stable.
   const ranked = candidates
     .filter((candidate) => placed(candidate.reading))
     .sort(
       (a, b) =>
-        Number(b.direct) - Number(a.direct) || b.at - a.at || a.order - b.order,
+        Number(b.rated) - Number(a.rated) ||
+        Number(b.direct) - Number(a.direct) ||
+        b.at - a.at ||
+        a.order - b.order,
     );
   const grid = new Map();
   const kept = candidates.filter((candidate) => !placed(candidate.reading));

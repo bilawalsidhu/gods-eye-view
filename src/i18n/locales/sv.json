@@ -4515,5 +4515,6 @@
   "Worldwide · available OpenAQ stations": "Hela världen · tillgängliga OpenAQ-stationer",
   "Available monitoring stations worldwide. Unmonitored areas have no measured coverage.": "Tillgängliga mätstationer världen över. Områden utan mätstationer saknar uppmätt täckning.",
   "GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.": "GEV jämför det valda förorenande ämnet med EEA:s timkategorier. Detta är inte ett sammanlagt stations-AQI eller ett lokalt officiellt index.",
-  "Unknown air quality provider": "Okänd luftkvalitetsleverantör"
+  "Unknown air quality provider": "Okänd luftkvalitetsleverantör",
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Enheterna eller medelvärdesperioden för detta nätverk är inte bekräftade; ingen hälsokategori tilldelas."
 }

@@ -4621,5 +4621,6 @@
   "SAAQIS category|Moderate": "Modéré",
   "SAAQIS category|Unhealthy": "Mauvais pour la santé",
   "SAAQIS category|Very Unhealthy": "Très mauvais pour la santé",
-  "SAAQIS category|Hazardous": "Dangereux"
+  "SAAQIS category|Hazardous": "Dangereux",
+  "The units or averaging period of this network are not confirmed; no health category is assigned.": "Les unités ou la période de moyenne de ce réseau ne sont pas confirmées ; aucune catégorie sanitaire n’est attribuée."
 }

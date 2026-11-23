@@ -193,7 +193,8 @@ India's CPCB stations are one more observation provider of the Air quality
 layer: they are drawn in the same station set as SAAQIS and OpenAQ, in the AQI
 view and in the PM2.5, PM10, NO2, SO2, CO and O3 (OGD `OZONE`) views; OGD's NH3
 has no view and is not read. Where OpenAQ carries a copy of a CPCB station
-within 150 m, the CPCB reading is shown. Its source is CPCB's
+within 150 m, one reading is shown: a rated one over an unrated one, then the
+CPCB reading over OpenAQ's, then the newer one. Its source is CPCB's
 [Real time Air Quality Index catalog](https://www.data.gov.in/catalog/real-time-air-quality-index),
 OGD resource `3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69`.
 The portal identifies published data as licensed under the Government Open Data
@@ -203,15 +204,21 @@ is implied. Data is fetched at runtime, not bundled in this repository.
 Add a personal OGD key in **Provider Settings** (`DATA_GOV_IN_API_KEY`, listed
 like OpenAQ's key), or set it in the ignored `.env` and restart the server. This
 private key stays in the server proxy. Without it the route answers 428 and the
-layer reports that India needs a key while the other providers keep drawing.
+layer reports that India needs a key while the other providers keep drawing; a
+key OGD rejects (401/403) is answered with the same status, which the layer
+shows as a rejected key.
 
 **Value semantics:** each pollutant's `avg_value` (or legacy `pollutant_avg`)
-is kept as a reported average. Until the field units are verified
-(`CPCB_UNITS_VERIFIED` in `src/layers/airQuality/cpcb.js`), India's readings
-carry no units, are unrated (`rated: false`, the neutral colour, no category)
-and contribute nothing to an AQI (`aqi: null`). The OGD catalog title alone is
-insufficient to establish those field semantics. Markers are neutral station
-symbols, not interpolated pollution coverage.
+is kept as a reported average. A reading is rated only when both the field
+units are verified (`CPCB_UNITS_VERIFIED`) and the averaging period is known
+(`CPCB_AVERAGING_MINUTES`; the resource does not state it), both in
+`src/layers/airQuality/cpcb.js`. Until then India's readings are unrated
+(`rated: false`, the neutral colour, no category, and a reason saying the units
+or averaging period are not confirmed) and contribute nothing to an AQI
+(`aqi: null`); units are shown only once verified. Once rated, colour and
+category come from the same interpretation as other networks. The OGD catalog
+title alone is insufficient to establish those field semantics. Markers are
+neutral station symbols, not interpolated pollution coverage.
 
 `last_update` is interpreted as an IST publication timestamp, not as the
 sampling time. Missing, invalid, more-than-six-hour-old and implausibly future
@@ -225,8 +232,8 @@ snapshot (`schemaVersion: 1`, station catalog and readings), normalized by
 
 The schema and failure paths have fixture coverage. An authenticated live
 response verified on 18 October 2026 uses `avg_value`, `min_value`, and
-`max_value`; legacy `pollutant_*` fields remain supported. Field-unit
-verification is still required before adding AQI colors. The unauthenticated
+`max_value`; legacy `pollutant_*` fields remain supported. Field-unit and
+averaging-period verification are still required before adding AQI colors. The unauthenticated
 endpoint responds with `Authorization field missing`.
 
 ### Local receiver input (not fetched from a service)

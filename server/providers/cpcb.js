@@ -32,11 +32,16 @@ export function cpcbProxy({
   apiKey = () => process.env.DATA_GOV_IN_API_KEY,
   now = () => Date.now(),
   timeoutMs = 30_000,
+  // Rating settings for the normalizer; default to the module's.
+  unitsVerified,
+  averagingMinutes,
 } = {}) {
   let cache = null;
   let cachedAt = 0;
   let inflight = null;
   let retryAt = 0;
+  /** 401 or 403 while OGD rejects the key; cleared by a good refresh. */
+  let keyRejected = null;
   async function refresh(key) {
     const signal = AbortSignal.timeout(timeoutMs);
     const records = [];
@@ -56,7 +61,9 @@ export function cpcbProxy({
       });
       if (!response.ok) {
         await response.body?.cancel();
-        throw new Error('OGD request failed');
+        throw Object.assign(new Error('OGD request failed'), {
+          status: response.status,
+        });
       }
       const page = await readResponseJsonCapped(
         response,
@@ -93,7 +100,10 @@ export function cpcbProxy({
         );
       }
       if (records.length === total) {
-        const snapshot = normalizeCpcbRecords({ records }, { now: now() });
+        const snapshot = normalizeCpcbRecords(
+          { records },
+          { now: now(), unitsVerified, averagingMinutes },
+        );
         if (!snapshot) throw new Error('Invalid OGD snapshot');
         return {
           schemaVersion: 1,
@@ -136,16 +146,22 @@ export function cpcbProxy({
             cache = snapshot;
             cachedAt = now();
             retryAt = 0;
+            keyRejected = null;
           })
-          .catch(() => {
+          .catch((error) => {
             // Never log upstream error text or a URL: either could contain the key.
             retryAt = now() + 60_000;
+            keyRejected = [401, 403].includes(error?.status)
+              ? error.status
+              : null;
           })
           .finally(() => {
             inflight = null;
           });
       }
       await inflight;
+      // The layer shows "Provider key rejected. Check Provider Settings."
+      if (keyRejected) return send(keyRejected, { error: 'key_rejected' });
       if (cache && now() - cachedAt <= 6 * 60 * 60_000)
         return send(200, { ...cache, stale: now() - cachedAt >= TTL });
       return send(502, { error: 'upstream_unavailable' });

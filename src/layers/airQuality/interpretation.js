@@ -60,7 +60,12 @@ export function hourlyLegend(parameter) {
 export function interpretHourly(reading) {
   const limits = EEA_HOURLY_LIMITS[reading.parameter];
   let reason = null;
-  if (!limits)
+  // A provider that cannot vouch for its units or averaging period says so.
+  if (reading.rated === false)
+    reason = msg(
+      'The units or averaging period of this network are not confirmed; no health category is assigned.',
+    );
+  else if (!limits)
     reason =
       reading.parameter === 'CO2'
         ? msg(
