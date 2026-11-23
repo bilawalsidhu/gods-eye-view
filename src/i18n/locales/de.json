@@ -1727,11 +1727,6 @@
   "Unnamed incident": "Unbenannter Einsatz",
   "Open {title} on InciWeb": "{title} auf InciWeb öffnen",
   "Perimeter source unavailable": "Quelle der Brandgrenzen nicht verfügbar",
-  "Not contained or unknown": "Nicht eingedämmt oder unbekannt",
-  "Under 50% contained": "Unter 50 % eingedämmt",
-  "50–99% contained": "50–99 % eingedämmt",
-  "Fully contained": "Vollständig eingedämmt",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Die Farbe zeigt die gemeldete Eindämmung. Brandgrenzen sind auf etwa 100 m vereinfacht.",
   "Malformed perimeter snapshot": "Fehlerhafter Brandgrenzen-Snapshot",
   "radio tag|All": "Alle",
   "Directory refresh degraded; showing the previous station catalog.": "Verzeichnisaktualisierung eingeschränkt; der vorherige Senderkatalog wird gezeigt.",
@@ -4467,5 +4462,13 @@
   "No station within {n} km": "Keine Station im Umkreis von {n} km",
   "Outside the chosen area": "Außerhalb des gewählten Gebiets",
   "No live requests": "Keine Live-Abfragen",
-  "Updated {age}": "Aktualisiert {age}"
+  "Updated {age}": "Aktualisiert {age}",
+  "Last growth time": "Letztes Wachstum",
+  "last growth {age} ago": "zuletzt gewachsen vor {age}",
+  "Last 6 hours": "Letzte 6 Stunden",
+  "6–24 hours": "6–24 Stunden",
+  "1–3 days": "1–3 Tage",
+  "Older or unknown": "Älter oder unbekannt",
+  "Colour shows the age of each area.": "Die Farbe zeigt das Alter jeder Fläche.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht."
 }

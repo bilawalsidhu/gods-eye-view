@@ -5990,6 +5990,14 @@ function analystProviders(
         truncated: true,
       };
     },
+    /** The moment a layer's records show when it is not now (a past snapshot), else null. */
+    getRecordsAt(layerKey) {
+      if (!dataManager.isEnabled(layerKey)) return null;
+      const at = dataManager.layers
+        .get(layerKey)
+        ?.module?.getAnalystRecordsAt?.();
+      return Number.isFinite(at) ? at : null;
+    },
     isWarming,
     /** The layer's own status text for an empty result, e.g. "Fly below 400 km". */
     getEmptyNote(layerKey) {
@@ -6076,8 +6084,11 @@ const ANALYST_CANONICAL_FIELDS = new Set([
 
 /**
  * Compact one analyst record for the voice payload: identity, position (so a
- * follow-up can fly to it), distance, and that layer's manifest fields with
- * times as ISO text. The full record set stays engine-side for follow-ups.
+ * follow-up can fly to it), distance, and that layer's manifest fields. The layer's
+ * `timeField` (on a layer without one, any time field) comes back as ISO `time`.
+ * Other timestamps keep their own keys,
+ * as ISO text except for numeric `lastContactAtMs`. The full record set
+ * stays engine-side for follow-ups.
  *
  * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
@@ -6097,7 +6108,8 @@ function compactAnalystItem(r) {
     compact.lon = Math.round(r.lon * 1e4) / 1e4;
   }
   if (present(r.distanceKm)) compact.distanceKm = r.distanceKm;
-  const fields = voiceLayer(r.layerKey)?.query?.fields || {};
+  const query = voiceLayer(r.layerKey)?.query;
+  const fields = query?.fields || {};
   for (const [key, spec] of Object.entries(fields)) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
@@ -6106,7 +6118,9 @@ function compactAnalystItem(r) {
       const time = new Date(ms);
       if (Number.isFinite(time.getTime())) {
         if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
-        else compact.time = time.toISOString();
+        else if (key === (query.timeField ?? key))
+          compact.time = time.toISOString();
+        else compact[key] = time.toISOString();
       }
     } else compact[key] = r[key];
   }

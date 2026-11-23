@@ -1024,11 +1024,6 @@
   "Unnamed incident": "名称未設定の火災",
   "Open {title} on InciWeb": "InciWebで{title}を開く",
   "Perimeter source unavailable": "延焼範囲のソースを利用できません",
-  "Not contained or unknown": "封じ込め率0%または不明",
-  "Under 50% contained": "封じ込め率50%未満",
-  "50–99% contained": "封じ込め率50–99%",
-  "Fully contained": "封じ込め率100%",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "色は報告された封じ込め率を示します。延焼範囲の輪郭は約100 mの精度で簡略化されています。",
   "Malformed perimeter snapshot": "延焼範囲スナップショットの形式が不正です",
   "radio tag|All": "すべて",
   "News": "ニュース",
@@ -4362,5 +4357,13 @@
   "No station within {n} km": "{n} km 以内に観測所なし",
   "Outside the chosen area": "選んだ範囲の外",
   "No live requests": "ライブ取得なし",
-  "Updated {age}": "{age}に更新"
+  "Updated {age}": "{age}に更新",
+  "Last growth time": "最後の拡大",
+  "last growth {age} ago": "{age}前に最終拡大",
+  "Last 6 hours": "過去6時間",
+  "6–24 hours": "6–24時間",
+  "1–3 days": "1–3日",
+  "Older or unknown": "それ以前または不明",
+  "Colour shows the age of each area.": "色は各区域の経過時間を示します。",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "経過時間は WFIGS の測図時刻から、なければ記録の最終編集時刻から数えます。境界線は約 100 m に簡略化されています。"
 }

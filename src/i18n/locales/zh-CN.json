@@ -1004,11 +1004,6 @@
   "Unnamed incident": "未命名火情",
   "Open {title} on InciWeb": "在 InciWeb 上打开 {title}",
   "Perimeter source unavailable": "周界数据源不可用",
-  "Not contained or unknown": "未控制或未知",
-  "Under 50% contained": "控制低于 50%",
-  "50–99% contained": "控制 50–99%",
-  "Fully contained": "已全部控制",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "颜色表示报告的控制比例。周界简化至约 100 m。",
   "Malformed perimeter snapshot": "周界快照格式错误",
   "radio tag|All": "全部",
   "News": "新闻",
@@ -4362,5 +4357,13 @@
   "No station within {n} km": "{n} 公里内没有监测站",
   "Outside the chosen area": "在所选区域之外",
   "No live requests": "不发起实时请求",
-  "Updated {age}": "{age}更新"
+  "Updated {age}": "{age}更新",
+  "Last growth time": "最近一次扩展",
+  "last growth {age} ago": "最近一次扩展于 {age}前",
+  "Last 6 hours": "过去 6 小时",
+  "6–24 hours": "6–24 小时",
+  "1–3 days": "1–3 天",
+  "Older or unknown": "更早或未知",
+  "Colour shows the age of each area.": "颜色表示各区域在所示时刻的年龄。",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "时长从 WFIGS 测绘时间算起，否则从记录的最后编辑时间算起。边界已简化至约 100 米。"
 }

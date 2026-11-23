@@ -32,6 +32,8 @@ import { useCockpitStore } from './stores/cockpit.js';
 import { activeTab } from './contextLayerTabs.js';
 import { ContextControls } from './contextControls.js';
 import { createControls as createWildlifeControls } from '../layers/wildlifeSightings/controls.js';
+import { firePerimeterSnapshot } from '../layers/perimeters/records.js';
+import { setLocale } from '../i18n/index.js';
 
 const turn = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -439,6 +441,54 @@ test('nothing picked: one list per layer that is on, nearest first; its first ro
   await nextTick();
   assert.equal(cards.card?.identity.id, 'near01');
   assert.deepEqual(followed, [cards.card.key], 'one tap selects and follows');
+});
+
+test('Nearby fire cards localize the last growth fact', async (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('fr');
+  const growth = Date.UTC(2026, 6, 15);
+  const {
+    fires: [fire],
+  } = firePerimeterSnapshot(
+    [
+      {
+        stableId: 'fixture-fire',
+        name: 'Fixture Fire',
+        polygonTime: growth,
+        polygons: [
+          [
+            [
+              [-97.75, 30.26],
+              [-97.73, 30.26],
+              [-97.73, 30.28],
+              [-97.75, 30.26],
+            ],
+          ],
+        ],
+      },
+    ],
+    { now: growth + 60_000 },
+  );
+  const { anchor, ...record } = fire;
+  const { $, cards } = fixture(t, [
+    {
+      id: 'fire-perimeters',
+      name: 'Fire Perimeters',
+      enabled: true,
+      records: [{ ...record, ...anchor }],
+    },
+  ]);
+  cards.setView({ center: HERE, heightM: 40_000 });
+  await nextTick();
+  $('.nearby-lists [data-row-layer="fire-perimeters"]').click();
+  await nextTick();
+
+  const facts = $('.entity-card__facts');
+  assert.ok(facts);
+  const labels = [...facts.querySelectorAll('dt')].map(
+    (part) => part.textContent,
+  );
+  assert.ok(labels.includes('Dernière progression'), labels.join(', '));
 });
 
 test('filtered Nearby keeps Acartia attribution visible on selection', async (t) => {

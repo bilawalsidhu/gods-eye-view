@@ -286,6 +286,7 @@ const FACT_LABELS = Object.freeze({
   acres: msg('Area'),
   containedPct: msg('Contained'),
   discoveredTime: msg('Discovered'),
+  lastGrowthTime: msg('Last growth time'),
   category: msg('Type'),
   windKt: msg('Wind'),
   pressureHpa: msg('Pressure'),

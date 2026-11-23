@@ -1643,11 +1643,6 @@
   "Unnamed incident": "Namnlös händelse",
   "Open {title} on InciWeb": "Öppna {title} på InciWeb",
   "Perimeter source unavailable": "Källa för brandgränser otillgänglig",
-  "Not contained or unknown": "Inte under kontroll eller okänt",
-  "Under 50% contained": "Mindre än 50 % under kontroll",
-  "50–99% contained": "50–99 % under kontroll",
-  "Fully contained": "Helt under kontroll",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Färgen visar rapporterad kontrollgrad. Brandgränserna är förenklade till cirka 100 m.",
   "Malformed perimeter snapshot": "Felformaterad ögonblicksbild av brandgränser",
   "radio tag|All": "Alla",
   "Directory refresh degraded; showing the previous station catalog.": "Uppdateringen av katalogen är begränsad; visar den tidigare stationskatalogen.",
@@ -4467,5 +4462,13 @@
   "No station within {n} km": "Ingen station inom {n} km",
   "Outside the chosen area": "Utanför det valda området",
   "No live requests": "Inga liveanrop",
-  "Updated {age}": "Uppdaterad {age}"
+  "Updated {age}": "Uppdaterad {age}",
+  "Last growth time": "Senaste tillväxt",
+  "last growth {age} ago": "senaste tillväxt för {age} sedan",
+  "Last 6 hours": "Senaste 6 timmarna",
+  "6–24 hours": "6–24 timmar",
+  "1–3 days": "1–3 dagar",
+  "Older or unknown": "Äldre eller okänt",
+  "Colour shows the age of each area.": "Färgen visar åldern på varje område.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m."
 }

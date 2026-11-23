@@ -469,6 +469,8 @@
   "src/layers/perimeters/cards.test.mjs",
   "src/layers/perimeters/inciweb.test.mjs",
   "src/layers/perimeters/ownership.test.mjs",
+  "src/app/layers/perimeters.test.mjs",
+  "src/ui/spotConditions.test.mjs",
   "src/layers/droneAirspace/index.js",
   "src/layers/droneAirspace/records.js",
   "src/layers/droneAirspace/source.js",

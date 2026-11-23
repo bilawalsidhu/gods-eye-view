@@ -6016,6 +6016,54 @@ test('analyst_query keeps its answer when one record has an out-of-range time', 
   assert.equal(r.time, undefined, 'an unrepresentable time is omitted');
 });
 
+test("analyst_query keeps a fire's discovery time apart from its last growth", async (t) => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const T = Date.parse('2026-09-04T00:00:00Z');
+  t.mock.method(Date, 'now', () => T);
+  const records = [
+    {
+      id: 'fire-a',
+      name: 'Alpha Fire',
+      lat: 35.2,
+      lon: -108.1,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: Date.parse('2026-09-02T00:00:00Z'),
+    },
+    {
+      id: 'fire-b',
+      name: 'Bravo Fire',
+      lat: 35.3,
+      lon: -108.2,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: null,
+    },
+  ];
+  const module = {
+    getStats: () => ({ count: records.length, lastUpdate: T }),
+    getAnalystRecords: () => records,
+  };
+  const { runner } = manifestRunner(
+    { 'fire-perimeters': module },
+    { enabled: ['fire-perimeters'] },
+  );
+  const result = await runner('analyst_query', {
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    limit: 5,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const a = result.items.find((item) => item.id === 'fire-a');
+  const b = result.items.find((item) => item.id === 'fire-b');
+  assert.equal(a.time, '2026-09-01T00:00:00.000Z');
+  assert.equal(a.lastGrowthTime, '2026-09-02T00:00:00.000Z');
+  assert.equal(b.time, '2026-09-01T00:00:00.000Z');
+  assert.equal('lastGrowthTime' in b, false);
+});
+
 test('spoken layer names from the manifest reach the newer layers', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,

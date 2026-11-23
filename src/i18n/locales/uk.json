@@ -1092,11 +1092,6 @@
   "Unnamed incident": "Без назви",
   "Open {title} on InciWeb": "Відкрити {title} в InciWeb",
   "Perimeter source unavailable": "Джерело контурів пожеж недоступне",
-  "Not contained or unknown": "Не локалізовано або невідомо",
-  "Under 50% contained": "Локалізовано менш ніж на 50%",
-  "50–99% contained": "Локалізовано на 50–99%",
-  "Fully contained": "Повністю локалізовано",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Колір показує заявлений ступінь локалізації. Контури спрощено приблизно до 100 м.",
   "Malformed perimeter snapshot": "Некоректний знімок контурів пожеж",
   "radio tag|All": "Усі",
   "News": "Новини",
@@ -4677,5 +4672,13 @@
   "No station within {n} km": "Немає станції в межах {n} км",
   "Outside the chosen area": "Поза вибраною областю",
   "No live requests": "Без живих запитів",
-  "Updated {age}": "Оновлено {age}"
+  "Updated {age}": "Оновлено {age}",
+  "Last growth time": "Останнє поширення",
+  "last growth {age} ago": "останнє зростання {age} тому",
+  "Last 6 hours": "Останні 6 годин",
+  "6–24 hours": "6–24 години",
+  "1–3 days": "1–3 дні",
+  "Older or unknown": "Старше або невідомо",
+  "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м."
 }

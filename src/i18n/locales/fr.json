@@ -1070,11 +1070,6 @@
   "Unnamed incident": "Incident sans nom",
   "Open {title} on InciWeb": "Ouvrir {title} sur InciWeb",
   "Perimeter source unavailable": "Source des périmètres indisponible",
-  "Not contained or unknown": "Non circonscrit ou inconnu",
-  "Under 50% contained": "Circonscrit à moins de 50 %",
-  "50–99% contained": "Circonscrit à 50–99 %",
-  "Fully contained": "Entièrement circonscrit",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "La couleur indique la part du périmètre déclarée circonscrite. Les périmètres sont simplifiés à environ 100 m.",
   "Malformed perimeter snapshot": "Instantané des périmètres mal formé",
   "radio tag|All": "Toutes",
   "News": "Actualités",
@@ -4572,5 +4567,13 @@
   "No station within {n} km": "Aucune station à moins de {n} km",
   "Outside the chosen area": "Hors de la zone choisie",
   "No live requests": "Aucune requête en direct",
-  "Updated {age}": "Mis à jour {age}"
+  "Updated {age}": "Mis à jour {age}",
+  "Last growth time": "Dernière progression",
+  "last growth {age} ago": "dernière progression il y a {age}",
+  "Last 6 hours": "6 dernières heures",
+  "6–24 hours": "6–24 heures",
+  "1–3 days": "1–3 jours",
+  "Older or unknown": "Plus ancien ou inconnu",
+  "Colour shows the age of each area.": "La couleur indique l’âge de chaque zone.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Âge compté depuis la cartographie WFIGS, sinon depuis la dernière modification de la fiche. Périmètres simplifiés à ~100 m."
 }
