@@ -992,8 +992,9 @@ Generic GeoJSON line features use a representative vertex.
 At globe view each layer shows once, with its
 loaded count at the provider's scope, feed state and a breakdown of the
 loaded records (`layerBreakdown`). The dedicated Bhote Koshi reconstruction
-panel takes over Context while active. The independent locator can list its
-evidence and places in the Inspector. Each map layer that is on has a tile at every zoom: a layer
+panel takes over Context while active. The reconstruction's geolocated
+evidence can appear in Context search and Nearby. The independent locator
+lists places in the Inspector. Each map layer that is on has a tile at every zoom: a layer
 with items shows its count, or why it holds none ("Zoom in to see bikes") in
 place of a 0, and keeps a tile with nothing within the radius; a field (wind,
 GNSS integrity, recent imagery, air quality) shows its value at the centre of
