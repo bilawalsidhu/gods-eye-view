@@ -10,7 +10,7 @@ const source = readFileSync(
   .replace(/^import .*;\n/gm, '')
   .replace('export function', 'function');
 
-function fixture() {
+function fixture({ playOpening, hasShareState = false } = {}) {
   const timers = new Map();
   const listeners = new Map();
   const events = [];
@@ -44,7 +44,10 @@ function fixture() {
       addEventListener: (type, listener) => listeners.set(type, listener),
       removeEventListener: (type) => listeners.delete(type),
     },
+    playOpening,
     styleManager: {
+      hasShareState,
+      viewer: 'viewer',
       initialRestorePromise: new Promise((resolve) => {
         restored = resolve;
       }),
@@ -123,4 +126,60 @@ test('shutdown during the cover transition cancels the listener and fallback', a
   transition();
   f.fire(900);
   assert.deepEqual(f.events, ['hidden', 'settings:destroy']);
+});
+
+function openingStub(events) {
+  let land;
+  const calls = [];
+  const play = (options) => {
+    calls.push(options);
+    events.push('opening');
+    return {
+      done: new Promise((resolve) => {
+        land = resolve;
+      }),
+      cancel: () => events.push('opening:cancel'),
+    };
+  };
+  return { play, calls, land: () => land() };
+}
+
+test('a bare address plays the opening, and welcome waits for its end', async () => {
+  const events = [];
+  const opening = openingStub(events);
+  const f = fixture({ playOpening: opening.play });
+  f.events.push = (value) => events.push(value);
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.deepEqual(events, ['opening']);
+  assert.equal(opening.calls[0].viewer, 'viewer');
+  f.fire(900);
+  assert.deepEqual(events, ['opening'], 'no fallback timer while it plays');
+  opening.land();
+  await flush();
+  assert.deepEqual(events, ['opening', 'welcome']);
+  await f.stop();
+  assert.ok(events.includes('opening:cancel'));
+});
+
+test('a shared view opens without the opening', async () => {
+  const events = [];
+  const opening = openingStub(events);
+  const f = fixture({ playOpening: opening.play, hasShareState: true });
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.equal(opening.calls.length, 0);
+  assert.deepEqual(f.events, ['hidden']);
+  await f.stop();
+});
+
+test('without an opening to play the cover hides as before', async () => {
+  const f = fixture({ playOpening: () => null });
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.deepEqual(f.events, ['hidden']);
+  await f.stop();
 });

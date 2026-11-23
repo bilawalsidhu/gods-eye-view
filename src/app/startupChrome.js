@@ -1,6 +1,9 @@
 import { initFirstRunExperience } from '../firstRunExperience.js';
 
-/** Reveal welcome controls only after restoration and the loading transition. */
+/**
+ * Reveal welcome controls only after restoration and the loading transition.
+ * `playOpening` plays the opening on a bare address (src/app/openingIntro.js).
+ */
 export function startApplicationChrome({
   loadingScreen,
   styleManager,
@@ -8,9 +11,11 @@ export function startApplicationChrome({
   signal,
   initializeWelcome = initFirstRunExperience,
   initializeSettings,
+  playOpening = null,
 }) {
   let disposed = false;
   let firstRun;
+  let opening = null;
   let revealTimer;
   let resolveDelay;
   const minimumDelay = new Promise((resolve) => {
@@ -29,6 +34,14 @@ export function startApplicationChrome({
     })
     .then(() => {
       if (disposed || signal.aborted) return;
+      // A bare address opens with the opening; welcome waits for its end.
+      opening = styleManager.hasShareState
+        ? null
+        : playOpening?.({ viewer: styleManager.viewer, loadingScreen });
+      if (opening) {
+        void opening.done.then(revealFirstRun);
+        return;
+      }
       loadingScreen.classList.add('hidden');
       loadingScreen.addEventListener('transitionend', revealFirstRun, {
         once: true,
@@ -44,6 +57,7 @@ export function startApplicationChrome({
   );
   return async () => {
     disposed = true;
+    opening?.cancel();
     clearTimeout(delayTimer);
     clearTimeout(revealTimer);
     resolveDelay();
