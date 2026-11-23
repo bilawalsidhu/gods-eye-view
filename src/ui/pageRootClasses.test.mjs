@@ -180,22 +180,30 @@ test('the HUD holds hud-minimal-active only while the Minimal HUD is active', as
   assert.ok(!on('hud-minimal-active'));
 });
 
-test('the welcome view holds has-first-run-launcher while its launcher is on the page', async (t) => {
+test('launcher-shown is on while the first-run launcher is on the page', async (t) => {
   const { pinia } = mount(t, WelcomeView);
   const store = useFirstRunStore(pinia);
   await settle();
   assert.ok(document.getElementById('first-run-launcher'));
-  assert.ok(
-    on('has-first-run-launcher'),
-    'drawn hidden before it is presented',
-  );
+  assert.ok(on('launcher-shown'), 'drawn hidden before it is presented');
   store.publish({ removed: false, shown: true, visible: true });
   await settle();
-  assert.ok(on('has-first-run-launcher'));
+  assert.ok(on('launcher-shown'));
   store.publish({ removed: true });
   await settle();
   assertSameNode(document.getElementById('first-run-launcher'), null);
-  assert.ok(!on('has-first-run-launcher'));
+  assert.ok(!on('launcher-shown'));
+});
+
+test('a launcher removed outside the welcome view clears launcher-shown', async (t) => {
+  mount(t, WelcomeView);
+  await settle();
+  assert.ok(on('launcher-shown'));
+  // As a page clearing the first-run dialog by hand does: `body:has()` stopped
+  // matching, so the class goes too.
+  document.getElementById('first-run-launcher').remove();
+  await settle();
+  assert.ok(!on('launcher-shown'));
 });
 
 test('the World Timeline holds has-world-timeline while it is drawn', async (t) => {
@@ -421,7 +429,7 @@ const ROOT_CLASSES = Object.freeze({
   'omnibar-has-results': '#gev-omnibar.has-results',
   'assistant-voice-mode': "#gev-voice-control[data-assistant-mode='voice']",
   'left-panel-open': '#left-panel-stack > .panel-collapsible:not(.collapsed)',
-  'has-first-run-launcher': '#first-run-launcher',
+  'launcher-shown': '#first-run-launcher',
   'loading-screen-shown': '#loading-screen:not(.hidden)',
   'has-world-timeline': '#world-timeline',
   'has-locale-picker': '#locale-picker',
