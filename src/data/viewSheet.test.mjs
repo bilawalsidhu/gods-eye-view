@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
   AIRCRAFT_VIEWS,
+  VESSEL_VIEWS,
   frameDirection,
   frameUp,
   viewFrame,
@@ -266,65 +267,110 @@ test('AIRCRAFT_VIEWS is consistent: a block a subject, every block on the sheet'
   assert.ok(Object.isFrozen(subjects));
 });
 
-const BAKE = new URL(
-  '../../scripts/build-aircraft-view-sheet.py',
-  import.meta.url,
-);
-const MANIFEST = new URL(
-  '../../public/sprites/aircraft-views.json',
-  import.meta.url,
-);
+const BAKE = new URL('../../scripts/bake-view-sheet.py', import.meta.url);
 
-test('the bake script lays the sheet out as AIRCRAFT_VIEWS says', () => {
-  const script = readFileSync(BAKE, 'utf8');
-  const constant = (name) => {
-    const match = new RegExp(`^${name} = (.+)$`, 'm').exec(script);
-    assert.ok(match, `${name} in the bake script`);
+/** The sheets the bake script bakes: its config name, the layout it must
+ *  match, the files it ships and the size the layout pins. */
+const SHEETS = [
+  {
+    config: 'AIRCRAFT',
+    views: AIRCRAFT_VIEWS,
+    name: 'aircraft-views',
+    frames: 302,
+    size: [4096, 3648],
+  },
+  {
+    config: 'VESSELS',
+    views: VESSEL_VIEWS,
+    name: 'vessel-views',
+    frames: 208,
+    size: [4096, 2496],
+  },
+];
+
+/** A sheet's entry in the bake script: `NAME = { ... }`. */
+function bakeConfig(script, config) {
+  const block = new RegExp(`^${config} = \\{([\\s\\S]*?)^\\}`, 'm').exec(
+    script,
+  );
+  assert.ok(block, `${config} in the bake script`);
+  const field = (key) => {
+    const match = new RegExp(`^\\s*"${key}": (.+),$`, 'm').exec(block[1]);
+    assert.ok(match, `${config}.${key} in the bake script`);
     return JSON.parse(match[1]);
   };
-  const { sheet, frames, subjects } = AIRCRAFT_VIEWS;
-  assert.equal(constant('RING_STEP_DEG'), sheet.ringStepDeg);
-  assert.deepEqual(constant('RINGS'), [...sheet.rings]);
-  assert.equal(constant('COLUMNS'), sheet.columns);
-  const list = /^SUBJECTS = \[([\s\S]*?)^\]/m.exec(script);
-  assert.ok(list, 'SUBJECTS in the bake script');
-  const names = [...list[1].matchAll(/^\s*\("(\w+)",/gm)].map((m) => m[1]);
-  assert.deepEqual(names, Object.keys(subjects), 'the same subjects in order');
-  // The script's rows: as many as its subjects' blocks take.
-  assert.equal(Math.ceil((names.length * frames) / sheet.columns), sheet.rows);
-});
+  const names = [...block[1].matchAll(/^\s*\("(\w+)", "([\w/.]+)"/gm)];
+  return {
+    field,
+    names: names.map((m) => m[1]),
+    models: names.map((m) => m[2]),
+  };
+}
 
-test(
-  'the baked manifest matches AIRCRAFT_VIEWS',
-  { skip: !existsSync(MANIFEST) && 'no public/sprites/aircraft-views.json' },
-  () => {
-    const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
-    const { sheet, subjects } = AIRCRAFT_VIEWS;
+for (const { config, views, name, frames, size } of SHEETS) {
+  test(`${views.id} is pinned: ${frames} frames a subject, ${size.join(' × ')} px`, () => {
+    const { sheet } = views;
+    assert.equal(views.frames, frames);
+    assert.equal(viewLayout(sheet).frames, frames);
+    assert.equal(sheet.cellPx * sheet.columns, size[0]);
+    assert.equal(sheet.cellPx * sheet.rows, size[1]);
+    assert.equal(sheet.image, `/sprites/${name}.webp`);
+    assert.equal(sheet.grey, true);
+  });
+
+  test(`the bake script lays ${views.id} out as the layout says`, () => {
+    const { field, names } = bakeConfig(readFileSync(BAKE, 'utf8'), config);
+    const { sheet, subjects } = views;
+    assert.equal(field('name'), name);
+    assert.equal(field('ring_step_deg'), sheet.ringStepDeg);
+    assert.deepEqual(field('rings'), [...sheet.rings]);
+    assert.equal(field('columns'), sheet.columns);
+    assert.deepEqual(
+      names,
+      Object.keys(subjects),
+      'the same subjects in order',
+    );
+    // The script's rows: as many as its subjects' blocks take.
+    assert.equal(
+      Math.ceil((names.length * frames) / sheet.columns),
+      sheet.rows,
+    );
+  });
+
+  const manifestUrl = new URL(
+    `../../public/sprites/${name}.json`,
+    import.meta.url,
+  );
+  test(`the baked manifest matches ${views.id}`, () => {
+    // Shipped with the app: a missing manifest fails, it does not skip.
+    assert.ok(existsSync(manifestUrl), `public/sprites/${name}.json`);
+    const manifest = JSON.parse(readFileSync(manifestUrl, 'utf8'));
+    const { models } = bakeConfig(readFileSync(BAKE, 'utf8'), config);
+    const { sheet, subjects } = views;
     assert.equal(manifest.cellPx, sheet.cellPx);
     assert.equal(manifest.columns, sheet.columns);
     assert.equal(manifest.rows, sheet.rows);
     assert.equal(manifest.ringStepDeg, sheet.ringStepDeg);
     assert.deepEqual(manifest.rings, [...sheet.rings]);
     assert.equal(manifest.grey, true);
-    assert.equal(manifest.image, 'aircraft-views.webp');
+    assert.equal(manifest.image, `${name}.webp`);
     assert.deepEqual(Object.keys(manifest.subjects), Object.keys(subjects));
-    for (const [name, first] of Object.entries(subjects))
-      assert.equal(manifest.subjects[name].first, first, name);
-  },
-);
+    Object.entries(subjects).forEach(([subject, first], i) => {
+      assert.equal(manifest.subjects[subject].first, first, subject);
+      assert.equal(manifest.subjects[subject].model, models[i], subject);
+      assert.ok(manifest.subjects[subject].radiusM > 0, `${subject} baked`);
+    });
+  });
 
-const SHEET = new URL(
-  '../../public/sprites/aircraft-views.webp',
-  import.meta.url,
-);
-
-test(
-  'the shipped sheet is the size the layout says, grey, and clear at every cell’s edge',
-  { skip: !existsSync(SHEET) && 'no public/sprites/aircraft-views.webp' },
-  async () => {
+  const sheetUrl = new URL(
+    `../../public/sprites/${name}.webp`,
+    import.meta.url,
+  );
+  test(`the shipped ${name}.webp is the size the layout says, grey, and clear at every cell’s edge`, async () => {
+    assert.ok(existsSync(sheetUrl), `public/sprites/${name}.webp`);
     const { default: sharp } = await import('sharp');
-    const { sheet, frames, subjects } = AIRCRAFT_VIEWS;
-    const { data, info } = await sharp(fileURLToPath(SHEET))
+    const { sheet, subjects } = views;
+    const { data, info } = await sharp(fileURLToPath(sheetUrl))
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
@@ -335,21 +381,25 @@ test(
     for (let i = 0; i < data.length; i += 4)
       if (data[i] !== data[i + 1] || data[i] !== data[i + 2])
         assert.fail(`not grey at pixel ${i / 4}`);
-    // Each used cell keeps its outer 2 px transparent (the mipmaps).
+    // Each used cell keeps its outer 2 px transparent (the mipmaps), and
+    // has something in it.
     const used = Object.keys(subjects).length * frames;
     const c = sheet.cellPx;
     for (let n = 0; n < used; n++) {
       const left = (n % sheet.columns) * c;
       const top = Math.floor(n / sheet.columns) * c;
+      let drawn = 0;
       for (let y = 0; y < c; y++)
         for (let x = 0; x < c; x++) {
-          if (x >= 2 && y >= 2 && x < c - 2 && y < c - 2) continue;
-          if (data[at(left + x, top + y) + 3] !== 0)
+          const alpha = data[at(left + x, top + y) + 3];
+          if (x >= 2 && y >= 2 && x < c - 2 && y < c - 2) drawn += alpha;
+          else if (alpha !== 0)
             assert.fail(`cell ${n}: alpha at its edge (${x}, ${y})`);
         }
+      assert.ok(drawn > 0, `cell ${n} is empty`);
     }
-  },
-);
+  });
+}
 
 test('in the bake’s axes (nose −X, starboard +Y, up +Z) a frame has the same up and direction', () => {
   // The bake turns forward by Blender's rotation_difference(UP, d), in its

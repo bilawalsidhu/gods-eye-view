@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createVesselLayer } from './index.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
+import { VESSEL_VIEWS } from '../../data/viewSheet.js';
 
 // Following the world clock on a renderer that moves icons along motion
 // segments on its own clock, each vessel's icon is drawn along its track
@@ -10,7 +12,7 @@ import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 
 const noop = () => {};
 
-function setup(t, { capabilities = new Set(['motionSegments']) } = {}) {
+function setup(t, { capabilities = new Set(['motionSegments']), fleet } = {}) {
   const originalDocument = globalThis.document;
   globalThis.document = { getElementById: () => null };
   t.after(() => {
@@ -35,6 +37,7 @@ function setup(t, { capabilities = new Set(['motionSegments']) } = {}) {
         clearOverlaySource: noop,
       },
       geoid: {},
+      ...(fleet ? { fleet } : null),
       sprites: {},
       focus: {
         focusNowMs: () => 0,
@@ -68,7 +71,7 @@ function setup(t, { capabilities = new Set(['motionSegments']) } = {}) {
     [...draw.sets.values()].find(
       (record) => record.kind === 'icons' && !record.disposed,
     );
-  return { layer, viewer, icons };
+  return { layer, viewer, icons, draw };
 }
 
 const T = 1_000_000;
@@ -281,4 +284,71 @@ test('going live, a vessel a live update has drawn since stays where that drew i
     assert.equal(visual.drawnLat, 52.1, id);
     assert.deepEqual(icons().items.get(id).pos, visual.position);
   }
+});
+
+test('on a renderer that draws view sheets a vessel is a view of its hull, an aid still its buoy', (t) => {
+  const { layer, viewer, icons, draw } = setup(t, {
+    capabilities: new Set(['motionSegments', 'viewSheets']),
+    fleet: { resolveAsset: (url) => `/gev${url}` },
+  });
+  layer.testing._reconcileVesselsForTest(viewer, [
+    { ...row(minuteFixes), type: 'Cargo' },
+    { ...row(minuteFixes), mmsi: '222', type: '36' },
+    { ...row(minuteFixes), mmsi: '333', type: '50' },
+    { ...row(minuteFixes), mmsi: '993672001', type: 'Port Hand Mark' },
+  ]);
+  // The sheet, once, at the layer's asset URL.
+  assert.deepEqual(draw.viewSheets, [
+    [
+      VESSEL_VIEWS.id,
+      { ...VESSEL_VIEWS.sheet, image: '/gev/sprites/vessel-views.webp' },
+    ],
+  ]);
+  const set = icons();
+  const cargo = set.items.get('111');
+  assert.deepEqual(cargo.image, {
+    views: VESSEL_VIEWS.id,
+    first: VESSEL_VIEWS.subjects.cargo,
+    fallback: vesselSprite('cargo'),
+  });
+  assert.equal(cargo.rotationMode, 'course', 'a view lies along its course');
+  assert.equal(cargo.imageLod, undefined);
+  assert.equal(set.items.get('222').image.first, VESSEL_VIEWS.subjects.sailing);
+  // A pilot boat: its own hull from the sheet, a service boat's flat hull.
+  assert.deepEqual(set.items.get('333').image, {
+    views: VESSEL_VIEWS.id,
+    first: VESSEL_VIEWS.subjects.pilot,
+    fallback: vesselSprite('tug'),
+  });
+  const buoy = set.items.get('993672001');
+  assert.equal(buoy.image, aidSprite());
+  assert.equal(buoy.rotationMode, 'screen');
+});
+
+test('without view sheets a vessel keeps its flat hull', (t) => {
+  const { layer, viewer, icons, draw } = setup(t);
+  layer.testing._reconcileVesselsForTest(viewer, [
+    { ...row(minuteFixes), type: 'Cargo' },
+  ]);
+  assert.deepEqual(draw.viewSheets, []);
+  assert.equal(icons().items.get('111').image, vesselSprite('cargo'));
+});
+
+test('a vessel is drawn larger near than far, under an aircraft at every range, and recedes toward the horizon', (t) => {
+  const { layer, viewer, icons } = setup(t);
+  layer.testing._reconcileVesselsForTest(viewer, [
+    // The fastest step of a vessel's own scale.
+    { ...row(minuteFixes), type: 'Cargo', speed: 20 },
+  ]);
+  const set = icons();
+  assert.deepEqual(set.spec.recede, {}, "the renderer's own recession");
+  const item = set.items.get('111');
+  const curve = item.scaleByDistance;
+  const px = (value) => item.size[0] * item.scale * value;
+  assert.ok(px(curve.nearValue) > px(1), 'larger up close than it was');
+  // An aircraft icon: 20 px, three times that near and half of it far, over
+  // the same range (aircraftIconLayer.js).
+  assert.deepEqual([curve.near, curve.far], [1000, 8000000]);
+  assert.ok(px(curve.nearValue) < 20 * 3);
+  assert.ok(px(curve.farValue) < 20 * 0.5);
 });

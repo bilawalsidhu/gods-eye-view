@@ -44,8 +44,13 @@ import {
 } from '../../data/fleetModels.js';
 import { createFleetModelLayer } from '../../data/fleetModelInstances.js';
 import { vesselPartState } from '../../data/modelPartDrivers.js';
-import { isAidToNavigation, vesselKind } from '../../data/vesselTypes.js';
+import {
+  isAidToNavigation,
+  vesselKind,
+  vesselShape,
+} from '../../data/vesselTypes.js';
 import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
+import { registerVesselViews, vesselViewRef } from '../../data/vesselViews.js';
 import { cssColor } from '../../render/color.js';
 import { KNOT_MPS } from '../../data/units.js';
 
@@ -61,6 +66,19 @@ const HIDDEN_FOLLOW_MS = 250;
 
 /** A vessel or aid sprite's drawn size before its scale (CSS px). */
 const SHIP_ICON_PX = 32;
+/**
+ * How a vessel or aid sprite's size follows its range from the eye, on the
+ * aircraft icons' range (`aircraftIconLayer.js`): half as large again up
+ * close, where a hull's shape reads; as it was drawn before at some
+ * 1,000 km; and a third from 8,000 km out. Under an aircraft's icon at every
+ * range, so a world of ships is a field of small marks.
+ */
+const SHIP_SCALE_BY_DISTANCE = Object.freeze({
+  near: 1000,
+  nearValue: 1.5,
+  far: 8000000,
+  farValue: 0.35,
+});
 
 let instances = 0;
 
@@ -228,6 +246,7 @@ export function createRendering({
     advanceSpriteFocus,
     focusAlphaNeedsWrite,
     spriteFocusAtRest,
+    nearFarScalarValueAtDistance,
   } = services.focus;
   const {
     holdContinuousRender,
@@ -265,12 +284,22 @@ export function createRendering({
     const capabilities = rendererOf(viewer)?.capabilities ?? null;
     iconMotion = capabilities?.has('motionSegments') === true;
     segmentsWere = segmentsOn();
+    // On a renderer that draws view sheets a vessel is the view of its
+    // hull from where the eye is, not the flat hull.
+    iconViews = registerVesselViews(
+      drawOf(viewer),
+      capabilities,
+      services.fleet?.resolveAsset,
+    );
     const set = drawOf(viewer).icons({
       id: `ais-vessels:${++instances}`,
       // Translucent, as its billboards were: overlapping chevrons keep
       // their outlines rather than the first one's fill.
       blend: 'translucent',
       horizonCull: true,
+      // Toward the horizon a vessel shrinks and fades, as an aircraft does
+      // (the renderer's defaults, which are the aircraft sets').
+      recede: {},
       drawOrder: spriteDrawOrder?.('ais') ?? 0,
       ...(iconMotion ? { motionClock: motionClock(segmentsWere) } : null),
     });
@@ -286,6 +315,8 @@ export function createRendering({
   // segments on its own clock.
   let iconSet = null;
   let iconMotion = false;
+  // Whether a vessel's icon is drawn from the vessel view sheet.
+  let iconViews = false;
   // Whether the icons last moved on the renderer's clock.
   let segmentsWere = false;
   // The record drawn under each icon id, for replanning an id.
@@ -381,6 +412,7 @@ export function createRendering({
     state.icons?.dispose();
     state.icons = null;
     iconSet = null;
+    iconViews = false;
     iconRecords.clear();
     planFrom.clear();
     replannedAtMs = -Infinity;
@@ -430,6 +462,7 @@ export function createRendering({
       // Tinted by type; selection changes neither the colour nor the size.
       color: shipTint(record),
       scale: shipScale(record),
+      scaleByDistance: SHIP_SCALE_BY_DISTANCE,
       // An aid's buoy stands upright on screen; a vessel turns with course.
       rotationMode: aid ? 'screen' : 'course',
       rotation: 0,
@@ -529,18 +562,22 @@ export function createRendering({
   }
 
   /**
-   * The sprite a vessel is drawn as: the white hull of its kind
-   * (`vesselKind`), bow up so the row's course turns it to its heading, or
-   * for an aid to navigation the buoy. The layer tints it
-   * (`shipTint`), so each shape takes one icon-atlas slot.
+   * The sprite a vessel is drawn as: on a renderer that draws view sheets,
+   * the view of its kind's hull (`vesselKind`) from where the eye is
+   * (`vesselViews.js`), with the flat hull to fall back on; else the flat
+   * white hull, bow up so the row's course turns it to its heading. An aid
+   * to navigation is the buoy either way. The layer tints it (`shipTint`).
    * @param {Object} record - Vessel record.
-   * @returns {string} SVG data URL.
+   * @returns {string|{views: string, first: number, fallback: string}} SVG
+   *   data URL, or a view of the vessel sheet.
    */
 
   function shipIcon(record) {
-    return isAidToNavigation(record)
-      ? aidSprite()
-      : vesselSprite(vesselKind(record.type));
+    if (isAidToNavigation(record)) return aidSprite();
+    const kind = vesselKind(record.type);
+    return iconViews
+      ? vesselViewRef(vesselShape(record.type), kind)
+      : vesselSprite(kind);
   }
 
   /**
@@ -1308,18 +1345,25 @@ export function createRendering({
         !focusAlphaNeedsWrite(icons.focus(id), 1, params)
       )
         continue;
+      const cameraDistance = cameraDistanceFor(position);
+      // The sprite's half size as drawn at that range.
+      const half =
+        (item.scale ?? 1) *
+        (nearFarScalarValueAtDistance?.(item.scaleByDistance, cameraDistance) ??
+          1) *
+        0.5;
       const focus = advanceSpriteFocus(sprite, {
         // Hidden/far-side icons still finish any pending release so the active
         // count remains truthful and they cannot reappear with stale dim alpha.
         screenPosition: visual.visible ? screenPositionFor(position) : null,
-        cameraDistance: cameraDistanceFor(position),
+        cameraDistance,
         nowMs,
         target,
         params,
         // Vessel artwork is 32 px before scale. Including the ambient
         // chevron's own rendered extent prevents edge-overlap misses.
-        spriteHalfWidthPx: item.size[0] * (item.scale ?? 1) * 0.5,
-        spriteHalfHeightPx: item.size[1] * (item.scale ?? 1) * 0.5,
+        spriteHalfWidthPx: item.size[0] * half,
+        spriteHalfHeightPx: item.size[1] * half,
       });
       transitioning ||= focus.transitioning;
       if (focus.active) activeCount += 1;

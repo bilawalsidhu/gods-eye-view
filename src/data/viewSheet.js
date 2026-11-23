@@ -3,8 +3,9 @@
  * @description A view sheet: one image of small sprites showing a subject
  * (an aircraft class) from a sphere of directions, and the maths that picks
  * the sprite for where the eye is. Plain JavaScript and GLSL: no DOM, no
- * engine. `scripts/build-aircraft-view-sheet.py` bakes the aircraft sheet to
- * this layout; a renderer with the `viewSheets` capability draws it.
+ * engine. `scripts/bake-view-sheet.py` bakes the aircraft and
+ * vessel sheets to their layouts here; a renderer with the `viewSheets`
+ * capability draws them.
  *
  * **Frames.** A subject lies flat on the earth: up is the ground's normal,
  * forward its course. `d` is the direction from the subject to the eye in
@@ -61,6 +62,44 @@ export const AIRCRAFT_VIEWS = Object.freeze({
     helicopter0: 2718,
     helicopter1: 3020,
     helicopter2: 3322,
+  }),
+});
+
+/**
+ * The vessel hull shapes' view sheet (`public/sprites/vessel-views.json`):
+ * from straight above down to the horizon, a ship never being seen from
+ * below.
+ */
+export const VESSEL_VIEWS = Object.freeze({
+  id: 'vessel-views',
+  sheet: Object.freeze({
+    image: '/sprites/vessel-views.webp',
+    cellPx: 64,
+    columns: 64,
+    rows: 39,
+    ringStepDeg: 7.5,
+    rings: Object.freeze([1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25]),
+    grey: true,
+  }),
+  /** Frames in each subject's block. */
+  frames: 208,
+  /**
+   * Each hull shape's first cell (`vesselShape`, vesselTypes.js): the ten
+   * hull kinds, then the shapes drawn within a kind.
+   */
+  subjects: Object.freeze({
+    cargo: 0,
+    tanker: 208,
+    passenger: 416,
+    highspeed: 624,
+    fishing: 832,
+    tug: 1040,
+    sailing: 1248,
+    pleasure: 1456,
+    military: 1664,
+    other: 1872,
+    dredger: 2080,
+    pilot: 2288,
   }),
 });
 

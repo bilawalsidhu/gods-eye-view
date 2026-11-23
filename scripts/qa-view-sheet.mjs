@@ -1,24 +1,29 @@
 #!/usr/bin/env node
 /**
- * qa-aircraft-view-sheet.mjs: contact sheets of a baked aircraft view sheet,
- * for reviewing a bake (`scripts/build-aircraft-view-sheet.py`) before it
+ * qa-view-sheet.mjs: contact sheets of a baked view sheet (aircraft or
+ * vessels), for reviewing a bake (`scripts/bake-view-sheet.py`) before it
  * ships.
  *
  * For each subject it writes one image: its frames with the rings as rows
- * (straight above at the top, 30° below the horizon at the bottom, each ring
- * from dead ahead to dead astern), over a dark sea colour, a pale land colour
- * and a mid satellite tone, each tinted as the layers tint it. Under them, a
- * few frames (above, oblique, abeam, below) shrunk to the sizes a contact is
- * drawn at, to judge whether thin wings still read.
+ * (straight above at the top, the last ring at the bottom, each ring from
+ * dead ahead to dead astern), in white, over three grounds the subject is
+ * seen over. Under them, a few frames (above, oblique, abeam, and below or
+ * low on the horizon) shrunk to the sizes a contact is drawn at, in each
+ * tint the layers draw it with, to judge whether thin wings and hulls still
+ * read. Aircraft: a dark sea, pale land and a mid satellite tone; the fleet,
+ * tracked and military tints. Vessels: a dark sea, pale shallow water and a
+ * satellite ocean tone; white and the colour of each kind the subject is
+ * drawn for (`VESSEL_KIND_STYLES`).
  *
- * Run:  node scripts/qa-aircraft-view-sheet.mjs [--manifest public/sprites/aircraft-views.json]
- *         [--sheet <image>] [--out qa-shots/aircraft-views] [--zoom 2] [--sizes 40,30,20]
+ * Run:  node scripts/qa-view-sheet.mjs [--manifest public/sprites/aircraft-views.json]
+ *         [--sheet <image>] [--out qa-shots/<name>] [--zoom 2] [--sizes 40,30,20]
  *         [--only airliner,glider]
  * `--sheet` defaults to the manifest's `image`, next to it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { VESSEL_KIND_STYLES } from '../src/data/vesselTypes.js';
 
 const argv = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -28,26 +33,51 @@ const opt = (name, fallback) => {
 const MANIFEST = path.resolve(
   opt('--manifest', 'public/sprites/aircraft-views.json'),
 );
-const OUT = path.resolve(opt('--out', 'qa-shots/aircraft-views'));
 const ZOOM = Number(opt('--zoom', '2'));
 const SIZES = opt('--sizes', '40,30,20').split(',').map(Number);
 const ONLY = opt('--only', '').split(',').filter(Boolean);
 
-/** Grounds a contact is seen over: a dark sea, pale land, a mid satellite tone. */
-const GROUNDS = [
-  { name: 'sea', css: '#1f3a4f' },
-  { name: 'land', css: '#d9d2bd' },
-  { name: 'satellite', css: '#6f7559' },
-];
-/** The layers' tints, multiplied into the neutral sprite. */
-const TINTS = [
-  { name: 'fleet', rgb: [1, 1, 1] },
-  { name: 'tracked', rgb: [0.22, 0.82, 1] },
-  { name: 'military', rgb: [1, 0.72, 0] },
-];
 const GAP = 8;
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
+const VESSELS = manifest.image.startsWith('vessel');
+const OUT = path.resolve(
+  opt('--out', `qa-shots/${path.basename(manifest.image, '.webp')}`),
+);
+const WHITE = { name: 'white', rgb: [1, 1, 1] };
+/** `#rrggbb` as 0..1 channels. */
+const rgbOf = (css) =>
+  [1, 3, 5].map((i) => parseInt(css.slice(i, i + 2), 16) / 255);
+/** Grounds a contact is seen over. */
+const GROUNDS = VESSELS
+  ? [
+      { name: 'sea', css: '#1f3a4f' },
+      { name: 'shallows', css: '#8fc3c1' },
+      { name: 'satellite', css: '#0f2e44' },
+    ]
+  : [
+      { name: 'sea', css: '#1f3a4f' },
+      { name: 'land', css: '#d9d2bd' },
+      { name: 'satellite', css: '#6f7559' },
+    ];
+/** The kinds a vessel shape that is not a kind of its own is coloured as: a
+ *  vessel takes its kind's colour (`vesselKind`), whatever its shape. */
+const SHAPE_KINDS = { dredger: ['other'], pilot: ['tug', 'military'] };
+/** A subject's tints, multiplied into the neutral sprite as the layers do. */
+const tintsOf = (name) =>
+  VESSELS
+    ? [
+        WHITE,
+        ...(SHAPE_KINDS[name] ?? [name]).map((kind) => ({
+          name: kind,
+          rgb: rgbOf(VESSEL_KIND_STYLES[kind].css),
+        })),
+      ]
+    : [
+        WHITE,
+        { name: 'tracked', rgb: [0.22, 0.82, 1] },
+        { name: 'military', rgb: [1, 0.72, 0] },
+      ];
 const sheetPath = path.resolve(
   opt('--sheet', path.join(path.dirname(MANIFEST), manifest.image)),
 );
@@ -58,13 +88,17 @@ const widest = Math.max(...rings);
 /** The ring nearest `offDeg` from straight above. */
 const ringAt = (offDeg) =>
   Math.min(rings.length - 1, Math.round(offDeg / manifest.ringStepDeg));
+const last = rings.length - 1;
 /** Frames shown shrunk, as ring and index: straight above, oblique from
- *  ahead and to the right, abeam on the horizon, and from below, abeam. */
+ *  ahead and to the right, abeam on the horizon, and the last ring from
+ *  below abeam or, if the last ring is the horizon, from the bow quarter. */
 const PICKS = [
   [0, 0],
   [ringAt(45), Math.floor((rings[ringAt(45)] - 1) / 3)],
   [ringAt(90), Math.round((rings[ringAt(90)] - 1) / 2)],
-  [rings.length - 1, Math.round((rings[rings.length - 1] - 1) / 2)],
+  last === ringAt(90)
+    ? [last, Math.round((rings[last] - 1) / 4)]
+    : [last, Math.round((rings[last] - 1) / 2)],
 ];
 
 const sheet = sharp(sheetPath, { limitInputPixels: false });
@@ -100,6 +134,7 @@ async function cellImage(index, tint, size) {
 }
 
 async function subjectSheet(name, first) {
+  const TINTS = tintsOf(name);
   const tile = cell * ZOOM;
   const panelW = widest * tile;
   const panelH = rings.length * tile;
@@ -122,11 +157,11 @@ async function subjectSheet(name, first) {
       left: x0,
       top: GAP,
     });
-    // Rings as rows, fleet white.
+    // Rings as rows, white.
     for (let ring = 0; ring < rings.length; ring++)
       for (let i = 0; i < rings[ring]; i++)
         layers.push({
-          input: await cellImage(first + firsts[ring] + i, TINTS[0], cell),
+          input: await cellImage(first + firsts[ring] + i, WHITE, cell),
           left: x0 + i * tile,
           top: GAP + ring * tile,
         });

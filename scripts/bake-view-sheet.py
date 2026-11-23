@@ -1,46 +1,52 @@
-"""Bake the aircraft view sheet: every aircraft class seen from a sphere of
-directions, as one image of small shaded sprites.
+"""Bake a view sheet: each subject of a sheet (an aircraft class, a vessel
+kind) seen from a sphere of directions, as one image of small shaded sprites.
 
-    blender -b --factory-startup --python scripts/build-aircraft-view-sheet.py -- \
-        --out <dir> [--cell 64] [--supersample 4] [--only airliner,light]
-        [--preview <dir>]
+    blender -b --factory-startup --python scripts/bake-view-sheet.py -- \
+        --sheet aircraft|vessels --out <dir> [--cell 64] [--supersample 4]
+        [--only airliner,light] [--preview <dir>]
 
-It writes `aircraft-views.png` and its manifest `aircraft-views.json` to
-`--out`. The manifest names the shipped image, `aircraft-views.webp`, which
-`npm run build:aircraft-views` (scripts/build-aircraft-views.mjs) makes from
-the PNG (lossless) and writes to `public/sprites/` with the manifest.
+It writes `<name>.png` and its manifest `<name>.json` to `--out`, `<name>`
+being the sheet's name (`aircraft-views`, `vessel-views`). The manifest names
+the shipped image, `<name>.webp`, which `npm run build:aircraft-views` or
+`npm run build:vessel-views` (scripts/build-view-sheet.mjs) makes from the
+PNG (lossless) and writes to `public/sprites/` with the manifest.
 
 The layers draw a contact with the frame that shows it from where the eye is
-(`src/data/viewSheet.js` holds the same layout and maths; its test,
-`src/data/viewSheet.test.mjs`, checks this script's constants and the shipped
-manifest against it). A frame is an orthographic view of the class's
-fleet model (`public/models/fleet/`, nose toward -X, +Y starboard, +Z up),
-centred on the model's origin, the model's bounding sphere filling
+(`src/data/viewSheet.js` holds the same layouts and maths; its test,
+`src/data/viewSheet.test.mjs`, checks this script's sheets and the shipped
+manifests against it). A frame is an orthographic view of the subject's
+fleet model (`public/models/fleet/`, nose or bow toward -X, +Y starboard, +Z
+up), centred on the model's origin, the model's bounding sphere filling
 `FILL` of the cell.
 
-Directions. `d` is the unit vector from the aircraft to the eye in the
-aircraft's own frame (forward, right, up), the aircraft lying flat on the
+Directions. `d` is the unit vector from the subject to the eye in the
+subject's own frame (forward, right, up), the subject lying flat on the
 earth: up is the ground's normal, forward its course. Rings of frames lie
-`RING_STEP_DEG` apart from straight above (ring 0, one frame) down to
-`RINGS[-1]` below the horizon. A ring holds the eye's bearings from dead ahead
-(first frame) round the starboard side to dead astern (last frame); the port
-side is the starboard frame mirrored, which is why the light is symmetric
-about the aircraft's centre plane.
+the sheet's `ring_step_deg` apart from straight above (ring 0, one frame)
+down to its last ring (30 degrees below the horizon for aircraft, the horizon
+for vessels). A ring holds the eye's bearings from dead ahead (first frame)
+round the starboard side to dead astern (last frame); the port side is the
+starboard frame mirrored, which is why the light is symmetric about the
+subject's centre plane.
 
-Roll. A frame's image up is where the aircraft's forward goes under the
+Roll. A frame's image up is where the subject's forward goes under the
 smallest rotation that takes "up" to `d`: straight above, the nose points up
 the image, and the roll then changes smoothly all the way round and below
 (it has no meaning only from straight below, which no ring reaches).
 
-The sprites are neutral (white paint, grey shading, dark glass and a dark
+The sprites are neutral (light paint, grey shading, dark glass and a dark
 edge) so a layer's tint multiplies them, as it does the flat glyphs; every
 pixel's red, green and blue are equal (`"grey": true` in the manifest), as
 the renderer keeps the sheet as grey and alpha, and the bake refuses a frame
-that is not. A
-helicopter's body and blades are painted light as well (its blades a solid
-light grey), and its rotor frames share one scale: each rotor vertex counts
-at the farthest point of the circle it sweeps about the rotor's axis. Thin
-subjects are thickened before their edge (`BOLD_PX`), and every cell keeps
+that is not. Each sheet has its paint ramp (`PAINTS`), and a subject may
+have its own. A helicopter's body and blades are painted light as well (its
+blades a solid light grey), and its rotor frames share one scale: each rotor
+vertex counts at the farthest point of the circle it sweeps about the
+rotor's axis. A vessel is cut at its waterline (its origin, z = 0) before it
+is rendered, so no hull below the water is drawn and its bounding sphere is
+of what floats; a subject's model may be widened across the beam (`beam`)
+or squashed above a height (`squash_above`: a sailboat's mast). Thin
+subjects are thickened before their edge (`bold_px`), and every cell keeps
 `CLEAR_EDGE_PX` clear at its edges for the renderer's mipmaps; the bake
 refuses a frame that does not.
 """
@@ -51,49 +57,78 @@ import os
 import struct
 import sys
 
+import bmesh
 import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-# --- The sheet's layout (mirrored in src/data/viewSheet.js) -----------------
+# --- The sheets (their layouts mirrored in src/data/viewSheet.js) -----------
 
-RING_STEP_DEG = 7.5
-# Frames in each ring, from dead ahead round starboard to dead astern.
-RINGS = [1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22]
-FRAMES = sum(RINGS)
-COLUMNS = 64
+# A sheet: its name (the files it writes), its rings of frames (each ring's
+# frame count, from dead ahead round starboard to dead astern), its paint,
+# whether its models are cut at the waterline, and its subjects, in the order
+# of their blocks of frames. A subject is (name, model, options); options:
+#   rotor_deg     a helicopter's rotor frame: the rotors turned this far
+#   paint         its own paint ramp (a key of PAINTS)
+#   bold_px       cell pixels it is thickened by before its edge, so thin
+#                 wings, blades and hulls still read 20 to 30 px wide
+#   beam          its model scaled across the beam by this much
+#   squash_above  [z, k]: its model above z metres scaled up by k
+AIRCRAFT = {
+    "name": "aircraft-views",
+    "ring_step_deg": 7.5,
+    "rings": [1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22],
+    "columns": 64,
+    "paint": "aircraft",
+    "waterline": False,
+    "subjects": [
+        ("airliner", "aircraft/a320.glb", {}),
+        ("widebody", "aircraft/b789.glb", {}),
+        ("quadjet", "aircraft/b744.glb", {}),
+        ("turboprop", "aircraft/at72.glb", {}),
+        ("light", "aircraft/c172.glb", {"bold_px": 0.35}),
+        ("glider", "aircraft/glider.glb", {"bold_px": 1.0}),
+        ("fastjet", "aircraft/t38.glb", {}),
+        ("bizjet", "aircraft/glf4.glb", {}),
+        ("uav", "aircraft/mq9.glb", {"bold_px": 1.0}),
+        # The helicopter has one block for each rotor frame (rotorFrames.js).
+        ("helicopter0", "helicopters/generic_heli.glb", {"rotor_deg": 15, "paint": "helicopter", "bold_px": 0.4}),
+        ("helicopter1", "helicopters/generic_heli.glb", {"rotor_deg": 45, "paint": "helicopter", "bold_px": 0.4}),
+        ("helicopter2", "helicopters/generic_heli.glb", {"rotor_deg": 75, "paint": "helicopter", "bold_px": 0.4}),
+    ],
+}
+
+# Vessels: down to the horizon only, as a ship is never seen from below. The
+# subjects are the hull kinds of vesselKind (src/data/vesselTypes.js), then
+# the dredger (AIS 33) and the pilot boat (pilot, rescue, tender and
+# anti-pollution craft).
+VESSELS = {
+    "name": "vessel-views",
+    "ring_step_deg": 7.5,
+    "rings": [1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25],
+    "columns": 64,
+    "paint": "ship",
+    "waterline": True,
+    "subjects": [
+        ("cargo", "ships/container_ship.glb", {"beam": 1.4, "bold_px": 1.0}),
+        ("tanker", "ships/tanker.glb", {"beam": 1.4, "bold_px": 1.0}),
+        ("passenger", "ships/cruise_ship.glb", {"beam": 1.4, "bold_px": 0.5}),
+        ("highspeed", "ships/fast_ferry.glb", {"beam": 1.2, "bold_px": 0.5}),
+        ("fishing", "ships/trawler.glb", {"bold_px": 0.5}),
+        ("tug", "ships/tug.glb", {"bold_px": 0.5}),
+        ("sailing", "ships/sailboat.glb", {"beam": 1.3, "bold_px": 0.5, "squash_above": [1.2, 0.4]}),
+        ("pleasure", "ships/motor_yacht.glb", {"beam": 1.25, "bold_px": 0.5}),
+        ("military", "ships/patrol.glb", {"beam": 1.5, "bold_px": 1.0}),
+        ("other", "ships/generic_vessel.glb", {"beam": 1.3, "bold_px": 0.5}),
+        ("dredger", "ships/dredger.glb", {"beam": 1.3, "bold_px": 0.5}),
+        ("pilot", "ships/pilot_boat.glb", {"beam": 1.2, "bold_px": 0.5}),
+    ],
+}
+
+SHEETS = {"aircraft": AIRCRAFT, "vessels": VESSELS}
+
 # How much of a cell the model's bounding sphere spans.
 FILL = 0.92
-
-# Each class's model, in the order of its block of frames in the sheet. A
-# helicopter has one block for each rotor frame (rotorFrames.js).
-ROTOR_ANGLES_DEG = [15, 45, 75]
-SUBJECTS = [
-    ("airliner", "aircraft/a320.glb", None),
-    ("widebody", "aircraft/b789.glb", None),
-    ("quadjet", "aircraft/b744.glb", None),
-    ("turboprop", "aircraft/at72.glb", None),
-    ("light", "aircraft/c172.glb", None),
-    ("glider", "aircraft/glider.glb", None),
-    ("fastjet", "aircraft/t38.glb", None),
-    ("bizjet", "aircraft/glf4.glb", None),
-    ("uav", "aircraft/mq9.glb", None),
-    ("helicopter0", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[0]),
-    ("helicopter1", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[1]),
-    ("helicopter2", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[2]),
-]
-
-# Cell pixels each subject is thickened by before its dark edge, so thin
-# wings and rotor blades still read when a contact is drawn 20 to 30 px
-# wide. The big aircraft read as they are and are not thickened.
-BOLD_PX = {
-    "light": 0.35,
-    "glider": 1.0,
-    "uav": 1.0,
-    "helicopter0": 0.4,
-    "helicopter1": 0.4,
-    "helicopter2": 0.4,
-}
 # Cells keep this many pixels at each edge clear: the renderer samples the
 # sheet with mipmaps (to level 1), so a neighbour's pixels must not reach
 # into a cell's footprint.
@@ -104,11 +139,11 @@ RIGHT = Vector((0.0, 1.0, 0.0))
 UP = Vector((0.0, 0.0, 1.0))
 
 
-def frame_directions():
+def frame_directions(sheet):
     """Every frame's (ring, index, d) with d in the model's axes."""
     out = []
-    for ring, count in enumerate(RINGS):
-        alpha = math.radians(ring * RING_STEP_DEG)
+    for ring, count in enumerate(sheet["rings"]):
+        alpha = math.radians(ring * sheet["ring_step_deg"])
         for i in range(count):
             phi = 0.0 if count == 1 else math.pi * i / (count - 1)
             d = (
@@ -131,6 +166,7 @@ def frame_up(d):
 def args_after_dashes():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     opts = {
+        "sheet": "aircraft",
         "out": "public/sprites",
         "cell": 64,
         "supersample": 4,
@@ -148,6 +184,8 @@ def args_after_dashes():
     opts["cell"] = int(opts["cell"])
     opts["supersample"] = int(opts["supersample"])
     opts["samples"] = int(opts["samples"])
+    if opts["sheet"] not in SHEETS:
+        raise SystemExit(f"--sheet is one of {', '.join(SHEETS)}")
     return opts
 
 
@@ -210,17 +248,26 @@ def setup_scene(render_px, samples):
     return scene, camera, fill
 
 
-# Paint by the model's own colour value (its largest channel, linear): glass
-# and tyres stay dark, a livery's accent becomes mid grey, and every body
-# colour a light paint, so a tint reads on any model.
-PAINT_RAMP = [(0.03, 0.07), (0.10, 0.30), (0.26, 0.56), (0.40, 0.76), (0.85, 0.90)]
-HELICOPTER_PAINT_RAMP = [(0.04, 0.07), (0.08, 0.38), (0.39, 0.95)]
+# Paint by the model's own colour value (its largest channel, linear), as
+# (value, grey) stops. Aircraft: glass and tyres stay dark, a livery's accent
+# becomes mid grey, and every body colour a light paint, so a tint reads on
+# any model. Ships: windows and the darkest fittings stay dark, and hull
+# paint, decks and cargo all become light greys a little apart.
+PAINTS = {
+    "aircraft": [(0.03, 0.07), (0.10, 0.30), (0.26, 0.56), (0.40, 0.76), (0.85, 0.90)],
+    "helicopter": [(0.04, 0.07), (0.08, 0.38), (0.39, 0.95)],
+    "ship": [(0.0, 0.62), (0.25, 0.78), (0.85, 0.95)],
+}
+# Glass by its colour, for a paint that lifts even black hull paint: a dark
+# colour (value at most `value`) whose blue is at least `blue` and
+# `blue_over_red` times its red (the ship models' windows) is painted `grey`.
+GLASS = {"ship": {"value": 0.08, "blue": 0.025, "blue_over_red": 2.5, "grey": 0.07}}
 SUN_STRENGTH = 1.4
 SKY_STRENGTH = 0.38
 FILL_STRENGTH = 0.9
 
 
-def paint_material(paint_ramp=PAINT_RAMP, solid=None):
+def paint_material(paint_ramp, solid=None, glass=None):
     """Neutral paint that keeps the model's light and dark parts apart."""
     material = bpy.data.materials.new("paint")
     material.use_nodes = True
@@ -251,7 +298,37 @@ def paint_material(paint_ramp=PAINT_RAMP, solid=None):
         element.position = position
         element.color = (grey, grey, grey, 1.0)
     links.new(value.outputs[0], ramp.inputs["Fac"])
-    links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+    if glass is None:
+        links.new(ramp.outputs["Color"], bsdf.inputs["Base Color"])
+        return material
+
+    def math_node(operation, a, b, c=None):
+        node = nodes.new("ShaderNodeMath")
+        node.operation = operation
+        for i, x in enumerate((a, b, c)):
+            if x is None:
+                continue
+            if isinstance(x, (int, float)):
+                node.inputs[i].default_value = x
+            else:
+                links.new(x, node.inputs[i])
+        return node.outputs[0]
+
+    dark = math_node("LESS_THAN", value.outputs[0], glass["value"] + 1e-4)
+    blue = math_node("GREATER_THAN", split.outputs[2], glass["blue"] - 1e-4)
+    red_scaled = math_node("MULTIPLY", split.outputs[0], glass["blue_over_red"])
+    over_red = math_node(
+        "GREATER_THAN", math_node("SUBTRACT", split.outputs[2], red_scaled), -1e-4
+    )
+    is_glass = math_node("MULTIPLY", math_node("MULTIPLY", dark, blue), over_red)
+    ramp_grey = nodes.new("ShaderNodeSeparateColor")
+    links.new(ramp.outputs["Color"], ramp_grey.inputs["Color"])
+    to_glass = math_node("SUBTRACT", glass["grey"], ramp_grey.outputs[0])
+    grey = math_node("MULTIPLY_ADD", is_glass, to_glass, ramp_grey.outputs[0])
+    combine = nodes.new("ShaderNodeCombineColor")
+    for i in range(3):
+        links.new(grey, combine.inputs[i])
+    links.new(combine.outputs["Color"], bsdf.inputs["Base Color"])
     return material
 
 
@@ -316,15 +393,47 @@ def turn_rotors(mesh, parts, degrees, rotor_material):
     return swept_radii
 
 
-def load_model(path, material, rotor_deg, rotor_material):
+def reshape(mesh, waterline, beam, squash_above):
+    """Bring a mesh into the scene's axes, cut away what lies below the
+    waterline (z = 0) and scale it across the beam and above a height."""
+    world = mesh.matrix_world.copy()
+    mesh.parent = None
+    mesh.matrix_world = Matrix.Identity(4)
+    mesh.data.transform(world)
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    if waterline:
+        bmesh.ops.bisect_plane(
+            bm,
+            geom=bm.verts[:] + bm.edges[:] + bm.faces[:],
+            dist=1e-4,
+            plane_co=(0.0, 0.0, 0.0),
+            plane_no=(0.0, 0.0, 1.0),
+            clear_inner=True,
+        )
+    for vertex in bm.verts:
+        vertex.co.y *= beam
+        if squash_above and vertex.co.z > squash_above[0]:
+            height, k = squash_above
+            vertex.co.z = height + (vertex.co.z - height) * k
+    bm.to_mesh(mesh.data)
+    bm.free()
+
+
+def load_model(path, material, rotor_deg, rotor_material, waterline=False, options=None):
+    options = options or {}
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=path)
     objects = [o for o in bpy.data.objects if o not in before]
     meshes = [o for o in objects if o.type == "MESH"]
     bpy.context.view_layer.update()
     parts = model_parts(path) if rotor_deg is not None else []
+    beam = options.get("beam", 1.0)
+    squash_above = options.get("squash_above")
     radius = 0.0
     for mesh in meshes:
+        if waterline or beam != 1.0 or squash_above:
+            reshape(mesh, waterline, beam, squash_above)
         mesh.data.materials.clear()
         mesh.data.materials.append(material)
         swept_radii = turn_rotors(mesh, parts, rotor_deg, rotor_material) if parts else {}
@@ -490,55 +599,63 @@ def save_png(path, pixels):
 
 def main():
     opts = args_after_dashes()
+    config = SHEETS[opts["sheet"]]
+    name_of_sheet = config["name"]
+    columns = config["columns"]
+    subjects = config["subjects"]
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     models = os.path.join(root, "public", "models", "fleet")
     cell = opts["cell"]
     supersample = opts["supersample"]
     only = set(opts["only"].split(",")) if opts["only"] else None
     scene, camera, fill = setup_scene(cell * supersample, opts["samples"])
-    material = paint_material()
-    helicopter_material = paint_material(HELICOPTER_PAINT_RAMP)
-    rotor_material = paint_material(solid=0.82)
-    directions = frame_directions()
+    materials = {
+        key: paint_material(ramp, glass=GLASS.get(key)) for key, ramp in PAINTS.items()
+    }
+    rotor_material = paint_material(None, solid=0.82)
+    directions = frame_directions(config)
+    frames = len(directions)
     tmp = os.path.join(bpy.app.tempdir, "view-frame.png")
 
-    rows = math.ceil(len(SUBJECTS) * FRAMES / COLUMNS)
-    sheet = np.zeros((rows * cell, COLUMNS * cell, 4), dtype=np.float32)
+    rows = math.ceil(len(subjects) * frames / columns)
+    sheet = np.zeros((rows * cell, columns * cell, 4), dtype=np.float32)
     manifest = {
-        "image": "aircraft-views.webp",
+        "image": f"{name_of_sheet}.webp",
         "cellPx": cell,
-        "columns": COLUMNS,
+        "columns": columns,
         "rows": rows,
-        "ringStepDeg": RING_STEP_DEG,
-        "rings": RINGS,
+        "ringStepDeg": config["ring_step_deg"],
+        "rings": config["rings"],
         "fill": FILL,
         # Every pixel's red, green and blue are equal.
         "grey": True,
         "subjects": {},
     }
 
-    for index, (name, model, rotor_deg) in enumerate(SUBJECTS):
-        first = index * FRAMES
+    for index, (name, model, options) in enumerate(subjects):
+        first = index * frames
         manifest["subjects"][name] = {"first": first, "model": model}
         if only and name not in only:
             continue
         objects, radius = load_model(
             os.path.join(models, model),
-            material if rotor_deg is None else helicopter_material,
-            rotor_deg,
+            materials[options.get("paint", config["paint"])],
+            options.get("rotor_deg"),
             rotor_material,
+            config["waterline"],
+            options,
         )
         manifest["subjects"][name]["radiusM"] = round(radius, 3)
         for n, (ring, i, d) in enumerate(directions):
             aim(camera, fill, d, radius)
             scene.render.filepath = tmp
             bpy.ops.render.render(write_still=True)
-            frame = finish(read_pixels(tmp), supersample, BOLD_PX.get(name, 0.0))
+            frame = finish(read_pixels(tmp), supersample, options.get("bold_px", 0.0))
             check_clear_edge(frame, name, n)
             frame = to_grey(frame, name, n)
             at = first + n
-            y = (at // COLUMNS) * cell
-            x = (at % COLUMNS) * cell
+            y = (at // columns) * cell
+            x = (at % columns) * cell
             sheet[y : y + cell, x : x + cell] = frame
             if opts["preview"]:
                 os.makedirs(opts["preview"], exist_ok=True)
@@ -547,15 +664,15 @@ def main():
                 )
         for obj in objects:
             bpy.data.objects.remove(obj, do_unlink=True)
-        print(f"baked {name}: {FRAMES} frames, radius {radius:.2f} m", flush=True)
+        print(f"baked {name}: {frames} frames, radius {radius:.2f} m", flush=True)
 
     out = os.path.join(root, opts["out"]) if not os.path.isabs(opts["out"]) else opts["out"]
     os.makedirs(out, exist_ok=True)
-    save_png(os.path.join(out, "aircraft-views.png"), sheet)
-    with open(os.path.join(out, "aircraft-views.json"), "w") as f:
+    save_png(os.path.join(out, f"{name_of_sheet}.png"), sheet)
+    with open(os.path.join(out, f"{name_of_sheet}.json"), "w") as f:
         json.dump(manifest, f, indent=1)
         f.write("\n")
-    print(f"wrote {out}/aircraft-views.png ({COLUMNS * cell}x{rows * cell})")
+    print(f"wrote {out}/{name_of_sheet}.png ({columns * cell}x{rows * cell})")
 
 
 main()
