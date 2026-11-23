@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 /**
- * build-aircraft-views.mjs: bake the aircraft view sheet and ship it.
+ * build-view-sheet.mjs: bake a view sheet (aircraft or vessels) and ship it.
  *
- * Runs `scripts/build-aircraft-view-sheet.py` in Blender (headless) into a
- * scratch directory, then writes `public/sprites/aircraft-views.webp`
- * (lossless WebP of the baked PNG) and `public/sprites/aircraft-views.json`
- * (its manifest). See `public/sprites/README.md`.
+ * Runs `scripts/bake-view-sheet.py` in Blender (headless) into a scratch
+ * directory, then writes the sheet to `public/sprites/` as
+ * `<name>.webp` (lossless WebP of the baked PNG) and `<name>.json` (its
+ * manifest): `aircraft-views` or `vessel-views`. See
+ * `public/sprites/README.md`.
  *
- * Run:  npm run build:aircraft-views [-- --only airliner,light] [--out public/sprites]
+ * Run:  node scripts/build-view-sheet.mjs --sheet aircraft|vessels
+ *         [--only airliner,light] [--out public/sprites]
+ *       (npm run build:aircraft-views, npm run build:vessel-views)
  * Blender: `$BLENDER`, else `blender` on the PATH, else the macOS app.
  */
 import { spawnSync } from 'node:child_process';
@@ -25,6 +28,15 @@ const opt = (name, fallback) => {
 };
 const OUT = path.resolve(root, opt('--out', 'public/sprites'));
 const ONLY = opt('--only', null);
+const SHEET = opt('--sheet', null);
+if (SHEET !== 'aircraft' && SHEET !== 'vessels')
+  throw new Error('--sheet is aircraft or vessels');
+// A bake of some subjects leaves the others' cells empty: it is for looking
+// at, never for the sheet the app loads.
+if (ONLY && !argv.includes('--out'))
+  throw new Error(
+    '--only bakes part of a sheet: give it its own --out, not public/sprites',
+  );
 
 function blender() {
   if (process.env.BLENDER) return process.env.BLENDER;
@@ -53,7 +65,7 @@ async function assertGrey(file) {
     }
 }
 
-const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'aircraft-views-'));
+const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'view-sheet-'));
 try {
   const bake = spawnSync(
     blender(),
@@ -61,8 +73,10 @@ try {
       '-b',
       '--factory-startup',
       '--python',
-      path.join(root, 'scripts', 'build-aircraft-view-sheet.py'),
+      path.join(root, 'scripts', 'bake-view-sheet.py'),
       '--',
+      '--sheet',
+      SHEET,
       '--out',
       scratch,
       ...(ONLY ? ['--only', ONLY] : []),
@@ -75,20 +89,19 @@ try {
     console.error(bake.stdout.split('\n').slice(-20).join('\n'));
     throw new Error(`the bake failed (exit ${bake.status})`);
   }
+  const [json] = fs.readdirSync(scratch).filter((f) => f.endsWith('.json'));
+  const name = path.basename(json, '.json');
   const manifest = JSON.parse(
-    fs.readFileSync(path.join(scratch, 'aircraft-views.json'), 'utf8'),
+    fs.readFileSync(path.join(scratch, json), 'utf8'),
   );
-  const png = path.join(scratch, 'aircraft-views.png');
+  const png = path.join(scratch, `${name}.png`);
   if (manifest.grey) await assertGrey(png);
   fs.mkdirSync(OUT, { recursive: true });
   const webp = path.join(OUT, manifest.image);
   await sharp(png)
     .webp({ lossless: true, effort: 6, exact: true })
     .toFile(webp);
-  fs.copyFileSync(
-    path.join(scratch, 'aircraft-views.json'),
-    path.join(OUT, 'aircraft-views.json'),
-  );
+  fs.copyFileSync(path.join(scratch, json), path.join(OUT, json));
   const kb = Math.round(fs.statSync(webp).size / 1024);
   console.log(`wrote ${path.relative(root, webp)} (${kb} KB) and its manifest`);
 } finally {

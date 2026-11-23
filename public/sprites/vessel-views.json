@@ -1,0 +1,86 @@
+{
+ "image": "vessel-views.webp",
+ "cellPx": 64,
+ "columns": 64,
+ "rows": 39,
+ "ringStepDeg": 7.5,
+ "rings": [
+  1,
+  4,
+  7,
+  10,
+  13,
+  16,
+  18,
+  20,
+  22,
+  23,
+  24,
+  25,
+  25
+ ],
+ "fill": 0.92,
+ "grey": true,
+ "subjects": {
+  "cargo": {
+   "first": 0,
+   "model": "ships/container_ship.glb",
+   "radiusM": 160.913
+  },
+  "tanker": {
+   "first": 208,
+   "model": "ships/tanker.glb",
+   "radiusM": 130.314
+  },
+  "passenger": {
+   "first": 416,
+   "model": "ships/cruise_ship.glb",
+   "radiusM": 168.583
+  },
+  "highspeed": {
+   "first": 624,
+   "model": "ships/fast_ferry.glb",
+   "radiusM": 23.032
+  },
+  "fishing": {
+   "first": 832,
+   "model": "ships/trawler.glb",
+   "radiusM": 13.229
+  },
+  "tug": {
+   "first": 1040,
+   "model": "ships/tug.glb",
+   "radiusM": 16.418
+  },
+  "sailing": {
+   "first": 1248,
+   "model": "ships/sailboat.glb",
+   "radiusM": 8.358
+  },
+  "pleasure": {
+   "first": 1456,
+   "model": "ships/motor_yacht.glb",
+   "radiusM": 10.073
+  },
+  "military": {
+   "first": 1664,
+   "model": "ships/patrol.glb",
+   "radiusM": 36.28
+  },
+  "other": {
+   "first": 1872,
+   "model": "ships/generic_vessel.glb",
+   "radiusM": 21.828
+  },
+  "dredger": {
+   "first": 2080,
+   "model": "ships/dredger.glb",
+   "radiusM": 53.542
+  },
+  "pilot": {
+   "first": 2288,
+   "model": "ships/pilot_boat.glb",
+   "radiusM": 10.774
+  }
+ }
+}

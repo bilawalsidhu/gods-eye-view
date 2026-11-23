@@ -37,7 +37,8 @@ How the layers use them:
   model is fetched while a session runs.
 - The aircraft and helicopter models are also rendered from every side into
   the aircraft view sheet, the shaded sprites far-away aircraft are drawn
-  with ([`../sprites/`](../sprites/README.md)).
+  with, and one ship model for each vessel hull shape, cut at its waterline,
+  into the vessel view sheet ([`../sprites/`](../sprites/README.md)).
 
 `src/data/fleetModels.js` reads the set and chooses each vehicle's model;
 `src/data/fleetModels.test.mjs` checks that every model `types.json` names is

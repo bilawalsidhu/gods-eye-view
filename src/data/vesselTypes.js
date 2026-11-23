@@ -59,9 +59,9 @@ const VESSEL_KIND_RULES = [
   ['fishing', /fishing|trawler/i],
   [
     'military',
-    /military|naval|navy|warship|law enforce|police|patrol|coast ?guard|\bsar\b|search and rescue/i,
+    /military|naval|navy|warship|law enforce|police|patrol|coast ?guard|\bsar\b|search\W+(?:and\W+|&\W*)?rescue/i,
   ],
-  ['tug', /tug|tow|pilot|tender|supply|service|anti-pollution/i],
+  ['tug', /tug|tow|pilot|tender|supply|service|anti\W?pollution/i],
   ['sailing', /sail/i],
   ['pleasure', /pleasure|yacht/i],
 ];
@@ -114,6 +114,57 @@ export function vesselKind(type) {
   if (KIND_MEMO.size >= KIND_MEMO_MAX) KIND_MEMO.clear();
   KIND_MEMO.set(text, kind);
   return kind;
+}
+
+/**
+ * Hull shapes drawn within a kind, where an AIS ship type has a hull of its
+ * own: a dredger (AIS 33, otherwise `other`), and the small workboats that
+ * are neither tugs nor patrol craft, drawn as a pilot boat (AIS 50 pilot,
+ * 51 search and rescue, 53 port tender, 54 anti-pollution). In order: the
+ * first that matches.
+ */
+const VESSEL_SHAPE_RULES = [
+  ['dredger', /dredg/i],
+  [
+    'pilot',
+    /pilot|\bsar\b|search\W+(?:and\W+|&\W*)?rescue|port\W?tender|anti\W?pollution/i,
+  ],
+];
+
+/** Every hull shape {@link vesselShape} names: the kinds, then the rest. */
+export const VESSEL_SHAPES = Object.freeze([
+  'cargo',
+  'tanker',
+  'passenger',
+  'highspeed',
+  'fishing',
+  'tug',
+  'sailing',
+  'pleasure',
+  'military',
+  'other',
+  ...VESSEL_SHAPE_RULES.map(([shape]) => shape),
+]);
+
+const SHAPE_MEMO = new Map();
+
+/**
+ * The hull a vessel is shown as from the eye's angle (the vessel view
+ * sheet, `vesselViews.js`): its own where its AIS type has one, else its
+ * kind's ({@link vesselKind}). Its colour is always its kind's.
+ * @param {string} type Raw AIS type.
+ * @returns {string} One of `VESSEL_SHAPES`.
+ */
+export function vesselShape(type) {
+  const text = normalizeVesselType(type);
+  let shape = SHAPE_MEMO.get(text);
+  if (shape !== undefined) return shape;
+  shape =
+    VESSEL_SHAPE_RULES.find(([, pattern]) => pattern.test(text))?.[0] ??
+    vesselKind(type);
+  if (SHAPE_MEMO.size >= KIND_MEMO_MAX) SHAPE_MEMO.clear();
+  SHAPE_MEMO.set(text, shape);
+  return shape;
 }
 
 /**

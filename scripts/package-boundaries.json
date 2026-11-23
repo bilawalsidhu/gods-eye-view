@@ -2399,7 +2399,8 @@
       "src/data/detectionOcclusion.js",
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/vesselViews.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -5622,7 +5623,8 @@
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
       "src/data/aircraftViews.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/vesselViews.js"
     ],
     "external": [
       "hls.js",
@@ -6480,7 +6482,8 @@
       "src/layers/satellites/tiangongArticulation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/data/aircraftViews.js",
-      "src/data/viewSheet.js"
+      "src/data/viewSheet.js",
+      "src/data/vesselViews.js"
     ],
     "external": [
       "hls.js",

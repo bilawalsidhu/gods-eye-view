@@ -10,7 +10,7 @@
  * below.
  *
  * Run:  node scripts/qa-aircraft-views.mjs --url http://localhost:4173 [--out qa-shots/views]
- *         [--layer military|flights] [--block-sheet] [--headful]
+ *         [--layer military|flights|vessels] [--block-sheet] [--headful]
  *         [--orbit [--orbit-step 2] [--orbit-pitch -35]]
  * Needs the dev server (`npm run dev`).
  */
@@ -27,9 +27,13 @@ const opt = (name, fallback) => {
 const APP_URL = opt('--url', 'http://localhost:4173');
 const OUT = path.resolve(opt('--out', 'qa-shots/views'));
 const HEADFUL = argv.includes('--headful');
-// `military` (amber, every class by type code) or `flights` (white, the
-// classes an ADS-B emitter category gives).
+// `military` (amber, every class by type code), `flights` (white, the
+// classes an ADS-B emitter category gives) or `vessels` (every hull kind by
+// AIS ship type, at sea level).
 const LAYER = opt('--layer', 'military');
+const VESSELS = LAYER === 'vessels';
+// The app's id of the layer.
+const LAYER_ID = VESSELS ? 'ais-live-vessels' : LAYER;
 // Fail the sheet's request: the contacts should draw their flat glyphs.
 const BLOCK_SHEET = argv.includes('--block-sheet');
 const GPU = argv.includes('--gpu');
@@ -56,11 +60,27 @@ const CATEGORIES = [
   ['glider', 9],
   ['helicopter', 8],
 ];
-const ROWS = LAYER === 'flights' ? CATEGORIES : CLASSES;
+// An AIS ship type for each hull kind (vesselTypes.js).
+const HULLS = [
+  ['cargo', 70],
+  ['tanker', 80],
+  ['passenger', 60],
+  ['highspeed', 40],
+  ['fishing', 30],
+  ['tug', 52],
+  ['sailing', 36],
+  ['pleasure', 37],
+  ['military', 35],
+  ['other', 90],
+  ['dredger', 33],
+  ['pilot', 50],
+];
+const ROWS = VESSELS ? HULLS : LAYER === 'flights' ? CATEGORIES : CLASSES;
 const COURSES = [0, 45, 90, 135, 180, 225, 270, 315];
-const CENTRE = { lon: -97.74, lat: 30.3 };
+// Aircraft over Austin; vessels on open water in the North Sea.
+const CENTRE = VESSELS ? { lon: 3.2, lat: 52.6 } : { lon: -97.74, lat: 30.3 };
 const STEP_DEG = 0.03;
-const ALT_FT = 12000;
+const ALT_FT = VESSELS ? 0 : 12000;
 
 const contacts = [];
 ROWS.forEach(([klass, type], row) =>
@@ -88,7 +108,11 @@ const SHOTS = [
   { name: '4-tilt55-east', heading: 90, pitch: -35, rangeKm: 50 },
   { name: '5-tilt55-southwest', heading: 225, pitch: -35, rangeKm: 50 },
   { name: '6-tilt75-north', heading: 0, pitch: -15, rangeKm: 52 },
-  { name: '7-below-north', heading: 0, pitch: 12, rangeKm: 15.5 },
+  // From below, looking up at the grid; a vessel is never seen from there,
+  // so vessels get a shot from just above the water in its place.
+  VESSELS
+    ? { name: '7-horizon-north', heading: 0, pitch: -5, rangeKm: 30 }
+    : { name: '7-below-north', heading: 0, pitch: 12, rangeKm: 15.5 },
 ];
 
 // `--orbit`: the camera swung round the grid a little at a time, a frame
@@ -139,7 +163,7 @@ async function main() {
       await page.setRequestInterception(true);
       page.on('request', (request) => {
         if (request.isInterceptResolutionHandled()) return;
-        if (/\/sprites\/aircraft-views\./.test(request.url())) request.abort();
+        if (/\/sprites\/[a-z]+-views\./.test(request.url())) request.abort();
         else request.continue();
       });
     }
@@ -197,6 +221,39 @@ async function main() {
                 ),
               }),
             );
+          if (url.includes('/api/vessels') && seed.layer === 'vessels') {
+            const now = Date.now();
+            return Promise.resolve(
+              json({
+                rows: seed.contacts.map((c, i) => ({
+                  ...at(c),
+                  name: c.flight,
+                  mmsi: String(235000000 + i),
+                  imo: '0',
+                  type: String(c.t),
+                  destination: 'QA',
+                  length: 120,
+                  beam: 20,
+                  speed: SPEED_MPS * 1.9438,
+                  course: c.courseDeg,
+                  heading: c.courseDeg,
+                  last_position_UTC: new Date(now).toISOString(),
+                  last_position_epoch: Math.floor(now / 1000),
+                })),
+                source: 'AISStream',
+                status: 'live',
+                error: null,
+                refreshing: false,
+                newestPositionAt: now,
+                lastMessageAt: now,
+                silentForMs: 0,
+                reconnectAttempt: 0,
+                nextAttemptAt: null,
+                staleAfterMs: 120000,
+                watchdog: 'armed',
+              }),
+            );
+          }
           if (url.includes('/api/flights/track'))
             return Promise.resolve(json({ path: [] }));
           if (url.includes('/api/flights') && seed.layer === 'flights') {
@@ -241,14 +298,26 @@ async function main() {
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 60000, polling: 200 },
     );
-    const seeded = await page.evaluate(async (name) => {
-      const { dataManager, viewer } = window.__godsEyeView;
-      await dataManager.setEnabled(name, true);
-      const layer = dataManager.layers.get(name).module;
-      for (let i = 0; i < 4; i++) await layer.update(viewer);
-      window.__viewQaDriver = setInterval(() => layer.update(viewer), 8000);
-      return layer.getStats().count;
-    }, LAYER);
+    const seeded = await page.evaluate(
+      async (name, centre) => {
+        const { dataManager, viewer } = window.__godsEyeView;
+        // Over the grid first: a layer may ask only for what is in view.
+        const Cartesian3 = viewer.camera.position.constructor;
+        viewer.camera.setView({
+          destination: Cartesian3.fromDegrees(centre.lon, centre.lat, 60000),
+        });
+        await dataManager.setEnabled(name, true);
+        const layer = dataManager.layers.get(name).module;
+        for (let i = 0; i < 4; i++) {
+          await layer.update(viewer);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        window.__viewQaDriver = setInterval(() => layer.update(viewer), 8000);
+        return layer.getStats().count;
+      },
+      LAYER_ID,
+      CENTRE,
+    );
     console.log(`  ${LAYER} contacts: ${seeded}/${contacts.length}`);
     if (seeded !== contacts.length)
       throw new Error(
