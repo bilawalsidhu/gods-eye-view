@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   FIELD_IDS,
   europeWeight,
+  FIELD_FADE,
   fieldColor,
   fieldStrength,
   fieldCoverage,
@@ -287,31 +288,42 @@ test('where the Europe inset is drawn the map shows the value the tiles read, wi
   // tiles read 25 µg/m³ there, half way between 10 and 40.
   assert.equal(europeWeight(manifest.europe, 6, 10), 0.5);
   assert.equal(sampleField(manifest, grids, 'pm25', 6, 10), 25);
-  // At every point of the inset, the inset over the global image is the
-  // colour and opacity of the value the tiles read there: in the band, where
-  // both draw it, and deep inside, where the inset alone does.
-  for (let y = 0; y < europe.height; y++)
-    for (let x = 0; x < europe.width; x++) {
-      const lon = europe.lon0 + x * europe.step;
-      const lat = europe.lat0 - y * europe.step;
-      const value = sampleField(manifest, grids, 'pm25', lon, lat);
-      const [r, g, b, a] = fieldColor(PM25.bands, PM25.limits, value);
-      const over = pixel(fine, x, y);
-      const under = pixel(wide, lon - global.lon0, global.lat0 - lat);
-      const top = over[3] / 255;
-      const bottom = under[3] / 255;
-      const together = top + bottom * (1 - top);
-      const at = `${lon} E ${lat} N`;
-      assert.ok(Math.abs(together - a) < 2 / 255, `opacity at ${at}`);
-      for (const [channel, want] of [r, g, b].entries()) {
-        const mixed =
-          (over[channel] * top + under[channel] * bottom * (1 - top)) /
-          together;
-        assert.ok(Math.abs(mixed - want) <= 1, `colour at ${at}`);
+  // At every point of the inset, the inset over the global image, both
+  // drawn at the field's strength, is the colour of the value the tiles read
+  // there and, at full strength (0.85, from 600 km up), exactly the opacity
+  // of one image of it: in the band, where both draw it, and deep inside,
+  // where the inset alone does. Fading at 0.44 (about 200 km) the band is at
+  // most 14 % more opaque.
+  for (const strength of [FIELD_FADE.maxAlpha, 0.44])
+    for (let y = 0; y < europe.height; y++)
+      for (let x = 0; x < europe.width; x++) {
+        const lon = europe.lon0 + x * europe.step;
+        const lat = europe.lat0 - y * europe.step;
+        const value = sampleField(manifest, grids, 'pm25', lon, lat);
+        const [r, g, b, a] = fieldColor(PM25.bands, PM25.limits, value);
+        const over = pixel(fine, x, y);
+        const under = pixel(wide, lon - global.lon0, global.lat0 - lat);
+        const top = (strength * over[3]) / 255;
+        const bottom = (strength * under[3]) / 255;
+        const together = top + bottom * (1 - top);
+        const one = strength * a;
+        const at = `${lon} E ${lat} N at ${strength}`;
+        if (strength === FIELD_FADE.maxAlpha)
+          assert.ok(Math.abs(together - one) < 2 / 255, `opacity at ${at}`);
+        else
+          assert.ok(
+            together > one - 2 / 255 && together < one * 1.14 + 2 / 255,
+            `opacity at ${at}`,
+          );
+        for (const [channel, want] of [r, g, b].entries()) {
+          const mixed =
+            (over[channel] * top + under[channel] * bottom * (1 - top)) /
+            together;
+          assert.ok(Math.abs(mixed - want) <= 1, `colour at ${at}`);
+        }
+        const w = europeWeight(manifest.europe, lon, lat);
+        if (w >= 1) assert.equal(under[3], 0, `global clear at ${at}`);
       }
-      const w = europeWeight(manifest.europe, lon, lat);
-      if (w >= 1) assert.equal(under[3], 0, `global clear at ${at}`);
-    }
   // The inset fades out to nothing at its edge, so neither image has an
   // edge to show; outside it the global image shows alone.
   assert.ok(pixel(fine, 0, 5)[3] < pixel(fine, 2, 5)[3]);
@@ -518,6 +530,7 @@ function fieldHarness({
   clock = createWorldClock(),
   renderer = {},
   definitions = [SAAQIS],
+  frames = null,
 } = {}) {
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
   const imagery = [];
@@ -540,7 +553,22 @@ function fieldHarness({
         ),
       isOccluded: () => false,
     },
+    // `frames`: a frame port whose postRender listeners the test calls, and
+    // whether the globe's imagery has settled.
+    ...(frames
+      ? {
+          frame: {
+            on(event, listener) {
+              if (event !== 'postRender') return () => {};
+              frames.postRender.add(listener);
+              return () => frames.postRender.delete(listener);
+            },
+            requestRender() {},
+          },
+        }
+      : {}),
     globe: {
+      isSettled: () => frames?.settled ?? true,
       imagery: {
         add(spec) {
           const entry = {
@@ -1124,4 +1152,77 @@ test('back at now from a run asked for another time, the newest run is asked for
   assert.deepEqual(asks, ['now', older + 12 * HOUR, 'now']);
   assert.equal(layer.getClockCoverage().start, latest);
   assert.equal(clock.follows('air-quality'), true);
+});
+
+test('back at now holding an older run that still covers now, the newest run is asked for at once', async () => {
+  const now = Date.now();
+  const latest = now - 6 * HOUR;
+  // Twenty hours old: it covers now, with four hours of forecast left.
+  const older = now - 20 * HOUR;
+  const asks = [];
+  const manifestAt = (run) => hostField({ run }).source.getManifest();
+  const { layer, clock } = fieldHarness({
+    fieldSource: {
+      getStep: hostField().source.getStep,
+      async getManifest(options = {}) {
+        asks.push(options.atMs ?? 'now');
+        const atOlder =
+          options.atMs !== undefined && options.atMs < latest - 2 * HOUR;
+        return manifestAt(atOlder ? older : latest);
+      },
+    },
+  });
+  await layer.update();
+  await settle();
+  clock.seek(now - 12 * HOUR);
+  await settle();
+  assert.equal(layer.getClockCoverage().start, older);
+  clock.goLive();
+  await settle();
+  assert.deepEqual(asks, ['now', now - 12 * HOUR, 'now']);
+  assert.equal(layer.getClockCoverage().start, latest);
+  assert.equal(layer.getClockCoverage().end, latest + 24 * HOUR);
+});
+
+test('on the globe a new step is drawn in one frame once loaded: never both steps at once', async (t) => {
+  fakeDocument(t);
+  const frames = { postRender: new Set(), settled: false };
+  const render = () => {
+    for (const listener of [...frames.postRender]) listener();
+  };
+  const host = hostField();
+  const { layer, clock, imagery, live } = fieldHarness({
+    fieldSource: host.source,
+    frames,
+  });
+  await layer.update();
+  await settle();
+  const [old] = live();
+  assert.equal(old.alpha, 0.85);
+  clock.seek(host.run + 24 * HOUR);
+  await settle();
+  // The new image loads clear under the old one.
+  const fresh = imagery.at(-1);
+  assert.notEqual(fresh, old);
+  assert.deepEqual(
+    [old.removed, old.alpha, fresh.alpha, fresh.show],
+    [false, 0.85, 0, true],
+  );
+  render();
+  assert.equal(old.removed, false);
+  // Settled with it: the old one goes and the new one shows, together.
+  frames.settled = true;
+  render();
+  assert.deepEqual([old.removed, fresh.alpha], [true, 0.85]);
+  assert.equal(frames.postRender.size, 0);
+  // Without a settled globe it swaps after 1.5 s at most.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  frames.settled = false;
+  clock.seek(host.run + 6 * HOUR);
+  await settle();
+  const next = imagery.at(-1);
+  assert.equal(next.alpha, 0);
+  t.mock.timers.tick(1_500);
+  assert.deepEqual([fresh.removed, next.alpha], [true, 0.85]);
+  assert.deepEqual(live(), [next]);
 });

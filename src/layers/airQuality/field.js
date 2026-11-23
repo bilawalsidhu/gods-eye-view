@@ -403,9 +403,13 @@ function paintImage(width, height, valueAt, rgb, limits, shareAt = null) {
  * `blendDeg`), so the map's colour is the tiles' value everywhere. Over the
  * blend band they cross-fade rather than meet at an edge: the inset's
  * opacity is its share `w` of its own, the global image's under it
- * `(1 − w) / (1 − w · a)` of its own (`a`), which makes the pair exactly as
- * opaque as one image of that value. The inset is clear at its edge and the
- * global image clear where `w` is 1, so neither has an edge to show.
+ * `(1 − w) / (1 − s · w · a)` of its own (`a`). Drawn at the field's full
+ * strength `s` (`FIELD_FADE.maxAlpha`, the strength from 600 km up) that
+ * makes the pair exactly as opaque as one image of that value; the images
+ * are painted once a step, not as the camera fades them, so below 600 km
+ * the band is up to 14 % (at 0.44 strength) more opaque than one image. The
+ * inset is clear at its edge and the global image clear where `w` is 1, so
+ * neither has an edge to show.
  * @param {{bands: Array<{color: string}>, limits: number[]}} scale
  */
 export function paintField(manifest, grids, id, { bands, limits }) {
@@ -448,7 +452,7 @@ export function paintField(manifest, grids, id, { bands, limits }) {
         europe &&
           ((x, y, alpha) => {
             const w = europeWeight(europe, lonAt(x), latAt(y));
-            return w > 0 ? (1 - w) / (1 - w * alpha) : 1;
+            return w > 0 ? (1 - w) / (1 - FIELD_FADE.maxAlpha * w * alpha) : 1;
           }),
       ),
     },

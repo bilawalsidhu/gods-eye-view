@@ -13,8 +13,8 @@ const SLOTS = Object.freeze({
   global: 'air-quality',
   europe: 'air-quality-inset',
 });
-/** Replaced globe images go once the new ones are drawn, or after this long. */
-const RETIRE_AFTER_MS = 1500;
+/** New globe images replace the old ones once drawn, or after this long. */
+const SWAP_AFTER_MS = 1500;
 
 let shells = 0;
 let paints = 0;
@@ -38,11 +38,12 @@ function canvasFor({ width, height, rgba }) {
  * 3D tiles a raised shell per image that rises with the camera, each in the
  * air-quality slot under wind (the Europe inset over the global field).
  *
- * A new step never blinks: shells take the new image in place (the port
- * keeps drawing the old one until the new one can be drawn whole), and on
- * the globe the new images are added before the old ones go, once the
- * globe's imagery has settled or after `RETIRE_AFTER_MS`. `setStrength`
- * scales every image's opacity (the fade by camera height); 0 hides them.
+ * A new step never blinks and never doubles: shells take the new image in
+ * place (the port keeps drawing the old one until the new one can be drawn
+ * whole), and on the globe the new images are added clear, load under the
+ * old ones, and take their place in one frame once the globe's imagery has
+ * settled (or after `SWAP_AFTER_MS`). `setStrength` scales every shown
+ * image's opacity (the fade by camera height); 0 hides them.
  * @param {{getViewer: () => object | null, getHost: () => {collection: object | null, kind: string}}} options
  */
 export function createFieldDrawing({ getViewer, getHost }) {
@@ -53,10 +54,10 @@ export function createFieldDrawing({ getViewer, getHost }) {
   let strength = FIELD_FADE.maxAlpha;
   /** The last painted images, as canvases (their pixels let go), by key. */
   let painted = null;
-  /** Globe images replaced by newer ones, drawn until those are. */
-  const outgoing = [];
-  let retireTimer = null;
-  let offRetire = null;
+  /** New globe images, clear while they load under the ones shown. */
+  let incoming = [];
+  let swapTimer = null;
+  let offSwap = null;
 
   const applyStrength = (entry) => {
     const show = strength > 0;
@@ -73,36 +74,45 @@ export function createFieldDrawing({ getViewer, getHost }) {
     entry.field?.dispose();
     entry.imagery?.remove();
   };
-  const retire = () => {
-    clearTimeout(retireTimer);
-    retireTimer = null;
-    offRetire?.();
-    offRetire = null;
-    for (const entry of outgoing.splice(0)) dropEntry(entry);
+  const stopSwap = () => {
+    clearTimeout(swapTimer);
+    swapTimer = null;
+    offSwap?.();
+    offSwap = null;
   };
-  /** Let the replaced globe images go once the new ones can be seen. */
-  const retireLater = (viewer) => {
+  /** The loaded new globe images take the old ones' place, in one frame. */
+  const swap = () => {
+    stopSwap();
+    if (!incoming.length) return;
+    for (const entry of entries) dropEntry(entry);
+    entries = incoming;
+    incoming = [];
+    for (const entry of entries) applyStrength(entry);
+  };
+  /** Swap once the globe's imagery has settled with the new images in it. */
+  const swapLater = (viewer) => {
     const globe = findGlobe(viewer);
     const frame = findFrame(viewer);
     if (typeof globe?.isSettled !== 'function' || !frame?.on) {
-      retire();
+      swap();
       return;
     }
-    clearTimeout(retireTimer);
-    offRetire?.();
-    retireTimer = setTimeout(retire, RETIRE_AFTER_MS);
-    offRetire = frame.on('postRender', () => {
-      if (globe.isSettled('imagery')) retire();
+    stopSwap();
+    swapTimer = setTimeout(swap, SWAP_AFTER_MS);
+    offSwap = frame.on('postRender', () => {
+      if (globe.isSettled('imagery')) swap();
     });
     frame.requestRender?.('air-quality');
   };
   const remove = () => {
-    retire();
+    stopSwap();
+    for (const entry of incoming.splice(0)) dropEntry(entry);
     for (const entry of entries.splice(0)) dropEntry(entry);
     drawnOn = null;
     shownKey = null;
   };
-  const addImagery = (host, { name, canvas, rectangle }) => {
+  /** One globe image; `staged`, clear until it takes an old one's place. */
+  const addImagery = (host, { name, canvas, rectangle }, staged = false) => {
     const imagery = host.collection.add({
       kind: 'single-image',
       url: canvas.toDataURL('image/png'),
@@ -111,7 +121,11 @@ export function createFieldDrawing({ getViewer, getHost }) {
     });
     imagery.drapeOn = 'surface';
     const entry = { name, imagery };
-    applyStrength(entry);
+    if (staged) {
+      // Shown but clear: the renderer loads it without drawing it.
+      imagery.alpha = 0;
+      imagery.show = true;
+    } else applyStrength(entry);
     return entry;
   };
   const addShell = (viewer, draw, { name, canvas, rectangle, key }) => {
@@ -183,14 +197,15 @@ export function createFieldDrawing({ getViewer, getHost }) {
         for (const entry of entries)
           if (!next.includes(entry)) dropEntry(entry);
         entries = next;
+      } else if (drawnOn === 'globe' && entries.length) {
+        // A newer step than one still loading replaces that one.
+        stopSwap();
+        for (const entry of incoming.splice(0)) dropEntry(entry);
+        incoming = painted.images.map((image) => addImagery(host, image, true));
+        swapLater(viewer);
       } else {
-        const replaced = drawnOn === 'globe' ? entries : [];
-        if (drawnOn !== 'globe') remove();
+        remove();
         entries = painted.images.map((image) => addImagery(host, image));
-        if (replaced.length) {
-          outgoing.push(...replaced);
-          retireLater(viewer);
-        }
       }
       drawnOn = host.kind;
       shownKey = hostKey;

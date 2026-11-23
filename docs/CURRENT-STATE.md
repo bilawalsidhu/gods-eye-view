@@ -10194,17 +10194,20 @@ each band's colour at its middle, opacity `min(0.82, 0.05 + 0.26 · p)` for scal
 position `p`. It is one `single-image` imagery layer per image on the globe (the
 weather imagery host) and a raised raster shell over photorealistic 3D tiles
 (`src/layers/airQuality/fieldDrawing.js`), in its own slot just under wind's
-(`WEATHER_IMAGERY_Z`, `WEATHER_SHELL_HEIGHTS`); a new step replaces the
-images without a gap. Its strength follows the camera: 0.85 of the painted
-opacity from 600 km up, fading on a log scale to nothing at 60 km
-(`FIELD_FADE`); below that the map shows stations only and the card still reads
-the model. The Europe inset blends into the global field over `blendDeg`
+(`WEATHER_IMAGERY_Z`, `WEATHER_SHELL_HEIGHTS`; above Active Fires' heat); a new
+step replaces the images without a gap or a moment of both (on the globe the new images load
+clear and take the old ones' place in one frame). Its strength follows the
+camera: 0.85 of the painted opacity from 600 km up, fading on a log scale to
+nothing at 60 km (`FIELD_FADE`); below that the map shows stations only and
+the card still reads the model. The Europe inset blends into the global field over `blendDeg`
 (default 3°) inside its edge with a smoothstep weight. Where the inset is drawn
 both images carry that blended value, the value the tiles read, so the map's
 colour is the tiles' value everywhere; over the blend band they cross-fade
 (the inset at its share `w` of its opacity, the global image under it at
-`(1 − w) / (1 − w · a)`), together exactly as opaque as one image, so neither
-has an edge to show. The map shows
+`(1 − w) / (1 − s · w · a)` with `s` the full strength 0.85), so neither has an
+edge to show. At full strength (600 km up) the pair is exactly as opaque as one
+image; the images are painted once a step, so while the field fades below
+600 km the band is up to 14 % (at 0.44 strength) more opaque than one image. The map shows
 only the step and view the card names: while a step loads, the field drawn
 stays only if it is of the same run and view, and a step that failed is not
 drawn. The forecast is on the timeline: the layer registers the run's first

@@ -343,6 +343,8 @@ export function createAirQualityLayer({
     manifestFailed: false,
     /** What the run held was asked for: 'now', or a time's three hours. */
     heldFor: null,
+    /** Whether the layer drew the present when last in step with the clock. */
+    wasLive: true,
     manifestRequest: null,
     stepRequest: null,
     /** When each ask may be made again: 'now', or a time's three hours. */
@@ -1255,14 +1257,19 @@ export function createAirQualityLayer({
     cancelStep();
   };
   /**
-   * At now, a run that does not cover now is let go: an expired one (stations
-   * only until a newer run), or one asked for another time, after which the
-   * newest run is asked for at once.
+   * Back at now holding a run asked for another time, the newest run is
+   * asked for at once, whether or not the run held covers now (an older one
+   * may, with a shorter forecast). At now a run that does not cover now is
+   * let go (expired: stations only until a newer run).
    */
   const expireRun = () => {
+    const live = liveTime();
+    const returned = live && !field.wasLive;
+    field.wasLive = live;
     const held = field.manifest;
-    if (!held || !liveTime() || fieldStepAt(held, clock.wallNow()) !== null)
-      return;
+    if (!held || !live) return;
+    if (returned && field.heldFor !== 'now') field.asks.delete('now');
+    if (fieldStepAt(held, clock.wallNow()) !== null) return;
     if (field.heldFor !== 'now') field.asks.delete('now');
     dropRun();
   };
