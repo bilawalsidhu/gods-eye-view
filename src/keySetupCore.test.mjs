@@ -401,3 +401,16 @@ test('OpenAQ uses the existing free server-side credential registry', () => {
   assert.notEqual(entry.clientExposed, true);
   assert.equal(entry.getUrl, 'https://explore.openaq.org/register');
 });
+
+test('the data.gov.in key is listed in Provider Settings like the OpenAQ key', () => {
+  const empty = keySetupStatus({});
+  const configured = keySetupStatus({ DATA_GOV_IN_API_KEY: 'private-test-value' });
+  assert.equal(configured.total, empty.total);
+  assert.equal(configured.setCount, empty.setCount + 1);
+  const india = configured.keys.find((key) => key.id === 'data-gov-in');
+  assert.equal(india.set, true);
+  assert.equal(india.tier, 'free');
+  assert.notEqual(india.clientExposed, true);
+  assert.deepEqual(india.envVars, ['DATA_GOV_IN_API_KEY']);
+  assert.ok(!JSON.stringify(configured).includes('private-test-value'));
+});

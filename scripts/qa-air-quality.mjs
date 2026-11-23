@@ -45,6 +45,12 @@ async function main() {
 
   try {
     const page = await browser.newPage();
+    page.on('response', (response) => {
+      if (response.status() >= 400) {
+        const url = new URL(response.url());
+        console.log(`HTTP ${response.status()}: ${url.origin}${url.pathname}`);
+      }
+    });
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
     page.on('console', (m) => {
       if (m.type() !== 'error') return;

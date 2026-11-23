@@ -267,6 +267,12 @@ export const DATA_CREDITS = [
     html: 'South African air quality: <a href="https://saaqis.environment.gov.za/" target="_blank" rel="noopener">SAAQIS</a> and originating monitoring networks. Provisional observations.',
   },
   {
+    key: 'cpcb-ogd',
+    html:
+      'Indian air-quality observations: Central Pollution Control Board via ' +
+      '<a href="https://www.data.gov.in/catalog/real-time-air-quality-index" target="_blank" rel="noopener">Open Government Data Platform India</a> · Government Open Data License – India',
+  },
+  {
     key: 'eccc-aqhi',
     html:
       'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
