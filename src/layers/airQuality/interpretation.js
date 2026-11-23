@@ -51,6 +51,17 @@ export function hourlyLegend(parameter) {
         : `${i ? `>${limits[i - 1]}` : '0'}–${limits[i]} µg/m³`,
   }));
 }
+/**
+ * The EEA hourly band of a concentration in µg/m³ (its position 0 to 5), or
+ * -1 for a pollutant the scale has no bands for.
+ */
+export function hourlyBandIndex(parameter, value) {
+  const limits = EEA_HOURLY_LIMITS[parameter];
+  if (!limits || !Number.isFinite(value)) return -1;
+  const severity = limits.findIndex((limit) => value <= limit);
+  return severity < 0 ? 5 : severity;
+}
+
 /** Unknown, flagged, incomplete and incompatible readings never turn green. */
 export function interpretHourly(reading) {
   const limits = EEA_HOURLY_LIMITS[reading.parameter];
@@ -90,8 +101,7 @@ export function interpretHourly(reading) {
     reason = msg('No usable measurement.');
   if (reason) return { ...reading, assessment: { reason }, color: '#8cb4ce' };
   const value = reading.value * factor;
-  let severity = limits.findIndex((limit) => value <= limit);
-  if (severity < 0) severity = 5;
+  const severity = hourlyBandIndex(reading.parameter, value);
   const band = EEA_HOURLY_BANDS[severity];
   return {
     ...reading,

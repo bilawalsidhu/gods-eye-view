@@ -1,15 +1,25 @@
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { cssColor } from '../../render/color.js';
 import {
+  canvasOf,
   drawOf,
   findCamera,
   findQuery,
   rendererOf,
 } from '../../render/rendererOf.js';
+import {
+  isTrackingClickGesture,
+  isTrackingSelectionGesture,
+} from '../../data/trackingClickGesture.js';
 import { keyRequirementText } from '../../ui/keyGuidance.js';
 import { ECCC_DEFINITION } from './providers.js';
 import { isRatedReading, mergeObservations } from './merge.js';
-import { hourlyLegend } from './interpretation.js';
+import {
+  EEA_HOURLY_BANDS,
+  hourlyBandIndex,
+  hourlyLegend,
+} from './interpretation.js';
+import { cellDegAt, groupRect, groupStations } from './groups.js';
 import {
   AQI_PARAMETERS,
   US_AQI_BANDS,
@@ -40,6 +50,14 @@ export { createAirQualitySource } from './providers.js';
 const STATION_MARKER_RADIUS_M = 6_000;
 /** Readings listed in the readout card. */
 const READOUT_LIMIT = 5;
+/** Station dots, CSS pixels: plain and selected. */
+const STATION_PX = 7;
+const SELECTED_STATION_PX = 13;
+/** A group's light outline, which tells it from a station's dark one. */
+const GROUP_OUTLINE = Object.freeze([1, 1, 1, 0.85]);
+const GROUP_OUTLINE_WIDTH = 1.5;
+/** A click on a group flies to its stations in this many seconds. */
+const GROUP_FLIGHT_S = 1.4;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -104,14 +122,30 @@ function valueText(key, value) {
  * pollutants (`usAqi.js`; providers are asked with `mode: 'aqi'`), a
  * pollutant view the EEA hourly bands of the concentration, and the AQHI
  * view ECCC's own bands. A network's own index stays in a station's details.
+ *
+ * At far zoom, stations that would overlap on screen draw as one group
+ * (`groups.js`) in the band colour of their members' mean; a click on a group
+ * flies to its stations, a click on a station selects it (`station`). Canada's
+ * AQHI discs are never grouped. Without `input` (the input dispatcher's
+ * `inputFor`) the layer takes no clicks; `clickCard` names a card painted on
+ * top of a click (`src/data/pickRegistry.js`), which then takes it.
  */
-export function createAirQualityLayer({ source, overlayHost } = {}) {
+export function createAirQualityLayer({
+  source,
+  overlayHost,
+  input = null,
+  clickCard = null,
+} = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
   let _viewer = null;
   let _markers = null;
   let _points = null;
+  /** Observation readings drawn as points, and each drawn point by item id. */
+  let _stations = [];
+  let _drawn = new Map();
+  let _offClick = null;
   let _readings = [];
   let _count = 0;
   let _lastUpdate = null;
@@ -406,6 +440,127 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
             reading.assessment.concentration ?? 0,
           ];
 
+  /**
+   * A reading's number on the view's scale, for its group's mean: the index
+   * in the AQI view, the concentration in a pollutant view; null unrated.
+   */
+  const scaleValue = (reading) =>
+    !isRatedReading(reading, view)
+      ? null
+      : view === 'aqi'
+        ? reading.aqi.index
+        : (reading.assessment.concentration ?? null);
+  /** The band colour of a value on the view's scale; unrated without one. */
+  const bandColor = (value) => {
+    if (!Number.isFinite(value)) return UNRATED_COLOR;
+    if (view === 'aqi') return usAqiBand(value)?.color ?? UNRATED_COLOR;
+    return (
+      EEA_HOURLY_BANDS[hourlyBandIndex(view, value)]?.color ?? UNRATED_COLOR
+    );
+  };
+  /** The view's size and ellipsoid pick, or null when it cannot be measured. */
+  const screen = () => {
+    const canvas = _viewer ? canvasOf(_viewer) : null;
+    const query = _viewer ? findQuery(_viewer) : null;
+    if (!canvas || typeof query?.pickEllipsoid !== 'function') return null;
+    return {
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+      pickEllipsoid: (x, y) => query.pickEllipsoid(x, y),
+    };
+  };
+
+  /**
+   * Draw the observation stations: where they would overlap on screen, one
+   * group each (`groups.js`), worked out again after every camera move. A
+   * scene that cannot be measured draws every station on its own.
+   */
+  const drawPoints = () => {
+    if (!_points) return;
+    _drawn = new Map();
+    const measured = view === 'aqhi' ? null : screen();
+    const groups = measured
+      ? groupStations(
+          _stations.map((reading) => ({
+            id: reading.id,
+            lat: reading.lat,
+            lon: reading.lon,
+            value: scaleValue(reading),
+            reading,
+          })),
+          cellDegAt(measured),
+          { selectedId: selectedStation },
+        )
+      : _stations.map((reading) => ({ members: [{ reading }] }));
+    const items = [];
+    for (const group of groups) {
+      if (group.members.length === 1) {
+        const { reading } = group.members[0];
+        const selected = reading.id === selectedStation;
+        const id = `air-quality:${reading.id}`;
+        _drawn.set(id, { reading });
+        items.push({
+          id,
+          pos: { lon: reading.lon, lat: reading.lat, height: 0 },
+          pixelSize: selected ? SELECTED_STATION_PX : STATION_PX,
+          color: reading.color,
+          outlineColor: selected ? '#ffffff' : '#000000',
+          outlineWidth: selected ? 3 : 1,
+          height: 'clampGround',
+          meta: { ...reading },
+        });
+        continue;
+      }
+      // One bubble: the band colour of its members' mean, its size growing
+      // with their number.
+      const id = `air-quality-group:${group.members[0].id}:${group.members.length}`;
+      _drawn.set(id, { group });
+      items.push({
+        id,
+        pos: { lon: group.lon, lat: group.lat, height: 0 },
+        pixelSize: Math.round(12 + 6 * Math.log10(group.members.length)),
+        color: bandColor(group.mean),
+        outlineColor: GROUP_OUTLINE,
+        outlineWidth: GROUP_OUTLINE_WIDTH,
+        height: 'clampGround',
+      });
+    }
+    _points.set(items);
+  };
+
+  /** Fly to where a group's stations come apart; nothing is selected. */
+  const openGroup = (group) =>
+    findCamera(_viewer)?.flyTo(
+      { rect: groupRect(group.members) },
+      { durationS: GROUP_FLIGHT_S },
+    );
+
+  /**
+   * A click on a group flies to it; on a station, selects it; on open map,
+   * lets go of the selected station. A card painted on top takes the click.
+   */
+  const onClick = (event) => {
+    if (!_enabled || !showStations || !_points || !_viewer) return;
+    if (!isTrackingSelectionGesture(event?.gesture)) return;
+    if (clickCard?.(event)) return;
+    const hit = event.drawHit;
+    const item = hit && hit.set === _points.id ? _drawn.get(hit.id) : null;
+    if (item?.group) {
+      openGroup(item.group);
+      return;
+    }
+    if (item?.reading) {
+      layer.setParams({ station: item.reading.id });
+      return;
+    }
+    if (
+      event.surface &&
+      selectedStation !== null &&
+      isTrackingClickGesture(event.gesture)
+    )
+      layer.setParams({ station: null });
+  };
+
   /** Merge every asked provider's readings into the drawn set. */
   const apply = () => {
     owners = new WeakMap();
@@ -536,8 +691,15 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         show: false,
       });
       _viewer = viewer;
+      try {
+        _offClick = input?.(viewer)?.onClick?.(onClick) ?? null;
+      } catch {
+        // A scene with no renderer input takes no clicks.
+        _offClick = null;
+      }
       removeMoveEnd = findCamera(viewer)?.on('moveEnd', () => {
         if (!_enabled) return;
+        drawPoints();
         this._publishOverlays();
         const key = JSON.stringify(currentView());
         // Only providers that fetch per view follow the camera; one still
@@ -581,6 +743,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
 
     enable() {
       _enabled = true;
+      drawPoints();
       syncVisibility();
       notify();
     },
@@ -624,6 +787,7 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       }
       if (nextView === view) {
         if (changed) {
+          drawPoints();
           syncVisibility();
           this._publishOverlays();
           notify();
@@ -666,29 +830,19 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
     _render() {
       if (!_markers) return;
       const markers = [];
-      const points = [];
+      const stations = [];
       overlayEntries = [];
       for (const reading of _readings) {
         const owner = ownerOf(reading);
         const category = categoryText(reading);
         const position = fromDegrees(reading.lon, reading.lat);
-        // A filled disc on the ground with static axes, as in the earthquake
+        // Observation stations are points (`drawPoints`). Index stations are
+        // a filled disc on the ground with static axes, as in the earthquake
         // layer: a per-frame axis re-tessellates clamped ground geometry
         // every frame. No outline: clamped to the ground, the default
         // renderer never drew one.
-        const meta = { ...reading };
-        if (owner.observation === true) {
-          points.push({
-            id: `air-quality:${reading.id}`,
-            pos: { lon: reading.lon, lat: reading.lat, height: 0 },
-            pixelSize: 8,
-            color: reading.color,
-            outlineColor: '#000000',
-            outlineWidth: 1,
-            height: 'clampGround',
-            meta,
-          });
-        } else
+        if (owner.observation === true) stations.push(reading);
+        else
           markers.push({
             id: `air-quality:${reading.id}`,
             geometry: {
@@ -725,7 +879,8 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         );
       }
       _markers.set(markers);
-      _points.set(points);
+      _stations = stations;
+      drawPoints();
       this._publishOverlays();
     },
 
@@ -766,6 +921,10 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
       _markers = null;
       _points?.dispose();
       _points = null;
+      _offClick?.();
+      _offClick = null;
+      _stations = [];
+      _drawn = new Map();
       removeMoveEnd?.();
       removeMoveEnd = null;
       _viewer = null;
