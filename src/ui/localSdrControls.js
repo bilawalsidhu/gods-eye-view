@@ -1,9 +1,10 @@
 import { onLocaleChange, t } from '../i18n/index.js';
+import { parseAtcChannel } from '../sdr/atcChannels.js';
 import {
   internetRadioAudioActive,
   localSdrCardView,
   localSdrFeedLine,
-  localSdrFmAudioActive,
+  localSdrAudioActive,
 } from './localSdrPresentation.js';
 import { useRadioStore } from './stores/radio.js';
 import { applicationPinia } from './vueRuntime.js';
@@ -14,8 +15,7 @@ import { applicationPinia } from './vueRuntime.js';
  * Answers the card's controls and owns its receiver/radio subscriptions; the
  * Radio view renders the card from what this publishes (`gev-radio` store)
  * and sends its controls here through the store's act(). The
- * Radio panel is one listening surface: starting local FM stops internet radio, and
- * starting internet radio stops local FM.
+ * Starting local SDR audio stops internet radio, and vice versa.
  */
 export class LocalSdrControls {
   /**
@@ -45,7 +45,8 @@ export class LocalSdrControls {
     this.actions = actions;
     this._state = receiver.getState();
     this._radioState = null;
-    this._fmAudioActive = localSdrFmAudioActive(this._state);
+    this._localAudioActive = localSdrAudioActive(this._state);
+    this._invalidAtcChannel = false;
     this._radioAudioActive = false;
     this._renderFrame = null;
     this._destroyed = false;
@@ -93,7 +94,7 @@ export class LocalSdrControls {
           await this.receiver.stop();
           return;
         }
-        if (before.mode === 'fm') this._stopInternetRadio();
+        if (before.mode !== 'adsb') this._stopInternetRadio();
         if (await this.receiver.connect(before.mode))
           await this._enableLayerWhenReceiving();
       },
@@ -101,18 +102,20 @@ export class LocalSdrControls {
         void this.receiver.requestReceiverLocation();
       },
       changeSdrDevice: async () => {
-        if (this.receiver.getState().mode === 'fm') this._stopInternetRadio();
+        if (this.receiver.getState().mode !== 'adsb') this._stopInternetRadio();
         if (await this.receiver.changeDevice())
           await this._enableLayerWhenReceiving();
       },
       setSdrMode: async (mode) => {
-        if (mode === 'fm') {
+        if (mode === 'adsb') {
+          if (await this.receiver.setMode('adsb'))
+            await this._enableLayerWhenReceiving();
+        } else {
           this._stopInternetRadio();
-          if (this.actions.isLocalAdsbEnabled?.())
+          if (mode === 'fm' && this.actions.isLocalAdsbEnabled?.())
             await this.actions.setLocalAdsbEnabled?.(false);
-          await this.receiver.setMode('fm');
-        } else if (await this.receiver.setMode('adsb'))
-          await this._enableLayerWhenReceiving();
+          await this.receiver.setMode(mode);
+        }
       },
       setSdrGain: (value) => {
         void this.receiver.setGain(value);
@@ -121,10 +124,22 @@ export class LocalSdrControls {
         void this.receiver.setHackrfGain(stage, value);
       },
       tuneSdr: (value) => {
+        if (this.receiver.getState().mode === 'atc') {
+          const channel = parseAtcChannel(value);
+          this._invalidAtcChannel = !channel;
+          this._scheduleRender();
+          if (channel) void this.receiver.tuneAtcChannel(channel.label);
+          return;
+        }
         const mhz = Number(value);
         if (!Number.isFinite(mhz)) return;
         this._stopInternetRadio();
         void this.receiver.tuneFm(mhz * 1_000_000);
+      },
+      clearSdrTuneError: () => {
+        if (!this._invalidAtcChannel) return;
+        this._invalidAtcChannel = false;
+        this._scheduleRender();
       },
       seekSdr: (direction) => {
         this._stopInternetRadio();
@@ -140,21 +155,23 @@ export class LocalSdrControls {
   }
 
   _onReceiverState(state) {
+    if (state.mode !== 'atc') this._invalidAtcChannel = false;
     this._state = state;
-    const fmAudioActive = localSdrFmAudioActive(state);
-    // Local FM just started: it takes over from internet radio.
-    if (fmAudioActive && !this._fmAudioActive) this._stopInternetRadio();
-    this._fmAudioActive = fmAudioActive;
+    const localAudioActive = localSdrAudioActive(state);
+    if (localAudioActive && !this._localAudioActive) this._stopInternetRadio();
+    this._localAudioActive = localAudioActive;
     this._scheduleRender();
   }
 
   _onRadioState(state) {
     this._radioState = state;
     const radioAudioActive = internetRadioAudioActive(state);
-    // Internet radio just started: it takes over from local FM.
-    if (radioAudioActive && !this._radioAudioActive && this._fmAudioActive) {
+    if (radioAudioActive && !this._radioAudioActive && this._localAudioActive) {
       void this.receiver.stop({
-        message: t('Local FM stopped: internet radio started'),
+        message:
+          this._state.mode === 'atc'
+            ? t('Local ATC stopped: internet radio started')
+            : t('Local FM stopped: internet radio started'),
       });
     }
     this._radioAudioActive = radioAudioActive;
@@ -180,18 +197,17 @@ export class LocalSdrControls {
   _render() {
     const view = localSdrCardView(this._state);
     const feedLine = localSdrFeedLine(this.feeds?.getState?.() || null);
-    // The card leaves a focused field, and the FM frequency outside FM, as
-    // they are.
     this._publish({
       ...view,
       gain: view.gainValue,
       frequency: view.frequencyValue,
+      invalidAtcChannel: this._invalidAtcChannel,
       volume: view.volumePercent,
       volumeText: `${view.volumePercent}%`,
       feedLine,
     });
     // Only structural changes move the rail; per-block text updates do not.
-    const layoutKey = `${view.receiverKind}|${view.statsHidden}|${view.connectionActive}|${feedLine === null}`;
+    const layoutKey = `${view.receiverKind}|${view.statsHidden}|${view.atcActive}|${this._invalidAtcChannel}|${view.connectionActive}|${feedLine === null}`;
     if (layoutKey !== this._layoutKey) {
       this._layoutKey = layoutKey;
       this.actions.scheduleLayout?.();

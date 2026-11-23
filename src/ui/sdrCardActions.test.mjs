@@ -46,6 +46,7 @@ test('the card’s buttons, gain, tuning and volume call LocalSdrControls', (t) 
     'sdr-locate-btn',
     'sdr-change-device-btn',
     'sdr-mode-fm-btn',
+    'sdr-mode-atc-btn',
     'sdr-mode-adsb-btn',
   ])
     $(id).click();
@@ -64,12 +65,31 @@ test('the card’s buttons, gain, tuning and volume call LocalSdrControls', (t) 
     ['locateSdr'],
     ['changeSdrDevice'],
     ['setSdrMode', 'fm'],
+    ['setSdrMode', 'atc'],
     ['setSdrMode', 'adsb'],
     ['setSdrGain', '20.7'],
     ['tuneSdr', '101.1'],
     ['tuneSdr', '95.3'],
     ['setSdrVolume', 40],
   ]);
+});
+
+test('ATC accepts comma-decimal input and hides FM seek controls', async (t) => {
+  const calls = mount(t);
+  const store = useRadioStore();
+  store.publishSdr({ atcActive: true, frequency: '118.005', stats: {} });
+  await nextTick();
+  assert.equal($('sdr-mode-atc-btn').getAttribute('aria-pressed'), 'true');
+  assert.equal($('sdr-seek-back-btn'), null);
+  assert.equal($('sdr-frequency-input').value, '118.005');
+  $('sdr-frequency-input').value = '118,010';
+  fire($('sdr-frequency-input'), 'keydown', { key: 'Enter' });
+  assert.deepEqual(calls, [['tuneSdr', '118,010']]);
+
+  store.publishSdr({ ...store.sdr, invalidAtcChannel: true });
+  await nextTick();
+  assert.equal($('sdr-frequency-input').getAttribute('aria-invalid'), 'true');
+  assert.match($('sdr-atc-channel-error').textContent, /118\.005/);
 });
 
 test('the seek buttons step down and up', (t) => {

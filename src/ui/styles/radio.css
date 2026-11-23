@@ -1287,7 +1287,7 @@ html:not([lang='en']) .data-row-list-text {
 }
 .sdr-radio-card button,
 .sdr-radio-card select,
-.sdr-radio-card input[type='number'] {
+.sdr-frequency-row input {
   min-height: 28px;
   border-radius: 5px;
   font: 8px/1 var(--font-mono);
@@ -1345,7 +1345,7 @@ html:not([lang='en']) .data-row-list-text {
   color: #ffd79a;
   font: 9px/1 var(--font-mono);
 }
-.sdr-frequency-row input[type='number'] {
+.sdr-frequency-row input {
   width: 78px;
   min-width: 0;
   padding: 5px 7px;

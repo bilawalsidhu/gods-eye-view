@@ -88,13 +88,13 @@ function formatIq(state) {
 }
 
 function statusText(state) {
-  const fmActive = state.mode === 'fm';
+  const adsbActive = state.mode === 'adsb';
   const iqStatus =
     state.samplesPerSecond > 0
       ? `${fixed(state.samplesPerSecond / 1_000_000, 2)} MS/s IQ`
       : t('waiting for IQ');
   const device = state.deviceLabel ? ` · ${state.deviceLabel}` : '';
-  if (state.connected && !fmActive) {
+  if (state.connected && adsbActive) {
     const decoded = tn(
       state.decodedMessages,
       '{count} message',
@@ -105,7 +105,7 @@ function statusText(state) {
   const detail = state.seeking
     ? state.seekMessage
     : state.seekMessage || state.message;
-  if (state.connected && fmActive) {
+  if (state.connected && !adsbActive) {
     const workerStatus =
       state.workerBlocks > 0
         ? tn(state.workerBlocks, 'DSP {count} block', 'DSP {count} blocks')
@@ -131,6 +131,8 @@ export function localSdrCardView(state) {
   const transitional =
     state.status === 'connecting' || state.status === 'tuning';
   const fmActive = state.mode === 'fm';
+  const atcActive = state.mode === 'atc';
+  const audioMode = fmActive || atcActive;
   const adsbActive = state.mode === 'adsb';
   const fmInteractive =
     state.connected && fmActive && state.status === 'streaming';
@@ -151,6 +153,7 @@ export function localSdrCardView(state) {
     receiverKind: state.receiverKind || 'rtl',
     receiverDisabled: transitional || state.connected || !state.webUsbSupported,
     fmActive,
+    atcActive,
     adsbActive,
     modeDisabled: transitional,
     locateLabel:
@@ -174,28 +177,32 @@ export function localSdrCardView(state) {
       positioned: String(state.aircraftPositioned || 0),
       iq: formatIq(state),
     },
-    frequencyDisabled: !fmActive || transitional,
-    frequencyValue: fmActive
-      ? (state.frequencyHz / 1_000_000).toFixed(1)
-      : null,
-    tuneDisabled: !state.connected || !fmActive || transitional,
+    frequencyDisabled: !audioMode || transitional,
+    frequencyValue: atcActive
+      ? state.atcChannel
+      : fmActive
+        ? (state.frequencyHz / 1_000_000).toFixed(1)
+        : null,
+    tuneDisabled: transitional || !(atcActive || (fmActive && state.connected)),
     seekDisabled: !fmInteractive || Boolean(state.seeking),
     volumePercent: Math.round((Number(state.volume) || 0) * 100),
-    volumeDisabled: !fmActive,
+    volumeDisabled: !audioMode,
     statusText: statusText(state),
     statusError: state.status === 'error' || state.status === 'unsupported',
   };
 }
 
 /**
- * Whether the receiver is producing FM audio (the state that must not overlap
+ * Whether the receiver is producing local audio (the state that must not overlap
  * internet-radio playback).
  * @param {object} state SdrController.getState() snapshot.
  * @returns {boolean}
  */
-export function localSdrFmAudioActive(state) {
+export function localSdrAudioActive(state) {
   return Boolean(
-    state?.connected && state.mode === 'fm' && state.status === 'streaming',
+    state?.connected &&
+    (state.mode === 'fm' || state.mode === 'atc') &&
+    state.status === 'streaming',
   );
 }
 

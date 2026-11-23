@@ -72,6 +72,11 @@ function stubReceiver() {
       calls.push(['tuneFm', hz]);
       return true;
     },
+    async tuneAtcChannel(channel) {
+      calls.push(['tuneAtcChannel', channel]);
+      this.emit({ atcChannel: channel });
+      return true;
+    },
   };
 }
 
@@ -180,6 +185,44 @@ test('card controls drive gain, FM mode and the Local ADS-B layer', async (t) =>
   controls.destroy();
   store.act('setSdrGain', '0.0');
   assert.deepEqual(receiver.calls.at(-1), ['tuneFm', 101_100_000], 'destroyed');
+});
+
+test('ATC tunes valid designators and leaves the decoder feed layer enabled', async (t) => {
+  const receiver = stubReceiver();
+  const radio = stubRadio();
+  const layerCalls = [];
+  let view;
+  const store = stubStore((next) => (view = next));
+  const controls = new LocalSdrControls({
+    document: stubDocument(),
+    receiver,
+    radio,
+    store,
+    actions: {
+      isLocalAdsbEnabled: () => true,
+      setLocalAdsbEnabled: async (enabled) => layerCalls.push(enabled),
+    },
+  });
+  t.after(() => controls.destroy());
+  receiver.emit({ connected: true, status: 'streaming', mode: 'adsb' });
+  await store.act('setSdrMode', 'atc');
+  assert.deepEqual(layerCalls, []);
+  assert.deepEqual(receiver.calls.at(-1), ['setMode', 'atc']);
+
+  store.act('tuneSdr', '118.020');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(view.invalidAtcChannel, true);
+  assert.deepEqual(receiver.calls.at(-1), ['setMode', 'atc']);
+  store.act('tuneSdr', '118,010');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(view.invalidAtcChannel, false);
+  assert.equal(view.frequency, '118.010');
+  assert.deepEqual(receiver.calls.at(-1), ['tuneAtcChannel', '118.010']);
+  radio.emit({ audioState: 'playing' });
+  assert.deepEqual(receiver.calls.at(-1), [
+    'stop',
+    { message: 'Local ATC stopped: internet radio started' },
+  ]);
 });
 
 test('a page without the card connects nothing', (t) => {

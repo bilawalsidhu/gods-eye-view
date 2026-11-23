@@ -29,7 +29,7 @@ const tune = () => act('tuneSdr', frequency.value.value);
     <strong>{{ t('LOCAL SDR') }}</strong>
     <span id="sdr-connection-state" v-class-toggle="{ active: sdr?.connectionActive }">{{ sdr ? sdr.connectionLabel : 'NO USB' }}</span>
   </div>
-  <p>{{ t('Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.') }}</p>
+  <p>{{ t('Chrome/Edge · WebUSB · one local tuner for FM, ATC or ADS-B.') }}</p>
   <div class="sdr-gain-row">
     <label for="sdr-receiver-select">{{ t('Receiver') }}</label>
     <UiSelect class="gev-field" id="sdr-receiver-select" :model-value="sdr?.receiverKind ?? 'rtl'" @update:model-value="act('selectSdrReceiver', $event)" :disabled="sdr?.receiverDisabled ?? true">
@@ -44,6 +44,7 @@ const tune = () => act('tuneSdr', frequency.value.value);
   </div>
   <div class="sdr-mode-row" role="group" :aria-label="t('SDR receiver mode')">
     <UiButton id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" :pressed="sdr ? sdr.fmActive : true" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">FM</UiButton>
+    <UiButton id="sdr-mode-atc-btn" @click="act('setSdrMode', 'atc')" :pressed="sdr?.atcActive ?? false" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">ATC · AM</UiButton>
     <UiButton id="sdr-mode-adsb-btn" @click="act('setSdrMode', 'adsb')" :pressed="sdr?.adsbActive ?? false" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">ADS-B · 1090</UiButton>
   </div>
   <div v-if="sdr?.receiverKind !== 'hackrf'" class="sdr-gain-row">
@@ -75,11 +76,13 @@ const tune = () => act('tuneSdr', frequency.value.value);
     <span translate="no">IQ <output id="sdr-stat-iq">{{ sdr ? sdr.stats.iq : '--' }}</output></span>
   </div>
   <div class="sdr-frequency-row">
-    <label for="sdr-frequency-input">{{ t('FM MHZ') }}</label>
-    <input ref="frequency" class="gev-field" id="sdr-frequency-input" @keydown.enter.prevent="tune" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" :disabled="sdr?.frequencyDisabled" v-field-value="sdr ? sdr.frequency : '98.5'" />
+    <label for="sdr-frequency-input">{{ sdr?.atcActive ? t('ATC channel') : t('FM MHZ') }}</label>
+    <input v-if="sdr?.atcActive" key="atc" id="sdr-frequency-input" ref="frequency" class="gev-field" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" :disabled="sdr.frequencyDisabled" :aria-invalid="sdr.invalidAtcChannel || undefined" :aria-describedby="sdr.invalidAtcChannel ? 'sdr-atc-channel-error' : undefined" @input="act('clearSdrTuneError')" @keydown.enter.prevent="tune" v-field-value="sdr.frequency" />
+    <input v-else key="fm" ref="frequency" class="gev-field" id="sdr-frequency-input" @keydown.enter.prevent="tune" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" :disabled="sdr?.frequencyDisabled" v-field-value="sdr ? sdr.frequency : '98.5'" />
     <UiButton id="sdr-tune-btn" @click="tune" :disabled="sdr?.tuneDisabled">{{ t('TUNE') }}</UiButton>
   </div>
-  <div class="sdr-seek-row" role="group" :aria-label="t('Seek broadcast FM stations')">
+  <p v-if="sdr?.invalidAtcChannel" id="sdr-atc-channel-error" class="radio-playback-state error" role="status">{{ t('Enter a valid ATC channel, such as 118.005.') }}</p>
+  <div v-if="!sdr?.atcActive" class="sdr-seek-row" role="group" :aria-label="t('Seek broadcast FM stations')">
     <UiButton id="sdr-seek-back-btn" @click="act('seekSdr', -1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('◀ SEEK') }}</UiButton>
     <UiButton id="sdr-seek-forward-btn" @click="act('seekSdr', 1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('SEEK ▶') }}</UiButton>
   </div>

@@ -26,6 +26,7 @@ test('the Local SDR card lives inside the Radio panel with every control', () =>
     'sdr-locate-btn',
     'sdr-change-device-btn',
     'sdr-mode-fm-btn',
+    'sdr-mode-atc-btn',
     'sdr-mode-adsb-btn',
     'sdr-gain-select',
     'sdr-adsb-stats',

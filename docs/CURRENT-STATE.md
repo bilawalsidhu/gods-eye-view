@@ -9713,9 +9713,9 @@ selector offers RTL-SDR and HackRF One. One browser WebUSB session
 CONNECT in desktop Chrome or Edge on localhost or HTTPS. The HackRF One
 receive adapter (`src/sdr/hackrfOne.js`) converts signed IQ bytes to the
 unsigned IQ format used by the shared worker. Demodulation and Mode S decoding
-run in that worker. FM audio plays through an audio worklet.
-Local FM and internet radio are one listening surface: starting local FM stops
-internet-radio playback, and starting internet radio stops local FM. ADS-B
+run in that worker. FM and ATC audio play through the same audio worklet.
+Starting local FM or ATC stops internet-radio playback, and starting internet
+radio stops local SDR audio. ADS-B
 reception does not interrupt internet radio.
 
 - **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
@@ -9734,17 +9734,21 @@ reception does not interrupt internet radio.
   overflow. FM signal display updates are coalesced to at most four per second;
   spectra are computed only while seeking. Optional `decoderDiagnostics` adds
   bounded timing samples and overload snapshots without recording audio or IQ.
-- **Modes.** FM (87.5–108 MHz, tune, seek, volume) or ADS-B at 1090 MHz.
+- **Modes.** FM (87.5–108 MHz, tune, seek, volume), ATC AM (manual VHF
+  channel entry and volume), or ADS-B at 1090 MHz. ATC accepts 25 and 8.33 kHz
+  channel designators and tunes the corresponding carrier.
   With a receiver open, selecting ADS-B enables the Local ADS-B layer;
-  selecting FM disables it.
+  selecting FM disables it. ATC retunes the USB device and leaves any
+  configured decoder feeds running while Local ADS-B is enabled.
   Enabling the layer switches the receiver to ADS-B; disabling it leaves the
   receiver mode unchanged.
 - **RTL-SDR gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
-  stored per mode in `gev:sdr:gain:v1`. Defaults: ADS-B 28.0 dB, FM AUTO.
+  stored in `gev:sdr:gain:v1`. ADS-B defaults to 28.0 dB. FM and ATC share
+  the audio gain setting, which defaults to AUTO.
   Changes apply to the open receiver without reconnecting.
 - **HackRF One gain.** LNA from 0 to 40 dB in 8 dB steps, VGA from 0 to 62 dB
   in 2 dB steps, and AMP on or off. The defaults are 16 dB LNA, 16 dB VGA and
-  AMP off. Changes apply during reception. FM and ADS-B share the settings,
+  AMP off. Changes apply during reception. All three modes share the settings,
   which the browser saves in `gev:sdr:hackrf:gain:v1`.
 - **Receiver stats (ADS-B).** CRC-valid messages per second, aircraft heard,
   aircraft with a fresh position and the IQ level.
@@ -9755,7 +9759,7 @@ reception does not interrupt internet radio.
   none); the Layers panel translates it where it shows it.
 - **Devices.** An already-authorized receiver opens without the WebUSB
   picker. For RTL-SDR, ADS-B prefers a device whose product name matches ADS-B
-  or 1090 (the 1090 MHz channel of a dual-channel board). FM avoids ADS-B/UAT
+  or 1090 (the 1090 MHz channel of a dual-channel board). FM and ATC avoid ADS-B/UAT
   channels.
   A device chosen in the picker is remembered per mode by vendor, product,
   product name and serial. RTL-SDR uses `gev:sdr:device:v1` and HackRF One uses

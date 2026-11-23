@@ -5,7 +5,7 @@ import {
   internetRadioAudioActive,
   localSdrCardView,
   localSdrFeedLine,
-  localSdrFmAudioActive,
+  localSdrAudioActive,
   localSdrGainOptionLabel,
 } from './localSdrPresentation.js';
 import { setLocale } from '../i18n/index.js';
@@ -90,14 +90,14 @@ test('streaming ADS-B shows message rate, heard, positioned and IQ level', () =>
   );
 });
 
-test('local FM and internet radio audio states drive the one-listener rule', () => {
-  assert.equal(localSdrFmAudioActive(idle), false);
+test('local SDR and internet radio audio states drive the one-listener rule', () => {
+  assert.equal(localSdrAudioActive(idle), false);
   assert.equal(
-    localSdrFmAudioActive({ ...idle, connected: true, status: 'streaming' }),
+    localSdrAudioActive({ ...idle, connected: true, status: 'streaming' }),
     true,
   );
   assert.equal(
-    localSdrFmAudioActive({
+    localSdrAudioActive({
       ...idle,
       connected: true,
       status: 'streaming',
@@ -110,6 +110,26 @@ test('local FM and internet radio audio states drive the one-listener rule', () 
     assert.equal(internetRadioAudioActive({ audioState }), true);
   assert.equal(internetRadioAudioActive({ audioState: 'paused' }), false);
   assert.equal(internetRadioAudioActive(null), false);
+});
+
+test('ATC shows its channel designator and enables tuning and volume', () => {
+  const state = {
+    ...idle,
+    mode: 'atc',
+    atcChannel: '118.010',
+    frequencyHz: 118_008_333,
+    connected: true,
+    status: 'streaming',
+    message: 'Receiving ATC on 118.010',
+  };
+  const view = localSdrCardView(state);
+  assert.equal(view.atcActive, true);
+  assert.equal(view.frequencyValue, '118.010');
+  assert.equal(view.tuneDisabled, false);
+  assert.equal(view.volumeDisabled, false);
+  assert.equal(view.seekDisabled, true);
+  assert.match(view.statusText, /Receiving ATC on 118\.010.*audio/);
+  assert.equal(localSdrAudioActive(state), true);
 });
 
 test('the decoder-feed line appears only when feeds are configured', () => {

@@ -1,7 +1,7 @@
 // The space missions, Contacts, Radio and provider settings controls are the
 // kit's: none of their views hand-writes a <button>, a Material Symbols span,
 // a select or a checkbox. Radio's Enable, the RTL-SDR card's Connect and its
-// FM and ADS-B modes are pressed toggles with `active`; Radio's Play and the
+// FM, ATC and ADS-B modes are pressed toggles with `active`; Radio's Play and the
 // card's Locate keep their own `active` class, since their words change
 // with their state rather than saying they are pressed. The RTL-SDR card's
 // FM frequency stays a native number field (the kit has none), and the radio
@@ -49,9 +49,9 @@ const VIEWS = {
   'panels/AwarenessPanel.vue': [4, 0, 0, 0, 0],
   'panels/AwarenessDirection.vue': [0, 0, 0, 0, 0],
   'panels/AwarenessNames.vue': [0, 0, 0, 0, 0],
-  // Connect, Locate, Change device, FM, ADS-B, Tune and the two seeks.
+  // Connect, Locate, Change device, FM, ATC, ADS-B, Tune and the two seeks.
   // Receiver, RTL gain, the shared HackRF LNA/VGA template and AMP.
-  'panels/SdrCard.vue': [8, 0, 0, 4, 1],
+  'panels/SdrCard.vue': [9, 0, 0, 4, 1],
   // Enable, PREV, PLAY, NEXT and STOP.
   'panels/RadioPanel.vue': [5, 0, 0, 1, 1],
   'panels/RadioTuner.vue': [0, 0, 0, 0, 0],
@@ -104,7 +104,7 @@ test('their selects and ranges are the kit’s, apart from the tuner', () => {
 test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () => {
   const pressed = {
     'panels/MissionDetail.vue': 1,
-    'panels/SdrCard.vue': 3,
+    'panels/SdrCard.vue': 4,
     'panels/RadioPanel.vue': 1,
   };
   for (const { file, markup } of views) {
@@ -123,6 +123,7 @@ test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () =>
   for (const [markup, id] of [
     [sdr, 'sdr-connect-btn'],
     [sdr, 'sdr-mode-fm-btn'],
+    [sdr, 'sdr-mode-atc-btn'],
     [sdr, 'sdr-mode-adsb-btn'],
     [radio, 'radio-enable-btn'],
   ])

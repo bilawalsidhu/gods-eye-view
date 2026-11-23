@@ -28,6 +28,15 @@ of the public one; both markers are drawn on purpose.
   at a time, so a dongle that dump1090 or dump978 owns cannot also be opened by
   the browser.
 
+## Local ATC audio
+
+In **Radio → Local SDR**, choose **ATC · AM**, enter the published VHF
+channel, and press **Tune**. If the receiver is disconnected, use **Connect**
+after choosing the channel. The field accepts 25 and 8.33 kHz channel
+designators, such as `118.005`. Volume and receiver gain remain available while
+listening. An SDR tuned to ATC pauses that device's USB ADS-B reception.
+Configured ADS-B decoder feeds continue while the Local ADS-B layer is enabled.
+
 ## Configuring feeds
 
 Feeds are set in the server environment only (`.env`), never in the browser:
