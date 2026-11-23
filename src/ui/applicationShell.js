@@ -1306,8 +1306,7 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Toggles the CCTV layer. The layer owns the provisional opening camera
-   * until a camera is picked.
+   * Toggles the CCTV layer without moving the globe.
    * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
    * @returns {Promise<boolean>} False if the shell is disposed or the layer is unavailable.
    */
