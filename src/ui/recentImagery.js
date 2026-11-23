@@ -22,6 +22,7 @@ import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
+  nonCrossingBoxes,
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
@@ -133,6 +134,20 @@ function coverageText(coverage) {
   if (coverage === 'full') return t('full', { context: 'coverage' });
   if (coverage === 'partial') return t('partial', { context: 'coverage' });
   return t('unknown');
+}
+
+/** A confirmed-empty side means partial coverage. An unanswered side leaves coverage unknown. */
+function shownCoverage(candidate, box) {
+  const { status, availableBoxes, emptyBoxes } = candidate.thumbnail ?? {};
+  const halves = nonCrossingBoxes(box).length;
+  if (emptyBoxes?.length && emptyBoxes.length < halves) return 'partial';
+  if (
+    status !== 'present' ||
+    !Array.isArray(availableBoxes) ||
+    availableBoxes.length >= halves
+  )
+    return candidate.coverage;
+  return 'unknown';
 }
 
 function cloudText(candidate) {
@@ -516,6 +531,9 @@ export function createRecentImageryPanel({
 
   function exportsView() {
     const ab = snapshot.mode === 'ab';
+    const crossing = Boolean(
+      snapshot.box && snapshot.box.west > snapshot.box.east,
+    );
     return [
       {
         id: 'export',
@@ -525,10 +543,12 @@ export function createRecentImageryPanel({
           label: ab
             ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
             : t('EXPORT'),
-          title: ab
-            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
-            : t('Download the image as a PNG'),
-          disabled: !exportTarget(slotId) || exporting.has(slotId),
+          title: crossing
+            ? t('Select one side of the dateline')
+            : ab
+              ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+              : t('Download the image as a PNG'),
+          disabled: crossing || !exportTarget(slotId) || exporting.has(slotId),
           reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),
@@ -566,7 +586,9 @@ export function createRecentImageryPanel({
           }),
         );
       times.push(
-        t('Coverage {coverage}', { coverage: coverageText(focus.coverage) }),
+        t('Coverage {coverage}', {
+          coverage: coverageText(shownCoverage(focus, snapshot.box)),
+        }),
       );
       lines.push({ id: 'acquired', text: times.join(' · ') });
       (focus.granules || []).forEach((granule, index) => {
