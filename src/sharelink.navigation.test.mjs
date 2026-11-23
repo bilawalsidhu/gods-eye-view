@@ -541,9 +541,7 @@ test('a copied link carries the Data Library selection to a clean recipient', (t
   sharer.setLibraryParamsEncoder((params) => params.set('lib', '03.0a'));
   const code = new URL(sharer.buildLink()).pathname.split('/').at(-1);
   sharer.destroy();
-  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), {
-    initialShareCode: code,
-  });
+  const opener = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()), { initialShareCode: code });
   assert.deepEqual(opener.parseInitialHash().library, ['03', '0a']);
   assert.deepEqual(opener.initialLibraryTokens, ['03', '0a']);
   opener.destroy();

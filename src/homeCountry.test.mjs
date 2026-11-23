@@ -4,10 +4,18 @@ import { homeCountry, homeCountryView } from './homeCountry.js';
 import { START_VIEW } from './camera.js';
 import { COUNTRY_CENTRES, ZONE_COUNTRIES } from './data/homeCountries.js';
 
-test('the time zone names the country, in its tzdata or ICU name', () => {
+test('the time zone names the country, in its tzdata, ICU or older name', () => {
   assert.equal(homeCountry({ timeZone: 'Europe/Berlin', languages: [] }), 'DE');
   assert.equal(homeCountry({ timeZone: 'Asia/Kolkata', languages: [] }), 'IN');
   assert.equal(homeCountry({ timeZone: 'Asia/Calcutta', languages: [] }), 'IN');
+  assert.equal(
+    homeCountry({ timeZone: 'Asia/Choibalsan', languages: [] }),
+    'MN',
+  );
+  assert.equal(
+    homeCountry({ timeZone: 'Europe/Uzhgorod', languages: [] }),
+    'UA',
+  );
   assert.equal(homeCountry({ timeZone: 'Europe/Kiev', languages: [] }), 'UA');
   assert.equal(
     homeCountry({ timeZone: 'America/Chicago', languages: ['de-DE'] }),

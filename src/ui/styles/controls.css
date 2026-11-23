@@ -431,7 +431,7 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   }
 }
 
-/* The opening (src/app/openingIntro.js) sets these each frame. */
+/* The opening (src/app/openingIntro.js) sets --opening-veil and --opening-text each frame. */
 #loading-screen.opening {
   background: color-mix(
     in srgb,

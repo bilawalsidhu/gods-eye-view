@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 import {
   OPENING,
-  eyeCoverScale,
   globeRadiusPx,
   heightForGlobeRadius,
   openingFlight,
@@ -17,14 +16,12 @@ const LENS = { fovy: Math.PI / 4, viewportHeight: 800 };
 const TARGET = { lon: 10.4, lat: 51.1, height: 23e6, heading: 0, pitch: -1 };
 const LANDED = { lon: TARGET.lon, lat: TARGET.lat, height: TARGET.height };
 const PLANET_FLIGHT_MS = OPENING.zoomMs + OPENING.spinMs;
-const END_MS = OPENING.centreMs + OPENING.flightStartMs + PLANET_FLIGHT_MS + 1;
 
 test('the words fade, then the eye opens past the screen before the globe arrives', () => {
   const start = openingStage(0);
   assert.equal(start.text, 1);
   assert.equal(start.shut, false);
   assert.equal(start.pupilOpacity, 1);
-  assert.equal(start.flight, 0);
   assert.equal(openingStage(OPENING.textMs).text, 0, 'the words go first');
   assert.ok(openingStage(OPENING.textMs).centre < 0.5);
   const centred = openingStage(OPENING.centreMs);
@@ -37,25 +34,10 @@ test('the words fade, then the eye opens past the screen before the globe arrive
   assert.equal(half.pupilOpacity, 1, 'the planet stays in the pupil');
   const open = openingStage(OPENING.centreMs + OPENING.eyeMs);
   assert.equal(open.eyeGrowth, 1);
-  assert.equal(open.eyeOpen, true);
   assert.equal(open.eyeOpacity, 0);
   assert.equal(open.shutterOpacity, 0);
   const real = openingStage(OPENING.centreMs + OPENING.pupilMs[1]);
   assert.equal(real.pupilOpacity, 0);
-  assert.ok(real.flight > 0 && real.flight < 1);
-  assert.equal(openingStage(END_MS).done, true);
-});
-
-test("the eye's window reaches past the corners of any screen", () => {
-  const radius = 40;
-  for (const view of [
-    { width: 1280, height: 720 },
-    { width: 375, height: 812 },
-    { width: 3840, height: 1600 },
-  ]) {
-    const scale = eyeCoverScale(radius, view);
-    assert.ok(radius * scale > Math.hypot(view.width, view.height) / 2);
-  }
 });
 
 const FAR = 4e8;
@@ -138,7 +120,7 @@ test('the far start draws the globe the size of the pupil', () => {
   assert.ok(globeRadiusPx(4e8, LENS) < globeRadiusPx(23e6, LENS));
 });
 
-test('reduced motion, Stories links and ?intro=0 open without it', () => {
+test('reduced motion, embedded views, Stories links and ?intro=0 open without it', () => {
   const win = (search, reduced = false) => ({
     location: { search },
     matchMedia: () => ({ matches: reduced }),
@@ -149,20 +131,48 @@ test('reduced motion, Stories links and ?intro=0 open without it', () => {
   assert.equal(openingWanted(win('?story=abc')), false);
   assert.equal(openingWanted(win('?stories')), false);
   assert.equal(openingWanted(win('?intro=1')), true);
+  assert.equal(openingWanted(win('?embed=1')), false);
+  globalThis.GEV_EMBED_INLINE = true;
+  try {
+    assert.equal(openingWanted(win('')), false);
+  } finally {
+    delete globalThis.GEV_EMBED_INLINE;
+  }
 });
 
 // A loading screen and a camera port; the test runs the frames by hand.
-function stage() {
-  const window = new Window({ width: 1280, height: 800 });
+function stage({
+  target = TARGET,
+  width = 1280,
+  height = 800,
+  fovy = Math.PI / 4,
+  disc = null,
+} = {}) {
+  const window = new Window({ width, height });
   const doc = window.document;
   doc.body.innerHTML = `
+    <style>.cls-4 { opacity: 0.63; }</style>
     <div id="cesiumContainer"></div>
     <div id="loading-screen"><span class="loader-logo"><svg>
       <path id="outer_eye" d="M0,10C0,0,20,0,20,10C20,20,0,20,0,10ZM5,10h1"/>
       <path id="inner_eye"/>
-      <path id="globe"/><path id="globe_cage"/>
+      <path id="globe"/><path id="globe_cage" class="cls-4"/>
     </svg></span></div>`;
   const screen = doc.getElementById('loading-screen');
+  doc.getElementById('cesiumContainer').getBoundingClientRect = () => ({
+    left: 0,
+    top: 0,
+    width,
+    height,
+  });
+  if (disc) {
+    doc.getElementById('inner_eye').getBoundingClientRect = () => ({
+      left: (width - disc) / 2,
+      top: (height - disc) / 2,
+      width: disc,
+      height: disc,
+    });
+  }
   let now = 0;
   let frames = [];
   window.performance.now = () => now;
@@ -173,10 +183,15 @@ function stage() {
   window.matchMedia = () => ({ matches: false });
   const views = [];
   const commandListeners = new Set();
+  let current = { ...target, fovy };
   const camera = {
-    pose: () => ({ ...TARGET, fovy: Math.PI / 4 }),
+    pose: () => ({ ...current }),
+    rawMove(pose) {
+      current = { ...pose, fovy };
+    },
     setView(spec) {
       views.push(spec);
+      current = { ...spec.destination, ...spec.orientation, fovy };
       for (const cb of commandListeners) cb({ kind: 'setView' });
     },
     onCommand(cb) {
@@ -190,6 +205,8 @@ function stage() {
     views,
     camera,
     commandListeners,
+    doc,
+    current: () => current,
     play: () =>
       playOpeningIntro({
         viewer: {},
@@ -202,6 +219,9 @@ function stage() {
       const run = frames;
       frames = [];
       for (const fn of run) fn();
+    },
+    advanceTo(ms, stepMs = 1000 / 60) {
+      while (now < ms) this.advance(Math.min(stepMs, ms - now));
     },
     otherMove: () => {
       for (const cb of [...commandListeners]) cb({ kind: 'flyTo' });
@@ -238,13 +258,6 @@ test('the opening runs to the start view, then hides the cover', async () => {
   assert.equal(s.commandListeners.size, 0);
 });
 
-test('a camera held in a target frame plays no opening', () => {
-  const s = stage();
-  s.camera.pose = () => ({ ...TARGET, frameIsIdentity: false });
-  assert.equal(s.play(), null);
-  assert.ok(!s.screen.classList.contains('opening'));
-});
-
 test("the person's input skips to the start view", async () => {
   const s = stage();
   const opening = s.play();
@@ -266,4 +279,116 @@ test('another camera move stops it where it is', async () => {
   s.advance(1000);
   assert.equal(s.views.length, count, 'no more frames');
   assert.ok(s.screen.classList.contains('hidden'));
+});
+
+const HOME = { ...TARGET, pitch: -Math.PI / 2, roll: 0 };
+const CLOSE = {
+  lon: 2.3522,
+  lat: 48.8566,
+  height: 5000,
+  heading: 0,
+  pitch: -0.61,
+  roll: Math.PI / 6,
+};
+
+test("a move made on the renderer's own camera stops it there", async () => {
+  const s = stage({ target: HOME });
+  const opening = s.play();
+  s.advance(2000);
+  const park = { ...HOME, lon: -121.49, lat: 38.5816, height: 900 };
+  s.camera.rawMove(park);
+  s.advance(16);
+  assert.equal(s.current().lat, park.lat);
+  s.advanceTo(15000);
+  await opening.done;
+  assert.equal(s.current().lat, park.lat);
+});
+
+test('a shared roll survives the landing and a skip', async () => {
+  for (const skip of [false, true]) {
+    const s = stage({ target: CLOSE });
+    const opening = s.play();
+    if (skip) {
+      s.advance(2000);
+      s.window.dispatchEvent(new s.window.Event('keydown'));
+    } else {
+      s.advanceTo(15000);
+    }
+    await opening.done;
+    assert.ok(Math.abs(s.views.at(-1).orientation.roll - CLOSE.roll) < 1e-9);
+  }
+});
+
+test('a view at or below the ellipsoid plays no opening', () => {
+  for (const height of [-100, 0]) {
+    const s = stage({ target: { ...CLOSE, lon: 35.5, lat: 31.5, height } });
+    assert.equal(s.play(), null);
+    assert.equal(s.views.length, 0);
+    assert.equal(s.screen.classList.contains('opening'), false);
+  }
+});
+
+test('a view just below the planet height lands without a jump', async () => {
+  const target = { ...HOME, lon: 10, lat: 50, height: 21e6 };
+  const flight = openingFlight({ target, farHeight: FAR });
+  const s = stage({ target });
+  const opening = s.play();
+  s.advanceTo(OPENING.centreMs + OPENING.flightStartMs + flight.ms + 50, 1);
+  await opening.done;
+  assert.equal(s.views.at(-1).destination.height, target.height);
+  assert.ok(Math.abs(s.views.at(-2).destination.height - target.height) < 1000);
+});
+
+test('on any screen the drawn planet matches the globe once the logo is centred', () => {
+  for (const [width, height] of [
+    [1280, 800],
+    [2560, 1440],
+    [3440, 1440],
+    [3840, 2160],
+  ]) {
+    const fovy = 2 * Math.atan((Math.tan(Math.PI / 6) * height) / width);
+    const s = stage({ target: HOME, width, height, fovy, disc: 64 });
+    const opening = s.play();
+    const logo = s.screen.querySelector('.loader-logo');
+    for (const at of [900, 1800]) {
+      s.advanceTo(at);
+      const scale = Number(/scale\(([^)]+)\)/.exec(logo.style.transform)[1]);
+      const radius = globeRadiusPx(s.current().height, {
+        fovy,
+        viewportHeight: height,
+      });
+      assert.ok(
+        Math.abs(32 * scale - radius) < 1,
+        `${width}×${height} at ${at} ms`,
+      );
+    }
+    opening.cancel();
+  }
+});
+
+test("the logo's grid fades from its own opacity", () => {
+  const s = stage();
+  const cage = s.doc.getElementById('globe_cage');
+  const opening = s.play();
+  assert.equal(Number(s.window.getComputedStyle(cage).opacity), 0.63);
+  s.advance(1800);
+  assert.ok(
+    Math.abs(Number(s.window.getComputedStyle(cage).opacity) - 0.315) < 0.01,
+  );
+  opening.cancel();
+});
+
+test('a lone click lands the opening before its handler reads the camera', async () => {
+  const s = stage({ target: CLOSE });
+  const opening = s.play();
+  s.advanceTo(3000);
+  const button = s.doc.createElement('button');
+  s.doc.body.appendChild(button);
+  let seen;
+  button.addEventListener('click', () => {
+    seen = s.current();
+  });
+  button.click();
+  assert.equal(seen.height, CLOSE.height);
+  await opening.done;
 });

@@ -22,17 +22,15 @@ export function homeCountry({
 }
 
 /**
- * The start view over the visitor's country: the planet from `base.height`,
- * looking straight down on the country's centre. `base` where the country is
- * unknown.
- * @param {{timeZone?: string|null, languages?: readonly string[],
- *   base?: {lon: number, lat: number, height: number}}} [where]
+ * Look straight down over the visitor's country from the start height.
+ * Use the default start view when the country is unknown.
+ * @param {{timeZone?: string|null, languages?: readonly string[]}} [where]
  */
-export function homeCountryView({ base = START_VIEW, ...where } = {}) {
+export function homeCountryView(where = {}) {
   const centre = COUNTRY_CENTRES[homeCountry(where)];
-  if (!centre) return base;
+  if (!centre) return START_VIEW;
   const [lat, lon] = centre;
-  return Object.freeze({ lon, lat, height: base.height });
+  return Object.freeze({ lon, lat, height: START_VIEW.height });
 }
 
 function currentTimeZone() {

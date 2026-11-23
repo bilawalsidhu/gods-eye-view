@@ -10,7 +10,12 @@ const source = readFileSync(
   .replace(/^import .*;\n/gm, '')
   .replace('export function', 'function');
 
-function fixture({ playOpening, hasShareState = false, shareLink } = {}) {
+function fixture({
+  playOpening,
+  hasShareState = false,
+  shareLink,
+  navigationGeneration,
+} = {}) {
   const timers = new Map();
   const listeners = new Map();
   const events = [];
@@ -37,6 +42,15 @@ function fixture({ playOpening, hasShareState = false, shareLink } = {}) {
   };
   vm.createContext(context);
   vm.runInContext(source, context);
+  const styleManager = {
+    _navigationGeneration: navigationGeneration,
+    hasShareState,
+    viewer: 'viewer',
+    shareLinkManager: shareLink,
+    initialRestorePromise: new Promise((resolve) => {
+      restored = resolve;
+    }),
+  };
   const stop = context.startApplicationChrome({
     initializeSettings: context.initKeySetup,
     loadingScreen: {
@@ -45,19 +59,13 @@ function fixture({ playOpening, hasShareState = false, shareLink } = {}) {
       removeEventListener: (type) => listeners.delete(type),
     },
     playOpening,
-    styleManager: {
-      hasShareState,
-      viewer: 'viewer',
-      shareLinkManager: shareLink,
-      initialRestorePromise: new Promise((resolve) => {
-        restored = resolve;
-      }),
-    },
+    styleManager,
     dataManager: {},
     signal: controller.signal,
   });
   return {
     events,
+    styleManager,
     listeners,
     stop,
     restored,
@@ -157,6 +165,7 @@ test('a bare address plays the opening, and welcome waits for its end', async ()
   assert.equal(opening.calls[0].viewer, 'viewer');
   f.fire(900);
   assert.deepEqual(events, ['opening'], 'no fallback timer while it plays');
+  f.listeners.get('transitionend')(); // the cover has faded
   opening.land();
   await flush();
   assert.deepEqual(events, ['opening', 'welcome']);
@@ -230,23 +239,77 @@ for (const [name, restored] of [
   ['a failed restore', { status: 'failed' }],
 ]) {
   test(`a link to ${name} opens without the opening`, async () => {
-    const events = [];
-    const opening = openingStub(events);
-    const f = fixture({ playOpening: opening.play, hasShareState: true });
-    f.restored(restored);
+    for (const [result, plays] of [
+      [restored, 0],
+      [VIEW_ONLY, 1],
+    ]) {
+      const opening = openingStub([]);
+      const f = fixture({ playOpening: opening.play, hasShareState: true });
+      f.restored(result);
+      f.fire(1000);
+      await flush();
+      assert.equal(opening.calls.length, plays);
+      if (!plays) assert.deepEqual(f.events, ['hidden']);
+      await f.stop();
+    }
+  });
+}
+
+test('a share restore whose navigation was superseded does not start the opening', async () => {
+  const opening = openingStub([]);
+  const f = fixture({
+    playOpening: opening.play,
+    hasShareState: true,
+    navigationGeneration: 5,
+  });
+  f.restored({ ...VIEW_ONLY, navigationToken: 3 });
+  f.fire(1000);
+  await flush();
+  assert.equal(opening.calls.length, 0);
+  assert.deepEqual(f.events, ['hidden']);
+  await f.stop();
+});
+
+test('a navigation before the opening starts keeps the camera from it', async () => {
+  const opening = openingStub([]);
+  const f = fixture({ playOpening: opening.play, navigationGeneration: 0 });
+  f.styleManager._navigationGeneration = 1;
+  f.restored();
+  f.fire(1000);
+  await flush();
+  assert.equal(opening.calls.length, 0);
+  assert.deepEqual(f.events, ['hidden']);
+  await f.stop();
+});
+
+for (const [name, rejectedShareCode, plays] of [
+  ['a rejected share code opens without the opening', 'checksum', 0],
+  ['control: a bare address still plays it', null, 1],
+]) {
+  test(name, async () => {
+    const opening = openingStub([]);
+    const f = fixture({
+      playOpening: opening.play,
+      shareLink: { rejectedShareCode },
+    });
+    f.restored({ status: 'not-requested', share: null, layers: [] });
     f.fire(1000);
     await flush();
-    assert.equal(opening.calls.length, 0);
-    assert.deepEqual(f.events, ['hidden']);
+    assert.equal(opening.calls.length, plays);
+    if (!plays) assert.deepEqual(f.events, ['hidden']);
     await f.stop();
   });
 }
 
-test('without an opening to play the cover hides as before', async () => {
-  const f = fixture({ playOpening: () => null });
+test('a skipped opening reveals welcome only once the cover has faded', async () => {
+  const f = fixture({
+    playOpening: () => ({ done: Promise.resolve(), cancel() {} }),
+  });
   f.restored();
   f.fire(1000);
   await flush();
-  assert.deepEqual(f.events, ['hidden']);
+  assert.ok(!f.events.includes('welcome'));
+  f.fire(900);
+  assert.ok(f.events.includes('welcome'));
   await f.stop();
 });
