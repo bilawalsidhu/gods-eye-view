@@ -30,3 +30,16 @@ export function initAirQualityTestLayer(layer, fixture = {}) {
   layer.init(viewer);
   return draw;
 }
+
+/**
+ * Resolve once no provider of an air-quality layer is still asking: an
+ * update resolves on the first provider's answer, the others land later.
+ */
+export async function airQualitySettled(layer, { turns = 200 } = {}) {
+  for (let turn = 0; turn < turns; turn++) {
+    if (!layer.getProviderStates().some((state) => state.status === 'loading'))
+      return;
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  throw new Error('air-quality providers did not settle');
+}

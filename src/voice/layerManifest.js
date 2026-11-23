@@ -5,7 +5,8 @@
  * the spoken aliases the action runner accepts, `toggle` (set_layer_visibility),
  * `context` (registers in-view entity context), `track` (track_entity), and
  * `query` — the analyst_query fields with type and unit — or `noQuery`, the
- * reason it has none. No layer has a voice timeline yet.
+ * reason it has none; `aliasParams` gives the layer parameters an alias that
+ * names one view of the layer asks for. No layer has a voice timeline yet.
  *
  * Both the server tool builder (`actionSchemas.js` → the Realtime tool JSON)
  * and the browser runner (`gevActions.js`) derive their layer enums and alias
@@ -279,6 +280,8 @@ const layers = [
   {
     id: 'air-quality',
     aliases: ['air quality', 'aqhi', 'smog', 'air pollution'],
+    // "AQHI" names Canada's index, one view of the layer.
+    aliasParams: { aqhi: { view: 'aqhi' } },
     context: false,
     query: {
       fields: {
@@ -512,6 +515,14 @@ function normalizeEntry(entry) {
   return Object.freeze({
     id: entry.id,
     aliases: Object.freeze([...entry.aliases]),
+    aliasParams: Object.freeze(
+      Object.fromEntries(
+        Object.entries(entry.aliasParams || {}).map(([alias, params]) => [
+          alias,
+          Object.freeze({ ...params }),
+        ]),
+      ),
+    ),
     toggle: entry.toggle !== false,
     context: entry.context === true,
     track: entry.track === true,
@@ -577,6 +588,22 @@ export function voiceLayerAliasMap() {
     }
   }
   return map;
+}
+
+/**
+ * The layer parameters a spoken alias asks for, when it names one view of a
+ * layer ("AQHI" → air quality's AQHI view).
+ * @param {string} phrase Spoken layer name.
+ * @returns {object|null} A copy of the parameters, or null.
+ */
+export function voiceLayerAliasParams(phrase) {
+  const key = String(phrase || '')
+    .trim()
+    .toLowerCase();
+  for (const entry of VOICE_LAYER_MANIFEST)
+    if (Object.hasOwn(entry.aliasParams, key))
+      return { ...entry.aliasParams[key] };
+  return null;
 }
 
 /** Plain-word ids the model already maps from speech without a hint. */

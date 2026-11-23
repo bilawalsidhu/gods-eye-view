@@ -439,6 +439,32 @@ test('coverage and legend come only from providers that answered; a failed one r
   assert.equal(controls.summary.coverage, '');
 });
 
+test('a view-driven provider waiting for a camera view neither says Loading nor hides a failure', async () => {
+  const { layer, camera } = cardHarness({
+    saaqis: new Error('Air quality provider unavailable'),
+  });
+  camera.rect = null;
+  await layer.update();
+  await flush();
+  const openaq = layer
+    .getProviderStates()
+    .find((state) => state.id === 'openaq');
+  assert.notEqual(openaq.status, 'loading');
+  assert.equal(layer.getStats().error, 'Air quality provider unavailable');
+  assert.doesNotMatch(layer.getRowControls().summary.status, /Loading/);
+
+  const answered = cardHarness({
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  answered.camera.rect = null;
+  await answered.layer.update();
+  await flush();
+  assert.equal(
+    answered.layer.getRowControls().summary.status,
+    'US AQI · Moderate',
+  );
+});
+
 test("one provider's request budget is its own line, not the card status", async () => {
   const { layer } = cardHarness(
     {
@@ -455,4 +481,123 @@ test("one provider's request budget is its own line, not the card status", async
     lineText(controls, 'provider-openaq'),
     'OPENAQ: request budget reached; cached data will refresh later',
   );
+});
+
+test('the retry timer asks again only providers whose cooldown has ended', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  const budget = (ms) =>
+    Object.assign(new Error('budget'), { retryAt: Date.now() + ms });
+  const { layer, calls } = cardHarness(
+    { soon: budget(1_000), later: budget(60_000) },
+    {
+      definitions: [
+        definition('soon', { viewDriven: true }),
+        definition('later', { viewDriven: true }),
+      ],
+    },
+  );
+  await layer.update();
+  await flush();
+  calls.length = 0;
+  t.mock.timers.tick(1_200);
+  await flush();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['soon'],
+  );
+  layer.disable();
+});
+
+test('the first update resolves on the first answer, or after five seconds', async (t) => {
+  let release;
+  const slow = new Promise((resolve) => {
+    release = resolve;
+  });
+  const { layer } = cardHarness({
+    openaq: () => slow,
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  const pending = layer.update();
+  const first = await Promise.race([
+    pending,
+    new Promise((resolve) => setTimeout(() => resolve('waiting'), 50)),
+  ]);
+  assert.equal(first, true);
+  assert.equal(
+    layer.getProviderStates().find((s) => s.id === 'openaq').status,
+    'loading',
+  );
+  assert.equal(layer.getStats().count, 1);
+  release(station('openaq', DURBAN, { 'PM2.5': 40 }));
+  await flush();
+  assert.equal(layer.getStats().count, 2);
+
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const silent = cardHarness({
+    openaq: () => new Promise(() => {}),
+    saaqis: () => new Promise(() => {}),
+  });
+  const capped = silent.layer.update();
+  await flush();
+  t.mock.timers.tick(5_000);
+  const after = await Promise.race([
+    capped,
+    new Promise((resolve) => setImmediate(() => resolve('waiting'))),
+  ]);
+  assert.equal(after, true);
+  assert.match(silent.layer.getRowControls().summary.status, /Loading/);
+  silent.layer.disable();
+});
+
+test('a source with only the AQHI accepts the default aqi view on restore', () => {
+  const layer = createAirQualityLayer({
+    source: { getSnapshot: async () => [] },
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  assert.notEqual(layer.setParams({ view: 'aqi' }), false);
+  assert.equal(layer.getParams().view, 'aqhi');
+  assert.equal(layer.setParams({ view: 'NO2' }), false);
+});
+
+test('a provider without its key is not asked again on scheduled updates for ten minutes', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  const { layer, calls } = cardHarness({
+    openaq: noKey(),
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+  });
+  await layer.update();
+  await flush();
+  calls.length = 0;
+  t.mock.timers.tick(9 * 60_000);
+  await layer.update();
+  await flush();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['saaqis'],
+  );
+  // The card keeps saying what is missing.
+  assert.equal(
+    lineText(layer.getRowControls(), 'provider-openaq'),
+    'OPENAQ: add a key in Provider Settings',
+  );
+  // A view switch does not ask it either.
+  calls.length = 0;
+  layer.setParams({ view: 'NO2' });
+  await flush();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['saaqis'],
+  );
+  assert.equal(
+    lineText(layer.getRowControls(), 'provider-openaq'),
+    'OPENAQ: add a key in Provider Settings',
+  );
+  calls.length = 0;
+  t.mock.timers.tick(2 * 60_000);
+  await layer.update();
+  await flush();
+  assert.deepEqual(calls.map((call) => call.provider).sort(), [
+    'openaq',
+    'saaqis',
+  ]);
 });

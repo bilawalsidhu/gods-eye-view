@@ -8949,3 +8949,56 @@ test('a failed military voice entry switches off only the layer it switched on',
     assert.equal(fixture.enabled.has('military'), militaryOn);
   }
 });
+
+test('the aqhi alias opens air quality on the AQHI view', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const steps = [];
+  let enabled = false;
+  const dataManager = {
+    layers: new Map([['air-quality', { module: {} }]]),
+    getAll: () => [{ id: 'air-quality', name: 'Air quality', enabled }],
+    isEnabled: () => enabled,
+    getLayerLifecycleState: () => ({
+      enabled,
+      lifecycleState: enabled ? 'enabled' : 'disabled',
+      uncertain: false,
+    }),
+    setLayerParams(id, params, options) {
+      steps.push(['params', id, params, options.origin]);
+      return true;
+    },
+    async setEnabled(id, value) {
+      steps.push(['enabled', id, value]);
+      enabled = value;
+      return true;
+    },
+  };
+  const runner = createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager: {},
+    dataManager,
+  });
+  const result = await runner('set_layer_visibility', {
+    layerId: 'aqhi',
+    enabled: true,
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(steps, [
+    ['params', 'air-quality', { view: 'aqhi' }, 'voice'],
+    ['enabled', 'air-quality', true],
+  ]);
+  steps.length = 0;
+  await runner('set_layer_visibility', {
+    layerId: 'air quality',
+    enabled: true,
+  });
+  assert.deepEqual(steps, [['enabled', 'air-quality', true]]);
+});

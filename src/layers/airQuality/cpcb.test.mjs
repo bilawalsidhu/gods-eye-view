@@ -11,6 +11,7 @@ import {
 import { createAirQualitySource } from './providers.js';
 import { createAirQualityLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { airQualitySettled } from '../../testSupport/airQualityViewer.mjs';
 
 const now = Date.parse('2026-10-18T06:30:00Z');
 const row = (patch = {}) => ({
@@ -240,6 +241,7 @@ test('India readings are drawn as one more observation provider', async () => {
     '/api/air-quality/south-africa': snapshot(),
   });
   assert.equal(await layer.update(), true);
+  await airQualitySettled(layer);
   assert.ok(requests.includes('/api/air-quality/india'));
   assert.ok(requests.some((url) => url.startsWith('/api/air-quality/openaq?')));
   const drawn = () =>
@@ -253,6 +255,7 @@ test('India readings are drawn as one more observation provider', async () => {
   // In PM2.5 OpenAQ's copy is rated and India's is not: the rated copy wins.
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
+  await airQualitySettled(layer);
   assert.deepEqual(drawn(), ['openaq']);
   layer.destroy();
 });

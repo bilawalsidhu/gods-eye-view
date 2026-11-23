@@ -68,6 +68,15 @@ const GROUP_OUTLINE = Object.freeze([1, 1, 1, 0.85]);
 const GROUP_OUTLINE_WIDTH = 1.5;
 /** A click on a group flies to its stations in this many seconds. */
 const GROUP_FLIGHT_S = 1.4;
+/**
+ * A provider that answered "no key" is asked again after this long. Saving a
+ * key in Provider Settings restarts the server and reloads the page, which
+ * starts the layer afresh; a host that adds a key without a reload is caught
+ * here.
+ */
+const NO_KEY_RETRY_MS = 10 * 60_000;
+/** An update resolves on the first provider's answer, or after this long. */
+const FIRST_ANSWER_CAP_MS = 5_000;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -222,6 +231,8 @@ export function createAirQualityLayer({
   let selectedStation = null;
   /** The selected station across views (`stationKey`), once it is known. */
   let selectedKey = null;
+  /** When each provider last answered that it has no key, by provider id. */
+  const noKeyAt = new Map();
   /** The providers the current view asks. */
   const asked = () =>
     view === 'aqhi'
@@ -278,6 +289,10 @@ export function createAirQualityLayer({
     const state = stateOf(entry);
     return state.status === 'ok' || state.readings.length > 0;
   };
+  /** A provider asked recently enough that "no key" still stands. */
+  const keyStillMissing = (entry) =>
+    noKeyAt.has(entry.id) &&
+    Date.now() - noKeyAt.get(entry.id) < NO_KEY_RETRY_MS;
   /** A layer error only when no asked provider answered. */
   const lastError = () => {
     const list = asked().map(stateOf);
@@ -333,8 +348,13 @@ export function createAirQualityLayer({
     retryTimer = setTimeout(
       () => {
         retryTimer = null;
+        // Only the providers whose cooldown has ended.
+        const now = Date.now();
         void refresh(
-          asked().filter((entry) => stateOf(entry).retryAt !== null),
+          asked().filter((entry) => {
+            const at = stateOf(entry).retryAt;
+            return at !== null && at <= now;
+          }),
         );
       },
       at - Date.now() + 100,
@@ -870,6 +890,7 @@ export function createAirQualityLayer({
       state.request = null;
       state.status = 'ok';
       state.error = null;
+      noKeyAt.delete(entry.id);
       const list = Array.isArray(readings) ? readings : [];
       // The AQI view draws one reading per station with all its values.
       state.readings = asking.mode === 'aqi' ? aqiStations(list) : list;
@@ -883,6 +904,7 @@ export function createAirQualityLayer({
       state.request = null;
       // Earlier readings stay drawn: a failed refresh is degraded, not empty.
       state.status = error?.code === 'no_key' ? 'no-key' : 'failed';
+      if (state.status === 'no-key') noKeyAt.set(entry.id, Date.now());
       state.error =
         (error?.code === 'no_key'
           ? keyRequirementText(entry.requiresKeyId)
@@ -901,7 +923,35 @@ export function createAirQualityLayer({
     }
   };
 
-  /** Ask the given providers in parallel; resolve once all have settled. */
+  /**
+   * True as soon as one provider answers (`run` resolves true), or after
+   * `FIRST_ANSWER_CAP_MS` while some are still asking; otherwise, once all
+   * have settled, whether any of them may still succeed (`fallback`).
+   */
+  const firstAnswer = (jobs, fallback) =>
+    new Promise((resolve) => {
+      if (!jobs.length) {
+        resolve(fallback);
+        return;
+      }
+      let left = jobs.length;
+      const timer = setTimeout(() => resolve(true), FIRST_ANSWER_CAP_MS);
+      const settle = (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      };
+      for (const job of jobs)
+        job.then((ok) => {
+          if (ok) settle(true);
+          else if (--left === 0) settle(fallback);
+        });
+    });
+
+  /**
+   * Ask the given providers in parallel. Resolves on the first answer, or
+   * after a few seconds while all are still asking; the others keep loading
+   * and land in their own state.
+   */
   const refresh = async (entries) => {
     if (!_enabled || !_markers) return false;
     if (moveTimer) {
@@ -914,7 +964,9 @@ export function createAirQualityLayer({
     }
     const rect = currentView();
     const requestedView = JSON.stringify(rect);
-    const jobs = entries.map((entry) => {
+    let waiting = false;
+    const jobs = [];
+    for (const entry of entries) {
       const state = stateOf(entry);
       state.request?.abort();
       state.request = null;
@@ -925,17 +977,21 @@ export function createAirQualityLayer({
         state.requestedView = requestedView;
         // A camera that is still restoring its share-link position has no
         // useful viewport yet. Never turn that transient state into a global
-        // API sweep.
-        if (!rect) return Promise.resolve(true);
+        // API sweep; the provider waits, idle, for the camera's next move.
+        if (!rect) {
+          state.status = 'idle';
+          waiting = true;
+          continue;
+        }
       }
       const request = new AbortController();
       state.request = request;
-      return run(entry, state, request, entry.viewDriven ? rect : null);
-    });
+      jobs.push(run(entry, state, request, entry.viewDriven ? rect : null));
+    }
     armRetry();
     notify();
-    const results = await Promise.all(jobs);
-    return !results.length || results.some(Boolean);
+    // A provider still waiting for a view may yet answer.
+    return firstAnswer(jobs, !entries.length || waiting);
   };
 
   const syncVisibility = () => {
@@ -975,7 +1031,8 @@ export function createAirQualityLayer({
         this._publishOverlays();
         const key = JSON.stringify(currentView());
         // Only providers that fetch per view follow the camera; one still
-        // waiting for a key is asked again on the next scheduled refresh.
+        // waiting for a key is asked again by a scheduled refresh, once
+        // NO_KEY_RETRY_MS has passed.
         const moved = asked().filter(
           (entry) =>
             entry.viewDriven &&
@@ -1042,7 +1099,12 @@ export function createAirQualityLayer({
     },
 
     setParams(params = {}) {
-      const nextView = params.view ?? view;
+      // The default view restored on a source without stations (Canada's
+      // AQHI only) is that source's own first view.
+      const nextView =
+        params.view === 'aqi' && !views.includes('aqi')
+          ? views[0]
+          : (params.view ?? view);
       if (!views.includes(nextView)) return false;
       let changed = false;
       if (
@@ -1086,7 +1148,24 @@ export function createAirQualityLayer({
 
     async update() {
       if (!_enabled || !_markers) return false;
-      return refresh(asked());
+      // A provider that said it has no key is left alone for a while; the
+      // card keeps saying what it needs.
+      const entries = asked().filter((entry) => {
+        if (!keyStillMissing(entry)) return true;
+        const state = stateOf(entry);
+        if (state.status !== 'no-key') {
+          state.status = 'no-key';
+          state.error = keyRequirementText(entry.requiresKeyId) || null;
+        }
+        return false;
+      });
+      // Nothing to ask because every provider lacks its key: as when they
+      // all said so, the update fails.
+      if (!entries.length && asked().length) {
+        notify();
+        return false;
+      }
+      return refresh(entries);
     },
 
     /** Each asked provider's state, for the card: ok, loading, failed, no-key. */
@@ -1240,8 +1319,16 @@ export function createAirQualityLayer({
       const covering = entries.filter(answered);
       const network = covering.map((entry) => entry.network).join(' · ');
       const error = lastError();
-      // The card waits only until the first network answers.
-      const loading = !covering.length && isLoading();
+      // The card waits only until the first network answers, or while a
+      // network waits for the camera's first view and none has failed.
+      const waitingForView = entries.some(
+        (entry) =>
+          entry.viewDriven &&
+          stateOf(entry).status === 'idle' &&
+          stateOf(entry).requestedView === 'null',
+      );
+      const loading =
+        !covering.length && (isLoading() || (waitingForView && !error));
       const coverage = combinedCoverage();
       const retryAt = nextRetryAt();
       const rectangle = viewRectangle();

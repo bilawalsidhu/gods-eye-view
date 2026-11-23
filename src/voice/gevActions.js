@@ -66,7 +66,11 @@ import {
   normalizeAnalystSpec,
   selectAnalystRows,
 } from '../data/analystEngine.js';
-import { voiceLayer, voiceLayerAliasMap } from './layerManifest.js';
+import {
+  voiceLayer,
+  voiceLayerAliasMap,
+  voiceLayerAliasParams,
+} from './layerManifest.js';
 import { layerFeedState } from '../data/feedState.js';
 import {
   initCameraVerbs,
@@ -584,6 +588,12 @@ export function createGevActionRunner({
       if (enabled) {
         const pending = dataManager.getAll?.().find((l) => l.id === layerId);
         reportProgress('layer', pending?.name || layerId);
+        // An alias naming one view of the layer opens on that view.
+        const aliasParams = voiceLayerAliasParams(args.layerId);
+        if (aliasParams)
+          dataManager.setLayerParams?.(layerId, aliasParams, {
+            origin: actionIntentOrigin(runOptions),
+          });
       }
       const changeOptions = { origin: actionIntentOrigin(runOptions) };
       if (runOptions.signal) changeOptions.signal = runOptions.signal;

@@ -294,8 +294,10 @@ test('a Canada-only injected source offers only the AQHI view', () => {
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   assert.equal(layer.getParams().view, 'aqhi');
-  for (const view of ['aqi', 'PM2.5', 'NO2'])
+  for (const view of ['PM2.5', 'NO2'])
     assert.equal(layer.setParams({ view }), false);
+  // The default view, restored, falls back to the source's own.
+  assert.notEqual(layer.setParams({ view: 'aqi' }), false);
   assert.equal(layer.getParams().view, 'aqhi');
   assert.deepEqual(
     layer
