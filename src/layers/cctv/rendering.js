@@ -1148,7 +1148,7 @@ export function createRendering({
   }
 
   /**
-   * The camera a pick (a draw-port `Hit`: `event.drawHit`, `query.pick`)
+   * The camera a pick (a draw-port `Hit`: `event.hit`, `query.pick`)
    * names: an item of the layer's own sets that its record still draws.
    * @param {{set: string, id: string, meta?: object}|null} hit
    * @returns {string|null} Camera ID, or null if the pick is not a CCTV item.

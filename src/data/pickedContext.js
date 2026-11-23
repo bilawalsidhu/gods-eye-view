@@ -111,7 +111,11 @@ export function resolvePickedContext(picked, { dataManager = null } = {}) {
   let id = pickId;
   try {
     // A layer whose helper geometry picks under its own ids names the record.
-    id = layer?.module?.recordIdForPick?.(pickId) ?? pickId;
+    if (layer?.module?.recordIdForPick) {
+      const mapped = layer.module.recordIdForPick(pickId, picked);
+      if (mapped == null && picked.set) return null;
+      id = mapped ?? pickId;
+    }
   } catch {
     // Keep the original pick ID for the normal lookup.
   }

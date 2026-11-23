@@ -96,6 +96,30 @@ test("a camera's projected image and view rays resolve to the camera", async (t)
   }
 });
 
+test('a plane and a camera icon sharing an id open their own camera cards', async (t) => {
+  const { createControls } = await import('../layers/cctv/controls.js');
+  const { createRendering } = await import('../layers/cctv/rendering.js');
+  const { ownsCctvPick } = await import('../layers/cctv/pickIds.js');
+  const { GIZMO_ID_PREFIX } = await import('./cctvGizmo.js');
+  const a = { id: 'cam-a', name: 'Camera A' };
+  const b = { id: 'cctv-cam-a-plane', name: 'Camera B' };
+  const state = {
+    _recordById: new Map([[a.id, { camera: a, projection: { plane: { id: b.id } } }], [b.id, { camera: b }]]),
+    _icons: { setId: 'icons', has: (id) => id === a.id || id === b.id },
+  };
+  const parts = { drawSets: { roleOfSet: (set) => set === 'planes' ? 'plane' : null } };
+  const services = { render: {}, activation: {}, focus: {} };
+  parts.rendering = createRendering({ state, services, parts });
+  const cctv = createControls({ state, services, parts }).methods;
+  registerPickOwner('cctv', (id) => ownsCctvPick(id, state._recordById, GIZMO_ID_PREFIX));
+  t.after(() => unregisterPickOwner('cctv'));
+  const dataManager = manager({ enabled: new Set(['cctv']), modules: { cctv } });
+  const pick = (set) => resolvePickedContext({ set, id: b.id, meta: { cameraId: a.id } }, { dataManager });
+  assert.equal(pick('planes')?.label, a.name);
+  assert.equal(pick('icons')?.label, b.name);
+  assert.equal(pick('another-layer'), null);
+});
+
 test('a failing layer pick mapper falls back to the original pick', (t) => {
   const pickId = 'cctv-sample-plane';
   registerPickOwner('cctv', (id) => id === pickId);

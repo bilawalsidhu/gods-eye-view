@@ -17,12 +17,13 @@ const props = defineProps({
 });
 
 const cctv = useCctvStore();
-const { view, frame, sourceBadge } = storeToRefs(cctv);
+const { view, frame, live, sourceBadge } = storeToRefs(cctv);
 const chrome = usePanelChromeStore();
 const { panels } = storeToRefs(chrome);
 
 const same = computed(() => !props.cameraId || frame.value?.cameraId === props.cameraId);
-const src = computed(() => (same.value ? frame.value?.src || frame.value?.currentSrc || '' : ''));
+const src = computed(() => (same.value ? frame.value?.src || (!live.value && frame.value?.currentSrc) || '' : ''));
+const badge = computed(() => live.value ? (src.value ? t('SNAPSHOT') : '') : sourceBadge.value?.label);
 const params = computed(() => {
   try {
     return new URL(src.value, location.origin).searchParams;
@@ -77,8 +78,9 @@ function openPanel() {
   <section class="cctv-preview">
     <div class="cctv-preview__frame" :class="{ 'is-empty': !src }">
       <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
+      <span v-else-if="same && live && frame?.error">{{ t('FRAME · UNAVAILABLE') }}</span>
       <span v-else>{{ t('Acquiring frame…') }}</span>
-      <span v-if="sourceBadge?.label" class="cctv-preview__badge">{{ sourceBadge.label }}</span>
+      <span v-if="badge" class="cctv-preview__badge">{{ badge }}</span>
       <UiButton v-if="src" class="cctv-preview__expand" :label="t('Show a bigger view')" @click="big = true">
         <UiIcon name="open_in_full" :size="null" />
       </UiButton>
@@ -89,7 +91,7 @@ function openPanel() {
           <header class="cctv-popup__head">
             <UiIcon name="videocam" :size="null" />
             <strong>{{ name || t('Camera view') }}</strong>
-            <span v-if="sourceBadge?.label" class="cctv-popup__badge">{{ sourceBadge.label }}</span>
+            <span v-if="badge" class="cctv-popup__badge">{{ badge }}</span>
             <UiCloseButton class="cctv-popup__close" glyph="icon" :label="t('Close')" @click="big = false" />
           </header>
           <img :src="src" :alt="name || t('Camera frame')" />

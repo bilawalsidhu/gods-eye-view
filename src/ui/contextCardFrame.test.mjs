@@ -114,6 +114,66 @@ test('desktop: the Context card keeps refreshing while the accordion folds CCTV'
   assert.equal(cardHost.querySelector('img')?.getAttribute('src'), 'a3.jpg');
 });
 
+test('an HLS camera keeps live video in CCTV and shows its registered snapshot in Context', async (t) => {
+  const requests = mockImages(t);
+  const { controls, panelEl, cardHost, mountCard, unmountCard } = fixture(t, {
+    card: false,
+  });
+  panelEl.classList.remove('collapsed');
+  const state = stillState('/api/cctv/frame/a');
+  state.activeCamera = {
+    ...state.activeCamera,
+    feedType: 'hls',
+    isVideo: true,
+    sourceKind: 'live',
+    sourceStatus: 'ok',
+    liveSnapshotUrl: '/api/cctv/frame/a?snapshotOnly=1',
+  };
+  controls._renderCctvState(state);
+  await settle();
+  assert.equal(requests.length, 0, 'the video panel alone needs no still');
+
+  mountCard();
+  await settle();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].src, state.activeCamera.liveSnapshotUrl);
+  assert.equal(panelEl.querySelector('#cctv-video').hidden, false);
+  assert.equal(
+    panelEl.querySelector('#cctv-frame-wrap').classList.contains('loading'),
+    false,
+  );
+  assert.equal(
+    panelEl.querySelector('#cctv-source-badge').textContent,
+    'LIVE · OK',
+  );
+  requests[0].onload();
+  await nextTick();
+  assert.equal(
+    cardHost.querySelector('img')?.getAttribute('src'),
+    state.activeCamera.liveSnapshotUrl,
+  );
+  assert.match(
+    cardHost.querySelector('.cctv-preview__badge').textContent,
+    /SNAPSHOT/,
+  );
+
+  unmountCard();
+  await settle();
+  assert.equal(panelEl.querySelector('#cctv-video').hidden, false);
+  controls._renderCctvState({
+    ...state,
+    activeCamera: { ...state.activeCamera, liveSnapshotUrl: '' },
+  });
+  mountCard();
+  await settle();
+  assert.equal(
+    requests.length,
+    1,
+    'a video-only camera has no registered still',
+  );
+  assert.equal(cardHost.querySelector('img'), null);
+});
+
 test('phone: a camera picked with the Context sheet open gets its still', async (t) => {
   const requests = mockImages(t);
   t.after(() => {

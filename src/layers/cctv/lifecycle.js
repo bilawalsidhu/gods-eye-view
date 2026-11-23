@@ -441,9 +441,7 @@ export function createLifecycle({
               );
             return;
           }
-          const cameraId = parts.selection.extractPickedCameraId(
-            event.drawHit ?? null,
-          );
+          const cameraId = parts.selection.extractPickedCameraId(event.hit);
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,

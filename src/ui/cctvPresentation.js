@@ -287,6 +287,7 @@ export function _renderCctvState(state) {
 
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
+  if (this.store.live !== liveIntent) this._clearCctvFrame();
   this.store.setLive(liveIntent);
   // A background tab, a collapsed panel or a closed phone sheet shows no
   // picture; the observers and visibilitychange render again on showing.
@@ -319,8 +320,10 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame && !liveIntent) {
-    const nextSrc = enabled && !isQuebecCamera ? activeCamera?.frameUrl : null;
+  if (this._cctvFrame) {
+    const nextSrc = liveIntent
+      ? (cardShown || popupShown) && activeCamera.liveSnapshotUrl
+      : enabled && !isQuebecCamera && activeCamera?.frameUrl;
     const nextCameraId =
       enabled && !isQuebecCamera ? activeCamera?.id || '' : '';
     const cameraChanged = this._frame.cameraId !== nextCameraId;
@@ -339,8 +342,6 @@ export function _renderCctvState(state) {
     if (!nextSrc) {
       this._clearCctvFrame();
     }
-  } else if (liveIntent) {
-    this._clearCctvFrame();
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);

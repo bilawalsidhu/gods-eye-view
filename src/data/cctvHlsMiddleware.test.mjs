@@ -141,6 +141,41 @@ test('ninth viewer frame fallback preserves active camera health', async (t) => 
   assert.deepEqual(await health('cam-a'), before);
 });
 
+test('a registered HLS snapshot can be viewed without changing live stream health', async (t) => {
+  const cam = camera('cam-a');
+  const snapshotUrl = 'https://cams.upstream.invalid/cam-a/photo.jpg';
+  let photoAvailable = true;
+  const { call, health } = mountCctvProvider(t, {
+    cameras: [{ ...cam, snapshotUrl }, camera('cam-b')],
+    fetch: async (url) => {
+      if (String(url) === snapshotUrl)
+        return new Response(photoAvailable ? 'camera photo' : null, {
+          status: photoAvailable ? 200 : 503,
+          headers: { 'Content-Type': 'image/jpeg' },
+        });
+      return new Response(String(url).endsWith('.m3u8') ? PLAYLIST : 'abc');
+    },
+  });
+  const { sources } = JSON.parse((await call('/sources', SAME_ORIGIN)).body);
+  assert.equal(sources.find((row) => row.id === cam.id).hasSnapshot, true);
+  assert.equal(sources.find((row) => row.id === 'cam-b').hasSnapshot, false);
+  const segment = await openPlaylist(call, cam.id, lease(0));
+  const before = await health(cam.id);
+  const path = '/frame/cam-a?snapshotOnly=1';
+  const frame = await call(path, SAME_ORIGIN);
+  assert.equal(frame.headers['X-CCTV-Source'], 'upstream-image');
+  assert.equal(frame.body, 'camera photo');
+  assert.deepEqual(await health(cam.id), before);
+  photoAvailable = false;
+  assert.equal((await call(path, SAME_ORIGIN)).statusCode, 503);
+  assert.equal(
+    (await call('/frame/cam-b?snapshotOnly=1', SAME_ORIGIN)).statusCode,
+    404,
+  );
+  assert.deepEqual(await health(cam.id), before);
+  assert.equal((await call(segment, SAME_ORIGIN)).statusCode, 200);
+});
+
 test('third camera frame fallback keeps absent health', async (t) => {
   const { call, health, upstream } = mount(t);
   await openPlaylist(call, 'cam-a', lease(0));

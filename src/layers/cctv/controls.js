@@ -237,9 +237,11 @@ export function createControls({ state: layerState, services, parts, source }) {
      * camera id, its coverage and projection geometry as
      * `cctv-<cameraId>-<role>`.
      * @param {string} pickId - Picked entity id.
+     * @param {object} [hit] - Draw-set identity distinguishes a helper from a camera with the same id.
      * @returns {string|null} Camera id, or null when no loaded camera owns it.
      */
-    recordIdForPick(pickId) {
+    recordIdForPick(pickId, hit) {
+      if (hit?.set) return parts.rendering.extractPickedCameraId(hit);
       if (typeof pickId !== 'string') return null;
       if (layerState._recordById.has(pickId)) return pickId;
       const match = CCTV_HELPER_PICK_ID.exec(pickId);
