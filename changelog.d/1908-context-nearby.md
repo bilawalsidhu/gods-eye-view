@@ -4,3 +4,5 @@
   last-known counts. Suggested Layers opens a filtered Data Layers list.
   Bhote Koshi reconstruction evidence can appear in Context search and
   Nearby, and the reconstruction keeps its dedicated panel (manjunath22466, #1908).
+- Keep the UI shell compatible with custom Intel HUDs that omit
+  `setDisplayed()` (manjunath22466, #1908).
