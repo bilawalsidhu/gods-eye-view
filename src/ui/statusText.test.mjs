@@ -23,6 +23,7 @@ const STATUS_LINES = [
   'feeds 1090, entry 2 invalid',
   '3 heard · USB 5.8 msg/s · feed 1090 stale',
   '2 feeds live · 14 heard',
+  '1 feed live · 3 vessels heard',
   'TTC 0 (95s old)',
   'TTC 0 · GO Transit 4 (95s old)',
   'Loading TTC, MiWay',
@@ -76,6 +77,47 @@ for (const locale of ['es', 'ru']) {
       const text = 'Upstream response too large';
       assert.notEqual(t(text), text, 'the catalog has the entry');
       assert.equal(translateFeedError(text), t(text));
+    });
+  });
+}
+
+// Local AIS counts vessels, not aircraft: its "{n} vessels heard" piece needs
+// its own pattern, and a locale without it shows English next to translated
+// text. Every non-English locale is covered.
+const LOCAL_AIS_LINES = [
+  '1 feed live · 1 vessel heard',
+  '2 feeds live · 3 vessels heard',
+  '3 vessels heard · feed 2 rejected',
+  '3 vessels heard · feeds 2, 3 rejected',
+  '1 feed live · 1 beacon heard',
+  '2 feeds live · 2 vessels heard · 3 beacons heard',
+];
+// "feed" and "live" are loanwords in several locales; the counted noun and
+// the verbs are not.
+const ENGLISH_WORDS = /\b(vessels?|beacons?|heard|rejected)\b/;
+
+for (const locale of [
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'he',
+  'it',
+  'ja',
+  'pt',
+  'ru',
+  'sv',
+  'uk',
+  'zh-CN',
+  'zh-Hant',
+]) {
+  test(`${locale}: Local AIS status lines are fully translated`, () => {
+    inLocale(locale, () => {
+      for (const text of LOCAL_AIS_LINES) {
+        const shown = translateStatusLine(text);
+        assert.doesNotMatch(shown, ENGLISH_WORDS, `${text} -> ${shown}`);
+        assert.ok(/\d/.test(shown), `numbers are kept: ${shown}`);
+      }
     });
   });
 }

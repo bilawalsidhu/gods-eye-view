@@ -4644,5 +4644,41 @@
   "JTWC warning ↗": "Попередження JTWC ↗",
   "Active cyclone advisories and warnings": "Чинні зведення та попередження про циклони",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Виберіть шторм на карті або у списку, щоб виділити його й перемістити камеру. Клацання по порожньому місцю карти знімає виділення. Зведення NOAA NHC/CPHC та попередження JTWC. Конус NHC показує невизначеність прогнозного треку центру, а не розмір шторму чи всю небезпечну зону. Небезпечна зона вітру 34 вузли JTWC — це область, куди може дійти вітер 34 вузли, розширена на похибку прогнозу треку; це не конус. Підписи прогнозних точок — завчасність джерела в годинах, а не час, обчислений від випуску. Геометрія повторює поверхню; висота не є метеорологічною висотою. Звіряйтеся з офіційним зведенням або регіональним центром попереджень.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Попередження № {number} · випущено {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Попередження № {number} · випущено {time}",
+  "Local AIS": "Локальний AIS",
+  "Local AIS receiver unavailable": "Локальний приймач AIS недоступний",
+  "not configured": "не налаштовано",
+  "no recent messages": "немає нових повідомлень",
+  "Position approximate (AIS type 27)": "Позиція приблизна (AIS, тип 27)",
+  "Position not yet validated by the receiver": "Позицію ще не підтверджено приймачем",
+  "{count} vessels heard": {
+    "one": "чутно суден: {count}",
+    "few": "чутно суден: {count}",
+    "many": "чутно суден: {count}",
+    "other": "чутно суден: {count}"
+  },
+  "feeds {names} rejected": {
+    "one": "потік {names} відхилено",
+    "few": "потоки {names} відхилено",
+    "many": "потоки {names} відхилено",
+    "other": "потоки {names} відхилено"
+  },
+  "Validated": "Перевірено",
+  "AIS-SART beacon": "Маяк AIS-SART",
+  "Man-overboard (MOB) beacon": "Маяк «людина за бортом» (MOB)",
+  "EPIRB beacon": "Маяк EPIRB",
+  "AIS distress beacon": "Аварійний маяк AIS",
+  "Distress or test beacon heard by your receiver": "Аварійний або тестовий маяк, прийнятий вашим приймачем",
+  "Test transmissions are common. This is not a verified emergency.": "Тестові передачі — звичайна справа. Це не підтверджена аварійна ситуація.",
+  "Active or test status: unknown": "Статус (активний або тест): невідомий",
+  "{count} beacons heard": {
+    "one": "чутно маяків: {count}",
+    "few": "чутно маяків: {count}",
+    "many": "чутно маяків: {count}",
+    "other": "чутно маяків: {count}"
+  },
+  "beacon": "маяк",
+  "Beacon type": "Тип маяка",
+  "Note": "Примітка",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "Прийнято вашим приймачем. Тестові передачі — звичайна справа, це не підтверджена надзвичайна ситуація, і невідомо, активний маяк чи це тест."
 }

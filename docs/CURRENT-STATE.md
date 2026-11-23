@@ -10192,3 +10192,74 @@ browser-only media links, refresh cadence, and location provenance where
 available. When MLIT serves its recognized adjustment image, `/api/cctv/frame`
 returns a God’s Eye maintenance card and `/api/cctv/health` reports the camera
 as degraded with the provider-adjustment reason.
+
+### Local AIS receiver (AIS-catcher)
+
+The Local AIS layer (`local-ais`) is an opt-in, local-only sibling to Live
+AIS Vessels. It is independent of AISStream authentication and rendering state.
+`LOCAL_AIS_FEEDS` (server-side only) accepts up to four local/private HTTP(S)
+AIS-catcher v0 `/ships.json` or `/api/ships.json` URLs. At the same-origin
+`GET /api/local-receivers/vessels` endpoint the server validates hosts and
+DNS, pins the connection, refuses redirects and credentials, caps response
+size at 4 MiB and caches successful snapshots for two seconds. Receiver URLs,
+station coordinates and raw radio payloads are never exposed to the browser.
+
+AIS-catcher `ships[]` is normalized by `src/sources/aisCatcherRecords.js`:
+invalid or 0,0 coordinates, non-nine-digit MMSIs, positions the receiver
+rejected (`validated` -1) and entries older than ten minutes are removed and
+counted (a refused row only as `rejected` while its `last_signal` is 600 s or
+less or unknown); non-vessel classes (SAR aircraft 9 and 10, base stations and
+aids to navigation 11 and 12) are filtered by design, counted apart from
+rejected rows as `filtered` in the route payload, and date the receiver so it
+reads alive but quiet. A refused row also dates the receiver by its
+`last_signal`. Beacons (MMSI 970, 972 or 974 only; class 13 under any other MMSI is
+filtered) are kept as records
+with a `beaconType` (`sart`, `mob`, `epirb`), drawn with their own
+marker and card as a distress or test beacon heard, with active or test
+status unknown, never as a vessel and never as a verified emergency (the caveat is on the
+Context card; voice is told the pick is a beacon but is not given the
+caveat); they follow the vessel age, refusal and validated/approximate rules, and count as
+heard in the status ("1 beacon heard"). Absent numeric measurements, and ship type 0
+("not available"), remain null. Type-27 approximate positions stay flagged, and
+a position the receiver has not validated is kept and flagged. Vessels have
+`local-ais:<MMSI>` identity and unique map-pick IDs; public twins are kept
+independent. A feed is `live` only while at least one vessel was heard in the
+last ten minutes; an empty or silent receiver is `stale`, and one that cannot
+be read or sets its own `error` is `unreachable` (the code is logged). A quiet
+receiver that also sends rejected rows reads as an error naming the feed
+`rejected` (logged as `ROWS_REJECTED` on entry), and the row is nominal only
+while at least one vessel or beacon is held. Each feed reports `newestAt`, its
+newest row, and the browser shows a feed whose newest row has aged past the
+window at snapshot time as stale, not live. The layer row is dated by the newest message
+heard, not by the poll. The browser
+refreshes the layer at a five-second cadence while enabled, shows click cards
+and publishes bounded analyst records, and never serializes this
+hardware-local layer into share links.
+
+The layer is in the voice manifest, like Local ADS-B (it is not voice-off), so
+with voice on the hosted model can read local vessels: analyst and entity
+context, the pointer context (`local-ais:<MMSI>`) and screenshots reach the
+provider. Only the manifest fields reach the model, so `validated` and `approx`
+do not; instead default-deny applies to the text tools (`validated === true &&
+approx === false` is the only fix that sends a position): a flagged fix is given
+to the analyst with `lat` and `lon` null, and the pointer context and
+`get_entity_context` pointer scope keep its id but withhold the ground and
+pointer coordinates. The text tools therefore do not hand a flagged fix to the
+model as coordinates, but the map still draws it: screenshots, the pointer's
+screen position (resolvable by `annotate_map`), a cursor next to the marker and
+the view's camera position, if you centre a flagged vessel
+(`get_current_view_state` always sends it), can still locate it. So can
+`get_entity_context`: its default scope sends the camera latitude and
+longitude, the view-centre point and "view centered near ...", and its pointer
+scope lists the nearby visible items by distance from the view centre with
+their coordinates, so centring on a flagged fix can reveal roughly where it is
+(only a withheld pointer target drops the centre, the samples and the camera
+position). Flagged vessels also leave the entity-context lists,
+nearby lists and omnibar search. Two paths do not depend on
+voice: the HUD summary (layer name, count, data age and error text, no
+positions) goes to OpenAI whenever `OPENAI_API_KEY` is set, with voice on or
+off, and MCP `panel_request` can reach `/api/local-receivers/vessels` whenever
+`LOCAL_AIS_FEEDS` is set, even with the layer off. See `docs/LOCAL-RECEIVERS.md`.
+
+Regression gate: `node --test server/providers/local-ais.test.mjs src/sources/aisCatcherRecords.test.mjs src/layers/localAis/*.test.mjs src/ui/statusText.test.mjs src/voice/localAisAnalyst.test.mjs src/voice/localAisPointer.test.mjs`. The
+feature does not handle UDP NMEA, provide AIS history, or expose receiver GPS.

@@ -4326,5 +4326,32 @@
   "JTWC warning ↗": "JTWC 警報 ↗",
   "Active cyclone advisories and warnings": "生效的氣旋公告和警報",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "在地圖上選擇風暴，或在列表中選擇風暴以選中它並移動鏡頭。點擊地圖空白處可取消選擇。NOAA NHC/CPHC 公告和 JTWC 警報。NHC 的預報不確定範圍表示中心預報路徑的不確定性，而不是風暴大小或整個危險區域。JTWC 的 34 節風危險區是 34 節風可能到達的範圍，並按路徑預報誤差加寬；它不是預報不確定範圍。預報點標籤是數據源的預報時效（小時），不是根據發布時間計算的時刻。幾何形狀貼合地表；高度不是氣象高度。請以官方公告或區域警報中心為準。",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}",
+  "Local AIS": "本地 AIS",
+  "Local AIS receiver unavailable": "本地 AIS 接收器不可用",
+  "not configured": "未配置",
+  "no recent messages": "近期無消息",
+  "Position approximate (AIS type 27)": "位置為近似值(AIS 類型 27)",
+  "Position not yet validated by the receiver": "接收器尚未驗證該位置",
+  "{count} vessels heard": {
+    "other": "已接收 {count} 艘船舶的信號"
+  },
+  "feeds {names} rejected": {
+    "other": "數據源 {names} 被拒絕"
+  },
+  "Validated": "已驗證",
+  "AIS-SART beacon": "AIS-SART 信標",
+  "Man-overboard (MOB) beacon": "落水人員 (MOB) 信標",
+  "EPIRB beacon": "EPIRB 信標",
+  "AIS distress beacon": "AIS 遇險信標",
+  "Distress or test beacon heard by your receiver": "你的接收機收到的遇險或測試信標",
+  "Test transmissions are common. This is not a verified emergency.": "測試發射很常見。這不是已確認的緊急情況。",
+  "Active or test status: unknown": "狀態(激活或測試):未知",
+  "{count} beacons heard": {
+    "other": "已接收 {count} 個信標的信號"
+  },
+  "beacon": "信標",
+  "Beacon type": "信標類型",
+  "Note": "注意",
+  "Heard by your receiver. Test transmissions are common, this is not a verified emergency, and whether it is active or a test is unknown.": "由你的接收機接收。測試發射很常見，這不是已確認的緊急情況，也不清楚它是在工作還是在測試。"
 }

@@ -56,6 +56,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // area scopes and the osm-places layer; natural-region candidates and the
     // tightened area tool wording follow review.
     // control_cockpit states the own-layer entry rule (Contacts not required).
+    // Local AIS extends the generated layer enums and its query fields (beaconType).
     // move_camera tilt takes an optional pitchDeg angle, described as
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
@@ -63,7 +64,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
-    '09abe70ef3a1fc4320e25cff997dd3b04db7e78ff31b8530e17bbbbb8156b4c6',
+    '0f5fcfd0d53248f5c667cf7fad60e8ff76a1ce7981825b2e766535c57b2645de',
   );
 });
 
