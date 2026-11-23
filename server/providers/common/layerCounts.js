@@ -1,3 +1,4 @@
+import { clientNetworkKey, makeRateLimiter } from './rate-limit.js';
 import { admitSameSiteKeyless } from './same-site.js';
 
 /**
@@ -51,8 +52,10 @@ async function readLayerCounts(readers) {
  */
 export function layerCountsEndpoint(readers) {
   const entries = Object.entries(readers);
+  const allow = makeRateLimiter({ windowMs: 60_000, max: 60, globalMax: 1200 });
   const install = (server) => {
-    server.middlewares.use('/api/layer-counts', async (req, res) => {
+    server.middlewares.use('/api/layer-counts', async (req, res, next) => {
+      if ((req.url || '/').split('?', 1)[0] !== '/') return next();
       if (admitSameSiteKeyless(req, res)) return;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.writeHead(405, {
@@ -62,7 +65,21 @@ export function layerCountsEndpoint(readers) {
         res.end(JSON.stringify({ error: 'method not allowed' }));
         return;
       }
-      const counts = await readLayerCounts(entries);
+      if (!allow(clientNetworkKey(req))) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+          'Retry-After': '60',
+        });
+        res.end(
+          req.method === 'HEAD'
+            ? ''
+            : JSON.stringify({ error: 'rate_limited' }),
+        );
+        return;
+      }
+      const counts =
+        req.method === 'HEAD' ? [] : await readLayerCounts(entries);
       res.writeHead(200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',

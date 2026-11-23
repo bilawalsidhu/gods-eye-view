@@ -5,6 +5,7 @@ import path from 'node:path';
 import { providerCooldownMs } from '../server/providers/space/cooldown.js';
 import { parseTerrainPoints } from './data/terrainHeightsProxy.js';
 import { readResponseTextCapped, coalesceProxyRequest } from './sources/httpBody.js';
+import { parseTleText, tleCatalogNumber } from './sources/tle.js';
 import { makeRateLimiter, clientKey } from '../server/providers/common/rate-limit.js';
 
 const source = ['local.js', 'common/http.js', 'aircraft/enrichment.js', 'terrain.js', 'space/celestrak.js', 'space/launch-library.js', '../../src/data/spaceProviderRequests.js']
@@ -24,7 +25,7 @@ function extract(name) {
 function fixture(name, overrides = {}, preview = false) {
   const logs = [];
   const deps = {
-    readResponseTextCapped, coalesceProxyRequest, providerCooldownMs,
+    readResponseTextCapped, coalesceProxyRequest, providerCooldownMs, parseTleText, tleCatalogNumber,
     // The rate-limited proxies reach for these; give them the real ones so a
     // fixture request is throttled exactly as production would be.
     makeRateLimiter, clientKey,
@@ -45,7 +46,7 @@ function fixture(name, overrides = {}, preview = false) {
     resolveTerrainHeightRequest: async () => { throw new Error(detail); },
     ...overrides,
   };
-  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'celestrakSatcatUrl', 'launchLibraryRecentUrl'].map(extract).join('\n');
+  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'celestrakSatcatUrl', 'launchLibraryRecentUrl', 'catalogNumbers'].map(extract).join('\n');
   const plugin = new Function(...Object.keys(deps), `${helpers}\n${extract(name)}\nreturn ${name}();`)(...Object.values(deps));
   let middleware;
   // A plugin with several routes (CelesTrak: TLEs, then SATCAT) is tested on its first.

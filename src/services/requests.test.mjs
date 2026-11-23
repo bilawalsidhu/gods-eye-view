@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applicationServices, configureApplicationServices } from './application.js';
-import { getConfiguredLayerCounts } from './layerCountService.js';
+import {
+  applicationServices,
+  configureApplicationServices,
+  getConfiguredLayerCounts,
+} from './application.js';
 import { createApplicationRequestServices } from './requests.js';
 
 test('independent compatible endpoints receive normalized requests without changing global fetch', async () => {

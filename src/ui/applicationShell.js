@@ -1,7 +1,7 @@
 import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
-import { getConfiguredLayerCounts } from '../services/layerCountService.js';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';

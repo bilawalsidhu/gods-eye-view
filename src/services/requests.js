@@ -88,6 +88,7 @@ export function createApplicationRequestServices({
         .finally(() => signal.removeEventListener('abort', abort));
     });
   }
+  let layerCounts;
   const services = {
     boundaries: {
       async query(query, { signal } = {}) {
@@ -168,7 +169,13 @@ export function createApplicationRequestServices({
         );
       },
     },
-    layerCounts: createLayerCountService(request, urls.layerCounts),
+    // Scene-only consumers never allocate a second Inspector adapter.
+    get layerCounts() {
+      return (layerCounts ??= createLayerCountService(
+        request,
+        urls.layerCounts,
+      ));
+    },
     summary: {
       // The capability probe, asked once per page: true or false from a
       // server that answers it, null (unknown) from one that does not.

@@ -15,7 +15,7 @@ import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 import { createLayerCounts } from './layerCounts.js';
-import { getConfiguredLayerCounts } from '../services/layerCountService.js';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { installEntityContext } from './entityContextBridge.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeInput } from '../input/testDoubles.mjs';

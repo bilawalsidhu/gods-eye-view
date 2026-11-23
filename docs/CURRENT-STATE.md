@@ -1075,14 +1075,16 @@ With no layer on, Context's "Worldwide, last known" tiles show how much a
 layer would show if turned on. The counts come only from what this server's
 providers already hold: the positioned aircraft in the OpenSky response
 cache (Live Flights), the
-CelesTrak memory and disk cache (Satellites; refreshed after six hours, and
-counted however old, with its age), the CCTV catalog
+CelesTrak core groups (unique satellite IDs, with the oldest group’s cache time;
+a normal feed read upgrades older caches to the compact count index), the CCTV catalog
 once it has been built, the live AIS store (ships seen recently, not aids to
-navigation, and only with the default worldwide subscription) and the FIRMS memory cache or the count saved beside its disk
-cache (Fires, only with a FIRMS key; the disk cache itself is never parsed
-for it). `GET /api/layer-counts` (`server/providers/common/layerCounts.js`)
+navigation, and only with the default worldwide subscription) and FIRMS detections
+in the layer’s trailing 24-hour window. FIRMS needs a key and counts from
+acquisition-minute totals in memory or on disk. A legacy disk total has no
+times and contributes no tile until the feed loads. `GET /api/layer-counts` (`server/providers/common/layerCounts.js`)
 makes no upstream request and uses no quota; it is same-site, keyless, GET
-and HEAD only and `no-store` (an ask from the browser gives up after 10 s),
+and HEAD only and `no-store`, with 60 requests per network peer per minute
+and 1,200 overall (the browser gives up after 10 s),
 and a provider with an empty cache gives no tile. Metered layers, such as
 TomTom traffic and the Google-backed layers, are never counted, even when
 cached. The browser asks on first entry to the nothing-on view and again on a

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
-import { configureApplicationServices } from '../services/application.js';
 import {
+  configureApplicationServices,
   getConfiguredLayerCounts,
-  LAYER_COUNTS_TIMEOUT_MS,
-} from '../services/layerCountService.js';
+} from '../services/application.js';
+import { LAYER_COUNTS_TIMEOUT_MS } from '../services/layerCountService.js';
 import { createLayerCounts, LAYER_COUNTS_REFETCH_MS } from './layerCounts.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 

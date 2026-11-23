@@ -1,9 +1,14 @@
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import https from 'node:https';
 import { promises as fsp } from 'node:fs';
 import { Readable } from 'node:stream';
 
-import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
+import {
+  acquisitionMsUtc,
+  filterTrailing24h,
+  parseFirmsCsv,
+} from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
@@ -172,10 +177,14 @@ export function firmsProxy() {
   // The cache's fire count and time beside it, so the layer counts can be
   // read without parsing the whole cache into memory.
   const COUNT_PATH = path.join(CACHE_DIR, 'firms-count.json');
+  // A feed spans 26 hours of acquisition minutes, including clock skew.
+  const COUNT_MAX_BYTES = 1024 * 1024;
 
   /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
   let mem = null;
+  let memMinutes = [];
   let diskChecked = false;
+  let countWrite = Promise.resolve();
   /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} single-flight refresh */
   let inflight = null;
   /** @type {?{at: number, transactions: ?{used: number, limit: number}}} mapkey_status cache */
@@ -193,27 +202,87 @@ export function firmsProxy() {
       if (
         Number.isFinite(parsed?.at) &&
         Array.isArray(parsed?.sources) &&
-        Array.isArray(parsed?.fires)
+        Array.isArray(parsed?.fires) &&
+        (!mem || parsed.at > mem.at)
       ) {
+        const minutes = minuteCounts(parsed.fires);
         mem = parsed;
+        memMinutes = minutes;
+        const saved = await readCountDisk();
+        if (mem === parsed && (!saved || saved.at < parsed.at))
+          await writeCount(parsed, minutes);
       }
     } catch {
       /* no disk cache yet */
     }
   }
 
-  async function writeDisk(entry) {
+  // A stale feed can cross the 24-hour cutoff between successive reads.
+  // Aggregate by acquisition minute so the count and the layer use the same window.
+  function minuteCounts(fires) {
+    const minutes = new Map();
+    for (const { acqDate, acqTime } of fires) {
+      const key = `${acqDate}:${acqTime}`;
+      const bucket = minutes.get(key);
+      if (bucket) bucket.count++;
+      else if (Number.isFinite(acquisitionMsUtc(acqDate, acqTime)))
+        minutes.set(key, { acqDate, acqTime, count: 1 });
+    }
+    return [...minutes.values()];
+  }
+
+  async function readCountDisk() {
+    try {
+      const summary = JSON.parse(await fsp.readFile(COUNT_PATH, 'utf8'));
+      if (
+        Number.isFinite(summary?.at) &&
+        Array.isArray(summary.minutes) &&
+        summary.minutes.every(
+          (minute) =>
+            Number.isSafeInteger(minute?.count) &&
+            minute.count > 0 &&
+            Number.isFinite(acquisitionMsUtc(minute.acqDate, minute.acqTime)),
+        )
+      )
+        return summary;
+    } catch {
+      /* No complete count summary. */
+    }
+    return null;
+  }
+
+  function writeCount(entry, minutes) {
+    // Serialize replacements so a repair already renaming its temporary file
+    // cannot finish after a refresh replaces the count.
+    countWrite = countWrite.then(async () => {
+      if (mem !== entry) return;
+      const temp = `${COUNT_PATH}.${randomUUID()}.tmp`;
+      try {
+        const body = JSON.stringify({ at: entry.at, minutes });
+        if (Buffer.byteLength(body) > COUNT_MAX_BYTES) return;
+        await fsp.writeFile(temp, body, 'utf8');
+        if (mem === entry) await fsp.rename(temp, COUNT_PATH);
+        else await fsp.unlink(temp);
+      } catch (error) {
+        await fsp.unlink(temp).catch(() => {});
+        console.warn('[firms-proxy] count cache write failed:', error.message);
+      }
+    });
+    return countWrite;
+  }
+
+  async function writeDisk(entry, minutes) {
+    const temp = `${CACHE_PATH}.${randomUUID()}.tmp`;
     try {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(CACHE_PATH, JSON.stringify(entry), 'utf8');
-      await fsp.writeFile(
-        COUNT_PATH,
-        JSON.stringify({ at: entry.at, count: entry.fires.length }),
-        'utf8',
-      );
+      await fsp.writeFile(temp, JSON.stringify(entry), 'utf8');
+      await fsp.rename(temp, CACHE_PATH);
     } catch (err) {
+      await fsp.unlink(temp).catch(() => {});
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
+      return;
     }
+    await writeCount(entry, minutes);
   }
 
   /**
@@ -331,16 +400,14 @@ export function firmsProxy() {
   // with a key, since without one the layer cannot load them; never fetched.
   async function readLayerCount() {
     if (!mapKey()) return null;
-    if (mem)
-      return mem.fires.length ? { count: mem.fires.length, at: mem.at } : null;
-    try {
-      const saved = JSON.parse(await fsp.readFile(COUNT_PATH, 'utf8'));
-      return Number.isFinite(saved?.at) && saved.count > 0
-        ? { count: saved.count, at: saved.at }
-        : null;
-    } catch {
-      return null;
-    }
+    const saved = mem ? null : await readCountDisk();
+    // The feed may have warmed during the sidecar read.
+    const minutes = mem ? memMinutes : saved?.minutes;
+    const at = mem?.at ?? saved?.at;
+    if (!minutes) return null;
+    const current = filterTrailing24h(minutes, Date.now());
+    const count = current.reduce((total, minute) => total + minute.count, 0);
+    return Number.isSafeInteger(count) && count > 0 ? { count, at } : null;
   }
 
   const installMiddleware = (server) => {
@@ -398,8 +465,10 @@ export function firmsProxy() {
         if (!inflight) {
           inflight = refreshUpstream(key)
             .then(async (fresh) => {
+              const minutes = minuteCounts(fresh.fires);
               mem = fresh;
-              await writeDisk(fresh);
+              memMinutes = minutes;
+              await writeDisk(fresh, minutes);
               return fresh;
             })
             .catch((err) => {
