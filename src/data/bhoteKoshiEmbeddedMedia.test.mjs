@@ -1,3 +1,4 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -11,6 +12,31 @@ import {
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
 import { bindRenderer } from '../render/rendererOf.js';
+
+// The cards draw provider frames; the tests never load their pages, and the
+// page's note that each one is not loaded is dropped.
+window.happyDOM.settings.disableIframePageLoading = true;
+const consoleError = console.error;
+console.error = (error, ...rest) => {
+  if (!/Iframe page loading is disabled/.test(String(error?.message)))
+    consoleError(error, ...rest);
+};
+
+/**
+ * Embedded media in a fresh globe container of the page, and the overlay
+ * root it renders into.
+ */
+function domFixture(options = {}) {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const media = createBhoteKoshiEmbeddedMedia({
+    viewer: { container },
+    documentRef: document,
+    globalRef: {},
+    ...options,
+  });
+  return { media, container, root: container.firstElementChild };
+}
 
 test('Pinokio fallback never creates provider DOM or loads SDKs', async () => {
   const unexpected = () => { throw new Error('Provider resource allocated in Pinokio'); };
@@ -186,31 +212,138 @@ test('trimmed YouTube teardown revokes pending SDK and player callbacks', async 
 });
 
 test('pausing YouTube removes its frame and rejects a late load from the stopped generation', () => {
-  const nodes = [];
-  class Element extends EventTarget {
-    constructor(tag) { super(); this.tag = tag; this.children = []; this.dataset = {}; this.classList = { add() {}, remove() {} }; nodes.push(this); }
-    setAttribute() {}
-    append(...children) { for (const child of children) { child.parent = this; this.children.push(child); } }
-    remove() { if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this); this.parent = null; }
-  }
-  const documentRef = {
-    body: new Element('body'),
-    createElement: (tag) => new Element(tag),
-    createElementNS: (_, tag) => new Element(tag),
-  };
-  const media = createBhoteKoshiEmbeddedMedia({ viewer: {}, documentRef, globalRef: {} });
+  const { media, container, root } = domFixture();
   const options = { observation: { title: 'Clip', media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k' } }, anchor: {}, autoplay: true };
   assert.equal(media.show(options), true);
-  const frame = nodes.find((node) => node.tag === 'iframe');
-  const card = nodes.find((node) => node.tag === 'section');
-  assert.ok(card.parent);
+  const card = root.querySelector('section');
+  const frame = card.querySelector('iframe');
+  assert.ok(card.isConnected);
   assert.equal(media.pause(), true);
-  assert.equal(card.parent, null);
+  assert.equal(card.isConnected, false);
   frame.dispatchEvent(new Event('load'));
-  assert.equal(card.parent, null);
+  assert.equal(root.querySelector('section'), null);
   assert.equal(media.show(options), true, 'an explicit replay creates a fresh player');
+  assert.notEqual(root.querySelector('section iframe'), frame);
   media.destroy();
-  assert.equal(documentRef.body.children.length, 0);
+  assert.equal(container.children.length, 0);
+});
+
+test('a card draws its provider, source, status and original link, and words them again in a new locale', async () => {
+  const { setLocale } = await import('../i18n/index.js');
+  const { media, root } = domFixture();
+  assert.equal(media.show({
+    observation: { title: 'Flood footage', media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k', orientation: 'portrait' } },
+    anchor: {},
+  }), true);
+  const card = root.querySelector('section');
+  assert.equal(card.className, 'bhote-embedded-callout is-youtube is-portrait');
+  assert.equal(card.dataset.provider, 'youtube');
+  assert.equal(card.getAttribute('aria-label'), 'Embedded YOUTUBE media for Flood footage');
+  const leader = card.firstElementChild;
+  assert.equal(leader.namespaceURI, 'http://www.w3.org/2000/svg');
+  assert.equal(leader.getAttribute('class'), 'bhote-embedded-callout-leader');
+  assert.equal(leader.getAttribute('aria-hidden'), 'true');
+  assert.equal(leader.querySelector('path').getAttribute('pathLength'), '1');
+  assert.equal(leader.querySelector('circle').getAttribute('r'), '4');
+  const body = card.querySelector('.bhote-embedded-callout-body');
+  assert.equal(body.getAttribute('data-overlay-input'), '');
+  const player = body.firstElementChild;
+  assert.equal(player.className, 'bhote-embedded-callout-player ui-scroll');
+  const frame = player.firstElementChild;
+  assert.equal(frame.tagName, 'IFRAME');
+  assert.equal(new URL(frame.src).pathname, '/embed/DbqRexFxv3k');
+  assert.equal(frame.title, 'YOUTUBE media: Flood footage');
+  assert.equal(frame.getAttribute('allow'), 'autoplay; encrypted-media; picture-in-picture; fullscreen');
+  assert.equal(frame.hasAttribute('allowfullscreen'), true);
+  assert.equal(frame.getAttribute('referrerpolicy'), 'strict-origin-when-cross-origin');
+  const [title, status, link] = body.querySelector('footer').children;
+  assert.equal(title.tagName, 'STRONG');
+  assert.equal(title.textContent, 'FLOOD FOOTAGE');
+  assert.equal(status.getAttribute('role'), 'status');
+  assert.equal(status.textContent, 'YOUTUBE · EMBEDDED SOURCE');
+  assert.equal(link.href, 'https://www.youtube.com/watch?v=DbqRexFxv3k');
+  assert.equal(link.target, '_blank');
+  assert.equal(link.rel, 'noopener noreferrer');
+  assert.equal(link.textContent, 'OPEN ORIGINAL ↗');
+  frame.dispatchEvent(new Event('load'));
+  assert.equal(status.textContent, 'YOUTUBE · PROVIDER CONTROLS');
+  try {
+    await setLocale('es');
+    assert.notEqual(link.textContent, 'OPEN ORIGINAL ↗', 'the link is worded again');
+    assert.notEqual(status.textContent, 'YOUTUBE · PROVIDER CONTROLS', 'the status is worded again');
+    assert.ok(root.querySelector('section') === card, 'in place');
+  } finally {
+    await setLocale('en');
+  }
+  media.destroy();
+});
+
+test('an X post is built by the provider inside the card and its failure marks the card', async () => {
+  let fail = false;
+  const { media, root } = domFixture({
+    xLoader: async () => ({ widgets: { createTweet: async (id, target) => {
+      if (fail) return null;
+      target.append(Object.assign(document.createElement('div'), { className: 'twitter-tweet', textContent: id }));
+      return {};
+    } } }),
+  });
+  const observation = { title: 'Clip', media: { sourceUrl: 'https://x.com/Indowatchosint/status/2092640554568007958' } };
+  assert.equal(media.show({ observation, anchor: {} }), true);
+  const card = root.querySelector('section');
+  const status = card.querySelector('[role="status"]');
+  assert.equal(status.textContent, 'LOADING X POST…');
+  await new Promise((resolve) => setTimeout(resolve));
+  assert.equal(card.querySelector('.bhote-embedded-callout-player .twitter-tweet').textContent, '2092640554568007958');
+  assert.equal(status.textContent, 'X POST · PROVIDER CONTROLS');
+  assert.equal(card.classList.contains('is-unavailable'), false);
+  media.hide({ immediate: true });
+  fail = true;
+  assert.equal(media.show({ observation, anchor: {} }), true);
+  await new Promise((resolve) => setTimeout(resolve));
+  const failed = root.querySelector('section');
+  assert.ok(failed.classList.contains('is-unavailable'));
+  assert.equal(failed.querySelector('[role="status"]').textContent, 'The X post is unavailable or cannot be embedded. OPEN ORIGINAL.');
+  media.destroy();
+});
+
+test('a warmed Facebook player moves into the card and stays through its redraws', async () => {
+  let ready;
+  const { media, root } = domFixture({
+    facebookLoader: async () => ({
+      Event: { subscribe(_name, callback) { ready = callback; }, unsubscribe() {} },
+      XFBML: { parse() {} },
+    }),
+  });
+  const observation = { title: 'Clip', media: { sourceUrl: 'https://www.facebook.com/reel/1571491657757829' } };
+  media.warm({ observation });
+  await Promise.resolve(); await Promise.resolve();
+  const host = root.querySelector('.bhote-embedded-media-warmup');
+  const embed = host.querySelector('.fb-video');
+  assert.equal(media.show({ observation, anchor: {} }), true);
+  const card = root.querySelector('section');
+  const player = card.querySelector('.bhote-embedded-callout-player');
+  assert.ok(host.parentNode === player, 'the warmed player is carried over, not rebuilt');
+  assert.equal(host.className, 'bhote-facebook-player-host');
+  assert.equal(host.hasAttribute('aria-hidden'), false);
+  ready({ type: 'video', id: embed.id, instance: { mute() {}, play() {}, pause() {} } });
+  assert.equal(card.querySelector('[role="status"]').textContent, 'FACEBOOK · PROVIDER CONTROLS');
+  assert.ok(host.parentNode === player, 'a redraw keeps the provider player');
+  media.destroy();
+});
+
+test('a leaving card animates out and is removed after its exit', () => {
+  const timers = [];
+  const { media, root } = domFixture({ globalRef: { setTimeout: (fn) => timers.push(fn), clearTimeout() {} } });
+  media.show({ observation: { media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k' } }, anchor: {} });
+  const card = root.querySelector('section');
+  card.hidden = false;
+  media.hide();
+  assert.ok(card.isConnected);
+  assert.ok(card.classList.contains('is-leaving'));
+  assert.equal(card.classList.contains('is-entering'), false);
+  timers.forEach((fn) => fn());
+  assert.equal(card.isConnected, false);
+  media.destroy();
 });
 
 test('resolves supported embedded callout providers from canonical public URLs', () => {
@@ -303,28 +436,8 @@ test('Mailung playback stops at source timestamp 0:07 without changing other cli
 });
 
 function preloadFixture(options = {}) {
-  class Element extends EventTarget {
-    constructor(tag) {
-      super(); this.tag = tag; this.children = []; this.dataset = {};
-      this.classList = { add() {}, remove() {}, contains() { return false; } };
-    }
-    setAttribute() {}
-    removeAttribute() {}
-    append(...children) {
-      for (const child of children) { child.remove(); child.parent = this; this.children.push(child); }
-    }
-    remove() {
-      if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this);
-      this.parent = null;
-    }
-  }
-  const documentRef = {
-    body: new Element('body'),
-    createElement: tag => new Element(tag),
-    createElementNS: (_, tag) => new Element(tag),
-  };
-  const media = createBhoteKoshiEmbeddedMedia({ viewer: {}, documentRef, globalRef: {}, ...options });
-  return { media, root: documentRef.body.children[0] };
+  const { media, root } = domFixture(options);
+  return { media, root };
 }
 
 for (const operation of ['pause', 'hide', 'destroy']) {
@@ -343,16 +456,18 @@ test('camera updates retain a preload until the visible player loads', () => {
   const observation = { media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k' } };
   media.warm({ observation });
   const frame = root.children[0];
+  assert.equal(frame.className, 'bhote-embedded-media-warmup');
+  assert.equal(frame.getAttribute('aria-hidden'), 'true');
+  assert.equal(frame.tabIndex, -1);
+  assert.equal(frame.title, 'Preloading YOUTUBE media');
   media.hide({ preserveWarm: true });
   media.warm({ observation });
-  assert.equal(root.children[0], frame);
+  assert.ok(root.children[0] === frame);
   assert.equal(media.show({ observation, anchor: {} }), true);
-  assert.equal(frame.parent, root, 'keep the preload while the visible player starts');
-  const card = root.children.find(node => node.tag === 'section');
-  const body = card.children.find(node => node.className === 'bhote-embedded-callout-body');
-  const player = body.children.find(node => node.className.split(' ').includes('bhote-embedded-callout-player'));
-  player.children.find(node => node.tag === 'iframe').dispatchEvent(new Event('load'));
-  assert.equal(frame.parent, null, 'visible player readiness releases the preload');
+  assert.ok(frame.parentNode === root, 'keep the preload while the visible player starts');
+  root.querySelector('section .bhote-embedded-callout-body > .bhote-embedded-callout-player > iframe')
+    .dispatchEvent(new Event('load'));
+  assert.equal(frame.isConnected, false, 'visible player readiness releases the preload');
   media.destroy();
   assert.equal(root.children.length, 0);
 });
@@ -420,25 +535,9 @@ test('a media card stays between the panels when right-to-left swaps their sides
 });
 
 test('a shown card follows its anchor through the renderer ports', () => {
-  class Element extends EventTarget {
-    constructor(tag) {
-      super(); this.tag = tag; this.children = []; this.dataset = {}; this.style = {};
-      this.classList = { add() {}, remove() {}, contains() { return false; } };
-    }
-    setAttribute() {}
-    removeAttribute() {}
-    querySelector() { return null; }
-    getBoundingClientRect() { return { left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 }; }
-    append(...children) { for (const child of children) { child.remove(); child.parent = this; this.children.push(child); } }
-    remove() { if (this.parent) this.parent.children = this.parent.children.filter((child) => child !== this); this.parent = null; }
-  }
-  const documentRef = {
-    body: new Element('body'),
-    createElement: (tag) => new Element(tag),
-    createElementNS: (_, tag) => new Element(tag),
-  };
   const listeners = new Set();
-  const viewer = { canvas: { getBoundingClientRect: () => ({ left: 500, top: 500 }) } };
+  const container = document.body.appendChild(document.createElement('div'));
+  const viewer = { container, canvas: { getBoundingClientRect: () => ({ left: 500, top: 500 }) } };
   let pose = { position: { x: 0, y: 0, z: 0 }, direction: { x: 1, y: 0, z: 0 } };
   const projected = [];
   // The renderer's canvas, not the viewer's, places the card.
@@ -454,14 +553,18 @@ test('a shown card follows its anchor through the renderer ports', () => {
       },
     },
   });
-  const media = createBhoteKoshiEmbeddedMedia({ viewer, documentRef, globalRef: {} });
+  const media = createBhoteKoshiEmbeddedMedia({ viewer, documentRef: document, globalRef: {} });
+  const root = container.firstElementChild;
+  root.getBoundingClientRect = () => ({ left: 0, top: 0, right: 1000, bottom: 800, width: 1000, height: 800 });
   assert.deepEqual([...listeners].map(([phase]) => phase), ['postRender']);
   const anchor = { x: 10, y: 0, z: 0 };
   assert.equal(media.show({ observation: { title: 'Clip', media: { sourceUrl: 'https://youtu.be/DbqRexFxv3k' } }, anchor }), true);
-  const card = documentRef.body.children[0].children.find((node) => node.tag === 'section');
+  const card = root.querySelector('section');
   assert.equal(card.hidden, false);
   assert.equal(projected.at(-1), anchor);
   assert.equal(card.style.left, `${300 + 10 + 42}px`);
+  // The leader runs from the anchor to the card's near edge.
+  assert.equal(card.querySelector('path').getAttribute('d'), `M ${300 + 10 - 352} ${200 + 5 - parseFloat(card.style.top)} L 0 ${Math.max(16, Math.min(360 - 16, 200 + 5 - parseFloat(card.style.top)))}`);
   // Behind the eye: hidden on the next drawn frame.
   pose = { ...pose, direction: { x: -1, y: 0, z: 0 } };
   for (const [, cb] of listeners) cb();

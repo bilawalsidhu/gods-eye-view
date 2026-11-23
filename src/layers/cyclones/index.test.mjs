@@ -861,7 +861,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   const controls = h.layer.getRowControls();
   assert.equal(controls.readout, true);
   assert.deepEqual(controls.chips, []);
-  assert.equal(controls.summary.coverage, 'Atlantic · E/C Pacific');
+  assert.equal(controls.summary.coverage, 'All tropical basins');
   assert.equal(controls.summary.actions[0].href, storm().advisoryUrl);
   assert.equal(controls.summary.lines.length, 3);
   assert.deepEqual(controls.summary.settings, []);
@@ -870,7 +870,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   ]);
   assert.match(controls.summary.compact, /2 active storms · .* selected/);
   assert.equal(controls.summary.sections, undefined);
-  assert.match(controls.list.ariaLabel, /NHC/);
+  assert.match(controls.list.ariaLabel, /cyclone advisories and warnings/);
   assert.equal(controls.list.items.length, 2);
   assert.equal(controls.list.items[0].active, true);
   assert.match(controls.info, /awaiting advisory 10/);
@@ -912,7 +912,10 @@ test('empty successful coverage, unavailable source and stale advisory are diffe
   h.layer.enable();
   await h.layer.update();
   assert.equal(h.layer.getStats().empty, true);
-  assert.match(h.layer.getRowControls().summary.detail, /No active NHC\/CPHC/);
+  assert.match(
+    h.layer.getRowControls().summary.detail,
+    /No active tropical cyclone warnings/,
+  );
   next = { ...snapshot(), stale: true };
   await h.layer.update();
   assert.match(h.layer.getRowControls().summary.status, /stale/);
@@ -986,4 +989,64 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.match(h.layer.getStats().error, /Network/);
   assert.ok(h.cleared > 0);
   h.layer.destroy();
+});
+
+test('a JTWC warning reads as a warning, notes the official regional centre and its danger area', async () => {
+  const jtwc = {
+    ...storm('sh042027'),
+    agency: 'jtwc',
+    name: 'Xavier',
+    classification: 'TC',
+    basin: 'SH',
+    advisoryNumber: '15',
+    advisoryUrl: 'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+    dangerArea: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([jtwc]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.match(
+      plain(controls.summary.detail),
+      /^Xavier · Tropical cyclone · Warning 15 · issued/,
+    );
+    assert.deepEqual(controls.summary.actions, [
+      { id: 'advisory', label: 'JTWC warning ↗', href: jtwc.advisoryUrl },
+    ]);
+    const note = controls.summary.lines.find((line) => line.id === 'note');
+    assert.equal(
+      note.text,
+      'JTWC warning: the regional centre’s warning is official. JTWC winds are 1-minute averages.',
+    );
+    assert.match(controls.info, /awaiting warning 15/);
+    assert.match(controls.info, /regional centre’s warning is official/);
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', '34-knot wind danger area'],
+    );
+    assert.equal(h.layer.getStats().source, 'JTWC');
+  } finally {
+    h.layer.destroy();
+  }
+});
+
+test('an NHC advisory carries no JTWC note and keeps its cone legend', async () => {
+  const h = harness({ getSnapshot: async () => snapshot([storm()]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.equal(
+      controls.summary.lines.find((line) => line.id === 'note'),
+      undefined,
+    );
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', 'Center-track uncertainty cone'],
+    );
+    assert.equal(h.layer.getStats().source, 'NOAA NHC / CPHC');
+  } finally {
+    h.layer.destroy();
+  }
 });

@@ -1,6 +1,6 @@
 import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
-import { nextTick } from 'vue';
+import { nextTick, watch } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -25,6 +25,7 @@ import { CctvControls } from './cctv.js';
 import { StreetLevelControls } from './streetLevelControls.js';
 import { createWildlifeSightingCard } from './wildlifeSightingCard.js';
 import { RadioControls } from './radio.js';
+import { LiveControls } from './liveControls.js';
 import { LocalSdrControls } from './localSdrControls.js';
 import { LocationNavigation } from './locationNavigation.js';
 import { bindCameraOrientationControls } from './cameraOrientationControls.js';
@@ -62,9 +63,12 @@ import { applyLocaleChoice } from './localePicker.js';
 import { PanelNavigation } from './panelNavigation.js';
 import { applicationPinia, createUiRuntime } from './vueRuntime.js';
 import { useContextStore } from './stores/context.js';
+import { useLiveStore } from './stores/live.js';
+import { useStationStore } from './stores/station.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { SpaceMissionsControls } from './spaceMissionsControls.js';
 import { useMissionReplayStore } from './stores/missionReplay.js';
+import { useStreetLevelPhotoStore } from './stores/streetLevelPhoto.js';
 import { useCelestialRingStore } from './stores/celestialRing.js';
 import { icrfToFixedAxes } from '../sky/icrf.js';
 import { useWorldOverlayActionsStore } from './stores/worldOverlayActions.js';
@@ -117,6 +121,8 @@ export class StyleManager extends ShellFacade {
    * @param {{lon: number, lat: number, height: number, heading?: number,
    *   pitch?: number}|null} [options.homeView] - where the title's logo goes
    *   back to (degrees): the view the app started from.
+   * @param {string[]} [options.startLayers] - the layers a bare address (one
+   *   that carries no link) starts with; none by default.
    */
   constructor(
     viewer,
@@ -128,6 +134,7 @@ export class StyleManager extends ShellFacade {
       initialShareCode = null,
       localePicker = true,
       homeView = null,
+      startLayers = [],
     } = {},
   ) {
     super();
@@ -256,6 +263,7 @@ export class StyleManager extends ShellFacade {
       updateFeedback: () => this._updateGlobalLoadingFeedback(),
       applyFollowOffset: (followed, offset) =>
         applyShareFollowOffset(viewer, followed, offset),
+      startLayers,
     });
 
     this._visualSettings = new VisualSettings({
@@ -900,41 +908,12 @@ export class StyleManager extends ShellFacade {
         this._panelChrome.setPanelCollapsed(panelId, collapsed, options),
       readPanel: (panel) => this._panelChrome._shownPanel(panel),
       onSheetsClosed: () => this._syncShareState(),
-      onTabOpened: (sheet) => {
-        void this._onMobileTabOpened(sheet);
-      },
       publish: (view) =>
         useDisplayStore(applicationPinia()).publishPhoneShell(view),
       afterPublish: (callback) => {
         void nextTick(callback);
       },
     });
-  }
-
-  /** Reveal a tracked aircraft through Contacts when its phone tab is opened. */
-  async _onMobileTabOpened(sheet) {
-    const context = this.getContextModeState();
-    if (
-      sheet !== 'context' ||
-      this._disposed ||
-      !context ||
-      context.mode ||
-      context.changing ||
-      context.entering ||
-      !this.getAircraftTrackingTarget()
-    )
-      return false;
-    try {
-      const result = await this.setContextMode('contacts');
-      if (result?.ok) return true;
-      if (result?.cancelled || this._disposed) return false;
-    } catch {
-      if (this._disposed) return false;
-    }
-    this._showToast(
-      t('Contacts could not complete the requested transition; try again'),
-    );
-    return false;
   }
 
   /**
@@ -1029,8 +1008,12 @@ export class StyleManager extends ShellFacade {
   }
 
   _initGlobalContextPanel() {
-    const { radioLayer, militaryInstallationsLayer, militaryAwarenessLayer } =
-      this.services;
+    const {
+      radioLayer,
+      militaryInstallationsLayer,
+      militaryAwarenessLayer,
+      satellitesLayer,
+    } = this.services;
     const contextStore = useContextStore(applicationPinia());
     this._contextControls = new ContextControls({
       elements: {
@@ -1070,6 +1053,39 @@ export class StyleManager extends ShellFacade {
       militaryAwarenessLayer?.subscribeDirectionOverlay?.((view) =>
         awarenessDirectionStore.publish(view),
       );
+    // The STATION section: the selected space station's moving parts, as
+    // the satellites layer presents them; its controls reach the layer.
+    const stationStore = useStationStore(applicationPinia());
+    this._stationPanelUnsubscribe?.();
+    if (this._stationOwner) stationStore.detach(this._stationOwner);
+    this._stationOwner = null;
+    stationStore.publish(null);
+    if (satellitesLayer?.getStationActions)
+      this._stationOwner = stationStore.connect(
+        satellitesLayer.getStationActions(),
+      );
+    this._stationPanelUnsubscribe = satellitesLayer?.subscribeStationPanel?.(
+      (view) => stationStore.publish(view),
+    );
+    // The LIVE section: streams attached to whatever the tracking layers
+    // select, in the platform's own player, loaded only once Play is pressed.
+    this._liveControls?.destroy();
+    const liveStore = useLiveStore(applicationPinia());
+    this._liveControls = new LiveControls({
+      store: liveStore,
+      actions: {
+        getLayer: (layerId) =>
+          this._dataManager?.layers?.get(layerId)?.module ?? null,
+        scheduleLayout: () => this._scheduleRightPanelLayout(),
+      },
+    });
+    // The Cockpit briefing offers its LIVE page while a stream is on offer.
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = watch(
+      () => liveStore.view !== null,
+      (offered) => this.cockpitView?.setBriefLiveOffered?.(offered),
+      { immediate: true },
+    );
   }
 
   _initSpaceMissionsPanel() {
@@ -1200,7 +1216,18 @@ export class StyleManager extends ShellFacade {
     const { streetLevelLayer } = this.services;
     this._streetLevelControls?.destroy();
     this._streetLevelControls = null;
+    // The photo viewer (KartaView, Panoramax), which the layer panels draw
+    // into the viewer host. A viewer left by an earlier shell must
+    // not outlive its layer.
+    const streetLevelPhotoStore = useStreetLevelPhotoStore(applicationPinia());
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
+    streetLevelPhotoStore.publish(null);
     if (!this._streetLevelPanel || !streetLevelLayer) return;
+    this._streetLevelPhotoUnsubscribe =
+      streetLevelLayer.subscribePhotoViewer?.((view) =>
+        streetLevelPhotoStore.publish(view),
+      ) ?? null;
     // Photo framing yields to newer navigation and releases tracking like
     // any deferred flight.
     streetLevelLayer.attachNavigation?.({
@@ -1959,6 +1986,14 @@ export class StyleManager extends ShellFacade {
     this.services?.streetLevelLayer?.attachNavigation?.(null);
     this._streetLevelControls?.destroy();
     this._radioControls?.destroy();
+    this._liveControls?.destroy();
+    this._liveOfferedUnwatch?.();
+    this._liveOfferedUnwatch = null;
+    this._stationPanelUnsubscribe?.();
+    this._stationPanelUnsubscribe = null;
+    if (this._stationOwner)
+      useStationStore(applicationPinia()).detach(this._stationOwner);
+    this._stationOwner = null;
     this._localSdrControls?.destroy();
     this._awarenessPanelUnsubscribe?.();
     this._awarenessPanelUnsubscribe = null;
@@ -1969,7 +2004,10 @@ export class StyleManager extends ShellFacade {
     this._spaceMissionsControls = null;
     this._missionReplayUnsubscribe?.();
     this._missionReplayUnsubscribe = null;
+    this._streetLevelPhotoUnsubscribe?.();
+    this._streetLevelPhotoUnsubscribe = null;
     useMissionReplayStore(applicationPinia()).publish(null);
+    useStreetLevelPhotoStore(applicationPinia()).publish(null);
     const contextStore = useContextStore(applicationPinia());
     contextStore.connectAwareness(null);
     contextStore.publishAwareness(null);

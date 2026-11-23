@@ -234,6 +234,15 @@ export type CameraEvent =
   'changed' | 'moveStart' | 'moveEnd' | 'followChanged' | 'flightEnd';
 
 export interface CameraPort {
+  /**
+   * Whether any of the ECEF points may be on screen: false only when their
+   * bounding sphere is outside the view or all of them are below the horizon
+   * of WGS84 shrunk by `horizonMarginM` metres; null when it cannot tell
+   * (not a 3D scene, an empty point set, or a non-finite point or camera
+   * vector), which callers treat as visible. Supply a finite, nonnegative
+   * margin smaller than the shortest WGS84 radius.
+   */
+  visiblePoints?(points: Ecef[], horizonMarginM: number): boolean | null;
   pose(): CameraPose;
   /**
    * Place the eye. A position with a `{direction, up}` orientation is placed

@@ -1,3 +1,4 @@
+import { createCountMarkers } from './countMarkers.js';
 import { createIconBook } from '../../render/motion/iconBook.js';
 
 /** A draw set that draws nothing, for the icon book the tests read. */
@@ -90,6 +91,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
    * @param {'off'|'on'|'viewshed'} [options.coverageMode='on'] Coverage mode.
    * @param {boolean} [options.showProjection=false] Projection visibility.
    * @param {Map<string, Object>} [options.healthById] Health rows by camera id.
+   * @param {Function} [options.registerPaintLane] Receives the count painter.
    * @returns {void}
    */
 
@@ -102,9 +104,11 @@ export function createTesting({ state: layerState, services, parts, source }) {
     showProjection = false,
     healthById = new Map(),
     openingCameraProvisional = false,
+    registerPaintLane,
   } = {}) {
     layerState._viewer = viewer;
     layerState._records = Array.isArray(records) ? records : [];
+    layerState._count = layerState._records.length;
     layerState._recordById = new Map(
       layerState._records
         .filter((record) => record?.camera?.id)
@@ -123,12 +127,20 @@ export function createTesting({ state: layerState, services, parts, source }) {
     layerState._showProjection = !!showProjection;
     layerState._healthById = healthById;
     layerState._viewRecords = [];
+    layerState._pickerRecords = [];
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    layerState._coverageCohort = null;
     // A real book (over a set that draws nothing): every record gets its
     // icon as init adds it.
     layerState._icons = createIconBook(testIconSet());
+    layerState._counts?.dispose();
+    layerState._counts = createCountMarkers(
+      registerPaintLane,
+      'cctv:test:counts',
+      parts.rendering.refreshHorizonCulling,
+    );
     for (const record of layerState._records)
       if (record?.camera?.id) parts.rendering.addCameraIcon(record);
   }
@@ -148,6 +160,7 @@ export function createTesting({ state: layerState, services, parts, source }) {
     for (const runtime of layerState._projectionEntities)
       if (runtime?.plane) planes[runtime.plane.id] = runtime.plane;
     return {
+      counts: layerState._counts,
       gizmo: layerState._gizmo?.partsForTest() ?? {},
       coverage,
       planes,

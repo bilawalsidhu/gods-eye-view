@@ -15,6 +15,7 @@ export function createState({ services }) {
 
   /** The catalog's camera icons: the icon book over their draw set. */
   layerState._icons = null;
+  layerState._counts = null;
 
   layerState._records = [];
 
@@ -95,10 +96,14 @@ export function createState({ services }) {
   // work over these, not the whole catalog.
 
   layerState._viewRecords = [];
+  // The view records plus the best-ranked camera of each visible cell.
+  layerState._pickerRecords = [];
 
-  // Coverage ids refreshCoverageStyles last drew: part of the geometry
-  // working set even when their icons are thinned out.
-
+  // The active camera's coverage neighbours, including grouped ones. A
+  // grouping change in this cohort requires a coverage refresh.
+  layerState._coverageCohort = null;
+  // The cohort minus grouped cameras, last drawn by refreshCoverageStyles.
+  // These belong to the geometry working set even off screen.
   layerState._coverageVisibleIds = new Set();
 
   // View pass triggers besides camera settle: an interval while the camera
@@ -113,6 +118,9 @@ export function createState({ services }) {
   // The camera port the moveStart/moveEnd listeners are on.
 
   layerState._viewListenerCamera = null;
+  // Reruns the view pass when terrain loads or the surface changes.
+  layerState._surfaceListener = null;
+  layerState._surfaceListenerGlobe = null;
 
   // A motion pass changed the shown set and the settle pass has not yet told
   // subscribers; the camera pose the last view pass ran at.
