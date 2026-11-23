@@ -66,10 +66,10 @@ function setup(overlay = OSM_OVERLAYS[0]) {
   return { layer, viewer, globe, mapStack };
 }
 
-test('OSM_OVERLAYS: the two shipped layers, each with a tile template and credit', () => {
+test('OSM_OVERLAYS: the four shipped layers, each with a tile template and credit', () => {
   assert.deepEqual(
     OSM_OVERLAYS.map((o) => o.id),
-    ['sea-marks', 'ski-pistes'],
+    ['sea-marks', 'ski-pistes', 'hiking', 'cycling'],
   );
   for (const overlay of OSM_OVERLAYS) {
     assert.match(overlay.urlTemplate, /^https:\/\/.*\{z\}.*\{x\}.*\{y\}/);
@@ -77,6 +77,8 @@ test('OSM_OVERLAYS: the two shipped layers, each with a tile template and credit
   }
   assert.match(OSM_OVERLAYS[0].credit, /CC BY-SA 2\.0/);
   assert.match(OSM_OVERLAYS[1].credit, /www\.opensnowmap\.org/);
+  assert.match(OSM_OVERLAYS[2].credit, /waymarkedtrails\.org/);
+  assert.match(OSM_OVERLAYS[3].credit, /waymarkedtrails\.org/);
 });
 
 test('createOsmOverlayLayers builds one independent layer per overlay', () => {
@@ -86,6 +88,8 @@ test('createOsmOverlayLayers builds one independent layer per overlay', () => {
     [
       ['sea-marks', 'Sea Marks'],
       ['ski-pistes', 'Ski Pistes'],
+      ['hiking', 'Hiking Trails'],
+      ['cycling', 'Cycling Routes'],
     ],
   );
   assert.notEqual(createOsmOverlayLayers()[0], layers[0]);

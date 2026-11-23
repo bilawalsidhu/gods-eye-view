@@ -1111,10 +1111,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
   // Fire Perimeters queries add lastGrowthTime.
-  assert.equal(block.length, 31387, 'serialized tool schema length drifted');
+  // Hiking Trails and Cycling Routes extend the generated layer enums.
+  assert.equal(block.length, 31425, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '909bc8924e5ad6adf599406d462d325a703d18993176d96498cbb057240a58b6',
+    '0a5cb45512c0ce9ee5c016ed84ad848cb665944e024a4358d8e9a306f6feec71',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

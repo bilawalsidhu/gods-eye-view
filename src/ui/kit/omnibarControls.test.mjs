@@ -15,7 +15,7 @@ const template = source.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/g, '');
 
 test('the Omnibar hand-writes no button; each is a UiButton', () => {
   assert.deepEqual(template.match(/<button\b/gi) ?? [], []);
-  assert.equal(template.match(/<UiButton\b/g)?.length, 2);
+  assert.equal(template.match(/<UiButton\b/g)?.length, 4);
 });
 
 test('the Omnibar hand-writes no Material glyph; each is a UiIcon', () => {
