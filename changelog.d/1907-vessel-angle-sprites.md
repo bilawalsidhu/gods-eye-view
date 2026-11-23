@@ -7,4 +7,4 @@
   and a renderer without view sheets draws the flat hulls as before. A
   vessel's size now follows the camera's range: larger up close, smaller
   than an aircraft from far out, and shrinking and fading toward the
-  horizon as aircraft do (Mazeyar Moeini Feizabadi, #0000).
+  horizon as aircraft do (Mazeyar Moeini Feizabadi, #1907).
