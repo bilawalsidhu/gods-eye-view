@@ -37,7 +37,8 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
-import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
+import { viewLayout } from '../../data/viewSheet.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -714,7 +715,7 @@ const animating = (record) => record.gpu?.animating();
 export function createCesiumDraw({
   scene,
   report,
-  capabilities = new Set(GPU_ICON_CAPABILITIES),
+  capabilities = new Set(gpuIconCapabilities(scene)),
   requestRender: requestFrame = null,
   date = null,
   now = () => performance.now(),
@@ -1129,6 +1130,7 @@ export function createCesiumDraw({
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
+    viewsOf: (id) => viewSheets.get(id),
     requestRender: (reason) => {
       if (!live()) return;
       if (requestFrame) requestFrame(reason);
@@ -1146,9 +1148,9 @@ export function createCesiumDraw({
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
     if (!record.gpu && !force && !gpu.wants(list, record.spec)) return false;
-    gpu.check(list, record.spec);
+    gpu.check(list, record.spec, record);
     if (record.gpu) return true;
-    if (!replacing) gpu.check(record.items.values(), record.spec);
+    if (!replacing) gpu.check(record.items.values(), record.spec, record);
     record.gpu = gpu.attach(record);
     record.billboards = null;
     record.billboardHost = null;
@@ -1670,6 +1672,9 @@ export function createCesiumDraw({
   // when its icon is drawn, and registering an atlas again swaps the images
   // of the icons that drew from it.
   const atlases = new Map();
+  // View sheets icons draw subjects of, by id (`viewSheets`): each as its
+  // image and checked layout, a new object whenever it is registered.
+  const viewSheets = new Map();
   /** The blob each material or quad draws, held while it lives (`holdImage`). */
   const heldBlobs = new WeakMap();
 
@@ -6024,6 +6029,32 @@ export function createCesiumDraw({
         }
       if (changed) scene.requestRender();
     },
+    ...(capabilities.has('viewSheets')
+      ? {
+          views(id, sheet) {
+            viewSheets.set(
+              id,
+              Object.freeze({
+                image: sheet.image,
+                layout: viewLayout(sheet),
+                grey: sheet.grey === true,
+              }),
+            );
+            let changed = false;
+            for (const record of sets.values())
+              if (
+                record.kind === 'icons' &&
+                record.gpu &&
+                record.views === id
+              ) {
+                record.gpu.reviews();
+                setsVersion += 1;
+                changed = true;
+              }
+            if (changed) scene.requestRender();
+          },
+        }
+      : {}),
   };
 
   return {
@@ -6148,7 +6179,11 @@ provideUnboundDraw((viewer) => {
   const part = createCesiumDraw({
     scene,
     report: uncaught,
-    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields', 'modelParts']),
+    capabilities: new Set([
+      ...gpuIconCapabilities(scene),
+      'fields',
+      'modelParts',
+    ]),
   });
   unboundParts.set(part.port, part);
   const offs = [

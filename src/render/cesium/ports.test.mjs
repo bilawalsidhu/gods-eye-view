@@ -18,6 +18,7 @@ test('capabilities follow what the scene supports', () => {
     'columns',
     'motionSegments',
     'courseGlide',
+    'viewSheets',
     'cluster',
     'styles',
     'bloom',

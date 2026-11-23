@@ -49,6 +49,7 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "build:panel": "node scripts/build-panel.mjs",
+    "build:aircraft-views": "node scripts/build-aircraft-views.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
     "test:perf": "node scripts/run-perf-tests.mjs",

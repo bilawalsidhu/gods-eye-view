@@ -207,6 +207,8 @@ export type Capability =
   | 'fields'
   /** Rate-limited course easing (`IconItem.courseGlide`). */
   | 'courseGlide'
+  /** Icons drawn from a sheet of views, by where the eye is (`ViewSheet`). */
+  | 'viewSheets'
   /** Lines that fade with the age of their points (`LineItem.ageFade`). */
   | 'lineAgeFade'
   /** Lines drawn only within a span of the scene clock (`LineAgeFade.showMs`). */

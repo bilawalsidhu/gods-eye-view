@@ -20,6 +20,17 @@
  * above, taken between the heights under its segment's two ends. On WebGL 1
  * the extras are not drawn (the draw port refuses rows that need them).
  *
+ * A row flagged `ICON_VIEWS` draws from the set's view sheet
+ * ({@link module:viewSheet}), a texture of its own, in place of the atlas
+ * (on WebGL 2; the shader has none of it on WebGL 1): it lies flat on the
+ * ground, forward along its course, and draws the frame nearest the eye's
+ * direction, mirrored for the eye on its left. The frame is a card standing
+ * at the row's anchor, square to the frame's own direction, so between
+ * frames the sprite is tilted (foreshortened and turned) as its subject is,
+ * with no blending of frames; the row's quad stays upright on screen. Until the
+ * sheet has loaded it draws its near image from the atlas, turned along its
+ * course as any row, if it has one.
+ *
  * This module is the one place the icon sets touch Cesium's renderer internals.
  */
 import * as Cesium from 'cesium';
@@ -29,6 +40,7 @@ import {
   ICON_CULL_HEIGHT_M,
   ICON_CULL_LIFT,
   ICON_EXTRA_TEXELS,
+  ICON_VIEWS,
   STYLE_STRIDE,
 } from '../../data/iconSet.js';
 import {
@@ -39,6 +51,13 @@ import {
   NEAR_IMAGE_DEVICE_PX,
 } from '../../data/iconAtlas.js';
 import { recedeFrame, recedeParams } from '../recession.js';
+import { rawTexture, webglContext } from './internals.js';
+import {
+  VIEW_RINGS_MAX,
+  VIEW_SHEET_FRAGMENT_GLSL,
+  VIEW_SHEET_GLSL,
+  viewUniforms,
+} from '../../data/viewSheet.js';
 
 /** The parameters the uniforms hold while the set does not recede. */
 const NO_RECEDE = recedeParams({});
@@ -84,6 +103,7 @@ uniform vec3 u_recessionFloors; // scale, alpha, combined alpha
 uniform vec4 u_slots[ICON_SLOTS]; // ICON_SLOTS: as many as the context addresses
 uniform float u_cull; // 1: hide rows past the ellipsoid's horizon
 uniform float u_pickPass; // 1 while drawing for a pick
+uniform float u_viewsReady; // 1 once the set's view sheet is loaded
 #ifdef ICON_EXTRAS
 uniform highp sampler2D u_extras; // ICON_EXTRA_TEXELS texels a row, ICON_EXTRA_ROWS rows a line
 #endif
@@ -93,12 +113,42 @@ out vec4 v_color;
 out vec4 v_pickColor;
 out float v_proxy;
 out float v_overDepth; // 1 for a row drawn over depth, on the near plane
+out float v_views; // 1 for a row drawn from the view sheet
+#ifdef ICON_VIEW_SHEETS
+// A view row's frame: its cell in the sheet (v_uv is then this corner's
+// place in that cell, not in the atlas).
+out float v_viewCell;
+#endif
 
 // The row's anchor in clip space before screen offsets, for effects that wrap
 // main() (sonar) and must not change geometry or picks.
 vec4 iconAnchorClip = vec4(0.0, 0.0, 0.0, -1.0);
 
 ${ICON_SEGMENT_GLSL}
+#ifdef ICON_VIEW_SHEETS
+${VIEW_SHEET_GLSL}
+
+// Where a corner of the row's quad falls in a frame's cell (0..1 across it,
+// v down). The frame is a card standing at the row's anchor, square to the
+// direction it shows its subject from: the corner (offset, in the eye's
+// axes) is carried along the eye's ray onto that card, so a frame seen from
+// a little off its direction is tilted (foreshortened and turned) as its
+// subject is, until the next frame is the nearer.
+// axes takes the subject's forward, right and up to the eye's axes; cardHalf
+// is the card's half size, in the offset's units.
+vec2 viewCardUv(float ring, float index, float flip, mat3 axes, vec3 offset, vec3 ray, vec2 cardHalf) {
+  vec3 toEye;
+  vec3 up;
+  viewFrameAxes(ring, index, flip, toEye, up);
+  vec3 normal = axes * toEye;
+  vec3 cardUp = axes * up;
+  vec3 cardRight = cross(cardUp, normal);
+  // The ray meets the card head on, or nearly: never edge on.
+  vec3 on = offset - ray * (dot(offset, normal) / min(dot(ray, normal), -0.2));
+  vec2 at = vec2(dot(on, cardRight), dot(on, cardUp)) / cardHalf;
+  return vec2(0.5 + 0.5 * (flip > 0.5 ? -at.x : at.x), 0.5 - 0.5 * at.y);
+}
+#endif
 
 bool iconFlag(float flags, float bit) {
   return mod(floor(flags / bit), 2.0) == 1.0;
@@ -127,6 +177,10 @@ void main() {
   v_color = vec4(0.0);
   v_proxy = 0.0;
   v_overDepth = 0.0;
+  v_views = 0.0;
+#ifdef ICON_VIEW_SHEETS
+  v_viewCell = 0.0;
+#endif
   gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // outside the clip volume: not drawn
 
   float flags = style1.z;
@@ -195,11 +249,25 @@ void main() {
   bool nearImage = style3.x > 0.0
     ? glyphPx / czm_pixelRatio > style3.x
     : glyphPx > ${NEAR_IMAGE_DEVICE_PX.toFixed(1)};
+  // A view row's far image is its subject's first cell in the view sheet,
+  // its near image the atlas slot drawn in its place while the sheet is not
+  // registered or loaded.
+  bool views = false;
+  vec2 viewUv = vec2(0.0);
   float slot = nearImage ? style1.y : style1.x;
+  if (iconFlag(flags, ${ICON_VIEWS.toFixed(1)})) {
+#ifdef ICON_VIEW_SHEETS
+    views = u_viewsReady > 0.5 && style1.x >= 0.0;
+#endif
+    slot = views ? style1.x : style1.y;
+  }
   if (slot < 0.0) return; // no image set
-  if (slot >= float(ICON_SLOTS)) return; // past what this context addresses
-  vec4 rect = u_slots[int(slot)];
-  if (rect.z <= 0.0) return; // image not loaded yet
+  vec4 rect = vec4(0.0, 0.0, 1.0, 1.0);
+  if (!views) {
+    if (slot >= float(ICON_SLOTS)) return; // past what this context addresses
+    rect = u_slots[int(slot)];
+    if (rect.z <= 0.0) return; // image not loaded yet
+  }
 
   vec2 halfSize = style0.xy * (scale * distanceScale * 0.5) * corner;
   vec2 shift = vec2(0.0);
@@ -222,15 +290,44 @@ void main() {
     vec3 east = dot(horizontal, horizontal) > 1.0 ? normalize(vec3(horizontal, 0.0)) : vec3(0.0, 1.0, 0.0);
     vec3 north = cross(up, east);
     vec3 forward = east * sin(course) + north * cos(course);
-    float dx = dot(forward, u_cameraRight);
-    float dy = -dot(forward, u_cameraUp);
-    // Heading into or out of the screen: no stable direction, stay upright
-    // (screenProjectedRotation's 0.5 m of a 2 km probe).
-    if (dx * dx + dy * dy >= 6.25e-8) {
-      float rotation = atan(-dx, -dy);
-      float c = cos(rotation);
-      float s = sin(rotation);
-      halfSize = mat2(c, s, -s, c) * halfSize;
+#ifdef ICON_VIEW_SHEETS
+    if (views) {
+      // A view lies flat on the ground, forward along its course, and draws
+      // the frame nearest the eye's direction. Its quad stays upright on
+      // screen; the frame is put on it where its card falls.
+      vec3 right = cross(forward, up);
+      vec3 toEye = normalize(-rte);
+      vec3 frame = viewNearest(
+        vec3(dot(toEye, forward), dot(toEye, right), dot(toEye, up)));
+      // The subject's axes in the eye's (x right, y up, z back).
+      mat3 axes = transpose(mat3(u_cameraRight, u_cameraUp, cross(u_cameraRight, u_cameraUp))) *
+        mat3(forward, right, up);
+      // This corner, square to the eye's ray (the eye's right and up, turned
+      // as its back turns onto the ray): a card facing the eye then fills
+      // the quad wherever on screen it is, without the stretch a wide view
+      // gives what is off its centre.
+      vec3 ray = normalize(positionEC.xyz);
+      vec3 turned = vec3(0.0, 0.0, 1.0) - ray;
+      vec3 offset =
+        (vec3(1.0, 0.0, 0.0) + turned * (ray.x / turned.z)) * halfSize.x +
+        (vec3(0.0, 1.0, 0.0) + turned * (ray.y / turned.z)) * halfSize.y;
+      viewUv = viewCardUv(
+        frame.x, frame.y, frame.z, axes, offset, ray,
+        style0.xy * (scale * distanceScale * 0.5));
+      v_viewCell = slot + viewRing(frame.x).y + frame.y;
+    } else
+#endif
+    {
+      float dx = dot(forward, u_cameraRight);
+      float dy = -dot(forward, u_cameraUp);
+      // Heading into or out of the screen: no stable direction, stay upright
+      // (screenProjectedRotation's 0.5 m of a 2 km probe).
+      if (dx * dx + dy * dy >= 6.25e-8) {
+        float rotation = atan(-dx, -dy);
+        float c = cos(rotation);
+        float s = sin(rotation);
+        halfSize = mat2(c, s, -s, c) * halfSize;
+      }
     }
   }
 #ifdef ICON_EXTRAS
@@ -267,22 +364,39 @@ void main() {
     v_overDepth = 1.0;
   }
 
-  v_uv = mix(rect.xy, rect.zw, vec2(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5));
+  v_uv = views
+    ? viewUv
+    : mix(rect.xy, rect.zw, vec2(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5));
+  v_views = views ? 1.0 : 0.0;
   v_color = vec4(color.rgb, color.a * alpha);
 }
 `;
 
 const FRAGMENT_SHADER = /* glsl */ `
 uniform sampler2D u_atlas;
+#ifdef ICON_VIEW_SHEETS
+${VIEW_SHEET_FRAGMENT_GLSL}
+in float v_viewCell;
+#endif
 
 in vec2 v_uv;
 in vec4 v_color;
 in vec4 v_pickColor;
 in float v_proxy;
 in float v_overDepth;
+in float v_views;
 
 void main() {
-  vec4 color = czm_gammaCorrect(texture(u_atlas, v_uv));
+  vec4 color = texture(u_atlas, v_uv);
+#ifdef ICON_VIEW_SHEETS
+  // How small the sheet's cells are drawn (v_uv runs 0..1 across a view
+  // row's cell), worked out for every row so the cell can be read inside
+  // the branch.
+  vec2 texels = v_uv * (float(textureSize(u_views, 0).x) / max(u_viewGrid.x, 1.0));
+  float lod = log2(max(max(length(dFdx(texels)), length(dFdy(texels))), 1.0e-6));
+  if (v_views > 0.5) color = viewCell(v_viewCell, v_uv, lod);
+#endif
+  color = czm_gammaCorrect(color);
   color *= czm_gammaCorrect(v_color);
   // A pick proxy is picked wherever it covers, drawn or not.
   if (v_proxy > 0.5) color = vec4(1.0);
@@ -307,6 +421,100 @@ void main() {
 #endif
 }
 `;
+
+/** The coarsest mip level a view sheet is sampled at (half-size cells). */
+const VIEW_SHEET_MAX_LOD = 1;
+
+/** Each context's view sheet textures, by URL. */
+const sheetTextures = new WeakMap();
+
+/**
+ * A view sheet's image as a texture on `context`, loaded once however many
+ * icon sets draw from it: `{state, texture}`, `state` going from `loading`
+ * to `ready` (its `texture` set) or `failed`. `onChange` runs when it does.
+ * Mipmapped where the context can (to `VIEW_SHEET_MAX_LOD`), so a sprite
+ * drawn smaller than its cell stays smooth; a cell's transparent margin
+ * keeps its neighbours out. The texture lives as long as its context.
+ * A sheet larger than the context's textures fails, as one that cannot load.
+ * @param {object} context A Cesium Context.
+ * @param {string} url
+ * @param {() => void} [onChange]
+ * @param {boolean} [grey] The sheet's pixels are grey: kept as one channel
+ *   and alpha.
+ */
+export function viewSheetTexture(context, url, onChange, grey = false) {
+  let byUrl = sheetTextures.get(context);
+  if (!byUrl) sheetTextures.set(context, (byUrl = new Map()));
+  const key = `${grey ? 'grey' : 'colour'}|${url}`;
+  let entry = byUrl.get(key);
+  if (!entry) {
+    entry = { state: 'loading', texture: null, listeners: new Set() };
+    byUrl.set(key, entry);
+    const settle = (state) => {
+      entry.state = state;
+      for (const listener of entry.listeners) listener();
+      entry.listeners.clear();
+    };
+    if (typeof Image === 'undefined') settle('failed');
+    else {
+      const image = new Image();
+      image.decoding = 'async';
+      // A cross-origin image would taint the upload.
+      image.crossOrigin = 'anonymous';
+      image.onload = () => {
+        if (context.isDestroyed?.()) return;
+        // This context's own limit (Cesium's is the last context's made).
+        const gl = webglContext({ context });
+        const limit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        if (Math.max(image.naturalWidth, image.naturalHeight) > limit) {
+          console.warn(
+            `[iconSetPrimitive] View sheet is larger than this context's textures (${limit} px): ${url}`,
+          );
+          settle('failed');
+          return;
+        }
+        const mipmapped = context.webgl2 === true;
+        entry.texture = new Cesium.Texture({
+          context,
+          source: image,
+          // A grey sheet as its grey (its red) and alpha: half the memory.
+          pixelFormat: grey
+            ? Cesium.PixelFormat.LUMINANCE_ALPHA
+            : Cesium.PixelFormat.RGBA,
+          flipY: false,
+          sampler: new Cesium.Sampler({
+            wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
+            wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+            minificationFilter: mipmapped
+              ? Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR
+              : Cesium.TextureMinificationFilter.LINEAR,
+            magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
+          }),
+        });
+        if (mipmapped) {
+          entry.texture.generateMipmap();
+          // No coarser than this: past it a cell's transparent margin is
+          // under a texel, and its neighbours would show at its edges.
+          gl.bindTexture(gl.TEXTURE_2D, rawTexture(entry.texture));
+          gl.texParameterf(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_MAX_LOD,
+            VIEW_SHEET_MAX_LOD,
+          );
+          gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+        settle('ready');
+      };
+      image.onerror = () => {
+        console.warn(`[iconSetPrimitive] View sheet failed to load: ${url}`);
+        settle('failed');
+      };
+      image.src = url;
+    }
+  }
+  if (onChange && entry.state === 'loading') entry.listeners.add(onChange);
+  return entry;
+}
 
 /**
  * How many atlas slots the icon shader addresses on `context`: as many as
@@ -344,7 +552,9 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
  *   Cesium's `BlendOption.TRANSLUCENT` billboards are, in place of an opaque
  *   pass and a translucent one (by default never). `pickObject` builds a row's pick object around the
  *   `primitive` drill picks hide it by (by default `{ id, iconSet, meta,
- *   primitive }`).
+ *   primitive }`). `views` gives the view sheet the set's view rows draw from
+ *   (`{image, layout, grey}`, `layout` as `viewLayout` returns; null: none),
+ *   the same object until the sheet changes.
  */
 export class IconSetPrimitive {
   constructor({
@@ -355,9 +565,22 @@ export class IconSetPrimitive {
     recede,
     translucent,
     pickObject,
+    views,
   }) {
     this.set = set;
     this.renderTime = renderTime;
+    this._requestRender = requestRender ?? null;
+    // The set's view sheet: what it was last read as, its texture's entry
+    // and its layout as uniforms.
+    this._views = views ?? (() => null);
+    this._viewsFrom = null;
+    this._viewEntry = null;
+    this._viewGrid = new Cesium.Cartesian4();
+    this._viewRings = Array.from(
+      { length: VIEW_RINGS_MAX / 2 },
+      () => new Cesium.Cartesian4(1, 0, 1, 0),
+    );
+    this._blank = null;
     this._cull = cull ?? (() => true);
     // The set's `recede`, and the parameters last made from it.
     this._recede = recede ?? (() => null);
@@ -410,7 +633,11 @@ export class IconSetPrimitive {
       u_recession: () => primitive._recession,
       u_recessionFloors: () => primitive._recessionFloors,
       u_slots: () => primitive._slotUniform,
-      u_atlas: () => primitive._texture,
+      u_atlas: () => primitive._texture ?? primitive._blank,
+      u_views: () => primitive._viewEntry?.texture ?? primitive._blank,
+      u_viewsReady: () => (primitive._viewEntry?.texture ? 1 : 0),
+      u_viewGrid: () => primitive._viewGrid,
+      u_viewRings: () => primitive._viewRings,
       u_extras: () => primitive._extras,
       u_cull: () => (primitive._cull() ? 1 : 0),
       u_pickPass: () => primitive._pickPass,
@@ -431,7 +658,10 @@ export class IconSetPrimitive {
       return;
     const context = frameState.context;
     this._syncAtlas(context);
-    if (!this._texture) return;
+    this._syncViews(context);
+    // Nothing to draw from yet: no atlas image packed, no view sheet.
+    if (!this._texture && !this._viewEntry) return;
+    this._blank = context.defaultTexture;
     // Read as the commands run, which they do right after this update.
     this._pickPass = frameState.passes.pick ? 1 : 0;
     const renderTime = this.renderTime(frameState);
@@ -483,6 +713,31 @@ export class IconSetPrimitive {
     });
     for (let slot = 0; slot < MAX_ICON_SLOTS; slot++)
       Cesium.Cartesian4.unpack(iconAtlas.rects, slot * 4, this._slots[slot]);
+  }
+
+  /** Follow the set's view sheet: its layout's uniforms and its texture. */
+  _syncViews(context) {
+    const sheet = this._views();
+    if (sheet === this._viewsFrom) return;
+    this._viewsFrom = sheet;
+    this._viewEntry = null;
+    if (!sheet) return;
+    const { grid, rings } = viewUniforms(sheet.layout);
+    Cesium.Cartesian4.fromArray(grid, 0, this._viewGrid);
+    rings.forEach((pair, k) =>
+      Cesium.Cartesian4.fromArray(pair, 0, this._viewRings[k]),
+    );
+    this._viewEntry = viewSheetTexture(
+      context,
+      sheet.image,
+      () => this._requestRender?.(),
+      sheet.grey === true,
+    );
+  }
+
+  /** The set's view sheet: `none`, `loading`, `failed` or `ready`. */
+  viewsState() {
+    return this._viewEntry?.state ?? (this._views() ? 'loading' : 'none');
   }
 
   _allocate(context) {
@@ -749,12 +1004,16 @@ export class IconSetPrimitive {
   _createCommands(context) {
     this._slotCount = contextIconSlots(context);
     this._slotUniform = this._slots.slice(0, this._slotCount);
+    // View sheets are drawn on WebGL 2 only (as the draw port offers them):
+    // on WebGL 1 the shader is as it was without them.
+    const viewDefines = context?.webgl2 ? ['ICON_VIEW_SHEETS'] : [];
     const programFor = (pass) =>
       Cesium.ShaderProgram.fromCache({
         context,
         vertexShaderSource: new Cesium.ShaderSource({
           defines: [
             `ICON_SLOTS ${this._slotCount}`,
+            ...viewDefines,
             ...(this._extras
               ? [
                   'ICON_EXTRAS',
@@ -766,12 +1025,14 @@ export class IconSetPrimitive {
           sources: [VERTEX_SHADER],
         }),
         fragmentShaderSource: new Cesium.ShaderSource({
-          defines:
-            pass === 'opaque'
+          defines: [
+            ...viewDefines,
+            ...(pass === 'opaque'
               ? ['OPAQUE']
               : pass === 'translucent'
                 ? ['TRANSLUCENT']
-                : [],
+                : []),
+          ],
           sources: [FRAGMENT_SHADER],
         }),
         attributeLocations: ATTRIBUTE_LOCATIONS,

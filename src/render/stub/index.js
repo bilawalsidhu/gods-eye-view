@@ -23,6 +23,7 @@ import {
 } from '../recession.js';
 import { CLEAR_WEATHER, mergeWeather } from '../weather.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
+import { viewLayout } from '../../data/viewSheet.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
 import { computeViewRectangle } from './viewRectangle.js';
@@ -704,6 +705,11 @@ export function createStubRenderer(options = {}) {
       };
     },
   };
+  if (capabilities.has('viewSheets'))
+    draw.views = (id, sheet) => {
+      viewLayout(sheet); // refused as a renderer refuses it
+      log('draw', 'views', [id]);
+    };
   if (capabilities.has('models'))
     draw.models = (spec) => makeSet('models', spec);
   if (capabilities.has('quads')) draw.quads = (spec) => makeSet('quads', spec);

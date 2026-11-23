@@ -8873,3 +8873,39 @@ test('a disposed set, and every set once the port is disposed, does nothing on l
     restore();
   }
 });
+
+test('a draw port registers view sheets only with viewSheets, each port its own', async () => {
+  const { PORTS } = await import('../contract/index.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/viewSheet.js');
+  assert.equal(PORTS.draw.views, 'viewSheets', 'an optional port method');
+  const report = (error) => assert.fail(error);
+  const without = createCesiumDraw({
+    scene: fakeScene(),
+    report,
+    capabilities: new Set(['motionSegments']),
+  });
+  assert.equal(typeof without.port.views, 'undefined');
+  // Two viewers: a sheet registered on one is not drawn by the other.
+  const one = createCesiumDraw({ scene: fakeScene(), report });
+  const two = createCesiumDraw({ scene: fakeScene(), report });
+  assert.equal(typeof one.port.views, 'function');
+  const view = {
+    id: 'a',
+    pos: { ...Cesium.Cartesian3.fromDegrees(4, 52, 1000) },
+    image: { views: AIRCRAFT_VIEWS.id, first: AIRCRAFT_VIEWS.subjects.uav },
+    size: [20, 20],
+    rotationMode: 'course',
+    course: 0,
+  };
+  const setOne = one.port.icons({ id: 'views:one' });
+  const setTwo = two.port.icons({ id: 'views:two' });
+  setOne.set([view]);
+  setTwo.set([view]);
+  one.port.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  const rowsOne = one.sets.get('views:one').gpu.set;
+  const rowsTwo = two.sets.get('views:two').gpu.set;
+  assert.equal(rowsOne.imageFar(rowsOne.row('a')), AIRCRAFT_VIEWS.subjects.uav);
+  assert.equal(rowsTwo.imageFar(rowsTwo.row('a')), -1, 'not on this port');
+  setOne.dispose();
+  setTwo.dispose();
+});

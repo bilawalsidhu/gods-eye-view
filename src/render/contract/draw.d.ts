@@ -154,10 +154,48 @@ export interface Placed {
   disableDepthTest?: number;
 }
 
-/** An image an icon draws: a URL, a slot in a shared atlas, or generated. */
+/**
+ * `viewSheets`: one image of small sprites that show subjects from a sphere
+ * of directions, registered with `DrawPort.views`. An icon whose image is a
+ * view (`{views, first}`) lies flat on the ground, forward along its course,
+ * and is drawn as the sprite that shows it from where the eye is.
+ *
+ * The image is a grid of square cells, `cellPx` a side, `columns` across and
+ * `rows` down. A subject is a block of consecutive cells, row-major from its
+ * `first`: rings of frames `ringStepDeg` apart, from straight above (ring 0,
+ * one frame) downward, short of straight below; ring `k` holds `rings[k]`
+ * frames, from the eye dead ahead of the subject, round its right side, to
+ * dead astern. The eye on its left side draws the right side's frame
+ * mirrored. A frame's up is the subject's forward, turned by the smallest
+ * rotation that takes its up onto the frame's direction. The frame nearest
+ * the eye's direction is drawn, as a card square to its own direction, so
+ * between frames it is tilted as its subject is (`data/viewSheet.js` holds
+ * the maths).
+ */
+export interface ViewSheet {
+  /** The sheet's URL. */
+  image: string;
+  cellPx: number;
+  columns: number;
+  rows: number;
+  ringStepDeg: number;
+  /** Frames in each ring; the first is 1. At most 18 rings. */
+  rings: readonly number[];
+  /**
+   * The sheet's pixels are grey (red, green and blue equal): a renderer may
+   * keep it as one channel and alpha.
+   */
+  grey?: boolean;
+}
+
+/**
+ * An image an icon draws: a URL, a slot in a shared atlas, generated, or
+ * (`viewSheets`, icons only) a subject of a view sheet by its first cell.
+ */
 export type ImageRef =
   | string
   | { atlas: string; slot: string }
+  | { views: string; first: number; fallback?: ImageRef }
   | { svg: string }
   | { blob: Blob }
   | { canvas: HTMLCanvasElement | OffscreenCanvas; key: string };
@@ -211,6 +249,12 @@ export interface CourseGlide {
 }
 
 export interface IconItem extends Placed {
+  /**
+   * A view (`{views, first}`) needs `rotationMode: 'course'` and takes no
+   * `imageLod`; a set draws views from one sheet. Until its sheet is
+   * registered and loaded, and if that cannot load, it draws its `fallback`
+   * (any image but a view) along its course, or nothing without one.
+   */
   image: ImageRef;
   /** Drawn size in CSS pixels. */
   size: [width: number, height: number];
@@ -752,4 +796,6 @@ export interface DrawPort {
   on(event: 'clampState', cb: (state: 'draped' | 'overlay') => void): Off;
   /** Register an atlas of images icons refer to by slot. */
   atlas(id: string, images: Record<string, ImageRef>): void;
+  /** `viewSheets`: register a sheet of views icons refer to by id. */
+  views?(id: string, sheet: ViewSheet): void;
 }

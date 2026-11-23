@@ -948,7 +948,12 @@ export function createTracking({
   /** The tracked billboard's images, from the current class/conversion: the
    *  fleet icon's own (`_fleetLook`), so selecting it changes only its colour. */
   function _trackedBillboardLook() {
-    return parts.icons._fleetLook(flightState._trackedIcao);
+    // Drawn along its course, as the fleet icon is: from the view sheet
+    // where the renderer draws one.
+    const id = flightState._trackedIcao;
+    return parts.icons._fleetLook(id, undefined, undefined, {
+      alongCourse: true,
+    });
   }
 
   /**
@@ -1130,6 +1135,9 @@ export function createTracking({
       // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
       // or model still loading); transparent once the tracked model is actually up.
       color: _trackedIconColor,
+      // The course a view-sheet image is drawn along (the same display
+      // course the screen rotation below is projected from).
+      course: () => parts.motion._trackedDisplayCourse(),
       // Screen-projected rotation, evaluated per frame on the camera's own
       // axes, so it stays exact through a tracked orbit. The tracked target
       // must never vanish into tile geometry — tracking a taxiing plane at
