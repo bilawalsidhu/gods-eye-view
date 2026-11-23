@@ -77,8 +77,12 @@ export function factFigure(fact) {
   return { number: factValue(fact), unit: '' };
 }
 
-/** How often the in-view answer reads a moving layer's items again, at most. */
+/** Minimum wait before refreshing cached moving rows in the in-view answer. */
 export const MOVING_REFRESH_MS = 10_000;
+/** How often a visible Inspector refreshes. */
+export const INSPECTOR_PULSE_MS = 4_000;
+// Allow time for the next Inspector pulse to observe an expired Nearby read.
+const NEARBY_MOVING_MAX_MS = MOVING_REFRESH_MS - INSPECTOR_PULSE_MS;
 /** The longest a moving layer's in-view rows wait to be read again. */
 export const MOVING_REFRESH_MAX_MS = 60_000;
 /**
@@ -319,14 +323,23 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * while its key holds: `place` (where), `options` (what was asked) and
    * the layer's data revision (`lastUpdate:count`). Another layer's refresh
    * never reads it again. A layer of moving items (satellites, aircraft) is
-   * also read again once its answer is movingWait(costMs) old, since
-   * satellites stamp a revision only when new orbits arrive. While the
-   * camera is still moving, a costly layer (its last read over
+   * also read again once its answer expires, since satellites stamp a
+   * revision only when new orbits arrive. Nearby limits the adaptive wait
+   * so a moving row that leaves the radius disappears within ten seconds.
+   * While the camera is still moving, a costly layer (its last read over
    * COSTLY_READ_MS) whose revision and options are unchanged keeps its
    * answer for movingWait(costMs) too; a settled view reads it at once.
    * @returns {boolean} Whether any layer's answer changed or went.
    */
-  function readLayers(cache, dm, rows, place, options, readOne) {
+  function readLayers(
+    cache,
+    dm,
+    rows,
+    place,
+    options,
+    readOne,
+    maxMovingWait = Infinity,
+  ) {
     const now = Date.now();
     let changed = false;
     for (const id of cache.keys())
@@ -337,11 +350,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     for (const row of rows) {
       const revision = `${row.stats?.lastUpdate ?? ''}:${row.stats?.count ?? ''}`;
       const kept = cache.get(row.id);
-      const fresh = kept && now - kept.at < movingWait(kept.costMs);
+      const moving = entityKind(row.id).moving;
+      const fresh =
+        kept &&
+        now - kept.at <
+          Math.min(movingWait(kept.costMs), moving ? maxMovingWait : Infinity);
       const same =
         kept && kept.options === options && kept.revision === revision;
-      if (same && kept.place === place && (fresh || !entityKind(row.id).moving))
-        continue;
+      if (same && kept.place === place && (fresh || !moving)) continue;
       if (same && fresh && viewMoving.value && kept.costMs > COSTLY_READ_MS)
         continue;
       // One layer's read: the data manager narrowed to this row.
@@ -545,6 +561,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         asked.excludeKey || '',
       ]),
       (one) => nearbyByLayer(one, { lat, lon }, asked)[0] ?? null,
+      NEARBY_MOVING_MAX_MS,
     );
     if (changed || nearbyLast?.layers !== layers)
       nearbyLast = {

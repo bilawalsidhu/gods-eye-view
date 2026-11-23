@@ -187,11 +187,8 @@ function ringRank(ring) {
   return (Math.abs(sum) / 2) * Math.cos((meanLat * Math.PI) / 180);
 }
 
-async function readPlaces() {
-  const [countries, marine] = await Promise.all([
-    loadBundledJson(PACKS.countries),
-    loadBundledJson(PACKS.marine),
-  ]);
+const loadLand = createRetryableLoader(async () => {
+  const countries = await loadBundledJson(PACKS.countries);
   const decimals = countries.meta?.decimals ?? 3;
   const land = [];
   for (const feature of countries.features || []) {
@@ -207,6 +204,29 @@ async function readPlaces() {
       box: boxOf(parts),
     });
   }
+  return land;
+});
+
+function landAt(land, lat, lon) {
+  return land.find(
+    (entry) =>
+      inBox(entry.box, lat, lon) && containsAnchor(entry.parts, lat, lon),
+  );
+}
+
+/** Country containing a ground point, without loading marine or detail packs. */
+export async function countryCodeAt(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90)
+    return null;
+  const wrapped = ((((lon + 180) % 360) + 360) % 360) - 180;
+  return landAt(await loadLand(), lat, wrapped)?.countryCode ?? null;
+}
+
+async function readPlaces() {
+  const [land, marine] = await Promise.all([
+    loadLand(),
+    loadBundledJson(PACKS.marine),
+  ]);
   const water = [];
   for (const feature of marine.features || []) {
     const kind = feature.featurecla;
@@ -367,21 +387,17 @@ async function findPlaceBelow(
     return null;
   const lon = ((((longitude + 180) % 360) + 360) % 360) - 180;
   const { land, water } = await loadPlaces();
-  for (const entry of land) {
-    if (
-      inBox(entry.box, latitude, lon) &&
-      containsAnchor(entry.parts, latitude, lon)
-    )
-      return {
-        kind: 'country',
-        name: entry.name,
-        countryCode: entry.countryCode,
-        division: await orNull(() =>
-          detail.division(entry.countryCode, latitude, lon),
-        ),
-        near: await orNull(() => detail.near(latitude, lon, nearKm)),
-      };
-  }
+  const entry = landAt(land, latitude, lon);
+  if (entry)
+    return {
+      kind: 'country',
+      name: entry.name,
+      countryCode: entry.countryCode,
+      division: await orNull(() =>
+        detail.division(entry.countryCode, latitude, lon),
+      ),
+      near: await orNull(() => detail.near(latitude, lon, nearKm)),
+    };
   let best = null;
   for (const entry of water) {
     if (best && entry.rank >= best.rank) continue;

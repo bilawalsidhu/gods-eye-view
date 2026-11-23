@@ -4,6 +4,7 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createPinia } from 'pinia';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { createApp, nextTick } from 'vue';
@@ -317,6 +318,12 @@ test('suggested layers are picked out, switched on by nobody, and the chip shows
     /Suggested/.test(b.textContent),
   );
   assert.ok(chip, 'the bar says the rows are suggested');
+  assert.equal(chip.getAttribute('aria-label'), 'Suggested · Show all layers');
+  assertSameNode(
+    document.activeElement,
+    chip,
+    'focus moves to the Suggested chip',
+  );
   assert.equal(
     document
       .querySelector('[data-layer-id="ais-live-vessels"] .data-toggle-btn')

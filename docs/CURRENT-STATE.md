@@ -962,12 +962,13 @@ from the CCTV panel.
 With nothing picked, the panel gives situational awareness of the layers
 that are on (`src/ui/views/panels/ViewContext.vue`): the place under the
 middle of the screen and the time there, "10:14 local, 16:14 UTC" (`clockLine`).
-The time zone comes from the spot's weather reading
-(`/api/weather-effects` through `fetchSpotWeather`, without the regional
-brief's place lookup and news); UTC alone until it is read, at globe view,
-and when the read for a new spot fails. A nearby zone can stay as a hint
-while the camera moves in the same Inspector mount. When the weather cell
-changes, the prior observation is cleared and its request is cancelled.
+The time zone comes from the configured spot-weather service
+(`/api/weather-effects` by default, without the regional brief's place
+lookup and news); UTC alone until it is read, at globe view,
+and when the read for a new spot fails. Within the same Inspector mount,
+a nearby zone stays as a hint only after bundled country boundaries confirm
+that the observation and the view are in the same country. When the weather
+cell changes, the prior observation is cleared and its request is cancelled.
 Context requests the new cell after the camera has settled for 400 ms. An
 observation refreshes after eleven minutes of visible Inspector time. A
 failed read retries after one minute of that time. A failed refresh clears
@@ -1018,11 +1019,12 @@ Both the in-view rows and the Nearby lists are remembered per layer
 (`readLayers` in `src/ui/stores/entityCard.js`): a layer is read again when
 the view (or, for Nearby, the centre, radius or search) changes, when it is
 turned on, or when its own data changes, never for another layer's refresh.
-A layer of moving items (satellites, aircraft, vessels, transit, rail) is
-also read again once its rows are 10 s old while something asks, since
-satellites mark new data only when fresh orbits arrive; a layer whose read
+A moving layer's In View rows (satellites, aircraft, vessels, transit, rail)
+are reread once they are 10 s old while something asks. A layer whose read
 costs more waits longer (at least 100 times its last read's cost, up to
-60 s: a 200 ms propagation of a large catalogue waits 20 s). While the camera
+60 s: a 200 ms propagation of a large catalogue waits 20 s). Moving Nearby
+rows expire within 6 s so the visible Inspector's next 4 s refresh updates
+them within 10 s, even when a feed's revision has not changed. While the camera
 is still moving, a layer whose last read took longer than a frame (16 ms)
 keeps its rows for that same wait instead of being read for each step; a
 settled camera move, or the layer's own new data, reads it at once, so one
@@ -1040,7 +1042,8 @@ feeds are not billed per request would show, worldwide and last known (see
 zoomed in; UTC and the share of Earth in daylight at globe view), a strip with the camera's height, and
 up to three suggested layers (`src/ui/layerSuggestions.js`), or a pointer to
 Data Layers when there are none. The phone opens its Layers sheet for either
-action. With layers on, suggestions of what goes with
+action. Opening Suggested moves focus to its chip in Data Layers.
+With layers on, suggestions of what goes with
 them sit at the end of the view, under the Nearby lists. The search field
 in the header filters item rows. Expanded, Context becomes a full-height column at the right edge
 (the left edge right to left) and the map credits stop short of it.

@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, onUpdated, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, onUpdated, ref, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText } from '../../contextSearch.js';
 import { formatNumber, t, tn } from '../../../i18n/index.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
-import { isGlobeView, useEntityCardStore } from '../../stores/entityCard.js';
+import { countryCodeAt } from '../../../data/placeBelow.js';
+import { INSPECTOR_PULSE_MS, isGlobeView, useEntityCardStore } from '../../stores/entityCard.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
 import { shownLayerName, sourceLabel } from '../../layerNames.js';
 import { translateFeedError, translateStatusMessage } from '../../statusText.js';
@@ -61,7 +62,7 @@ onMounted(() => {
     if (!visible() || !store.inspector.shown) return;
     tick.value++;
     store.pulseInspector();
-  }, 4000);
+  }, INSPECTOR_PULSE_MS);
   emit('mounted');
 });
 onBeforeUnmount(() => {
@@ -77,37 +78,64 @@ const globeView = computed(() => isGlobeView(view.value));
 
 // The city at (or nearest to) the middle of the view, from the bundled cities
 // pack: no place service is asked.
-const place = ref(null);
-let placeFor = '';
+const place = shallowRef(null);
+let placeRequest = null;
+const placeKey = (center) => `${center.lat.toFixed(2)},${center.lon.toFixed(2)}`;
 watch(
   view,
   async (current) => {
     if (!current) return;
-    const key = `${current.center.lat.toFixed(2)},${current.center.lon.toFixed(2)}`;
-    if (key === placeFor) return;
-    placeFor = key;
-    try {
-      const city = await nearestCity(current.center.lat, current.center.lon);
-      if (placeFor === key) place.value = city ? { name: city.name, country: countryName(city.country) } : null;
-    } catch {
-      if (placeFor === key) place.value = null;
-    }
+    const key = placeKey(current.center);
+    if (key === placeRequest?.key) return;
+    const request = { key };
+    placeRequest = request;
+    const city = await nearestCity(current.center.lat, current.center.lon).catch(() => null);
+    if (placeRequest === request) place.value = city;
   },
   { immediate: true },
 );
 const placeName = computed(() => place.value?.name || t('This view'));
+const placeCountry = computed(() => countryName(place.value?.country));
 const weather = computed(() => viewWeather.value?.reading ?? null);
 const weatherFailed = computed(() => Boolean(viewWeather.value?.failed && !viewWeather.value.pending));
 const zone = computed(() => viewWeather.value?.zone ?? null);
+const samePoint = (a, b) => a.lat === b.lat && a.lon === b.lon;
+// The weather endpoint rounds request coordinates to five decimal places.
+const sameWeatherPoint = (a, b) =>
+  Number(a.lat?.toFixed(5)) === Number(b.lat?.toFixed(5)) &&
+  Number(a.lon?.toFixed(5)) === Number(b.lon?.toFixed(5));
+const readCountry = (center) => countryCodeAt(center.lat, center.lon).catch(() => null);
+const confirmedZone = shallowRef(null);
+let zoneOrigin;
+watch(
+  [() => view.value?.center?.lat, () => view.value?.center?.lon, zone, globeView],
+  async ([lat, lon, reading, globe], _, onCleanup) => {
+    const center = { lat, lon };
+    if (globe || !reading || sameWeatherPoint(center, reading.center)) return;
+    let current = true;
+    onCleanup(() => { current = false; });
+    if (zoneOrigin?.reading !== reading)
+      zoneOrigin = { reading, country: readCountry(reading.center) };
+    const [origin, country] = await Promise.all([zoneOrigin.country, readCountry(center)]);
+    if (current) confirmedZone.value = origin && country === origin ? { center, reading } : null;
+  },
+  { immediate: true },
+);
 
 // "10:14 local, 16:14 UTC" where the view looks; UTC alone until its time
 // zone is known, and at globe view.
 const clock = computed(() => {
   void tick.value;
-  return clockLine(globeView.value ? null : zone.value);
+  const center = view.value?.center;
+  const reading = zone.value;
+  if (globeView.value || !center || !reading) return clockLine(null);
+  if (sameWeatherPoint(center, reading.center)) return clockLine(reading);
+  const hint = confirmedZone.value;
+  const confirmed = hint?.reading === reading && samePoint(center, hint.center);
+  return clockLine(confirmed ? reading : null);
 });
 const placeLine = computed(() =>
-  [place.value?.country && place.value.country !== place.value.name ? place.value.country : null, clock.value].filter(Boolean).join(' · '),
+  [placeCountry.value !== placeName.value ? placeCountry.value : null, clock.value].filter(Boolean).join(' · '),
 );
 const cameraText = computed(() => {
   const m = view.value?.heightM ?? 0;

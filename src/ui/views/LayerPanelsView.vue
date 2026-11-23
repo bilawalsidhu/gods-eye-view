@@ -24,6 +24,8 @@ import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
 
 const finder = useLayerFinderStore();
 const toggleList = ref(null);
+const finderButtons = ref(null);
+const finderBar = ref(null);
 let detachFinderControls;
 onMounted(() => {
   detachFinderControls = finder.attachControls(toggleList.value.ownerDocument);
@@ -63,8 +65,8 @@ async function importChosen(event) {
   <div id="left-panel-stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
-    <template #actions><LayerFinder part="buttons" /></template>
-    <LayerFinder part="bar" />
+    <template #actions><LayerFinder ref="finderButtons" part="buttons" @focus-search-field="finderBar?.focusSearchField()" /></template>
+    <LayerFinder ref="finderBar" part="bar" @focus-search-button="finderButtons?.focusSearchButton()" @focus-filter-button="finderButtons?.focusFilterButton()" />
     <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll" v-class-toggle="{ 'is-filtering': finder.narrowed }"></div>
     <LayerSectionIndex />
     <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->

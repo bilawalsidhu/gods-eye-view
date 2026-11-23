@@ -1120,6 +1120,47 @@ test('at a local view, another layer refreshing never reads a moving layer again
   assert.match($('.nearby-lists').textContent, /SAT/, 'still listed');
 });
 
+test('Nearby removes a moving satellite within ten seconds of an expensive read', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let now = 2_000_000_000_000;
+  let monotonic = 0;
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(performance, 'now', () => monotonic);
+  let position = HERE;
+  const { $, cards } = fixture(t, [
+    {
+      id: 'satellites',
+      enabled: true,
+      stats: { count: 1, lastUpdate: 1 },
+      module: {
+        getAnalystRecords() {
+          monotonic += 300;
+          return [{ noradId: '1', name: 'SAT', ...position }];
+        },
+      },
+    },
+  ]);
+  const advance = async (ms) => {
+    now += ms;
+    t.mock.timers.tick(ms);
+    await nextTick();
+  };
+  // A settled pan can cause the first read between panel pulses.
+  await advance(2_100);
+  cards.setView({ center: HERE, heightM: 40_000 });
+  await nextTick();
+  const group = () => $('.nearby-lists__layer[data-layer="satellites"]');
+  assert.match(group()?.textContent ?? '', /SAT/);
+
+  position = { ...HERE, lat: HERE.lat + 20 };
+  // The feed revision stays unchanged while the satellite moves away.
+  await advance(1_900);
+  assert.ok(group(), 'the early pulse reuses the cached rows');
+  await advance(4_000);
+  await advance(4_000);
+  assert.equal(Boolean(group()), false, 'the departed row is gone by 9.9 s');
+});
+
 test('the globe count stays through a refresh and clears for a new enable', async (t) => {
   const flights = flightsOn([], { count: 123 });
   const { $, cards, notifyLayers } = fixture(t, [flights]);
@@ -1346,7 +1387,7 @@ async function settleWeather(t) {
   await nextTick();
 }
 
-test('the local time stays while the view pans nearby, goes if that spot cannot be read, and goes when it moves far', async (t) => {
+test('the local time stays on a nearby pan once the same country is confirmed, and clears on failure or a far move', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   // Only the first read answers: later ones fail, as a slow or refused
   // brief would.
@@ -1359,10 +1400,21 @@ test('the local time stays while the view pans nearby, goes if that spot cannot 
   point(HERE);
   await settleWeather(t);
   assert.match($('.view-context__region').textContent, /local, \d\d:\d\d UTC/);
-  // About 25 km away: the same zone, kept while its own read fails.
+  // About 25 km away: the old zone is a hint once the place lookup agrees.
   point({ lat: HERE.lat + 0.2, lon: HERE.lon });
   await nextTick();
-  assert.match($('.view-context__region').textContent, /local/, 'kept at once');
+  assert.doesNotMatch(
+    $('.view-context__region').textContent,
+    /local/,
+    'UTC until the place lookup confirms the country',
+  );
+  await turn();
+  await nextTick();
+  assert.match(
+    $('.view-context__region').textContent,
+    /local/,
+    'kept once the country is confirmed',
+  );
   await settleWeather(t);
   // Its own read failed: another spot's zone may be across a border.
   assert.doesNotMatch(

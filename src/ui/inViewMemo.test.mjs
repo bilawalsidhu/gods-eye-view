@@ -589,7 +589,7 @@ test('a cheap layer is read for each step of a moving camera', () => {
   assert.equal(scans(), 2);
 });
 
-test("Nearby is remembered per layer: another layer's refresh, or the same ask again, reads nothing", (t) => {
+test("Nearby reuses a fresh layer's rows when another layer refreshes or the same ask repeats", (t) => {
   let now = 6_000_000_000_000;
   const clock = { ms: 0 };
   t.mock.method(Date, 'now', () => now);
@@ -615,7 +615,7 @@ test("Nearby is remembered per layer: another layer's refresh, or the same ask a
   for (let tick = 0; tick < 10; tick++) {
     vessels.stats = { lastUpdate: 2 + tick, count: 1 };
     ask();
-    now += 1_000;
+    now += 500;
   }
   assert.equal(satellites.reads, 1, 'vessels refreshing read no satellites');
   const vesselScans = scans();

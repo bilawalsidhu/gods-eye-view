@@ -12,6 +12,7 @@ import { bindRenderer } from '../../render/rendererOf.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { configureApplicationServices } from '../../services/application.js';
+import { createApplicationRequestServices } from '../../services/requests.js';
 import { ShareLinkManager } from '../../sharelink.js';
 import { LAYER_COUNTS_REFETCH_MS } from '../layerCounts.js';
 import { LocationSearch } from '../location.js';
@@ -337,10 +338,12 @@ test('stock Context uses the configured layer counts through either public shell
   await direct.stop();
 
   const ordinary = t.mock.fn(async () => countResponse(9999));
-  const configured = t.mock.fn(async () => countResponse(1400));
-  t.after(
-    configureApplicationServices({ layerCounts: { getCounts: configured } }),
-  );
+  const configured = t.mock.fn(async () => Response.json(countResponse(1400)));
+  const adapter = createApplicationRequestServices({
+    fetchImpl: configured,
+    endpoints: { layerCounts: '/host/counts' },
+  }).layerCounts;
+  t.after(configureApplicationServices({ layerCounts: adapter }));
   t.mock.timers.tick(LAYER_COUNTS_REFETCH_MS);
   const standard = await countInspector(t, {
     layerCounts: { getCounts: ordinary },
@@ -348,6 +351,7 @@ test('stock Context uses the configured layer counts through either public shell
   await standard.show();
   assert.equal(standard.count(), '1,400');
   assert.equal(configured.mock.callCount(), 1);
+  assert.equal(configured.mock.calls[0].arguments[0], '/host/counts');
   assert.equal(ordinary.mock.callCount(), 0);
   assert.ok(
     !fetchStub.mock.calls.some(
@@ -452,6 +456,78 @@ test('stock controls use host weather in the Inspector and host regional conditi
     !fetchStub.mock.calls.some(({ arguments: [url] }) =>
       String(url).startsWith('/api/weather-effects'),
     ),
+  );
+});
+
+test('the composed shell uses the supplied weather service directly', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
+  const weather = {
+    getConditions: t.mock.fn(async () => ({
+      weather: { temperatureC: 17, weatherCode: 0 },
+    })),
+  };
+  const { StyleManager: ComposedStyleManager } =
+    await import('../composition.js');
+  const f = await countInspector(
+    t,
+    { weather },
+    ({ scene, services, defer }) => {
+      const styleManager = new ComposedStyleManager(scene.viewer, {
+        services,
+        requestServices: scene.operations.requests,
+      });
+      defer(() => styleManager.dispose());
+      return { styleManager };
+    },
+  );
+
+  await f.show();
+  await f.point(47.6, -122.3);
+  t.mock.timers.tick(400);
+  await new Promise((resolve) => setImmediate(resolve));
+  await nextTick();
+  assert.equal(weather.getConditions.mock.callCount(), 1);
+  assert.equal(weather.getConditions.mock.calls[0].this, weather);
+  assert.match(
+    f.host.querySelector('.view-context__tiles--facts').textContent,
+    /17 °C/,
+  );
+  await f.stop();
+
+  const regional = t.mock.fn(async () => ({
+    weather: { temperatureC: 21, weatherCode: 0 },
+  }));
+  const fallback = await countInspector(
+    t,
+    { weather },
+    ({ scene, services, defer }) => {
+      const styleManager = new ComposedStyleManager(scene.viewer, {
+        services: {
+          ...services,
+          fetchSpotWeather: null,
+          fetchRegionalBrief: regional,
+        },
+        requestServices: scene.operations.requests,
+      });
+      defer(() => styleManager.dispose());
+      return { styleManager };
+    },
+  );
+  await fallback.show();
+  await fallback.point(47.6, -122.3);
+  t.mock.timers.tick(400);
+  await new Promise((resolve) => setImmediate(resolve));
+  await nextTick();
+  assert.equal(weather.getConditions.mock.callCount(), 1);
+  assert.equal(regional.mock.callCount(), 1);
+  assert.match(
+    fallback.host.querySelector('.view-context__tiles--facts').textContent,
+    /21 °C/,
   );
 });
 

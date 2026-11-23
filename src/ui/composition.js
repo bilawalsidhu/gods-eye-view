@@ -72,6 +72,7 @@ import {
 
 export class StyleManager extends ApplicationShell {
   constructor(viewer, options = {}) {
+    const weather = options.requestServices?.weather;
     super(viewer, {
       ...options,
       services: {
@@ -123,10 +124,11 @@ export class StyleManager extends ApplicationShell {
         getScopeTerminusOverride,
         clampScopeTerminusPct,
         fetchRegionalBrief,
-        fetchSpotWeather,
         regionalDistanceM,
         weatherCodeLabel,
         LocationSearch,
+        fetchSpotWeather:
+          weather?.getConditions?.bind(weather) ?? fetchSpotWeather,
         ...options.services,
       },
     });

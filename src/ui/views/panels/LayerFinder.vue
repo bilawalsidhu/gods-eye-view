@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, computed } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useLayerFinderStore } from '../../stores/layerFinder.js';
 import { msg, t } from '../../../i18n/index.js';
@@ -14,8 +14,10 @@ const props = defineProps({
 
 const finder = useLayerFinderStore();
 const { selection, searching, filtering, categories, shown, narrowed } = storeToRefs(finder);
+const emit = defineEmits(['focus-search-field', 'focus-search-button', 'focus-filter-button']);
 const searchTrigger = ref(null);
 const searchField = ref(null);
+const suggestionChip = ref(null);
 const SHOWS = [
   { id: 'all', label: msg('All layers') },
   { id: 'on', label: msg('On') },
@@ -29,16 +31,15 @@ async function toggleSearch() {
   finder.setSearching(!searching.value);
   if (!searching.value) finder.select({ query: '' });
   await nextTick();
-  if (searching.value) searchTrigger.value?.$el?.closest('#data-panel')?.querySelector('#layer-finder-input')?.focus();
+  if (searching.value) emit('focus-search-field');
 }
 // Escape in the field closes the search and stays there: it must not also
 // fold the panel or leave the cockpit.
 async function closeSearch() {
-  const panel = searchField.value?.$el?.closest('#data-panel');
   finder.setSearching(false);
   finder.select({ query: '' });
   await nextTick();
-  panel?.querySelector('#layer-finder-search-btn')?.focus();
+  emit('focus-search-button');
 }
 
 // The filter is a disclosure of two groups of toggle buttons. Opening it moves
@@ -93,18 +94,32 @@ function onOutside(e) {
 function pickCategory(key) {
   finder.select({ category: selection.value.category === key ? '' : key });
 }
-async function showAllLayers(event) {
-  const panel = event.currentTarget.closest('#data-panel');
+async function showAllLayers() {
   finder.clearAll();
   await nextTick();
-  panel?.querySelector('[aria-controls="layer-finder-menu"]')?.focus();
+  emit('focus-filter-button');
 }
 if (props.part === 'buttons') {
   onMounted(() => document.addEventListener('pointerdown', onOutside, true));
   onBeforeUnmount(() =>
     document.removeEventListener('pointerdown', onOutside, true),
   );
+} else {
+  watch(
+    () => selection.value.picked,
+    async (picked) => {
+      if (!picked.length) return;
+      await nextTick();
+      if (selection.value.picked === picked) suggestionChip.value?.$el.focus();
+    },
+    { flush: 'post' },
+  );
 }
+defineExpose({
+  focusSearchField: () => searchField.value?.focus(),
+  focusSearchButton: () => searchTrigger.value?.$el.focus(),
+  focusFilterButton: () => triggerEl.value?.$el.focus(),
+});
 </script>
 
 <template>
@@ -137,7 +152,7 @@ if (props.part === 'buttons') {
     <UiButton v-if="selection.show !== 'all'" class="layer-finder__chip" @click="finder.select({ show: 'all' })">
       {{ selection.show === 'on' ? t('On') : t('Off') }}<UiIcon name="close" :size="null" />
     </UiButton>
-    <UiButton v-if="selection.picked.length" class="layer-finder__chip" :title="t('Show all layers')" @click="showAllLayers">
+    <UiButton v-if="selection.picked.length" ref="suggestionChip" class="layer-finder__chip" :label="`${t('Suggested')} · ${t('Show all layers')}`" :title="t('Show all layers')" @click="showAllLayers">
       {{ t('Suggested') }}<UiIcon name="close" :size="null" />
     </UiButton>
     <UiButton v-if="selection.category" class="layer-finder__chip" @click="finder.select({ category: '' })">

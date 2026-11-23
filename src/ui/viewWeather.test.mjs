@@ -30,10 +30,16 @@ function weatherRequests() {
 }
 
 function mountInspector(t, { regionalBrief, spotWeather, layers = [] } = {}) {
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('', { status: 503 }),
+  t.mock.method(globalThis, 'fetch', async (url) =>
+    String(url).endsWith('/wikidata_cities/cities.json')
+      ? Response.json({
+          rows: [
+            ['Seattle', 47.61, -122.31, 750_000, 'US', 'Q5083'],
+            ['Badajoz', 38.88, -6.97, 150_000, 'ES', 'Q15681'],
+            ['Elvas', 38.88, -7.17, 20_000, 'PT', 'Q997224'],
+          ],
+        })
+      : new Response('', { status: 503 }),
   );
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   let elapsed = 0;
@@ -175,7 +181,9 @@ test('moving Context replaces a weather reading only after the new spot settles'
     /18 °C/,
     'a new cell must hide the last cell’s reading immediately',
   );
-  assert.match(clock(), /local/, 'a nearby zone remains while fetching');
+  assert.doesNotMatch(clock(), /local/, 'the new place is not confirmed yet');
+  await flush();
+  assert.match(clock(), /local/, 'a nearby zone remains in the same country');
   await advance();
   assert.equal(reads.length, 2);
 
@@ -269,6 +277,68 @@ test('remounting Context near the earlier cell shows UTC until the new cell answ
   await f.flush();
   assert.match(f.clock(), /local/);
   assert.match(f.facts(), /21 °C/);
+});
+
+test('crossing a country border shows UTC until the new cell supplies its zone', async (t) => {
+  const { reads, spotWeather } = weatherRequests();
+  const f = mountInspector(t, { spotWeather });
+  // The bundled country polygons put 38.828 in Spain and 38.832 in
+  // Portugal here, even though the same city names both views and their weather
+  // and place-name cache keys are identical.
+  await f.point(38.828, { lon: -7.1 });
+  await f.advance(400);
+  reads[0].resolve({
+    weather: { temperatureC: 18, weatherCode: 0, timeZone: 'Europe/Madrid' },
+  });
+  await f.flush();
+  assert.match(f.clock(), /local/);
+  const placeTitle = f.host.querySelector('.view-context__title').textContent;
+
+  await f.point(38.832, { lon: -7.1, settled: false });
+  await f.flush();
+  assert.equal(
+    f.host.querySelector('.view-context__title').textContent,
+    placeTitle,
+  );
+  assert.match(f.clock(), /UTC/);
+  assert.doesNotMatch(f.clock(), /local/);
+  assert.equal(reads.length, 1);
+
+  await f.point(38.85, { lon: -7.1 });
+  await f.advance(400);
+  assert.doesNotMatch(f.clock(), /local/);
+  reads[1].resolve({
+    weather: { temperatureC: 20, weatherCode: 0, timeZone: 'Europe/Lisbon' },
+  });
+  await f.flush();
+  assert.match(f.clock(), /local/);
+});
+
+test('a cached observation from across the border does not supply local time', async (t) => {
+  const { reads, spotWeather } = weatherRequests();
+  const f = mountInspector(t, { spotWeather });
+  await f.point(38.832, { lon: -7.1 });
+  await f.advance(400);
+  reads[0].resolve({
+    coordinates: { latitude: 38.828, longitude: -7.1 },
+    weather: { temperatureC: 18, weatherCode: 0, timeZone: 'Europe/Madrid' },
+  });
+  await f.flush();
+  assert.match(f.clock(), /UTC/);
+  assert.doesNotMatch(f.clock(), /local/);
+});
+
+test('a fresh response at rounded request coordinates shows local time offshore', async (t) => {
+  const { reads, spotWeather } = weatherRequests();
+  const f = mountInspector(t, { spotWeather });
+  await f.point(-30.123456, { lon: -130.654321 });
+  await f.advance(400);
+  reads[0].resolve({
+    coordinates: { latitude: -30.12346, longitude: -130.65432 },
+    weather: { temperatureC: 18, weatherCode: 0, timeZone: 'Etc/GMT+9' },
+  });
+  await f.flush();
+  assert.match(f.clock(), /local.*UTC/);
 });
 
 test('retrying failed weather shows loading until cancellation or a usable reading', async (t) => {

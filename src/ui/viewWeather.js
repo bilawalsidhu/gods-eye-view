@@ -123,9 +123,18 @@ export function createViewWeather({
     const reading = brief?.weather ?? null;
     let { zone } = state;
     if (reading) {
+      const { latitude, longitude } = brief.coordinates ?? {};
+      // A shared cache cell can return a reading taken across a border.
+      const observationCenter =
+        Number.isFinite(latitude) &&
+        Math.abs(latitude) <= 90 &&
+        Number.isFinite(longitude) &&
+        Math.abs(longitude) <= 180
+          ? { lat: latitude, lon: longitude }
+          : center;
       zone = {
         cell: request.cell,
-        center,
+        center: observationCenter,
         timeZone: reading.timeZone,
         utcOffsetSeconds: reading.utcOffsetSeconds,
       };
