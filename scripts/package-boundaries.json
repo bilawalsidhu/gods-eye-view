@@ -1034,7 +1034,9 @@
       "src/ui/kit/UiIcon.vue",
       "src/ui/rail/fieldValue.js",
       "src/ui/kit/UiSlider.js",
-      "src/ui/kit/UiSegmented.vue"
+      "src/ui/kit/UiSegmented.vue",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": ["vue"]
   },
@@ -1715,7 +1717,9 @@
       "src/data/liveStreams.js",
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
-      "src/ui/liveControls.js"
+      "src/ui/liveControls.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue"
     ],
     "external": [
       "cesium",
@@ -5597,7 +5601,11 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/data/layerOpacity.js",
+      "src/ui/layerOpacity.js",
+      "src/ui/layerPanel/LayerOpacityRow.vue",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -6453,7 +6461,8 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
-      "src/layers/satellites/tiangongModel.js"
+      "src/layers/satellites/tiangongModel.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": [
       "hls.js",
@@ -7824,7 +7833,8 @@
       "src/render/cesium/cameraControls.js",
       "src/render/input/router.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/render/camera/followTransition.js"
+      "src/render/camera/followTransition.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },
@@ -8061,7 +8071,8 @@
       "src/data/pickRegistry.js",
       "src/data/scenePick.js",
       "src/input/sensorPick.js",
-      "src/styles/styleStages.js"
+      "src/styles/styleStages.js",
+      "src/layers/sceneOpacity.js"
     ],
     "external": ["cesium"]
   },

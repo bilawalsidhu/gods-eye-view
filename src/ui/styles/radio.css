@@ -1240,6 +1240,31 @@ html:not([lang='en']) .data-row-list-text {
 .data-toggle-slider-tick:first-child {
   transform: none;
 }
+/* The opacity slider under a layer row: label, slider, readout. Aligned under
+   the layer name like .data-toggle-meta; the logical padding follows RTL. */
+.data-toggle-opacity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline-start: 26px;
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+}
+
+.data-toggle-opacity-slider {
+  flex: 1 1 auto;
+}
+
+.data-toggle-opacity-value {
+  flex: 0 0 auto;
+  min-width: 4ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Local RTL-SDR card (FM + Local ADS-B receiver) ── */
 .sdr-radio-card {
   display: grid;
