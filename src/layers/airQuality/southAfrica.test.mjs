@@ -270,7 +270,8 @@ test('view switch clears old markers and ignores late requests; camera changes u
   assert.equal(await old, true);
   assert.equal(layer.getStats().count, 1);
   const card = layer.getRowControls();
-  assert.equal(card.legend.length, 6);
+  // The EEA PM2.5 bands and "Not rated": one scale for every network.
+  assert.equal(card.legend.length, 7);
   assert.deepEqual(
     card.list.items,
     [],
@@ -450,7 +451,7 @@ test('partial or stale coverage does not label visible observations unavailable'
   assert.equal(
     layer.getRowControls().summary.lines.find((l) => l.id === 'interpretation')
       .text,
-    definition.interpretation,
+    'GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.',
   );
   layer.destroy();
 });

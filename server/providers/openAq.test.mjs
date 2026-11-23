@@ -603,6 +603,95 @@ test('parameter-scoped views acquire hourly means with independent caches and no
   );
 });
 
+test('the AQI view asks latest per location and returns every pollutant', async () => {
+  const paths = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      paths.push(url.pathname);
+      if (url.pathname === '/v3/locations')
+        return Response.json({
+          results: [
+            {
+              ...locations[0],
+              sensors: [
+                { id: 100, parameter: { name: 'pm25', units: 'µg/m³' } },
+                { id: 101, parameter: { name: 'no2', units: 'µg/m³' } },
+                { id: 102, parameter: { name: 'co', units: 'ppm' } },
+              ],
+            },
+            // No pollutant the index uses: never asked.
+            {
+              ...locations[1],
+              coordinates: { latitude: 1, longitude: 20 },
+              sensors: [{ id: 200, parameter: { name: 'co2', units: 'ppm' } }],
+            },
+          ],
+        });
+      const at = { utc: new Date(start - 600_000).toISOString() };
+      return Response.json({
+        results: [
+          { locationsId: 1, sensorsId: 100, value: 8, datetime: at },
+          { locationsId: 1, sensorsId: 101, value: 20, datetime: at },
+          { locationsId: 1, sensorsId: 102, value: 0.4, datetime: at },
+        ],
+      });
+    },
+  });
+  const view = [10, -10, 30, 10, 20, 0];
+  const snapshot = await source.getSnapshot({ view, mode: 'aqi' });
+  assert.deepEqual(paths, ['/v3/locations', '/v3/locations/1/latest']);
+  assert.equal(snapshot.readings.length, 1);
+  const [station] = snapshot.readings;
+  assert.equal(station.id, 'openaq:1:aqi');
+  assert.equal(station.provider, 'openaq');
+  assert.deepEqual(station.values, { pm25: 8, no2: 20, co: 0.4 * 1.1456 });
+  assert.equal(station.observedMs, start - 600_000);
+  assert.equal(snapshot.eligible, 1);
+  // The AQI view keeps its own cache beside the pollutant views.
+  assert.equal(await source.getSnapshot({ view, mode: 'aqi' }), snapshot);
+  await assert.rejects(
+    source.getSnapshot({ view, mode: 'aqi', parameter: 'PM2.5' }),
+    (e) => e.status === 400,
+  );
+  await assert.rejects(
+    source.getSnapshot({ view, mode: 'other' }),
+    (e) => e.status === 400,
+  );
+});
+
+test('the AQI mode travels through the fixed route', async () => {
+  const seen = [];
+  const plugin = openAqProxy({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      seen.push(new URL(raw).pathname);
+      return Response.json({ results: [] });
+    },
+  });
+  let handler;
+  plugin.configureServer({
+    middlewares: { use: (_path, fn) => (handler = fn) },
+  });
+  const ask = (url) =>
+    new Promise((resolve) => {
+      const res = {
+        writeHead: (status) => (res.status = status),
+        end: () => resolve(res.status),
+        once() {},
+        removeListener() {},
+      };
+      handler({ method: 'GET', url }, res);
+    });
+  assert.equal(await ask('/?view=10,-10,30,10,20,0&mode=aqi'), 200);
+  assert.equal(await ask('/?view=10,-10,30,10,20,0&mode=x'), 400);
+  assert.equal(await ask('/?mode=aqi'), 400);
+  assert.ok(seen.length > 0);
+});
+
 test('small pans reuse rounded catalog regions and hourly results', async () => {
   const { source, calls } = fixture();
   for (let i = 0; i < 10; i++) {

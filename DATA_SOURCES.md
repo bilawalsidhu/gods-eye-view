@@ -815,7 +815,7 @@ NOAA density imagery with the raw GLM product.
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
 
-- **South African air quality (SAAQIS).** Optional provider in the existing Air quality layer. Anonymous server-side portal session; no personal key. National catalog discovery across all nine provinces, with no municipality allowlist. A municipality without reporting monitors has no measured coverage. The 20-minute cache and channel-level freshness filtering preserve source units and never infer AQI or emissions. See [access verification, coverage and contributor contract](docs/SOUTH-AFRICA-AIR-QUALITY.md).
+- **South African air quality (SAAQIS).** Optional provider in the existing Air quality layer. Anonymous server-side portal session; no personal key. National catalog discovery across all nine provinces, with no municipality allowlist. A municipality without reporting monitors has no measured coverage. The 20-minute cache and channel-level freshness filtering preserve source units and never infer AQI or emissions; the layer's own US AQI is described under "US AQI computed per station". See [access verification, coverage and contributor contract](docs/SOUTH-AFRICA-AIR-QUALITY.md).
 
 ### OpenAQ worldwide observations
 
@@ -823,7 +823,7 @@ Optional OpenAQ v3 access uses a private, free-account `OPENAQ_API_KEY` entered
 through Provider Settings. Global discovery has no country or city allowlist.
 Station coverage depends on contributing networks and may overlap SAAQIS.
 Concentrations preserve source units, time, network and licence attribution;
-OpenAQ measurements are not presented as an overall AQI. For the selected
+OpenAQ's own data carries no overall AQI (GEV computes one, below). For the selected
 pollutant, verified complete, unflagged hourly averages are compared with the
 [EEA hourly pollutant bands](https://airindex.eea.europa.eu/AQI/), with the result
 labelled as GEV-calculated. Unsupported pollutants or units and incomplete/flagged
@@ -839,3 +839,21 @@ Original data-provider terms still apply. No downloaded observation archive is
 bundled in the repository. References: [API](https://docs.openaq.org/),
 [terms](https://docs.openaq.org/about/terms),
 [limits](https://docs.openaq.org/using-the-api/rate-limits).
+
+### US AQI computed per station
+
+The Air quality layer's default view is a US AQI that GEV computes for each
+station from the pollutants it reports: OpenAQ from each location's latest
+values (`/v3/locations/{id}/latest`, within the same request budget), SAAQIS
+and CPCB from their national snapshots. The method is the US EPA's
+[Technical Assistance Document for the Reporting of Daily Air Quality](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf):
+Table 6 breakpoints (PM2.5 as revised in 2024), truncation, Equation 1 and the
+highest sub-index, with the EPA's category names and standard colours
+(`src/layers/airQuality/usAqi.js`). Latest values stand in for the 24-hour and
+8-hour averages the table is defined on, so the result is GEV's calculation,
+not an official reading, in the US or elsewhere. A value above its pollutant's
+plausibility ceiling, and PM2.5 above the same station's PM10, is left out; a
+reading its provider leaves unrated (India's, until its units and averaging
+period are confirmed) gives no index. Each view colours, ranks and builds its
+legend on one scale (US AQI, EEA hourly bands, or AQHI); a network's own index,
+such as SAAQIS's 1–10, appears only in that station's details.

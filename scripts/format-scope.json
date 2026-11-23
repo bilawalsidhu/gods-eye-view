@@ -1265,6 +1265,7 @@
   "src/tooling/changelogFragments.test.mjs",
   "src/data/gbfsProxyRateLimit.test.mjs",
   "src/layers/airQuality/cpcb.test.mjs",
+  "src/layers/airQuality/usAqi.test.mjs",
   "server/providers/cpcb.test.mjs",
   "scripts/qa-india-air-quality.mjs",
   "src/data/routeSegment.test.mjs",

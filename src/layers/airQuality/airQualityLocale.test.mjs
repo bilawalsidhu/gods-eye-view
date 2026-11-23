@@ -11,6 +11,7 @@ import { createAirQualityLayer } from './index.js';
 import { createDefaultAirQualityProviders } from './providers.js';
 import { interpretHourly, hourlyLegend } from './interpretation.js';
 import { attachSaIndexes, SA_INDEX_BANDS } from './southAfrica.js';
+import { usAqiRange } from './usAqi.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function inLocale(locale, run) {
@@ -112,23 +113,50 @@ for (const locale of ['en', 'es', 'ru']) {
   });
 }
 
+const eeaRussian = [
+  'Хорошее',
+  'Приемлемое',
+  'Умеренное',
+  'Плохое',
+  'Очень плохое',
+  'Крайне плохое',
+];
 const russianScales = {
-  eccc: ['Низкий', 'Умеренный', 'Высокий', 'Очень высокий'],
-  openaq: [
-    'Хорошее',
-    'Приемлемое',
-    'Умеренное',
-    'Плохое',
-    'Очень плохое',
-    'Крайне плохое',
-  ],
-  saaqis: ['Хорошо', 'Умеренно', 'Вредно', 'Очень вредно', 'Опасно'],
+  eccc: {
+    view: 'aqhi',
+    labels: ['Низкий', 'Умеренный', 'Высокий', 'Очень высокий'],
+  },
+  openaq: { view: 'PM2.5', labels: eeaRussian },
+  // SAAQIS stations are rated on the EEA bands too; SAAQIS's own index keeps
+  // its own grammar in the station's details.
+  saaqis: { view: 'PM2.5', labels: eeaRussian },
+  'US AQI': {
+    provider: 'openaq',
+    view: 'aqi',
+    labels: [
+      'Хорошо',
+      'Умеренно',
+      'Вредно для чувствительных групп',
+      'Вредно',
+      'Очень вредно',
+      'Опасно',
+    ],
+  },
 };
+const saaqisRussian = [
+  'Хорошо',
+  'Умеренно',
+  'Вредно',
+  'Очень вредно',
+  'Опасно',
+];
 
-for (const [providerId, expected] of Object.entries(russianScales)) {
-  test(`ru: ${providerId} legend, summary, badges and map labels use their scale's grammar`, async () => {
+for (const [scale, { provider = scale, view, labels }] of Object.entries(
+  russianScales,
+)) {
+  test(`ru: ${scale} legend, summary, badges and map labels use their scale's grammar`, async () => {
     const definition = createDefaultAirQualityProviders().find(
-      (p) => p.id === providerId,
+      (p) => p.id === provider,
     );
     let rows = [];
     let overlays = [];
@@ -147,21 +175,21 @@ for (const [providerId, expected] of Object.entries(russianScales)) {
       },
     });
     initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
-    layer.setParams({ view: providerId === 'eccc' ? 'aqhi' : 'PM2.5' });
+    layer.setParams({ view });
     layer.enable();
     setLocale('ru');
     try {
       await layer.update();
       const controls = layer.getRowControls();
       const ranges =
-        providerId === 'openaq'
-          ? hourlyLegend('PM2.5').map((band) => band.range)
-          : definition.legend.map((band) => band.range);
+        view === 'aqi'
+          ? labels.map((_label, i) => usAqiRange(i))
+          : view === 'aqhi'
+            ? definition.legend.map((band) => band.range)
+            : hourlyLegend(view).map((band) => band.range);
       assert.deepEqual(
-        controls.legend.slice(0, expected.length).map((entry) => entry.label),
-        expected.map(
-          (label, i) => `${label}${ranges[i] ? ` ${ranges[i]}` : ''}`,
-        ),
+        controls.legend.slice(0, labels.length).map((entry) => entry.label),
+        labels.map((label, i) => `${label}${ranges[i] ? ` ${ranges[i]}` : ''}`),
       );
       assert.equal(
         t('Moderate'),
@@ -172,8 +200,8 @@ for (const [providerId, expected] of Object.entries(russianScales)) {
         t('Moderate', { context: 'fire behavior' }),
         'умеренная активность',
       );
-      if (providerId === 'eccc') return;
-      for (const [i, label] of expected.entries()) {
+      if (view === 'aqhi') return;
+      for (const [i, label] of labels.entries()) {
         const raw = {
           ...reading,
           id: 'observation',
@@ -183,45 +211,55 @@ for (const [providerId, expected] of Object.entries(russianScales)) {
           units: 'µg/m³',
           averagingMinutes: 60,
           observedMs: Date.now(),
-          value: [4, 10, 25, 60, 100, 150][i],
+          value:
+            view === 'aqi'
+              ? [5, 20, 45, 100, 200, 300][i]
+              : [4, 10, 25, 60, 100, 150][i],
         };
+        const band = SA_INDEX_BANDS[Math.min(i, SA_INDEX_BANDS.length - 1)];
         rows =
-          providerId === 'openaq'
-            ? [interpretHourly(raw)]
-            : attachSaIndexes([raw], {
-                indexType: 1,
-                data: [
-                  {
-                    stationId: raw.stationId,
-                    datetime: new Date(raw.observedMs).toISOString(),
-                    indexes: [
-                      {
-                        pollutant: raw.parameter,
-                        index: SA_INDEX_BANDS[i].max,
-                        description: SA_INDEX_BANDS[i].label,
-                      },
-                    ],
-                  },
-                ],
-              });
+          view === 'aqi'
+            ? [raw]
+            : provider === 'openaq'
+              ? [interpretHourly(raw)]
+              : attachSaIndexes([raw], {
+                  indexType: 1,
+                  data: [
+                    {
+                      stationId: raw.stationId,
+                      datetime: new Date(raw.observedMs).toISOString(),
+                      indexes: [
+                        {
+                          pollutant: raw.parameter,
+                          index: band.max,
+                          description: band.label,
+                        },
+                      ],
+                    },
+                  ],
+                }).map(interpretHourly);
         await layer.update();
         const card = layer.getRowControls();
-        assert.equal(card.summary.status, `PM2.5 · ${label}`);
+        assert.equal(
+          card.summary.status,
+          `${view === 'aqi' ? 'US AQI' : 'PM2.5'} · ${label}`,
+        );
         assert.ok(card.summary.overview[0].text.includes(label));
-        assert.equal(
-          card.list.items[0].badge,
-          providerId === 'openaq'
-            ? label
-            : `${label} · ${SA_INDEX_BANDS[i].max}/10`,
-        );
+        assert.equal(card.list.items[0].badge, label);
         assert.ok(overlays[0].title.endsWith(` · ${label}`));
-        assert.equal(
-          rows[0].assessment?.label || rows[0].rating?.label,
-          providerId === 'openaq'
-            ? hourlyLegend('PM2.5')[i].label
-            : SA_INDEX_BANDS[i].label,
-          'source categories stay English',
-        );
+        if (provider === 'saaqis')
+          assert.ok(
+            card.list.items[0].text.includes(
+              `Индекс SAAQIS ${band.max}/10 · ${saaqisRussian[SA_INDEX_BANDS.indexOf(band)]}`,
+            ),
+            card.list.items[0].text,
+          );
+        if (view !== 'aqi')
+          assert.equal(
+            rows[0].assessment.label,
+            hourlyLegend('PM2.5')[i].label,
+            'source categories stay English',
+          );
       }
     } finally {
       layer.destroy();

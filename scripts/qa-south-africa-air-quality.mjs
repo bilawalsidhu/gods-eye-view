@@ -197,10 +197,11 @@ try {
   assert.equal(result.records[0].units, 'µg/m³');
   assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
-  // SAAQIS's index bands (6) beside OpenAQ's EEA bands and "Not rated" (7):
-  // the PM2.5 view draws both networks together.
-  assert.equal(result.controls.legend.length, 13);
-  assert.equal(result.controls.list.items[0].badge, 'Moderate · 4/10');
+  // One scale for every network: the EEA PM2.5 bands and "Not rated" (7).
+  // 12 µg/m³ is "Fair"; SAAQIS's own index (4/10) stays in the details.
+  assert.equal(result.controls.legend.length, 7);
+  assert.equal(result.controls.list.items[0].badge, 'Fair');
+  assert.match(result.controls.list.items[0].text, /SAAQIS index 4\/10/);
   assert.ok(
     result.controls.summary.lines.some((row) =>
       row.text.includes('2 catalog stations'),
@@ -235,11 +236,11 @@ try {
     () =>
       document.querySelector(
         '[data-card-id="air-quality"] .data-row-list-badge',
-      )?.textContent === 'Moderate · 4/10',
+      )?.textContent === 'Fair',
   );
   assert.equal(
     await page.$eval('.data-row-list-badge', (el) => el.textContent),
-    'Moderate · 4/10',
+    'Fair',
   );
   await no2.click();
 

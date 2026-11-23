@@ -10098,8 +10098,9 @@ when their footprints touch or contain one another, never across a seam toleranc
 Weather → Air quality draws every observation provider together, de-duplicated,
 for one view: the US AQI (default), Canada's AQHI, or one pollutant. South Africa
 discovers the national SAAQIS catalog with no municipal allowlist. Invalid calendar dates and hour 24 are rejected before
-readings or provider indexes can use them. Observations retain original units and channel timestamps,
-with neutral markers rather than inferred AQI bands. No reporting station in the
+readings or provider indexes can use them. Observations retain original units and channel timestamps;
+each view rates them on its own scale (below), and SAAQIS's own index stays in a
+station's details. No reporting station in the
 view is displayed as a coverage gap. See [the source audit and adapter contract](SOUTH-AFRICA-AIR-QUALITY.md).
 The deterministic real-app gate is `scripts/qa-south-africa-air-quality.mjs`;
 `--live` performs a separate national/Western Cape coverage audit.
@@ -10114,7 +10115,7 @@ map focus and continuing through the visible bounds (including dateline crossing
 Loading and partial discovery are distinct from completed searches with no recent
 observations. The shared Weather card supplies provider/pollutant selection. The OpenAQ
 fixture gate is `scripts/qa-openaq.mjs`; live coverage requires the operator's key.
-SAAQIS retains its source-reported index and ECCC retains AQHI semantics.
+SAAQIS's source-reported index is kept in station details and ECCC retains AQHI semantics.
 OpenAQ navigation reuses stable catalog regions and recent station observations.
 Each pass fetches at most one new catalog page and four nearby station hours;
 nearby enrichment waits eight seconds and yields capacity to new regions.
@@ -10139,8 +10140,18 @@ the method, observation age and provenance. Hourly acquisition replaces the late
 request within the existing per-view request budget; caches are pollutant-scoped.
 The summary excludes stations beyond the globe's horizon, and failed/stale
 refreshes suppress activity guidance instead of reassuring from cached readings.
-Provider definitions carry a `bandContext` for scale-specific translations: AQHI
-health risk, EEA hourly quality and SAAQIS categories are translated independently
+Each view has one scale for colour, ranking and legend. The default US AQI view
+computes an index per station (`src/layers/airQuality/usAqi.js`): every
+observation provider is asked with `mode: 'aqi'` (OpenAQ from each location's
+`/latest`, within the same budget, cache and cancellation; SAAQIS and CPCB from
+their national snapshots), a station's plausible values get a sub-index each on
+the EPA breakpoints (Technical Assistance Document, Table 6, PM2.5 as revised in
+2024) and the highest one sets its index, category and colour; India's unrated
+readings give none. A pollutant view rates every network's concentration on the
+EEA hourly bands, so a SAAQIS station is coloured, ranked and listed like any
+other and its own 1–10 index appears in its details only.
+Scale-specific translations: AQHI
+health risk, EEA hourly quality, US AQI and SAAQIS categories are translated independently
 across legends, summaries, station badges and map labels. Source category values
 remain English data; Russian risk, quality and SAAQIS wording retain their own
 grammatical forms.

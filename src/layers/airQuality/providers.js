@@ -1,8 +1,8 @@
 import { msg } from '../../i18n/marker.js';
 import { createEcccAirQualitySource } from './source.js';
 import { AIR_QUALITY_PROVIDERS, AIR_QUALITY_BANDS } from './model.js';
-import { SA_POLLUTANTS, SA_INDEX_BANDS } from './southAfrica.js';
-import { hourlyLegend, interpretHourly } from './interpretation.js';
+import { SA_POLLUTANTS } from './southAfrica.js';
+import { interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { CPCB_POLLUTANTS } from './cpcb.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
@@ -27,7 +27,13 @@ export const ECCC_DEFINITION = Object.freeze({
   refreshMs: 1_200_000,
 });
 
-/** Fixed-route snapshot adapter; caller supplies the acquisition endpoint. */
+/**
+ * Fixed-route snapshot adapter; caller supplies the acquisition endpoint.
+ *
+ * `getSnapshot` answers one pollutant (`parameter`), interpreted on the EEA
+ * hourly bands when `hourly`, or with `mode: 'aqi'` every pollutant the
+ * snapshot holds: the layer folds them into one reading per station.
+ */
 export function createAirQualitySnapshotSource({
   endpoint,
   hourly = false,
@@ -37,7 +43,8 @@ export function createAirQualitySnapshotSource({
   let coverage = null;
   return {
     getCoverage: () => coverage,
-    async getSnapshot({ parameter = 'PM2.5', signal, view } = {}) {
+    async getSnapshot({ parameter = 'PM2.5', mode, signal, view } = {}) {
+      const allPollutants = mode === 'aqi';
       signal?.throwIfAborted();
       const requestSignal = AbortSignal.any([
         AbortSignal.timeout(50_000),
@@ -45,7 +52,7 @@ export function createAirQualitySnapshotSource({
       ]);
       const response = await fetchImpl(
         view
-          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
+          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${allPollutants ? '&mode=aqi' : hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
           : endpoint,
         { signal: requestSignal },
       );
@@ -97,12 +104,12 @@ export function createAirQualitySnapshotSource({
       const readings = payload.readings
         .filter(
           (row) =>
-            row.parameter === parameter &&
+            (allPollutants || row.parameter === parameter) &&
             Number.isFinite(row.observedMs) &&
             row.observedMs <= now() + 300_000 &&
             now() - row.observedMs <= 6 * 3600_000,
         )
-        .map((row) => (hourly ? interpretHourly(row) : row))
+        .map((row) => (hourly && !allPollutants ? interpretHourly(row) : row))
         .sort(
           (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
         );
@@ -128,24 +135,16 @@ export function createDefaultAirQualityProviders({
       direct: true,
       parameters: SA_POLLUTANTS,
       averagingLabel: msg('Hourly average'),
+      // SAAQIS's own index (1–10) is shown in a station's details only; the
+      // views rate its concentrations on their own scale.
       indexLabel: msg('SAAQIS index'),
       bandContext: 'SAAQIS category',
       coverageNote: msg(
         'Station observations across all nine provinces. Municipalities without monitors have no measured coverage.',
       ),
-      interpretation: msg(
-        'Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.',
-      ),
-      legend: [
-        ...SA_INDEX_BANDS.map((b, i) => ({
-          color: b.color,
-          label: b.label,
-          range: `${i ? SA_INDEX_BANDS[i - 1].max + 1 : 1}–${b.max}`,
-        })),
-        { color: '#8cb4ce', label: msg('Index unavailable') },
-      ],
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
+        hourly: true,
         fetchImpl,
         now,
       }),
@@ -167,7 +166,6 @@ export function createDefaultAirQualityProviders({
       // Unrated until both the units and the averaging period are confirmed
       // (CPCB_UNITS_VERIFIED, CPCB_AVERAGING_MINUTES).
       interpretation: msg('Reported pollutant average · not an overall AQI'),
-      legend: [{ color: '#8cb4ce', label: msg('Not rated') }],
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/india',
         hourly: true,
@@ -188,16 +186,10 @@ export function createDefaultAirQualityProviders({
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
       averagingLabel: msg('Hourly average'),
-      getLegend: hourlyLegend,
-      bandContext: 'EEA hourly quality',
       indexLabel: msg('Index unavailable'),
       coverageNote: msg(
         'Available monitoring stations worldwide. Unmonitored areas have no measured coverage.',
       ),
-      interpretation: msg(
-        'GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.',
-      ),
-      legend: [{ color: '#8cb4ce', label: msg('Index unavailable') }],
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/openaq',
         hourly: true,
@@ -257,7 +249,7 @@ export function createAirQualitySource(options = {}) {
       if (!entry) throw new Error(msg('Unknown air quality provider'));
       const ticket = (generations.get(provider) || 0) + 1;
       generations.set(provider, ticket);
-      const cacheKey = `${provider}:${request.parameter || ''}:${request.view?.join(',') || ''}`;
+      const cacheKey = `${provider}:${request.mode || request.parameter || ''}:${request.view?.join(',') || ''}`;
       const previous = cache.get(cacheKey);
       if (previous && clock() - previous.at < (entry.refreshMs || 0)) {
         coverage = previous.coverage;

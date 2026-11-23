@@ -49,14 +49,52 @@ test('a rated copy beats an unrated direct reading, and then the newer one loses
   assert.deepEqual(merge({ ...rated, ...older }, rated), ['cpcb']);
 });
 
-test('rated means a category or a provider index, never a reading marked rated: false', () => {
+test("rated means a category on the view's scale, never a reading marked rated: false", () => {
   assert.equal(isRatedReading({ assessment: { label: 'Good' } }), true);
-  assert.equal(isRatedReading({ rating: { label: 'Good', score: 2 } }), true);
+  assert.equal(isRatedReading({ assessment: { label: 'Good' } }, 'NO2'), true);
+  // A network's own index alone is not the view's scale.
+  assert.equal(isRatedReading({ rating: { label: 'Good', score: 2 } }), false);
   assert.equal(isRatedReading({ assessment: { reason: 'No usable' } }), false);
   assert.equal(isRatedReading({ rating: null }), false);
   assert.equal(
     isRatedReading({ rated: false, assessment: { label: 'Good' } }),
     false,
+  );
+  // The AQI view rates on the computed US AQI only.
+  const aqi = { aqi: { index: 57, leading: 'pm25' } };
+  assert.equal(isRatedReading(aqi, 'aqi'), true);
+  assert.equal(isRatedReading({ aqi: null }, 'aqi'), false);
+  assert.equal(isRatedReading({ assessment: { label: 'Good' } }, 'aqi'), false);
+  assert.equal(isRatedReading({ ...aqi, rated: false }, 'aqi'), false);
+  assert.equal(isRatedReading(aqi, 'PM2.5'), false);
+});
+
+test('the merge ranks on the view it is given', () => {
+  const at = (provider, extra) => ({
+    id: `${provider}:1`,
+    lat: 10,
+    lon: 10,
+    observedMs: 1000,
+    ...extra,
+  });
+  const kept = mergeObservations(
+    [
+      {
+        provider: 'saaqis',
+        direct: true,
+        readings: [at('saaqis', { aqi: null })],
+      },
+      {
+        provider: 'openaq',
+        direct: false,
+        readings: [at('openaq', { aqi: { index: 40, leading: 'pm25' } })],
+      },
+    ],
+    { view: 'aqi' },
+  );
+  assert.deepEqual(
+    kept.map((reading) => reading.id),
+    ['openaq:1'],
   );
 });
 

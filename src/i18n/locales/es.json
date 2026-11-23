@@ -4560,7 +4560,6 @@
   "Hourly average": "Promedio horario",
   "SAAQIS index": "Índice SAAQIS",
   "Provisional data": "Datos provisionales",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "Los colores muestran el índice SAAQIS del proveedor (1–10), no el cumplimiento de las directrices de la OMS. Gris indica que no hay un índice coincidente.",
   "Coverage is loading progressively within the provider request budget.": "La cobertura se carga progresivamente dentro del límite de solicitudes del proveedor.",
   "Cached observations; provider refresh failed.": "Observaciones en caché; falló la actualización del proveedor.",
   "Observations in view": "Observaciones en la vista",
@@ -4622,5 +4621,14 @@
   "SAAQIS category|Unhealthy": "Insalubre",
   "SAAQIS category|Very Unhealthy": "Muy insalubre",
   "SAAQIS category|Hazardous": "Peligrosa",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEV calcula un US AQI para cada estación a partir de sus últimos valores: el subíndice más alto entre sus contaminantes según los puntos de corte de la EPA. No es una lectura oficial.",
+  "Calculated US AQI · main pollutant {pollutant}": "US AQI calculado · contaminante principal {pollutant}",
+  "US AQI category|Good": "Buena",
+  "US AQI category|Moderate": "Moderada",
+  "US AQI category|Unhealthy for Sensitive Groups": "Insalubre para grupos sensibles",
+  "US AQI category|Sensitive groups": "Grupos sensibles",
+  "US AQI category|Unhealthy": "Insalubre",
+  "US AQI category|Very Unhealthy": "Muy insalubre",
+  "US AQI category|Hazardous": "Peligrosa",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Las unidades o el periodo de promedio de esta red no están confirmados; no se asigna ninguna categoría de salud."
 }

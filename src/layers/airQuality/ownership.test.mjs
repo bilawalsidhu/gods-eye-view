@@ -493,16 +493,20 @@ test('every observation provider is asked in parallel and drawn as one de-duplic
   );
   settle();
   assert.equal(await pending, true);
+  // The AQI view draws one reading per station.
   assert.deepEqual([...drawn('points').items.keys()].sort(), [
-    'air-quality:openaq:paris',
-    'air-quality:regional:durban',
-    'air-quality:saaqis:cape-town',
+    'air-quality:openaq:paris:aqi',
+    'air-quality:regional:durban:aqi',
+    'air-quality:saaqis:cape-town:aqi',
   ]);
   assert.equal(layer.getStats().count, 3);
-  // Until the US AQI is computed, the AQI view draws every station unrated.
+  // PM2.5 12 µg/m³ is a US AQI of 56, Moderate, on its own scale.
   assert.ok(
     [...drawn('points').items.values()].every(
-      (point) => point.color === '#8cb4ce' && !point.meta.assessment,
+      (point) =>
+        point.color === '#ffff00' &&
+        point.meta.aqi.index === 56 &&
+        !point.meta.assessment,
     ),
   );
 });
@@ -528,7 +532,7 @@ test('a provider without its key, or failing, does not blank the others', async 
   assert.equal(states.saaqis.status, 'ok');
   assert.equal(states.saaqis.count, 1);
   assert.equal(states.regional.status, 'failed');
-  assert.match(layer.getRowControls().summary.status, /1 station reporting/);
+  assert.equal(layer.getRowControls().summary.status, 'US AQI · Moderate');
 });
 
 test('when every provider fails the layer reports the error', async () => {

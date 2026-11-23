@@ -4600,7 +4600,6 @@
   "South Africa": "África do Sul",
   "SAAQIS index": "Índice SAAQIS",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Observações de estações nas nove províncias. Municípios sem estações não têm cobertura medida.",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "As cores mostram o índice SAAQIS (1–10) informado pelo provedor, não o cumprimento das diretrizes da OMS. Cinza indica ausência de índice correspondente.",
   "Worldwide · OpenAQ": "Mundo · OpenAQ",
   "Air quality · Worldwide": "Qualidade do ar · Mundo",
   "Worldwide · available OpenAQ stations": "Mundo · estações OpenAQ disponíveis",
@@ -4622,5 +4621,14 @@
   "SAAQIS category|Unhealthy": "Insalubre",
   "SAAQIS category|Very Unhealthy": "Muito insalubre",
   "SAAQIS category|Hazardous": "Perigosa",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "O GEV calcula um US AQI para cada estação a partir dos seus valores mais recentes: o subíndice mais alto entre os seus poluentes segundo os limites da EPA. Não é uma leitura oficial.",
+  "Calculated US AQI · main pollutant {pollutant}": "US AQI calculado · poluente principal {pollutant}",
+  "US AQI category|Good": "Boa",
+  "US AQI category|Moderate": "Moderada",
+  "US AQI category|Unhealthy for Sensitive Groups": "Insalubre para grupos sensíveis",
+  "US AQI category|Sensitive groups": "Grupos sensíveis",
+  "US AQI category|Unhealthy": "Insalubre",
+  "US AQI category|Very Unhealthy": "Muito insalubre",
+  "US AQI category|Hazardous": "Perigosa",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "As unidades ou o período de média desta rede não estão confirmados; nenhuma categoria de saúde é atribuída."
 }

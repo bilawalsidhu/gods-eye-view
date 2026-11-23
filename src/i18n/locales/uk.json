@@ -4706,7 +4706,6 @@
   "South Africa": "Південна Африка",
   "SAAQIS index": "Індекс SAAQIS",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Спостереження станцій у всіх дев’яти провінціях. Муніципалітети без станцій не мають виміряного покриття.",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "Кольори показують індекс SAAQIS (1–10), наданий постачальником, а не відповідність рекомендаціям ВООЗ. Сірий означає відсутність відповідного індексу.",
   "Worldwide · OpenAQ": "Увесь світ · OpenAQ",
   "Air quality · Worldwide": "Якість повітря · Увесь світ",
   "Worldwide · available OpenAQ stations": "Увесь світ · доступні станції OpenAQ",
@@ -4728,5 +4727,14 @@
   "SAAQIS category|Unhealthy": "Шкідлива для здоров’я",
   "SAAQIS category|Very Unhealthy": "Дуже шкідлива для здоров’я",
   "SAAQIS category|Hazardous": "Небезпечна",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEV обчислює US AQI для кожної станції за її останніми значеннями: найбільший підіндекс серед забруднювачів за пороговими значеннями EPA. Це не офіційне показання.",
+  "Calculated US AQI · main pollutant {pollutant}": "Обчислений US AQI · основний забруднювач {pollutant}",
+  "US AQI category|Good": "Добре",
+  "US AQI category|Moderate": "Помірно",
+  "US AQI category|Unhealthy for Sensitive Groups": "Шкідливо для чутливих груп",
+  "US AQI category|Sensitive groups": "Чутливі групи",
+  "US AQI category|Unhealthy": "Шкідливо",
+  "US AQI category|Very Unhealthy": "Дуже шкідливо",
+  "US AQI category|Hazardous": "Небезпечно",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Одиниці вимірювання або період усереднення цієї мережі не підтверджено; категорію впливу на здоров’я не призначено."
 }

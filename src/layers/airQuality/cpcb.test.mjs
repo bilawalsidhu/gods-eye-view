@@ -244,8 +244,9 @@ test('India readings are drawn as one more observation provider', async () => {
   assert.ok(requests.some((url) => url.startsWith('/api/air-quality/openaq?')));
   const drawn = () =>
     [...points().items.values()].map((point) => point.meta.provider);
-  // The AQI view rates nobody yet: both unrated, the direct network wins.
-  assert.deepEqual(drawn(), ['cpcb']);
+  // India is unrated and OpenAQ's copy has a computed US AQI: the rated
+  // copy wins, in the AQI view as in a pollutant view.
+  assert.deepEqual(drawn(), ['openaq']);
   const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
   assert.equal(india.status, 'ok');
   assert.equal(india.requiresKeyId, 'data-gov-in');

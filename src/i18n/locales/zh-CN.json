@@ -4387,7 +4387,6 @@
   "South Africa": "南非",
   "SAAQIS index": "SAAQIS 指数",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "涵盖所有九个省的监测站观测数据。没有监测站的市镇没有实测覆盖。",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "颜色表示数据提供方上报的 SAAQIS 指数（1–10），不代表符合世卫组织指南。灰色表示没有匹配的指数。",
   "Worldwide · OpenAQ": "全球 · OpenAQ",
   "Air quality · Worldwide": "空气质量 · 全球",
   "Worldwide · available OpenAQ stations": "全球 · 可用的 OpenAQ 监测站",
@@ -4410,5 +4409,14 @@
   "SAAQIS category|Unhealthy": "不健康",
   "SAAQIS category|Very Unhealthy": "非常不健康",
   "SAAQIS category|Hazardous": "危险",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEV 根据每个监测站的最新数值计算 US AQI：按 EPA 断点取各污染物分指数中的最高值。这不是官方读数。",
+  "Calculated US AQI · main pollutant {pollutant}": "计算得出的 US AQI · 首要污染物 {pollutant}",
+  "US AQI category|Good": "良好",
+  "US AQI category|Moderate": "中等",
+  "US AQI category|Unhealthy for Sensitive Groups": "对敏感人群不健康",
+  "US AQI category|Sensitive groups": "敏感人群",
+  "US AQI category|Unhealthy": "不健康",
+  "US AQI category|Very Unhealthy": "非常不健康",
+  "US AQI category|Hazardous": "危险",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "该监测网络的单位或平均时段尚未确认，因此不分配健康类别。"
 }

@@ -4666,7 +4666,6 @@
   "Hourly average": "Среднее за час",
   "SAAQIS index": "Индекс SAAQIS",
   "Provisional data": "Предварительные данные",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "Цвета показывают индекс SAAQIS поставщика (1–10), а не соответствие рекомендациям ВОЗ. Серый означает отсутствие соответствующего индекса.",
   "Coverage is loading progressively within the provider request budget.": "Покрытие загружается постепенно в пределах лимита запросов поставщика.",
   "Cached observations; provider refresh failed.": "Кэшированные наблюдения; обновление поставщика не удалось.",
   "Observations in view": "Наблюдения в области карты",
@@ -4728,5 +4727,14 @@
   "SAAQIS category|Unhealthy": "Вредно",
   "SAAQIS category|Very Unhealthy": "Очень вредно",
   "SAAQIS category|Hazardous": "Опасно",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEV вычисляет US AQI для каждой станции по её последним значениям: наибольший подындекс среди загрязнителей по пороговым значениям EPA. Это не официальное показание.",
+  "Calculated US AQI · main pollutant {pollutant}": "Вычисленный US AQI · основной загрязнитель {pollutant}",
+  "US AQI category|Good": "Хорошо",
+  "US AQI category|Moderate": "Умеренно",
+  "US AQI category|Unhealthy for Sensitive Groups": "Вредно для чувствительных групп",
+  "US AQI category|Sensitive groups": "Чувствительные группы",
+  "US AQI category|Unhealthy": "Вредно",
+  "US AQI category|Very Unhealthy": "Очень вредно",
+  "US AQI category|Hazardous": "Опасно",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Единицы измерения или период усреднения этой сети не подтверждены; категория воздействия на здоровье не присваивается."
 }

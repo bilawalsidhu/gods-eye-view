@@ -4494,7 +4494,6 @@
   "South Africa": "Südafrika",
   "SAAQIS index": "SAAQIS-Index",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "Stationsbeobachtungen aus allen neun Provinzen. Gemeinden ohne Messstationen haben keine gemessene Abdeckung.",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "Die Farben zeigen den vom Anbieter gemeldeten SAAQIS-Index (1–10), nicht die Einhaltung der WHO-Richtwerte. Grau bedeutet, dass kein passender Index vorliegt.",
   "Worldwide · OpenAQ": "Weltweit · OpenAQ",
   "Air quality · Worldwide": "Luftqualität · Weltweit",
   "Worldwide · available OpenAQ stations": "Weltweit · verfügbare OpenAQ-Stationen",
@@ -4516,5 +4515,14 @@
   "SAAQIS category|Unhealthy": "Gesundheitsschädlich",
   "SAAQIS category|Very Unhealthy": "Sehr gesundheitsschädlich",
   "SAAQIS category|Hazardous": "Gefährlich",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEV berechnet für jede Station einen US AQI aus ihren neuesten Werten: den höchsten Teilindex ihrer Schadstoffe nach den Grenzwerten der EPA. Dies ist kein amtlicher Messwert.",
+  "Calculated US AQI · main pollutant {pollutant}": "Berechneter US AQI · Hauptschadstoff {pollutant}",
+  "US AQI category|Good": "Gut",
+  "US AQI category|Moderate": "Mäßig",
+  "US AQI category|Unhealthy for Sensitive Groups": "Ungesund für empfindliche Gruppen",
+  "US AQI category|Sensitive groups": "Empfindliche Gruppen",
+  "US AQI category|Unhealthy": "Ungesund",
+  "US AQI category|Very Unhealthy": "Sehr ungesund",
+  "US AQI category|Hazardous": "Gefährlich",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Die Einheiten oder der Mittelungszeitraum dieses Messnetzes sind nicht bestätigt; es wird keine Gesundheitskategorie zugewiesen."
 }

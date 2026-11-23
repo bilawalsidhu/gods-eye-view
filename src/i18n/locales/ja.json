@@ -4388,7 +4388,6 @@
   "South Africa": "南アフリカ",
   "SAAQIS index": "SAAQIS指数",
   "Station observations across all nine provinces. Municipalities without monitors have no measured coverage.": "全9州の観測所データ。観測所のない自治体には実測データがありません。",
-  "Colours show the provider-reported SAAQIS index (1–10), not WHO guideline compliance. Grey means no matching index.": "色は提供元が報告したSAAQIS指数（1～10）を示し、WHOガイドラインへの適合を示すものではありません。灰色は対応する指数がないことを示します。",
   "Worldwide · OpenAQ": "世界 · OpenAQ",
   "Air quality · Worldwide": "大気質 · 世界",
   "Worldwide · available OpenAQ stations": "世界 · 利用可能なOpenAQ観測所",
@@ -4410,5 +4409,14 @@
   "SAAQIS category|Unhealthy": "健康に悪影響",
   "SAAQIS category|Very Unhealthy": "健康に非常に悪影響",
   "SAAQIS category|Hazardous": "危険",
+  "GEV computes a US AQI for each station from its latest values: the highest pollutant sub-index on the EPA breakpoints. This is not an official reading.": "GEVは各観測所の最新値からUS AQIを算出します。EPAの区切り値による汚染物質の副指数のうち最も高いものです。公式の値ではありません。",
+  "Calculated US AQI · main pollutant {pollutant}": "算出したUS AQI · 主な汚染物質 {pollutant}",
+  "US AQI category|Good": "良い",
+  "US AQI category|Moderate": "普通",
+  "US AQI category|Unhealthy for Sensitive Groups": "敏感なグループには不健康",
+  "US AQI category|Sensitive groups": "敏感なグループ",
+  "US AQI category|Unhealthy": "不健康",
+  "US AQI category|Very Unhealthy": "非常に不健康",
+  "US AQI category|Hazardous": "危険",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "このネットワークの単位または平均化期間は確認されていないため、健康区分は割り当てられません。"
 }

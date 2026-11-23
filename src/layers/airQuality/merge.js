@@ -7,9 +7,9 @@
  * once as the aggregator's copy, with coordinates rounded a little
  * differently. Two readings from different providers closer than `dedupeM`
  * are one site. The reading kept is, in order: a rated one over an unrated one
- * (`isRatedReading`), then the direct provider's over the aggregator's, then
- * the newer observation. A provider's own neighbouring stations are never
- * merged with each other.
+ * on the view's scale (`isRatedReading`), then the direct provider's over the
+ * aggregator's, then the newer observation. A provider's own neighbouring
+ * stations are never merged with each other.
  */
 
 /** Grid cell edge in degrees: about 2.2 km, well above any dedupe distance. */
@@ -32,14 +32,17 @@ function metres(a, b) {
 }
 
 /**
- * Whether a reading carries a rating on the view's scale: a category from the
- * layer's interpretation (`assessment.label`) or a provider index (`rating`).
- * A reading its provider marks `rated: false` is never rated. The one
- * definition of "rated" for the merge and the card.
+ * Whether a reading is rated on the scale of `view`: in the US AQI view
+ * (`'aqi'`) a computed index (`aqi.index`), in any other view a category
+ * from the layer's interpretation (`assessment.label`). A network's own
+ * index (`rating`) alone does not count, and a reading its provider marks
+ * `rated: false` is never rated. The one definition of "rated" for the merge
+ * and the card.
  */
-export function isRatedReading(reading) {
+export function isRatedReading(reading, view) {
   if (reading?.rated === false) return false;
-  return Boolean(reading?.assessment?.label || reading?.rating);
+  if (view === 'aqi') return Number.isFinite(reading?.aqi?.index);
+  return Boolean(reading?.assessment?.label);
 }
 
 const placed = (reading) =>
@@ -50,10 +53,11 @@ const placed = (reading) =>
 
 /**
  * @param {Array<{provider: string, direct: boolean, readings: object[]}>} lists
- * @param {{dedupeM?: number}} [options]
+ * @param {{dedupeM?: number, view?: string}} [options] `view` is the scale
+ *   readings are rated on (`isRatedReading`).
  * @returns {object[]} The kept readings, in input order.
  */
-export function mergeObservations(lists, { dedupeM = 150 } = {}) {
+export function mergeObservations(lists, { dedupeM = 150, view } = {}) {
   const candidates = [];
   for (const list of Array.isArray(lists) ? lists : []) {
     if (!Array.isArray(list?.readings)) continue;
@@ -62,7 +66,7 @@ export function mergeObservations(lists, { dedupeM = 150 } = {}) {
         reading,
         provider: list.provider,
         direct: list.direct === true,
-        rated: isRatedReading(reading),
+        rated: isRatedReading(reading, view),
         at: observedAt(reading),
         order: candidates.length,
       });

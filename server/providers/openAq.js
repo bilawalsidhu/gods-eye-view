@@ -6,6 +6,10 @@ import {
   normalizeOpenAqHours,
   OPENAQ_PARAMETER_NAMES,
 } from '../../src/layers/airQuality/openAq.js';
+import {
+  AQI_POLLUTANTS,
+  aqiStations,
+} from '../../src/layers/airQuality/usAqi.js';
 
 // Geographic scope is configuration, not a station/city allowlist. UN M49 Africa
 // countries/areas, including Indian/Atlantic Ocean islands and territories.
@@ -23,6 +27,12 @@ const ROOT = 'https://api.openaq.org/v3/';
 const HOUR = 3600_000;
 const error = (status, message) =>
   Object.assign(new Error(message), { status });
+/**
+ * One view's cache identity: the camera rectangle and what it asks, one
+ * pollutant's hourly means or (`mode: 'aqi'`) every pollutant's latest value.
+ */
+const viewId = (view, parameter, mode) =>
+  `${view.join(',')}|${parameter || mode || ''}`;
 
 /** Strict numeric viewport, including an optional antimeridian crossing. */
 export function parseOpenAqView(value) {
@@ -163,8 +173,8 @@ export function createOpenAqAcquisition({
   const views = new Map(),
     viewCache = new Map(),
     viewPending = new Map();
-  async function acquireView(get, view, parameter, signal) {
-    const id = `${view.join(',')}|${parameter || ''}`;
+  async function acquireView(get, view, parameter, mode, signal) {
+    const id = viewId(view, parameter, mode);
     let state = views.get(id);
     if (!state || now() - state.at > HOUR) state = createViewState(view, now());
     views.delete(id);
@@ -247,7 +257,10 @@ export function createOpenAqAcquisition({
       (s) =>
         (!s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR) &&
         (!parameter ||
-          s.sensors.some((sensor) => sensor.parameter === parameter)),
+          s.sensors.some((sensor) => sensor.parameter === parameter)) &&
+        // The AQI view spends no request on a station it cannot rate.
+        (mode !== 'aqi' ||
+          s.sensors.some((sensor) => AQI_POLLUTANTS[sensor.parameter])),
     );
     // Overlapping pans/zooms reuse recent station checks without spending the
     // shared request budget again. Only stations discovered in this view join.
@@ -359,7 +372,8 @@ export function createOpenAqAcquisition({
       scope: 'viewport',
       view,
       stations: [...state.stations.values()],
-      readings: fresh,
+      // The AQI view answers one reading per station with all its values.
+      readings: mode === 'aqi' ? aqiStations(fresh) : fresh,
       checked: eligible.filter((s) => state.checked.has(s.stationId)).length,
       eligible: eligible.length,
       countriesReporting: new Set(fresh.map((r) => r.country)).size,
@@ -505,7 +519,7 @@ export function createOpenAqAcquisition({
       stale: failed,
     };
   }
-  async function acquire(key, view, parameter, consumerSignal) {
+  async function acquire(key, view, parameter, mode, consumerSignal) {
     const signal = AbortSignal.any([
       AbortSignal.timeout(40_000),
       ...(consumerSignal ? [consumerSignal] : []),
@@ -533,7 +547,7 @@ export function createOpenAqAcquisition({
         throw error(503, 'Malformed OpenAQ response');
       return data;
     }
-    if (view) return acquireView(get, view, parameter, signal);
+    if (view) return acquireView(get, view, parameter, mode, signal);
     if (scope.countries === null) return acquireGlobal(get);
     if (!catalog || now() - catalogAt > HOUR) {
       const countries = await get('countries?limit=1000&page=1');
@@ -623,13 +637,22 @@ export function createOpenAqAcquisition({
     };
   }
   return {
-    async getSnapshot({ view, parameter, signal } = {}) {
+    /**
+     * A viewport snapshot asks either one `parameter` (its hourly means) or,
+     * with `mode: 'aqi'`, every pollutant's latest value per station.
+     */
+    async getSnapshot({ view, parameter, mode, signal } = {}) {
       signal?.throwIfAborted();
       if (
         parameter !== undefined &&
         (!view || !Object.values(OPENAQ_PARAMETER_NAMES).includes(parameter))
       )
         throw error(400, 'Invalid pollutant');
+      if (
+        mode !== undefined &&
+        (mode !== 'aqi' || !view || parameter !== undefined)
+      )
+        throw error(400, 'Invalid air quality mode');
       if (view) view = parseOpenAqView(view.join(','));
       const key = getKey().trim();
       if (!key) throw error(428, 'OpenAQ key required');
@@ -657,7 +680,7 @@ export function createOpenAqAcquisition({
         checked.clear();
       }
       if (view) {
-        const id = `${view.join(',')}|${parameter || ''}`;
+        const id = viewId(view, parameter, mode);
         const previous = viewCache.get(id);
         if (
           previous &&
@@ -675,7 +698,13 @@ export function createOpenAqAcquisition({
               retryAt: now() + 2000,
             });
           job = { controller: new AbortController(), consumers: new Set() };
-          job.promise = acquire(key, view, parameter, job.controller.signal)
+          job.promise = acquire(
+            key,
+            view,
+            parameter,
+            mode,
+            job.controller.signal,
+          )
             .then((value) => {
               if (views.has(id)) viewCache.set(id, value);
               return value;
@@ -735,10 +764,11 @@ export function openAqProxy(options = {}) {
       if (
         url.pathname !== '/' ||
         [...url.searchParams.keys()].some(
-          (k) => !['view', 'parameter'].includes(k),
+          (k) => !['view', 'parameter', 'mode'].includes(k),
         ) ||
         url.searchParams.getAll('view').length > 1 ||
-        url.searchParams.getAll('parameter').length > 1
+        url.searchParams.getAll('parameter').length > 1 ||
+        url.searchParams.getAll('mode').length > 1
       )
         return send(400, { error: 'invalid_air_quality_query' });
       const view = url.searchParams.has('view')
@@ -749,6 +779,7 @@ export function openAqProxy(options = {}) {
         await source.getSnapshot({
           view,
           parameter: url.searchParams.get('parameter') ?? undefined,
+          mode: url.searchParams.get('mode') ?? undefined,
           signal: controller.signal,
         }),
       );
