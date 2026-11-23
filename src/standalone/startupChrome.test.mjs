@@ -163,17 +163,45 @@ test('a bare address plays the opening, and welcome waits for its end', async ()
   assert.ok(events.includes('opening:cancel'));
 });
 
-test('a shared view opens without the opening', async () => {
+const VIEW_ONLY = Object.freeze({
+  status: 'settled',
+  share: { camera: 'applied' },
+  tracking: { status: 'skipped', reason: 'no-shared-target' },
+  thing: false,
+});
+
+test('a link to only a view opens with the opening, ending at that view', async () => {
   const events = [];
   const opening = openingStub(events);
   const f = fixture({ playOpening: opening.play, hasShareState: true });
-  f.restored();
+  f.restored(VIEW_ONLY);
   f.fire(1000);
   await flush();
-  assert.equal(opening.calls.length, 0);
-  assert.deepEqual(f.events, ['hidden']);
+  assert.equal(opening.calls.length, 1);
   await f.stop();
 });
+
+for (const [name, restored] of [
+  ['a followed target', { ...VIEW_ONLY, tracking: { status: 'restored' } }],
+  ['a shared thing', { ...VIEW_ONLY, thing: true }],
+  [
+    'a camera the person moved first',
+    { ...VIEW_ONLY, share: { camera: 'superseded' } },
+  ],
+  ['a failed restore', { status: 'failed' }],
+]) {
+  test(`a link to ${name} opens without the opening`, async () => {
+    const events = [];
+    const opening = openingStub(events);
+    const f = fixture({ playOpening: opening.play, hasShareState: true });
+    f.restored(restored);
+    f.fire(1000);
+    await flush();
+    assert.equal(opening.calls.length, 0);
+    assert.deepEqual(f.events, ['hidden']);
+    await f.stop();
+  });
+}
 
 test('without an opening to play the cover hides as before', async () => {
   const f = fixture({ playOpening: () => null });

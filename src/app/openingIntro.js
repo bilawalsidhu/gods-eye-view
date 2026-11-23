@@ -95,8 +95,10 @@ export function openingStage(t, timing = OPENING) {
 
 /**
  * The camera `flight` (0–1) of the way in: from `farHeight` over the
- * equator, a turn of `spinDeg` west to east that slows to a stop over
- * `target`, closing in on `target.height`.
+ * equator, looking straight down, a turn of `spinDeg` west to east that
+ * slows to a stop over `target`, closing in on `target.height`. Over the
+ * last part it turns to `target`'s heading and pitch (radians), so a view
+ * at an angle (a shared one) is reached without a jump.
  */
 export function openingPose(
   flight,
@@ -109,10 +111,18 @@ export function openingPose(
       (Math.log(target.height) - Math.log(farHeight)) * closing,
   );
   const lon = target.lon + spinDeg * (1 - easeOutCubic(f));
+  const turning = easeInOutCubic(span(f, [0.6, 1]));
+  const heading = target.heading ?? 0;
+  // The short way round to the target's heading.
+  const headingFrom =
+    heading - 2 * Math.PI * Math.round(heading / (2 * Math.PI));
+  const pitch = target.pitch ?? -Math.PI / 2;
   return {
     lon: ((((lon + 180) % 360) + 360) % 360) - 180,
     lat: target.lat * closing,
     height,
+    heading: headingFrom * turning,
+    pitch: -Math.PI / 2 + (pitch + Math.PI / 2) * turning,
   };
 }
 
@@ -191,10 +201,11 @@ export function openingWanted(win = globalThis.window) {
 }
 
 /**
- * Play the opening over `loadingScreen`, from where the camera stands (the
- * start view). Returns null when it does not play; else `done`, which
- * settles when the camera has stopped, and `cancel()`. A click, a key or the
- * wheel skips to the start view; any other camera move stops it where it is. The loading
+ * Play the opening over `loadingScreen`, ending where the camera stands (the
+ * start view, or the view a link opened). Returns null when it does not
+ * play, as for a camera held in a target's frame; else `done`, which settles
+ * when the camera has stopped, and `cancel()`. A click, a key or the wheel
+ * skips to the end; any other camera move stops it where it is. The loading
  * screen is `hidden` once the real globe shows, or at once on a cancel.
  * @param {{viewer: object, loadingScreen: HTMLElement, win?: Window,
  *   camera?: object}} options `camera` is the viewer's camera port unless given.
@@ -213,6 +224,7 @@ export function playOpeningIntro({
   }
   const target = camera.pose();
   if (
+    target?.frameIsIdentity === false ||
     !Number.isFinite(target?.height) ||
     !Number.isFinite(target.lon) ||
     !Number.isFinite(target.lat)
@@ -273,11 +285,11 @@ export function playOpeningIntro({
     : 1;
 
   let driving = false;
-  const place = (pose, heading = 0, pitch = -Math.PI / 2) => {
+  const place = ({ lon, lat, height, heading, pitch }) => {
     driving = true;
     try {
       camera.setView({
-        destination: pose,
+        destination: { lon, lat, height },
         orientation: { heading, pitch, roll: 0 },
       });
     } finally {
@@ -310,11 +322,13 @@ export function playOpeningIntro({
     for (const type of inputs)
       win.removeEventListener(type, onInput, { capture: true });
     if (land)
-      place(
-        { lon: target.lon, lat: target.lat, height: target.height },
-        target.heading ?? 0,
-        target.pitch ?? -Math.PI / 2,
-      );
+      place({
+        lon: target.lon,
+        lat: target.lat,
+        height: target.height,
+        heading: target.heading ?? 0,
+        pitch: target.pitch ?? -Math.PI / 2,
+      });
     hide();
     resolveDone();
   }

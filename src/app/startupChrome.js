@@ -32,12 +32,14 @@ export function startApplicationChrome({
     .catch(() => {
       /* Restoration reports its own outcome through the controls. */
     })
-    .then(() => {
+    .then(([restored] = []) => {
       if (disposed || signal.aborted) return;
-      // A bare address opens with the opening; welcome waits for its end.
-      opening = styleManager.hasShareState
-        ? null
-        : playOpening?.({ viewer: styleManager.viewer, loadingScreen });
+      // A bare address, or a share of only a view, opens with the opening
+      // (it ends where the camera stands); welcome waits for its end.
+      opening =
+        !styleManager.hasShareState || sharesOnlyAView(restored)
+          ? playOpening?.({ viewer: styleManager.viewer, loadingScreen })
+          : null;
       if (opening) {
         void opening.done.then(revealFirstRun);
         return;
@@ -65,4 +67,18 @@ export function startApplicationChrome({
     firstRun?.destroy();
     (await keySetup.catch(() => null))?.destroy();
   };
+}
+
+/**
+ * Whether a start-up share restore left only a view: the camera landed where
+ * the link points and nothing is followed or selected for it.
+ */
+function sharesOnlyAView(restored) {
+  return (
+    restored?.status === 'settled' &&
+    restored.share?.camera === 'applied' &&
+    restored.tracking?.status === 'skipped' &&
+    restored.tracking.reason === 'no-shared-target' &&
+    !restored.thing
+  );
 }

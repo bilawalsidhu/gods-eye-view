@@ -85,6 +85,25 @@ test('the flight turns west to east, slows and stops over the target', () => {
   }
 });
 
+test('a view at an angle is reached by turning over the last part', () => {
+  const angled = {
+    lon: 2.35,
+    lat: 48.86,
+    height: 5000,
+    heading: 5.5,
+    pitch: -0.5,
+  };
+  const far = 4e8;
+  const early = openingPose(0.5, { target: angled, farHeight: far });
+  assert.ok(Math.abs(early.heading) < 1e-12);
+  assert.equal(early.pitch, -Math.PI / 2, 'straight down while far out');
+  const end = openingPose(1, { target: angled, farHeight: far });
+  // 5.5 rad turns the short way round: -0.78 rad.
+  assert.ok(Math.abs(end.heading - (5.5 - 2 * Math.PI)) < 1e-9);
+  assert.ok(Math.abs(end.pitch - angled.pitch) < 1e-9);
+  assert.ok(Math.abs(end.height - angled.height) < 1e-6);
+});
+
 test('the far start draws the globe the size of the pupil', () => {
   for (const radius of [12, 20, 64]) {
     const height = heightForGlobeRadius(radius, LENS);
@@ -187,9 +206,17 @@ test('the opening runs to the start view, then hides the cover', async () => {
   await opening.done;
   const last = s.views.at(-1);
   assert.deepEqual(last.destination, LANDED);
+  assert.equal(last.orientation.heading, TARGET.heading);
   assert.equal(last.orientation.pitch, TARGET.pitch);
   assert.equal(openingPlaying(), false);
   assert.equal(s.commandListeners.size, 0);
+});
+
+test('a camera held in a target frame plays no opening', () => {
+  const s = stage();
+  s.camera.pose = () => ({ ...TARGET, frameIsIdentity: false });
+  assert.equal(s.play(), null);
+  assert.ok(!s.screen.classList.contains('opening'));
 });
 
 test("the person's input skips to the start view", async () => {
