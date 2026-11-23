@@ -2,6 +2,7 @@
  * EEA revised hourly bands: https://airindex.eea.europa.eu/AQI/
  * Upper bounds are inclusive; decimal values are not rounded into a lower band.
  */
+import { concentrationFactor } from './units.js';
 const msg = (text) => text;
 export const EEA_HOURLY_LIMITS = Object.freeze({
   'PM2.5': [5, 15, 50, 90, 140],
@@ -39,12 +40,6 @@ export const EEA_SENSITIVE_GUIDANCE = [
   msg('Avoid physical activity outdoors.'),
 ];
 
-export function massConcentrationFactor(units) {
-  const normalized = String(units).replaceAll('μ', 'µ').replaceAll('³', '3');
-  if (['µg/m3', 'ug/m3'].includes(normalized)) return 1;
-  if (normalized === 'mg/m3') return 1000;
-  return null;
-}
 export function hourlyLegend(parameter) {
   const limits = EEA_HOURLY_LIMITS[parameter];
   if (!limits) return [];
@@ -85,7 +80,8 @@ export function interpretHourly(reading) {
     reason = msg(
       'The hourly average is incomplete; no health category is assigned.',
     );
-  const factor = massConcentrationFactor(reading.units);
+  // Mixing ratios of gases convert at 25 °C (units.js), as for the US AQI.
+  const factor = concentrationFactor(reading.parameter, reading.units);
   if (!reason && factor === null)
     reason = msg(
       'These units cannot be compared without additional conversion data.',

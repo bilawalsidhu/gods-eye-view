@@ -4736,5 +4736,11 @@
   "US AQI category|Unhealthy": "Шкідливо",
   "US AQI category|Very Unhealthy": "Дуже шкідливо",
   "US AQI category|Hazardous": "Небезпечно",
+  "Not used: {values}": "Не використано: {values}",
+  "unrated units": "неоцінювані одиниці",
+  "flagged by the source": "позначено джерелом",
+  "implausible": "неправдоподібно",
+  "above PM10": "вище PM10",
+  "too old": "застаріле",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Одиниці вимірювання або період усереднення цієї мережі не підтверджено; категорію впливу на здоров’я не призначено."
 }

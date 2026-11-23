@@ -4,11 +4,14 @@ import {
   US_AQI_BANDS,
   US_AQI_LIMITS,
   aqiStations,
-  concentrationIn,
+  plausibility,
   plausible,
+  stationIndex,
   usAqi,
   usAqiBand,
 } from './usAqi.js';
+import { concentrationFactor, concentrationIn } from './units.js';
+import { interpretHourly } from './interpretation.js';
 import { createAirQualitySource } from './providers.js';
 import { createAirQualityLayer } from './index.js';
 import { normalizeCpcbRecords } from './cpcb.js';
@@ -52,11 +55,20 @@ test('above the table the index runs on past 500 in the hazardous row (EPA)', ()
   assert.equal(usAqiBand(699).id, 'hazardous');
 });
 
-test('ozone above 0.200 ppm is hazardous, numbered on the 1-hour row', () => {
-  assert.equal(usAqi({ o3: 200 * 1.963 }).index, 300);
-  assert.equal(usAqi({ o3: 201 * 1.963 }).index, 301);
-  assert.equal(usAqi({ o3: 404 * 1.963 }).index, 301);
-  assert.equal(usAqi({ o3: 604 * 1.963 }).index, 500);
+test('ozone above 0.200 ppm is on the EPA 1-hour rows', () => {
+  const at = (ppb) => usAqi({ o3: ppb * 1.963 }).index;
+  // Both rows apply from 0.125 to 0.200 ppm: the higher (8-hour) wins.
+  assert.equal(at(162), 260);
+  assert.equal(at(200), 300);
+  // Above 0.200 ppm only the 1-hour rows are defined (TAD footnote 2).
+  assert.equal(at(201), 196);
+  assert.equal(at(205), 201);
+  assert.equal(at(300), 248);
+  assert.notEqual(at(205), at(300));
+  for (const ppb of [205, 300])
+    assert.equal(usAqiBand(at(ppb)).id, 'very-unhealthy', `${ppb} ppb`);
+  assert.equal(at(405), 301);
+  assert.equal(at(604), 500);
 });
 
 test('a 1-hour SO2 value at or above 305 ppb is fixed at 200 (EPA)', () => {
@@ -110,12 +122,80 @@ test('concentrations convert to the layer units at 25 °C', () => {
   assert.equal(concentrationIn('NO2', 10, 'ppb'), 18.82);
   assert.equal(concentrationIn('CO', 2, 'ppm'), 2 * 1.1456);
   assert.equal(concentrationIn('CO', 500, 'µg/m³'), 0.5);
-  assert.equal(concentrationIn('O3', 0.05, 'ppm'), 50 * 1.963);
+  assert.ok(Math.abs(concentrationIn('O3', 0.05, 'ppm') - 50 * 1.963) < 1e-9);
+  assert.equal(concentrationFactor('SO2', 'μg/m³'), 1);
+  assert.equal(concentrationFactor('PM10', 'mg/m3'), 1000);
   assert.equal(concentrationIn('PM2.5', 7, 'ug/m3'), 7);
   assert.equal(concentrationIn('PM2.5', 7, 'ppm'), null);
   assert.equal(concentrationIn('PM2.5', 7, null), null);
   assert.equal(concentrationIn('CO2', 420, 'ppm'), null);
   assert.equal(concentrationIn('PM10', -1, 'µg/m³'), null);
+});
+
+test('one unit conversion serves the EEA comparison: 10 ppb of NO2 is rated', () => {
+  const rated = interpretHourly({
+    parameter: 'NO2',
+    value: 10,
+    units: 'ppb',
+    averagingMinutes: 60,
+  });
+  assert.equal(rated.assessment.concentration, 18.82);
+  assert.equal(rated.assessment.units, 'µg/m³');
+  assert.equal(rated.assessment.label, 'Fair');
+  // Particles have no gas factor: a mixing ratio stays unrated.
+  const particles = interpretHourly({
+    parameter: 'PM2.5',
+    value: 10,
+    units: 'ppb',
+    averagingMinutes: 60,
+  });
+  assert.match(particles.assessment.reason, /units cannot be compared/);
+});
+
+test('plausibility names why each value is left out', () => {
+  assert.deepEqual(plausibility({ pm25: 308, pm10: 92, no2: 1600 }), {
+    kept: { pm10: 92 },
+    excluded: { pm25: 'above-pm10', no2: 'implausible' },
+  });
+});
+
+test("a station's time is its leading value's, and discarded values do not count", () => {
+  const t0 = Date.parse('2026-11-23T08:00:00Z');
+  const row = (parameter, value, units, observedMs) => ({
+    id: `x:1:${parameter}`,
+    provider: 'x',
+    stationId: '1',
+    name: 'Probe',
+    lat: 1,
+    lon: 2,
+    parameter,
+    units,
+    value,
+    averagingMinutes: 60,
+    observedMs,
+  });
+  // PM2.5 at t0, NO2 at +5e6 ms, O3 in units that do not convert at +9e6 ms.
+  const [probe] = aqiStations([
+    row('PM2.5', 40, 'µg/m³', t0),
+    row('NO2', 10, 'µg/m³', t0 + 5e6),
+    row('O3', 30, 'furlongs', t0 + 9e6),
+  ]);
+  assert.equal(probe.observedMs, t0 + 5e6, 'the newest value kept');
+  assert.deepEqual(probe.excluded, { o3: 'units' });
+  const result = stationIndex(probe);
+  assert.deepEqual(result.aqi, { index: 112, leading: 'pm25' });
+  assert.equal(result.observedMs, t0, 'the leading pollutant');
+  assert.deepEqual(result.excluded, { o3: 'units' });
+  // A stalled PM2.5 four hours behind NO2 is dropped; NO2 leads.
+  const [stalled] = aqiStations([
+    row('PM2.5', 100, 'µg/m³', t0),
+    row('NO2', 50, 'µg/m³', t0 + 4 * 3600_000),
+  ]);
+  const fresh = stationIndex(stalled);
+  assert.deepEqual(fresh.aqi, { index: 25, leading: 'no2' });
+  assert.deepEqual(fresh.used, { no2: 50 });
+  assert.deepEqual(fresh.excluded, { pm25: 'too-old' });
+  assert.equal(fresh.observedMs, t0 + 4 * 3600_000);
 });
 
 test('per-pollutant readings become one station with every pollutant', () => {
@@ -150,6 +230,8 @@ test('per-pollutant readings become one station with every pollutant', () => {
   assert.equal(station.scale, 'US AQI');
   assert.equal(station.kind, 'observation');
   assert.deepEqual(station.values, { pm25: 12, no2: 18.82 });
+  assert.deepEqual(station.valueTimes, { pm25: 1000, no2: 2000 });
+  assert.deepEqual(station.excluded, { so2: 'flagged' });
   assert.equal(station.observedMs, 2000);
   assert.equal(station.averagingMinutes, 60);
   assert.equal(station.aqi, null);
@@ -344,12 +426,95 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
     card.summary.overview[0].text,
     /Highest US AQI category in view: Unhealthy · openaq 1/,
   );
-  assert.equal(layer.getAnalystRecords()[0].scale, 'US AQI');
+  // SAAQIS's own index stays in its station's details in the AQI view too.
+  assert.match(card.list.items[1].text, /SAAQIS index PM2\.5 4\/10 · Moderate/);
+  const record = layer
+    .getAnalystRecords()
+    .find((row) => row.provider === 'openaq');
+  assert.equal(record.scale, 'US AQI');
+  assert.deepEqual(record.aqi, {
+    index: 154,
+    category: 'Unhealthy',
+    leading: 'pm25',
+    values: { pm25: 60, no2: 20 },
+  });
+  layer.destroy();
+});
+
+/** A layer on one injected observation provider answering `rows`. */
+function injectedLayer(rows) {
+  const definition = createAirQualitySource().definitions.find(
+    (entry) => entry.id === 'saaqis',
+  );
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer, {
+    camera: {
+      on: () => () => {},
+      viewRectangle: () => ({ west: 27, south: -27, east: 29, north: -25 }),
+    },
+  });
+  const layer = createAirQualityLayer({
+    source: { definitions: [definition], getSnapshot: async () => rows },
+    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
+  });
+  layer.init(viewer);
+  layer.enable();
+  const point = () =>
+    [
+      ...[...draw.sets.values()]
+        .find((set) => set.kind === 'points' && !set.disposed)
+        .items.values(),
+    ][0];
+  return { layer, point };
+}
+const row = (parameter, value, extra = {}) =>
+  site('saaqis', '2', -25.5, {
+    id: `saaqis:2:${parameter}`,
+    parameter,
+    value,
+    ...extra,
+  });
+
+test('the AQI view runs its values through plausible()', async () => {
+  // PM2.5 above the same station's PM10: PM10 alone sets the index (69).
+  let { layer, point } = injectedLayer([row('PM2.5', 300), row('PM10', 92)]);
+  await layer.update();
+  assert.deepEqual(point().meta.aqi.index, 69);
+  assert.equal(point().meta.aqi.leading, 'pm10');
+  assert.match(
+    layer.getRowControls().list.items[0].text,
+    /Not used: PM2\.5 \(above PM10\)/,
+  );
+  layer.destroy();
+  // A value above its ceiling is left out: PM2.5 10 µg/m³ gives 53.
+  ({ layer, point } = injectedLayer([row('PM2.5', 10), row('NO2', 1600)]));
+  await layer.update();
+  assert.equal(point().meta.aqi.index, 53);
+  assert.deepEqual(point().meta.aqiExcluded, { no2: 'implausible' });
+  assert.match(
+    layer.getRowControls().list.items[0].text,
+    /PM2\.5 10 µg\/m³ · Not used: NO2 \(implausible\)/,
+  );
+  layer.destroy();
+});
+
+test('an old leading value dates the station and reads as older', async () => {
+  const { layer, point } = injectedLayer([
+    row('PM2.5', 100, { observedMs: minutesAgo(150) }),
+    row('NO2', 5, { observedMs: minutesAgo(10) }),
+    row('O3', 30, { units: 'furlongs', observedMs: minutesAgo(1) }),
+  ]);
+  await layer.update();
+  assert.equal(point().meta.aqi.leading, 'pm25');
+  assert.ok(Math.abs(point().meta.observedMs - minutesAgo(150)) < 60_000);
+  const [item] = layer.getRowControls().list.items;
+  assert.match(item.text, /Older observation/);
+  assert.match(item.text, /Not used: O3 \(unrated units\)/);
   layer.destroy();
 });
 
 test('a pollutant view rates every network on the EEA hourly bands', async () => {
-  const { layer, drawn } = stationLayer({
+  const { layer, drawn, requests } = stationLayer({
     '/api/air-quality/openaq': (url) =>
       snapshotOf(
         modeOf(url).get('parameter') === 'PM2.5'
@@ -363,12 +528,19 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
             ]
           : [],
       ),
-    // SAAQIS rates this station "Moderate" (4/10) on its own index.
+    // SAAQIS rates this station "Moderate" (4/10) on its own index, and
+    // reports NO2 as a mixing ratio.
     '/api/air-quality/south-africa': snapshotOf([
       site('saaqis', '2', -25.5, {
         value: 10,
         rating: { score: 4, label: 'Moderate', method: 'SAAQIS index' },
         color: '#F7FF00',
+      }),
+      site('saaqis', '2', -25.5, {
+        id: 'saaqis:2:NO2',
+        parameter: 'NO2',
+        units: 'ppb',
+        value: 10,
       }),
     ]),
     '/api/air-quality/india': snapshotOf(),
@@ -400,5 +572,17 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
   );
   assert.match(card.list.items[1].text, /SAAQIS index 4\/10/);
   assert.match(card.summary.status, /Extremely poor/);
+  // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C: "Fair" on the EEA NO2 bands.
+  const national = () =>
+    requests.filter((url) => url.startsWith('/api/air-quality/south-africa'))
+      .length;
+  const asked = national();
+  layer.setParams({ view: 'NO2' });
+  await layer.update();
+  const no2 = drawn().get('saaqis').meta;
+  assert.equal(no2.assessment.label, 'Fair');
+  assert.equal(no2.assessment.concentration, 18.82);
+  // The national snapshot serves the next view without asking again.
+  assert.equal(national(), asked);
   layer.destroy();
 });

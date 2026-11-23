@@ -1,8 +1,9 @@
 # South African air quality
 
-The existing Weather → Air quality layer now offers Canada (ECCC AQHI) and
-South Africa (SAAQIS). Canada remains the default so existing share links retain
-their meaning. The South African provider needs no personal API key.
+The Weather → Air quality layer draws South Africa's SAAQIS stations with the
+other observation networks (OpenAQ, India's CPCB) in one station set, on one
+view at a time: the US AQI computed per station (the default), one pollutant,
+or Canada's AQHI. The South African provider needs no personal API key.
 
 ## National scope and municipal coverage
 
@@ -77,9 +78,11 @@ the data owner before distributing a hosted archive or bulk exports.
 
 The pollutant selector supports PM2.5, PM10, NO2, SO2, O3, CO, CO2, NO, NOX and
 H2S where valid source readings exist. Data is requested on the source's
-60-minute timebase. Preserve returned concentration units; no mass/mixing-ratio
-conversion, AQI conversion, risk category, regulatory exceedance or emissions
-estimate is inferred.
+60-minute timebase. Readings keep their returned concentration units. To rate
+them, the layer converts them once (`src/layers/airQuality/units.js`): mg/m³
+to µg/m³, and gas mixing ratios (ppb, ppm) to µg/m³ (CO to mg/m³) at 25 °C
+with the US EPA's factors, for both the pollutant views and the US AQI. No
+regulatory exceedance or emissions estimate is inferred.
 
 CO2 here is a concentration, not tonnes of CO2 emitted. Source-invalid and
 inactive channels, negative/null values, unsupported units, implausibly future
@@ -88,8 +91,9 @@ Use each channel's timestamp before the enclosing station timestamp. Unzoned
 source timestamps are interpreted as SAST (UTC+02:00). A two-hour-old newest
 observation marks the layer stale using its existing freshness policy.
 
-Neutral markers and labels avoid suggesting AQHI health bands. The readout
-lists stations in view alphabetically, rather than ranking incomparable units.
+Each view rates every station on one scale, so the readout ranks the stations
+in view on it: by US AQI in the AQI view, and by EEA hourly category, then
+concentration, in a pollutant view. Unrated stations come last, in name order.
 Analyst records preserve pollutant, units, averaging period, network owner,
 observation time and observation kind.
 
@@ -155,9 +159,10 @@ GEV joins a rating only to the identical station, pollutant and observation
 concentrations separate from index scores. Unsupported scales, mismatches,
 missing ratings and sentinel values stay neutral with an explicit unavailable
 badge. Index endpoint failure does not discard concentrations. CO2 does not
-inherit another pollutant's rating. The legend identifies the SAAQIS method;
-category text accompanies colour, and station details state hourly averaging,
-source, timestamp and provisional status. Existing observation freshness rules
+inherit another pollutant's rating. The SAAQIS index is shown in a station's
+details only (in every view); its colour, ranking and legend are the view's
+own scale. Station details state hourly averaging, source, timestamp and
+provisional status. Existing observation freshness rules
 continue to apply to rated observations.
 
 Primary references: https://saaqis.environment.gov.za/ and
@@ -241,9 +246,10 @@ GEV compares valid hourly means for PM2.5, PM10, NO2, O3 and SO2 with the
 [revised EEA hourly pollutant bands](https://airindex.eea.europa.eu/AQI/).
 This is a **calculated comparison for one pollutant**, not an EEA station index,
 local official index, regulatory compliance test or a claim about an entire city.
-Decimal concentrations use inclusive upper bounds without rounding down; only
-mass-unit conversions (mg/m³ to µg/m³) are performed. Gas volume units require
-additional conversion conditions and remain unrated. GEV requires a closed
+Decimal concentrations use inclusive upper bounds without rounding down. Gas
+mixing ratios (ppb, ppm) convert to µg/m³ at 25 °C (`units.js`, the same
+conversion as the US AQI); particle mixing ratios and unknown units stay
+unrated. For OpenAQ hours GEV requires a closed
 one-hour period, 100% hourly coverage and an explicit unflagged source result;
 missing quality/coverage, unsupported pollutants and unknown averaging periods
 remain neutral with an explanation. Readings older than six hours are excluded;
@@ -254,19 +260,22 @@ among visible reporting stations, general and sensitive-population guidance,
 then sorted station details and a numeric legend. Categories appear as text and
 colour in the existing map overlays and shared status badge component. The
 portable `interpretation.js` module keeps thresholds and per-pollutant semantics
-out of the generic UI. Provider descriptors can supply their own legend; ECCC
-AQHI and provider-reported SAAQIS ratings retain their established scales.
-CO2 concentration is explicitly distinguished from an emissions rate. A
-SAAQIS station may also be distributed through OpenAQ: providers are alternatives,
-not summed together or advertised as independent coverage. Actual overlap needs
-an authenticated audit; no heuristic merges unrelated stations by proximity.
+out of the generic UI. The legend is the view's one scale: the EEA bands of
+the selected pollutant, the US AQI categories, or, for the AQHI, the index
+provider's own `legend`. SAAQIS's provider-reported ratings stay in station
+details. CO2 concentration is explicitly distinguished from an emissions rate.
+A SAAQIS station may also be distributed through OpenAQ: two readings from
+different providers within 150 m are one site (`merge.js`), and the one rated on
+the view's scale, then the direct network's (SAAQIS), then the newer, is kept.
 
 ### Injecting a provider
 
 `createAirQualitySource({ providers })` replaces the full default catalog.
 Each definition owns `id`, `title`, `label`, `network`, `coverage`, `sourceLabel`,
-`parameters`, `observation`, optional `legend`, explanatory text and a source
-implementing `getSnapshot({ parameter, signal })`. Optional `getCoverage()` returns
+`parameters`, `observation`, optional `legend` (used by index providers, the
+AQHI view), explanatory text and a source implementing
+`getSnapshot({ parameter, mode, view, signal })`: one pollutant, or with
+`mode: 'aqi'` every pollutant a station reports. Optional `getCoverage()` returns
 coverage/progress metadata. Sources acquire and normalize; the existing layer owns
 Cesium, lifecycle, overlay labels and Weather-card descriptors. No browser/Node
 imports belong in a portable source. A legacy source without definitions remains

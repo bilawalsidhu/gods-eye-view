@@ -851,9 +851,15 @@ Table 6 breakpoints (PM2.5 as revised in 2024), truncation, Equation 1 and the
 highest sub-index, with the EPA's category names and standard colours
 (`src/layers/airQuality/usAqi.js`). Latest values stand in for the 24-hour and
 8-hour averages the table is defined on, so the result is GEV's calculation,
-not an official reading, in the US or elsewhere. A value above its pollutant's
-plausibility ceiling, and PM2.5 above the same station's PM10, is left out; a
-reading its provider leaves unrated (India's, until its units and averaging
-period are confirmed) gives no index. Each view colours, ranks and builds its
+not an official reading, in the US or elsewhere. Ozone takes the higher of its
+8-hour and 1-hour rows where both apply, and only the 1-hour rows above
+0.200 ppm. A value above its pollutant's plausibility ceiling, PM2.5 above the
+same station's PM10, a value more than three hours older than the station's
+newest value kept, and a value whose units do not convert are left out and
+named in the station's details; the station's time is that of the pollutant
+leading its index. A reading its provider leaves unrated (India's, until its
+units and averaging period are confirmed) gives no index. Gas mixing ratios
+(ppb, ppm) convert to µg/m³ at 25 °C (`src/layers/airQuality/units.js`), the
+same conversion for the US AQI and for the EEA comparison of a pollutant view. Each view colours, ranks and builds its
 legend on one scale (US AQI, EEA hourly bands, or AQHI); a network's own index,
 such as SAAQIS's 1–10, appears only in that station's details.

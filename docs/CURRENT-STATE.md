@@ -10146,8 +10146,12 @@ observation provider is asked with `mode: 'aqi'` (OpenAQ from each location's
 `/latest`, within the same budget, cache and cancellation; SAAQIS and CPCB from
 their national snapshots), a station's plausible values get a sub-index each on
 the EPA breakpoints (Technical Assistance Document, Table 6, PM2.5 as revised in
-2024) and the highest one sets its index, category and colour; India's unrated
-readings give none. A pollutant view rates every network's concentration on the
+2024; ozone above 0.200 ppm on the 1-hour rows) and the highest one sets its
+index, category, colour and time. Values more than three hours older than the
+station's newest value kept are left out, as are implausible ones; details
+name each value left out and why. India's unrated readings give none. Gas
+mixing ratios convert at 25 °C (`units.js`) for both the US AQI and the EEA
+comparison. A pollutant view rates every network's concentration on the
 EEA hourly bands, so a SAAQIS station is coloured, ranked and listed like any
 other and its own 1–10 index appears in its details only.
 Scale-specific translations: AQHI

@@ -4418,5 +4418,11 @@
   "US AQI category|Unhealthy": "不健康",
   "US AQI category|Very Unhealthy": "非常不健康",
   "US AQI category|Hazardous": "危險",
+  "Not used: {values}": "未使用：{values}",
+  "unrated units": "單位無法評級",
+  "flagged by the source": "被來源標記",
+  "implausible": "不合理",
+  "above PM10": "高於 PM10",
+  "too old": "過舊",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "該監測網絡的單位或平均時段尚未確認，因此不分配健康類別。"
 }

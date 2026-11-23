@@ -4524,5 +4524,11 @@
   "US AQI category|Unhealthy": "Ungesund",
   "US AQI category|Very Unhealthy": "Sehr ungesund",
   "US AQI category|Hazardous": "Gefährlich",
+  "Not used: {values}": "Nicht verwendet: {values}",
+  "unrated units": "nicht bewertbare Einheiten",
+  "flagged by the source": "von der Quelle markiert",
+  "implausible": "unplausibel",
+  "above PM10": "über PM10",
+  "too old": "zu alt",
   "The units or averaging period of this network are not confirmed; no health category is assigned.": "Die Einheiten oder der Mittelungszeitraum dieses Messnetzes sind nicht bestätigt; es wird keine Gesundheitskategorie zugewiesen."
 }

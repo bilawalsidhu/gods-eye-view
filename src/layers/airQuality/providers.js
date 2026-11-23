@@ -32,74 +32,86 @@ export const ECCC_DEFINITION = Object.freeze({
  *
  * `getSnapshot` answers one pollutant (`parameter`), interpreted on the EEA
  * hourly bands when `hourly`, or with `mode: 'aqi'` every pollutant the
- * snapshot holds: the layer folds them into one reading per station.
+ * snapshot holds: the layer folds them into one reading per station. A
+ * national snapshot is reused for `reuseMs` across views.
  */
 export function createAirQualitySnapshotSource({
   endpoint,
   hourly = false,
+  reuseMs = 0,
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = Date.now,
 } = {}) {
   let coverage = null;
+  let reused = null;
+  /** Fetch and check one snapshot. */
+  async function fetchPayload(url, signal) {
+    const requestSignal = AbortSignal.any([
+      AbortSignal.timeout(50_000),
+      ...(signal ? [signal] : []),
+    ]);
+    const response = await fetchImpl(url, { signal: requestSignal });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403)
+        throw new Error(msg('Provider key rejected. Check Provider Settings.'));
+      if (response.status === 428)
+        throw Object.assign(new Error(msg('Provider API key required')), {
+          code: 'no_key',
+        });
+      if (response.status === 429) {
+        const body = await readResponseJsonCapped(
+          response,
+          8192,
+          requestSignal,
+        ).catch(() => null);
+        signal?.throwIfAborted();
+        const retryAt = Number.isFinite(body?.retryAt)
+          ? Math.min(
+              now() + 24 * 3600_000,
+              Math.max(now() + 1000, body.retryAt),
+            )
+          : now() + 60_000;
+        throw Object.assign(
+          new Error(
+            msg(
+              'Provider request budget reached. Cached data will refresh later.',
+            ),
+          ),
+          { retryAt },
+        );
+      }
+      throw new Error(msg('Air quality provider unavailable'));
+    }
+    const payload = await readResponseJsonCapped(
+      response,
+      64 * 1024 * 1024,
+      requestSignal,
+    );
+    if (
+      payload?.schemaVersion !== 1 ||
+      !Array.isArray(payload.stations) ||
+      !Array.isArray(payload.readings)
+    )
+      throw new Error(msg('Malformed air quality snapshot'));
+    return payload;
+  }
   return {
     getCoverage: () => coverage,
     async getSnapshot({ parameter = 'PM2.5', mode, signal, view } = {}) {
       const allPollutants = mode === 'aqi';
       signal?.throwIfAborted();
-      const requestSignal = AbortSignal.any([
-        AbortSignal.timeout(50_000),
-        ...(signal ? [signal] : []),
-      ]);
-      const response = await fetchImpl(
-        view
-          ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${allPollutants ? '&mode=aqi' : hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
-          : endpoint,
-        { signal: requestSignal },
-      );
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403)
-          throw new Error(
-            msg('Provider key rejected. Check Provider Settings.'),
-          );
-        if (response.status === 428)
-          throw Object.assign(new Error(msg('Provider API key required')), {
-            code: 'no_key',
-          });
-        if (response.status === 429) {
-          const body = await readResponseJsonCapped(
-            response,
-            8192,
-            requestSignal,
-          ).catch(() => null);
-          signal?.throwIfAborted();
-          const retryAt = Number.isFinite(body?.retryAt)
-            ? Math.min(
-                now() + 24 * 3600_000,
-                Math.max(now() + 1000, body.retryAt),
-              )
-            : now() + 60_000;
-          throw Object.assign(
-            new Error(
-              msg(
-                'Provider request budget reached. Cached data will refresh later.',
-              ),
-            ),
-            { retryAt },
-          );
-        }
-        throw new Error(msg('Air quality provider unavailable'));
-      }
-      const payload = await readResponseJsonCapped(
-        response,
-        64 * 1024 * 1024,
-        requestSignal,
-      );
-      if (
-        payload?.schemaVersion !== 1 ||
-        !Array.isArray(payload.stations) ||
-        !Array.isArray(payload.readings)
-      )
-        throw new Error(msg('Malformed air quality snapshot'));
+      const url = view
+        ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${allPollutants ? '&mode=aqi' : hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
+        : endpoint;
+      // A national snapshot (no view) serves every view and pollutant: a
+      // view switch within `reuseMs` filters the same payload again.
+      const reusable = !view && reuseMs > 0;
+      const payload =
+        reusable && reused?.url === url && now() - reused.at < reuseMs
+          ? reused.payload
+          : await fetchPayload(url, signal);
+      if (reusable && reused?.payload !== payload)
+        reused = { url, payload, at: now() };
       signal?.throwIfAborted();
       const readings = payload.readings
         .filter(
@@ -145,6 +157,8 @@ export function createDefaultAirQualityProviders({
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
         hourly: true,
+        // One layer refresh: a view switch does not ask again.
+        reuseMs: 60_000,
         fetchImpl,
         now,
       }),
@@ -169,6 +183,7 @@ export function createDefaultAirQualityProviders({
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/india',
         hourly: true,
+        reuseMs: 1_200_000,
         fetchImpl,
         now,
       }),

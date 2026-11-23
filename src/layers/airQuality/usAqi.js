@@ -14,13 +14,16 @@
  *
  * The table is defined on 24-hour (PM, SO2 above 200), 8-hour (O3, CO) and
  * 1-hour (NO2, SO2 up to 200) averages; a station's latest values stand in
- * for them. Where the document rules on a 1-hour value it is followed: ozone
- * above 0.200 ppm is hazardous and numbered on the 1-hour row from
- * 0.405 ppm, and a 1-hour SO2 value of 305 ppb or more gives exactly 200.
+ * for them. Where the document gives 1-hour rules they are followed: ozone
+ * takes the higher of its 8-hour and 1-hour rows where both apply, and only
+ * the 1-hour rows above 0.200 ppm; a 1-hour SO2 value of 305 ppb or more
+ * gives exactly 200.
  *
- * Values are in µg/m³, CO in mg/m³: the layer's units. Gases convert to ppb
- * (CO to ppm) at 25 °C and 1 atm, the EPA's reference conditions.
+ * Values are in µg/m³, CO in mg/m³: the layer's units (`units.js`). Gases
+ * convert back to ppb (CO to ppm) at 25 °C, the EPA's reference conditions.
  */
+import { EPA_GAS_FACTORS, concentrationIn } from './units.js';
+
 /** The five upper limits between the six categories. */
 export const US_AQI_LIMITS = Object.freeze([50, 100, 150, 200, 300]);
 
@@ -38,6 +41,7 @@ export const US_AQI_BANDS = Object.freeze([
     id: 'sensitive',
     // i18n-ignore: EPA category; translated in layer presentation
     label: 'Unhealthy for Sensitive Groups',
+    // The pollutant tile card shows this short form; the legend the label.
     // i18n-ignore: EPA category; translated in layer presentation
     short: 'Sensitive groups',
     color: '#ff7e00',
@@ -59,14 +63,12 @@ export const AQI_POLLUTANTS = Object.freeze({
   SO2: 'so2',
   CO: 'co',
 });
-
-/** µg/m³ per ppb (CO: mg/m³ per ppm) at 25 °C: molar mass / 24.45. */
-export const EPA_GAS_FACTORS = Object.freeze({
-  o3: 1.963,
-  no2: 1.882,
-  so2: 2.62,
-  co: 1.1456,
-});
+/** A `values` key as the layer's pollutant id. */
+export const AQI_PARAMETERS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(AQI_POLLUTANTS).map(([parameter, key]) => [key, parameter]),
+  ),
+);
 
 /** Above these (µg/m³; CO mg/m³) a value is taken to be an instrument fault. */
 export const AQI_CEILINGS = Object.freeze({
@@ -77,6 +79,9 @@ export const AQI_CEILINGS = Object.freeze({
   so2: 3000,
   co: 100,
 });
+
+/** A value this much older than the station's newest one is not used. */
+export const AQI_MAX_SPREAD_MS = 3 * 3600_000;
 
 /**
  * Table 6 by pollutant: decimals kept by truncation, and rows of
@@ -106,7 +111,7 @@ const TABLE = Object.freeze({
       [425, 604, 301, 500],
     ],
   },
-  // 8-hour rows; above 0.200 ppm see `ozone`.
+  // 8-hour rows, defined up to 0.200 ppm; the 1-hour rows are `OZONE_HOURLY`.
   o3: {
     digits: 3,
     rows: [
@@ -128,7 +133,7 @@ const TABLE = Object.freeze({
       [1250, 2049, 301, 500],
     ],
   },
-  // 1-hour rows; from 305 ppb see `sulphurDioxide`.
+  // 1-hour rows; from 305 ppb the table is on 24-hour values (`subIndex`).
   so2: {
     digits: 0,
     rows: [
@@ -150,8 +155,13 @@ const TABLE = Object.freeze({
     ],
   },
 });
-/** The 1-hour ozone row for 301 to 500, in ppm. */
-const OZONE_HAZARDOUS = Object.freeze([0.405, 0.604, 301, 500]);
+/** Table 6's 1-hour ozone rows, in ppm (none below 0.125 ppm). */
+const OZONE_HOURLY = Object.freeze([
+  [0.125, 0.164, 101, 150],
+  [0.165, 0.204, 151, 200],
+  [0.205, 0.404, 201, 300],
+  [0.405, 0.604, 301, 500],
+]);
 
 /** Truncate to `digits` decimals; a tolerance absorbs unit-conversion error. */
 const truncate = (value, digits) => {
@@ -163,9 +173,13 @@ const truncate = (value, digits) => {
 const interpolate = (c, [low, high, indexLow, indexHigh]) =>
   ((indexHigh - indexLow) / (high - low)) * (c - low) + indexLow;
 
+/** Equation 1 in the row holding `c`, or past the last row. */
+const onRows = (c, rows) =>
+  interpolate(c, rows.find((row) => c <= row[1]) ?? rows.at(-1));
+
 /** A concentration in the table's units, truncated, from the layer's units. */
 function tableConcentration(key, value) {
-  const factor = EPA_GAS_FACTORS[key];
+  const factor = EPA_GAS_FACTORS[AQI_PARAMETERS[key]];
   const native = !factor ? value : (value / factor) * (key === 'o3' ? 1e-3 : 1);
   return truncate(native, TABLE[key].digits);
 }
@@ -173,12 +187,17 @@ function tableConcentration(key, value) {
 /** One pollutant's sub-index before rounding. */
 function subIndex(key, value) {
   const c = tableConcentration(key, value);
-  if (key === 'o3' && c > 0.2)
-    // 8-hour values above 0.200 ppm are hazardous; the 1-hour row numbers it.
-    return c < OZONE_HAZARDOUS[0] ? 301 : interpolate(c, OZONE_HAZARDOUS);
+  if (key === 'o3') {
+    // The higher of the 8-hour rows (to 0.200 ppm) and the 1-hour rows (from
+    // 0.125 ppm), where each is defined.
+    const candidates = [];
+    if (c <= 0.2) candidates.push(onRows(c, TABLE.o3.rows));
+    if (c >= OZONE_HOURLY[0][0]) candidates.push(onRows(c, OZONE_HOURLY));
+    return Math.max(...candidates);
+  }
+  // 1-hour SO2 values do not define 200 and above: fixed at 200.
   if (key === 'so2' && c >= 305) return 200;
-  const { rows } = TABLE[key];
-  return interpolate(c, rows.find((row) => c <= row[1]) ?? rows.at(-1));
+  return onRows(c, TABLE[key].rows);
 }
 
 const usable = (value) => Number.isFinite(value) && value >= 0;
@@ -201,21 +220,67 @@ export function usAqi(values) {
 }
 
 /**
- * The values worth an index: each at or below its ceiling, and PM2.5 only
- * when it does not exceed the station's PM10 (PM2.5 is part of PM10).
+ * The values worth an index, and why each other one is not: above its
+ * pollutant's ceiling (`'implausible'`), or PM2.5 above the station's PM10
+ * (`'above-pm10'`; PM2.5 is part of PM10).
  */
-export function plausible(values) {
+export function plausibility(values) {
   const kept = {};
-  for (const [key, ceiling] of Object.entries(AQI_CEILINGS))
-    if (usable(values?.[key]) && values[key] <= ceiling)
-      kept[key] = values[key];
+  const excluded = {};
+  for (const [key, ceiling] of Object.entries(AQI_CEILINGS)) {
+    if (!usable(values?.[key])) continue;
+    if (values[key] <= ceiling) kept[key] = values[key];
+    else excluded[key] = 'implausible';
+  }
   if (
     kept.pm25 !== undefined &&
     kept.pm10 !== undefined &&
     kept.pm25 > kept.pm10
-  )
+  ) {
     delete kept.pm25;
-  return kept;
+    excluded.pm25 = 'above-pm10';
+  }
+  return { kept, excluded };
+}
+
+/** The plausible values alone (`plausibility`). */
+export const plausible = (values) => plausibility(values).kept;
+
+/**
+ * A station's index from the values it reports (`aqiStations`). The values
+ * kept are the plausible ones no more than `AQI_MAX_SPREAD_MS` older than the
+ * newest of them (`times`, per value); the observation time is that of the
+ * pollutant leading the index.
+ * @returns {{aqi: {index: number, leading: string} | null,
+ *   used: object, excluded: Object<string, string>, observedMs: number|null}}
+ *   `excluded` gives each value left out its reason: `'units'` or
+ *   `'flagged'` (from the station), `'implausible'`, `'above-pm10'` or
+ *   `'too-old'`.
+ */
+export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
+  const { kept, excluded: implausible } = plausibility(values);
+  const reasons = { ...excluded, ...implausible };
+  const times = Object.keys(kept)
+    .map((key) => valueTimes[key])
+    .filter(Number.isFinite);
+  const newest = times.length ? Math.max(...times) : null;
+  if (newest !== null)
+    for (const key of Object.keys(kept))
+      if (
+        Number.isFinite(valueTimes[key]) &&
+        valueTimes[key] < newest - AQI_MAX_SPREAD_MS
+      ) {
+        delete kept[key];
+        reasons[key] = 'too-old';
+      }
+  const aqi = usAqi(kept);
+  const leadingTime = aqi ? valueTimes[aqi.leading] : undefined;
+  return {
+    aqi,
+    used: kept,
+    excluded: reasons,
+    observedMs: Number.isFinite(leadingTime) ? leadingTime : newest,
+  };
 }
 
 /** The category of an index, or null. */
@@ -228,41 +293,6 @@ export function usAqiBand(index) {
 export function usAqiRange(position) {
   if (position === US_AQI_LIMITS.length) return `${US_AQI_LIMITS.at(-1) + 1}+`;
   return `${position ? US_AQI_LIMITS[position - 1] + 1 : 0}–${US_AQI_LIMITS[position]}`;
-}
-
-const normalizedUnits = (units) =>
-  String(units ?? '')
-    .trim()
-    .replaceAll('μ', 'µ')
-    .replaceAll('³', '3')
-    .toLowerCase();
-
-/**
- * A layer pollutant's value in the layer's units (µg/m³; CO mg/m³), from
- * µg/m³, mg/m³, ppb or ppm, or null when it cannot be converted.
- */
-export function concentrationIn(parameter, value, units) {
-  const key = AQI_POLLUTANTS[parameter];
-  if (!key || !usable(value)) return null;
-  const factor = EPA_GAS_FACTORS[key];
-  // The layer's unit for CO is mg/m³ and its factor is per ppm; for the
-  // others, µg/m³ and per ppb.
-  const milli = key === 'co';
-  switch (normalizedUnits(units)) {
-    case 'µg/m3':
-    case 'ug/m3':
-      return milli ? value / 1000 : value;
-    case 'mg/m3':
-      return milli ? value : value * 1000;
-    case 'ppb':
-      if (!factor) return null;
-      return milli ? (value / 1000) * factor : value * factor;
-    case 'ppm':
-      if (!factor) return null;
-      return milli ? value * factor : value * 1000 * factor;
-    default:
-      return null;
-  }
 }
 
 /** Per-pollutant fields a station reading in the AQI view does not carry. */
@@ -291,14 +321,19 @@ const POLLUTANT_FIELDS = [
 ];
 
 /**
- * One reading per station for the AQI view, its `values` holding every
- * pollutant the station reports in the layer's units. Per-pollutant readings
- * of a station (one `provider` and `stationId`) are folded together; a
- * reading that already carries `values` passes through. A value is kept only
- * from a reading its provider rates (`rated !== false`), that its source did
- * not flag and whose units convert. A station whose provider rates none of
- * its readings stays `rated: false`. Stations reporting none of the index's
- * pollutants are left out. `aqi` is left for the layer to compute.
+ * One reading per station for the AQI view. Per-pollutant readings of a
+ * station (one `provider` and `stationId`) are folded together; a reading
+ * that already carries `values` passes through.
+ *
+ * `values` holds every pollutant the station reports, in the layer's units,
+ * with `valueTimes` and `valueAveraging` per value; `excluded` names the
+ * readings left out (`'units'` when their units do not convert, `'flagged'`
+ * when their source flagged them), and `ratings` keeps a network's own
+ * index per pollutant. A reading its provider leaves unrated
+ * (`rated: false`) gives no value, and a station with no rated reading stays
+ * `rated: false`. Stations reporting none of the index's pollutants are left
+ * out. The station's time is its newest value's (its newest reading's when
+ * it has none); `aqi` is left for the layer (`stationIndex`).
  */
 export function aqiStations(readings) {
   const stations = new Map();
@@ -308,9 +343,10 @@ export function aqiStations(readings) {
       out.push(reading);
       continue;
     }
-    if (!AQI_POLLUTANTS[reading?.parameter]) continue;
-    const key = `${reading.provider}\u0000${reading.stationId ?? reading.id}`;
-    let station = stations.get(key);
+    const key = AQI_POLLUTANTS[reading?.parameter];
+    if (!key) continue;
+    const stationKey = `${reading.provider}\u0000${reading.stationId ?? reading.id}`;
+    let station = stations.get(stationKey);
     if (!station) {
       const identity = { ...reading };
       for (const field of POLLUTANT_FIELDS) delete identity[field];
@@ -321,35 +357,54 @@ export function aqiStations(readings) {
         scale: 'US AQI',
         kind: 'observation',
         values: {},
-        observedMs: -Infinity,
-        averaging: new Set(),
+        valueTimes: {},
+        valueAveraging: {},
+        excluded: {},
+        ratings: {},
+        observedMs: null,
+        reportedMs: -Infinity,
         anyRated: false,
         aqi: null,
         color: '#8cb4ce',
         label: '',
         note: 'US AQI computed from the latest value of each pollutant; not an official reading.',
       };
-      stations.set(key, station);
+      stations.set(stationKey, station);
       out.push(station);
     }
-    if (Number.isFinite(reading.observedMs))
-      station.observedMs = Math.max(station.observedMs, reading.observedMs);
+    const at = Number.isFinite(reading.observedMs) ? reading.observedMs : null;
+    if (at !== null) station.reportedMs = Math.max(station.reportedMs, at);
+    if (reading.rating) station.ratings[key] = reading.rating;
     if (reading.rated === false) continue;
     station.anyRated = true;
+    // One reading per pollutant: the newest.
+    const previous = station.valueTimes[key];
+    if (Number.isFinite(previous) && (at === null || at <= previous)) continue;
     const value = reading.qualityFlagged
       ? null
       : concentrationIn(reading.parameter, reading.value, reading.units);
-    if (value === null) continue;
-    station.values[AQI_POLLUTANTS[reading.parameter]] = value;
-    station.averaging.add(reading.averagingMinutes ?? null);
+    if (value === null) {
+      station.excluded[key] = reading.qualityFlagged ? 'flagged' : 'units';
+      continue;
+    }
+    delete station.excluded[key];
+    station.values[key] = value;
+    station.valueTimes[key] = at;
+    station.valueAveraging[key] = reading.averagingMinutes ?? null;
   }
   for (const station of stations.values()) {
-    const { averaging, anyRated } = station;
-    delete station.averaging;
+    const { reportedMs, anyRated } = station;
+    delete station.reportedMs;
     delete station.anyRated;
+    const times = Object.values(station.valueTimes).filter(Number.isFinite);
+    station.observedMs = times.length
+      ? Math.max(...times)
+      : Number.isFinite(reportedMs)
+        ? reportedMs
+        : null;
+    const averaging = new Set(Object.values(station.valueAveraging));
     station.averagingMinutes = averaging.size === 1 ? [...averaging][0] : null;
     if (!anyRated) station.rated = false;
-    if (!Number.isFinite(station.observedMs)) station.observedMs = null;
   }
   return out;
 }

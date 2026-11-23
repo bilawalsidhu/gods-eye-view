@@ -412,6 +412,20 @@ export function mapAnalystRecord(raw, index = 0) {
           owner: text(raw.owner),
           note: text(raw.note),
           assessment: raw.assessment ?? null,
+          // The AQI view's computed index: its category, the pollutant
+          // leading it and the values it used (µg/m³; CO mg/m³).
+          ...(raw.parameter === 'aqi'
+            ? {
+                aqi: raw.aqi
+                  ? {
+                      index: num(raw.aqi.index),
+                      category: text(raw.aqi.category),
+                      leading: text(raw.aqi.leading),
+                      values: { ...(raw.aqiValues ?? {}) },
+                    }
+                  : null,
+              }
+            : {}),
         }
       : {}),
   };

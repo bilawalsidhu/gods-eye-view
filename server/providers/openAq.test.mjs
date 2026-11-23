@@ -705,6 +705,79 @@ test('small pans reuse rounded catalog regions and hourly results', async () => 
   assert.equal(calls.length, 4);
 });
 
+test('AQI-mode pans reuse catalog regions and latest results within the per-pass cap', async () => {
+  // Small pans: one catalog page and one /latest per station, then reuse.
+  const { source, calls } = fixture();
+  for (let i = 0; i < 10; i++) {
+    const offset = i / 100;
+    const result = await source.getSnapshot({
+      view: [19.1 + offset, -0.9, 20.1 + offset, 0.9, 20, 0],
+      mode: 'aqi',
+    });
+    assert.equal(result.readings.length, 3);
+    assert.ok(result.readings.every((row) => row.id.endsWith(':aqi')));
+  }
+  assert.equal(calls.filter((c) => c.url.includes('/locations?')).length, 1);
+  assert.equal(calls.filter((c) => c.url.includes('/latest?')).length, 3);
+  // Returning to a view within a minute answers from its cache.
+  const view = [19.1, -0.9, 20.1, 0.9, 20, 0];
+  const before = calls.length;
+  await source.getSnapshot({ view, mode: 'aqi' });
+  assert.equal(calls.length, before, 'cached view');
+
+  // At most four stations are checked per pass, nearest first.
+  const many = Array.from({ length: 6 }, (_, i) => ({
+    ...locations[0],
+    id: 10 + i,
+    coordinates: { latitude: 0, longitude: 20 + i / 10 },
+    sensors: [{ id: 200 + i, parameter: { name: 'pm25', units: 'µg/m³' } }],
+  }));
+  const latest = [];
+  const capped = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations')
+        return Response.json({ results: many });
+      latest.push(url.pathname);
+      return Response.json({ results: [] });
+    },
+  });
+  const first = await capped.getSnapshot({
+    view: [19, -1, 21, 1, 20, 0],
+    mode: 'aqi',
+  });
+  assert.equal(latest.length, 4);
+  assert.ok(latest.every((path) => path.endsWith('/latest')));
+  assert.equal(first.partial, true);
+  assert.equal(first.eligible, 6);
+
+  // An abandoned AQI view cancels its upstream work.
+  let upstream;
+  const abandoned = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: (_url, { signal }) =>
+      new Promise((_resolve, reject) => {
+        upstream = signal;
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        });
+      }),
+  });
+  const controller = new AbortController();
+  const pending = abandoned.getSnapshot({
+    view: [19, -1, 21, 1, 20, 0],
+    mode: 'aqi',
+    signal: controller.signal,
+  });
+  const rejection = assert.rejects(pending, (e) => e.name === 'AbortError');
+  controller.abort();
+  await rejection;
+  assert.equal(upstream.aborted, true);
+});
+
 test('returning to an evicted view during provider cooldown retains cached readings and retries at reset', async () => {
   let clock = start,
     limited = false;
