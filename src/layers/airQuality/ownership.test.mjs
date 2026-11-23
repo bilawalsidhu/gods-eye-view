@@ -115,7 +115,7 @@ test('the readout lists only readings inside the camera port view rectangle', as
   );
   await layer.update();
   assert.deepEqual(
-    layer.getRowControls().list.items.map((item) => item.text),
+    layer.getRowControls().list.items.map((item) => item.title),
     ['Toronto · Low health risk'],
   );
 });
@@ -213,7 +213,7 @@ test('the readout descriptor carries the band legend and coverage', async () => 
   await layer.update();
   const controls = layer.getRowControls();
   assert.equal(controls.readout, true);
-  assert.match(controls.summary.coverage, /Canada only/);
+  assert.equal(controls.summary.coverage, 'Canada');
   // The Weather panel's legend shape: one {color, label} per band.
   assert.equal(controls.legendCategorical, true);
   assert.deepEqual(
@@ -225,11 +225,14 @@ test('the readout descriptor carries the band legend and coverage', async () => 
   );
   // Worst first, and every item keyed.
   assert.deepEqual(
-    controls.list.items.map((i) => i.text),
-    ['B · Low health risk', 'A · Low health risk'],
+    controls.list.items.map((i) => [i.lead, i.text, i.title]),
+    [
+      ['9', 'B', 'B · Low health risk'],
+      ['2', 'A', 'A · Low health risk'],
+    ],
   );
   assert.ok(controls.list.items.every((i) => i.id));
-  assert.match(controls.summary.status, /2 stations reporting/);
+  assert.equal(controls.summary.status, '2 stations');
 });
 
 test('the readout reports an error rather than a silent empty card', async () => {
@@ -239,7 +242,15 @@ test('the readout reports an error rather than a silent empty card', async () =>
     },
   });
   await layer.update();
-  assert.match(layer.getRowControls().summary.status, /503/);
+  // The card names the network; the error itself stays the layer's.
+  assert.deepEqual(layer.getRowControls().summary.lines, [
+    {
+      id: 'provider-eccc',
+      muted: true,
+      text: 'Environment and Climate Change Canada unavailable',
+    },
+  ]);
+  assert.match(layer.getStats().error, /503/);
 });
 
 test('row-control listeners are notified on refresh and teardown-safe', async () => {
@@ -305,7 +316,7 @@ test('a refresh that kept no current observation reports stale, not nominal', as
   assert.equal(stats.observedAt, null);
   assert.equal(stats.stale, true);
   assert.equal(layerFeedState(stats), 'stale');
-  assert.equal(layer.getRowControls().summary.status, 'No current readings');
+  assert.equal(layer.getRowControls().summary.status, '0 stations');
 });
 
 test('a failed refresh over good readings reports degraded, not nominal', async () => {
@@ -532,7 +543,7 @@ test('a provider without its key, or failing, does not blank the others', async 
   assert.equal(states.saaqis.status, 'ok');
   assert.equal(states.saaqis.count, 1);
   assert.equal(states.regional.status, 'failed');
-  assert.equal(layer.getRowControls().summary.status, 'US AQI · Moderate');
+  assert.equal(layer.getRowControls().summary.status, '1 station');
 });
 
 test('when every provider fails the layer reports the error', async () => {

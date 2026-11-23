@@ -11,6 +11,12 @@ const props = defineProps({
 });
 const root = ref(null);
 
+// A row's colour dot, before its value; an unreadable colour draws none.
+const swatchStyle = (item) =>
+  /^#[0-9a-f]{6}$/i.test(item.swatch || '')
+    ? `background: ${item.swatch}`
+    : undefined;
+
 const rowClass = (item) =>
   `data-row-list-item${item.disabled ? ' note' : ''}${item.current ? ' current' : ''}`;
 
@@ -54,6 +60,12 @@ onUpdated(followCurrent);
         pressed-class="active"
         :title="String(item.title ?? item.text ?? '')"
         @click="onSelect(item)"
+        ><span
+          v-if="swatchStyle(item)"
+          class="data-row-list-swatch"
+          aria-hidden="true"
+          :style="swatchStyle(item)"
+        ></span
         ><span class="data-row-list-lead">{{ String(item.lead ?? '') }}</span
         ><span class="data-row-list-text">{{ String(item.text ?? '') }}</span
         ><UiBadge

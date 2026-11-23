@@ -621,3 +621,46 @@ test('a lead result renders first', () => {
   assert.equal(order().at(-2), 'station');
   panel.destroy();
 });
+
+test('a list row draws its colour dot before its value; a bad colour draws none', () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  const paint = (swatch) =>
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'list',
+            type: 'list',
+            list: {
+              ariaLabel: 'Highest in view',
+              items: [
+                {
+                  id: 'durban',
+                  swatch,
+                  lead: '112',
+                  text: 'Durban',
+                  title: 'Durban · details',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+  paint('#ff7e00');
+  const row = f.container.querySelector('.data-row-list-item');
+  const [dot, lead, text] = row.children;
+  assert.ok(dot.classList.contains('data-row-list-swatch'));
+  assert.equal(dot.getAttribute('aria-hidden'), 'true');
+  assert.match(dot.style.background, /^(#ff7e00|rgb\(255, 126, 0\))$/);
+  assert.equal(lead.textContent, '112');
+  assert.equal(text.textContent, 'Durban');
+  // The details are the tooltip, not a second line.
+  assert.equal(row.title, 'Durban · details');
+  assert.equal(row.querySelector('.data-row-list-badge'), null);
+  paint('url(https://example.com)');
+  assert.equal(row.querySelector('.data-row-list-swatch'), null);
+  view.destroy();
+});

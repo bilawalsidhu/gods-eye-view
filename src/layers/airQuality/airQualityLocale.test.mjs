@@ -11,7 +11,6 @@ import { createAirQualityLayer } from './index.js';
 import { createDefaultAirQualityProviders } from './providers.js';
 import { interpretHourly, hourlyLegend } from './interpretation.js';
 import { attachSaIndexes, SA_INDEX_BANDS } from './southAfrica.js';
-import { usAqiRange } from './usAqi.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function inLocale(locale, run) {
@@ -98,18 +97,31 @@ for (const locale of ['es', 'ru']) {
 }
 
 for (const locale of ['en', 'es', 'ru']) {
-  test(`${locale}: the Weather card shows an HTTP failure as the row does`, async () => {
+  test(`${locale}: the Weather card names a failed network in its language; the row keeps the error`, async () => {
     const layer = harness({
       getSnapshot: async () => {
         throw new Error('ECCC HTTP 503');
       },
     });
     await layer.update();
-    const card = inLocale(locale, () => layer.getRowControls().summary.status);
-    assert.equal(
-      card,
-      inLocale(locale, () => translateFeedError('ECCC HTTP 503')),
+    const line = inLocale(
+      locale,
+      () =>
+        layer
+          .getRowControls()
+          .summary.lines.find((item) => item.id === 'provider-eccc').text,
     );
+    assert.equal(
+      line,
+      inLocale(locale, () =>
+        t('{network} unavailable', {
+          network: 'Environment and Climate Change Canada',
+        }),
+      ),
+    );
+    // The HTTP failure itself stays the layer's error, for the Layers row.
+    assert.equal(layer.getStats().error, 'ECCC HTTP 503');
+    assert.ok(translateFeedError('ECCC HTTP 503'));
   });
 }
 
@@ -154,7 +166,7 @@ const saaqisRussian = [
 for (const [scale, { provider = scale, view, labels }] of Object.entries(
   russianScales,
 )) {
-  test(`ru: ${scale} legend, summary, badges and map labels use their scale's grammar`, async () => {
+  test(`ru: ${scale} legend, tiles and map labels use their scale's grammar`, async () => {
     const definition = createDefaultAirQualityProviders().find(
       (p) => p.id === provider,
     );
@@ -174,22 +186,36 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
         clearSource() {},
       },
     });
-    initAirQualityTestLayer(layer, { dataSources: { add() {}, remove() {} } });
+    const radians = (degrees) => (degrees * Math.PI) / 180;
+    initAirQualityTestLayer(layer, {
+      dataSources: { add() {}, remove() {} },
+      // Around the reading, which is then the station nearest the centre.
+      camera: {
+        computeViewRectangle: () => ({
+          west: radians(-80),
+          south: radians(43),
+          east: radians(-79),
+          north: radians(44),
+        }),
+      },
+    });
     layer.setParams({ view });
     layer.enable();
     setLocale('ru');
     try {
       await layer.update();
       const controls = layer.getRowControls();
-      const ranges =
-        view === 'aqi'
-          ? labels.map((_label, i) => usAqiRange(i))
-          : view === 'aqhi'
-            ? definition.legend.map((band) => band.range)
-            : hourlyLegend(view).map((band) => band.range);
+      // The AQHI names its bands; the other views show a numeric ramp.
       assert.deepEqual(
-        controls.legend.slice(0, labels.length).map((entry) => entry.label),
-        labels.map((label, i) => `${label}${ranges[i] ? ` ${ranges[i]}` : ''}`),
+        controls.legend.map((entry) => entry.label),
+        view === 'aqhi'
+          ? labels.map(
+              (label, i) =>
+                `${label}${definition.legend[i].range ? ` ${definition.legend[i].range}` : ''}`,
+            )
+          : view === 'aqi'
+            ? ['0', '50', '100', '150', '200', '300+']
+            : ['0', '5', '15', '50', '90', '140+'],
       );
       assert.equal(
         t('Moderate'),
@@ -240,12 +266,10 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
                 }).map(interpretHourly);
         await layer.update();
         const card = layer.getRowControls();
-        assert.equal(
-          card.summary.status,
-          `${view === 'aqi' ? 'US AQI' : 'PM2.5'} · ${label}`,
-        );
-        assert.ok(card.summary.overview[0].text.includes(label));
-        assert.equal(card.list.items[0].badge, label);
+        const tile = card.sublists
+          .flatMap((group) => group.tiles)
+          .find((item) => item.id === view);
+        assert.ok(tile.title.endsWith(` · ${label}`), tile.title);
         assert.ok(overlays[0].title.endsWith(` · ${label}`));
         if (provider === 'saaqis')
           assert.ok(

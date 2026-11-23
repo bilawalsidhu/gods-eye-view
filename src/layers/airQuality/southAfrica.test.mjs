@@ -270,18 +270,14 @@ test('view switch clears old markers and ignores late requests; camera changes u
   assert.equal(await old, true);
   assert.equal(layer.getStats().count, 1);
   const card = layer.getRowControls();
-  // The EEA PM2.5 bands and "Not rated": one scale for every network.
-  assert.equal(card.legend.length, 7);
+  // The EEA PM2.5 bands as one ramp: one scale for every network.
+  assert.equal(card.legend.length, 6);
   assert.deepEqual(
     card.list.items,
     [],
     'no distant Canadian or South African fallback',
   );
-  assert.ok(
-    card.summary.lines.some((line) =>
-      line.text.includes('No current observations'),
-    ),
-  );
+  assert.equal(card.summary.status, '0 stations');
   assert.equal(layer.getAnalystRecords()[0].units, 'µg/m³');
   listener();
   layer.destroy();
@@ -415,15 +411,13 @@ test('view-driven providers debounce navigation, abort old requests, and separat
   coverage = { partial: true };
   resolveOld([]);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.match(layer.getRowControls().summary.status, /Partial/);
-  assert.ok(
-    layer.getRowControls().summary.lines.some((l) => /incomplete/.test(l.text)),
-  );
+  // Answered with nothing yet: a count, not Loading.
+  assert.equal(layer.getRowControls().summary.status, '0 stations');
   const complete = layer.update();
   coverage = { partial: false };
   resolveOld([]);
   await complete;
-  assert.match(layer.getRowControls().summary.status, /No current readings/);
+  assert.equal(layer.getRowControls().summary.status, '0 stations');
   rect = { ...rect, west: 2, east: 2.1 };
   moveEnd();
   layer.disable();
@@ -450,11 +444,9 @@ test('partial or stale coverage does not label visible observations unavailable'
   layer.enable();
   await layer.update();
   assert.equal(layer.getStats().count, 1);
-  assert.equal(
-    layer.getRowControls().summary.lines.find((l) => l.id === 'interpretation')
-      .text,
-    'GEV compares the selected pollutant with EEA hourly bands. This is not an overall station AQI or a local official index.',
-  );
+  const { summary } = layer.getRowControls();
+  assert.equal(summary.status, '1 station');
+  assert.deepEqual(summary.lines, []);
   layer.destroy();
 });
 
@@ -485,7 +477,7 @@ test('viewport rate limits are explicit and do not disable the layer', async () 
   assert.equal(await layer.update(), true);
   // The budget is the network's own line; the status says what the map has.
   const controls = layer.getRowControls();
-  assert.match(controls.summary.status, /provider unavailable/);
+  assert.equal(controls.summary.status, '0 stations');
   assert.match(
     controls.summary.lines.find((line) => line.id === 'provider-openaq').text,
     /^OpenAQ: request budget reached/,
@@ -558,21 +550,11 @@ test('progressive updates and rate-limit errors retry automatically; disable and
     layer.enable();
     try {
       assert.equal(await layer.update(), true);
-      assert.ok(
-        layer
-          .getRowControls()
-          .summary.lines.some((line) => line.id === 'retry'),
-      );
       t.mock.timers.tick(1999);
       assert.equal(calls, 1);
       t.mock.timers.tick(102);
       await new Promise((resolve) => setImmediate(resolve));
       assert.equal(calls, 2);
-      assert.ok(
-        !layer
-          .getRowControls()
-          .summary.lines.some((line) => line.id === 'retry'),
-      );
       calls = 0;
       await layer.update();
       layer.disable();

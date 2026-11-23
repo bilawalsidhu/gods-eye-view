@@ -113,7 +113,7 @@ test('hourly data chooses latest complete period, retaining source units, time a
     [],
   );
 });
-test('readout leads with the highest selected-pollutant category and distinguishes a calculated comparison', async () => {
+test('readout ranks the highest selected-pollutant category first and keeps the calculated comparison in its details', async () => {
   const definition = createAirQualitySource().definitions.find(
     (p) => p.id === 'openaq',
   );
@@ -150,17 +150,19 @@ test('readout leads with the highest selected-pollutant category and distinguish
   layer.enable();
   await layer.update();
   const controls = layer.getRowControls();
-  assert.equal(controls.summary.status, 'PM2.5 · Poor');
-  assert.match(controls.summary.overview[0].text, /Poor · Z concern/);
-  assert.match(controls.summary.overview.at(-1).text, /this pollutant only/);
-  assert.equal(controls.list.items[0].badge, 'Poor');
+  assert.equal(controls.summary.status, '2 stations');
+  // Highest first, in its band's colour; the comparison is the tooltip.
+  assert.equal(controls.list.items[0].text, 'Z concern');
+  assert.equal(controls.list.items[0].lead, '55');
+  assert.equal(controls.list.items[0].swatch, '#f29457');
   assert.match(controls.list.items[0].title, /Calculated comparison/);
-  assert.equal(controls.legend.length, 7);
+  // The PM2.5 ramp: six EEA bands, 0 to the open top band.
+  assert.equal(controls.legend.length, 6);
   assert.equal(layer.getAnalystRecords()[0].assessment.basis, 'calculated');
   layer.destroy();
 });
 
-test('the overview excludes stations beyond the horizon and suppresses guidance on failed refreshes', async () => {
+test('the card counts and lists only stations this side of the horizon', async () => {
   const definition = createAirQualitySource().definitions.find(
     (p) => p.id === 'openaq',
   );
@@ -201,14 +203,20 @@ test('the overview excludes stations beyond the horizon and suppresses guidance 
   layer.setParams({ view: 'PM2.5' });
   layer.enable();
   await layer.update();
-  assert.equal(layer.getRowControls().summary.status, 'PM2.5 · Good');
+  assert.equal(layer.getRowControls().summary.status, '1 station');
   assert.equal(layer.getRowControls().list.items.length, 1);
+  assert.equal(layer.getRowControls().list.items[0].text, 'Visible station');
+  // A stale or failed refresh keeps what is drawn and says so in the stats.
   stale = true;
   await layer.update();
-  assert.deepEqual(layer.getRowControls().summary.overview, []);
+  assert.equal(layer.getStats().stale, true);
   stale = false;
   fail = true;
   await layer.update();
-  assert.deepEqual(layer.getRowControls().summary.overview, []);
+  assert.equal(layer.getRowControls().list.items.length, 1);
+  assert.equal(
+    layer.getRowControls().summary.lines.at(-1).text,
+    'OpenAQ unavailable',
+  );
   layer.destroy();
 });

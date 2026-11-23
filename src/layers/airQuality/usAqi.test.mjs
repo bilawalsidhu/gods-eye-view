@@ -408,31 +408,21 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
   const card = layer.getRowControls();
   assert.deepEqual(
     card.legend.map((band) => band.color),
-    [
-      '#00e400',
-      '#ffff00',
-      '#ff7e00',
-      '#ff0000',
-      '#8f3f97',
-      '#7e0023',
-      '#8cb4ce',
-    ],
+    ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#8f3f97', '#7e0023'],
   );
-  assert.equal(card.legend[0].label, 'Good 0–50');
-  assert.equal(card.legend[5].label, 'Hazardous 301+');
+  // One ramp, 0 to the open top band.
+  assert.equal(card.legend[0].label, '0');
+  assert.equal(card.legend[5].label, '300+');
+  // Ranked on the index, each row in its category's colour; unrated last.
   assert.deepEqual(
-    card.list.items.map((item) => item.badge),
-    ['Unhealthy', 'Good', 'Not rated'],
+    card.list.items.map((item) => item.swatch),
+    ['#ff0000', '#00e400', '#8cb4ce'],
   );
   // Value and name; the details are the row's tooltip.
   assert.equal(card.list.items[0].lead, '154');
   assert.equal(card.list.items[0].text, 'openaq 1');
   assert.match(card.list.items[0].title, /PM2\.5/);
-  assert.match(card.summary.status, /US AQI · Unhealthy/);
-  assert.match(
-    card.summary.overview[0].text,
-    /Highest US AQI category in view: Unhealthy · openaq 1/,
-  );
+  assert.equal(card.summary.status, '3 stations');
   // SAAQIS's own index stays in its station's details in the AQI view too.
   assert.match(
     card.list.items[1].title,
@@ -562,26 +552,17 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
   assert.equal(points.get('saaqis').color, '#a3cf62');
   assert.equal(points.get('openaq').meta.assessment.label, 'Extremely poor');
   const card = layer.getRowControls();
-  // One scale: the EEA PM2.5 bands and "Not rated", nothing from SAAQIS.
+  // One scale: the EEA PM2.5 bands as a ramp, nothing from SAAQIS.
   assert.deepEqual(
     card.legend.map((band) => band.color),
-    [
-      '#50c9b5',
-      '#a3cf62',
-      '#f2d45c',
-      '#f29457',
-      '#e96070',
-      '#bb6bbd',
-      '#8cb4ce',
-    ],
+    ['#50c9b5', '#a3cf62', '#f2d45c', '#f29457', '#e96070', '#bb6bbd'],
   );
   // The 400 µg/m³ station ranks first; SAAQIS's own index stays in details.
   assert.deepEqual(
-    card.list.items.map((item) => item.badge),
-    ['Extremely poor', 'Fair'],
+    card.list.items.map((item) => item.swatch),
+    ['#bb6bbd', '#a3cf62'],
   );
   assert.match(card.list.items[1].title, /SAAQIS index 4\/10/);
-  assert.match(card.summary.status, /Extremely poor/);
   // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C: "Fair" on the EEA NO2 bands.
   const national = () =>
     requests.filter((url) => url.startsWith('/api/air-quality/south-africa'))

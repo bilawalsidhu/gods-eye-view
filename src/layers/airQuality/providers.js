@@ -151,9 +151,6 @@ export function createDefaultAirQualityProviders({
       // views rate its concentrations on their own scale.
       indexLabel: msg('SAAQIS index'),
       bandContext: 'SAAQIS category',
-      coverageNote: msg(
-        'Station observations across all nine provinces. Municipalities without monitors have no measured coverage.',
-      ),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
         hourly: true,
@@ -179,7 +176,6 @@ export function createDefaultAirQualityProviders({
       indexLabel: msg('Index unavailable'),
       // Unrated until both the units and the averaging period are confirmed
       // (CPCB_UNITS_VERIFIED, CPCB_AVERAGING_MINUTES).
-      interpretation: msg('Reported pollutant average · not an overall AQI'),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/india',
         hourly: true,
@@ -202,9 +198,6 @@ export function createDefaultAirQualityProviders({
       requiresKeyId: 'openaq',
       averagingLabel: msg('Hourly average'),
       indexLabel: msg('Index unavailable'),
-      coverageNote: msg(
-        'Available monitoring stations worldwide. Unmonitored areas have no measured coverage.',
-      ),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/openaq',
         hourly: true,

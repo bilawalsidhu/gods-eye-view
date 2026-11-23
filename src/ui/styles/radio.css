@@ -1055,6 +1055,15 @@ html:not([lang='en'])
   opacity: 0.85;
 }
 
+/* A row's colour dot (a reading's band), before its value. */
+.data-row-list-swatch {
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 .data-row-list-text {
   flex: 1 1 auto;
   overflow: hidden;

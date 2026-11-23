@@ -753,7 +753,7 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   assert.equal(aq.dataset.open, 'true');
   assert.match(
     f.find((n) => n.classList?.contains?.('rail-card-badge'), aq).textContent,
-    /Canada only/,
+    /^Canada$/,
   );
   assert.match(line(f, 'air-quality', 'status').textContent, /2 stations/);
   const entries = f.find((n) => n.className === 'rail-card-legend-entries', aq);
@@ -770,12 +770,61 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   assert.equal(list.hidden, false);
   assert.deepEqual(
     [...list.children].map((item) =>
-      [...item.children[0].children].map((part) => part.textContent).join(' '),
+      [...item.children[0].children]
+        .map((part) => part.textContent)
+        .filter(Boolean)
+        .join(' '),
     ),
-    ['AQHI 8 Hamilton · high risk', 'AQHI 2 Toronto · low risk'],
+    ['8 Hamilton', '2 Toronto'],
   );
+  // One line a row; the risk is the tooltip.
+  assert.equal(list.children[0].children[0].title, 'Hamilton · high risk');
   view.destroy();
   layer.destroy();
+});
+
+test('a scale without units shows its ramp and range as given', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([
+    {
+      id: 'air-quality',
+      icon: '◍',
+      summary: {
+        label: 'Air quality',
+        coverage: 'Global',
+        status: '3 stations',
+        units: '',
+        unitsVerbatim: true,
+      },
+      legend: ['0', '50', '100', '150', '200', '300+'].map((label, i) => ({
+        label,
+        color: [
+          '#00e400',
+          '#ffff00',
+          '#ff7e00',
+          '#ff0000',
+          '#8f3f97',
+          '#7e0023',
+        ][i],
+      })),
+      legendCategorical: false,
+    },
+  ]);
+  const aq = card(f, 'air-quality');
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
+    false,
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-scale', aq).textContent,
+    '0 — 300+',
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-legend-entries', aq).hidden,
+    true,
+  );
+  view.destroy();
 });
 test('source-supplied legend units are shown as given; catalog units are translated', () => {
   setLocale('ru');

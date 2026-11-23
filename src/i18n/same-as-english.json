@@ -756,7 +756,8 @@
     "3D",
     "KT",
     "{seconds} s",
-    "Canada"
+    "Canada",
+    "{count} stations"
   ],
   "it": [
     "India",
@@ -1510,7 +1511,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "{count} stations"
   ],
   "uk": [
     "1900–1945",
