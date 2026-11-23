@@ -152,8 +152,7 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
       if (playing) return worldClock.pause();
       if (live) return;
       const covered = reach();
-      if (span && covered && timeMs >= covered.end)
-        worldClock.seek(span.start);
+      if (span && covered && timeMs >= covered.end) worldClock.seek(span.start);
       // At the clock's rate: the speed chosen, or a host's own.
       worldClock.play({ continuous: true });
     },
