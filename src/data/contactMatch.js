@@ -1,3 +1,5 @@
+import { normalizeFlightIdentity } from './flightIdentity.js';
+
 /**
  * Shared identity matching for aircraft contact lookup (`findByQuery`).
  *
@@ -80,9 +82,12 @@ export function rankContactMatch({
   const callsignText = String(callsign ?? '')
     .trim()
     .toLowerCase();
-  // Callsigns carry no separators, so they compare raw — canonicalizing them
-  // would silently widen the long-standing callsign contract.
-  if (callsignText && callsignText === rawQuery)
+  // Flight-number aliases and separators use the same deterministic
+  // normalization as the catalog and voice feed lookup.
+  if (
+    callsignText &&
+    normalizeFlightIdentity(callsignText) === normalizeFlightIdentity(rawQuery)
+  )
     return CONTACT_MATCH_TIER.CALLSIGN_EXACT;
 
   const canonicalQuery = canonicalizeContactId(rawQuery);

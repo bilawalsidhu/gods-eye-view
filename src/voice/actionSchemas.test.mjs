@@ -60,10 +60,11 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // absolute with its -45 default, with steps sent as a direction.
     // show_street_level (map, source, photo) adds one tool.
     // open_stories adds the Stories Explore entry action.
+    // Aircraft feed lookup adds lookupOnly and aircraft-only tracking guidance.
     // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
-    '09abe70ef3a1fc4320e25cff997dd3b04db7e78ff31b8530e17bbbbb8156b4c6',
+    'a8c4064a27e4a789d7be103e48fad87efb8bdb6f9512008361f495970f8f6451',
   );
 });
 
@@ -208,6 +209,8 @@ test('all legacy action arguments are byte-identical after removing the delibera
     }
   }
   const track = legacy.find((tool) => tool.name === 'track_entity').parameters;
+  // Feed lookup reuses tracking without changing legacy follow arguments.
+  delete track.properties.lookupOnly;
   delete track.anyOf;
   delete track.properties.query.minLength;
   delete track.properties.query.pattern;
