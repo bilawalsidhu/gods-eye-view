@@ -15,7 +15,7 @@ export const OPENING = Object.freeze({
   /** The words under the logo fade. */
   textMs: 150,
   /** The logo moves to the centre. */
-  centreMs: 450,
+  centreMs: 900,
   // The rest is timed from the end of the move.
   /** The eye grows past the screen's edges. */
   eyeMs: 1100,
