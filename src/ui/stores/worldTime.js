@@ -141,17 +141,18 @@ export const useWorldTimeStore = defineStore('gev-world-time', () => {
     time,
     /**
      * Play runs the track at the world clock's rate (the speed chosen, which
-     * sets it), from the start when it is at
-     * its end (at live, say), as a video plays again from the top. It runs
-     * the clock itself: weather follows the time frame by frame like every
-     * other layer the track covers.
+     * sets it), from where the clock is, or from the start when it is paused
+     * at the track's end, as a video plays again from the top. At live it
+     * does nothing: the clock is already at now, running with the world. It
+     * runs the clock itself: weather follows the time frame by frame like
+     * every other layer the track covers.
      */
     togglePlay() {
       const { playing, live, timeMs, span } = time.value;
       if (playing) return worldClock.pause();
+      if (live) return;
       const covered = reach();
-      if (span && covered && (live || timeMs >= covered.end))
-        worldClock.seek(span.start);
+      if (span && covered && timeMs >= covered.end) worldClock.seek(span.start);
       // At the clock's rate: the speed chosen, or a host's own.
       worldClock.play({ continuous: true });
     },
