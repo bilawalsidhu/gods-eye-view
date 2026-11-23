@@ -25,7 +25,7 @@ export const OPENING = Object.freeze({
   pupilMs: Object.freeze([600, 1200]),
   /** The camera's flight in. */
   flightStartMs: 300,
-  flightMs: 4200,
+  flightMs: 6000,
   /** How far the globe turns on the way in, degrees. */
   spinDeg: 360,
 });
@@ -60,6 +60,7 @@ const easeInCubic = (x) => x ** 3;
 const easeOutCubic = (x) => 1 - (1 - x) ** 3;
 const easeInOutCubic = (x) =>
   x < 0.5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2;
+const smoothstep = (x) => x * x * (3 - 2 * x);
 const span = (t, [from, to]) => clamp01((t - from) / (to - from));
 
 /**
@@ -105,7 +106,9 @@ export function openingPose(
   { target, farHeight, spinDeg = OPENING.spinDeg },
 ) {
   const f = clamp01(flight);
-  const closing = easeInOutCubic(f);
+  // Half the peak speed of a cubic ease, so the imagery keeps up as the
+  // globe grows.
+  const closing = smoothstep(f);
   const height = Math.exp(
     Math.log(farHeight) +
       (Math.log(target.height) - Math.log(farHeight)) * closing,
