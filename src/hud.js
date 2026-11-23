@@ -254,6 +254,12 @@ export class IntelHUD {
     this.placeSearch = placeSearch;
     this.viewer = viewer;
     this._visible = false;
+    // Whether the HUD's view is on screen (setDisplayed). While it is not,
+    // the readouts are neither worked out nor published; what was skipped is
+    // caught up when it is back.
+    this._displayed = true;
+    this._unseen = { settle: false, show: false, summary: false };
+    this._destroyed = false;
     this._autoMode = true; // auto show/hide based on style
     this._currentStyle = 'normal';
     /** The presented HUD; see {@link IntelHUD#_initView}. */
@@ -320,20 +326,8 @@ export class IntelHUD {
     };
     this._onCameraMoveEnd = () => {
       this._markSummaryDirty();
-      // The 250 ms telemetry timer and 15 s semantic-summary timer must not
-      // leave the prior city on-screen after a long CCTV focus flight.
-      // Refresh deterministic camera context synchronously on settle; the AI
-      // summary can still upgrade it on its normal cadence.
-      if (this._visible) {
-        this._updateCameraData();
-        this._setSummaryText(this._composeSummary(), false);
-      }
-      // First settled view: request the AI summary now rather than waiting for
-      // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
-      if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
-        this._firstSummaryKicked = true;
-        void this._updateSummary(true, true);
-      }
+      if (this._displayed) this._settle();
+      else this._unseen.settle = true;
     };
 
     // Session-consistent pseudorandom identifiers (generated once at construction)
@@ -358,6 +352,27 @@ export class IntelHUD {
     this._startTimers();
   }
 
+  /**
+   * The camera has settled: show the readouts and the plain summary for the
+   * view it settled on.
+   */
+  _settle() {
+    // The 250 ms telemetry timer and 15 s semantic-summary timer must not
+    // leave the prior city on-screen after a long CCTV focus flight.
+    // Refresh deterministic camera context synchronously on settle; the AI
+    // summary can still upgrade it on its normal cadence.
+    if (this._visible) {
+      this._updateCameraData();
+      this._setSummaryText(this._composeSummary(), false);
+    }
+    // First settled view: request the AI summary now rather than waiting for
+    // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
+    if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
+      this._firstSummaryKicked = true;
+      void this._updateSummary(true, true);
+    }
+  }
+
   /** Show the HUD's words in the new locale; drop AI text in the old one. */
   _relocalize() {
     this._markSummaryDirty();
@@ -374,7 +389,8 @@ export class IntelHUD {
         ? {}
         : { vessel: { active: false, text: t('AIS: --') } }),
     });
-    if (this._visible && this._latestMetrics) this._updateCameraData();
+    if (this._visible && this._displayed && this._latestMetrics)
+      this._updateCameraData();
     this._setSummaryText(this._composeSummary(), false);
   }
 
@@ -431,11 +447,13 @@ export class IntelHUD {
   _startTimers() {
     // Timestamp — every second
     this._timestampInterval = setInterval(() => {
+      if (!this._displayed) return;
       this._present({ timestamp: this._formatUTC() });
     }, 1000);
 
     // REC blink — every 800ms
     this._recBlinkInterval = setInterval(() => {
+      if (!this._displayed) return;
       this._recBlinkState = !this._recBlinkState;
       this._present({ recShown: this._recBlinkState });
     }, 800);
@@ -444,13 +462,18 @@ export class IntelHUD {
     // page, except an inline panel, whose host may report it hidden while it
     // is on screen (see keepPanelRendering in app/panelRendering.js).
     this._updateInterval = setInterval(() => {
-      if (!this._visible || (document.hidden && !isEmbeddedInline())) return;
+      if (!this._visible || !this._displayed) return;
+      if (document.hidden && !isEmbeddedInline()) return;
       this._updateCameraData();
     }, 250);
 
     // Semantic summary refresh cadence
     this._summaryInterval = setInterval(() => {
       if (!this._visible) return;
+      if (!this._displayed) {
+        this._unseen.summary = true;
+        return;
+      }
       void this._updateSummary(true);
     }, HUD_SUMMARY_INTERVAL_MS);
   }
@@ -1123,9 +1146,35 @@ export class IntelHUD {
   show() {
     this._visible = true;
     this._present({ active: true });
+    if (this._displayed) this._refreshShown();
+    else this._unseen.show = true;
+  }
+
+  /** Readouts and a fresh summary for a HUD just shown. */
+  _refreshShown() {
     this._updateCameraData(); // immediate update
     this._markSummaryDirty();
     void this._updateSummary(false, true);
+  }
+
+  /**
+   * Whether the HUD's view is on screen. A stylesheet can give the view
+   * `display: none`; until it is displayed again the HUD works out and
+   * publishes no readouts, and then it shows current ones at once.
+   * @param {boolean} displayed
+   */
+  setDisplayed(displayed) {
+    displayed = Boolean(displayed);
+    if (this._destroyed || displayed === this._displayed) return;
+    this._displayed = displayed;
+    if (!displayed) return;
+    const { settle, show, summary } = this._unseen;
+    this._unseen = { settle: false, show: false, summary: false };
+    this._present({ timestamp: this._formatUTC() });
+    if (settle) this._settle();
+    if (show && this._visible) this._refreshShown();
+    else if (!settle && this._visible) this._updateCameraData();
+    if (summary && !show && this._visible) void this._updateSummary(true);
   }
 
   /** Hide the HUD overlay. */
@@ -1214,6 +1263,7 @@ export class IntelHUD {
 
   /** Tear down all running intervals. Call when discarding the HUD instance. */
   destroy() {
+    this._destroyed = true;
     clearInterval(this._updateInterval);
     clearInterval(this._recBlinkInterval);
     clearInterval(this._timestampInterval);

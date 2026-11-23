@@ -15,6 +15,7 @@ import { useHudStore } from '../stores/hud.js';
 import IntelHudView from './IntelHudView.vue';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { toDegrees as deg } from '../../geo/index.js';
+import { assertSameNode } from '../../testSupport/domAssert.mjs';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -59,7 +60,7 @@ function mount(t) {
     presentSelectedVessel(null);
     app.unmount();
   });
-  return { hud, root: document.getElementById('intel-hud') };
+  return { hud, store, root: document.getElementById('intel-hud') };
 }
 
 test('the corners are in the document from mount, before IntelHUD presents them', (t) => {
@@ -155,4 +156,141 @@ test('the selected vessel readout shows while a vessel is selected', async (t) =
   await nextTick();
   assert.equal(vessel.className, 'hud-ais-vessel');
   assert.equal(vessel.textContent, 'AIS: --');
+});
+
+/**
+ * IntelHUD over a fake camera, with every publish counted. Mock timers are
+ * on, so the cadences run when the test ticks them.
+ */
+function countedHud(t) {
+  t.mock.timers.enable({ apis: ['setInterval', 'setTimeout', 'Date'] });
+  const camera = fakeCameraPort({
+    pose: { lat: deg(0.7), lon: deg(-1.2), height: 500 },
+  });
+  const published = [];
+  const hud = new IntelHUD(
+    {},
+    {
+      camera: camera.port,
+      summaryService: { configured: async () => false },
+      publish: (view) => published.push(view),
+    },
+  );
+  t.after(() => hud.destroy());
+  return { hud, camera, published };
+}
+
+test('a HUD that is not displayed works out and publishes no readouts', (t) => {
+  const { hud, camera, published } = countedHud(t);
+  hud.setMode('on');
+  hud.setDisplayed(false);
+  const pose = hud._camera.pose;
+  let poses = 0;
+  hud._camera.pose = () => {
+    poses += 1;
+    return pose();
+  };
+  const before = published.length;
+  // Every cadence: the clock, the REC blink, telemetry and the summary.
+  t.mock.timers.tick(60_000);
+  camera.setPose({ height: 900 });
+  camera.emit('moveStart');
+  camera.emit('moveEnd');
+  t.mock.timers.tick(60_000);
+  assert.equal(published.length, before, 'nothing is published');
+  assert.equal(poses, 0, 'the camera is not read');
+});
+
+test('a HUD displayed again shows current readouts at once', (t) => {
+  const { hud, camera, published } = countedHud(t);
+  hud.setMode('on');
+  hud.setDisplayed(false);
+  t.mock.timers.tick(5_000);
+  camera.setPose({ height: 900 });
+  camera.emit('moveStart');
+  camera.emit('moveEnd');
+  hud.setDisplayed(true);
+  const view = published.at(-1);
+  assert.match(view.alt, /^ALT: 900m/, 'the altitude the camera has now');
+  assert.equal(view.timestamp, hud._formatUTC(), 'the clock reads now');
+  // And the cadences run again.
+  const count = published.length;
+  t.mock.timers.tick(1_000);
+  assert.ok(published.length > count);
+});
+
+test('a HUD shown while not displayed refreshes when it is displayed', (t) => {
+  const { hud, camera, published } = countedHud(t);
+  hud.setDisplayed(false);
+  camera.setPose({ height: 700 });
+  hud.setMode('on');
+  assert.equal(published.at(-1).active, true, 'visibility is still published');
+  assert.equal(published.at(-1).alt, 'ALT: --m   SUN: --° EL');
+  hud.setDisplayed(true);
+  assert.match(published.at(-1).alt, /^ALT: 700m/);
+});
+
+test('the view reports whether #intel-hud is displayed, and IntelHUD follows', async (t) => {
+  // happy-dom lays nothing out: a stand-in observer reports the box, and
+  // getClientRects() answers as the stylesheet would.
+  const observers = [];
+  const previous = globalThis.window.ResizeObserver;
+  globalThis.window.ResizeObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      observers.push(this);
+    }
+    observe(target) {
+      this.targets.push(target);
+    }
+    disconnect() {
+      this.targets = [];
+    }
+  };
+  t.after(() => {
+    globalThis.window.ResizeObserver = previous;
+  });
+  const { hud, store, root } = mount(t);
+  let boxes = 1;
+  root.getClientRects = () => Array.from({ length: boxes });
+  const report = () => observers.at(-1).callback([]);
+  assert.deepEqual(observers.at(-1).targets, [root]);
+  const calls = [];
+  const setDisplayed = hud.setDisplayed.bind(hud);
+  hud.setDisplayed = (displayed) => {
+    calls.push(displayed);
+    setDisplayed(displayed);
+  };
+  store.connect(hud);
+  assert.deepEqual(calls, [true], 'connecting tells IntelHUD the view state');
+  boxes = 0;
+  report();
+  report();
+  assert.equal(store.displayed, false);
+  assert.equal(hud._displayed, false);
+  boxes = 1;
+  report();
+  assert.equal(hud._displayed, true);
+  assert.deepEqual(calls, [true, false, true]);
+});
+
+test('a readout keeps its text node and changes its text', async (t) => {
+  const { hud } = mount(t);
+  hud._present({ alt: 'ALT: 1m', timestamp: '2026-01-01 00:00:01Z' });
+  await nextTick();
+  const alt = document.getElementById('hud-alt');
+  const stamp = document.getElementById('hud-timestamp');
+  const [altText, stampText] = [alt.firstChild, stamp.firstChild];
+  hud._present({ alt: 'ALT: 2m', timestamp: '2026-01-01 00:00:02Z' });
+  await nextTick();
+  assert.equal(alt.textContent, 'ALT: 2m');
+  assert.equal(stamp.textContent, '2026-01-01 00:00:02Z');
+  assertSameNode(alt.firstChild, altText, 'the same text node');
+  assertSameNode(stamp.firstChild, stampText, 'the same text node');
+  assert.equal(alt.childNodes.length, 1);
+  // An empty readout has no text node, as before.
+  hud._present({ summary: '' });
+  await nextTick();
+  assert.equal(document.getElementById('hud-summary').childNodes.length, 0);
 });

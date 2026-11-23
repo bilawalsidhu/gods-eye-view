@@ -920,7 +920,7 @@ test('the Stories announcement waits behind the welcome card', () => {
   // the card is dismissed.
   assert.match(
     css,
-    /body:has\(#first-run-launcher\) #gev-stories #hPop,\s*body\.first-run-opening-stories #gev-stories #hPop \{\s*visibility: hidden;\s*pointer-events: none;\s*\}/,
+    /body:is\(\.has-first-run-launcher \*, #first-run-launcher\) #gev-stories #hPop,\s*body\.first-run-opening-stories #gev-stories #hPop \{\s*visibility: hidden;\s*pointer-events: none;\s*\}/,
   );
   // The selector only works while Stories still renders the popup as #hPop
   // inside #gev-stories.

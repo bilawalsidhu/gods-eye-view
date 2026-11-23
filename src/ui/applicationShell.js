@@ -426,6 +426,9 @@ export class StyleManager extends ShellFacade {
       summaryService: requestServices?.summary,
       publish: (view) => hudStore.publish(view),
     });
+    // The view says whether it is on screen; off screen the HUD does no
+    // readout work.
+    hudStore.connect(this.hud);
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,

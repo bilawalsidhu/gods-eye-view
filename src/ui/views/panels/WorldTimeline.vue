@@ -5,6 +5,7 @@ import { formatDate, t } from '../../../i18n/index.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
+import { vRootClass } from '../../rail/rootClass.js';
 import UiSelect from '../../kit/UiSelect.js';
 
 // The world timeline: play and pause and the speed on the left, a track
@@ -400,7 +401,7 @@ const onKey = (event) => {
 </script>
 
 <template>
-  <div v-if="time.supported && time.span" id="world-timeline" role="group" :aria-label="t('World time')"
+  <div v-if="time.supported && time.span" id="world-timeline" v-root-class="{ 'has-world-timeline': true }" role="group" :aria-label="t('World time')"
     ><UiButton class="world-timeline-play" :label="time.playing ? t('Pause') : t('Play')" @click="store.togglePlay()"
       ><UiIcon :name="time.playing ? 'pause' : 'play_arrow'" :size="20" /></UiButton
     ><UiSelect class="gev-field gev-field--compact world-timeline-speed" :aria-label="t('Play speed')" :title="t('Play speed')" :options="speeds" :model-value="speed" @update:model-value="store.setSpeed($event)"

@@ -6,6 +6,7 @@ import { FIRST_RUN_LINKS, environmentalLabel } from '../../firstRunCopy.js';
 import UiButton from '../kit/UiButton.vue';
 import UiCheckbox from '../kit/UiCheckbox.vue';
 import UiIcon from '../kit/UiIcon.vue';
+import { vRootClass } from '../rail/rootClass.js';
 import { useFirstRunStore } from '../stores/firstRun.js';
 import { useStoriesStore } from '../stores/stories.js';
 
@@ -157,7 +158,7 @@ function onSuppress(event) {
        src/firstRunExperience.js for the full show policy. -->
   <!-- Tints the globe behind the card; click-through, so the card stays non-modal. -->
   <div v-if="!launcher?.removed && launcher?.shown" class="first-run-backdrop" :class="{ visible: launcher?.visible }" aria-hidden="true"></div>
-  <aside v-if="!launcher?.removed" id="first-run-launcher" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" :class="{ visible: launcher?.visible }" :hidden="!launcher?.shown" :aria-hidden="launcher?.closing ? 'true' : undefined" :aria-busy="launcher?.busy ?? undefined" :data-state="launcher?.state ?? undefined">
+  <aside v-if="!launcher?.removed" id="first-run-launcher" v-root-class="{ 'has-first-run-launcher': true }" role="dialog" aria-labelledby="first-run-title" aria-describedby="first-run-description" :class="{ visible: launcher?.visible }" :hidden="!launcher?.shown" :aria-hidden="launcher?.closing ? 'true' : undefined" :aria-busy="launcher?.busy ?? undefined" :data-state="launcher?.state ?? undefined">
     <div class="first-run-scanline" aria-hidden="true"></div>
     <header class="first-run-header">
       <span class="first-run-kicker">{{ t('MISSION CONTROL · FIRST LAUNCH') }}</span>

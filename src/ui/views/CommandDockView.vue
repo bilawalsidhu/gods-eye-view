@@ -4,6 +4,7 @@ import { msg, t } from '../../i18n/index.js';
 import { vPanelState } from '../rail/panelState.js';
 import UiButton from '../kit/UiButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
+import { vRootClass } from '../rail/rootClass.js';
 import { useDisplayStore } from '../stores/display.js';
 import { computed } from 'vue';
 import { useLocationStore } from '../stores/location.js';
@@ -127,7 +128,8 @@ function selectMapSource(chip) {
     </div>
   </div>
 
-  <VoiceControl v-else-if="slot === 'voice'" :key="voice.id" :view="voice" />
+  <!-- The Omnibar's stylesheet selects on the voice control in the dock, and on voice being live, through classes on the page root (src/ui/rail/rootClass.js). -->
+  <VoiceControl v-else-if="slot === 'voice'" :key="voice.id" :view="voice" v-root-class="{ 'dock-has-voice': true, 'assistant-voice-mode': voice.root.assistantMode === 'voice' }" />
 
   <!-- Location bar -->
   <div v-else-if="slot === 'location'" id="location-bar" v-panel-state="'location-bar'" class="panel-collapsible collapsed">

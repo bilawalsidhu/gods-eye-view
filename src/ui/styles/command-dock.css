@@ -225,7 +225,9 @@ body:not(.ui-clean-view):not(.recording-mode) #gev-credits {
   bottom: calc(2vh + 7rem + var(--world-timeline-lift, 0px));
 }
 
-body:not(.ui-clean-view):not(.recording-mode):has(
+/* `.hud-minimal-active`: the Minimal HUD is showing, one of the page-root classes of src/ui/rail/rootClass.js. */
+body:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits {
@@ -235,7 +237,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(
   text-align: right;
 }
 
-body:not(.ui-clean-view):not(.recording-mode):has(
+body:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #gev-credits {
