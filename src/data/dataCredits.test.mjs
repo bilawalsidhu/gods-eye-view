@@ -273,7 +273,10 @@ test('a credit with several links becomes one credit per link, in order', async 
     'a character reference is not a separator',
   );
   assert.deepEqual(read(html('usgs')), [
-    ['Earthquakes: Data courtesy of the U.S. Geological Survey', undefined],
+    [
+      'Earthquakes and water levels: Data courtesy of the U.S. Geological Survey',
+      undefined,
+    ],
   ]);
   for (const entry of DATA_CREDITS) {
     const credits = creditsFromMarkup(entry.html);

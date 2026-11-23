@@ -4432,5 +4432,19 @@
   "JTWC warning ↗": "JTWC-Warnung ↗",
   "Active cyclone advisories and warnings": "Aktive Wirbelsturm-Lageberichte und -Warnungen",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Wähle einen Sturm auf der Karte oder in der Liste, um ihn auszuwählen und die Kamera hinzubewegen. Ein Klick auf eine leere Kartenstelle hebt die Auswahl auf. Lageberichte von NOAA NHC/CPHC und Warnungen des JTWC. Der NHC-Kegel beschreibt die Unsicherheit der vorhergesagten Zugbahn des Zentrums, nicht die Sturmgröße oder das gesamte Gefahrengebiet. Der 34-Knoten-Gefahrenbereich des JTWC ist das Gebiet, das Winde von 34 Knoten erreichen können, erweitert um den Fehler der Zugbahnvorhersage; er ist kein Kegel. Die Beschriftungen der Vorhersagepunkte sind die Vorlaufstunden der Quelle, keine aus der Ausgabe berechneten Zeiten. Die Geometrie folgt der Oberfläche; die Höhe ist keine Wetterhöhe. Maßgeblich sind der offizielle Lagebericht oder das regionale Warnzentrum.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Warnung {number} · ausgegeben {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Warnung {number} · ausgegeben {time}",
+  "USGS Lakes & Reservoirs": "USGS: Seen und Stauseen",
+  "Water": "Wasser",
+  "Zoom in to a region to load river gauges": "Zoomen Sie in eine Region, um Pegelmessstellen zu laden",
+  "USGS Springs": "USGS: Quellen",
+  "USGS Rivers & Streams": "USGS: Flüsse und Bäche",
+  "Discharge": "Abfluss",
+  "USGS Water Data · refreshed hourly": "USGS-Wasserdaten · stündlich aktualisiert",
+  "as of {time}": "Stand: {time}",
+  "Gage height": "Pegelstand",
+  "Lake elevation above NGVD29": "Seespiegelhöhe über NGVD29",
+  "Reading": "Messwert",
+  "Lake elevation above NAVD88": "Seespiegelhöhe über NAVD88",
+  "Lake/reservoir stage": "See-/Stauseepegel",
+  "No current reading": "Keine aktuelle Messung"
 }

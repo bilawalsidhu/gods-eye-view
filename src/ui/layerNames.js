@@ -51,6 +51,10 @@ export const LAYER_NAME_KEYS = Object.freeze({
   'alpr-cameras': msg('ALPR Cameras'),
   'sea-marks': msg('Sea Marks'),
   'ski-pistes': msg('Ski Pistes'),
+  // USGS water layers (src/layers/usgsWater/).
+  'local-usgs-water': msg('USGS Rivers & Streams'),
+  'local-usgs-lakes': msg('USGS Lakes & Reservoirs'),
+  'local-usgs-springs': msg('USGS Springs'),
 });
 
 /** The layer panel's own English names, where they differ from the module's. */
@@ -133,6 +137,7 @@ const SOURCE_LABEL_KEYS = new Map(
     msg('OSM routing'),
     msg('Mapped camera locations'),
     msg('OpenStreetMap · community mapped'),
+    msg('USGS Water Data · refreshed hourly'),
   ].map((key) => [key, key]),
 );
 

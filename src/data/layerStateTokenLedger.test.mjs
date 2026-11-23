@@ -37,11 +37,17 @@ const CHECKER_PATH = fileURLToPath(
 const NEXT_PATH = fileURLToPath(
   new URL('../../scripts/next-layer-state-token.mjs', import.meta.url),
 );
-const reservationRows = JSON.parse(
+const allReservationRows = JSON.parse(
   readFileSync(
     new URL('./layerStateTokenReservations.json', import.meta.url),
     'utf8',
   ),
+);
+// The allocation scenarios below start from the ledger as published before
+// the USGS water layers; individual fixtures below remove later reservations
+// where they exercise historic allocation scenarios.
+const reservationRows = allReservationRows.filter(
+  ([id]) => !id.startsWith('local-usgs-'),
 );
 
 test('pre-ledger published ownership is independent of the candidate mapping', () => {
@@ -134,6 +140,20 @@ function writeCodecFixture(cwd, rows, entries) {
       /  Object\.freeze\(\{\s*id: 'rail',[\s\S]*?\}\),\n/,
       '',
     );
+  for (const id of [
+    'local-usgs-water',
+    'local-usgs-lakes',
+    'local-usgs-springs',
+  ]) {
+    if (!rows.some(([rowId]) => rowId === id)) {
+      source = source.replace(
+        new RegExp(
+          `  Object\\.freeze\\(\\{\\s*id: '${id}',[\\s\\S]*?\\}\\),\\n`,
+        ),
+        '',
+      );
+    }
+  }
   const registryEnd = ']);\n\nexport const REGISTERED_LAYER_IDS';
   assert.equal(source.split(registryEnd).length, 2);
   const additions = entries
@@ -154,10 +174,10 @@ function writeCodecFixture(cwd, rows, entries) {
 
 test('reservation ledger is complete, pinned, and rejects duplicate or malformed rows', () => {
   assert.deepEqual(
-    { ...parseLayerStateTokenReservations(reservationRows) },
+    { ...parseLayerStateTokenReservations(allReservationRows) },
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
   );
-  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 39);
+  assert.equal(Object.keys(LAYER_STATE_TOKEN_RESERVATIONS).length, 42);
   assert.deepEqual(
     { ...LAYER_STATE_TOKEN_RESERVATIONS },
     {
@@ -173,6 +193,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
       news: '00',
       shipwrecks: '01',
       rail: '02',
+      'local-usgs-water': '03',
+      'local-usgs-lakes': '04',
+      'local-usgs-springs': '05',
     },
   );
   assert.throws(
@@ -198,9 +221,9 @@ test('reservation ledger is complete, pinned, and rejects duplicate or malformed
     /Duplicate layer-state token reservation/,
   );
   assert.equal(
-    parseLayerStateTokenReservations([...reservationRows, ['future', '03']])
+    parseLayerStateTokenReservations([...reservationRows, ['future', '06']])
       .future,
-    '03',
+    '06',
   );
   assert.throws(
     () =>
