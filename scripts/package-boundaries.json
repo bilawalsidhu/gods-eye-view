@@ -5602,7 +5602,8 @@
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/interpretation.js",
-      "src/layers/airQuality/openAq.js"
+      "src/layers/airQuality/openAq.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": [
       "hls.js",
@@ -6464,6 +6465,7 @@
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
+      "src/layers/airQuality/cpcb.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs"
@@ -7225,7 +7227,8 @@
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/interpretation.js",
-      "src/layers/airQuality/openAq.js"
+      "src/layers/airQuality/openAq.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": []
   },
@@ -8302,6 +8305,7 @@
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
+      "src/layers/airQuality/cpcb.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
       "src/localRequestGate.mjs"
@@ -8318,7 +8322,8 @@
       "src/layers/airQuality/providers.js",
       "src/layers/airQuality/southAfrica.js",
       "src/layers/airQuality/interpretation.js",
-      "src/layers/airQuality/openAq.js"
+      "src/layers/airQuality/openAq.js",
+      "src/layers/airQuality/cpcb.js"
     ],
     "external": []
   },

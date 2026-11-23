@@ -4,6 +4,7 @@ import { AIR_QUALITY_PROVIDERS, AIR_QUALITY_BANDS } from './model.js';
 import { SA_POLLUTANTS, SA_INDEX_BANDS } from './southAfrica.js';
 import { hourlyLegend, interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
+import { CPCB_POLLUTANTS } from './cpcb.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
 /**
@@ -37,6 +38,7 @@ export function createAirQualitySnapshotSource({
   return {
     getCoverage: () => coverage,
     async getSnapshot({ parameter = 'PM2.5', signal, view } = {}) {
+      signal?.throwIfAborted();
       const requestSignal = AbortSignal.any([
         AbortSignal.timeout(50_000),
         ...(signal ? [signal] : []),
@@ -144,6 +146,28 @@ export function createDefaultAirQualityProviders({
       ],
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
+        fetchImpl,
+        now,
+      }),
+    },
+    {
+      id: 'cpcb',
+      title: msg('India'),
+      label: msg('Air quality'),
+      coverage: msg('India · CPCB via OGD'),
+      network: 'CPCB',
+      sourceLabel: 'CPCB · data.gov.in',
+      observation: true,
+      direct: true,
+      parameters: CPCB_POLLUTANTS,
+      requiresKeyId: 'data-gov-in',
+      indexLabel: msg('Index unavailable'),
+      // Unrated until the feed's units are verified (CPCB_UNITS_VERIFIED).
+      interpretation: msg('Reported pollutant average · not an overall AQI'),
+      legend: [{ color: '#8cb4ce', label: msg('Not rated') }],
+      source: createAirQualitySnapshotSource({
+        endpoint: '/api/air-quality/india',
+        hourly: true,
         fetchImpl,
         now,
       }),

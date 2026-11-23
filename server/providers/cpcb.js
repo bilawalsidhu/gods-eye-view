@@ -1,4 +1,5 @@
 import { readResponseJsonCapped } from './common/http.js';
+import { normalizeCpcbRecords } from '../../src/layers/airQuality/cpcb.js';
 
 const RESOURCE =
   'https://api.data.gov.in/resource/3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69';
@@ -22,7 +23,10 @@ const FIELDS = [
   'avg_value',
 ];
 
-/** Fixed-origin, bounded OGD proxy. Private API keys never leave the server. */
+/**
+ * Fixed-origin, bounded OGD acquisition answering the shared air-quality
+ * snapshot (schemaVersion 1). Private API keys never leave the server.
+ */
 export function cpcbProxy({
   fetchImpl = (...args) => globalThis.fetch(...args),
   apiKey = () => process.env.DATA_GOV_IN_API_KEY,
@@ -88,7 +92,20 @@ export function cpcbProxy({
           ),
         );
       }
-      if (records.length === total) return { records };
+      if (records.length === total) {
+        const snapshot = normalizeCpcbRecords({ records }, { now: now() });
+        if (!snapshot) throw new Error('Invalid OGD snapshot');
+        return {
+          schemaVersion: 1,
+          fetchedAt: now(),
+          source: 'CPCB',
+          attribution:
+            'Central Pollution Control Board via Open Government Data Platform India',
+          sourceUrl:
+            'https://www.data.gov.in/catalog/real-time-air-quality-index',
+          ...snapshot,
+        };
+      }
       if (page.records.length !== PAGE_SIZE || records.length > total)
         throw new Error('Incomplete OGD snapshot');
     }
@@ -109,7 +126,8 @@ export function cpcbProxy({
         return send(405, { error: 'method_not_allowed' });
       }
       const key = apiKey()?.trim();
-      if (!key) return send(503, { error: 'key_required' });
+      // The layer reads 428 as "needs a key" (Provider Settings).
+      if (!key) return send(428, { error: 'no_key' });
       if (cache && now() - cachedAt < TTL)
         return send(200, { ...cache, stale: false });
       if (!inflight && now() >= retryAt) {

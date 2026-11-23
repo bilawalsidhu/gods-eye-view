@@ -189,24 +189,29 @@ How to read this:
 
 ### India air-quality observations (CPCB / OGD)
 
-The Air quality card can select **India**, then one pollutant (PM2.5, PM10,
-NO2, SO2, CO, OZONE or NH3). Its source is CPCB's
+India's CPCB stations are one more observation provider of the Air quality
+layer: they are drawn in the same station set as SAAQIS and OpenAQ, in the AQI
+view and in the PM2.5, PM10, NO2, SO2, CO and O3 (OGD `OZONE`) views; OGD's NH3
+has no view and is not read. Where OpenAQ carries a copy of a CPCB station
+within 150 m, the CPCB reading is shown. Its source is CPCB's
 [Real time Air Quality Index catalog](https://www.data.gov.in/catalog/real-time-air-quality-index),
 OGD resource `3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69`.
 The portal identifies published data as licensed under the Government Open Data
 License – India. Credit CPCB and OGD Platform India; no government endorsement
 is implied. Data is fetched at runtime, not bundled in this repository.
 
-Add a personal OGD key through **Air quality → India → Manage connection**, or set
-`DATA_GOV_IN_API_KEY` in the ignored `.env` and restart the server. This private
-key stays in the server proxy. Canada remains the default, keyless provider.
+Add a personal OGD key in **Provider Settings** (`DATA_GOV_IN_API_KEY`, listed
+like OpenAQ's key), or set it in the ignored `.env` and restart the server. This
+private key stays in the server proxy. Without it the route answers 428 and the
+layer reports that India needs a key while the other providers keep drawing.
 
-**Value semantics:** the first integration preserves the selected pollutant's
-`avg_value` (or legacy `pollutant_avg`) as a reported average. It does not convert this field to an
-overall AQI, assign concentration units, or apply health categories. The OGD
-catalog title alone is insufficient to establish those field semantics.
-Markers are neutral station symbols, not interpolated pollution coverage.
-Canada's AQHI and India's reported averages are never combined in a ranking.
+**Value semantics:** each pollutant's `avg_value` (or legacy `pollutant_avg`)
+is kept as a reported average. Until the field units are verified
+(`CPCB_UNITS_VERIFIED` in `src/layers/airQuality/cpcb.js`), India's readings
+carry no units, are unrated (`rated: false`, the neutral colour, no category)
+and contribute nothing to an AQI (`aqi: null`). The OGD catalog title alone is
+insufficient to establish those field semantics. Markers are neutral station
+symbols, not interpolated pollution coverage.
 
 `last_update` is interpreted as an IST publication timestamp, not as the
 sampling time. Missing, invalid, more-than-six-hour-old and implausibly future
@@ -214,9 +219,9 @@ records are omitted. A successful response can still contain old source data:
 the existing two-hour freshness threshold applies. The proxy caches complete
 snapshots for 20 minutes, coalesces requests, caps pagination/response sizes,
 and pauses retries for one minute on failure. Cached fallback is explicitly
-labeled and expires after six hours. Switching provider clears the previous
-network's markers immediately. Provider and pollutant are included in share
-and persisted layer options.
+labeled and expires after six hours. The route answers the shared air-quality
+snapshot (`schemaVersion: 1`, station catalog and readings), normalized by
+`src/layers/airQuality/cpcb.js`.
 
 The schema and failure paths have fixture coverage. An authenticated live
 response verified on 18 October 2026 uses `avg_value`, `min_value`, and

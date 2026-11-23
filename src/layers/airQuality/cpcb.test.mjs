@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpcbObservationTime, normalizeCpcbRecords } from './cpcb.js';
-import { createAirQualitySource } from './source.js';
+import {
+  CPCB_POLLUTANTS,
+  CPCB_UNITS_VERIFIED,
+  cpcbObservationTime,
+  normalizeCpcbRecords,
+} from './cpcb.js';
+import { createAirQualitySource } from './providers.js';
 import { createAirQualityLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
@@ -19,6 +24,7 @@ const row = (patch = {}) => ({
   ...patch,
 });
 const normalize = (records) => normalizeCpcbRecords({ records }, { now });
+const readingsOf = (records) => normalize(records).readings;
 
 test('OGD dates are IST, independent of host timezone, and invalid dates are rejected', () => {
   assert.equal(cpcbObservationTime('18-10-2026 12:00:00'), now);
@@ -43,8 +49,8 @@ test('missing values never become zero; stale, future and invalid locations are 
     Infinity,
     true,
   ])
-    assert.deepEqual(normalize([row({ pollutant_avg })]), []);
-  assert.equal(normalize([row({ pollutant_avg: '0' })])[0].value, 0);
+    assert.deepEqual(readingsOf([row({ pollutant_avg })]), []);
+  assert.equal(readingsOf([row({ pollutant_avg: '0' })])[0].value, 0);
   for (const patch of [
     { latitude: null },
     { longitude: 190 },
@@ -52,42 +58,248 @@ test('missing values never become zero; stale, future and invalid locations are 
     { last_update: '17-10-2026 12:00:00' },
     { last_update: '19-10-2026 12:00:00' },
   ])
-    assert.deepEqual(normalize([row(patch)]), []);
+    assert.deepEqual(readingsOf([row(patch)]), []);
 });
 
-test('one pollutant per station, newest wins; reported averages are not labeled AQI', () => {
-  const rows = normalize([
+test('one reading per station and pollutant, newest wins; reported averages are not labeled AQI', () => {
+  const rows = readingsOf([
     row({ last_update: '18-10-2026 11:00:00' }),
     row({ pollutant_avg: 150 }),
-    row({ pollutant_id: 'CO' }),
+    row({ pollutant_id: 'CO', pollutant_avg: '1.2' }),
   ]);
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0].value, 150);
-  assert.equal(rows[0].scale, 'PM2.5');
-  assert.equal(rows[0].risk, null);
-  assert.equal(rows[0].band, null);
-  assert.equal(normalize([row(), row({ state: 'Other' })]).length, 2);
+  assert.deepEqual(
+    rows.map((reading) => [reading.parameter, reading.value]),
+    [
+      ['CO', 1.2],
+      ['PM2.5', 150],
+    ],
+  );
+  for (const reading of rows) {
+    assert.equal(reading.provider, 'cpcb');
+    assert.equal(reading.scale, reading.parameter);
+    assert.equal(reading.risk, null);
+    assert.equal(reading.band, null);
+  }
+  assert.equal(readingsOf([row(), row({ state: 'Other' })]).length, 2);
   assert.equal(normalizeCpcbRecords({ error: 'denied' }), null);
 });
 
-test('source requests the local proxy, forwards stale status and handles missing keys', async () => {
-  let status = 200;
+test("OZONE is the layer's O3; pollutants without a view are left out", () => {
+  assert.deepEqual([...CPCB_POLLUTANTS].sort(), [
+    'CO',
+    'NO2',
+    'O3',
+    'PM10',
+    'PM2.5',
+    'SO2',
+  ]);
+  assert.deepEqual(
+    readingsOf([
+      row({ pollutant_id: 'OZONE' }),
+      row({ pollutant_id: 'NH3' }),
+      row({ pollutant_id: 'Unknown' }),
+    ]).map((reading) => reading.parameter),
+    ['O3'],
+  );
+});
+
+test('the station catalog keeps stations whose readings are all out of date', () => {
+  const { stations, readings } = normalize([
+    row(),
+    row({ station: 'Silent station', last_update: '17-10-2026 12:00:00' }),
+  ]);
+  assert.equal(readings.length, 1);
+  assert.deepEqual(
+    stations.map((station) => station.name),
+    ['Silent station', 'Test station'],
+  );
+});
+
+test('current OGD avg_value schema is accepted alongside legacy pollutant_avg', () => {
+  const liveShape = row({ avg_value: '42', min_value: '7', max_value: '80' });
+  delete liveShape.pollutant_avg;
+  assert.equal(readingsOf([liveShape])[0].value, 42);
+  assert.equal(
+    readingsOf([row({ avg_value: '42', pollutant_avg: '99' })])[0].value,
+    42,
+  );
+  assert.deepEqual(
+    readingsOf([row({ avg_value: 'NA', pollutant_avg: '99' })]),
+    [],
+  );
+});
+
+test('unverified India readings carry no units, no rating and no AQI', () => {
+  assert.equal(CPCB_UNITS_VERIFIED, false);
+  const [reading] = readingsOf([row()]);
+  assert.equal(reading.units, null);
+  assert.equal(reading.rated, false);
+  assert.equal(reading.aqi, null);
+  assert.equal(reading.color, '#8cb4ce');
+  assert.equal(reading.label, '123');
+});
+
+// ── India in the layer, through the default providers ─────────────────────
+
+/** An OGD `last_update` stamp (IST wall time) for an instant. */
+const istStamp = (ms) => {
+  const ist = new Date(ms + 330 * 60_000).toISOString();
+  return `${ist.slice(8, 10)}-${ist.slice(5, 7)}-${ist.slice(0, 4)} ${ist.slice(11, 19)}`;
+};
+const recent = () => istStamp(Date.now() - 10 * 60_000);
+const snapshot = (body = {}) => ({
+  schemaVersion: 1,
+  stations: [],
+  readings: [],
+  ...body,
+});
+/** What the local India route answers for these OGD rows. */
+const indiaSnapshot = (records) =>
+  snapshot(normalizeCpcbRecords({ records }, { now: Date.now() }));
+const openAqCopy = (lat, lon) => ({
+  id: 'openaq:9:PM2.5',
+  provider: 'openaq',
+  stationId: '9',
+  name: 'OpenAQ copy',
+  zone: 'India',
+  country: 'IN',
+  lat,
+  lon,
+  parameter: 'PM2.5',
+  scale: 'PM2.5',
+  units: 'µg/m³',
+  value: 120,
+  averagingMinutes: 60,
+  observedMs: Date.now() - 5 * 60_000,
+  kind: 'observation',
+  label: '120.00 µg/m³',
+});
+
+function indiaLayer(routes) {
+  const requests = [];
   const source = createAirQualitySource({
-    now: () => now,
     fetchImpl: async (url) => {
-      assert.equal(url, '/api/air-quality/india');
-      return Response.json(
-        status === 200
-          ? { records: [row()], stale: true }
-          : { error: 'key_required' },
-        { status },
-      );
+      requests.push(String(url));
+      const answer = routes[String(url).split('?')[0]];
+      if (!answer) throw new Error(`unexpected request ${url}`);
+      return typeof answer === 'function' ? answer() : Response.json(answer);
     },
   });
-  assert.equal((await source.getSnapshot({ provider: 'cpcb' }))[0].value, 123);
-  assert.equal(source.getStatus().stale, true);
-  status = 503;
-  await assert.rejects(source.getSnapshot({ provider: 'cpcb' }), /API key/);
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer, {
+    camera: {
+      on: () => () => {},
+      viewRectangle: () => ({ west: 76, south: 28, east: 78, north: 29 }),
+    },
+  });
+  const layer = createAirQualityLayer({
+    source,
+    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
+  });
+  layer.init(viewer);
+  layer.enable();
+  const points = () =>
+    [...draw.sets.values()].find(
+      (set) => set.kind === 'points' && !set.disposed,
+    );
+  return { layer, points, requests };
+}
+
+test('India readings are drawn as one more observation provider', async () => {
+  const { layer, points, requests } = indiaLayer({
+    '/api/air-quality/india': indiaSnapshot([row({ last_update: recent() })]),
+    // An aggregator's copy of the same station, 50 m away.
+    '/api/air-quality/openaq': snapshot({
+      readings: [openAqCopy(28.6 + 50 / 111_320, 77.2)],
+    }),
+    '/api/air-quality/south-africa': snapshot(),
+  });
+  assert.equal(await layer.update(), true);
+  assert.ok(requests.includes('/api/air-quality/india'));
+  assert.ok(requests.some((url) => url.startsWith('/api/air-quality/openaq?')));
+  const drawn = [...points().items.values()];
+  assert.equal(drawn.length, 1);
+  assert.equal(drawn[0].meta.provider, 'cpcb');
+  const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
+  assert.equal(india.status, 'ok');
+  assert.equal(india.requiresKeyId, 'data-gov-in');
+  layer.destroy();
+});
+
+test('unverified India readings are unrated and leave the AQI alone', async () => {
+  assert.equal(CPCB_UNITS_VERIFIED, false);
+  const { layer, points } = indiaLayer({
+    '/api/air-quality/india': indiaSnapshot([row({ last_update: recent() })]),
+    '/api/air-quality/openaq': snapshot(),
+    '/api/air-quality/south-africa': snapshot(),
+  });
+  assert.equal(layer.getParams().view, 'aqi');
+  await layer.update();
+  for (const view of ['aqi', 'PM2.5']) {
+    if (view !== 'aqi') {
+      layer.setParams({ view });
+      await layer.update();
+    }
+    const [station] = [...points().items.values()];
+    assert.equal(station.meta.provider, 'cpcb', view);
+    assert.equal(station.color, '#8cb4ce', view);
+    assert.equal(station.meta.aqi, null, view);
+    assert.equal(station.meta.rated, false, view);
+    assert.equal(station.meta.assessment?.label, undefined, view);
+  }
+  layer.destroy();
+});
+
+test('without a data.gov.in key India asks for it and the others still draw', async () => {
+  const { layer, points } = indiaLayer({
+    '/api/air-quality/india': () =>
+      Response.json({ error: 'no_key' }, { status: 428 }),
+    '/api/air-quality/openaq': snapshot({
+      readings: [openAqCopy(28.6, 77.2)],
+    }),
+    '/api/air-quality/south-africa': snapshot(),
+  });
+  assert.equal(await layer.update(), true);
+  const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
+  assert.equal(india.status, 'no-key');
+  assert.match(india.error, /DATA_GOV_IN_API_KEY/);
+  assert.match(india.error, /Provider Settings/);
+  assert.equal(layer.getStats().error, null);
+  assert.deepEqual(
+    [...points().items.values()].map((point) => point.meta.provider),
+    ['openaq'],
+  );
+  layer.destroy();
+});
+
+test('the India source asks the local route and keeps its stale status', async () => {
+  const urls = [];
+  const source = createAirQualitySource({
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json({
+        ...indiaSnapshot([
+          row({ last_update: recent() }),
+          row({
+            pollutant_id: 'NO2',
+            pollutant_avg: '40',
+            last_update: recent(),
+          }),
+        ]),
+        stale: true,
+      });
+    },
+  });
+  const readings = await source.getSnapshot({
+    provider: 'cpcb',
+    parameter: 'NO2',
+  });
+  assert.deepEqual(urls, ['/api/air-quality/india']);
+  assert.deepEqual(
+    readings.map((reading) => [reading.parameter, reading.value]),
+    [['NO2', 40]],
+  );
+  assert.equal(source.getCoverage('cpcb').stale, true);
 });
 
 test('an already aborted India request does not fetch', async () => {
@@ -96,19 +308,19 @@ test('an already aborted India request does not fetch', async () => {
   });
   await assert.rejects(
     source.getSnapshot({ provider: 'cpcb', signal: AbortSignal.abort() }),
+    { name: 'AbortError' },
   );
 });
 
-test('switching provider clears old markers and a late Canadian response cannot replace India', async () => {
-  let release;
+/** Default provider definitions with a hand-driven snapshot per provider. */
+function heldLayer(answers) {
+  const pending = new Map();
   const source = {
-    providers: ['eccc', 'cpcb'],
-    getSnapshot: async ({ provider }) =>
-      provider === 'cpcb'
-        ? normalize([row()])
-        : new Promise((resolve) => {
-            release = resolve;
-          }),
+    definitions: createAirQualitySource().definitions,
+    getSnapshot: ({ provider }) =>
+      answers[provider] === 'hold'
+        ? new Promise((resolve) => pending.set(provider, resolve))
+        : Promise.resolve(answers[provider] ?? []),
   };
   const layer = createAirQualityLayer({
     source,
@@ -117,104 +329,57 @@ test('switching provider clears old markers and a late Canadian response cannot 
   const viewer = {};
   bindFakeDraw(viewer);
   layer.init(viewer);
+  return { layer, release: (provider, rows) => pending.get(provider)(rows) };
+}
+const indiaRows = () =>
+  normalizeCpcbRecords(
+    { records: [row({ last_update: recent() })] },
+    { now: Date.now() },
+  ).readings;
+const canadaRows = () => [
+  {
+    ...indiaRows()[0],
+    id: 'eccc:test-station',
+    provider: 'eccc',
+    scale: 'AQHI',
+    value: 3,
+    label: '3',
+  },
+];
+
+test('switching view clears old markers and a late Canadian response cannot replace India', async () => {
+  const { layer, release } = heldLayer({ eccc: 'hold', cpcb: indiaRows() });
+  layer.setParams({ view: 'aqhi' });
   layer.enable();
   const pending = layer.update();
-  layer.setParams({ provider: 'cpcb' });
+  layer.setParams({ view: 'PM2.5' });
   await layer.update();
-  release([]);
+  release('eccc', canadaRows());
   await pending;
-  assert.equal(layer.getAnalystRecords()[0].provider, 'cpcb');
+  assert.deepEqual(
+    layer.getAnalystRecords().map((record) => record.provider),
+    ['cpcb'],
+  );
   assert.equal(layer.getStats().count, 1);
-  assert.deepEqual(layer.getRowControls().legend, []);
-  assert.equal(layer.getParams().provider, 'cpcb');
-  assert.match(layer.getRowControls().summary.detail, /not an overall AQI/);
+  assert.equal(layer.getParams().view, 'PM2.5');
   layer.destroy();
 });
 
-test('late India response cannot replace Canada after switching back', async () => {
-  let releaseIndia;
-  const indiaReadings = normalize([row()]);
-  const canadaReadings = [
-    {
-      ...indiaReadings[0],
-      id: 'eccc:test-station',
-      provider: 'eccc',
-      scale: 'AQHI',
-      value: 3,
-      label: '3',
-    },
-  ];
-  const source = {
-    providers: ['eccc', 'cpcb'],
-    getSnapshot: ({ provider }) =>
-      provider === 'cpcb'
-        ? new Promise((resolve) => {
-            releaseIndia = resolve;
-          })
-        : Promise.resolve(canadaReadings),
-  };
-  const layer = createAirQualityLayer({
-    source,
-    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
-  });
-  const viewer = {};
-  bindFakeDraw(viewer);
-  layer.init(viewer);
-  layer.setParams({ provider: 'cpcb' });
+test('a late India response after the view changes is dropped', async () => {
+  const { layer, release } = heldLayer({ cpcb: 'hold', eccc: canadaRows() });
+  layer.setParams({ view: 'PM2.5' });
   layer.enable();
-
   const pendingIndia = layer.update();
-  assert.equal(typeof releaseIndia, 'function');
-  layer.setParams({ provider: 'eccc' });
+  layer.setParams({ view: 'aqhi' });
   assert.equal(await layer.update(), true);
-
-  releaseIndia(indiaReadings);
-  assert.equal(await pendingIndia, false);
-  assert.equal(layer.getParams().provider, 'eccc');
+  release('cpcb', indiaRows());
+  await pendingIndia;
+  assert.equal(layer.getParams().view, 'aqhi');
   assert.equal(layer.getStats().count, 1);
-  assert.equal(layer.getAnalystRecords()[0].provider, 'eccc');
+  assert.deepEqual(
+    layer.getAnalystRecords().map((record) => record.provider),
+    ['eccc'],
+  );
   assert.ok(layer.getRowControls().legend.length > 0);
   layer.destroy();
-});
-
-test('missing India credentials keep provider controls accessible and error visible', async () => {
-  const source = {
-    providers: ['eccc', 'cpcb'],
-    getSnapshot: async () => {
-      throw new Error('India air quality requires a data.gov.in API key');
-    },
-  };
-  const layer = createAirQualityLayer({
-    source,
-    overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
-  });
-  const viewer = {};
-  bindFakeDraw(viewer);
-  layer.init(viewer);
-  layer.setParams({ provider: 'cpcb' });
-  layer.enable();
-  assert.equal(await layer.update(), true);
-  assert.match(layer.getStats().error, /API key/);
-  assert.ok(
-    layer
-      .getRowControls()
-      .summary.actions.some(
-        (action) => action.id === 'eccc' && !action.disabled,
-      ),
-  );
-  layer.destroy();
-});
-
-test('current OGD avg_value schema is accepted alongside legacy pollutant_avg', () => {
-  const liveShape = row({ avg_value: '42', min_value: '7', max_value: '80' });
-  delete liveShape.pollutant_avg;
-  assert.equal(normalize([liveShape])[0].value, 42);
-  assert.equal(
-    normalize([row({ avg_value: '42', pollutant_avg: '99' })])[0].value,
-    42,
-  );
-  assert.deepEqual(
-    normalize([row({ avg_value: 'NA', pollutant_avg: '99' })]),
-    [],
-  );
 });

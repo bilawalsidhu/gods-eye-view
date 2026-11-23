@@ -1,5 +1,6 @@
 - Add optional CPCB air-quality station observations for India through OGD,
-  with pollutant selection, source timestamps, and cached-data status. Connect
-  a personal data.gov.in key from the Air quality card; Canada remains the
-  default keyless AQHI provider. Indian values are labeled as reported pollutant
-  averages without inferred AQI or health categories (m3ayush, #1204).
+  drawn in the same station set as the other providers, with source
+  timestamps and cached-data status. Add a personal data.gov.in key in Provider
+  Settings. Indian values are shown as reported pollutant averages without
+  inferred AQI or health categories until their units are verified (m3ayush,
+  #1204).

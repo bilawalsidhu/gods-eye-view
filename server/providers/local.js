@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { openAqProxy } from './openAq.js';
 import { southAfricaAirQualityProxy } from './southAfricaAirQuality.js';
+import { cpcbProxy } from './cpcb.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { issTelemetryProxy } from './space/issTelemetry.js';
@@ -40,7 +41,6 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
-import { cpcbProxy } from './cpcb.js';
 import { libraryProxy } from './library.js';
 
 /**
@@ -91,10 +91,10 @@ function localProviderPlugins({
     cycloneProxy(),
     southAfricaAirQualityProxy(),
     openAqProxy(),
+    cpcbProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
-    cpcbProxy(),
     libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),

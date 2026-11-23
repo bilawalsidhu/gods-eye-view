@@ -2,9 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cpcbProxy } from './cpcb.js';
 
+const NOW = Date.parse('2026-10-18T06:30:00Z');
+/** One OGD row, published at NOW (12:00 IST). */
+const ogdRow = (patch = {}) => ({
+  country: 'India',
+  state: 'Delhi',
+  city: 'Delhi',
+  station: 'Test station',
+  latitude: '28.6',
+  longitude: '77.2',
+  pollutant_id: 'PM2.5',
+  avg_value: '42',
+  last_update: '18-10-2026 12:00:00',
+  ...patch,
+});
+
 function harness(options = {}, preview = false) {
   let handler;
-  const plugin = cpcbProxy(options);
+  const plugin = cpcbProxy({ now: () => NOW, ...options });
   const installed = plugin[
     preview ? 'configurePreviewServer' : 'configureServer'
   ]({
@@ -40,12 +55,14 @@ function harness(options = {}, preview = false) {
     return { status, body, next };
   };
 }
-test('no key makes no upstream request; preview has the same route and method policy', async () => {
+test('no key makes no upstream request and answers 428; preview has the same route and method policy', async () => {
   const request = harness(
     { apiKey: () => '', fetchImpl: () => assert.fail() },
     true,
   );
-  assert.equal((await request()).body.error, 'key_required');
+  const missing = await request();
+  assert.equal(missing.status, 428);
+  assert.equal(missing.body.error, 'no_key');
   assert.equal((await request('POST')).status, 405);
   assert.equal((await request('GET', '/other')).next, true);
 });
@@ -59,17 +76,19 @@ test('pagination, coalescing and cache: credentials and arbitrary upstream field
       const offset = Number(url.searchParams.get('offset'));
       return Response.json({
         total: 1001,
-        records: Array.from({ length: offset ? 1 : 1000 }, (_, i) => ({
-          station: String(i + offset),
-          api_key: 'private-test-key',
-        })),
+        records: Array.from({ length: offset ? 1 : 1000 }, (_, i) =>
+          ogdRow({ station: String(i + offset), api_key: 'private-test-key' }),
+        ),
       });
     },
   });
   const results = await Promise.all([request(), request()]);
   assert.equal(urls.length, 2);
-  assert.equal(results[0].body.records.length, 1001);
+  assert.equal(results[0].body.schemaVersion, 1);
+  assert.equal(results[0].body.readings.length, 1001);
+  assert.equal(results[0].body.stations.length, 1001);
   assert.equal(JSON.stringify(results).includes('private-test-key'), false);
+  assert.equal(JSON.stringify(results).includes('api_key'), false);
   assert.equal(urls[0].origin, 'https://api.data.gov.in');
   assert.equal(urls[0].searchParams.get('api-key'), 'private-test-key');
   await request();
@@ -82,7 +101,7 @@ test('incomplete pages fail atomically and failures are throttled and sanitized'
     apiKey: () => 'secret',
     fetchImpl: async () => {
       calls++;
-      return Response.json({ total: 2, records: [{ station: 'partial' }] });
+      return Response.json({ total: 2, records: [ogdRow()] });
     },
   });
   assert.equal((await request()).status, 502);
@@ -91,14 +110,14 @@ test('incomplete pages fail atomically and failures are throttled and sanitized'
 });
 
 test('stale cache is labeled after failure and expires after six hours', async () => {
-  let clock = 1,
+  let clock = NOW,
     fail = false;
   const request = harness({
     apiKey: () => 'secret',
     now: () => clock,
     fetchImpl: async () => {
       if (fail) throw new Error('secret in an upstream URL');
-      return Response.json({ total: 1, records: [{ station: 'test' }] });
+      return Response.json({ total: 1, records: [ogdRow()] });
     },
   });
   assert.equal((await request()).body.stale, false);
@@ -106,6 +125,7 @@ test('stale cache is labeled after failure and expires after six hours', async (
   clock += 21 * 60_000;
   const stale = await request();
   assert.equal(stale.body.stale, true);
+  assert.equal(stale.body.readings.length, 1);
   assert.equal(JSON.stringify(stale).includes('secret'), false);
   clock += 6 * 60 * 60_000;
   assert.equal((await request()).status, 502);
@@ -123,18 +143,20 @@ test('oversized upstream responses and redirects are not accepted', async () => 
   assert.equal((await request()).status, 502);
 });
 
-test('proxy preserves current OGD average fields for the station normalizer', async () => {
+test('the snapshot carries the current OGD avg_value as the reading value', async () => {
   const request = harness({
     apiKey: () => 'test-key',
     fetchImpl: async () =>
       Response.json({
         total: 1,
-        records: [{ avg_value: '42', min_value: '7', max_value: '80' }],
+        records: [ogdRow({ min_value: '7', max_value: '80' })],
       }),
   });
   const response = await request();
   assert.equal(response.status, 200);
-  assert.equal(response.body.records[0].avg_value, '42');
-  assert.equal(response.body.records[0].min_value, '7');
-  assert.equal(response.body.records[0].max_value, '80');
+  const [reading] = response.body.readings;
+  assert.equal(reading.provider, 'cpcb');
+  assert.equal(reading.parameter, 'PM2.5');
+  assert.equal(reading.value, 42);
+  assert.equal(reading.observedMs, NOW);
 });
