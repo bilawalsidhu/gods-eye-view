@@ -7,6 +7,7 @@ import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { STORY_TAG_LIMIT, STORY_TAGS } from '../../scenes/storyTags.js';
 import { vClassToggle } from '../rail/classToggle.js';
+import WellRecordsView from './WellRecordsView.vue';
 import SceneDialog from './panels/SceneDialog.vue';
 import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
@@ -122,6 +123,7 @@ async function importChosen(event) {
   </RailPanel>
 
   </div>
+  <WellRecordsView />
   <Teleport to="body">
     <SceneDialog v-if="dialog" :key="dialog.id" :view="dialog" />
   </Teleport>

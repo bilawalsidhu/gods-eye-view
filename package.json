@@ -351,6 +351,8 @@
     "./weather/effects": "./src/weatherEffectsMath.js",
     "./geo/screenCluster": "./src/geo/screenCluster.js",
     "./fleet": "./src/fleet/index.js",
+    "./layers/us-groundwater": "./src/layers/usGroundwater/index.js",
+    "./layers/us-groundwater/source": "./src/layers/usGroundwater/source.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
     "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }

@@ -100,6 +100,31 @@ test('OpenStreetMap has one generic data credit with separate tile and names dis
   );
 });
 
+test('Rainfolk hosting credit preserves USGWD original attribution, licence and adaptation notice', () => {
+  const credit = DATA_CREDITS.find(
+    (entry) => entry.key === 'rainfolk-groundwater',
+  );
+  assert.ok(credit);
+  assert.match(credit.html, /Rainfolk.*preparation and hosting/);
+  assert.match(credit.html, /USGWD.*Lin, Miller, Waqar and Marston/);
+  assert.match(credit.html, /10\.4211/);
+  assert.match(credit.html, /creativecommons\.org\/licenses\/by\/4\.0/);
+  assert.match(
+    credit.html,
+    /normalized, datum-converted and spatially packaged/,
+  );
+  assert.match(credit.html, /State credits and supplied notices/);
+  const notices = new URL(credit.html.match(/href="([^"]*Table_S2[^"]*)"/)[1]);
+  assert.equal(notices.origin, 'https://www.hydroshare.org');
+  assert.equal(notices.username, '');
+  assert.equal(notices.search, '');
+  assert.ok(
+    notices.pathname.startsWith(
+      '/resource/8b02895f02c14dd1a749bcc5584a5c55/data/contents/Metadata/',
+    ),
+  );
+});
+
 test('inline OSM attribution persists until its last display owner leaves', async (t) => {
   const { showOsmCredit, hideOsmCredit } = await import('./dataCredits.js');
   t.mock.timers.enable({ apis: ['setTimeout'] });
