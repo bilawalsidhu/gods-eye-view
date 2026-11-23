@@ -230,7 +230,7 @@ test('without diagnostics the overload snapshot keeps counts only', async (t) =>
   assert.equal(snapshot.timings, undefined);
 });
 
-test('the real decoder returns timings only for stamped blocks', async (t) => {
+async function startDecoder(t) {
   const module = new URL('./sdr.worker.js', import.meta.url).href;
   const thread = new ThreadWorker(
     `const { parentPort } = require('node:worker_threads');
@@ -244,6 +244,11 @@ test('the real decoder returns timings only for stamped blocks', async (t) => {
   const inbox = [];
   thread.on('message', (message) => inbox.push(message));
   await until(() => inbox.some((m) => m.type === 'ready'), 5_000);
+  return { thread, inbox };
+}
+
+test('the real decoder returns timings only for stamped blocks', async (t) => {
+  const { thread, inbox } = await startDecoder(t);
   thread.postMessage({
     type: 'configure',
     mode: 'fm',
@@ -303,19 +308,7 @@ test('blocks request a spectrum only while seeking', (t) => {
 });
 
 test('the real decoder computes spectra only when requested, with audio unchanged', async (t) => {
-  const module = new URL('./sdr.worker.js', import.meta.url).href;
-  const thread = new ThreadWorker(
-    `const { parentPort } = require('node:worker_threads');
-     globalThis.self = globalThis;
-     self.postMessage = (m, transfer) => parentPort.postMessage(m, transfer);
-     parentPort.on('message', (data) => self.onmessage && self.onmessage({ data }));
-     import(${JSON.stringify(module)});`,
-    { eval: true },
-  );
-  t.after(() => thread.terminate());
-  const inbox = [];
-  thread.on('message', (message) => inbox.push(message));
-  await until(() => inbox.some((m) => m.type === 'ready'), 5_000);
+  const { thread, inbox } = await startDecoder(t);
   const tone = () => {
     const bytes = new Uint8Array(32_768 * 2);
     for (let n = 0; n < 32_768; n += 1) {
@@ -368,4 +361,64 @@ test('the real decoder computes spectra only when requested, with audio unchange
     Array.from(listening[5].samples),
     Array.from(seeking[5].samples),
   );
+});
+
+test('the SDR worker recovers audio from a synthetic VHF AM signal', async (t) => {
+  const { thread, inbox } = await startDecoder(t);
+  const sampleRate = 2_048_000;
+  const toneHz = 1_000;
+  const blockLength = 32_768;
+  const warmupBlocks = 96;
+  const measuredBlocks = 6;
+  const blockCount = warmupBlocks + measuredBlocks;
+  thread.postMessage({
+    type: 'configure',
+    mode: 'atc',
+    channelSpacingKhz: 8.33,
+    sampleRate,
+    tune: 42,
+  });
+  for (let block = 0; block < blockCount; block += 1) {
+    const iq = new Uint8Array(blockLength * 2);
+    for (let index = 0; index < blockLength; index += 1) {
+      const radians =
+        (2 * Math.PI * (block * blockLength + index)) / sampleRate;
+      const amplitude = 55 + 25 * Math.sin(toneHz * radians);
+      iq[2 * index] = Math.round(127.5 + amplitude * Math.cos(600 * radians));
+      iq[2 * index + 1] = Math.round(
+        127.5 + amplitude * Math.sin(600 * radians),
+      );
+    }
+    thread.postMessage({ type: 'samples', id: block, buffer: iq.buffer }, [
+      iq.buffer,
+    ]);
+  }
+  await until(
+    () => inbox.filter((m) => m.type === 'ack').length === blockCount,
+    5_000,
+  );
+  const audio = inbox.filter((m) => m.type === 'atc');
+  assert.equal(audio.length, blockCount);
+  assert.ok(audio.every((m) => m.tune === 42 && m.bins === null));
+  // The library's AM carrier level estimator has a 0.5-second time constant.
+  const samples = audio
+    .slice(warmupBlocks)
+    .flatMap((m) => Array.from(m.samples));
+  assert.equal(
+    samples.length,
+    (measuredBlocks * blockLength * 48_000) / sampleRate,
+  );
+
+  let cosine = 0;
+  let sine = 0;
+  let energy = 0;
+  for (const [index, sample] of samples.entries()) {
+    const phase = (2 * Math.PI * toneHz * index) / 48_000;
+    cosine += sample * Math.cos(phase);
+    sine += sample * Math.sin(phase);
+    energy += sample ** 2;
+  }
+  assert.ok(energy / samples.length > 1e-4, 'the recovered tone is audible');
+  const toneEnergy = (2 * (sine ** 2 + cosine ** 2)) / samples.length;
+  assert.ok(toneEnergy / energy > 0.9, 'the 1 kHz tone dominates the output');
 });

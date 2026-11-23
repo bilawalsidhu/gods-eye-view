@@ -1,6 +1,7 @@
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { findDirectionalFmPeak } from './spectrum.js';
 import { openHackrfOne } from './hackrfOne.js';
+import { parseAtcChannel } from './atcChannels.js';
 import {
   SDR_GAIN_DEFAULTS,
   normalizeHackrfGain,
@@ -93,15 +94,27 @@ export const SDR_RECEIVER_PRESETS = Object.freeze({
     ppm: 0,
     rtlAgc: false,
   }),
+  atc: Object.freeze({
+    frequencyHz: 118_000_000,
+    sampleRate: 2_048_000,
+    ppm: 0,
+    rtlAgc: false,
+  }),
 });
 
 const FM_DEFAULT_HZ = SDR_RECEIVER_PRESETS.fm.frequencyHz;
 const FM_SAMPLE_RATE = SDR_RECEIVER_PRESETS.fm.sampleRate;
-const ADSB_FREQUENCY_HZ = SDR_RECEIVER_PRESETS.adsb.frequencyHz;
-const ADSB_SAMPLE_RATE = SDR_RECEIVER_PRESETS.adsb.sampleRate;
 
 function normalizeMode(mode) {
+  return mode === 'adsb' || mode === 'atc' ? mode : 'fm';
+}
+
+function gainMode(mode) {
   return mode === 'adsb' ? 'adsb' : 'fm';
+}
+
+function isAudioMode(mode) {
+  return mode === 'fm' || mode === 'atc';
 }
 
 function defaultStorage() {
@@ -347,7 +360,9 @@ function errorState(text) {
   };
 }
 
-function streamingMessage(mode) {
+function streamingMessage(mode, atcChannel) {
+  if (mode === 'atc')
+    return () => t('Receiving ATC on {channel}', { channel: atcChannel });
   return () =>
     mode === 'adsb'
       ? t('Receiving 1090 MHz ADS-B')
@@ -355,7 +370,7 @@ function streamingMessage(mode) {
 }
 
 /**
- * Browser-local SDR session shared by the FM controls and the Local ADS-B
+ * Browser-local SDR session shared by the audio controls and the Local ADS-B
  * layer. `state.aircraft` holds source-agnostic records from
  * `src/sources/adsbRecords.js`.
  */
@@ -382,6 +397,9 @@ export class SdrController {
     this._webUsb = webUsb || null;
     this._storage = storage;
     this._gainByMode = readSdrGainSettings(storage);
+    this._atcChannel = parseAtcChannel(
+      (SDR_RECEIVER_PRESETS.atc.frequencyHz / 1_000_000).toFixed(3),
+    );
     this._deviceMemory = createSdrDeviceMemory(storage);
     const hackrfMemory = createSdrDeviceMemory(
       storage,
@@ -396,6 +414,7 @@ export class SdrController {
       message: '',
       mode: 'fm',
       frequencyHz: FM_DEFAULT_HZ,
+      atcChannel: this._atcChannel.label,
       sampleRate: FM_SAMPLE_RATE,
       volume: 0.8,
       gain: this._gainByMode.fm,
@@ -942,12 +961,16 @@ export class SdrController {
     // Every configuration starts a new decoder epoch, so output of blocks
     // queued before it (another mode, or a failed retune) is never current.
     const tune = ++this._fmTune;
+    this._fmLevelPatch = null;
     worker.postMessage({
       type: 'configure',
       tune,
       mode: this.state.mode,
       sampleRate: this.state.sampleRate,
       location: this.state.receiverLocation,
+      ...(this.state.mode === 'atc'
+        ? { channelSpacingKhz: this._atcChannel.spacingKhz }
+        : {}),
     });
   }
 
@@ -980,7 +1003,7 @@ export class SdrController {
           this._audioNode !== audioNode ||
           event.data?.type !== 'audioStats' ||
           !this._device ||
-          this.state.mode !== 'fm'
+          !isAudioMode(this.state.mode)
         )
           return;
         const { underruns, waiting, empty, dropped, queued } = event.data;
@@ -1022,7 +1045,7 @@ export class SdrController {
               : this.state.audioLevelDbfs,
           }
         : null;
-    if (message.type === 'fm') {
+    if (isAudioMode(message.type)) {
       this._recordAudioDelay(message.workerPostedAt);
       // Display values only: merged and published at most every 250 ms, so
       // every subscriber is not run for each 16 ms block.
@@ -1045,7 +1068,7 @@ export class SdrController {
     } else if (levels) {
       this._setState(levels);
     }
-    if (message.type === 'fm') {
+    if (isAudioMode(message.type)) {
       // Audio from before the latest retune, from another mode, or from a
       // session that has ended never reaches the player.
       if (
@@ -1054,7 +1077,8 @@ export class SdrController {
         this._audioNode &&
         this._device &&
         this._audioSessionActive &&
-        this.state.mode === 'fm' &&
+        this.state.mode === message.type &&
+        this.state.status !== 'tuning' &&
         message.tune === this._fmTune &&
         !this.state.seeking
       ) {
@@ -1116,6 +1140,12 @@ export class SdrController {
     return { messagesPerSecond: null };
   }
 
+  _frequencyForMode(mode) {
+    if (mode === 'atc') return this._atcChannel.frequencyHz;
+    if (mode === 'fm') return this._fmFrequencyHz;
+    return SDR_RECEIVER_PRESETS[mode].frequencyHz;
+  }
+
   /**
    * Whether the session identified by `token` still owns `device`.
    * @param {number} token Session token captured before an await.
@@ -1136,13 +1166,11 @@ export class SdrController {
    *   torn down after a stall, or replaced) during configuration; nothing is
    *   published then.
    */
-  async _configureDevice(mode, frequencyHz, token = this._sessionToken) {
-    const preset =
-      mode === 'adsb' ? SDR_RECEIVER_PRESETS.adsb : SDR_RECEIVER_PRESETS.fm;
+  async _configureDevice(mode, token) {
+    const preset = SDR_RECEIVER_PRESETS[mode];
     const sampleRate = preset.sampleRate;
-    const tunedFrequency =
-      mode === 'adsb' ? preset.frequencyHz : clampFmFrequency(frequencyHz);
-    const gain = this._gainByMode[mode];
+    const tunedFrequency = this._frequencyForMode(mode);
+    const gain = this.getGain(mode);
     const device = this._device;
     if (!this._owns(token, device)) return false;
     const owned = await this._queueUsb(async () => {
@@ -1176,16 +1204,17 @@ export class SdrController {
       this._setState({
         sampleRate: actualRate,
         frequencyHz: actualFrequency,
+        atcChannel: this._atcChannel.label,
         gain,
       });
+      if (!this._owns(token, device)) return false;
+      this._configureWorker();
+      this._audioNode?.port.postMessage({ type: 'clear' });
+      if (isAudioMode(mode)) this._beginAudioSession();
+      else this._endAudioSession();
       return true;
     });
-    if (!owned || !this._owns(token, device)) return false;
-    this._configureWorker();
-    this._audioNode?.port.postMessage({ type: 'clear' });
-    if (mode === 'fm') this._beginAudioSession();
-    else this._endAudioSession();
-    return true;
+    return owned && this._owns(token, device);
   }
 
   async connect(mode = this.state.mode) {
@@ -1212,11 +1241,11 @@ export class SdrController {
     let acquisition = null;
     try {
       const nextMode = normalizeMode(mode);
-      this._setState({ mode: nextMode, gain: this._gainByMode[nextMode] });
+      this._setState({ mode: nextMode, gain: this.getGain(nextMode) });
       // Resume audio completely before opening the USB chooser. A context that
       // has only been constructed can still be suspended after the chooser
       // consumes the click activation.
-      if (nextMode === 'fm' && !(await this._ensureAudio())) {
+      if (isAudioMode(nextMode) && !(await this._ensureAudio())) {
         throw new Error(
           msg('Browser audio is suspended; press Connect again to resume it'),
         );
@@ -1241,11 +1270,7 @@ export class SdrController {
       // The session owns the device now; teardown takes over from here.
       this._endAcquisition(acquisition);
       acquisition = null;
-      const configured = await this._configureDevice(
-        this.state.mode,
-        this._fmFrequencyHz,
-        token,
-      );
+      const configured = await this._configureDevice(nextMode, token);
       // A stop() during configuration already closed this device.
       if (!configured || superseded()) return false;
       this._readGeneration += 1;
@@ -1254,7 +1279,7 @@ export class SdrController {
       this._setState({
         connected: true,
         status: 'streaming',
-        message: streamingMessage(this.state.mode),
+        message: streamingMessage(nextMode, this._atcChannel.label),
         deviceLabel: this._deviceIdentity
           ? sdrDeviceLabel(this._deviceIdentity)
           : null,
@@ -1653,63 +1678,64 @@ export class SdrController {
   }
 
   async setMode(mode) {
+    if (this.state.status === 'connecting' || this.state.status === 'tuning')
+      return false;
     const nextMode = normalizeMode(mode);
+    const previousMode = this.state.mode;
+    const switchingAtc = previousMode === 'atc' || nextMode === 'atc';
     this.cancelSeek();
     const token = this._sessionToken;
     const device = this._device;
     if (!device) {
       this._setState({
         mode: nextMode,
-        gain: this._gainByMode[nextMode],
-        frequencyHz:
-          nextMode === 'adsb' ? ADSB_FREQUENCY_HZ : this._fmFrequencyHz,
-        sampleRate: nextMode === 'adsb' ? ADSB_SAMPLE_RATE : FM_SAMPLE_RATE,
+        gain: this.getGain(nextMode),
+        frequencyHz: this._frequencyForMode(nextMode),
+        atcChannel: this._atcChannel.label,
+        sampleRate: SDR_RECEIVER_PRESETS[nextMode].sampleRate,
       });
       return true;
-    }
-    // A different authorized receiver preferred for this mode (the 1090 MHz
-    // channel of a dual-channel board, or a device remembered for the mode)
-    // takes over: reopen through selection instead of retuning this one.
-    if (
-      this.state.receiverKind === 'rtl' &&
-      nextMode !== this.state.mode &&
-      this._deviceIdentity
-    ) {
-      const preferred = await this._preferredDevice(nextMode);
-      if (!this._owns(token, device)) return false;
-      if (preferred && !sameSdrDevice(preferred, this._deviceIdentity)) {
-        await this.stop({ preserveMessage: true });
-        return this.connect(nextMode);
-      }
     }
     this._setState({
       status: 'tuning',
       mode: nextMode,
-      gain: this._gainByMode[nextMode],
+      gain: this.getGain(nextMode),
       message: () =>
         t('Switching to {mode}…', {
-          mode: nextMode === 'adsb' ? 'ADS-B' : 'FM',
+          mode: { adsb: 'ADS-B', fm: 'FM', atc: 'ATC' }[nextMode],
         }),
       errorText: null,
     });
+    if (switchingAtc) this._endAudioSession();
     try {
-      if (nextMode === 'fm' && !(await this._ensureAudio())) {
+      if (isAudioMode(nextMode) && !(await this._ensureAudio())) {
         throw new Error(
-          msg('Browser audio is suspended; select FM again to resume it'),
+          nextMode === 'atc'
+            ? msg('Browser audio is suspended; select ATC again to resume it')
+            : msg('Browser audio is suspended; select FM again to resume it'),
         );
       }
       // A stall teardown, stop() or reconnect during the switch supersedes
       // it: that path owns the published state, never "streaming" from here.
       if (!this._owns(token, device)) return false;
-      const configured = await this._configureDevice(
-        nextMode,
-        this._fmFrequencyHz,
-        token,
-      );
+      // Prefer the authorized RTL device selected for the destination mode.
+      if (
+        this.state.receiverKind === 'rtl' &&
+        nextMode !== previousMode &&
+        this._deviceIdentity
+      ) {
+        const preferred = await this._preferredDevice(nextMode);
+        if (!this._owns(token, device)) return false;
+        if (preferred && !sameSdrDevice(preferred, this._deviceIdentity)) {
+          await this.stop({ preserveMessage: true });
+          return this.connect(nextMode);
+        }
+      }
+      const configured = await this._configureDevice(nextMode, token);
       if (!configured || !this._owns(token, device)) return false;
       this._setState({
         status: 'streaming',
-        message: streamingMessage(nextMode),
+        message: streamingMessage(nextMode, this._atcChannel.label),
         snr: null,
         workerBlocks: 0,
         iqLevelDbfs: null,
@@ -1723,7 +1749,7 @@ export class SdrController {
       this._setState(
         errorState(describeConnectionError(error, this.state.receiverKind)),
       );
-      if (this.state.receiverKind === 'hackrf')
+      if (switchingAtc || this.state.receiverKind === 'hackrf')
         await this.stop({ preserveMessage: true });
       return false;
     }
@@ -1746,7 +1772,7 @@ export class SdrController {
    * Set the tuner gain for a mode and apply it live when that mode is active.
    * @param {'auto'|number|string} value `'auto'` or a gain in dB.
    * @param {object} [options]
-   * @param {'fm'|'adsb'} [options.mode] Mode to configure; defaults to current.
+   * @param {'fm'|'adsb'|'atc'} [options.mode] Mode to configure; defaults to current.
    * @returns {Promise<'auto'|number|null>} Applied setting, or null if invalid.
    */
   async setGain(value, { mode = this.state.mode } = {}) {
@@ -1754,9 +1780,10 @@ export class SdrController {
     const targetMode = normalizeMode(mode);
     const setting = normalizeSdrGain(value);
     if (setting === null) return null;
-    this._gainByMode = { ...this._gainByMode, [targetMode]: setting };
+    const profile = gainMode(targetMode);
+    this._gainByMode = { ...this._gainByMode, [profile]: setting };
     writeSdrGainSettings(this._storage, this._gainByMode);
-    if (targetMode !== this.state.mode) return setting;
+    if (profile !== gainMode(this.state.mode)) return setting;
     this._setState({ gain: setting });
     if (!this._device) return setting;
     try {
@@ -1774,11 +1801,11 @@ export class SdrController {
 
   /**
    * Current gain setting for a mode.
-   * @param {'fm'|'adsb'} [mode]
+   * @param {'fm'|'adsb'|'atc'} [mode] FM and ATC share the audio gain profile.
    * @returns {'auto'|number}
    */
   getGain(mode = this.state.mode) {
-    const target = normalizeMode(mode);
+    const target = gainMode(mode);
     return this._gainByMode[target] ?? SDR_GAIN_DEFAULTS[target];
   }
 
@@ -1820,6 +1847,24 @@ export class SdrController {
       await this.stop({ preserveMessage: true });
       return false;
     }
+  }
+
+  /**
+   * Select a published ATC channel and tune its carrier in AM receive mode.
+   * @param {string} channel VHF channel designator in MHz.
+   * @returns {Promise<boolean>} Whether the channel was accepted.
+   */
+  async tuneAtcChannel(channel) {
+    const parsed = parseAtcChannel(channel);
+    if (
+      !parsed ||
+      this._destroyed ||
+      this.state.status === 'connecting' ||
+      this.state.status === 'tuning'
+    )
+      return false;
+    this._atcChannel = parsed;
+    return this.setMode('atc');
   }
 
   async tuneFm(frequencyHz, { quiet = false } = {}) {

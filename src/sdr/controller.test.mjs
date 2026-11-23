@@ -76,6 +76,7 @@ function fakeDevice(events = [], name = 'device') {
 
 test('FM resumes audio before opening WebUSB and reports the running context', async (t) => {
   const events = [];
+  const playback = [];
   class FakeAudioContext {
     constructor() {
       events.push('audio:create');
@@ -101,7 +102,7 @@ test('FM resumes audio before opening WebUSB and reports the running context', a
   }
   class FakeAudioWorkletNode {
     constructor() {
-      this.port = { postMessage() {} };
+      this.port = { postMessage: (message) => playback.push(message) };
     }
 
     connect() {}
@@ -133,6 +134,29 @@ test('FM resumes audio before opening WebUSB and reports the running context', a
   assert.ok(events.includes('rtl-agc:false'));
   assert.ok(events.includes('device:gain:null'), 'FM defaults to tuner AGC');
   assert.equal(controller.getState().gain, 'auto');
+
+  const fmTune = controller._fmTune;
+  assert.equal(await controller.tuneAtcChannel('118.010'), true);
+  assert.equal(controller.getState().mode, 'atc');
+  assert.equal(controller.getState().atcChannel, '118.010');
+  assert.equal(controller.getState().frequencyHz, 118_008_333);
+  assert.ok(events.includes('device:tune:118008333'));
+  assert.equal(await controller.tuneAtcChannel('118.020'), false);
+  assert.equal(controller.getState().atcChannel, '118.010');
+
+  const samples = new Float32Array(8);
+  const deliver = (type, tune) =>
+    controller._handleWorkerMessage({ type, tune, samples });
+  deliver('fm', fmTune);
+  deliver('atc', controller._fmTune);
+  assert.equal(playback.filter(({ type }) => type === 'samples').length, 1);
+
+  assert.equal(await controller.setMode('adsb'), true);
+  assert.equal(controller.getState().frequencyHz, 1_090_000_000);
+  assert.equal(await controller.setMode('fm'), true);
+  assert.equal(controller.getState().frequencyHz, 98_500_000);
+  assert.equal(await controller.setMode('atc'), true);
+  assert.equal(controller.getState().frequencyHz, 118_008_333);
 });
 
 test('receiver presets keep the known-working tuning settings', () => {

@@ -13,6 +13,7 @@ let mode = 'fm';
 let sampleRate = 2_048_000;
 let receiverLocation = null;
 let demodulator = null;
+let channelSpacingKhz = 25;
 let blockCount = 0;
 let tune = 0;
 // True while handling a block the controller stamped for diagnostics.
@@ -22,17 +23,26 @@ const aircraft = new Map();
 const decoderStats = { positionsRejected: 0 };
 const adsbStream = new AdsbStreamDecoder();
 
-function configure(nextMode, nextSampleRate, location) {
-  const modeChanged = mode !== (nextMode === 'adsb' ? 'adsb' : 'fm');
-  mode = nextMode === 'adsb' ? 'adsb' : 'fm';
+function configure(nextMode, nextSampleRate, location, spacingKhz = 25) {
+  const selectedMode =
+    nextMode === 'atc' || nextMode === 'adsb' ? nextMode : 'fm';
+  const modeChanged = mode !== selectedMode;
+  mode = selectedMode;
   sampleRate =
     Number(nextSampleRate) || (mode === 'adsb' ? 2_000_000 : 2_048_000);
   receiverLocation = location || receiverLocation;
+  channelSpacingKhz = spacingKhz;
   blockCount = 0;
   demodulator =
     mode === 'fm'
       ? getDemod(sampleRate, 48_000, { ...getMode('WBFM'), stereo: false })
       : null;
+  if (mode === 'atc') {
+    demodulator = getDemod(sampleRate, 48_000, {
+      ...getMode('AM'),
+      bandwidth: channelSpacingKhz === 8.33 ? 7_000 : 10_000,
+    });
+  }
   if (modeChanged) {
     adsbStream.reset();
     aircraft.clear();
@@ -131,7 +141,12 @@ function absoluteNow() {
 function handleMessage(message) {
   if (message.type === 'configure') {
     if (Number.isSafeInteger(message.tune)) tune = message.tune;
-    configure(message.mode, message.sampleRate, message.location);
+    configure(
+      message.mode,
+      message.sampleRate,
+      message.location,
+      message.channelSpacingKhz,
+    );
     return;
   }
   if (message.type === 'location') {
@@ -146,17 +161,18 @@ function handleMessage(message) {
       aircraft.clear();
       decoderStats.positionsRejected = 0;
     }
-    if (mode === 'fm') configure(mode, sampleRate, receiverLocation);
+    if (demodulator)
+      configure(mode, sampleRate, receiverLocation, channelSpacingKhz);
     return;
   }
   if (message.type !== 'samples' || !(message.buffer instanceof ArrayBuffer))
     return;
 
   blockCount += 1;
-  if (mode === 'fm') {
+  if (demodulator) {
     // Only seek reads spectra: skip the FFT and its transfer otherwise.
     const bins =
-      message.spectrum === true && blockCount % 3 === 0
+      mode === 'fm' && message.spectrum === true && blockCount % 3 === 0
         ? analyzeSpectrum(message.buffer)
         : null;
     const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
@@ -166,7 +182,7 @@ function handleMessage(message) {
     const samples = new Float32Array(decoded.left);
     self.postMessage(
       {
-        type: 'fm',
+        type: mode,
         ...(timedBlock ? { workerPostedAt: absoluteNow() } : {}),
         samples,
         bins,
