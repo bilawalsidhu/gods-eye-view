@@ -166,6 +166,20 @@ test('a sideways move mid-swipe neither turns the gesture round nor steps again'
   p.remove();
 });
 
+test('navigation controls near the edge keep their own wheel', () => {
+  const p = page();
+  const nav = p.doc.createElement('div');
+  nav.className = 'gev-nav';
+  const dial = p.doc.createElement('div');
+  dial.setAttribute('role', 'slider');
+  nav.append(dial);
+  p.doc.body.append(nav);
+  const event = p.wheel(1580, 120, { target: dial });
+  assert.equal(event.defaultPrevented, false);
+  assert.deepEqual(p.clicks, []);
+  p.remove();
+});
+
 test('an open dialog near the edge keeps its own wheel', () => {
   const p = page();
   const dialog = p.doc.createElement('dialog');

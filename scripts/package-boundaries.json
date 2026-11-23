@@ -321,7 +321,11 @@
       "src/ui/stores/live.js",
       "src/ui/views/panels/LivePanel.vue",
       "src/ui/views/panels/CockpitLivePage.vue",
-      "src/ui/liveScreen.js"
+      "src/ui/liveScreen.js",
+      "src/ui/stores/navControl.js",
+      "src/ui/views/panels/NavControl.vue",
+      "src/ui/views/panels/NavControlButton.vue",
+      "src/ui/navControl/navMath.js"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -1437,6 +1441,9 @@
       "src/render/cesium/internals.js",
       "src/render/cesium/common.js",
       "src/ui/railEdgeScroll.js",
+      "src/ui/navControl/navMath.js",
+      "src/ui/navControl/navControl.js",
+      "src/geo/eyeMoves.js",
       "src/ui/localePicker.js",
       "src/ui/cyberSonarControls.js",
       "src/ui/locationNavigation.js",
@@ -1715,7 +1722,8 @@
       "src/data/liveStreams.js",
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
-      "src/ui/liveControls.js"
+      "src/ui/liveControls.js",
+      "src/ui/stores/navControl.js"
     ],
     "external": [
       "cesium",
@@ -4796,6 +4804,8 @@
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
       "src/ui/railEdgeScroll.js",
+      "src/ui/navControl/navMath.js",
+      "src/ui/navControl/navControl.js",
       "src/ui/mobileShell.js",
       "src/ui/mobileSheets.js",
       "src/ui/localePicker.js",
@@ -5597,7 +5607,8 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/ui/stores/navControl.js"
     ],
     "external": [
       "hls.js",
