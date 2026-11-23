@@ -1,6 +1,7 @@
+import { findCamera } from '../render/rendererOf.js';
+import { stopFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { createStateChannel } from '../app/stateChannel.js';
-import * as Cesium from 'cesium';
 import {
   beginDeferredNavigation,
   reassertNavigationHandoff,
@@ -12,8 +13,9 @@ export class NavigationController {
   constructor({
     viewer,
     tracking,
-    searchInput,
+    settleSearch = () => {},
     interruptCameraMotion,
+    interruptGlobeRotation = () => {},
     isCockpitActive,
     clearLocation,
     cancelShareSelection,
@@ -25,8 +27,9 @@ export class NavigationController {
     Object.assign(this, {
       viewer,
       tracking,
-      searchInput,
+      settleSearch,
       interruptCameraMotion,
+      interruptGlobeRotation,
       isCockpitActive,
       clearLocation,
       cancelShareSelection,
@@ -46,6 +49,7 @@ export class NavigationController {
     cancelPendingSelection = true,
     clearSearchedLocation = true,
   } = {}) {
+    this.interruptGlobeRotation('navigation-intent');
     cancelCameraArrival(this.viewer);
     this.cancelOrientation();
     const { flightsLayer, militaryFlightsLayer, satellitesLayer } =
@@ -116,12 +120,11 @@ export class NavigationController {
     return this._navigationGeneration;
   }
 
-  _settleLocationSearchUi(generation) {
+  /** A search that found nothing keeps its query and focus so it can be corrected. */
+  _settleLocationSearchUi(generation, { keepQuery = false } = {}) {
     if (this._activeLocationSearchGeneration !== generation) return;
     this._activeLocationSearchGeneration = null;
-    this.searchInput?.classList.remove('searching', 'expanded');
-    if (this.searchInput) this.searchInput.value = '';
-    this.searchInput?.blur();
+    this.settleSearch({ keepQuery });
   }
 
   _releaseFollowCamera({
@@ -174,12 +177,13 @@ export class NavigationController {
     } catch {
       /* best-effort release */
     }
-    this.viewer.trackedEntity = undefined;
+    stopFollowing(this.viewer);
     this.interruptCameraMotion('explicit-navigation');
     this.stopOrbit();
-    if (!preserveCameraFlight) this.viewer.camera.cancelFlight();
+    const camera = findCamera(this.viewer);
+    if (!preserveCameraFlight) camera?.cancelFlight();
     try {
-      this.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      camera?.release();
     } catch {
       /* teardown race */
     }
@@ -213,7 +217,7 @@ export class NavigationController {
       release: () => {
         this.interruptCameraMotion('camera-orientation');
         this.stopOrbit();
-        this.viewer.camera.cancelFlight();
+        findCamera(this.viewer)?.cancelFlight();
       },
       navigate,
     });
@@ -238,7 +242,7 @@ export class NavigationController {
     });
   }
 
-  _reassertNavigationHandoff(generation) {
+  _reassertNavigationHandoff(generation, { trackingOrigin = 'tool' } = {}) {
     return reassertNavigationHandoff({
       generation,
       currentGeneration: this._navigationGeneration,
@@ -250,7 +254,7 @@ export class NavigationController {
       // was refused by the cockpit leaves the old readout standing.
       release: () => {
         this.clearLocation();
-        return this._releaseFollowCamera();
+        return this._releaseFollowCamera({ trackingOrigin });
       },
     });
   }

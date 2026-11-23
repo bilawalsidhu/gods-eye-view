@@ -7,6 +7,7 @@ import { createSequenceCones, thinImages } from '../../sequenceCones.js';
 import { passesImageryFilter } from '../../filter.js';
 import { lonToTileX, latToTileY, tileBounds } from '../../tileMath.js';
 import { metresBetween } from '../../view.js';
+import { findCamera } from '../../../../render/rendererOf.js';
 import { createLru, createTileCache } from '../../tileCache.js';
 import { decodeCoverageTileSliced, decodePictures } from './decode.js';
 import { createPanoramaxSource } from './source.js';
@@ -40,8 +41,6 @@ import {
   ZOOM_IN_HINT,
   normalizeItem,
 } from './policy.js';
-
-export { PANORAMAX_PROVIDER_ID } from './policy.js';
 
 /**
  * A tile's bytes decoded by `decode`; a body that is not a vector tile
@@ -171,7 +170,7 @@ export function createPanoramaxProvider({
         sequence: {
           selectedId: null,
           images: [],
-          collection: null,
+          set: null,
           loading: false,
           error: null,
           abort: null,
@@ -258,7 +257,9 @@ export function createPanoramaxProvider({
        * from high up the click may land tens of metres off the line.
        */
       function lineClickRadius() {
-        const height = state.viewer?.camera?.positionCartographic?.height;
+        const height = state.viewer
+          ? findCamera(state.viewer)?.pose().height
+          : undefined;
         if (!Number.isFinite(height)) return NEAREST_RADIUS_M;
         return Math.min(
           LINE_CLICK_RADIUS_MAX_M,

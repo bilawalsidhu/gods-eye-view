@@ -76,7 +76,7 @@ export function createRadioLayer({ services, source }) {
       rankRadioStationsForRequest: parts.queries.rankRadioStationsForRequest,
       radioViewIsGlobal: parts.navigation.radioViewIsGlobal,
       radioRequestIsCurrent: parts.model.radioRequestIsCurrent,
-      radioStationIdFromPick: parts.interaction.radioStationIdFromPick,
+      radioStationIdFromPick: parts.rendering.radioStationIdFromPick,
       radioStationCameraPlan: parts.navigation.radioStationCameraPlan,
       radioGlobeNeedsRecentering: parts.navigation.radioGlobeNeedsRecentering,
       radioGlobeRecenterHeight: parts.navigation.radioGlobeRecenterHeight,

@@ -18,17 +18,18 @@
  *
  * Provider-neutral and Cesium-free: the pick is injected.
  */
+import { findCamera } from '../render/rendererOf.js';
 
 /** Movement below this many CSS pixels is still the same dwell. */
-export const POINTER_DWELL_PX = 12;
+const POINTER_DWELL_PX = 12;
 /** Stillness that makes a dwell point. */
 export const POINTER_DWELL_MS = 250;
 /** A resting pointer stays a referent this long after it last moved. */
 export const POINTER_FRESH_MS = 30000;
 /** Pixels from the canvas edge that count as "parked", never a referent. */
-export const POINTER_EDGE_PX = 8;
+const POINTER_EDGE_PX = 8;
 /** A dwell pick is reused by a snapshot only while this recent (contacts move). */
-export const POINTER_DWELL_REUSE_MS = 1000;
+const POINTER_DWELL_REUSE_MS = 1000;
 /**
  * Open mic has no gesture, so the pointer only counts when it moved or
  * settled on the map this recently: a cursor resting there for minutes is
@@ -55,28 +56,33 @@ const finite = finiteOrNull;
 
 /**
  * Camera pose identity: position to 1 m, orientation to about 0.06 degrees.
- * A pixel read under one key names nothing under another. Reads plain
- * numbers only, so it needs no Cesium import.
- * @param {object} viewer Cesium viewer.
+ * A pixel read under one key names nothing under another. Reads the
+ * camera port's pose.
+ * @param {object} viewer The scene object.
  * @returns {string|null}
  */
 export function cameraPoseKey(viewer) {
-  const camera = viewer?.camera;
-  const p = camera?.positionWC;
+  let pose = null;
+  try {
+    pose = findCamera(viewer)?.pose() ?? null;
+  } catch {
+    return null;
+  }
+  const p = pose?.position;
   if (!p || !Number.isFinite(p.x)) return null;
   const angle = (value) => Math.round((Number(value) || 0) * 1000);
   return [
     Math.round(p.x),
     Math.round(p.y),
     Math.round(p.z),
-    angle(camera.heading),
-    angle(camera.pitch),
-    angle(camera.roll),
+    angle(pose.heading),
+    angle(pose.pitch),
+    angle(pose.roll),
   ].join(',');
 }
 
 /** Bound and de-control a label before it goes to the model or the card. */
-export function pointerLabel(value, max = LABEL_MAX) {
+function pointerLabel(value, max = LABEL_MAX) {
   const clean = String(value ?? '')
     .replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')

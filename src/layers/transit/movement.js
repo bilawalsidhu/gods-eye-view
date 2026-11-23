@@ -9,14 +9,16 @@ import {
   correctHeight,
   setTimeOffsetMs,
 } from '../../data/contactPlayback.js';
-export const FIX_HISTORY_MAX = 128;
-export const DISPLAY_LAG_MIN_MS = 25_000;
-export const DISPLAY_LAG_RESET_MS = 90_000;
-export const MODE_MAX_SPEED_MPS = Object.freeze({
+const MODE_MAX_SPEED_MPS = Object.freeze({
   bus: 36, // ~130 km/h — a coach on a motorway
+  trolleybus: 28, // ~100 km/h — wired to the street
   tram: 28, // ~100 km/h — interurban light rail
+  cable_tram: 12, // ~43 km/h — the cable runs at a walking-pace multiple
   subway: 42, // ~150 km/h
+  monorail: 42, // ~150 km/h
   rail: 111, // ~400 km/h — high-speed services exist on some feeds
+  funicular: 16, // ~58 km/h — the fastest lines
+  aerial_lift: 15, // ~54 km/h — the fastest gondolas and trams
   ferry: 25, // ~90 km/h — fast catamarans
   unknown: 56, // ~200 km/h
 });
@@ -32,22 +34,19 @@ export const MODE_MAX_SPEED_MPS = Object.freeze({
  * @param {boolean} [inferred] Whether the mode came from a feed default.
  * @returns {number} m/s
  */
-export function speedCeilingMps(mode, inferred = false) {
+function speedCeilingMps(mode, inferred = false) {
   if (inferred) return MODE_MAX_SPEED_MPS.unknown;
   return MODE_MAX_SPEED_MPS[mode] ?? MODE_MAX_SPEED_MPS.unknown;
 }
-
-/** Position deadband is disabled: even a short reported crawl is played. */
-export const FIX_NOISE_M = 0;
 
 /**
  * Displacement (m) a glide must cover before its direction is worth believing.
  * Below this the course derived from it is noise; the last good one is held.
  */
-export const COURSE_MIN_TRAVEL_M = 12;
+const COURSE_MIN_TRAVEL_M = 12;
 
 /** Maximum display-course change per second (deg). A bus is not a gyroscope. */
-export const COURSE_MAX_RATE_DEG_PER_S = 120;
+const COURSE_MAX_RATE_DEG_PER_S = 120;
 /**
  * Longest stretch of elapsed time (s) one evaluation may spend. The limiter
  * used to bank the time since the course last CHANGED, so a vehicle that held
@@ -56,15 +55,7 @@ export const COURSE_MAX_RATE_DEG_PER_S = 120;
  * EVALUATED, and capped here so that even a first look after a long idle
  * sweeps visibly instead of snapping.
  */
-export const COURSE_STEP_MAX_S = 0.25;
-
-/**
- * Consecutive fixes at the same place before a vehicle is called STOPPED.
- * One is not enough: a fifteen-second gap between identical fixes is also what
- * a vehicle waiting at a light looks like, and so is a feed that repeated
- * itself.
- */
-export const STOPPED_FIXES = 2;
+const COURSE_STEP_MAX_S = 0.25;
 
 /**
  * How long after its newest fix a vehicle stops being described as travelling.
@@ -75,7 +66,7 @@ export const STOPPED_FIXES = 2;
  * otherwise is the same overreach as reading STOPPED off a stale status. Ninety
  * seconds matches the threshold at which a whole feed reads as gone quiet.
  */
-export const MOTION_UNKNOWN_AFTER_MS = 90_000;
+const MOTION_UNKNOWN_AFTER_MS = 90_000;
 
 const EARTH_M_PER_DEG = 111_320;
 
@@ -95,28 +86,12 @@ export function fixDistanceM(a, b) {
 }
 
 /**
- * Course in degrees clockwise from north, from one point to another.
- * @param {{lat:number, lon:number}} from
- * @param {{lat:number, lon:number}} to
- * @returns {number} 0-360
- */
-export function courseBetween(from, to) {
-  const dLat = (to.lat - from.lat) * EARTH_M_PER_DEG;
-  const dLon =
-    (to.lon - from.lon) *
-    EARTH_M_PER_DEG *
-    Math.cos((from.lat * Math.PI) / 180);
-  const deg = (Math.atan2(dLon, dLat) * 180) / Math.PI;
-  return (deg + 360) % 360;
-}
-
-/**
  * Shortest signed difference between two courses, in degrees (-180, 180].
  * @param {number} from
  * @param {number} to
  * @returns {number}
  */
-export function courseDelta(from, to) {
+function courseDelta(from, to) {
   let delta = ((to - from + 540) % 360) - 180;
   if (delta === -180) delta = 180;
   return delta;
@@ -211,13 +186,57 @@ export function recordFix(entry, fix, observation = {}) {
     );
     entry.currentEpoch = latest.epoch;
     if (context) entry.track.epochs.set(latest.epoch, context);
+    entry.placement?.observe(entry.key, {
+      timeMs: fix.t,
+      lat: fix.lat,
+      lon: fix.lon,
+      altitudeM: NaN,
+      speedMps: NaN,
+      courseDeg: Number.isFinite(fix.bearingDeg) ? fix.bearingDeg : NaN,
+      headingDeg: NaN,
+      feedId: entry.feedId,
+    });
   }
   return result;
 }
+/**
+ * How often a vehicle a host-supplied placement holds still is asked again
+ * whether it moves, so it resumes without the frame loop running for it.
+ */
+export const PLACED_WAKE_MS = 1000;
+
+/**
+ * Advance a vehicle's playback to now. With a host-supplied placement
+ * (`entry.placement`, ../../data/placementProvider.js) that places it, it is
+ * drawn there, its course and speed the placement's (`entry.placed`); the
+ * playback's own phase, motion and segment stand. `entry.placedMoving` says
+ * whether the placed position changed since the placement was last asked at
+ * an earlier time (true for its first answer, so one more frame can tell).
+ */
 export function updatePlayback(entry, wallNowMs, monoNowMs) {
   entry.clocks.wallNowMs = wallNowMs;
   entry.clocks.monoNowMs = monoNowMs;
   advance(entry.track, entry.clocks, entry.sample);
+  const placed = entry.placement?.place(entry.key, wallNowMs) ?? null;
+  const wasPlaced = entry.placed === true;
+  entry.placed = placed !== null;
+  if (!placed) entry.placedMoving = false;
+  else if (!wasPlaced) entry.placedMoving = true;
+  else if (wallNowMs !== entry.placedAtWallMs)
+    entry.placedMoving =
+      placed.lat !== entry.placedLat || placed.lon !== entry.placedLon;
+  if (placed) {
+    entry.placedLat = placed.lat;
+    entry.placedLon = placed.lon;
+    entry.placedAtWallMs = wallNowMs;
+    const sample = entry.sample;
+    sample.lat = placed.lat;
+    sample.lon = placed.lon;
+    if (Number.isFinite(placed.courseDeg))
+      sample.segmentCourseDeg = placed.courseDeg;
+    if (Number.isFinite(placed.speedMps))
+      sample.segmentSpeedMps = placed.speedMps;
+  }
   entry.resets = entry.track.resets;
   const segment = entry.segment;
   readFix(
@@ -242,6 +261,16 @@ export function syncPlayback(entry, wallNowMs, monoNowMs = performance.now()) {
   }
   updatePlayback(entry, wallNowMs, monoNowMs);
 }
+/**
+ * Whether a vehicle's drawn position changes on its own: a vehicle a
+ * host-supplied placement draws moves while that placement's position
+ * changes; any other while its playback glides along a segment.
+ */
+export function playbackMoving(entry) {
+  if (entry.placed === true) return entry.placedMoving === true;
+  const sample = entry.sample;
+  return sample?.phase === 'playing' && sample.segmentSpeedMps > 0;
+}
 export function playbackPosition(entry) {
   if (!entry?.track) return null;
   return {
@@ -259,7 +288,7 @@ export function attachFloorToPlace(entry, fix, heightM) {
       correctHeight(entry.track, scratch.seq, heightM);
   }
 }
-export function displayCourse(entry, nowMs) {
+function displayCourse(entry, nowMs) {
   if (!entry) return null;
   const target = Number.isFinite(entry.sample?.segmentCourseDeg)
     ? entry.sample.segmentCourseDeg

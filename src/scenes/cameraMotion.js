@@ -19,7 +19,12 @@ export function createCameraMotion({
       disposed = true;
       cancel();
     },
-    play(move, token) {
+    /**
+     * Play one move. `fromProgress` starts partway in, as if the move had
+     * already run that share of its duration; `sample` replaces the authored
+     * sampler (a resumed ordinary flight follows its own path).
+     */
+    play(move, token, { fromProgress = 0, sample = sampleCameraMove } = {}) {
       cancel();
       if (disposed || token?.cancelled || token?.signal?.aborted)
         return Promise.resolve(false);
@@ -27,7 +32,11 @@ export function createCameraMotion({
         throw new RangeError('Camera move duration must be positive');
       return new Promise((resolve, reject) => {
         const run = { handle: null, finish: null };
-        const startedAt = now();
+        const startOffset =
+          Math.min(1, Math.max(0, Number(fromProgress) || 0)) *
+          move.durationSec *
+          1000;
+        const startedAt = now() - startOffset;
         const onAbort = () => run.finish(false);
         run.finish = (completed, error) => {
           if (active !== run) return;
@@ -51,7 +60,7 @@ export function createCameraMotion({
               1,
               Math.max(0, (now() - startedAt) / (move.durationSec * 1000)),
             );
-            if (applyPose(sampleCameraMove(move, progress)) === false) {
+            if (applyPose(sample(move, progress)) === false) {
               run.finish(false);
               return;
             }

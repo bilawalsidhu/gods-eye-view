@@ -1,3 +1,5 @@
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
+import { findGlobe } from '../../render/rendererOf.js';
 import {
   SUPPORT_KEYS,
   planeSupportPoints,
@@ -12,7 +14,7 @@ export function createGround({ state: layerState, services, parts, source }) {
   const { resolveEllipsoidalGround } = services.terrain;
 
   /**
-   * Task 5 (height-datum fix): maps the scene's `globe.show` flag to the surface
+   * Task 5 (height-datum fix): maps whether the renderer shows the globe to the surface
    * regime key the per-camera ground cache is keyed by (spec §2 "cache by
    * surface regime", collapsed to two keys — ion World Terrain and Re:Earth
    * globe terrain get the same handling):
@@ -20,12 +22,14 @@ export function createGround({ state: layerState, services, parts, source }) {
    *  - `google-3d`     — photoreal stack: globe hidden, the visible Google 3D
    *                      tileset IS the surface → one-shot scene sampling refines.
    *  - `terrain-globe` — any globe stack: the Re:Earth point-height prior IS the
-   *                      resolution (zero scene queries).
+   *                      resolution. A camera the batch left unanswered takes the
+   *                      drawn terrain from the view pass (`adoptDrawnGround`).
    *
    * Only an explicit `false` (the photoreal stack hides the globe) selects
    * `google-3d`; undefined/null (no viewer / torn down) must fall to the regime
-   * that never touches the scene. Pure — exported for the unit suite.
-   * @param {boolean|undefined|null} globeShow - `viewer.scene.globe.show`.
+   * that never samples the scene's tiles. Pure — exported for the unit suite.
+   * @param {boolean|undefined|null} globeShow - Whether the renderer shows the
+   *   globe (`globe.isGlobeVisible()`).
    * @returns {'google-3d'|'terrain-globe'}
    */
 
@@ -35,15 +39,15 @@ export function createGround({ state: layerState, services, parts, source }) {
 
   /**
    * Task 5: the surface regime the scene is CURRENTLY rendering, derived live
-   * from `globe.show` (mapStackController's `_activatePhotoreal` /
-   * `_activateGlobeStack` flip exactly this flag). Reading scene state directly
+   * from whether the renderer shows the globe (mapStackController's
+   * `_activatePhotoreal` / `_activateGlobeStack` flip exactly this). Reading it live
    * — rather than caching the map-stack id — means the regime is correct even
    * for stack changes this module never got an event for.
    * @returns {'google-3d'|'terrain-globe'}
    */
 
   function currentSurfaceRegime() {
-    return surfaceRegimeKey(layerState._viewer?.scene?.globe?.show);
+    return surfaceRegimeKey(findGlobe(layerState._viewer)?.isGlobeVisible?.());
   }
 
   /**
@@ -76,6 +80,14 @@ export function createGround({ state: layerState, services, parts, source }) {
 
   function isGroundResolved(record, regime = currentSurfaceRegime()) {
     return record?.groundResolved?.[regime] === true;
+  }
+
+  /**
+   * True until the record has geometry grounded for the regime. Cameras are
+   * refined only once they enter the view, so many never have geometry.
+   */
+  function needsGeometry(record, regime = currentSurfaceRegime()) {
+    return !record?.frustumGeometry || !isGroundResolved(record, regime);
   }
 
   /**
@@ -184,8 +196,11 @@ export function createGround({ state: layerState, services, parts, source }) {
    * Task 5: applies a LATE-arriving ground-prior batch (init's bounded race
    * lost — cold proxy cache / slow upstream). Pure recomputes only, no scene
    * queries:
+   *  - records without geometry yet: only the icon moves onto the prior;
+   *    the frustum is built when the camera enters the view.
    *  - terrain-globe regime: the prior IS the resolution → re-run the
-   *    resolution (updateRecordGeometry latches it) for every record.
+   *    resolution (updateRecordGeometry latches it) for every record with
+   *    geometry.
    *  - google-3d regime: records still awaiting a shared floor move from the
    *    catalog fallback onto the exact prior; records already holding a shared
    *    mesh/DEM floor keep it untouched.
@@ -198,33 +213,84 @@ export function createGround({ state: layerState, services, parts, source }) {
   function applyLateGroundPriors(records, priors) {
     if (!Array.isArray(records) || !Array.isArray(priors)) return;
     let applied = 0;
+    let moved = 0;
     for (let i = 0; i < records.length && i < priors.length; i++) {
-      const record = records[i];
-      const prior = priors[i];
-      if (!record || !prior || !Number.isFinite(prior.ellipsoid)) continue;
-      // Stale-record guard: init() may have re-run (destroy/init cycle) while
-      // the batch was in flight — only touch records still live in the map.
-      if (layerState._recordById.get(record.camera.id) !== record) continue;
-      record.groundPrior = prior;
-      // Keep the cheap pre-enable altitude consistent for records whose
-      // geometry hasn't been applied yet (applyFrustumGeometry overwrites it).
-      if (!record.frustumPositions) {
-        record.camera.absoluteHeightM =
-          prior.ellipsoid + record.camera.mountHeightM;
-      }
-      const regime = currentSurfaceRegime();
-      if (regime === 'terrain-globe') {
-        // Prior IS the resolution — re-latch onto the fresh value.
-        parts.geometry.updateRecordGeometry(record, { sampleGround: false });
-        applied += 1;
-      } else if (!Number.isFinite(record.groundSamples['google-3d'])) {
-        // Still awaiting the shared floor: snap interim geometry onto the exact
-        // prior (pure recompute; the shared cell may refine later).
-        parts.geometry.applyFrustumGeometry(record, prior.ellipsoid);
-        applied += 1;
-      }
+      const outcome = applyGroundPrior(records[i], priors[i]);
+      if (outcome === 'moved') moved += 1;
+      else if (outcome === 'applied') applied += 1;
     }
-    if (applied) parts.presentation.notifyListeners();
+    if (moved && parts.rendering.refreshHorizonCulling())
+      parts.geometryQueue.enqueueViewGeometry();
+    if (applied || moved) parts.presentation.notifyListeners();
+  }
+
+  /**
+   * Gives one live record a ground prior: `'moved'` when only its icon went
+   * onto the prior in place, `'applied'` when its geometry was recomputed,
+   * null when nothing changed. Pure recomputes, no scene queries.
+   */
+  function applyGroundPrior(record, prior) {
+    if (!record || !prior || !Number.isFinite(prior.ellipsoid)) return null;
+    // Stale-record guard: init() may have re-run (destroy/init cycle) while
+    // the batch was in flight — only touch records still live in the map.
+    if (layerState._recordById.get(record.camera.id) !== record) return null;
+    // The drawn terrain beats a fallback. Only a real batch answer replaces it.
+    if (
+      prior.source === 'geoid-fallback' &&
+      record.groundPrior?.source === 'drawn-terrain'
+    )
+      return null;
+    record.groundPrior = prior;
+    // Keep the cheap pre-enable altitude consistent for records whose
+    // geometry hasn't been applied yet (applyFrustumGeometry overwrites it).
+    if (!record.frustumPositions) {
+      record.camera.absoluteHeightM =
+        prior.ellipsoid + record.camera.mountHeightM;
+    }
+    // Cameras without geometry only move their icon onto the prior, so the
+    // view pass projects the right point; their frustums are built when
+    // they enter the view, as recomputing the whole catalog here would
+    // stall a large one.
+    if (!record.frustumGeometry) {
+      if (!record.position) return null;
+      // In place: the record keeps its position object.
+      fromDegreesInto(
+        record.camera.lon,
+        record.camera.lat,
+        record.camera.absoluteHeightM,
+        record.position,
+      );
+      parts.rendering.moveCameraIcon(record);
+      return 'moved';
+    }
+    const regime = currentSurfaceRegime();
+    if (regime === 'terrain-globe') {
+      // Prior IS the resolution — re-latch onto the fresh value.
+      parts.geometry.updateRecordGeometry(record, { sampleGround: false });
+      return 'applied';
+    }
+    if (!Number.isFinite(record.groundSamples['google-3d'])) {
+      // Still awaiting the shared floor: snap interim geometry onto the exact
+      // prior (pure recompute; the shared cell may refine later).
+      parts.geometry.applyFrustumGeometry(record, prior.ellipsoid);
+      return 'applied';
+    }
+    return null;
+  }
+
+  /**
+   * Applies drawn terrain as a drawn-terrain prior. The read records the eye
+   * distance (rangeM), globe surface version (surface) and whether terrain
+   * loading had finished (settled). Reading from under half that range or
+   * receiving a later Re:Earth answer replaces the height.
+   * @returns {'moved'|'applied'|null} As `applyGroundPrior`.
+   */
+  function adoptDrawnGround(record, heightM, read) {
+    return applyGroundPrior(record, {
+      ellipsoid: heightM,
+      source: 'drawn-terrain',
+      ...read,
+    });
   }
 
   /**
@@ -234,7 +300,7 @@ export function createGround({ state: layerState, services, parts, source }) {
    * deck/building-top in google-3d vs bare Re:Earth DEM on globe stacks), so
    * on a REGIME change (photoreal ↔ globe; bing→osm stays 'terrain-globe' and
    * no-ops):
-   *  1. every record's geometry recomputes IMMEDIATELY from the new regime's
+   *  1. every record that has geometry recomputes IMMEDIATELY from the new regime's
    *     resolution — cached sample if that regime has one, else the Re:Earth
    *     prior (never blank, zero scene queries);
    *  2. entering google-3d re-arms the one-shot tiles-ready completion latch so
@@ -250,6 +316,9 @@ export function createGround({ state: layerState, services, parts, source }) {
     layerState._lastAppliedRegime = regime;
 
     for (const record of layerState._records) {
+      // Only cameras that already have geometry are rewritten; the rest are
+      // grounded for the new regime when they enter the view.
+      if (!record.frustumGeometry) continue;
       if (regime === 'terrain-globe') {
         // Prior IS the resolution — latch it (zero scene queries).
         record.groundSamples['terrain-globe'] = groundPriorAltFor(record);
@@ -353,11 +422,13 @@ export function createGround({ state: layerState, services, parts, source }) {
     resolveFootprintGround,
     groundPriorAltFor,
     isGroundResolved,
+    needsGeometry,
     groundAltFor,
     rearmGroundResolution,
     resolveCommittedGroundAnchor,
     resolveGroundPriors,
     applyLateGroundPriors,
+    adoptDrawnGround,
     handleMapStackChanged,
   };
 }

@@ -1,14 +1,62 @@
-import { applicationHtmlPlugin } from './application-html.js';
+import { fileURLToPath } from 'node:url';
 import cesium from 'vite-plugin-cesium';
+import vue from '@vitejs/plugin-vue';
+import { VUE_PLUGIN_OPTIONS } from './vueOptions.js';
 import { DEFAULT_ALLOWED_HOSTS, hostCheckPlugin } from './allowedHosts.js';
 import { embedFramingPlugin } from './embed-framing.js';
 import { panelBuildPlugin } from './panel.js';
 
 /**
+ * The repository root (this file lives at `<root>/build/vite.js`), as a
+ * forward-slash path for glob matching. Vite's `fs.deny` patterns are
+ * matched against the full absolute file path, and a bare `**\/dist/**`
+ * matches a `dist` directory at *any* depth — including dependencies that
+ * ship their own, such as `node_modules/vite/dist/client/client.mjs` (the
+ * dev client itself). Anchoring to this repository's root denies only the
+ * project's own build output.
+ */
+const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
+  .replace(/\\/g, '/')
+  .replace(/\/$/, '');
+
+export function escapeFsDenyPath(path) {
+  return path.replace(/[()[\]{}*?!+@|]/g, '\\$&');
+}
+
+const REPO_ROOT_GLOB = escapeFsDenyPath(REPO_ROOT);
+
+/**
+ * Browser-safe form of the optional Photon endpoint build input. Only https
+ * is accepted: the page's connect-src allows no plain-http origin, so an
+ * http endpoint would only fail later, silently, in the browser.
+ */
+function photonEndpointSetting(value) {
+  if (value === undefined) return undefined;
+  const text = String(value ?? '').trim();
+  if (!text || ['off', 'none', 'disabled'].includes(text.toLowerCase()))
+    return null;
+  try {
+    const url = new URL(text);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    )
+      return null;
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
  * three that the Bhote Koshi event's embedded media needs (YouTube, Facebook
- * and X), which frame-src matches for their players and posts. 'unsafe-eval' is
+ * and X), which frame-src matches for their players and posts; the stations'
+ * LIVE video uses the same YouTube player, after the viewer presses Play. 'unsafe-eval' is
  * required: Knockout (bundled inside @cesium/widgets) resolves the global
  * object with `(0, eval)("this")` at module load, and without it the Cesium
  * widget never initializes (verified in headless Chrome). It also covers
@@ -19,9 +67,10 @@ import { panelBuildPlugin } from './panel.js';
  */
 export const BROWSER_CSP = [
   "default-src 'self'",
-  // The Bhote Koshi event's embedded media: the YouTube player API, the
-  // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js);
-  // and the Maps JavaScript API that Street Level's Google Street View runs on.
+  // The Bhote Koshi event's embedded media: the YouTube player API (also the
+  // stations' LIVE video, src/data/youtubeLivePlayer.js), the Facebook video
+  // SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js); and the
+  // Maps JavaScript API that Street Level's Google Street View runs on.
   "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com https://maps.googleapis.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -122,12 +171,14 @@ export function createBrowserViteConfig({
   publicDir,
   googleApiKey,
   cesiumToken,
+  photonUrl,
   mapillaryToken,
   host = 'localhost',
   port = 4173,
   allowedHosts = DEFAULT_ALLOWED_HOSTS,
   command,
 } = {}) {
+  const photonSetting = photonEndpointSetting(photonUrl);
   return {
     plugins: [
       // First, so every API response, including a Host refusal, carries them.
@@ -135,7 +186,8 @@ export function createBrowserViteConfig({
       // Next, so no provider route answers a Host the server does not allow.
       hostCheckPlugin(),
       cesium(),
-      applicationHtmlPlugin(),
+      // Application views are Vue single-file components.
+      vue(VUE_PLUGIN_OPTIONS),
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
@@ -165,7 +217,19 @@ export function createBrowserViteConfig({
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
       fs: {
-        deny: ['.env', '.env.*', '*.{crt,pem}', '**/.git/**', '**/ENVIRONMENT'],
+        deny: [
+          '.env',
+          '.env.*',
+          '*.{crt,pem}',
+          '**/.git/**',
+          '**/ENVIRONMENT',
+          '**/.gev-logs/**',
+          '**/.gev-cache/**',
+          // Root-anchored: a bare '**/dist/**' would also deny every
+          // dependency's own dist/ (e.g. node_modules/vite/dist/client),
+          // breaking /@vite/client and other dev-client assets.
+          `${REPO_ROOT_GLOB}/dist/**`,
+        ],
       },
       // These headers protect the document containing Provider Settings and
       // give the whole page a real Content-Security-Policy (BROWSER_CSP).
@@ -177,13 +241,31 @@ export function createBrowserViteConfig({
     // framing + CSP hardening (one constant, no drift).
     preview: { headers: BROWSER_HEADERS },
     define: {
+      // vue-i18n holds the locale and catalogs; Core formats the messages
+      // (src/ui/i18n.js), so the build drops vue-i18n's message compiler.
+      __VUE_I18N_FULL_INSTALL__: 'false',
+      __VUE_I18N_LEGACY_API__: 'false',
+      __INTLIFY_PROD_DEVTOOLS__: 'false',
+      __INTLIFY_DROP_MESSAGE_COMPILER__: 'true',
       'import.meta.env.GOOGLE_MAPS_API_KEY': JSON.stringify(googleApiKey),
       'import.meta.env.CESIUM_ION_TOKEN': JSON.stringify(cesiumToken),
+      // Only expose a validated URL or the explicit disabled sentinel.
+      ...(photonSetting === undefined
+        ? {}
+        : {
+            'import.meta.env.PHOTON_URL': JSON.stringify(photonSetting),
+          }),
       // Mapillary client tokens are public by design (see SECURITY.md).
       'import.meta.env.MAPILLARY_CLIENT_TOKEN': JSON.stringify(
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      // The places pack's tiles stay files, read only when a lookup touches
+      // them; inlined, the small ones would all load with the first lookup.
+      assetsInlineLimit: (file) =>
+        file.includes('/wikidata_places/') ? false : undefined,
+    },
   };
 }

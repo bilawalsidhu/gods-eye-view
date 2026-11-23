@@ -1,3 +1,0 @@
-- Preserve enable during first-load replacement (asturksever, #1275).
-- Release disabled weather camera listeners and make teardown resource leaks fail the browser probe (asturksever, #1275).
-- Keep visible-page weather teardown probes focused through the browser testing API (asturksever, #1275).

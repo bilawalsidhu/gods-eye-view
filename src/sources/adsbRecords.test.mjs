@@ -68,6 +68,34 @@ test('dump1090 aircraft.json maps to the shared local ADS-B records', () => {
   assert.deepEqual(summary, { heard: 4, positioned: 2 });
 });
 
+test('a dump1090 aircraft with no track takes its true heading, never its magnetic one', () => {
+  const trackOf = (extra) =>
+    normalizeDump1090Aircraft(
+      {
+        now: 1,
+        aircraft: [
+          {
+            hex: 'a4418c',
+            lat: 37.6,
+            lon: -122.38,
+            alt_baro: 'ground',
+            seen: 1,
+            ...extra,
+          },
+        ],
+      },
+      1000,
+    )[0].trackDeg;
+  assert.equal(
+    trackOf({ track: 56.25, true_heading: 40 }),
+    56.25,
+    'track first',
+  );
+  assert.equal(trackOf({ true_heading: 185.62 }), 185.62, 'true heading');
+  assert.equal(trackOf({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(trackOf({}), null, 'none');
+});
+
 test('dump1090 adapter skips invalid addresses and tolerates missing fields', () => {
   const records = normalizeDump1090Aircraft(
     {
@@ -167,6 +195,20 @@ test('a feed document names its band on every record', () => {
   assert.equal(uat.length, 4);
   assert.ok(uat.every((record) => record.band === '978'));
   assert.ok(uat.every((record) => record.source === 'feed'));
+});
+
+test('a decoder feed reads a GNSS-sourced vertical rate when no baro rate is sent', () => {
+  // dump1090-fa and readsb file a velocity message's rate under geom_rate
+  // instead of baro_rate when its source bit says GNSS.
+  const rate = (fields) =>
+    normalizeDump1090Aircraft(
+      { aircraft: [{ hex: 'abc123', seen: 1, ...fields }] },
+      10_000,
+    )[0].verticalRateFpm;
+  assert.equal(rate({ geom_rate: -832 }), -832);
+  assert.equal(rate({ baro_rate: -768, geom_rate: -832 }), -768);
+  assert.equal(rate({ baro_rate: 0, geom_rate: -832 }), 0);
+  assert.equal(rate({}), null);
 });
 
 function heard(overrides = {}) {

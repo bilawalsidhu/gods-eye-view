@@ -189,7 +189,13 @@ export function createRouteService({
       } catch {
         /* the status below is authoritative */
       }
+      // Handle 429 and 5xx before route refusals, regardless of the body.
       if (response.status === 429) throw httpFailure(response, 'Routing');
+      if (response.status >= 500)
+        throw new ToolError(
+          'unavailable',
+          `Routing service unavailable (HTTP ${response.status})`,
+        );
       if (payload?.ok === false || response.status === 400)
         return { ok: false, error: payload?.error || 'no route found' };
       if (!response.ok) throw httpFailure(response, 'Routing');

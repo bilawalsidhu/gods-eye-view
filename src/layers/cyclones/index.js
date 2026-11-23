@@ -1,8 +1,6 @@
-import * as Cesium from 'cesium';
-import { hitTestWorldOverlay } from '../../overlays/worldOverlay.js';
-import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
+  clickCard,
   registerPickOwner,
   unregisterPickOwner,
 } from '../../data/pickRegistry.js';
@@ -16,22 +14,32 @@ import {
 } from './labels.js';
 import {
   formatUtcDayMonth,
+  isolate,
   t,
   tn,
   msg,
   translateKnown,
 } from '../../i18n/index.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
+import { cameraOf, canvasOf } from '../../render/rendererOf.js';
 
 // "10-12 15:00 UTC" never breaks across lines: no-break spaces, and a word
 // joiner after the hyphen (JetBrains Mono has no U+2011 non-breaking hyphen).
+// The clock is isolated (a no-op outside RTL): a no-break space between two
+// numbers joins them into one run, which in Arabic split the date around it.
 const utc = (value) =>
   value
-    ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${value.slice(11, 16)}\u00a0UTC`
+    ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${isolate(value.slice(11, 16))}\u00a0UTC`
     : t('Unavailable');
 const COVERAGE = msg(
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.',
+  'NHC/CPHC: Atlantic and eastern/central North Pacific. JTWC: western North Pacific, North Indian Ocean and Southern Hemisphere.',
 );
+// The layer's sources, and each storm's.
+const SOURCE = 'NOAA NHC / CPHC · JTWC';
+const AGENCY_SOURCES = Object.freeze({ nhc: 'NOAA NHC / CPHC', jtwc: 'JTWC' });
+const sourceOf = (storm) => AGENCY_SOURCES[storm?.agency] || AGENCY_SOURCES.nhc;
+const isJtwc = (storm) => storm?.agency === 'jtwc';
+const DANGER_AREA = msg('34-knot wind danger area');
 // The server sends the same English coverage (server/providers/cyclones.js);
 // data stays English and is translated here, where it is shown.
 const coverageText = (coverage) =>
@@ -41,11 +49,21 @@ const ADVISORIES_UNAVAILABLE = msg('Cyclone advisories unavailable');
 const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
+// NHC's Tropical Cyclone Status JSON reference: PTC is post-tropical, PC is a
+// potential tropical cyclone, and subtropical systems are STS and STD. JTWC
+// warns of typhoons (TY), super typhoons (STY), tropical cyclones (TC) and
+// subtropical storms and depressions (SS, SD).
 const CLASSIFICATION_NAMES = Object.freeze({
-  PTC: msg('Potential tropical cyclone'),
+  PC: msg('Potential tropical cyclone'),
+  PTC: msg('Post-tropical cyclone'),
   HU: msg('Hurricane'),
   TS: msg('Tropical storm'),
   TD: msg('Tropical depression'),
+  STS: msg('Subtropical storm'),
+  STD: msg('Subtropical depression'),
+  TY: msg('Typhoon'),
+  STY: msg('Super typhoon'),
+  TC: msg('Tropical cyclone'),
   SS: msg('Subtropical storm'),
   SD: msg('Subtropical depression'),
 });
@@ -53,15 +71,28 @@ const classificationName = (code) =>
   Object.hasOwn(CLASSIFICATION_NAMES, code)
     ? t(CLASSIFICATION_NAMES[code])
     : code;
-const number = (value, unit) =>
-  value === null ? t('Unavailable') : formatQuantity(value, unit);
+// A value the advisory leaves out (null) is left out of the line too.
+const intensityText = (storm) => {
+  const has = (value) => value !== null && value !== undefined;
+  const wind = has(storm.windKt) ? formatQuantity(storm.windKt, 'kt') : null;
+  const pressure = has(storm.pressureHpa)
+    ? formatQuantity(storm.pressureHpa, 'hPa')
+    : null;
+  if (wind && pressure)
+    return t('Maximum sustained wind: {wind} · Pressure: {pressure}', {
+      wind,
+      pressure,
+    });
+  if (wind) return t('Maximum sustained wind: {wind}', { wind });
+  if (pressure) return t('Pressure: {pressure}', { pressure });
+  return '';
+};
 
 /** Advisory status and coherent forecast geometry; selected through the shared row list. */
 export function createCyclonesLayer({
   feed,
-  hitTestOverlay = hitTestWorldOverlay,
   overlayHost,
-  cesium = Cesium,
+  context = null,
   createRendering = createCycloneRendering,
   matchMedia = globalThis.matchMedia?.bind(globalThis),
   openLink = (url) => globalThis.open?.(url, '_blank', 'noopener,noreferrer'),
@@ -76,8 +107,8 @@ export function createCyclonesLayer({
     selectedId = null,
     selectionIntent = 'auto',
     navigationGeneration = 0,
-    clickHandler = null,
-    removeClickCapture = null;
+    selectionOwner = null,
+    selectedContextStormId = null;
   let enabled = false,
     loading = false,
     error = null,
@@ -86,120 +117,113 @@ export function createCyclonesLayer({
   const notify = () => listener?.();
   const selected = () =>
     snapshot?.storms.find((storm) => storm.id === selectedId) || null;
+  function clearSelectedContext({ evicted = false } = {}) {
+    if (selectedContextStormId) {
+      if (!evicted)
+        context.clearSelectedEntityContextForLayer('weather-cyclones');
+      context.removeEntityContextsForLayer('weather-cyclones');
+    }
+    selectedContextStormId = null;
+  }
+
+  // Callers publish only while selectedId names a storm in the snapshot.
+  function publishSelectedContext({ announce = false } = {}) {
+    const storm = selected();
+    if (!context) return;
+    const entity = {};
+    const contextId = `cyclone:${storm.id}`;
+    context.registerEntityContext(entity, {
+      id: contextId,
+      layerId: 'weather-cyclones',
+      layerName: 'Cyclone advisories',
+      source: sourceOf(storm),
+      label: storm.name,
+      latitude: storm.position.latitude,
+      longitude: storm.position.longitude,
+      // At most 12 properties reach the voice summary; keep the list short.
+      properties: {
+        classification: storm.classification,
+        classificationName: Object.hasOwn(
+          CLASSIFICATION_NAMES,
+          storm.classification,
+        )
+          ? CLASSIFICATION_NAMES[storm.classification]
+          : undefined,
+        basin: storm.basin,
+        agency: storm.agency,
+        advisoryNumber: storm.advisoryNumber,
+        issuedAt: storm.issuedAt,
+        positionAt: storm.positionAt,
+        windKt: storm.windKt,
+        pressureHpa: storm.pressureHpa,
+        // Flat scalars: the voice context summary drops nested objects.
+        movementDirectionDegrees: storm.movement?.directionDegrees,
+        movementSpeedKt: storm.movement?.speedKt,
+        advisoryUrl: storm.advisoryUrl,
+        // Only while the proxy serves its cache because a source is unreachable.
+        staleCacheFetchedAt:
+          snapshot.stale && Number.isFinite(snapshot.fetchedAt)
+            ? new Date(snapshot.fetchedAt).toISOString()
+            : undefined,
+      },
+    });
+    selectedContextStormId = storm.id;
+    if (announce) context.selectEntityContext(entity);
+    context.removeEntityContextsForLayer('weather-cyclones', {
+      retainIds: new Set([contextId]),
+    });
+  }
+
   function select(id) {
     if (selectedId !== id) ++navigationGeneration;
     selectedId = id;
     rendering?.setSelection(id);
   }
-  // Photorealistic 3D Tiles pick as tileset content without an entity id;
-  // that is empty map, the same as no pick at all on the globe.
-  const isSurfacePick = (picked) =>
-    !picked ||
-    (picked.id === undefined &&
-      (picked.content !== undefined ||
-        (typeof cesium.Cesium3DTileset === 'function' &&
-          picked.primitive instanceof cesium.Cesium3DTileset)));
   function installSelection() {
-    if (
-      clickHandler ||
-      !viewer?.scene?.canvas ||
-      typeof cesium.ScreenSpaceEventHandler !== 'function'
-    )
-      return;
-    const owner = new cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    clickHandler = owner;
-    // Snapshot before sibling bubble listeners can rebuild the overlay hit
-    // rectangles. A vessel selection does that synchronously in the same click.
-    const canvas = viewer.scene.canvas;
-    let capturedHit = null;
-    const overlayHit = (x, y) => {
-      const hit = hitTestOverlay(x, y);
-      return { sourceId: hit?.sourceId, entryId: hit?.entryId };
-    };
-    const capture = (event) => {
-      capturedHit = null;
-      const point = event.changedTouches?.[0] || event;
-      if (!Number.isFinite(point.clientX) || !Number.isFinite(point.clientY))
+    if (selectionOwner || !canvasOf(viewer)) return;
+    const owner = {};
+    selectionOwner = owner;
+    const unsubscribe = inputFor(viewer).onClick((event) => {
+      // Ambient selection yields to draw tools and Director (the dispatcher
+      // skips a held pointer); it never claims the pointer, camera, or
+      // tracking state.
+      const position = event.screenPosition;
+      if (!enabled || destroyed || selectionOwner !== owner || !position)
         return;
-      const rect = canvas.getBoundingClientRect();
-      const x = point.clientX - rect.left,
-        y = point.clientY - rect.top;
-      capturedHit = { x, y, ...overlayHit(x, y) };
-    };
-    const resetCapture = () => {
-      capturedHit = null;
-    };
-    const resetEvents = [
-      'pointerdown',
-      'mousedown',
-      'touchstart',
-      'pointercancel',
-      'touchcancel',
-    ];
-    for (const type of resetEvents)
-      canvas.addEventListener?.(type, resetCapture, { capture: true });
-    const events = ['pointerup', 'mouseup', 'touchend'];
-    for (const type of events)
-      canvas.addEventListener?.(type, capture, { capture: true });
-    removeClickCapture = () => {
-      for (const type of events)
-        canvas.removeEventListener?.(type, capture, { capture: true });
-      for (const type of resetEvents)
-        canvas.removeEventListener?.(type, resetCapture, { capture: true });
-      capturedHit = null;
-    };
-    owner.setInputAction((click) => {
-      const nativeHit = capturedHit;
-      capturedHit = null;
-      // Ambient selection yields to draw tools and Director; it never claims
-      // the pointer, camera, or tracking state.
-      if (
-        !enabled ||
-        destroyed ||
-        clickHandler !== owner ||
-        !isPointerFree() ||
-        !click?.position
-      )
-        return;
-      // AIS cards paint above the globe on a pointer-events:none canvas. The
-      // vessel handler resolves this same topmost hit before cyclone geometry.
-      const captureMatches =
-        nativeHit &&
-        Math.abs(nativeHit.x - click.position.x) < 1 &&
-        Math.abs(nativeHit.y - click.position.y) < 1;
-      const hit = captureMatches
-        ? nativeHit
-        : overlayHit(click.position.x, click.position.y);
-      if (hit.sourceId === VESSEL_OVERLAY_SOURCE_ID) return;
+      // The card or label painted on top, as it was when the click landed.
+      const card = clickCard(event);
       // Storm cards and lead-hour labels paint on the same canvas; a click on
       // one selects its storm. An id from a superseded advisory changes nothing.
-      if (hit.sourceId === CYCLONE_OVERLAY_SOURCE_ID) {
-        const id = cycloneStormIdFromEntryId(hit.entryId);
+      if (card?.sourceId === CYCLONE_OVERLAY_SOURCE_ID) {
+        const id = cycloneStormIdFromEntryId(card.entryId);
         if (id) layer.setParams({ stormId: id });
         return;
       }
-      const picked = viewer.scene.pick(click.position);
-      const id = rendering?.pickStorm(picked);
+      // Another layer's card on top takes the click: the storm under it does
+      // not act, and the click is not empty map either.
+      if (card) return;
+      // A storm's own drawing names it; empty map (the globe, or 3D tiles)
+      // clears the selection.
+      const id = rendering?.pickStorm(event.drawHit);
       if (id) layer.setParams({ stormId: id });
-      else if (isSurfacePick(picked)) layer.setParams({ clear: true });
-    }, cesium.ScreenSpaceEventType.LEFT_CLICK);
+      else if (!event.topHit) layer.setParams({ clear: true });
+    });
+    owner.unsubscribe = unsubscribe;
   }
   function removeSelection() {
-    const owner = clickHandler;
-    clickHandler = null;
-    removeClickCapture?.();
-    removeClickCapture = null;
-    if (owner && !owner.isDestroyed?.()) owner.destroy();
+    const owner = selectionOwner;
+    selectionOwner = null;
+    owner?.unsubscribe?.();
   }
   const layer = {
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
     icon: '◉',
-    source: 'NOAA NHC / CPHC',
+    source: SOURCE,
     updateInterval: 300_000,
     init(nextViewer) {
       viewer = nextViewer;
-      rendering = createRendering({ viewer, cesium, overlayHost });
+      rendering = createRendering({ viewer, overlayHost });
     },
     attachShellServices(services) {
       runNavigation =
@@ -230,6 +254,7 @@ export function createCyclonesLayer({
       selectedId = null;
       selectionIntent = 'auto';
       ++navigationGeneration;
+      clearSelectedContext();
       rendering?.clear();
     },
     async update(_viewer, { signal } = {}) {
@@ -253,6 +278,7 @@ export function createCyclonesLayer({
           snapshot = next;
           selectedId = null;
           ++navigationGeneration;
+          clearSelectedContext({ evicted: true });
           error = next.reason || ADVISORIES_UNAVAILABLE;
           return true;
         }
@@ -275,6 +301,10 @@ export function createCyclonesLayer({
               : snapshot.storms[0]?.id || null,
           );
         else rendering.setSelection(selectedId);
+        if (selectedContextStormId) {
+          if (selectedId === selectedContextStormId) publishSelectedContext();
+          else clearSelectedContext({ evicted: true });
+        }
         return true;
       } catch (cause) {
         if (controller.signal.aborted || request !== controller) return false;
@@ -284,6 +314,7 @@ export function createCyclonesLayer({
         snapshot = null;
         selectedId = null;
         ++navigationGeneration;
+        clearSelectedContext({ evicted: true });
         return true;
       } finally {
         signal?.removeEventListener('abort', abort);
@@ -299,6 +330,7 @@ export function createCyclonesLayer({
       if (params.clear === true || params.stormId === null) {
         selectionIntent = 'cleared';
         select(null);
+        clearSelectedContext();
         notify();
       } else if (
         typeof params.stormId === 'string' &&
@@ -306,6 +338,7 @@ export function createCyclonesLayer({
       ) {
         selectionIntent = 'user';
         select(params.stormId);
+        publishSelectedContext({ announce: true });
         notify();
       }
       const storm = selected();
@@ -321,12 +354,15 @@ export function createCyclonesLayer({
               selectedId !== storm.id
             )
               return;
-            return viewer.camera.flyToBoundingSphere(sphere, {
-              duration: matchMedia?.('(prefers-reduced-motion: reduce)')
-                ?.matches
-                ? 0
-                : 1.4,
-            });
+            cameraOf(viewer).flyToBounds(
+              { center: sphere.center, radius: sphere.radius },
+              {
+                durationS: matchMedia?.('(prefers-reduced-motion: reduce)')
+                  ?.matches
+                  ? 0
+                  : 1.4,
+              },
+            );
           });
         }
       }
@@ -339,13 +375,28 @@ export function createCyclonesLayer({
         snapshot && !snapshot.unavailable && snapshot.storms.length === 0;
       const geometry =
         storm &&
-        (coherentCycloneGeometry(storm)
-          ? t('Track and cone match this advisory')
-          : storm.geometryStatus === 'pending'
-            ? t('Track/cone awaiting advisory {number}', {
-                number: storm.advisoryNumber,
-              })
-            : t('Track/cone unavailable'));
+        (isJtwc(storm)
+          ? coherentCycloneGeometry(storm)
+            ? t('Track and 34-knot wind danger area match this warning')
+            : storm.geometryStatus === 'pending'
+              ? t('Track/danger area awaiting warning {number}', {
+                  number: storm.advisoryNumber,
+                })
+              : t('Track/danger area unavailable')
+          : coherentCycloneGeometry(storm)
+            ? t('Track and cone match this advisory')
+            : storm.geometryStatus === 'pending'
+              ? t('Track/cone awaiting advisory {number}', {
+                  number: storm.advisoryNumber,
+                })
+              : t('Track/cone unavailable'));
+      // JTWC is not the regional warning centre for any basin.
+      const note =
+        storm && isJtwc(storm)
+          ? t(
+              'JTWC warning: the regional centre’s warning is official. JTWC winds are 1-minute averages.',
+            )
+          : '';
       const status =
         errorText(error) ||
         (snapshot?.stale
@@ -364,21 +415,23 @@ export function createCyclonesLayer({
       const position = storm
         ? t('Position as of {time}', { time: utc(storm.positionAt) })
         : '';
-      const intensity = storm
-        ? t('Maximum sustained wind: {wind} · Pressure: {pressure}', {
-            wind: number(storm.windKt, 'kt'),
-            pressure: number(storm.pressureHpa, 'hPa'),
-          })
-        : '';
+      const intensity = storm ? intensityText(storm) : '';
       const detail = storm
-        ? t('{name} · {classification} · Advisory {number} · issued {time}', {
-            name: storm.name,
-            classification: classificationName(storm.classification),
-            number: storm.advisoryNumber,
-            time: utc(storm.issuedAt),
-          })
+        ? isJtwc(storm)
+          ? t('{name} · {classification} · Warning {number} · issued {time}', {
+              name: storm.name,
+              classification: classificationName(storm.classification),
+              number: storm.advisoryNumber,
+              time: utc(storm.issuedAt),
+            })
+          : t('{name} · {classification} · Advisory {number} · issued {time}', {
+              name: storm.name,
+              classification: classificationName(storm.classification),
+              number: storm.advisoryNumber,
+              time: utc(storm.issuedAt),
+            })
         : empty
-          ? t('No active NHC/CPHC systems')
+          ? t('No active tropical cyclone warnings')
           : stormCount
             ? activeStorms
             : loading
@@ -387,8 +440,8 @@ export function createCyclonesLayer({
       const controls = {
         readout: true,
         summary: {
-          label: t('Cyclones · NHC / CPHC'),
-          coverage: t('Atlantic · E/C Pacific'),
+          label: t('Cyclones · NHC / CPHC · JTWC'),
+          coverage: t('All tropical basins'),
           compact: stormCount
             ? storm
               ? t('{storms} · {name} selected', {
@@ -401,7 +454,9 @@ export function createCyclonesLayer({
             ? [
                 {
                   id: 'advisory',
-                  label: t('Official advisory ↗'),
+                  label: isJtwc(storm)
+                    ? t('JTWC warning ↗')
+                    : t('Official advisory ↗'),
                   href: storm.advisoryUrl,
                 },
               ]
@@ -419,14 +474,15 @@ export function createCyclonesLayer({
                   text: intensity,
                 },
                 { id: 'geometry', text: geometry, muted: true },
-              ]
+                { id: 'note', text: note, muted: true },
+              ].filter((line) => line.text)
             : [],
           detail,
           status,
           units: 'kt',
         },
         list: {
-          ariaLabel: t('Active NHC and CPHC cyclone advisories'),
+          ariaLabel: t('Active cyclone advisories and warnings'),
           items: (snapshot?.storms || []).map((item, index) => ({
             id: item.id,
             ordinal: index + 1,
@@ -444,17 +500,19 @@ export function createCyclonesLayer({
                 label: t('Advisory center / forecast track'),
                 color: '#7fe6ed',
               },
-              {
-                label: t('Center-track uncertainty cone'),
-                color: '#7fe6ed44',
-              },
+              isJtwc(storm)
+                ? { label: t(DANGER_AREA), color: '#ffb15c44' }
+                : {
+                    label: t('Center-track uncertainty cone'),
+                    color: '#7fe6ed44',
+                  },
             ]
           : [],
         info: storm
-          ? `${detail}\n${position}\n${intensity}\n${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
+          ? `${detail}\n${position}\n${intensity ? intensity + '\n' : ''}${geometry}${status && status !== geometry ? '\n' + status : ''}${note ? '\n' + note : ''}\n${coverageText(snapshot.coverage)}`
           : `${detail}${status ? '\n' + status : ''}\n${coverageText(snapshot?.coverage)}`,
         infoTitle: t(
-          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisory context. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory.',
+          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.',
         ),
       };
       return controls;
@@ -501,7 +559,7 @@ export function createCyclonesLayer({
         loading,
         error,
         stale: Boolean(snapshot?.stale),
-        source: 'NOAA NHC / CPHC',
+        source: storm ? sourceOf(storm) : SOURCE,
         advisoryAt: storm?.issuedAt || null,
         empty: Boolean(
           snapshot && !snapshot.unavailable && !snapshot.storms.length,
@@ -514,7 +572,7 @@ export function createCyclonesLayer({
         enabled,
         loading,
         requestPending: !!request,
-        selectionActive: clickHandler !== null,
+        selectionActive: selectionOwner !== null,
         selectedId,
         selectionIntent,
         timerActive: false,

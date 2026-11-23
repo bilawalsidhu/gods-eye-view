@@ -401,6 +401,11 @@ const OPENSKY_CATEGORY = {
   7: 'fastjet', // High performance (>5g, >400 kt)
   8: 'helicopter', // Rotorcraft
   9: 'glider',
+  16: 'vehicle', // Surface vehicle, emergency
+  17: 'vehicle', // Surface vehicle, service
+  18: 'station', // Point obstacle
+  19: 'station', // Cluster obstacle
+  20: 'station', // Line obstacle
 };
 
 /** ADS-B emitter-category string → class. */
@@ -413,13 +418,35 @@ const EMITTER_CATEGORY = {
   A6: 'fastjet',
   A7: 'helicopter',
   B1: 'glider',
+  C1: 'vehicle', // Surface vehicle, emergency
+  C2: 'vehicle', // Surface vehicle, service
+  C3: 'station', // Point obstacle
+  C4: 'station', // Cluster obstacle
+  C5: 'station', // Line obstacle
 };
 
+/**
+ * The type codes feeds give what is not an aircraft: an airport vehicle
+ * (ZVEH) and a ground station (GRND).
+ */
+const GROUND_TYPE_CLASS = { ZVEH: 'vehicle', GRND: 'station' };
+
+/**
+ * The class an aircraft draws and reads as, from its ICAO type code (which
+ * outranks the category), else its OpenSky integer or ADS-B emitter category.
+ * Besides the aircraft classes, `vehicle` is an airport vehicle (type ZVEH,
+ * emitter C1 or C2) and `station` a ground station or obstacle (type GRND,
+ * emitter C3 to C5). A known type code outside every set is an airliner, and
+ * so is a contact with nothing to go on.
+ * @param {{typeCode?: string|null, category?: string|number|null}} [record]
+ * @returns {string}
+ */
 export function classifyAircraft({ typeCode, category } = {}) {
   const code = String(typeCode || '')
     .trim()
     .toUpperCase();
   if (code) {
+    if (GROUND_TYPE_CLASS[code]) return GROUND_TYPE_CLASS[code];
     if (FASTJET.has(code)) return 'fastjet';
     if (UAV.has(code)) return 'uav';
     if (HELI.has(code)) return 'helicopter';
@@ -452,69 +479,13 @@ export const AIRCRAFT_CLASS_LABELS = Object.freeze({
   fastjet: msg('Fast jet'),
   bizjet: msg('Business jet'),
   uav: msg('Drone'),
+  vehicle: msg('Airport vehicle'),
+  station: msg('Ground station / obstacle'),
 });
 
-/** Billboard scale multipliers (skylight GLYPH_SCALE, + fastjet). */
-export const CLASS_SCALE_2D = {
-  light: 0.62,
-  glider: 0.58,
-  turboprop: 0.86,
-  airliner: 1.0,
-  widebody: 1.3,
-  quadjet: 1.45,
-  helicopter: 0.82,
-  fastjet: 0.8,
-  bizjet: 0.72,
-  uav: 0.75,
-};
-
-/** 3D model scale multipliers — clamped [0.75, 1.45] while every class shares
- *  the single airplane.glb (a jet mesh at C172 scale reads wrong). Widen when
- *  real per-class models land in CLASS_MODEL_URL. */
-export const CLASS_SCALE_3D = {
-  light: 0.75,
-  glider: 0.75,
-  turboprop: 0.85,
-  airliner: 1.0,
-  widebody: 1.3,
-  quadjet: 1.45,
-  helicopter: 0.8,
-  fastjet: 0.8,
-  bizjet: 0.8,
-  uav: 0.8,
-};
-
-/** Per-class glTF — all the shared airplane today; drop real assets in here.
- *  NOTE for future models: each asset may need its own heading offset (the
- *  shared GLB uses MODEL_HEADING_OFFSET_DEG = 180 in both layers). */
-export const CLASS_MODEL_URL = {
-  light: '/models/airplane.glb',
-  glider: '/models/airplane.glb',
-  turboprop: '/models/airplane.glb',
-  airliner: '/models/airplane.glb',
-  widebody: '/models/airplane.glb',
-  quadjet: '/models/airplane.glb',
-  helicopter: '/models/airplane.glb',
-  fastjet: '/models/airplane.glb',
-  bizjet: '/models/airplane.glb',
-  uav: '/models/airplane.glb',
-};
-
-/** Real per-class GLBs (2026-08-15 Hangar fleet, owner picks; CC-BY 4.0 —
- *  provenance in public/models/README.md). Every asset is vertex-baked to the
- *  airplane.glb convention: Y-up, X = length, Z = span, nose −X (so the layers'
- *  MODEL_HEADING_OFFSET_DEG = 180 applies unchanged), origin at bbox centre,
- *  REAL-WORLD METERS (render at scale 1 — no MODEL_SCALE, no CLASS_SCALE_3D).
- *  bellyM = origin→lowest-vertex distance (grounded-model lift, replaces the
- *  airplane.glb MODEL_BELLY_OFFSET_NATIVE formula); radiusM = bounding-sphere
- *  radius in meters (pixel-size math). Values measured from the shipped GLBs —
- *  pinned by modelScale.test.mjs. Classes NOT listed (airliner, quadjet,
- *  glider, fastjet) still render the shared airplane.glb via CLASS_MODEL_URL. */
-export const CLASS_MODEL_REAL = {
-  helicopter: { url: '/models/bell206.glb', bellyM: 1.66, radiusM: 8.24 },
-  light: { url: '/models/c172.glb', bellyM: 1.36, radiusM: 7.0 },
-  bizjet: { url: '/models/citation2.glb', bellyM: 2.86, radiusM: 11.24 },
-  uav: { url: '/models/mq9.glb', bellyM: 2.02, radiusM: 12.0 },
-  widebody: { url: '/models/b789.glb', bellyM: 7.81, radiusM: 44.08 },
-  turboprop: { url: '/models/atr72.glb', bellyM: 3.81, radiusM: 19.49 },
-};
+/**
+ * The tint an airport vehicle's sprite draws with in Flights and Local
+ * ADS-B: an orange amber, apart from aircraft white and the military layer's
+ * yellow amber (#FFB800).
+ */
+export const VEHICLE_TINT_CSS = '#FF8F1F';

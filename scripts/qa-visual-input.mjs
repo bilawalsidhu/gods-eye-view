@@ -57,7 +57,7 @@ try {
       persist: false,
       syncShare: false,
     });
-    manager._sliderPanel.classList.remove('collapsed');
+    manager._presentPanel(manager._sliderPanel, { collapsed: false });
     const slider = manager._sliderContainer.querySelector('input');
     window.__qaOldSlider = slider;
     const name = 'pixelation';
@@ -140,15 +140,19 @@ try {
       hudBefore,
     ),
   );
-  const displayBefore = await page.evaluate(() => {
+  const displayBefore = await page.evaluate(async () => {
     const manager = window.__godsEyeView.styleManager;
     manager._setBloomEnabled(true);
+    // The Display view shows the slider row on its next render.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
     manager._bloomSlider.value = '80';
     manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
     manager._bloomSlider.focus();
     return {
       value: Number(manager._bloomSlider.value),
-      contrast: manager._bloomStage.uniforms.contrast,
+      contrast:
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast,
     };
   });
   await page.keyboard.press('ArrowRight');
@@ -158,7 +162,8 @@ try {
       const manager = window.__godsEyeView.styleManager;
       return (
         Number(manager._bloomSlider.value) > before.value &&
-        manager._bloomStage.uniforms.contrast < before.contrast
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast < before.contrast
       );
     }, displayBefore),
   );
@@ -263,15 +268,18 @@ try {
     'destroyed Display controls cannot change settings',
     await page.evaluate(() => {
       const manager = window.__godsEyeView.styleManager;
-      manager._displayControls.destroy();
+      manager._displayBindings._detachDisplayControls();
       const before = manager.bloomEnabled;
-      const contrast = manager._bloomStage.uniforms.contrast;
+      const contrast =
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast;
       manager._bloomBtn.click();
       manager._bloomSlider.value = '15';
       manager._bloomSlider.dispatchEvent(new Event('input', { bubbles: true }));
       return (
         manager.bloomEnabled === before &&
-        manager._bloomStage.uniforms.contrast === contrast
+        window.__godsEyeView.viewer.scene.postProcessStages.bloom.uniforms
+          .contrast === contrast
       );
     }),
   );

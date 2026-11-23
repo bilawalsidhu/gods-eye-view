@@ -4,11 +4,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parsers } from 'prettier/plugins/babel.mjs';
 
-// Existing entity graphics only. Remove entries as these callers migrate.
-const legacyFiles = new Set([
-  'src/scenes/dataPacks/presentation.js',
-  'src/layers/directions/index.js',
-]);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const propertyName = (node) => node?.name ?? node?.value;
 const memberName = (node) =>
@@ -110,7 +105,6 @@ function cesiumLabels(source) {
 
 test('runtime world text uses the world-overlay host, never new Cesium labels', () => {
   const violations = [];
-  const legacySeen = new Set();
   function scan(directory) {
     for (const entry of readdirSync(root + directory, {
       withFileTypes: true,
@@ -123,9 +117,7 @@ test('runtime world text uses the world-overlay host, never new Cesium labels', 
         !/\.(?:test|spec)\.js$/.test(entry.name)
       ) {
         const hits = cesiumLabels(readFileSync(root + file, 'utf8'));
-        if (!hits.length) continue;
-        if (legacyFiles.has(file)) legacySeen.add(file);
-        else violations.push(...hits.map((hit) => `${file}:${hit}`));
+        violations.push(...hits.map((hit) => `${file}:${hit}`));
       }
     }
   }
@@ -134,11 +126,6 @@ test('runtime world text uses the world-overlay host, never new Cesium labels', 
     violations,
     [],
     `Cesium text labels are forbidden; use the world-overlay host.\n${violations.join('\n')}`,
-  );
-  assert.deepEqual(
-    legacySeen,
-    legacyFiles,
-    'Remove stale or false-positive Cesium-label exceptions',
   );
 });
 
@@ -156,6 +143,18 @@ test('the guard catches label APIs and entity graphics, including aliases and mu
     'const options = { label: { font: "12px sans-serif", text: title } };',
   ])
     assert.ok(cesiumLabels(source).length > 0, source);
+});
+
+test('Overpass-free outline modules construct no Cesium labels and import no Cesium', () => {
+  for (const file of [
+    'src/annotations/outlineRungs.js',
+    'src/sources/openFreeMapOutlines.js',
+    'src/sources/nominatimOutlines.js',
+  ]) {
+    const source = readFileSync(root + file, 'utf8');
+    assert.deepEqual(cesiumLabels(source), [], file);
+    assert.doesNotMatch(source, /from ['"]cesium['"]/, file);
+  }
 });
 
 test('schemas, UI label lookups, comments and strings are not Cesium labels', () => {

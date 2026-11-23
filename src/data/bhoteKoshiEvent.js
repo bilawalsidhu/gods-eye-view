@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { isPointerFree } from './inputOwnership.js';
 import {
   clearOverlaySource,
@@ -24,8 +23,21 @@ import {
   resolveEmbeddedMediaSource,
 } from './bhoteKoshiEmbeddedMedia.js';
 import { acquireImageryComparison } from '../maps/imageryComparison.js';
-import { createImagerySplit } from '../ui/imagerySplit.js';
-import { formatDate, t, tn, msg } from '../i18n/index.js';
+import { createImagerySplit, globeSplitTarget } from '../ui/imagerySplit.js';
+import { formatDate, t, tn, msg, onLocaleChange } from '../i18n/index.js';
+import { useBhoteKoshiPanelStore } from '../ui/stores/bhoteKoshiPanel.js';
+import { applicationPinia } from '../ui/vueRuntime.js';
+import { heightsOf } from '../queries/heights.js';
+import {
+  cameraOf,
+  canvasOf,
+  drawOf,
+  findCamera,
+  findGlobe,
+} from '../render/rendererOf.js';
+import { hexColor } from '../render/color.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { clone, lerp, lerpInto, toRadians, vec } from '../geo/vector.js';
 
 export const BHOTE_KOSHI_LAYER_ID = 'bhote-koshi-2026';
 export const BHOTE_KOSHI_OVERLAY_SOURCE_ID = 'bhote-koshi-witnesses';
@@ -44,8 +56,24 @@ const SCENE_PATH_RENDER_HOLD = 'bhote-koshi-scene-path-travel';
 const SCENE_MEDIA_MIN_PLAYBACK_SECONDS = 6;
 const SCENE_MEDIA_EXIT_SECONDS = 0.65;
 const BHOTE_EVENT_ACCENT = WORLD_OVERLAY_STYLE.accent;
-const FLOOD_COLOR = Cesium.Color.fromCssColorString('#d8954e').withAlpha(0.68);
-const SURGE_COLOR = Cesium.Color.fromCssColorString('#e8b47c');
+const FLOOD_ACCENT = '#d8954e';
+const FLOOD_HALO_COLOR = hexColor(FLOOD_ACCENT, 0.38);
+const FLOOD_CORE_COLOR = hexColor(FLOOD_ACCENT, 0.96);
+const SURGE_COLOR = hexColor('#e8b47c');
+const SURGE_OUTLINE_COLOR = [0, 0, 0, 0.85];
+const FLOOD_HALO_ID = 'bhote-koshi-flood-halo';
+const FLOOD_CORE_ID = 'bhote-koshi-flood-core';
+const SURGE_FRONT_ID = 'bhote-koshi-surge-front';
+const IMAGERY_CREDIT = Object.freeze({
+  text: 'Vantor WorldView Open Data · CC BY-NC 4.0',
+});
+
+// Each layer's draw sets have ids of their own.
+let layerSerial = 0;
+
+/** Whether two positions are the same point; either may be null. */
+const samePoint = (a, b) =>
+  a === b || (Boolean(a && b) && a.x === b.x && a.y === b.y && a.z === b.z);
 const CINEMATIC_INPUT_EVENTS = Object.freeze(['pointerdown', 'wheel']);
 const CINEMATIC_VIEW_SPECS = Object.freeze([
   {
@@ -117,23 +145,25 @@ const DEFAULT_EVENT_LOADER = async () => {
     throw new Error(`Bhote Koshi event pack unavailable (${response.status})`);
   return response.json();
 };
-const DEFAULT_IMAGERY_PROVIDER_FACTORY = (url, options) =>
-  Cesium.SingleTileImageryProvider.fromUrl(url, options);
+/** The globe port's spec for one of the event's images, over `rectangle`. */
+const DEFAULT_IMAGERY_SPEC_FACTORY = (url, { rectangle, credit }) => ({
+  kind: 'single-image',
+  url,
+  rectangle,
+  credit,
+});
+/**
+ * Terrain heights under the observations, once the most detailed terrain
+ * has loaded. The bare ellipsoid answers no height, as there is no terrain
+ * to sample then.
+ */
 const DEFAULT_TERRAIN_SAMPLER = async (viewer, observations) => {
-  if (
-    !viewer?.terrainProvider ||
-    !viewer.terrainProvider.availability ||
-    typeof Cesium.sampleTerrainMostDetailed !== 'function'
-  ) {
-    return null;
-  }
-  const cartographics = observations.map((observation) =>
-    Cesium.Cartographic.fromDegrees(observation.lon, observation.lat),
-  );
-  return Cesium.sampleTerrainMostDetailed(
-    viewer.terrainProvider,
-    cartographics,
-  );
+  if (!viewer) return null;
+  const heights = await heightsOf(viewer).batch(observations, {
+    against: 'terrain',
+    ellipsoidMisses: true,
+  });
+  return heights.map((height) => ({ height }));
 };
 const DEFAULT_MEDIA_LOADER = async (url, { signal } = {}) => {
   if (typeof createImageBitmap !== 'function') {
@@ -185,7 +215,7 @@ export function visibleSegmentCount(progress, segmentCount) {
 
 /**
  * Build a corridor whose final vertex is the exact animated surge position.
- * Returns true only when the Cesium polyline assignments need refreshing.
+ * Returns true only when the drawn corridor needs refreshing.
  */
 export function updateCorridorPositionCache(progress, terrainPositions, cache) {
   const positions = Array.isArray(terrainPositions) ? terrainPositions : [];
@@ -208,15 +238,15 @@ export function updateCorridorPositionCache(progress, terrainPositions, cache) {
   const startIndex = Math.min(segmentCount - 1, Math.floor(scaledProgress));
   const segmentProgress =
     normalizedProgress >= 1 ? 1 : scaledProgress - startIndex;
-  cache.headPosition = Cesium.Cartesian3.lerp(
+  cache.headPosition = lerpInto(
     positions[startIndex],
     positions[startIndex + 1],
     segmentProgress,
-    cache.headPosition || new Cesium.Cartesian3(),
+    cache.headPosition || vec(),
   );
   cache.positions = positions.slice(0, startIndex + 1);
   if (segmentProgress > 0) {
-    cache.positions.push(Cesium.Cartesian3.clone(cache.headPosition));
+    cache.positions.push(clone(cache.headPosition));
   }
   return true;
 }
@@ -449,18 +479,6 @@ function imageryEndpointText(entry) {
   return [name, date].filter(Boolean).join(' · ');
 }
 
-/** Name, then the date kept on one line so the year never wraps alone. */
-function renderImageryEndpoint(element, entry) {
-  if (!element) return;
-  const { name, date } = imageryEndpointLabel(entry);
-  element.textContent = date ? `${name} · ` : name;
-  if (!date) return;
-  const dateElement = document.createElement('span');
-  dateElement.className = 'bhote-event-date';
-  dateElement.textContent = date;
-  element.appendChild(dateElement);
-}
-
 /** Compact, source-bounded disclosure for multi-source geolocation beats. */
 export function evidenceCorroborationLabel(observation) {
   const count = Math.max(
@@ -535,19 +553,19 @@ export function sampleCinematicPose(progress, keyframes, result = {}) {
       : (linearAmount - BHOTE_KOSHI_CAMERA_HOLD_RATIO) /
         (1 - BHOTE_KOSHI_CAMERA_HOLD_RATIO);
   const amount = travelAmount * travelAmount * (3 - 2 * travelAmount);
-  result.target = Cesium.Cartesian3.lerp(
+  result.target = lerpInto(
     from.target,
     to.target,
     amount,
-    result.target || new Cesium.Cartesian3(),
+    result.target || vec(),
   );
   result.headingDeg = interpolateHeadingDegrees(
     from.headingDeg,
     to.headingDeg,
     amount,
   );
-  result.pitchDeg = Cesium.Math.lerp(from.pitchDeg, to.pitchDeg, amount);
-  result.rangeM = Cesium.Math.lerp(from.rangeM, to.rangeM, amount);
+  result.pitchDeg = lerp(from.pitchDeg, to.pitchDeg, amount);
+  result.rangeM = lerp(from.rangeM, to.rangeM, amount);
   result.fromId = from.id;
   result.toId = to.id;
   return result;
@@ -901,25 +919,29 @@ function openExternal(url) {
 
 function focusView(viewer, viewpoint) {
   announceNavigationAuthority('bhote-koshi-event-focus');
-  const target = Cesium.Cartesian3.fromDegrees(
+  const target = fromDegrees(
     viewpoint.lon,
     viewpoint.lat,
     viewpoint.targetElevationM,
   );
-  const offset = new Cesium.HeadingPitchRange(
-    Cesium.Math.toRadians(viewpoint.headingDeg),
-    Cesium.Math.toRadians(viewpoint.pitchDeg),
-    viewpoint.rangeM,
-  );
-  viewer.camera.cancelFlight?.();
-  viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 80), {
-    offset,
-    duration: 2.2,
-    complete: () => {
-      viewer.camera.lookAt(target, offset);
-      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  const offset = {
+    heading: toRadians(viewpoint.headingDeg),
+    pitch: toRadians(viewpoint.pitchDeg),
+    range: viewpoint.rangeM,
+  };
+  const camera = cameraOf(viewer);
+  camera.cancelFlight();
+  camera.flyToBounds(
+    { center: target, radius: 80 },
+    {
+      offset,
+      durationS: 2.2,
+      onComplete: () => {
+        camera.lookAt(target, offset);
+        camera.release();
+      },
     },
-  });
+  );
 }
 
 function setElementProperty(element, property, value) {
@@ -929,213 +951,114 @@ function setElementProperty(element, property, value) {
 }
 
 function setElementAttribute(element, attribute, value) {
-  if (!element || element.getAttribute?.(attribute) === value) return false;
-  element.setAttribute(attribute, value);
+  if (!element || element.attributes[attribute] === value) return false;
+  element.attributes[attribute] = value;
   return true;
 }
 
-function collectPanelReferences(panel) {
+/** One panel control's state, as the panel view renders it. */
+function panelRecord(initial = {}) {
+  return {
+    textContent: '',
+    hidden: false,
+    disabled: false,
+    value: '',
+    ...initial,
+    attributes: { ...initial.attributes },
+  };
+}
+
+/**
+ * The panel's controls as the layer writes them, starting from the panel's
+ * markup. The panel view renders what the layer publishes from them.
+ */
+function createPanelRecords(event) {
   return Object.freeze({
-    imagerySection: panel.querySelector('[data-role="imagery-comparison"]'),
-    observedStatus: panel.querySelector('.bhote-event-status.observed'),
-    beforeDate: panel.querySelector('[data-role="before-date"]'),
-    afterDate: panel.querySelector('[data-role="after-date"]'),
-    time: panel.querySelector('[data-role="time"]'),
-    caveat: panel.querySelector('[data-role="caveat"]'),
-    imageryCloudNote: panel.querySelector('[data-role="imagery-cloud-note"]'),
-    reportList: panel.querySelector('.bhote-event-report-list'),
-    playButton: panel.querySelector('[data-action="play"]'),
-    playSceneButton: panel.querySelector('[data-action="play-scene"]'),
-    cinematicButton: panel.querySelector('[data-action="cinematic"]'),
-    storyReplayButton: panel.querySelector('[data-action="story-replay"]'),
-    corridorButton: panel.querySelector('[data-action="corridor"]'),
-    previousButton: panel.querySelector('[data-action="previous-beat"]'),
-    nextButton: panel.querySelector('[data-action="next-beat"]'),
-    openSourceButton: panel.querySelector('[data-action="open-source"]'),
-    progressInput: panel.querySelector('[data-role="progress"]'),
-    splitInput: panel.querySelector('[data-role="split"]'),
-    splitReadout: panel.querySelector('[data-role="split-readout"]'),
-    timelineLabel: panel.querySelector('[data-role="timeline-label"]'),
-    beatIndex: panel.querySelector('[data-role="beat-index"]'),
-    beatTitle: panel.querySelector('[data-role="beat-title"]'),
-    beatMeta: panel.querySelector('[data-role="beat-meta"]'),
+    root: { sceneBeat: false },
+    imagerySection: panelRecord(),
+    observedStatus: panelRecord(),
+    time: panelRecord({
+      textContent: `~0:00 / ${elapsedLabel(1, event.reconstruction.elapsedSeconds)}`,
+    }),
+    caveat: panelRecord({
+      textContent: bhoteEventText(event.reconstruction.caveat),
+    }),
+    imageryCloudNote: panelRecord(),
+    playButton: panelRecord({ textContent: t('▶ PLAY') }),
+    playSceneButton: panelRecord({
+      textContent: t('▶ PLAY SCENE'),
+      hidden: true,
+    }),
+    // `pressed` is the button's pressed state; the view renders it as one.
+    cinematicButton: panelRecord({
+      textContent: t('◉ CINEMATIC'),
+      pressed: false,
+    }),
+    storyReplayButton: panelRecord({ textContent: t('↺ FULL STORY') }),
+    corridorButton: panelRecord(),
+    previousButton: panelRecord({
+      attributes: { 'aria-label': t('Previous story beat') },
+    }),
+    nextButton: panelRecord({
+      attributes: { 'aria-label': t('Next story beat') },
+    }),
+    openSourceButton: panelRecord(),
+    progressInput: panelRecord({
+      value: '0',
+      attributes: { 'aria-label': t('Schematic downstream progression') },
+    }),
+    splitInput: panelRecord({ value: '50' }),
+    splitReadout: panelRecord({ textContent: '50 / 50' }),
+    timelineLabel: panelRecord({ textContent: t('RECONSTRUCTION CLOCK') }),
+    beatIndex: panelRecord({ textContent: '01 / 06' }),
+    beatTitle: panelRecord({ textContent: t('CAUSE') }),
+    beatMeta: panelRecord({ textContent: t('CAPTURE TIME UNVERIFIED') }),
   });
-}
-
-/** Escape translated text for the panel markup template. */
-function escapeMarkup(text) {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function createPanel(event, handlers) {
-  const panel = document.createElement('aside');
-  panel.id = 'bhote-koshi-event-panel';
-  panel.setAttribute(
-    'aria-label',
-    t('Bhote Koshi flood reconstruction controls'),
-  );
-  panel.innerHTML = `
-    <div class="bhote-event-header">
-      <div>
-        <div class="bhote-event-kicker">${escapeMarkup(t('EVENT RECONSTRUCTION · 26 AUG 2026'))}</div>
-        <div class="bhote-event-title">${escapeMarkup(t('BHOTE KOSHI OUTBURST FLOOD'))}</div>
-      </div>
-      <button class="bhote-event-icon-btn" type="button" data-action="close" title="${escapeMarkup(t('Close event layer'))}" aria-label="${escapeMarkup(t('Close event layer'))}">×</button>
-    </div>
-    <div class="bhote-event-status-row">
-      <span class="bhote-event-status observed">${escapeMarkup(t('OBSERVED IMAGERY'))}</span>
-      <span class="bhote-event-status reconstructed">${escapeMarkup(t('SCHEMATIC CORRIDOR'))}</span>
-    </div>
-    <section class="bhote-event-section" data-role="imagery-comparison">
-      <div class="bhote-event-section-head">
-        <span>${escapeMarkup(t('2021 HISTORICAL REFERENCE / 2026 POST-EVENT'))}</span>
-        <span data-role="split-readout">50 / 50</span>
-      </div>
-      <input class="bhote-event-range" data-role="split" type="range" min="0" max="100" value="50" aria-label="${escapeMarkup(t('Historical reference and post-event image split'))}" />
-      <div class="bhote-event-dates">
-        <span data-role="before-date"></span>
-        <span data-role="after-date"></span>
-      </div>
-    </section>
-    <section class="bhote-event-section">
-      <div class="bhote-event-section-head">
-        <span data-role="timeline-label">${escapeMarkup(t('RECONSTRUCTION CLOCK'))}</span>
-        <span data-role="time"></span>
-      </div>
-      <input class="bhote-event-range flood" data-role="progress" type="range" min="0" max="1000" value="0" aria-label="${escapeMarkup(t('Schematic downstream progression'))}" />
-      <div class="bhote-event-story-nav" aria-label="${escapeMarkup(t('Story beat navigation'))}">
-        <button type="button" data-action="previous-beat" title="${escapeMarkup(t('Previous story beat'))}" aria-label="${escapeMarkup(t('Previous story beat'))}">‹</button>
-        <div class="bhote-event-story-current">
-          <span data-role="beat-index">01 / 06</span>
-          <strong data-role="beat-title" aria-live="polite">${escapeMarkup(t('CAUSE'))}</strong>
-          <small data-role="beat-meta">${escapeMarkup(t('CAPTURE TIME UNVERIFIED'))}</small>
-        </div>
-        <button type="button" data-action="next-beat" title="${escapeMarkup(t('Next story beat'))}" aria-label="${escapeMarkup(t('Next story beat'))}">›</button>
-      </div>
-      <div class="bhote-event-actions">
-        <button type="button" data-action="play">${escapeMarkup(t('▶ PLAY'))}</button>
-        <button type="button" data-action="play-scene" hidden title="${escapeMarkup(t('Play the next shot and continue through this scene'))}">${escapeMarkup(t('▶ PLAY SCENE'))}</button>
-        <button type="button" data-action="cinematic" aria-pressed="false">${escapeMarkup(t('◉ CINEMATIC'))}</button>
-        <button type="button" data-action="story-replay">${escapeMarkup(t('↺ FULL STORY'))}</button>
-        <button type="button" data-action="open-source">${escapeMarkup(t('↗ OPEN ORIGINAL'))}</button>
-        <button type="button" data-action="corridor">${escapeMarkup(t('⌖ LOWER GORGE'))}</button>
-      </div>
-    </section>
-    <details class="bhote-event-evidence">
-      <summary>${escapeMarkup(t('FIELD REPORTS · {count}', { count: event.fieldReports.length }))}</summary>
-      <div class="bhote-event-report-list"></div>
-    </details>
-    <div class="bhote-event-credit">
-      <span>${escapeMarkup(t('GEOLOCATIONS · {credit}', { credit: 'GEO GEORGE SHADRACH' }))}</span>
-      <button type="button" data-action="geolocation-map">${escapeMarkup(t('↗ OPEN PUBLIC MAP'))}</button>
-    </div>
-    <p class="bhote-event-caveat"><span data-role="caveat"></span><span data-role="imagery-cloud-note">${escapeMarkup(t(' Clouds are preserved from the source imagery.'))}</span></p>
-  `;
-
-  const refs = collectPanelReferences(panel);
-  renderImageryEndpoint(refs.beforeDate, event.imagery.before);
-  renderImageryEndpoint(refs.afterDate, event.imagery.after);
-  refs.time.textContent = `~0:00 / ${elapsedLabel(1, event.reconstruction.elapsedSeconds)}`;
-  refs.caveat.textContent = bhoteEventText(event.reconstruction.caveat);
-
-  for (const report of event.fieldReports) {
-    const button = document.createElement('button');
-    const label = document.createElement('span');
-    const status = document.createElement('small');
-    button.type = 'button';
-    button.className = 'bhote-event-report';
-    label.textContent = bhoteEventText(report.label);
-    status.textContent = bhoteEventText(report.status);
-    button.append(label, status);
-    button.addEventListener('click', () => openExternal(report.url));
-    refs.reportList.appendChild(button);
-  }
-
-  panel
-    .querySelector('[data-action="close"]')
-    .addEventListener('click', handlers.close);
-  panel
-    .querySelector('[data-action="play"]')
-    .addEventListener('click', handlers.play);
-  panel
-    .querySelector('[data-action="play-scene"]')
-    .addEventListener('click', handlers.playScene);
-  panel
-    .querySelector('[data-action="cinematic"]')
-    .addEventListener('click', handlers.toggleCinematic);
-  panel
-    .querySelector('[data-action="previous-beat"]')
-    .addEventListener('click', handlers.previousBeat);
-  panel
-    .querySelector('[data-action="next-beat"]')
-    .addEventListener('click', handlers.nextBeat);
-  panel
-    .querySelector('[data-action="story-replay"]')
-    .addEventListener('click', handlers.replayCinematic);
-  panel
-    .querySelector('[data-action="open-source"]')
-    .addEventListener('click', handlers.openActiveSource);
-  panel
-    .querySelector('[data-action="geolocation-map"]')
-    .addEventListener('click', handlers.openGeolocationMap);
-  panel
-    .querySelector('[data-action="corridor"]')
-    .addEventListener('click', handlers.focusCorridor);
-  panel
-    .querySelector('[data-role="split"]')
-    .addEventListener('input', (inputEvent) => {
-      handlers.setSplit(Number(inputEvent.target.value) / 100);
-    });
-  panel
-    .querySelector('[data-role="progress"]')
-    .addEventListener('input', (inputEvent) => {
-      handlers.previewProgress(Number(inputEvent.target.value) / 1000);
-    });
-  panel
-    .querySelector('[data-role="progress"]')
-    .addEventListener('change', (inputEvent) => {
-      handlers.commitProgress(Number(inputEvent.target.value) / 1000, {
-        final: true,
-      });
-    });
-  const rightRail = document.getElementById?.('right-context-rail');
-  rightRail?.classList.add('bhote-event-active');
-  (rightRail || document.body).appendChild(panel);
-  return { panel, refs };
 }
 
 export function createBhoteKoshiEventLayer({
   overlayHost = DEFAULT_OVERLAY_HOST,
   renderHost = DEFAULT_RENDER_HOST,
   eventLoader = DEFAULT_EVENT_LOADER,
-  imageryProviderFactory = DEFAULT_IMAGERY_PROVIDER_FACTORY,
+  imagerySpecFactory = DEFAULT_IMAGERY_SPEC_FACTORY,
   terrainSampler = DEFAULT_TERRAIN_SAMPLER,
   mediaLoader = DEFAULT_MEDIA_LOADER,
   evidenceFrameFactory = createEvidenceFrame,
   evidenceFrameUpdater = updateEvidenceFrame,
   videoFactory = DEFAULT_VIDEO_FACTORY,
   embeddedMediaFactory = createBhoteKoshiEmbeddedMedia,
+  panelStore = useBhoteKoshiPanelStore(applicationPinia()),
 } = {}) {
   let _viewer = null;
   let _dataManager = null;
   let _mapStackController = null;
   let _event = null;
   let _enabled = false;
-  let _panel = null;
+  // The panel's controls; null while the layer is off. Their state is
+  // published to the panel store, which the context rail renders.
   let _panelRefs = null;
+  let _panelOwner = null;
+  let _panelPublished = '';
+  // The dates and field reports, which stay as they were when the panel
+  // opened, until a locale change words them again.
+  let _panelFixed = null;
+  let _offPanelLocale = null;
   let _splitControl = null;
   let _beforeLayer = null;
   let _afterLayer = null;
-  let _imageryLayerCollection = null;
-  let _floodDataSource = null;
+  // An event image failed to load this enable: no comparison is shown.
+  let _imageryFailed = false;
+  const _serial = ++layerSerial;
+  // The flood's draw sets: the corridor's halo and core lines, and the
+  // surge front. Null while the layer is off.
+  let _floodSets = null;
   let _floodSurfaceMode = null;
-  let _floodHalo = null;
-  let _floodCore = null;
-  let _surgePoint = null;
+  // What the flood shows, set as the event plays, and what was last drawn
+  // of it (`drawFlood`).
+  let _floodShow = false;
+  let _surgeShow = false;
+  let _surgePosition = null;
+  let _floodDrawn = null;
   let _terrainPositions = [];
   let _sourceShotPaths = new Map();
   let _scenePathPositionCache = new Map();
@@ -1166,11 +1089,15 @@ export function createBhoteKoshiEventLayer({
   let _sceneRevealAnimationFrame = null;
   let _sceneRevealHoldActive = false;
   let _sceneRevealProgress = 1;
+  // How far a timeline seek's settled-camera reveal had come (0..1, linear).
+  let _sceneSeekRevealLinear = 1;
+  // The beat whose clip a run going on from a seek in its hold started again.
+  let _sceneMediaRestartBeatId = null;
   let _cinematicKeyframes = [];
   let _cinematicActive = false;
   let _cinematicReplayArmed = false;
-  let _cinematicPose = { target: new Cesium.Cartesian3() };
-  let _cinematicOffset = new Cesium.HeadingPitchRange();
+  let _cinematicPose = { target: vec() };
+  const _cinematicOffset = { heading: 0, pitch: 0, range: 0 };
   let _lastCinematicProgress = null;
   let _cameraInputTarget = null;
   let _evidenceClickTarget = null;
@@ -1185,7 +1112,6 @@ export function createBhoteKoshiEventLayer({
   let _comparisonLease = null;
   let _introTimer = null;
   let _introGeneration = 0;
-  let _lastSurgePosition = null;
   let _lastSurgeVisible = null;
   let _presentation = 'standalone';
   let _sceneBeatId = null;
@@ -1271,31 +1197,50 @@ export function createBhoteKoshiEventLayer({
   }
 
   async function createImagery(event) {
-    const rectangle = Cesium.Rectangle.fromDegrees(
-      event.imagery.rectangle.west,
-      event.imagery.rectangle.south,
-      event.imagery.rectangle.east,
-      event.imagery.rectangle.north,
-    );
-    const [beforeProvider, afterProvider] = await Promise.all([
-      imageryProviderFactory(eventAsset(event.imagery.before.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
-      imageryProviderFactory(eventAsset(event.imagery.after.path), {
-        rectangle,
-        credit: 'Vantor WorldView Open Data · CC BY-NC 4.0',
-      }),
+    _imageryFailed = false;
+    const { west, south, east, north } = event.imagery.rectangle;
+    const options = {
+      rectangle: { west, south, east, north },
+      credit: IMAGERY_CREDIT,
+    };
+    const [beforeSpec, afterSpec] = await Promise.all([
+      imagerySpecFactory(eventAsset(event.imagery.before.path), options),
+      imagerySpecFactory(eventAsset(event.imagery.after.path), options),
     ]);
     if (!_enabled) return;
-    _imageryLayerCollection = _viewer.imageryLayers;
-    _beforeLayer = _imageryLayerCollection.addImageryProvider(beforeProvider);
-    _afterLayer = _imageryLayerCollection.addImageryProvider(afterProvider);
-    _beforeLayer.splitDirection = Cesium.SplitDirection.LEFT;
-    _afterLayer.splitDirection = Cesium.SplitDirection.RIGHT;
-    _beforeLayer.alpha = 0.96;
-    _afterLayer.alpha = 0.96;
+    const globe = findGlobe(_viewer);
+    if (!globe)
+      throw new Error('Bhote Koshi imagery needs a globe to drape on');
+    _beforeLayer = addEventImagery(globe, beforeSpec, 'left');
+    _afterLayer = addEventImagery(globe, afterSpec, 'right');
     setSplit(_split);
+  }
+
+  /**
+   * One of the before/after images, on its side of the split, over every
+   * layer drawn so far. It drapes on the globe's surface only, as the
+   * comparison is drawn on terrain.
+   */
+  function addEventImagery(globe, spec, split) {
+    const layer = globe.imagery.add(spec, globe.imagery.list().length);
+    layer.split = split;
+    layer.alpha = 0.96;
+    layer.drapeOn = 'surface';
+    layer.on('tileError', (error) => imageryFailed(error));
+    return layer;
+  }
+
+  /**
+   * An image that did not load: without both images there is nothing to
+   * compare, so the pair and the comparison's divider and labels go.
+   */
+  function imageryFailed(error) {
+    if (_imageryFailed) return;
+    _imageryFailed = true;
+    console.warn('[Data:BhoteKoshi] Event imagery unavailable:', error);
+    removeImagery();
+    syncPresentationMode();
+    renderHost.request('bhote-koshi-imagery-failed');
   }
 
   async function resolveEvidenceAnchors(event, signal) {
@@ -1314,9 +1259,10 @@ export function createBhoteKoshiEventLayer({
     }
     throwIfEnableCancelled(signal, _enabled);
     return observations.map((observation, index) => {
-      const sampledHeight = Number(sampled?.[index]?.height);
+      // A miss is null or undefined, never sea level.
+      const sampledHeight = Number(sampled?.[index]?.height ?? Number.NaN);
       const fallbackHeight = Number(observation.fallbackElevationM) || 0;
-      return Cesium.Cartesian3.fromDegrees(
+      return fromDegrees(
         observation.lon,
         observation.lat,
         (Number.isFinite(sampledHeight) ? sampledHeight : fallbackHeight) + 18,
@@ -1357,7 +1303,7 @@ export function createBhoteKoshiEventLayer({
   function showWitnessEmbed() {
     const witness = _event?.witnessAnchors?.[0];
     if (!witness?.sourceUrl) return false;
-    const anchor = Cesium.Cartesian3.fromDegrees(
+    const anchor = fromDegrees(
       witness.lon,
       witness.lat,
       (Number(witness.elevationM) || 0) + 18,
@@ -1468,6 +1414,16 @@ export function createBhoteKoshiEventLayer({
       typeof _sceneControls.timelineSeek === 'object'
       ? _sceneControls.timelineSeek
       : null;
+  }
+
+  /** Whether a seek's moment in the hold comes after the shot's clip. */
+  function sceneSeekPassedMedia(seek) {
+    if (_sceneControls.evidenceMediaAutoplay !== true) return false;
+    const mediaDurationSec = Math.max(
+      SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
+      Number(_sceneControls.mediaPlaybackHoldSec) || 0,
+    );
+    return Math.max(0, Number(seek?.holdElapsedSec) || 0) >= mediaDurationSec;
   }
 
   function sceneTimelineMediaVisible() {
@@ -1599,6 +1555,19 @@ export function createBhoteKoshiEventLayer({
     );
   }
 
+  /**
+   * Whether a run going on from a seek in this beat's hold started its clip
+   * again, so the hold has to play out as from its start.
+   */
+  function sceneShotRestartsMedia(beatId) {
+    return (
+      _enabled &&
+      _sceneBeatId === beatId &&
+      _sceneMediaRestartBeatId === beatId &&
+      sceneEvidenceMediaAutoplays()
+    );
+  }
+
   function getSceneShotMediaHold(beatId) {
     if (
       !_enabled ||
@@ -1683,24 +1652,21 @@ export function createBhoteKoshiEventLayer({
     const cached = _scenePathPositionCache.get(cacheKey);
     if (cached) return cached;
     const positions = (_sourceShotPaths.get(beatId) || []).map((point) => {
-      const position = Cesium.Cartographic.fromDegrees(point.lon, point.lat);
+      const position = { lon: point.lon, lat: point.lat };
       let height;
       // Some schematic reaches have a source elevation profile. Do not replace
       // it with coarse mesh heights on entry/exit from the comparison surface:
       // a single high sample can make the front dive backward in screen space.
       if (_sceneControls.evidencePathElevation !== 'source') {
         // Sample once while preparing the shot, never from an animation frame.
-        try {
-          height = _viewer?.scene?.sampleHeight?.(
-            position,
-            [_floodCore, _floodHalo, _surgePoint].filter(Boolean),
-          );
-        } catch {}
+        // The flood's own sets are not ground: queries see through them.
+        const heights = _viewer ? heightsOf(_viewer) : null;
+        height = heights?.now(position);
         if (!Number.isFinite(height))
-          height = _viewer?.scene?.globe?.getHeight?.(position);
+          height = heights?.now(position, { against: 'terrain' });
       }
       if (!Number.isFinite(height)) height = point.fallbackElevationM;
-      return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, height + 8);
+      return fromDegrees(point.lon, point.lat, height + 8);
     });
     _scenePathPositionCache.set(cacheKey, positions);
     return positions;
@@ -1883,6 +1849,7 @@ export function createBhoteKoshiEventLayer({
   function applySceneTimelineSeek() {
     const seek = sceneTimelineSeek();
     if (!seek) return false;
+    _sceneSeekRevealLinear = 1;
     stopScenePathReveal();
     stopSceneEvidenceReveal();
     stopSceneMediaPlayback();
@@ -1906,6 +1873,43 @@ export function createBhoteKoshiEventLayer({
       _sceneRevealProgress = 1;
       return true;
     }
+
+    // The settled-camera reveal waits out the shot's clip and its exit
+    // (unless the path runs during the clip), then runs for its duration.
+    const mediaDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
+            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
+          )
+        : 0;
+    const exitDurationSec =
+      _sceneControls.evidenceMediaAutoplay === true
+        ? Math.max(
+            SCENE_MEDIA_EXIT_SECONDS,
+            Number(_sceneControls.mediaExitDurationSec) || 0,
+          )
+        : 0;
+    const settledDurationSec = Math.max(
+      0.25,
+      Number(
+        sceneUsesSourcePath()
+          ? _sceneControls.evidencePathDurationSec
+          : sceneEvidenceSequenceAnimates()
+            ? _sceneControls.evidenceSequenceDurationSec
+            : _sceneControls.evidenceRevealDurationSec,
+      ) || 0.9,
+    );
+    const settledStartSec = Math.max(
+      0,
+      Number(_sceneControls.evidencePathStartDelaySec) || 0,
+      _sceneControls.evidencePathDuringMedia === true
+        ? 0
+        : mediaDurationSec + exitDurationSec,
+    );
+    const settledLinear = clampUnit(
+      (holdElapsedSec - settledStartSec) / settledDurationSec,
+    );
 
     if (scenePathMovesDuringCamera()) {
       const authoredDurationSec = Number(
@@ -1932,41 +1936,25 @@ export function createBhoteKoshiEventLayer({
                   Number(_sceneControls.evidenceRevealDurationSec) || 0.9,
                 ),
             );
+      // In the hold, an animated evidence sequence runs on its own clock
+      // after the camera's path; it stands where that clock has it.
+      const sequenceWindow =
+        cameraProgress >= 1 && sceneEvidenceSequenceAnimates()
+          ? evidenceSequenceWindow(_sceneBeatId, _evidenceTimeline)
+          : null;
+      if (sequenceWindow) {
+        _sceneSeekRevealLinear = settledLinear;
+        _sceneRevealProgress = smoothstep(0, 1, settledLinear);
+        _progress =
+          sequenceWindow.startProgress +
+          (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
+            _sceneRevealProgress;
+      }
       return true;
     }
 
-    const mediaDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_MIN_PLAYBACK_SECONDS,
-            Number(_sceneControls.mediaPlaybackHoldSec) || 0,
-          )
-        : 0;
-    const exitDurationSec =
-      _sceneControls.evidenceMediaAutoplay === true
-        ? Math.max(
-            SCENE_MEDIA_EXIT_SECONDS,
-            Number(_sceneControls.mediaExitDurationSec) || 0,
-          )
-        : 0;
-    const pathDurationSec = Math.max(
-      0.25,
-      Number(
-        sceneUsesSourcePath()
-          ? _sceneControls.evidencePathDurationSec
-          : sceneEvidenceSequenceAnimates()
-            ? _sceneControls.evidenceSequenceDurationSec
-            : _sceneControls.evidenceRevealDurationSec,
-      ) || 0.9,
-    );
-    const pathStartSec = Math.max(
-      0,
-      Number(_sceneControls.evidencePathStartDelaySec) || 0,
-      _sceneControls.evidencePathDuringMedia === true
-        ? 0
-        : mediaDurationSec + exitDurationSec,
-    );
-    const linear = clampUnit((holdElapsedSec - pathStartSec) / pathDurationSec);
+    const linear = settledLinear;
+    _sceneSeekRevealLinear = linear;
     _sceneRevealProgress = smoothstep(0, 1, linear);
     _scenePathRevealProgress =
       startProgress + (targetProgress - startProgress) * _sceneRevealProgress;
@@ -2087,7 +2075,11 @@ export function createBhoteKoshiEventLayer({
     _scenePathAnimationFrame = requestAnimationFrame(step);
   }
 
-  function startSceneEvidenceReveal() {
+  /**
+   * Start the settled-camera reveal, from `fromLinear` of its way when a run
+   * goes on from a timeline seek that had already brought it that far.
+   */
+  function startSceneEvidenceReveal(fromLinear = 0) {
     stopSceneEvidenceReveal();
     const sequenceAnimates = sceneEvidenceSequenceAnimates();
     if (
@@ -2131,7 +2123,25 @@ export function createBhoteKoshiEventLayer({
           );
     if (sequenceWindow) updateProgress(sequenceWindow.startProgress);
     let lastTickAt = performance.now();
-    let activeElapsedMs = 0;
+    let activeElapsedMs = clampUnit(fromLinear) * durationMs;
+    const applyReveal = (linear) => {
+      _sceneRevealProgress = smoothstep(0, 1, linear);
+      if (sequenceWindow) {
+        updateProgress(
+          sequenceWindow.startProgress +
+            (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
+              _sceneRevealProgress,
+        );
+      } else if (!scenePathMovesDuringCamera()) {
+        const floodProgress = sourceWindow
+          ? sourceWindow.start +
+            (sourceWindow.target - sourceWindow.start) * _sceneRevealProgress
+          : targetFloodProgress * _sceneRevealProgress;
+        updateFloodTrace(floodProgress);
+        updateSurgeFront(floodProgress);
+      }
+    };
+    if (activeElapsedMs > 0) applyReveal(activeElapsedMs / durationMs);
     renderHost.hold(SCENE_REVEAL_RENDER_HOLD);
     _sceneRevealHoldActive = true;
     const step = (now) => {
@@ -2148,21 +2158,7 @@ export function createBhoteKoshiEventLayer({
         activeElapsedMs += tickAt - lastTickAt;
       lastTickAt = tickAt;
       const linear = clampUnit(activeElapsedMs / durationMs);
-      _sceneRevealProgress = smoothstep(0, 1, linear);
-      if (sequenceWindow) {
-        updateProgress(
-          sequenceWindow.startProgress +
-            (sequenceWindow.targetProgress - sequenceWindow.startProgress) *
-              _sceneRevealProgress,
-        );
-      } else if (!scenePathMovesDuringCamera()) {
-        const floodProgress = sourceWindow
-          ? sourceWindow.start +
-            (sourceWindow.target - sourceWindow.start) * _sceneRevealProgress
-          : targetFloodProgress * _sceneRevealProgress;
-        updateFloodTrace(floodProgress);
-        updateSurgeFront(floodProgress);
-      }
+      applyReveal(linear);
       renderHost.request('bhote-koshi-scene-beat-reveal');
       if (linear < 1) {
         _sceneRevealAnimationFrame = requestAnimationFrame(step);
@@ -2597,11 +2593,7 @@ export function createBhoteKoshiEventLayer({
     const elevationOffsetM =
       _presentation === BHOTE_KOSHI_SCENE_PRESENTATION ? 55 : 8;
     _terrainPositions = event.reconstruction.corridor.map((point) =>
-      Cesium.Cartesian3.fromDegrees(
-        point.lon,
-        point.lat,
-        point.elevationM + elevationOffsetM,
-      ),
+      fromDegrees(point.lon, point.lat, point.elevationM + elevationOffsetM),
     );
     prepareScenePath();
     _evidenceTimeline = buildEvidenceTimeline(
@@ -2639,93 +2631,151 @@ export function createBhoteKoshiEventLayer({
     updateProgress(_progress);
   }
 
-  function createFloodDataSource() {
-    const tileSafe = usesPhotorealFloodSurface();
-    _floodSurfaceMode = tileSafe ? 'tiles' : 'terrain';
-    const haloMaterial = new Cesium.PolylineDashMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.38),
-      dashLength: 18,
-    });
-    const coreMaterial = new Cesium.PolylineGlowMaterialProperty({
-      color: FLOOD_COLOR.withAlpha(0.96),
-      glowPower: 0.24,
-      taperPower: 0.7,
-    });
-    _floodDataSource = new Cesium.CustomDataSource('bhote-koshi-flood');
-    _floodHalo = _floodDataSource.entities.add({
-      id: 'bhote-koshi-flood-halo',
+  /** The flood's draw sets, drawing nothing until the event shows it. */
+  function createFloodSets() {
+    _floodSurfaceMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
+    const draw = drawOf(_viewer);
+    const prefix = `${BHOTE_KOSHI_LAYER_ID}:${_serial}`;
+    // Presentation only: clicks go through to what is under them.
+    _floodSets = {
+      lines: draw.lines({ id: `${prefix}:flood`, pickable: false }),
+      surge: draw.points({
+        id: `${prefix}:surge-front`,
+        pickable: false,
+        clampTo: 'both',
+      }),
+    };
+    resetFloodDrawn();
+  }
+
+  function resetFloodDrawn() {
+    _floodShow = false;
+    _surgeShow = false;
+    _surgePosition = null;
+    _lastSurgeVisible = null;
+    _floodDrawn = {
+      positions: null,
       show: false,
-      polyline: {
-        positions: new Cesium.CallbackProperty(
-          () => _corridorPositionCache.positions,
-          false,
-        ),
-        width: 18,
-        // Dynamic non-ground Cesium lines do not support depthFailMaterial.
-        // Classify the active surface so later-refined mesh tiles cannot bury it.
-        clampToGround: true,
-        material: haloMaterial,
-        classificationType: tileSafe
-          ? Cesium.ClassificationType.BOTH
-          : Cesium.ClassificationType.TERRAIN,
+      surge: null,
+      surgeShow: false,
+    };
+  }
+
+  function removeFloodSets() {
+    _floodSets?.lines.dispose();
+    _floodSets?.surge.dispose();
+    _floodSets = null;
+    _floodSurfaceMode = null;
+    resetFloodDrawn();
+  }
+
+  /**
+   * The corridor's lines along `positions`: a dashed halo under a glowing
+   * core, draped on the surface the flood is drawn on (tiles too under
+   * photoreal, so later-refined tiles cannot bury it).
+   */
+  function floodLines(positions, show) {
+    const clampTo = _floodSurfaceMode === 'tiles' ? 'both' : 'terrain';
+    return [
+      {
+        id: FLOOD_HALO_ID,
+        positions,
+        widthPx: 18,
+        mode: 'draped',
+        clampTo,
+        style: { kind: 'dash', color: FLOOD_HALO_COLOR, length: 18 },
+        show,
       },
-    });
-    _floodCore = _floodDataSource.entities.add({
-      id: 'bhote-koshi-flood-core',
-      show: false,
-      polyline: {
-        positions: new Cesium.CallbackProperty(
-          () => _corridorPositionCache.positions,
-          false,
-        ),
-        width: 5,
-        clampToGround: true,
-        material: coreMaterial,
-        classificationType: tileSafe
-          ? Cesium.ClassificationType.BOTH
-          : Cesium.ClassificationType.TERRAIN,
+      {
+        id: FLOOD_CORE_ID,
+        positions,
+        widthPx: 5,
+        mode: 'draped',
+        clampTo,
+        style: {
+          kind: 'glow',
+          color: FLOOD_CORE_COLOR,
+          power: 0.24,
+          taper: 0.7,
+        },
+        show,
       },
-    });
-    _surgePoint = _floodDataSource.entities.add({
-      id: 'bhote-koshi-surge-front',
-      show: false,
-      position: Cesium.Cartesian3.ZERO,
-      point: {
-        pixelSize: 11,
-        color: SURGE_COLOR,
-        outlineColor: Cesium.Color.BLACK.withAlpha(0.85),
-        outlineWidth: 3,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: tileSafe ? Number.POSITIVE_INFINITY : 0,
-      },
-    });
-    _viewer.dataSources.add(_floodDataSource);
+    ];
+  }
+
+  function surgeItem(position, show) {
+    return {
+      id: SURGE_FRONT_ID,
+      pos: position,
+      height: 'clampGround',
+      pixelSize: 11,
+      color: SURGE_COLOR,
+      outlineColor: SURGE_OUTLINE_COLOR,
+      outlineWidth: 3,
+      disableDepthTest:
+        _floodSurfaceMode === 'tiles' ? Number.POSITIVE_INFINITY : 0,
+      show,
+    };
+  }
+
+  /**
+   * Draw the flood as it now stands, changing only what changed: the
+   * corridor where it has grown to and whether it shows, and the surge
+   * front's place and whether it shows.
+   */
+  function drawFlood() {
+    if (!_floodSets) return;
+    const drawn = _floodDrawn;
+    const positions = _corridorPositionCache.positions;
+    if (positions.length > 1) {
+      if (positions !== drawn.positions || _floodShow !== drawn.show) {
+        _floodSets.lines.upsert(floodLines(positions, _floodShow));
+        drawn.positions = positions;
+        drawn.show = _floodShow;
+      }
+    } else if (drawn.show) {
+      // Too short to be a line: the last one drawn hides, kept so the next
+      // can still be drawn where it moves in the same frame.
+      _floodSets.lines.upsert(floodLines(drawn.positions, false));
+      drawn.show = false;
+    }
+    if (
+      _surgePosition &&
+      (!samePoint(_surgePosition, drawn.surge) ||
+        _surgeShow !== drawn.surgeShow)
+    ) {
+      drawn.surge = _surgePosition;
+      drawn.surgeShow = _surgeShow;
+      _floodSets.surge.upsert([surgeItem(drawn.surge, _surgeShow)]);
+    }
   }
 
   function syncFloodSurfaceMode() {
     const nextMode = usesPhotorealFloodSurface() ? 'tiles' : 'terrain';
-    if (!_viewer || !_floodDataSource || _floodSurfaceMode === nextMode) return;
-    _viewer.dataSources.remove(_floodDataSource, true);
-    _floodDataSource = null;
-    _floodHalo = null;
-    _floodCore = null;
-    _surgePoint = null;
-    _lastSurgePosition = null;
-    _lastSurgeVisible = null;
+    if (!_viewer || !_floodSets || _floodSurfaceMode === nextMode) return;
+    // Drawn anew on the other surface as the event next moves on.
+    removeFloodSets();
     _corridorPositionCache = { visibleCount: -1, positions: [] };
-    createFloodDataSource();
+    createFloodSets();
+  }
+
+  /** The canvas the scene is drawn on, for its pointer events. */
+  function sceneCanvas() {
+    if (!_viewer) return null;
+    return canvasOf(_viewer);
   }
 
   function createSplitControl(event) {
     _splitControl = createImagerySplit({
-      scene: _viewer.scene,
+      // The split as the divider moves it: the globe's, through its port.
+      scene: globeSplitTarget(findGlobe(_viewer)),
       initialValue: _split,
       id: 'bhote-koshi-split-line',
       handleClass: 'bhote-koshi-split-handle',
       cssProperty: '--bhote-koshi-split',
-      beforeTitle: imageryEndpointText(event.imagery.before),
-      afterTitle: imageryEndpointText(event.imagery.after),
-      ariaLabel: t('Historical reference and post-event image divider'),
+      beforeTitle: () => imageryEndpointText(event.imagery.before),
+      afterTitle: () => imageryEndpointText(event.imagery.after),
+      ariaLabel: () => t('Historical reference and post-event image divider'),
       formatValueText: (beforePercent, afterPercent) =>
         t(
           'A historical reference {before} percent, B post-event {after} percent',
@@ -2738,7 +2788,7 @@ export function createBhoteKoshiEventLayer({
   function applyCinematicCamera() {
     if (
       !_cinematicActive ||
-      !_viewer?.camera ||
+      !findCamera(_viewer) ||
       _cinematicKeyframes.length === 0
     )
       return;
@@ -2749,22 +2799,70 @@ export function createBhoteKoshiEventLayer({
       _cinematicPose,
     );
     if (!pose) return;
-    _cinematicOffset.heading = Cesium.Math.toRadians(pose.headingDeg);
-    _cinematicOffset.pitch = Cesium.Math.toRadians(pose.pitchDeg);
+    _cinematicOffset.heading = toRadians(pose.headingDeg);
+    _cinematicOffset.pitch = toRadians(pose.pitchDeg);
     _cinematicOffset.range = pose.rangeM;
-    _viewer.camera.lookAt(pose.target, _cinematicOffset);
+    findCamera(_viewer)?.lookAt(pose.target, _cinematicOffset);
     _lastCinematicProgress = _progress;
   }
 
+  /** Present the panel's controls as they stand; an unchanged panel is not sent again. */
+  function publishPanel() {
+    if (!_panelRefs) return;
+    const { root, ...controls } = _panelRefs;
+    const refs = Object.fromEntries(
+      Object.entries(controls).map(([key, record]) => [
+        key,
+        { ...record, attributes: { ...record.attributes } },
+      ]),
+    );
+    const signature = JSON.stringify([root.sceneBeat, refs]);
+    if (signature === _panelPublished) return;
+    _panelPublished = signature;
+    _panelFixed ??= {
+      beforeDate: imageryEndpointLabel(_event.imagery.before),
+      afterDate: imageryEndpointLabel(_event.imagery.after),
+      reports: _event.fieldReports.map((report) => ({
+        label: bhoteEventText(report.label),
+        status: bhoteEventText(report.status),
+      })),
+    };
+    panelStore.publish({
+      owner: _panelOwner,
+      sceneBeat: root.sceneBeat,
+      refs,
+      ..._panelFixed,
+    });
+  }
+
+  /**
+   * Word the panel again in the current locale: fresh records, written by
+   * the same syncs that keep them current.
+   */
+  function relocalizePanel() {
+    if (!_panelRefs || !_event) return;
+    _panelRefs = createPanelRecords(_event);
+    _panelFixed = null;
+    writeCinematicButton();
+    syncPanel();
+    syncPresentationMode();
+  }
+
   function syncCinematicButton() {
+    if (writeCinematicButton()) publishPanel();
+  }
+
+  /** Write the cinematic button's label and state; false without a panel. */
+  function writeCinematicButton() {
     const button = _panelRefs?.cinematicButton;
-    if (!button) return;
+    if (!button) return false;
     setElementProperty(
       button,
       'textContent',
       _cinematicActive ? t('■ RELEASE CAMERA') : t('◉ CINEMATIC'),
     );
-    setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
+    setElementProperty(button, 'pressed', _cinematicActive);
+    return true;
   }
 
   function claimCinematicCamera() {
@@ -2774,7 +2872,7 @@ export function createBhoteKoshiEventLayer({
       _cinematicActive = true;
       _lastCinematicProgress = null;
       announceNavigationAuthority('bhote-koshi-cinematic');
-      _viewer?.camera?.cancelFlight?.();
+      findCamera(_viewer)?.cancelFlight();
     }
     syncCinematicButton();
     return true;
@@ -2791,8 +2889,7 @@ export function createBhoteKoshiEventLayer({
     }
     _cinematicActive = false;
     _lastCinematicProgress = null;
-    if (releaseCamera)
-      _viewer?.camera?.lookAtTransform?.(Cesium.Matrix4.IDENTITY);
+    if (releaseCamera) findCamera(_viewer)?.release();
     syncCinematicButton();
     renderHost.request('bhote-koshi-cinematic-stop');
   }
@@ -2826,7 +2923,7 @@ export function createBhoteKoshiEventLayer({
   }
 
   function attachCameraInputRelease() {
-    _cameraInputTarget = _viewer?.scene?.canvas || null;
+    _cameraInputTarget = sceneCanvas();
     for (const type of CINEMATIC_INPUT_EVENTS) {
       _cameraInputTarget?.addEventListener?.(type, handleManualCameraInput);
     }
@@ -2863,16 +2960,17 @@ export function createBhoteKoshiEventLayer({
       : Number.isFinite(clientY) && bounds
         ? clientY - bounds.top
         : Number.NaN;
-    const hit = overlayHost.hitTest?.(x, y, {
-      sourceId: BHOTE_KOSHI_OVERLAY_SOURCE_ID,
-      filter: (entry) => String(entry?.id || '').startsWith('evidence-card-'),
-    });
-    if (typeof hit?.entry?.activate !== 'function') return;
+    // Only the card painted on top acts: an evidence card covered by
+    // another layer's card or label leaves the click to that card.
+    const hit = overlayHost.hitTest?.(x, y);
+    if (hit?.sourceId !== BHOTE_KOSHI_OVERLAY_SOURCE_ID) return;
+    if (!String(hit.entry?.id || '').startsWith('evidence-card-')) return;
+    if (typeof hit.entry.activate !== 'function') return;
     hit.entry.activate();
   }
 
   function attachEvidenceCardActivation() {
-    _evidenceClickTarget = _viewer?.scene?.canvas || null;
+    _evidenceClickTarget = sceneCanvas();
     _evidenceClickTarget?.addEventListener?.('click', handleEvidenceCardClick);
   }
 
@@ -3029,6 +3127,7 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       `~${elapsedLabel(_sceneScrubProgress, sceneDurationSec)} / ${elapsedLabel(1, sceneDurationSec)}`,
     );
+    publishPanel();
     if (_sceneSeekFrame != null) return;
     const schedule =
       globalThis.requestAnimationFrame ||
@@ -3302,7 +3401,7 @@ export function createBhoteKoshiEventLayer({
       'disabled',
       !observation?.media?.sourceUrl,
     );
-    syncCinematicButton();
+    writeCinematicButton();
     setElementProperty(
       _panelRefs.splitInput,
       'value',
@@ -3314,12 +3413,14 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       `${beforePercent} / ${100 - beforePercent}`,
     );
+    publishPanel();
   }
 
   function syncPresentationMode() {
     const sceneDirected = _presentation === BHOTE_KOSHI_SCENE_PRESENTATION;
     const imageryAvailable =
-      !sceneDirected || _sceneControls.imageryComparison === true;
+      !_imageryFailed &&
+      (!sceneDirected || _sceneControls.imageryComparison === true);
     const scrubberAvailable =
       !sceneDirected || Boolean(_sceneController?.seekScene);
     const knownSceneBeat =
@@ -3330,7 +3431,7 @@ export function createBhoteKoshiEventLayer({
     const evidenceAvailable =
       !sceneDirected ||
       (_sceneSurface === BHOTE_KOSHI_SCENE_EVIDENCE_BEAT && knownSceneBeat);
-    _panel?.classList?.toggle('bhote-event-scene-beat', sceneDirected);
+    if (_panelRefs) _panelRefs.root.sceneBeat = sceneDirected;
     if (_panelRefs?.playSceneButton)
       _panelRefs.playSceneButton.hidden = !sceneDirected;
     if (_panelRefs?.imagerySection)
@@ -3364,17 +3465,18 @@ export function createBhoteKoshiEventLayer({
     }
     if (_panelRefs?.openSourceButton)
       _panelRefs.openSourceButton.hidden = !evidenceAvailable;
+    publishPanel();
     overlayHost.setVisible(BHOTE_KOSHI_OVERLAY_SOURCE_ID, evidenceAvailable);
   }
 
   function updateFloodTrace(progress) {
-    if (!_floodHalo || !_floodCore) return;
+    if (!_floodSets) return;
     if (
       _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
       _sceneSurface !== BHOTE_KOSHI_SCENE_EVIDENCE_BEAT
     ) {
-      _floodHalo.show = false;
-      _floodCore.show = false;
+      _floodShow = false;
+      drawFlood();
       return;
     }
     if (
@@ -3385,31 +3487,24 @@ export function createBhoteKoshiEventLayer({
       )
     )
       return;
-    const positions = _corridorPositionCache.positions;
-    _floodHalo.show = positions.length > 1;
-    _floodCore.show = positions.length > 1;
+    _floodShow = _corridorPositionCache.positions.length > 1;
+    drawFlood();
   }
 
   function updateSurgeFront(progress) {
-    if (!_surgePoint) return;
+    if (!_floodSets) return;
     if (
       _presentation === BHOTE_KOSHI_SCENE_PRESENTATION &&
       _sceneSurface !== BHOTE_KOSHI_SCENE_EVIDENCE_BEAT
     ) {
-      _surgePoint.show = false;
+      _surgeShow = false;
+      drawFlood();
       return;
     }
     const headPosition = _corridorPositionCache.headPosition;
-    if (
-      headPosition &&
-      !Cesium.Cartesian3.equals(_lastSurgePosition, headPosition)
-    ) {
-      _surgePoint.position = headPosition;
-      _lastSurgePosition = Cesium.Cartesian3.clone(
-        headPosition,
-        _lastSurgePosition || new Cesium.Cartesian3(),
-      );
-    }
+    // A copy, as the cache's head is written in place as the flood moves.
+    if (headPosition && !samePoint(_surgePosition, headPosition))
+      _surgePosition = clone(headPosition);
     const visible =
       Boolean(headPosition) &&
       progress > 0 &&
@@ -3418,9 +3513,10 @@ export function createBhoteKoshiEventLayer({
         sceneKeepsFloodVisible() ||
         progress < 1);
     if (_lastSurgeVisible !== visible) {
-      _surgePoint.show = visible;
+      _surgeShow = visible;
       _lastSurgeVisible = visible;
     }
+    drawFlood();
   }
 
   function updateProgress(progress) {
@@ -3521,11 +3617,10 @@ export function createBhoteKoshiEventLayer({
   }
 
   function removeImagery() {
-    if (_beforeLayer) _imageryLayerCollection?.remove(_beforeLayer, true);
-    if (_afterLayer) _imageryLayerCollection?.remove(_afterLayer, true);
+    _beforeLayer?.remove();
+    _afterLayer?.remove();
     _beforeLayer = null;
     _afterLayer = null;
-    _imageryLayerCollection = null;
   }
 
   async function init(viewer) {
@@ -3559,9 +3654,14 @@ export function createBhoteKoshiEventLayer({
       throwIfEnableCancelled(signal, _enabled);
       await syncTerrainComparison();
       throwIfEnableCancelled(signal, _enabled);
-      createFloodDataSource();
+      createFloodSets();
       createSplitControl(event);
-      const panelView = createPanel(event, {
+      _panelRefs = createPanelRecords(event);
+      _panelOwner = {};
+      _panelPublished = '';
+      _panelFixed = null;
+      const owner = _panelOwner;
+      const controls = {
         close: () =>
           _dataManager?.setEnabled(BHOTE_KOSHI_LAYER_ID, false, {
             origin: 'user',
@@ -3578,9 +3678,23 @@ export function createBhoteKoshiEventLayer({
         commitProgress,
         setSplit,
         focusCorridor,
-      });
-      _panel = panelView.panel;
-      _panelRefs = panelView.refs;
+        openReport: (index) => {
+          const url = event.fieldReports[index]?.url;
+          if (url) openExternal(url);
+        },
+      };
+      // Only the panel this enable published may act.
+      panelStore.connect(
+        Object.fromEntries(
+          Object.entries(controls).map(([name, control]) => [
+            name,
+            (...args) => (_panelOwner === owner ? control(...args) : undefined),
+          ]),
+        ),
+      );
+      publishPanel();
+      _offPanelLocale?.();
+      _offPanelLocale = onLocaleChange(relocalizePanel);
       syncPresentationMode();
       overlayHost.setVisible(
         BHOTE_KOSHI_OVERLAY_SOURCE_ID,
@@ -3665,20 +3779,17 @@ export function createBhoteKoshiEventLayer({
       closeFrame(slot.poster);
     }
     _evidenceFrameSlots = [];
-    if (_floodDataSource) _viewer.dataSources.remove(_floodDataSource, true);
-    _floodDataSource = null;
-    _floodSurfaceMode = null;
-    _floodHalo = null;
-    _floodCore = null;
-    _surgePoint = null;
-    _lastSurgePosition = null;
-    _lastSurgeVisible = null;
-    _panel?.remove();
-    document
-      .getElementById?.('right-context-rail')
-      ?.classList.remove('bhote-event-active');
-    _panel = null;
+    removeFloodSets();
+    if (_panelOwner && panelStore.panel?.owner === _panelOwner) {
+      panelStore.connect(null);
+      panelStore.publish(null);
+    }
+    _offPanelLocale?.();
+    _offPanelLocale = null;
+    _panelOwner = null;
     _panelRefs = null;
+    _panelPublished = '';
+    _panelFixed = null;
     _splitControl?.destroy();
     _splitControl = null;
     _progress = 0;
@@ -3734,6 +3845,7 @@ export function createBhoteKoshiEventLayer({
       _sceneControls.cameraTravel?.completed === true;
     const previousTravelCancelled =
       _sceneControls.cameraTravel?.cancelled === true;
+    const previousSeek = sceneTimelineSeek();
     if (params.presentation === BHOTE_KOSHI_SCENE_PRESENTATION) {
       _presentation = BHOTE_KOSHI_SCENE_PRESENTATION;
       _sceneSurface =
@@ -3788,6 +3900,27 @@ export function createBhoteKoshiEventLayer({
       stopSceneMediaPlayback();
       _sceneMediaPlaybackCompletedBeatId = null;
     }
+    // A run going on from a seek inside the settled hold plays on from that
+    // moment: the reveal continues from where the seek put it, and the clip
+    // starts again unless the seek was already past it.
+    const resumesSeek =
+      previousSeek != null &&
+      !sceneTimelineSeek() &&
+      !beatChanged &&
+      cameraIsSettled &&
+      cameraWasSettled &&
+      previouslyDeferred &&
+      nowDeferred;
+    if (resumesSeek && sceneSeekPassedMedia(previousSeek))
+      _sceneMediaPlaybackCompletedBeatId = _sceneBeatId;
+    if (
+      resumesSeek &&
+      sceneEvidenceMediaAutoplays() &&
+      !sceneSeekPassedMedia(previousSeek)
+    )
+      _sceneMediaRestartBeatId = _sceneBeatId;
+    else if (beatChanged || sceneTimelineSeek())
+      _sceneMediaRestartBeatId = null;
     if (!nowDeferred) {
       stopSceneEvidenceReveal();
       _sceneRevealProgress = 1;
@@ -3854,9 +3987,9 @@ export function createBhoteKoshiEventLayer({
         !timelineSeekActive &&
         cameraIsSettled &&
         (nowDeferred || sceneEvidenceSequenceAnimates()) &&
-        (beatChanged || !previouslyDeferred || !cameraWasSettled)
+        (beatChanged || !previouslyDeferred || !cameraWasSettled || resumesSeek)
       ) {
-        startSceneEvidenceReveal();
+        startSceneEvidenceReveal(resumesSeek ? _sceneSeekRevealLinear : 0);
       }
       if (!sceneDirected && params.cinematic === true)
         startCinematic({ play: params.autoPlay !== false });
@@ -3902,6 +4035,7 @@ export function createBhoteKoshiEventLayer({
     setParams,
     getParams,
     getSceneShotMediaHold,
+    sceneShotRestartsMedia,
     setSceneMediaPlayback,
     getStats() {
       return {

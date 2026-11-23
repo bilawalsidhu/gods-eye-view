@@ -12,20 +12,28 @@
  * Cameras without an identified model are untouched — unknown never implies
  * anything.
  *
- * Spec records are vendored verbatim from the CCTV Camera Database
+ * Specification fields are vendored from the CCTV Camera Database
  * (https://github.com/ch-bas/cctv-camera-database, CC0-1.0) — an open dataset
- * of 28,000+ camera models transcribed from manufacturer datasheets (84% with
- * FOV, as of v2.26.0). This module vendors the records that the currently integrated public
+ * of 29,000+ camera models transcribed from manufacturer datasheets (76% with
+ * FOV, as of v2.29.0). This module vendors records that the integrated public
  * catalogs publish hardware for — King County WA (Cohu, Bosch AUTODOME, Axis
  * Q6135-LE), plus the Bosch AUTODOME and Axis PTZ/multisensor models that
- * appear in Sarasota County FL and Sioux Falls SD open data; packs that
+ * appear in Sarasota County FL and Sioux Falls SD open data, plus the Bosch MIC
+ * PTZs for the City of Amsterdam camera register proposed in #251; packs that
  * publish other hardware models can grow it, or vendor the full extract.
  *
  * Scope guardrail: records describe camera PRODUCTS (optics, resolution,
  * night vision) — never endpoints, stream paths, or access/config data.
  */
 
-/** Verbatim records from the dataset's model-enrichment extract (v2.26.0). */
+/**
+ * Records from the dataset's model-enrichment extract: v2.26.0, plus the Bosch
+ * MIC records from v2.29.0 with titles shortened to model codes.
+ * A Bosch MIC order code ends in a colour letter (B, G, W; registries write
+ * `x`) on one shared datasheet. The colours are aliases of one record whose
+ * `model` leaves the letter out, so the HUD never names a variant the source
+ * did not.
+ */
 const RECORDS = [
   {
     id: 'axis-q6135-le',
@@ -265,6 +273,67 @@ const RECORDS = [
     environment: ['outdoor'],
   },
   {
+    id: 'bosch-mic-7130-pb4',
+    brand: 'Bosch',
+    model: 'MIC-7130-P_4',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7130-pb4/',
+    aliases: [
+      'MIC IP starlight 7000 HD',
+      'MIC-7130-PB4',
+      'MIC-7130-PG4',
+      'MIC-7130-PW4',
+      'MIC-7130-Px4',
+    ],
+    fov_deg: '2.1-59',
+    resolution: { mp: 1, w: 1280, h: 720, label: '720p' },
+    ptz: true,
+    autotracking: true,
+    varifocal: true,
+    environment: ['outdoor'],
+  },
+  {
+    id: 'bosch-mic-7502-z30b',
+    brand: 'Bosch',
+    model: 'MIC-7502-Z30',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7502-z30b/',
+    aliases: [
+      'MIC-7502-Z30B',
+      'MIC-7502-Z30G',
+      'MIC-7502-Z30W',
+      'MIC-7502-Z30x',
+    ],
+    fov_deg: '2.3-63.7',
+    resolution: { mp: 2.13, w: 1920, h: 1080, label: '1080p' },
+    ptz: true,
+    autotracking: true,
+    varifocal: true,
+    night_vision: { type: 'color' },
+    environment: ['outdoor'],
+  },
+  {
+    id: 'bosch-mic-7522-z30b',
+    brand: 'Bosch',
+    model: 'MIC-7522-Z30',
+    type: 'ptz',
+    url: 'https://www.cctv-database.com/camera/bosch-mic-7522-z30b/',
+    aliases: [
+      'MIC-7522-Z30B',
+      'MIC-7522-Z30G',
+      'MIC-7522-Z30W',
+      'MIC-7522-Z30x',
+    ],
+    fov_deg: '2.1-58.3',
+    // i18n-ignore: datasheet label
+    resolution: { mp: 2, w: 1920, h: 1080, label: '1080p HD' },
+    ptz: true,
+    varifocal: true,
+    night_vision: { type: 'color' },
+    environment: ['outdoor'],
+    ndaa_compliant: true,
+  },
+  {
     id: 'cohu-3920-idome',
     brand: 'Cohu',
     model: '3920 iDome',
@@ -387,33 +456,60 @@ const BRAND_ALIASES = {
   Hikvision: ['hiwatch'],
 };
 
-function brandWords(record) {
-  return new Set([
-    ...words(record.brand),
-    ...(BRAND_ALIASES[record.brand] || []),
-  ]);
-}
-
-/**
- * One entry per record name (model + aliases). `required` is every
- * non-generic word of the name — all must appear in a query, so a generation
- * or suffix ("Mk II", "7000i" vs "7000") is never dropped. `hasCode` marks
- * names carrying a letter+digit model code; names without one ("3950",
- * "01959-004", "AUTODOME 800 Series") match only when the brand does.
- */
-const NAME_INDEX = RECORDS.flatMap((record) => {
-  const brand = brandWords(record);
-  return [record.model, ...(record.aliases || [])].map((name) => {
-    const nameWords = words(name);
-    return {
-      record,
-      brand,
-      allowed: new Set(nameWords),
-      required: nameWords.filter((word) => !isGeneric(word)),
-      hasCode: nameWords.some(isModelCode),
-    };
+/** A model lookup over `records` with this module's matching rules (see lookupModelSpec). */
+export function createModelSpecLookup(records) {
+  /**
+   * One entry per record name (model + aliases). `required` is every
+   * non-generic word of the name — all must appear in a query, so a
+   * generation or suffix ("Mk II", "7000i" vs "7000") is never dropped.
+   * `hasCode` marks names carrying a letter+digit model code; names without
+   * one ("3950", "01959-004", "AUTODOME 800 Series") match only when the
+   * brand does.
+   */
+  const nameIndex = records.flatMap((record) => {
+    const brand = new Set([
+      ...words(record.brand),
+      ...(BRAND_ALIASES[record.brand] || []),
+    ]);
+    return [record.model, ...(record.aliases || [])].map((name) => {
+      const nameWords = words(name);
+      return {
+        record,
+        brand,
+        allowed: new Set(nameWords),
+        required: nameWords.filter((word) => !isGeneric(word)),
+        hasCode: nameWords.some(isModelCode),
+      };
+    });
   });
-});
+  return (model, manufacturer) => {
+    const query = words(model).map(stripVariantSuffix);
+    if (!query.length) return null;
+    const maker = words(manufacturer);
+    const found = new Set();
+    for (const entry of nameIndex) {
+      const makerMatches = maker.some((word) => entry.brand.has(word));
+      if (maker.length && !makerMatches) continue;
+      if (
+        !entry.hasCode &&
+        !makerMatches &&
+        !query.some((word) => entry.brand.has(word))
+      )
+        continue;
+      if (!entry.required.length) continue;
+      if (!entry.required.every((word) => query.includes(word))) continue;
+      if (
+        !query.every(
+          (word) =>
+            entry.allowed.has(word) || entry.brand.has(word) || isGeneric(word),
+        )
+      )
+        continue;
+      found.add(entry.record);
+    }
+    return found.size === 1 ? [...found][0] : null;
+  };
+}
 
 /**
  * Looks up a spec record for a hardware-model string.
@@ -431,35 +527,9 @@ const NAME_INDEX = RECORDS.flatMap((record) => {
  * guesses).
  * @param {string} model - Hardware model as named by a source pack or seed.
  * @param {string} [manufacturer] - The source's manufacturer, when published.
- * @returns {Object|null} The verbatim spec record, or null when unknown.
+ * @returns {Object|null} The matched spec record, or null when unknown.
  */
-export function lookupModelSpec(model, manufacturer) {
-  const query = words(model).map(stripVariantSuffix);
-  if (!query.length) return null;
-  const maker = words(manufacturer);
-  const found = new Set();
-  for (const entry of NAME_INDEX) {
-    const makerMatches = maker.some((word) => entry.brand.has(word));
-    if (maker.length && !makerMatches) continue;
-    if (
-      !entry.hasCode &&
-      !makerMatches &&
-      !query.some((word) => entry.brand.has(word))
-    )
-      continue;
-    if (!entry.required.length) continue;
-    if (!entry.required.every((word) => query.includes(word))) continue;
-    if (
-      !query.every(
-        (word) =>
-          entry.allowed.has(word) || entry.brand.has(word) || isGeneric(word),
-      )
-    )
-      continue;
-    found.add(entry.record);
-  }
-  return found.size === 1 ? [...found][0] : null;
-}
+export const lookupModelSpec = createModelSpecLookup(RECORDS);
 
 /**
  * Datasheet horizontal FOV as the range the hardware can cover. Only
@@ -533,13 +603,19 @@ export function specFovCapabilityToken(
 
 /**
  * One-line spec summary for HUD meta text.
- * @param {Object} spec - A record from this module.
+ * @param {Object} spec - A spec record (CCTV or ALPR). Resolution falls back
+ *   from label to WxH to NMP.
+ * @param {{withBrand?: boolean}} [options] - `withBrand: false` leaves the
+ *   brand out.
  * @returns {string} e.g. 'Axis Q6135-LE · 1080p · IR 250m · PTZ' ('' for null).
  */
-export function specSummary(spec) {
+export function specSummary(spec, { withBrand = true } = {}) {
   if (!spec) return '';
-  const parts = [`${spec.brand} ${spec.model}`];
-  if (spec.resolution?.label) parts.push(spec.resolution.label);
+  const parts = [withBrand ? `${spec.brand} ${spec.model}` : spec.model];
+  const { label, w, h, mp } = spec.resolution || {};
+  if (label) parts.push(label);
+  else if (w && h) parts.push(`${w}x${h}`);
+  else if (mp) parts.push(`${mp}MP`);
   if (spec.night_vision) {
     parts.push(
       `${spec.night_vision.type.toUpperCase()}${spec.night_vision.range_m ? ` ${spec.night_vision.range_m}m` : ''}`,
