@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, onUpdated, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText } from '../../contextSearch.js';
-import { formatNumber, t } from '../../../i18n/index.js';
+import { formatNumber, t, tn } from '../../../i18n/index.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
 import { isGlobeView, useEntityCardStore } from '../../stores/entityCard.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
@@ -370,6 +370,9 @@ const nearCentre = computed(() => {
   const query = contextNeedle.value;
   return Object.fromEntries(store.inView({ perLayer: query ? 12 : 3, query }).map((group) => [group.layerId, group.items]));
 });
+const globeTiles = computed(() => contextNeedle.value
+  ? tiles.value.filter((tile) => nearCentre.value[tile.id]?.length)
+  : tiles.value);
 // Own row focus in the view so it survives a switch between list layouts.
 const viewBox = ref(null);
 let heldRow = null;
@@ -612,7 +615,8 @@ function openSuggested() {
       <!-- Globe view: each layer once, its name, count and feed state, and
            what its count is made of. -->
       <div v-if="globeView" class="view-context__blocks" tabindex="-1">
-        <div v-for="tile in tiles" :key="tile.id" class="view-context__block" :data-layer="tile.id" tabindex="-1">
+        <p v-if="contextNeedle && !globeTiles.length" class="view-context__empty" role="status">{{ tn(0, '{n} results', '{n} results', { n: formatNumber(0) }) }}</p>
+        <div v-for="tile in globeTiles" :key="tile.id" class="view-context__block" :data-layer="tile.id" tabindex="-1">
           <div class="view-context__block-head">
             <i class="view-context__dot" :class="`view-context__dot--${tile.tone}`" role="img" :aria-label="tile.toneText" :title="tile.toneText"></i>
             <EntityMark :layer="tile.id" :icon="tile.icon" />

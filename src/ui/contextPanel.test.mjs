@@ -598,7 +598,38 @@ test('with nothing on, Context shows a few facts and points to Data Layers', asy
   assert.match($('.view-context__region').textContent, /No layers on/);
 });
 
+function contextSearchStyles(t) {
+  const style = document.createElement('style');
+  // Happy DOM drops the multiline :is() rule. Chromium checks the original.
+  style.textContent = readFileSync(
+    new URL('./styles/context-dock.css', import.meta.url),
+    'utf8',
+  ).replace(/\s+/g, ' ');
+  document.head.append(style);
+  t.after(() => style.remove());
+}
+
+test('Context search hides the empty globe controls once the query is typed', async (t) => {
+  contextSearchStyles(t);
+  const { $, cards } = fixture(t, [{ ...flightsOn([]), enabled: false }]);
+  cards.setView({ center: HERE, heightM: 20_000_000 });
+  await nextTick();
+  const selectors = [
+    '.view-context__tiles--facts',
+    '.sun-dial',
+    '.view-context__camera',
+    '.view-context__suggest',
+  ];
+  contextSearchOpen.value = true;
+  contextSearchText.value = 'paris';
+  await nextTick();
+  assert.ok($('#context-tab-view').classList.contains('context-searching'));
+  for (const selector of selectors)
+    assert.equal(getComputedStyle($(selector)).display, 'none', selector);
+});
+
 test('the nearby lists follow the Context search', async (t) => {
+  contextSearchStyles(t);
   const { $, cards } = fixture(t, [
     flightsOn([flight('near01', 30.31, -97.74)]),
   ]);
@@ -617,6 +648,9 @@ test('the nearby lists follow the Context search', async (t) => {
   contextSearchText.value = 'near01';
   await nextTick();
   assert.match($(NEAREST).textContent, /NEAR01/);
+  assert.equal(getComputedStyle($('.view-context__tiles')).display, 'none');
+  assert.notEqual(getComputedStyle($('.view-context__radius')).display, 'none');
+  assert.notEqual(getComputedStyle($('.nearby-lists')).display, 'none');
 });
 
 test('nothing picked: the time reads local and UTC, and there is only counts and one Nearby section', async (t) => {
@@ -888,6 +922,46 @@ test('switching zoom modes preserves the focused item or moves focus to the view
   );
 });
 
+test(
+  'globe search keeps focus in Context when the last matching row leaves',
+  { timeout: 10_000 },
+  async (t) => {
+    const flights = flightsOn([
+      flight('near01', 1, 1),
+      flight('mid01', 10, 10),
+    ]);
+    const { $, cards } = fixture(t, [flights]);
+    const globe = { center: { lat: 0, lon: 0 }, heightM: 20_000_000 };
+    cards.setView(globe);
+    contextSearchOpen.value = true;
+    contextSearchText.value = 'near01';
+    await nextTick();
+    const row = $('.view-context__block [data-row-key]');
+    assert.match(row.textContent, /NEAR01/);
+    row.focus();
+    assert.equal(document.activeElement, row);
+
+    flights.records = [flight('mid01', 10, 10)];
+    flights.stats = {
+      ...flights.stats,
+      count: 1,
+      lastUpdate: flights.stats.lastUpdate + 1,
+    };
+    cards.setView({ ...globe });
+    await nextTick();
+    await nextTick();
+    assert.ok(
+      document.activeElement === $('.view-context__blocks'),
+      'focus moves to the globe results when the last matching row leaves',
+    );
+    assert.ok(!$('.view-context__block'), 'the unmatched group is gone');
+    assert.match(
+      $('.view-context__blocks [role="status"]')?.textContent ?? '',
+      /\b0\b/,
+    );
+  },
+);
+
 test('a stalled feed turned on and off never passes its old count off as new over a newer server count', async (t) => {
   const satellites = {
     id: 'satellites',
@@ -1104,21 +1178,17 @@ test('globe view: each block lists its three items nearest the centre, on the vi
   );
   assert.equal(mark?.dataset.mark, 'airliner');
   assert.equal(mark.textContent, '');
-  const block = $('.view-context__block[data-layer="flights"]');
-  const count = block.querySelector('strong').textContent;
+  const block = () => $('.view-context__block[data-layer="flights"]');
+  const count = block().querySelector('strong').textContent;
   const names = () =>
-    [...block.querySelectorAll('.nearby-lists__name')].map(
+    [...(block()?.querySelectorAll('.nearby-lists__name') ?? [])].map(
       (row) => row.textContent,
     );
   contextSearchOpen.value = true;
   contextSearchText.value = 'nomatchxyz';
   await nextTick();
   assert.deepEqual(names(), [], 'a nonmatching query hides globe rows');
-  assert.equal(
-    block.querySelector('strong').textContent,
-    count,
-    'the loaded total is unchanged',
-  );
+  assert.ok(!block(), 'the unmatched layer group is gone');
   contextSearchText.value = 'far02';
   await nextTick();
   assert.deepEqual(
@@ -1126,9 +1196,10 @@ test('globe view: each block lists its three items nearest the centre, on the vi
     ['FAR02'],
     'search finds a matching item outside the first three',
   );
+  assert.equal(block().querySelector('strong').textContent, count);
   contextSearchText.value = '';
   await nextTick();
-  block.querySelectorAll('.view-context__block-rows li button')[1].click();
+  block().querySelectorAll('.view-context__block-rows li button')[1].click();
   await nextTick();
   assert.equal(cards.card?.identity.id, 'mid01');
 });
