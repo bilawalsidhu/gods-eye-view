@@ -7,6 +7,7 @@
 import * as Cesium from 'cesium';
 import { createTerrainRetryPolicy } from '../../maps/terrainRetry.js';
 import { KEYLESS_TERRAIN_URL } from '../../maps/keylessTerrain.js';
+import { ionRequestOptions } from '../../sources/serverKeys.js';
 
 /** Re:Earth / Mapterhorn ellipsoidal quantized mesh, CC BY 4.0. */
 export { KEYLESS_TERRAIN_URL };
@@ -17,7 +18,10 @@ export async function createWorldTerrain(accessToken, { signal } = {}) {
   if (!accessToken)
     throw new Error('World terrain requires an explicit ion token');
   signal?.throwIfAborted();
-  const resource = await Cesium.IonResource.fromAssetId(1, { accessToken });
+  const resource = await Cesium.IonResource.fromAssetId(
+    1,
+    ionRequestOptions(accessToken),
+  );
   signal?.throwIfAborted();
   return {
     provider: await Cesium.CesiumTerrainProvider.fromUrl(resource, {

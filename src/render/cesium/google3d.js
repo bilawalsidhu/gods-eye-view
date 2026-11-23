@@ -3,6 +3,8 @@
  * @description Google Photorealistic 3D Tiles for the Cesium renderer, by
  * the routes `selectMapStartupRoute` (`src/maps/startupRoute.js`) names.
  */
+import { ionRequestOptions } from '../../sources/serverKeys.js';
+
 export { selectMapStartupRoute } from '../../maps/startupRoute.js';
 
 const clean = (value) => String(value || '').trim();
@@ -109,9 +111,10 @@ export async function createGoogleIonTileset(
   if (!accessToken)
     throw new Error('Google 3D through ion requires an explicit token');
   signal?.throwIfAborted();
-  const resource = await Cesium.IonResource.fromAssetId(2275207, {
-    accessToken,
-  });
+  const resource = await Cesium.IonResource.fromAssetId(
+    2275207,
+    ionRequestOptions(accessToken),
+  );
   signal?.throwIfAborted();
   // Match the installed SDK's Google helper rendering/cache defaults.
   return Cesium.Cesium3DTileset.fromUrl(resource, {
