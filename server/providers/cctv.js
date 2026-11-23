@@ -18,7 +18,7 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
-import { createHlsPuller } from './cctv/stream.js';
+import { createHlsPuller, HlsCapacityError } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
 import {
@@ -27,6 +27,10 @@ import {
 } from './places/google-key.js';
 import { clientNetworkKey, makeCostRateLimiter } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
+
+/** An http(s) .m3u8 URL: what the HLS puller behind /media can play. */
+const isPullableHlsUrl = (url) =>
+  /^https?:\/\//i.test(url) && /\.m3u8(?:\?|$)/i.test(url);
 
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
@@ -407,10 +411,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (feedType === 'hls') {
-            if (
-              !/^https?:\/\//i.test(mediaUrl) ||
-              !/\.m3u8(?:\?|$)/i.test(mediaUrl)
-            ) {
+            if (!isPullableHlsUrl(mediaUrl)) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(
                 JSON.stringify({
@@ -470,13 +471,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 'X-CCTV-Session': entry.token,
               });
               res.end(playlist);
-            } catch {
-              setHealth(cameraId, {
-                status: 'degraded',
-                sourceKind: 'fallback',
-                label: source?.provider || 'Configured source',
-                message: 'Live HLS unavailable',
-              });
+            } catch (error) {
+              // A capacity refusal says nothing about the source: keep its health.
+              if (!(error instanceof HlsCapacityError))
+                setHealth(cameraId, {
+                  status: 'degraded',
+                  sourceKind: 'fallback',
+                  label: source?.provider || 'Configured source',
+                  message: 'Live HLS unavailable',
+                });
               if (!downstream.closed) {
                 res.writeHead(503, {
                   'Content-Type': 'application/json',
@@ -670,6 +673,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           (!isVideoFeedType(normalizeFeedType(source?.feedType))
             ? source?.url
             : '');
+        // /media reports a pullable HLS camera's health. Without a snapshot of
+        // its own, the placeholder or Street View frame here says nothing about
+        // its stream, so it leaves that health as it is.
+        const keepHealth =
+          normalizeFeedType(source?.feedType) === 'hls' &&
+          !source?.snapshotUrl &&
+          isPullableHlsUrl(source?.url || '');
 
         const upstreamImage =
           source?.pack === 'world-cameras'
@@ -767,12 +777,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 pitch,
               });
         if (sv?.ok) {
-          setHealth(cameraId, {
-            status: 'degraded',
-            sourceKind: 'streetview',
-            label: 'Google Street View',
-            message: 'Fallback Street View frame',
-          });
+          if (!keepHealth)
+            setHealth(cameraId, {
+              status: 'degraded',
+              sourceKind: 'streetview',
+              label: 'Google Street View',
+              message: 'Fallback Street View frame',
+            });
           res.writeHead(200, {
             'Content-Type': sv.contentType,
             'Cache-Control': 'no-store',
@@ -791,14 +802,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : 'NO UPSTREAM CONFIGURED',
         });
 
-        setHealth(cameraId, {
-          status: 'degraded',
-          sourceKind: 'synthetic',
-          label: source?.provider || 'Synthetic fallback',
-          message: source?.url
-            ? 'Upstream unavailable'
-            : 'No source configured',
-        });
+        if (!keepHealth)
+          setHealth(cameraId, {
+            status: 'degraded',
+            sourceKind: 'synthetic',
+            label: source?.provider || 'Synthetic fallback',
+            message: source?.url
+              ? 'Upstream unavailable'
+              : 'No source configured',
+          });
 
         res.writeHead(200, {
           'Content-Type': 'image/svg+xml',

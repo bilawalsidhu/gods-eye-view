@@ -86,6 +86,62 @@ function sameMatrix(array, matrix) {
   return true;
 }
 
+const finiteVector = (v) =>
+  !!v && Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
+
+/** Conservative globe/frustum visibility; null means unknown. */
+export function createPointsVisibility(scene, camera) {
+  const visibilitySphere = new Cesium.BoundingSphere();
+  let visibilityMargin = null;
+  let visibilityEllipsoid = null;
+  let visibilityOccluder = null;
+  return function visiblePoints(points, marginM) {
+    const eye = camera.positionWC;
+    const direction = camera.directionWC;
+    const up = camera.upWC;
+    if (
+      scene.mode !== Cesium.SceneMode.SCENE3D ||
+      !points?.length ||
+      !finiteVector(eye) ||
+      !finiteVector(direction) ||
+      !finiteVector(up) ||
+      !points.every(finiteVector)
+    )
+      return null;
+    if (visibilityMargin !== marginM) {
+      const radii = Cesium.Ellipsoid.WGS84.radii;
+      visibilityMargin = marginM;
+      visibilityEllipsoid = new Cesium.Ellipsoid(
+        radii.x - marginM,
+        radii.y - marginM,
+        radii.z - marginM,
+      );
+      visibilityOccluder = new Cesium.EllipsoidalOccluder(visibilityEllipsoid);
+    }
+    const inverse = visibilityEllipsoid.oneOverRadii;
+    // Inside the ellipsoid Cesium's occluder hides nearby points; judge by the frustum alone.
+    const outside =
+      Math.hypot(eye.x * inverse.x, eye.y * inverse.y, eye.z * inverse.z) >= 1;
+    if (outside) {
+      visibilityOccluder.cameraPosition = eye;
+      let visible = false;
+      for (const p of points) {
+        if (visibilityOccluder.isPointVisible(p)) {
+          visible = true;
+          break;
+        }
+      }
+      if (!visible) return false;
+    }
+    const culling = camera.frustum.computeCullingVolume(eye, direction, up);
+    return (
+      culling.computeVisibility(
+        Cesium.BoundingSphere.fromPoints(points, visibilitySphere),
+      ) !== Cesium.Intersect.OUTSIDE
+    );
+  };
+}
+
 /**
  * @param {{scene: object, camera: object, report: (error: unknown) => void,
  *   widget?: object, capabilities?: ReadonlySet<string>,

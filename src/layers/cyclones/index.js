@@ -32,8 +32,14 @@ const utc = (value) =>
     ? `${formatUtcDayMonth(value).replace('-', '-\u2060')}\u00a0${isolate(value.slice(11, 16))}\u00a0UTC`
     : t('Unavailable');
 const COVERAGE = msg(
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.',
+  'NHC/CPHC: Atlantic and eastern/central North Pacific. JTWC: western North Pacific, North Indian Ocean and Southern Hemisphere.',
 );
+// The layer's sources, and each storm's.
+const SOURCE = 'NOAA NHC / CPHC · JTWC';
+const AGENCY_SOURCES = Object.freeze({ nhc: 'NOAA NHC / CPHC', jtwc: 'JTWC' });
+const sourceOf = (storm) => AGENCY_SOURCES[storm?.agency] || AGENCY_SOURCES.nhc;
+const isJtwc = (storm) => storm?.agency === 'jtwc';
+const DANGER_AREA = msg('34-knot wind danger area');
 // The server sends the same English coverage (server/providers/cyclones.js);
 // data stays English and is translated here, where it is shown.
 const coverageText = (coverage) =>
@@ -44,7 +50,9 @@ const SERVER_REASONS = new Set([msg('Cyclone data unavailable')]);
 const errorText = (error) =>
   error && (SERVER_REASONS.has(error) ? t(error) : translateKnown(error));
 // NHC's Tropical Cyclone Status JSON reference: PTC is post-tropical, PC is a
-// potential tropical cyclone, and subtropical systems are STS and STD.
+// potential tropical cyclone, and subtropical systems are STS and STD. JTWC
+// warns of typhoons (TY), super typhoons (STY), tropical cyclones (TC) and
+// subtropical storms and depressions (SS, SD).
 const CLASSIFICATION_NAMES = Object.freeze({
   PC: msg('Potential tropical cyclone'),
   PTC: msg('Post-tropical cyclone'),
@@ -53,6 +61,11 @@ const CLASSIFICATION_NAMES = Object.freeze({
   TD: msg('Tropical depression'),
   STS: msg('Subtropical storm'),
   STD: msg('Subtropical depression'),
+  TY: msg('Typhoon'),
+  STY: msg('Super typhoon'),
+  TC: msg('Tropical cyclone'),
+  SS: msg('Subtropical storm'),
+  SD: msg('Subtropical depression'),
 });
 const classificationName = (code) =>
   Object.hasOwn(CLASSIFICATION_NAMES, code)
@@ -123,7 +136,7 @@ export function createCyclonesLayer({
       id: contextId,
       layerId: 'weather-cyclones',
       layerName: 'Cyclone advisories',
-      source: 'NOAA NHC / CPHC',
+      source: sourceOf(storm),
       label: storm.name,
       latitude: storm.position.latitude,
       longitude: storm.position.longitude,
@@ -137,6 +150,7 @@ export function createCyclonesLayer({
           ? CLASSIFICATION_NAMES[storm.classification]
           : undefined,
         basin: storm.basin,
+        agency: storm.agency,
         advisoryNumber: storm.advisoryNumber,
         issuedAt: storm.issuedAt,
         positionAt: storm.positionAt,
@@ -146,7 +160,7 @@ export function createCyclonesLayer({
         movementDirectionDegrees: storm.movement?.directionDegrees,
         movementSpeedKt: storm.movement?.speedKt,
         advisoryUrl: storm.advisoryUrl,
-        // Only while the proxy serves its cache because NHC is unreachable.
+        // Only while the proxy serves its cache because a source is unreachable.
         staleCacheFetchedAt:
           snapshot.stale && Number.isFinite(snapshot.fetchedAt)
             ? new Date(snapshot.fetchedAt).toISOString()
@@ -205,7 +219,7 @@ export function createCyclonesLayer({
     id: 'weather-cyclones',
     name: 'Cyclone advisories',
     icon: '◉',
-    source: 'NOAA NHC / CPHC',
+    source: SOURCE,
     updateInterval: 300_000,
     init(nextViewer) {
       viewer = nextViewer;
@@ -361,13 +375,28 @@ export function createCyclonesLayer({
         snapshot && !snapshot.unavailable && snapshot.storms.length === 0;
       const geometry =
         storm &&
-        (coherentCycloneGeometry(storm)
-          ? t('Track and cone match this advisory')
-          : storm.geometryStatus === 'pending'
-            ? t('Track/cone awaiting advisory {number}', {
-                number: storm.advisoryNumber,
-              })
-            : t('Track/cone unavailable'));
+        (isJtwc(storm)
+          ? coherentCycloneGeometry(storm)
+            ? t('Track and 34-knot wind danger area match this warning')
+            : storm.geometryStatus === 'pending'
+              ? t('Track/danger area awaiting warning {number}', {
+                  number: storm.advisoryNumber,
+                })
+              : t('Track/danger area unavailable')
+          : coherentCycloneGeometry(storm)
+            ? t('Track and cone match this advisory')
+            : storm.geometryStatus === 'pending'
+              ? t('Track/cone awaiting advisory {number}', {
+                  number: storm.advisoryNumber,
+                })
+              : t('Track/cone unavailable'));
+      // JTWC is not the regional warning centre for any basin.
+      const note =
+        storm && isJtwc(storm)
+          ? t(
+              'JTWC warning: the regional centre’s warning is official. JTWC winds are 1-minute averages.',
+            )
+          : '';
       const status =
         errorText(error) ||
         (snapshot?.stale
@@ -388,14 +417,21 @@ export function createCyclonesLayer({
         : '';
       const intensity = storm ? intensityText(storm) : '';
       const detail = storm
-        ? t('{name} · {classification} · Advisory {number} · issued {time}', {
-            name: storm.name,
-            classification: classificationName(storm.classification),
-            number: storm.advisoryNumber,
-            time: utc(storm.issuedAt),
-          })
+        ? isJtwc(storm)
+          ? t('{name} · {classification} · Warning {number} · issued {time}', {
+              name: storm.name,
+              classification: classificationName(storm.classification),
+              number: storm.advisoryNumber,
+              time: utc(storm.issuedAt),
+            })
+          : t('{name} · {classification} · Advisory {number} · issued {time}', {
+              name: storm.name,
+              classification: classificationName(storm.classification),
+              number: storm.advisoryNumber,
+              time: utc(storm.issuedAt),
+            })
         : empty
-          ? t('No active NHC/CPHC systems')
+          ? t('No active tropical cyclone warnings')
           : stormCount
             ? activeStorms
             : loading
@@ -404,8 +440,8 @@ export function createCyclonesLayer({
       const controls = {
         readout: true,
         summary: {
-          label: t('Cyclones · NHC / CPHC'),
-          coverage: t('Atlantic · E/C Pacific'),
+          label: t('Cyclones · NHC / CPHC · JTWC'),
+          coverage: t('All tropical basins'),
           compact: stormCount
             ? storm
               ? t('{storms} · {name} selected', {
@@ -418,7 +454,9 @@ export function createCyclonesLayer({
             ? [
                 {
                   id: 'advisory',
-                  label: t('Official advisory ↗'),
+                  label: isJtwc(storm)
+                    ? t('JTWC warning ↗')
+                    : t('Official advisory ↗'),
                   href: storm.advisoryUrl,
                 },
               ]
@@ -436,6 +474,7 @@ export function createCyclonesLayer({
                   text: intensity,
                 },
                 { id: 'geometry', text: geometry, muted: true },
+                { id: 'note', text: note, muted: true },
               ].filter((line) => line.text)
             : [],
           detail,
@@ -443,7 +482,7 @@ export function createCyclonesLayer({
           units: 'kt',
         },
         list: {
-          ariaLabel: t('Active NHC and CPHC cyclone advisories'),
+          ariaLabel: t('Active cyclone advisories and warnings'),
           items: (snapshot?.storms || []).map((item, index) => ({
             id: item.id,
             ordinal: index + 1,
@@ -461,17 +500,19 @@ export function createCyclonesLayer({
                 label: t('Advisory center / forecast track'),
                 color: '#7fe6ed',
               },
-              {
-                label: t('Center-track uncertainty cone'),
-                color: '#7fe6ed44',
-              },
+              isJtwc(storm)
+                ? { label: t(DANGER_AREA), color: '#ffb15c44' }
+                : {
+                    label: t('Center-track uncertainty cone'),
+                    color: '#7fe6ed44',
+                  },
             ]
           : [],
         info: storm
-          ? `${detail}\n${position}\n${intensity ? intensity + '\n' : ''}${geometry}${status && status !== geometry ? '\n' + status : ''}\n${coverageText(snapshot.coverage)}`
+          ? `${detail}\n${position}\n${intensity ? intensity + '\n' : ''}${geometry}${status && status !== geometry ? '\n' + status : ''}${note ? '\n' + note : ''}\n${coverageText(snapshot.coverage)}`
           : `${detail}${status ? '\n' + status : ''}\n${coverageText(snapshot?.coverage)}`,
         infoTitle: t(
-          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisory context. The cone describes forecast center-track uncertainty, not storm size or the full hazard area. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory.',
+          'Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.',
         ),
       };
       return controls;
@@ -518,7 +559,7 @@ export function createCyclonesLayer({
         loading,
         error,
         stale: Boolean(snapshot?.stale),
-        source: 'NOAA NHC / CPHC',
+        source: storm ? sourceOf(storm) : SOURCE,
         advisoryAt: storm?.issuedAt || null,
         empty: Boolean(
           snapshot && !snapshot.unavailable && !snapshot.storms.length,

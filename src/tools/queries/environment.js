@@ -173,7 +173,8 @@ export const getCyclones = defineTool({
   title: 'Tropical cyclones',
   description:
     'Active tropical cyclones from the NOAA National Hurricane Center and ' +
-    'Central Pacific Hurricane Center, optionally limited to an area.',
+    'Central Pacific Hurricane Center, and from the Joint Typhoon Warning ' +
+    'Center elsewhere, optionally limited to an area.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA },
@@ -204,6 +205,7 @@ export const getCyclones = defineTool({
         name: storm.name,
         classification: storm.classification,
         basin: storm.basin,
+        agency: storm.agency ?? 'nhc',
         lat: storm.position.latitude,
         lon: storm.position.longitude,
         position_at: storm.positionAt,

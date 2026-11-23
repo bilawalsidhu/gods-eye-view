@@ -105,9 +105,13 @@ Status: Open (source limits, by design)
   15-minute density product derived from Vaisala NLDN/GLD360 on an approximately
   8 km grid, for the Americas and Pacific only (110°E across the dateline to 0°,
   25°S–80°N). It is not a live strike counter or an all-clear.
-- **Cyclone advisories cover NOAA's basins only:** the Atlantic and the
-  eastern/central North Pacific (NHC and CPHC). Storms elsewhere do not appear.
-  The cone is forecast-center uncertainty, not storm size.
+- **Cyclone advisories come from two agencies:** NHC and CPHC for the Atlantic
+  and the eastern/central North Pacific, and the Joint Typhoon Warning Center
+  (JTWC) for the western North Pacific, North Indian Ocean and Southern
+  Hemisphere. JTWC is not the official warning centre for those basins, and its
+  winds are 1-minute averages, higher than the 10-minute winds regional centres
+  quote. The NHC cone is forecast-center uncertainty, not storm size; JTWC's
+  34-knot wind danger area is not a cone.
 - **Satellite clouds:** global infrared is hourly with typically 2–3 hours of
   source latency. Clouds only is a brightness filter, not a cloud mask.
 - **Wind is a forecast.** The animation flows through one forecast on an

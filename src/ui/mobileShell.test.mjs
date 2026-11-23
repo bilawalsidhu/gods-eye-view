@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { StyleManager } from './applicationShell.js';
-import { ContextControls } from './contextControls.js';
 import {
   MOBILE_SHEET_PANELS,
   MOBILE_TABS,
@@ -10,7 +9,6 @@ import {
   nextSheet,
   sheetForPanelId,
 } from './mobileShell.js';
-import { withEntityRecord } from '../data/entityRecords.js';
 
 function element(tag, document) {
   const node = new EventTarget();
@@ -111,12 +109,7 @@ function element(tag, document) {
 
 const PANEL_IDS = [...new Set(Object.values(MOBILE_SHEET_PANELS).flat())];
 
-function fixture({
-  mobile = true,
-  expanded = [],
-  onTabOpened = () => {},
-  afterPublish,
-} = {}) {
+function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
   const document = new EventTarget();
   document.ids = new Map();
   document.createElement = (tag) => element(tag, document);
@@ -208,7 +201,6 @@ function fixture({
   }
   const shell = initMobileShell({
     documentRef: document,
-    onTabOpened,
     publish,
     afterPublish,
     matchMedia: () => media,
@@ -587,7 +579,9 @@ test('the phone shell keeps the required attribution visible', () => {
   };
   const lift = (block) =>
     Number(
-      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(block)?.[1],
+      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(
+        block,
+      )?.[1],
     );
   const z = (block) => Number(/z-index: (\d+);/.exec(block)?.[1]);
   const idleCredit = rule(
@@ -803,155 +797,17 @@ test('touches outside the active sheet and destroyed listeners cannot dismiss or
   assert.equal(shell.getSheet(), null);
 });
 
-test('the tab-open callback reports only a successful manual opening', () => {
-  const opened = [];
-  const phone = fixture({ onTabOpened: (sheet) => opened.push(sheet) });
-  phone.shell.setSheet('context');
-  assert.deepEqual(opened, []);
+test('opening the Context tab only presents its panel and starts no Context mode', () => {
+  const phone = fixture();
   phone.press('context');
-  assert.deepEqual(opened, [], 'closing is not a new context request');
-  phone.press('context');
-  assert.deepEqual(opened, ['context']);
-  phone.setBodyClass('cockpit-mode');
-  phone.press('context');
+  assert.equal(phone.shell.getSheet(), 'context');
   assert.deepEqual(
-    opened,
-    ['context'],
-    'blocked sheets cannot activate a mode',
+    phone.calls.map(({ panelId, collapsed }) => ({ panelId, collapsed })),
+    [{ panelId: 'global-context-panel', collapsed: false }],
   );
+  // The application shell no longer starts Contacts when the tab opens.
+  assert.equal(StyleManager.prototype._onMobileTabOpened, undefined);
   phone.shell.destroy();
-});
-
-test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
-  const calls = [];
-  const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
-  const viewer = { trackedEntity: withEntityRecord({}, { trackedId: 'flights:abc123' }) };
-  const entity = viewer.trackedEntity;
-  const enabled = new Set(['flights', 'weather']);
-  const controls = new ContextControls({
-    elements: {},
-    installations: {},
-    actions: {
-      getCockpit: () => null,
-      claimVisualAuthority: () => calls.push('claim'),
-      syncDetection() {},
-      scheduleLayout() {},
-      showToast() {},
-    },
-  });
-  controls.connect({
-    layers: new Map(
-      ['flights', 'weather', 'military-awareness'].map((id) => [id, {}]),
-    ),
-    getEnabledLayerIds: () => [...enabled],
-    getLayerParams: () => ({}),
-    isEffectivelyEnabled: (id) => enabled.has(id),
-    isEnabled: (id) => enabled.has(id),
-    setLayerParams: (id, params) => calls.push({ id, params }),
-    setEnabled: async (id, value) => {
-      calls.push({ id, value });
-      if (!value) enabled.delete(id);
-      if (id === 'flights' && !value) viewer.trackedEntity = null;
-      return true;
-    },
-    _setEnabledWithIntent: (id, value) => {
-      calls.push({ id, value });
-      enabled.add(id);
-      return { intentEpoch: 1, promise: Promise.resolve(true) };
-    },
-  });
-  const shell = {
-    cockpitView: {
-      readAircraftInfo: () => (viewer.trackedEntity ? tracked : null),
-    },
-    getAircraftTrackingTarget: StyleManager.prototype.getAircraftTrackingTarget,
-    getContextModeState: () => controls.getContextModeState(),
-    setContextMode: (mode) => controls.setContextMode(mode),
-    _showToast: () => assert.fail('successful entry must not report a failure'),
-  };
-  try {
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      true,
-    );
-    assert.equal(controls.getContextModeState().mode, 'flights');
-    assert.equal(viewer.trackedEntity, entity);
-    assert.deepEqual(shell.getAircraftTrackingTarget(), {
-      layerId: 'flights',
-      id: 'abc123',
-    });
-    assert.ok(enabled.has('flights'));
-    assert.ok(
-      calls.some(
-        (call) => call.id === 'military-awareness' && call.value === true,
-      ),
-    );
-    assert.ok(!calls.some((call) => call.id === 'flights'));
-    const count = calls.length;
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      false,
-    );
-    assert.equal(
-      calls.length,
-      count,
-      'an already active Contacts session is not restarted',
-    );
-  } finally {
-    controls.stop();
-    controls.disconnect();
-  }
-});
-
-test('manual Context respects an active mode, busy transitions, missing tracks and disposal', async () => {
-  for (const state of [
-    { mode: 'flights' },
-    { changing: true },
-    { entering: 'flights' },
-    { noTrack: true },
-    { disposed: true },
-    { sheet: 'layers' },
-  ]) {
-    const shell = {
-      _disposed: state.disposed,
-      getContextModeState: () => state,
-      getAircraftTrackingTarget: () =>
-        state.noTrack ? null : { layerId: 'flights', id: 'abc123' },
-      setContextMode: () =>
-        assert.fail('guarded tab must not mutate Context or tracking'),
-    };
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(
-        shell,
-        state.sheet || 'context',
-      ),
-      false,
-    );
-  }
-});
-
-test('failed mobile Contacts entry uses the existing notice and cancelled/disposed entries stay quiet', async () => {
-  for (const outcome of ['failure', 'throw', 'cancelled', 'disposed']) {
-    const notices = [];
-    const shell = {
-      getContextModeState: () => ({ mode: null }),
-      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'abc123' }),
-      setContextMode: async () => {
-        if (outcome === 'throw') throw new Error('source unavailable');
-        if (outcome === 'disposed') shell._disposed = true;
-        return { ok: false, cancelled: outcome === 'cancelled' };
-      },
-      _showToast: (message) => notices.push(message),
-    };
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      false,
-    );
-    assert.equal(
-      notices.length,
-      ['failure', 'throw'].includes(outcome) ? 1 : 0,
-    );
-  }
 });
 
 test('a slow downward pull is claimed before Android native scroll takes ownership', () => {

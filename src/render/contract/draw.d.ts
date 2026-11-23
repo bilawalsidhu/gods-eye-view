@@ -295,10 +295,74 @@ export type LineStyle =
       rim?: { shade: number; widthFraction: number };
     };
 
+/**
+ * `lineAgeFade`: a line that fades with the age of its points, drawn by the
+ * renderer on the scene clock (`frame.setTime`), so a line whose points stay
+ * where they are is not sent again as time passes. A point's recency is
+ * `1 - clamp((now - time) / windowMs, 0, 1)`, its time running evenly
+ * between neighbouring positions, so the fade is smooth along the line, not
+ * stepped at its points. The line's colour (its style's, or a segment's from
+ * `segmentColors`) draws at its alpha times
+ * `mix(alphaFloor, 1, smoothstep(0, 1, recency))`, and with
+ * `squaredAlphaFloor` times `mix(squaredAlphaFloor, 1, recency²)` as well;
+ * with `widthFloor` it draws `widthPx` times `mix(widthFloor, 1, recency)`
+ * wide, about its path. A point at or past the window draws at the floors, a
+ * point at or after now at full strength. New `times` with new positions are
+ * an ordinary update.
+ *
+ * `lineTimeWindow`: with `showMs`, only the part of the line within `showMs`
+ * of now is drawn, cut along it where its interpolated time crosses: parts
+ * whose time is after now, or before `now - showMs`, are not drawn (nor
+ * picked). The cut follows the scene clock as the fade does, so a moving
+ * object's trail can be its whole track, sent once: drawn from `showMs` ago
+ * up to where the object is now. A renderer without the capability ignores
+ * `showMs` and draws the whole line.
+ */
+export interface LineAgeFade {
+  /** Each position's time, epoch ms on the scene clock: one per position. */
+  times: number[] | Float64Array;
+  /** The age a point fades over, ms; positive. */
+  windowMs: number;
+  /** A fully aged point's alpha multiplier, 0..1. */
+  alphaFloor: number;
+  /** A second alpha multiplier's floor, eased by recency squared, 0..1. */
+  squaredAlphaFloor?: number;
+  /** A fully aged point's width multiplier, 0..1 [1, no narrowing]. */
+  widthFloor?: number;
+  /**
+   * `lineTimeWindow`: draw only the part of the line from `showMs` before
+   * now up to now, ms; positive (`Infinity`: up to now, however old).
+   * [absent: the whole line]
+   */
+  showMs?: number;
+}
+
+/**
+ * `lineBreaks`: a line drawn as several runs, so many lines in one style can
+ * be one item (thousands of moving objects' trails sent as one line, say),
+ * and the renderer handles one item instead of thousands. Each break is the
+ * index `i` of a position that starts a new run (`0 < i < positions.length`,
+ * strictly increasing): the segment from position `i - 1` to `i` is not
+ * drawn (nor picked), and the line does not join across it, each run having
+ * two ends of its own, capped and joined as a line of its own would be.
+ * `segmentColors` and `segmentShow` stay one a pair of neighbouring
+ * positions (`j`: from position `j` to `j + 1`), so a pair across a break
+ * has an entry that is ignored; `ageFade.times` stays one a position; and
+ * `revealFraction` runs along the runs, in order, as one length (the gaps
+ * between them have none). A renderer without the capability is never sent
+ * `breaks`: its lines are sent one item a run instead.
+ */
+export type LineBreaks = number[] | Uint32Array;
+
 export interface LineItem {
   id: string;
   /** ECEF positions, or packed `x, y, z` triples. */
   positions: Ecef[] | Float64Array;
+  /**
+   * `lineBreaks`: the positions that start a new run of the line
+   * (`LineBreaks`). [absent or empty: one run]
+   */
+  breaks?: LineBreaks;
   widthPx: number;
   /**
    * `3d`: straight in space; `geodesic`: along the ellipsoid; `draped`: on
@@ -321,6 +385,8 @@ export interface LineItem {
   segmentShow?: boolean[];
   /** Draw only the first fraction of the line, 0..1. */
   revealFraction?: number;
+  /** `lineAgeFade`: fade the line with the age of its points (`LineAgeFade`). */
+  ageFade?: LineAgeFade;
   /** Positions are in a frame rotating with the sky (orbits). */
   frame?: 'fixed' | 'inertial';
   meta?: Meta;

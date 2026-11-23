@@ -198,3 +198,7 @@ test('storm identity resolves from card and lead-hour ids only', () => {
   for (const value of ['vessel:123', 'storm:', 'lead:', '', null, undefined])
     assert.equal(cycloneStormIdFromEntryId(value), null, String(value));
 });
+
+test('a danger area label names its storm', () => {
+  assert.equal(cycloneStormIdFromEntryId('area:sh042027'), 'sh042027');
+});

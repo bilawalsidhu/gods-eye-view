@@ -41,6 +41,9 @@ export const CAPABILITIES = Object.freeze([
   'meshes',
   'fields',
   'courseGlide',
+  'lineAgeFade',
+  'lineTimeWindow',
+  'lineBreaks',
   'cluster',
   'styles',
   'bloom',
@@ -50,6 +53,7 @@ export const CAPABILITIES = Object.freeze([
   'followFrame',
   'cameraChangeThreshold',
   'occlusionTest',
+  'pointVisibility',
   'keepEarthFramed',
 ]);
 
@@ -209,6 +213,7 @@ export const PORTS = deepFreeze({
       'matrices',
     ),
     ['followFrame', 'followFrame'],
+    ['visiblePoints', 'pointVisibility'],
     ['controls.keepEarthFramed', 'keepEarthFramed'],
   ]),
   query: Object.fromEntries([

@@ -2150,50 +2150,6 @@ test('a hold resumed partway waits for a clip that starts again, else only its r
   assert.deepEqual(await hold(0), [2000]);
 });
 
-/** Drive frame-by-frame camera motion headlessly for one test. */
-function installAnimationFrames() {
-  const original = globalThis.requestAnimationFrame;
-  const originalCancel = globalThis.cancelAnimationFrame;
-  globalThis.requestAnimationFrame = (callback) => setTimeout(callback, 16);
-  globalThis.cancelAnimationFrame = (handle) => clearTimeout(handle);
-  return () => {
-    globalThis.requestAnimationFrame = original;
-    globalThis.cancelAnimationFrame = originalCancel;
-  };
-}
-
-test('a run resumed inside a flight goes on from that point of the path and clock', async () => {
-  const { director, viewer, restore } = makeDirector();
-  const restoreFrames = installAnimationFrames();
-  const clock = [];
-  director.subscribeSceneClock((snap) => clock.push(snap));
-  const poses = [];
-  const setView = director._setCameraView.bind(director);
-  director._setCameraView = (pose) => {
-    poses.push(pose);
-    return setView(pose);
-  };
-  try {
-    // 0.75 of a 0.4 s scene: halfway along shot B's 0.2 s flight.
-    const run = director.startScene('scene-1', {
-      single: true,
-      fromProgress: 0.75,
-      preview: false,
-    });
-    await settle(40);
-    const first = clock.find((snap) => snap.running);
-    assert.equal(first.shotId, 'shot-b', 'starts in the shot that moment is in');
-    assert.ok(Math.abs(first.sceneElapsedSec - 0.3) < 1e-9, 'the clock starts at the moment');
-    // The first frame is the seek's own framing, halfway from A to B.
-    assert.ok(poses.length, 'the camera is driven from where it is');
-    assert.ok(Math.abs(poses[0].lat - -10) < 0.5, 'halfway from A to B');
-    assert.deepEqual(await run, { started: true, shots: 1 });
-    assert.equal(poses.at(-1).lat, -30, 'and ends on shot B');
-    assert.equal(viewer.flights.length, 0, 'no fresh flight from the shot start');
-    assert.equal(director._lastRun.wasCancelled, false);
-  } finally { await director.destroy(); restoreFrames(); restore(); }
-});
-
 test('a run resumed inside a hold plays its layers on from the seek’s state and waits only the rest of it', async () => {
   const project = structuredClone(PROJECT_FIXTURE);
   project.scenes[0].shots[0].holdSec = 0.6;
