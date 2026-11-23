@@ -929,6 +929,7 @@ export function createLocalAdsbLayer({
         const lat = marker.lat ?? record.lat;
         const lon = marker.lon ?? record.lon;
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        const route = plausibleRoute(marker, enrichment.get(record.icao));
         result.push({
           id: record.callsign || record.icao,
           icao24: record.icao || null,
@@ -941,6 +942,12 @@ export function createLocalAdsbLayer({
           speedKts: num(record.groundSpeedKt),
           heading: num(record.trackDeg),
           onGround: record.onGround === true,
+          ...(route
+            ? {
+                routeOrigin: route.origin.code,
+                routeDestination: route.destination.code,
+              }
+            : {}),
         });
       }
       return result;

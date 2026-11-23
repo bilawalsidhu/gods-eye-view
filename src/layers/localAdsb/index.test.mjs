@@ -617,6 +617,10 @@ test('adsbdb type, operator and route reach the card for the selected aircraft o
     readEntityRecord(entity)?.labelModel.details.at(-1),
     'Heard by your receiver · 1090 MHz · browser SDR',
   );
+  const [selected, other] = layer.getAnalystRecords();
+  assert.equal(selected.routeOrigin, 'AUS');
+  assert.equal(selected.routeDestination, 'SAT');
+  assert.equal(other.routeOrigin, undefined);
   layer.selectAircraft('a0b702');
   await layer.update();
   assert.equal(queries.length, 2, 'each key is asked for once');

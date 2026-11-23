@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { formatNumber, t } from '../../../i18n/index.js';
 import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
@@ -27,6 +27,7 @@ const props = defineProps({
 });
 const store = useEntityCardStore();
 const { card, lost, tick, away, finding, located } = storeToRefs(store);
+const AircraftAtcChannels = defineAsyncComponent(() => import('./AircraftAtcChannels.vue'));
 // Cameras carry only an id; the CCTV panel's store knows the picked one's name.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -437,6 +438,7 @@ watch(
         <span>{{ routePlaces.from }}</span>
         <span>{{ routePlaces.to }}</span>
       </p>
+      <AircraftAtcChannels v-if="card.kind === 'aircraft'" :aircraft="card" :lost="lost" />
       <AltitudeGraph v-if="altitudeGraphed" v-show="!props.withContacts" :key="`altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" />
       <template v-if="orbitGraphed">
         <AltitudeGraph :key="`orbit-altitude:${card.key}`" :altitude-m="lost ? null : card.altitudeM" :tick="tick" unit="km" />

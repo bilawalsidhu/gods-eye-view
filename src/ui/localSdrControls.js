@@ -27,7 +27,8 @@ export class LocalSdrControls {
    *   has feeds configured.
    * @param {object} [options.radio] Internet-radio port (subscribe, stopPlayback).
    * @param {object} [options.actions] Application actions:
-   *   setLocalAdsbEnabled(enabled), isLocalAdsbEnabled(), scheduleLayout().
+   *   setLocalAdsbEnabled(enabled), isLocalAdsbEnabled(), revealAtc(),
+   *   scheduleLayout().
    * @param {object} [options.store] Store the card's view is published to.
    */
   constructor({
@@ -122,6 +123,18 @@ export class LocalSdrControls {
       },
       setHackrfGain: (stage, value) => {
         void this.receiver.setHackrfGain(stage, value);
+      },
+      tuneAirportAtc: async (channel) => {
+        this._invalidAtcChannel = false;
+        this._scheduleRender();
+        const tuned = await this.receiver.tuneAtcChannel(channel);
+        this.actions.revealAtc?.();
+        return tuned;
+      },
+      openManualAtc: async () => {
+        if (this.receiver.getState().mode !== 'atc')
+          await this.receiver.setMode('atc');
+        this.actions.revealAtc?.();
       },
       tuneSdr: (value) => {
         if (this.receiver.getState().mode === 'atc') {

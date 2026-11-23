@@ -225,6 +225,25 @@ test('ATC tunes valid designators and leaves the decoder feed layer enabled', as
   ]);
 });
 
+test('an airport preset stages the selected channel and reveals the local SDR', async (t) => {
+  const receiver = stubReceiver();
+  const store = stubStore();
+  let revealed = 0;
+  const controls = new LocalSdrControls({
+    document: stubDocument(),
+    receiver,
+    store,
+    actions: { revealAtc: () => (revealed += 1) },
+  });
+  t.after(() => controls.destroy());
+  assert.equal(await store.act('tuneAirportAtc', '119.900'), true);
+  assert.deepEqual(receiver.calls, [['tuneAtcChannel', '119.900']]);
+  assert.equal(revealed, 1);
+  await store.act('openManualAtc');
+  assert.deepEqual(receiver.calls.at(-1), ['setMode', 'atc']);
+  assert.equal(revealed, 2);
+});
+
 test('a page without the card connects nothing', (t) => {
   const store = stubStore();
   const receiver = stubReceiver();

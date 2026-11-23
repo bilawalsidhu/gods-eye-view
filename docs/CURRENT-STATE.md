@@ -9742,6 +9742,13 @@ reception does not interrupt internet radio.
   configured decoder feeds running while Local ADS-B is enabled.
   Enabling the layer switches the receiver to ADS-B; disabling it leaves the
   receiver mode unchanged.
+- **ATC from an aircraft card.** A position-checked route offers catalogued
+  Tower and Approach channels at either endpoint. If neither endpoint
+  matches, a current aircraft position can suggest a nearby airport within
+  100 km. The card always offers manual tuning when the Local SDR controls
+  are available. A preset reveals the Radio panel and retunes an open
+  receiver to the airport's shared channel. With a disconnected receiver
+  the chosen channel is staged for Connect.
 - **RTL-SDR gain.** AUTO (tuner AGC) or a manual R820T step from 0.0 to 49.6 dB,
   stored in `gev:sdr:gain:v1`. ADS-B defaults to 28.0 dB. FM and ATC share
   the audio gain setting, which defaults to AUTO.

@@ -1178,6 +1178,18 @@ export class StyleManager extends ShellFacade {
             this._dataManager?.setEnabled('local-adsb', enabled, {
               origin: 'user',
             }),
+          revealAtc: () => {
+            this.setPanelCollapsed('global-context-panel', false, {
+              explicit: true,
+            });
+            this.setPanelCollapsed('radio-panel', false, { explicit: true });
+            void nextTick(() => {
+              this.revealPanel('radio-panel');
+              document.getElementById('sdr-radio-card')?.scrollIntoView?.({
+                block: 'nearest',
+              });
+            });
+          },
           scheduleLayout: () => this._scheduleRightPanelLayout(),
         },
       });

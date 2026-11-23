@@ -37,6 +37,19 @@ designators, such as `118.005`. Volume and receiver gain remain available while
 listening. An SDR tuned to ATC pauses that device's USB ADS-B reception.
 Configured ADS-B decoder feeds continue while the Local ADS-B layer is enabled.
 
+Under **ATC channels**, aircraft cards with a position-checked route offer
+Tower and Approach presets for airports in the bundled OurAirports catalogue.
+When neither endpoint matches, the card can suggest the closest catalogued
+airport within 100 km of the aircraft. **Manual tuning** opens the Radio panel
+from any aircraft card. Choosing a preset retunes an open SDR, or prepares the
+channel for **Connect**. The presets tune shared airport channels. The channels
+available to a particular receiver depend on its location and antenna.
+
+The catalogue is a snapshot of the public-domain OurAirports database.
+To refresh it, download `airports.csv` and `airport-frequencies.csv` from
+[OurAirports](https://github.com/davidmegginson/ourairports-data) and run
+`node scripts/build-airport-atc-catalog.mjs airports.csv airport-frequencies.csv`.
+
 ## Configuring feeds
 
 Feeds are set in the server environment only (`.env`), never in the browser:

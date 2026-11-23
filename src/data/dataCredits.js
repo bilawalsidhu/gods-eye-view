@@ -551,6 +551,12 @@ export const DATA_CREDITS = [
       '(public domain; audio delivered directly by each broadcaster)',
   },
   {
+    key: 'ourairports-atc',
+    html:
+      'ATC channel presets: <a href="https://ourairports.com/data/" target="_blank" rel="noopener">OurAirports</a> ' +
+      '(public domain)',
+  },
+  {
     key: 'reearth-terrain',
     html:
       'Terrain (keyless globe stacks): ' +
