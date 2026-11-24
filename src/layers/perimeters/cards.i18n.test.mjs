@@ -8,13 +8,14 @@ import { buildIncidentCard } from './cards.js';
 
 const now = Date.UTC(2026, 9, 14);
 const row = {
-  stableId: 'x',
+  id: 'x',
   name: 'Lake',
   acres: 1200,
   containedPct: 40,
   state: 'CA',
   discoveredTime: now - 2 * 3600e3,
   updatedTime: now - 3600e3,
+  lastGrowthTime: now - 3 * 3600e3,
   cause: 'Human',
   behavior: 'Moderate',
   complexity: 'Type 3 Incident',
@@ -33,6 +34,7 @@ test('en: the fire card keeps its English wording', () => {
     'part of North Complex',
     'Human cause · Moderate · Type 3 Incident',
     '1,500 personnel · Plumas County · $4.2M to date',
+    'last growth 3h ago',
     'discovered 2h ago · updated 1h ago',
     'InciWeb ↗ · click card to open',
   ]);
@@ -44,8 +46,8 @@ for (const locale of ['es', 'ru']) {
     setLocale(locale);
     try {
       assert.notEqual(
-        t('Fully contained'),
-        'Fully contained',
+        t('Older or unknown'),
+        'Older or unknown',
         'legend is translated',
       );
       const card = buildIncidentCard(row, now, {
@@ -60,6 +62,7 @@ for (const locale of ['es', 'ru']) {
         'contained',
         'discovered',
         'updated',
+        'last growth',
         'part of',
         'cause',
         'personnel',

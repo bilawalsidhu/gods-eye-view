@@ -1,6 +1,6 @@
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { decodeSatelliteClassMask } from '../../data/satelliteClassMask.js';
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { t } from '../../i18n/index.js';
 import {
   DEFAULT_SATELLITE_CLASSES,
@@ -9,6 +9,7 @@ import {
   mergeClassVisibility,
 } from './classes.js';
 import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
+import { modelFor, trackedStation } from './stationModels.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -17,7 +18,7 @@ export function createControls({ state: layerState, services, parts, source }) {
    * Resolve the canonical point style for a satellite.
    * @param {number} noradId NORAD catalog number.
    * @param {string|undefined} group Catalog group tag (see CATALOG_GROUPS / 'dense').
-   * @returns {{ pixelSize: number, color: Cesium.Color, outlineColor: Cesium.Color, outlineWidth: number }}
+   * @returns {{ pixelSize: number, color: number[], outlineColor: number[], outlineWidth: number }}
    */
 
   function _pointStyleFor(noradId, group) {
@@ -52,10 +53,10 @@ export function createControls({ state: layerState, services, parts, source }) {
    * The ISS's ring and label go with its class.
    */
   function _applyClassVisibility() {
-    for (const [noradId, point] of layerState._points) {
+    for (const noradId of layerState._points.keys()) {
       if (noradId === layerState._trackedNorad) continue;
       if (layerState._cockpitHiddenPoints?.has(noradId)) continue;
-      point.show = _classVisible(noradId);
+      parts.rendering._setPointShown(noradId, _classVisible(noradId));
     }
     _syncIssOrbit();
     parts.labels?._syncIssOverlay?.();
@@ -64,7 +65,8 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Whether the ISS's ring shows: orbits on, the layer drawing, and its
-   * class on or the ISS tracked (a tracked satellite keeps its ring).
+   * class on or the ISS tracked (a tracked satellite keeps its ring), also
+   * as an object docked to it, which draws no ring of its own.
    */
   function _issOrbitVisible() {
     return (
@@ -72,14 +74,15 @@ export function createControls({ state: layerState, services, parts, source }) {
         layerState._enabled,
         layerState._params.showOrbits,
       ) &&
-      (_classVisible(ISS_NORAD) || layerState._trackedNorad === ISS_NORAD)
+      (_classVisible(ISS_NORAD) ||
+        layerState._trackedNorad === ISS_NORAD ||
+        Boolean(layerState._trackedDockedToIss))
     );
   }
 
   /** Show or hide the ISS's ring by _issOrbitVisible, if it is built. */
   function _syncIssOrbit() {
-    const issPath = layerState._orbitPaths.get(ISS_NORAD);
-    if (issPath) issPath.primitive.show = _issOrbitVisible();
+    parts.rendering._setOrbitPathShown(ISS_NORAD, _issOrbitVisible());
   }
 
   /**
@@ -102,7 +105,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     };
   }
 
-  /** Tell the manager to re-render this layer's row (chip state / legend counts). */
+  /** Tell the manager to re-render this layer's row (chip state and counts). */
 
   function _notifyRowControls() {
     try {
@@ -113,7 +116,7 @@ export function createControls({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Per-class tally for the row legend, cached against the catalog revision.
+   * Per-class tally for the row's class chips, cached against the catalog revision.
    * Without the cache this scans ~10.7k entries in dense mode on every panel
    * refresh, and any layer polling on the 1s stats timer refreshes the panel.
    * @returns {Record<string, number>} Class key → count.
@@ -220,8 +223,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     refreshInterval: 5 * 60 * 1000,
 
     getDetectableObjects(options = {}) {
-      if (!layerState._pointCollection || !layerState._pointCollection.show)
-        return [];
+      if (!parts.rendering._pointsShown()) return [];
       // Dense extras are points-only: excluded from the detection overlay.
       const eligibleCount = Math.max(
         1,
@@ -236,7 +238,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       let idx = 0;
-      for (const [noradId, point] of layerState._points) {
+      for (const noradId of layerState._points.keys()) {
         if (
           layerState._denseIds.length > 0 &&
           layerState._catalog.get(noradId)?.group === 'dense'
@@ -245,7 +247,8 @@ export function createControls({ state: layerState, services, parts, source }) {
         const shouldTake = (idx - start) % stride === 0;
         idx++;
         if (!shouldTake) continue;
-        if (!point.position) continue;
+        const position = parts.rendering._pointPosition(noradId);
+        if (!position) continue;
         const isTracked = noradId === layerState._trackedNorad;
         // A hidden class is not on screen, so nothing is bracketed on it.
         if (!isTracked && !_classVisible(noradId)) continue;
@@ -254,6 +257,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // Up close a station is its 3D model: no mark on it, nor on what is
+        // docked to it.
+        if (modelFor(parts, noradId)?._visualPosition?.()) continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
         if (isTracked && parts.cockpit?._cockpitHeld()) continue;
@@ -274,7 +280,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         object.klass = satelliteClassText(cat?.satelliteClass, cat?.group, {
           isIss: noradId === ISS_NORAD,
         });
-        object.position = point.position;
+        object.position = position;
         object.skipLabel = isTracked;
         result.push(object);
         if (result.length >= maxCount) break;
@@ -286,7 +292,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * Find a satellite by exact NORAD id (numeric string) or case-insensitive
      * name substring. Position is freshly propagated via SGP4.
      * @param {string|number} query NORAD id or partial name.
-     * @returns {{ noradId: number, name: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }|null}
+     * @returns {{ noradId: number, name: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number }|null}
      */
     findByQuery(query) {
       if (
@@ -323,11 +329,7 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         noradId,
         name: sat.name.trim(),
-        position: Cesium.Cartesian3.fromDegrees(
-          pos.longitude,
-          pos.latitude,
-          pos.altitude,
-        ),
+        position: fromDegrees(pos.longitude, pos.latitude, pos.altitude),
         latitude: pos.latitude,
         longitude: pos.longitude,
         altitudeM: pos.altitude,
@@ -338,7 +340,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * Get positions of currently rendered satellites from per-point state
      * (no SGP4 re-propagation).
      * @param {number} [maxCount=300] Maximum entries to return.
-     * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number }>}
+     * @returns {Array<{ id: number, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number }>}
      */
     getAllPositions(maxCount = 300) {
       const result = [];
@@ -346,9 +348,10 @@ export function createControls({ state: layerState, services, parts, source }) {
       const cap =
         Number.isFinite(maxCount) && maxCount > 0 ? Math.floor(maxCount) : 300;
 
-      for (const [noradId, point] of layerState._points) {
+      for (const noradId of layerState._points.keys()) {
         if (result.length >= cap) break;
-        if (!point.position) continue;
+        const position = parts.rendering._pointPosition(noradId);
+        if (!position) continue;
         if (!_classVisible(noradId)) continue;
         // Dense extras are points-only — keep voice/framing lists to the core catalog.
         if (
@@ -356,15 +359,15 @@ export function createControls({ state: layerState, services, parts, source }) {
           layerState._catalog.get(noradId)?.group === 'dense'
         )
           continue;
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
+        const carto = toLonLatH(position);
         if (!carto) continue;
         const sat = layerState._catalog.get(noradId);
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
-          position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
+          position,
+          latitude: carto.lat,
+          longitude: carto.lon,
           altitudeM: carto.height,
         });
       }
@@ -376,12 +379,12 @@ export function createControls({ state: layerState, services, parts, source }) {
      * state (no SGP4 re-propagation): a bounded pass that keeps only the
      * nearest `maxCount`, and reads latitude and longitude for those alone.
      * Dense extras are left out, as in `getAllPositions`.
-     * @param {Cesium.Cartesian3} center Earth-fixed position.
+     * @param {{x: number, y: number, z: number}} center Earth-fixed position.
      * @param {number} [maxCount=8] Most entries to return.
      * @param {{excludeIds?: Array<number|string>,
      *   excludeClasses?: Array<string>}} [options] Satellites, and classes
      *   (e.g. 'debris'), to leave out.
-     * @returns {Array<{ id: number, label: string, position: Cesium.Cartesian3, latitude: number, longitude: number, altitudeM: number, satelliteClass: string|null, distanceM: number }>}
+     * @returns {Array<{ id: number, label: string, position: {x: number, y: number, z: number}, latitude: number, longitude: number, altitudeM: number, satelliteClass: string|null, distanceM: number }>}
      */
     getNearestPositions(
       center,
@@ -400,8 +403,8 @@ export function createControls({ state: layerState, services, parts, source }) {
       const excluded = new Set(excludeIds.map(String));
       const classes = new Set(excludeClasses);
       const dense = layerState._denseIds.length > 0;
-      for (const [noradId, point] of layerState._points) {
-        const p = point.position;
+      for (const noradId of layerState._points.keys()) {
+        const p = parts.rendering._pointPosition(noradId);
         if (!p || excluded.has(String(noradId))) continue;
         if (!_classVisible(noradId)) continue;
         const sat = layerState._catalog.get(noradId);
@@ -416,25 +419,37 @@ export function createControls({ state: layerState, services, parts, source }) {
         // Insertion into a short sorted list: no copy or sort of the rest.
         let at = nearest.length;
         while (at > 0 && nearest[at - 1].distanceSq > distanceSq) at -= 1;
-        nearest.splice(at, 0, { noradId, point, sat, distanceSq });
+        nearest.splice(at, 0, { noradId, p, sat, distanceSq });
         if (nearest.length > cap) nearest.pop();
       }
       const result = [];
-      for (const { noradId, point, sat, distanceSq } of nearest) {
-        const carto = Cesium.Cartographic.fromCartesian(point.position);
-        if (!carto) continue;
+      for (const { noradId, p, sat, distanceSq } of nearest) {
+        const geo = toLonLatH(p);
+        if (!geo) continue;
         result.push({
           id: noradId,
           label: sat ? sat.name.trim() : String(noradId),
-          position: point.position,
-          latitude: Cesium.Math.toDegrees(carto.latitude),
-          longitude: Cesium.Math.toDegrees(carto.longitude),
-          altitudeM: carto.height,
+          position: { x: p.x, y: p.y, z: p.z },
+          latitude: geo.lat,
+          longitude: geo.lon,
+          altitudeM: geo.height,
           satelliteClass: sat?.satelliteClass ?? null,
           distanceM: Math.sqrt(distanceSq),
         });
       }
       return result;
+    },
+
+    /**
+     * The keys the LIVE section matches streams by for the tracked
+     * satellite: a station is `station:<key>` (`station:iss`,
+     * `station:tiangong`) whichever of its entries is tracked (the station,
+     * a module, a docked vehicle).
+     * @returns {string[]}
+     */
+    getLiveSubjectKeys() {
+      const station = trackedStation(layerState, parts);
+      return station ? [`station:${station.key}`] : [];
     },
 
     /**
@@ -618,22 +633,25 @@ export function createControls({ state: layerState, services, parts, source }) {
       }
       if (params.showPoints !== undefined) {
         layerState._params.showPoints = params.showPoints !== false;
-        if (layerState._pointCollection)
-          layerState._pointCollection.show = satelliteVisualsVisible(
+        parts.rendering._setPointsShown(
+          satelliteVisualsVisible(
             layerState._enabled,
             layerState._params.showPoints,
-          );
+          ),
+        );
       }
       if (params.showOrbits !== undefined) {
         layerState._params.showOrbits = params.showOrbits !== false;
-        for (const [noradId, path] of layerState._orbitPaths)
-          path.primitive.show =
+        for (const noradId of layerState._orbitPaths.keys())
+          parts.rendering._setOrbitPathShown(
+            noradId,
             noradId === ISS_NORAD
               ? _issOrbitVisible()
               : satelliteVisualsVisible(
                   layerState._enabled,
                   layerState._params.showOrbits,
-                );
+                ),
+          );
         parts.labels._syncIssOverlay();
       }
       if (catalogChanged && catalog === 'dense') {
@@ -694,8 +712,10 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Layer-row sub-controls (DataLayerManager row-controls contract): one
-     * toggle chip per satellite class (src/layers/satellites/classes.js), and a legend
-     * of the classes on screen so the point colours are learnable.
+     * toggle chip per satellite class (src/layers/satellites/classes.js). A
+     * class that is on carries its point colour (`swatch`) and, once any of
+     * it is loaded, its count, so the point colours are learnable; a class
+     * that is off carries only its name.
      *
      * Chips are stateless — each declares the params to apply and the manager
      * owns the write, so the Space Missions snapshot/restore path (which drives
@@ -705,49 +725,41 @@ export function createControls({ state: layerState, services, parts, source }) {
      * STARLINK is the dense catalog (chip id `catalog`) and reports the dense
      * LOAD state, not the param: the param flips synchronously while the shell
      * takes seconds to arrive and frequently 502s, so ACTIVE means "Starlink
-     * points are on screen" and nothing less. The legend tally is cached
+     * points are on screen" and nothing less. The class tally is cached
      * against the catalog revision. While SATCAT is stale or unavailable the
      * info line says the classes may lag (see `classEvidenceNotice`).
-     * @returns {{ chips: Array<object>, legend: Array<object>, info: string,
-     *   infoTitle: string }} Row controls.
+     * @returns {{ chips: Array<object>, info: string, infoTitle: string }}
+     *   Row controls.
      */
     getRowControls() {
       // A dependency owner (Space Missions) borrows this layer for TLE lookup
-      // with showPoints:false. Nothing is rendered, so a legend would describe an
+      // with showPoints:false. Nothing is rendered, so a count would describe an
       // empty sky and a chip write would be silently reverted by that owner's
       // restore. Surrender the row rather than lie about it.
-      if (!layerState._params.showPoints) return { chips: [], legend: [] };
+      if (!layerState._params.showPoints) return { chips: [] };
 
       const classes = _classes();
-      const chips = SATELLITE_CLASS_IDS.map((id) =>
-        id === 'starlink'
-          ? _starlinkChip()
-          : {
-              id: `class-${id}`,
-              label: t(SATELLITE_CLASS_DISPLAY[id].label),
-              active: classes[id] === true,
-              state: classes[id] === true ? 'active' : 'idle',
-              title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-              params: { classes: { [id]: classes[id] !== true } },
-            },
-      );
       const counts = _classTally();
-      const legend = [];
-      for (const id of SATELLITE_CLASS_IDS) {
-        const shown =
+      const chips = SATELLITE_CLASS_IDS.map((id) => {
+        const chip =
           id === 'starlink'
-            ? layerState._params.catalog === 'dense'
-            : classes[id] === true;
-        if (!shown || !(counts[id] > 0)) continue;
-        legend.push({
-          klass: id,
-          label: t(SATELLITE_CLASS_DISPLAY[id].label),
-          color: SATELLITE_CLASS_DISPLAY[id].color,
-          blurb: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-          count: counts[id],
-        });
-      }
-      return { chips, legend, ...classEvidenceNotice() };
+            ? _starlinkChip()
+            : {
+                id: `class-${id}`,
+                label: t(SATELLITE_CLASS_DISPLAY[id].label),
+                active: classes[id] === true,
+                state: classes[id] === true ? 'active' : 'idle',
+                title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
+                params: { classes: { [id]: classes[id] !== true } },
+              };
+        // The colour key and count ride on a class that is on; an off
+        // class is its name alone.
+        if (!chip.active) return chip;
+        chip.swatch = SATELLITE_CLASS_DISPLAY[id].color;
+        if (counts[id] > 0) chip.count = counts[id];
+        return chip;
+      });
+      return { chips, ...classEvidenceNotice() };
     },
 
     /**

@@ -4,15 +4,21 @@ import { computed, useTemplateRef } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { createBriefState } from '../../cockpitBriefPages.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import { useLiveStore } from '../../stores/live.js';
+import CockpitLivePage from './CockpitLivePage.vue';
 import CockpitRoute from './CockpitRoute.vue';
 import CockpitSignalList from './CockpitSignalList.vue';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The Cockpit briefing card. The Cockpit controller presents its pages,
 // cycle toggle, regional news and local conditions; until it does, the card
 // shows the state it starts in. The controls keep the controller's
-// listeners. The route card and the signal rows render themselves.
+// listeners. The route card, the signal rows and the LIVE page render
+// themselves; the LIVE page and its tab are there only while the subject has
+// a stream (the live store's view), which the controller is told of.
 const { presence, brief } = storeToRefs(useCockpitStore());
+const { view: live } = storeToRefs(useLiveStore());
 const initial = createBriefState();
 const b = computed(() => brief.value ?? initial);
 // The card's collapse, which its toggle and data-collapsed show.
@@ -45,17 +51,17 @@ function leaveSignals() {
         <strong id="cockpit-brief-subtitle">{{ b.subtitle }}</strong>
       </div>
       <nav class="cockpit-card-actions cockpit-brief-actions" :aria-label="t('Cockpit briefing controls')">
-        <button id="cockpit-brief-previous" type="button" :aria-label="t('Previous briefing page')" :title="t('Previous briefing page')">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
-        </button>
+        <UiButton id="cockpit-brief-previous" :aria-label="t('Previous briefing page')" :title="t('Previous briefing page')">
+          <UiIcon name="chevron_left" :size="null" />
+        </UiButton>
         <span id="cockpit-brief-position" aria-live="polite">{{ b.position }}</span>
-        <button id="cockpit-brief-next" type="button" :aria-label="t('Next briefing page')" :title="t('Next briefing page')">
-          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-        </button>
+        <UiButton id="cockpit-brief-next" :aria-label="t('Next briefing page')" :title="t('Next briefing page')">
+          <UiIcon name="chevron_right" :size="null" />
+        </UiButton>
         <UiButton id="cockpit-brief-auto" :aria-label="b.autoLabel" :pressed="Boolean(b.autoRotate)" :title="b.autoHelp">{{ b.autoLabel }}</UiButton>
-        <button id="cockpit-signal-toggle" type="button" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
-          <span class="material-symbols-outlined" aria-hidden="true">{{ collapsed ? 'right_panel_open' : 'right_panel_close' }}</span>
-        </button>
+        <UiButton id="cockpit-signal-toggle" :aria-label="collapsed ? t('Expand cockpit briefing panel') : t('Collapse cockpit briefing panel')" :aria-expanded="String(!collapsed)" :title="collapsed ? t('Expand briefing panel') : t('Collapse briefing panel')">
+          <UiIcon :name="collapsed ? 'right_panel_open' : 'right_panel_close'" :size="null" />
+        </UiButton>
       </nav>
     </header>
     <div class="cockpit-brief-stage">
@@ -79,13 +85,18 @@ function leaveSignals() {
         </div>
         <a class="cockpit-weather-credit" href="https://open-meteo.com/" target="_blank" rel="noopener">{{ t('Weather data by Open-Meteo.com') }}</a>
       </section>
+      <section data-cockpit-brief-page="live" :aria-label="t('Live video')" :hidden="b.pageId !== 'live'">
+        <CockpitLivePage v-if="live" :shown="b.pageId === 'live' && !collapsed" />
+      </section>
     </div>
     <footer class="cockpit-signal-footer">
       <span id="cockpit-brief-source">{{ b.source }}</span>
       <nav class="cockpit-brief-tabs" :aria-label="t('Cockpit briefing pages')">
-        <button type="button" data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</button>
-        <button type="button" data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</button>
-        <button type="button" data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</button>
+        <UiButton data-cockpit-brief-index="0" :aria-label="t('Show Live Signals')" :aria-current="String(b.pageIndex === 0)">{{ t('SIG') }}</UiButton>
+        <UiButton data-cockpit-brief-index="1" :aria-label="t('Show Regional News')" :aria-current="brief ? String(b.pageIndex === 1) : undefined">{{ t('NEWS') }}</UiButton>
+        <UiButton data-cockpit-brief-index="2" :aria-label="t('Show Local Info')" :aria-current="brief ? String(b.pageIndex === 2) : undefined">{{ t('LOCAL') }}</UiButton>
+        <!-- Always in the markup (the controller binds the tabs once); hidden without a stream. -->
+        <UiButton data-cockpit-brief-index="3" :hidden="!live" :aria-label="t('Show Live Video')" :aria-current="brief ? String(b.pageIndex === 3) : undefined">{{ t('LIVE') }}</UiButton>
       </nav>
     </footer>
   </aside>

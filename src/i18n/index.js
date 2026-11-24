@@ -22,10 +22,12 @@ import ar from './locales/ar.json' with { type: 'json' };
 import de from './locales/de.json' with { type: 'json' };
 import es from './locales/es.json' with { type: 'json' };
 import fr from './locales/fr.json' with { type: 'json' };
+import he from './locales/he.json' with { type: 'json' };
 import it from './locales/it.json' with { type: 'json' };
 import ja from './locales/ja.json' with { type: 'json' };
 import pt from './locales/pt.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
+import sv from './locales/sv.json' with { type: 'json' };
 import uk from './locales/uk.json' with { type: 'json' };
 import zhCN from './locales/zh-CN.json' with { type: 'json' };
 import zhHant from './locales/zh-Hant.json' with { type: 'json' };
@@ -35,10 +37,12 @@ const CATALOGS = Object.freeze({
   de,
   es,
   fr,
+  he,
   it,
   ja,
   pt,
   ru,
+  sv,
   uk,
   'zh-CN': zhCN,
   'zh-Hant': zhHant,
@@ -173,7 +177,69 @@ function interpolate(pattern, values) {
 /** A catalog string with something to show; an empty one counts as missing. */
 const filled = (value) => typeof value === 'string' && value.trim() !== '';
 
+// A host application's own text for messages Core shows (setMessageOverrides),
+// by locale: { en: { 'English key': 'Its text' }, de: { … } }.
+let overrides = Object.freeze({});
+
+/**
+ * Show a host application's own text for Core's messages. `messages` maps a
+ * locale (`en` included) to entries keyed as the catalogs are: the English
+ * text, `context|text` for a t() context, the English plural for tn() (whose
+ * entry is a `{one, other, …}` object). An overridden message shows the host's
+ * text in the active locale, else the host's English, else Core's. Each call
+ * replaces the previous overrides; `{}` removes them. Call it before views
+ * render: onLocaleChange listeners word their text again at once, but a view
+ * already drawn keeps its text until it next renders. A t() entry is text, a
+ * tn() entry `{one, other, …}` forms worded in its locale; any other entry is
+ * ignored.
+ * @param {Record<string, Record<string, string|Record<string, string>>>} messages
+ */
+export function setMessageOverrides(messages) {
+  const next = {};
+  for (const [locale, entries] of Object.entries(messages ?? {})) {
+    const code = normalizeLocale(locale);
+    if (!code || !entries || typeof entries !== 'object') continue;
+    const own = Object.fromEntries(
+      Object.entries(entries).map(([key, entry]) => [
+        key,
+        entry && typeof entry === 'object'
+          ? Object.freeze({ ...entry })
+          : entry,
+      ]),
+    );
+    next[code] = Object.freeze({ ...next[code], ...own });
+  }
+  overrides = Object.freeze(next);
+  notifyLocaleChange();
+}
+
+/** A host's entry for t() is text; for tn() plural forms with an `other`. */
+const usable = (entry, plural) =>
+  plural
+    ? Boolean(entry) && typeof entry === 'object' && filled(entry.other)
+    : filled(entry);
+
+/**
+ * The host's entry for a message, in the active locale or else in English,
+ * with the locale it is worded in (whose plural rules pick its form).
+ */
+function overridden(text, plural = false) {
+  for (const locale of new Set([getLocale(), DEFAULT_LOCALE])) {
+    const entries = overrides[locale];
+    const entry =
+      entries && Object.hasOwn(entries, text) ? entries[text] : undefined;
+    if (usable(entry, plural)) return { entry, locale };
+  }
+  return null;
+}
+
 function lookup(text) {
+  const host = overridden(text);
+  return host ? host.entry : catalogEntry(text);
+}
+
+/** Core's own catalog entry for a message in the active locale. */
+function catalogEntry(text) {
   const catalog = CATALOGS[getLocale()];
   if (!catalog) return undefined;
   const entry = Object.hasOwn(catalog, text) ? catalog[text] : undefined;
@@ -208,7 +274,14 @@ export function t(text, values) {
  * @returns {string}
  */
 export function tn(count, one, other, values) {
-  const entry = lookup(other);
+  const host = overridden(other, true);
+  if (host) {
+    const forms = host.entry;
+    const category = pluralRules(host.locale).select(count);
+    const pattern = filled(forms[category]) ? forms[category] : forms.other;
+    return interpolate(pattern, { count, ...values });
+  }
+  const entry = catalogEntry(other);
   const category = pluralRules(getLocale()).select(count);
   let pattern;
   const forms = entry && typeof entry === 'object' ? entry : null;
@@ -226,8 +299,11 @@ export function tn(count, one, other, values) {
  * missing-translation warning.
  */
 export function translateKnown(text) {
+  if (typeof text !== 'string') return text;
+  const host = overridden(text);
+  if (host) return host.entry;
   const catalog = CATALOGS[getLocale()];
-  if (!catalog || typeof text !== 'string') return text;
+  if (!catalog) return text;
   const entry = Object.hasOwn(catalog, text) ? catalog[text] : undefined;
   return filled(entry) ? entry : text;
 }

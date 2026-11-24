@@ -1,8 +1,9 @@
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 import {
   PUSH_TO_TALK_HOLD_DELAY_MS,
   MICROPHONE_VISUALIZER_GATE,
   ASSISTANT_VISUALIZER_GATE,
+  isStoriesOpen,
   isPushToTalkKey,
   SPACE_INTERACTIVE_SELECTOR,
   isInteractiveSpaceTarget,
@@ -55,9 +56,11 @@ export class RealtimeInput {
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
-      // Space types in chat; it never talks while chat is open.
+      // Space types in chat; it never talks while chat is open, nor while
+      // Stories owns the keyboard (body.stories-mode).
       if (
         this.ui.state?.chat?.open === true ||
+        isStoriesOpen() ||
         !shouldHandlePushToTalkKeyDown(event)
       )
         return;
@@ -93,6 +96,10 @@ export class RealtimeInput {
         this.pushToTalkHoldTimer = null;
         if (holdGeneration !== this.pushToTalkHoldGeneration) return;
         if (!this.spaceKeyHeld || this.pushToTalkKeyHeld) return;
+        if (isStoriesOpen()) {
+          this.shortcutBlurHandler();
+          return;
+        }
         // A pointer or Tab focus change during the delay cancels the original
         // gesture rather than letting voice claim a key held for another owner.
         if (document.activeElement !== this.pushToTalkHoldFocusOwner) return;
@@ -124,7 +131,7 @@ export class RealtimeInput {
           this.ui.update('root', { pushToTalk: 'held' });
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', t('Release Space to send'));
+            this.setStatus('listening', msg('Release Space to send'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
@@ -201,7 +208,7 @@ export class RealtimeInput {
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', t('Hold Space to talk'));
+      this.setStatus('listening', msg('Hold Space to talk'));
     else this.updateVoiceButtonLabel();
   }
 

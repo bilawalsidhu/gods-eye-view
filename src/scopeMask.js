@@ -1,5 +1,6 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
+import { findCamera, findFrame } from './render/rendererOf.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -89,6 +90,12 @@ let _container = null;
 let _viewer = null;
 let _enabled = true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+/**
+ * How strongly the whole mask shows, from the Display panel's Opacity slider:
+ * a fade over the painted mask, separate from the altitude terminus above,
+ * so the terminus band and its repaint gate stay as they are.
+ */
+let _maskOpacity = 1;
 let _resizeObserver = null;
 let _dprQuery = null;
 let _dprListener = null;
@@ -433,6 +440,7 @@ export function installScopeMask(viewer) {
   _canvas = document.createElement('canvas');
   _canvas.id = 'scope-mask';
   _canvas.setAttribute('aria-hidden', 'true');
+  _canvas.style.opacity = String(_maskOpacity);
   _container.appendChild(_canvas);
   _resizeObserver = new ResizeObserver(() => draw());
   _resizeObserver.observe(_container);
@@ -446,7 +454,7 @@ export function installScopeMask(viewer) {
 
 /** @returns {number} Live camera height above the ellipsoid, or +Inf if unknown. */
 function currentCameraHeightM() {
-  const height = _viewer?.camera?.positionCartographic?.height;
+  const height = findCamera(_viewer)?.pose().height;
   return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
 }
 
@@ -460,9 +468,9 @@ function currentCameraHeightM() {
  * @returns {void}
  */
 function watchCameraHeight(viewer) {
-  const preRender = viewer?.scene?.preRender;
-  if (preRender?.addEventListener) {
-    _cameraSampleRemover = preRender.addEventListener(() => {
+  const frame = findFrame(viewer);
+  if (frame) {
+    _cameraSampleRemover = frame.on('preRender', () => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
       // throttle bookkeeping, no quantize — the listener is a single compare.
       // setScopeMaskEnabled(true) re-syncs the alpha it skipped.
@@ -474,9 +482,9 @@ function watchCameraHeight(viewer) {
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
   }
-  const moveEnd = viewer?.camera?.moveEnd;
-  if (moveEnd?.addEventListener) {
-    _cameraMoveEndRemover = moveEnd.addEventListener(() => {
+  const camera = findCamera(viewer);
+  if (camera) {
+    _cameraMoveEndRemover = camera.on('moveEnd', () => {
       if (!_enabled) return;
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
@@ -538,6 +546,23 @@ export function getScopeMaskFeather() {
 }
 
 /**
+ * @param {number} ratio - How strongly the mask shows, 0 (clear) to 1.
+ * @returns {void}
+ */
+export function setScopeMaskOpacity(ratio) {
+  _maskOpacity = Math.max(
+    0,
+    Math.min(1, Number.isFinite(Number(ratio)) ? Number(ratio) : 1),
+  );
+  if (_canvas) _canvas.style.opacity = String(_maskOpacity);
+}
+
+/** @returns {number} */
+export function getScopeMaskOpacity() {
+  return _maskOpacity;
+}
+
+/**
  * Tear the mask down (canvas + observer). Reinstall with installScopeMask.
  * @returns {void}
  */
@@ -567,6 +592,7 @@ export function _resetScopeMaskForTest() {
   _viewer = null;
   _enabled = true;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+  _maskOpacity = 1;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
   _terminusOverride = null;
   _terminusRepaints = 0;

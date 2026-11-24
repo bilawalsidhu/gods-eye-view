@@ -5,12 +5,23 @@ import {
   transitDetectionClass,
   transitDetectionId,
   transitDetectionMetric,
+  vehicleReportTimeMs,
 } from './policy.js';
 import {
   TRANSIT_ENABLED_FEEDS,
   getRegisteredTransitFeed,
+  transitRouteLabel,
 } from '../../data/transitFeeds.js';
 import { transitModeTier } from '../../data/transitPresetStyle.js';
+import { displayMotion } from './movement.js';
+
+/** The display's motion word as a record field for the Context card. */
+const MOTION_FIELD = Object.freeze({
+  'EN ROUTE': 'moving',
+  STOPPED: 'stopped',
+  WAITING: 'waiting',
+  'NO FIX': 'no-fix',
+});
 
 /** Regions, not feeds: one region can carry several feeds (Rio has two). */
 const TRANSIT_REGION_COUNT = new Set(
@@ -89,7 +100,7 @@ export function createQueries({ state, parts }) {
    * @returns {Array<object>}
    */
   function collectDetectableVehicles(options = defaults) {
-    if (!state._enabled || !state._markers?.show) return empty;
+    if (!state._enabled || !state._markersShown) return empty;
     if (state._vehicles.size === 0) return empty;
     const maxCount = Number.isFinite(options.maxCount)
       ? Math.max(1, Math.floor(options.maxCount))
@@ -129,7 +140,9 @@ export function createQueries({ state, parts }) {
     const visible = [];
     for (const entry of state._visible) {
       const marker = entry.marker;
-      if (!marker?.position || marker.show === false) continue;
+      // A vehicle drawn as its 3D model is present though its marker is hidden.
+      if (!marker?.position) continue;
+      if (marker.show === false && entry.modelOwnsVisual !== true) continue;
       visible.push(entry);
     }
     let chosen = visible;
@@ -209,10 +222,14 @@ export function createQueries({ state, parts }) {
      * query engine. On demand only (once per spoken query); [] while the
      * layer is off.
      * @param {number} [maxCount=Infinity] Most records to return.
-     * @returns {Array<Object>} {id, label, routeId, mode, lat, lon, speedMps, courseDeg, status, occupancy}.
+     * @returns {Array<Object>} {id, label, routeId, mode, lat, lon, speedMps, courseDeg, status, occupancy},
+     *   plus `key` (the layer's own vehicle key, which a map click carries),
+     *   `route`, `operator`, `place`, `observedMs` and `motion` (what the
+     *   display shows: moving, stopped, waiting or no-fix) for the Context card.
      */
     getAnalystRecords(maxCount = Infinity) {
       if (!state._enabled) return [];
+      const now = Date.now();
       const num = (v) => (Number.isFinite(v) ? v : null);
       const result = [];
       for (const entry of state._vehicles.values()) {
@@ -220,6 +237,8 @@ export function createQueries({ state, parts }) {
         const record = entry.record || {};
         if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
           continue;
+        const feed = feedForEntry(state, entry);
+        const reportedMs = vehicleReportTimeMs(record, entry.fetchedAt);
         result.push({
           id: record.label || record.id || entry.key,
           label: record.label || null,
@@ -231,6 +250,15 @@ export function createQueries({ state, parts }) {
           courseDeg: num(entry.courseDeg ?? record.bearing),
           status: record.status || null,
           occupancy: record.occupancy || null,
+          key: entry.key,
+          route:
+            record.routeId && feed
+              ? transitRouteLabel(feed, record.routeId)
+              : record.routeId || null,
+          operator: feed?.name || null,
+          place: feed?.region || null,
+          observedMs: Number.isFinite(reportedMs) ? reportedMs : null,
+          motion: MOTION_FIELD[displayMotion(entry, now).word] || null,
         });
       }
       return result;

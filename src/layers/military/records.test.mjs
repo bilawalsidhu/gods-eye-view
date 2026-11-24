@@ -65,6 +65,52 @@ test('military ground records leave model-owned placement alone and warm the sam
   assert.deepEqual(unowned.floorWarmPoints, owned.floorWarmPoints);
 });
 
+test('a military contact that lands with no altitude sits on the ground, not at its last airborne height', () => {
+  for (const [modelOwnsVisual, expected] of [
+    [false, 201.5],
+    [true, 0],
+  ]) {
+    const records = store();
+    records.receive(
+      observation({ baroAltitudeM: 1539 }),
+      context({ modelOwnsVisual }),
+    );
+    // Every grounded report, not just the first after the landing.
+    for (let poll = 0; poll < 3; poll += 1) {
+      const landed = records.receive(
+        observation({ onGround: true, baroAltitudeM: null, speedMps: 4.6 }),
+        context({ modelOwnsVisual }),
+      );
+      assert.equal(landed.meta.renderAltitudeM, expected);
+      // The aviation readout keeps the last reported altitude, as before.
+      assert.equal(landed.meta.altitudeFt, 1539 / 0.3048);
+    }
+  }
+});
+
+test('a grounded military contact holds a ground altitude it reported earlier', () => {
+  const records = store();
+  records.receive(
+    observation({ onGround: true, baroAltitudeM: 320 }),
+    context({ modelOwnsVisual: true }),
+  );
+  for (let poll = 0; poll < 2; poll += 1) {
+    const next = records.receive(
+      observation({ onGround: true, baroAltitudeM: null }),
+      context({ modelOwnsVisual: true }),
+    );
+    assert.equal(next.meta.renderAltitudeM, 320);
+  }
+  // Airborne again: that ground altitude is forgotten, so the next landing
+  // without an altitude starts from the ground, not from it.
+  records.receive(observation({ baroAltitudeM: 900 }), context());
+  const relanded = records.receive(
+    observation({ onGround: true, baroAltitudeM: null }),
+    context({ modelOwnsVisual: true }),
+  );
+  assert.equal(relanded.meta.renderAltitudeM, 0);
+});
+
 test('military records keep bounded partial retention and release metadata only after removal admission', () => {
   const first = store();
   const second = store();
@@ -173,4 +219,122 @@ test('military records hold the last track and speed when a poll omits them', ()
   );
   assert.equal(parked.meta.speedMps, 0);
   assert.equal(parked.meta.track, 90);
+});
+
+test('an airborne military contact reported with no altitude is marked as drawn at an invented height', () => {
+  const records = store();
+  const none = records.receive(
+    observation({ baroAltitudeM: null, ellipsoidAltitudeM: null }),
+    context(),
+  );
+  assert.equal(none.meta.renderAltitudeInvented, true);
+  const known = records.receive(
+    observation({ positionTimeMs: 1700000005000 }),
+    context(),
+  );
+  assert.equal(known.meta.renderAltitudeInvented, false);
+  const parked = store().receive(
+    observation({ baroAltitudeM: null, onGround: true }),
+    context(),
+  );
+  assert.equal(parked.meta.renderAltitudeInvented, false);
+});
+
+test('the tracked military contact is stale from its first missed update and kept until ten minutes after its newest fix', () => {
+  const realNow = Date.now;
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  let clock = fixMs + 5_000;
+  Date.now = () => clock;
+  try {
+    for (const snapshot of [
+      { complete: true },
+      { complete: true, retainIds: new Set(['aaa001']) },
+      { complete: false },
+    ]) {
+      const records = store();
+      records.receive(
+        observation({ positionTimeMs: fixMs }),
+        context({ observedAtMs: fixMs + 1_000 }),
+      );
+      const absent = (tracked) =>
+        records.absence('aaa001', {
+          ...snapshot,
+          likelyLanded: false,
+          tracked,
+        });
+      clock = fixMs + 15_000;
+      assert.equal(absent(true), 'stale');
+      assert.equal(records.missingPolls.get('aaa001'), 1);
+      clock = fixMs + 9 * 60_000;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000 - 1;
+      assert.equal(absent(true), 'stale');
+      clock = fixMs + 10 * 60_000;
+      assert.equal(absent(true), 'remove');
+      assert.equal(records.missingPolls.has('aaa001'), false);
+    }
+    const records = store();
+    records.receive(
+      observation({ positionTimeMs: fixMs }),
+      context({ observedAtMs: fixMs + 1_000 }),
+    );
+    clock = fixMs + 15_000;
+    const untracked = (snapshot) =>
+      records.absence('aaa001', { ...snapshot, likelyLanded: false });
+    assert.equal(untracked({ complete: false }), 'retain');
+    assert.deepEqual(
+      [1, 2, 3].map(() => untracked({ complete: true })),
+      ['stale', 'stale', 'remove'],
+    );
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('a repeated military fix time marks the contact as not updated; removal is unchanged', () => {
+  const records = store();
+  const fixMs = Date.UTC(2026, 10, 9, 20, 0);
+  const poll = (snapshotMs, positionTimeMs) => {
+    records.beginSnapshot(snapshotMs);
+    records.receive(
+      observation({ positionTimeMs }),
+      context({ observedAtMs: snapshotMs }),
+    );
+  };
+  poll(fixMs + 2_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+  // adsb.lol re-sends the last position for up to a minute.
+  poll(fixMs + 12_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), true);
+  assert.equal(records.missingPolls.has('aaa001'), false);
+  poll(fixMs + 12_000, fixMs);
+  assert.equal(records.fixRepeated.has('aaa001'), true);
+  poll(fixMs + 22_000, fixMs + 10_000);
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+  poll(fixMs + 32_000, fixMs + 10_000);
+  records.forget('aaa001');
+  assert.equal(records.fixRepeated.has('aaa001'), false);
+});
+
+test('a military contact reported with no course faces the way its newer fixes went', () => {
+  const records = store();
+  const T = 1700000000000;
+  const taxi = (latitude, seconds) =>
+    records.receive(
+      observation({
+        latitude,
+        onGround: true,
+        baroAltitudeM: null,
+        courseDeg: null,
+        speedMps: 8,
+        positionTimeMs: T + seconds * 1000,
+      }),
+      context({ observedAtMs: T + seconds * 1000 + 500 }),
+    );
+  assert.equal(taxi(39, 0).meta.track, 0);
+  assert.ok(Math.abs(taxi(38.9995, 5).meta.track - 180) < 0.1);
+  assert.ok(
+    Math.abs(taxi(39.002, 3).meta.track - 180) < 0.1,
+    'an older fix gives no course',
+  );
 });

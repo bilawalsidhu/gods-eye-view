@@ -1,16 +1,19 @@
 import { defineStore } from 'pinia';
-import { markRaw, shallowRef } from 'vue';
+import { computed, markRaw, shallowRef } from 'vue';
 
 /**
  * @typedef {object} SceneRowHandlers
+ * @property {(sceneId: string) => void} selectScene The select's choice.
  * @property {(shotId: string) => void} select
  * @property {(sceneId: string, shotId: string, title: string) => void} rename
  * @property {(sceneId: string, shotId: string) => void} load
  * @property {(sceneId: string, shotId: string) => void} remove
- * @property {(sceneId: string) => void} selectScene The select's choice.
+ * @property {(sceneId: string, shotId: string, index: number) => void} move
+ *   Move a shot to `index` in its scene's playback order.
  * @property {(file: File) => Promise<void>|void} importFile A chosen file.
- * @property {() => void} create, deleteScene, capture, update, start, stop,
- *   next, export, download The panel's buttons.
+ * @property {() => void} create, deleteScene, stories, thumb, capture, update,
+ *   start, stop, next, export, download The panel's buttons.
+ * @property {(tag: string) => void} tag A Stories tag chip.
  */
 
 /**
@@ -28,10 +31,15 @@ export const useSceneStore = defineStore('gev-scenes', () => {
   // Counts option renders: each one re-applies the select's choice, which
   // the person may have changed since.
   const listedRevision = shallowRef(0);
+  /** The selected scene, whose Stories details the panel shows, or null. */
+  const currentScene = computed(
+    () =>
+      scenes.value.find((scene) => scene.id === selectedSceneId.value) ?? null,
+  );
   /**
    * The panel's buttons, status line, progress and runtime chip:
-   * `{running, hasShots, disabled: {[button]: boolean}, status, progress,
-   * runtime, playLabel}`, or null until an owner presents them.
+   * `{running, hasShots, inStories, disabled: {[button]: boolean}, status,
+   * progress, runtime, playLabel}`, or null until an owner presents them.
    */
   const panel = shallowRef(null);
 
@@ -106,6 +114,7 @@ export const useSceneStore = defineStore('gev-scenes', () => {
     selectedShotId,
     listedSceneId,
     listedRevision,
+    currentScene,
     attached,
     panel,
     publishPanel,

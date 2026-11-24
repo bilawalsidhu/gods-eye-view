@@ -397,6 +397,28 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
       }),
     }),
   };
+  // The marker record (fresh with each state read, as the fixture's
+  // wrappers are), and the billboard the draw port drew for the latest one
+  // in the layer's still set.
+  let marker = null;
+  const billboard = {
+    id: { set: 'transit:1:still', id: 'bus' },
+    show: true,
+    color: { alpha: 1 },
+    rotation: 0,
+    get position() {
+      return marker.position;
+    },
+  };
+  scene.primitives = {
+    length: 1,
+    get: () => ({
+      drawSetId: 'transit:1:still',
+      show: true,
+      length: 1,
+      get: () => billboard,
+    }),
+  };
   globalThis.window = {
     __godsEyeView: {
       viewer: { scene },
@@ -406,22 +428,22 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
             'transit',
             {
               module: {
-                _transitStateForTest: () => ({
-                  _vehicles: new Map([
-                    [
-                      'bus',
-                      {
-                        key: 'bus',
-                        mode: 'bus',
-                        marker: {
-                          show: true,
-                          image: 'raster',
-                          position: { x: 0, y: 0, z: 0 },
-                        },
-                      },
-                    ],
-                  ]),
-                }),
+                _transitSetIdsForTest: () => [
+                  'transit:1:still',
+                  'transit:1:moving',
+                ],
+                _transitStateForTest: () => {
+                  marker = {
+                    show: true,
+                    image: 'raster',
+                    position: { x: 0, y: 0, z: 0 },
+                  };
+                  return {
+                    _vehicles: new Map([
+                      ['bus', { key: 'bus', mode: 'bus', marker }],
+                    ]),
+                  };
+                },
               },
             },
           ],
@@ -603,8 +625,30 @@ test('preset baseline clears a previous city selection before comparing fleet si
     _selectedKey: entry.key,
     _vehicles: new Map([[entry.key, entry]]),
   };
+  // The billboard the draw port drew for the marker, styled as it is.
+  const billboard = {
+    id: { set: 'transit:1:still', id: entry.key },
+    get width() {
+      return entry.marker.width;
+    },
+    get color() {
+      return entry.marker.color;
+    },
+  };
   globalThis.window = {
     __godsEyeView: {
+      viewer: {
+        scene: {
+          primitives: {
+            length: 1,
+            get: () => ({
+              drawSetId: 'transit:1:still',
+              length: 1,
+              get: () => billboard,
+            }),
+          },
+        },
+      },
       dataManager: {
         layers: new Map([
           [
@@ -612,6 +656,7 @@ test('preset baseline clears a previous city selection before comparing fleet si
             {
               module: {
                 _transitStateForTest: () => state,
+                _transitSetIdsForTest: () => ['transit:1:still'],
                 _transitPartsForTest: () => ({
                   selection: {
                     clearSelection() {
@@ -673,12 +718,15 @@ test('public transit documentation uses courtesy attribution and the approved gr
     new URL('../../DATA_SOURCES.md', import.meta.url),
     'utf8',
   );
+  // The Transit layer's own rows; the Rail layer's rows for the same
+  // operators quote their licences.
   const rows = data
     .split('\n')
-    .filter((line) =>
-      /^\| \*\*(MBTA|CapMetro|Metro Transit|OVapi|Entur|TransLink|HSL)/.test(
-        line,
-      ),
+    .filter(
+      (line) =>
+        /^\| \*\*(MBTA|CapMetro|Metro Transit|OVapi|Entur|TransLink|HSL)/.test(
+          line,
+        ) && /^\| [^|]+\| Transit layer /.test(line),
     );
   assert.equal(rows.length, 7);
   for (const row of rows) {
@@ -695,7 +743,7 @@ test('public transit documentation uses courtesy attribution and the approved gr
   );
   assert.ok(
     readme.includes(
-      'Twenty-two layers and map sources. **Twenty have a keyless path.**',
+      'Twenty-three layers and map sources. **Twenty-one have a keyless path.**',
     ),
   );
   assert.ok(

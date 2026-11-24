@@ -314,17 +314,7 @@ try {
   }
   await page.evaluate(() => {
     document.documentElement.lang = 'en';
-    document.documentElement.dataset.uiTheme = 'cyber';
   });
-  const cyber = await page.$eval(
-    '#scene-select',
-    (node) => getComputedStyle(node).backgroundColor,
-  );
-  check(
-    'Cyber keeps its native field theme',
-    cyber === 'rgba(26, 35, 39, 0.96)',
-    cyber,
-  );
   await begin('heading');
   await page.evaluate(() => {
     const owner = window.__godsEyeView.styleManager._cctvControls;

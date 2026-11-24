@@ -1,4 +1,5 @@
 import { readLayerSource } from '../testSupport/readLayerSource.mjs';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -11,6 +12,11 @@ import assert from 'node:assert/strict';
  * decisions and constants in the two flight layers, and those are exactly what a
  * regression would silently revert. These assertions pin the decisions.
  */
+
+const DRAW_MODELS_SOURCE = readFileSync(
+  new URL('../render/cesium/drawModels.js', import.meta.url),
+  'utf8',
+);
 
 const LAYERS = [
   { name: 'flights', path: new URL('./flights.js', import.meta.url) },
@@ -28,20 +34,23 @@ for (const layer of LAYERS) {
   const source = readLayerSource(layer.path);
 
   test(`${layer.name}: every GLB creation bypasses the tile-contended frame-spread queue`, () => {
-    const calls = [...source.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
-    assert.ok(calls.length >= 3, `expected fleet, tracked, and preload model calls; found ${calls.length}`);
+    // The fleet and tracked models are draw-port models sets; the Cesium
+    // draw port creates every model off the frame-spread queue.
+    assert.match(source, /\.models\(\{\s*id:/, 'the layer draws its models as draw-port models sets');
+    const calls = [...DRAW_MODELS_SOURCE.matchAll(/Cesium\.Model\.fromGltfAsync\(\{([\s\S]*?)\}\)/g)];
+    assert.ok(calls.length >= 1, 'the draw port creates models');
     for (const [index, call] of calls.entries()) {
       assert.match(call[1], /\basynchronous:\s*false\b/,
-        `Model.fromGltfAsync call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
+        `_createModel call ${index + 1} must keep bounded GLB readiness independent of tile jobs`);
     }
   });
 
   test(`${layer.name}: Cockpit 3D obeys the shared Display toggle`, () => {
     const regime = /^([ \t]*)function _modelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, '_modelRegimeActive is defined');
-    assert.match(regime, /if\s*\(\s*!(?:flightState\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
+    assert.match(regime, /if\s*\(\s*!(?:(?:flightState|state)\.)?_models3dEnabled,?\s*\)\s*return\s*false;/,
       'OFF must keep Cockpit AIR contacts in 2D');
-    assert.doesNotMatch(regime, /!(?:flightState\.)?_models3dEnabled\s*&&\s*!(?:flightState\.)?_cockpitContactMode/,
+    assert.doesNotMatch(regime, /!(?:(?:flightState|state)\.)?_models3dEnabled\s*&&\s*!(?:(?:flightState|state)\.)?_cockpitContactMode/,
       'Cockpit must not bypass the owner-visible Display toggle');
   });
 
@@ -53,7 +62,7 @@ for (const layer of LAYERS) {
     // suppression is now an explicit early return.
     const regime = /^([ \t]*)function _trackedModelRegimeActive\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(regime, '_trackedModelRegimeActive is defined');
-    assert.match(regime, /if\s*\(\s*!(?:flightState\.)?_trackedIcao\s*\|\|\s*(?:flightState\.)?_cockpitContactMode\s*\|\|[\s\S]*?return\s*false;/,
+    assert.match(regime, /if\s*\(\s*!(?:(?:flightState|state)\.)?_trackedIcao\s*\|\|\s*(?:(?:flightState|state)\.)?_cockpitContactMode\s*\|\|[\s\S]*?return\s*false;/,
       '_trackedModelRegimeActive excludes cockpit');
     const tracked = /^([ \t]*)function _updateTrackedModel\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.ok(tracked, '_updateTrackedModel is defined');
@@ -61,46 +70,73 @@ for (const layer of LAYERS) {
       'the tracked-model driver uses the cockpit-aware predicate');
   });
 
-  test(`${layer.name}: Cockpit uses standard Proximity and All radii with a lower cap`, () => {
-    assert.equal(numericConstant(source, 'MODEL_PROX_ADD_M'), 150_000);
-    assert.equal(numericConstant(source, 'MODEL_PROX_KEEP_M'), 185_000);
-    assert.equal(numericConstant(source, 'MODEL_ALL_ADD_M'), 400_000);
-    assert.equal(numericConstant(source, 'MODEL_ALL_KEEP_M'), 450_000);
+  test(`${layer.name}: models draw within 3 km in both modes; Cockpit's AIR band keeps its own radii`, () => {
+    assert.equal(numericConstant(source, 'MODEL_ADD_M'), 3000);
+    assert.equal(numericConstant(source, 'MODEL_KEEP_M'), 3600);
     assert.equal(numericConstant(source, 'COCKPIT_MODEL_MAX'), 60);
 
     const add = /^([ \t]*)function _modelAddDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     const keep = /^([ \t]*)function _modelKeepDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(add, /(?:flightState\.)?_models3dMode\s*===\s*'all'\s*\?\s*MODEL_ALL_ADD_M\s*:\s*MODEL_PROX_ADD_M/);
-    assert.match(keep, /(?:flightState\.)?_models3dMode\s*===\s*'all'\s*\?\s*MODEL_ALL_KEEP_M\s*:\s*MODEL_PROX_KEEP_M/);
-    assert.doesNotMatch(add, /COCKPIT_MODEL_ADD_M/);
-    assert.doesNotMatch(keep, /COCKPIT_MODEL_KEEP_M/);
+    assert.match(add, /return\s+(?:policy\.)?MODEL_ADD_M;/, 'Proximity and All share the add radius');
+    assert.match(keep, /return\s+(?:policy\.)?MODEL_KEEP_M;/, 'Proximity and All share the keep radius');
+
+    // The AIR silhouettes are icons, not models: their band stays mode-aware.
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_PROX_ADD_M'), 150_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_PROX_KEEP_M'), 185_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_ALL_ADD_M'), 400_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_ALL_KEEP_M'), 450_000);
+    const near = /^([ \t]*)function _refreshCockpitNearContacts\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
+    assert.match(near, /all\s*\?\s*COCKPIT_AIR_ALL_ADD_M\s*:\s*COCKPIT_AIR_PROX_ADD_M/);
+    assert.match(near, /all\s*\?\s*COCKPIT_AIR_ALL_KEEP_M\s*:\s*COCKPIT_AIR_PROX_KEEP_M/);
 
     const cap = /^([ \t]*)function _modelCap\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(cap, /Math\.min\(\s*COCKPIT_MODEL_MAX/,
+    assert.match(cap, /Math\.min\(\s*(?:policy\.)?COCKPIT_MODEL_MAX/,
       'Cockpit keeps its 60-model performance ceiling');
   });
 
   test(`${layer.name}: near AIR state is independent from model admission`, () => {
     assert.match(source, /nextCockpitNearContacts\(/,
       'Cockpit derives a separate near-contact hysteresis set');
-    assert.match(source, /isCockpitContact && !isCockpitNear[\s\S]*cockpitContactDotImage\(\)/,
+    assert.match(source, /!state\._cockpitNearContacts\.has\(icao24\);\s*const look = cockpitDot\s*\?\s*\{\s*image: cockpitDotImage\(\)/,
       'only out-of-range Cockpit contacts become dots');
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /bb\.image\s*=\s*aircraftIcon\(\s*_iconKind\(\s*icao24,\s*meta\?\.klass,?\s*\)(,\s*bb\._gevIconLarge\s*\?\s*TRACKED_ICON_PX\s*:\s*undefined)?,?\s*\)/,
+    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*(?:FLEET_ICON_PX,?\s*)?(?:frame,?\s*)?\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
-    assert.match(source, /bb\.rotation\s*=\s*0;/,
+    assert.match(source, /color: rgba\(rendering\._cockpitContactColor\(icao24, info\)\),\s*rotationMode: 'screen',/,
       'far dots are reset to a rotation-free presentation');
-    assert.match(source, /\(\s*!(?:flightState\.)?_cockpitContactMode\s*\|\|\s*isCockpitNear,?\s*\)\s*&&\s*\(\s*doRotations\s*\|\|\s*revealed,?\s*\)/,
+    assert.match(source, /color: rgba\(rendering\._fleetBillboardColor\(icao24, info\)\),\s*rotationMode: 'course',/,
       'near 2D silhouettes continue to receive projected course');
-    assert.match(source, /if\s*\(\s*bb\.show,?\s*\)\s*bb\.show\s*=\s*false;\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
-      'the gap-proof billboard-to-model handoff remains intact');
+    assert.match(source, /icons\.setShown\(icao24, false\);\s*\/\/\s*hand\s*off\s*ONLY\s*once\s*the\s*model\s*renders/,
+      'the gap-proof icon-to-model handoff remains intact');
   });
 
   test(`${layer.name}: Cockpit exit clears near state before restoring map presentation`, () => {
     const setMode = /^([ \t]*)function _setCockpitContactMode\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(setMode, /else\s*(?:flightState\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
-    assert.match(setMode, /for\s*\(\s*const\s*\[icao24,\s*bb\]\s*of\s*(?:flightState\.)?_billboards,?\s*\)\s*(?:parts\.\w+\.)?_applyFleetBillboardPresentation\(\s*icao24,\s*bb,?\s*\);/);
+    assert.match(setMode, /else\s*(?:(?:flightState|state)\.)?_cockpitNearContacts\s*=\s*new\s*Set\(\s*,?\s*\);/);
+    assert.match(setMode, /for \(const icao24 of (?:flightState\._)?icons\?\.ids\(\) \?\? \[\]\)\s*parts\.icons\._applyIconPresentation\(icao24\);/);
   });
 }
+
+// The source reads above include the shared model module, so they pass from it
+// alone. These pin that each layer actually builds its models from it, and that
+// flights keeps its own hooks.
+const RENDERING = {
+  flights: new URL('../layers/flights/rendering.js', import.meta.url),
+  militaryFlights: new URL('../layers/military/rendering.js', import.meta.url),
+};
+
+for (const [name, url] of Object.entries(RENDERING)) {
+  test(`${name}: 3D models come from the shared aircraft model module`, () => {
+    const source = readFileSync(url, 'utf8');
+    assert.match(source, /createAircraftModels\(\{/);
+    assert.match(source, /\.\.\.models\b/);
+  });
+}
+
+test('flights: model eligibility nudges enrichment and the tick floors grounded icons', () => {
+  const source = readFileSync(RENDERING.flights, 'utf8');
+  assert.match(source, /onModelEligible:[\s\S]*?_requestTypeEnrichment\(icao24, true\)/);
+  assert.match(source, /afterReplan:[\s\S]*?_floorGroundedIcons\(/);
+});
