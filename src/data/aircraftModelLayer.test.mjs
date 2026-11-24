@@ -114,11 +114,14 @@ function fleetFixture(positions, { eyeM = EYE_M } = {}) {
   };
   let now = 1_000_000;
   let iconRecedeSyncs = 0;
+  const replanViews = [];
   const parts = {
     icons: {
       _displayMs: () => now,
       _syncImageSwitch() {},
-      _replanExpired() {},
+      _replanExpired(_t, view) {
+        replanViews.push(view);
+      },
       _focusIcons() {},
       _occluder: () => null,
       _aboveHorizon: () => true,
@@ -160,6 +163,9 @@ function fleetFixture(positions, { eyeM = EYE_M } = {}) {
     failNextUpsert: () => (failNextUpsert = true),
     /** How often the icons were told to recede by the tuning as it is now. */
     iconRecedeSyncs: () => iconRecedeSyncs,
+    /** The camera each fleet tick re-planned the icons with. */
+    replanViews,
+    eye,
     /** Mark a contact as not there yet at the time drawn, or there again. */
     setUnseen(id, value) {
       if (value) unseenIds.add(id);
@@ -475,4 +481,16 @@ test('the selected contact keeps a loaded, hidden fleet model that takes it back
   f.models._handBackDeselected('a1');
   assert.equal(f.fleet().items.get('a1').show, true);
   assert.equal(f.shown.get('a1'), false);
+});
+
+test('the fleet tick re-plans the icons with the camera: its eye, and what it sees', () => {
+  const f = fleetFixture(new Map([['a1', far(1)]]));
+  f.tick();
+  const [view] = f.replanViews;
+  assert.equal(view.eye, f.eye);
+  // The camera looks along -z: ahead of the eye is in view, behind it not.
+  const ahead = { x: f.eye.x, y: f.eye.y, z: f.eye.z - 10_000 };
+  const behind = { x: f.eye.x, y: f.eye.y, z: f.eye.z + 10_000 };
+  assert.equal(view.inView(ahead), true);
+  assert.equal(view.inView(behind), false);
 });

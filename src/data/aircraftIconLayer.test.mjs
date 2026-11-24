@@ -5,6 +5,7 @@ import {
   createAircraftIcons,
   createContactIcons,
   floorCoastArc,
+  placedPlanSpread,
 } from './aircraftIconLayer.js';
 import { COAST_FLOOR_LIFT_M, recoveryMs } from './motionModel.js';
 import { fromDegrees, toCartographicRadians } from '../geo/ellipsoid.js';
@@ -500,4 +501,111 @@ test('back at live, a placed contact eases from where it is drawn over a recover
   assert.ok(
     metres(easing.position('c', Date.now(), {}), placedAt(Date.now())) < 1,
   );
+});
+
+/** A layer whose placement has every contact flying east from `at(id)`. */
+function placedFleet(ids, at) {
+  const state = {
+    now: () => Date.now(),
+    _icons: createContactIcons(),
+    _positionHistory: new Map(ids.map((id) => [id, [{ epochMs: WORLD_MS }]])),
+    records: { data: new Map(ids.map((id) => [id, {}])) },
+  };
+  const icons = createAircraftIcons({
+    state,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts: {
+      motion: { _displayTimeAt: (ms) => ms, _fixEpochMs: (f) => f.epochMs },
+    },
+    layerId: 'flights',
+    courseMaxDps: 3,
+    cockpitContactSizePx: 8,
+    placeAt: (id, wallMs, _info, _history, out) => {
+      Object.assign(out, at(id, wallMs));
+      return { courseDeg: 90, speedMps: 200 };
+    },
+  });
+  for (const id of ids)
+    state._icons.put(
+      {
+        id,
+        pos: at(id, WORLD_MS),
+        motion: { kind: 'hold', courseDeg: 90 },
+        course: 90,
+        size: [20, 20],
+      },
+      { expiresAt: -Infinity },
+    );
+  return { icons, set: state._icons };
+}
+
+test('a placed fleet planned in one pass runs out spread over the passes after it, not together', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const ids = Array.from({ length: 400 }, (_, i) =>
+    (0xa00000 + i * 37).toString(16),
+  );
+  const { icons, set } = placedFleet(ids, () => fromDegrees(0, 30, 3_000));
+  icons._replanExpired(Date.now());
+  const ends = ids.map((id) => set.expires(id) - WORLD_MS);
+  for (const ms of ends) assert.ok(ms >= 500 && ms < 1_500, `${ms} ms`);
+  // An 80 ms pass (the fleet's tick) has an eighth of the fleet at most.
+  const perPass = new Map();
+  for (const ms of ends) {
+    const pass = Math.floor(ms / 80);
+    perPass.set(pass, (perPass.get(pass) ?? 0) + 1);
+  }
+  assert.ok(
+    Math.max(...perPass.values()) <= ids.length / 8,
+    `${Math.max(...perPass.values())} in one pass`,
+  );
+  // Planned again when it runs out, each runs as long as before, from then.
+  const first = new Map(ids.map((id) => [id, set.expires(id)]));
+  t.mock.timers.tick(1_500);
+  icons._replanExpired(Date.now());
+  for (const id of ids) {
+    const item = set.item(id);
+    assert.equal(item.motion.t0, Date.now(), id);
+    assert.equal(
+      set.expires(id) - Date.now(),
+      first.get(id) - WORLD_MS,
+      `${id} runs as long`,
+    );
+  }
+});
+
+test('a placed contact far from the eye or out of view is planned for longer than a near one in view', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const where = {
+    n: fromDegrees(0, 30, 3_000),
+    f: fromDegrees(10, 30, 3_000),
+    o: fromDegrees(0.01, 30, 3_000),
+  };
+  const ids = Object.keys(where);
+  const { icons, set } = placedFleet(ids, (id) => where[id]);
+  const eye = fromDegrees(0, 30, 60_000);
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  // In view: all but 'o', told apart by where the placement puts it.
+  const view = { eye, inView: (p) => metres(p, where.o) > 1 };
+  const length = (id) =>
+    (set.expires(id) - set.item(id).motion.t0) / placedPlanSpread(id);
+  icons._replanExpired(Date.now(), view);
+  assert.ok(Math.abs(length('n') - 1_000) < 1, `near ${length('n')}`);
+  assert.ok(Math.abs(length('f') - 4_000) < 1, `far ${length('f')}`);
+  assert.ok(Math.abs(length('o') - 4_000) < 1, `out of view ${length('o')}`);
+
+  // The camera is the pass's only: a contact planned after it, as a new
+  // report plans it, takes a near plan, even after a pass that threw.
+  icons._planIcon('f');
+  assert.ok(Math.abs(length('f') - 1_000) < 1, `after a pass ${length('f')}`);
+  t.mock.timers.tick(5_000);
+  assert.throws(() =>
+    icons._replanExpired(Date.now(), {
+      eye,
+      inView: () => {
+        throw new Error('camera gone');
+      },
+    }),
+  );
+  icons._planIcon('f');
+  assert.ok(Math.abs(length('f') - 1_000) < 1, `after a throw ${length('f')}`);
 });

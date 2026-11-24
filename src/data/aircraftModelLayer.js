@@ -1041,7 +1041,14 @@ export function createAircraftModels({
 
     if (state._cockpitContactMode) parts.tracking._refreshCockpitNearContacts();
     parts.icons._syncImageSwitch();
-    parts.icons._replanExpired(t);
+    // Far and out-of-view contacts are planned for longer (the camera says
+    // which are which).
+    parts.icons._replanExpired(
+      t,
+      pose?.position
+        ? { eye: pose.position, inView: (position) => inView(pose, position) }
+        : null,
+    );
     const renderTime = parts.motion._displayTimeAt(
       t,
       state._scratchFleetRenderTime,

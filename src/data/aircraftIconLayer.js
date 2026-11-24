@@ -10,6 +10,7 @@ import { straightSegment } from './fixCurve.js';
 import {
   norm180,
   distance,
+  distanceSquared,
   clone,
   copyInto,
   toDegrees,
@@ -385,8 +386,32 @@ let instances = 0;
 /** A plan that ran out longer ago than this (ms) is not eased away from. */
 const RECOVER_STALE_PLAN_MS = 1_000;
 
-/** How far ahead (ms) a placed contact's segment runs before it is asked again. */
+/** How far ahead (ms) a placed contact's segment runs before it is asked
+ *  again, in view and near the eye. */
 const PLACED_PLAN_MS = 1000;
+/** The same out of view, or farther than PLACED_NEAR_M from the eye: off
+ *  screen a contact's path is not seen, and that far a straight segment
+ *  over this long (half as long again at most, as spread) is well under a
+ *  pixel off it. Asking for each contact every second would rewrite the
+ *  whole fleet every second. */
+const PLACED_FAR_PLAN_MS = 4000;
+/** Nearer the eye than this (m), a placed contact in view is planned every
+ *  PLACED_PLAN_MS. */
+const PLACED_NEAR_M = 300_000;
+
+/**
+ * Each contact's plans run between 1/2 and 3/2 of their length, by its id,
+ * so the fleet's plans run out spread over the passes, not together in one
+ * (contacts first planned in the same pass would otherwise stay in step).
+ */
+export function placedPlanSpread(id) {
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return 0.5 + ((hash >>> 0) % 1024) / 1024;
+}
 
 /** A display delay that never changes (ms). */
 function fixedDelay(ms) {
@@ -818,12 +843,28 @@ export function createAircraftIcons({
     planFrom.set(icao24, validFrom);
   }
 
+  /** The camera, while the fleet pass re-plans the rows that ran out:
+   *  `{eye, inView(position)}` (null: every plan is a near one). */
+  let planView = null;
+
+  /** How long a placed contact at `position` is planned for (ms). */
+  function _placedPlanMs(icao24, position) {
+    const near =
+      !planView ||
+      (distanceSquared(planView.eye, position) <
+        PLACED_NEAR_M * PLACED_NEAR_M &&
+        planView.inView(position));
+    return (
+      (near ? PLACED_PLAN_MS : PLACED_FAR_PLAN_MS) * placedPlanSpread(icao24)
+    );
+  }
+
   /**
    * Plan a live contact a host-supplied placement places: from where it
    * places it at `t` (display ms, the live clock's delayed time) to where it
-   * places it PLACED_PLAN_MS on, asked again when that runs out. Display
-   * time is wall time less the display delay, so the placement is asked at
-   * the wall times the segment's ends stand for.
+   * places it a plan's length on (`_placedPlanMs`), asked again when that
+   * runs out. Display time is wall time less the display delay, so the
+   * placement is asked at the wall times the segment's ends stand for.
    * @returns {boolean} False when there is no placement, the layer follows
    *   the world clock, or it has no answer for this contact.
    */
@@ -842,7 +883,7 @@ export function createAircraftIcons({
     )
       return true;
     easeEnds.delete(icao24);
-    const t1 = t + PLACED_PLAN_MS;
+    const t1 = t + _placedPlanMs(icao24, from);
     const to = vec();
     const end = placeAt(icao24, t1 + leadMs, info, history, to);
     const motion = end
@@ -906,12 +947,17 @@ export function createAircraftIcons({
    * moved back (a seek, or the clock run backward): it is drawn where it was
    * then, as it is when the time moves on.
    */
-  function _replanExpired(t) {
-    if (followsClock() && t < replannedAt)
-      for (const [icao24, from] of planFrom)
-        if (from > t) _planIcon(icao24, { rewound: true });
-    replannedAt = t;
-    for (const icao24 of state._icons.due(t)) _planIcon(icao24);
+  function _replanExpired(t, view = null) {
+    planView = view;
+    try {
+      if (followsClock() && t < replannedAt)
+        for (const [icao24, from] of planFrom)
+          if (from > t) _planIcon(icao24, { rewound: true });
+      replannedAt = t;
+      for (const icao24 of state._icons.due(t)) _planIcon(icao24);
+    } finally {
+      planView = null;
+    }
   }
 
   /**
