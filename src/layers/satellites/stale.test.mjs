@@ -34,7 +34,6 @@ const GROUPS = [
   'resource',
   'weather',
   'planet',
-  'sar',
   'science',
 ];
 /** The core catalog's groups, one owned satellite each. */

@@ -136,7 +136,6 @@ const GROUP_CLASS = Object.freeze({
   resource: 'imaging',
   weather: 'imaging',
   planet: 'imaging',
-  sar: 'imaging',
   'gps-ops': 'telecom',
   glonass: 'telecom',
   'glo-ops': 'telecom',

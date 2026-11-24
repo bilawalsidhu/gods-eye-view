@@ -49,7 +49,6 @@ export function celestrakProxy() {
     'resource',
     'weather',
     'planet',
-    'sar',
     'science',
   ];
   const feeds = [
