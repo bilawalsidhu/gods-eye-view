@@ -14,6 +14,12 @@ import {
   showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
+import {
+  createRenderPace,
+  createScreenSpeed,
+  paceHzForSpeed,
+} from '../renderPace.js';
+import { ROTOR_FPS } from './rotorFrames.js';
 import { fleetModelSet, fleetPartTable } from './fleetModels.js';
 import { aircraftLayerPartState } from './modelPartDrivers.js';
 import { findCamera, findDraw, rendererOf } from '../render/rendererOf.js';
@@ -119,6 +125,70 @@ export function createAircraftModels({
   let instances = 0;
   /** The fleet items this tick wrote, sent together when it ends. */
   let pendingItems = [];
+
+  // The pace: how often the fleet is drawn while nothing else draws
+  // (renderPace.js). The icons move on the GPU, so a frame is all a move
+  // takes; an airliner crosses a hundredth of a pixel a second on the whole
+  // globe and hundreds from close by, so the rate follows the fastest icon
+  // in view.
+  const pace = createRenderPace({ owner: setPrefix, render: services.render });
+  const screenSpeed = createScreenSpeed();
+  /** How often the icons' on-screen speed is read, in ms. */
+  const PACE_READ_MS = 250;
+  /** Each icon's move is read over this much of its drawn path, in ms. */
+  const PACE_SPAN_MS = 1000;
+  /** While icons fade for a focus change, they are drawn this often. */
+  const PACE_FADE_HZ = 20;
+  /** A rotor drawn this recently is in view. */
+  const PACE_ROTOR_SEEN_MS = 600;
+  let paceReadMs = -Infinity;
+  let pacePxPerSec = 0;
+
+  /**
+   * The fastest icon in view's speed on screen, in pixels a second: each
+   * shown icon's drawn position now and PACE_SPAN_MS on, which takes in a
+   * new fix being blended in as well as its flight.
+   */
+  function _readIconSpeed(pose) {
+    const icons = state._icons;
+    if (!icons || !screenSpeed.begin(pose, _viewport().height)) return 0;
+    const t = parts.icons._displayMs();
+    for (const id of icons.ids()) {
+      if (!icons.shown(id)) continue;
+      screenSpeed.add(
+        icons.position(id, t),
+        icons.position(id, t + PACE_SPAN_MS),
+      );
+    }
+    return screenSpeed.pxPerSec(PACE_SPAN_MS / 1000);
+  }
+
+  /**
+   * Draws a second the fleet needs as the camera stands (the pace clamps
+   * it to its range). Infinity: as often as the pace allows.
+   */
+  function _paceHz(nowMs = Date.now()) {
+    const pose = _pose();
+    if (!pose?.position) return Infinity;
+    // Models, and the Cockpit's contacts, are moved on every frame.
+    if (
+      state._cockpitContactMode ||
+      state._models.size ||
+      _modelRegimeActive(pose)
+    )
+      return Infinity;
+    if (nowMs - paceReadMs >= PACE_READ_MS) {
+      paceReadMs = nowMs;
+      pacePxPerSec = _readIconSpeed(pose);
+    }
+    let hz = paceHzForSpeed(pacePxPerSec);
+    if (state._iconFocusFading > 0 && hz < PACE_FADE_HZ) hz = PACE_FADE_HZ;
+    // A helicopter in view turns its rotor ROTOR_FPS times a second.
+    const rotorAtMs = parts.icons._rotorDrawnAtMs?.() ?? -Infinity;
+    if (nowMs - rotorAtMs < PACE_ROTOR_SEEN_MS && hz < ROTOR_FPS)
+      hz = ROTOR_FPS;
+    return hz;
+  }
   /** The ground sample's exclusions, kept while the sets they name live. */
   let exclusions = null;
 
@@ -952,6 +1022,7 @@ export function createAircraftModels({
         }
       }
       state._icons?.flush();
+      pace.set(_paceHz());
     }
   }
 
@@ -1136,5 +1207,11 @@ export function createAircraftModels({
     _handBackDeselected,
     _updateTrackedModel,
     _fleetTick,
+    _paceHz,
+    _startPace: () => {
+      paceReadMs = -Infinity;
+      pace.start();
+    },
+    _stopPace: pace.stop,
   };
 }

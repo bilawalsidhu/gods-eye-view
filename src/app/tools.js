@@ -39,6 +39,7 @@ import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   getRenderGovernorDiagnostics,
   governorRequestRender,
+  FOLLOW_FRAME_RATE,
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
@@ -273,7 +274,8 @@ export function createApplicationTools({
   // The follow camera recomputes the tracked target's dead-reckon position
   // every frame — tracking anything is a per-frame animation. (perf wave 2)
   const removeTrackingListener = onFollowChanged(viewer, (followed) => {
-    if (followed) holdContinuousRender('tracked-entity');
+    if (followed)
+      holdContinuousRender('tracked-entity', { maxFps: FOLLOW_FRAME_RATE });
     else releaseContinuousRender('tracked-entity');
   });
 

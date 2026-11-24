@@ -465,6 +465,8 @@ export function createAircraftIcons({
    * @type {Map<string, {drawn: number, checked: number}>}
    */
   const rotors = new Map();
+  /** When a rotor in view was last given a new frame (wall ms). */
+  let rotorDrawnAtMs = -Infinity;
 
   /** The delayed instant (epoch ms) every untracked contact is drawn at. */
   const _displayMs = () =>
@@ -492,7 +494,8 @@ export function createAircraftIcons({
   const motionClock = (scene) =>
     scene
       ? { kind: 'scene' }
-      : { kind: 'live', delayMs: displayDelay.currentMs };
+      : // The layer's pace asks for the frames its moving rows need.
+        { kind: 'live', delayMs: displayDelay.currentMs, frames: 'owner' };
 
   /**
    * Once a frame: move the display delay on, and put the set's motion on
@@ -930,6 +933,7 @@ export function createAircraftIcons({
     const query = viewer ? findQuery(viewer) : null;
     const eye = viewer ? findCamera(viewer)?.pose()?.position : null;
     let active = 0;
+    let fading = 0;
     for (const id of icons.ids()) {
       if (!icons.shown(id) && !state._models.has(id)) continue;
       const item = icons.item(id);
@@ -952,10 +956,13 @@ export function createAircraftIcons({
         spriteHalfHeightPx: item.size[1] * half,
       });
       if (focus.active || focus.transitioning) active++;
+      if (focus.transitioning) fading++;
       if (focusAlphaNeedsWrite(current, focus.factor))
         icons.setFocus(id, focus.factor);
     }
     state._iconFocusActive = active;
+    // Rows still fading in or out, for the layer's pace.
+    state._iconFocusFading = fading;
   }
 
   /**
@@ -1043,6 +1050,7 @@ export function createAircraftIcons({
       if (!_aboveHorizon(position, occluder)) continue;
       if (inView && !inView(position)) continue;
       rotor.drawn = frame;
+      rotorDrawnAtMs = nowMs;
       if (tracked) {
         parts.tracking?._syncTrackedBillboardImage?.();
         continue;
@@ -1104,6 +1112,11 @@ export function createAircraftIcons({
   /** Whether any airborne helicopter's rotor turns (`_turnRotors` has work). */
   function _rotorsTurning() {
     return rotors.size > 0;
+  }
+
+  /** When a rotor in view was last given a new frame (wall ms), for the pace. */
+  function _rotorDrawnAtMs() {
+    return rotorDrawnAtMs;
   }
 
   /** Add a row for a new contact, hidden while it is the tracked one. */
@@ -1178,6 +1191,7 @@ export function createAircraftIcons({
     _fleetLook,
     _turnRotors,
     _rotorsTurning,
+    _rotorDrawnAtMs,
     _addIcon,
     _forgetContact,
     _iconIds,

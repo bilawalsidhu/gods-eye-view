@@ -37,7 +37,11 @@ test('following the world clock, contacts draw at the world’s time on the scen
   icons._createIcons(viewer);
   const set = draw.find('flights-icons:');
   // Live: a poll interval behind real time, on the delayed live clock.
-  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 30_000 });
+  assert.deepEqual(set.spec.motionClock, {
+    kind: 'live',
+    delayMs: 30_000,
+    frames: 'owner',
+  });
   assert.equal(icons._displayMs(), Date.now() - 30_000);
   following = true;
   assert.equal(icons._displayMs(), WORLD_MS, 'the world’s time, no delay');
@@ -45,7 +49,11 @@ test('following the world clock, contacts draw at the world’s time on the scen
   assert.deepEqual(set.spec.motionClock, { kind: 'scene' });
   following = false;
   icons._syncMotionClock();
-  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 30_000 });
+  assert.deepEqual(set.spec.motionClock, {
+    kind: 'live',
+    delayMs: 30_000,
+    frames: 'owner',
+  });
   icons._disposeIcons();
 });
 
@@ -68,7 +76,11 @@ test('as the display delay moves, the renderer’s live clock and the layer’s 
   });
   icons._createIcons(viewer);
   const set = draw.find('flights-icons:');
-  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 30_000 });
+  assert.deepEqual(set.spec.motionClock, {
+    kind: 'live',
+    delayMs: 30_000,
+    frames: 'owner',
+  });
   // Reports 90 s old every 30 s: the delay heads for about two minutes.
   for (let i = 0; i < 20; i++)
     delay.noteReport(WORLD_MS, WORLD_MS - 90_000, WORLD_MS - 120_000);
@@ -76,7 +88,11 @@ test('as the display delay moves, the renderer’s live clock and the layer’s 
   t.mock.timers.setTime(WORLD_MS + 10_000);
   icons._syncMotionClock();
   // 10 s at 0.2 s/s: 2 s more, on both the renderer's clock and the layer's.
-  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 32_000 });
+  assert.deepEqual(set.spec.motionClock, {
+    kind: 'live',
+    delayMs: 32_000,
+    frames: 'owner',
+  });
   assert.equal(icons._displayMs(), Date.now() - 32_000);
   // Following the world clock: no delay, and it is not moved on meanwhile.
   following = true;
@@ -87,7 +103,11 @@ test('as the display delay moves, the renderer’s live clock and the layer’s 
   assert.equal(delay.currentMs, 32_000);
   following = false;
   icons._syncMotionClock();
-  assert.deepEqual(set.spec.motionClock, { kind: 'live', delayMs: 34_000 });
+  assert.deepEqual(set.spec.motionClock, {
+    kind: 'live',
+    delayMs: 34_000,
+    frames: 'owner',
+  });
   icons._disposeIcons();
 });
 
