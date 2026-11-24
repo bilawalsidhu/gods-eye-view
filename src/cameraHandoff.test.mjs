@@ -426,3 +426,50 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
     'clearFireSelection()',
   ], 'fire card on top, then sibling ownership');
 });
+
+test('clearing a camera during enable leaves the selection and view alone', async () => {
+  let enabled = false;
+  let activeCameraId = 'camera-a';
+  const effects = [];
+  const visibilityRequests = [];
+  const enabling = Promise.withResolvers();
+  const shell = {
+    services: {
+      cctvLayer: {
+        focusNearest() {
+          effects.push('reselect');
+          return 'camera-b';
+        },
+        focusCamera() {
+          effects.push('fly');
+        },
+      },
+    },
+    _dataManager: {
+      layers: new Map([['cctv', {}]]),
+      isEnabled: () => enabled,
+      setEnabled: (...args) => {
+        visibilityRequests.push(args);
+        return enabling.promise;
+      },
+    },
+    _cctvControls: { getState: () => ({ activeCameraId }) },
+    _runExplicitCctvFocus(activate, fly) {
+      fly(activate());
+    },
+  };
+  let finished = false;
+  const toggle = shellMethod('_toggleCctvEnabled').call(shell, true).then((result) => {
+    finished = true;
+    return result;
+  });
+  assert.deepEqual(visibilityRequests, [['cctv', true, { origin: 'user' }]]);
+  await Promise.resolve();
+  assert.equal(finished, false, 'toggle must wait for the layer to enable');
+
+  activeCameraId = null;
+  enabled = true;
+  enabling.resolve();
+  assert.equal(await toggle, true);
+  assert.deepEqual(effects, []);
+});

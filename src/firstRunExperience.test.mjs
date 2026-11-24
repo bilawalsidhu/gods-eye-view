@@ -774,11 +774,9 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
   );
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
-  assert.ok(
-    startup.indexOf("loadingScreen.classList.add('hidden')") <
-      startup.indexOf(
-        "loadingScreen.addEventListener('transitionend', revealFirstRun",
-      ),
+  assert.match(
+    startup,
+    /loadingScreen\.classList\.add\('hidden'\);\s*revealAfterCover\(\);/,
   );
   assert.match(
     startup,

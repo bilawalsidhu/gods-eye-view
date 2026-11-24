@@ -61,6 +61,7 @@ import {
 import { isRtlLocale } from './i18n/locale.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
+import { openingPlaying } from './app/openingIntro.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
@@ -385,7 +386,13 @@ export class IntelHUD {
     }
     // First settled view: request the AI summary now rather than waiting for
     // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
-    if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
+    // The opening's frames are not that view: it lands with a moveEnd.
+    if (
+      !this._firstSummaryKicked &&
+      !openingPlaying() &&
+      this._visible &&
+      this._latestMetrics
+    ) {
       this._firstSummaryKicked = true;
       void this._updateSummary(true, true);
     }

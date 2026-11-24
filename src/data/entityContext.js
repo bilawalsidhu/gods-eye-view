@@ -721,9 +721,17 @@ const sameText = (a, b) =>
 export function findRecord(dataManager, identity) {
   const { layerId } = identity || {};
   if (!layerId) return null;
+  const id = text(identity.id);
+  // Calibration moves the mount while the same camera card is open.
+  if (layerId === 'cctv' && id) {
+    if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return null;
+    const camera = dataManager?.layers
+      ?.get?.(layerId)
+      ?.module?.findByQuery?.(id);
+    return camera ? { id, ...camera } : null;
+  }
   const records = layerRecords(dataManager, layerId);
   if (!records.length) return null;
-  const id = text(identity.id);
   const bare = id.startsWith(`${layerId}:`) ? id.slice(layerId.length + 1) : id;
   const at =
     finite(identity.lat) !== null && finite(identity.lon) !== null

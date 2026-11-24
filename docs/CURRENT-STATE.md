@@ -969,8 +969,11 @@ within the radius the panel sets (25 to 2,500 km). Aircraft, satellites and
 vessels are followed as they are picked; the card says Following only while
 the camera follows the card's own item, and closing the card lets go.
 Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
-vehicles show their motion and fleet. A camera's card shows its latest frame
-from the CCTV panel.
+vehicles show their motion and fleet. A camera's card shows its latest still
+when available, while live video plays in the CCTV panel. Clicking the
+projected image, a view ray or the far-plane outline opens that camera's card.
+A loaded camera's name and position are also available when the card opens
+from its icon.
 
 With nothing picked, the panel describes the view
 (`src/ui/views/panels/ViewContext.vue`): the place under the middle of the
@@ -2105,7 +2108,8 @@ camera that is already active counts. The picker shows the automatic camera
 as its own option, and a native list sends no change for the option it
 already shows, so the list cannot pick that camera: FOCUS does, and so does
 NEAREST when that camera is the nearest. Closing the list without a choice
-keeps automatic selection.
+keeps automatic selection. Turning CCTV on leaves the globe in place, even if
+the active camera is cleared before enabling finishes.
 
 The active camera's pictures follow what can be seen. The monitor plane skips
 its 10 s still while the renderer reports it off screen or below the horizon,
@@ -5325,6 +5329,24 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   clock goes live and the camera flies to the view the app started from (the
 >   host's `homeView`, else its `startView`, else the whole planet), letting go
 >   of whatever it follows as Reset Globe does (`returnToStart()`).
+>   On a bare address, the standalone app starts 23,000 km above the country of
+>   the browser's time zone, looking straight down. It falls back to a preferred
+>   language's region, then to the default start view. The lookup runs in the
+>   browser (`src/homeCountry.js` and `src/data/homeCountries.js`).
+>   Once the startup restore settles and at least one second has passed, the
+>   loading text fades and the logo glides to the centre. The eye grows past the
+>   screen edges as the drawn planet in its pupil gives way to the globe. The
+>   globe grows to whole-planet size and turns once west to east, stopping over
+>   the destination. For a closer or angled view, the camera then approaches or
+>   turns to match it (`src/app/openingIntro.js`).
+>   A bare address or a link that restores only a view plays the opening.
+>   Links that follow or select something or open Street Level photos skip it,
+>   as do failed, refused or superseded restores, a newer navigation, Stories
+>   links, embedded views, reduced motion and `?intro=0`.
+>   A press, click, key, touch or wheel event lands the opening immediately.
+>   Another camera move stops the opening where the camera stands. During the
+>   flight the address keeps the destination and globe-in-view recovery waits.
+>   Welcome appears once the opening ends and the loading cover has faded.
 > - **Context, Cockpit, and Radio interaction contract:** explicit Contacts and
 >   Radio actions and successful Cockpit actions can reveal Context. Contacts
 >   uses the dedicated right-side chooser. Space Missions has its own rail
