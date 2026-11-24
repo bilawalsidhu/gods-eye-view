@@ -892,7 +892,8 @@
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-Hant.json",
       "src/ui/rail/fieldValue.js",
-      "src/ui/kit/UiSlider.js"
+      "src/ui/kit/UiSlider.js",
+      "src/render/rendererOf.js"
     ],
     "external": ["vue"]
   },
