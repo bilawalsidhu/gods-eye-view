@@ -116,9 +116,10 @@ Status: Open (source limits, by design)
   source latency. Clouds only is a brightness filter, not a cloud mask.
 - **Wind is a forecast.** The animation flows through one forecast on an
   approximately 1° grid and does not advance forecast time or follow the
-  observed-history timeline.
-- **History is not shared.** Share links carry the weather layers and their
-  settings but open at Latest.
+  world timeline.
+- **Shared history depends on the source.** A share link made away from Live
+  opens at the same world time, paused; a weather product shows its frame there
+  only while the source still serves it, otherwise it reports the gap.
 - **3D Tiles detail window during history playback:** when a frame's detail image
   is slow to arrive, the window may fall back to the coarser full-extent image
   until it does.
