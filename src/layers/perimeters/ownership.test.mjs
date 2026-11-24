@@ -21,9 +21,10 @@ const liveSet = (draw, suffix) =>
     (record) => !record.disposed && record.spec.id.endsWith(suffix),
   );
 /** A Cesium pick of a perimeter's fill, as the draw port makes it. */
-const perimeterPick = (id) => ({
-  id: { set: liveSet(lastDraw, ':fills')?.spec.id, id },
-});
+const perimeterPick = (id) => {
+  const set = liveSet(lastDraw, ':fills');
+  return { id: { set: set?.spec.id, id, meta: set?.items.get(id)?.meta } };
+};
 
 function harness(
   source,
@@ -258,7 +259,11 @@ test("a pick selects only an item of the layer's own sets", async () => {
   );
   await h.layer.update(h.viewer);
   pickResult = {
-    id: { set: 'someone-else', id: 'fire-perimeter:2026-NMGNF-000123:0' },
+    id: {
+      set: 'someone-else',
+      meta: { fireId: fire.id },
+      id: 'fire-perimeter:2026-NMGNF-000123:0',
+    },
   };
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
@@ -267,6 +272,7 @@ test("a pick selects only an item of the layer's own sets", async () => {
     id: {
       set: h.lines().spec.id,
       id: 'fire-perimeter:2026-NMGNF-000123:line:0',
+      meta: h.lines().items.get('fire-perimeter:2026-NMGNF-000123:line:0').meta,
     },
   };
   h.clicks.handler({ position: { x: 10, y: 10 } });

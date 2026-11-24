@@ -1,8 +1,8 @@
 - Fire Perimeters redraws only the pieces that changed when the timeline
   steps: with an id on every piece (WFIGS now gives one), new pieces are
-  added, gone ones removed and aged ones recoloured in place. On a synthetic
-  peak day of 1,000 pieces an hourly step's longest task on Cesium drops from
-  about 450 ms to under 80 ms (German, @gekh, #1922).
+  added, gone ones removed and aged ones recoloured in place. An hourly step on
+  a synthetic peak day of 1,000 pieces rebuilds only the draw sets it changes
+  (German, @gekh, #1922).
 - Hosts can place fire-perimeter cards and cancel stale reads without
   workarounds: the package's `./layers/perimeters/records` export carries
   `perimeterAnchorDegrees` with no rendering code, so a server or worker

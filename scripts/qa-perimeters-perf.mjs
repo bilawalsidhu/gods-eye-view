@@ -10,23 +10,23 @@
  *
  * The layer is made in the page over the app's viewer, with a source that
  * serves the peak snapshot at the moment asked. After the first draw
- * settles, each step moves the moment on an hour, reads again and waits
- * until no long task has run for `--quiet-ms`; it reports the long tasks
- * (PerformanceObserver `longtask`) that step caused, then the scene's
- * primitives, the draw commands of a frame and its time.
+ * settles, each step moves the moment on an hour and reads again from a
+ * task of the page's own (its `longtask` observer never sees a task run by
+ * `page.evaluate`), then waits until no long task has run for
+ * `--quiet-ms`. It reports the long tasks that overlap the step, then the
+ * draw commands of a frame and the time of a frame drawn.
  *
  * Options:
  *   --steps 6
  *   --no-ids       pieces without `pieces[].id`, drawn whole
  *   --layer /src/layers/perimeters/index.js
- *                  the layer module the page imports; to time another
- *                  version, copy it beside this one (e.g. `git show
- *                  main:src/layers/perimeters/index.js >
- *                  src/layers/perimeters/index.main.js`)
+ *                  the layer module the page imports. To time another version,
+ *                  copy it beside this one, where its relative imports resolve
+ *                  (e.g. `git show origin/main:src/layers/perimeters/index.js >
+ *                  src/layers/perimeters/index.main.js`), and delete the copy afterwards.
  *   --quiet-ms 3000
  *   --json out.json
- *   --profile last-step.cpuprofile   the last step's CPU profile
- *   --shot last.png                  the busiest fire up close at the end
+ *   --no-sandbox   Chromium without its sandbox, where it cannot start with it
  */
 
 import puppeteer from 'puppeteer';
@@ -42,16 +42,14 @@ const STEPS = Number(opt('--steps', '6'));
 const QUIET_MS = Number(opt('--quiet-ms', '3000'));
 const IDS = !argv.includes('--no-ids');
 const JSON_OUT = opt('--json', null);
-const PROFILE = opt('--profile', null);
 const LAYER = opt('--layer', '/src/layers/perimeters/index.js');
-const SHOT = opt('--shot', null);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const browser = await puppeteer.launch({
   headless: 'new',
   protocolTimeout: 600_000,
   args: [
-    '--no-sandbox',
+    ...(argv.includes('--no-sandbox') ? ['--no-sandbox'] : []),
     '--window-size=1440,900',
     '--use-angle=metal',
     '--disable-backgrounding-occluded-windows',
@@ -62,7 +60,9 @@ const browser = await puppeteer.launch({
 
 try {
   const page = await browser.newPage();
-  page.on('pageerror', (e) => console.error('[page]', e.message));
+  page.on('pageerror', (e) =>
+    console.error('[page]', JSON.stringify(String(e.message))),
+  );
   await page.setViewport({ width: 1440, height: 860 });
   await page.goto(`${APP_URL}/?welcome=0`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(
@@ -94,19 +94,13 @@ try {
   await sleep(5000);
 
   const setup = await page.evaluate(
-    async (ids, layerUrl) => {
+    async (ids, layerUrl, steps) => {
       const { createFirePerimetersLayer } = await import(layerUrl);
       const { perimeterPeak, peakSnapshot, peakVertices } =
         await import('/scripts/fixtures/perimeterPeak.mjs');
       const v = window.__godsEyeView.viewer;
-      const peak = perimeterPeak();
-      // The fire with the most pieces, for a close look.
-      const counts = new Map();
-      for (const { fireId } of peak.pieces)
-        counts.set(fireId, (counts.get(fireId) ?? 0) + 1);
-      const busiest = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+      const peak = perimeterPeak({ afterHours: steps });
       const bench = (window.__perimeterBench = {
-        focus: peak.fires.find(({ id }) => id === busiest).anchor,
         at: peak.start,
         long: [],
         lastLong: performance.now(),
@@ -135,6 +129,7 @@ try {
     },
     IDS,
     LAYER,
+    STEPS,
   );
   console.log('peak snapshot:', setup, IDS ? '(with piece ids)' : '(no ids)');
 
@@ -145,8 +140,16 @@ try {
         const bench = window.__perimeterBench;
         const t0 = performance.now();
         bench.at += hours * 3600000;
-        const ok = await bench.layer.update();
-        const updateMs = performance.now() - t0;
+        const { ok, updateMs } = await new Promise((resolve) =>
+          setTimeout(() => {
+            const start = performance.now();
+            bench.layer
+              .update()
+              .then((ok) =>
+                resolve({ ok, updateMs: performance.now() - start }),
+              );
+          }, 0),
+        );
         bench.lastLong = Math.max(bench.lastLong, performance.now());
         const deadline = performance.now() + 90_000;
         while (
@@ -155,30 +158,26 @@ try {
         )
           await new Promise((r) => setTimeout(r, 250));
         const long = bench.long
-          .filter((entry) => entry.start >= t0 - 1)
+          .filter((entry) => entry.start + entry.ms > t0)
           .map((entry) => Math.round(entry.ms));
-        // What the scene draws once quiet: its primitives by kind, and the
-        // commands of a frame.
         const scene = window.__godsEyeView.viewer.scene;
-        const kinds = {};
-        const visit = (primitive) => {
-          const kind = primitive?.constructor?.name ?? '?';
-          if (typeof primitive?.get === 'function' && 'length' in primitive)
-            for (let i = 0; i < primitive.length; i++) visit(primitive.get(i));
-          else kinds[kind] = (kinds[kind] ?? 0) + 1;
-        };
-        visit(scene.primitives);
+        let drawn = 0;
+        const off = scene.postRender.addEventListener(() => {
+          drawn += 1;
+        });
         const frameStart = performance.now();
-        for (let i = 0; i < 20; i++) scene.render();
-        const frameMs =
-          Math.round(((performance.now() - frameStart) / 20) * 10) / 10;
+        for (let i = 0; i < 20; i++) {
+          scene.requestRender();
+          scene.render();
+        }
+        const elapsed = performance.now() - frameStart;
+        off();
         return {
           ok,
           updateMs: Math.round(updateMs),
           long,
-          primitives: kinds,
           commands: scene.frameState.commandList.length,
-          frameMs,
+          frameMs: drawn ? Math.round((elapsed / drawn) * 10) / 10 : null,
         };
       },
       hours,
@@ -188,47 +187,23 @@ try {
   const first = await step(0);
   console.log('first draw:', JSON.stringify(first));
   const steps = [];
-  const cdp = PROFILE ? await page.createCDPSession() : null;
   for (let i = 1; i <= STEPS; i++) {
-    // The last step's CPU profile, with `--profile`.
-    const profiled = cdp && i === STEPS;
-    if (profiled) {
-      await cdp.send('Profiler.enable');
-      await cdp.send('Profiler.setSamplingInterval', { interval: 200 });
-      await cdp.send('Profiler.start');
-    }
     const result = await step(1);
-    if (profiled) {
-      const { profile } = await cdp.send('Profiler.stop');
-      fs.writeFileSync(PROFILE, JSON.stringify(profile));
-    }
     const max = Math.max(0, ...result.long);
     const sum = result.long.reduce((a, b) => a + b, 0);
     steps.push({ ...result, max, sum });
     console.log(
-      `+${i} h: update ${result.updateMs} ms, long tasks [${result.long.join(', ')}] ms, max ${max}, total ${sum}; then a frame ${result.frameMs} ms, ${result.commands} commands, ${JSON.stringify(result.primitives)}`,
+      `+${i} h: update ${result.updateMs} ms, long tasks [${result.long.join(', ')}] ms, max ${max}, total ${sum}; then a frame ${result.frameMs} ms, ${result.commands} commands`,
     );
   }
-  if (SHOT) {
-    // The busiest fire up close, once every set is built.
-    await page.evaluate(async () => {
-      const v = window.__godsEyeView.viewer;
-      const { lon, lat } = window.__perimeterBench.focus;
-      v.camera.setView({
-        destination: v.scene.globe.ellipsoid.cartographicToCartesian({
-          longitude: (lon * Math.PI) / 180,
-          latitude: (lat * Math.PI) / 180,
-          height: 45_000,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-    });
-    await sleep(QUIET_MS + 5000);
-    await page.screenshot({ path: SHOT });
-  }
   const maxes = steps.map((s) => s.max).sort((a, b) => a - b);
+  const mid = Math.floor(maxes.length / 2);
+  const median =
+    maxes.length % 2
+      ? maxes[mid]
+      : Math.round((maxes[mid - 1] + maxes[mid]) / 2);
   console.log(
-    `steps: max long task median ${maxes[Math.floor(maxes.length / 2)]} ms, worst ${maxes.at(-1)} ms`,
+    `steps: max long task median ${median} ms, worst ${maxes.at(-1)} ms`,
   );
   if (JSON_OUT)
     fs.writeFileSync(

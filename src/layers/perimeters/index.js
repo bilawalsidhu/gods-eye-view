@@ -69,15 +69,16 @@ export const PERIMETER_SET_PREFIX = 'fire-perimeters';
 let instances = 0;
 
 /**
- * Fills, and lines, one draw set holds before the next new piece starts
- * another. Pieces with ids are drawn in such sets, oldest first, and a read
- * changes only the sets its pieces are in. A renderer may rebuild a whole
- * set for an item added, removed or (a line) recoloured, so small sets keep
- * a timeline step cheap on a busy day; but each set of fills costs draw
- * calls every frame, so those are larger (scripts/qa-perimeters-perf.mjs).
+ * Items a draw set takes before a new piece starts the next set. A renderer
+ * may rebuild a whole set for one item changed, so small sets keep a timeline
+ * step cheap. Each set of fills costs draw calls every frame, so those are
+ * larger (scripts/qa-perimeters-perf.mjs).
  */
-export const PERIMETER_SET_SIZES = Object.freeze({ fills: 8000, lines: 2000 });
+const PERIMETER_SET_SIZES = Object.freeze({ fills: 8000, lines: 2000 });
 const KINDS = ['fills', 'lines'];
+// A piece id with a lone UTF-16 surrogate cannot be URI-encoded into its
+// items' ids: such a piece counts as one without an id.
+const LONE_SURROGATE = /\p{Surrogate}/u;
 
 const PICK_PREFIX = 'fire-perimeter:';
 const CARD_HOST_OPTIONS = Object.freeze({
@@ -99,8 +100,9 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
  *   legend count from it.
  * - `fetchedAt` (epoch ms or null) and `stale`: a stale snapshot is dated by
  *   its `fetchedAt`.
- * - `revision`: a string that changes whenever any piece does. Without a
- *   string revision the layer redraws on every read.
+ * - `revision`: for a snapshot drawn whole (see `pieces[].id`), a string
+ *   that changes whenever any piece does. Such a snapshot without a string
+ *   revision is redrawn on every read.
  * - `note`: text the layer row shows with the legend, or null.
  * - `fires`: `id` (string), `anchor` (`{lon, lat}` degrees, where the card
  *   stands), `lastGrowthTime` (epoch ms or null; the legend counts by it) and
@@ -112,10 +114,12 @@ const INCIWEB_INDEX_TTL_MS = 6 * 3600000;
  *   `[outer, ...holes]`, rings of `[lon, lat]`) and `outline` (lines of
  *   `[lon, lat]` drawn as the fire line, apart from the fill, so a piece cut
  *   from a larger area has no line along the cut). Optional `id`: a string,
- *   unique among its fire's pieces, that stays the same while the piece's
- *   geometry does. With an id on every piece, a read redraws only the pieces
- *   added, removed or recoloured since the last; without, it redraws them
- *   all.
+ *   unique among its fire's pieces, that the source changes with any edit
+ *   of the piece's `polygons` or `outline`. A new `revision` alone does
+ *   not redraw a piece with an id. With an id on every piece, a read redraws
+ *   only pieces added, removed or recoloured since the last, in snapshot
+ *   order. A piece without an id, or with an id repeated within its fire or
+ *   holding a lone UTF-16 surrogate, has the snapshot drawn whole.
  *
  * When to read again (a timeline, the camera) is the host's call, through
  * the manager's `refreshLayer`. Given a Cesium viewer with no renderer bound,
@@ -135,23 +139,24 @@ export function createFirePerimetersLayer({
   let _viewer = null;
   let _request = null;
   let _linkRequest = null;
-  // What the sets show: the snapshot revision and each piece's age band.
+  // What the sets show when drawn whole: the revision and each piece's age
+  // band (null on the id path).
   let _drawnKey = null;
   let _draw = null;
   let _setPrefix = null;
   let _setCount = 0;
   /**
-   * The draw sets of each kind, oldest first: `{set, size, pieces}`, with
+   * The draw sets of each kind, oldest first: `{kind, set, size, pieces}`, with
    * the items it holds (`size`) and its pieces by key, in draw order.
    */
   let _chunks = { fills: [], lines: [] };
   /**
-   * Each drawn piece by key (`<fire>\n<piece id>`): its fire, age band, its
-   * fill and line items, and the set (`chunks`) each kind is drawn in.
+   * Each drawn piece by key (`<fire>\n<piece id>`): its age band, its
+   * fill and line items, and the chunk (`chunks`) each kind is drawn in.
    */
   const _drawn = new Map();
-  // Whether the sets hold pieces by id (true), all redrawn at once (false),
-  // or nothing yet (null).
+  // Whether the sets hold pieces by id (true) or all drawn at once (false).
+  // Null on startup or after an interrupted draw, so the next read starts over.
   let _byPieceId = null;
   let _lastUpdate = null;
   // The moment the snapshot shows (null: now), and the source's legend note.
@@ -172,8 +177,6 @@ export function createFirePerimetersLayer({
   let _indexFetchedAt = 0;
   let _indexFetchInFlight = false;
   let _fireById = new Map();
-  /** `<set id>\n<item id>` → the fire that item belongs to. */
-  const _fireByItem = new Map();
   const shownAt = () => _at ?? Date.now();
   const _linkPublications = new Map();
   // Retry failed pages on reselection or when a read finds the card linkless.
@@ -342,13 +345,18 @@ export function createFirePerimetersLayer({
   }
 
   /**
-   * The incident a click's draw hit (`Hit`, query.d.ts) belongs to: an item
-   * of this layer's own sets, for an incident drawn now; else null.
+   * The incident a click's draw hit (`Hit`, query.d.ts) belongs to, by its
+   * `meta.fireId` and this layer's set prefix, if still in the snapshot.
+   * A replaced set or item still counts: Cesium draws and picks the old
+   * ground primitives until the new ones are ready.
    */
   function pickedIncidentId(hit) {
-    if (!hit || hit.surface) return null;
-    const incidentId = _fireByItem.get(`${hit.set}\n${hit.id}`);
-    return incidentId != null && _fireById.has(incidentId) ? incidentId : null;
+    if (!hit || hit.surface || !hit.set?.startsWith(`${_setPrefix}:`))
+      return null;
+    const incidentId = hit.meta?.fireId;
+    return typeof incidentId === 'string' && _fireById.has(incidentId)
+      ? incidentId
+      : null;
   }
 
   function installClickHandler() {
@@ -409,41 +417,35 @@ export function createFirePerimetersLayer({
 
   /** A new chunk of `kind`, last of its kind, its set made later. */
   function addChunk(kind) {
-    const chunk = { set: null, size: 0, pieces: new Map() };
+    const chunk = { kind, set: null, size: 0, pieces: new Map() };
     _chunks[kind].push(chunk);
     return chunk;
   }
 
-  function dropChunks() {
+  /** Calls `fn` with each draw set made so far. */
+  function eachSet(fn) {
     for (const kind of KINDS)
-      for (const chunk of _chunks[kind]) chunk.set?.dispose();
+      for (const chunk of _chunks[kind]) if (chunk.set) fn(chunk.set);
+  }
+
+  /** The items a chunk holds, in its pieces' order. */
+  const chunkItems = (chunk) =>
+    [...chunk.pieces.values()].flatMap((drawn) => drawn[chunk.kind]);
+
+  function dropChunks() {
+    eachSet((set) => set.dispose());
     _chunks = { fills: [], lines: [] };
     _drawn.clear();
-    _fireByItem.clear();
-  }
-
-  /** Note (or forget) which fire `items` of `set` belong to. */
-  function remember(set, items, fireId) {
-    for (const { id } of items) {
-      const key = `${set.id}\n${id}`;
-      if (fireId === null) _fireByItem.delete(key);
-      else _fireByItem.set(key, fireId);
-    }
-  }
-
-  /** Note (or forget) the fires of every item a chunk holds. */
-  function rememberChunk(chunk, kind, keep = true) {
-    for (const drawn of chunk.pieces.values())
-      remember(chunk.set, drawn[kind], keep ? drawn.fireId : null);
   }
 
   /**
    * A piece's fills (each exterior with its own holes) and fire line, in
    * `band`'s colours; `nextId(kind)` names each, `''` for a fill and
-   * `'line:'` for a line.
+   * `'line:'` for a line. Each carries its fire as `meta.fireId`.
    */
   function pieceItems(piece, band, nextId) {
     const { color } = PERIMETER_AGE_BANDS[band];
+    const meta = { fireId: piece.fireId };
     const fills = [];
     const lines = [];
     for (const rings of Array.isArray(piece.polygons) ? piece.polygons : []) {
@@ -451,6 +453,7 @@ export function createFirePerimetersLayer({
         continue;
       fills.push({
         id: nextId(''),
+        meta,
         geometry: { kind: 'polygon', rings: rings.map(ringDegrees) },
         fill: hexColor(color, FILL_ALPHA),
         height: 'clampGround',
@@ -463,6 +466,7 @@ export function createFirePerimetersLayer({
       if (!validLine(line, 2)) continue;
       lines.push({
         id: nextId('line:'),
+        meta,
         positions: line.map(([lon, lat]) => fromDegrees(lon, lat)),
         widthPx: LINE_WIDTH_PX,
         mode: 'draped',
@@ -486,24 +490,17 @@ export function createFirePerimetersLayer({
       lines: _chunks.lines[0] ?? addChunk('lines'),
     };
     for (const kind of KINDS) chunks[kind].set ??= makeSet(kind);
-    _fireByItem.clear();
     const counts = new Map();
     const items = { fills: [], lines: [] };
     for (const [index, piece] of pieces.entries()) {
       const { fireId } = piece;
-      const drawn = {
-        fireId,
-        ...pieceItems(piece, bands[index], (kind) => {
-          const key = `${kind}${fireId}`;
-          const n = counts.get(key) ?? 0;
-          counts.set(key, n + 1);
-          return `${PICK_PREFIX}${fireId}:${kind}${n}`;
-        }),
-      };
-      for (const kind of KINDS) {
-        remember(chunks[kind].set, drawn[kind], fireId);
-        items[kind].push(...drawn[kind]);
-      }
+      const drawn = pieceItems(piece, bands[index], (kind) => {
+        const key = `${kind}${fireId}`;
+        const n = counts.get(key) ?? 0;
+        counts.set(key, n + 1);
+        return `${PICK_PREFIX}${fireId}:${kind}${n}`;
+      });
+      for (const kind of KINDS) items[kind].push(...drawn[kind]);
     }
     for (const kind of KINDS) chunks[kind].set.set(items[kind]);
     console.log(
@@ -513,11 +510,13 @@ export function createFirePerimetersLayer({
 
   /**
    * With piece ids: only what changed since the last draw. A piece gone is
-   * removed, a new one is added to the newest set of each kind (a new set
-   * once that one is full), and one whose age band changed is drawn again
-   * in its new colours where it is. Items are named
-   * `fire-perimeter:<fire>:<piece>:<n>` and `…:<piece>:line:<n>`, `<piece>`
-   * URI-encoded.
+   * removed, and one whose age band changed is recoloured where it is.
+   * A new piece goes where the snapshot's order puts it. After every drawn
+   * piece, it goes into the newest set of each kind (a new set once that
+   * one holds `PERIMETER_SET_SIZES`). Ahead of a drawn piece, it goes into
+   * that piece's set, which is then written whole in the snapshot's order.
+   * Items are named `fire-perimeter:<fire>:<piece>:<n>` and
+   * `…:<piece>:line:<n>`, `<piece>` URI-encoded.
    */
   function drawChanges(pieces, bands, keys) {
     if (_byPieceId !== true) {
@@ -527,13 +526,13 @@ export function createFirePerimetersLayer({
     const listed = new Set(keys);
     /**
      * Per chunk: the items removed from it, those to draw in it (new or
-     * recoloured), and the pieces new to it.
+     * recoloured), and whether it is written whole.
      */
     const edits = new Map();
-    const editOf = (chunk, kind) => {
+    const editOf = (chunk) => {
       let edit = edits.get(chunk);
       if (!edit) {
-        edit = { kind, removed: [], drawn: [], added: [] };
+        edit = { removed: [], drawn: [], whole: false };
         edits.set(chunk, edit);
       }
       return edit;
@@ -548,9 +547,22 @@ export function createFirePerimetersLayer({
         if (!chunk) continue;
         chunk.pieces.delete(key);
         chunk.size -= drawn[kind].length;
-        remember(chunk.set, drawn[kind], null);
-        editOf(chunk, kind).removed.push(...drawn[kind]);
+        editOf(chunk).removed.push(...drawn[kind]);
       }
+    }
+    // For each piece, the chunk of each kind of the nearest piece after it
+    // that is drawn already: a new piece goes in there, ahead of it, so the
+    // sets keep the snapshot's order (a later piece draws over an earlier).
+    const after = new Array(pieces.length);
+    let next = { fills: null, lines: null };
+    for (let index = pieces.length - 1; index >= 0; index--) {
+      after[index] = next;
+      const drawn = _drawn.get(keys[index]);
+      if (drawn)
+        next = {
+          fills: drawn.chunks.fills ?? next.fills,
+          lines: drawn.chunks.lines ?? next.lines,
+        };
     }
     let added = 0;
     let recoloured = 0;
@@ -571,38 +583,51 @@ export function createFirePerimetersLayer({
         }));
         for (const kind of KINDS)
           if (drawn.chunks[kind])
-            editOf(drawn.chunks[kind], kind).drawn.push(...drawn[kind]);
+            editOf(drawn.chunks[kind]).drawn.push(...drawn[kind]);
         recoloured += 1;
         continue;
       }
       const base = `${PICK_PREFIX}${piece.fireId}:${encodeURIComponent(piece.id)}:`;
       const counts = { '': 0, 'line:': 0 };
       drawn = {
-        fireId: piece.fireId,
         band,
         ...pieceItems(piece, band, (kind) => `${base}${kind}${counts[kind]++}`),
         chunks: { fills: null, lines: null },
       };
       for (const kind of KINDS) {
         if (!drawn[kind].length) continue;
-        let chunk = _chunks[kind].at(-1);
-        if (!chunk || chunk.size >= PERIMETER_SET_SIZES[kind])
-          chunk = addChunk(kind);
+        let chunk = after[index][kind];
+        if (chunk) editOf(chunk).whole = true;
+        else {
+          chunk = _chunks[kind].at(-1);
+          if (!chunk || chunk.size >= PERIMETER_SET_SIZES[kind])
+            chunk = addChunk(kind);
+        }
         drawn.chunks[kind] = chunk;
         chunk.pieces.set(key, drawn);
         chunk.size += drawn[kind].length;
-        const edit = editOf(chunk, kind);
-        edit.drawn.push(...drawn[kind]);
-        edit.added.push(drawn);
+        editOf(chunk).drawn.push(...drawn[kind]);
       }
       _drawn.set(key, drawn);
       added += 1;
     }
+    // A chunk a piece went into ahead of drawn ones takes the snapshot's order.
+    const reordered = new Map();
+    for (const [chunk, { whole }] of edits)
+      if (whole) reordered.set(chunk, new Map());
+    if (reordered.size) {
+      for (const key of keys) {
+        const drawn = _drawn.get(key);
+        for (const kind of KINDS)
+          reordered.get(drawn.chunks[kind])?.set(key, drawn);
+      }
+      for (const [chunk, ordered] of reordered) chunk.pieces = ordered;
+    }
     // A chunk left with nothing goes with its set.
-    for (const [chunk, { kind }] of edits)
+    for (const chunk of edits.keys())
       if (!chunk.pieces.size) {
         chunk.set?.dispose();
-        _chunks[kind].splice(_chunks[kind].indexOf(chunk), 1);
+        _chunks[chunk.kind].splice(_chunks[chunk.kind].indexOf(chunk), 1);
         edits.delete(chunk);
       }
     // New sets: fills before lines, so every line is drawn over every fill.
@@ -610,32 +635,27 @@ export function createFirePerimetersLayer({
     // those are made again, in their order, after it.
     const newFills = _chunks.fills.filter((chunk) => !chunk.set);
     for (const chunk of newFills) chunk.set = makeSet('fills');
-    const relaid = newFills.length
-      ? _chunks.lines.filter((chunk) => chunk.set)
-      : [];
-    for (const chunk of relaid) {
-      rememberChunk(chunk, 'lines', false);
-      chunk.set.dispose();
-      chunk.set = null;
-    }
+    if (newFills.length)
+      for (const chunk of _chunks.lines)
+        if (chunk.set) {
+          chunk.set.dispose();
+          chunk.set = null;
+          editOf(chunk).whole = true;
+        }
     for (const chunk of _chunks.lines) chunk.set ??= makeSet('lines');
-    for (const chunk of relaid) {
-      chunk.set.set([...chunk.pieces.values()].flatMap(({ lines }) => lines));
-      rememberChunk(chunk, 'lines');
-      edits.delete(chunk);
-    }
-    for (const [chunk, edit] of edits) {
-      const { kind, removed: gone, drawn: items } = edit;
-      for (const drawn of edit.added)
-        remember(chunk.set, drawn[kind], drawn.fireId);
-      if (gone.length && items.length)
-        // Removes and upserts may each rebuild the set: one set does both.
-        chunk.set.set(
-          [...chunk.pieces.values()].flatMap((drawn) => drawn[kind]),
-        );
-      else if (gone.length) chunk.set.remove(gone.map(({ id }) => id));
-      else chunk.set.upsert(items);
-    }
+    // Fills written first, each kind in its sets' order: on Cesium a set
+    // takes its place among the scene's primitives at its first write.
+    for (const kind of KINDS)
+      for (const chunk of _chunks[kind]) {
+        const edit = edits.get(chunk);
+        if (!edit) continue;
+        if (edit.whole || (edit.removed.length && edit.drawn.length))
+          // Removes and upserts may each rebuild the set: one set does both.
+          chunk.set.set(chunkItems(chunk));
+        else if (edit.removed.length)
+          chunk.set.remove(edit.removed.map(({ id }) => id));
+        else chunk.set.upsert(edit.drawn);
+      }
     if (added || removed || recoloured)
       console.log(
         `[Data:FirePerimeters] Drew ${added} new, ${recoloured} recoloured and ${removed} removed of ${pieces.length} pieces of ${_fireById.size} fires`,
@@ -677,8 +697,9 @@ export function createFirePerimetersLayer({
 
     enable() {
       _enabled = true;
-      for (const kind of KINDS)
-        for (const chunk of _chunks[kind]) chunk.set.show = true;
+      eachSet((set) => {
+        set.show = true;
+      });
       overlayHost?.setVisible?.(PERIMETER_OVERLAY_SOURCE_ID, true);
       installClickHandler();
     },
@@ -687,8 +708,9 @@ export function createFirePerimetersLayer({
       _request?.abort();
       _request = null;
       _enabled = false;
-      for (const kind of KINDS)
-        for (const chunk of _chunks[kind]) chunk.set.show = false;
+      eachSet((set) => {
+        set.show = false;
+      });
       removeClickHandler();
       clearSelection();
     },
@@ -728,9 +750,12 @@ export function createFirePerimetersLayer({
         const atMs = shownAt();
         const bands = pieces.map((piece) => perimeterAgeBand(piece.born, atMs));
         // Pieces by id when every one has its own: `<fire>\n<piece id>`.
-        // No pieces at all clear the sets either way.
+        // An empty snapshot stays in the current mode.
+        // Both modes clear their sets.
         let keys = pieces.map((piece) =>
-          typeof piece.id === 'string' && piece.id !== ''
+          typeof piece.id === 'string' &&
+          piece.id !== '' &&
+          !LONE_SURROGATE.test(piece.id)
             ? `${piece.fireId}\n${piece.id}`
             : null,
         );
@@ -740,16 +765,29 @@ export function createFirePerimetersLayer({
           (!keys.length && _byPieceId === false)
         )
           keys = null;
-        const drawKey =
-          typeof snapshot.revision === 'string'
-            ? `${keys ? 'id' : 'all'}\n${snapshot.revision}\n${bands.join('')}`
-            : null;
         _fireById = fires;
         _bandsAt = atMs;
-        if (drawKey === null || drawKey !== _drawnKey) {
-          if (keys) drawChanges(pieces, bands, keys);
-          else drawAll(pieces, bands);
-          _drawnKey = drawKey;
+        try {
+          if (keys) {
+            // Compared piece by piece: nothing unchanged is written.
+            drawChanges(pieces, bands, keys);
+            _drawnKey = null;
+          } else {
+            const drawKey =
+              typeof snapshot.revision === 'string'
+                ? `${snapshot.revision}\n${bands.join('')}`
+                : null;
+            if (drawKey === null || drawKey !== _drawnKey) {
+              drawAll(pieces, bands);
+              _drawnKey = drawKey;
+            }
+          }
+        } catch (e) {
+          // A draw cut short leaves sets the layer's notes no longer match:
+          // the next read starts them over.
+          _byPieceId = null;
+          _drawnKey = null;
+          throw e;
         }
         // Refresh (or drop) the selected incident's card against the new
         // snapshot: its ages move with `at` even when nothing is redrawn.

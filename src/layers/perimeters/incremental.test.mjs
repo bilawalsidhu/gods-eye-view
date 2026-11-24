@@ -1,108 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  createFirePerimetersLayer,
-  PERIMETER_AGE_BANDS,
-  PERIMETER_SET_SIZES,
-} from './index.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
-import { hexColor } from '../../render/color.js';
-import { bindRenderer } from '../../render/rendererOf.js';
-import { createStubRenderer } from '../../render/stub/index.js';
-
-const HOUR = 3600000;
-const AT = Date.UTC(2026, 7, 20, 12);
-
-/** A small square ring at `lon, lat`, `size` degrees across. */
-const square = (lon, lat, size = 0.01) => [
-  [lon, lat],
-  [lon + size, lat],
-  [lon + size, lat + size],
-  [lon, lat + size],
-  [lon, lat],
-];
-const fireAt = (id, lon, lat) => ({
-  id,
-  name: id,
-  containedPct: 0,
-  lastGrowthTime: null,
-  anchor: { lon, lat },
-});
-/** A piece of `count` squares beside each other, each outlined. */
-const piece = (fireId, id, born, { lon = -120, lat = 38, count = 1 } = {}) => {
-  const polygons = [];
-  for (let i = 0; i < count; i++) polygons.push([square(lon + i * 0.02, lat)]);
-  return {
-    ...(id === null ? {} : { id }),
-    fireId,
-    born,
-    polygons,
-    outline: polygons.map((rings) => rings[0]),
-  };
-};
-const snapshot = (fires, pieces, { at = AT, revision } = {}) => ({
-  at,
-  fetchedAt: at,
-  stale: false,
-  revision: revision ?? pieces.map((p) => p.id ?? '').join('|'),
-  note: null,
-  fires,
-  pieces,
-});
-
-/**
- * The layer drawn on the stub renderer, every write to its draw sets
- * logged as `{set, call, ids}` (`set` the set's id, `call` set, upsert or
- * remove, `ids` the item ids).
- */
-function harness(read, extra = {}) {
-  const renderer = createStubRenderer();
-  const viewer = {};
-  bindRenderer(viewer, renderer);
-  const writes = [];
-  const sets = new Map();
-  const draw = renderer.draw;
-  for (const kind of ['shapes', 'lines']) {
-    const make = draw[kind].bind(draw);
-    draw[kind] = (spec) => {
-      const set = make(spec);
-      sets.set(spec.id, set);
-      for (const call of ['set', 'upsert', 'remove']) {
-        const write = set[call].bind(set);
-        set[call] = (items) => {
-          writes.push({
-            set: spec.id,
-            call,
-            ids: items.map((item) => (call === 'remove' ? item : item.id)),
-          });
-          return write(items);
-        };
-      }
-      return set;
-    };
-  }
-  const layer = createFirePerimetersLayer({
-    source: { getSnapshot: async () => read() },
-    ...extra,
-  });
-  layer.init(viewer);
-  layer.enable(viewer);
-  /** The items drawn now in the layer's sets of `kind`, by id. */
-  const items = (kind) => {
-    const out = new Map();
-    for (const id of renderer.testing.sets()) {
-      if (!id.startsWith('fire-perimeters:') || !id.endsWith(`:${kind}`))
-        continue;
-      for (const [itemId, item] of renderer.testing.setRecord(id).items)
-        out.set(itemId, { ...item, set: id });
-    }
-    return out;
-  };
-  return { renderer, viewer, layer, writes, items, sets };
-}
-
-const fillOf = (band) => hexColor(PERIMETER_AGE_BANDS[band].color, 0.35);
-const lineOf = (band) => hexColor(PERIMETER_AGE_BANDS[band].color, 0.9);
+import {
+  AT,
+  HOUR,
+  fireAt,
+  piece,
+  snapshot,
+  harness,
+  fillOf,
+  lineOf,
+  SET_SIZES,
+} from '../../testSupport/perimeterLayerHarness.mjs';
 
 test('a read with nothing changed writes nothing', async () => {
   const fires = [fireAt('a', -120, 38)];
@@ -138,12 +47,20 @@ test('a piece that changes band is recoloured in its own two sets, and nothing e
   const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
   let at = AT;
   const pieces = [
+    piece('a', 'still', AT - 100 * HOUR, { lon: -121, count: SET_SIZES.lines }),
     piece('a', 'young', AT - 5 * HOUR, { count: 2 }),
     piece('a', 'old', AT - 40 * HOUR),
     piece('b', 'other', AT - 2 * HOUR, { lon: -119, lat: 39 }),
   ];
   const h = harness(() => snapshot(fires, pieces, { at }));
   await h.layer.update();
+  const sets = h.renderer.testing
+    .sets()
+    .filter((id) => id.startsWith('fire-perimeters:'));
+  const fillSets = sets.filter((id) => id.endsWith(':fills'));
+  const lineSets = sets.filter((id) => id.endsWith(':lines'));
+  assert.equal(fillSets.length, 1);
+  assert.equal(lineSets.length, 2);
   const before = h.items('fills');
   h.writes.length = 0;
   // Two hours on, `young` is 7 h old: band 1; the rest keep theirs.
@@ -154,21 +71,20 @@ test('a piece that changes band is recoloured in its own two sets, and nothing e
   );
   assert.equal(young.length, 2);
   assert.deepEqual(
-    h.writes.map(({ set, call, ids }) => [set.split(':').at(-1), call, ids]),
+    h.writes.map(({ set, call, ids }) => [set, call, ids]),
     [
       [
-        'fills',
+        fillSets[0],
         'upsert',
         ['fire-perimeter:a:young:0', 'fire-perimeter:a:young:1'],
       ],
       [
-        'lines',
+        lineSets[1],
         'upsert',
         ['fire-perimeter:a:young:line:0', 'fire-perimeter:a:young:line:1'],
       ],
     ],
   );
-  assert.equal(new Set(h.writes.map(({ set }) => set)).size, 2);
   const fills = h.items('fills');
   const lines = h.items('lines');
   assert.deepEqual(fills.get('fire-perimeter:a:young:0').fill, fillOf(1));
@@ -245,7 +161,7 @@ test('a set that loses and gains pieces in one read is written once, whole', asy
 
 test('new pieces start a new set once the newest is full, drawn over the older', async () => {
   const fires = [fireAt('a', -120, 38)];
-  const per = PERIMETER_SET_SIZES.lines;
+  const per = SET_SIZES.lines;
   let pieces = [piece('a', 'p1', AT - HOUR, { count: per })];
   const h = harness(() => snapshot(fires, pieces));
   await h.layer.update();
@@ -270,7 +186,7 @@ test('new pieces start a new set once the newest is full, drawn over the older',
 
 test('every line set is drawn over every fill set, made again after a new one', async () => {
   const fires = [fireAt('a', -120, 38)];
-  const full = PERIMETER_SET_SIZES.fills;
+  const full = SET_SIZES.fills;
   let pieces = [piece('a', 'p1', AT - HOUR, { count: full })];
   const h = harness(() => snapshot(fires, pieces));
   const ours = () =>
@@ -288,12 +204,12 @@ test('every line set is drawn over every fill set, made again after a new one', 
   assert.deepEqual(
     h.writes.map(({ set, call, ids }) => [set, call, ids.length]),
     [
-      [relaid, 'set', full],
       [newFills, 'upsert', 1],
+      [relaid, 'set', full],
       [newLines, 'upsert', 1],
     ],
   );
-  // Its lines still pick as their fire.
+  // Its lines are in the re-made set.
   assert.equal(h.items('lines').get('fire-perimeter:a:p1:line:0').set, relaid);
   h.layer.destroy();
 });
@@ -387,10 +303,13 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
     },
   });
   await h.layer.update();
-  // A band change and a new piece since: the picks still find their fire.
-  at += 2 * HOUR;
+  // Six hours on, both pieces recoloured, and a new piece: the picks still
+  // find their fire.
+  at += 6 * HOUR;
   pieces = [...pieces, piece('b', 'pb2', at, { lon: -119.95 })];
   await h.layer.update();
+  for (const id of ['fire-perimeter:a:pa:0', 'fire-perimeter:b:pb:0'])
+    assert.deepEqual(h.items('fills').get(id).fill, fillOf(1));
   h.renderer.camera.setView({
     destination: { lon: -119.9, lat: 38.005, height: 20000 },
   });
@@ -412,4 +331,42 @@ test('a click on a piece drawn by id selects its own fire, through the stub pick
     assert.equal(entries[0].id, `fire-perimeter-card:${fireId}`);
   }
   h.layer.destroy();
+});
+
+test('fill sets are written before line sets, so each line set takes its place above every fill set', async () => {
+  const fires = [fireAt('a', -120, 38)];
+  const pieces = [
+    piece('a', 'p1', AT - HOUR, { count: SET_SIZES.fills }),
+    piece('a', 'p2', AT, { lon: -110 }),
+  ];
+  const h = harness(() => snapshot(fires, pieces));
+  await h.layer.update();
+  const first = new Map();
+  for (const { set } of h.writes)
+    if (!first.has(set)) first.set(set, set.split(':').at(-1));
+  assert.deepEqual([...first.values()], ['fills', 'fills', 'lines', 'lines']);
+  h.layer.destroy();
+});
+
+test('a piece id repeated within a fire draws the snapshot whole; the same id in two fires does not', async () => {
+  const fires = [fireAt('a', -120, 38), fireAt('b', -119, 39)];
+  const a = piece('a', 'p', AT);
+  const separate = harness(() =>
+    snapshot(fires, [a, piece('b', 'p', AT, { lon: -119, lat: 39 })]),
+  );
+  await separate.layer.update();
+  assert.deepEqual(
+    [...separate.items('fills').keys()],
+    ['fire-perimeter:a:p:0', 'fire-perimeter:b:p:0'],
+  );
+  separate.layer.destroy();
+  const repeated = harness(() =>
+    snapshot(fires, [a, piece('a', 'p', AT, { lon: -120.5 })]),
+  );
+  await repeated.layer.update();
+  assert.deepEqual(
+    [...repeated.items('fills').keys()],
+    ['fire-perimeter:a:0', 'fire-perimeter:a:1'],
+  );
+  repeated.layer.destroy();
 });

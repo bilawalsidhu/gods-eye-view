@@ -183,8 +183,8 @@ const CLOCK_SKEW_MS = 10 * 60 * 1000;
  * WFIGS keeps one perimeter per fire, so each of its polygons is one piece,
  * born when the perimeter was mapped (`poly_PolygonDateTime`, else the
  * record's last edit `poly_DateCurrent`). A piece's id is the record's
- * version (its last edit, else a hash of its outline) and its place in the
- * perimeter, so an edit draws the fire's pieces anew.
+ * version (its last edit, else a hash of its mapping time and outline) and
+ * its place in the perimeter, so an edit draws the fire's pieces anew.
  * @param {object[]} rows - normalizeFirePerimeterSnapshot rows.
  * @param {{fetchedAt?: number|null, stale?: boolean, now?: number}} [options]
  * @returns {{at: null, fetchedAt: number|null, stale: boolean,
@@ -210,16 +210,16 @@ export function firePerimeterSnapshot(
       lastGrowthTime: grown,
       anchor: perimeterAnchorDegrees(polygons),
     });
-    // Without poly_DateCurrent, the mapping time and outline stand in for it.
+    // Without poly_DateCurrent, a hash of the mapping time and outline
+    // stands in for it. Both the revision and piece ids assume WFIGS changes
+    // poly_DateCurrent with every polygon edit. An edit that leaves this
+    // date unchanged keeps the old outline drawn.
     const version = Number.isFinite(facts.updatedTime)
       ? String(facts.updatedTime)
-      : `${polygonTime ?? ''}:${JSON.stringify(polygons)}`;
-    const pieceVersion = Number.isFinite(facts.updatedTime)
-      ? version
-      : `h${hashText(version)}`;
+      : `h${hashText(`${polygonTime ?? ''}:${JSON.stringify(polygons)}`)}`;
     polygons.forEach((rings, index) =>
       pieces.push({
-        id: `${pieceVersion}/${index}`,
+        id: `${version}/${index}`,
         fireId: stableId,
         born: grown,
         polygons: [rings],

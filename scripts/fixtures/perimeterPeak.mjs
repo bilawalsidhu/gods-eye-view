@@ -10,19 +10,9 @@
  * then.
  */
 
-const HOUR_MS = 3600000;
+import { rng } from '../../src/testSupport/rng.mjs';
 
-/** A small deterministic generator (mulberry32). */
-function random(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+const HOUR_MS = 3600000;
 
 /** `[lon, lat]` at `km` from a centre, toward `angle` (radians from east). */
 function offset(lon, lat, km, angle) {
@@ -51,17 +41,18 @@ function growthRing(next, fire, inner, outer, sectors, arc) {
       outerArc.push(offset(fire.lon, fire.lat, outer * wobble(), angle));
       innerArc.push(offset(fire.lon, fire.lat, inner, angle));
     }
-    const ring = [...innerArc, ...outerArc.reverse()];
+    const ring = [...innerArc, ...outerArc.toReversed()];
     ring.push(ring[0]);
     polygons.push([ring]);
-    outline.push(outerArc.reverse());
+    outline.push(outerArc);
   }
   return { polygons, outline };
 }
 
 /**
- * The peak day's fires and every piece they grow, `pieces` of them born in
- * the `spanHours` before `start` and as many an hour for `afterHours` more.
+ * The peak day's fires and every piece they grow: `pieces` of them born in
+ * the `spanHours` before `start`, and at the same hourly rate for
+ * `afterHours` after it.
  */
 export function perimeterPeak({
   seed = 1,
@@ -73,7 +64,7 @@ export function perimeterPeak({
   sectorsPerPiece = 47,
   arcVertices = 7,
 } = {}) {
-  const next = random(seed);
+  const next = rng(seed);
   const fires = [];
   for (let i = 0; i < fireCount; i++) {
     const lon = -124 + 20 * next();
