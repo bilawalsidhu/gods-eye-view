@@ -71,6 +71,10 @@ export function presentCctvPanel(state, enabled) {
   const dirty = !!activeCamera?.calDirty;
   return {
     enabled,
+    activeCameraId: activeId,
+    hasLiveSnapshot: Boolean(activeCamera?.liveSnapshotUrl),
+    stillSuppressed:
+      enabled && Boolean(activeCamera?.sourceKind?.startsWith('quebec-')),
     navDisabled: !enabled || catalogCount === 0,
     focusDisabled: !enabled || catalogCount === 0 || !activeId,
     toggleDisabled: !enabled,
@@ -178,8 +182,8 @@ export function _renderCctvState(state) {
   this._lastQuebecSelectionRevision = Number.isFinite(selectionRevision)
     ? selectionRevision
     : null;
-  const isQuebecCamera =
-    enabled && activeCamera?.sourceKind?.startsWith('quebec-');
+  const view = presentCctvPanel(state, enabled);
+  const isQuebecCamera = view.stillSuppressed;
   this._quebecCctvOverlay?.setCamera(isQuebecCamera ? activeCamera : null, {
     reselected,
   });
@@ -283,7 +287,7 @@ export function _renderCctvState(state) {
     });
   }
 
-  this.store.publish(presentCctvPanel(state, enabled));
+  this.store.publish(view);
 
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
@@ -299,13 +303,13 @@ export function _renderCctvState(state) {
     tabShown &&
     !this._cctvPanel?.classList.contains('collapsed') &&
     (!phone || sheet === CAMERAS_SHEET);
-  // Context's camera card shows the same still.
+  // A Context preview can outlive CCTV's selection when the feed changes.
   const cardShown =
     tabShown &&
-    this.store.previewCards > 0 &&
+    this.store.previewCards.includes(activeId) &&
     (!phone || sheet === CONTEXT_SHEET);
   // Its bigger view is a popup over the map, shown on any phone sheet.
-  const popupShown = tabShown && this.store.previewPopups > 0;
+  const popupShown = tabShown && this.store.previewPopups.includes(activeId);
   if (this._cctvVideo) {
     const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
@@ -338,8 +342,7 @@ export function _renderCctvState(state) {
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
-    }
-    if (!nextSrc) {
+    } else if (!nextSrc || (cameraChanged && this._frame.cameraId)) {
       this._clearCctvFrame();
     }
   }
