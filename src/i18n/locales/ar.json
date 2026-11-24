@@ -1845,11 +1845,6 @@
   "Unnamed incident": "حادث بلا اسم",
   "Open {title} on InciWeb": "فتح {title} على InciWeb",
   "Perimeter source unavailable": "مصدر محيطات الحرائق غير متاح",
-  "Not contained or unknown": "بلا احتواء أو غير معروف",
-  "Under 50% contained": "الاحتواء: أقل من 50%",
-  "50–99% contained": "الاحتواء: 50–99%",
-  "Fully contained": "احتواء كامل",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "يبيّن اللون نسبة الاحتواء المُبلَّغ عنها. المحيطات مبسّطة إلى نحو 100 م.",
   "Malformed perimeter snapshot": "لقطة المحيطات مشوّهة",
   "radio tag|All": "الكل",
   "Directory refresh degraded; showing the previous station catalog.": "تحديث الدليل متدهور؛ يُعرض فهرس المحطات السابق.",
@@ -4856,5 +4851,12 @@
   "JTWC warning ↗": "تحذير JTWC ↗",
   "Active cyclone advisories and warnings": "نشرات وتحذيرات الأعاصير النشطة",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "اختر عاصفة على الخريطة، أو اختر عاصفة من القائمة لتحديدها وتحريك الكاميرا إليها. انقر على مكان فارغ من الخريطة لإلغاء التحديد. نشرات NOAA NHC/CPHC وتحذيرات JTWC. يصف مخروط NHC عدم اليقين في المسار المتوقع للمركز، لا حجم العاصفة ولا منطقة الخطر كاملة. منطقة خطر رياح 34 عقدة لدى JTWC هي حيث قد تصل رياح بسرعة 34 عقدة، موسّعةً بخطأ توقع المسار؛ وهي ليست مخروطًا. تسميات نقاط التوقع هي ساعات المهلة لدى المصدر، لا أوقات محسوبة من وقت الإصدار. تتبع الأشكال سطح الأرض؛ والارتفاع ليس ارتفاعًا جويًا. ارجع إلى النشرة الرسمية أو إلى مركز الإنذار الإقليمي.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · التحذير {number} · صدر {time}",
+  "last growth {age} ago": "آخر توسّع قبل {age}",
+  "Last 6 hours": "آخر 6 ساعات",
+  "6–24 hours": "6–24 ساعة",
+  "1–3 days": "1–3 أيام",
+  "Older or unknown": "أقدم أو غير معروف",
+  "Colour shows the age of each area.": "يبيّن اللون عمر كل منطقة.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م."
 }

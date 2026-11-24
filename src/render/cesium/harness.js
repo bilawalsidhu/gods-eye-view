@@ -158,6 +158,7 @@ export const CESIUM_CHECKS = new Set([
   'renderer.whenSettled',
   'renderer.resize',
   'frame.onHeldChange',
+  'frame.onHoldsChange',
   'frame.setTargetFps',
   'globe.setTerrain',
   'globe.setPhotoreal',

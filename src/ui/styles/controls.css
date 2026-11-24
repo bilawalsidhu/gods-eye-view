@@ -431,6 +431,35 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   }
 }
 
+/* The opening (src/app/openingIntro.js) sets --opening-veil and --opening-text each frame. */
+#loading-screen.opening {
+  background: color-mix(
+    in srgb,
+    var(--bg-dark) calc(var(--opening-veil, 1) * 100%),
+    transparent
+  );
+}
+
+#loading-screen.opening .loader-logo {
+  animation: none;
+  will-change: transform;
+}
+
+#loading-screen.opening .loader-logo svg {
+  overflow: visible;
+}
+
+#loading-screen.opening .loader-logo svg > path {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+#loading-screen.opening h2,
+#loading-screen.opening .loader-status {
+  animation: none;
+  opacity: var(--opening-text, 1);
+}
+
 .loader-content h2 {
   font-family: var(--font-mono);
   font-size: 18px;

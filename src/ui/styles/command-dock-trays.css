@@ -452,9 +452,11 @@
    baseline, below the raised command dock (command-dock.css). It stops 26rem
    short of the right edge, clear of the corner row (Power Up and the language
    picker), and wraps rather than running under it. Below 1200px the dock
-   keeps to the bottom edge and the row sits above it. */
+   keeps to the bottom edge and the row sits above it. `.hud-minimal-active`
+   and the Omnibar layout's classes are page-root classes (src/ui/rail/rootClass.js). */
 body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-body:not(.ui-clean-view):not(.recording-mode):has(
+body:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits {
@@ -467,7 +469,8 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 }
 
 body:not(.ui-clean-view):not(.recording-mode) #gev-credits,
-body:not(.ui-clean-view):not(.recording-mode):has(
+body:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #gev-credits {
@@ -512,12 +515,14 @@ body:not(.ui-clean-view):not(.recording-mode):has(
 
 @media (max-width: 1199px) {
   body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(
+  body:not(.ui-clean-view):not(.recording-mode):is(
+      .hud-minimal-active *,
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits,
   body:not(.ui-clean-view):not(.recording-mode) #gev-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(
+  body:not(.ui-clean-view):not(.recording-mode):is(
+      .hud-minimal-active *,
       #intel-hud[data-variant='minimal'].active
     )
     #gev-credits {
@@ -534,9 +539,7 @@ body:not(.ui-clean-view):not(.recording-mode):has(
    shares the bottom edge with the corner row (omnibar-dock.css). */
 body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .ui-clean-view
-  ):not(.recording-mode):where(
-    :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
-  )
+  ):not(.recording-mode):where(.has-omnibar.dock-has-voice *)
   #cesium-credits
   .cesium-widget-credits {
   width: max-content;
@@ -550,7 +553,7 @@ html[dir='rtl']
   body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .ui-clean-view
   ):not(.recording-mode):not(.context-docked):where(
-    :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
+    .has-omnibar.dock-has-voice *
   )
   #cesium-credits
   .cesium-widget-credits {
@@ -574,7 +577,8 @@ html[dir='rtl']
     body:not(.context-docked):not(.ui-clean-view):not(.recording-mode)
     :is(#cesium-credits, #gev-credits),
   html[dir='rtl']
-    body:not(.context-docked):not(.ui-clean-view):not(.recording-mode):has(
+    body:not(.context-docked):not(.ui-clean-view):not(.recording-mode):is(
+      .hud-minimal-active *,
       #intel-hud[data-variant='minimal'].active
     )
     :is(#cesium-credits, #gev-credits) {
@@ -594,7 +598,8 @@ html[dir='rtl']
 
 @media (max-width: 900px) {
   body:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(
+  body:not(.ui-clean-view):not(.recording-mode):is(
+      .hud-minimal-active *,
       #intel-hud[data-variant='minimal'].active
     )
     #cesium-credits {
@@ -604,7 +609,8 @@ html[dir='rtl']
   }
 
   body:not(.ui-clean-view):not(.recording-mode) #gev-credits,
-  body:not(.ui-clean-view):not(.recording-mode):has(
+  body:not(.ui-clean-view):not(.recording-mode):is(
+      .hud-minimal-active *,
       #intel-hud[data-variant='minimal'].active
     )
     #gev-credits {

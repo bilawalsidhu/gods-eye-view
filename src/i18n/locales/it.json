@@ -1070,11 +1070,6 @@
   "Unnamed incident": "Incendio senza nome",
   "Open {title} on InciWeb": "Apri {title} su InciWeb",
   "Perimeter source unavailable": "Fonte dei perimetri non disponibile",
-  "Not contained or unknown": "Non contenuto o dato non disponibile",
-  "Under 50% contained": "Contenuto a meno del 50%",
-  "50–99% contained": "Contenuto al 50–99%",
-  "Fully contained": "Completamente contenuto",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Il colore indica il contenimento riportato. I perimetri sono semplificati a circa 100 m.",
   "Malformed perimeter snapshot": "Snapshot dei perimetri non valido",
   "radio tag|All": "Tutti",
   "News": "Notizie",
@@ -4538,5 +4533,12 @@
   "JTWC warning ↗": "Avviso JTWC ↗",
   "Active cyclone advisories and warnings": "Bollettini e avvisi attivi sui cicloni",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Seleziona una tempesta sulla mappa o sceglila nell’elenco per selezionarla e spostare la telecamera. Fai clic su un punto vuoto della mappa per annullare la selezione. Bollettini NOAA NHC/CPHC e avvisi JTWC. Il cono NHC descrive l’incertezza della traccia prevista del centro, non le dimensioni della tempesta né l’intera area di pericolo. L’area di pericolo a 34 nodi del JTWC è dove possono arrivare venti a 34 nodi, ampliata dall’errore di previsione della traccia; non è un cono. Le etichette dei punti di previsione sono ore di anticipo della fonte, non orari calcolati dall’emissione. La geometria segue la superficie; l’altezza non è quota meteorologica. Consulta il bollettino ufficiale o il centro di allerta regionale.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Avviso {number} · emesso {time}",
+  "last growth {age} ago": "ultima espansione {age} fa",
+  "Last 6 hours": "Ultime 6 ore",
+  "6–24 hours": "6–24 ore",
+  "1–3 days": "1–3 giorni",
+  "Older or unknown": "Più vecchio o sconosciuto",
+  "Colour shows the age of each area.": "Il colore indica l’età di ciascuna area.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Età dalla mappatura WFIGS, altrimenti dall’ultima modifica del record. Perimetri semplificati a ~100 m."
 }

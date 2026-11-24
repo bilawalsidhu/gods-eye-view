@@ -13,11 +13,11 @@ const REFUSALS = [
   'Point the camera at the ground to use the view', // layers/recentImagery/index.js
   'That point cannot anchor a box', // layers/recentImagery/index.js
   ...[
-    { west: 170, south: 10, east: -170, north: 20 }, // dateline
-    { west: 10, south: 80, east: 20, north: 89 }, // polar
-    { west: 10, south: 10, east: 10, north: 20 }, // degenerate
-    { west: 10, south: 10, east: 200, north: 20 }, // longitude range
-    { west: Number.NaN, south: 10, east: 20, north: 20 }, // not finite
+    { west: 170, south: 10, east: -170, north: 20 }, // dateline, over the size cap
+    { west: 10, south: 80, east: 20, north: 89 },
+    { west: 10, south: 10, east: 10, north: 20 },
+    { west: 10, south: 10, east: 200, north: 20 },
+    { west: Number.NaN, south: 10, east: 20, north: 20 },
   ].map((box) => {
     const result = validateBox(box);
     assert.equal(result.ok, false);
@@ -27,7 +27,14 @@ const REFUSALS = [
 
 test('en: refusals stay English', () => {
   setLocale('en');
-  for (const text of REFUSALS) assert.equal(localizeNotice(text), text);
+  for (const text of REFUSALS) {
+    const shown = localizeNotice(text);
+    // Size refusals are rewritten with a non-breaking space before the unit.
+    const expected = / km wide/.test(text)
+      ? text.replaceAll(' km', '\u00a0km')
+      : text;
+    assert.equal(shown, expected);
+  }
   assert.ok(REFUSALS.includes('Imagery stops at ±85.05° latitude'));
 });
 

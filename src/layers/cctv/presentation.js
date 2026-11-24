@@ -168,6 +168,9 @@ export function createPresentation({
       Number.isFinite(sourceRefreshMs) && sourceRefreshMs > 0
         ? Math.max(defaultRefreshMs, sourceRefreshMs)
         : defaultRefreshMs;
+    const isVideo =
+      parts.model.isVideoFeedCamera(camera) &&
+      record.projection?.mode !== 'image';
     return {
       id: camera.id,
       name: camera.name,
@@ -201,9 +204,11 @@ export function createPresentation({
       browserMediaUrl: camera.browserMediaUrl || '',
       accuracyM: Number.isFinite(camera.accuracyM) ? camera.accuracyM : null,
       positionSource: camera.positionSource || '',
-      isVideo:
-        parts.model.isVideoFeedCamera(camera) &&
-        record.projection?.mode !== 'image',
+      isVideo,
+      liveSnapshotUrl:
+        isVideo && camera.hasSnapshot
+          ? parts.frames.frameUrlFor(camera, refreshMs, { snapshotOnly: true })
+          : '',
       sourceKind: camera.sourceKind?.startsWith('quebec-')
         ? camera.sourceKind
         : health?.sourceKind ||

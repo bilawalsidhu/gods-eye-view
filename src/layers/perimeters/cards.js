@@ -3,61 +3,12 @@ import { formatNumber, t, tn } from '../../i18n/index.js';
 
 export const PERIMETER_OVERLAY_SOURCE_ID = 'fire-perimeters';
 
-/** CSS accent for a perimeter card by containment progress (mirrors the fill). */
+/** CSS accent for a perimeter card by containment progress. */
 export function containmentAccent(containedPct) {
   if (!Number.isFinite(containedPct) || containedPct <= 0) return '#ff3b30';
   if (containedPct < 50) return '#ff7a00';
   if (containedPct < 100) return '#ffb300';
   return '#8bc34a';
-}
-
-/** Shoelace area along short longitude edges (degree², relative sizes only). */
-function ringArea(ring) {
-  let sum = 0;
-  let [x1, y1] = ring[0];
-  for (let i = 1; i < ring.length; i++) {
-    let delta = ring[i][0] - ring[i - 1][0];
-    if (delta > 180) delta -= 360;
-    else if (delta < -180) delta += 360;
-    const x2 = x1 + delta;
-    const y2 = ring[i][1];
-    sum += x1 * y2 - x2 * y1;
-    x1 = x2;
-    y1 = y2;
-  }
-  return Math.abs(sum / 2);
-}
-
-/**
- * Anchor point for the incident card: the vertex mean of the largest polygon's
- * outer ring, with circular longitude. Callers own the Cartesian conversion.
- * @param {Array<Array<Array<[number, number]>>>} polygons - Normalized rows' polygons.
- * @returns {{lon: number, lat: number}}
- */
-export function perimeterAnchorDegrees(polygons) {
-  let best = null;
-  let bestArea = -1;
-  for (const rings of polygons) {
-    const outer = rings[0];
-    const area = ringArea(outer);
-    if (area > bestArea) {
-      bestArea = area;
-      best = outer;
-    }
-  }
-  // Vertex mean over the closed ring (first == last point dropped): perimeters
-  // are compact enough that this stays inside or near the polygon.
-  let sinLon = 0;
-  let cosLon = 0;
-  let lat = 0;
-  const count = best.length - 1;
-  const toRad = Math.PI / 180;
-  for (let i = 0; i < count; i++) {
-    sinLon += Math.sin(best[i][0] * toRad);
-    cosLon += Math.cos(best[i][0] * toRad);
-    lat += best[i][1];
-  }
-  return { lon: Math.atan2(sinLon, cosLon) / toRad, lat: lat / count };
 }
 
 /**
@@ -149,8 +100,9 @@ function formatAge(deltaMs) {
 /**
  * Build the overlay-host entry for one selected incident. The caller supplies
  * `position` (Cartesian) separately — this model stays JSON-safe for tests.
- * @param {Object} row - Normalized perimeter row (see records.js).
- * @param {number} nowMs - Current epoch milliseconds.
+ * @param {Object} row - A snapshot fire (see records.js).
+ * @param {number} nowMs - The moment shown, epoch milliseconds: the snapshot's
+ *   `at`, or now.
  * @param {{link: ?string}} [extras] - Optional InciWeb page for this incident.
  * @returns {Object} World-overlay entry without `position`.
  */
@@ -194,13 +146,17 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     if (cost) response.push(t('{cost} to date', { cost }));
   }
 
+  const ago = (time) => (time == null ? null : formatAge(nowMs - time));
+  const growth = ago(row.lastGrowthTime);
+  const lastGrowth = growth
+    ? t('last growth {age} ago', { age: growth })
+    : null;
+
   const ages = [];
-  const discovered = formatAge(nowMs - row.discoveredTime);
-  if (row.discoveredTime != null && discovered)
-    ages.push(t('discovered {age} ago', { age: discovered }));
-  const updated = formatAge(nowMs - row.updatedTime);
-  if (row.updatedTime != null && updated)
-    ages.push(t('updated {age} ago', { age: updated }));
+  const discovered = ago(row.discoveredTime);
+  if (discovered) ages.push(t('discovered {age} ago', { age: discovered }));
+  const updated = ago(row.updatedTime);
+  if (updated) ages.push(t('updated {age} ago', { age: updated }));
 
   const details = [facts.join(' · ')];
   if (row.complexName)
@@ -209,6 +165,7 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     );
   if (situation.length) details.push(situation.join(' · '));
   if (response.length) details.push(response.join(' · '));
+  if (lastGrowth) details.push(lastGrowth);
   if (ages.length) details.push(ages.join(' · '));
   if (link) details.push(t('InciWeb ↗ · click card to open'));
 
@@ -216,7 +173,7 @@ export function buildIncidentCard(row, nowMs, { link = null } = {}) {
     name: row.name || t('Unnamed incident'),
   });
   return {
-    id: `fire-perimeter-card:${row.stableId}`,
+    id: `fire-perimeter-card:${row.id}`,
     // `selected` picks the paint lane and collision protection; an explicit
     // paintLane would override it in the host's lane resolver.
     selected: true,

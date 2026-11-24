@@ -15,6 +15,7 @@ test('capabilities follow what the scene supports', () => {
     'pointVisibility',
     'followAutodetect',
     'cameraChangeThreshold',
+    'holdChanges',
     'columns',
     'motionSegments',
     'courseGlide',

@@ -1411,11 +1411,6 @@
   "Routing unavailable — no response from the routing service": "Rutas no disponibles — sin respuesta del servicio de rutas",
   "Routing unavailable": "Rutas no disponibles",
   "Fire · FRP {frp} MW": "Incendio · FRP {frp} MW",
-  "Not contained or unknown": "Sin contener o desconocido",
-  "Under 50% contained": "Contenido por debajo del 50%",
-  "50–99% contained": "Contenido al 50–99%",
-  "Fully contained": "Totalmente contenido",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "El color indica la contención notificada. Los perímetros se simplifican a unos 100 m.",
   "MORE DETAIL · 30 m": "MÁS DETALLE · 30 m",
   "Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days": "Sentinel‑2 y Landsat vía HLS, 30 m, cada 2–6 días",
   "DAILY OVERVIEW · 250 m": "VISTA GENERAL DIARIA · 250 m",
@@ -4538,5 +4533,12 @@
   "JTWC warning ↗": "Aviso del JTWC ↗",
   "Active cyclone advisories and warnings": "Avisos activos de ciclones",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Selecciona una tormenta en el mapa o elige una en la lista para seleccionarla y mover la cámara. Haz clic en una zona vacía del mapa para quitar la selección. Avisos de NOAA NHC/CPHC y del JTWC. El cono del NHC describe la incertidumbre de la trayectoria prevista del centro, no el tamaño de la tormenta ni toda la zona de peligro. La zona de peligro de 34 nudos del JTWC es donde pueden llegar vientos de 34 nudos, ampliada por el error de la trayectoria prevista; no es un cono. Las etiquetas de los puntos de pronóstico son horas de anticipación de la fuente, no horas calculadas desde la emisión. La geometría sigue la superficie; la altura no es altitud meteorológica. Consulta el aviso oficial o el centro de avisos regional.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Aviso {number} · emitido {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Aviso {number} · emitido {time}",
+  "last growth {age} ago": "último crecimiento hace {age}",
+  "Last 6 hours": "Últimas 6 horas",
+  "6–24 hours": "6–24 horas",
+  "1–3 days": "1–3 días",
+  "Older or unknown": "Más antiguo o desconocido",
+  "Colour shows the age of each area.": "El color indica la antigüedad de cada zona.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Antigüedad desde el mapeo de WFIGS o, si falta, desde la última edición del registro. Perímetros simplificados a ~100 m."
 }

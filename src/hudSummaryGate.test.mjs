@@ -6,6 +6,8 @@
 // setup as hudPageVisibility.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { Window } from 'happy-dom';
+import { playOpeningIntro } from './app/openingIntro.js';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { registerHooks } from 'node:module';
 import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
@@ -174,4 +176,46 @@ test('an unchanged context restores its accepted reply over the fallback line', 
   await hud._updateSummary(false);
   assert.equal(service.calls, 1);
   assert.equal(shown(), 'Austin capitol district live');
+});
+
+test('the first summary waits for the opening to land', (t) => {
+  const { hud } = createHud(t, {
+    summarize: async () => ({ ok: true, status: 200, data: { summary: 'x' } }),
+  });
+  hud._visible = true;
+  let asked = 0;
+  hud._updateSummary = async () => {
+    asked += 1;
+  };
+
+  const win = new Window();
+  win.document.body.innerHTML = `
+    <div id="loading-screen"><span class="loader-logo"><svg>
+      <path id="outer_eye"/><path id="inner_eye"/>
+    </svg></span></div>`;
+  win.requestAnimationFrame = () => 1;
+  win.matchMedia = () => ({ matches: false });
+  const opening = playOpeningIntro({
+    win,
+    loadingScreen: win.document.getElementById('loading-screen'),
+    camera: {
+      pose: () => ({
+        lon: 10,
+        lat: 50,
+        height: 23e6,
+        heading: 0,
+        pitch: -Math.PI / 2,
+        roll: 0,
+        fovy: 1,
+      }),
+      setView() {},
+      onCommand: () => () => {},
+    },
+  });
+  t.after(() => opening.cancel());
+  hud._onCameraMoveEnd();
+  assert.equal(asked, 0);
+  opening.cancel();
+  hud._onCameraMoveEnd();
+  assert.equal(asked, 1);
 });

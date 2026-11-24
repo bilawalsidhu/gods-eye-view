@@ -1004,11 +1004,6 @@
   "Unnamed incident": "未命名火情",
   "Open {title} on InciWeb": "在 InciWeb 上打開 {title}",
   "Perimeter source unavailable": "周界數據源不可用",
-  "Not contained or unknown": "未控制或未知",
-  "Under 50% contained": "控制低於 50%",
-  "50–99% contained": "控制 50–99%",
-  "Fully contained": "已全部控制",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "顏色表示報告的控制比例。周界簡化至約 100 m。",
   "Malformed perimeter snapshot": "周界快照格式錯誤",
   "radio tag|All": "全部",
   "News": "新聞",
@@ -4326,5 +4321,12 @@
   "JTWC warning ↗": "JTWC 警報 ↗",
   "Active cyclone advisories and warnings": "生效的氣旋公告和警報",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "在地圖上選擇風暴，或在列表中選擇風暴以選中它並移動鏡頭。點擊地圖空白處可取消選擇。NOAA NHC/CPHC 公告和 JTWC 警報。NHC 的預報不確定範圍表示中心預報路徑的不確定性，而不是風暴大小或整個危險區域。JTWC 的 34 節風危險區是 34 節風可能到達的範圍，並按路徑預報誤差加寬；它不是預報不確定範圍。預報點標籤是數據源的預報時效（小時），不是根據發布時間計算的時刻。幾何形狀貼合地表；高度不是氣象高度。請以官方公告或區域警報中心為準。",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第 {number} 號警報 · 發布於 {time}",
+  "last growth {age} ago": "最近一次擴展於 {age}前",
+  "Last 6 hours": "過去 6 小時",
+  "6–24 hours": "6–24 小時",
+  "1–3 days": "1–3 天",
+  "Older or unknown": "更早或未知",
+  "Colour shows the age of each area.": "顏色表示各區域在所示時刻的年齡。",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "時長從 WFIGS 測繪時間算起，否則從記錄的最後編輯時間算起。邊界已簡化至約 100 米。"
 }

@@ -2294,7 +2294,7 @@ test('points show only within their display range', () => {
   set.dispose();
 });
 
-test('the fire perimeters layer draws holed ground fills and draped fire lines on a viewer of its own', async () => {
+test('the fire perimeters layer draws holed ground fills and draped outlines on a viewer of its own', async () => {
   const { createFirePerimetersLayer } =
     await import('../../layers/perimeters/index.js');
   const scene = fakeScene();
@@ -2313,9 +2313,19 @@ test('the fire perimeters layer draws holed ground fills and draped fire lines o
   ];
   const layer = createFirePerimetersLayer({
     source: {
-      getSnapshot: async () => [
-        { stableId: 'a', containedPct: 0, polygons: [[outer, hole]] },
-      ],
+      getSnapshot: async () => ({
+        at: null,
+        revision: 'r',
+        fires: [{ id: 'a', containedPct: 0, anchor: { lon: -108, lat: 35.2 } }],
+        pieces: [
+          {
+            fireId: 'a',
+            born: null,
+            polygons: [[outer, hole]],
+            outline: [outer, hole],
+          },
+        ],
+      }),
     },
   });
   layer.init(viewer);
@@ -2336,9 +2346,9 @@ test('the fire perimeters layer draws holed ground fills and draped fire lines o
   assert.equal(instance.geometry._polygonHierarchy.holes.length, 1);
   const [line] = of(Cesium.GroundPolylinePrimitive);
   assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
-  assert.equal(line.geometryInstances.length, 1, 'the exterior ring only');
+  assert.equal(line.geometryInstances.length, 2, 'the hole is outlined too');
   assert.equal(line.geometryInstances[0].geometry.width, 2);
-  assert.equal(line.geometryInstances[0].id.id, 'fire-perimeter:a:0');
+  assert.equal(line.geometryInstances[0].id.id, 'fire-perimeter:a:line:0');
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });

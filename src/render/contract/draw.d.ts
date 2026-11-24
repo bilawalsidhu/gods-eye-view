@@ -133,7 +133,20 @@ export interface SetSpec {
    * `live` (the default) is wall time minus `delayMs`, as a live feed is
    * drawn a little behind real time; `scene` is the frame port's scene time.
    */
-  motionClock?: { kind: 'live'; delayMs?: number } | { kind: 'scene' };
+  motionClock?:
+    | {
+        kind: 'live';
+        delayMs?: number;
+        /**
+         * Who asks for the frames moving rows need: the set itself, one after
+         * another while a row moves (the default), or its `owner`, at the
+         * rate the rows move on screen. An owner's set may also draw a
+         * change written in place on the owner's next frame without asking
+         * for one (the owner writes as a frame begins).
+         */
+        frames?: 'set' | 'owner';
+      }
+    | { kind: 'scene' };
   show?: boolean;
 }
 
