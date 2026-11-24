@@ -3,7 +3,8 @@
     blender -b --factory-startup --python scripts/build-aircraft-view-sheet.py -- --out <dir> [--only airliner,light]
 
 Writes aircraft-views.png and aircraft-views.json in --out. The npm script
-build:aircraft-views encodes the PNG as lossless WebP. The models face -X,
+build:aircraft-views encodes the PNG as lossless WebP and writes the manifest
+to src/data/aircraftViews.json, which the app imports. The models face -X,
 with +Y starboard and +Z up. Helicopter frames share one scale based on the
 farthest point each vertex reaches over its rotor sweep.
 The layout and frame maths are described in src/data/viewSheet.js.
@@ -42,7 +43,7 @@ SUBJECTS = [
     ("light", "aircraft/c172.glb", None),
     ("glider", "aircraft/glider.glb", None),
     ("fastjet", "aircraft/t38.glb", None),
-    ("bizjet", "aircraft/glf4.glb", None),
+    ("bizjet", "aircraft/c56x.glb", None),
     ("uav", "aircraft/mq9.glb", None),
     ("helicopter0", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[0]),
     ("helicopter1", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[1]),

@@ -62,8 +62,8 @@
   },
   "bizjet": {
    "first": 2114,
-   "model": "aircraft/glf4.glb",
-   "radiusM": 17.211
+   "model": "aircraft/c56x.glb",
+   "radiusM": 8.741
   },
   "uav": {
    "first": 2416,

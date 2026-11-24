@@ -3,38 +3,25 @@
  * @description Maps an icon kind and rotor frame to its block of AIRCRAFT_VIEWS
  * and registers the sheet on a draw port. Course-rotated icons of rendered
  * kinds take a view. Other icons keep the flat glyph.
- * AIRCRAFT_VIEWS is the layout `scripts/build-aircraft-view-sheet.py` bakes.
+ * AIRCRAFT_VIEWS is built from `aircraftViews.json`, the manifest
+ * `scripts/build-aircraft-views.mjs` writes with the sheet.
  */
 import {
   aircraftIcon,
   FLEET_ICON_PX,
   rotorFrameIndex,
 } from './aircraftIcons.js';
+import manifest from './aircraftViews.json' with { type: 'json' };
 
 // The bake's SUBJECTS order.
-const SUBJECTS = [
-  'airliner',
-  'widebody',
-  'quadjet',
-  'turboprop',
-  'light',
-  'glider',
-  'fastjet',
-  'bizjet',
-  'uav',
-  'helicopter0',
-  'helicopter1',
-  'helicopter2',
-];
+const SUBJECTS = Object.keys(manifest.subjects);
 const SHEET = Object.freeze({
-  image: '/sprites/aircraft-views.webp',
-  cellPx: 64,
-  columns: 64,
-  rows: 57,
-  ringStepDeg: 7.5,
-  rings: Object.freeze([
-    1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22,
-  ]),
+  image: `/sprites/${manifest.image}`,
+  cellPx: manifest.cellPx,
+  columns: manifest.columns,
+  rows: manifest.rows,
+  ringStepDeg: manifest.ringStepDeg,
+  rings: Object.freeze([...manifest.rings]),
 });
 const FRAMES = SHEET.rings.reduce((sum, n) => sum + n, 0);
 export const AIRCRAFT_VIEWS = Object.freeze({
@@ -42,7 +29,9 @@ export const AIRCRAFT_VIEWS = Object.freeze({
   sheet: SHEET,
   frames: FRAMES,
   subjects: Object.freeze(
-    Object.fromEntries(SUBJECTS.map((name, i) => [name, i * FRAMES])),
+    Object.fromEntries(
+      SUBJECTS.map((name) => [name, manifest.subjects[name].first]),
+    ),
   ),
 });
 const STILL_KINDS = new Set(

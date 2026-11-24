@@ -4,10 +4,13 @@
  *
  * Runs `scripts/build-aircraft-view-sheet.py` in Blender (headless) into a
  * scratch directory, then writes `public/sprites/aircraft-views.webp`
- * (lossless WebP of the baked PNG) and `public/sprites/aircraft-views.json`
- * (its manifest). See `public/sprites/README.md`.
+ * (lossless WebP of the baked PNG) and `src/data/aircraftViews.json` (its
+ * manifest, which the app imports). With `--out`, the manifest is written
+ * next to the WebP instead, unless `--manifest` names a path.
+ * See `public/sprites/README.md`.
  *
  * Run:  npm run build:aircraft-views [-- --only airliner,light --out /tmp/views]
+ *         [--manifest <path>]
  * Requires Blender 5.2 or newer for EXT_meshopt_compression in the fleet models.
  * Uses `$BLENDER`, else `blender` on the PATH, else the macOS app.
  */
@@ -24,18 +27,34 @@ const opt = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
+const SHIPPED = path.join(root, 'public', 'sprites');
 const OUT = path.resolve(root, opt('--out', 'public/sprites'));
+const MANIFEST = path.resolve(
+  root,
+  opt(
+    '--manifest',
+    OUT === SHIPPED
+      ? 'src/data/aircraftViews.json'
+      : path.join(OUT, 'aircraft-views.json'),
+  ),
+);
 const ONLY = opt('--only', null);
 
-const relative = path.relative(path.join(root, 'public', 'sprites'), OUT);
+const inside = (dir, file) => {
+  const relative = path.relative(dir, file);
+  return (
+    relative !== '..' &&
+    !relative.startsWith('..' + path.sep) &&
+    !path.isAbsolute(relative)
+  );
+};
 if (
   ONLY &&
-  relative !== '..' &&
-  !relative.startsWith('..' + path.sep) &&
-  !path.isAbsolute(relative)
+  (inside(SHIPPED, OUT) ||
+    MANIFEST === path.join(root, 'src', 'data', 'aircraftViews.json'))
 ) {
   console.error(
-    '--only leaves other subjects empty. Give --out a directory outside public/sprites.',
+    '--only leaves other subjects empty. Give --out a directory outside public/sprites, and no --manifest into src/data.',
   );
   process.exit(1);
 }
@@ -81,12 +100,12 @@ try {
   await sharp(png)
     .webp({ lossless: true, effort: 6, exact: true })
     .toFile(webp);
-  fs.copyFileSync(
-    path.join(scratch, 'aircraft-views.json'),
-    path.join(OUT, 'aircraft-views.json'),
-  );
+  fs.mkdirSync(path.dirname(MANIFEST), { recursive: true });
+  fs.copyFileSync(path.join(scratch, 'aircraft-views.json'), MANIFEST);
   const kb = Math.round(fs.statSync(webp).size / 1024);
-  console.log(`wrote ${path.relative(root, webp)} (${kb} KB) and its manifest`);
+  console.log(
+    `wrote ${path.relative(root, webp)} (${kb} KB) and ${path.relative(root, MANIFEST)}`,
+  );
 } finally {
   fs.rmSync(scratch, { recursive: true, force: true });
 }

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import {
@@ -95,51 +94,6 @@ test('AIRCRAFT_VIEWS is consistent: a block a subject, every block on the sheet'
   assert.ok(Object.isFrozen(sheet.rings));
   assert.ok(Object.isFrozen(subjects));
 });
-
-const BAKE = new URL(
-  '../../scripts/build-aircraft-view-sheet.py',
-  import.meta.url,
-);
-const MANIFEST = new URL(
-  '../../public/sprites/aircraft-views.json',
-  import.meta.url,
-);
-
-test('the bake script lays the sheet out as AIRCRAFT_VIEWS says', () => {
-  const script = readFileSync(BAKE, 'utf8');
-  const constant = (name) => {
-    const match = new RegExp(`^${name} = (.+)$`, 'm').exec(script);
-    assert.ok(match, `${name} in the bake script`);
-    return JSON.parse(match[1]);
-  };
-  const { sheet, frames, subjects } = AIRCRAFT_VIEWS;
-  assert.equal(constant('RING_STEP_DEG'), sheet.ringStepDeg);
-  assert.deepEqual(constant('RINGS'), [...sheet.rings]);
-  assert.equal(constant('COLUMNS'), sheet.columns);
-  const list = /^SUBJECTS = \[([\s\S]*?)^\]/m.exec(script);
-  assert.ok(list, 'SUBJECTS in the bake script');
-  const names = [...list[1].matchAll(/^\s*\("(\w+)",/gm)].map((m) => m[1]);
-  assert.deepEqual(names, Object.keys(subjects), 'the same subjects in order');
-  // The script's rows: as many as its subjects' blocks take.
-  assert.equal(Math.ceil((names.length * frames) / sheet.columns), sheet.rows);
-});
-
-test(
-  'the baked manifest matches AIRCRAFT_VIEWS',
-  () => {
-    const manifest = JSON.parse(readFileSync(MANIFEST, 'utf8'));
-    const { sheet, subjects } = AIRCRAFT_VIEWS;
-    assert.equal(manifest.cellPx, sheet.cellPx);
-    assert.equal(manifest.columns, sheet.columns);
-    assert.equal(manifest.rows, sheet.rows);
-    assert.equal(manifest.ringStepDeg, sheet.ringStepDeg);
-    assert.deepEqual(manifest.rings, [...sheet.rings]);
-    assert.equal(manifest.image, 'aircraft-views.webp');
-    assert.deepEqual(Object.keys(manifest.subjects), Object.keys(subjects));
-    for (const [name, first] of Object.entries(subjects))
-      assert.equal(manifest.subjects[name].first, first, name);
-  },
-);
 
 const SHEET = new URL(
   '../../public/sprites/aircraft-views.webp',

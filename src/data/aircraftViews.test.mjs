@@ -7,6 +7,8 @@ import {
 } from './aircraftViews.js';
 import { ROTOR_FRAMES, ROTOR_STILL_FRAME } from './rotorFrames.js';
 import { aircraftIcon, FLEET_ICON_PX } from './aircraftIcons.js';
+import { CLASS_MODELS } from './fleetModels.js';
+import manifest from './aircraftViews.json' with { type: 'json' };
 
 const STILL_KINDS = [
   'airliner',
@@ -126,4 +128,23 @@ test('the sheet is registered with its image resolved as the layer resolves its 
     'the layout as it is',
   );
   assert.equal(AIRCRAFT_VIEWS.sheet.image, '/sprites/aircraft-views.webp');
+});
+
+test('each class is baked from the model it is drawn with up close', () => {
+  const unmatched = [];
+  for (const [name, { model }] of Object.entries(manifest.subjects)) {
+    const kind = name.replace(/\d+$/, '');
+    if (!(kind in CLASS_MODELS)) {
+      unmatched.push(name);
+      continue;
+    }
+    assert.equal(
+      model.replace(/^.*\//, '').replace(/\.glb$/, ''),
+      CLASS_MODELS[kind],
+      name,
+    );
+  }
+  // Airliner has no class model: each airliner type draws its own, so the
+  // sheet stands them all in with the A320, the most common.
+  assert.deepEqual(unmatched, ['airliner']);
 });

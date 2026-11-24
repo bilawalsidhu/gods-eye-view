@@ -11,10 +11,11 @@
  * few frames (above, oblique, abeam, below) shrunk to the sizes a contact is
  * drawn at, to judge whether thin wings still read.
  *
- * Run:  node scripts/qa-aircraft-view-sheet.mjs [--manifest public/sprites/aircraft-views.json]
+ * Run:  node scripts/qa-aircraft-view-sheet.mjs [--manifest src/data/aircraftViews.json]
  *         [--sheet <image>] [--out qa-shots/aircraft-views] [--zoom 2] [--sizes 40,30,20]
  *         [--only airliner,glider]
- * `--sheet` defaults to the manifest's `image`, a file next to it.
+ * `--sheet` defaults to the manifest's `image`: in `public/sprites` for the
+ * shipped manifest, else a file next to the manifest (a `--out` bake).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,9 +26,8 @@ const opt = (name, fallback) => {
   const i = argv.indexOf(name);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-const MANIFEST = path.resolve(
-  opt('--manifest', 'public/sprites/aircraft-views.json'),
-);
+const SHIPPED_MANIFEST = path.resolve('src/data/aircraftViews.json');
+const MANIFEST = path.resolve(opt('--manifest', SHIPPED_MANIFEST));
 const OUT = path.resolve(opt('--out', 'qa-shots/aircraft-views'));
 const ZOOM = Number(opt('--zoom', '2'));
 const SIZES = opt('--sizes', '40,30,20').split(',').map(Number);
@@ -59,9 +59,16 @@ if (
     ['.', '..'].includes(manifest.image))
 )
   throw new Error(
-    "The manifest's image must be a file next to it. Pass --sheet for another.",
+    "The manifest's image must be a file name. Pass --sheet for another.",
   );
-const sheetPath = override ?? path.join(path.dirname(MANIFEST), manifest.image);
+const sheetPath =
+  override ??
+  path.join(
+    MANIFEST === SHIPPED_MANIFEST
+      ? path.resolve('public/sprites')
+      : path.dirname(MANIFEST),
+    manifest.image,
+  );
 const { cellPx: cell, columns, rows, rings } = manifest;
 const firsts = [];
 rings.reduce((at, count) => (firsts.push(at), at + count), 0);

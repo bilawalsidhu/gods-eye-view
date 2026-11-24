@@ -14,18 +14,19 @@ import sharp from 'sharp';
 
 const repo = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const shippedWebp = path.join(repo, 'public/sprites/aircraft-views.webp');
-const shippedJson = path.join(repo, 'public/sprites/aircraft-views.json');
+const shippedJson = path.join(repo, 'src/data/aircraftViews.json');
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'partial-bake-'));
   fs.mkdirSync(path.join(root, 'scripts'));
   fs.mkdirSync(path.join(root, 'public/sprites'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'src/data'), { recursive: true });
   fs.copyFileSync(
     path.join(repo, 'scripts/build-aircraft-views.mjs'),
     path.join(root, 'scripts/build-aircraft-views.mjs'),
   );
   fs.copyFileSync(shippedWebp, path.join(root, 'public/sprites/aircraft-views.webp'));
-  fs.copyFileSync(shippedJson, path.join(root, 'public/sprites/aircraft-views.json'));
+  fs.copyFileSync(shippedJson, path.join(root, 'src/data/aircraftViews.json'));
   fs.symlinkSync(path.join(repo, 'node_modules'), path.join(root, 'node_modules'));
   // Blender stand-in: the shipped sheet with every block not in --only zeroed,
   // as build-aircraft-view-sheet.py leaves it (np.zeros, skipped subjects).

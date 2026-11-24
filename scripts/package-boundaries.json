@@ -2092,6 +2092,7 @@
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
       "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
       "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2240,6 +2241,7 @@
       "src/data/courseFromFixes.js",
       "src/data/approxDistance.js",
       "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
       "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -5622,6 +5624,7 @@
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
       "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
       "src/data/viewSheet.js"
     ],
     "external": [
@@ -6480,6 +6483,7 @@
       "src/layers/satellites/tiangongArticulation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
       "src/data/viewSheet.js"
     ],
     "external": [
