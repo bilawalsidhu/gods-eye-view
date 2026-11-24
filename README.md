@@ -352,7 +352,7 @@ and it carries the LAN-sharing rules alongside [Keys & Costs](#-api-keys).
 
 Choose a first-run mission, or try these in order. Your starting basemap depends on the keys you've added.
 
-1. **Light up the sky.** Turn on **Flights** in Data Layers — thousands of live aircraft, gliding on real telemetry, detection mesh already reading the scene. Click one: the camera locks on, a trail draws behind it, and its live telemetry card comes up.
+1. **Light up the sky.** Turn on **Live Flights** in Data Layers — thousands of live aircraft, gliding on real telemetry, detection mesh already reading the scene. Click one: the camera locks on, a trail draws behind it, and its live telemetry card comes up.
 2. **Take the controls.** Hit **COCKPIT** on your tracked plane and ride it down, switching sensors mid-flight: NVG into Ironbow FLIR.
 
 3. **Drop into a busy airport.** Search one and descend to the taxiways with **3D** aircraft on — grounded contacts, taxi trails, the whole apron working in real time.
@@ -470,7 +470,7 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some of
 
 </details>
 
-**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline: the world timeline moves through them (drag back, **Play**, **Live**), and the **WEATHER** rail panel shows the displayed frame's time (its age while live); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones, and JTWC warnings with their 34-knot wind danger areas for the other basins. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
+**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline: drag back on the world timeline, use **Play** to advance through history, or choose **Live** to return to the newest frames. The **WEATHER** panel heading shows the newest selected frame and its age while live, or the timeline time in history. The product cards show the times of the displayed frames. **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones, and JTWC warnings with their 34-knot wind danger areas for the other basins. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
 
