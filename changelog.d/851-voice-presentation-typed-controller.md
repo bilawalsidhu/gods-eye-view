@@ -1,6 +1,8 @@
-- Keep the policy-only voice presentation resolver truthful for controller
-  sessions: unsupported states (including `ready`) return idle, and only
-  literal boolean activity flags can imply ongoing speech or actions. The
-  voice card/HUD still does not consume the resolver; no voice UX claim.
-  Reviewer feedback: quanticsoul4772 on #851; original downstream repair
-  from #265 and prior #837 compatibility review by asturksever.
+- Voice: the dock's assistant phase line now says what OpenAI Realtime voice
+  is doing (READY, WORKING, SPEAKING, EXECUTING, LISTENING) instead of always
+  LISTENING. SPEAKING needs audible output, not just `response.created`, and
+  lasts while audio drains after `response.done`; an accepted Space barge-in
+  hands the line to the user, a refused one changes nothing. Unknown session
+  states and non-boolean flags fail closed. Thanks to asturksever for the #837
+  voice card and barge-in compatibility review and quanticsoul4772 for the
+  Windows validation and fail-closed review on #851.

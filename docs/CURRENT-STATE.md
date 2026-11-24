@@ -1701,14 +1701,19 @@ Voice Settings or Voice Preview puts chat away, minimized or not, and shows the
 voice panel; the typed conversation and its running reply carry on, and the
 chat button brings them back.
 
-The experimental presentation-only `resolveVoicePresentationState()` policy
-recognizes the controller session states `idle`, `connecting`, `listening`,
-`executing` and `error`. Unknown states fall back to `idle`, never `ready`;
-only literal boolean `true` activates interruption, action, audio or response
-flags. An accepted Space barge-in still outranks action/audio; the user turn
-outranks lingering assistant work, and audible output outranks an in-flight
-response. No app/HUD consumer is connected to this resolver, and localized
-labels for the extra presentation states are not yet implemented.
+With OpenAI Realtime voice, the dock's assistant phase line follows
+`resolveVoicePresentationState()` instead of always reading LISTENING: READY
+while the session waits, WORKING while a response is generated but not yet
+audible, SPEAKING only between `output_audio_buffer.started` and
+`stopped`/`cleared` (so it stays through audio that drains after
+`response.done`), EXECUTING while a tool runs, and LISTENING for the user's turn
+and right after an accepted Space barge-in. A Space press refused while Radio
+owns the speaker changes nothing. The resolver recognizes the controller session
+states `idle`, `connecting`, `listening`, `executing` and `error`; unknown
+states fall back to `idle`, never `ready`, and only literal boolean `true`
+activates interruption, action, audio or response flags. Gemini Live does not
+report the projection and keeps LISTENING. The voice card still owns captions,
+plan steps and results.
 
 Contacts nearest-aircraft follow-ups retain the snapshot's distance basis even
 after the camera moves. An explicit new scope replaces that basis. Provider

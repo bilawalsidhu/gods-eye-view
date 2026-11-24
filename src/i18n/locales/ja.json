@@ -2349,6 +2349,7 @@
   "voice|CONNECTING": "接続中",
   "voice|LISTENING": "聞き取り中",
   "voice|EXECUTING": "実行中",
+  "voice|SPEAKING": "発話中",
   "voice|ERROR": "エラー",
   "Voice provider": "音声プロバイダー",
   "Changing provider reconnects voice if it is on.": "音声がオンの場合、プロバイダーを変更すると音声が再接続されます。",

@@ -791,6 +791,7 @@
   "DETECT": "ERKENN.",
   "voice|LISTENING": "HÖRT ZU",
   "voice|EXECUTING": "FÜHRT AUS",
+  "voice|SPEAKING": "SPRICHT",
   "AI AGENT": "KI-AGENT",
   "Voice model tier — applies next session": "Sprachmodell-Stufe: gilt ab nächster Sitzung",
   "Estimated session cost": "Geschätzte Sitzungskosten",

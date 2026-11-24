@@ -2459,6 +2459,7 @@
   "voice|CONNECTING": "CONNEXION",
   "voice|LISTENING": "ÉCOUTE",
   "voice|EXECUTING": "EXÉCUTION",
+  "voice|SPEAKING": "PAROLE",
   "voice|ERROR": "ERREUR",
   "Voice provider": "Fournisseur vocal",
   "Changing provider reconnects voice if it is on.": "Changer de fournisseur reconnecte la voix si elle est activée.",

@@ -2113,6 +2113,7 @@
   "voice|CONNECTING": "СВЯЗЬ…",
   "voice|LISTENING": "СЛУШАЮ",
   "voice|EXECUTING": "ДЕЛАЮ",
+  "voice|SPEAKING": "ГОВОРЮ",
   "voice|ERROR": "ОШИБКА",
   "MIC": "МИК",
   "WORKING": "В РАБОТЕ",

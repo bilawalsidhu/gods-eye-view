@@ -18,6 +18,7 @@ import {
 } from './pointerContext.js';
 
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
+import { resolveVoicePresentationState } from './realtimeInputPolicy.js';
 import { missingVoiceKeyText, postDebugLog } from './realtimeDiagnostics.js';
 
 export {
@@ -150,7 +151,16 @@ export class GevRealtimeController extends RealtimeFacade {
         setStatus: (...args) => this.setStatus(...args),
         start: (...args) => this.start(...args),
         pauseRadioForVoice: (...args) => this.pauseRadioForVoice(...args),
-        bargeIn: () => this._turns.bargeIn(),
+        bargeIn: () => {
+          // Only an accepted barge-in may show as interrupted; one refused
+          // while Radio owns the speaker leaves the projection unchanged.
+          const interrupted = this._turns.bargeIn();
+          if (interrupted) {
+            this.presentationInterrupted = true;
+            this.refreshPresentation();
+          }
+          return interrupted;
+        },
         holdPointer: () => this.pointer?.hold('keydown'),
         releasePointerHold: () => this.pointer?.releaseHold(),
         beginPointerTurn: (at) => this.beginPointerTurn(at),
@@ -199,6 +209,7 @@ export class GevRealtimeController extends RealtimeFacade {
           this.sendVisualContextIfUseful(...args),
         setStatus: (...args) => this.setStatus(...args),
         setVoiceSpeaker: (...args) => this.setVoiceSpeaker(...args),
+        refreshPresentation: () => this.refreshPresentation(),
         settleRadioToolHandoffReservation: (...args) =>
           this.settleRadioToolHandoffReservation(...args),
         startPendingRadioHandoff: (...args) =>
@@ -468,6 +479,36 @@ export class GevRealtimeController extends RealtimeFacade {
     ) {
       this.pauseRadioForVoice();
     }
+    this.refreshPresentation();
+  }
+
+  setVoiceSpeaker(speaker, options) {
+    const result = super.setVoiceSpeaker(speaker, options);
+    this.presentationSpeaker =
+      speaker === 'user' || speaker === 'ai' ? speaker : 'idle';
+    // An accepted barge-in shows until the next turn owner takes over.
+    this.presentationInterrupted = false;
+    this.refreshPresentation();
+    return result;
+  }
+
+  /**
+   * Emits the dock's truthful turn state when it changes. `speaker === 'ai'`
+   * arrives at response.created, before any audio: only the output audio
+   * buffer events make it SPEAKING (see resolveVoicePresentationState).
+   */
+  refreshPresentation() {
+    if (!this._turns) return;
+    const state = resolveVoicePresentationState({
+      sessionState: this.status,
+      speaker: this.presentationSpeaker,
+      responseActive: this._turns.responseActive === true,
+      outputAudible: this._turns.assistantAudioPlaying === true,
+      interrupted: this.presentationInterrupted === true,
+    });
+    if (state === this.presentationState) return;
+    this.presentationState = state;
+    this.emitSessionEvent({ type: 'presentation', state });
   }
 
   /* ---------------- voice cost control ---------------- */
