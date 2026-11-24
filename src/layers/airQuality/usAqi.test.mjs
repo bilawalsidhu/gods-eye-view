@@ -88,7 +88,7 @@ test('no rated value gives null', () => {
   assert.equal(usAqi(null), null);
 });
 
-test('plausible drops PM2.5 above PM10', () => {
+test('plausible drops PM2.5 well above PM10', () => {
   assert.deepEqual(plausible({ pm25: 308, pm10: 92 }), { pm10: 92 });
   assert.deepEqual(plausible({ pm25: 40, pm10: 92 }), { pm25: 40, pm10: 92 });
 });
@@ -576,4 +576,31 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
   // The national snapshot serves the next view without asking again.
   assert.equal(national(), asked);
   layer.destroy();
+});
+
+test('PM2.5 is dropped only when it exceeds PM10 by a real margin: 1.5 × PM10 + 10', () => {
+  // Smoke: PM2.5 close to PM10 stays and sets the index.
+  assert.deepEqual(plausible({ pm25: 150, pm10: 145 }), {
+    pm25: 150,
+    pm10: 145,
+  });
+  assert.deepEqual(usAqi(plausible({ pm25: 150, pm10: 145 })), {
+    index: 225,
+    leading: 'pm25',
+  });
+  assert.deepEqual(plausible({ pm25: 12.3, pm10: 12.0 }), {
+    pm25: 12.3,
+    pm10: 12.0,
+  });
+  // A Sirsa-type pair stays excluded.
+  assert.deepEqual(plausibility({ pm25: 308, pm10: 92 }), {
+    kept: { pm10: 92 },
+    excluded: { pm25: 'above-pm10' },
+  });
+  // The margin itself.
+  assert.deepEqual(plausible({ pm25: 160, pm10: 100 }), {
+    pm25: 160,
+    pm10: 100,
+  });
+  assert.deepEqual(plausible({ pm25: 160.1, pm10: 100 }), { pm10: 100 });
 });

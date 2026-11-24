@@ -4358,6 +4358,7 @@
   "These units cannot be compared without additional conversion data.": "缺少額外的換算數據，無法對這些單位進行比較。",
   "No usable measurement.": "沒有可用的測量值。",
   "EEA hourly pollutant bands": "歐洲環境署小時汙染物分級",
+  "WHO-based carbon monoxide bands": "基於世衛組織的一氧化碳分級",
   "Air quality · South Africa": "空氣質量 · 南非",
   "South Africa · SAAQIS": "南非 · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "數據提供方拒絕了密鑰。請檢查提供方設置。",
@@ -4416,6 +4417,11 @@
   },
   "Deselect station": "取消選擇監測站",
   "{network}: showing cached data": "{network}：顯示緩存數據",
+  "Licence: {licence}": "許可：{licence}",
+  "{network}: key rejected — check Provider Settings": "{network}：密鑰被拒絕——請檢查服務商設置",
+  "{network}: loading stations, {n} of {m}": "{network}：正在加載站點，{m} 個中的 {n} 個",
+  "{source}: no forecast for this time": "{source}：此時間沒有預報",
+  "Implausibly high for this pollutant; no health category is assigned.": "該汙染物的數值高得不合理；不賦予健康等級。",
   "forecast for {time}": "{time} 的預報",
   "Model field unavailable": "模型場不可用"
 }

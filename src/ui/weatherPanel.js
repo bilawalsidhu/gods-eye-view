@@ -198,9 +198,6 @@ export function createWeatherPanel({
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
-      const overviewBlocks = summary.overview?.length
-        ? [{ id: 'overview', type: 'lines', lines: summary.overview }]
-        : [];
       // A titled list says what it ranks in a muted line above it.
       const listBlocks = list?.items?.length
         ? [
@@ -243,12 +240,12 @@ export function createWeatherPanel({
         ...(lead ? resultBlocks : []),
         // A card with tiles reads top down: what it shows, its scale, the
         // tiles, then what stands out in view.
-        ...(tileBlocks.length ? [] : [...overviewBlocks, ...listBlocks]),
+        ...(tileBlocks.length ? [] : listBlocks),
         { id: 'details', type: 'lines', lines },
         ...toggleBlocks,
         ...(legend.length ? [legendBlock] : []),
         ...tileBlocks,
-        ...(tileBlocks.length ? [...overviewBlocks, ...listBlocks] : []),
+        ...(tileBlocks.length ? listBlocks : []),
         ...(summary.settings?.length
           ? [{ id: 'settings', type: 'settings', settings: summary.settings }]
           : []),

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createSaAcquisition,
+  saaqisEnabled,
   southAfricaAirQualityProxy,
 } from './southAfricaAirQuality.js';
 
@@ -187,4 +188,62 @@ test('optional index endpoint attaches ratings and failure preserves concentrati
       failIndex ? null : 'Good',
     );
   }
+});
+
+test('only SAAQIS_ENABLED=1 switches South Africa on', () => {
+  assert.equal(saaqisEnabled({}), false);
+  assert.equal(saaqisEnabled({ SAAQIS_ENABLED: '' }), false);
+  assert.equal(saaqisEnabled({ SAAQIS_ENABLED: '0' }), false);
+  assert.equal(saaqisEnabled({ SAAQIS_ENABLED: 'true' }), false);
+  assert.equal(saaqisEnabled({ SAAQIS_ENABLED: ' 1 ' }), true);
+});
+
+test('off by default the route answers not configured and never contacts the portal', async () => {
+  const answer = async (env) => {
+    let fetched = 0;
+    const plugin = southAfricaAirQualityProxy({
+      env,
+      fetchImpl: async (url, options) => {
+        fetched++;
+        if (url.endsWith('GetApiFromBackToken'))
+          return Response.json({ key: 'private' });
+        return Response.json(
+          JSON.parse(options.body).url === 'regions' ? regions : latest,
+        );
+      },
+    });
+    let handler;
+    plugin.configureServer({
+      middlewares: {
+        use(path, fn) {
+          handler = fn;
+        },
+      },
+    });
+    let status;
+    let body = '';
+    await handler(
+      { method: 'GET', url: '/' },
+      {
+        writeHead(code) {
+          status = code;
+        },
+        end(text) {
+          body = text;
+        },
+      },
+    );
+    return { status, body: JSON.parse(body), fetched };
+  };
+  const off = await answer({});
+  assert.equal(off.status, 200);
+  assert.deepEqual(
+    { unavailable: off.body.unavailable, code: off.body.code },
+    { unavailable: true, code: 'not_configured' },
+  );
+  assert.equal(off.fetched, 0);
+  const on = await answer({ SAAQIS_ENABLED: '1' });
+  assert.equal(on.status, 200);
+  assert.equal(on.body.readings.length, 1);
+  assert.ok(on.fetched > 0);
 });

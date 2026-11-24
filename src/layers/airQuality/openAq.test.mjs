@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeOpenAqLocations, normalizeOpenAqLatest } from './openAq.js';
-import { createAirQualitySource } from './providers.js';
+import {
+  normalizeOpenAqLocations,
+  normalizeOpenAqLatest,
+  normalizeOpenAqHours,
+} from './openAq.js';
+import {
+  createAirQualitySnapshotSource,
+  createAirQualitySource,
+} from './providers.js';
 import { createAirQualityLayer } from './index.js';
 const now = Date.parse('2026-10-20T12:00:00Z');
 const location = {
@@ -203,4 +210,65 @@ test('providers asked in parallel keep their own coverage and cache', async () =
   assert.equal(source.getCoverage('fast').network, 'fast');
   await ask();
   assert.deepEqual(calls, ['slow', 'fast'], 'both answers were cached');
+});
+
+test('an hourly note names the bands used: WHO-based for CO, EEA for the rest', () => {
+  const now = Date.parse('2026-11-20T12:30:00Z');
+  const hour = (name, units, value) => ({
+    value,
+    parameter: { name, units },
+    period: {
+      interval: '01:00:00',
+      datetimeFrom: { utc: '2026-11-20T10:00:00Z' },
+      datetimeTo: { utc: '2026-11-20T11:00:00Z' },
+    },
+    coverage: { percentCoverage: 100 },
+    flagInfo: { hasFlags: false },
+  });
+  const note = (parameter, name, units) => {
+    const sensor = { id: 9, parameter, units, name };
+    const station = {
+      stationId: '1',
+      name: 'S',
+      lat: 1,
+      lon: 1,
+      country: 'ZA',
+      sensors: [sensor],
+    };
+    return normalizeOpenAqHours(station, sensor, [hour(name, units, 1)], now)[0]
+      ?.note;
+  };
+  assert.match(note('CO', 'co', 'mg/m³') ?? '', /WHO-based pollutant bands/);
+  assert.match(note('PM2.5', 'pm25', 'µg/m³') ?? '', /EEA pollutant bands/);
+});
+
+test('a viewport snapshot without a station catalogue is accepted', async () => {
+  const source = createAirQualitySnapshotSource({
+    endpoint: '/api/air-quality/openaq',
+    hourly: true,
+    fetchImpl: async () =>
+      Response.json({
+        schemaVersion: 1,
+        readings: [],
+        checked: 3,
+        eligible: 10,
+        partial: true,
+        retryAt: Date.now() + 8000,
+      }),
+  });
+  assert.deepEqual(
+    await source.getSnapshot({
+      parameter: 'PM2.5',
+      view: [0, 0, 1, 1, 0.5, 0.5],
+    }),
+    [],
+  );
+  assert.equal(source.getCoverage().eligible, 10);
+  // A catalogue that is there must still be a list.
+  const broken = createAirQualitySnapshotSource({
+    endpoint: '/x',
+    fetchImpl: async () =>
+      Response.json({ schemaVersion: 1, stations: {}, readings: [] }),
+  });
+  await assert.rejects(broken.getSnapshot(), /Malformed/);
 });

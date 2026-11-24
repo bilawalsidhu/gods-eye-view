@@ -4912,6 +4912,7 @@
   "These units cannot be compared without additional conversion data.": "لا يمكن مقارنة هذه الوحدات دون بيانات تحويل إضافية.",
   "No usable measurement.": "لا يوجد قياس صالح للاستخدام.",
   "EEA hourly pollutant bands": "فئات الملوِّثات الساعية لدى EEA",
+  "WHO-based carbon monoxide bands": "فئات أول أكسيد الكربون المستندة إلى منظمة الصحة العالمية",
   "Air quality · South Africa": "جودة الهواء · جنوب أفريقيا",
   "South Africa · SAAQIS": "جنوب أفريقيا · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "رُفض مفتاح المزوِّد. تحقّق من إعدادات المزوِّدين.",
@@ -4946,6 +4947,11 @@
   },
   "Deselect station": "إلغاء تحديد المحطة",
   "{network}: showing cached data": "{network}: عرض البيانات المخزنة مؤقتًا",
+  "Licence: {licence}": "الترخيص: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: رُفض المفتاح — راجع «إعدادات المزوّدين»",
+  "{network}: loading stations, {n} of {m}": "{network}: جارٍ تحميل المحطات، {n} من {m}",
+  "{source}: no forecast for this time": "{source}: لا توقع لهذا الوقت",
+  "Implausibly high for this pollutant; no health category is assigned.": "قيمة مرتفعة بشكل غير معقول لهذا الملوث؛ لا تُسنَد إليها فئة صحية.",
   "forecast for {time}": "توقع لـ {time}",
   "Model field unavailable": "حقل النموذج غير متاح"
 }

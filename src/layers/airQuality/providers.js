@@ -53,7 +53,10 @@ export function createAirQualitySnapshotSource({
     const response = await fetchImpl(url, { signal: requestSignal });
     if (!response.ok) {
       if (response.status === 401 || response.status === 403)
-        throw new Error(msg('Provider key rejected. Check Provider Settings.'));
+        throw Object.assign(
+          new Error(msg('Provider key rejected. Check Provider Settings.')),
+          { code: 'key_rejected' },
+        );
       if (response.status === 428)
         throw Object.assign(new Error(msg('Provider API key required')), {
           code: 'no_key',
@@ -87,9 +90,16 @@ export function createAirQualitySnapshotSource({
       64 * 1024 * 1024,
       requestSignal,
     );
+    // A network this server leaves switched off: no failure, nothing to show.
+    // English data for the console; the card shows no line for it.
+    if (payload?.unavailable === true && payload.code === 'not_configured')
+      throw Object.assign(new Error('Air quality provider not enabled'), {
+        code: 'not_configured',
+      });
+    // A viewport answer carries counts in place of its station catalogue.
     if (
       payload?.schemaVersion !== 1 ||
-      !Array.isArray(payload.stations) ||
+      (payload.stations !== undefined && !Array.isArray(payload.stations)) ||
       !Array.isArray(payload.readings)
     )
       throw new Error(msg('Malformed air quality snapshot'));

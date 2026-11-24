@@ -4682,6 +4682,7 @@
   "These units cannot be compared without additional conversion data.": "Эти единицы нельзя сравнить без дополнительных данных для пересчёта.",
   "No usable measurement.": "Нет пригодного измерения.",
   "EEA hourly pollutant bands": "Почасовые категории загрязнителей ЕАОС",
+  "WHO-based carbon monoxide bands": "Категории оксида углерода на основе ВОЗ",
   "Calculated comparison": "Расчётное сравнение",
   "Older observation": "Более старое наблюдение",
   "air quality risk|Low": "Низкий",
@@ -4734,6 +4735,11 @@
   },
   "Deselect station": "Снять выбор станции",
   "{network}: showing cached data": "{network}: показаны кэшированные данные",
+  "Licence: {licence}": "Лицензия: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: ключ отклонён — проверьте «Настройки провайдеров»",
+  "{network}: loading stations, {n} of {m}": "{network}: загрузка станций, {n} из {m}",
+  "{source}: no forecast for this time": "{source}: нет прогноза на это время",
+  "Implausibly high for this pollutant; no health category is assigned.": "Неправдоподобно высокое значение для этого загрязнителя; категория воздействия на здоровье не присваивается.",
   "forecast for {time}": "прогноз на {time}",
   "Model field unavailable": "Поле модели недоступно"
 }

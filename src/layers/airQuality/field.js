@@ -151,6 +151,7 @@ export function readFieldManifest(raw) {
   return Object.freeze({
     source: text(raw.source, 80),
     sourceShort: text(raw.sourceShort, 24),
+    credit: text(raw.credit, 500),
     run: raw.run,
     runMs,
     scale: Object.freeze(scale),

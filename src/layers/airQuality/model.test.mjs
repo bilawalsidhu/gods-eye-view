@@ -267,3 +267,29 @@ test('analyst records are JSON-safe and name the provider and scale', () => {
     assert.notEqual(value, undefined, `${key} must not be undefined`);
   }
 });
+
+test("an analyst record gives a pollutant's value in the layer's units, as the card does", () => {
+  const observation = (parameter, value, units) =>
+    mapAnalystRecord({
+      id: `saaqis:1:${parameter}`,
+      provider: 'saaqis',
+      kind: 'observation',
+      parameter,
+      scale: parameter,
+      value,
+      units,
+    });
+  // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C; 2 ppm of CO is 2.29 mg/m³.
+  assert.deepEqual(
+    (({ value, units }) => ({ value, units }))(observation('NO2', 10, 'ppb')),
+    { value: 18.82, units: 'µg/m³' },
+  );
+  const co = observation('CO', 2, 'ppm');
+  assert.ok(Math.abs(co.value - 2 * 1.1456) < 1e-9);
+  assert.equal(co.units, 'mg/m³');
+  // Units that do not convert keep the source's value and units.
+  assert.deepEqual(
+    (({ value, units }) => ({ value, units }))(observation('CO2', 420, 'ppm')),
+    { value: 420, units: 'ppm' },
+  );
+});

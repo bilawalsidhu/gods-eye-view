@@ -1,8 +1,11 @@
 /**
  * Deterministic browser gate for India's Air quality provider (no API key).
- * Run: node scripts/qa-india-air-quality.mjs --url http://localhost:4173
+ * Run against a dev server started with OPENAQ_API_KEY and DATA_GOV_IN_API_KEY
+ * empty (the key chip must exist):
+ * node scripts/qa-india-air-quality.mjs --url http://localhost:4173
  * Synthetic observations exercise presentation, not live CPCB availability.
- * The other station providers answer empty snapshots, so India is alone.
+ * The other station providers answer empty snapshots, so India is alone
+ * (South Africa as a switched-on network: the server needs no SAAQIS_ENABLED).
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
@@ -71,22 +74,29 @@ try {
       body: JSON.stringify(body),
     });
   });
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
-  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
-    timeout: 90_000,
-  });
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  const explore = await page.$('[data-first-run-choice="explore"]');
-  if (explore && (await explore.isVisible())) await explore.click();
-  await page.evaluate(async () => {
-    const { dataManager: dm, viewer } = window.__godsEyeView;
-    const { cameraOf } = await import('/src/render/rendererOf.js');
-    const camera = cameraOf(viewer);
-    camera.cancelFlight();
-    camera.setView({ destination: { lon: 77.2, lat: 28.6, height: 80_000 } });
-    await dm.setLayerParams('air-quality', { view: 'PM2.5' });
-    await dm.setEnabled('air-quality', true);
-  });
+  // A provider that said it has no key, or that answered, is left alone for a
+  // while (the layer keeps its answer), so each case starts on a fresh load.
+  const open = async () => {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+      timeout: 90_000,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const explore = await page.$('[data-first-run-choice="explore"]');
+    if (explore && (await explore.isVisible())) await explore.click();
+    await page.evaluate(async () => {
+      const { dataManager: dm, viewer } = window.__godsEyeView;
+      const { cameraOf } = await import('/src/render/rendererOf.js');
+      const camera = cameraOf(viewer);
+      camera.cancelFlight();
+      camera.setView({
+        destination: { lon: 77.2, lat: 28.6, height: 80_000 },
+      });
+      await dm.setLayerParams('air-quality', { view: 'PM2.5' });
+      await dm.setEnabled('air-quality', true);
+    });
+  };
+  await open();
   const indiaState = () =>
     page.evaluate(
       () =>
@@ -103,10 +113,17 @@ try {
   );
   assert.match((await indiaState()).error, /DATA_GOV_IN_API_KEY/);
   mode = 'live';
-  const result = await page.evaluate(async () => {
+  await open();
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getStats().count === 1,
+    { timeout: 30_000 },
+  );
+  const result = await page.evaluate(() => {
     const layer =
       window.__godsEyeView.dataManager.layers.get('air-quality').module;
-    await layer.update();
     return {
       stats: layer.getStats(),
       records: layer.getAnalystRecords(),
@@ -119,16 +136,30 @@ try {
   assert.equal(result.records[0].scale, 'PM2.5');
   assert.equal(result.records[0].band, null);
   // Unverified units: India's station is unrated in the pollutant view.
-  assert.equal(result.controls.list.items[0].badgeColor, '#8cb4ce');
+  assert.equal(result.controls.list.items[0].swatch, '#8cb4ce');
   mode = 'stale';
-  const stale = await page.evaluate(async () => {
-    const layer =
-      window.__godsEyeView.dataManager.layers.get('air-quality').module;
-    await layer.update();
-    return { controls: layer.getRowControls() };
-  });
-  assert.ok(stale.controls.summary.lines.some((line) => line.id === 'cached'));
+  await open();
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getRowControls()
+        .summary.lines.some((line) => line.id === 'provider-cpcb'),
+    { timeout: 30_000 },
+  );
+  const cached = await page.evaluate(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getRowControls().summary.lines,
+  );
+  assert.match(
+    cached.find((line) => line.id === 'provider-cpcb').text,
+    /showing cached data/,
+  );
   // The key is a normal Provider Settings entry.
+  // The server for this gate runs with no keys, so the chip always shows.
+  await page.waitForSelector('#key-setup-chip', { visible: true });
   await page.click('#key-setup-chip');
   await page.waitForSelector('#key-setup.visible');
   const keys = await page.$$eval('#key-setup input[data-env-var]', (nodes) =>
@@ -138,7 +169,7 @@ try {
   assert.ok(keys.includes('OPENAQ_API_KEY'));
   await page.click('[data-key-setup-close]');
   await page.waitForSelector('#key-setup', { hidden: true });
-  // Exercise the real pollutant chip of the Weather card.
+  // Exercise the real pollutant tile of the Weather card.
   const header = await page.$('[data-card-id="air-quality"] .rail-card-header');
   assert.ok(header, 'Air quality card is mounted');
   if (
@@ -147,7 +178,7 @@ try {
     )
   )
     await header.click();
-  await page.click('[data-card-id="air-quality"] [data-chip-id="PM10"]');
+  await page.click('[data-card-id="air-quality"] [data-tile-id="PM10"]');
   await page.waitForFunction(() => {
     const layer =
       window.__godsEyeView.dataManager.layers.get('air-quality').module;

@@ -4568,6 +4568,7 @@
   "These units cannot be compared without additional conversion data.": "Ces unités ne peuvent pas être comparées sans données de conversion supplémentaires.",
   "No usable measurement.": "Aucune mesure exploitable.",
   "EEA hourly pollutant bands": "Classes horaires de polluants de l’AEE",
+  "WHO-based carbon monoxide bands": "Catégories de monoxyde de carbone fondées sur l’OMS",
   "Air quality · South Africa": "Qualité de l’air · Afrique du Sud",
   "South Africa · SAAQIS": "Afrique du Sud · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "Clé du fournisseur refusée. Vérifiez les paramètres des fournisseurs.",
@@ -4628,6 +4629,11 @@
   },
   "Deselect station": "Désélectionner la station",
   "{network}: showing cached data": "{network} : données en cache",
+  "Licence: {licence}": "Licence : {licence}",
+  "{network}: key rejected — check Provider Settings": "{network} : clé refusée — vérifiez les paramètres des fournisseurs",
+  "{network}: loading stations, {n} of {m}": "{network} : chargement des stations, {n} sur {m}",
+  "{source}: no forecast for this time": "{source} : aucune prévision pour cette heure",
+  "Implausibly high for this pollutant; no health category is assigned.": "Valeur invraisemblablement élevée pour ce polluant ; aucune catégorie sanitaire n’est attribuée.",
   "forecast for {time}": "prévision pour {time}",
   "Model field unavailable": "Champ du modèle indisponible"
 }

@@ -4673,6 +4673,7 @@
   "These units cannot be compared without additional conversion data.": "Ці одиниці неможливо порівняти без додаткових даних для перетворення.",
   "No usable measurement.": "Немає придатного вимірювання.",
   "EEA hourly pollutant bands": "Погодинні діапазони забруднювачів ЄЕА",
+  "WHO-based carbon monoxide bands": "Категорії чадного газу на основі ВООЗ",
   "Air quality · South Africa": "Якість повітря · Південна Африка",
   "South Africa · SAAQIS": "Південна Африка · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "Ключ постачальника відхилено. Перевірте налаштування постачальників.",
@@ -4734,6 +4735,11 @@
   },
   "Deselect station": "Скасувати вибір станції",
   "{network}: showing cached data": "{network}: показано кешовані дані",
+  "Licence: {licence}": "Ліцензія: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: ключ відхилено — перевірте «Налаштування постачальників»",
+  "{network}: loading stations, {n} of {m}": "{network}: завантаження станцій, {n} з {m}",
+  "{source}: no forecast for this time": "{source}: немає прогнозу на цей час",
+  "Implausibly high for this pollutant; no health category is assigned.": "Неправдоподібно високе значення для цього забруднювача; категорію впливу на здоров’я не призначено.",
   "forecast for {time}": "прогноз на {time}",
   "Model field unavailable": "Поле моделі недоступне"
 }

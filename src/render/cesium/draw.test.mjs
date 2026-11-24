@@ -1409,7 +1409,8 @@ test('the air quality layer draws its stations as ground fills on a viewer of it
     name: id,
     lat: 45,
     lon,
-    observedMs: 0,
+    // Recent: a reading older than six hours is not drawn.
+    observedMs: Date.now() - 10 * 60_000,
     color: '#4cc9f0',
     label: '3',
     risk: 'Low health risk',

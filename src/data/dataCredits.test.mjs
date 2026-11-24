@@ -376,3 +376,12 @@ test('the always-on rail credit names live feeds only, never timetables', () => 
   assert.match(rail.html, /realtime feeds/);
   assert.doesNotMatch(rail.html, /timetable|placed from/i);
 });
+
+test('the OpenAQ credit says where each station names its network and licence', () => {
+  const credit = DATA_CREDITS.find((entry) => entry.key === 'openaq');
+  assert.match(
+    credit.html,
+    /The originating network and its licence are named in each station’s details\.$/,
+  );
+  assert.doesNotMatch(credit.html, /accompany each station/);
+});

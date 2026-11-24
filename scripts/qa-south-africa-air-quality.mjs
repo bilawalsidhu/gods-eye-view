@@ -1,7 +1,11 @@
 /**
  * Deterministic real-app South African provider gate.
  * Run with a dev server: node scripts/qa-south-africa-air-quality.mjs
- * Optional --live audits the national public source (no credentials printed).
+ * South Africa is off by default (SAAQIS_ENABLED=1 switches the server route
+ * on); this gate answers the route itself with synthetic snapshots, as a
+ * switched-on network, so it runs either way and reads nothing upstream.
+ * Optional --live audits the national public source directly (no credentials
+ * printed); that audit ignores SAAQIS_ENABLED.
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
@@ -197,18 +201,19 @@ try {
   assert.equal(result.records[0].units, 'µg/m³');
   assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
-  // One scale for every network: the EEA PM2.5 bands and "Not rated" (7).
-  // 12 µg/m³ is "Fair"; SAAQIS's own index (4/10) stays in the details.
-  assert.equal(result.controls.legend.length, 7);
-  assert.equal(result.controls.list.items[0].badge, 'Fair');
-  assert.match(result.controls.list.items[0].text, /SAAQIS index 4\/10/);
+  // One scale for every network: the six EEA PM2.5 bands. 12 µg/m³ is
+  // "Fair"; SAAQIS's own index (4/10) stays in the details.
+  assert.equal(result.controls.legend.length, 6);
+  assert.equal(result.records[0].assessment.label, 'Fair');
+  assert.match(result.controls.list.items[0].title, /SAAQIS index 4\/10/);
+  // The keyed providers say they need a key.
   assert.ok(
     result.controls.summary.lines.some((row) =>
-      row.text.includes('2 catalog stations'),
+      row.text.includes('OpenAQ: add a key'),
     ),
   );
   console.log(
-    'PASS: national source → layer → map-view card; silent catalog station stays distinct',
+    'PASS: national source → layer → map-view card with the EEA band and the SAAQIS index in details',
   );
 
   // Open the Weather air-quality card, then exercise the real pollutant button.
@@ -229,18 +234,14 @@ try {
     },
     { timeout: 90_000 },
   );
-  const no2 = await page.$('[data-chip-id="NO2"]');
+  const no2 = await page.$('[data-tile-id="NO2"]');
   assert.ok(no2, 'real Weather card exposes the pollutant controls');
   // Camera restoration and Vue publication may settle after the layer data.
   await page.waitForFunction(
     () =>
-      document.querySelector(
-        '[data-card-id="air-quality"] .data-row-list-badge',
-      )?.textContent === 'Fair',
-  );
-  assert.equal(
-    await page.$eval('.data-row-list-badge', (el) => el.textContent),
-    'Fair',
+      document
+        .querySelector('[data-card-id="air-quality"] [data-tile-id="PM2.5"]')
+        ?.getAttribute('aria-pressed') === 'true',
   );
   await no2.click();
 
@@ -269,22 +270,33 @@ try {
   });
   result = await state();
   assert.equal(result.controls.list.items.length, 0);
-  assert.ok(
-    result.controls.summary.lines.some((row) =>
-      row.text.includes('No current observations'),
-    ),
-  );
+  // The card says so with its count, not with distant readings.
+  assert.equal(result.controls.summary.status, '0 stations');
   console.log(
     'PASS: municipality without reporting stations shows a gap, not distant readings',
   );
 
+  // The client keeps a provider's answer for its refresh interval, so a
+  // failing source is met on a fresh load.
   fail = true;
-  await page.evaluate(async () => {
-    await window.__godsEyeView.dataManager.layers
-      .get('air-quality')
-      .module.update();
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 90_000 });
+  await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
+    timeout: 90_000,
   });
-  assert.ok((await state()).stats.error);
+  await page.evaluate(async () => {
+    const dm = window.__godsEyeView.dataManager;
+    dm.setLayerParams('air-quality', { view: 'PM2.5' });
+    await dm.setEnabled('air-quality', true);
+    await dm.layers.get('air-quality').module.update();
+  });
+  const failed = await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('air-quality')
+      .module.getProviderStates()
+      .find((entry) => entry.id === 'saaqis'),
+  );
+  assert.equal(failed.status, 'failed');
+  assert.ok(failed.error);
   console.log('PASS: source failure is visible');
   assert.deepEqual(errors, []);
 } finally {

@@ -37,24 +37,6 @@ export const KEY_SETUP_APPEND_HEADER =
  */
 export const KEY_SETUP_KEYS = Object.freeze([
   Object.freeze({
-    id: 'openaq',
-    title: 'OPENAQ', // i18n-ignore: provider product name
-    unlocks: msg(
-      'Air-quality observations worldwide. Free account key; coverage depends on reporting stations.',
-    ),
-    getUrl: 'https://explore.openaq.org/register',
-    envVars: Object.freeze(['OPENAQ_API_KEY']),
-    tier: 'free',
-  }),
-  Object.freeze({
-    id: 'data-gov-in',
-    title: 'DATA.GOV.IN', // i18n-ignore: provider product name
-    unlocks: msg('Indian air-quality station observations'),
-    getUrl: 'https://www.data.gov.in/',
-    envVars: Object.freeze(['DATA_GOV_IN_API_KEY']),
-    tier: 'free',
-  }),
-  Object.freeze({
     id: 'google-maps',
     title: 'GOOGLE MAPS', // i18n-ignore: provider product name
     unlocks: msg('The photorealistic 3D planet, place search + Street View'),
@@ -105,6 +87,24 @@ export const KEY_SETUP_KEYS = Object.freeze([
     unlocks: msg('Live active-fire detections'),
     getUrl: 'https://firms.modaps.eosdis.nasa.gov/api/map_key/',
     envVars: Object.freeze(['FIRMS_MAP_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'openaq',
+    title: 'OPENAQ', // i18n-ignore: provider product name
+    unlocks: msg(
+      'Air-quality observations worldwide. Free account key; coverage depends on reporting stations.',
+    ),
+    getUrl: 'https://explore.openaq.org/register',
+    envVars: Object.freeze(['OPENAQ_API_KEY']),
+    tier: 'free',
+  }),
+  Object.freeze({
+    id: 'data-gov-in',
+    title: 'DATA.GOV.IN', // i18n-ignore: provider product name
+    unlocks: msg('Indian air-quality station observations'),
+    getUrl: 'https://www.data.gov.in/',
+    envVars: Object.freeze(['DATA_GOV_IN_API_KEY']),
     tier: 'free',
   }),
   Object.freeze({

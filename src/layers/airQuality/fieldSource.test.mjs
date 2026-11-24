@@ -87,11 +87,33 @@ test('a server with no field configured says so, and the source passes it on', a
     fetchImpl: async () => new Response('{}', { status: 404 }),
   });
   await assert.rejects(elsewhere.getManifest(), { code: 'not_configured' });
-  // Any other failure is a failure, tried again later.
-  const failing = createLocalAirQualityFieldSource({
-    fetchImpl: async () => new Response('{}', { status: 502 }),
+});
+
+test('before a manifest was ever read, a page, a server error or no answer means no field', async () => {
+  for (const fetchImpl of [
+    // A static host answering every path with its page.
+    async () =>
+      new Response('<!doctype html><title>GEV</title>', {
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    async () => new Response('{}', { status: 502 }),
+    async () => {
+      throw new TypeError('fetch failed');
+    },
+  ]) {
+    const source = createLocalAirQualityFieldSource({ fetchImpl });
+    await assert.rejects(source.getManifest(), { code: 'not_configured' });
+  }
+  // Once a manifest was read, a failure is a failure, tried again later.
+  const { fetchImpl } = fixtureFetch();
+  let down = false;
+  const source = createLocalAirQualityFieldSource({
+    fetchImpl: async (url, options) =>
+      down ? new Response('{}', { status: 502 }) : fetchImpl(url, options),
   });
-  await assert.rejects(failing.getManifest(), (error) => {
+  await source.getManifest();
+  down = true;
+  await assert.rejects(source.getManifest(), (error) => {
     assert.notEqual(error.code, 'not_configured');
     return true;
   });
@@ -107,4 +129,15 @@ test('a grid of the wrong size is refused', async () => {
   );
   // A step the manifest does not list is not asked for.
   await assert.rejects(source.getStep(3, { run: manifest.run }), /step/);
+});
+
+test('the CAMS fixture carries the full credit CAMS requires', async () => {
+  const { fetchImpl } = fixtureFetch();
+  const manifest = await createLocalAirQualityFieldSource({
+    fetchImpl,
+  }).getManifest();
+  assert.equal(
+    manifest.credit,
+    'Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains.',
+  );
 });

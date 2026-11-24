@@ -4358,6 +4358,7 @@
   "These units cannot be compared without additional conversion data.": "追加の換算データがないため、これらの単位を比較できません。",
   "No usable measurement.": "使用可能な測定値がありません。",
   "EEA hourly pollutant bands": "EEAの時間別汚染物質区分",
+  "WHO-based carbon monoxide bands": "WHO に基づく一酸化炭素の区分",
   "Air quality · South Africa": "大気質 · 南アフリカ",
   "South Africa · SAAQIS": "南アフリカ · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "提供元のキーが拒否されました。プロバイダー設定を確認してください。",
@@ -4416,6 +4417,11 @@
   },
   "Deselect station": "測定局の選択を解除",
   "{network}: showing cached data": "{network}：キャッシュされたデータを表示中",
+  "Licence: {licence}": "ライセンス：{licence}",
+  "{network}: key rejected — check Provider Settings": "{network}：キーが拒否されました。プロバイダー設定を確認してください",
+  "{network}: loading stations, {n} of {m}": "{network}：観測所を読み込み中（{m}か所中{n}か所）",
+  "{source}: no forecast for this time": "{source}：この時刻の予報はありません",
+  "Implausibly high for this pollutant; no health category is assigned.": "この汚染物質としてはありえないほど高い値のため、健康区分は割り当てません。",
   "forecast for {time}": "{time}の予報",
   "Model field unavailable": "モデル場を利用できません"
 }

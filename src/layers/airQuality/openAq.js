@@ -170,7 +170,9 @@ export function normalizeOpenAqHours(
       periodEnd: hour.period.datetimeTo.utc,
       coveragePercent: hour.coverage?.percentCoverage ?? null,
       qualityFlagged: hour.flagInfo?.hasFlags !== false,
-      note: 'OpenAQ hourly mean; GEV comparison against EEA pollutant bands; not an overall AQI or emissions estimate.',
+      note: `OpenAQ hourly mean; GEV comparison against ${
+        reading.parameter === 'CO' ? 'WHO-based' : 'EEA'
+      } pollutant bands; not an overall AQI or emissions estimate.`,
     }),
   );
 }

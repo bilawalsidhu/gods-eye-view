@@ -222,9 +222,16 @@ export function usAqi(values) {
 }
 
 /**
+ * PM2.5 is part of PM10, but the two are measured by separate instruments:
+ * in smoke, where nearly all of PM10 is fine particles, PM2.5 can read a
+ * little above PM10. Only above this much more is PM2.5 taken to be a fault.
+ */
+const pm25Ceiling = (pm10) => 1.5 * pm10 + 10;
+
+/**
  * The values worth an index, and why each other one is not: above its
- * pollutant's ceiling (`'implausible'`), or PM2.5 above the station's PM10
- * (`'above-pm10'`; PM2.5 is part of PM10).
+ * pollutant's ceiling (`'implausible'`), or PM2.5 well above the station's
+ * PM10 (`'above-pm10'`: more than 1.5 × PM10 + 10 µg/m³).
  */
 export function plausibility(values) {
   const kept = {};
@@ -237,7 +244,7 @@ export function plausibility(values) {
   if (
     kept.pm25 !== undefined &&
     kept.pm10 !== undefined &&
-    kept.pm25 > kept.pm10
+    kept.pm25 > pm25Ceiling(kept.pm10)
   ) {
     delete kept.pm25;
     excluded.pm25 = 'above-pm10';

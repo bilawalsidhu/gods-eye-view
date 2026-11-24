@@ -64,7 +64,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
-    'a246c78c5a6c7b7684a15b4d57b412011c5b726e454079363ff3dcac1c4152a7',
+    'dc2819ed30c42cc7c4812d0e92b512c40d6053e0cebbf8bc9b15a07668125b7e',
   );
 });
 

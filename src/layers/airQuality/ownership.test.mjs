@@ -36,7 +36,8 @@ const reading = (id, value, overrides = {}) => ({
   zone: 'ont',
   lat: 43.65,
   lon: -79.38,
-  observedMs: 1_700_000_000_000,
+  // Recent: a reading older than six hours is not drawn.
+  observedMs: Date.now() - 10 * 60_000,
   color: '#4cc9f0',
   label: String(value),
   risk: 'Low health risk',
@@ -555,7 +556,8 @@ test('when every provider fails the layer reports the error', async () => {
   });
   const pending = layer.update();
   settle();
-  assert.equal(await pending, false);
+  // Canada's AQHI is still on offer: the layer stays on, saying so.
+  assert.equal(await pending, true);
   assert.equal(layer.getStats().error, 'Air quality provider unavailable');
 });
 
@@ -945,4 +947,51 @@ test('stations and groups are air quality picks: other layers leave them alone, 
   assert.equal(picking.isOwnedByOtherLayer('flights', station), true);
   layer.destroy();
   assert.equal(picking.isOwnedByOtherLayer('flights', station), false);
+});
+
+// ── an index without an upper limit ────────────────────────────────────────
+
+/** A station reporting PM2.5 at `value` µg/m³, for the AQI view. */
+const aqiSite = (id, lat, lon, value) => ({
+  ...observed('saaqis', id, lat, lon),
+  value,
+});
+
+test('an index above 500 reads 500+ and adds at most 500 to its group mean', async () => {
+  // Ten stations at 5.4 µg/m³ (US AQI 30) and a sensor stuck at 999 µg/m³:
+  // its index is 1842; it may lift the mean by (500 − 30) / 11 at most, to
+  // about 73 (Moderate) rather than about 195 (Unhealthy).
+  const { layer, points, bubbles, zoomTo } = await zoomHarness([
+    ...Array.from({ length: 10 }, (_, i) =>
+      aqiSite(`calm-${i}`, 48.85 + i * 0.01, 2.35, 5.4),
+    ),
+    aqiSite('stuck', 48.86, 2.45, 999),
+  ]);
+  const [bubble] = bubbles();
+  assert.equal(bubble.pixelSize, Math.round(12 + 6 * Math.log10(11)));
+  assert.equal(bubble.color, '#ffff00');
+  zoomTo(0.0001);
+  const stuck = points().items.get('air-quality:saaqis:stuck:aqi');
+  // The computed value stays in the data; what is shown reads 500+.
+  assert.equal(stuck.meta.aqi.index, 1842);
+  assert.equal(stuck.meta.value, 1842);
+  assert.equal(stuck.meta.label, '500+');
+  const [row] = layer.getRowControls().list.items;
+  assert.equal(row.text, 'stuck');
+  assert.equal(row.lead, '500+');
+  layer.setParams({ station: 'saaqis:stuck:aqi' });
+  const index = layer
+    .getRowControls()
+    .sublists.find((group) => group.id === 'index')
+    .tiles.find((tile) => tile.id === 'aqi');
+  assert.equal(index.value, '500+');
+  // Exactly at the edge: four stations at 0 and one stuck average 100, still
+  // Moderate; a contribution above 500 would make it 101.
+  const edge = await zoomHarness([
+    ...Array.from({ length: 4 }, (_, i) =>
+      aqiSite(`zero-${i}`, 48.85 + i * 0.01, 2.35, 0),
+    ),
+    aqiSite('stuck', 48.86, 2.45, 999),
+  ]);
+  assert.equal(edge.bubbles()[0].color, '#ffff00');
 });

@@ -1,7 +1,7 @@
 {
   "source": "CAMS forecast (Copernicus Atmosphere Monitoring Service)",
   "sourceShort": "CAMS",
-  "credit": "Generated using Copernicus Atmosphere Monitoring Service information 2026",
+  "credit": "Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains.",
   "run": "2026-11-20T00:00:00Z",
   "scale": {
     "pm25": 20,

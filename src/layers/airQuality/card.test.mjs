@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createAirQualityLayer } from './index.js';
+import { createAirQualitySource } from './providers.js';
 import { interpretHourly } from './interpretation.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
@@ -315,6 +316,8 @@ test('a selected station heads the card and the tiles read it', async () => {
     id: 'station',
     lead: true,
     label: 'Durban',
+    // Its network and licence: the header's tooltip.
+    title: 'SAAQIS · Licence: CC BY 4.0 (Licence holder)',
     clear: { label: 'Deselect station', params: { station: null } },
     lines: [
       {
@@ -388,8 +391,15 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
   );
   layer.setParams({ station: 'saaqis:durban:aqi' });
   assert.equal(layer.getRowControls().list.items[0].active, true);
+  // The licence is named in the tooltips only, never on the card itself.
+  const { list: rows, summary } = layer.getRowControls();
+  assert.match(rows.items[0].title, /Licence: CC BY 4\.0 \(Licence holder\)$/);
   assert.doesNotMatch(
-    JSON.stringify(layer.getRowControls()),
+    JSON.stringify([
+      summary.lines,
+      summary.result.lines,
+      rows.items.map(({ lead, text }) => [lead, text]),
+    ]),
     /Licence holder|CC BY/,
   );
 });
@@ -1013,23 +1023,37 @@ test('a camera move folded into a scheduled update leaves a provider without its
   layer.disable();
 });
 
-test('the stats say loading while a slower provider is still asking', async () => {
+test('the stats say loading only until the first network answers, not on every refresh', async () => {
   const { layerFeedState } = await import('../../data/feedState.js');
-  let release;
+  const held = [];
   const { layer } = cardHarness({
-    openaq: () =>
-      new Promise((resolve) => {
-        release = () => resolve([]);
-      }),
-    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+    openaq: () => new Promise((resolve) => held.push(() => resolve([]))),
+    saaqis: () =>
+      new Promise((resolve) =>
+        held.push(() =>
+          resolve(station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES)),
+        ),
+      ),
   });
-  await layer.update();
+  const release = async () => {
+    for (const answer of held.splice(0)) answer();
+    await flush();
+  };
+  const first = layer.update();
+  // Nothing has answered yet: the Layers row says loading.
   assert.equal(layer.getStats().loading, true);
   assert.equal(layerFeedState(layer.getStats()), 'loading');
-  release();
+  // South Africa answers while OpenAQ is still asking: no longer loading.
+  held.pop()();
+  await first;
   await flush();
   assert.equal(layer.getStats().loading, false);
+  await release();
   assert.equal(layerFeedState(layer.getStats()), 'nominal');
+  // A scheduled refresh in flight does not flicker the row back to loading.
+  void layer.update();
+  assert.equal(layer.getStats().loading, false);
+  await release();
 });
 
 test('a collapsed card with no status shows the first network line', async () => {
@@ -1070,4 +1094,384 @@ test('the AQHI legend lists each band once across index providers', async () => 
     layer.getRowControls().legend.map((band) => band.label),
     ['Low 1–3'],
   );
+});
+
+// ── final fix wave ─────────────────────────────────────────────────────────
+
+/**
+ * A layer on the default providers, each local route answering
+ * `routes[path]` (`{ status, body }`); a route not listed answers 404.
+ */
+function routedLayer(routes) {
+  const requests = [];
+  const source = createAirQualitySource({
+    fetchImpl: async (url) => {
+      requests.push(String(url));
+      const answer = routes[String(url).split('?')[0]] ?? { status: 404 };
+      return Response.json(answer.body ?? {}, { status: answer.status ?? 200 });
+    },
+  });
+  const viewer = {};
+  bindFakeDraw(viewer, {
+    camera: {
+      on: () => () => {},
+      viewRectangle: () => ({ west: 10, south: -40, east: 35, north: -20 }),
+    },
+  });
+  const layer = createAirQualityLayer({
+    source,
+    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+  });
+  layer.init(viewer);
+  layer.enable();
+  return { layer, requests };
+}
+const NO_KEY_ROUTE = { status: 428, body: { error: 'no_key' } };
+const NOT_ENABLED = {
+  status: 200,
+  body: { unavailable: true, code: 'not_configured' },
+};
+
+test('with no keys and South Africa failing the layer still turns on, its key lines shown', async () => {
+  const { layer } = routedLayer({
+    '/api/air-quality/south-africa': { status: 502 },
+    '/api/air-quality/openaq': NO_KEY_ROUTE,
+    '/api/air-quality/india': NO_KEY_ROUTE,
+  });
+  assert.equal(await layer.update(), true);
+  await flush();
+  const controls = layer.getRowControls();
+  assert.deepEqual(
+    controls.summary.lines.map((line) => [line.id, line.text]),
+    [
+      ['provider-saaqis', 'SAAQIS unavailable'],
+      ['provider-cpcb', 'CPCB: add a key in Provider Settings'],
+      ['provider-openaq', 'OpenAQ: add a key in Provider Settings'],
+    ],
+  );
+  // Canada's AQHI stays a click away.
+  assert.equal(tile(controls, 'index', 'aqhi').params.view, 'aqhi');
+  // A scheduled update keeps the layer on too.
+  assert.equal(await layer.update(), true);
+  layer.destroy();
+});
+
+test('all keyless with South Africa off the layer turns on, with only the key lines', async () => {
+  const { layer, requests } = routedLayer({
+    '/api/air-quality/south-africa': NOT_ENABLED,
+    '/api/air-quality/openaq': NO_KEY_ROUTE,
+    '/api/air-quality/india': NO_KEY_ROUTE,
+  });
+  assert.equal(await layer.update(), true);
+  await flush();
+  const controls = layer.getRowControls();
+  // A network switched off on this server is no failure and no line.
+  assert.deepEqual(
+    controls.summary.lines.map((line) => line.id),
+    ['provider-cpcb', 'provider-openaq'],
+  );
+  const states = Object.fromEntries(
+    layer.getProviderStates().map((state) => [state.id, state]),
+  );
+  assert.equal(states.saaqis.status, 'disabled');
+  assert.equal(states.saaqis.error, null);
+  assert.doesNotMatch(String(layer.getStats().error), /SAAQIS|unavailable/);
+  // It is not asked again on the next scheduled update.
+  const asked = requests.filter((url) => url.includes('south-africa')).length;
+  assert.equal(await layer.update(), true);
+  await flush();
+  assert.equal(
+    requests.filter((url) => url.includes('south-africa')).length,
+    asked,
+  );
+  layer.destroy();
+});
+
+test('an update fails only when every network failed and no other view is on offer', async () => {
+  const down = () => new Error('Air quality provider unavailable');
+  const only = cardHarness(
+    { saaqis: down(), regional: down() },
+    { definitions: [definition('saaqis'), definition('regional')] },
+  );
+  assert.equal(await only.layer.update(), false);
+  // Canada's AQHI is still on offer.
+  const canada = cardHarness({ saaqis: down(), openaq: down() });
+  assert.equal(await canada.layer.update(), true);
+  // A network that needs its key is guidance, not a failure.
+  const keyless = cardHarness(
+    { openaq: noKey(), saaqis: down() },
+    { definitions: [OPENAQ, definition('saaqis')] },
+  );
+  assert.equal(await keyless.layer.update(), true);
+});
+
+test("a station's originating network and licence are named in its row and header tooltips", async () => {
+  const { layer } = cardHarness({
+    saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES).map((row) => ({
+      ...row,
+      network: 'City network',
+    })),
+  });
+  await layer.update();
+  await flush();
+  const [row] = layer.getRowControls().list.items;
+  assert.match(
+    row.title,
+    / · City network · Licence: CC BY 4\.0 \(Licence holder\)$/,
+  );
+  layer.setParams({ station: row.params.station });
+  const { summary } = layer.getRowControls();
+  assert.equal(
+    summary.result.title,
+    'City network · Licence: CC BY 4.0 (Licence holder)',
+  );
+  // A tooltip, not a card line.
+  assert.doesNotMatch(
+    JSON.stringify([summary.lines, summary.result.lines]),
+    /Licence/,
+  );
+  // A station without a stated licence names its network alone.
+  const plain = cardHarness({
+    saaqis: station('saaqis', CAPE_TOWN, { 'PM2.5': 12 }).map((reading) => ({
+      ...reading,
+      licenses: undefined,
+    })),
+  });
+  await plain.layer.update();
+  await flush();
+  assert.match(plain.layer.getRowControls().list.items[0].title, / · SAAQIS$/);
+});
+
+test('readings older than six hours are not drawn, even with no answer since', async (t) => {
+  t.mock.timers.enable({
+    apis: ['setTimeout', 'Date'],
+    now: 1_700_000_000_000,
+  });
+  let down = false;
+  const { layer } = cardHarness(
+    {
+      saaqis: () =>
+        down
+          ? new Error('Air quality provider unavailable')
+          : station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+    },
+    { definitions: [definition('saaqis')] },
+  );
+  await layer.update();
+  await flush();
+  assert.equal(layer.getStats().count, 1);
+  // The server goes down: a failed refresh keeps the readings drawn.
+  down = true;
+  t.mock.timers.tick(5 * 3600_000);
+  await layer.update();
+  await flush();
+  assert.equal(layer.getStats().count, 1);
+  // Six hours after they were measured they go, with no answer since.
+  t.mock.timers.tick(3600_000);
+  await flush();
+  assert.equal(layer.getStats().count, 0);
+  const controls = layer.getRowControls();
+  assert.deepEqual(controls.list.items, []);
+  // The card still says the network is unavailable, and how old it was.
+  assert.equal(lineText(controls, 'provider-saaqis'), 'SAAQIS unavailable');
+  assert.equal(controls.summary.detail, 'SAAQIS · updated 6h ago');
+  layer.disable();
+});
+
+test('in the AQI view a value older than six hours leaves the index', async (t) => {
+  t.mock.timers.enable({
+    apis: ['setTimeout', 'Date'],
+    now: 1_700_000_000_000,
+  });
+  const { layer } = cardHarness(
+    {
+      saaqis: () => [
+        pollutant('saaqis', CAPE_TOWN, 'PM2.5', 60, {
+          observedMs: Date.now() - 5.5 * 3600_000,
+        }),
+        pollutant('saaqis', CAPE_TOWN, 'NO2', 20, {
+          observedMs: Date.now() - 3 * 3600_000,
+        }),
+      ],
+    },
+    { definitions: [definition('saaqis')] },
+  );
+  await layer.update();
+  await flush();
+  assert.equal(layer.getRowControls().list.items[0].lead, '154');
+  t.mock.timers.tick(3600_000);
+  await flush();
+  const [row] = layer.getRowControls().list.items;
+  // PM2.5 is now 6.5 hours old: NO2 alone (20 µg/m³, 10 ppb: 9) sets the
+  // index.
+  assert.equal(row.lead, '9');
+  assert.match(row.title, /Not used: PM2\.5 \(too old\)/);
+  layer.disable();
+});
+
+test('the OpenAQ discovery loop waits while the tab is hidden', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1_000_000 });
+  const listeners = new Set();
+  const page = {
+    visibilityState: 'hidden',
+    addEventListener: (type, fn) =>
+      type === 'visibilitychange' && listeners.add(fn),
+    removeEventListener: (type, fn) => listeners.delete(fn),
+  };
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    value: page,
+    configurable: true,
+    writable: true,
+  });
+  t.after(() => {
+    if (saved) Object.defineProperty(globalThis, 'document', saved);
+    else delete globalThis.document;
+  });
+  // OpenAQ says more of the view is on its way in 8 s.
+  const { layer, calls } = cardHarness(
+    { openaq: [] },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { partial: true, retryAt: 1_008_000 } },
+    },
+  );
+  await layer.update();
+  await flush();
+  calls.length = 0;
+  t.mock.timers.tick(30_000);
+  await flush();
+  assert.deepEqual(calls, [], 'no discovery while hidden');
+  // Shown again, it resumes at once.
+  page.visibilityState = 'visible';
+  for (const listener of listeners) listener();
+  t.mock.timers.tick(200);
+  await flush();
+  assert.deepEqual(
+    calls.map((call) => call.provider),
+    ['openaq'],
+  );
+  layer.destroy();
+  assert.equal(listeners.size, 0, 'destroy lets go of the page');
+});
+
+test('while OpenAQ is still discovering a view one muted line says how far along', async () => {
+  const { layer } = cardHarness(
+    { openaq: station('openaq', DURBAN, { 'PM2.5': 40 }) },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { partial: true, checked: 12, eligible: 40 } },
+    },
+  );
+  await layer.update();
+  await flush();
+  assert.deepEqual(
+    layer
+      .getRowControls()
+      .summary.lines.filter((line) => line.id === 'provider-openaq'),
+    [
+      {
+        id: 'provider-openaq',
+        muted: true,
+        text: 'OPENAQ: loading stations, 12 of 40',
+      },
+    ],
+  );
+  // Complete coverage says nothing.
+  const done = cardHarness(
+    { openaq: station('openaq', DURBAN, { 'PM2.5': 40 }) },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { partial: false, checked: 40, eligible: 40 } },
+    },
+  );
+  await done.layer.update();
+  await flush();
+  assert.equal(
+    lineText(done.layer.getRowControls(), 'provider-openaq'),
+    undefined,
+  );
+});
+
+test('a rejected key says so and points to Provider Settings', async () => {
+  const { layer } = routedLayer({
+    '/api/air-quality/south-africa': NOT_ENABLED,
+    '/api/air-quality/openaq': {
+      status: 401,
+      body: { error: 'OpenAQ unavailable' },
+    },
+    '/api/air-quality/india': { status: 403, body: { error: 'key_rejected' } },
+  });
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(
+    lineText(controls, 'provider-openaq'),
+    'OpenAQ: key rejected — check Provider Settings',
+  );
+  assert.equal(
+    lineText(controls, 'provider-cpcb'),
+    'CPCB: key rejected — check Provider Settings',
+  );
+  layer.destroy();
+});
+
+test('a row whose reading has no observation time still has its tooltip', async () => {
+  const { layer } = cardHarness(
+    {
+      saaqis: [
+        interpretHourly(
+          pollutant('saaqis', CAPE_TOWN, 'NO2', 20, { observedMs: undefined }),
+        ),
+      ],
+    },
+    { definitions: [definition('saaqis')], view: 'NO2' },
+  );
+  await layer.update();
+  await flush();
+  const [row] = layer.getRowControls().list.items;
+  assert.match(
+    row.title,
+    /^Cape Town · Western Cape · SAAQIS · Hourly average · Unavailable · /,
+  );
+  assert.doesNotMatch(row.title, /Older observation/);
+});
+
+test("a pollutant view's map label gives the value in the view's unit", async () => {
+  const titles = [];
+  const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
+  bindFakeDraw(viewer, {
+    camera: {
+      on: () => () => {},
+      viewRectangle: () => ({ west: 10, south: -40, east: 35, north: -20 }),
+    },
+  });
+  const layer = createAirQualityLayer({
+    source: {
+      definitions: [definition('saaqis')],
+      getSnapshot: async () => [
+        interpretHourly(
+          pollutant('saaqis', CAPE_TOWN, 'NO2', 10, {
+            units: 'ppb',
+            label: '10.00 ppb',
+          }),
+        ),
+      ],
+    },
+    overlayHost: {
+      setEntries: (_id, entries) => titles.push(...entries.map((e) => e.title)),
+      setVisible() {},
+      clearSource() {},
+    },
+  });
+  layer.init(viewer);
+  layer.setParams({ view: 'NO2' });
+  layer.enable();
+  await layer.update();
+  await flush();
+  assert.equal(titles.at(-1), 'Cape Town 19 µg/m³ · Fair');
+  const [record] = layer.getAnalystRecords();
+  assert.equal(record.value, 18.82);
+  assert.equal(record.units, 'µg/m³');
+  layer.destroy();
 });

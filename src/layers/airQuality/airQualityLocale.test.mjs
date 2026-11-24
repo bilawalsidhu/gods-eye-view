@@ -45,7 +45,8 @@ const reading = {
   zone: 'ont',
   lat: 43.65,
   lon: -79.38,
-  observedMs: 1_700_000_000_000,
+  // Recent: a reading older than six hours is not drawn.
+  observedMs: Date.now() - 10 * 60_000,
   color: '#4cc9f0',
   label: '2',
   risk: 'Low health risk',
@@ -291,3 +292,55 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
     }
   });
 }
+
+test('every catalogue names each band of a scale differently', async () => {
+  const { readdirSync, readFileSync } = await import('node:fs');
+  const dir = new URL('../../i18n/locales/', import.meta.url);
+  // Each band, with its short form where it has one: a band may share its
+  // short name with its own long one, never with another band.
+  const scales = {
+    'air quality risk': [['Low'], ['Moderate'], ['High'], ['Very High']],
+    'EEA hourly quality': [
+      ['Good'],
+      ['Fair'],
+      ['Moderate'],
+      ['Poor'],
+      ['Very poor'],
+      ['Extremely poor', 'Extreme'],
+    ],
+    'US AQI category': [
+      ['Good'],
+      ['Moderate'],
+      ['Unhealthy for Sensitive Groups', 'Sensitive groups'],
+      ['Unhealthy'],
+      ['Very Unhealthy'],
+      ['Hazardous'],
+    ],
+    'SAAQIS category': [
+      ['Good'],
+      ['Moderate'],
+      ['Unhealthy'],
+      ['Very Unhealthy'],
+      ['Hazardous'],
+    ],
+  };
+  const files = readdirSync(dir).filter((name) => name.endsWith('.json'));
+  assert.equal(files.length, 13);
+  const clashes = [];
+  for (const file of files) {
+    const catalogue = JSON.parse(readFileSync(new URL(file, dir), 'utf8'));
+    for (const [context, bands] of Object.entries(scales)) {
+      const owner = new Map();
+      bands.forEach((names, band) => {
+        for (const name of names) {
+          const text = catalogue[`${context}|${name}`];
+          assert.ok(text, `${file}: ${context}|${name} is missing`);
+          if (owner.has(text) && owner.get(text) !== band)
+            clashes.push(`${file} ${context}: "${text}"`);
+          owner.set(text, band);
+        }
+      });
+    }
+  }
+  assert.deepEqual(clashes, []);
+});

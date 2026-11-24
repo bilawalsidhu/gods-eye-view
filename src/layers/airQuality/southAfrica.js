@@ -197,12 +197,14 @@ export function attachSaIndexes(readings, payload) {
     Array.isArray(payload.data) &&
     payload.data.length <= 2000
   ) {
+    // One broken row is skipped: the ratings are optional, and this runs
+    // outside the acquisition's optional-index guard.
     for (const station of payload.data) {
-      if (!Array.isArray(station.indexes) || station.indexes.length > 200)
+      if (!Array.isArray(station?.indexes) || station.indexes.length > 200)
         continue;
       const observedMs = saObservationTime(station.datetime);
       for (const item of station.indexes) {
-        const score = item.index;
+        const score = item?.index;
         if (!Number.isInteger(score) || score < 1 || score > 10) continue;
         const band = SA_INDEX_BANDS.find((b) => score <= b.max);
         if (item.description !== band.label) continue;

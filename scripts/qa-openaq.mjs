@@ -1,5 +1,8 @@
 /** Real-app OpenAQ gate. Runs with explicit synthetic data; never writes keys.
- * QA_BASE_URL=http://127.0.0.1:4174 node scripts/qa-openaq.mjs
+ * Start the dev server with OPENAQ_API_KEY and DATA_GOV_IN_API_KEY empty, then
+ * point QA_BASE_URL at it: QA_BASE_URL=<the dev server> node scripts/qa-openaq.mjs
+ * South Africa's route is answered here as a switched-on, empty network, so the
+ * server needs no SAAQIS_ENABLED.
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
@@ -66,12 +69,36 @@ try {
   const cdp = await page.createCDPSession();
   let status = 200;
   let scoped = false;
-  let incomplete = false;
   const requestedViews = [];
   await cdp.send('Fetch.enable', {
-    patterns: [{ urlPattern: '*/api/air-quality/openaq*' }],
+    patterns: [
+      { urlPattern: '*/api/air-quality/openaq*' },
+      { urlPattern: '*/api/air-quality/south-africa*' },
+    ],
   });
   cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+    // South Africa's source answers empty, so only the fixtures are drawn.
+    if (new URL(request.url).pathname.endsWith('/south-africa')) {
+      await cdp
+        .send('Fetch.fulfillRequest', {
+          requestId,
+          responseCode: 200,
+          responseHeaders: [
+            { name: 'Content-Type', value: 'application/json' },
+          ],
+          body: Buffer.from(
+            JSON.stringify({
+              schemaVersion: 1,
+              stations: [],
+              readings: [],
+              fetchedAt: Date.now(),
+              stale: false,
+            }),
+          ).toString('base64'),
+        })
+        .catch(() => {});
+      return;
+    }
     const raw = new URL(request.url).searchParams.get('view');
     const view = raw?.split(',').map(Number);
     requestedViews.push(view);
@@ -99,7 +126,6 @@ try {
                   ...payload,
                   readings: selected,
                   stations: selected,
-                  partial: incomplete,
                 }
               : {
                   error: status === 429 ? 'rate_limited' : 'no_key',
@@ -123,6 +149,7 @@ try {
       ) === 0,
     { timeout: 90000 },
   );
+  // The server for this gate runs with no keys, so the panel always opens.
   await page.waitForSelector('input[data-env-var="OPENAQ_API_KEY"]', {
     visible: true,
     timeout: 15000,
@@ -134,48 +161,66 @@ try {
   assert.equal(input.type, 'password');
   assert.equal(input.value, '');
   await page.click('[data-key-setup-close]');
+  const layerState = () =>
+    page.evaluate(() => {
+      const m =
+        window.__godsEyeView.dataManager.layers.get('air-quality').module;
+      return {
+        params: m.getParams(),
+        stats: m.getStats(),
+        records: m.getAnalystRecords(),
+        controls: m.getRowControls(),
+        providers: m.getProviderStates(),
+      };
+    });
   await page.waitForFunction(
     () => {
       const layer =
         window.__godsEyeView.dataManager.layers.get('air-quality').module;
-      // Camera restoration can start a second view refresh after cached rows
-      // arrive. Guidance is intentionally hidden until that refresh completes.
-      const controls = layer.getRowControls();
-      return (
-        layer.getStats().count === 5 &&
-        controls.list.items.length > 0 &&
-        controls.summary.overview.some((line) => line.id === 'general-guidance')
-      );
+      return layer.getStats().count === 5;
     },
     { timeout: 10000 },
   );
-  let state = await page.evaluate(() => {
-    const m = window.__godsEyeView.dataManager.layers.get('air-quality').module;
-    return {
-      params: m.getParams(),
-      records: m.getAnalystRecords(),
-      controls: m.getRowControls(),
-    };
-  });
-  assert.equal(state.params.provider, 'openaq');
+  // Every provider is read together; this gate looks at one pollutant.
+  await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('air-quality')
+      .module.setParams({ view: 'PM2.5' }),
+  );
+  await page.waitForFunction(
+    () => {
+      const controls = window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getRowControls();
+      return controls.list.items.length > 0;
+    },
+    { timeout: 10000 },
+  );
+  let state = await layerState();
+  assert.equal(state.params.view, 'PM2.5');
   assert.deepEqual(
     new Set(state.records.map((r) => r.country)),
     new Set(fixtures.map((r) => r[0])),
   );
-  assert.equal(state.controls.summary.settings[0].chips.length, 3);
-  assert.ok(state.controls.list.items.every((r) => r.badge === 'Fair'));
-  console.log(
-    'PASS: existing Provider Settings has a masked, empty OpenAQ field; worldwide fixture renders through shared layer',
+  // The slim tile card: the indices and six pollutants, no provider picker.
+  assert.deepEqual(
+    state.controls.sublists.map((group) => [group.id, group.tiles.length]),
+    [
+      ['index', 2],
+      ['pollutants', 6],
+    ],
   );
-  assert.equal(state.controls.legend.length, 7);
+  assert.ok(state.records.every((r) => r.assessment?.label === 'Fair'));
+  console.log(
+    'PASS: masked, empty OpenAQ key field; worldwide fixture renders through the shared layer',
+  );
+  assert.equal(state.controls.legend.length, 6);
+  assert.ok(state.records.every((r) => r.assessment.general));
   assert.ok(
-    state.controls.summary.overview.some((line) =>
-      line.text.includes('Most people:'),
-    ),
+    await page.$('[data-card-id="air-quality"] [data-tile-id="PM2.5"]'),
   );
-  assert.ok(await page.$('.data-row-list-badge.gev-status-badge'));
   console.log(
-    'PASS: hourly comparison shows category, guidance, numeric legend and shared status badges',
+    'PASS: hourly comparison shows category, guidance, numeric legend and the tile card',
   );
   scoped = true;
   async function navigate(lat, lon) {
@@ -193,23 +238,12 @@ try {
   for (const country of ['ZA', 'BR', 'JP']) {
     const [, , lat, lon] = fixtures.find((f) => f[0] === country);
     await navigate(lat, lon);
-    await page.waitForFunction(() =>
-      /Loading/.test(
-        window.__godsEyeView.dataManager.layers
-          .get('air-quality')
-          .module.getRowControls().summary.status,
-      ),
-    );
     await page.waitForFunction(
       (country) => {
         const m =
           window.__godsEyeView.dataManager.layers.get('air-quality').module;
         const rows = m.getAnalystRecords();
-        return (
-          !/Loading/.test(m.getRowControls().summary.status) &&
-          rows.length === 1 &&
-          rows[0].country === country
-        );
+        return rows.length === 1 && rows[0].country === country;
       },
       { timeout: 15000 },
       country,
@@ -217,85 +251,108 @@ try {
   }
   assert.ok(requestedViews.every((view) => view?.length === 6));
   console.log(
-    'PASS: camera navigation automatically loads South Africa, Brazil and Japan with geographic queries and visible loading state',
+    'PASS: camera navigation automatically loads South Africa, Brazil and Japan with geographic queries',
   );
   status = 429;
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers.get('air-quality').module.update(),
   );
-  const cooldown = await page.evaluate(() => {
-    const m = window.__godsEyeView.dataManager.layers.get('air-quality').module;
-    return { count: m.getStats().count, summary: m.getRowControls().summary };
-  });
-  assert.equal(cooldown.count, 1);
-  assert.match(cooldown.summary.status, /request budget reached/);
-  assert.ok(cooldown.summary.lines.some((line) => line.id === 'retry'));
+  // A pass already under way may answer first; the card names the provider.
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getRowControls()
+        .summary.lines.some((line) => /OpenAQ unavailable/.test(line.text)),
+    { timeout: 15000 },
+  );
+  const cooldown = await layerState();
+  assert.equal(cooldown.stats.count, 1);
+  assert.match(
+    cooldown.providers.find((entry) => entry.id === 'openaq').error,
+    /request budget reached/,
+  );
   const beforeRetry = requestedViews.length;
   status = 200;
   await page.waitForFunction(
     () => {
       const m =
         window.__godsEyeView.dataManager.layers.get('air-quality').module;
-      return (
-        /PM2.5/.test(m.getRowControls().summary.status) &&
-        m.getStats().count === 1
-      );
+      return !m
+        .getRowControls()
+        .summary.lines.some((line) => line.id === 'provider-openaq');
     },
     { timeout: 10000 },
   );
-  assert.equal(requestedViews.length, beforeRetry + 1);
+  assert.equal(requestedViews.length > beforeRetry, true);
+  assert.equal((await layerState()).stats.count, 1);
   console.log(
-    'PASS: rate limits retain cached markers, show the retry time and recover automatically',
+    'PASS: rate limits retain cached markers, say so on the card and recover automatically',
   );
-  incomplete = true;
+  // A completed search over open ocean finds nothing: the answer for the new
+  // view has come back (a request was made and the provider is no longer
+  // loading), and only then is the empty list asserted.
+  const beforeOcean = requestedViews.length;
   await navigate(0, -140);
-  await page.waitForFunction(() =>
-    /Partial/.test(
+  await page.waitForFunction(
+    () =>
       window.__godsEyeView.dataManager.layers
         .get('air-quality')
-        .module.getRowControls().summary.status,
-    ),
+        .module.getAnalystRecords().length === 0,
+    { timeout: 15000 },
   );
-  incomplete = false;
-  await page.evaluate(() =>
-    window.__godsEyeView.dataManager.layers.get('air-quality').module.update(),
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getProviderStates()
+        .find((entry) => entry.id === 'openaq').status === 'ok',
+    { timeout: 15000 },
   );
-  assert.match(
-    await page.evaluate(
-      () =>
-        window.__godsEyeView.dataManager.layers
-          .get('air-quality')
-          .module.getRowControls().summary.status,
-    ),
-    /No current readings/,
+  const ocean = await layerState();
+  assert.ok(requestedViews.length > beforeOcean, 'the ocean view was asked');
+  assert.equal(ocean.records.length, 0);
+  assert.equal(ocean.controls.list.items.length, 0);
+  console.log('PASS: a completed ocean search lists no stations');
+  // Back over a fixture station, a missing key must leave its cached reading
+  // as it is, not replace it with anything else.
+  const [, tokyo, tokyoLat, tokyoLon] = fixtures.find((f) => f[0] === 'JP');
+  await navigate(tokyoLat, tokyoLon);
+  await page.waitForFunction(
+    () =>
+      window.__godsEyeView.dataManager.layers
+        .get('air-quality')
+        .module.getAnalystRecords().length === 1,
+    { timeout: 15000 },
   );
-  console.log(
-    'PASS: empty incomplete discovery differs from a completed empty ocean search',
-  );
+  const cachedBefore = (await layerState()).records;
+  assert.equal(cachedBefore[0].name, tokyo);
   status = 428;
   await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers.get('air-quality').module.update(),
   );
-  assert.match(
-    await page.evaluate(
-      () =>
+  await page.waitForFunction(
+    () =>
+      /Provider Settings/.test(
         window.__godsEyeView.dataManager.layers
           .get('air-quality')
-          .module.getStats().error,
-    ),
+          .module.getProviderStates()
+          .find((entry) => entry.id === 'openaq').error ?? '',
+      ),
+    { timeout: 15000 },
+  );
+  const noKey = await layerState();
+  assert.match(
+    noKey.providers.find((entry) => entry.id === 'openaq').error ?? '',
     /Provider Settings/,
   );
   assert.deepEqual(
-    await page.evaluate(
-      () =>
-        window.__godsEyeView.dataManager.layers
-          .get('air-quality')
-          .module.getRowControls().summary.overview,
-    ),
-    [],
+    noKey.records.map((r) => [r.id, r.value]),
+    cachedBefore.map((r) => [r.id, r.value]),
+    'the cached reading stays; nothing fabricated replaces it',
   );
   console.log(
-    'PASS: missing key gives Provider Settings guidance, without replacing data with fake readings',
+    'PASS: missing key gives Provider Settings guidance, and the cached reading is kept',
   );
   assert.deepEqual(errors, []);
 } finally {

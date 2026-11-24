@@ -3,6 +3,7 @@
  * Upper bounds are inclusive; decimal values are not rounded into a lower band.
  */
 import { concentrationFactor, layerUnits } from './units.js';
+import { AQI_CEILINGS, AQI_POLLUTANTS } from './usAqi.js';
 const msg = (text) => text;
 export const EEA_HOURLY_LIMITS = Object.freeze({
   'PM2.5': [5, 15, 50, 90, 140],
@@ -73,6 +74,19 @@ export function hourlyBandIndex(parameter, value) {
   return severity < 0 ? 5 : severity;
 }
 
+/**
+ * The highest value of a pollutant a pollutant view rates, in the layer's
+ * units: the AQI view's plausibility ceiling (`AQI_CEILINGS`), unless that
+ * would leave the top band empty. Carbon monoxide's ceiling (100 mg/m³) is
+ * where its top band begins, so there it is twice that edge, 200 mg/m³.
+ */
+export function hourlyCeiling(parameter) {
+  const ceiling = AQI_CEILINGS[AQI_POLLUTANTS[parameter]];
+  const top = EEA_HOURLY_LIMITS[parameter]?.at(-1);
+  if (!Number.isFinite(ceiling)) return Infinity;
+  return Number.isFinite(top) && ceiling <= top ? 2 * top : ceiling;
+}
+
 /** Unknown, flagged, incomplete and incompatible readings never turn green. */
 export function interpretHourly(reading) {
   const limits = EEA_HOURLY_LIMITS[reading.parameter];
@@ -110,8 +124,14 @@ export function interpretHourly(reading) {
     );
   if (!reason && (!Number.isFinite(reading.value) || reading.value < 0))
     reason = msg('No usable measurement.');
+  const value = reason ? null : reading.value * factor;
+  // Above the plausibility ceiling the AQI view uses, a value is taken to be
+  // an instrument fault: unrated here too (`hourlyCeiling`).
+  if (!reason && value > hourlyCeiling(reading.parameter))
+    reason = msg(
+      'Implausibly high for this pollutant; no health category is assigned.',
+    );
   if (reason) return { ...reading, assessment: { reason }, color: '#8cb4ce' };
-  const value = reading.value * factor;
   const severity = hourlyBandIndex(reading.parameter, value);
   const band = EEA_HOURLY_BANDS[severity];
   return {
@@ -120,7 +140,11 @@ export function interpretHourly(reading) {
     assessment: {
       ...band,
       severity,
-      method: msg('EEA hourly pollutant bands'),
+      // CO's bands are the WHO's guideline values, not the EEA's.
+      method:
+        reading.parameter === 'CO'
+          ? msg('WHO-based carbon monoxide bands')
+          : msg('EEA hourly pollutant bands'),
       basis: 'calculated',
       concentration: value,
       units: layerUnits(reading.parameter),

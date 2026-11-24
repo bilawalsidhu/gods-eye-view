@@ -3,16 +3,22 @@
 The Weather → Air quality layer draws South Africa's SAAQIS stations with the
 other observation networks (OpenAQ, India's CPCB) in one station set, on one
 view at a time: the US AQI computed per station (the default), one pollutant,
-or Canada's AQHI. The South African provider needs no personal API key.
+or Canada's AQHI. The South African provider needs no personal API key, and
+it is **off by default**: SAAQIS is read through the portal's own session API
+and no reuse licence is established for it, so the server contacts the portal
+only when the operator sets `SAAQIS_ENABLED=1` (in `.env`; see below). Without
+it `/api/air-quality/south-africa` answers "not configured", no request is made,
+and the layer leaves South Africa out with no card line and no failure.
 
 ## National scope and municipal coverage
 
 The adapter discovers the complete SAAQIS national station catalog on every
 uncached acquisition. It has no city, municipality, or province allowlist.
 Moving the map to any municipality scopes its readout and labels to observations
-in that view. Municipalities without a reporting station show an explicit
-no-observations message. A reading is a station observation, not a municipal
-average, and a nearby station outside the view is not substituted.
+in that view. A view without a reporting station counts 0 stations, lists none
+in HIGHEST IN VIEW and its tiles read a dash. A reading is a station
+observation, not a municipal average, and a nearby station outside the view is
+not substituted.
 
 This is national **access**, not a claim that every municipality is monitored.
 SAAQIS identifies provinces and station coordinates, not authoritative municipal
@@ -76,9 +82,10 @@ the data owner before distributing a hosted archive or bulk exports.
 
 ## Measurement semantics
 
-The pollutant selector supports PM2.5, PM10, NO2, SO2, O3, CO, CO2, NO, NOX and
-H2S where valid source readings exist. Data is requested on the source's
-60-minute timebase. Readings keep their returned concentration units. To rate
+The pollutant views are PM2.5, PM10, NO2, SO2, O3 and CO, beside the US AQI
+computed from them; CO2, NO, NOX and H2S readings are normalized from the same
+snapshot but no view shows them. Data is requested on the source's 60-minute
+timebase. Readings keep their returned concentration units. To rate
 them, the layer converts them once (`src/layers/airQuality/units.js`): mg/m³
 to µg/m³, and gas mixing ratios (ppb, ppm) to µg/m³ (CO to mg/m³) at 25 °C
 with the US EPA's factors, for both the pollutant views and the US AQI. No
@@ -106,13 +113,17 @@ observation time and observation kind.
 - `/api/air-quality/south-africa`: GET-only national snapshot, in development
   and built preview. No arbitrary upstream URL or credential is accepted.
 - `providers.js`: injected source composition, bounded client response and
-  cancellation. Switching provider/pollutant clears the previous display and
-  prevents late responses from replacing the current selection.
+  cancellation. Switching view clears the previous display and prevents late
+  responses from replacing the current selection.
 - `index.js`: existing layer lifecycle, shared Weather card controls, in-view
   label cohort, disposal and analyst records. Camera movement updates presentation
   without requesting upstream data or rebuilding station entities.
-- Existing share token `4` is unchanged. Provider and pollutant are serialized;
-  absent provider options retain the historical Canada default.
+- The share link carries the view only (the US AQI, one pollutant, or
+  Canada's AQHI); whether stations are shown and the selected station are
+  session state. There is no provider setting: every provider is read together.
+- Off by default: `saaqisEnabled()` in `server/providers/southAfricaAirQuality.js`
+  reads `SAAQIS_ENABLED`; only `1` switches the route on. The browser QA gates
+  start the dev server with it set.
 
 On refresh failure, the server can return the last successful snapshot for up
 to six hours, explicitly marked stale. The client checks observation ages again;
@@ -128,8 +139,7 @@ network identity, units, time semantics, quality flags and attribution. Separate
 modelled estimates from observations. Preserve existing provider defaults and
 share tokens; add fixtures for missing coverage, stale data, units and failures.
 
-Coordinate further provider UI work with upstream PR #1204 (India CPCB), and
-query-tool integration with issue #1213. Neither branch is imported here.
+India's CPCB is already a provider on the same contract (`cpcb.js`).
 
 ## Validation
 
@@ -157,8 +167,7 @@ A complete calculation-method document has not been verified. In particular,
 GEV joins a rating only to the identical station, pollutant and observation
  timestamp, validates integer scores 1–10 and the published category, and keeps
 concentrations separate from index scores. Unsupported scales, mismatches,
-missing ratings and sentinel values stay neutral with an explicit unavailable
-badge. Index endpoint failure does not discard concentrations. CO2 does not
+missing ratings and sentinel values stay neutral. Index endpoint failure does not discard concentrations. CO2 does not
 inherit another pollutant's rating. The SAAQIS index is shown in a station's
 details only (in every view); its colour, ranking and legend are the view's
 own scale. Station details state hourly averaging, source, timestamp and
@@ -177,8 +186,8 @@ write/restart path. The variable is `OPENAQ_API_KEY`; it is never client-exposed
 Provider Settings remains development/loopback-only. Preview and other hosts use
 environment configuration. No credential is needed for ECCC or SAAQIS.
 
-The standalone defaults offer Canada, South Africa and worldwide OpenAQ. The
-OpenAQ default has no country, city or station allowlist. The map requests the
+The standalone defaults compose Canada, South Africa, India and worldwide
+OpenAQ, drawn together as one station set. The OpenAQ default has no country, city or station allowlist. The map requests the
 visible geographic bounds and focus point through the fixed local proxy. OpenAQ
 location discovery starts within five degrees of the focus, then paginates the
 whole visible rectangle, splitting dateline crossings. Each pass spends at most
@@ -199,11 +208,17 @@ and supplies known observations even after view-cache eviction or during cooldow
 View caches and background/global callers share a conservative 45/minute,
 1,800/hour process budget. Provider remaining/reset headers and numeric or HTTP-date
 Retry-After can impose an earlier stop or longer cooldown. Other clients using the
-same key still consume its provider quota. The card shows the next automatic update
-time, retains cached observations, and retries when the cooldown expires. Timers
+same key still consume its provider quota. The card says when a network's
+request budget is reached or it shows cached data, and, while OpenAQ is still
+discovering a view, how many of its stations it has checked ("loading stations,
+n of m"); it retains cached observations and retries when the cooldown expires.
+A key OpenAQ refuses is said to be rejected on the card, and the server does not
+send it upstream again until it changes or ten minutes pass. While the tab is
+hidden the discovery loop waits. Timers
 are cancelled on navigation, provider changes, disable and destroy. Loading,
 partial discovery, failed/stale refreshes, and completed searches with no recent
-readings remain distinct. Explicit Canada and South Africa selections stay national.
+readings remain distinct. SAAQIS and ECCC stay national providers; OpenAQ
+discovery follows the map.
 
 Hosts calling the proxy without a viewport retain global acquisition. Its locations
 catalog is paginated incrementally (eight pages per refresh), with cursor state
@@ -255,11 +270,12 @@ missing quality/coverage, unsupported pollutants and unknown averaging periods
 remain neutral with an explanation. Readings older than six hours are excluded;
 readings older than two hours are visibly marked older observations.
 
-The shared Weather card leads with the highest **selected-pollutant** category
-among visible reporting stations, general and sensitive-population guidance,
-then sorted station details and a numeric legend. Categories appear as text and
-colour in the existing map overlays and shared status badge component. The
-portable `interpretation.js` module keeps thresholds and per-pollutant semantics
+The shared Weather card is the slim tile card: its HIGHEST IN VIEW list ranks
+the visible reporting stations on the view's scale, one line each, with the
+station's details (and its originating network and licence) as the row's
+tooltip, under a ramp legend. Categories appear as text and colour in the map
+labels and tiles; the general and sensitive-population guidance stays on the
+assessment in analyst records. The portable `interpretation.js` module keeps thresholds and per-pollutant semantics
 out of the generic UI. The legend is the view's one scale: the EEA bands of
 the selected pollutant, the US AQI categories, or, for the AQHI, the index
 provider's own `legend`. SAAQIS's provider-reported ratings stay in station

@@ -14,6 +14,8 @@
  *
  * ECCC AQHI and SAAQIS concentrations share provenance, not a numeric scale.
  */
+import { concentrationIn, layerUnits } from './units.js';
+
 // A portable export (package.json): no i18n here. The labels stay English data;
 // the Weather card (index.js) shows them translated.
 const msg = (text) => text;
@@ -390,11 +392,17 @@ export function mapAnalystRecord(raw, index = 0) {
     const t = String(v ?? '').trim();
     return t || null;
   };
+  // A pollutant's value in the layer's units (µg/m³, CO mg/m³), as the card
+  // gives it; units that do not convert keep the source's.
+  const converted =
+    raw?.kind === 'observation' && raw.parameter !== 'aqi'
+      ? concentrationIn(raw.parameter, raw.value, raw.units)
+      : null;
   return {
     id: text(raw?.id) || `AIR-${String(index).padStart(4, '0')}`,
     provider: text(raw?.provider),
     scale: text(raw?.scale),
-    value: num(raw?.value),
+    value: converted ?? num(raw?.value),
     band: text(raw?.band),
     name: text(raw?.name),
     zone: text(raw?.zone),
@@ -405,7 +413,8 @@ export function mapAnalystRecord(raw, index = 0) {
     ...(raw?.kind === 'observation'
       ? {
           parameter: text(raw.parameter),
-          units: text(raw.units),
+          units:
+            converted === null ? text(raw.units) : layerUnits(raw.parameter),
           averagingMinutes: num(raw.averagingMinutes),
           kind: 'observation',
           country: text(raw.country),

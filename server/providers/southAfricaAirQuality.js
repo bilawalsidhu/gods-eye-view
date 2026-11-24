@@ -126,7 +126,30 @@ export function createSaAcquisition({
   };
 }
 
-export function southAfricaAirQualityProxy(options = {}) {
+/**
+ * Whether the operator switched South Africa on. Only "1" does.
+ *
+ * Off by default: SAAQIS is read through the portal's own session API and
+ * publishes no reuse terms for it, so nothing here contacts the portal unless
+ * the operator sets `SAAQIS_ENABLED=1`. Without it the route answers "not
+ * configured" and the layer leaves South Africa out, with no failure.
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {boolean}
+ */
+export function saaqisEnabled(env = process.env) {
+  return String(env.SAAQIS_ENABLED || '').trim() === '1';
+}
+
+const NOT_CONFIGURED = Object.freeze({
+  unavailable: true,
+  code: 'not_configured',
+  reason: 'South Africa air quality not enabled (SAAQIS_ENABLED=1)',
+});
+
+export function southAfricaAirQualityProxy({
+  env = process.env,
+  ...options
+} = {}) {
   const source = createSaAcquisition(options);
   const handler = async (req, res) => {
     const send = (status, data) => {
@@ -141,6 +164,7 @@ export function southAfricaAirQualityProxy(options = {}) {
     // This is a fixed national snapshot, never an arbitrary upstream proxy.
     if (req.url !== '/' && req.url !== '')
       return send(400, { error: 'invalid_air_quality_query' });
+    if (!saaqisEnabled(env)) return send(200, NOT_CONFIGURED);
     try {
       send(200, await source.getSnapshot());
     } catch {

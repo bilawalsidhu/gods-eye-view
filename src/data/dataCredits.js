@@ -260,7 +260,7 @@ export const DATA_CREDITS = [
   OPENMAPTILES_CREDIT,
   {
     key: 'openaq',
-    html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. Provider attribution and licences accompany each station.',
+    html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. The originating network and its licence are named in each station’s details.',
   },
   {
     key: 'saaqis',
@@ -271,6 +271,17 @@ export const DATA_CREDITS = [
     html:
       'Indian air-quality observations: Central Pollution Control Board via ' +
       '<a href="https://www.data.gov.in/catalog/real-time-air-quality-index" target="_blank" rel="noopener">Open Government Data Platform India</a> · Government Open Data License – India',
+  },
+  {
+    key: 'eea-aqi-bands',
+    html:
+      'Air quality. Bands and colours: ' +
+      '<a href="https://airindex.eea.europa.eu/AQI/" target="_blank" rel="noopener">European Air Quality Index (EEA)</a> · CC BY 4.0 · ' +
+      'Carbon monoxide: WHO air quality guidelines',
+  },
+  {
+    key: 'us-aqi',
+    html: "US AQI: computed by GEV from station readings with the US EPA's breakpoints and colours; not an official reading.",
   },
   {
     key: 'eccc-aqhi',

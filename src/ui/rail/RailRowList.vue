@@ -1,6 +1,5 @@
 <script setup>
 import { onMounted, onUpdated, ref } from 'vue';
-import UiBadge from '../kit/UiBadge.vue';
 import UiButton from '../kit/UiButton.vue';
 
 // An ordered list whose rows keep their identity, so a focused row stays.
@@ -67,17 +66,9 @@ onUpdated(followCurrent);
           :style="swatchStyle(item)"
         ></span
         ><span class="data-row-list-lead">{{ String(item.lead ?? '') }}</span
-        ><span class="data-row-list-text">{{ String(item.text ?? '') }}</span
-        ><UiBadge
-          v-if="item.badge"
-          class="gev-status-badge--box data-row-list-badge"
-          :style="{
-            color: /^#[0-9a-f]{6}$/i.test(item.badgeColor || '')
-              ? item.badgeColor
-              : '',
-          }"
-          >{{ String(item.badge) }}</UiBadge
-        ></UiButton
+        ><span class="data-row-list-text">{{
+          String(item.text ?? '')
+        }}</span></UiButton
       ></li
     ></ol
   >

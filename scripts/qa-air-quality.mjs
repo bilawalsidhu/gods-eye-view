@@ -112,8 +112,18 @@ async function main() {
       // googleTokens.js deliberately probes an optional host capability. A
       // standalone server without it returns 404 and falls back to keyless maps.
       // Keep every other resource error and every page exception as a failure.
-      if (sourceUrl === new URL('/api/google/tiles-token', APP_URL).href &&
-          /Failed to load resource.*404/i.test(m.text())) return;
+      if (
+        sourceUrl === new URL('/api/google/tiles-token', APP_URL).href &&
+        /Failed to load resource.*404/i.test(m.text())
+      )
+        return;
+      // Without a key the OpenAQ and India routes answer 428 by design (the
+      // layer says the provider needs a key); this run has none.
+      if (
+        /\/api\/air-quality\/(openaq|india)(\?|$)/.test(sourceUrl) &&
+        /Failed to load resource.*428/i.test(m.text())
+      )
+        return;
       consoleErrors.push(`${m.text().slice(0, 160)} [${sourceUrl}]`);
     });
 
@@ -141,14 +151,17 @@ async function main() {
     });
 
     const loaded = !stats?.missing && !stats?.error && stats?.count > 0;
-    record('stations report a current index', loaded,
-      `count=${stats?.count} error=${stats?.error}`);
+    record(
+      'stations report a current index',
+      loaded,
+      `count=${stats?.count} error=${stats?.error}`,
+    );
     if (!loaded) exitCode = 1;
 
     const records = await page.evaluate(
       () =>
-        window.__godsEyeView.dataManager
-          .layers.get('air-quality')
+        window.__godsEyeView.dataManager.layers
+          .get('air-quality')
           ?.module.getAnalystRecords(500) || [],
     );
 
@@ -156,20 +169,33 @@ async function main() {
     const shaped = records.every(
       (r) => r.provider && r.scale && Number.isFinite(r.value) && r.band,
     );
-    record('every reading carries provider, scale, value and band', shaped,
+    record(
+      'every reading carries provider, scale, value and band',
+      shaped,
       records.length
         ? `sample={provider:${records[0].provider}, scale:${records[0].scale}, value:${records[0].value}, band:${records[0].band}}`
-        : 'no records');
+        : 'no records',
+    );
     if (!shaped) exitCode = 1;
 
-    const published = records.every((r) => Number.isInteger(r.value) && r.value >= 1);
-    record('every AQHI value is in the published integer form, floored at 1', published,
-      `values=${[...new Set(records.map((r) => r.value))].sort((a, b) => a - b).join(',')}`);
+    const published = records.every(
+      (r) => Number.isInteger(r.value) && r.value >= 1,
+    );
+    record(
+      'every AQHI value is in the published integer form, floored at 1',
+      published,
+      `values=${[...new Set(records.map((r) => r.value))].sort((a, b) => a - b).join(',')}`,
+    );
     if (!published) exitCode = 1;
 
-    const zones = [...new Set(records.map((r) => r.zone).filter(Boolean))].sort();
-    record('coverage spans multiple ECCC administrative zones', zones.length >= 3,
-      `zones=${zones.join(',') || 'none'} stations=${records.length}`);
+    const zones = [
+      ...new Set(records.map((r) => r.zone).filter(Boolean)),
+    ].sort();
+    record(
+      'coverage spans multiple ECCC administrative zones',
+      zones.length >= 3,
+      `zones=${zones.join(',') || 'none'} stations=${records.length}`,
+    );
     if (zones.length < 3) exitCode = 1;
 
     // The card's whole point is "highest readings in view", so put the camera
@@ -198,30 +224,45 @@ async function main() {
 
     const controls = await page.evaluate(
       () =>
-        window.__godsEyeView.dataManager
-          .layers.get('air-quality')
+        window.__godsEyeView.dataManager.layers
+          .get('air-quality')
           ?.module.getRowControls?.() || null,
     );
     const readoutOk =
       controls?.readout === true &&
       Array.isArray(controls?.legend) &&
       controls.legend.length === 4 &&
-      controls.legend.every((band) => /^#[0-9a-f]{6}$/i.test(band.color) && band.label) &&
+      controls.legend.every(
+        (band) => /^#[0-9a-f]{6}$/i.test(band.color) && band.label,
+      ) &&
       controls.legendCategorical === true &&
       Array.isArray(controls?.list?.items) &&
       controls.list.items.length > 0 &&
       controls.list.items.every((item) => item.id && item.lead && item.text) &&
-      /Canada only/.test(controls?.summary?.coverage || '');
-    record('the Weather readout lists the worst readings in view, with a legend', readoutOk,
+      controls.summary?.coverage === 'Canada' &&
+      // The slim tile card: an Index group holding the AQHI tile, active, and
+      // a Pollutants group of six.
+      controls.sublists
+        ?.find((group) => group.id === 'index')
+        ?.tiles.find((tile) => tile.id === 'aqhi')?.active === true &&
+      controls.sublists?.find((group) => group.id === 'pollutants')?.tiles
+        .length === 6;
+    record(
+      'the Weather card lists the worst readings in view, with a legend and tiles',
+      readoutOk,
       controls
         ? `bands=${controls.legend?.map((band) => band.label).join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
-        : 'no descriptor');
+        : 'no descriptor',
+    );
     if (!readoutOk) exitCode = 1;
 
     await checkField(page);
 
-    record('no console errors', consoleErrors.length === 0,
-      consoleErrors.length ? consoleErrors.slice(0, 2).join(' | ') : 'clean');
+    record(
+      'no console errors',
+      consoleErrors.length === 0,
+      consoleErrors.length ? consoleErrors.slice(0, 2).join(' | ') : 'clean',
+    );
     if (consoleErrors.length) exitCode = 1;
   } catch (e) {
     console.error('\x1b[31mHarness error:\x1b[0m', e);
@@ -314,10 +355,13 @@ async function checkField(page) {
       ? `layer ${new Date(now.own.start).toISOString()} .. ${new Date(now.own.end).toISOString()}, timeline ${new Date(now.coverage?.start).toISOString()} .. ${new Date(now.coverage?.end).toISOString()}, follows=${now.follows}`
       : 'no coverage from the layer',
   );
-  await page.evaluate(async (at) => {
-    const { worldClock } = await import('/src/time/worldClock.js');
-    worldClock.seek(at);
-  }, FIELD_RUN + 24 * HOUR);
+  await page.evaluate(
+    async (at) => {
+      const { worldClock } = await import('/src/time/worldClock.js');
+      worldClock.seek(at);
+    },
+    FIELD_RUN + 24 * HOUR,
+  );
   let later = null;
   for (let i = 0; i < 40; i++) {
     await sleep(500);

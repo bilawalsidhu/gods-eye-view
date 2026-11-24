@@ -414,3 +414,12 @@ test('the data.gov.in key is listed in Provider Settings like the OpenAQ key', (
   assert.deepEqual(india.envVars, ['DATA_GOV_IN_API_KEY']);
   assert.ok(!JSON.stringify(configured).includes('private-test-value'));
 });
+
+test('the air-quality keys sit among the free optional keys, after NASA FIRMS', () => {
+  const ids = KEY_SETUP_KEYS.map((key) => key.id);
+  // Most magic per minute first: the 3D planet leads.
+  assert.equal(ids[0], 'google-maps');
+  assert.ok(ids.indexOf('openaq') > ids.indexOf('firms'));
+  assert.ok(ids.indexOf('data-gov-in') > ids.indexOf('firms'));
+  assert.equal(ids.indexOf('data-gov-in'), ids.indexOf('openaq') + 1);
+});

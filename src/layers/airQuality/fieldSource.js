@@ -70,24 +70,31 @@ export function createLocalAirQualityFieldSource({
       code: 'not_configured',
     });
   const source = {
-    /** The folder's manifest; a static folder holds one run, whatever `atMs`. */
+    /**
+     * The folder's manifest; a static folder holds one run, whatever `atMs`.
+     * Until a manifest has been read once, an answer that is not one (a page,
+     * a server error, no answer) means no field here, not a failed one.
+     */
     async getManifest({ signal } = {}) {
       return bounded(signal, async (active) => {
-        let response;
+        const neverRead = manifest === null;
+        let body;
         try {
-          response = await get(`${base}/manifest`, active, {
+          const response = await get(`${base}/manifest`, active, {
             cache: 'no-store',
           });
+          body = await readResponseJsonCapped(
+            response,
+            MAX_MANIFEST_BYTES,
+            active,
+          );
         } catch (error) {
           // A server without the route has no field to give.
           if (error?.status === 404) throw notConfigured();
+          // A caller who let go is told so, not that there is no field.
+          if (neverRead && !signal?.aborted) throw notConfigured();
           throw error;
         }
-        const body = await readResponseJsonCapped(
-          response,
-          MAX_MANIFEST_BYTES,
-          active,
-        );
         if (body?.unavailable === true) {
           if (body.code === 'not_configured') throw notConfigured();
           throw Object.assign(new Error('Model field unavailable'), {

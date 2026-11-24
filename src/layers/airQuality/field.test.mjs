@@ -531,6 +531,7 @@ function fieldHarness({
   renderer = {},
   definitions = [SAAQIS],
   frames = null,
+  registerCredit,
 } = {}) {
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
   const imagery = [];
@@ -597,6 +598,7 @@ function fieldHarness({
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     fieldSource,
     clock,
+    ...(registerCredit ? { registerCredit } : {}),
   });
   layer.init(viewer);
   layer.enable();
@@ -645,6 +647,48 @@ test('with a field the layer registers its span with the world clock', async () 
   layer.destroy();
   assert.equal(clock.coverage(), null);
   assert.equal(clock.follows('air-quality'), false);
+});
+
+test('the manifest credit joins the data credits, as written and escaped', async () => {
+  const credit =
+    'Generated using Copernicus Atmosphere Monitoring Service information 2026 <b>&';
+  const credits = [];
+  const host = hostField({ manifest: { credit } });
+  const { layer, viewer } = fieldHarness({
+    fieldSource: host.source,
+    registerCredit: (v, entry) => {
+      credits.push([v, entry]);
+      return true;
+    },
+  });
+  await layer.update();
+  await settle();
+  assert.equal(credits.length >= 1, true);
+  assert.equal(credits[0][0], viewer);
+  assert.equal(
+    credits[0][1].html,
+    'Generated using Copernicus Atmosphere Monitoring Service information 2026 &lt;b&gt;&amp;',
+  );
+  layer.destroy();
+  // No credit in the manifest, nothing registered.
+  const none = [];
+  const plain = fieldHarness({
+    fieldSource: hostField().source,
+    registerCredit: (v, entry) => none.push(entry),
+  });
+  await plain.layer.update();
+  await settle();
+  assert.deepEqual(none, []);
+  plain.layer.destroy();
+});
+
+test('readFieldManifest keeps a manifest credit', () => {
+  assert.equal(
+    manifestOf({ width: 2, height: 2, lon0: 0, lat0: 1, step: 1 }, null, {
+      credit: '  Some credit ',
+    }).credit,
+    'Some credit',
+  );
 });
 
 test('without a field the layer registers nothing', async () => {
@@ -1225,4 +1269,68 @@ test('on the globe a new step is drawn in one frame once loaded: never both step
   t.mock.timers.tick(1_500);
   assert.deepEqual([fresh.removed, next.alpha], [true, 0.85]);
   assert.deepEqual(live(), [next]);
+});
+
+test('"Model field unavailable" only once a manifest has been read', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const unavailable = (layer) =>
+    layer
+      .getRowControls()
+      .summary.lines.some((line) => line.text === 'Model field unavailable');
+  // A field that never answered: nobody may have configured one.
+  const never = fieldHarness({
+    fieldSource: {
+      getStep: async () => ({}),
+      getManifest: async () => {
+        throw new Error('unreachable');
+      },
+    },
+  });
+  await never.layer.update();
+  await settle();
+  assert.equal(unavailable(never.layer), false);
+  // A field that was read, then fails when asked for a newer run.
+  const host = hostField();
+  let down = false;
+  const { layer } = fieldHarness({
+    fieldSource: {
+      getStep: host.source.getStep,
+      async getManifest(options) {
+        if (down) throw new Error('unreachable');
+        return host.source.getManifest(options);
+      },
+    },
+  });
+  await layer.update();
+  await settle();
+  assert.equal(unavailable(layer), false);
+  down = true;
+  t.mock.timers.tick(11 * 60_000);
+  await layer.update();
+  await settle();
+  assert.equal(unavailable(layer), true);
+});
+
+test('outside the run one muted line says the model has no forecast for the time', async () => {
+  const host = hostField({ manifest: { sourceShort: 'CAMS' } });
+  const { layer, clock } = fieldHarness({ fieldSource: host.source });
+  await layer.update();
+  await settle();
+  const line = () =>
+    layer
+      .getRowControls()
+      .summary.lines.find((item) => item.id === 'model-time');
+  assert.equal(line(), undefined);
+  // Two days past the run's last step: the host has no run covering it.
+  clock.seek(host.run + 72 * HOUR);
+  await settle();
+  assert.deepEqual(line(), {
+    id: 'model-time',
+    muted: true,
+    text: 'CAMS: no forecast for this time',
+  });
+  // Inside the run again, the line goes.
+  clock.seek(host.run + 24 * HOUR);
+  await settle();
+  assert.equal(line(), undefined);
 });

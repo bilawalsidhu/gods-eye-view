@@ -120,6 +120,11 @@ test('rejected keys never fall back to cache and 429 respects retry window', asy
   clock += 21 * 60_000;
   status = 401;
   await assert.rejects(source.getSnapshot(), (e) => e.status === 401);
+  // The refused key is not sent again for ten minutes, and no cache stands in.
+  const refused = calls.length;
+  await assert.rejects(source.getSnapshot(), (e) => e.status === 401);
+  assert.equal(calls.length, refused);
+  clock += 10 * 60_000;
   status = 429;
   const cached = await source.getSnapshot();
   assert.equal(cached.stale, true);
@@ -1011,4 +1016,43 @@ test('provider cooldown takes precedence over the nearby progressive refresh dea
   const next = await source.getSnapshot({ view: [1, -10, 39, 10, 20, 0] });
   assert.equal(next.readings.length, 1);
   assert.equal(next.retryAt, start + 120_000);
+});
+
+test('a viewport answer carries counts, not the station catalogue', async () => {
+  const { source } = fixture({ batchSize: 1 });
+  const answer = await source.getSnapshot({ view: [0, -40, 50, 10, 18, -34] });
+  assert.equal(answer.stations, undefined);
+  assert.equal(answer.stationCount, 3);
+  assert.equal(answer.eligible, 3);
+  assert.equal(answer.checked, 1);
+  assert.equal(answer.partial, true);
+  assert.equal(answer.readings.length, 1);
+});
+
+test('a rejected key is not sent upstream again until it changes or ten minutes pass', async () => {
+  let clock = start;
+  let key = 'refused';
+  const { source, calls } = fixture({
+    now: () => clock,
+    getKey: () => key,
+    fail: () => (key === 'refused' ? 401 : 0),
+  });
+  const view = [0, -40, 50, 10, 18, -34];
+  await assert.rejects(source.getSnapshot({ view }), (e) => e.status === 401);
+  const sent = calls.length;
+  assert.ok(sent > 0);
+  // Asked again at once, by any view or the national route: refused here.
+  await assert.rejects(source.getSnapshot({ view }), (e) => e.status === 401);
+  await assert.rejects(source.getSnapshot(), (e) => e.status === 401);
+  assert.equal(calls.length, sent);
+  // Ten minutes on, the same key is tried once more.
+  clock += 10 * 60_000;
+  await assert.rejects(source.getSnapshot({ view }), (e) => e.status === 401);
+  assert.ok(calls.length > sent);
+  // A new key is tried at once.
+  const before = calls.length;
+  key = 'accepted';
+  const answer = await source.getSnapshot({ view });
+  assert.ok(calls.length > before);
+  assert.ok(answer.readings.length > 0);
 });

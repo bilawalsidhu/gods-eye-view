@@ -71,6 +71,13 @@ test('CO is banded in mg/m³ on the same six bands', () => {
   // 9000 µg/m³ is 9 mg/m³.
   assert.equal(co(9000, 'µg/m³').label, 'Moderate');
   assert.equal(co(0.4).units, 'mg/m³');
+  // CO's bands are the WHO's; the EEA's label belongs to the other gases.
+  assert.equal(co(0.4).method, 'WHO-based carbon monoxide bands');
+  assert.equal(
+    interpretHourly({ ...base, parameter: 'NO2', units: 'µg/m³', value: 5 })
+      .assessment.method,
+    'EEA hourly pollutant bands',
+  );
   assert.deepEqual(
     hourlyLegend('CO').map((band) => band.range),
     [
@@ -244,4 +251,21 @@ test('the card counts and lists only stations this side of the horizon', async (
     'OpenAQ unavailable',
   );
   layer.destroy();
+});
+
+test('an implausible hourly value is unrated in a pollutant view, as in the AQI view', () => {
+  const hourly = (parameter, value, units = 'µg/m³') =>
+    interpretHourly({ parameter, value, units, averagingMinutes: 60 });
+  const stuck = hourly('PM2.5', 9999);
+  assert.equal(stuck.assessment.label, undefined);
+  assert.match(stuck.assessment.reason, /Implausibly high/);
+  assert.equal(stuck.color, '#8cb4ce');
+  // At its ceiling a value is still rated.
+  assert.equal(hourly('PM2.5', 3000).assessment.label, 'Extremely poor');
+  // Carbon monoxide's top band begins at the AQI view's ceiling (100 mg/m³):
+  // here its ceiling is 200 mg/m³, in the layer's units (175 ppm is 200.5).
+  assert.equal(hourly('CO', 150, 'mg/m³').assessment.label, 'Extremely poor');
+  assert.match(hourly('CO', 175, 'ppm').assessment.reason, /Implausibly high/);
+  assert.equal(hourly('NO2', 1500).assessment.label, 'Extremely poor');
+  assert.match(hourly('NO2', 1501).assessment.reason, /Implausibly high/);
 });

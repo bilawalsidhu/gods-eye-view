@@ -4492,6 +4492,7 @@
   "These units cannot be compared without additional conversion data.": "Dessa enheter kan inte jämföras utan ytterligare omräkningsdata.",
   "No usable measurement.": "Ingen användbar mätning.",
   "EEA hourly pollutant bands": "EEA:s timbaserade föroreningskategorier",
+  "WHO-based carbon monoxide bands": "Koloxidklasser baserade på WHO",
   "Air quality · South Africa": "Luftkvalitet · Sydafrika",
   "South Africa · SAAQIS": "Sydafrika · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "Leverantörsnyckeln avvisades. Kontrollera leverantörsinställningarna.",
@@ -4522,6 +4523,11 @@
   },
   "Deselect station": "Avmarkera station",
   "{network}: showing cached data": "{network}: visar cachade data",
+  "Licence: {licence}": "Licens: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: nyckeln avvisades – kontrollera Leverantörsinställningar",
+  "{network}: loading stations, {n} of {m}": "{network}: läser in stationer, {n} av {m}",
+  "{source}: no forecast for this time": "{source}: ingen prognos för den här tiden",
+  "Implausibly high for this pollutant; no health category is assigned.": "Orimligt högt värde för detta ämne; ingen hälsokategori tilldelas.",
   "forecast for {time}": "prognos för {time}",
   "Model field unavailable": "Modellfältet är inte tillgängligt"
 }

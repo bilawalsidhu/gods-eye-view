@@ -25,6 +25,8 @@ export const AFRICA_SCOPE = Object.freeze({
 export const GLOBAL_SCOPE = Object.freeze({ id: 'global', countries: null });
 const ROOT = 'https://api.openaq.org/v3/';
 const HOUR = 3600_000;
+/** A refused key is tried upstream again after this long, unless it changes. */
+const REFUSED_KEY_MS = 10 * 60_000;
 const error = (status, message) =>
   Object.assign(new Error(message), { status });
 /**
@@ -159,6 +161,11 @@ export function createOpenAqAcquisition({
     cachedAt = 0;
   const readings = new Map(),
     checked = new Map();
+  /**
+   * The key OpenAQ last refused (401 or 403), with its answer and when: it is
+   * not sent upstream again until it changes or `REFUSED_KEY_MS` pass.
+   */
+  let refused = null;
   const budget = createOpenAqBudget(now);
   const catalogPages = new Map();
   let discoveryPage = 1,
@@ -371,7 +378,9 @@ export function createOpenAqAcquisition({
       sourceUrl: 'https://openaq.org/',
       scope: 'viewport',
       view,
-      stations: [...state.stations.values()],
+      // Counts, not the catalogue: the browser reads only how far along
+      // discovery is, and the catalogue stays on the server.
+      stationCount: state.stations.size,
       // The AQI view answers one reading per station with all its values.
       readings: mode === 'aqi' ? aqiStations(fresh) : fresh,
       checked: eligible.filter((s) => state.checked.has(s.stationId)).length,
@@ -533,6 +542,8 @@ export function createOpenAqAcquisition({
         redirect: 'error',
       });
       budget.observe(res);
+      if (res.status === 401 || res.status === 403)
+        refused = { key, status: res.status, at: now() };
       if (!res.ok) {
         throw Object.assign(
           error(
@@ -656,6 +667,8 @@ export function createOpenAqAcquisition({
       if (view) view = parseOpenAqView(view.join(','));
       const key = getKey().trim();
       if (!key) throw error(428, 'OpenAQ key required');
+      if (refused?.key === key && now() - refused.at < REFUSED_KEY_MS)
+        throw error(refused.status, 'OpenAQ key rejected');
       if (key !== keyAtCache) {
         if (pending) await pending.catch(() => {});
         if (viewPending.size)

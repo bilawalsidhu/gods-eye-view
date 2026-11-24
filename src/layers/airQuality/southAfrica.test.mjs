@@ -7,6 +7,7 @@ import {
   selectSaReadings,
   saObservationTime,
   SA_POLLUTANTS,
+  attachSaIndexes,
 } from './southAfrica.js';
 import { createAirQualitySource } from './providers.js';
 import { createAirQualityLayer } from './index.js';
@@ -219,7 +220,9 @@ test('provider composition preserves Canada, propagates errors and rechecks cach
   );
 });
 
-test('view switch clears old markers and ignores late requests; camera changes unsubscribe on destroy', async () => {
+test('view switch clears old markers and ignores late requests; camera changes unsubscribe on destroy', async (t) => {
+  // The layer's clock at the snapshot's time: its readings are an hour old.
+  t.mock.timers.enable({ apis: ['Date'], now });
   let resolveCanada;
   let removed = false;
   let listener;
@@ -426,7 +429,8 @@ test('view-driven providers debounce navigation, abort old requests, and separat
   layer.destroy();
 });
 
-test('stale coverage says the network shows cached data; partial alone says nothing', async () => {
+test('stale coverage says the network shows cached data; partial alone says nothing', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now });
   const definition = createAirQualitySource().definitions.find(
     (p) => p.id === 'saaqis',
   );
@@ -633,4 +637,26 @@ test('navigation cancels the old view retry and only refreshes the new camera', 
   } finally {
     layer.destroy();
   }
+});
+
+test('a null or broken index row is skipped, never thrown', () => {
+  const readings = snapshot([channel()]).readings;
+  const rated = attachSaIndexes(readings, {
+    indexType: 1,
+    data: [
+      null,
+      { stationId: 1, indexes: null },
+      {
+        stationId: 1,
+        datetime: '2026-10-20T11:00:00+02:00',
+        indexes: [
+          null,
+          7,
+          { pollutant: 'PM2.5', index: 2, description: 'Good' },
+        ],
+      },
+    ],
+  });
+  assert.equal(rated.length, 1);
+  assert.equal(rated[0].rating?.label, 'Good');
 });

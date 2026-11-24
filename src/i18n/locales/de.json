@@ -4463,6 +4463,7 @@
   "These units cannot be compared without additional conversion data.": "Diese Einheiten lassen sich ohne zusätzliche Umrechnungsdaten nicht vergleichen.",
   "No usable measurement.": "Kein verwendbarer Messwert.",
   "EEA hourly pollutant bands": "Stündliche EEA-Schadstoffklassen",
+  "WHO-based carbon monoxide bands": "Kohlenmonoxid-Klassen nach WHO",
   "Air quality · South Africa": "Luftqualität · Südafrika",
   "South Africa · SAAQIS": "Südafrika · SAAQIS",
   "Provider key rejected. Check Provider Settings.": "Anbieterschlüssel abgelehnt. Prüfen Sie die Anbietereinstellungen.",
@@ -4479,7 +4480,7 @@
   "air quality risk|High": "Hoch",
   "air quality risk|Very High": "Sehr hoch",
   "EEA hourly quality|Good": "Gut",
-  "EEA hourly quality|Fair": "Mäßig",
+  "EEA hourly quality|Fair": "Ausreichend",
   "EEA hourly quality|Moderate": "Mäßig",
   "EEA hourly quality|Poor": "Schlecht",
   "EEA hourly quality|Very poor": "Sehr schlecht",
@@ -4522,6 +4523,11 @@
   },
   "Deselect station": "Station abwählen",
   "{network}: showing cached data": "{network}: zwischengespeicherte Daten",
+  "Licence: {licence}": "Lizenz: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: Schlüssel abgelehnt – Anbieter-Einstellungen prüfen",
+  "{network}: loading stations, {n} of {m}": "{network}: Stationen werden geladen, {n} von {m}",
+  "{source}: no forecast for this time": "{source}: keine Vorhersage für diese Zeit",
+  "Implausibly high for this pollutant; no health category is assigned.": "Unplausibel hoch für diesen Schadstoff; es wird keine Gesundheitskategorie zugewiesen.",
   "forecast for {time}": "Vorhersage für {time}",
   "Model field unavailable": "Modellfeld nicht verfügbar"
 }

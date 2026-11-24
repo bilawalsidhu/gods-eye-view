@@ -112,7 +112,9 @@ function legendView(legend) {
         :dispatch="(descriptor) => dispatch(descriptor, block)"
       /><template v-else-if="block.type === 'result'"
         ><div class="rail-card-result-header"
-          ><span class="panel-title">{{ block.label }}</span
+          ><span class="panel-title" :title="block.title || undefined">{{
+            block.label
+          }}</span
           ><UiCloseButton
             class="data-toggle-chip"
             data-action-id="clear"

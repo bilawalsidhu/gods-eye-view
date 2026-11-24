@@ -8290,6 +8290,8 @@
     "exports": ["./layers/air-quality"],
     "modules": [
       "src/layers/airQuality/index.js",
+      "src/data/dataCredits.js",
+      "src/render/creditMarkup.js",
       "src/time/worldClock.js",
       "src/layers/weather/shellPlacement.js",
       "src/layers/airQuality/field.js",

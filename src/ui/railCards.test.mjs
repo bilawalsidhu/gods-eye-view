@@ -402,50 +402,60 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   assert.equal(calls.length, before);
 });
 
-test('row lists render and update shared status badges without replacing the focused row', () => {
+test('a row draws no status badge: no card gives one', () => {
   const f = railFixture();
   const view = createRailCards(f);
-  const paint = (badge, badgeColor) =>
-    view.update([
-      {
-        ...card,
-        blocks: [
-          {
-            id: 'stations',
-            type: 'list',
-            list: {
-              ariaLabel: 'Stations',
-              items: [
-                {
-                  id: 'station',
-                  lead: 'PM2.5',
-                  text: 'Cape Town',
-                  badge,
-                  badgeColor,
-                },
-              ],
-            },
+  view.update([
+    {
+      ...card,
+      blocks: [
+        {
+          id: 'stations',
+          type: 'list',
+          list: {
+            ariaLabel: 'Stations',
+            items: [
+              {
+                id: 'station',
+                lead: 'PM2.5',
+                text: 'Cape Town',
+                badge: 'Good',
+                badgeColor: '#50c9b5',
+              },
+            ],
           },
-        ],
-      },
-    ]);
-  paint('Good', '#50c9b5');
+        },
+      ],
+    },
+  ]);
   const row = f.container.querySelector('.data-row-list-item');
-  const badge = row.querySelector('.data-row-list-badge');
-  assert.ok(badge.classList.contains('ui-badge'));
-  assert.ok(badge.classList.contains('gev-status-badge--box'));
-  assert.equal(badge.textContent, 'Good');
-  assert.equal(badge.style.color, '#50c9b5');
-  row.focus();
-  paint('<img onerror=alert(1)>', 'url(https://example.com)');
-  assertSameNode(f.container.querySelector('.data-row-list-item'), row);
-  assert.equal(badge.textContent, '<img onerror=alert(1)>');
-  assert.equal(badge.querySelector('img'), null);
-  assert.equal(badge.style.color, '');
-  paint(null, null);
-  assert.equal(row.querySelector('.data-row-list-badge'), null);
-  assertSameNode(f.container.querySelector('.data-row-list-item'), row);
+  // Booleans: a failing assertion on a DOM node takes minutes to print.
+  assert.ok(!row.querySelector('.data-row-list-badge'), 'no badge element');
+  assert.equal(row.textContent, 'PM2.5Cape Town');
   view.destroy();
+});
+
+test('a summary overview draws nothing: no layer gives one', () => {
+  const f = railFixture();
+  const panel = createWeatherPanel({ container: f.container });
+  panel.update([
+    {
+      id: 'air-quality',
+      icon: '◍',
+      summary: {
+        label: 'Air quality',
+        status: '1 station',
+        overview: [{ id: 'headline', text: 'Overview headline' }],
+      },
+      legend: [],
+    },
+  ]);
+  assert.ok(
+    !f.container.querySelector('[data-block-id="overview"]'),
+    'no overview block',
+  );
+  assert.doesNotMatch(f.container.textContent, /Overview headline/);
+  panel.destroy();
 });
 
 const tilesBlock = (active = 'aqi') => ({
@@ -675,5 +685,35 @@ test('a list row draws its colour dot before its value; a bad colour draws none'
   assert.equal(row.querySelector('.data-row-list-badge'), null);
   paint('url(https://example.com)');
   assert.equal(row.querySelector('.data-row-list-swatch'), null);
+  view.destroy();
+});
+
+test("a result's title is its header's tooltip", () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  const paint = (title) =>
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'station',
+            type: 'result',
+            lead: true,
+            label: 'Cape Town',
+            title,
+            lines: [{ id: 'station-source', muted: true, text: 'Measured' }],
+          },
+        ],
+      },
+    ]);
+  paint('SAAQIS · Licence: CC BY 4.0 (City of Cape Town)');
+  const label = f.container.querySelector(
+    '.rail-card-result-header .panel-title',
+  );
+  assert.equal(label.textContent, 'Cape Town');
+  assert.equal(label.title, 'SAAQIS · Licence: CC BY 4.0 (City of Cape Town)');
+  paint(undefined);
+  assert.equal(label.getAttribute('title'), null);
   view.destroy();
 });

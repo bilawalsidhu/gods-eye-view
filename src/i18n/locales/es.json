@@ -4577,6 +4577,7 @@
   "These units cannot be compared without additional conversion data.": "Estas unidades no pueden compararse sin datos adicionales de conversión.",
   "No usable measurement.": "No hay una medición utilizable.",
   "EEA hourly pollutant bands": "Categorías horarias de contaminantes de la AEMA",
+  "WHO-based carbon monoxide bands": "Categorías de monóxido de carbono basadas en la OMS",
   "Calculated comparison": "Comparación calculada",
   "Older observation": "Observación anterior",
   "air quality risk|Low": "Baja",
@@ -4628,6 +4629,11 @@
   },
   "Deselect station": "Deseleccionar estación",
   "{network}: showing cached data": "{network}: datos en caché",
+  "Licence: {licence}": "Licencia: {licence}",
+  "{network}: key rejected — check Provider Settings": "{network}: clave rechazada — revisa Ajustes de proveedores",
+  "{network}: loading stations, {n} of {m}": "{network}: cargando estaciones, {n} de {m}",
+  "{source}: no forecast for this time": "{source}: sin pronóstico para esta hora",
+  "Implausibly high for this pollutant; no health category is assigned.": "Valor inverosímilmente alto para este contaminante; no se asigna una categoría sanitaria.",
   "forecast for {time}": "pronóstico para {time}",
   "Model field unavailable": "Campo del modelo no disponible"
 }
