@@ -4540,5 +4540,13 @@
   "1–3 days": "1–3 giorni",
   "Older or unknown": "Più vecchio o sconosciuto",
   "Colour shows the age of each area.": "Il colore indica l’età di ciascuna area.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Età dalla mappatura WFIGS, altrimenti dall’ultima modifica del record. Perimetri semplificati a ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Età dalla mappatura WFIGS, altrimenti dall’ultima modifica del record. Perimetri semplificati a ~100 m.",
+  "This renderer cannot draw the aurora": "Questo renderer non può disegnare l’aurora",
+  "Solar wind {speed} km/s": "Vento solare {speed} km/s",
+  "Overhead to {lat}°N": "Allo zenit fino a {lat}° N",
+  "Forecast for {time} UTC": "Previsione per le {time} UTC",
+  "NOAA OVATION forecast of the chance of seeing aurora overhead, about 30 to 90 minutes ahead, drawn 110 km up. Kp is the planetary geomagnetic index (0 to 9); G, R and S are NOAA’s storm, radio blackout and radiation scales (0 to 5). A southward (negative) Bz feeds stronger aurora. Aurora is only visible from the ground at night under clear skies.": "Previsione OVATION della NOAA della probabilità di vedere l’aurora allo zenit, circa 30-90 minuti in anticipo, disegnata a 110 km di quota. Kp è l’indice geomagnetico planetario (da 0 a 9); G, R e S sono le scale NOAA di tempesta, blackout radio e radiazione (da 0 a 5). Un Bz verso sud (negativo) alimenta aurore più intense. L’aurora è visibile da terra solo di notte con cielo sereno.",
+  "Chance of aurora ≥ {percent}%": "Probabilità di aurora ≥ {percent}%",
+  "Aurora": "Aurore",
+  "Kp {kp}": "Kp {kp}"
 }

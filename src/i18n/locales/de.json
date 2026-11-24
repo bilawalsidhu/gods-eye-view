@@ -4434,5 +4434,13 @@
   "1–3 days": "1–3 Tage",
   "Older or unknown": "Älter oder unbekannt",
   "Colour shows the age of each area.": "Die Farbe zeigt das Alter jeder Fläche.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht.",
+  "This renderer cannot draw the aurora": "Dieser Renderer kann keine Polarlichter darstellen",
+  "Solar wind {speed} km/s": "Sonnenwind {speed} km/s",
+  "Overhead to {lat}°N": "Über Kopf bis {lat}° N",
+  "Forecast for {time} UTC": "Vorhersage für {time} UTC",
+  "NOAA OVATION forecast of the chance of seeing aurora overhead, about 30 to 90 minutes ahead, drawn 110 km up. Kp is the planetary geomagnetic index (0 to 9); G, R and S are NOAA’s storm, radio blackout and radiation scales (0 to 5). A southward (negative) Bz feeds stronger aurora. Aurora is only visible from the ground at night under clear skies.": "NOAA-OVATION-Vorhersage der Wahrscheinlichkeit, Polarlichter über sich zu sehen, etwa 30 bis 90 Minuten im Voraus, in 110 km Höhe dargestellt. Kp ist der planetare geomagnetische Index (0 bis 9); G, R und S sind die NOAA-Skalen für Sturm, Funkausfall und Strahlung (0 bis 5). Ein südwärts gerichtetes (negatives) Bz verstärkt Polarlichter. Vom Boden aus sind Polarlichter nur nachts bei klarem Himmel sichtbar.",
+  "Chance of aurora ≥ {percent}%": "Polarlicht-Wahrscheinlichkeit ≥ {percent} %",
+  "Aurora": "Polarlichter",
+  "Kp {kp}": "Kp {kp}"
 }

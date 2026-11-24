@@ -4328,5 +4328,13 @@
   "1–3 days": "1–3 天",
   "Older or unknown": "更早或未知",
   "Colour shows the age of each area.": "颜色表示各区域在所示时刻的年龄。",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "时长从 WFIGS 测绘时间算起，否则从记录的最后编辑时间算起。边界已简化至约 100 米。"
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "时长从 WFIGS 测绘时间算起，否则从记录的最后编辑时间算起。边界已简化至约 100 米。",
+  "This renderer cannot draw the aurora": "此渲染器无法绘制极光",
+  "Solar wind {speed} km/s": "太阳风 {speed} km/s",
+  "Overhead to {lat}°N": "头顶可见至北纬 {lat}°",
+  "Forecast for {time} UTC": "{time} UTC 预报",
+  "NOAA OVATION forecast of the chance of seeing aurora overhead, about 30 to 90 minutes ahead, drawn 110 km up. Kp is the planetary geomagnetic index (0 to 9); G, R and S are NOAA’s storm, radio blackout and radiation scales (0 to 5). A southward (negative) Bz feeds stronger aurora. Aurora is only visible from the ground at night under clear skies.": "NOAA OVATION 对头顶可见极光概率的预报，约提前 30 至 90 分钟，绘制于 110 公里高空。Kp 为全球地磁指数（0 至 9）；G、R、S 为 NOAA 的地磁暴、无线电中断和辐射等级（0 至 5）。向南（负值）的 Bz 会增强极光。只有在晴朗的夜晚才能从地面看到极光。",
+  "Chance of aurora ≥ {percent}%": "极光概率 ≥ {percent}%",
+  "Aurora": "极光",
+  "Kp {kp}": "Kp {kp}"
 }

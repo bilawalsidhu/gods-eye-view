@@ -562,6 +562,10 @@ export const DATA_CREDITS = [
     html: 'Observed weather: <a href="https://nowcoast.noaa.gov/" target="_blank" rel="noopener">NOAA nowCOAST</a> · NWS/OAR MRMS radar; NESDIS GOES and global satellite partners. <a href="https://oceanservice.noaa.gov/disclaimer.html" target="_blank" rel="noopener">Source disclaimer</a>.',
   },
   {
+    key: 'aurora',
+    html: 'Aurora forecast (OVATION), Kp index, space-weather scales and solar wind: <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA Space Weather Prediction Center</a> (U.S. Government work, public domain)',
+  },
+  {
     key: 'weather-cyclones',
     html: 'Cyclone advisories: <a href="https://www.nhc.noaa.gov/" target="_blank" rel="noopener">NOAA/NWS NHC / CPHC</a> · Atlantic and eastern/central North Pacific; <a href="https://www.metoc.navy.mil/jtwc/jtwc.html" target="_blank" rel="noopener">Joint Typhoon Warning Center</a> · western North Pacific, North Indian Ocean, Southern Hemisphere. The NHC cone is forecast center uncertainty, not storm size.',
   },

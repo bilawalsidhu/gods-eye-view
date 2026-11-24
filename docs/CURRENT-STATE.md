@@ -1506,6 +1506,21 @@ Clear or disable reports `deliberate`; a storm leaving the feed reports
 `evicted`, with no fallback.
 Consult the linked official advisory for safety decisions.
 
+Aurora (default off, Weather group, share token `03`) reads five NOAA SWPC
+products directly from `services.swpc.noaa.gov`, keyless (CORS `*`): the OVATION
+aurora forecast grid (`json/ovation_aurora_latest.json`, 1° nodes, about 0.9 MB,
+capped at 4 MB), the planetary Kp index, today's NOAA R/S/G scales and the
+solar wind speed and magnetic-field summaries. It refreshes every five minutes;
+only OVATION is required, and a failed optional product leaves its readout out
+rather than failing the layer. The grid is drawn as one world `rasterShell`
+field 110 km up (a 360×180 equirectangular canvas, transparent below 3%), so it
+needs a renderer with fields. The row shows Kp, the scales, solar wind speed and
+Bz, how far toward the equator the ≥10% oval reaches in the north, and the
+forecast's valid time. A failed refresh keeps the last forecast drawn with the
+error in the row; stats turn stale after 30 minutes without a new run. OVATION
+is the chance of aurora overhead, not of seeing it: it says nothing about
+daylight or cloud. Voice control does not name the layer yet.
+
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
 Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h, or for FIRMS the 24 hours to a snapshot's `at`), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.

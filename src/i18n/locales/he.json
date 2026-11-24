@@ -4540,5 +4540,13 @@
   "1–3 days": "1–3 ימים",
   "Older or unknown": "ישן יותר או לא ידוע",
   "Colour shows the age of each area.": "הצבע מציין את הגיל של כל שטח.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "הגיל נספר ממועד המיפוי של WFIGS, או מהעריכה האחרונה של הרשומה. קווי המתאר מפושטים לכ־100 מ׳."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "הגיל נספר ממועד המיפוי של WFIGS, או מהעריכה האחרונה של הרשומה. קווי המתאר מפושטים לכ־100 מ׳.",
+  "This renderer cannot draw the aurora": "מעבד זה אינו יכול לצייר את הזוהר",
+  "Solar wind {speed} km/s": "רוח סולרית {speed} ק״מ/ש׳",
+  "Overhead to {lat}°N": "מעל הראש עד {lat}° צפון",
+  "Forecast for {time} UTC": "תחזית ל־{time} UTC",
+  "NOAA OVATION forecast of the chance of seeing aurora overhead, about 30 to 90 minutes ahead, drawn 110 km up. Kp is the planetary geomagnetic index (0 to 9); G, R and S are NOAA’s storm, radio blackout and radiation scales (0 to 5). A southward (negative) Bz feeds stronger aurora. Aurora is only visible from the ground at night under clear skies.": "תחזית OVATION של NOAA לסיכוי לראות זוהר מעל הראש, כ־30 עד 90 דקות מראש, מצוירת בגובה 110 ק״מ. Kp הוא המדד הגאומגנטי הפלנטרי (0 עד 9); G,‏ R ו־S הם סולמות NOAA לסערה, להפסקת קשר רדיו ולקרינה (0 עד 5). Bz דרומי (שלילי) מזין זוהר חזק יותר. הזוהר נראה מהקרקע רק בלילה ובשמיים בהירים.",
+  "Chance of aurora ≥ {percent}%": "סיכוי לזוהר ≥ {percent}%",
+  "Aurora": "זוהר קוטבי",
+  "Kp {kp}": "Kp {kp}"
 }
