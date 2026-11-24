@@ -288,6 +288,7 @@ test('a keyed chip carries its swatch and count while on, only its name while of
     id: 'class-imaging',
     label: 'IMAGING',
     active: true,
+    keyed: true,
     swatch: '#4fd8ff',
     countText: '1.2K',
   };
@@ -316,7 +317,9 @@ test('a keyed chip carries its swatch and count while on, only its name while of
   render(
     h(LayerRows, {
       items: [
-        classRow([{ id: 'class-imaging', label: 'IMAGING', active: false }]),
+        classRow([
+          { id: 'class-imaging', label: 'IMAGING', active: false, keyed: true },
+        ]),
       ],
     }),
     container,
@@ -326,7 +329,8 @@ test('a keyed chip carries its swatch and count while on, only its name while of
   assert.equal(off.textContent, 'IMAGING');
   assert.equal(off.querySelector('.data-toggle-chip-swatch'), null);
   assert.equal(off.querySelector('.data-toggle-chip-count'), null);
-  assert.equal(off.classList.contains('chip-keyed'), false);
+  // Still a keyed chip, so its name keeps the same readable text.
+  assert.equal(off.classList.contains('chip-keyed'), true);
   assert.equal(container.querySelector('.data-toggle-legend-item'), null);
   render(null, container);
 });

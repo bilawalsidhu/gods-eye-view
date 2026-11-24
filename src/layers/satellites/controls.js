@@ -712,7 +712,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Layer-row sub-controls (DataLayerManager row-controls contract): one
-     * toggle chip per satellite class (src/layers/satellites/classes.js). A
+     * keyed toggle chip per satellite class (src/layers/satellites/classes.js). A
      * class that is on carries its point colour (`swatch`) and, once any of
      * it is loaded, its count, so the point colours are learnable; a class
      * that is off carries only its name.
@@ -752,8 +752,10 @@ export function createControls({ state: layerState, services, parts, source }) {
                 title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
                 params: { classes: { [id]: classes[id] !== true } },
               };
-        // The colour key and count ride on a class that is on; an off
-        // class is its name alone.
+        // Every class chip is a keyed chip, so its name reads the same on
+        // or off. The colour key and count ride on a class that is on; an
+        // off class is its name alone.
+        chip.keyed = true;
         if (!chip.active) return chip;
         chip.swatch = SATELLITE_CLASS_DISPLAY[id].color;
         if (counts[id] > 0) chip.count = counts[id];
