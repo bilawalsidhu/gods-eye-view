@@ -172,6 +172,8 @@ export function createFirePerimetersLayer({
    * record that left the feed; otherwise the clear is the user's.
    */
   function clearSelectedContext({ evicted = false } = {}) {
+    // Nothing published, nothing to clear (and no store to reach for).
+    if (!_selectedContextEntity) return;
     if (!evicted)
       context?.clearSelectedEntityContextForLayer?.('fire-perimeters');
     context?.removeEntityContextsForLayer?.('fire-perimeters');
