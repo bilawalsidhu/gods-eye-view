@@ -31,6 +31,8 @@ const ctx = {
   toEcef,
   assets: {
     model: '/models/fleet/aircraft/c172.glb',
+    // Its one node, which the `nodes` check moves.
+    modelNode: 'c172',
     // Not served: the model failure check loads it.
     missingModel: '/models/conformance-missing.glb',
   },
@@ -47,6 +49,7 @@ const HARNESSES = {
   cesium: () => [
     createCesiumHarness({
       model: ctx.assets.model,
+      modelNode: ctx.assets.modelNode,
       missingModel: ctx.assets.missingModel,
     }),
     { only: (id) => CESIUM_CHECKS.has(id) },

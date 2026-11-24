@@ -101,6 +101,8 @@ export class LocationSearch {
           destination: { ...destination },
         };
         this.channel.publish(change('found'));
+        // Found and still the current search: a plan may go on.
+        return current() && !controller.signal.aborted;
       } else {
         this.onMissing?.();
         if (!current() || controller.signal.aborted) return;

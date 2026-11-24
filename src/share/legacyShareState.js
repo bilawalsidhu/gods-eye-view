@@ -34,6 +34,7 @@ export const LEGACY_SHARE_STATE_KEYS = Object.freeze([
   'bloomVersion',
   'sharpenIntensity',
   'hudVariant',
+  'hudSonar',
   'hudVisible',
   'detectionMode',
   'detectionDensity',

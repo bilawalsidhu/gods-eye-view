@@ -31,6 +31,7 @@ import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import IntelHudView from './views/IntelHudView.vue';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
+import { setClickCardHitTest } from '../data/pickRegistry.js';
 import { ORBITAL_FOCUS_EASE_TAU_MS } from '../cockpitOrbitalFocus.js';
 import { ORBITAL_HOP_MS } from '../cockpitOrbitalSatellites.js';
 
@@ -40,10 +41,34 @@ const FRAME_MS = 16;
 
 /** Satellites the layer knows, by NORAD id: the ridden one and its neighbours. */
 const SATELLITES = Object.freeze({
-  25544: { name: 'ISS (ZARYA)', lat: 30, lon: -97, alt: 420_000, cls: 'stations' },
-  49260: { name: 'LANDSAT 9', lat: 31.5, lon: -95, alt: 705_000, cls: 'imaging' },
-  40697: { name: 'SENTINEL-2A', lat: 26, lon: -99, alt: 786_000, cls: 'imaging' },
-  99001: { name: 'DEB FRAGMENT', lat: 30.2, lon: -97.1, alt: 430_000, cls: 'debris' },
+  25544: {
+    name: 'ISS (ZARYA)',
+    lat: 30,
+    lon: -97,
+    alt: 420_000,
+    cls: 'stations',
+  },
+  49260: {
+    name: 'LANDSAT 9',
+    lat: 31.5,
+    lon: -95,
+    alt: 705_000,
+    cls: 'imaging',
+  },
+  40697: {
+    name: 'SENTINEL-2A',
+    lat: 26,
+    lon: -99,
+    alt: 786_000,
+    cls: 'imaging',
+  },
+  99001: {
+    name: 'DEB FRAGMENT',
+    lat: 30.2,
+    lon: -97.1,
+    alt: 430_000,
+    cls: 'debris',
+  },
 });
 
 /** Mapped sites as the installations layer keeps them. */
@@ -57,6 +82,8 @@ const SITES = Object.freeze({
     lon: -96.5,
     memberNames: ['North Field'],
     at: { x: 100, y: 100 },
+    // Where the overlay paints its label box: nothing picks there.
+    labelAt: { x: 140, y: 70 },
   },
   bravo: {
     id: 'osm:military:way/202',
@@ -101,7 +128,11 @@ function installationsLayer() {
     withPosition(record) {
       return {
         ...record,
-        position: Cesium.Cartesian3.fromDegrees(record.longitude, record.latitude, 0),
+        position: Cesium.Cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+          0,
+        ),
       };
     },
     // As the layer's own: loaded installations within `rangeM` of
@@ -118,7 +149,10 @@ function installationsLayer() {
             from,
             Cesium.Cartographic.fromDegrees(record.longitude, record.latitude),
           );
-          return { ...layer.withPosition(record), distanceM: geodesic.surfaceDistance };
+          return {
+            ...layer.withPosition(record),
+            distanceM: geodesic.surfaceDistance,
+          };
         })
         .filter((record) => record.distanceM <= rangeM)
         .sort((a, b) => a.distanceM - b.distanceM)
@@ -133,6 +167,17 @@ function installationsLayer() {
     findByPick(hit) {
       const id = hit?.meta?.installationId ?? null;
       return id ? layer.getById(id) : null;
+    },
+    // As the layer's: the label box the overlay paints, where no primitive
+    // picks (the dot is left to the pick ids here).
+    findAt(position) {
+      const site = Object.values(SITES).find(
+        (s) =>
+          s.labelAt &&
+          s.labelAt.x === position?.x &&
+          s.labelAt.y === position?.y,
+      );
+      return site ? layer.getById(site.id) : null;
     },
   };
   return layer;
@@ -191,7 +236,11 @@ function satellitesLayer(viewer) {
     },
     // As the layer's: the nearest shown satellites, bounded, with the
     // asked-for ids and classes left out.
-    getNearestPositions(center, maxCount = 8, { excludeIds = [], excludeClasses = [] } = {}) {
+    getNearestPositions(
+      center,
+      maxCount = 8,
+      { excludeIds = [], excludeClasses = [] } = {},
+    ) {
       layer.calls.push(['nearest']);
       const skip = new Set(excludeIds.map(String));
       return layer
@@ -215,7 +264,9 @@ function satellitesLayer(viewer) {
       if (!positions.has(id)) return false;
       layer.calls.push(['track', id]);
       layer.tracked = id;
-      followEntity(viewer, { position: { getValue: () => layer.position(id) } });
+      followEntity(viewer, {
+        position: { getValue: () => layer.position(id) },
+      });
       return true;
     },
     setCockpitSubject(noradId) {
@@ -235,7 +286,11 @@ function fixture(t, { reducedMotion = false } = {}) {
   const host = document.body.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp(
-    defineComponent(() => () => [h(ContextView), h(IntelHudView), h(CockpitView)]),
+    defineComponent(() => () => [
+      h(ContextView),
+      h(IntelHudView),
+      h(CockpitView),
+    ]),
   ).use(pinia);
   app.mount(host);
   useHudStore(pinia);
@@ -277,7 +332,10 @@ function fixture(t, { reducedMotion = false } = {}) {
   handler.stockDouble = ({ position }) => {
     handler.stockDoubleClicks += 1;
     const picked = picks.get(`${position.x},${position.y}`);
-    followEntity(viewer, picked ? { position: { getValue: () => null } } : null);
+    followEntity(
+      viewer,
+      picked ? { position: { getValue: () => null } } : null,
+    );
   };
   // The viewer's stock handler holds them, so the scene's input has them to
   // hold off.
@@ -375,7 +433,11 @@ function fixture(t, { reducedMotion = false } = {}) {
     globalThis.matchMedia = previousMatchMedia;
     performance.now = originalNow;
     Date.now = originalDateNow;
-    document.body.classList.remove('cockpit-mode', 'cockpit-bridge', 'cockpit-orbit');
+    document.body.classList.remove(
+      'cockpit-mode',
+      'cockpit-bridge',
+      'cockpit-orbit',
+    );
   });
 
   const frame = () => {
@@ -455,7 +517,10 @@ function missDeg(shot, key) {
 
 /** The camera's angle from nadir, degrees. */
 function offNadir(shot) {
-  const toCentre = Cesium.Cartesian3.negate(shot.destination, new Cesium.Cartesian3());
+  const toCentre = Cesium.Cartesian3.negate(
+    shot.destination,
+    new Cesium.Cartesian3(),
+  );
   return angleDeg(shot.direction, toCentre);
 }
 
@@ -466,7 +531,10 @@ function siteOffNadir(shot, key) {
     shot.destination,
     new Cesium.Cartesian3(),
   );
-  const toCentre = Cesium.Cartesian3.negate(shot.destination, new Cesium.Cartesian3());
+  const toCentre = Cesium.Cartesian3.negate(
+    shot.destination,
+    new Cesium.Cartesian3(),
+  );
   return angleDeg(line, toCentre);
 }
 
@@ -521,7 +589,9 @@ test('in orbit Live Signals lists the sites getNearby finds and the nearest sate
   assert.ok(shown.length <= 5, 'five rows at most');
   assert.equal(shown[0].title, 'TRACK ACQUIRED', 'the track row stays first');
   // Two site rows, nearest to nadir first, then the satellites (debris out).
-  const sitesShown = shown.filter((row) => row.target?.layerId === 'military-installations');
+  const sitesShown = shown.filter(
+    (row) => row.target?.layerId === 'military-installations',
+  );
   assert.deepEqual(
     sitesShown.map((row) => row.target.id).sort(),
     [SITES.alpha.id, SITES.bravo.id].sort(),
@@ -530,16 +600,33 @@ test('in orbit Live Signals lists the sites getNearby finds and the nearest sate
     assert.match(row.detail, /^(BASE|AIRFIELD) · OFF-NADIR \d+\.\d°$/);
     assert.match(row.className, /nearby actionable/);
   }
-  const satellitesShown = shown.filter((row) => row.target?.layerId === 'satellites');
-  assert.deepEqual(satellitesShown.map((row) => row.title), ['LANDSAT 9', 'SENTINEL-2A']);
-  assert.match(satellitesShown[0].detail, /^SATELLITE · (AHEAD|[LR] \d{3}°) · [\d,.]+\s+KM$/);
+  const satellitesShown = shown.filter(
+    (row) => row.target?.layerId === 'satellites',
+  );
+  assert.deepEqual(
+    satellitesShown.map((row) => row.title),
+    ['LANDSAT 9', 'SENTINEL-2A'],
+  );
+  assert.match(
+    satellitesShown[0].detail,
+    /^SATELLITE · (AHEAD|[LR] \d{3}°) · [\d,.]+\s+KM$/,
+  );
   // Each row names its own action.
-  assert.equal(siteRow(scene, 'alpha').getAttribute('aria-label'), 'Keep the camera on Camp Alpha');
-  assert.equal(satelliteRow(scene, 49260).getAttribute('aria-label'), 'Ride LANDSAT 9');
+  assert.equal(
+    siteRow(scene, 'alpha').getAttribute('aria-label'),
+    'Keep the camera on Camp Alpha',
+  );
+  assert.equal(
+    satelliteRow(scene, 49260).getAttribute('aria-label'),
+    'Ride LANDSAT 9',
+  );
   // Rebuilt on the clock, rows keep their keys and times.
   const before = shown.map((row) => [row.key, row.time]);
   await refreshRows(scene);
-  assert.deepEqual(rows(scene).map((row) => [row.key, row.time]), before);
+  assert.deepEqual(
+    rows(scene).map((row) => [row.key, row.time]),
+    before,
+  );
 });
 
 test('a site row turns the camera onto it, holds it, and reads its off-nadir angle', async (t) => {
@@ -551,11 +638,17 @@ test('a site row turns the camera onto it, holds it, and reads its off-nadir ang
   // The first frames turn part of the way: no jump onto the site.
   assert.ok(missDeg(scene.frame(), 'alpha') > 5, 'still turning');
   const largest = run(scene, LAND_FRAMES);
-  assert.ok(largest > 0.1 && largest < MAX_TURN_PER_FRAME_DEG, `turned ${largest}° in a frame`);
+  assert.ok(
+    largest > 0.1 && largest < MAX_TURN_PER_FRAME_DEG,
+    `turned ${largest}° in a frame`,
+  );
   for (let i = 0; i < 20; i += 1) {
     scene.satellites.move(0.002, 0.002);
     const shot = scene.frame();
-    assert.ok(missDeg(shot, 'alpha') < 1e-5, `frame ${i}: ${missDeg(shot, 'alpha')}°`);
+    assert.ok(
+      missDeg(shot, 'alpha') < 1e-5,
+      `frame ${i}: ${missDeg(shot, 'alpha')}°`,
+    );
   }
   for (let i = 0; i < 8; i += 1) scene.frame();
   await settle();
@@ -565,14 +658,20 @@ test('a site row turns the camera onto it, holds it, and reads its off-nadir ang
     `OFF-NADIR ${siteOffNadir(shot, 'alpha').toFixed(1)}°`,
   );
   assert.equal($('#cockpit-orbital-focus').textContent, 'FOCUS · Camp Alpha');
-  assert.equal($('#cockpit-orbital-look-readout').getAttribute('aria-live'), 'off');
+  assert.equal(
+    $('#cockpit-orbital-look-readout').getAttribute('aria-live'),
+    'off',
+  );
   assert.equal(store.orbital.footprintKm, null);
   assert.match($('.cockpit-orbital-swath').textContent, /^SWATH ≈ [\d.]+ KM$/);
   // The held site's row reads as the subject does, first among the sites.
   const held = rows(scene).find((row) => row.target?.id === SITES.alpha.id);
   assert.match(held.className, /^track actionable$/);
   assert.match(held.detail, /^FOCUS · BASE · OFF-NADIR/);
-  assert.equal(siteRow(scene, 'alpha').getAttribute('aria-label'), 'Release the camera from Camp Alpha');
+  assert.equal(
+    siteRow(scene, 'alpha').getAttribute('aria-label'),
+    'Release the camera from Camp Alpha',
+  );
   // The held site's FOCUS is a status, worded apart from the FOCUS command.
   t.after(() => setLocale('en'));
   setLocale('es');
@@ -599,7 +698,10 @@ test('another site row switches the focus; the held site row ends it', async (t)
   assert.ok(largest < MAX_TURN_PER_FRAME_DEG, `turned ${largest}° in a frame`);
   assert.ok(missDeg(scene.shots.at(-1), 'bravo') < 1e-5);
   await settle();
-  assert.match(rows(scene).find((row) => row.target?.id === SITES.alpha.id).className, /^nearby/);
+  assert.match(
+    rows(scene).find((row) => row.target?.id === SITES.alpha.id).className,
+    /^nearby/,
+  );
   siteRow(scene, 'bravo').click();
   assert.equal(cockpit.orbital.focus, null);
   const back = run(scene, LAND_FRAMES, { drift: 0 });
@@ -616,7 +718,11 @@ test('a click on a site marker focuses it through the layer; a click elsewhere e
   run(scene, LAND_FRAMES);
   assert.ok(missDeg(scene.shots.at(-1), 'alpha') < 1e-5);
   scene.click(SITES.alpha.at);
-  assert.equal(cockpit.orbital.focus.key, SITES.alpha.id, 'kept on a second click');
+  assert.equal(
+    cockpit.orbital.focus.key,
+    SITES.alpha.id,
+    'kept on a second click',
+  );
   const focused = offNadir(scene.shots.at(-1));
   scene.click(EMPTY_GROUND);
   assert.equal(cockpit.orbital.focus, null);
@@ -639,13 +745,42 @@ test('a click a tool owns is left alone', async (t) => {
   const lease = claimPointer('draw');
   t.after(() => releasePointer(lease));
   scene.click(SITES.alpha.at);
-  assert.equal(scene.cockpit.orbital.focus ?? null, null, 'no focus while drawing');
+  assert.equal(
+    scene.cockpit.orbital.focus ?? null,
+    null,
+    'no focus while drawing',
+  );
   releasePointer(lease);
   scene.click(SITES.alpha.at);
   const again = claimPointer('draw');
   t.after(() => releasePointer(again));
   scene.click(EMPTY_GROUND);
-  assert.equal(scene.cockpit.orbital.focus.key, SITES.alpha.id, 'kept while drawing');
+  assert.equal(
+    scene.cockpit.orbital.focus.key,
+    SITES.alpha.id,
+    'kept while drawing',
+  );
+});
+
+// The card or label painted on top takes the click: a site under another
+// layer's card does not focus, and a click there does not end a held focus.
+test("another layer's card over the orbital view keeps the click", async (t) => {
+  const scene = await inOrbit(t);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  scene.click(SITES.alpha.at);
+  assert.equal(scene.cockpit.orbital.focus ?? null, null, 'covered: no focus');
+  top = null;
+  scene.click(SITES.alpha.at);
+  assert.equal(scene.cockpit.orbital.focus.key, SITES.alpha.id);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  scene.click(EMPTY_GROUND);
+  assert.equal(
+    scene.cockpit.orbital.focus.key,
+    SITES.alpha.id,
+    'covered: kept',
+  );
 });
 
 test('a double-click on a site focuses it and keeps the orbital view', async (t) => {
@@ -660,7 +795,11 @@ test('a double-click on a site focuses it and keeps the orbital view', async (t)
   scene.doubleClick(SITES.bravo.at);
   assert.equal(cockpit.orbital.focus.key, SITES.bravo.id);
   scene.doubleClick(SITES.far.at);
-  assert.equal(handler.stockDoubleClicks, 0, 'beyond reach: not focused, not tracked');
+  assert.equal(
+    handler.stockDoubleClicks,
+    0,
+    'beyond reach: not focused, not tracked',
+  );
   scene.frame();
   assert.equal(cockpit.active, true);
   scene.doubleClick(EMPTY_GROUND);
@@ -702,8 +841,15 @@ test('turning the layer off ends the focus and says why; a reload around the sit
   assert.ok(status, 'a status row says why no site is listed');
   assert.equal(status.detail, 'ENABLE MAPPED INSTALLATIONS FOR SITE PINGS');
   assert.equal(status.className, 'warning');
-  assert.ok(!rows(scene).some((row) => row.target?.layerId === 'military-installations'));
-  assert.equal(rows(scene).filter((row) => row.target?.layerId === 'satellites').length, 2);
+  assert.ok(
+    !rows(scene).some(
+      (row) => row.target?.layerId === 'military-installations',
+    ),
+  );
+  assert.equal(
+    rows(scene).filter((row) => row.target?.layerId === 'satellites').length,
+    2,
+  );
   scene.sites.enabled = true;
   await refreshRows(scene);
   assert.ok(!rows(scene).some((row) => row.title === 'SITES STANDBY'));
@@ -714,7 +860,11 @@ test('turning the layer off ends the focus and says why; a reload around the sit
   const loaded = scene.sites.records;
   scene.sites.records = loaded.filter((r) => r.id !== SITES.bravo.id);
   run(scene, 10);
-  assert.equal(scene.cockpit.orbital.focus.key, SITES.bravo.id, 'kept through a reload');
+  assert.equal(
+    scene.cockpit.orbital.focus.key,
+    SITES.bravo.id,
+    'kept through a reload',
+  );
   assert.ok(missDeg(scene.shots.at(-1), 'bravo') < 1e-5, 'still centred');
   scene.sites.records = loaded;
   // A row the list shows works even if the layer just dropped its site.
@@ -727,7 +877,10 @@ test('turning the layer off ends the focus and says why; a reload around the sit
 test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) => {
   const scene = await inOrbit(t);
   const { cockpit, satellites, viewer, modeEvents } = scene;
-  assert.ok(!rows(scene).some((row) => row.title.startsWith('RETURN')), 'no history yet');
+  assert.ok(
+    !rows(scene).some((row) => row.title.startsWith('RETURN')),
+    'no history yet',
+  );
   siteRow(scene, 'alpha').click();
   run(scene, 5);
   const before = Cesium.Cartesian3.clone(scene.shots.at(-1).destination);
@@ -737,21 +890,36 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   satelliteRow(scene, 49260).click();
   const newTrack = cockpit.signalItems.filter((item) => item.key === 'track');
   assert.equal(newTrack.length, 1);
-  assert.ok(newTrack[0].timestamp > firstTrack.timestamp, 'the new ride’s own time');
-  assert.deepEqual(satellites.calls.slice(-2), [['track', 49260], ['subject', 49260]]);
+  assert.ok(
+    newTrack[0].timestamp > firstTrack.timestamp,
+    'the new ride’s own time',
+  );
+  assert.deepEqual(satellites.calls.slice(-2), [
+    ['track', 49260],
+    ['subject', 49260],
+  ]);
   assert.equal(followedOf(viewer), null, 'the Cockpit keeps the camera');
   assert.equal(cockpit.subjectId, 49260);
   assert.equal(cockpit.orbital.focus, null, 'the focus is reset');
   assert.equal(modeEvents.at(-1)?.active, true);
   await settle();
   const shown = rows(scene);
-  assert.deepEqual([shown[0].title, shown[0].detail], ['TRACK ACQUIRED', 'LANDSAT 9 · NADIR VIEW']);
+  assert.deepEqual(
+    [shown[0].title, shown[0].detail],
+    ['TRACK ACQUIRED', 'LANDSAT 9 · NADIR VIEW'],
+  );
   assert.equal(shown.filter((row) => row.title === 'TRACK ACQUIRED').length, 1);
   const back = shown.find((row) => row.title === 'RETURN · ISS (ZARYA)');
   assert.ok(back, 'a RETURN row while there is history');
   assert.equal(back.detail, 'PREVIOUS SATELLITE');
-  assert.equal(satelliteRow(scene, 25544).getAttribute('aria-label'), 'Return to ISS (ZARYA)');
-  assert.ok(!shown.some((row) => row.title === 'ISS (ZARYA)'), 'listed once, as RETURN');
+  assert.equal(
+    satelliteRow(scene, 25544).getAttribute('aria-label'),
+    'Return to ISS (ZARYA)',
+  );
+  assert.ok(
+    !shown.some((row) => row.title === 'ISS (ZARYA)'),
+    'listed once, as RETURN',
+  );
 
   // The camera hops along the way, never in one jump.
   const target = satellites.position(49260);
@@ -761,11 +929,20 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   for (let i = 0; i < Math.ceil(ORBITAL_HOP_MS / FRAME_MS) + 2; i += 1) {
     const shot = scene.frame();
     assert.equal(cockpit.active, true, `still in orbit at frame ${i}`);
-    largestStep = Math.max(largestStep, Cesium.Cartesian3.distance(previous, shot.destination));
+    largestStep = Math.max(
+      largestStep,
+      Cesium.Cartesian3.distance(previous, shot.destination),
+    );
     previous = shot.destination;
   }
-  assert.ok(largestStep < hopM * 0.1, `largest step ${largestStep} m of ${hopM} m`);
-  assert.ok(Cesium.Cartesian3.distance(previous, target) < 1, 'landed on the satellite');
+  assert.ok(
+    largestStep < hopM * 0.1,
+    `largest step ${largestStep} m of ${hopM} m`,
+  );
+  assert.ok(
+    Cesium.Cartesian3.distance(previous, target) < 1,
+    'landed on the satellite',
+  );
   run(scene, LAND_FRAMES, { drift: 0 });
   assert.ok(offNadir(scene.shots.at(-1)) < 1e-6, 'looking at nadir');
 
@@ -781,10 +958,16 @@ test('a satellite row rides it, staying in orbit; RETURN goes back', async (t) =
   satelliteRow(scene, 25544).click();
   assert.equal(cockpit.subjectId, 25544);
   await settle();
-  assert.ok(!rows(scene).some((row) => row.title.startsWith('RETURN')), 'back at the start');
+  assert.ok(
+    !rows(scene).some((row) => row.title.startsWith('RETURN')),
+    'back at the start',
+  );
   scene.frame();
   assert.equal(cockpit.active, true);
-  assert.ok(!satellites.calls.some(([, id]) => id === 99001), 'debris never offered');
+  assert.ok(
+    !satellites.calls.some(([, id]) => id === 99001),
+    'debris never offered',
+  );
 });
 
 test('while the camera hops, no stale rows; on landing, rows measured from the new satellite', async (t) => {
@@ -803,15 +986,32 @@ test('while the camera hops, no stale rows; on landing, rows measured from the n
   scene.refreshCard();
   await settle();
   assert.ok(cockpit.orbital.hop, 'still hopping');
-  assert.deepEqual(rows(scene).map((row) => row.title), ['TRACK ACQUIRED', 'RETURN · ISS (ZARYA)']);
+  assert.deepEqual(
+    rows(scene).map((row) => row.title),
+    ['TRACK ACQUIRED', 'RETURN · ISS (ZARYA)'],
+  );
   // Landed: the first frame on the satellite rebuilds them at once.
-  for (let i = 0; i < Math.ceil(ORBITAL_HOP_MS / FRAME_MS) + 2; i += 1) scene.frame();
+  for (let i = 0; i < Math.ceil(ORBITAL_HOP_MS / FRAME_MS) + 2; i += 1)
+    scene.frame();
   await settle();
   shown = rows(scene);
-  assert.ok(shown.some((row) => row.target?.layerId === 'military-installations'), 'sites back');
-  const satellitesShown = shown.filter((row) => row.title !== 'TRACK ACQUIRED' && row.target?.layerId === 'satellites');
-  assert.ok(!satellitesShown.some((row) => row.title === 'LANDSAT 9'), 'never the ridden one');
-  assert.equal(satellitesShown.filter((row) => row.target.id === '25544').length, 1, 'ISS only as RETURN');
+  assert.ok(
+    shown.some((row) => row.target?.layerId === 'military-installations'),
+    'sites back',
+  );
+  const satellitesShown = shown.filter(
+    (row) =>
+      row.title !== 'TRACK ACQUIRED' && row.target?.layerId === 'satellites',
+  );
+  assert.ok(
+    !satellitesShown.some((row) => row.title === 'LANDSAT 9'),
+    'never the ridden one',
+  );
+  assert.equal(
+    satellitesShown.filter((row) => row.target.id === '25544').length,
+    1,
+    'ISS only as RETURN',
+  );
 });
 
 test('RETURN to a satellite that left the catalogue offers the one before it', async (t) => {
@@ -828,7 +1028,10 @@ test('RETURN to a satellite that left the catalogue offers the one before it', a
   satelliteRow(scene, 49260).click();
   assert.equal(cockpit.subjectId, 40697, 'still on the same satellite');
   await settle();
-  assert.ok(rows(scene).some((row) => row.title === 'RETURN · ISS (ZARYA)'), 'the one before');
+  assert.ok(
+    rows(scene).some((row) => row.title === 'RETURN · ISS (ZARYA)'),
+    'the one before',
+  );
   satelliteRow(scene, 25544).click();
   assert.equal(cockpit.subjectId, 25544);
 });
@@ -840,7 +1043,11 @@ test('with Installations off no site is offered, by row, list or click', async (
   sites.enabled = false;
   await refreshRows(scene);
   assert.ok(rows(scene).some((row) => row.title === 'SITES STANDBY'));
-  assert.equal(cockpit.orbital.listedSites.size, 0, 'nothing kept to focus from');
+  assert.equal(
+    cockpit.orbital.listedSites.size,
+    0,
+    'nothing kept to focus from',
+  );
   assert.equal(cockpit.toggleOrbitalFocus(SITES.alpha.id), false);
   scene.click(SITES.alpha.at);
   assert.equal(cockpit.orbital.focus ?? null, null);
@@ -855,7 +1062,10 @@ test('an arrow during the ease back from a focus turns on the arrows’ clock', 
   scene.frame();
   assert.equal(cockpit.orbital.focusReleasing, true);
   const view = { ...cockpit.orbital.lookView };
-  assert.ok(Math.abs(view.pitchDeg) > 1 || Math.abs(view.yawDeg) > 1, 'still turned');
+  assert.ok(
+    Math.abs(view.pitchDeg) > 1 || Math.abs(view.yawDeg) > 1,
+    'still turned',
+  );
   cockpit.onKeyDown({
     key: 'ArrowUp',
     target: document.body,
@@ -868,7 +1078,10 @@ test('an arrow during the ease back from a focus turns on the arrows’ clock', 
     Math.abs(cockpit.orbital.lookTarget.yawDeg - view.yawDeg) < 1e-6,
     'across kept',
   );
-  assert.ok(cockpit.orbital.lookTarget.pitchDeg > view.pitchDeg, 'tilted on up');
+  assert.ok(
+    cockpit.orbital.lookTarget.pitchDeg > view.pitchDeg,
+    'tilted on up',
+  );
 });
 
 test('leaving orbit leaves no orbital rows to act on', async (t) => {
@@ -883,7 +1096,10 @@ test('leaving orbit leaves no orbital rows to act on', async (t) => {
   assert.equal(scene.cockpit.toggleOrbitalFocus(SITES.bravo.id), false);
   assert.equal(scene.cockpit.onOrbitalClick(SITES.bravo.at), false);
   assert.equal(scene.cockpit.rideOrbitalSatellite(49260), false);
-  assert.equal(scene.cockpit.handleOrbitalSignalClick('satellites', '49260'), false);
+  assert.equal(
+    scene.cockpit.handleOrbitalSignalClick('satellites', '49260'),
+    false,
+  );
 });
 
 test('NADIR and Home end a focus; an arrow takes the view over where it is', async (t) => {
@@ -926,7 +1142,12 @@ test('reduced motion cuts onto the site, back, and between satellites', async (t
   assert.ok(offNadir(scene.frame()) < 1e-6, 'back at once');
   satelliteRow(scene, 49260).click();
   const shot = scene.frame();
-  assert.ok(Cesium.Cartesian3.distance(shot.destination, scene.satellites.position(49260)) < 1);
+  assert.ok(
+    Cesium.Cartesian3.distance(
+      shot.destination,
+      scene.satellites.position(49260),
+    ) < 1,
+  );
 });
 
 test('stopping the Cockpit leaves both clicks to the renderer', async (t) => {
@@ -957,11 +1178,21 @@ test('the focused site keeps its row after nearer sites push it down', async (t)
       sources: [],
     });
   await refreshRows(scene);
-  const sitesShown = rows(scene).filter((row) => row.target?.layerId === 'military-installations');
+  const sitesShown = rows(scene).filter(
+    (row) => row.target?.layerId === 'military-installations',
+  );
   assert.equal(sitesShown.length, 2);
-  assert.equal(sitesShown[0].target.id, SITES.alpha.id, 'the focused site is kept, first');
+  assert.equal(
+    sitesShown[0].target.id,
+    SITES.alpha.id,
+    'the focused site is kept, first',
+  );
   siteRow(scene, 'alpha').click();
-  assert.equal(scene.cockpit.orbital.focus, null, 'its row still ends the focus');
+  assert.equal(
+    scene.cockpit.orbital.focus,
+    null,
+    'its row still ends the focus',
+  );
 });
 
 test('a site the layer drops in a reload keeps its row, and its row still focuses it', async (t) => {
@@ -972,13 +1203,24 @@ test('a site the layer drops in a reload keeps its row, and its row still focuse
   // The thinned view reloads without Camp Alpha for a moment.
   scene.sites.records = loaded.filter((r) => r.id !== SITES.alpha.id);
   await refreshRows(scene);
-  assert.deepEqual(rows(scene).map((row) => row.key), before, 'the rows hold still');
+  assert.deepEqual(
+    rows(scene).map((row) => row.key),
+    before,
+    'the rows hold still',
+  );
   siteRow(scene, 'alpha').click();
-  assert.equal(scene.cockpit.orbital.focus?.key, SITES.alpha.id, 'focused from its row');
+  assert.equal(
+    scene.cockpit.orbital.focus?.key,
+    SITES.alpha.id,
+    'focused from its row',
+  );
   siteRow(scene, 'alpha').click();
   // Gone for good: after a while it leaves the rows.
   for (let i = 0; i < 12; i += 1) await refreshRows(scene);
-  assert.ok(!rows(scene).some((row) => row.target?.id === SITES.alpha.id), 'forgotten later');
+  assert.ok(
+    !rows(scene).some((row) => row.target?.id === SITES.alpha.id),
+    'forgotten later',
+  );
 });
 
 test('shown rows keep their places while they still qualify', async (t) => {
@@ -1003,12 +1245,174 @@ test('shown rows keep their places while they still qualify', async (t) => {
   const sitesAfter = rows(scene)
     .filter((row) => row.target?.layerId === 'military-installations')
     .map((row) => row.target.id);
-  assert.deepEqual(sitesAfter, sitesBefore, 'no row moves while its site is in reach');
+  assert.deepEqual(
+    sitesAfter,
+    sitesBefore,
+    'no row moves while its site is in reach',
+  );
   // Once a shown site leaves the list, the nearer one takes its slot.
-  scene.sites.records = scene.sites.records.filter((r) => r.id !== SITES.bravo.id);
+  scene.sites.records = scene.sites.records.filter(
+    (r) => r.id !== SITES.bravo.id,
+  );
   for (let i = 0; i < 12; i += 1) await refreshRows(scene);
   assert.ok(
     rows(scene).some((row) => row.target?.id === 'osm:military:way/999'),
     'the nearer site fills the freed slot',
   );
+});
+
+/**
+ * A view from the station: its camera 20 m above the satellite, looking 65°
+ * below level toward the north, as the satellites layer gives it. Camp Alpha,
+ * about 120 km to the north-east of a satellite 420 km up, is some 74°
+ * below level from it: within the view's reach.
+ */
+function stationMount(scene) {
+  const position = scene.satellites.position(25544);
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(position);
+  const axis = (x, y, z) =>
+    Cesium.Cartesian3.normalize(
+      Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        new Cesium.Cartesian3(x, y, z),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+  const down = (65 * Math.PI) / 180;
+  const direction = axis(0, Math.cos(down), -Math.sin(down));
+  const up = axis(0, Math.sin(down), Math.cos(down));
+  return {
+    position: Cesium.Cartesian3.add(
+      position,
+      Cesium.Cartesian3.multiplyByScalar(
+        axis(0, 0, 1),
+        20,
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    ),
+    direction,
+    up,
+    right: Cesium.Cartesian3.cross(direction, up, new Cesium.Cartesian3()),
+    key: 'zarya',
+    label: 'ZARYA',
+    noradId: 25544,
+    card: null,
+    views: [
+      { key: 'zarya', label: 'ZARYA', noradId: 25544, card: null },
+      { key: 'cupola', label: 'CUPOLA', noradId: 25544, card: null },
+    ],
+  };
+}
+
+test('from a station view, a site row turns the camera onto it from the view’s own point and holds it', async (t) => {
+  const scene = await inOrbit(t);
+  const { cockpit, satellites } = scene;
+  satellites.getCockpitMount = () => stationMount(scene);
+  scene.frame();
+  await refreshRows(scene);
+  const mount = stationMount(scene);
+  // Camp Alpha lies below and to the north-east, within 45° of the view.
+  assert.ok(missDeg(scene.shots.at(-1), 'alpha') > 5, 'not centred yet');
+  siteRow(scene, 'alpha').click();
+  assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
+  run(scene, LAND_FRAMES, { drift: 0 });
+  for (let i = 0; i < 10; i += 1) {
+    const shot = scene.frame();
+    // From the view's camera point on the station, not the satellite's.
+    assert.ok(
+      Cesium.Cartesian3.distance(
+        shot.destination,
+        stationMount(scene).position,
+      ) < 1e-6,
+    );
+    assert.ok(
+      missDeg(shot, 'alpha') < 1e-4,
+      `frame ${i}: ${missDeg(shot, 'alpha')}°`,
+    );
+  }
+  // The same site from straight down would be off the view's direction.
+  assert.ok(angleDeg(mount.direction, scene.shots.at(-1).direction) > 1);
+  // Its row still words the angle from straight down, not from the view.
+  await refreshRows(scene);
+  const held = rows(scene).find((row) => row.target?.id === SITES.alpha.id);
+  const fromNadir = siteOffNadir(scene.shots.at(-1), 'alpha');
+  const shown = Number(/OFF-NADIR ([\d.]+)°/.exec(held.detail)[1]);
+  assert.ok(Math.abs(shown - fromNadir) < 0.2, `${shown}° vs ${fromNadir}°`);
+
+  // Switching views ends the focus: the new view looks its own way.
+  cockpit.nextOrbitalView();
+  assert.ok(!cockpit.orbital.focus);
+});
+
+test('from a station view, a site beyond 45° of where the view looks is not focused', async (t) => {
+  const scene = await inOrbit(t);
+  const { cockpit, satellites } = scene;
+  // The view looks south; Camp Alpha is to the north-east, behind it.
+  satellites.getCockpitMount = () => {
+    const mount = stationMount(scene);
+    const flip = (v) => Cesium.Cartesian3.negate(v, new Cesium.Cartesian3());
+    const enu = Cesium.Transforms.eastNorthUpToFixedFrame(
+      scene.satellites.position(25544),
+    );
+    const south = Cesium.Cartesian3.normalize(
+      Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        new Cesium.Cartesian3(0, -0.87, -0.5),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+    const up = Cesium.Cartesian3.normalize(
+      Cesium.Matrix4.multiplyByPointAsVector(
+        enu,
+        new Cesium.Cartesian3(0, -0.5, 0.87),
+        new Cesium.Cartesian3(),
+      ),
+      new Cesium.Cartesian3(),
+    );
+    return {
+      ...mount,
+      direction: south,
+      up,
+      right: Cesium.Cartesian3.cross(south, up, new Cesium.Cartesian3()),
+      unused: flip,
+    };
+  };
+  scene.frame();
+  await refreshRows(scene);
+  const row = siteRow(scene, 'alpha');
+  if (row) row.click();
+  else cockpit.toggleOrbitalFocus?.(SITES.alpha.id);
+  assert.ok(!cockpit.orbital.focus);
+});
+
+test("a click on a site's label box focuses it, as one on its dot does", async (t) => {
+  const scene = await inOrbit(t);
+  const { cockpit, handler, sites } = scene;
+  // No dot is drawn at the label's place: the layer's own lookup is what
+  // finds the site there, through the label box the overlay paints.
+  assert.equal(sites.findByPick(null), null, 'no draw item at the label');
+  assert.equal(sites.findAt(SITES.alpha.labelAt)?.id, SITES.alpha.id);
+  // The overlay reports the label box as the card on top there, as it does
+  // for an interactive entry: the site's own label is not another layer's.
+  const labels = [SITES.alpha.labelAt];
+  setClickCardHitTest((x, y) =>
+    labels.some((at) => at.x === x && at.y === y)
+      ? { sourceId: 'military-installations', entryId: SITES.alpha.id }
+      : null,
+  );
+  t.after(() => setClickCardHitTest(null));
+  scene.click(SITES.alpha.labelAt);
+  assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
+  assert.equal(handler.stockClicks, 1, 'Cesium still gets the click');
+  run(scene, LAND_FRAMES);
+  assert.ok(missDeg(scene.shots.at(-1), 'alpha') < 1e-5);
+  // The label of the focused site again keeps it; another site's dot
+  // switches.
+  scene.click(SITES.alpha.labelAt);
+  assert.equal(cockpit.orbital.focus.key, SITES.alpha.id);
+  scene.click(SITES.bravo.at);
+  assert.equal(cockpit.orbital.focus.key, SITES.bravo.id);
 });

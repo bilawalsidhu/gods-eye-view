@@ -186,6 +186,14 @@ export function _settleCctvFrame(token, src, ok) {
   );
 }
 
+/** Shared live health describes the stream even when this viewer shows a frame. */
+export function isCctvLiveFrameFallback(activeCamera) {
+  return (
+    activeCamera?.isVideo === false &&
+    String(activeCamera.sourceKind || '').toLowerCase() === 'live'
+  );
+}
+
 /** The source badge's label and frame state for the camera and preview. */
 export function presentCctvSourceBadge(activeCamera, enabled, frame) {
   if (!enabled || !activeCamera)
@@ -194,6 +202,11 @@ export function presentCctvSourceBadge(activeCamera, enabled, frame) {
     return { label: t('FRAME · LOADING'), state: 'loading' };
   if (frame.error && !frame.hasFrame)
     return { label: t('FRAME · UNAVAILABLE'), state: 'error' };
+  if (isCctvLiveFrameFallback(activeCamera))
+    return {
+      label: `${cctvSourceKindLabel('fallback')} · ${cctvSourceStatusLabel('degraded')}`,
+      state: 'ready',
+    };
   const kind = cctvSourceKindLabel(
     activeCamera.sourceKind || activeCamera.feedType || 'unknown',
   );

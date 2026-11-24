@@ -6,7 +6,10 @@ import {
   releasePointer,
   isPointerFree,
 } from '../../data/inputOwnership.js';
-import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import {
+  isOwnedByOtherLayer,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
 
@@ -77,7 +80,7 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-test('map selection yields to pointer owners and owns only its enabled handler', async () => {
+test('map selection yields to pointer owners and owns only its enabled handler', async (t) => {
   const handlers = [],
     // A pick of an item in one of the layer's draw sets, and one of another
     // layer's set: the dispatcher hands each to pickStorm as a draw hit.
@@ -109,11 +112,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
     createRendering: () => rendering,
-    hitTestOverlay: () => {
-      overlayTests++;
-      return overlayHit;
-    },
   });
+  setClickCardHitTest(() => {
+    overlayTests++;
+    return overlayHit;
+  });
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
   const viewer = {
@@ -180,41 +184,15 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     'foreground AIS card wins before scene picking',
   );
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // A native capture runs before an earlier sibling handler clears hit rects.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 110, clientY: 220 });
-  canvas.dispatchEvent(up);
-  overlayHit = null;
+  // Any other layer's card on top takes the click, not only a vessel's.
+  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   handlers[0].click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep152026',
-    'captured AIS hit survives synchronous sibling overlay rebuild',
+    'a camera card over the storm keeps the click',
   );
-  // A captured background hit remains background even if a sibling adds a card.
-  canvas.dispatchEvent(up);
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  // A new gesture clears an unconsumed release snapshot.
-  canvas.dispatchEvent(up);
-  canvas.dispatchEvent(new Event('pointerdown'));
   overlayHit = null;
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
-  handlers[0].click({ position: { x: 15, y: 25 } });
-  assert.equal(
-    layer.getDiagnostics().selectedId,
-    'ep162026',
-    'a different click cannot reuse the captured card',
-  );
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   const before = notices;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
@@ -264,13 +242,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(layer.getDiagnostics().selectionActive, false);
   const afterDisable = picks;
   const afterDisableOverlay = overlayTests;
-  canvas.dispatchEvent(up);
+  handlers[0].click(click);
   assert.equal(
     overlayTests,
     afterDisableOverlay,
-    'disable removes native capture listeners',
+    'a disabled layer reads no card',
   );
-  handlers[0].click(click);
   assert.equal(picks, afterDisable, 'queued disabled callback is inert');
   layer.enable();
   await layer.update();
@@ -289,7 +266,7 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   assert.equal(handlers[1].destroyed, true);
 });
-test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
+test('a click on a storm card or lead-hour label selects that storm without picking', async (t) => {
   const handlers = [];
   let picks = 0,
     overlayHit = null,
@@ -309,8 +286,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         getDiagnostics: () => ({}),
       };
     },
-    hitTestOverlay: () => overlayHit,
   });
+  setClickCardHitTest(() => overlayHit);
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
   const viewer = {
@@ -343,15 +321,11 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // The native release snapshot carries the card identity too.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 10, clientY: 20 });
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.equal(picks, 0, 'card clicks never fall through to the scene');
+  overlayHit = null;
   handlers[0].click(click);
   assert.equal(picks, 1);
   assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');
@@ -887,7 +861,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   const controls = h.layer.getRowControls();
   assert.equal(controls.readout, true);
   assert.deepEqual(controls.chips, []);
-  assert.equal(controls.summary.coverage, 'Atlantic · E/C Pacific');
+  assert.equal(controls.summary.coverage, 'All tropical basins');
   assert.equal(controls.summary.actions[0].href, storm().advisoryUrl);
   assert.equal(controls.summary.lines.length, 3);
   assert.deepEqual(controls.summary.settings, []);
@@ -896,7 +870,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   ]);
   assert.match(controls.summary.compact, /2 active storms · .* selected/);
   assert.equal(controls.summary.sections, undefined);
-  assert.match(controls.list.ariaLabel, /NHC/);
+  assert.match(controls.list.ariaLabel, /cyclone advisories and warnings/);
   assert.equal(controls.list.items.length, 2);
   assert.equal(controls.list.items[0].active, true);
   assert.match(controls.info, /awaiting advisory 10/);
@@ -938,7 +912,10 @@ test('empty successful coverage, unavailable source and stale advisory are diffe
   h.layer.enable();
   await h.layer.update();
   assert.equal(h.layer.getStats().empty, true);
-  assert.match(h.layer.getRowControls().summary.detail, /No active NHC\/CPHC/);
+  assert.match(
+    h.layer.getRowControls().summary.detail,
+    /No active tropical cyclone warnings/,
+  );
   next = { ...snapshot(), stale: true };
   await h.layer.update();
   assert.match(h.layer.getRowControls().summary.status, /stale/);
@@ -1012,4 +989,64 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.match(h.layer.getStats().error, /Network/);
   assert.ok(h.cleared > 0);
   h.layer.destroy();
+});
+
+test('a JTWC warning reads as a warning, notes the official regional centre and its danger area', async () => {
+  const jtwc = {
+    ...storm('sh042027'),
+    agency: 'jtwc',
+    name: 'Xavier',
+    classification: 'TC',
+    basin: 'SH',
+    advisoryNumber: '15',
+    advisoryUrl: 'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+    dangerArea: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([jtwc]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.match(
+      plain(controls.summary.detail),
+      /^Xavier · Tropical cyclone · Warning 15 · issued/,
+    );
+    assert.deepEqual(controls.summary.actions, [
+      { id: 'advisory', label: 'JTWC warning ↗', href: jtwc.advisoryUrl },
+    ]);
+    const note = controls.summary.lines.find((line) => line.id === 'note');
+    assert.equal(
+      note.text,
+      'JTWC warning: the regional centre’s warning is official. JTWC winds are 1-minute averages.',
+    );
+    assert.match(controls.info, /awaiting warning 15/);
+    assert.match(controls.info, /regional centre’s warning is official/);
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', '34-knot wind danger area'],
+    );
+    assert.equal(h.layer.getStats().source, 'JTWC');
+  } finally {
+    h.layer.destroy();
+  }
+});
+
+test('an NHC advisory carries no JTWC note and keeps its cone legend', async () => {
+  const h = harness({ getSnapshot: async () => snapshot([storm()]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.equal(
+      controls.summary.lines.find((line) => line.id === 'note'),
+      undefined,
+    );
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', 'Center-track uncertainty cone'],
+    );
+    assert.equal(h.layer.getStats().source, 'NOAA NHC / CPHC');
+  } finally {
+    h.layer.destroy();
+  }
 });

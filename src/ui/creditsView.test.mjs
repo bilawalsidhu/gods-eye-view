@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { mountCreditsView } from './creditsView.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { createStubRenderer } from '../render/stub/index.js';
+import { setLocale } from '../i18n/index.js';
 
 function scene() {
   document.body.replaceChildren();
@@ -118,10 +119,12 @@ test('focus in the list stays in it as it redraws, and goes to the line as it em
   const off = mountCreditsView(viewer);
   const panel = document.getElementById('gev-credits-panel');
   document.querySelector('.gev-credits-expand').click();
-  panel.querySelector('li a').focus();
+  const link = panel.querySelector('li a');
+  link.focus();
   const removeOther = renderer.credits.addStatic({ text: 'NOAA' });
   assert.equal(panel.hidden, false);
   assert.ok(panel.contains(document.activeElement), 'still in the list');
+  assert.equal(document.activeElement, link, 'the focused link keeps it');
   remove();
   removeOther();
   assert.equal(panel.hidden, true);
@@ -151,4 +154,56 @@ test('a credit with linked words links only those words', () => {
     'Street Level: imagery © Mapillary contributors, CC BY-SA 4.0',
   );
   off();
+});
+
+test('the line and its list follow the locale', () => {
+  const { viewer, renderer } = scene();
+  renderer.credits.addStatic({ text: 'NOAA' });
+  const off = mountCreditsView(viewer);
+  const expand = document.querySelector('.gev-credits-expand');
+  const close = document.querySelector('.gev-credits-close');
+  try {
+    setLocale('fr');
+    assert.equal(expand.textContent, 'Attribution des données');
+    assert.equal(
+      document.getElementById('gev-credits-panel-title').textContent,
+      'Données fournies par\u202f:',
+    );
+    assert.equal(
+      close.getAttribute('aria-label'),
+      "Fermer l'attribution des données",
+    );
+  } finally {
+    setLocale('en');
+  }
+  assert.equal(expand.textContent, 'Data attribution');
+  off();
+});
+
+test('the line and its list are the last of the body, and its close button is the kit’s', () => {
+  const { viewer, renderer } = scene();
+  document.body.append(document.createElement('main'));
+  renderer.credits.addStatic({ text: 'NOAA' });
+  const off = mountCreditsView(viewer);
+  const children = [...document.body.children];
+  assert.deepEqual(
+    children.slice(-2).map((element) => element.id),
+    ['gev-credits', 'gev-credits-panel'],
+    'the page’s rules select them as children of the body',
+  );
+  const close = document.querySelector('.gev-credits-close');
+  assert.ok(close.classList.contains('ui-button'), 'a UiCloseButton');
+  assert.equal(close.type, 'button');
+  assert.equal(close.textContent, '×');
+  assert.equal(close.hasAttribute('title'), false, 'no tip');
+  assert.equal(
+    close.classList.contains('ui-close-button'),
+    false,
+    'bare: it keeps the browser’s padding',
+  );
+  off();
+  assert.deepEqual(
+    [...document.body.children].map((element) => element.tagName),
+    ['MAIN'],
+  );
 });

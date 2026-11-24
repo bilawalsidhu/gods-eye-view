@@ -7,6 +7,8 @@ import { createRendering } from './rendering.js';
 import { createNamedMarkers, namedPointId } from './namedMarkers.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
+import { LAYER_ID } from './policy.js';
 
 function harness(t) {
   const previousWindow = globalThis.window;
@@ -59,6 +61,8 @@ function harness(t) {
     () => new Cesium.Cartesian2(640, 400),
   );
   let labels = [];
+  // The boxes the overlay painted last frame for this layer's labels.
+  const boxes = new Map();
   const services = {
     context,
     anchors: {},
@@ -81,6 +85,9 @@ function harness(t) {
       },
       clearSource() {},
       setVisible() {},
+      paintRect(_id, entryId) {
+        return boxes.get(entryId) ?? null;
+      },
     },
   };
   parts.rendering = createRendering(ctx);
@@ -115,6 +122,7 @@ function harness(t) {
     draw,
     input,
     parts,
+    boxes,
     /** Click on what `pick` names, as the scene would pick it. */
     click(value) {
       picked = value;
@@ -186,6 +194,30 @@ test('a click on a named marker point selects its site; again releases it', (t) 
   h.assertSelected(false);
 });
 
+// The card or label painted on top takes the click: a site under another
+// layer's card neither selects nor releases.
+test("another layer's card over a site keeps the click", (t) => {
+  const h = harness(t);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const setId = h.parts.namedMarkers.setId;
+  const item = h.draw.set(setId).items.get(namedPointId('base'));
+  const pointPick = { id: { set: setId, id: item.id, meta: item.meta } };
+  h.click(pointPick);
+  h.assertSelected(true);
+  h.click(undefined);
+  h.assertSelected(true);
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  h.click(pointPick);
+  h.assertSelected(false);
+  top = null;
+  h.click(pointPick);
+  h.assertSelected(true);
+});
+
 test('a click on a site dot or its outline selects the site; another set does not', (t) => {
   const h = harness(t);
   h.state.selectedId = null;
@@ -232,4 +264,65 @@ test('a click on a site dot or its outline selects the site; another set does no
   assert.equal(selectedNow(), true);
   h.click({ id: { set: 'other:1', id: outline.id, meta: outline.meta } });
   assert.equal(selectedNow(), false);
+});
+
+test("a click on a site's label box selects it where nothing else is drawn under it", (t) => {
+  const h = harness(t);
+  h.state.selectedId = null;
+  context.clearSelectedEntityContextForLayer('military-installations');
+  h.parts.rendering.renderRecords();
+  // The card every layer reads for each click, as Context's bridge reads it.
+  const cards = [];
+  const offCards = h.input.input.onClick((event) =>
+    cards.push(clickCard(event)),
+  );
+  t.after(offCards);
+  // No label at the click and nothing picked: nothing is selected.
+  h.click(undefined);
+  h.assertSelected(false);
+  assert.equal(cards.at(-1), null);
+  // The site's label box at the click (CSS px) selects it; again releases it.
+  h.boxes.set('base', { x: 600, y: 390, w: 80, h: 20 });
+  h.click(undefined);
+  h.assertSelected(true);
+  assert.deepEqual(cards.at(-1), { sourceId: LAYER_ID, entryId: 'base' });
+  h.click(undefined);
+  h.assertSelected(false);
+  // Over the site's own named marker, the label still takes the click.
+  const setId = h.parts.namedMarkers.setId;
+  const item = h.draw.set(setId).items.get(namedPointId('base'));
+  h.click({ id: { set: setId, id: item.id, meta: item.meta } });
+  h.assertSelected(true);
+  assert.deepEqual(cards.at(-1), { sourceId: LAYER_ID, entryId: 'base' });
+  // An aircraft drawn under the label keeps its click: the label is no card
+  // there, so its own layer and Context can select it, and the site lets go.
+  h.click({ id: 'flight:abc123' });
+  h.assertSelected(false);
+  assert.equal(cards.at(-1), null);
+  // Another layer's card painted over the label takes the click.
+  setClickCardHitTest(() => ({ sourceId: 'earthquake-card', entryId: 'ak1' }));
+  t.after(() => setClickCardHitTest(null));
+  h.click(undefined);
+  h.assertSelected(false);
+  setClickCardHitTest(null);
+  // A layer that is off claims nothing.
+  h.state.enabled = false;
+  h.click(undefined);
+  assert.equal(cards.at(-1), null);
+  h.state.enabled = true;
+});
+
+test('destroy withdraws the label claim', (t) => {
+  const h = harness(t);
+  h.boxes.set('base', { x: 600, y: 390, w: 80, h: 20 });
+  const cards = [];
+  const offCards = h.input.input.onClick((event) =>
+    cards.push(clickCard(event)),
+  );
+  t.after(offCards);
+  h.click(undefined);
+  assert.deepEqual(cards.at(-1), { sourceId: LAYER_ID, entryId: 'base' });
+  h.selection.destroy();
+  h.click(undefined);
+  assert.equal(cards.at(-1), null);
 });

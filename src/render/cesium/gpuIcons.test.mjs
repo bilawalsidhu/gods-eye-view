@@ -221,6 +221,40 @@ test('rows moving on a live clock keep frames coming until their segments end', 
   assert.equal(scene.renders, onScene);
 });
 
+test('a live set whose owner asks for its frames asks for none itself', () => {
+  const { scene, part, draw } = drawOver();
+  const set = draw.icons({
+    id: 'gpu:owned',
+    motionClock: { kind: 'live', delayMs: 2000, frames: 'owner' },
+  });
+  const now = Date.now();
+  const to = ecef(Cesium.Cartesian3.fromDegrees(4.2, 51.95, 2));
+  set.set([
+    icon('a', {
+      motion: { kind: 'lerp', from: ecef(AT), to, t0: now, t1: now + 60000 },
+    }),
+  ]);
+  const moving = scene.renders;
+  part.afterRender();
+  assert.equal(scene.renders, moving, 'moving rows ask for no frame');
+  set.setOptions({
+    motionClock: { kind: 'live', delayMs: 3000, frames: 'owner' },
+  });
+  assert.equal(scene.renders, moving, 'a new delay asks for no frame');
+  // A row restyled in place, as the owner does when a frame begins (a
+  // helicopter's rotor), asks for none either: that frame draws it.
+  set.upsert([
+    icon('a', {
+      scale: 2,
+      motion: { kind: 'lerp', from: ecef(AT), to, t0: now, t1: now + 60000 },
+    }),
+  ]);
+  assert.equal(scene.renders, moving, 'a write in place asks for no frame');
+  set.setOptions({ motionClock: { kind: 'live', delayMs: 4000 } });
+  part.afterRender();
+  assert.ok(scene.renders > moving, 'back to the set: frames again');
+});
+
 test('a set that recedes draws on the GPU, every row receding by the set’s parameters, and changes live', () => {
   const { scene, part, draw } = drawOver();
   // An item's own `recede` is not the contract's: it changes nothing.

@@ -68,6 +68,8 @@ export interface ConformanceHarness {
   ): void | Promise<void>;
   assets?: {
     model?: string;
+    /** The name of a node `model` has, for the `nodes` check. */
+    modelNode?: string;
     missingModel?: string;
     modelBytes?: () => Promise<Uint8Array>;
   };

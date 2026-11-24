@@ -10,6 +10,7 @@
  */
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
+import { isUnderOtherCard } from '../data/pickRegistry.js';
 import { findQuery } from '../render/rendererOf.js';
 import { clampOrbitalLook, easeLook } from '../cockpitLook.js';
 import { ORBITAL_EARTH_RADIUS_M } from '../cockpitOrbital.js';
@@ -115,8 +116,19 @@ function sitePosition(site) {
     : null;
 }
 
-/** The mapped site a canvas position shows, through the layer's picks. */
+/**
+ * The mapped site a canvas position shows: through the layer's own lookup
+ * where it has one (`findAt`: the dot, the site entity or the label box the
+ * overlay paints, which is what a click lands on from orbit), else through
+ * its pick ids.
+ */
 function siteAt(controller, position) {
+  try {
+    const found = sitesLayer(controller)?.findAt?.(position) ?? null;
+    if (found) return found;
+  } catch {
+    // Fall through to the pick ids.
+  }
   let picked = null;
   try {
     picked = findQuery(controller.viewer)?.pick(position.x, position.y) ?? null;
@@ -286,7 +298,13 @@ export function routeSceneClick() {
     // A viewer with no input (headless tools, partial stubs) has no clicks.
     return () => {};
   }
-  return input.onClick((event) => this.onOrbitalClick(event?.position));
+  return input.onClick((event) => {
+    // Another layer's card or label painted on top takes the click: the site
+    // under it does not focus, and the click does not end a held focus. A
+    // site's own label is not another layer's: it focuses that site.
+    if (isUnderOtherCard(event, [SITES_LAYER_ID])) return;
+    this.onOrbitalClick(event?.position);
+  });
 }
 
 /**
@@ -297,15 +315,26 @@ export function routeSceneClick() {
  * held from its last record). Also rebuilds
  * the orbital Live Signals rows on their own clock.
  * @param {object} state The orbital session.
- * @param {{direction: object, up: object, right: object}} nadir This
- *   frame's nadir frame.
- * @param {{x: number, y: number, z: number}} position The satellite, ECEF.
+ * @param {{direction: object, up: object, right: object}} nadir The frame
+ *   the look turns about this frame: the nadir one, or a station view's.
+ * @param {{x: number, y: number, z: number}} position Where the camera is,
+ *   ECEF: the satellite, or the station view's point on it.
  * @param {number} nowMs
+ * @param {{direction: object, up: object, right: object}|null} [trueNadir]
+ *   The nadir frame when `nadir` is a station view's: the rows still word
+ *   their angles from straight down.
  * @returns {boolean} True when it placed `state.lookView` itself.
  */
-export function updateOrbitalFocus(state, nadir, position, nowMs) {
+export function updateOrbitalFocus(
+  state,
+  nadir,
+  position,
+  nowMs,
+  trueNadir = null,
+) {
   state.focusFrame = {
     nadir,
+    trueNadir,
     position: { x: position.x, y: position.y, z: position.z },
   };
   // After a satellite switch the first frame on the new satellite (the hop
@@ -459,13 +488,21 @@ export function orbitalSitesInReach(info) {
       });
   state.listedSites = remembered;
   const focusKey = state.focus?.key ?? null;
+  const positions = new Map(candidates.map((c) => [c.key, c.position]));
+  // Reach is measured about the frame the look turns in; the angle shown
+  // is always from straight down, also from a station view.
+  const shownOffNadir = (key, offNadirDeg) => {
+    if (!frame.trueNadir) return offNadirDeg;
+    const look = focusLook(frame.trueNadir, frame.position, positions.get(key));
+    return Number.isFinite(look?.offNadirDeg) ? look.offNadirDeg : offNadirDeg;
+  };
   return {
     entries: pointsInReach(candidates, {
       nadir: frame.nadir,
       satellite: frame.position,
     }).map(({ key, offNadirDeg }) => ({
       site: byId.get(key),
-      offNadirDeg,
+      offNadirDeg: shownOffNadir(key, offNadirDeg),
       focused: key === focusKey,
     })),
   };

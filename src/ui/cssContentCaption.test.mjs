@@ -9,9 +9,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STYLES = path.join(HERE, 'styles');
 const LOCALES = path.join(HERE, '..', 'i18n', 'locales');
-// cyber.css carries decorative theme strings (LOC / GRID, SYS 06 // ...);
-// street-level.css ' · ESC' is a key cap. Neither is UI copy.
-const DECORATIVE = new Set(['cyber.css', 'street-level.css']);
+// street-level.css ' · ESC' is a key cap, not UI copy.
+const DECORATIVE = new Set(['street-level.css']);
 
 test('no user-visible text in CSS content: outside decorative themes', () => {
   const hits = [];

@@ -94,6 +94,8 @@ export class ShareLinkManager {
     this._bloomVersion = BLOOM_SCALE_VERSION;
     this._sharpenIntensity = 49;
     this._hudVariant = 'tactical';
+    // Sonar on beside a layout whose code cannot say so (Minimal); `hs`.
+    this._hudSonar = false;
     this._hudVisible = false;
     this._detectionMode = 'OFF';
     this._detectionDensity = 50;
@@ -260,6 +262,9 @@ export class ShareLinkManager {
       bloomVersion: parseOr(params.get('bv'), 1),
       sharpenIntensity: parseOr(params.get('si'), 49),
       hudVariant: params.get('hud') || 'tactical',
+      // Absent in links made before it, which restore Sonar from `hud=cyber`
+      // alone.
+      hudSonar: params.get('hs') === '1',
       hudVisible: params.get('hv') === '1',
       detectionMode: restoredDetection.enabled
         ? restoredDetection.profile
@@ -477,6 +482,7 @@ export class ShareLinkManager {
         bloomVersion: visualCurrent ? state.bloomVersion : undefined,
         sharpenIntensity: visualCurrent ? state.sharpenIntensity : undefined,
         hudVariant: visualCurrent ? state.hudVariant : undefined,
+        hudSonar: visualCurrent ? state.hudSonar : undefined,
         hudVisible: visualCurrent ? state.hudVisible : undefined,
         detectionMode: visualCurrent ? state.detectionMode : undefined,
         detectionDensity: visualCurrent ? state.detectionDensity : undefined,
@@ -627,6 +633,7 @@ export class ShareLinkManager {
       this._sharpenIntensity = extras.sharpenIntensity;
     if (typeof extras.hudVariant === 'string')
       this._hudVariant = extras.hudVariant;
+    if (typeof extras.hudSonar === 'boolean') this._hudSonar = extras.hudSonar;
     if (typeof extras.hudVisible === 'boolean')
       this._hudVisible = extras.hudVisible;
     if (typeof extras.detectionMode === 'string')
@@ -786,6 +793,8 @@ export class ShareLinkManager {
     params.set('bv', Math.round(this._bloomVersion).toString());
     params.set('si', Math.round(this._sharpenIntensity).toString());
     params.set('hud', this._hudVariant);
+    // Only written when on, so a link without Sonar keeps its old form.
+    if (this._hudSonar) params.set('hs', '1');
     params.set('hv', this._hudVisible ? '1' : '0');
     params.set('dm', this._detectionMode);
     params.set('dd', Math.round(this._detectionDensity).toString());

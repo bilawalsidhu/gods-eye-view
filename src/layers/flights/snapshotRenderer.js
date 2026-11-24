@@ -217,6 +217,7 @@ export function createFlightSnapshotRenderer({
               {
                 nullAltitude: meta.renderAltitudeInvented === true,
                 track: meta.true_track,
+                estimated: meta.estimated === true,
               },
             );
         } else {

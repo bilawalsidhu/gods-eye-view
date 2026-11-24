@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t, tn } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
+import UiButton from '../../kit/UiButton.vue';
 import { chapterAt } from '../../../stories/format.js';
 import {
   anchorStamp,
@@ -206,10 +207,9 @@ defineExpose({ dragging });
     :aria-label="t('Context')"
     :style="dragH != null ? { height: `${dragH}px` } : null"
   >
-    <button
+    <UiButton
       id="sheetHandle"
       class="sheet-handle"
-      type="button"
       :aria-expanded="sheet !== 'peek'"
       :aria-label="
         sheet === 'peek'
@@ -243,7 +243,7 @@ defineExpose({ dragging });
           >{{ t(f[1]) }}</span
         >
       </span>
-    </button>
+    </UiButton>
     <div class="cx-search-wrap">
       <div class="cx-search">
         <svg
@@ -270,9 +270,8 @@ defineExpose({ dragging });
           @input="onQuery"
           @keydown="onSearchKey"
         />
-        <button
+        <UiButton
           class="cx-ic"
-          type="button"
           disabled
           :aria-label="t('Voice search (not in this build)')"
           :title="t('Voice search (not in this build)')"
@@ -287,7 +286,7 @@ defineExpose({ dragging });
             <rect x="9" y="3" width="6" height="11" rx="3" />
             <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
           </svg>
-        </button>
+        </UiButton>
       </div>
       <ul
         v-if="results"
@@ -297,8 +296,7 @@ defineExpose({ dragging });
         :aria-label="t('Search results')"
       >
         <li v-for="(x, i) in results" :key="`${x.type}:${x.k ?? x.title}`">
-          <button
-            type="button"
+          <UiButton
             role="option"
             :aria-selected="i === active"
             @click="choose(x)"
@@ -308,7 +306,7 @@ defineExpose({ dragging });
               ><b>{{ x.title }}</b
               ><span class="sub">{{ x.sub }}</span></span
             >
-          </button>
+          </UiButton>
         </li>
         <li v-if="!results.length" class="empty">{{
           t('Nothing in this story matches.')
@@ -334,12 +332,11 @@ defineExpose({ dragging });
       <div class="cx-sec">
         <div class="cx-h">
           {{ t('About') }}
-          <button
+          <UiButton
             class="tbtn cx-close"
-            type="button"
             style="height: 28px; padding: 0 8px"
             @click="emit('hide')"
-            >{{ t('Close') }}</button
+            >{{ t('Close') }}</UiButton
           >
         </div>
         <p class="cx-p">
@@ -356,8 +353,7 @@ defineExpose({ dragging });
         <div class="cx-h">{{ t('Key moments') }}</div>
         <ul class="cx-anchors">
           <li v-for="(ev, i) in events" :key="i">
-            <button
-              type="button"
+            <UiButton
               :class="{ past: playback.wallMs >= ev.wallMs }"
               @click="emit('anchor', ev)"
             >
@@ -366,7 +362,7 @@ defineExpose({ dragging });
                 ><i :style="{ background: ev.color }"></i
                 >{{ storyText(ev.label) }}</span
               >
-            </button>
+            </UiButton>
           </li>
         </ul>
       </div>
@@ -391,10 +387,9 @@ defineExpose({ dragging });
       <div class="cx-sec">
         <div class="cx-h">{{ t('Related stories') }}</div>
         <div class="cx-related">
-          <button
+          <UiButton
             v-for="x in related"
             :key="x.id"
-            type="button"
             @click="emit('open', x.id)"
           >
             <span class="thumb"
@@ -404,7 +399,7 @@ defineExpose({ dragging });
               ><b>{{ titleOf(x) }}</b
               ><span class="c-meta">{{ windowText(x) }}</span></span
             >
-          </button>
+          </UiButton>
         </div>
       </div>
     </div>

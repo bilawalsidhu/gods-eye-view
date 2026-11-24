@@ -140,25 +140,28 @@ for (const [label, flag] of [
   });
 }
 
-test('a failed catalog cancels the sibling request instead of waiting for the timeout', async (t) => {
-  t.mock.method(console, 'warn', () => {});
-  let siblingSignal;
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    if (url === LITHUANIA_CAMERAS_URL) {
-      return new Response('', { status: 503 });
-    }
-    siblingSignal = options.signal;
-    // Never settles on its own; only an abort ends it.
-    return new Promise((_, reject) => {
-      options.signal.addEventListener('abort', () =>
-        reject(options.signal.reason),
-      );
+for (const [failure, camerasResponse] of [
+  ['failed', () => new Response('', { status: 503 })],
+  ['malformed', () => new Response('<html>error page</html>')],
+]) {
+  test(`a ${failure} catalog cancels the sibling request instead of waiting for the timeout`, async (t) => {
+    t.mock.method(console, 'warn', () => {});
+    let siblingSignal;
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+      if (url === LITHUANIA_CAMERAS_URL) return camerasResponse();
+      siblingSignal = options.signal;
+      // Never settles on its own; only an abort ends it.
+      return new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () =>
+          reject(options.signal.reason),
+        );
+      });
     });
+    assert.deepEqual(await loadLithuaniaSources(), []);
+    assert.equal(siblingSignal?.aborted, true);
+    assert.notEqual(siblingSignal.reason?.name, 'TimeoutError');
   });
-  assert.deepEqual(await loadLithuaniaSources(), []);
-  assert.equal(siblingSignal?.aborted, true);
-  assert.notEqual(siblingSignal.reason?.name, 'TimeoutError');
-});
+}
 
 test('a redirected catalog is reported as not followed', async (t) => {
   const warnings = [];

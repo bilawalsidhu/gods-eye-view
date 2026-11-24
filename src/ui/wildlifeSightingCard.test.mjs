@@ -128,8 +128,10 @@ function fixture(
       now: () => NOW,
       overlayHost: {
         setEntries: (id, entries) => overlays.set(id, entries),
-        hitTest: (_x, _y, { sourceId }) =>
-          hit?.sourceId === sourceId ? hit : null,
+        // As the host does: unfiltered, the topmost entry; filtered, only
+        // an entry of that source.
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          hit && (!sourceId || hit.sourceId === sourceId) ? hit : null,
       },
       input: () => ({
         onClick(fn) {
@@ -138,6 +140,8 @@ function fixture(
         },
       }),
       focus: { requestWorldFocus: (value) => flights.push(value) },
+      // The card on top at a click, as the registry answers from the host.
+      picking: { clickCard: () => hit },
     },
     parts: {
       rendering: { refreshSelection() {}, requestRender() {} },

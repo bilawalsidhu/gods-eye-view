@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import {
   createShipwrecksLayer,
   markerPixelSize,
@@ -36,7 +37,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ snapshots, now = () => 1 } = {}) {
+function harness({ snapshots, now = () => 1, cardHit = () => null } = {}) {
   const cards = [];
   const handlers = [];
   const opened = [];
@@ -47,6 +48,8 @@ function harness({ snapshots, now = () => 1 } = {}) {
   const { draw } = bindFakeDraw(viewer);
   const queue = [...(snapshots || [])];
   const requests = [];
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest((x, y) => cardHit(x, y));
   const layer = createShipwrecksLayer({
     source: {
       getSnapshot({ signal }) {
@@ -59,7 +62,7 @@ function harness({ snapshots, now = () => 1 } = {}) {
     overlayHost: {
       setEntries: (_source, entries) => cards.push(entries),
       setVisible() {},
-      hitTest: () => null,
+      hitTest: cardHit,
     },
     // The globe's clicks: one listener per click handler installed.
     input: () => ({
@@ -392,4 +395,98 @@ test('the page deadline subtracts the newest available source age from the limit
     'an unavailable source does not count',
   );
   assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  let picked = null;
+  const viewer = { scene: { canvas: {}, pick: () => picked } };
+  bindFakeDraw(viewer);
+  let cardUnder = null;
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () =>
+      cardUnder ? { sourceId: 'shipwrecks', entryId: cardUnder } : null,
+  });
+  t.after(() => fake.destroy());
+  const cards = [];
+  const opened = [];
+  const layer = createShipwrecksLayer({
+    source: { getSnapshot: () => Promise.resolve(snapshot([wreck('a')])) },
+    overlayHost: {
+      setEntries: (_source, entries) => cards.push(entries),
+      setVisible() {},
+    },
+    input: () => fake.input,
+    picking,
+    pointer: { isPointerFree: () => true },
+    openExternal: (url) => opened.push(url),
+    now: () => 1,
+  });
+  layer.init(viewer);
+  t.after(() => layer.destroy());
+  layer.enable();
+  await layer.update();
+  picked = { primitive: {}, id: { set: 'shipwrecks:', id: 'shipwreck:a' } };
+  fake.click();
+  const [card] = cards.at(-1);
+  assert.equal(card.id, 'shipwreck-card:a');
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  picked = null;
+  cardUnder = card.id;
+  fake.label.over = true;
+  fake.click();
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(opened.length, 1);
+});
+
+test('a covered selected card and covered markers yield; bare markers select', async () => {
+  let painted = [];
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { url: 'https://example.com/a' }),
+        wreck('b', { url: 'https://example.com/b' }),
+      ]),
+    ],
+    cardHit: (_x, _y, { sourceId } = {}) =>
+      painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+  });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const click = () => h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+    h.pick('a');
+    click();
+    const first = h.lastCard()[0];
+    painted = [
+      { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' },
+      { sourceId: 'shipwrecks', entryId: first.id },
+    ];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, []);
+    assert.equal(h.lastCard()[0].id, first.id);
+    // A marker under another layer's card is that card's click too.
+    h.pick('b');
+    click();
+    assert.equal(h.lastCard()[0].id, first.id, 'a covered marker yields');
+    painted = [];
+    click();
+    assert.equal(h.lastCard()[0].id, 'shipwreck-card:b');
+    painted = [{ sourceId: 'shipwrecks', entryId: 'shipwreck-card:b' }];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, ['https://example.com/b']);
+    painted = [];
+    click();
+    assert.deepEqual(h.lastCard(), [], 'bare map still clears the selection');
+  } finally {
+    h.layer.destroy();
+  }
 });
