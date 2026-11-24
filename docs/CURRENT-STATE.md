@@ -1356,8 +1356,8 @@ avoid restaging for every pointer event. Status refreshes retain the uncommitted
 drag preview; changed model values or disabled controls supersede it.
 Satellite share links carry the filter
 strength; legacy `f`/`a` values keep their Clouds only / Full meanings. Soft and
-Vivid remain layer-opacity presets (40%/70%); history remains transient and links
-open latest.
+Vivid remain layer-opacity presets (40%/70%). A link made away from Live opens
+at its world time, paused.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
@@ -1399,15 +1399,15 @@ hardware GPU behavior remains unverified; software-rendered checks do not
 establish native GPU performance or compatibility.
 
 The right-rail WEATHER panel shows active-product readouts, coverage badges
-and legends. The world timeline controls observation history. Drag to a past
-time, use Play to advance through history, or choose Live for the newest frame
-per product. The WEATHER heading shows the newest selected frame and its age
-while live, or the timeline time in history. Each product card shows its
-displayed frame's UTC time and marks historical frames as synced or nearest.
-A product's frame eligibility gap is at least 30 minutes (three hours for the
-global infrared mosaic). A sparse feed can extend that to 1.5 times the median
-spacing of its recent frames. Wind shows forecast valid and issue times and does
-not follow history. Satellite clouds uses Clouds only / Full controls, a continuous cloud
+and legends; its heading shows the newest selected frame and its age while
+live, or the timeline time in history, and each product card shows its
+displayed frame's UTC time and age, marked synced or nearest in history.
+With Rain radar, Satellite clouds or Lightning density on, the world timeline
+appears and moves observation history (drag back, Play, Live); wind alone does
+not show it. Frame selection, eligibility gaps and Play are described under
+Local Weather review candidate below. Wind shows forecast valid and issue times
+and does not follow history.
+Satellite clouds uses Clouds only / Full controls, a continuous cloud
 filter slider and Soft/Vivid opacity presets in its right-rail settings.
 
 Left weather rows retain only the toggle and one status line with a source
@@ -1415,8 +1415,8 @@ tooltip. Configuration and the cyclone Storms list live in the cards, as do the
 cyclone advisory, position time, wind, pressure, geometry status and the
 official advisory link. The panel hides when empty, auto-expands once per page
 session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
-per frame. Generic keyed rail cards and the native rail timeline preserve DOM
-nodes and avoid identical writes; the weather panel owns descriptor mapping.
+per frame. Generic keyed rail cards preserve DOM nodes and avoid identical
+writes; the weather panel owns descriptor mapping.
 Inspection emphasizes the chosen scalar and marks the exact sampled location;
 the passive marker follows that snapshot, respects globe occlusion and disappears
 on dismissal, field/model changes, disable or teardown. Clean view and
@@ -10041,8 +10041,9 @@ of its own.
 Source, opacity and coverage navigation live in the WEATHER panel's cards, not
 in the rows; the panel shows the frame time and has no time controls. The
 viewer clock is untouched.
-Observation layers are off by default; share/persist includes appearance and product, while history
-is transient and shared links open latest. Rendering retains the previous frame
+Observation layers are off by default; share/persist includes appearance and
+product; a share link made away from Live also carries the world time and opens
+there, paused. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
 
 Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at

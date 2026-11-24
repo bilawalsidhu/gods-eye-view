@@ -470,7 +470,7 @@ Twenty-three layers and map sources. **Twenty-one have a keyless path.** Some of
 
 </details>
 
-**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations on one history timeline: drag back on the world timeline, use **Play** to advance through history, or choose **Live** to return to the newest frames. The **WEATHER** panel heading shows the newest selected frame and its age while live, or the timeline time in history. The product cards show the times of the displayed frames. **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones, and JTWC warnings with their 34-knot wind danger areas for the other basins. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
+**Weather, keyless.** **Wind** animates 10 m forecast flow from NOAA GFS or ECMWF IFS, with an optional color field and a reading at map center. **Rain radar**, **Satellite clouds** and **Lightning density** are observations that follow the world timeline (drag back, **Play**, **Live**); **Cyclone advisories** draw NHC and CPHC positions, forecast tracks and cones, and JTWC warnings with their 34-knot wind danger areas for the other basins. On Google 3D Tiles the observed layers float above the city as translucent shells, sharpened around your view.
 
 In the app, **Data Layers** groups them as Movement, Cameras, Infrastructure, Events, Weather and Audio; Directions and OSM Places sit in the separate **Utilities** panel with Draw and Import.
 
