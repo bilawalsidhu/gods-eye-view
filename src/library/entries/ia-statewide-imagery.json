@@ -1,0 +1,48 @@
+{
+  "id": "ia-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Iowa Statewide Imagery (2023)",
+  "provider": "Iowa State Univ. GIS / Iowa DNR",
+  "description": "Aerial orthophotos: Statewide coverage of Iowa.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-96.7456, 40.3273, -90.0366, 43.5847]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://ortho.gis.iastate.edu/arcgis/rest/services/ortho/naip_2023_cir/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 m / 60 cm (NAIP)",
+    "resolutionM": 0.6,
+    "trueOrtho": false,
+    "vintage": "2023–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://geodata.iowa.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "USDA NAIP, Iowa State University GIS Facility",
+    "url": "https://geodata.iowa.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

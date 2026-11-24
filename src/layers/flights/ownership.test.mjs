@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { createCivilFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createEnrichment } from './enrichment.js';
+import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
+import { LiveSourceError } from '../../sources/live/contract.js';
 
 function services() {
   const names = [
@@ -25,6 +29,14 @@ function services() {
   return {
     ...Object.fromEntries(names.map((name) => [name, {}])),
     groundSnap: { createGroundSnap: () => ({ clear() {} }) },
+  };
+}
+
+/** The services enrichment reads: which hexes are military or a TR-3B. */
+function enrichServices({ military = [], tr3b = [] } = {}) {
+  return {
+    militaryRegistry: { isMilitaryIcao: (id) => military.includes(id) },
+    aircraftPresentation: { isTr3b: (id) => tr3b.includes(id) },
   };
 }
 
@@ -58,11 +70,12 @@ test('flight state owns distinct mutable records, scratch objects and floor samp
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_grounded',
+    '_floorPinned',
     '_positionHistory',
     '_displayFloorState',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {
@@ -89,7 +102,11 @@ test('aborted enrichment cannot write into a later lifecycle or decrement its ac
     },
   };
   const flightState = createFlightState({ source, services: services() });
-  const enrichment = createEnrichment({ flightState, services: {}, parts: {} });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {},
+  });
   let writes = 0;
   enrichment._enqueueEnrich(
     'test',
@@ -117,10 +134,595 @@ test('a synchronous enrichment failure stays bounded and releases its slot', asy
       },
     },
   });
-  const enrichment = createEnrichment({ flightState, services: {}, parts: {} });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {},
+  });
   assert.doesNotThrow(() =>
     enrichment._enqueueEnrich('test', {}, () => assert.fail()),
   );
   await new Promise((done) => setImmediate(done));
   assert.equal(flightState._enrichActive, 0);
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: services(),
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, altitudeM: 9000 }),
+        _contactLabel: () => 'AAL1',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('abc123').properties.heading,
+    '0°',
+  );
+});
+
+test('a flight layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createCivilFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});
+
+test('the tracked trail head is drawn each frame while tracked and stops with the trail', async () => {
+  const Cesium = await import('cesium');
+  const { bindFakeDraw } = await import('../../testSupport/fakeDrawPort.mjs');
+  const trails = await import('../../data/trailRenderer.js');
+  const listeners = new Set();
+  const frame = {
+    on(phase, cb) {
+      const entry = { phase, cb };
+      listeners.add(entry);
+      return () => listeners.delete(entry);
+    },
+  };
+  const tick = () => {
+    for (const { phase, cb } of [...listeners]) if (phase === 'preRender') cb();
+  };
+  const viewer = { isDestroyed: () => false };
+  const { draw, unbind } = bindFakeDraw(viewer, { frame });
+  const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 1000);
+  // Three reports ten seconds apart, ten minutes ago.
+  const reportAt = (i) => {
+    const epochMs = Date.now() - 600_000 + i * 10_000;
+    return { epochMs, time: Cesium.JulianDate.fromDate(new Date(epochMs)) };
+  };
+  let headLon = 0.03;
+  const flightState = {
+    now: Date.now,
+    _viewer: viewer,
+    _trackedIcao: 'abc123',
+    _trail: null,
+    _trailFixes: [],
+    _trailBackfillToken: 0,
+    _trailHeadOff: null,
+    _cockpitContactMode: false,
+    _positionHistory: new Map([
+      [
+        'abc123',
+        [0, 0.01, 0.02].map((lon, i) => ({
+          ...reportAt(i),
+          position: at(lon),
+        })),
+      ],
+    ]),
+    _scratchWarmupTime: new Cesium.JulianDate(),
+    _scratchTrailHead: new Cesium.Cartesian3(),
+    feed: { _source: {} },
+    records: { data: new Map() },
+    lifetime: new AbortController(),
+  };
+  const supplied = services();
+  supplied.trails = trails;
+  const tracking = createTracking({
+    flightState,
+    services: supplied,
+    parts: {
+      motion: {
+        _isTrackWarmingUp: () => false,
+        _trackedTrailCached: () => at(headLon),
+        _trackedDisplayPosition: () => null,
+        _trackedModelCenterWorld: () => null,
+        _trackedModelEnvelopeM: () => 0,
+      },
+    },
+    layer: {},
+  });
+  try {
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1, 'one frame listener');
+    tick();
+    const set = draw.find('trail:');
+    const head = () => set.items.get(`${[...set.items.keys()][0]}:head`);
+    assert.ok(
+      Cesium.Cartesian3.equals(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.03),
+      ),
+    );
+    headLon = 0.04;
+    tick();
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        new Cesium.Cartesian3(...Object.values(head().positions[1])),
+        at(0.04),
+        1e-6,
+      ),
+    );
+    // Tracked again: still one listener.
+    tracking._clearTrail();
+    assert.equal(listeners.size, 0, 'cleared with the trail');
+    tracking._startTrail('abc123');
+    assert.equal(listeners.size, 1);
+    tracking._destroyTrail();
+    assert.equal(listeners.size, 0, 'gone with the trail');
+  } finally {
+    unbind();
+  }
+});
+
+test('the tracked plane’s photo is asked once per hex and lands on its record', async () => {
+  const queries = [];
+  let answer = {
+    found: true,
+    src: 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg',
+    width: 420,
+    height: 280,
+    photographer: 'Jan Seler',
+    link: 'https://www.planespotters.net/photo/1745410/x?utm_source=api',
+  };
+  const flightState = createFlightState({
+    services: services(),
+    source: {
+      async getEnrichment(query) {
+        queries.push(query);
+        if (answer instanceof Error) throw answer;
+        return answer;
+      },
+    },
+  });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {},
+  });
+  flightState.records.data.set('a0f1bb', { callsign: 'AAL1' });
+  flightState._trackedIcao = 'a0f1bb';
+  flightState._trackedEntity = {};
+  enrichment._requestPhotoEnrichment('A0F1BB');
+  enrichment._requestPhotoEnrichment('a0f1bb');
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, [{ kind: 'photo', id: 'a0f1bb' }]);
+  assert.deepEqual(flightState.records.data.get('a0f1bb').photo, {
+    src: answer.src,
+    width: 420,
+    height: 280,
+    photographer: 'Jan Seler',
+    link: answer.link,
+  });
+
+  // A failure is not asked again within its cool-down.
+  answer = new Error('outage');
+  flightState.records.data.set('abc123', {});
+  enrichment._requestPhotoEnrichment('abc123');
+  await new Promise((done) => setTimeout(done, 300));
+  enrichment._requestPhotoEnrichment('abc123');
+  await new Promise((done) => setImmediate(done));
+  assert.equal(queries.length, 2);
+  assert.equal(flightState.records.data.get('abc123').photo, undefined);
+  enrichment._requestPhotoEnrichment('not-hex');
+  assert.equal(queries.length, 2);
+  flightState.lifetime.abort();
+});
+
+test('a military aircraft or a converted TR-3B is never looked up for a photo', async () => {
+  const queries = [];
+  const flightState = createFlightState({
+    services: services(),
+    source: {
+      async getEnrichment(query) {
+        queries.push(query);
+        return { found: false };
+      },
+    },
+  });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices({ military: ['ae1234'], tr3b: ['a0f1bb'] }),
+    parts: {},
+  });
+  for (const id of ['ae1234', 'a0f1bb']) {
+    flightState.records.data.set(id, {});
+    enrichment._requestPhotoEnrichment(id);
+  }
+  enrichment._requestPhotoEnrichment('AE1234');
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, []);
+  assert.equal(flightState._enrichSeen.size, 0);
+  flightState.lifetime.abort();
+});
+
+test('a photo answer in the upstream shape or a server’s cached shape lands checked', async () => {
+  const SRC = 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg';
+  const LINK = 'https://www.planespotters.net/photo/1745410/x?utm_source=api';
+  const answers = {
+    a0f1bb: {
+      photos: [
+        {
+          thumbnail_large: { src: SRC, size: { width: 420, height: 280 } },
+          link: LINK,
+          photographer: 'Jan Seler',
+        },
+      ],
+    },
+    abc123: {
+      found: true,
+      thumbnail: { src: SRC, width: 420, height: 280 },
+      photographer: 'Jan Seler',
+      link: LINK,
+    },
+    def456: {
+      found: true,
+      thumbnail: { src: 'https://evil.example/a.jpg', width: 1, height: 1 },
+      photographer: 'Jan Seler',
+      link: LINK,
+    },
+    fed789: { photos: [] },
+  };
+  const flightState = createFlightState({
+    services: services(),
+    source: { getEnrichment: async ({ id }) => answers[id] },
+  });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {},
+  });
+  const ids = Object.keys(answers);
+  for (const id of ids) flightState.records.data.set(id, {});
+  for (const id of ids) {
+    enrichment._requestPhotoEnrichment(id);
+    // One dispatch per drip gap.
+    await new Promise((done) => setTimeout(done, 250));
+  }
+  const photo = {
+    src: SRC,
+    width: 420,
+    height: 280,
+    photographer: 'Jan Seler',
+    link: LINK,
+  };
+  assert.deepEqual(flightState.records.data.get('a0f1bb').photo, photo);
+  assert.deepEqual(flightState.records.data.get('abc123').photo, photo);
+  assert.equal(flightState.records.data.get('def456').photo, undefined);
+  assert.equal(flightState.records.data.get('fed789').photo, undefined);
+  flightState.lifetime.abort();
+});
+
+/** An enrichment queue over `answer(query)` with a hand-driven clock. */
+function enrichmentClock(t, answer) {
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
+  const queries = [];
+  const flightState = createFlightState({
+    services: services(),
+    source: {
+      getEnrichment(query) {
+        queries.push(query.id);
+        return answer(query);
+      },
+    },
+  });
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: { tracking: { _updateTrackedLabelModel() {} } },
+  });
+  const settle = () => new Promise((done) => setImmediate(done));
+  const advance = (ms) => {
+    now += ms;
+  };
+  return { flightState, enrichment, queries, settle, advance };
+}
+
+test('a failed lookup is asked again only after its cool-down', async (t) => {
+  let fail = true;
+  const { flightState, enrichment, queries, settle, advance } = enrichmentClock(
+    t,
+    async () => {
+      if (fail) throw new Error('503');
+      return { found: true, typeCode: 'A321' };
+    },
+  );
+  flightState.records.data.set('a0f1bb', {});
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(queries, ['a0f1bb']);
+  advance(59_000);
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(queries, ['a0f1bb'], 'not within the cool-down');
+  fail = false;
+  advance(1_000);
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(queries, ['a0f1bb', 'a0f1bb'], 'asked again after it');
+  assert.equal(flightState.records.data.get('a0f1bb').typeCode, 'A321');
+  advance(120_000);
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  assert.equal(queries.length, 2, 'an answer is final');
+  assert.equal(flightState._enrichActive, 0);
+  flightState.lifetime.abort();
+});
+
+test('a synchronous source failure cools down like a rejected one', async (t) => {
+  const { flightState, enrichment, queries, settle, advance } = enrichmentClock(
+    t,
+    () => {
+      throw new Error('boom');
+    },
+  );
+  enrichment._requestPhotoEnrichment('a0f1bb');
+  await settle();
+  advance(60_000);
+  enrichment._requestPhotoEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(queries, ['a0f1bb', 'a0f1bb']);
+  flightState.lifetime.abort();
+});
+
+test('a "not found" answer is never asked again', async (t) => {
+  const { flightState, enrichment, queries, settle, advance } = enrichmentClock(
+    t,
+    async ({ kind }) => (kind === 'photo' ? { photos: [] } : { found: false }),
+  );
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  advance(1_000); // past the dispatch drip
+  enrichment._requestPhotoEnrichment('a0f1bb');
+  await settle();
+  assert.equal(queries.length, 2);
+  advance(3_600_000);
+  enrichment._requestTypeEnrichment('a0f1bb');
+  enrichment._requestPhotoEnrichment('a0f1bb');
+  await settle();
+  assert.equal(queries.length, 2);
+  assert.equal(flightState._enrichRetryAfter.size, 0);
+  flightState.lifetime.abort();
+});
+
+test('a lookup cut off by the layer’s teardown schedules no retry', async (t) => {
+  let release;
+  const { flightState, enrichment, settle } = enrichmentClock(
+    t,
+    (query) =>
+      new Promise((_resolve, reject) => {
+        release = () => reject(new DOMException('aborted', 'AbortError'));
+      }),
+  );
+  enrichment._requestTypeEnrichment('a0f1bb');
+  await settle();
+  flightState.lifetime.abort();
+  release();
+  await settle();
+  assert.equal(flightState._enrichRetryAfter.size, 0);
+  assert.equal(flightState._enrichSeen.has('t:a0f1bb'), true);
+});
+
+test('a permanent refusal is final; a timeout, rate limit, outage or authorization refusal cools down', async (t) => {
+  const errors = {
+    aaaaa1: new LiveSourceError('denied', 'adsbdb HTTP 404', { status: 404 }),
+    aaaaa2: new LiveSourceError('unsupported', 'Enrichment unavailable'),
+    aaaaa3: new LiveSourceError('limited', 'adsbdb rate limited', {
+      status: 429,
+    }),
+    aaaaa4: new LiveSourceError('unavailable', 'adsbdb HTTP 503', {
+      status: 503,
+    }),
+    aaaaa5: new LiveSourceError('unavailable', 'adsbdb HTTP 408', {
+      status: 408,
+    }),
+    aaaaa6: new Error('network'),
+    aaaaa7: new LiveSourceError('denied', 'Unauthorized', { status: 401 }),
+    aaaaa8: new LiveSourceError('denied', 'Forbidden', { status: 403 }),
+  };
+  const { flightState, enrichment, queries, settle, advance } = enrichmentClock(
+    t,
+    async ({ id }) => {
+      throw errors[id];
+    },
+  );
+  const ids = Object.keys(errors);
+  for (const id of ids) {
+    enrichment._requestTypeEnrichment(id);
+    await settle();
+    advance(1_000); // past the dispatch drip
+  }
+  assert.deepEqual(queries, ids);
+  advance(60_000);
+  for (const id of ids) {
+    enrichment._requestTypeEnrichment(id);
+    await settle();
+    advance(1_000);
+  }
+  assert.deepEqual(
+    queries.slice(ids.length),
+    ['aaaaa3', 'aaaaa4', 'aaaaa5', 'aaaaa6', 'aaaaa7', 'aaaaa8'],
+    'a 404 and an unsupported lookup are never asked again',
+  );
+  assert.equal(flightState._enrichSeen.has('t:aaaaa1'), true);
+  assert.equal(flightState._enrichRetryAfter.has('t:aaaaa1'), false);
+  flightState.lifetime.abort();
+});
+
+test('a route answer for a callsign the plane no longer flies is dropped', async (t) => {
+  const pending = [];
+  const { flightState, enrichment, settle, advance } = enrichmentClock(
+    t,
+    (query) => new Promise((resolve) => pending.push({ query, resolve })),
+  );
+  const meta = { callsign: 'UAL9' };
+  flightState.records.data.set('a0f1bb', meta);
+  enrichment._requestRouteEnrichment('a0f1bb');
+  await settle();
+  meta.callsign = 'UAL10'; // the next poll's callsign
+  advance(1_000);
+  enrichment._requestRouteEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(
+    pending.map(({ query }) => query.id),
+    ['UAL9', 'UAL10'],
+  );
+  const route = (code) => ({
+    found: true,
+    airline: `${code} Air`,
+    origin: { code: `${code}O` },
+    destination: { code: `${code}D` },
+  });
+  pending[0].resolve(route('OLD'));
+  await settle();
+  assert.equal(meta.route, undefined, 'the late UAL9 answer is ignored');
+  assert.equal(meta.airline, undefined);
+  pending[1].resolve(route('NEW'));
+  await settle();
+  assert.deepEqual(meta.route, {
+    origin: { code: 'NEWO' },
+    destination: { code: 'NEWD' },
+  });
+  assert.equal(meta.routeCallsign, 'UAL10');
+  flightState.lifetime.abort();
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
+});
+
+test("a type lookup overrides the feed's type and fills the type name", async () => {
+  const queries = [];
+  const source = {
+    getEnrichment(query) {
+      queries.push(query);
+      return Promise.resolve({
+        found: true,
+        typeCode: 'B738',
+        typeName: 'Boeing 737-800',
+        registration: 'N123AB',
+      });
+    },
+  };
+  const flightState = createFlightState({ source, services: services() });
+  const view = {
+    viewerLatDeg: null,
+    viewerLonDeg: null,
+    trackedId: null,
+    floorWarmPoints: [],
+  };
+  const { meta } = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  );
+  assert.equal(meta.klass, 'helicopter', 'classed by the feed type at once');
+  const restyled = [];
+  const synced = [];
+  const enrichment = createEnrichment({
+    flightState,
+    services: enrichServices(),
+    parts: {
+      icons: { _applyIconPresentation: (id) => restyled.push(id) },
+      rendering: { _syncModelToClass: (id) => synced.push(id) },
+    },
+  });
+  // A present feed type does not skip the lookup.
+  enrichment._requestTypeEnrichment('abc123', true);
+  await new Promise((done) => setImmediate(done));
+  assert.deepEqual(queries, [{ kind: 'type', id: 'abc123' }]);
+  const looked = flightState.records.data.get('abc123');
+  assert.equal(looked.typeCode, 'B738');
+  assert.equal(looked.typeName, 'Boeing 737-800');
+  assert.equal(looked.registration, 'N123AB');
+  assert.equal(looked.klass, 'airliner');
+  assert.deepEqual(restyled, ['abc123']);
+  assert.deepEqual(synced, ['abc123']);
+  // The next poll's feed type no longer wins.
+  const next = flightState.records.receive(
+    {
+      id: 'abc123',
+      reference: 'abc123',
+      longitude: -77,
+      latitude: 39,
+      callsign: 'TEST1',
+      baroAltitudeM: 1000,
+      typeCode: 'EC45',
+    },
+    view,
+  ).meta;
+  assert.equal(next.typeCode, 'B738');
+  assert.equal(next.klass, 'airliner');
+  flightState.lifetime.abort();
 });

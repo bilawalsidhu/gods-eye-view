@@ -1,7 +1,9 @@
+import { createGeminiTextChat } from './geminiTextChat.js';
 import { t, translateKnown } from '../i18n/index.js';
 import { msg } from '../i18n/marker.js';
 import { createGeminiAudio } from './geminiAudio.js';
 import { RealtimeInput } from './realtimeInput.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
 import { RealtimeRadio } from './realtimeRadio.js';
 import { captureViewportImage } from './realtimeViewport.js';
 import { createNarrationScheduler } from './narration.js';
@@ -21,6 +23,7 @@ import {
   shouldSendViewportImage,
   shouldStopVoiceAfterRadioTool,
   responseInstructionForToolResult,
+  isGlobeViewRefusal,
 } from './realtimeProtocol.js';
 
 const SOCKET_PATH =
@@ -69,7 +72,9 @@ export function geminiSocketUrl({ token, websocketUrl }) {
   return url.href;
 }
 
-// Known local-server failures are translated; unexpected diagnostics stay intact.
+// The local server's known failures, marked for translation. Each is kept as
+// its English catalog text, which the status words when it is shown, so a
+// language change words it again; unexpected diagnostics stay intact.
 function tokenErrorMessage(error) {
   switch (error) {
     case msg('Gemini voice could not connect. Try again.'):
@@ -83,7 +88,6 @@ function tokenErrorMessage(error) {
     case msg('Token request is too large'):
     case msg('Use an empty JSON token request'):
     case msg('Method not allowed'):
-      return t(error);
     default:
       return error;
   }
@@ -182,6 +186,11 @@ export class GeminiSessionController {
     this.model = null;
     this.epoch = 0;
     this.turn = 0;
+    // Identifies one turn's tool calls to the runner as one reply; a new
+    // object each turn, so no two sessions or turns share it.
+    this.turnReply = {};
+    this.globeToolsBlocked = false;
+    this.globeResetFailed = false;
     this.inputGeneration = 0;
     this.turnAbort = new AbortController();
     this.disposed = false;
@@ -352,18 +361,35 @@ export class GeminiSessionController {
     );
   }
 
-  setStatus(status, detail, recovery) {
+  /**
+   * @param {{missingKey?: boolean, params?: object}} [options] `missingKey`
+   *   is true when the server has no Gemini key: the control then drops its
+   *   microphone hint. `params` fill the placeholders of `detail`.
+   */
+  setStatus(
+    status,
+    detail,
+    recovery,
+    { missingKey = false, params = null } = {},
+  ) {
     this.status = status;
     if (status === 'listening' && this.input.pushToTalkMode)
       detail = this.input.pushToTalkKeyHeld
         ? msg('Release Space to send')
         : msg('Hold Space to talk');
+    // `detail` is worded in the current language; `sourceDetail` keeps the
+    // message as given (English catalog text, with `sourceParams` for its
+    // placeholders, when it is ours), so a view can word it again after a
+    // language change.
     const event = {
       type: 'state',
       state: status,
-      detail: translateKnown(detail),
+      detail: params ? t(detail, params) : translateKnown(detail),
+      ...(typeof detail === 'string' && { sourceDetail: detail }),
+      ...(params && { sourceParams: params }),
     };
     if (recovery) event.recovery = translateKnown(recovery);
+    if (missingKey) event.missingKey = true;
     this.emit(event);
     this.input.updateVoiceButtonLabel();
     if (['idle', 'connecting', 'error'].includes(status))
@@ -577,12 +603,24 @@ export class GeminiSessionController {
       const data = await readResponseJsonCapped(response, 256 * 1024, signal);
       signal.throwIfAborted();
       if (!response.ok)
-        throw new Error(
+        throw Object.assign(
+          new Error(
+            typeof data?.error === 'string'
+              ? tokenErrorMessage(data.error)
+              : t('Gemini token request failed (HTTP {status})', {
+                  status: response.status,
+                }),
+          ),
+          typeof data?.code === 'string' ? { code: data.code } : {},
+          // The status words this again in the current language when shown.
           typeof data?.error === 'string'
-            ? tokenErrorMessage(data.error)
-            : t('Gemini token request failed (HTTP {status})', {
-                status: response.status,
-              }),
+            ? {}
+            : {
+                wording: {
+                  text: msg('Gemini token request failed (HTTP {status})'),
+                  params: { status: response.status },
+                },
+              },
         );
       if (
         typeof data?.model !== 'string' ||
@@ -615,7 +653,13 @@ export class GeminiSessionController {
   }
 
   async start({ pushToTalk = false } = {}) {
-    if (this.disposed || this.isActive() || this.signal?.aborted) return;
+    if (
+      isStoriesOpen() ||
+      this.disposed ||
+      this.isActive() ||
+      this.signal?.aborted
+    )
+      return;
     const held = pushToTalk && this.input.pushToTalkKeyHeld;
     const spaceHeld = this.input.spaceKeyHeld;
     this.stop({ preserveStatus: true });
@@ -659,6 +703,8 @@ export class GeminiSessionController {
             return;
           if (!pushToTalk || activityCaptureId === metadata.captureId) return;
           this.captureOwner.admitted = true;
+          this.globeToolsBlocked = false;
+          this.globeResetFailed = false;
           if (
             !this.interrupt('push-to-talk', {
               keepPlayback: !this.pttPlaybackSuppressed,
@@ -954,10 +1000,15 @@ export class GeminiSessionController {
           )
         : error?.name === 'TimeoutError'
           ? msg('Gemini connection timed out. Try again.')
-          : error?.message || msg('Gemini voice could not start');
-    this.lastError = detail;
+          : error?.wording?.text ||
+            error?.message ||
+            msg('Gemini voice could not start');
+    this.lastError = error?.wording ? error.message : detail;
     this.stop({ preserveStatus: true });
-    this.setStatus('error', detail, recovery);
+    this.setStatus('error', detail, recovery, {
+      missingKey: error?.code === 'API_KEY_MISSING',
+      params: error?.wording?.params,
+    });
   }
 
   abortTools() {
@@ -965,6 +1016,7 @@ export class GeminiSessionController {
     const tools = [...this.tools.values()];
     this.turnAbort = new AbortController();
     this.turn++;
+    this.turnReply = {};
     this.typedIntent = null;
     this.radioStrongerCommit = null;
     this.pruneControls();
@@ -1294,6 +1346,8 @@ export class GeminiSessionController {
           this.replyPending = false;
           if (!this.interrupt()) return;
         } else if (!this.retiredReplyPending && !this.interrupt()) return;
+        this.globeToolsBlocked = false;
+        this.globeResetFailed = false;
         // Local activity ownership is only for expiry liveness, not tools.
         // Assign after retiring observed output so its boundary cannot clear
         // a newer detected activity that has not received a reply yet.
@@ -1536,6 +1590,7 @@ export class GeminiSessionController {
     )
       throw new Error(msg('Gemini requested too many simultaneous actions'));
     const turn = this.turn;
+    const reply = this.turnReply;
     this.userTurnPending = false;
     this.modelComplete = false;
     // Admit each valid native call ID once per connection.
@@ -1557,6 +1612,7 @@ export class GeminiSessionController {
       const action = new AbortController();
       action.call = { id: call.id, name: call.name };
       action.sequence = ++this.toolSequence;
+      action.reply = reply;
       this.tools.set(call.id, action);
       const priorTools = this.toolQueue;
       const args =
@@ -1573,6 +1629,7 @@ export class GeminiSessionController {
         .then(async () => {
           if (!this.owns(epoch) || turn !== this.turn) return;
           if (this.cancelledCalls.has(call.id)) {
+            if (call.name === 'zoom_to_globe') this.globeResetFailed = true;
             if (this.tools.get(call.id) === action) this.tools.delete(call.id);
             this.pendingTools--;
             if (!this.pendingTools) {
@@ -1618,8 +1675,28 @@ export class GeminiSessionController {
       (authority !== 'playback' ||
         handoffEpoch === this.radio.radioHandoffEpoch);
     let result;
+    let skippedGlobeRotation = false;
+    let blockedGlobeTool = false;
     try {
       if (!actionCurrent()) throw cancelled();
+      // Live has no response-scoped tool_choice. Recheck here so queued siblings
+      // cannot reset after a rotation refusal.
+      if (this.globeToolsBlocked) {
+        blockedGlobeTool = true;
+        throw new Error(
+          'Wait for fresh user input before calling another tool.',
+        );
+      }
+      if (
+        this.globeResetFailed &&
+        call.name === 'move_camera' &&
+        String(args.motion || '').toLowerCase() === 'rotate_globe'
+      ) {
+        skippedGlobeRotation = true;
+        throw new Error(
+          'Not run: the Globe View reset/rotation sequence failed or was cancelled.',
+        );
+      }
       if (stronger)
         reservation = this.radio.reserveRadioToolHandoff({ abortScope });
       handoffEpoch = this.radio.radioHandoffEpoch;
@@ -1645,6 +1722,9 @@ export class GeminiSessionController {
         this.runAction(call.name, args, {
           signal: toolSignal,
           callId: call.id,
+          // Calls run one by one, so a motion can follow a fly-to of the
+          // same reply that already found nothing.
+          reply: action.reply,
           progress: (update) => {
             if (actionCurrent()) this.narration.progress(call.id, update);
           },
@@ -1689,7 +1769,12 @@ export class GeminiSessionController {
     } catch (error) {
       result = {
         ok: false,
-        tool: call.name,
+        ...(skippedGlobeRotation
+          ? { action: call.name, reason: 'globe-reset-failed', skipped: true }
+          : {
+              tool: call.name,
+              ...(blockedGlobeTool ? { skipped: true } : {}),
+            }),
         ...(radioVisibility ? { layerId: 'radio' } : {}),
         error:
           error?.name === 'AbortError'
@@ -1716,6 +1801,11 @@ export class GeminiSessionController {
       this.noteRadioStrongerCommit(action, abortScope, turn);
     }
     if (!this.owns(epoch) || turn !== this.turn) return;
+    if (
+      call.name === 'zoom_to_globe' &&
+      (result?.ok !== true || result.cancelled)
+    )
+      this.globeResetFailed = true;
     const playbackObsolete =
       authority === 'playback' && handoffEpoch !== this.radio.radioHandoffEpoch;
     if (radioControl || radioVisibility) {
@@ -1744,6 +1834,8 @@ export class GeminiSessionController {
       this.stopAfterReply = true;
     // Native call cancellation suppresses its output, without canceling siblings.
     if (!this.cancelledCalls.has(call.id)) {
+      if (isGlobeViewRefusal(result) && !skippedGlobeRotation)
+        this.globeToolsBlocked = true;
       this.postToolOutput = false;
       this.modelComplete = false;
       this.replyPending = true;
@@ -1751,7 +1843,9 @@ export class GeminiSessionController {
       const mapEvents = mapSnapshot.map((text) => JSON.parse(text));
       const response = {
         ...(result ?? { ok: false, error: 'Command returned no result' }),
-        responseGuidance: responseInstructionForToolResult(result),
+        responseGuidance: blockedGlobeTool
+          ? 'That action did not run. Wait for fresh user input; do not claim any change or call another tool.'
+          : responseInstructionForToolResult(result),
       };
       this.send(
         {
@@ -1902,6 +1996,8 @@ export class GeminiSessionController {
       {
         onSent: () => {
           if (!owned() || this.typedIntent !== typedIntent) return;
+          this.globeToolsBlocked = false;
+          this.globeResetFailed = false;
           this.replyPending = true;
           this.bindTextIntent(typedIntent);
           if (!owned() || this.typedIntent !== typedIntent) return;
@@ -2455,6 +2551,8 @@ export class GeminiSessionController {
     this.cancelledCalls.clear();
     this.pendingMapEvents = [];
     this.userTurnPending = false;
+    this.globeToolsBlocked = false;
+    this.globeResetFailed = false;
     this.replyPending = false;
     this.unrequestedReply = false;
     this.automaticTurnOpen = false;
@@ -2481,7 +2579,7 @@ export class GeminiSessionController {
       this.input.detachBindings();
       this.radio.detachObservers();
       this.signal?.removeEventListener('abort', this.lifetimeAbort);
-      this.ui?.root?.remove();
+      this.ui?.remove();
       this.emit({ type: 'disposed' });
     } else if (!preserveStatus) this.setStatus('idle', msg('Voice off'));
   }
@@ -2489,6 +2587,21 @@ export class GeminiSessionController {
 
 export function createGeminiSession(options) {
   const controller = new GeminiSessionController(options);
+  const chat = createGeminiTextChat({
+    ...options,
+    emit: (event) => {
+      if (event.type === 'state') controller.status = event.state;
+      options.emit(event);
+    },
+  });
+  let textOnly = false;
+  const startVoice = (settings) => {
+    chat.stop({ preserveStatus: true });
+    textOnly = false;
+    return controller.start(settings);
+  };
+  controller.input.start = startVoice;
+  controller.radio.isActive = () => !textOnly && controller.isActive();
   return {
     controller,
     capabilities: {
@@ -2498,13 +2611,24 @@ export function createGeminiSession(options) {
         'Gemini voice sessions have a time limit. When a session expires, start voice again for a new conversation.',
       ),
     },
-    start: (settings) => controller.start(settings),
+    start: (settings) => {
+      textOnly = Boolean(settings?.textOnly);
+      return textOnly ? chat.start() : startVoice(settings);
+    },
     getStartOptions: () => ({
       pushToTalk: Boolean(controller.input.pushToTalkMode),
+      ...(textOnly ? { textOnly: true } : {}),
     }),
-    stop: (settings) => controller.stop(settings),
-    sendText: (text) => controller.sendTextCommand(text),
-    sendMapEvent: (event) => controller.notifyMapEvent(event),
+    stop: (settings) => {
+      chat.stop({ ...settings, preserveStatus: true });
+      controller.stop(settings);
+    },
+    // Chat Stop: abort the reply in progress, keep the conversation.
+    cancelTurn: () => textOnly && chat.cancelTurn(),
+    sendText: (text) =>
+      textOnly ? chat.sendText(text) : controller.sendTextCommand(text),
+    sendMapEvent: (event) =>
+      textOnly ? chat.sendMapEvent(event) : controller.notifyMapEvent(event),
     ignoreButtonClick: () => Boolean(controller.spaceKeyHeld),
     bindControls: () => controller.input.bindPushToTalkShortcut(),
   };

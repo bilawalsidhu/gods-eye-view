@@ -1,9 +1,8 @@
 # Panel surface contract
 
 `src/ui/styles/panel-surfaces.css` supplies an opt-in visual surface for new
-panels. It uses the application's default color, font, border and radius tokens;
-Cyber supplies its existing red/slate palette, monospace typography and shaped
-frame. This is CSS shared by the existing panel system, not a panel registry or
+panels. It uses the application's default color, font, border and radius tokens.
+This is CSS shared by the existing panel system, not a panel registry or
 a controller. A panel ID does not need a new theme selector.
 
 ## Markup
@@ -12,7 +11,7 @@ A rail panel uses an outer owner with its existing stable `id`, matching
 `data-panel-id`, and `panel-collapsible` class. Its first non-glow child is the
 surface. Keep the header and any outward popup outside the scrolling body:
 
-```html
+```vue
 <section
   id="example-panel"
   data-panel-id="example-panel"
@@ -21,14 +20,11 @@ surface. Keep the header and any outward popup outside the scrolling body:
   <div data-panel-surface>
     <header data-panel-header>
       <h2 class="panel-title panel-surface-title">Example</h2>
-      <button
-        class="panel-collapse-btn panel-surface-control"
-        data-collapse-target="example-panel"
-        aria-expanded="true"
-        aria-label="Collapse Example"
-      >
-        −
-      </button>
+      <PanelCollapseButton
+        class="panel-surface-control"
+        target="example-panel"
+        :name="t('Example')"
+      />
     </header>
     <div data-panel-body data-rail-scroller>
       <label>Filter <input class="panel-surface-control" type="text" /></label>
@@ -60,13 +56,12 @@ fit when those contents should instead scroll.
 | Mount                                 | Shared contract                                                                                     | Owner responsibilities                                                                                                                                                                                   |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Direct child of `#left-panel-stack`   | An owner with a direct `[data-panel-surface]` child receives relative positioning and allocated height; inner surface/body skin | Add the wrapper shown above, use the existing layout/disclosure owners, and retain left-rail focus/auto-collapse rules.                                                                                  |
-| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                 | Keep `data-rail-scroller` on the body so measurement preserves its scroll position. Respect Cyber's one-expanded-panel policy.                                                                           |
+| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                 | Keep `data-rail-scroller` on the body so measurement preserves its scroll position.                                                                                                                      |
 | Surface inside `#command-dock`        | Surface, controls, popup decoration and inherited dock concealment                                  | Supply geometry, stacking, disclosure, pin behavior if wanted, safe viewport bounds and dismissal. This CSS does not extend the existing Location/Visual Presets tray stack manager to arbitrary panels. |
 | `dialog[data-panel-surface]`          | The same surface/body skin; a closed dialog remains hidden                                          | Set width/max-height, use `showModal()` or `show()` and `close()`, and own labels, initial/return focus and dismissal. Do not put `panel-collapsible` on a dialog.                                       |
 
 For rails, `--panel-expanded-width` and `--panel-collapsed-width` customize
-the desired widths within the rail; otherwise Cyber uses its existing left,
-right and collapsed panel widths. `--left-panel-allocated-height` and
+the desired widths within the rail. `--left-panel-allocated-height` and
 `--right-panel-allocated-height` belong
 to the existing layout owner, not to individual panels. The surface must be
 the wrapper's first non-glow child because left-rail intrinsic measurement
@@ -92,15 +87,27 @@ Do not copy the rail example's `.panel-collapse-btn` class into the dock:
 existing dock rules intentionally hide that class. The generic surface skin
 does not replace the dock's disclosure policy.
 
-The existing `PanelChrome` binds `.panel-collapse-btn[data-collapse-target]`
-at initialization and routes state through `setPanelCollapsed`. For additions
+A panel with Core's standard header (glow, title, badges, divider, actions
+and collapse button) is a `RailPanel` (`src/ui/rail/`): the kit's `UiPanel`
+bound to the `gev-panel-chrome` store, with its state classes drawn by
+`v-panel-state` and its button's click asking `PanelChrome` to toggle it.
+A panel with its own header uses `PanelCollapseButton`, which renders the
+collapse button (`.panel-collapse-btn`) from the open state `PanelChrome`
+presents to that store; until then, both show their `startCollapsed` state,
+which should match the markup's `collapsed` class.
+Either way, the click reaches `PanelChrome`'s `setPanelCollapsed`. `PanelChrome` collects the buttons'
+targets at initialization and binds each panel's Escape. For additions
 present at startup, keep those hooks and the existing chrome lifecycle. A
-dynamically mounted panel must bind and dispose its own disclosure using
-`bindPanelDisclosure` / `collapsePanelOnEscape` from `panelDisclosure.js`, with
-the application owning state changes. Do not rerun the whole application chrome
+dynamically mounted panel must own its disclosure: its own state, button and
+Escape, bound and disposed with `bindPanelDisclosure` /
+`collapsePanelOnEscape` from `panelDisclosure.js` (which bind Escape only). Do not rerun the whole application chrome
 initializer just to add one panel. `layoutLeftPanelRail` and
 `layoutRightPanelRail` accept arbitrary direct `data-panel-id` children; their
-host owns layout scheduling, observations and collapse callbacks. Dynamic
+host owns layout scheduling, observations and collapse callbacks. A rail
+never writes a panel's classes: it calls `onCollapse(panel, {collapsed,
+auto})`, and the host draws that state (the application presents it to the
+panel chrome store, which each root's `v-panel-state` draws at once, so the
+rail can measure the panel in the same task). Dynamic
 content that changes size may require an owner-scheduled layout pass or an
 owned `ResizeObserver`; adding CSS attributes does not register new observers.
 
@@ -112,9 +119,9 @@ dismiss open popups/dialogs and restore focus before removing a dynamic panel.
 
 ## Decoration, popups and visibility
 
-The shared surface reserves `::before` for its non-interactive background. The
-Cyber frame clips this pseudo-element only; the surface stays unclipped with
-visible overflow. This follows the existing Display and Global Context pattern.
+The shared surface reserves `::before` for its non-interactive background; the
+surface stays unclipped with visible overflow. This follows the existing
+Display and Global Context pattern.
 Putting the shape on an interactive ancestor clips all descendant popups even
 if their `z-index` is high. A scrolling body also clips descendants by design,
 so outward popups must be siblings of the body, or use an explicitly owned
@@ -139,8 +146,8 @@ visible.
 
 ## Check an addition
 
-Use the real application with the default and Cyber themes. Check open,
-collapsed, hidden, disabled/error, theme round trips, clean UI/recording and
+Use the real application with the Tactical and Minimal HUD layouts. Check open,
+collapsed, hidden, disabled/error, layout round trips, clean UI/recording and
 the intended Cockpit behavior. Exercise keyboard focus, Escape, pointer input,
 the last scrolling item, resize without reload and any pin/unpin controls.
 For an outward popup, test visible pixels and pointer hit-testing outside the

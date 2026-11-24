@@ -1,11 +1,30 @@
-/** A reveal must beat the one-second idle rotation refresh, regardless of FPS. */
+/**
+ * Wall-clock budget for EACH observed frame, regardless of FPS. Both the settle
+ * frame (measured from the forced moveEnd) and the reveal frame (measured from
+ * the settle frame that hid the contact) must land inside it, so neither can be
+ * repaired by the one-second idle rotation refresh before it is read. The
+ * refresh clock starts at the fleet tick (preRender) of the frame the budget is
+ * measured from, so the budget must leave room for that frame's own render
+ * time: half the refresh interval tolerates frames up to ~500 ms, and a ~300 ms
+ * software-rendered frame (headless SwiftShader) fits with margin.
+ */
 export const ARRIVAL_OBSERVATION_MS = 500;
+
+/** A measured rotation error at or above this fails the arrival check. */
+export const ARRIVAL_MAX_ERROR_DEG = 10;
+
+/** Attempts allowed when every earlier one timed out without a wrong angle. */
+export const ARRIVAL_MAX_ATTEMPTS = 2;
 
 /**
  * Observe the first completed moveEnd frame and the first subsequent reveal.
- * The deadline starts when moveEnd is forced, before its rotation baseline, so
- * waiting for either frame cannot let the one-second idle refresh mask a bug.
- * `read` snapshots visibility and rotation error against the current position.
+ * The settle deadline starts when moveEnd is forced, before its rotation
+ * baseline; the reveal deadline restarts at the settle frame, which is where
+ * the contact is hidden. `read` snapshots visibility and rotation error
+ * against the current position. A hidden sample carrying `revealStartsNow`
+ * (a frame drew the contact hidden and it was just shown again) restarts the
+ * reveal's clock and deadline there: the frames spent drawing it hidden are
+ * the probe's setup, reported as `hiddenMs`, not part of the reveal.
  */
 export function observeArrivalRotation({
   scene,
@@ -18,8 +37,12 @@ export function observeArrivalRotation({
 }) {
   return new Promise((resolve, reject) => {
     const startedAt = now();
+    let phaseStartedAt = startedAt;
     let moveEnd = null;
     let moveEndMs = null;
+    // Where the reveal is measured from: the settle frame, or the frame a
+    // `revealStartsNow` sample marks.
+    let revealFromMs = null;
     let revealFrames = 0;
     let done = false;
     let remove;
@@ -34,28 +57,51 @@ export function observeArrivalRotation({
       cleanup();
       resolve(result);
     };
-    const expired = () => ({
+    // A timeout keeps every angle it measured: the settle angle before a
+    // reveal timeout, and the angle on a late frame itself (a late frame is
+    // read first; the idle refresh can only repair an angle, so a wrong one
+    // seen late was wrong on time too). `arrivalAngleViolated` then makes the
+    // timeout final instead of retryable.
+    const expired = (late = null) => ({
       error: `arrival ${moveEnd ? 'reveal' : 'moveEnd'} observation exceeded ${ARRIVAL_OBSERVATION_MS} ms`,
       elapsedMs: now() - startedAt,
       moveEndMs,
+      ...(moveEnd
+        ? { dMoveEnd: moveEnd.rotationError }
+        : late
+          ? { dMoveEnd: late.rotationError }
+          : {}),
+      ...(moveEnd && late?.shown ? { dReveal: late.rotationError } : {}),
       flipFrame: -1,
     });
+    const armDeadline = () => {
+      clearTimer(timer);
+      timer = setTimer(() => finish(expired()), ARRIVAL_OBSERVATION_MS);
+    };
     remove = scene.postRender.addEventListener(() => {
       if (done) return;
       try {
-        const elapsedMs = now() - startedAt;
-        if (elapsedMs >= ARRIVAL_OBSERVATION_MS) {
-          finish(expired());
+        const at = now();
+        const elapsedMs = at - startedAt;
+        const sample = read();
+        if (at - phaseStartedAt >= ARRIVAL_OBSERVATION_MS) {
+          finish(expired(sample));
           return;
         }
-        const sample = read();
         if (moveEnd === null) {
           moveEnd = sample;
           moveEndMs = elapsedMs;
+          revealFromMs = elapsedMs;
+          phaseStartedAt = at;
+          armDeadline();
           startReveal();
         } else {
           revealFrames++;
-          if (sample.shown) {
+          if (!sample.shown && sample.revealStartsNow) {
+            revealFromMs = elapsedMs;
+            phaseStartedAt = at;
+            armDeadline();
+          } else if (sample.shown) {
             // Keep the FIRST visible result, including a wrong angle. Never
             // wait for a subsequent tick to repair a failed reveal.
             finish({
@@ -64,7 +110,8 @@ export function observeArrivalRotation({
               shown: sample.shown,
               flipFrame: revealFrames,
               moveEndMs,
-              revealMs: elapsedMs - moveEndMs,
+              revealMs: elapsedMs - revealFromMs,
+              hiddenMs: revealFromMs - moveEndMs,
               elapsedMs,
             });
             return;
@@ -76,7 +123,7 @@ export function observeArrivalRotation({
         reject(error);
       }
     });
-    timer = setTimer(() => finish(expired()), ARRIVAL_OBSERVATION_MS);
+    armDeadline();
     try {
       startMoveEnd();
       scene.requestRender();
@@ -87,14 +134,51 @@ export function observeArrivalRotation({
   });
 }
 
+/**
+ * Whether an observation measured a rotation error over the threshold on any
+ * frame it captured, including the settle frame of a reveal that then timed
+ * out. Such an observation is a demonstrated failure, never inconclusive.
+ */
+export function arrivalAngleViolated(observation) {
+  const limit = (ARRIVAL_MAX_ERROR_DEG * Math.PI) / 180;
+  return [observation?.dMoveEnd, observation?.dReveal].some(
+    (error) => Number.isFinite(error) && error >= limit,
+  );
+}
+
+/**
+ * Observe arrival rotation, retrying only an inconclusive timeout. A wall-clock
+ * timeout means the frame landed where the idle refresh could already have
+ * repaired it, so it earns another attempt; an observation that measured a
+ * wrong angle (or succeeded) is final, so a later clean attempt can never
+ * replace it. `prepare` runs before every attempt; the result carries
+ * `attempts`.
+ */
+export async function observeArrivalRotationWithRetry({
+  prepare = async () => {},
+  observe = observeArrivalRotation,
+  maxAttempts = ARRIVAL_MAX_ATTEMPTS,
+  ...options
+}) {
+  let observed;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await prepare();
+    observed = { ...(await observe(options)), attempts: attempt };
+    if (!observed.error || arrivalAngleViolated(observed)) break;
+  }
+  return observed;
+}
+
 /** Test the captured frames without retrying a bad first observation. */
 export function arrivalRotationPassed(observation) {
   return (
     !!observation &&
     !observation.error &&
     observation.shown === true &&
-    observation.elapsedMs < ARRIVAL_OBSERVATION_MS &&
-    (observation.dMoveEnd * 180) / Math.PI < 10 &&
-    (observation.dReveal * 180) / Math.PI < 10
+    observation.moveEndMs < ARRIVAL_OBSERVATION_MS &&
+    observation.revealMs < ARRIVAL_OBSERVATION_MS &&
+    Number.isFinite(observation.dMoveEnd) &&
+    Number.isFinite(observation.dReveal) &&
+    !arrivalAngleViolated(observation)
   );
 }

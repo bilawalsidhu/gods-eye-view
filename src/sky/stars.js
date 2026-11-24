@@ -18,7 +18,7 @@ export const STAR_MAX_SIGMA_PX = 1.35;
 /** Peak opacity of the faintest star. */
 export const STAR_MIN_ALPHA = 0.22;
 /** B−V for stars the catalogue gives no colour (a solar-type white). */
-export const STAR_DEFAULT_BV = 0.6;
+const STAR_DEFAULT_BV = 0.6;
 /** Floats per star in the vertex buffer: xyz, σ, rgb, alpha. */
 export const STAR_VERTEX_FLOATS = 8;
 
@@ -76,7 +76,7 @@ export function bvToTemperature(bv) {
 }
 
 /** Black-body colour of a temperature, sRGB 0..1 (Helland's fit). */
-export function temperatureToRgb(kelvin) {
+function temperatureToRgb(kelvin) {
   const t = clamp(kelvin, 1000, 40000) / 100;
   const red = t <= 66 ? 255 : 329.698727446 * (t - 60) ** -0.1332047592;
   const green =

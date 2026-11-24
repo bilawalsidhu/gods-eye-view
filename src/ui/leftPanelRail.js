@@ -5,6 +5,29 @@ import {
   resolvePanelStackCorridor,
 } from '../panelStackLayout.js';
 import { measurePanelNaturalHeight } from './panelMeasurement.js';
+import { bandBesideMidpointObstacles } from './panelRailGeometry.js';
+import { settleSideAccordion } from './panelAccordion.js';
+
+/**
+ * Whether the desktop Omnibar dock is laid out, by the condition
+ * omnibar-dock.css lays it out by: the bar and the voice control in the
+ * dock, outside the phone layout, the cockpit, playback, clean view and
+ * recording.
+ */
+const DOCK_OFF = [
+  'mobile-shell',
+  'cockpit-mode',
+  'scene-playback-mode',
+  'ui-clean-view',
+  'recording-mode',
+];
+function desktopOmnibarDock(documentRef) {
+  if (!documentRef?.getElementById?.('gev-omnibar')) return false;
+  const body = documentRef.body;
+  if (DOCK_OFF.some((name) => body?.classList?.contains?.(name))) return false;
+  const voice = documentRef.getElementById('gev-voice-control');
+  return Boolean(voice) && voice.parentElement?.id === 'command-dock';
+}
 
 /**
  * Measure and place the left panel rail for one synchronous layout pass.
@@ -16,11 +39,13 @@ import { measurePanelNaturalHeight } from './panelMeasurement.js';
  * @param {Window} options.windowRef Viewport and style reader.
  * @param {{visible: boolean, variant: string}} options.hud Current HUD presentation.
  * @param {string} options.preferredPanelId Most recently opened panel.
- * @param {Function} options.onCollapse Update a panel's disclosure chrome.
+ * @param {Function} options.onCollapse Present a panel's collapse:
+ *   `(panel, {collapsed, auto})`.
  * @param {Function} options.onRetry Request another pass after automatic collapse.
  * @param {Function} [options.getComputedStyle] Optional DOM style reader override.
  * @param {Map<string, number>} options.collapsedHeights Caller-owned measurement cache.
  * @param {Function} options.onAligned Notify the caller after the left rail moves.
+ * @param {Document} [options.documentRef] Document supplying current keyboard focus.
  */
 export function layoutLeftPanelRail({
   stack,
@@ -32,6 +57,7 @@ export function layoutLeftPanelRail({
   onRetry,
   collapsedHeights,
   onAligned,
+  documentRef = stack?.ownerDocument,
   getComputedStyle = (element) => windowRef.getComputedStyle(element),
 }) {
   if (!stack) return;
@@ -42,20 +68,24 @@ export function layoutLeftPanelRail({
     for (const panel of panels.filter((item) =>
       item.classList.contains('layout-auto-collapsed'),
     )) {
-      panel.classList.remove('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: false, auto: null });
     }
   }
 
   // The existing narrow-screen composition has its own full-width stack.
   // Keep this desktop lane engine from fighting those dedicated rules.
-  if (windowRef.matchMedia('(max-width: 720px)').matches) {
+  const isMobile = windowRef.matchMedia('(max-width: 720px)').matches;
+  if (isMobile) {
     stack.classList.remove('layout-focus');
     stack.classList.remove('layout-tail');
     stack.style.removeProperty('--left-stack-safe-top');
     stack.style.removeProperty('--left-stack-safe-bottom');
     stack.style.removeProperty('--left-stack-centered-height');
+    stack.style.removeProperty('--panel-rail-offset');
+    stack.style.removeProperty('--panel-rail-lift');
+    stack.classList.remove('layout-exclusive');
     stack.dataset.layoutMode = 'mobile';
+    settleSideAccordion({ panels, enabled: false, onCollapse });
     for (const panel of panels) {
       panel.removeAttribute('aria-hidden');
       panel.style.removeProperty('--left-panel-allocated-height');
@@ -63,15 +93,34 @@ export function layoutLeftPanelRail({
     return;
   }
 
+  // One panel is open per desktop side, and the panel rail lists the others,
+  // so collapsed panels are hidden. Cockpit keeps its collapsed Data Layers
+  // strip, which its layout aligns to, and shows no rail.
+  settleSideAccordion({
+    panels,
+    enabled: true,
+    preferredPanelId,
+    documentRef,
+    onCollapse,
+  });
+  const exclusive =
+    !isMobile && !documentRef?.body?.classList?.contains('cockpit-mode');
+  stack.classList.toggle('layout-exclusive', exclusive);
+  const laidOutPanels = panels.filter(
+    (panel) => !exclusive || !panel.classList.contains('collapsed'),
+  );
+
   const viewportHeight = Math.max(1, windowRef.innerHeight);
   const stackRect = stack.getBoundingClientRect();
   const baseTop = viewportHeight * 0.26;
   const baseBottomInset = viewportHeight * 0.04;
   const safeGap = viewportHeight * 0.012;
-  let obstacleSafeTop = viewportHeight * 0.04;
+  const topInset = viewportHeight * 0.04;
+  let obstacleSafeTop = topInset;
   let safeTop = baseTop;
   let safeBottom = viewportHeight - baseBottomInset;
   const bottomObstacles = [];
+  const inLane = [];
 
   for (const obstacle of obstacles) {
     if (stack.contains(obstacle)) continue;
@@ -90,10 +139,18 @@ export function layoutLeftPanelRail({
     if (hiddenByAncestor) continue;
     const rect = obstacle.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) continue;
-    const overlapsHorizontally =
-      rect.right > stackRect.left && rect.left < stackRect.right;
+    // The centered controls can enter the stack's transparent outer gutter.
+    // Only constrain the lane if they reach an expanded panel itself, whose
+    // actual bounds also include the edge-rail offset.
+    const lanes = ['world-timeline', 'gev-voice-control'].includes(obstacle.id)
+      ? laidOutPanels.map((panel) => panel.getBoundingClientRect())
+      : [stackRect];
+    const overlapsHorizontally = lanes.some(
+      (lane) => rect.right > lane.left && rect.left < lane.right,
+    );
     if (!overlapsHorizontally) continue;
 
+    inLane.push(rect);
     if (rect.top < baseTop && rect.bottom <= viewportHeight * 0.5) {
       const obstacleBottom = rect.bottom + safeGap;
       obstacleSafeTop = Math.max(obstacleSafeTop, obstacleBottom);
@@ -101,6 +158,25 @@ export function layoutLeftPanelRail({
     } else if (rect.top >= baseTop) {
       bottomObstacles.push({ top: rect.top });
     }
+  }
+  // Obstacles across the midpoint (common in short windows) put the panels
+  // on whichever side of them has more room, and the panels may use all of
+  // it, above the corridor's usual top too; with no room on either side the
+  // obstacles are read as before.
+  const beside = bandBesideMidpointObstacles({
+    midpoint: viewportHeight * 0.5,
+    top: topInset,
+    bottom: safeBottom,
+    obstacles: inLane,
+    gap: safeGap,
+    // A side thinner than this holds no usable panel.
+    minimum: viewportHeight * 0.08,
+  });
+  if (beside) {
+    obstacleSafeTop = beside.top;
+    safeTop = beside.top;
+    bottomObstacles.length = 0;
+    bottomObstacles.push({ top: beside.bottom + safeGap });
   }
   safeBottom = resolveLeftStackBottomBoundary({
     baseBottom: safeBottom,
@@ -162,7 +238,7 @@ export function layoutLeftPanelRail({
     (sum, height) => sum + height,
     0,
   );
-  const siblingHeight = panels.reduce((total, panel) => {
+  const siblingHeight = laidOutPanels.reduce((total, panel) => {
     if (!panel.classList.contains('collapsed')) return total;
     const measured = collapsedHeights.get(panel.id);
     return total + (measured || panel.getBoundingClientRect().height || 0);
@@ -170,12 +246,8 @@ export function layoutLeftPanelRail({
   let requiredHeight = siblingHeight;
 
   const rowGap = parseFloat(getComputedStyle(stack).rowGap) || 0;
-  if (expandedPanels.length) {
-    requiredHeight += naturalExpandedHeight;
-    requiredHeight += rowGap * Math.max(0, panels.length - 1);
-  } else {
-    requiredHeight += rowGap * Math.max(0, panels.length - 1);
-  }
+  if (expandedPanels.length) requiredHeight += naturalExpandedHeight;
+  requiredHeight += rowGap * Math.max(0, laidOutPanels.length - 1);
 
   const wasFocused = stack.classList.contains('layout-focus');
   const wasTail = stack.classList.contains('layout-tail');
@@ -189,7 +261,7 @@ export function layoutLeftPanelRail({
   const tailRequiredHeight =
     naturalExpandedHeight +
     siblingHeight +
-    rowGap * Math.max(0, panels.length - 1);
+    rowGap * Math.max(0, laidOutPanels.length - 1);
   // A compact expansion should not make the whole control stack jump down
   // merely to center a few short rows. Preserve the normal top anchor when
   // the centered stack would begin below it; tall stacks can still grow
@@ -199,11 +271,20 @@ export function layoutLeftPanelRail({
   const tailLayoutBottom = tailLayoutTop + tailRequiredHeight;
   const tailAvailableHeight = Math.max(0, obstacleSafeBottom - obstacleSafeTop);
   const tailTolerance = wasTail ? stabilityBand : -stabilityBand;
+  // Data Layers has a scrollable list and a fixed footer. Give it the full
+  // desktop lane while short control panels keep their natural height.
+  const fillDataLayers =
+    exclusive &&
+    expandedPanels.length === 1 &&
+    expandedPanels[0].id === 'data-panel' &&
+    desktopOmnibarDock(documentRef);
   const shouldTail =
+    !fillDataLayers &&
     expandedPanels.length > 0 &&
     tailLayoutTop >= obstacleSafeTop - tailTolerance &&
     tailLayoutBottom <= obstacleSafeBottom + tailTolerance;
-  const shouldFocus = exceedsCenteredCorridor && !shouldTail;
+  const shouldFocus =
+    fillDataLayers || (exceedsCenteredCorridor && !shouldTail);
   // Focus mode owns the lane, so let every expanded panel share the full
   // obstacle-safe corridor. Tail/normal layouts keep the balanced
   // viewport centering used for compact accordion stacks.
@@ -229,10 +310,12 @@ export function layoutLeftPanelRail({
           rowGap * Math.max(0, expandedPanels.length - 1),
       )
     : naturalExpandedHeight;
-  const allocatedExpandedHeights = allocatePanelStackHeights({
-    naturalHeights: naturalExpandedHeights,
-    availableHeight: expandedAvailableHeight,
-  });
+  const allocatedExpandedHeights = fillDataLayers
+    ? [expandedAvailableHeight]
+    : allocatePanelStackHeights({
+        naturalHeights: naturalExpandedHeights,
+        availableHeight: expandedAvailableHeight,
+      });
   const autoCollapseIndices = hud.visible
     ? panelStackAutoCollapseIndices({
         naturalHeights: naturalExpandedHeights,
@@ -243,8 +326,7 @@ export function layoutLeftPanelRail({
   if (autoCollapseIndices.length) {
     for (const index of autoCollapseIndices) {
       const panel = expandedPanels[index];
-      panel.classList.add('collapsed', 'layout-auto-collapsed');
-      onCollapse(panel);
+      onCollapse(panel, { collapsed: true, auto: 'layout' });
     }
     onRetry();
     return;
@@ -256,6 +338,20 @@ export function layoutLeftPanelRail({
     stack.style.getPropertyValue('--left-stack-safe-bottom') !== bottomValue
   ) {
     stack.style.setProperty('--left-stack-safe-bottom', bottomValue);
+  }
+  // The rail stays where the resting stack puts it; only the panels move.
+  // The stack itself rises by the lift below, by a different amount for a
+  // tall panel than at rest; the rail takes up the difference.
+  const lift = (top) => Math.min(0, obstacleSafeTop - top);
+  const railOffset = `${(safeTop + lift(safeTop) - layoutTop - lift(layoutTop)).toFixed(1)}px`;
+  if (stack.style.getPropertyValue('--panel-rail-offset') !== railOffset) {
+    stack.style.setProperty('--panel-rail-offset', railOffset);
+  }
+  // How far the column can rise before it meets the HUD readout, so the rail
+  // and any open panel sit just under it, whether or not a panel is open.
+  const railLift = `${lift(layoutTop).toFixed(1)}px`;
+  if (stack.style.getPropertyValue('--panel-rail-lift') !== railLift) {
+    stack.style.setProperty('--panel-rail-lift', railLift);
   }
   stack.style.removeProperty('--left-stack-centered-height');
   for (const panel of panels)
@@ -296,8 +392,8 @@ export function layoutLeftPanelRail({
   // CockpitView.syncSignalLayout() owns `--cockpit-utility-top` instead.
 
   for (const panel of panels) {
-    const hiddenSibling = shouldFocus && panel.classList.contains('collapsed');
-    if (hiddenSibling) panel.setAttribute('aria-hidden', 'true');
+    if (exclusive && panel.classList.contains('collapsed'))
+      panel.setAttribute('aria-hidden', 'true');
     else panel.removeAttribute('aria-hidden');
   }
   // The right controls share this top baseline; update them after the left

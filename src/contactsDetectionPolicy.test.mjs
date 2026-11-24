@@ -281,7 +281,7 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
     uiSource.indexOf('_syncContactsDetection() {'),
     uiSource.indexOf('/** Apply a temporary cockpit-only'),
   );
-  assert.ok(helper.length > 0, 'the Contacts detection helper is present in ui.js');
+  assert.ok(helper.length > 0, 'the Contacts detection helper is present in the UI shell source');
   assert.match(helper, /if \(this\._contextModeChanging\) return;/, 'fires at settle, not at click');
   assert.match(helper, /active: this\._contextMode === 'flights'/);
   assert.match(helper, /styleOwnsDetection:\s*!this\._detectionUserOverridden/);
@@ -302,7 +302,7 @@ test('detection is wired to the Contacts transaction, and cockpit no longer touc
     uiSource.indexOf('_setCockpitVision(mode, active, { revealParameters = false } = {}) {'),
     uiSource.indexOf('_syncIrBoost() {'),
   );
-  assert.ok(visionHook.length > 0, 'the cockpit vision hook is present in ui.js');
+  assert.ok(visionHook.length > 0, 'the cockpit vision hook is present in the UI shell source');
   assert.doesNotMatch(visionHook, /etection/, 'cockpit transitions must not touch detection');
 });
 

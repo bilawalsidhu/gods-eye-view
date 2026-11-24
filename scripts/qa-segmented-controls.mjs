@@ -35,15 +35,21 @@ try {
       document.getElementById('loading-screen')?.classList.contains('hidden'),
     { timeout: 60000 },
   );
-  await page.evaluate(() =>
-    window.__godsEyeView.styleManager.setPanelCollapsed('pp-toggles', false, {
-      persist: false,
-      syncShare: false,
-    }),
-  );
+  // DISPLAY holds most segmented controls; Draw's shape group is in UTILITIES.
+  await page.evaluate(() => {
+    for (const panel of ['pp-toggles', 'utilities-panel'])
+      window.__godsEyeView.styleManager.setPanelCollapsed(panel, false, {
+        persist: false,
+        syncShare: false,
+      });
+  });
 
   const surface = await page.evaluate(() => {
-    const groups = [...document.querySelectorAll('[role="radiogroup"]')];
+    // Colour swatches are one-of-many too, but chips, not segments: they are
+    // checked on their own below.
+    const groups = [
+      ...document.querySelectorAll('[role="radiogroup"]:not(.draw-colors)'),
+    ];
     const buttons = groups.flatMap((group) => [
       ...group.querySelectorAll('[role="radio"]'),
     ]);
@@ -67,6 +73,31 @@ try {
     'all six one-of-many groups use the shared surface',
     surface.groups === 6 && surface.buttons === 15 && surface.shared,
     JSON.stringify(surface),
+  );
+
+  const swatches = await page.evaluate(() => {
+    const group = document.getElementById('draw-colors');
+    const chips = [...(group?.querySelectorAll('[role="radio"]') || [])];
+    return {
+      count: chips.length,
+      round: chips.every(
+        (chip) => getComputedStyle(chip).borderRadius === '50%',
+      ),
+      colours: new Set(
+        chips.map((chip) => getComputedStyle(chip).backgroundColor),
+      ).size,
+      checked: chips.filter(
+        (chip) => chip.getAttribute('aria-checked') === 'true',
+      ).length,
+    };
+  });
+  check(
+    "Draw's colour swatches are five round chips, one checked",
+    swatches.count === 5 &&
+      swatches.round &&
+      swatches.colours === 5 &&
+      swatches.checked === 1,
+    JSON.stringify(swatches),
   );
 
   await page.evaluate(() =>
@@ -244,35 +275,6 @@ try {
         .filter((g) => g.getClientRects().length)
         .every((group) => group.scrollWidth <= group.clientWidth + 1),
     ),
-  );
-  const cyber = await page.evaluate(() => {
-    const root = document.documentElement;
-    const previous = root.getAttribute('data-ui-theme');
-    root.setAttribute('data-ui-theme', 'cyber');
-    const selected = [
-      ...document.querySelectorAll('.gev-segment[aria-checked="true"]'),
-    ];
-    // Check the final theme colors, independent of software-GL frame cadence.
-    for (const button of selected)
-      for (const animation of button.getAnimations()) animation.finish();
-    const backgrounds = selected.map(
-      (button) => getComputedStyle(button).backgroundColor,
-    );
-    const radii = [...document.querySelectorAll('.gev-segmented')].map(
-      (group) => getComputedStyle(group).borderRadius,
-    );
-    const consistent =
-      selected.length === 6 &&
-      backgrounds.every((color) => color === backgrounds[0]) &&
-      radii.every((radius) => radius === '1px');
-    if (previous === null) root.removeAttribute('data-ui-theme');
-    else root.setAttribute('data-ui-theme', previous);
-    return { consistent, count: selected.length, backgrounds, radii };
-  });
-  check(
-    'Cyber theme styles every selected segment consistently',
-    cyber.consistent,
-    JSON.stringify(cyber),
   );
   await page.evaluate(async () => {
     const { dataManager, styleManager } = window.__godsEyeView;

@@ -4,7 +4,7 @@
  * file dropped from the desktop, proved in a real browser.
  *
  * The dialog draws a translated row over the native file input
- * (src/ui/sceneSharing.js, fileChooser). The input must still cover the row,
+ * (src/ui/views/panels/SceneDialog.vue). The input must still cover the row,
  * or drops miss it. Drops a file on the row's centre via CDP and expects
  * `input.files` to hold it.
  *
@@ -15,31 +15,34 @@
  * drop selects the file, 1 otherwise.
  */
 import http from 'node:http';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vue from '@vitejs/plugin-vue';
 import puppeteer from 'puppeteer';
+import { createServer } from 'vite';
+import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const TYPES = {
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.json': 'application/json',
-  '.html': 'text/html',
-};
 
+// The scene panels view draws the dialog; Vite compiles it for the page.
 const PAGE = `<!doctype html><html lang="en"><body>
+<div id="view"></div>
 <script type="module">
+  import { createApp, nextTick } from 'vue';
+  import { applicationPinia } from '/src/ui/vueRuntime.js';
+  import LayerPanelsView from '/src/ui/views/LayerPanelsView.vue';
   import { createSceneDialog } from '/src/ui/sceneSharing.js';
-  window.openDialog = () => {
+  createApp(LayerPanelsView).use(applicationPinia()).mount('#view');
+  window.openDialog = async () => {
     const dialog = createSceneDialog('Share selected scene', () => {});
-    const files = dialog.input('Choose data-pack files', '', { type: 'file' });
-    files.multiple = true;
-    window.filesInput = files;
-    // Centre of the visible row (the wrapper's last child).
-    const row = files.parentElement.lastElementChild;
-    const r = row.getBoundingClientRect();
+    dialog.input('Choose data-pack files', '', { type: 'file', multiple: true });
+    await nextTick();
+    const input = document.querySelector('[data-director-dialog] input[type=file]');
+    window.filesInput = input;
+    // Centre of the visible row (the label's last child).
+    const r = input.parentElement.lastElementChild.getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
   };
   window.ready = true;
@@ -56,21 +59,21 @@ async function main() {
   const dir = await mkdtemp(path.join(tmpdir(), 'qa-scene-dialog-drop-'));
   const pack = path.join(dir, 'pack.json');
   await writeFile(pack, '{}');
-  const server = http.createServer(async (req, res) => {
+  const vite = await createServer({
+    root: ROOT,
+    configFile: false,
+    logLevel: 'error',
+    plugins: [vue(VUE_PLUGIN_OPTIONS)],
+    server: { middlewareMode: true, hmr: false },
+    appType: 'custom',
+  });
+  const server = http.createServer((req, res) => {
     if (req.url === '/') {
       res.writeHead(200, { 'content-type': 'text/html' });
       res.end(PAGE);
       return;
     }
-    try {
-      const body = await readFile(path.join(ROOT, req.url));
-      res.writeHead(200, {
-        'content-type': TYPES[path.extname(req.url)] || 'text/plain',
-      });
-      res.end(body);
-    } catch {
-      res.writeHead(404).end();
-    }
+    vite.middlewares(req, res, () => res.writeHead(404).end());
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}/`;
@@ -99,6 +102,7 @@ async function main() {
   } finally {
     await browser.close();
     server.close();
+    await vite.close();
     await rm(dir, { recursive: true, force: true });
   }
 }

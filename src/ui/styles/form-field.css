@@ -10,6 +10,20 @@
   font-family: var(--font-sans);
   font-size: 12px;
   outline: none;
+  /* Native number spinners and the open select list follow the dark skin. */
+  color-scheme: dark;
+}
+
+/* A select draws the field's own chevron, not the platform's arrow, so every
+   dropdown in the app reads the same. The open list stays native. */
+select.gev-field {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-inline-end: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='rgba(255,255,255,0.62)' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 6px;
 }
 
 .gev-field:focus-visible {
@@ -28,6 +42,11 @@
   font-size: 10px;
   letter-spacing: 0.6px;
   padding: 2px 6px;
+}
+
+select.gev-field--compact {
+  padding-inline-end: 18px;
+  background-position: right 6px center;
 }
 
 /* Compact inline editors share density and hide native number spinners.

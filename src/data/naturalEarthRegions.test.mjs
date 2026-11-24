@@ -195,3 +195,21 @@ test('pointInRing: basic square', () => {
   assert.equal(pointInRing(sq, 15, 5), false);
   assert.equal(pointInRing([[0, 0], [1, 1]], 0.5, 0.5), false, 'degenerate ring');
 });
+
+test('same-name parts of one feature are one place; distant namesakes are separate places', async () => {
+  for (const name of ['Great Rift Valley', 'Lau Group', 'Transantarctic Mountains']) {
+    const region = await findNaturalRegion(name);
+    assert.equal(region?.places?.length, 1, `${name} is one place`);
+    const place = region.places[0];
+    assert.equal(place.polygons.length >= 2, true, `${name} keeps every part`);
+    assert.ok(place.areaKm2 > region.areaKm2, `${name} counts more than its largest part`);
+  }
+  for (const name of ['Flores', 'Cordillera Oriental']) {
+    const region = await findNaturalRegion(name);
+    assert.equal(region?.places?.length, 2, `${name} names two places`);
+    for (const place of region.places) {
+      assert.ok(Number.isFinite(place.center.lat) && Number.isFinite(place.center.lon));
+    }
+  }
+  assert.equal((await findNaturalRegion('Alps'))?.places?.length, 1);
+});

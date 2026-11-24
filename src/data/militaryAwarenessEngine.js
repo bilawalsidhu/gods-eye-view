@@ -1,7 +1,8 @@
 /** Pure proximity helpers for Global Context. No capability modeling. */
 
-import { t } from '../i18n/index.js';
+import { msg, t } from '../i18n/index.js';
 import { UNNAMED_PLACE_NAMES } from './installationNames.js';
+import { formatDistanceText } from './distanceFormat.js';
 
 const UNNAMED_NAMES = new Set(UNNAMED_PLACE_NAMES);
 
@@ -12,6 +13,35 @@ export const AWARENESS_RELATIONSHIP = Object.freeze({
   OUTSIDE_RANGE: 'OUTSIDE_RANGE',
   UNKNOWN: 'UNKNOWN',
 });
+
+/**
+ * Whether an aircraft matches a spoken class filter ("helicopter", "tanker"),
+ * on its class or type fields. No filter matches everything; an aircraft
+ * with no class or type matches no filter.
+ * @param {object} item Aircraft summary (`getNearby` row or cohort item).
+ * @param {string|null} aircraftClass Requested class.
+ * @returns {boolean}
+ */
+export function aircraftClassMatches(item, aircraftClass) {
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+  const requested = normalize(aircraftClass);
+  if (!requested) return true;
+  return [
+    item?.aircraftClass,
+    item?.klass,
+    item?.type,
+    item?.typeCode,
+    item?.typeName,
+  ]
+    .map(normalize)
+    .filter(Boolean)
+    .some(
+      (candidate) => candidate === requested || candidate.includes(requested),
+    );
+}
 
 /**
  * Search an expanding area synchronously, doubling the radius after each miss.
@@ -46,10 +76,7 @@ export function findByDoublingRadius(
 
 /** @param {number} meters @returns {string} */
 export function formatAwarenessDistance(meters) {
-  if (!Number.isFinite(meters) || meters < 0) return '—';
-  return meters < 1000
-    ? `${Math.round(meters)} m`
-    : `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+  return formatDistanceText(meters) ?? '—';
 }
 
 /**
@@ -63,9 +90,9 @@ export function formatAwarenessLabel(value) {
       value.callsign,
       value.name,
       value.label,
+      value.mmsi,
       value.id,
       value.icao24,
-      value.mmsi,
     ]) {
       const label = formatAwarenessLabel(candidate);
       if (label !== '—') return label;
@@ -84,7 +111,8 @@ export function formatAwarenessLabel(value) {
 /**
  * Summarize sorted nearby results without promoting missing/stale feeds to a
  * negative finding. `UNKNOWN` is an input-data state, never an out-of-range
- * claim in this MVP.
+ * claim in this MVP. `reason` is English data; the awareness panel shows it
+ * in the UI language.
  */
 export function summarizeAwarenessCohort(
   items,
@@ -95,14 +123,14 @@ export function summarizeAwarenessCohort(
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: t('feed unavailable'),
+      reason: msg('feed unavailable'),
     };
   if (stale)
     return {
       relationship: AWARENESS_RELATIONSHIP.UNKNOWN,
       count: null,
       nearest: [],
-      reason: t('feed stale'),
+      reason: msg('feed stale'),
     };
   const normalized = (Array.isArray(items) ? items : [])
     .filter(
@@ -119,8 +147,8 @@ export function summarizeAwarenessCohort(
     count: normalized.length,
     nearest: normalized.slice(0, limit),
     reason: normalized.length
-      ? t('observed or mapped nearby context')
-      : t('no observed or mapped objects in current feeds'),
+      ? msg('observed or mapped nearby context')
+      : msg('no observed or mapped objects in current feeds'),
   };
 }
 
@@ -155,7 +183,7 @@ export function getAwarenessNavigationTargets(
         ? cohort.summary.nearest
         : [];
     for (const item of sourceItems) {
-      const id = item?.icao24 || item?.mmsi || item?.id;
+      const id = item?.icao24 || item?.id || item?.mmsi;
       if (!id) continue;
       const key = `${layerId}:${id}`;
       if (key === `${subject?.layerId}:${subject?.id}`) continue;

@@ -652,9 +652,8 @@ html:not([lang='en']) #gev-voice-control .gev-voice-help-detail {
   white-space: normal;
 }
 
-#gev-voice-control:not([data-status='error']):hover .gev-voice-help-tray,
 #gev-voice-control:not([data-status='error'])
-  #gev-voice-button:focus-visible
+  #gev-voice-button:enabled:is(:hover, :focus-visible)
   ~ .gev-voice-help-tray {
   visibility: visible;
   opacity: 1;

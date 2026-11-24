@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { expandApplicationHtml } from '../build/application-html.js';
+import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
 import { readStylesheet } from './testSupport/readStylesheet.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-const html = expandApplicationHtml(read('index.html'));
+const html = await renderApplicationHtml(read('index.html'));
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const panelCss = read('src/ui/styles/street-level.css');
 const panelChrome = read('src/ui/panelChrome.js');
@@ -18,21 +18,21 @@ const layoutController = read('src/ui/panelLayoutController.js');
 test('Street Level is a collapsible right-rail panel that starts collapsed', () => {
   assert.match(
     html,
-    /<div id="street-level-panel" class="panel-collapsible collapsed" data-panel-id="street-level-panel">/,
+    /<div id="street-level-panel" class="ui-panel panel-collapsible collapsed" data-panel-id="street-level-panel">/,
   );
   assert.match(
     html,
-    /<button class="panel-collapse-btn" data-collapse-target="street-level-panel"/,
+    /<button type="button" class="[^"]*\bpanel-collapse-btn\b[^"]*"[^>]*data-collapse-target="street-level-panel"/,
   );
   assert.match(
     html,
-    /<span class="panel-title" data-i18n>STREET LEVEL<\/span>/,
+    /<span class="ui-panel__title panel-title">STREET LEVEL<\/span>/,
   );
   // Provider-neutral header: no vendor mark; the inner restores its scroll.
   assert.doesNotMatch(html, /sl-mark|mly-mark/);
   assert.match(
     html,
-    /<div class="street-level-panel-inner" data-rail-scroller>/,
+    /<div class="street-level-panel-inner ui-scroll" data-rail-scroller>/,
   );
   assert.doesNotMatch(
     html,
@@ -46,9 +46,10 @@ test('the panel is registered with panel chrome, cockpit entry and the right rai
     panelChrome,
     /COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object\.freeze\(\[[\s\S]*'street-level-panel'/,
   );
+  // A right-rail panel's collapse button opens sideways (◀ / ▶).
   assert.match(
-    panelChrome,
-    /const isRightRail = \[[\s\S]*'street-level-panel'/,
+    read('src/ui/views/panels/StreetLevelPanel.vue'),
+    /<RailPanel id="street-level-panel"[^>]*\bsideways\b/,
   );
   assert.match(
     layoutController,
@@ -90,20 +91,6 @@ test('each radiogroup is one tab stop, on its checked button', () => {
   }
 });
 
-test('the Cyber theme frames the Street Level panel like its rail peers (P3)', () => {
-  const cyber = read('src/ui/styles/cyber.css');
-  const inner = (cyber.match(/\.recent-imagery-panel-inner,/g) || []).length;
-  const panel = (cyber.match(/#recent-imagery-panel,/g) || []).length;
-  assert.ok(inner > 0 && panel > 0);
-  assert.equal(
-    (cyber.match(/\.street-level-panel-inner,/g) || []).length,
-    inner,
-  );
-  assert.equal((cyber.match(/#street-level-panel,/g) || []).length, panel);
-  // A theme header rule must be able to outrank the panel's own.
-  assert.doesNotMatch(panelCss, /#street-level-panel \.panel-header/);
-});
-
 test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
   // .scene-btn grows and shrinks (flex: 1) and loads after this stylesheet:
   // only a more specific rule keeps the button from being squeezed.
@@ -113,4 +100,27 @@ test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
     /\.sl-meta-row \.sl-nearest-btn \{\s*flex: 0 0 auto;\s*\}/,
   );
   assert.match(panelCss, /\.sl-meta-row \.sl-meta \{[^}]*min-width: 0;/);
+});
+
+test('embed mode shows an open photo over the globe, filling the overlay', () => {
+  const overlay = css.match(
+    /body\.ui-embed \.sl-viewer-wrap-embed \{([^}]*)\}/,
+  );
+  assert.ok(overlay, 'embed styles the viewer it moves over the globe');
+  for (const rule of ['position: fixed', 'inset: 12px', 'z-index: 1000'])
+    assert.ok(overlay[1].includes(rule), rule);
+  // Cockpit, recording and scene playback own the screen: the photo hides.
+  for (const mode of ['cockpit-mode', 'recording-mode', 'scene-playback-mode'])
+    assert.match(
+      css,
+      new RegExp(
+        `body\\.ui-embed\\.${mode} \\.sl-viewer-wrap-embed[^{]*\\{[^}]*display: none`,
+      ),
+      mode,
+    );
+  // The photo takes the overlay's height, as it does full screen.
+  assert.match(
+    css,
+    /body\.ui-embed \.sl-viewer-wrap-embed \.sl-viewer \{[^}]*flex: 1 1 auto/,
+  );
 });

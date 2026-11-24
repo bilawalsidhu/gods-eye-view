@@ -263,32 +263,30 @@ function installRenderFramesHelper(page) {
 
 // In-page helper (stringified and re-defined inside each evaluate that needs
 // it, since functions can't cross the puppeteer boundary): serializes the
-// 5 frustum polylines + plane position/orientation/dimensions for a camera
-// into plain arrays of numbers, using only the camera's own clock time (no
-// Cesium namespace needed — Property.getValue just needs *a* JulianDate,
-// and the viewer's own clock.currentTime is a valid live instance of one).
+// 5 frustum lines + plane position/orientation/dimensions for a camera
+// into plain arrays of numbers, from what the layer reports it draws.
 const SERIALIZE_GEOM_SRC = `
   function serializeGeom(camId) {
-    const viewer = window.__godsEyeView.viewer;
-    const time = viewer.clock.currentTime;
+    const drawn = window.__godsEyeView.dataManager.layers
+      .get('cctv')
+      .module._cctvDrawnForTest();
     const roles = ['ray-tl', 'ray-tr', 'ray-br', 'ray-bl', 'cap'];
     const poly = {};
     for (const role of roles) {
-      const ent = viewer.entities.getById('cctv-' + camId + '-' + role);
-      poly[role] = ent && ent.polyline
-        ? ent.polyline.positions.getValue(time).map((p) => [p.x, p.y, p.z])
+      const line = drawn.coverage['cctv-' + camId + '-' + role];
+      poly[role] = line?.positions
+        ? line.positions.map((p) => [p.x, p.y, p.z])
         : null;
     }
-    const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
+    const quad = drawn.planes['cctv-' + camId + '-plane'];
     let plane = null;
-    if (planeEnt) {
-      const pos = planeEnt.position.getValue(time);
-      const orient = planeEnt.orientation.getValue(time);
-      const dims = planeEnt.plane.dimensions.getValue(time);
+    if (quad) {
+      const pos = quad.center;
+      const orient = quad.orientation;
       plane = {
         position: [pos.x, pos.y, pos.z],
         orientation: [orient.x, orient.y, orient.z, orient.w],
-        dimensions: [dims.x, dims.y],
+        dimensions: [quad.size[0], quad.size[1]],
       };
     }
     return { poly, plane };
@@ -629,26 +627,24 @@ async function main() {
     // 2026-07-04: every click on the monitor plane picks its own camera, and
     // re-running activation rewrote the plane entity → visible flash). No new
     // probe, no geometry rewrite.
-    const geomBeforeReselect = await page.evaluate(`(() => {
+    // Keep the snapshots and selection in one browser task so a pending DEM
+    // result from the original activation cannot land between them.
+    const reselection = await page.evaluate(`(() => {
       ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
-    })()`);
-    await page.evaluate((id) => {
-      window.__godsEyeView.dataManager.layers
-        .get('cctv')
-        .module.setParams({ selectedCameraId: id });
-    }, activeId);
-    await sleep(400);
-    const cAfterReselect = await readCounters();
-    const geomAfterReselect = await page.evaluate(`(() => {
-      ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
+      const cameraId = ${JSON.stringify(activeId)};
+      const before = JSON.stringify(serializeGeom(cameraId));
+      const probesBefore = window.__qaCounters.pickFromRay;
+      window.__godsEyeView.dataManager.layers.get('cctv').module
+        .setParams({ selectedCameraId: cameraId });
+      return {
+        probeDelta: window.__qaCounters.pickFromRay - probesBefore,
+        geometryChanged: JSON.stringify(serializeGeom(cameraId)) !== before,
+      };
     })()`);
     record(
       're-selecting the active camera is a no-op (no probe, no geometry rewrite)',
-      cAfterReselect.pickFromRay - cAfterActivate.pickFromRay === 0 &&
-        geomBeforeReselect === geomAfterReselect,
-      `probeΔ=${cAfterReselect.pickFromRay - cAfterActivate.pickFromRay}, geometryChanged=${geomBeforeReselect !== geomAfterReselect}`,
+      reselection.probeDelta === 0 && !reselection.geometryChanged,
+      `probeΔ=${reselection.probeDelta}, geometryChanged=${reselection.geometryChanged}`,
     );
 
     // -----------------------------------------------------------------------
@@ -695,10 +691,9 @@ async function main() {
             const camera = dataManager.layers
               .get('cctv')
               .module.getUIState().activeCamera;
-            const ray = viewer.entities.getById(`cctv-${camera.id}-ray-tl`);
-            const mount = ray?.polyline?.positions.getValue(
-              viewer.clock.currentTime,
-            )?.[0];
+            const ray = dataManager.layers.get('cctv').module._cctvDrawnForTest()
+              .coverage[`cctv-${camera.id}-ray-tl`];
+            const mount = ray?.positions?.[0];
             const height =
               mount &&
               viewer.scene.globe.ellipsoid.cartesianToCartographic(mount)
@@ -849,8 +844,10 @@ async function main() {
       // source. Assert the migrated surface via the host diagnostics.
       const diag = window.__gevWorldOverlay?.getDiagnostics?.();
       g.hasLabel = (diag?.entriesBySource?.['cctv-projection'] || 0) >= 1;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
-      g.planeShow = planeEnt ? planeEnt.show : null;
+      const quad = window.__godsEyeView.dataManager.layers
+        .get('cctv')
+        .module._cctvDrawnForTest().planes['cctv-' + camId + '-plane'];
+      g.planeShow = quad ? quad.show : null;
       return g;
     })(${JSON.stringify(activeId)})`);
 
@@ -1212,26 +1209,22 @@ async function main() {
     console.log(
       'Checking frame-loop health (placeholder -> frame swap, URL family)...',
     );
-    // The plane's material.image is always defined (placeholder canvas from
-    // the moment the runtime is created, real frame content painted onto the
+    // The plane's image is always defined (placeholder canvas from the
+    // moment the runtime is created, real frame content painted onto the
     // same canvas/video reference once the fetch resolves) — assert it's
     // never null/undefined once the runtime exists, i.e. there's no gap where
     // the plane shows nothing.
     const materialInfo = await page.evaluate((camId) => {
-      const viewer = window.__godsEyeView.viewer;
-      const time = viewer.clock.currentTime;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
-      const mat = planeEnt?.plane?.material;
-      const image = mat?.image;
-      const resolved =
-        image && typeof image.getValue === 'function'
-          ? image.getValue(time)
-          : image;
+      const quad = window.__godsEyeView.dataManager.layers
+        .get('cctv')
+        .module._cctvDrawnForTest().planes['cctv-' + camId + '-plane'];
+      const source = quad?.source;
+      const resolved = source?.video || source?.canvas || source?.image;
       return {
-        hasMaterial: !!mat,
+        hasMaterial: !!source,
         hasImage: !!resolved,
         tagName: resolved?.tagName || null,
-        show: planeEnt?.show,
+        show: quad?.show,
       };
     }, activeId);
     record(
@@ -1262,18 +1255,67 @@ async function main() {
       `status=${frameFetch.status} content-type=${frameFetch.contentType} url=${frameFetch.url}`,
     );
 
-    // Panel <img> src and the plane's frame fetch share the same
-    // /api/cctv/frame/<id> URL family (same endpoint + camera id segment).
-    const panelImgSrc = await page.evaluate(
-      () => document.getElementById('cctv-frame')?.getAttribute('src') || null,
-    );
+    // A live camera uses the panel's video canvas. Exercise the image contract
+    // on an image-backed camera with the panel open, even if focusNearest picked HLS.
+    const still = await page.evaluate(() => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      const layer = dataManager.layers.get('cctv').module;
+      const ui = layer.getUIState();
+      const isStill = (cam) =>
+        cam?.feedType === 'image' && !cam.sourceKind?.startsWith('quebec-');
+      const camera = isStill(ui.activeCamera)
+        ? ui.activeCamera
+        : ui.cameras.find(isStill);
+      const collapsed = document
+        .getElementById('cctv-panel')
+        .classList.contains('collapsed');
+      if (camera) {
+        layer.selectCamera(camera.id);
+        styleManager.setPanelCollapsed('cctv-panel', false, {
+          persist: false,
+          syncShare: false,
+        });
+      }
+      return { id: camera?.id, collapsed };
+    });
     const sameFamily =
-      !!panelImgSrc &&
-      panelImgSrc.includes(`/api/cctv/frame/${encodeURIComponent(activeId)}`);
+      Boolean(still.id) &&
+      (await waitForPredicate(
+        page,
+        (id) => {
+          const layer =
+            window.__godsEyeView.dataManager.layers.get('cctv').module;
+          const camera = layer.getUIState().activeCamera;
+          const image = document.getElementById('cctv-frame');
+          const plane = layer._cctvDrawnForTest().planes[`cctv-${id}-plane`];
+          const path = `/api/cctv/frame/${encodeURIComponent(id)}`;
+          return (
+            camera?.id === id &&
+            plane?.source?.canvas &&
+            image?.naturalWidth > 0 &&
+            !image.hidden &&
+            new URL(image.currentSrc).pathname === path &&
+            new URL(camera.frameUrl, location.origin).pathname === path
+          );
+        },
+        { timeoutMs: 30000, args: [still.id] },
+      ));
     record(
       'panel <img> and plane share the same /api/cctv/frame/<id> URL family',
       sameFamily,
-      `panelSrc=${panelImgSrc}`,
+      `image camera=${still.id || 'none'}`,
+    );
+    await page.evaluate(
+      ({ activeId, collapsed }) => {
+        const { dataManager, styleManager } = window.__godsEyeView;
+        dataManager.layers.get('cctv').module.selectCamera(activeId);
+        if (collapsed)
+          styleManager.setPanelCollapsed('cctv-panel', true, {
+            persist: false,
+            syncShare: false,
+          });
+      },
+      { activeId, collapsed: still.collapsed },
     );
 
     // =========================================================================
@@ -1665,14 +1707,12 @@ async function main() {
       'Checking viewshed mode (coverage tri-state + color-coded volumes)...',
     );
     const countVolumes = () =>
-      page.evaluate(() => {
-        const prims = window.__godsEyeView.viewer.scene.primitives;
-        let n = 0;
-        for (let i = 0; i < prims.length; i++) {
-          if (prims.get(i) && prims.get(i)._gevViewshed) n += 1;
-        }
-        return n;
-      });
+      page.evaluate(
+        () =>
+          window.__godsEyeView.dataManager.layers
+            .get('cctv')
+            .module._cctvDrawnForTest().viewsheds.length,
+      );
 
     const cBeforeViewshed = await readCounters();
     const modeAfterSet = await page.evaluate(() => {
@@ -1725,26 +1765,26 @@ async function main() {
       mod.setParams({ coverageMode: 'viewshed' });
     });
     await sleep(400);
-    await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      window.__qaViewshedRefs = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed)
-          window.__qaViewshedRefs.push(prims.get(i));
-      }
-    });
+    // Volumes are draw-port mesh items: "no churn" is no volume written.
+    const drawnViewsheds = () =>
+      page.evaluate(() => {
+        const drawn = window.__godsEyeView.dataManager.layers
+          .get('cctv')
+          .module._cctvDrawnForTest();
+        return { ids: drawn.viewsheds, writes: drawn.viewshedWrites };
+      });
+    const viewshedsBefore = await drawnViewsheds();
     await sleep(8000);
-    const viewshedIdle = await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      const now = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed) now.push(prims.get(i));
-      }
-      const before = window.__qaViewshedRefs || [];
-      const sameCount = now.length === before.length;
-      const sameIdentity = sameCount && before.every((p) => now.includes(p));
-      return { sameCount, sameIdentity, count: now.length };
-    });
+    const viewshedsAfter = await drawnViewsheds();
+    const viewshedIdle = (() => {
+      const sameCount =
+        viewshedsAfter.ids.length === viewshedsBefore.ids.length;
+      const sameIdentity =
+        sameCount &&
+        viewshedsBefore.ids.every((id) => viewshedsAfter.ids.includes(id)) &&
+        viewshedsAfter.writes === viewshedsBefore.writes;
+      return { sameCount, sameIdentity, count: viewshedsAfter.ids.length };
+    })();
     const cAfterViewshed = await readCounters();
     const lateFloorSamples =
       cAfterViewshed.sampleHeight - cBeforeViewshed.sampleHeight;
@@ -1785,9 +1825,9 @@ async function main() {
     const gizmoStates = await page.evaluate((parts) => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: true });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1797,14 +1837,52 @@ async function main() {
       gizmoStates.map((s, i) => `${GIZMO_PARTS[i]}=${s}`).join(' '),
     );
 
+    // Frame the actual gizmo for the drag fixture. Default autofocus can leave
+    // its shaft below the 10px interaction threshold; that distant view is not
+    // the drag-usability scenario this regression exercises. The gizmo is drawn
+    // through the renderer ports, so its arrow is read from the layer's drawn
+    // state (plain {x,y,z} points), not from viewer.entities.
+    const dragFraming = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const arrow = () =>
+        mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east']?.positions;
+      if (!arrow()?.length) return null;
+      const Cartesian3 = viewer.camera.positionWC.constructor;
+      const measure = () => {
+        const pts = arrow();
+        if (!pts?.length) return { shaftPx: null, rangeM: null };
+        const a = viewer.scene.cartesianToCanvasCoordinates(pts[0]);
+        const b = viewer.scene.cartesianToCanvasCoordinates(pts[pts.length - 1]);
+        return {
+          shaftPx: a && b ? Math.hypot(b.x - a.x, b.y - a.y) : null,
+          rangeM: Cartesian3.distance(viewer.camera.positionWC, pts[0]),
+        };
+      };
+      const before = measure();
+      const target = Cartesian3.clone(arrow()[0]);
+      viewer.camera.cancelFlight();
+      viewer.camera.lookAt(target, new Cartesian3(0, -200, 180));
+      viewer.camera.lookAtTransform(viewer.camera.transform.constructor.IDENTITY);
+      viewer.scene.requestRender();
+      const frames = await window.__qaRenderFrames(3, 10000);
+      return { before, after: measure(), frames };
+    });
+    record(
+      'drag fixture frames the east arrow above the 10px grab threshold',
+      dragFraming?.after?.shaftPx >= 10,
+      JSON.stringify(dragFraming),
+    );
+
     // Synthetic CDP drag on the EAST arrow — the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.
     const eastDrag = await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
-      const e = viewer.entities.getById('cctv-gizmo-move-east');
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const e = mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east'];
       if (!e) return null;
-      const pts = e.polyline.positions.getValue(viewer.clock.currentTime);
+      const pts = e.positions;
       const scene = viewer.scene;
       const w = scene.canvas.clientWidth;
       const h = scene.canvas.clientHeight;
@@ -2082,9 +2160,9 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: false });
       mod.setParams({ calibration: { reset: true } });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
