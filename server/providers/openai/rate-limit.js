@@ -12,10 +12,10 @@ import { makeCostRateLimiter, clientKey } from '../common/rate-limit.js';
  */
 const OPENAI_DEFAULT_PER_MIN = 30;
 
-// Built LAZILY on first request, NOT at module load: `.env` values are applied to process.env later
+// Built LAZILY on first request, NOT at module load: dotenv-file values are applied to process.env later
 // (the plugin config hook calls loadEnv → process.env, AFTER this module is imported), so reading
 // process.env here at import time would always see them unset and fall back to the default even when
-// configured via .env. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
+// configured in a dotenv file. Building on first request (like the OPENAI_API_KEY reads) sees the loaded env;
 // the result is cached so the limiter's per-IP window state persists. `null` = the explicit 0 opt-out.
 let _openAiRateLimiter;
 

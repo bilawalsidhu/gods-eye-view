@@ -23,7 +23,8 @@ keyless terrain, and OSM takes over automatically if Esri is unreachable.
 Google Maps provides direct photorealistic 3D and place search; Cesium ion
 provides ion-hosted Google 3D plus optional Bing/world-terrain stacks.
 On macOS the launcher pulls optional keys from
-the Keychain; on any platform you can pass them as env vars or use a `.env`.
+the Keychain; on any platform you can pass them as env vars or put them in
+`.env.local` (`npm run env:init` creates it).
 People who only want to run the app can instead install the repository directly
 through Pinokio; the terminal path above remains the contributor path.
 
@@ -52,7 +53,7 @@ rules are under [Pull requests](#pull-requests).
 
 Run `npm run build` followed by `npm run preview`. Preview serves the built
 frontend and local data-provider APIs. Keep optional server credentials in the
-ignored `.env`; browser keys are embedded during the build, so rebuild after
+ignored `.env.local`; browser keys are embedded during the build, so rebuild after
 changing them. Provider Settings and `/api/setup/*` are development-only: edit
 configuration through the development app or environment file. Unknown API
 paths return JSON 404 responses. Vite preview is for checking a local build;

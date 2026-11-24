@@ -6,6 +6,7 @@ import { parseEnv } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { projectRoot } from './project-root.mjs';
 import { selectMapStartupRoute } from '../src/mapStartup.js';
+import { SECRETS_FILE, SETTINGS_FILE, planSecretMigration } from '../src/secretEnv.mjs';
 
 const ROOT = projectRoot(import.meta.url);
 const OPENSKY_AUTH_MODE_DEFAULT = 'oauth';
@@ -87,26 +88,58 @@ export function npmProcessSpec(args, platform = process.platform) {
   return { command: ['npm.cmd', ...args].join(' '), args: [], shell: true };
 }
 
+/**
+ * Which file in Vite's dotenv ladder supplies one key, and its value, without
+ * depending on Vite. Later files override earlier ones, as in Vite.
+ * @returns {{value: string, file: string|null}} `file` is e.g. '.env.local'.
+ */
+export function readDoctorDotenvSource(
+  variableName,
+  rootDir = ROOT,
+  mode = 'development',
+) {
+  const key = String(variableName || '').trim();
+  if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) return { value: '', file: null };
+
+  let found = { value: '', file: null };
+  for (const filename of [SETTINGS_FILE, SECRETS_FILE, `.env.${mode}`, `.env.${mode}.local`]) {
+    const filepath = path.join(rootDir, filename);
+    if (!existsSync(filepath)) continue;
+    try {
+      const values = parseEnv(readFileSync(filepath, 'utf8'));
+      if (Object.prototype.hasOwnProperty.call(values, key)) {
+        found = { value: String(values[key] ?? ''), file: filename };
+      }
+    } catch {
+      // A malformed or unreadable optional dotenv file must not crash the
+      // setup diagnosis (an operator may deny this account the secrets file).
+    }
+  }
+  return found;
+}
+
 /** Read one key from Vite's dotenv file ladder without depending on Vite. */
 export function readDoctorDotenvValue(
   variableName,
   rootDir = ROOT,
   mode = 'development',
 ) {
-  const key = String(variableName || '').trim();
-  if (!/^[A-Z_][A-Z0-9_]*$/i.test(key)) return '';
+  return readDoctorDotenvSource(variableName, rootDir, mode).value;
+}
 
-  const values = {};
-  for (const filename of ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`]) {
-    const filepath = path.join(rootDir, filename);
-    if (!existsSync(filepath)) continue;
-    try {
-      Object.assign(values, parseEnv(readFileSync(filepath, 'utf8')));
-    } catch {
-      // A malformed optional dotenv file must not crash the setup diagnosis.
-    }
+/**
+ * Secret names that still hold a value in the settings file (.env) — active or
+ * commented out. Names only, never values. They belong in .env.local;
+ * `npm run env:init` moves them.
+ */
+export function secretsInSettingsFile(rootDir = ROOT) {
+  const filepath = path.join(rootDir, SETTINGS_FILE);
+  if (!existsSync(filepath)) return [];
+  try {
+    return planSecretMigration(readFileSync(filepath, 'utf8')).moved;
+  } catch {
+    return [];
   }
-  return String(values[key] ?? '');
 }
 
 /** Resolve the OpenSky auth mode using the same environment and dotenv precedence as the launcher. */
@@ -157,7 +190,8 @@ export function resolveCredential(spec, {
   const environmentDefinesKey = Object.prototype.hasOwnProperty.call(environment, spec.name);
   if (isConfiguredValue(environment[spec.name])) return { configured: true, source: 'environment' };
   if (authoritativeEnvironment && environmentDefinesKey) return { configured: false, source: null };
-  if (isConfiguredValue(readDoctorDotenvValue(spec.name, rootDir))) return { configured: true, source: 'dotenv files' };
+  const dotenv = readDoctorDotenvSource(spec.name, rootDir);
+  if (isConfiguredValue(dotenv.value)) return { configured: true, source: dotenv.file };
   if (includeKeychain && spec.keychain.some(([service, account]) => keychainLookup(service, account))) {
     return { configured: true, source: 'macOS Keychain' };
   }
@@ -229,6 +263,7 @@ export function inspectSetup({ includeKeychain = true, authoritativeEnvironment 
       : { available: false, version: null },
     dependenciesInstalled,
     credentials,
+    secretsInSettings: secretsInSettingsFile(rootDir),
     capabilities: buildCapabilitySummary(credentials, {
       openSkyAuthMode: resolveOpenSkyAuthMode({ authoritativeEnvironment, rootDir }),
       openSkyCredentialsFile: resolveOpenSkyCredentialsFile({ authoritativeEnvironment, rootDir }),
@@ -270,6 +305,13 @@ export function formatSetupReport(report, { readyMessage } = {}) {
         ? `  [OK] ${spec.label} (${state.source})`
         : `  [--] ${spec.label}`;
     }),
+    ...(report.secretsInSettings?.length
+      ? [
+        '',
+        `[WARN] ${SETTINGS_FILE} still holds secrets: ${report.secretsInSettings.join(', ')}`,
+        `       Keys belong in ${SECRETS_FILE}. Move them: npm run env:init`,
+      ]
+      : []),
     '',
     report.ready
       ? resolvedReadyMessage

@@ -14,7 +14,7 @@ import {
  * GET /api/setup/status (the registry lives in src/keySetupCore.mjs and this
  * module never duplicates it): one row per key, what it unlocks, where to get
  * it, and a paste field. SAVE posts to /api/setup/keys, which writes the
- * repo-root .env and restarts the dev server — Vite's client then reloads the
+ * repo-root .env.local (moving any copy out of .env) and restarts the dev server — Vite's client then reloads the
  * page itself, and the pasted key is simply *on*. No hand-edited env files.
  *
  * The surface self-destructs where it cannot work: a prod build (no endpoint)
@@ -383,7 +383,7 @@ export async function initKeySetup({
   const storeLabel = () =>
     status?.store === 'pinokio-environment'
       ? t('your app configuration')
-      : t('your local .env');
+      : t('your local .env.local');
 
   // doneMessageKey names the whole saved/removed sentence; the storage
   // destination is interpolated so the {store} phrase stays one spelling.
@@ -607,7 +607,7 @@ export async function initKeySetup({
     if (disposed) return null;
   } catch {
     // Prod build or non-loopback visitor: the surface cannot function, so it
-    // does not exist. (The README covers .env for headless/self-host setups.)
+    // does not exist. (The README covers .env.local for headless/self-host setups.)
     destroy();
     return null;
   }
