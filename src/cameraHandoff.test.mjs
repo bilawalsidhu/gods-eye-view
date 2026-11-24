@@ -431,6 +431,7 @@ test('clearing a camera during enable leaves the selection and view alone', asyn
   let enabled = false;
   let activeCameraId = 'camera-a';
   const effects = [];
+  const visibilityRequests = [];
   const enabling = Promise.withResolvers();
   const shell = {
     services: {
@@ -447,8 +448,8 @@ test('clearing a camera during enable leaves the selection and view alone', asyn
     _dataManager: {
       layers: new Map([['cctv', {}]]),
       isEnabled: () => enabled,
-      setEnabled: (layer, value, options) => {
-        assert.deepEqual([layer, value, options], ['cctv', true, { origin: 'user' }]);
+      setEnabled: (...args) => {
+        visibilityRequests.push(args);
         return enabling.promise;
       },
     },
@@ -457,7 +458,15 @@ test('clearing a camera during enable leaves the selection and view alone', asyn
       fly(activate());
     },
   };
-  const toggle = shellMethod('_toggleCctvEnabled').call(shell, true);
+  let finished = false;
+  const toggle = shellMethod('_toggleCctvEnabled').call(shell, true).then((result) => {
+    finished = true;
+    return result;
+  });
+  assert.deepEqual(visibilityRequests, [['cctv', true, { origin: 'user' }]]);
+  await Promise.resolve();
+  assert.equal(finished, false, 'toggle must wait for the layer to enable');
+
   activeCameraId = null;
   enabled = true;
   enabling.resolve();
