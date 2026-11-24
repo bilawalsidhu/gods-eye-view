@@ -1,4 +1,18 @@
-import { MAX_POST_TLE_RETRIES, POST_TLE_RETRY_DELAY_MS } from './policy.js';
+import {
+  MAX_POST_TLE_RETRIES,
+  POST_TLE_RETRY_DELAY_MS,
+  cockpitActive,
+} from './policy.js';
+
+/**
+ * Let pending Satellites work finish, including requests that join it while
+ * waiting, so the mission dependency cannot overtake it. Bounded: a
+ * Satellites change that never settles cannot hold missions forever.
+ */
+async function waitForSatelliteVisibility(manager, { signal, timeoutMs }) {
+  if (typeof manager.waitForLayerIdle !== 'function') return true;
+  return manager.waitForLayerIdle('satellites', { signal, timeoutMs });
+}
 
 export function createIngestion({
   state: layerState,
@@ -50,8 +64,9 @@ export function createIngestion({
     layerState._postTleRetryCount++;
     layerState._retryTimer = setTimeout(() => {
       layerState._retryTimer = null;
+      // A failed retry is already recorded in the layer stats.
       if (layerState._enabled && token === layerState._lifecycleToken)
-        requestMissionUpdate();
+        requestMissionUpdate().catch(() => {});
     }, POST_TLE_RETRY_DELAY_MS);
   }
 
@@ -96,28 +111,51 @@ export function createIngestion({
   }
 
   async function captureSatelliteDependency() {
-    if (!layerState._dataManager || layerState._satelliteStateBeforeMission)
+    const manager = layerState._dataManager;
+    if (!manager) return;
+    const token = layerState._lifecycleToken;
+    // Let a pending Satellites action finish before reserving dependency ON.
+    // A successful explicit OFF can cancel this mission entry while we wait.
+    const idle = await waitForSatelliteVisibility(manager, {
+      signal: layerState._sourceController?.signal,
+      timeoutMs: layerState.satelliteSettleTimeoutMs,
+    });
+    if (token !== layerState._lifecycleToken) return;
+    if (!idle && layerState._enabled)
+      throw new Error(
+        'Space Missions could not start: the satellites layer did not settle',
+      );
+    if (
+      !layerState._enabled ||
+      (manager.layers?.has('rocket-launches') &&
+        !manager.isEffectivelyEnabled('rocket-launches'))
+    )
       return;
-    layerState._satelliteStateBeforeMission = {
-      // Effective visibility: a user enable still mid-activation is intent ON —
-      // capturing settled false would restore the user's enable away on exit.
-      enabled:
-        layerState._dataManager.isEffectivelyEnabled?.('satellites') ??
-        layerState._dataManager.isEnabled('satellites'),
-      params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
-        layerState._dataManager.getLayerParams('satellites'),
-      ),
-    };
-    layerState._dataManager.setLayerParams(
+    // A saved state kept by a restore that could not finish (Satellites was
+    // busy) is still the one from before the mission: keep it, and switch
+    // Satellites on for the mission again. A Satellites switch the person
+    // made since (restoreVisibility false) settled its visibility, so it
+    // is taken as it is now; its params are still the saved ones.
+    const kept = layerState._satelliteStateBeforeMission;
+    if (kept?.restoreVisibility === false)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: kept.params,
+      };
+    else if (!kept)
+      layerState._satelliteStateBeforeMission = {
+        enabled: manager.isEnabled('satellites'),
+        params: parts.policyHelpers.satelliteParamsAfterSpaceMissions(
+          manager.getLayerParams('satellites'),
+        ),
+      };
+    manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsForSpaceMissions(
         layerState._satelliteStateBeforeMission.params,
       ),
     );
-    const token = layerState._lifecycleToken;
-    const activation = Promise.resolve(
-      layerState._dataManager.setEnabled('satellites', true),
-    );
+    const activation = Promise.resolve(manager.setEnabled('satellites', true));
     layerState._satelliteActivationPromise = activation;
     try {
       const activated = await activation;
@@ -127,8 +165,7 @@ export function createIngestion({
       if (
         token === layerState._lifecycleToken &&
         layerState._enabled &&
-        (activated === false ||
-          !layerState._dataManager.isEnabled('satellites'))
+        (activated === false || !manager.isEnabled('satellites'))
       ) {
         throw new Error(
           'Space Missions requires the satellites layer, which failed to start',
@@ -145,21 +182,38 @@ export function createIngestion({
   }
 
   async function restoreSatelliteDependency() {
+    const manager = layerState._dataManager;
     const snapshot = layerState._satelliteStateBeforeMission;
-    if (!snapshot || !layerState._dataManager) return;
+    if (!snapshot || !manager) return;
+    // Keep the snapshot available until any explicit Satellites action settles.
+    const token = layerState._lifecycleToken;
+    const idle = await waitForSatelliteVisibility(manager, {
+      timeoutMs: layerState.satelliteSettleTimeoutMs,
+    });
+    if (
+      token !== layerState._lifecycleToken ||
+      layerState._satelliteStateBeforeMission !== snapshot
+    )
+      return;
+    // An accepted Satellites action owns visibility through mission teardown.
+    const restoreVisibility = snapshot.restoreVisibility !== false;
+    // Satellites is still busy: change nothing and keep the saved state, so
+    // turning Space Missions off again can finish the restore.
+    if (restoreVisibility && !idle)
+      throw new Error(
+        'Space Missions could not restore the satellites layer: it did not settle',
+      );
     layerState._satelliteStateBeforeMission = null;
     layerState._satelliteActivationPromise = null;
-    layerState._dataManager.setLayerParams(
+    manager.setLayerParams(
       'satellites',
       parts.policyHelpers.satelliteParamsAfterSpaceMissions(snapshot.params),
     );
-    const restored = await layerState._dataManager.setEnabled(
-      'satellites',
-      snapshot.enabled,
-    );
+    if (!restoreVisibility) return;
+    const restored = await manager.setEnabled('satellites', snapshot.enabled);
     if (
       restored === false ||
-      layerState._dataManager.isEnabled('satellites') !== snapshot.enabled
+      manager.isEnabled('satellites') !== snapshot.enabled
     ) {
       throw new Error('Space Missions could not restore the satellites layer');
     }
@@ -168,32 +222,44 @@ export function createIngestion({
   async function performMissionUpdate(token) {
     try {
       ensureActiveTleLookup(token);
-      const payload = await source.getLaunches({
-        signal: layerState._sourceController.signal,
-      });
+      const { payload, stale } = source.getLaunchSnapshot
+        ? await source.getLaunchSnapshot({
+            signal: layerState._sourceController.signal,
+          })
+        : {
+            payload: await source.getLaunches({
+              signal: layerState._sourceController.signal,
+            }),
+            stale: false,
+          };
       const launches = parts.model.normalizeRocketLaunches(payload);
       if (
         !layerState._enabled ||
         token !== layerState._lifecycleToken ||
-        !layerState._dataSource
+        !layerState._missionSets
       )
         return;
       const activeTleText = layerState._activeTleText;
       if (layerState._replayCameraLaunchId) parts.replay.stopMissionReplay();
       layerState._launches = launches;
       parts.orbitRendering.removeMissionOrbitPrimitives();
-      layerState._dataSource.entities.removeAll();
+      parts.rendering.clearLaunchEntities();
       layerState._missionOverlayRecords.clear();
       layerState._satelliteTelemetry.clear();
       layerState._replayTracks.clear();
       layerState._orbitMatches = 0;
       launches.forEach((launch) =>
-        parts.rendering.addLaunchEntity(launch, activeTleText),
+        parts.rendering.addLaunchEntity(launch, activeTleText, { defer: true }),
       );
+      parts.rendering.flushLaunchEntities();
       layerState._renderedTleText = activeTleText;
       if (layerState._renderedTleText === layerState._activeTleText)
         clearPostTleRetry();
       layerState._count = launches.length;
+      // The roster reads these to tell a loaded empty index from loading.
+      layerState._lastUpdate = Date.now();
+      layerState._lastError = null;
+      layerState._stale = stale === true;
       parts.panel.renderMissionRoster();
       if (
         !layerState._selectedLaunchId ||
@@ -202,7 +268,9 @@ export function createIngestion({
         parts.selection.setSelectedMission(null, false);
       } else {
         parts.selection.setSelectedMission(layerState._selectedLaunchId, true);
-        if (layerState._focusAfterActiveLookup) {
+        // The cockpit holds the camera: a mission picked there is not flown
+        // to when its orbit arrives.
+        if (layerState._focusAfterActiveLookup && !cockpitActive()) {
           parts.selection.focusMission(
             launches.find(
               (launch) => launch.id === layerState._selectedLaunchId,
@@ -212,12 +280,18 @@ export function createIngestion({
       }
       layerState._focusAfterActiveLookup = false;
       parts.panel.renderMissionPanel();
-      layerState._lastUpdate = Date.now();
-      layerState._lastError = null;
+      layerState.coverageChanged();
+      layerState._entryCameraView = null;
     } catch (error) {
       if (layerState._enabled && token === layerState._lifecycleToken) {
         layerState._lastError = error.message;
         console.warn('[Data:RocketLaunches] Fetch error:', error);
+        // No index yet: fail the enable so Context rolls back.
+        // After a loaded index, a failed refresh keeps its records.
+        if (layerState._lastUpdate === null) {
+          parts.panel.renderMissionRoster();
+          throw error;
+        }
       }
     }
   }

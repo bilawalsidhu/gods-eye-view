@@ -24,7 +24,7 @@
  */
 
 export const TERRAIN_RETRY_ATTEMPTS = 3;
-export const TERRAIN_RETRY_STATUSES = Object.freeze([429, 502, 503, 504]);
+const TERRAIN_RETRY_STATUSES = Object.freeze([429, 502, 503, 504]);
 export const TERRAIN_RETRY_BASE_MS = 750;
 export const TERRAIN_RETRY_MAX_MS = 15_000;
 export const TERRAIN_RETRY_SPREAD_MS = 1_500;

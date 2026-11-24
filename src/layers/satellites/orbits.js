@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   gstime,
   propagate,
@@ -8,36 +7,66 @@ import {
   twoline2satrec,
 } from 'satellite.js';
 import { findNextSatellitePass } from '../../data/satellitePass.js';
-import { parseTleText } from '../../sources/tle.js';
+import {
+  noradIdFromSatnum,
+  parseTleText,
+  tleLineLaunchYear,
+} from '../../sources/tle.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { ORBIT_PATH_STEPS, ISS_NORAD } from './policy.js';
 
+/** The Earth's rotation rate, rad/s (WGS84). */
+const EARTH_ROTATION_RAD_S = 7.292115e-5;
+
+/** Below this ground speed a satellite holds still over the ground (GEO), m/s. */
+const GROUND_TRACK_MIN_SPEED_MPS = 10;
+
+/**
+ * The ground track's bearing, degrees clockwise from north, from one SGP4
+ * state: the inertial velocity turned into the Earth-fixed frame, less the
+ * Earth's rotation under the satellite, read in the east/north plane at the
+ * sub-satellite point. Null without a velocity, or for a satellite that holds
+ * still over the ground (geostationary).
+ * @param {{x: number, y: number, z: number}} positionKm TEME position, km.
+ * @param {{x: number, y: number, z: number}|null} velocityKmS TEME velocity, km/s.
+ * @param {number} gmst Greenwich mean sidereal time, radians.
+ * @param {number} latitudeDeg Sub-satellite latitude.
+ * @param {number} longitudeDeg Sub-satellite longitude.
+ * @returns {number|null}
+ */
+export function groundTrackBearingDeg(
+  positionKm,
+  velocityKmS,
+  gmst,
+  latitudeDeg,
+  longitudeDeg,
+) {
+  if (!positionKm || !velocityKmS || !Number.isFinite(gmst)) return null;
+  const cosG = Math.cos(gmst);
+  const sinG = Math.sin(gmst);
+  // TEME to Earth-fixed is a turn about z by GMST.
+  const rx = cosG * positionKm.x + sinG * positionKm.y;
+  const ry = -sinG * positionKm.x + cosG * positionKm.y;
+  const vx =
+    (cosG * velocityKmS.x + sinG * velocityKmS.y + EARTH_ROTATION_RAD_S * ry) *
+    1000;
+  const vy =
+    (-sinG * velocityKmS.x + cosG * velocityKmS.y - EARTH_ROTATION_RAD_S * rx) *
+    1000;
+  const vz = velocityKmS.z * 1000;
+  const φ = (latitudeDeg * Math.PI) / 180;
+  const λ = (longitudeDeg * Math.PI) / 180;
+  const east = -Math.sin(λ) * vx + Math.cos(λ) * vy;
+  const north =
+    -Math.sin(φ) * Math.cos(λ) * vx -
+    Math.sin(φ) * Math.sin(λ) * vy +
+    Math.cos(φ) * vz;
+  if (![east, north].every(Number.isFinite)) return null;
+  if (Math.hypot(east, north) < GROUND_TRACK_MIN_SPEED_MPS) return null;
+  return ((Math.atan2(east, north) * 180) / Math.PI + 360) % 360;
+}
+
 export function createOrbits({ state: layerState, services, parts, source }) {
-  /**
-   * Build the rigid ECEF transform that keeps an orbit path baked at one GMST
-   * aligned with live SGP4 positions propagated at another epoch.
-   * @param {number} gmstAtBake GMST used when the path positions were baked.
-   * @param {Date} nowDate Epoch whose rotating-Earth frame should be displayed.
-   * @param {Cesium.Matrix4} [result] Optional matrix to update in place.
-   * @returns {Cesium.Matrix4} Z-rotation from bake-time ECEF to current ECEF.
-   */
-
-  function orbitFrameModelMatrix(
-    gmstAtBake,
-    nowDate,
-    result = new Cesium.Matrix4(),
-  ) {
-    const deltaGmst = gstime(nowDate) - gmstAtBake;
-    const rotation = Cesium.Matrix3.fromRotationZ(
-      -deltaGmst,
-      layerState._scratchRingRotation,
-    );
-    return Cesium.Matrix4.fromRotationTranslation(
-      rotation,
-      Cesium.Cartesian3.ZERO,
-      result,
-    );
-  }
-
   /**
    * Parse TLE text into array of { name, line1, line2 } objects.
    */
@@ -64,11 +93,20 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         ? Math.hypot(velocity.x, velocity.y, velocity.z) * 1000
         : null;
 
+      const latitude = degreesLat(geo.latitude);
+      const longitude = degreesLong(geo.longitude);
       return {
-        longitude: degreesLong(geo.longitude),
-        latitude: degreesLat(geo.latitude),
+        longitude,
+        latitude,
         altitude: geo.height * 1000, // km → meters
         speedMps: Number.isFinite(speedMps) ? speedMps : null,
+        groundTrackDeg: groundTrackBearingDeg(
+          posVel.position,
+          velocity,
+          gmst,
+          latitude,
+          longitude,
+        ),
       };
     } catch {
       return null;
@@ -81,7 +119,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Compute full orbital path as array of Cartesian3 positions.
+   * Compute full orbital path as ECEF `{x, y, z}` positions, metres.
    * Steps around one full orbit based on the satellite's mean motion.
    */
 
@@ -103,7 +141,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         if (!posVel.position || typeof posVel.position === 'boolean') continue;
         const geo = eciToGeodetic(posVel.position, fixedGmst);
         positions.push(
-          Cesium.Cartesian3.fromDegrees(
+          fromDegrees(
             degreesLong(geo.longitude),
             degreesLat(geo.latitude),
             geo.height * 1000,
@@ -133,7 +171,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     lonDeg,
     minElevDeg = 10,
     requireVisible = false,
-    fromMs = Date.now(),
+    fromMs = layerState.now(),
   }) {
     return getNextSatellitePass(ISS_NORAD, {
       latDeg,
@@ -163,7 +201,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
       lonDeg,
       minElevDeg = 10,
       requireVisible = false,
-      fromMs = Date.now(),
+      fromMs = layerState.now(),
     },
   ) {
     const id = Number(noradId);
@@ -258,13 +296,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     return score;
   }
 
-  function internationalDesignatorYear(satrec) {
-    const match = String(satrec?.intldesg || '').match(/^(\d{2})/);
-    if (!match) return null;
-    const shortYear = Number(match[1]);
-    return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
-  }
-
   function lookupTleEntries(tleText) {
     if (tleText !== layerState._lookupTleText) {
       layerState._lookupTleText = tleText;
@@ -273,22 +304,19 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     return layerState._lookupTleEntries;
   }
 
-  function tleLineLaunchYear(line1) {
-    const shortYear = Number(String(line1 || '').slice(9, 11));
-    if (!Number.isFinite(shortYear)) return null;
-    return shortYear >= 57 ? 1900 + shortYear : 2000 + shortYear;
-  }
-
   function orbitTrackFromRecord(name, satrec) {
-    const referenceDate = new Date();
+    const referenceDate = new Date(layerState.now());
     const current = propagatePosition(satrec, referenceDate);
     if (!current) return null;
     return {
-      noradId: Number(satrec.satnum),
+      noradId: noradIdFromSatnum(satrec.satnum),
       name: String(name || '').trim(),
       current,
       periodSec: orbitalPeriodSeconds(satrec),
-      orbitPath: computeOrbitPath(satrec, referenceDate),
+      // Handed to the renderer's own polylines by the launches layer.
+      orbitPath: parts.rendering._rendererPositions(
+        computeOrbitPath(satrec, referenceDate),
+      ),
       gmstAtBake: gstime(referenceDate),
       positionAt: (date) => propagatePosition(satrec, date),
     };
@@ -301,7 +329,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
    * @param {string} tleText Three-line-element catalog text.
    * @param {string} query Mission or payload name.
    * @param {{launchTime?: string|null}} [options] Optional launch epoch for namesake rejection.
-   * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],positionAt:function(Date):object|null}|null}
+   * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Array<{x:number,y:number,z:number}>,positionAt:function(Date):object|null}|null}
    */
 
   function findSatelliteOrbitTrackInTle(tleText, query, options = {}) {
@@ -335,7 +363,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
    * Return the current propagated position and one-orbit path for a catalog satellite.
    * @param {string|number} query NORAD id or mission/payload name.
    * @param {{launchTime?: string|null}} [options] Optional launch epoch used to reject namesakes from another launch year.
-   * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Cesium.Cartesian3[],positionAt:function(Date):object|null}|null}
+   * @returns {{noradId:number,name:string,current:object,periodSec:number,orbitPath:Array<{x:number,y:number,z:number}>,positionAt:function(Date):object|null}|null}
    */
 
   function getSatelliteOrbitTrack(query, options = {}) {
@@ -350,7 +378,7 @@ export function createOrbits({ state: layerState, services, parts, source }) {
         : null;
       let bestScore = 0;
       for (const [id, sat] of layerState._catalog) {
-        const designatorYear = internationalDesignatorYear(sat.satrec);
+        const designatorYear = sat.launchYear ?? null;
         if (
           launchYear !== null &&
           designatorYear !== null &&
@@ -370,7 +398,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     return orbitTrackFromRecord(sat.name, sat.satrec);
   }
   return {
-    orbitFrameModelMatrix,
     parseTLE,
     propagatePosition,
     orbitalPeriodSeconds,
@@ -379,7 +406,6 @@ export function createOrbits({ state: layerState, services, parts, source }) {
     getNextSatellitePass,
     resolveSatelliteForPass,
     scoreSatelliteNameMatch,
-    internationalDesignatorYear,
     lookupTleEntries,
     tleLineLaunchYear,
     orbitTrackFromRecord,

@@ -8,21 +8,15 @@ import { setContextMode as contextModeAction } from './ui/contextActions.js';
 import { ContextControls } from './ui/contextControls.js';
 import { readFileSync as readRadioSource } from 'node:fs';
 const radioBindings = readRadioSource(new URL('./ui/radioBindings.js', import.meta.url), 'utf8');
-const radioPresentation = readRadioSource(new URL('./ui/radioPresentation.js', import.meta.url), 'utf8');
 const radioControlsSource = readRadioSource(new URL('./ui/radioControls.js', import.meta.url), 'utf8');
 // Source-contract pins read the actual Context owners and root disposal wiring. Each pin guards a bug that shipped or nearly shipped:
 //  - session bookkeeping ran AFTER the exit early-return, so the compensating
 //    userAdded.delete never ran on the left-panel chip exit and restoration
 //    resurrected the mission layer the user just disabled;
-//  - the effective mode was read AFTER the entering flag was cleared, so the
-//    entry layer's own enable event was judged against a null mode;
-//  - a failed Space Missions START from the chip route cleared siblings with
-//    no rollback;
+//  - a failed direct Contacts START cleared siblings with no rollback;
 //  - the right-rail entry ignored the activation result entirely.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 const src = readShellSource();
 
@@ -36,25 +30,20 @@ test('context handler: session bookkeeping runs before the exit early-return', (
   assert.ok(record < exit, 'bookkeeping must precede the exit check');
 });
 
-test('context handler: effective mode is read before the entering flag is cleared', () => {
-  const effective = handler.indexOf('this._contextModeEntering || this._contextMode');
-  const clear = handler.indexOf('this._contextModeEntering = null');
-  assert.ok(effective > 0, 'effective-mode read present');
-  assert.ok(clear > 0, 'entering-flag clear present');
-  assert.ok(effective < clear, 'effective mode must be captured first');
+test('Space Missions is an ordinary layer the Context handler never enters', () => {
+  assert.doesNotMatch(handler, /'space-missions'/);
+  assert.doesNotMatch(handler, /_contextModeEntering = /);
+  const attach = connectContextManager.toString();
+  assert.doesNotMatch(attach, /rocket-launches|space-missions/);
 });
 
-test('cancelled Space Missions entry resolves ownership before settled bookkeeping', () => {
+test('a cancelled visibility request returns before settled bookkeeping', () => {
   const cancelled = handler.indexOf("change?.type === 'visibility-cancelled'");
   const bookkeeping = handler.indexOf('recordContextSessionUserChange(');
   assert.ok(cancelled > 0, 'cancellation branch present');
   assert.ok(cancelled < bookkeeping, 'cancellation returns before settled session bookkeeping');
   const branch = handler.slice(cancelled, handler.indexOf("change?.type === 'visibility-blocked'"));
-  assert.match(branch, /spaceMissionEntryCancellationDisposition\(\{/);
-  assert.match(branch, /cancellationDisposition === 'replacement'[\s\S]*?_contextModeEntering = 'space-missions'[\s\S]*?entryIntent\.intentEpoch === change\.intentEpoch[\s\S]*?_contextModeReplacementIntent = \{[\s\S]*?intentEpoch: change\.successorIntentEpoch/);
-  assert.match(branch, /cancellationDisposition === 'restore'[\s\S]*?_contextModeEntering = null/);
-  assert.match(branch, /_restoreContextSessionAfterLayerSettles\(/);
-  assert.match(branch, /return;/);
+  assert.match(branch, /this\._syncContextModeButtons\(\);\s*return;/);
 });
 
 test('direct Context entry captures on the synchronous request boundary', () => {
@@ -63,18 +52,29 @@ test('direct Context entry captures on the synchronous request boundary', () => 
     attach,
     /subscribeVisibilityRequests\(\(change\) => \{[\s\S]*?shouldCaptureContextSession\(change\)/,
   );
-  assert.match(
-    attach,
-    /_captureContextSessionSnapshot\(\{\s*excludeLayerIds:\s*\[change\.layerId\],?\s*\}\)/,
-  );
 });
 
-test('Clear All defers a newer explicit mission guard until its batch settles', () => {
-  const attach = connectContextManager.toString();
-  assert.match(attach, /shouldDeferContextEntryDuringClear\(\{/);
-  assert.match(attach, /_contextModeDeferredEntryIntent = \{/);
-  assert.match(attach, /await this\._clearSelectedLayersManagerPromise/);
-  assert.match(attach, /await this\._clearLayersOutsideContextMode\(entryMode/);
+test('only a direct Contacts entry request snapshots the layers', () => {
+  let request;
+  const controls = new ContextControls({
+    elements: {},
+    installations: {},
+    actions: { getCockpit: () => null },
+  });
+  const captures = [];
+  controls._captureContextSessionSnapshot = (options) => captures.push(options);
+  controls._syncContextModeButtons = () => {};
+  controls.connect({
+    subscribe: () => () => {},
+    subscribeVisibilityRequests(listener) {
+      request = listener;
+      return () => {};
+    },
+  });
+  for (const layerId of ['rocket-launches', 'military-awareness'])
+    request({ type: 'visibility-requested', layerId, enabled: true, origin: 'user', intentEpoch: 1 });
+  controls.stop();
+  assert.deepEqual(captures, [{ excludeLayerIds: ['military-awareness'] }]);
 });
 
 test('context restore replays explicit companion intent after the stale restore queue drains', () => {
@@ -94,7 +94,16 @@ test('context restore settles the Contacts coordinator before dependency fanout'
   assert.ok(settle > 0, 'Contacts coordinator settlement is present');
   assert.ok(coordinatorOff > settle, 'Contacts OFF is awaited');
   assert.ok(fanout > coordinatorOff, 'snapshot fanout starts after Contacts settles');
-  assert.match(restore, /excludeLayerIds: settleContactsCoordinator[\s\S]*?contactsCoordinatorId/);
+  assert.match(restore, /excludeLayerIds: \[[\s\S]*?CONTEXT_INDEPENDENT_LAYER_IDS[\s\S]*?settleContactsCoordinator \? \[contactsCoordinatorId\]/);
+});
+
+test('Clear All during the Contacts settle stops the snapshot coming back', () => {
+  const restore = _restoreContextSession.toString();
+  const coordinatorOff = restore.indexOf('const coordinatorSettled = await this._dataManager.setEnabled(');
+  const cancelled = restore.indexOf('if (restoreState.cancelled) return;', coordinatorOff);
+  const fanout = restore.indexOf('await this._dataManager.restoreEnabledLayerIds(', coordinatorOff);
+  assert.ok(cancelled > coordinatorOff, 'the cancellation is checked after Contacts settles');
+  assert.ok(fanout > cancelled, 'and before the snapshot fans out');
 });
 
 test('context restore preserves its exact pending target after a failed transition', () => {
@@ -110,7 +119,7 @@ test('context handler: either failed direct Context-shell start rolls the sessio
     handler.indexOf("change?.type === 'visibility-failed'"),
     handler.indexOf("change?.type === 'visibility-will-change'"),
   );
-  assert.match(failedBranch, /\['military-awareness', 'rocket-launches'\]\.includes\(change\.layerId\)/);
+  assert.match(failedBranch, /change\.layerId === 'military-awareness' &&/);
   assert.match(
     failedBranch,
     /_restoreContextSessionAfterLayerSettles\(\s*change\.layerId,\s*\{\s*notificationToken,?\s*\},?\s*\)/,
@@ -148,21 +157,21 @@ test('wrapped visibility blocks leave the accessible toast to the wrapper token 
 
 test('every user-facing Context exit route settles through the failure surface', () => {
   const initPanel = _initGlobalContextPanel.toString();
-  assert.equal((initPanel.match(/void this\._runUserFacingContextAction/g) || []).length, 3);
+  assert.equal((initPanel.match(/void this\._runUserFacingContextAction/g) || []).length, 2);
   assert.doesNotMatch(initPanel, /falseIsFailure:\s*false/);
   assert.doesNotMatch(initPanel, /void this\._selectContextMode/);
 
   const deactivationCalls = [...handler.matchAll(
     /void this\._trackContextLayerReaction\(\s*this\._runUserFacingContextAction\(\(notificationToken\) =>\s*this\._deactivateContextForLayerChange\(\{ notificationToken \}\),?\s*\),?\s*\)/g,
   )];
-  assert.equal(deactivationCalls.length, 4, 'dependency and primary layer exits share the caught restore path');
+  assert.equal(deactivationCalls.length, 3, 'dependency and primary layer exits share the caught restore path');
   assert.doesNotMatch(handler, /void this\._deactivateContextForLayerChange\(\)/);
 });
 
 test('the Radio chip catches lifecycle rejection and semantic false through the toast wrapper', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /await this\.actions\.runUserAction\(/);
   assert.match(radioControls, /Radio could not \$\{enabling \? 'start' : 'stop'\} cleanly/);
@@ -172,7 +181,7 @@ test('the Radio chip catches lifecycle rejection and semantic false through the 
 test('only the expanded Radio Enable gesture requests the contained post-enable reveal', () => {
   const radioControls = radioBindings.slice(
     radioBindings.indexOf('const toggleRadio = async (trigger) => {'),
-    radioBindings.indexOf("this.listen(this._radioFilter, 'change'"),
+    radioBindings.indexOf('this._storeToken = this.store?.connect?.('),
   );
   assert.match(radioControls, /revealAfterEnable = enabling && trigger === this\._radioEnableBtn/);
   assert.match(radioControls, /if \(revealAfterEnable\)\s*await this\._revealRadioControlsAfterExplicitEnable\(trigger\)/);
@@ -187,10 +196,7 @@ test('right-rail context entry is transactional: activation result gates the mod
   const failureBlock = select.slice(activation);
   assert.match(failureBlock, /activated = await activationIntent\.promise/);
   assert.match(failureBlock, /catch \(error\) \{\s*activationError = error;/);
-  assert.match(failureBlock, /_contextModeReplacementIntent\?\.generation === generation/);
   assert.match(failureBlock, /await this\._dataManager\._waitForVisibilityIntent\?\.\(/);
-  assert.match(failureBlock, /outcome\?\.intentEpoch === replacementIntent\.intentEpoch[\s\S]*?outcome\.succeeded === true/);
-  assert.match(failureBlock, /outcome\?\.cancellationReason === 'superseded'[\s\S]*?outcome\.successorEnabled === true[\s\S]*?outcome\.successorIntentEpoch > replacementIntent\.intentEpoch/);
   assert.match(failureBlock, /activationError\s*\|\|\s*activated === false\s*\|\|\s*!this\._dataManager\.isEnabled\(entryLayerId\)/);
   assert.match(failureBlock, /cancelledAndSettled\s*=\s*terminalIntentOutcome\?\.succeeded === false/);
   assert.match(failureBlock, /\['caller-abort', 'resource-abort', 'superseded'\]/);
@@ -210,9 +216,11 @@ test('Context entry awaits isolation and direct shell routes isolate in the visi
   // rests on Context OFF; the honesty lives in the REPORT, not in a racy
   // attempt to put the prior mode back (see the note above
   // _restoreContextSessionAfterLayerSettles).
+  const capture = select.indexOf('this._captureContextSessionSnapshot(');
+  assert.ok(capture > 0, 'Context snapshot capture is missing');
   const crossMode = select.slice(
     select.indexOf('const crossModeSwitch = Boolean('),
-    select.indexOf('this._captureContextSessionSnapshot();'),
+    capture,
   );
   assert.ok(crossMode, 'cross-mode teardown block is missing');
   assert.doesNotMatch(crossMode, /if \(signal\?\.aborted\)[\s\S]*?await this\._restoreContextSession/);
@@ -236,10 +244,10 @@ test('Context entry awaits isolation and direct shell routes isolate in the visi
   assert.match(ContextControls.prototype.stop.toString(), /this\._contextModeGeneration\+\+/);
 
   const guard = connectContextManager.toString();
-  assert.match(guard, /\['military-awareness', 'rocket-launches'\]\.includes\(change\.layerId\)/);
+  assert.match(guard, /change\.layerId !== 'military-awareness'/);
   assert.match(guard, /const notificationToken\s*=\s*change\.notificationToken\s*\|\|\s*Symbol\('direct-context-shell-entry'\)/);
   assert.match(guard, /this\._userFacingContextNotificationTokens\.add\(notificationToken\)/);
-  assert.match(guard, /await this\._clearLayersOutsideContextMode\(entryMode,\s*\{\s*notificationToken,?\s*\}\)/);
+  assert.match(guard, /await this\._clearLayersOutsideContextMode\(null,\s*\{\s*notificationToken,?\s*\}\)/);
   assert.match(
     guard,
     /await this\._restoreContextSession\(\{\s*excludeLayerIds: \[change\.layerId\],\s*notificationToken,\s*\}\)/,

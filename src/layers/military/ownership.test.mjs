@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
+import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 
 function services() {
   const names = [
@@ -24,6 +27,29 @@ function services() {
   return {
     ...Object.fromEntries(names.map((name) => [name, {}])),
     groundSnap: { createGroundSnap: () => ({ clear() {} }) },
+  };
+}
+
+// The application's own scene services, as src/app/layers/militaryFlights.js
+// composes them; only the surface samplers and registry are stubbed.
+async function sceneServices() {
+  return {
+    picking: await import('../../data/pickRegistry.js'),
+    sprites: await import('../../data/spriteOrder.js'),
+    trails: await import('../../data/trailRenderer.js'),
+    aircraftPresentation: await import('../../data/tr3bRegistry.js'),
+    camera: await import('../../data/trackedCamera.js'),
+    labels: await import('../../data/detectionDraw.js'),
+    geoid: await import('../../data/geoid.js'),
+    focus: await import('../../data/focusDeemphasis.js'),
+    readout: await import('../../data/trackedReadout.js'),
+    context: await import('../../data/contextStore.js'),
+    render: await import('../../renderGovernor.js'),
+    recession: await import('../../data/aircraftRecession.js'),
+    groundFloor: await import('../../data/groundFloor.js'),
+    groundSnap: await import('../../data/groundSnap.js'),
+    meshFloor: { sampleMeshFloorCells: () => {} },
+    militaryRegistry: { registerMilitaryIcaos: () => {} },
   };
 }
 
@@ -63,10 +89,10 @@ test('military state owns separate contact maps, motion scratch and ground sampl
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_displayCourse',
     '_positionHistory',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {
@@ -117,30 +143,11 @@ test('a normalized source can retain its stale reason without changing standalon
 test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
   // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
   // contact's first displayed position is its fix projected back to that
-  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // delayed time. Creating the icon at the raw fix drew it ahead until
   // the next fleet tick jumped it back.
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
-  // The application's own scene services, as src/app/layers/militaryFlights.js
-  // composes them; only the surface samplers and registry are stubbed.
-  const supplied = {
-    picking: await import('../../data/pickRegistry.js'),
-    sprites: await import('../../data/spriteOrder.js'),
-    trails: await import('../../data/trailRenderer.js'),
-    aircraftPresentation: await import('../../data/tr3bRegistry.js'),
-    camera: await import('../../data/trackedCamera.js'),
-    labels: await import('../../data/detectionDraw.js'),
-    geoid: await import('../../data/geoid.js'),
-    focus: await import('../../data/focusDeemphasis.js'),
-    readout: await import('../../data/trackedReadout.js'),
-    context: await import('../../data/contextStore.js'),
-    render: await import('../../renderGovernor.js'),
-    recession: await import('../../data/aircraftRecession.js'),
-    groundFloor: await import('../../data/groundFloor.js'),
-    groundSnap: await import('../../data/groundSnap.js'),
-    meshFloor: { sampleMeshFloorCells: () => {} },
-    militaryRegistry: { registerMilitaryIcaos: () => {} },
-  };
+  const supplied = await sceneServices();
   const fixLon = -97.6;
   const fixLat = 30.3;
   const speedMps = 200;
@@ -172,31 +179,22 @@ test('a newly seen military contact appears at its delayed position, not ahead o
       },
     },
   });
-  const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection: {
-      show: false,
-      add(options) {
-        const billboard = { ...options };
-        added.push(billboard);
-        return billboard;
-      },
-      remove() {},
-    },
+    iconLayer: { show: false },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
   await layer.update({ camera: { positionCartographic: null }, scene: {} });
-  const billboard = added.find((entry) => entry.id === 'ae0001');
-  assert.ok(billboard, 'the new contact gets a billboard');
-  const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+  const icon = layer.testing._iconForTest('ae0001');
+  assert.ok(icon, 'the new contact gets an icon');
+  const shown = Cesium.Cartographic.fromCartesian(icon.position);
   const behindM = Cesium.Cartesian3.distance(
     Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
     Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
@@ -210,4 +208,135 @@ test('a newly seen military contact appears at its delayed position, not ahead o
     Math.abs(behindM - expectedM) < speedMps * 3,
     `expected about ${Math.round(expectedM)} m behind the fix, got ${Math.round(behindM)} m`,
   );
+});
+
+test('a vanished military contact fades while position-less rows keep theirs', async () => {
+  // About a third of a live adsb.lol /v2/mil fetch is contacts without a
+  // position. Those rows marked every snapshot partial, so an aircraft that
+  // left the feed stayed at full opacity for five minutes.
+  const Cesium = await import('cesium');
+  const { readsbSnapshot } = await import('../../sources/live/aircraft.js');
+  const nowMs = Date.now();
+  const row = (hex, lon) => ({
+    hex,
+    lat: 30.3,
+    lon,
+    alt_baro: 20_000,
+    gs: 300,
+    track: 90,
+    seen_pos: 1,
+  });
+  const polls = [
+    [row('ae0001', -97.6), row('ae0002', -96.6), row('ae0003', -95.6)],
+    [row('ae0001', -97.5), { hex: 'ae0003' }],
+  ];
+  // Every poll also lists a contact that never has a position.
+  for (const poll of polls) poll.push({ hex: 'ae0009', type: 'mode_s' });
+  const layer = createMilitaryFlightLayer({
+    services: await sceneServices(),
+    source: {
+      label: 'Fixture aircraft',
+      getSnapshot: async () =>
+        readsbSnapshot(
+          { ac: polls.shift() },
+          { observedAtMs: nowMs, now: nowMs },
+        ),
+    },
+  });
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  layer.testing._setTrackedMilitaryRefreshStateForTest({
+    icao24: 'seed00',
+    entity: null,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    icon: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
+    iconLayer: { show: true, add: (options) => ({ ...options }) },
+    viewer,
+    tracked: false,
+  });
+  await layer.update(viewer);
+  await layer.update(viewer);
+  assert.equal(layer.findByQuery('ae0002')?.stale, true, 'vanished: fading');
+  assert.equal(layer.findByQuery('ae0003')?.stale, false, 'still listed');
+});
+
+test('voice context reads a track that rounds to north as 0°, not 360°', () => {
+  const stubs = services();
+  stubs.aircraftPresentation = { tr3bTypeLabel: (id, type) => type };
+  const tracking = createTracking({
+    flightState: {
+      feed: { _lastSource: 'Fixture aircraft' },
+      records: { data: new Map() },
+    },
+    services: stubs,
+    parts: {
+      queries: {
+        _describeFlight: () => ({ track: 359.6, callsign: 'RCH123' }),
+        _toCleanText: (value) => value || '',
+        _formatAltitude: () => '',
+      },
+    },
+    layer: {},
+  });
+  assert.equal(
+    tracking._contextSubjectMetadata('ae1234').properties.heading,
+    '0°',
+  );
+});
+
+test('a military layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createMilitaryFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
 });

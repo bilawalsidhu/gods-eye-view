@@ -1,16 +1,23 @@
-import * as Cesium from 'cesium';
 import { imageConeGlyph } from './glyphs.js';
 import { passesImageryFilter } from './filter.js';
-import { refineHeights } from './groundCast.js';
 import { createHorizonCull, metresBetween } from './view.js';
-import { meshCellKey } from './meshSampler.js';
-
-/** How many recently viewed sequences keep their image list in memory. */
-const SEQUENCE_CACHE_SIZE = 40;
+import { msg } from '../../i18n/index.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
 
 /** Cones closer than this to the previous kept one are dropped. */
-export const IMAGE_CONE_MIN_SPACING_M = 3;
-export const IMAGE_CONE_SIZE_PX = 26;
+const IMAGE_CONE_MIN_SPACING_M = 3;
+const IMAGE_CONE_SIZE_PX = 26;
+/** Cones a little larger near the eye, a third of their size far off. */
+const IMAGE_CONE_SCALE = Object.freeze({
+  near: 200,
+  nearValue: 1.1,
+  far: 6000,
+  farValue: 0.35,
+});
+
+/** Draw-set ids of the cone sets made so far, so every provider instance has its own. */
+let coneSets = 0;
 
 /**
  * @typedef {object} ConeImage   One image of a sequence, as the cones draw it.
@@ -36,8 +43,10 @@ export function thinImages(images, spacingM = IMAGE_CONE_MIN_SPACING_M) {
 }
 
 /**
- * Image cones for one selected sequence, any provider's. A cone's pick id is
- * `pickPrefix` + the image id; 360° images draw as rings.
+ * Image cones for one selected sequence, any provider's, clamped to the
+ * ground. A cone's pick id is `pickPrefix` + the image id; 360° images draw
+ * as rings. Why a sequence could not load stays in `state.sequence.error`
+ * until it goes.
  *
  * @param {object} options
  * @param {object} options.state  Provider state: `context`, `services`, `viewer`, `sequence`.
@@ -45,10 +54,10 @@ export function thinImages(images, spacingM = IMAGE_CONE_MIN_SPACING_M) {
  *   The sequence's images in capture order, thinned (see `thinImages`).
  * @param {{coverage: string}} options.colors
  * @param {string} options.pickPrefix   Pick-id prefix of the cones.
- * @param {string} options.spriteId     Sprite-order id of the cone collection.
+ * @param {string} options.spriteId     Stem of the cone set's draw-set id.
  * @param {string} options.renderKey    Render-governor reason.
- * @param {(sequenceId: string, selected: boolean) => void} [options.onHighlight]
- *   Highlight (or stop highlighting) the sequence's coverage line.
+ * @param {(sequenceId: string|null) => void} [options.onHighlight]
+ *   Highlight the sequence's coverage line (null: none).
  * @param {(image: ConeImage, filter: object) => boolean} [options.passes]
  *   Whether the imagery filter keeps a cone.
  */
@@ -62,7 +71,7 @@ export function createSequenceCones({
   onHighlight = () => {},
   passes = passesImageryFilter,
 }) {
-  const { render, sprites } = state.services;
+  const { render } = state.services;
 
   function requestRender() {
     render?.governorRequestRender?.(renderKey);
@@ -72,81 +81,41 @@ export function createSequenceCones({
     state.context.notify();
   }
 
-  const nothingDrawn = () => ({ images: [], cones: [], cells: new Set() });
-  /** Drawn cones, plus the mesh cells under them, so a sample moves only those. */
-  let drawn = nothingDrawn();
+  /** Drawn cones: `{icon, position, show}` each, `icon` as last sent. */
+  let cones = [];
 
   // The cones skip the depth test: hide the ones behind the globe.
   const horizon = createHorizonCull({
     getViewer: () => state.viewer,
-    items: () => drawn.cones.map((cone) => cone.billboard),
-    onChange: requestRender,
+    items: () => cones,
+    onChange: (changed) => {
+      state.sequence.set?.upsert(
+        changed.map((cone) => ({ ...cone.icon, show: cone.show })),
+      );
+      requestRender();
+    },
   });
 
   function ensureCollections(viewer) {
-    if (state.sequence.collection) return;
-    state.sequence.collection = new Cesium.BillboardCollection({
-      scene: viewer.scene,
+    if (state.sequence.set) return;
+    state.sequence.set = drawOf(viewer).icons({
+      id: `${spriteId}:${++coneSets}`,
     });
-    viewer.scene.primitives.add(state.sequence.collection);
-    sprites?.registerSpriteCollection?.(spriteId, state.sequence.collection);
+    // Drawn from now, empty: the cones keep their place by when they were
+    // made (after the marker).
+    state.sequence.set.set([]);
   }
 
   function clearCones() {
-    state.sequence.collection?.removeAll();
+    state.sequence.set?.clear();
     state.sequence.images = [];
-    drawn = nothingDrawn();
+    cones = [];
     horizon.stop();
   }
 
-  /** Where a cone stands: at `height`, or clamped to the ground when null. */
-  function placement(image, height) {
-    return {
-      position: Cesium.Cartesian3.fromDegrees(
-        image.lon,
-        image.lat,
-        height ?? 0,
-      ),
-      heightReference:
-        height === null
-          ? Cesium.HeightReference.CLAMP_TO_GROUND
-          : Cesium.HeightReference.NONE,
-    };
-  }
-
-  /**
-   * Terrain-mode cone heights on the street, not on roofs: bare earth refined
-   * by mesh samples. Null when draped or while terrain heights are fetched.
-   */
-  function coneHeights(images, { request = true } = {}) {
-    const ground = state.context.groundCaster;
-    if (state.context.getSurface?.() !== 'terrain' || !ground) return null;
-    const dems = images.map((image) => ground.groundAt(image.lon, image.lat));
-    if (dems.includes(null)) {
-      ground
-        .prepare(images.map((image) => [image.lon, image.lat]))
-        .then((ready) => {
-          if (ready && state.sequence.images === images) renderCones(images);
-        });
-      return null;
-    }
-    const sampler = state.context.meshSampler;
-    if (request)
-      sampler?.request(images.map((image) => [image.lon, image.lat]));
-    return refineHeights(
-      images.map((image, i) => ({
-        dem: dems[i],
-        mesh: sampler?.meshAt(image.lon, image.lat),
-      })),
-    );
-  }
-
   function renderCones(images) {
-    const collection = state.sequence.collection;
-    if (!collection) return;
-    collection.removeAll();
-    drawn = { ...nothingDrawn(), images };
-    const heights = coneHeights(images);
+    const set = state.sequence.set;
+    if (!set) return;
     // One colour per source; 360° images keep the ring shape.
     const cone = imageConeGlyph({ size: 32, color: colors.coverage });
     const ring = imageConeGlyph({
@@ -156,66 +125,30 @@ export function createSequenceCones({
     });
     // Resolved now, so a "since N days" window keeps up with the clock.
     const filter = state.context.getFilter();
-    images.forEach((image, index) => {
-      if (!passes(image, filter)) return;
-      const height = heights?.[index] ?? null;
-      const billboard = collection.add({
-        id: `${pickPrefix}${image.id}`,
-        ...placement(image, height),
-        image: image.isPano ? ring : cone,
-        imageId: image.isPano ? `${spriteId}:pano` : `${spriteId}:flat`,
-        width: IMAGE_CONE_SIZE_PX,
-        height: IMAGE_CONE_SIZE_PX,
-        rotation: -Cesium.Math.toRadians(image.compassAngle),
-        alignedAxis: Cesium.Cartesian3.UNIT_Z,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        scaleByDistance: new Cesium.NearFarScalar(200, 1.1, 6000, 0.35),
+    cones = [];
+    for (const image of images) {
+      if (!passes(image, filter)) continue;
+      cones.push({
+        position: fromDegrees(image.lon, image.lat),
+        show: true,
+        icon: {
+          id: `${pickPrefix}${image.id}`,
+          pos: { lon: image.lon, lat: image.lat },
+          height: 'clampGround',
+          image: image.isPano ? ring : cone,
+          size: [IMAGE_CONE_SIZE_PX, IMAGE_CONE_SIZE_PX],
+          rotationMode: 'course',
+          course: image.compassAngle,
+          anchor: 'center',
+          disableDepthTest: Number.POSITIVE_INFINITY,
+          scaleByDistance: IMAGE_CONE_SCALE,
+        },
       });
-      drawn.cones.push({ index, billboard, height });
-      drawn.cells.add(meshCellKey(image.lon, image.lat));
-    });
-    horizon.update();
-    requestRender();
-  }
-
-  /**
-   * Re-place cones whose height new mesh samples changed. A sample can move
-   * a neighbour too, so every height is recomputed but only moved cones touched.
-   */
-  function onMeshSampled(batch) {
-    if (state.context.getSurface?.() !== 'terrain' || !drawn.cones.length)
-      return;
-    if (!batch.some(([lon, lat]) => drawn.cells.has(meshCellKey(lon, lat))))
-      return;
-    const { images, cones } = drawn;
-    // Already asked for when drawn; a missing terrain cell redraws them all.
-    const heights = coneHeights(images, { request: false });
-    if (!heights) return;
-    const moved = [];
-    for (const cone of cones) {
-      const height = heights[cone.index] ?? null;
-      if (height === cone.height) continue;
-      cone.height = height;
-      const { position, heightReference } = placement(
-        images[cone.index],
-        height,
-      );
-      cone.billboard.heightReference = heightReference;
-      cone.billboard.position = position;
-      moved.push(cone.billboard);
     }
-    if (!moved.length) return;
-    horizon.update(moved);
+    // Culled before they are drawn, so far-side cones never show.
+    horizon.update(cones, { quiet: true });
+    set.set(cones.map((item) => ({ ...item.icon, show: item.show })));
     requestRender();
-  }
-
-  function remember(sequenceId, images) {
-    const { cache } = state.sequence;
-    cache.delete(sequenceId);
-    cache.set(sequenceId, images);
-    while (cache.size > SEQUENCE_CACHE_SIZE)
-      cache.delete(cache.keys().next().value);
   }
 
   /**
@@ -231,21 +164,9 @@ export function createSequenceCones({
       (state.sequence.images.length || state.sequence.abort)
     )
       return;
-    if (state.sequence.selectedId && state.sequence.selectedId !== sequenceId)
-      onHighlight(state.sequence.selectedId, false);
     state.sequence.abort?.abort();
     state.sequence.selectedId = sequenceId;
-    onHighlight(sequenceId, true);
-    const cached = force ? null : state.sequence.cache.get(sequenceId);
-    if (cached) {
-      state.sequence.abort = null;
-      state.sequence.loading = false;
-      state.sequence.images = cached;
-      renderCones(cached);
-      state.context.actions.reportError(null);
-      notify();
-      return;
-    }
+    onHighlight(sequenceId);
     // The previous sequence's cones must not stay clickable under the new
     // highlight while this one loads, nor after its load fails.
     clearCones();
@@ -253,24 +174,24 @@ export function createSequenceCones({
     const controller = new AbortController();
     state.sequence.abort = controller;
     state.sequence.loading = true;
+    // An earlier sequence's error does not belong to this one.
+    state.sequence.error = null;
     notify();
     try {
       const images = await loadImages(sequenceId, {
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
-      remember(sequenceId, images);
       state.sequence.images = images;
       renderCones(images);
-      state.context.actions.reportError(null);
+      state.sequence.error = null;
     } catch (error) {
       if (!controller.signal.aborted) {
         // Nothing to show: drop the highlight, so a click asks again.
-        onHighlight(sequenceId, false);
+        onHighlight(null);
         state.sequence.selectedId = null;
-        state.context.actions.reportError(
-          error?.message || 'Sequence images unavailable',
-        );
+        state.sequence.error =
+          error?.message || msg('Sequence images unavailable');
       }
     } finally {
       if (state.sequence.abort === controller) {
@@ -284,13 +205,12 @@ export function createSequenceCones({
   function clearSelection() {
     state.sequence.abort?.abort();
     state.sequence.abort = null;
-    if (state.sequence.selectedId)
-      onHighlight(state.sequence.selectedId, false);
+    if (state.sequence.selectedId) onHighlight(null);
     state.sequence.selectedId = null;
     state.sequence.loading = false;
     clearCones();
     // An error about the sequence goes with it.
-    state.context.actions.reportError(null);
+    state.sequence.error = null;
     requestRender();
     notify();
   }
@@ -300,24 +220,19 @@ export function createSequenceCones({
     if (state.sequence.images.length) renderCones(state.sequence.images);
   }
 
-  // New mesh samples may move the cones onto (or off) the road surface.
-  const stopMeshListener = state.context.meshSampler?.onSampled(onMeshSampled);
-
   function setVisible(visible) {
-    if (state.sequence.collection) state.sequence.collection.show = visible;
+    if (state.sequence.set) state.sequence.set.show = visible;
     requestRender();
   }
 
   function destroy(viewer) {
     state.sequence.abort?.abort();
     horizon.stop();
-    drawn = nothingDrawn();
-    stopMeshListener?.();
-    const collection = state.sequence.collection;
-    if (collection) {
-      sprites?.unregisterSpriteCollection?.(spriteId, collection);
-      viewer?.scene?.primitives?.remove(collection);
-      state.sequence.collection = null;
+    cones = [];
+    const set = state.sequence.set;
+    if (set) {
+      set.dispose();
+      state.sequence.set = null;
     }
     state.sequence.images = [];
     state.sequence.selectedId = null;

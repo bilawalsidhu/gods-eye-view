@@ -33,7 +33,7 @@ const TEETH = args.includes('--teeth');
 const HEADFUL = args.includes('--headful');
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SHOT_DIR = path.join(ROOT, 'qa-shots', 'firstrun');
+const SHOT_DIR = process.env.QA_OUTPUT_DIR || path.join(ROOT, 'qa-shots', 'firstrun');
 
 const CHROME_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -109,7 +109,7 @@ const appState = (page) => page.evaluate(() => {
   const gev = window.__godsEyeView || {};
   const sm = gev.styleManager;
   const dm = gev.dataManager;
-  const carto = sm?.viewer?.camera?.positionCartographic;
+  const carto = gev.viewer?.camera?.positionCartographic;
   const layers = {};
   const counts = {};
   const all = dm?.getAll?.() || [];
@@ -170,8 +170,22 @@ async function watchLoadingChip(page) {
 
 const readLoadingChip = (page) => page.evaluate(() => window.__chipSeen || []);
 
+async function nextStep(page, readySelector) {
+  await page.click('[data-first-run-next]');
+  await page.waitForSelector(readySelector, { visible: true });
+  await page.waitForFunction(() => {
+    const steps = [...document.querySelectorAll('#first-run-launcher .first-run-step')];
+    return steps.length === 1
+      && !/first-run-step-(forward|back)-(enter|leave)-/.test(steps[0].className)
+      && document.querySelector('[data-first-run-primary]')?.getAttribute('aria-disabled') !== 'true';
+  });
+}
+
 async function pick(page, choice, { timeout = 40000, settle = [] } = {}) {
-  await page.click(`[data-first-run-choice="${choice}"]`);
+  await nextStep(page, '[data-first-run-start]');
+  await page.click(`[data-first-run-start="${choice}"]`);
+  await nextStep(page, '[data-first-run-choice]');
+  await page.click('[data-first-run-choice]');
   await page.waitForFunction(
     (sel) => !document.querySelector(sel) || !document.querySelector(sel).classList.contains('visible'),
     { timeout },
@@ -190,8 +204,8 @@ async function pick(page, choice, { timeout = 40000, settle = [] } = {}) {
 /** Every section the run is expected to reach; the teeth verdict requires all. */
 const EXPECTED_SECTIONS = [
   'show-policy', 'esc-arbitration',
-  'mission-environmental', 'mission-contacts', 'mission-space', 'mission-explore',
-  'viewports', 'console',
+  'mission-environmental', 'mission-space', 'mission-explore',
+  'stories-card', 'viewports', 'console',
 ];
 
 /*
@@ -357,53 +371,6 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       `classVisible=${afterUncoveredEsc.classVisible} session=${afterUncoveredEsc.session}`,
     );
 
-    // ── Blocker repro: a control that claims only the KEY ───────────────────
-    // The compact Radio disclosure closes on ESC from a capture listener bound
-    // long before this module exists. It called stopPropagation(), which does
-    // NOT stop later listeners on the same document — so one key closed the
-    // disclosure AND dismissed the launcher. The card is not hiding behind this
-    // one and must not yield to it: the key is simply already spoken for.
-    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    const beforeRadio = await launcherState();
-    record('the launcher is up before the radio disclosure opens', beforeRadio.onScreen);
-    const radioOpened = await page.evaluate(() => {
-      document.getElementById('context-radio-toggle-btn')?.click();
-      return !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open');
-    });
-    await sleep(250);
-    record('the compact Radio disclosure opens', radioOpened);
-    const withRadio = await launcherState();
-    record(
-      'a small disclosure is a key contest, not a screen takeover — no yield',
-      withRadio.classVisible && withRadio.topmost,
-      `classVisible=${withRadio.classVisible} topmost=${withRadio.topmost}`,
-    );
-
-    await page.keyboard.press('Escape');
-    await sleep(400);
-    const radioAfterEsc = await page.evaluate(() => (
-      !!document.getElementById('context-radio-dock')?.classList.contains('disclosure-open')
-    ));
-    const launcherAfterRadioEsc = await launcherState();
-    record('ESC closes the disclosure', radioOpened && !radioAfterEsc,
-      `disclosure still open=${radioAfterEsc}`);
-    record(
-      'that SAME ESC does not also dismiss the launcher',
-      beforeRadio.onScreen && launcherAfterRadioEsc.classVisible
-        && launcherAfterRadioEsc.session !== 'dismissed',
-      `classVisible=${launcherAfterRadioEsc.classVisible} session=${launcherAfterRadioEsc.session} — one key, one action`,
-    );
-    // ...and the NEXT press is the launcher's, so nothing was permanently taken.
-    await page.keyboard.press('Escape');
-    await sleep(600);
-    const escAfterRadioClosed = await launcherState();
-    record(
-      'the next ESC belongs to the launcher again',
-      beforeRadio.onScreen && !escAfterRadioClosed.classVisible
-        && escAfterRadioClosed.session === 'dismissed',
-      `classVisible=${escAfterRadioClosed.classVisible} session=${escAfterRadioClosed.session}`,
-    );
-
     // ── Deferred reveal: a surface already up when the launcher would show ──
     // The class goes on as soon as the app exists, which is well before the
     // launcher's reveal (~T+1.9s), so init genuinely sees a screen it does not
@@ -429,7 +396,8 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       observer.observe(document, { childList: true, subtree: true });
     });
     try {
-      await page.goto(`${APP_URL}/?welcome=1`, { waitUntil: 'domcontentloaded' });
+      // Disable the opening so only the cockpit holds the launcher back.
+      await page.goto(`${APP_URL}/?welcome=1&intro=0`, { waitUntil: 'domcontentloaded' });
     } finally {
       await page.removeScriptToEvaluateOnNewDocument(earlyCockpitBlocker.identifier);
     }
@@ -529,8 +497,8 @@ async function main() {
       record('a fresh session gets the launcher', freshVisible);
       if (freshVisible) shots.push(await shoot(page, 'launcher-desktop'));
 
-      const focused = await page.evaluate(() => document.activeElement?.dataset?.firstRunChoice ?? null);
-      record('focus lands on the first mission tile', focused === 'contacts', `activeElement=${focused}`);
+      const focused = await page.evaluate(() => document.activeElement?.hasAttribute('data-first-run-next') ?? false);
+      record('focus lands on Next', focused === true, `activeElement=${focused}`);
 
       // The card is a flex column (so its list can scroll on short viewports),
       // and an author `display` on this id outranks the UA's `[hidden]` rule.
@@ -547,10 +515,11 @@ async function main() {
       record('the hidden attribute still hides the flex card', hiddenHonored === 'none',
         `computed display while hidden = ${hiddenHonored}`);
 
-      const tiles = await page.$$eval('[data-first-run-choice]', (nodes) => nodes.map((n) => n.dataset.firstRunChoice));
+      await nextStep(page, '[data-first-run-start]');
+      const tiles = await page.$$eval('[data-first-run-start]', (nodes) => nodes.map((n) => n.dataset.firstRunStart));
       record(
-        'four tiles in the owner\'s order',
-        JSON.stringify(tiles) === JSON.stringify(['contacts', 'space-missions', 'environmental', 'explore']),
+        'three tiles in the owner\'s order',
+        JSON.stringify(tiles) === JSON.stringify(['space-missions', 'environmental', 'explore']),
         tiles.join(' · '),
       );
 
@@ -605,7 +574,7 @@ async function main() {
 
     // ── Mission outcomes ────────────────────────────────────────────────────
     // One section PER MISSION: a throw in one (a tile that never rendered under
-    // --teeth, say) must not take the other four down with it, or the teeth
+    // --teeth, say) must not take the other two down with it, or the teeth
     // tally reports "reached" for assertions that never ran.
     let state;
     let before;
@@ -637,14 +606,9 @@ async function main() {
      *
      *   KEYED   — both datasets must actually arrive, and a failure banner in
      *             that state is a real defect, so the chip IS asserted.
-     *   KEYLESS — only the LAYER ROW is asserted: FIRMS reports KEY REQUIRED,
-     *             which is the honest surface a keyless visitor is judged on.
-     *             The GLOBAL chip is deliberately NOT asserted in either
-     *             direction here: it has no key-required terminal state and
-     *             folds that row into a misleading LOAD FAILED. That
-     *             aggregation is a defect in the shared state machine
-     *             (`src/loadingFeedback.js`), LEDGERED post-launch — it is not
-     *             a desirable outcome and not this tile's contract.
+     *   KEYLESS — the LAYER ROW reports KEY REQUIRED, and the GLOBAL chip
+     *             never says LOAD FAILED: a missing key ends the batch
+     *             KEY REQUIRED (`src/loadingFeedback.js`).
      */
     const keyless = state.firmsError === 'KEY REQUIRED';
     console.log(`  \x1b[2m   FIRMS key state: ${keyless ? 'KEYLESS' : 'KEYED'} `
@@ -659,6 +623,12 @@ async function main() {
         'KEYLESS: the quakes half of the tile still delivers in full',
         (state.counts.earthquakes ?? 0) > 0,
         `${state.counts.earthquakes} quakes`,
+      );
+      const keylessChip = await readLoadingChip(page);
+      record(
+        'KEYLESS: the global chip never says LOAD FAILED for a missing key',
+        !keylessChip.some((entry) => /LOAD FAILED/i.test(entry)),
+        keylessChip.join(' → ') || 'no chip',
       );
     } else {
       record(
@@ -688,45 +658,91 @@ async function main() {
     shots.push(await shoot(page, 'mission-environmental'));
     });
 
-    await section('mission-contacts', async () => {
-    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
-    await pick(page, 'contacts');
-    state = await appState(page);
-    record('LIVE CONTACTS activates the Contacts context mode', state.contextMode === 'flights',
-      `contextMode=${state.contextMode}`);
-    const panelOpen = await page.evaluate(() => {
-      const panel = document.getElementById('global-context-panel');
-      return !!panel && !panel.classList.contains('collapsed');
-    });
-    record('LIVE CONTACTS reveals the Context panel', panelOpen);
-    record('LIVE CONTACTS still leaves the detection override untouched',
-      state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);
-    shots.push(await shoot(page, 'mission-contacts'));
-    });
-
     await section('mission-space', async () => {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
     await pick(page, 'space-missions');
     state = await appState(page);
-    record('SPACE MISSIONS activates its context mode', state.contextMode === 'space-missions',
-      `contextMode=${state.contextMode}`);
+    const missions = await page.evaluate(() => {
+      const panel = document.getElementById('space-missions-panel');
+      return {
+        layerOn: window.__godsEyeView.dataManager.isEffectivelyEnabled('rocket-launches'),
+        panelOpen: !!panel && !panel.hidden && !panel.classList.contains('collapsed'),
+      };
+    });
+    record('SPACE MISSIONS switches its layer on without a Context mode',
+      missions.layerOn && state.contextMode == null,
+      `layerOn=${missions.layerOn} contextMode=${state.contextMode}`);
+    record('SPACE MISSIONS opens its own panel', missions.panelOpen,
+      `panelOpen=${missions.panelOpen}`);
+    record('SPACE MISSIONS still leaves the detection override untouched',
+      state.detectionOverridden === false, `_detectionUserOverridden=${state.detectionOverridden}`);
     shots.push(await shoot(page, 'mission-space-missions'));
     });
 
     await section('mission-explore', async () => {
     await open(page, { query: "?welcome=1", errorSink: consoleErrors });
+    // Start below the mission overview so an accidental overview flight is observable.
+    await page.evaluate(() => {
+      const camera = window.__godsEyeView.viewer.camera;
+      camera.cancelFlight();
+      camera.setView({ destination: camera.position.constructor.fromDegrees(-97.7431, 30.2672, 100000) });
+    });
     const beforeExplore = await appState(page);
     await pick(page, 'explore');
     state = await appState(page);
     record('EXPLORE MANUALLY enables no layer and no context mode',
       Object.values(state.layers).every((on) => !on) && state.contextMode === null,
       Object.entries(state.layers).filter(([, on]) => on).map(([id]) => id).join(', ') || 'nothing enabled');
-    // The real claim is that Explore issues no camera command of its own: the
-    // arrival fly-in owns the camera and must still be heading down, not out.
     record('EXPLORE MANUALLY never commandeers the camera',
-      (state.heightKm ?? 0) < 12000 && (state.heightKm ?? 1e9) <= (beforeExplore.heightKm ?? 1e9),
-      `${beforeExplore.heightKm} → ${state.heightKm} km (globe would be 18000)`);
+      beforeExplore.heightKm === 100 && state.heightKm === beforeExplore.heightKm,
+      `${beforeExplore.heightKm} → ${state.heightKm} km (expected 100 → 100 km)`);
     shots.push(await shoot(page, 'mission-explore'));
+    });
+
+    await section('stories-card', async () => {
+    await open(page, { query: "?welcome=1", errorSink: consoleErrors });
+    const backdrop = await page.evaluate(() => {
+      const el = document.querySelector('.first-run-backdrop');
+      if (!el) return null;
+      const style = getComputedStyle(el);
+      return {
+        filter: style.backdropFilter || style.webkitBackdropFilter || 'none',
+        background: style.backgroundColor,
+        pointerEvents: style.pointerEvents,
+      };
+    });
+    record('the welcome backdrop tints the globe without blurring it',
+      !!backdrop && backdrop.filter === 'none' && backdrop.background !== 'rgba(0, 0, 0, 0)'
+        && backdrop.pointerEvents === 'none',
+      JSON.stringify(backdrop));
+    await nextStep(page, '[data-first-run-start]');
+    await nextStep(page, '[data-first-run-choice]');
+    const button = await page.evaluate(() => {
+      const el = document.querySelector('#first-run-launcher [data-first-run-stories]');
+      return el ? { tag: el.tagName, href: el.getAttribute('href'), target: el.getAttribute('target') } : null;
+    });
+    record('the GEV Stories card offers an in-app BROWSE STORIES button',
+      button?.tag === 'BUTTON' && button.href === null && button.target === null,
+      JSON.stringify(button));
+    const pagesBefore = (await browser.pages()).length;
+    await page.click('#first-run-launcher [data-first-run-stories]');
+    const opened = await page.waitForFunction(
+      () => document.body.classList.contains('stories-mode')
+        && !!document.querySelector('#gev-stories .app'),
+      { timeout: 30000 },
+    ).then(() => true, () => false);
+    const after = await page.evaluate((sel) => ({
+      launcherVisible: !!document.querySelector(sel)?.classList.contains('visible'),
+      session: sessionStorage.getItem('gev:first-run-mission-session:v1'),
+      query: location.search,
+    }), LAUNCHER);
+    record('BROWSE STORIES opens Stories Explore in this tab',
+      opened && (await browser.pages()).length === pagesBefore,
+      `stories-mode=${opened}, query=${after.query}`);
+    record('BROWSE STORIES closes the welcome card for the session',
+      !after.launcherVisible && after.session !== null,
+      `visible=${after.launcherVisible}, session=${after.session}`);
+    shots.push(await shoot(page, 'stories-card-explore'));
     });
 
     // ── Viewports ───────────────────────────────────────────────────────────
@@ -741,6 +757,8 @@ async function main() {
     for (const vp of VIEWPORTS) {
       await page.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: vp.dpr });
       await open(page, { query: "?welcome=1", errorSink: consoleErrors });
+      for (let step = 1; step <= 3; step++) {
+      if (step > 1) await nextStep(page, step === 2 ? '[data-first-run-start]' : '[data-first-run-choice]');
       const box = await page.evaluate((sel) => {
         const node = document.querySelector(sel);
         if (!node) return null;
@@ -761,22 +779,23 @@ async function main() {
       const fits = !!box && box.top >= 0 && box.bottom <= box.vh
         && box.left >= 0 && box.right <= box.vw;
       record(
-        `the launcher fits a ${vp.label} with no clipping`,
+        `step ${step} fits a ${vp.label} with no clipping`,
         fits,
         box ? `${box.left},${box.top} → ${box.right},${box.bottom} in ${box.vw}x${box.vh}${box.listScrolls ? ' (list scrolls)' : ''}` : 'absent',
       );
-      record(`"Don't show this again" stays on screen at ${vp.width}x${vp.height}`,
+      record(`step ${step} checkbox stays on screen at ${vp.width}x${vp.height}`,
         !!box?.checkboxOnScreen);
 
       // Discoverability: if the list scrolls, the LAST tile must still peek
       // above the fold. A fold that lands exactly between tiles looks like a
-      // complete list of four, and the fifth mission is simply never found.
+      // complete list, and the last mission is simply never found.
+      if (step === 2) {
       const peek = await page.evaluate((sel) => {
         const node = document.querySelector(sel);
         const list = node?.querySelector('.first-run-choices');
         if (!list) return null;
         list.scrollTop = 0;
-        const tiles = [...list.querySelectorAll('[data-first-run-choice]')];
+        const tiles = [...list.querySelectorAll('[data-first-run-start]')];
         const last = tiles[tiles.length - 1];
         if (!last) return null;
         const listBox = list.getBoundingClientRect();
@@ -785,7 +804,7 @@ async function main() {
         return {
           scrolls: list.scrollHeight > list.clientHeight + 1,
           fraction: lastBox.height ? visible / lastBox.height : 0,
-          label: last.dataset.firstRunChoice,
+          label: last.dataset.firstRunStart,
         };
       }, LAUNCHER);
       record(
@@ -801,7 +820,7 @@ async function main() {
       const reach = await page.evaluate(async (sel) => {
         const node = document.querySelector(sel);
         if (!node) return null;
-        const targets = [...node.querySelectorAll('[data-first-run-choice], [data-first-run-suppress]')];
+        const targets = [...node.querySelectorAll('[data-first-run-start], [data-first-run-suppress]')];
         const offscreen = [];
         for (const target of targets) {
           target.focus();
@@ -810,7 +829,7 @@ async function main() {
           const host = node.getBoundingClientRect();
           if (document.activeElement !== target
             || rect.bottom <= host.top || rect.top >= host.bottom) {
-            offscreen.push(target.dataset.firstRunChoice || 'suppress-checkbox');
+            offscreen.push(target.dataset.firstRunStart || 'suppress-checkbox');
           }
         }
         return { count: targets.length, offscreen };
@@ -819,7 +838,7 @@ async function main() {
       // A hardcoded count silently turns into a failure the day the menu
       // changes, which is exactly what it did when a tile was removed.
       const expectedFocusable = await page.$$eval(
-        '[data-first-run-choice]', (nodes) => nodes.length,
+        '[data-first-run-start]', (nodes) => nodes.length,
       ) + 1;
       record(
         `every tile and the checkbox are keyboard-reachable at ${vp.width}x${vp.height}`,
@@ -828,6 +847,7 @@ async function main() {
           ? `${reach.count}/${expectedFocusable} focusable${reach.offscreen.length ? `, unreachable: ${reach.offscreen.join(', ')}` : ''}`
           : 'absent',
       );
+      }
       // The reachability probe above tabs to the last tile and scrolls the list
       // with it. Put it back to the top so the taste-pass shot shows what a
       // visitor actually opens on.
@@ -837,7 +857,8 @@ async function main() {
         document.activeElement?.blur?.();
       }, LAUNCHER);
       await sleep(250);
-      shots.push(await shoot(page, `launcher-${vp.name}`));
+      shots.push(await shoot(page, `launcher-${vp.name}-step-${step}`));
+      }
     }
     await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
     });

@@ -148,6 +148,34 @@ test('wind is sampled from the model grid at the location', async () => {
   const calm = await catalog.call('get_wind', { location: { lat: 0, lon: 0 } });
   assert.equal(calm.summary, 'Wind at 0.0000, 0.0000: 0 km/h, calm.');
   assert.equal(calm.data.calm, true);
+  assert.equal(calm.data.stale, false);
+  // The proxy's last run, served while the model upstream fails.
+  const cached = composeCatalog({
+    tools: coreTools,
+    services: {
+      wind: {
+        getSnapshot: async (options) => ({
+          ...(await wind.getSnapshot(options)),
+          stale: true,
+          reason: 'Wind upstream unavailable',
+        }),
+      },
+    },
+  });
+  const stale = await cached.call('get_wind', { location: { lat: 0, lon: 0 } });
+  assert.equal(
+    stale.summary,
+    'Wind at 0.0000, 0.0000: 0 km/h, calm (forecast may be stale).',
+  );
+  assert.equal(stale.data.stale, true);
+  u.fill(10);
+  const staleWest = await cached.call('get_wind', {
+    location: { lat: 30.27, lon: -97.74 },
+  });
+  assert.equal(
+    staleWest.summary,
+    'Wind at 30.2700, -97.7400: 36 km/h from the W (forecast may be stale).',
+  );
   const down = composeCatalog({
     tools: coreTools,
     services: { wind: { getSnapshot: async () => ({ unavailable: true }) } },

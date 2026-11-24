@@ -20,6 +20,9 @@ import { t, tn } from '../i18n/index.js';
  * `drawTool.js`.
  */
 
+import { greatCircleMeters } from '../geoDistance.js';
+import { formatDistanceText } from '../data/distanceFormat.js';
+
 export const DRAW_SHAPES = Object.freeze(['area', 'line', 'pin']);
 export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
 /**
@@ -29,10 +32,10 @@ export const MIN_VERTICES = Object.freeze({ area: 3, line: 2, pin: 1 });
  */
 export const MAX_VERTICES = 512;
 /** Two clicks closer than this are one vertex: a double-click to finish must not add a stray point. */
-export const MIN_VERTEX_SEPARATION_M = 0.5;
+const MIN_VERTEX_SEPARATION_M = 0.5;
 /** A line shorter than this, or an area thinner than this, is a mis-click rather than a shape. */
-export const MIN_PATH_LENGTH_M = 1;
-export const MIN_AREA_M2 = 1;
+const MIN_PATH_LENGTH_M = 1;
+const MIN_AREA_M2 = 1;
 
 /** @param {string} shape @returns {'area'|'line'|'pin'} */
 export function normalizeShape(shape) {
@@ -48,15 +51,8 @@ export function createDrawSession(shape = 'area') {
 }
 
 /** Great-circle distance in metres between two {lon, lat} points. */
-export function greatCircleM(a, b) {
-  const R = 6371000;
-  const toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLon = toRad(b.lon - a.lon);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(Math.min(1, h)));
+function greatCircleM(a, b) {
+  return greatCircleMeters(a, b);
 }
 
 /**
@@ -212,16 +208,16 @@ export function ringCentroid(vertices) {
 export function formatMeasure(session) {
   if (!session) return '';
   if (session.shape === 'line') {
-    const m = pathLengthM(session.vertices);
-    return m >= 1000
-      ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`
-      : `${Math.round(m)} m`;
+    return formatDistanceText(pathLengthM(session.vertices)) ?? '';
   }
   if (session.shape === 'area') {
     const m2 = ringAreaM2(session.vertices);
-    if (m2 >= 1e6) return `${(m2 / 1e6).toFixed(2)} km²`;
-    if (m2 >= 1e4) return `${(m2 / 1e4).toFixed(1)} ha`;
-    return `${Math.round(m2)} m²`;
+    // Round before each unit cut, as for a line. 9,999.6 m² was "10000 m²".
+    const whole = Math.round(m2);
+    const ha = (m2 / 1e4).toFixed(1);
+    if (whole < 1e4) return `${whole} m²`;
+    if (Number(ha) < 100) return `${ha} ha`;
+    return `${(m2 / 1e6).toFixed(2)} km²`;
   }
   return '';
 }

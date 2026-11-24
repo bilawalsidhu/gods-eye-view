@@ -6,17 +6,29 @@ import {
   kartaViewZoomFor,
 } from './index.js';
 import {
+  COVERAGE_TUNING,
   FILTERED_OUT_MESSAGE,
   NO_COVERAGE_HINT,
   SEQUENCE_PAGE_SIZE,
   TOO_HIGH_HINT,
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
+  drawn,
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  bindStreetViewer,
   coverageViewer,
+  drawnLineSets,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 /** A photo record `metres` east of (42.3314, -83.0458), in sequence `seq` at `index`. */
 function photoRecord(id, { metres = 0, seq = '14010', index = 0 } = {}) {
@@ -100,9 +112,6 @@ function fakeContext({ filter = { pano: 'all', sinceMs: null } } = {}) {
       services: {},
       getFilter: () => actions.filter,
       isActive: () => true,
-      groundCaster: null,
-      meshSampler: null,
-      getSurface: () => 'draped',
       notify() {},
       actions: {
         // As the core does: the provider's own viewer opens it.
@@ -153,11 +162,6 @@ test('KartaView registers keyless, off by default, with Mapillary’s filters an
     'upload',
     'SINCE is KartaView’s upload date',
   );
-  assert.equal(
-    definition.highlightsSequence,
-    false,
-    'its lines are streets: a selected drive shows as cones',
-  );
   assert.match(
     definition.credit.html,
     /KartaView<\/a> contributors, CC BY-SA 4\.0/,
@@ -176,14 +180,10 @@ test('KartaView registers keyless, off by default, with Mapillary’s filters an
 });
 
 test('coverage is drawn from z14 near the street and z13 a little higher; never from orbit', () => {
-  assert.deepEqual(kartaViewZoomFor(300), { zoom: 14, kind: 'sequence' });
-  assert.deepEqual(kartaViewZoomFor(2_500), { zoom: 14, kind: 'sequence' });
-  assert.deepEqual(kartaViewZoomFor(4_000), { zoom: 13, kind: 'sequence' });
-  assert.deepEqual(
-    kartaViewZoomFor(6_000),
-    { zoom: 13, kind: 'sequence' },
-    'the top of the range still draws',
-  );
+  assert.equal(kartaViewZoomFor(300), 14);
+  assert.equal(kartaViewZoomFor(2_500), 14);
+  assert.equal(kartaViewZoomFor(4_000), 13);
+  assert.equal(kartaViewZoomFor(6_000), 13, 'the top of the range still draws');
   assert.equal(kartaViewZoomFor(6_001), null);
   assert.equal(kartaViewZoomFor(NaN), null);
 });
@@ -198,7 +198,7 @@ test('the nearest photo is the closest within 50 m, and opening it asks nothing 
   });
   const id = await instance.nearestImage({ lat: 42.3314, lon: -83.0458 });
   assert.equal(id, 'near');
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   await instance.viewer.open(id);
   assert.deepEqual(source.calls.photo, [], 'the lookup filled the cache');
@@ -293,7 +293,7 @@ const press = async (button, opened) => {
 
 async function mounted(sourceOptions, contextOptions) {
   const env = setup(sourceOptions, contextOptions);
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const poses = [];
   env.instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -422,24 +422,24 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const draw = fakeDrawPort();
+  env.instance.init(
+    bindStreetViewer(
+      {
+        scene: { preRender: { addEventListener: () => () => {} } },
+        camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
+      },
+      { draw },
+    ),
+  );
+  const drawn = () => [
+    ...(draw.find('street-level:kartaview-cones:')?.items.values() ?? []),
+  ];
   const cones = () => {
-    const indexes = [];
-    for (let i = 0; i < collection.length; i++)
-      indexes.push(Number(collection.get(i).id.split('-').at(-1)));
+    const indexes = drawn().map((cone) => Number(cone.id.split('-').at(-1)));
     return [Math.min(...indexes), Math.max(...indexes)];
   };
-  cones.count = () => collection?.length ?? 0;
+  cones.count = () => drawn().length;
   return cones;
 }
 
@@ -515,7 +515,7 @@ test('coverage tiles are kept for a while: panning back asks KartaView nothing',
   const tiles = createTileCache({
     load: async (tile) => {
       asked.push(`${tile.z}/${tile.x}/${tile.y}`);
-      return { sequences: [], overview: [] };
+      return { sequences: [] };
     },
     size: 2,
     ttlMs: 1000,
@@ -744,10 +744,7 @@ function coverageSetup(
     return { query };
   };
   const centre = tileCentre(-83.0458, 42.3314);
-  const viewer = coverageViewer(
-    { lon: centre.lon, lat: centre.lat, height },
-    t,
-  );
+  const viewer = coverageViewer({ lon: centre.lon, lat: centre.lat, height });
   const tiles = [];
   let hold = null;
   env.source.getTile = (tile) => {
@@ -789,6 +786,14 @@ function coverageSetup(
   };
 }
 
+/** The camera came to rest: coverage refreshes once its debounce is over. */
+async function moved(viewer) {
+  viewer.camera.moveEnd.raiseEvent();
+  await new Promise((resolve) =>
+    setTimeout(resolve, COVERAGE_TUNING.moveDebounceMs + 20),
+  );
+}
+
 test('a filter thins the lines to those its PNG mask draws; without one they all show', async (t) => {
   const { lon, lat } = tileCentre(-83.0458, 42.3314);
   // Across the tile's middle row (mask row ~256), and a quarter up (~130).
@@ -811,15 +816,16 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
   assert.equal(env.tiles.length, 1, 'the segments are kept');
   // SINCE a day: uploaded since yesterday (UTC) — none here. The lines
-  // drawn now stay on the globe while KartaView draws the filtered tile.
+  // drawn now go while KartaView draws the filtered tile.
   const since = Date.now() - 86_400_000;
   const release = env.holdMasks();
   env.actions.filter = { pano: 'all', sinceMs: since };
   env.instance.setFilter();
   assert.ok(await until(() => env.instance.coverageStats().loading));
-  assert.ok(
-    env.viewer.scene.groundPrimitives.items.size > 0,
-    'the unfiltered lines show meanwhile',
+  assert.equal(
+    drawnLineSets(env.viewer).length,
+    0,
+    'the unfiltered lines are not shown as filtered ones',
   );
   release();
   assert.ok(
@@ -834,10 +840,7 @@ test('a filter thins the lines to those its PNG mask draws; without one they all
     `startDate=${new Date(since).toISOString().slice(0, 10)}`,
   );
   assert.equal(env.instance.coverageStats().hint, NO_COVERAGE_HINT);
-  assert.ok(
-    await until(() => env.viewer.scene.groundPrimitives.items.size === 0),
-    'and go once it is in',
-  );
+  assert.equal(drawnLineSets(env.viewer).length, 0);
   // The same filter again asks KartaView for nothing.
   env.instance.setFilter();
   for (let i = 0; i < 5; i++) await settle();
@@ -851,7 +854,7 @@ test('coverage hints: zoom in from too high, “no photos” only once an empty 
   assert.deepEqual(env.tiles, [], 'nothing asked from up there');
   const release = env.holdTiles();
   env.viewer.view.height = 900;
-  env.instance.refreshCoverage();
+  await moved(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().loading));
   assert.equal(env.instance.coverageStats().hint, '', 'not while it loads');
   release();
@@ -871,7 +874,7 @@ test('coverage tiles are kept while KartaView is on and dropped once it is switc
   });
   env.instance.activate(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
-  env.instance.refreshCoverage();
+  await moved(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 1));
   assert.equal(env.tiles.length, 1, 'kept while on');
   // Switched off: the decoded lines are not kept, so on again asks again.
@@ -975,7 +978,7 @@ test('after a GPU reset the photo is drawn again by the viewer, not through the 
   context.actions.reportError = (message) => errors.push(message);
   const instance = definition.create(context);
   actions.instance = instance;
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const poses = [];
   instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -983,6 +986,7 @@ test('after a GPU reset the photo is drawn again by the viewer, not through the 
   const canvas = () => host.children[0].children[1];
   const kind = () => host.children[0].dataset.kind;
   canvas().fire('webglcontextlost');
+  await drawn();
   assert.equal(kind(), '', 'cleared while it is drawn again');
   assert.ok(await until(() => kind() === 'pano'), 'drawn again');
   assert.ok(poses.length >= 2);
@@ -1015,7 +1019,7 @@ test('the marker is KartaView’s own cone, and it points along the drive, not a
       photos: page.photos.map((record) => ({ ...record, heading: '200' })),
     };
   };
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const bearings = [];
   env.instance.viewer.onPose((pose) => bearings.push(pose.bearing));
@@ -1106,7 +1110,7 @@ test('a sequence page that lands while a lost GPU context recovers still draws i
   const instance = definition.create(context);
   actions.instance = instance;
   const cones = await withCones(t, { instance });
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   await instance.viewer.open('p-0');
   // › to the next panorama; the GPU resets while it loads.

@@ -5,6 +5,13 @@
  */
 
 import { t, msg } from '../i18n/index.js';
+import {
+  normalizeVesselType,
+  vesselKind,
+  VESSEL_KIND_STYLES,
+} from './vesselTypes.js';
+
+export { normalizeVesselType };
 
 export const VESSEL_OVERLAY_SOURCE_ID = 'ais-live-vessels';
 /** Existing selector grid size; one ambient winner is retained per cell. */
@@ -19,57 +26,16 @@ export const VESSEL_CARD_FADE_DISTANCE_M = 5_000_000;
 export const VESSEL_CARD_FADE_START_RATIO = 0.7;
 
 /**
- * AIS type family → chevron hue + card accent. Single source of truth for
- * vessel type colors so billboard chevrons and host cards cannot drift apart.
+ * An aid to navigation's buoy and card accent: a bone white apart from every
+ * ship type's colour.
  */
-const TYPE_STYLES = [
-  { pattern: /tanker/i, css: '#ffb347', accent: '255, 179, 71' },
-  {
-    pattern: /cargo|container|bulk|carrier/i,
-    css: '#39d5ff',
-    accent: '57, 213, 255',
-  },
-  {
-    pattern: /passenger|ferry|cruise/i,
-    css: '#ff7adf',
-    accent: '255, 122, 223',
-  },
-  { pattern: /fishing/i, css: '#7cff9b', accent: '124, 255, 155' },
-  {
-    pattern: /tug|tow|pilot|supply|service/i,
-    css: '#f7f0a3',
-    accent: '247, 240, 163',
-  },
-];
-const DEFAULT_STYLE = { css: '#39d5ff', accent: '57, 213, 255' };
+export const AID_TO_NAVIGATION_STYLE = Object.freeze({
+  css: '#d9d2c0',
+  accent: '217, 210, 192',
+});
 
-const NUMERIC_TYPE_SPECIALS = {
-  30: 'FISHING',
-  31: 'TOWING',
-  32: 'TOWING',
-  33: 'DREDGER',
-  34: 'DIVE OPS',
-  35: 'MILITARY',
-  36: 'SAILING',
-  37: 'PLEASURE',
-  50: 'PILOT',
-  51: 'SAR',
-  52: 'TUG',
-  53: 'PORT TENDER',
-  54: 'ANTI-POLLUTION',
-  55: 'LAW ENFORCE',
-  58: 'MEDICAL',
-};
-const NUMERIC_TYPE_FAMILIES = {
-  4: 'HIGH-SPEED',
-  6: 'PASSENGER',
-  7: 'CARGO',
-  8: 'TANKER',
-  9: 'OTHER',
-};
-
-// Card text for the type tokens above. The tokens stay English: TYPE_STYLES
-// and tests match on them.
+// Card text for the type tokens above. The tokens stay English: the vessel
+// kinds (`vesselKind`) and tests match on them.
 const TYPE_DISPLAY_KEYS = Object.freeze({
   FISHING: msg('FISHING'),
   TOWING: msg('TOWING'),
@@ -105,33 +71,17 @@ export function displayVesselType(type) {
 }
 
 /**
- * Resolve an AIS type to display text: bare numeric ship-type codes map to
- * family names ("71" → "CARGO"); text types pass through unchanged.
- * @param {string} type Raw AIS type.
- * @returns {string}
+ * AIS ship type → CSS hex colour its sprite is tinted with. The sprite and
+ * the card take it from the vessel's kind (`vesselKind`), so they cannot
+ * drift apart.
  */
-export function normalizeVesselType(type) {
-  const text = String(type || '').trim();
-  if (!text || !/^\d{1,2}$/.test(text)) return text;
-  const code = Number(text);
-  if (code <= 0) return '';
-  if (NUMERIC_TYPE_SPECIALS[code]) return NUMERIC_TYPE_SPECIALS[code];
-  return NUMERIC_TYPE_FAMILIES[Math.floor(code / 10)] || 'OTHER';
-}
-
-/** AIS ship type → CSS hex hue for the billboard chevron. */
 export function vesselTypeCss(type) {
-  return styleForType(type).css;
+  return VESSEL_KIND_STYLES[vesselKind(type)].css;
 }
 
 /** AIS ship type → "r, g, b" accent string for the host card. */
 export function accentForVesselType(type) {
-  return styleForType(type).accent;
-}
-
-function styleForType(type) {
-  const text = normalizeVesselType(type);
-  return TYPE_STYLES.find((entry) => entry.pattern.test(text)) || DEFAULT_STYLE;
+  return VESSEL_KIND_STYLES[vesselKind(type)].accent;
 }
 
 /**
@@ -192,7 +142,7 @@ export function applyVesselOverlayPolicy(
     edgeFade: 'keyhole',
     horizonCull: true,
     terrainOcclusion: false,
-    // Only MMSI-keyed cards can resolve back to one actionable vessel.
+    // Only keyed cards can resolve back to one actionable vessel.
     interactive: card?.actionable === true,
   };
 }

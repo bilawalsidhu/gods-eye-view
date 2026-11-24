@@ -11,11 +11,17 @@ scene playback and voice. It delegates; new behavior belongs with its owner.
 | `cockpitCoordinator.js` | Cockpit entry/rollback, readouts and the single Display portal |
 | `visualSettings.js` | Effects, detection overrides, visual restoration and render-loop lifetime |
 | `panelChrome.js` | Disclosure, docking, layout and Cockpit panel restoration |
+| `panelNavigation.js` | Desktop panel rails: each side's offered panels and the open one |
 | `aircraftDisplay.js` | Shared commercial/military 3D display preferences and controls |
 | `layerBindings.js` | Data-manager attachment, selected-tracker adoption and camera-entry listeners |
 | `displayBindings.js` | Keyboard/display subscriptions and frame-rate monitor lifetime |
 | `shareRestoration.js` | Initial share/layer restoration and cancellation |
 | `shellFeedback.js` | Loading feedback, notices and toast lifetime |
+
+Owners that present UI do so through Vue: they publish plain view objects to a
+Pinia store in `src/ui/stores/`, views in `src/ui/views/` render them, and user
+actions return through the handlers the owner connects to that store. See
+[Building UI](../CONTRIBUTING.md#building-ui).
 
 Owners receive named services, elements, operations and readers. They do not
 receive the application shell itself. Readers resolve a replaceable collaborator

@@ -1,7 +1,7 @@
 // src/data/aircraftClass.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyAircraft, CLASS_SCALE_2D, CLASS_SCALE_3D, CLASS_MODEL_URL, CLASS_MODEL_REAL } from './aircraftClass.js';
+import { AIRCRAFT_CLASS_LABELS, classifyAircraft } from './aircraftClass.js';
 
 test('type-code classification (military layer path)', () => {
   assert.equal(classifyAircraft({ typeCode: 'F16' }), 'fastjet');
@@ -48,19 +48,53 @@ test('typeCode outranks category; unknown → airliner', () => {
   assert.equal(classifyAircraft({ typeCode: null, category: 0 }), 'airliner');
 });
 
-test('scale/url tables cover every class', () => {
-  for (const kind of ['light','glider','turboprop','airliner','widebody','quadjet','helicopter','fastjet','bizjet','uav']) {
-    assert.ok(Number.isFinite(CLASS_SCALE_2D[kind]), kind);
-    assert.ok(CLASS_SCALE_3D[kind] >= 0.75 && CLASS_SCALE_3D[kind] <= 1.45, kind);
-    assert.ok(typeof CLASS_MODEL_URL[kind] === 'string', kind);
+test('every class has a label', () => {
+  for (const kind of [
+    'light',
+    'glider',
+    'turboprop',
+    'airliner',
+    'widebody',
+    'quadjet',
+    'helicopter',
+    'fastjet',
+    'bizjet',
+    'uav',
+    'vehicle',
+    'station',
+  ]) {
+    assert.ok(AIRCRAFT_CLASS_LABELS[kind], kind);
   }
 });
 
-test('CLASS_MODEL_REAL entries carry the fields the layers consume', () => {
-  for (const [kind, spec] of Object.entries(CLASS_MODEL_REAL)) {
-    assert.ok(spec.url.startsWith('/models/') && spec.url.endsWith('.glb'), kind);
-    assert.ok(spec.radiusM > 0 && spec.bellyM > 0, kind);
-    // every real-model class must also exist in the classifier tables
-    assert.ok(Number.isFinite(CLASS_SCALE_2D[kind]), kind);
-  }
+test('airport vehicles and ground stations class apart from aircraft', () => {
+  // A feed's own types, in any case.
+  assert.equal(classifyAircraft({ typeCode: 'ZVEH' }), 'vehicle');
+  assert.equal(classifyAircraft({ typeCode: ' zveh ' }), 'vehicle');
+  assert.equal(classifyAircraft({ typeCode: 'GRND' }), 'station');
+  // Emitter categories: surface vehicles, then obstacles.
+  assert.equal(classifyAircraft({ category: 'C1' }), 'vehicle');
+  assert.equal(classifyAircraft({ category: 'C2' }), 'vehicle');
+  for (const category of ['C3', 'C4', 'C5'])
+    assert.equal(classifyAircraft({ category }), 'station', category);
+  // OpenSky's integer categories for the same.
+  assert.equal(classifyAircraft({ category: 16 }), 'vehicle');
+  assert.equal(classifyAircraft({ category: 17 }), 'vehicle');
+  assert.equal(classifyAircraft({ category: 18 }), 'station');
+  // A type code still outranks the category.
+  assert.equal(
+    classifyAircraft({ typeCode: 'ZVEH', category: 'A3' }),
+    'vehicle',
+  );
+  assert.equal(
+    classifyAircraft({ typeCode: 'A320', category: 'C1' }),
+    'airliner',
+  );
+});
+
+test('helicopter types and categories', () => {
+  for (const typeCode of ['EC35', 'R44', 'S76', 'H60', 'AS50', 'B407'])
+    assert.equal(classifyAircraft({ typeCode }), 'helicopter', typeCode);
+  assert.equal(classifyAircraft({ category: 'A7' }), 'helicopter');
+  assert.equal(classifyAircraft({ category: 8 }), 'helicopter');
 });

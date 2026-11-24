@@ -1,0 +1,95 @@
+/* Ordinary actions share one surface; feature classes own placement and width.
+ * Legacy scene-btn hooks keep untouched toggles/Street Level controls stable.
+ * The kit's UiButton wears it as variant="action" (.ui-button--action) and
+ * variant="primary" (.ui-button--primary); its resting rules select one kit
+ * class, so a feature class loaded later still wins. */
+.ui-button--action,
+.ui-button--primary,
+.gev-action-button,
+.scene-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+  padding: 6px 9px;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+/* A pressed kit action looks as a hovered regular one does (a compact one
+   too: its quieter hover below is for an unpressed button). */
+.ui-button--action:hover:not(:disabled),
+.ui-button--primary:hover:not(:disabled),
+.ui-button--action.ui-button--pressed:not(:disabled),
+.ui-button--primary.ui-button--pressed:not(:disabled),
+.gev-action-button:hover:not(:disabled),
+.scene-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.ui-button--action:disabled,
+.ui-button--primary:disabled,
+.gev-action-button:disabled,
+.scene-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* tone="danger". */
+.ui-button--action.ui-button--danger:hover:not(:disabled),
+.ui-button--action.ui-button--danger.ui-button--pressed:not(:disabled),
+.gev-action-button--danger:hover:not(:disabled),
+.scene-btn-danger:hover:not(:disabled) {
+  color: #ff7272;
+  border-color: #ff7272;
+  background: rgba(255, 88, 88, 0.15);
+}
+
+/* One primary action per group: Authoring's CAPTURE SHOT and PLAY. The panel
+   id keeps those above the shared surface; scenes.css keeps their hover. The
+   kit selector stays at one class's weight. */
+.ui-button--primary:where(:not(:disabled)),
+#scene-panel .scene-btn-primary:not(:disabled) {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* Shot-row actions retain their smaller footprint and quieter hover treatment
+   (size="compact", on the action variant only: :where keeps the kit
+   selector at one class's weight). */
+.ui-button--compact:where(.ui-button--action),
+.gev-action-button--compact {
+  border-radius: 6px;
+  font-size: 8px;
+  letter-spacing: 0.8px;
+  padding: 4px 6px;
+}
+
+/* A pressed compact action keeps its pressed look under the pointer. */
+.ui-button--compact:where(.ui-button--action):hover:not(:disabled):not(
+    .ui-button--pressed
+  ),
+.gev-action-button--compact:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--glass-border-hover);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ui-button--compact.ui-button--danger:where(.ui-button--action):hover:not(
+    :disabled
+  ),
+.gev-action-button--compact.gev-action-button--danger:hover:not(:disabled) {
+  color: #ff7e7e;
+  border-color: #ff7e7e;
+}

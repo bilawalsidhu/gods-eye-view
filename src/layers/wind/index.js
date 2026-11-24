@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { createWindRendering } from './rendering.js';
 import { WIND_FIELDS } from './fields.js';
 import {
@@ -6,11 +5,9 @@ import {
   windReadingResult,
   windUnitChips,
 } from './presentation.js';
-import {
-  inspectWindAtCenter,
-  createWindInspectionMarker,
-  WIND_UNITS,
-} from './inspection.js';
+import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import { createWindInspectionMarker } from './inspectionMarker.js';
+import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 
@@ -57,7 +54,6 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
   container,
   createRendering = createWindRendering,
 } = {}) {
@@ -84,7 +80,10 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    const view = viewer
+      ? { query: findQuery(viewer), canvas: canvasOf(viewer) }
+      : {};
+    reading = inspectWindAtCenter(manifest, view, {
       position,
       units,
       overlay,
@@ -116,14 +115,10 @@ export function createWindLayer({
     init(nextViewer) {
       viewer = nextViewer;
       rendering = createRendering({
-        cesium,
         container: container ?? nextViewer.container,
         getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
+        // Without a host from the shell, the rendering drapes on the globe.
+        getHost: () => imageryHost?.(),
         onStatusChange: notify,
       });
       rendering.attach();
@@ -132,7 +127,6 @@ export function createWindLayer({
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
-        cesium,
       });
     },
     attachShellServices(services) {
@@ -180,7 +174,7 @@ export function createWindLayer({
           overlay: requestedScalar(),
         });
         if (!enabled || controller.signal.aborted || request !== controller)
-          return false;
+          return enabled && !signal?.aborted && request !== controller;
         manifest = snapshot;
         error = null;
         if (sampledPosition) sample(sampledPosition);
@@ -194,7 +188,8 @@ export function createWindLayer({
         }
         return true;
       } catch (cause) {
-        if (controller.signal.aborted || request !== controller) return false;
+        if (controller.signal.aborted || request !== controller)
+          return enabled && !signal?.aborted && request !== controller;
         error = cause?.message || msg('Wind source unavailable');
         return true;
       } finally {
@@ -263,8 +258,9 @@ export function createWindLayer({
       return { model, overlay, paused, units };
     },
     getRowControls() {
+      // A source that follows the timeline shows the wind at its time.
       const historyStatus =
-        clock?.getState().mode === 'history'
+        clock?.getState().mode === 'history' && !clock.follows?.('wind')
           ? t('Forecast · does not follow history')
           : null;
       const valid = formatWindValidTime(manifest?.cycle?.validIso);

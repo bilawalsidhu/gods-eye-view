@@ -15,10 +15,132 @@ const parseName = (fields, version) =>
     data: { stations: [station(fields)] },
   }).get('s1').name;
 
+const parseCapacity = (fields) =>
+  parseStationInformation({ data: { stations: [station(fields)] } }).get('s1')
+    .capacity;
+
+test('station information skips missing, blank and malformed coordinates', () => {
+  for (const field of ['lat', 'lon', 'latitude', 'longitude']) {
+    for (const value of [
+      undefined,
+      null,
+      '',
+      ' \t ',
+      false,
+      true,
+      [],
+      [0],
+      {},
+      'bad',
+      NaN,
+      Infinity,
+    ]) {
+      const raw = { station_id: 'bad', lat: 0, lon: 0 };
+      if (field === 'latitude') delete raw.lat;
+      if (field === 'longitude') delete raw.lon;
+      raw[field] = value;
+      const parsed = parseStationInformation({
+        data: { stations: [raw, station({ station_id: 'good' })] },
+      });
+      assert.deepEqual(
+        [...parsed.keys()],
+        ['good'],
+        `${field} = ${JSON.stringify(value)}`,
+      );
+    }
+  }
+});
+
+test('station information skips coordinates outside latitude and longitude bounds', () => {
+  for (const fields of [
+    { lat: 90.001 },
+    { lat: -90.001 },
+    { lon: 180.001 },
+    { lon: -180.001 },
+    { lat: undefined, latitude: '91' },
+    { lon: undefined, longitude: '-181' },
+  ]) {
+    const parsed = parseStationInformation({
+      data: { stations: [station(fields)] },
+    });
+    assert.equal(parsed.size, 0, JSON.stringify(fields));
+  }
+});
+
+test('station information preserves zero, boundary coordinates and numeric aliases', () => {
+  for (const [fields, expected] of [
+    [{ lat: 0, lon: 0 }, [0, 0]],
+    [{ lat: ' 0 ', lon: '0' }, [0, 0]],
+    [{ lat: 90, lon: 180 }, [90, 180]],
+    [{ lat: '-90', lon: '-180' }, [-90, -180]],
+    [
+      { lat: null, lon: undefined, latitude: '30.2681', longitude: '-97.7469' },
+      [30.2681, -97.7469],
+    ],
+  ]) {
+    const parsed = parseStationInformation({
+      data: { stations: [station(fields)] },
+    }).get('s1');
+    assert.ok(parsed, JSON.stringify(fields));
+    assert.deepEqual([parsed.lat, parsed.lon], expected);
+  }
+});
+
+test('capacity counts docks, not the geofenced area PBSC adds to it', () => {
+  // Bilbao Bizi, BiciMAD and Dbizi as published on 2026-10-17.
+  assert.equal(parseCapacity({ capacity: 839, geofenced_capacity: 800 }), 39);
+  assert.equal(parseCapacity({ capacity: 43, geofenced_capacity: 20 }), 23);
+  assert.equal(parseCapacity({ capacity: 19, geofenced_capacity: 0 }), 19);
+});
+
+test('capacity is read as given without a usable geofenced_capacity', () => {
+  assert.equal(parseCapacity({ capacity: 27 }), 27);
+  assert.equal(parseCapacity({ capacity: 27, geofenced_capacity: null }), 27);
+  assert.equal(parseCapacity({ capacity: 27, geofenced_capacity: 'n/a' }), 27);
+  assert.equal(parseCapacity({ capacity: 10, geofenced_capacity: 30 }), 10);
+  assert.equal(parseCapacity({ capacity: null, geofenced_capacity: 5 }), null);
+});
+
 test('GBFS v2 station names remain trimmed strings', () => {
   assert.equal(
     parseName({ name: ' Republic Square ', short_name: 'Short' }, '2.3'),
     'Republic Square',
+  );
+});
+
+test('underscores in station names read as word breaks', () => {
+  // As published by JCDecaux's Spanish contracts (checked 2026-10-17).
+  for (const [published, shown] of [
+    ['_PLAZA_MUSICO_LOPEZ_CHAVARRI', 'PLAZA MUSICO LOPEZ CHAVARRI'],
+    ['_GLORIETA OLIMPICA', 'GLORIETA OLIMPICA'],
+    ['_CAMPAMENTO_81', 'CAMPAMENTO 81'],
+    ['Plaza__Mayor_ ', 'Plaza Mayor'],
+  ]) {
+    assert.equal(parseName({ name: published }), shown);
+  }
+});
+
+test('spacing without underscores stays as the operator published it', () => {
+  assert.equal(parseName({ name: 'C/  NÀPOLS, 82' }), 'C/  NÀPOLS, 82');
+});
+
+test('a name of only underscores falls back to short_name, then to empty', () => {
+  assert.equal(parseName({ name: '_', short_name: '_S_1_' }), 'S 1');
+  assert.equal(parseName({ name: '__', short_name: '_' }), '');
+});
+
+test('underscores are read the same in GBFS v3 localized names', () => {
+  assert.equal(
+    parseName(
+      {
+        name: [
+          { language: 'es', text: '_' },
+          { language: 'en', text: '_COLON_I' },
+        ],
+      },
+      '3.0',
+    ),
+    'COLON I',
   );
 });
 

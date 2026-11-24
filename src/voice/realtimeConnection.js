@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
 
 const DISCONNECT_GRACE_MS = 6000;
 
@@ -52,7 +53,8 @@ export class RealtimeConnection {
     return this.readStatus();
   }
   async start({ pushToTalk = false } = {}) {
-    if (this.isActive() || this.lifetimeSignal?.aborted) return;
+    if (isStoriesOpen() || this.isActive() || this.lifetimeSignal?.aborted)
+      return;
     this.pauseRadioForVoice();
     const pushToTalkKeyHeld = pushToTalk && this.input.pushToTalkKeyHeld;
     const spaceKeyHeld = this.input.spaceKeyHeld;
@@ -376,6 +378,10 @@ export class RealtimeConnection {
       this.stream = null;
     }
     if (this.audioEl) {
+      // This session owns the element's remote media; peer closure is not track release.
+      const remoteStream = this.audioEl.srcObject;
+      this.audioEl.srcObject = null;
+      remoteStream?.getTracks?.().forEach((track) => track.stop());
       this.audioEl.remove();
       this.audioEl = null;
     }

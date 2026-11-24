@@ -1,5 +1,10 @@
-import * as Cesium from 'cesium';
-import { ISS_OVERLAY_SOURCE_ID } from './policy.js';
+import { frameOf } from '../../render/rendererOf.js';
+import {
+  ISS_NORAD,
+  ISS_OVERLAY_SOURCE_ID,
+  SATELLITE_COVERAGE_MS,
+} from './policy.js';
+import { worldClock } from '../../time/worldClock.js';
 
 export function createLifecycle({
   state: layerState,
@@ -8,15 +13,41 @@ export function createLifecycle({
   source,
 }) {
   const { clearFocusTarget } = services.focus;
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
+  // While on with a catalog, satellites can be shown at any time in reach of
+  // their element sets. Registered once; off, the layer has no time to show,
+  // and each step tells the clock once it has settled.
+  const clockSource = {
+    id: 'satellites',
+    coverage: () => {
+      if (!layerState._enabled || !layerState._catalog.size) return null;
+      const now = worldClock.wallNow();
+      return {
+        start: now - SATELLITE_COVERAGE_MS,
+        end: now + SATELLITE_COVERAGE_MS,
+      };
+    },
+  };
+  // Unregistered on destroy, so a page that builds the app again holds no old layer; init
+  // registers it again.
+  let uncover = worldClock.register(clockSource);
   const { registerPickOwner, unregisterPickOwner } = services.picking;
+
+  /** Run the shared per-frame tick before each frame draws. */
+  function onEachFrame(frame) {
+    return frame.on('preRender', (t) => parts.rendering._preRenderTick(t));
+  }
 
   const methods = {
     // Catalog data refresh; propagation remains preRender-owned.
 
     async init(viewer) {
+      uncover ??= worldClock.register(clockSource);
+      // Asked first: a viewer without one fails before anything is built.
+      const frame = frameOf(viewer);
       parts.catalog._abortActiveUpdates();
       clearFocusTarget('satellites');
+      for (const model of parts.stationModels ?? [])
+        model._destroyStationModel();
       layerState._viewer = viewer;
       layerState._catalog = new Map();
       layerState._points = new Map();
@@ -24,12 +55,18 @@ export function createLifecycle({
       layerState._orbitPaths = new Map();
       layerState._count = 0;
       layerState._lastUpdate = null;
+      layerState._coreStale = false;
+      layerState._denseStale = false;
       layerState._trackedNorad = null;
       parts.tracking._cancelPendingTrackingRestore();
       layerState._trackedEntity = null;
       layerState._trackedFrameNumber = -1;
       layerState._trackedFrameGeo = null;
       layerState._trackedFrameNowForTest = null;
+      // The new catalog's points and rings carry no hold.
+      layerState._cockpitHiddenPoints = new Set();
+      layerState._cockpitHiddenPath = null;
+      layerState._cockpitHiddenDot = false;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
       layerState._enabled = false;
@@ -44,36 +81,41 @@ export function createLifecycle({
       layerState._denseStatus = 'idle';
       layerState._denseError = null;
       layerState._catalogRevision++;
+      layerState.coverageChanged();
 
-      // Point primitives for satellite dots
-      layerState._pointCollection = new Cesium.PointPrimitiveCollection();
-      viewer.scene.primitives.add(layerState._pointCollection);
+      // The sets the satellite dots, the tracked dot and the rings draw in
+      parts.rendering._attach(viewer);
 
       parts.interaction._installClickHandler(viewer);
 
       // Pre-render listener for real-time position updates
       // (fleet propagation + tracked per-frame dot + orbit ring GMST rotation)
-      layerState._preRenderListener = viewer.scene.preRender.addEventListener(
-        parts.rendering._preRenderTick,
-      );
+      layerState._preRenderListener = onEachFrame(frame);
 
       console.log('[Data:Satellites] Initialized');
     },
 
     enable(viewer) {
       layerState._enabled = true;
-      holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
-      if (layerState._pointCollection)
-        layerState._pointCollection.show =
-          parts.controls.satelliteVisualsVisible(
-            layerState._enabled,
-            layerState._params.showPoints,
-          );
-      // Orbit ring primitives + persistent ISS host label — show them
-      for (const path of layerState._orbitPaths.values())
-        path.primitive.show = parts.controls.satelliteVisualsVisible(
+      // Drawn as often as the dots move on screen (rendering.js, the pace).
+      parts.rendering._startPace();
+      parts.rendering._setPointsShown(
+        parts.controls.satelliteVisualsVisible(
           layerState._enabled,
-          layerState._params.showOrbits,
+          layerState._params.showPoints,
+        ),
+      );
+      // Orbit rings + persistent ISS host label — show them; the ISS's ring
+      // follows its class (and its tracking).
+      for (const noradId of layerState._orbitPaths.keys())
+        parts.rendering._setOrbitPathShown(
+          noradId,
+          noradId === ISS_NORAD
+            ? parts.controls._issOrbitVisible()
+            : parts.controls.satelliteVisualsVisible(
+                layerState._enabled,
+                layerState._params.showOrbits,
+              ),
         );
       parts.labels._syncIssOverlay();
       // Re-attach input handlers and preRender propagation
@@ -85,28 +127,27 @@ export function createLifecycle({
         return Number.isFinite(norad) && layerState._points.has(norad);
       });
       if (!layerState._preRenderListener && viewer) {
-        layerState._preRenderListener = viewer.scene.preRender.addEventListener(
-          parts.rendering._preRenderTick,
-        );
+        layerState._preRenderListener = onEachFrame(frameOf(viewer));
       }
       parts.tracking._applyPendingTrackingRestore();
+      layerState.coverageChanged();
     },
 
     disable(viewer) {
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
-      releaseContinuousRender('satellites');
-      if (layerState._pointCollection) layerState._pointCollection.show = false;
-      for (const path of layerState._orbitPaths.values())
-        path.primitive.show = false;
+      parts.rendering._stopPace();
+      parts.rendering._setPointsShown(false);
+      parts.rendering._setOrbitPathsShown(false);
+      for (const model of parts.stationModels ?? [])
+        model._updateStationModel(); // off: releases the model
       parts.tracking._clearTracking();
+      parts.stationPanel?._syncStationPanel(); // off: takes the panel down
       parts.labels._syncIssOverlay();
       // Remove click handler + keydown listener + preRender propagation while disabled
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       if (layerState._trackedEntityChangedRemove) {
         layerState._trackedEntityChangedRemove();
         layerState._trackedEntityChangedRemove = null;
@@ -117,18 +158,19 @@ export function createLifecycle({
         layerState._preRenderListener();
         layerState._preRenderListener = null;
       }
+      layerState.coverageChanged();
     },
 
     destroy(viewer) {
       parts.catalog._abortActiveUpdates();
-      releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
+      uncover?.();
+      uncover = null;
+      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();
-      if (layerState._clickHandler) {
-        layerState._clickHandler.destroy();
-        layerState._clickHandler = null;
-      }
+      layerState._clickSubscription?.();
+      layerState._clickSubscription = null;
       if (layerState._trackedEntityChangedRemove) {
         layerState._trackedEntityChangedRemove();
         layerState._trackedEntityChangedRemove = null;
@@ -141,14 +183,11 @@ export function createLifecycle({
       }
       layerState._overlayHost.clearSource(ISS_OVERLAY_SOURCE_ID);
       layerState._overlayHost.setVisible(ISS_OVERLAY_SOURCE_ID, false);
-      if (layerState._pointCollection) {
-        viewer.scene.primitives.remove(layerState._pointCollection);
-        layerState._pointCollection = null;
-      }
-      // Orbit ring primitives are removed (and destroyed) here
-      for (const path of layerState._orbitPaths.values()) {
-        viewer.scene.primitives.remove(path.primitive);
-      }
+      for (const model of parts.stationModels ?? [])
+        model._destroyStationModel();
+      parts.stationPanel?._destroyStationPanel();
+      // The dots', tracked dot's and rings' sets are disposed of
+      parts.rendering._detach(viewer);
       layerState._points.clear();
       layerState._detectionObjects.clear();
       layerState._orbitPaths.clear();
@@ -162,6 +201,8 @@ export function createLifecycle({
       layerState._rowControlsListener = null;
       layerState._count = 0;
       layerState._lastUpdate = null;
+      layerState._coreStale = false;
+      layerState._denseStale = false;
       layerState._lastError = null;
       layerState._lastFocusUpdate = 0;
       layerState._activeFocusCount = 0;
@@ -172,6 +213,7 @@ export function createLifecycle({
         failedGroups: [],
       };
       layerState._viewer = null;
+      layerState.coverageChanged();
     },
   };
 

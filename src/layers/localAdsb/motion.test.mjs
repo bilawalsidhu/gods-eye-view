@@ -207,3 +207,13 @@ test('a velocity/altitude-only update with the same position time still refreshe
   );
   assert.ok(Math.abs(display.lat) < 1e-9, 'a stopped aircraft does not coast');
 });
+
+test('without a reported track the course follows the heard path', () => {
+  const motion = new LocalAdsbMotion();
+  for (let second = 0; second <= 10; second += 1) {
+    const at = second * 1_000;
+    motion.observe(fix(at, 0, { lon: second * STEP, trackDeg: null }), at);
+  }
+  const course = motion.displayAt(10_000).courseDeg;
+  assert.ok(Math.abs(course - 90) < 0.5, `${course}`);
+});

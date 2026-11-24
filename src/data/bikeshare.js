@@ -23,4 +23,3 @@ export {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
 } from '../layers/bikeshare/index.js';
-export default layer;

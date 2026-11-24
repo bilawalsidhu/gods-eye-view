@@ -1,0 +1,70 @@
+/* Shared ordinary slider surface; feature classes only own surrounding layout.
+ * Native range inputs retain keyboard, pointer, bounds and step behavior. */
+.gev-quantitative-slider {
+  width: 100%;
+  min-width: 0;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  cursor: pointer;
+}
+.gev-quantitative-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.gev-quantitative-slider::-webkit-slider-thumb {
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border: 0;
+  border-radius: 50%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  cursor: pointer;
+}
+.gev-quantitative-slider::-moz-range-track,
+.gev-quantitative-slider::-moz-range-progress {
+  height: 3px;
+  border: 0;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.gev-quantitative-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+  cursor: pointer;
+}
+.gev-quantitative-slider:focus-visible {
+  border-radius: 4px;
+  outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
+  outline-offset: 2px;
+}
+.gev-quantitative-slider:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+.pp-slider-value,
+.param-value,
+.ri-opacity-value,
+.rail-card-setting-range-value,
+.gev-slider-value {
+  min-width: 28px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  text-align: right;
+  flex-shrink: 0;
+}

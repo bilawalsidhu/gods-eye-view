@@ -1,5 +1,14 @@
-import * as Cesium from 'cesium';
-import { t, msg } from '../i18n/index.js';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
+import { dot, sub } from '../geo/vector.js';
+import { loadYouTubeApi } from './youtubeApi.js';
+import { t, msg, onLocaleChange } from '../i18n/index.js';
+import { h, render as renderVue } from 'vue';
+import BhoteKoshiMediaCards from '../ui/bhoteKoshi/BhoteKoshiMediaCards.vue';
 
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
@@ -92,59 +101,7 @@ export function bhoteEventText(value) {
 let _xWidgetsPromise = null;
 let _facebookSdkPromise = null;
 let _facebookEmbedSequence = 0;
-const youtubeApis = new WeakMap();
-
-function loadYouTubeApi(documentRef, globalRef) {
-  if (typeof globalRef.YT?.Player === 'function')
-    return Promise.resolve(globalRef.YT);
-  if (youtubeApis.has(documentRef)) return youtubeApis.get(documentRef);
-  const pending = new Promise((resolve, reject) => {
-    const previous = globalRef.onYouTubeIframeAPIReady;
-    let timer;
-    let settled = false;
-    const script = documentRef.createElement('script');
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      globalRef.clearTimeout(timer);
-      if (globalRef.onYouTubeIframeAPIReady === ready)
-        globalRef.onYouTubeIframeAPIReady = previous;
-      if (error) {
-        script.remove();
-        reject(error);
-      } else resolve(globalRef.YT);
-    };
-    const ready = () => {
-      try {
-        previous?.();
-      } finally {
-        finish(
-          typeof globalRef.YT?.Player === 'function'
-            ? null
-            : new Error('YouTube API unavailable'),
-        );
-      }
-    };
-    globalRef.onYouTubeIframeAPIReady = ready;
-    script.src = 'https://www.youtube.com/iframe_api';
-    script.async = true;
-    script.addEventListener(
-      'error',
-      () => finish(new Error('YouTube API unavailable')),
-      { once: true },
-    );
-    timer = globalRef.setTimeout(
-      () => finish(new Error('YouTube API timed out')),
-      5000,
-    );
-    documentRef.head.append(script);
-  }).catch((error) => {
-    youtubeApis.delete(documentRef);
-    throw error;
-  });
-  youtubeApis.set(documentRef, pending);
-  return pending;
-}
+let _cardSequence = 0;
 
 /** A trimmed clip follows provider time, never time spent loading its iframe. */
 export function createTrimmedYouTubePlayback({
@@ -538,23 +495,22 @@ function ensureProviderConnections(documentRef, provider) {
   }
 }
 
+/**
+ * Where an anchor (ECEF) is in the card root, through the renderer's camera
+ * and query ports; null behind the eye, off the root, or with no renderer.
+ */
 function anchorOnScreen(viewer, anchor, root) {
-  if (!viewer?.scene || !anchor || !root) return null;
-  const camera = viewer.camera;
-  if (camera?.positionWC && camera?.directionWC) {
-    const delta = Cesium.Cartesian3.subtract(
-      anchor,
-      camera.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
-  }
-  const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    anchor,
-  );
+  if (!anchor || !root) return null;
+  const camera = findCamera(viewer);
+  const query = findQuery(viewer);
+  if (!camera || !query) return null;
+  const pose = camera.pose();
+  if (dot(sub(anchor, pose.position), pose.direction) <= 0) return null;
+  const pixel = query.project(anchor);
   if (!pixel) return null;
-  const canvasBounds = viewer.canvas?.getBoundingClientRect?.();
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvas = canvasOf(viewer);
+  const canvasBounds = canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -569,7 +525,8 @@ function anchorOnScreen(viewer, anchor, root) {
   return { x, y, width: rootBounds.width, height: rootBounds.height };
 }
 
-function placeCard(card, leader, anchor) {
+/** Place a media card beside its map anchor, in the lane between the panels. */
+export function placeCard(card, leader, anchor) {
   const margin = 18;
   const gap = 42;
   const width = card.offsetWidth || 392;
@@ -580,22 +537,22 @@ function placeCard(card, leader, anchor) {
   let laneRight = anchor.width - margin;
   let laneBottom = anchor.height - margin;
   if (rootBounds && documentRef?.querySelector) {
-    const leftPanel = documentRef
-      .querySelector('#scene-panel')
-      ?.getBoundingClientRect?.();
-    const rightRail = documentRef
-      .querySelector('#right-context-rail')
-      ?.getBoundingClientRect?.();
     const commandDock = documentRef
       .querySelector('#command-dock')
       ?.getBoundingClientRect?.();
-    if (leftPanel?.width > 0)
-      laneLeft = Math.max(laneLeft, leftPanel.right - rootBounds.left + margin);
-    if (rightRail?.width > 0)
-      laneRight = Math.min(
-        laneRight,
-        rightRail.left - rootBounds.left - margin,
-      );
+    // The scene panel and the context rail swap sides in right-to-left
+    // languages: each narrows the lane from the side it sits on.
+    for (const selector of ['#scene-panel', '#right-context-rail']) {
+      const panel = documentRef
+        .querySelector(selector)
+        ?.getBoundingClientRect?.();
+      if (!(panel?.width > 0)) continue;
+      const start = panel.left - rootBounds.left;
+      const end = panel.right - rootBounds.left;
+      if (start + end < rootBounds.width)
+        laneLeft = Math.max(laneLeft, end + margin);
+      else laneRight = Math.min(laneRight, start - margin);
+    }
     if (commandDock?.height > 0)
       laneBottom = Math.min(
         laneBottom,
@@ -635,6 +592,8 @@ function placeCard(card, leader, anchor) {
 function createRoot(documentRef, viewer) {
   const root = documentRef.createElement('div');
   root.id = 'bhote-koshi-embedded-media-root';
+  // Drawn over the globe for the scene: Stories keeps it while one plays.
+  root.setAttribute('data-globe-overlay', '');
   root.setAttribute('aria-live', 'polite');
   (viewer?.container || documentRef.body)?.append(root);
   return root;
@@ -674,7 +633,60 @@ export function createBhoteKoshiEmbeddedMedia({
   let record = null;
   let warmRecord = null;
   let generation = 0;
+  let destroyed = false;
+  // The cards in the root, in the order they were shown: the current one and
+  // any still leaving. Their text is kept as the calls that word it, so a
+  // locale change words it again.
+  const cards = [];
+
+  /** Render the cards and the YouTube preload into the root, synchronously. */
+  function render() {
+    if (destroyed) return;
+    const warmFrame = warmRecord?.frame;
+    renderVue(
+      h(BhoteKoshiMediaCards, {
+        warm: warmFrame
+          ? {
+              key: warmRecord.key,
+              src: warmFrame.src,
+              title: warmFrame.title(),
+            }
+          : null,
+        cards: cards.map((current) => ({
+          id: current.id,
+          provider: current.source.provider,
+          portrait: current.portrait,
+          entering: current.entering,
+          leaving: current.leaving,
+          unavailable: current.unavailable,
+          label: current.label(),
+          title: current.title(),
+          status: current.status(),
+          url: current.source.url,
+          frame: current.frame && {
+            src: current.frame.src,
+            title: current.frame.title(),
+            onLoad: current.frame.onLoad,
+          },
+          bind: current.bind,
+        })),
+      }),
+      root,
+    );
+  }
+  const offLocale = onLocaleChange(render);
   const leavingRecords = new Set();
+
+  /** Word a card's status and draw it. */
+  function setStatus(current, text) {
+    current.status = text;
+    render();
+  }
+  /** Mark a card unavailable or not and draw it. */
+  function setUnavailable(current, unavailable) {
+    current.unavailable = unavailable;
+    render();
+  }
 
   const prefersReducedMotion = () =>
     globalRef.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ===
@@ -816,8 +828,10 @@ export function createBhoteKoshiEmbeddedMedia({
     if (current.exitTimer != null) globalRef.clearTimeout?.(current.exitTimer);
     destroyFacebookSession(current.facebookSession);
     current.youtubeSession?.destroy();
-    current.card?.remove?.();
+    const at = cards.indexOf(current);
+    if (at !== -1) cards.splice(at, 1);
     leavingRecords.delete(current);
+    render();
   }
 
   const position = () => {
@@ -833,13 +847,14 @@ export function createBhoteKoshiEmbeddedMedia({
         current.enterFrame = scheduleFrame(() => {
           current.enterFrame = null;
           if (token !== generation || record !== current) return;
-          current.card.classList.add('is-entering');
+          current.entering = true;
+          render();
         });
       }
     }
   };
   const removePostRender =
-    viewer.scene?.postRender?.addEventListener?.(position);
+    findFrame(viewer)?.on('postRender', () => position()) ?? null;
 
   function hide({ immediate = false, preserveWarm = false } = {}) {
     if (!preserveWarm) clearWarm();
@@ -855,9 +870,10 @@ export function createBhoteKoshiEmbeddedMedia({
       removeRecord(current);
       return;
     }
-    current.card.classList.remove('is-entering');
-    current.card.classList.add('is-leaving');
+    current.entering = false;
+    current.leaving = true;
     leavingRecords.add(current);
+    render();
     current.exitTimer =
       globalRef.setTimeout?.(
         () => removeRecord(current),
@@ -867,10 +883,10 @@ export function createBhoteKoshiEmbeddedMedia({
 
   function clearWarm(key = null) {
     if (!warmRecord || (key && warmRecord.key !== key)) return;
-    if (warmRecord.facebookSession)
-      destroyFacebookSession(warmRecord.facebookSession);
-    else warmRecord.iframe?.remove?.();
+    const facebookSession = warmRecord.facebookSession;
     warmRecord = null;
+    if (facebookSession) destroyFacebookSession(facebookSession);
+    else render();
   }
 
   function takeWarmFacebook(key, host) {
@@ -910,27 +926,26 @@ export function createBhoteKoshiEmbeddedMedia({
       warmRecord = { key, facebookSession };
       return true;
     }
-    const iframe = documentRef.createElement('iframe');
-    iframe.className = 'bhote-embedded-media-warmup';
-    iframe.src = embeddedMediaFrameUrl(source, {
-      autoplay: false,
-      startAtSec,
-      endAtSec,
-    });
-    iframe.title = t('Preloading {provider} media', {
-      provider: providerLabel(source.provider),
-    });
-    iframe.tabIndex = -1;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.loading = 'eager';
-    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    root.append(iframe);
-    warmRecord = { key, iframe };
+    warmRecord = {
+      key,
+      frame: {
+        src: embeddedMediaFrameUrl(source, {
+          autoplay: false,
+          startAtSec,
+          endAtSec,
+        }),
+        title: () =>
+          t('Preloading {provider} media', {
+            provider: providerLabel(source.provider),
+          }),
+      },
+    };
+    render();
     return true;
   }
 
   async function mountX(current, token) {
-    current.status.textContent = t('LOADING X POST…');
+    setStatus(current, () => t('LOADING X POST…'));
     try {
       const api = await xLoader(documentRef, globalRef);
       if (token !== generation || record !== current) return;
@@ -950,14 +965,16 @@ export function createBhoteKoshiEmbeddedMedia({
         throw new Error(
           msg('The X post is unavailable or cannot be embedded.'),
         );
-      current.status.textContent = t('X POST · PROVIDER CONTROLS');
+      setStatus(current, () => t('X POST · PROVIDER CONTROLS'));
       position();
     } catch (error) {
       if (token !== generation || record !== current) return;
-      current.card.classList.add('is-unavailable');
-      current.status.textContent = t('{reason} OPEN ORIGINAL.', {
-        reason: t(String(error?.message || msg('X embed unavailable'))),
-      });
+      current.unavailable = true;
+      setStatus(current, () =>
+        t('{reason} OPEN ORIGINAL.', {
+          reason: t(String(error?.message || msg('X embed unavailable'))),
+        }),
+      );
       position();
     }
   }
@@ -970,23 +987,25 @@ export function createBhoteKoshiEmbeddedMedia({
     session.shouldPlay = autoplay === true;
     session.onReady = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = t('FACEBOOK · PROVIDER CONTROLS');
-      current.card.classList.remove('is-unavailable');
+      current.status = () => t('FACEBOOK · PROVIDER CONTROLS');
+      setUnavailable(current, false);
       position();
     };
     session.onError = (error) => {
       if (token !== generation || record !== current) return;
-      current.card.classList.add('is-unavailable');
-      current.status.textContent = t('{reason} OPEN ORIGINAL.', {
-        reason: t(String(error?.message || msg('Facebook embed unavailable'))),
-      });
+      current.unavailable = true;
+      setStatus(current, () =>
+        t('{reason} OPEN ORIGINAL.', {
+          reason: t(
+            String(error?.message || msg('Facebook embed unavailable')),
+          ),
+        }),
+      );
       position();
     };
     session.onPlaybackBlocked = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = t(
-        'AUTOPLAY BLOCKED · USE PROVIDER CONTROLS',
-      );
+      setStatus(current, () => t('AUTOPLAY BLOCKED · USE PROVIDER CONTROLS'));
     };
     if (session.ready) session.onReady();
     else if (session.error) session.onError(session.error);
@@ -1032,97 +1051,69 @@ export function createBhoteKoshiEmbeddedMedia({
     if (warmRecord && warmRecord.key !== warmKey) clearWarm();
     hide({ preserveWarm: true });
     const token = ++generation;
-    const card = documentRef.createElement('section');
-    const portraitClass = isPortraitMedia(media) ? ' is-portrait' : '';
-    card.className = `bhote-embedded-callout is-${source.provider}${portraitClass}`;
-    card.dataset.provider = source.provider;
-    card.setAttribute(
-      'aria-label',
-      t('Embedded {provider} media for {source}', {
-        provider: providerLabel(source.provider),
-        source: observation?.title
-          ? bhoteEventText(observation.title)
-          : t('witness source'),
-      }),
-    );
-    const leader = documentRef.createElementNS(
-      'http://www.w3.org/2000/svg',
-      'svg',
-    );
-    leader.classList.add('bhote-embedded-callout-leader');
-    leader.setAttribute('aria-hidden', 'true');
-    leader.innerHTML =
-      '<path pathLength="1" fill="none" stroke="rgba(147,213,228,.72)" stroke-width="1.5"/><circle r="4" fill="#6be8ff" stroke="#ffffff" stroke-width="1.5"/>';
-    const player = documentRef.createElement('div');
-    player.className = 'bhote-embedded-callout-player';
-    const footer = documentRef.createElement('footer');
-    const title = documentRef.createElement('strong');
-    title.textContent = bhoteEventText(
-      observation?.shortTitle || observation?.title || t('Witness source'),
-    ).toUpperCase();
-    const status = documentRef.createElement('small');
-    status.setAttribute('role', 'status');
-    status.textContent = t('{provider} · EMBEDDED SOURCE', {
-      provider: providerLabel(source.provider),
-    });
-    const link = documentRef.createElement('a');
-    link.href = source.url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = t('OPEN ORIGINAL ↗');
-    footer.append(title, status, link);
-    const body = documentRef.createElement('div');
-    body.className = 'bhote-embedded-callout-body';
-    body.append(player, footer);
-    card.append(leader, body);
-    root.append(card);
-    record = {
+    const providerName = () => providerLabel(source.provider);
+    const sourceName = () =>
+      observation?.title
+        ? bhoteEventText(observation.title)
+        : t('witness source');
+    const current = {
+      id: ++_cardSequence,
       key,
       source,
       anchor,
-      card,
-      leader,
-      player,
-      status,
+      portrait: isPortraitMedia(media),
+      entering: false,
+      leaving: false,
+      unavailable: false,
+      label: () =>
+        t('Embedded {provider} media for {source}', {
+          provider: providerName(),
+          source: sourceName(),
+        }),
+      title: () =>
+        bhoteEventText(
+          observation?.shortTitle || observation?.title || t('Witness source'),
+        ).toUpperCase(),
+      status: () =>
+        t('{provider} · EMBEDDED SOURCE', { provider: providerName() }),
+      frame: null,
+      frameElement: null,
+      card: null,
+      leader: null,
+      player: null,
       entered: false,
     };
-
-    if (source.provider === 'x') {
-      void mountX(record, token);
-    } else if (source.provider === 'facebook') {
-      bindFacebook(record, token, warmKey, autoplay);
-    } else {
-      const iframe = documentRef.createElement('iframe');
-      iframe.src = embeddedMediaFrameUrl(source, {
-        autoplay,
-        startAtSec,
-        endAtSec,
-      });
-      const controlled =
+    // The elements the card's view draws: placed after each frame, filled by
+    // the provider.
+    current.bind = (name, element) => {
+      if (element) current[name] = element;
+    };
+    let controlled = false;
+    if (source.provider === 'youtube') {
+      const url = new URL(
+        embeddedMediaFrameUrl(source, {
+          autoplay,
+          startAtSec,
+          endAtSec,
+        }),
+      );
+      controlled =
         autoplay &&
         Number.isFinite(Number(endAtSec)) &&
         Number(endAtSec) > startAtSec;
       if (controlled) {
-        const url = new URL(iframe.src);
         url.searchParams.set('enablejsapi', '1');
         if (globalRef.location?.origin)
           url.searchParams.set('origin', globalRef.location.origin);
-        iframe.src = url.href;
       }
-      iframe.title = t('{provider} media: {source}', {
-        provider: providerLabel(source.provider),
-        source: observation?.title
-          ? bhoteEventText(observation.title)
-          : t('witness source'),
-      });
-      iframe.allow =
-        'autoplay; encrypted-media; picture-in-picture; fullscreen';
-      iframe.allowFullscreen = true;
-      iframe.loading = 'eager';
-      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-      iframe.addEventListener?.(
-        'load',
-        () => {
+      current.frame = {
+        src: url.href,
+        title: () =>
+          t('{provider} media: {source}', {
+            provider: providerName(),
+            source: sourceName(),
+          }),
+        onLoad: () => {
           if (token !== generation || record?.key !== key) return;
           clearWarm(warmKey);
           if (
@@ -1131,44 +1122,54 @@ export function createBhoteKoshiEmbeddedMedia({
               record.youtubeSession.getState().phase,
             )
           ) {
-            status.textContent = t('{provider} · PROVIDER CONTROLS', {
-              provider: providerLabel(source.provider),
-            });
+            setStatus(current, () =>
+              t('{provider} · PROVIDER CONTROLS', { provider: providerName() }),
+            );
           }
           position();
         },
-        { once: true },
-      );
-      player.append(iframe);
-      if (controlled) {
-        const current = record;
-        current.youtubeSession = createTrimmedYouTubePlayback({
-          iframe,
-          endAtSec: Number(endAtSec),
-          startAtSec,
-          globalRef,
-          loadApi: () => youtubeLoader(documentRef, globalRef),
-          isCurrent: () => token === generation && record === current,
-          onStatus: (phase) => {
-            if (phase !== 'completed')
-              status.textContent = t('YOUTUBE {state} · OPEN ORIGINAL', {
+      };
+    }
+    record = current;
+    cards.push(current);
+    render();
+
+    if (source.provider === 'x') {
+      void mountX(current, token);
+    } else if (source.provider === 'facebook') {
+      bindFacebook(current, token, warmKey, autoplay);
+    } else if (controlled) {
+      current.youtubeSession = createTrimmedYouTubePlayback({
+        iframe: current.frameElement,
+        endAtSec: Number(endAtSec),
+        startAtSec,
+        globalRef,
+        loadApi: () => youtubeLoader(documentRef, globalRef),
+        isCurrent: () => token === generation && record === current,
+        onStatus: (phase) => {
+          if (phase !== 'completed')
+            setStatus(current, () =>
+              t('YOUTUBE {state} · OPEN ORIGINAL', {
                 state: YOUTUBE_PHASE_LABELS[phase]
                   ? t(YOUTUBE_PHASE_LABELS[phase])
                   : phase.toUpperCase(),
-              });
-          },
-        });
-      }
+              }),
+            );
+        },
+      });
     }
     position();
     return true;
   }
 
   function destroy() {
+    offLocale();
     hide({ immediate: true });
     for (const current of [...leavingRecords]) removeRecord(current);
     clearWarm();
     removePostRender?.();
+    destroyed = true;
+    renderVue(null, root);
     root.remove();
   }
 
