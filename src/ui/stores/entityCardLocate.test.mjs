@@ -152,3 +152,45 @@ test('a lookup still running when the item comes back is dropped', async (t) => 
   assert.equal(store.card.lat, 1, 'the card keeps its live position');
   assert.deepEqual(shell.flown, [], 'the camera stays');
 });
+
+test('Fly to and Ask read the open camera’s current calibrated mount by id', (t) => {
+  const store = useEntityCardStore(createPinia());
+  t.after(() => store.clear());
+  const mount = { name: 'Camera A', latitude: 49, longitude: -123 };
+  let open = true;
+  const actions = [];
+  const module = {
+    findByQuery: (id) => (id === 'cam-a' ? { ...mount } : null),
+  };
+  store.connect({
+    isOpen: () => open,
+    dataManager: () => ({
+      layers: new Map([['cctv', { module }]]),
+      getAll: () => [],
+    }),
+    flyTo: (card) => actions.push([card.identity.id, card.lat, card.lon]),
+    ask: (card) => actions.push([card.identity.id, card.lat, card.lon]),
+  });
+  assert.ok(
+    store.select({
+      layerId: 'cctv',
+      id: 'cam-a',
+      label: mount.name,
+      lat: 49,
+      lon: -123,
+    }),
+  );
+  mount.latitude = 49.001;
+  store.flyTo();
+  open = false; // The Omnibar can act on this card after the panel closes.
+  mount.longitude = -123.002;
+  store.ask();
+  assert.deepEqual(actions, [
+    ['cam-a', 49.001, -123],
+    ['cam-a', 49.001, -123.002],
+  ]);
+  open = true;
+  mount.latitude = 49.003;
+  store.refresh();
+  assert.equal(store.card.lat, 49.003);
+});

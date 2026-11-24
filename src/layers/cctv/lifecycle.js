@@ -4,6 +4,7 @@ import { canvasOf, findCamera, findGlobe } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
+import { ownsCctvPick } from './pickIds.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
@@ -440,9 +441,7 @@ export function createLifecycle({
               );
             return;
           }
-          const cameraId = parts.selection.extractPickedCameraId(
-            event.drawHit ?? null,
-          );
+          const cameraId = parts.selection.extractPickedCameraId(event.hit);
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,
@@ -503,19 +502,9 @@ export function createLifecycle({
       layerState._lastUpdate = Date.now();
       // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner('cctv', (pickedId) => {
-        if (layerState._recordById.has(pickedId)) return true;
-        if (
-          typeof pickedId === 'string' &&
-          pickedId.startsWith(GIZMO_ID_PREFIX)
-        )
-          return true;
-        const coverage =
-          /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-            pickedId,
-          );
-        return Boolean(coverage && layerState._recordById.has(coverage[1]));
-      });
+      registerPickOwner('cctv', (pickedId) =>
+        ownsCctvPick(pickedId, layerState._recordById, GIZMO_ID_PREFIX),
+      );
       registerClickClaim?.('cctv', parts.selection.countClickCard);
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();

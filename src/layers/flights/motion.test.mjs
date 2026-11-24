@@ -441,3 +441,31 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
   assert.ok(Number.isNaN(told[1][1].courseDeg));
   assert.equal(told[1][1].onGround, true);
 });
+
+test('the trail head reads the tracked position only from the frame it is drawn in', () => {
+  for (const create of [createMotion, createMilitaryMotion]) {
+    const position = { x: 1, y: 2, z: 3 };
+    const flightState = {
+      records: { data: new Map() },
+      _positionHistory: new Map(),
+      _focusEvidenceIds: new Set(),
+      _trackedIcao: 'abc123',
+      // No viewer: the drawn-frame count reads -1.
+      _viewer: null,
+      _drReconcileValid: true,
+      _drReconcileIcao: 'abc123',
+      _cachedDRPosition: position,
+      _cachedDRFrame: -1,
+      now: Date.now,
+    };
+    const motion = create({
+      flightState,
+      services: { groundFloor: {}, camera: {}, focus: {}, placement: null },
+      parts: { rendering: { _modelOwnsVisual: () => false } },
+    });
+    assert.equal(motion._trackedTrailCached(), position, 'this frame');
+    // Kept from a frame before: the head works it out for its own frame.
+    flightState._cachedDRFrame = -2;
+    assert.equal(motion._trackedTrailCached(), null, 'a frame before');
+  }
+});

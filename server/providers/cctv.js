@@ -316,6 +316,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              hasSnapshot: Boolean(source.snapshotUrl),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
@@ -666,6 +667,18 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
         const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
+        // A live camera card asks only for its registered photo. Its request
+        // must neither change video health nor substitute a historical frame.
+        const snapshotOnly = url.searchParams.get('snapshotOnly') === '1';
+        if (
+          snapshotOnly &&
+          (!source?.snapshotUrl ||
+            !isVideoFeedType(normalizeFeedType(source.feedType)))
+        ) {
+          res.writeHead(404, { 'Cache-Control': 'no-store' });
+          res.end();
+          return;
+        }
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
         const upstreamCandidate =
@@ -695,6 +708,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 : await fetchCctvImageFromUpstream(upstreamCandidate, {
                     allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
                   });
+        if (snapshotOnly && !upstreamImage?.ok) {
+          res.writeHead(503, { 'Cache-Control': 'no-store' });
+          res.end();
+          return;
+        }
         if (
           source?.sourceKind === 'mlit-river' &&
           isMlitRiverAdjustmentImage(upstreamImage)
@@ -738,16 +756,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
         if (upstreamImage?.ok) {
-          setHealth(cameraId, {
-            status: upstreamImage.stale ? 'degraded' : 'ok',
-            sourceKind: 'snapshot',
-            label: source?.provider || 'Configured source',
-            message: upstreamImage.stale
-              ? 'Serving last snapshot; refresh failed'
-              : upstreamImage.cached
-                ? 'Cached snapshot active'
-                : 'Upstream snapshot active',
-          });
+          if (!snapshotOnly)
+            setHealth(cameraId, {
+              status: upstreamImage.stale ? 'degraded' : 'ok',
+              sourceKind: 'snapshot',
+              label: source?.provider || 'Configured source',
+              message: upstreamImage.stale
+                ? 'Serving last snapshot; refresh failed'
+                : upstreamImage.cached
+                  ? 'Cached snapshot active'
+                  : 'Upstream snapshot active',
+            });
           res.writeHead(200, {
             'Content-Type': upstreamImage.contentType,
             'Cache-Control': 'no-store',

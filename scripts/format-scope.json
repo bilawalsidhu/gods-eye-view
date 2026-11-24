@@ -630,6 +630,8 @@
   "src/render/cesium/renderLoopFixture.mjs",
   "src/layers/cctv/lifecycle.js",
   "src/layers/cctv/controls.js",
+  "src/layers/cctv/pickIds.js",
+  "src/layers/cctv/pickIds.test.mjs",
   "src/layers/cctv/geometry.js",
   "src/layers/cctv/source.js",
   "src/layers/cctv/catalog.js",

@@ -55,6 +55,7 @@ export const CAPABILITIES = Object.freeze([
   'occlusionTest',
   'pointVisibility',
   'keepEarthFramed',
+  'holdChanges',
 ]);
 
 /** @type {readonly import('./frame').FrameStep[]} */
@@ -120,8 +121,8 @@ export const PORTS = deepFreeze({
       'destroy',
     ),
   ),
-  frame: Object.fromEntries(
-    required(
+  frame: Object.fromEntries([
+    ...required(
       'on',
       'requestRender',
       'holdContinuous',
@@ -135,7 +136,8 @@ export const PORTS = deepFreeze({
       'setTime',
       'time',
     ),
-  ),
+    ['onHoldsChange', 'holdChanges'],
+  ]),
   globe: Object.fromEntries([
     ...required(
       'setBase',
