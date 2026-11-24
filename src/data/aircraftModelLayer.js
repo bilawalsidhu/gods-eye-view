@@ -812,6 +812,18 @@ export function createAircraftModels({
     );
   }
 
+  /** Whether the tracked contact may draw as a model, set by the fleet pass
+   *  (preRender). The icon owns the visual from the moment it may not
+   *  (`_modelOwnsVisual`), so its models stop drawing in this frame too, not
+   *  at the next frame's `_updateTrackedModel`. */
+  function _setTrackedModelEligible(eligible) {
+    const was = state._trackedModelEligible;
+    state._trackedModelEligible = eligible;
+    if (!was || eligible) return;
+    _hideTrackedModel();
+    _hideTrackedFleetModel();
+  }
+
   /** The tracked contact's fleet model lets go once the contact is no
    *  longer drawn as a model at all (out of range, 3D off, cockpit). */
   function _releaseTrackedFleetModel() {
@@ -1094,7 +1106,7 @@ export function createAircraftModels({
     const useModels = _modelRegimeActive(pose);
     if (!useModels && state._models.size) _releaseModels();
     if (!useModels) {
-      state._trackedModelEligible = false;
+      _setTrackedModelEligible(false);
       return;
     }
 
@@ -1149,8 +1161,9 @@ export function createAircraftModels({
         state._models.has(icao) ||
         (icao === state._trackedIcao && state._trackedModelEligible),
     });
-    state._trackedModelEligible =
-      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao);
+    _setTrackedModelEligible(
+      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao),
+    );
     const toRelease = [];
     for (const icao of state._models.keys()) {
       if (icao !== state._trackedIcao && !modelEligible.has(icao))
