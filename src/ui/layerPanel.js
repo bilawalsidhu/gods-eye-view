@@ -525,7 +525,12 @@ export class LayerPanel {
       row.controls = false;
       return null;
     }
-    const chips = controls?.chips || [];
+    // A chip's count is shortened as the row's is.
+    const chips = (controls?.chips || []).map((chip) =>
+      Number.isFinite(chip.count)
+        ? { ...chip, countText: formatCount(chip.count) }
+        : chip,
+    );
     const legend = (controls?.legend || []).map((item) => ({
       color: item.color,
       blurb: item.blurb,
