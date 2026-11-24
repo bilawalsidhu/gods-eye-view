@@ -8075,6 +8075,11 @@
     ],
     "external": []
   },
+  "perimeters-records": {
+    "exports": ["./layers/perimeters/records"],
+    "modules": ["src/layers/perimeters/records.js", "src/i18n/marker.js"],
+    "external": []
+  },
   "drone-airspace": {
     "exports": ["./layers/drone-airspace"],
     "modules": [
