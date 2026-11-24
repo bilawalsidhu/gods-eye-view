@@ -627,26 +627,24 @@ async function main() {
     // 2026-07-04: every click on the monitor plane picks its own camera, and
     // re-running activation rewrote the plane entity → visible flash). No new
     // probe, no geometry rewrite.
-    const geomBeforeReselect = await page.evaluate(`(() => {
+    // Keep the snapshots and selection in one browser task so a pending DEM
+    // result from the original activation cannot land between them.
+    const reselection = await page.evaluate(`(() => {
       ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
-    })()`);
-    await page.evaluate((id) => {
-      window.__godsEyeView.dataManager.layers
-        .get('cctv')
-        .module.setParams({ selectedCameraId: id });
-    }, activeId);
-    await sleep(400);
-    const cAfterReselect = await readCounters();
-    const geomAfterReselect = await page.evaluate(`(() => {
-      ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
+      const cameraId = ${JSON.stringify(activeId)};
+      const before = JSON.stringify(serializeGeom(cameraId));
+      const probesBefore = window.__qaCounters.pickFromRay;
+      window.__godsEyeView.dataManager.layers.get('cctv').module
+        .setParams({ selectedCameraId: cameraId });
+      return {
+        probeDelta: window.__qaCounters.pickFromRay - probesBefore,
+        geometryChanged: JSON.stringify(serializeGeom(cameraId)) !== before,
+      };
     })()`);
     record(
       're-selecting the active camera is a no-op (no probe, no geometry rewrite)',
-      cAfterReselect.pickFromRay - cAfterActivate.pickFromRay === 0 &&
-        geomBeforeReselect === geomAfterReselect,
-      `probeΔ=${cAfterReselect.pickFromRay - cAfterActivate.pickFromRay}, geometryChanged=${geomBeforeReselect !== geomAfterReselect}`,
+      reselection.probeDelta === 0 && !reselection.geometryChanged,
+      `probeΔ=${reselection.probeDelta}, geometryChanged=${reselection.geometryChanged}`,
     );
 
     // -----------------------------------------------------------------------
