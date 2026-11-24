@@ -8,6 +8,7 @@ import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { installEntityContext } from './entityContextBridge.js';
 import { createLayerCounts } from './layerCounts.js';
 import { useDisplayStore } from './stores/display.js';
+import { createViewWeather } from './viewWeather.js';
 import ContextView from './views/ContextView.vue';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
@@ -21,9 +22,9 @@ function weatherRequests() {
   const reads = [];
   return {
     reads,
-    spotWeather(lat, lon, { signal }) {
+    spotWeather(lat, lon, { signal, exactPoint }) {
       const result = Promise.withResolvers();
-      reads.push({ lat, lon, signal, ...result });
+      reads.push({ lat, lon, signal, exactPoint, ...result });
       return result.promise;
     },
   };
@@ -165,7 +166,7 @@ test("the view's weather and local time come from the weather alone", async (t) 
 
 test('moving Context replaces a weather reading only after the new spot settles', async (t) => {
   const { reads, spotWeather } = weatherRequests();
-  const { point, advance, flush, facts, clock } = mountInspector(t, {
+  const { host, point, advance, flush, facts, clock } = mountInspector(t, {
     spotWeather,
   });
 
@@ -181,9 +182,9 @@ test('moving Context replaces a weather reading only after the new spot settles'
     /18 °C/,
     'a new cell must hide the last cell’s reading immediately',
   );
-  assert.doesNotMatch(clock(), /local/, 'the new place is not confirmed yet');
+  assert.match(clock(), /UTC · local time loading…$/);
   await flush();
-  assert.match(clock(), /local/, 'a nearby zone remains in the same country');
+  assert.doesNotMatch(clock(), /\d\d:\d\d local/);
   await advance();
   assert.equal(reads.length, 2);
 
@@ -216,6 +217,13 @@ test('moving Context replaces a weather reading only after the new spot settles'
   reads[2].reject(new Error('fixture refused'));
   await flush();
   assert.match(facts(), /No weather reading here\./);
+  const failedTile = host.querySelector(
+    '.view-context__tiles--facts .view-context__tile',
+  );
+  assert.equal(
+    failedTile.title,
+    failedTile.querySelector('strong').textContent,
+  );
   assert.doesNotMatch(
     clock(),
     /local/,
@@ -241,11 +249,7 @@ test('moving Context replaces a weather reading only after the new spot settles'
     'a failed parked refresh drops its old observation',
   );
   assert.match(facts(), /No weather reading here\./);
-  assert.match(
-    clock(),
-    /local/,
-    'the verified zone still belongs to this cell',
-  );
+  assert.doesNotMatch(clock(), /local/, 'a failed refresh shows plain UTC');
 });
 
 test('remounting Context near the earlier cell shows UTC until the new cell answers', async (t) => {
@@ -268,7 +272,7 @@ test('remounting Context near the earlier cell shows UTC until the new cell answ
   assert.equal(reads.length, 2);
   assert.equal(reads[1].lat, 34.719);
   assert.match(f.clock(), /UTC/);
-  assert.doesNotMatch(f.clock(), /local/);
+  assert.match(f.clock(), /UTC · local time loading…$/);
   assert.doesNotMatch(f.facts(), /18 °C/);
 
   reads[1].resolve({
@@ -279,39 +283,30 @@ test('remounting Context near the earlier cell shows UTC until the new cell answ
   assert.match(f.facts(), /21 °C/);
 });
 
-test('crossing a country border shows UTC until the new cell supplies its zone', async (t) => {
+test('crossing from Arizona to Nevada in one weather cell waits for the new point’s own zone', async (t) => {
   const { reads, spotWeather } = weatherRequests();
   const f = mountInspector(t, { spotWeather });
-  // The bundled country polygons put 38.828 in Spain and 38.832 in
-  // Portugal here, even though the same city names both views and their weather
-  // and place-name cache keys are identical.
-  await f.point(38.828, { lon: -7.1 });
+  // Opposite sides of the Colorado River at Hoover Dam, in the same 0.1° cell.
+  await f.point(36.015, { lon: -114.735 });
   await f.advance(400);
   reads[0].resolve({
-    weather: { temperatureC: 18, weatherCode: 0, timeZone: 'Europe/Madrid' },
+    weather: { temperatureC: 18, timeZone: 'America/Phoenix' },
   });
   await f.flush();
-  assert.match(f.clock(), /local/);
-  const placeTitle = f.host.querySelector('.view-context__title').textContent;
+  assert.match(f.clock(), /05:00 local, 12:00 UTC$/);
 
-  await f.point(38.832, { lon: -7.1, settled: false });
-  await f.flush();
-  assert.equal(
-    f.host.querySelector('.view-context__title').textContent,
-    placeTitle,
-  );
-  assert.match(f.clock(), /UTC/);
-  assert.doesNotMatch(f.clock(), /local/);
-  assert.equal(reads.length, 1);
-
-  await f.point(38.85, { lon: -7.1 });
+  await f.point(36.015, { lon: -114.746 });
+  assert.match(f.clock(), /12:00 UTC · local time loading…$/);
+  assert.doesNotMatch(f.clock(), /05:00/);
   await f.advance(400);
-  assert.doesNotMatch(f.clock(), /local/);
+  assert.equal(reads.length, 2);
+  assert.equal(reads[1].lon, -114.746);
+  assert.equal(reads[1].exactPoint, true);
   reads[1].resolve({
-    weather: { temperatureC: 20, weatherCode: 0, timeZone: 'Europe/Lisbon' },
+    weather: { temperatureC: 20, timeZone: 'America/Los_Angeles' },
   });
   await f.flush();
-  assert.match(f.clock(), /local/);
+  assert.match(f.clock(), /04:00 local, 12:00 UTC$/);
 });
 
 test('a cached observation from across the border does not supply local time', async (t) => {
@@ -442,3 +437,275 @@ for (const layersOn of [false, true]) {
     assert.equal(reads, 1);
   });
 }
+
+const A = { lat: 35.71, lon: 139.81 };
+const B = { lat: 35.89, lon: 139.81 };
+const FAR = { lat: 45.71, lon: 139.81 };
+const TOKYO = {
+  temperatureC: 21.4,
+  timeZone: 'Asia/Tokyo',
+  utcOffsetSeconds: 32400,
+};
+const RECEIVED = Date.parse('2026-11-21T12:00:00Z');
+
+function fixture(t) {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: RECEIVED });
+  const { reads, spotWeather } = weatherRequests();
+  const publications = [];
+  let input = { center: A, moving: false, shown: true, mountId: 1 };
+  let elapsed = 0;
+  let visible = true;
+  let visibilityListener = null;
+  const owner = createViewWeather({
+    read: spotWeather,
+    nowMonotonic: () => elapsed,
+    isPageVisible: () => visible,
+    onPageVisibility(listener) {
+      visibilityListener = listener;
+      return () => (visibilityListener = null);
+    },
+    readCurrentInput: () => input,
+    publish: (state) => publications.push(state),
+  });
+  t.after(owner.stop);
+  return {
+    reads,
+    publications,
+    owner,
+    get state() {
+      return publications.at(-1);
+    },
+    get listening() {
+      return visibilityListener !== null;
+    },
+    setInput(changes, { deliver = true } = {}) {
+      input = { ...input, ...changes };
+      if (deliver) owner.update(input);
+    },
+    setVisible(next) {
+      visible = next;
+      visibilityListener?.();
+    },
+    advance(ms) {
+      elapsed += ms;
+      t.mock.timers.tick(ms);
+    },
+    async finish(value) {
+      reads.at(-1).resolve(value);
+      await Promise.resolve();
+    },
+  };
+}
+
+test('a failed read becomes due after one wall-clock minute, even while hidden, and a cancelled retry stays due', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.advance(400);
+  await f.finish({ weather: { ...TOKYO, temperatureC: null } });
+  assert.equal(f.state.failed, true);
+  assert.equal(f.state.pending, false);
+  assert.equal(f.state.reading, null);
+  assert.equal(f.state.zone, null);
+  assert.equal(f.state.freshnessAt, null);
+
+  f.advance(20_000);
+  f.setInput({ shown: false });
+  f.advance(39_999);
+  f.owner.pulse();
+  f.setVisible(false);
+  f.setInput({ shown: true });
+  f.advance(1);
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 1, 'a due retry waits while the page is hidden');
+  f.setVisible(true);
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 2);
+  assert.equal(f.state.pending, true);
+  assert.equal(f.state.failed, true);
+
+  f.setInput({ moving: true });
+  assert.equal(f.reads[1].signal.aborted, true);
+  assert.equal(f.state.pending, false);
+  assert.equal(f.state.failed, true);
+  await f.finish({ weather: TOKYO });
+  assert.equal(f.state.reading, null);
+
+  f.setInput({ moving: false });
+  f.advance(400);
+  assert.equal(f.reads.length, 3);
+  await f.finish({ weather: TOKYO });
+  assert.equal(f.state.reading, TOKYO);
+  assert.equal(f.state.failed, false);
+});
+
+test('a hung weather read times out, retries, and cannot overwrite the retry', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.advance(400);
+  assert.equal(f.state.pending, true);
+  assert.equal(f.reads.length, 1);
+
+  f.advance(14_999);
+  assert.equal(f.state.pending, true);
+  assert.equal(f.reads[0].signal.aborted, false);
+  f.advance(1);
+  assert.equal(f.reads[0].signal.reason?.name, 'TimeoutError');
+  assert.equal(f.state.failed, true);
+  assert.equal(f.state.pending, false);
+  assert.equal(f.state.reading, null);
+
+  f.advance(59_999);
+  f.owner.pulse();
+  assert.equal(f.reads.length, 1);
+  f.advance(1);
+  f.owner.pulse();
+  f.advance(399);
+  assert.equal(f.reads.length, 1);
+  f.advance(1);
+  assert.equal(f.reads.length, 2);
+  await f.finish({ weather: TOKYO });
+  assert.equal(f.state.reading, TOKYO);
+  assert.equal(f.state.failed, false);
+  assert.equal(f.reads[1].signal.aborted, false);
+
+  f.reads[0].resolve({ weather: { ...TOKYO, temperatureC: 99 } });
+  await Promise.resolve();
+  assert.equal(f.state.reading, TOKYO);
+});
+
+test('a completed deadline becomes due only on a visible pulse', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.advance(400);
+  await f.finish(null);
+  f.advance(59_600);
+  f.owner.pulse();
+  f.advance(500);
+
+  f.setVisible(false);
+  f.setInput({ moving: true });
+  f.setInput({ moving: false });
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(
+    f.reads.length,
+    1,
+    'a background camera update cannot start a retry',
+  );
+
+  f.setVisible(true);
+  f.advance(400);
+  assert.equal(
+    f.reads.length,
+    1,
+    'restoring visibility alone does not start a retry',
+  );
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 2);
+});
+
+test('settle samples live eligibility and a late reply releases its attempt before a coalesced camera update', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.setInput({ moving: true }, { deliver: false });
+  f.advance(400);
+  assert.deepEqual(f.reads, []);
+  assert.deepEqual(f.publications, []);
+
+  f.setInput({ moving: false }, { deliver: false });
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.state.pending, true);
+
+  f.reads[0].resolve({ weather: TOKYO });
+  f.setInput({ center: B }, { deliver: false });
+  await Promise.resolve();
+  assert.equal(f.reads[0].signal.aborted, true);
+  assert.deepEqual(f.state, {
+    reading: null,
+    failed: false,
+    zone: null,
+    freshnessAt: null,
+    pending: false,
+  });
+
+  f.setInput({ center: A }, { deliver: false });
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 2);
+  assert.equal(f.reads[1].lat, A.lat);
+
+  const lastPublication = f.state;
+  f.owner.stop();
+  await f.finish({ weather: TOKYO });
+  assert.equal(f.reads[1].signal.aborted, true);
+  assert.equal(f.listening, false);
+  assert.equal(f.state, lastPublication);
+});
+
+test('a refresh retains weather through a hide and a failed refresh clears the local clock', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.advance(400);
+  const retrievedAt = '2026-11-21T10:00:00Z';
+  await f.finish({ weather: TOKYO, retrievedAt });
+  const zone = f.state.zone;
+  assert.equal(f.state.freshnessAt, Date.parse(retrievedAt));
+
+  f.setInput({ shown: false, mountId: null });
+  f.setInput({ shown: true, mountId: 2 });
+  f.advance(659_600);
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 1);
+  assert.equal(f.state.reading, TOKYO);
+  assert.equal(f.state.zone, zone);
+
+  f.owner.pulse();
+  f.advance(400);
+  assert.equal(f.reads.length, 2);
+  assert.equal(f.state.pending, true);
+  assert.equal(f.state.reading, TOKYO);
+  await f.finish(null);
+  assert.equal(f.state.failed, true);
+  assert.equal(f.state.pending, false);
+  assert.equal(f.state.reading, null);
+  assert.equal(f.state.zone, null);
+});
+
+test('a new point clears the previous zone before settling, including across mounts', async (t) => {
+  const f = fixture(t);
+  f.setInput({});
+  f.advance(400);
+  const weather = { ...TOKYO, observedAt: '2026-11-21T08:00:00Z' };
+  await f.finish({ weather, retrievedAt: '2026-11-21T11:59:00Z' });
+  assert.equal(f.state.freshnessAt, Date.parse(weather.observedAt));
+  assert.equal(f.state.zone.timeZone, TOKYO.timeZone);
+
+  f.setInput({ center: B });
+  assert.equal(f.state.zone, null);
+  f.advance(400);
+  assert.equal(f.state.zone, null);
+  assert.equal(f.state.reading, null);
+  await f.finish(null);
+  assert.equal(f.state.zone, null);
+
+  f.setInput({ center: A });
+  f.advance(400);
+  await f.finish({ weather: TOKYO });
+  assert.equal(f.state.freshnessAt, RECEIVED + 1200);
+  f.setInput({ center: FAR, moving: true });
+  assert.equal(f.state.zone, null);
+
+  f.setInput({ center: A, moving: false });
+  f.advance(400);
+  await f.finish({ weather: TOKYO });
+  f.setInput({ shown: false, mountId: null });
+  f.setInput({ center: B, shown: true, mountId: 2 });
+  f.advance(400);
+  assert.equal(f.state.pending, true);
+  assert.equal(f.state.zone, null);
+});

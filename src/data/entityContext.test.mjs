@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { twoline2satrec } from 'satellite.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { CONTEXT_LINES, contextLine } from './contextGeometry.js';
+import { createControls } from '../layers/awareness/controls.js';
 import { createOrbits } from '../layers/satellites/orbits.js';
 import { createRecords } from '../layers/satellites/records.js';
 import {
@@ -9,13 +12,15 @@ import {
   findRecord,
   formatFact,
   layerBreakdown,
+  layerMatches,
+  layerRecords,
   nearbyByKind,
-  nearbyByLayer,
+  nearbyForLayer,
   nearbyEntities,
   recordTitle,
   recordWarnings,
   searchEntities,
-  viewSummary,
+  viewSummaryForLayer,
 } from './entityContext.js';
 
 /** A data manager over fixed layer records. */
@@ -62,6 +67,97 @@ const dm = manager({
   'local-dams': { name: 'Dams', records: dams },
 });
 
+test('uncached layer readers return empty results when a host reader fails', () => {
+  const layerId = 'local-dams';
+  const data = manager({ [layerId]: { records: [] } });
+  const layer = data.layers.get(layerId);
+  const center = { lat: 0, lon: 0 };
+  const unavailable = () => {
+    throw new Error('records unavailable');
+  };
+  layer.module.getAnalystRecords = unavailable;
+  assert.deepEqual(layerRecords(data, layerId), []);
+  assert.equal(nearbyForLayer(data, layer, center).count, 0);
+  const globe = () =>
+    viewSummaryForLayer(data, layer, null, center, { hemisphere: true });
+  assert.equal(globe(), null);
+
+  layer.module.getNearbyContextPoints = unavailable;
+  assert.equal(nearbyForLayer(data, layer, center), null);
+  assert.equal(globe(), null);
+});
+
+test('globe search resolves records using the point snapshot as receiver', () => {
+  const layerId = 'local-dams';
+  const data = manager({ [layerId]: { name: 'Dams', records: [] } });
+  const layer = data.layers.get(layerId);
+  const point = { id: 'dam-a', lat: 0, lon: 0 };
+  const record = { ...point, name: 'Cedar Dam' };
+  const snapshot = {
+    points: [point],
+    records: new Map([[point.id, record]]),
+    recordForPoint(hit) {
+      return this.records.get(hit.id);
+    },
+  };
+  layer.module.getNearbyContextPoints = () => snapshot;
+  const result = viewSummaryForLayer(data, layer, null, point, {
+    hemisphere: true,
+    query: 'cedar',
+  });
+  assert.equal(result.count, 1);
+  assert.equal(result.items[0].title, 'Cedar Dam');
+});
+
+test('a failed selected-row conversion uses ordinary records or propagates a second failure', () => {
+  const layerId = 'local-dams';
+  const center = { lat: 0, lon: 0 };
+  const ordinary = { id: 'ordinary', name: 'Cedar ordinary', ...center };
+  const data = manager({ [layerId]: { name: 'Dams', records: [ordinary] } });
+  const layer = data.layers.get(layerId);
+  const snapshot = {
+    points: [{ id: 'optimized', ...center }],
+    recordForPoint(point, full = true) {
+      assert.equal(this, snapshot);
+      if (full) throw new Error('selected row conversion failed');
+      return { ...point, name: 'Cedar optimized' };
+    },
+  };
+  layer.module.getNearbyContextPoints = () => snapshot;
+  let fallbackAttempts = 0;
+  const options = {
+    query: 'cedar',
+    throwOnReadError: true,
+    onSnapshotFallback: () => {
+      fallbackAttempts++;
+    },
+  };
+  const reads = [
+    () => nearbyForLayer(data, layer, center, options),
+    () =>
+      viewSummaryForLayer(data, layer, null, center, {
+        ...options,
+        hemisphere: true,
+      }),
+  ];
+  for (const read of reads) {
+    const result = read();
+    assert.equal(result.count, 1);
+    assert.deepEqual(
+      result.items.map(({ title }) => title),
+      ['Cedar ordinary'],
+    );
+  }
+  assert.equal(fallbackAttempts, 2);
+
+  const failure = new Error('ordinary records failed');
+  layer.module.getAnalystRecords = () => {
+    throw failure;
+  };
+  for (const read of reads) assert.throws(read, (error) => error === failure);
+  assert.equal(fallbackAttempts, 4);
+});
+
 test('a click identity finds its record by key, past the first 2000 records', () => {
   const record = findRecord(dm, {
     layerId: 'flights',
@@ -102,6 +198,28 @@ test('a transit click finds its vehicle by the layer key and reads its state', (
   assert.equal(facts.Operator, 'CapMetro');
   assert.equal(facts.Status, 'Heading to next stop');
   assert.equal(facts.Key, undefined, 'the layer key is not shown');
+});
+
+test('transit vehicles with the same fleet label keep distinct Nearby and card keys', () => {
+  const records = [
+    { id: '42', label: '42', key: 'first:42', lat: 30.2, lon: -97.7 },
+    { id: '42', label: '42', key: 'other:42', lat: 30.3, lon: -97.7 },
+  ];
+  const vehicles = manager({ transit: { name: 'Transit', records } });
+  const group = nearbyForLayer(
+    vehicles,
+    vehicles.layers.get('transit'),
+    records[0],
+  );
+  assert.deepEqual(
+    group.items.map(({ key }) => key),
+    ['transit:first:42', 'transit:other:42'],
+  );
+  const first = describeEntity(vehicles, group.items[0].identity);
+  assert.equal(first.identity.id, 'first:42');
+  const other = records.pop();
+  records[0] = other;
+  assert.equal(findRecord(vehicles, first.identity), null);
 });
 
 test('transit vehicles break down by motion, mode and reported state', () => {
@@ -183,6 +301,63 @@ test('nearby lists the closest of the same kind and one of each other layer', ()
   assert.equal(other[0].layerId, 'flights');
 });
 
+test('a card and its Contacts alias omit their shared subject from Nearby', () => {
+  const here = { lat: 30.3, lon: -97.7 };
+  const layers = manager({
+    flights: {
+      name: 'Live Flights',
+      records: [{ icao24: 'abc123', callsign: 'UAL1', ...here }],
+    },
+    'military-awareness': { name: 'Global Context', records: [] },
+  });
+  const subject = {
+    layerId: 'flights',
+    id: 'abc123',
+    label: 'UAL1',
+    position: fromDegrees(here.lon, here.lat, 10000),
+  };
+  const contacts = layers.layers.get('military-awareness');
+  contacts.module = createControls({
+    state: { enabled: true, subject },
+    services: {},
+    parts: {},
+  }).methods;
+  const card = describeEntity(layers, { layerId: 'flights', id: 'abc123' });
+  const options = { excludeKey: card.key };
+  const contactsList = () => nearbyForLayer(layers, contacts, here, options);
+  assert.deepEqual(nearbyByKind(layers, here, options).other, []);
+  assert.deepEqual(nearbyEntities(layers, card).other, []);
+  assert.equal(contactsList().count, 0);
+
+  const alias = describeEntity(layers, {
+    layerId: 'military-awareness',
+    id: 'flights:abc123',
+  });
+  assert.equal(alias.key, 'military-awareness:flights:abc123');
+  assert.deepEqual(nearbyEntities(layers, alias).other, []);
+  assert.deepEqual(
+    nearbyByKind(layers, here, { excludeKey: alias.key }).flights.items,
+    [],
+  );
+  assert.equal(
+    nearbyForLayer(layers, layers.layers.get('flights'), here, {
+      excludeKey: alias.key,
+    }).count,
+    0,
+  );
+
+  subject.layerId = 'military';
+  assert.equal(
+    nearbyByKind(layers, here, options).other[0]?.key,
+    'military-awareness:military:abc123',
+  );
+  assert.equal(
+    contactsList().count,
+    1,
+    'an identical ID in another layer stays visible',
+  );
+});
+
 test('selected-card nearby rows open a cable at the point used for its distance', () => {
   const layerId = 'telegeography-submarine-cables';
   const here = { lat: 21, lon: -160 };
@@ -213,6 +388,29 @@ test('selected-card nearby rows open a cable at the point used for its distance'
     const { lat, lon } = describeEntity(layers, row.identity);
     assert.deepEqual({ lat, lon }, here);
   }
+});
+
+test('a rounded GeoJSON pick stays on its selected part when the card refreshes', () => {
+  const layerId = 'local-datacenters';
+  const part = { lat: 37.12345648, lon: 179.99999972 };
+  const site = {
+    id: 'campus',
+    name: 'Campus',
+    lat: 20,
+    lon: 10,
+    parts: [part],
+  };
+  const data = manager({ [layerId]: { records: [site] } });
+  const card = describeEntity(data, {
+    layerId,
+    id: 'campus_2',
+    label: site.name,
+    lat: 37.123456,
+    lon: -180,
+  });
+  assert.deepEqual({ lat: card.lat, lon: card.lon }, part);
+  const refreshed = describeEntity(data, card.identity);
+  assert.deepEqual({ lat: refreshed.lat, lon: refreshed.lon }, part);
 });
 
 test('search ranks an exact name first and needs two characters', () => {
@@ -293,17 +491,17 @@ test('warnings lead with an emergency, then the squawk code, and stay out of the
   assert.ok(!card.facts.some((fact) => /emergency/i.test(fact.label)));
 });
 
-test('the view summary counts each layer inside the view, closest to the middle first', () => {
-  const groups = viewSummary(
+test('the view summary counts items inside the view, closest to the middle first', () => {
+  const group = viewSummaryForLayer(
     dm,
+    dm.layers.get('flights'),
     { west: -119, south: 34, east: -117, north: 34.5 },
     { lat: 34.1, lon: -118 },
     { perLayer: 2 },
   );
-  assert.equal(groups.length, 1);
-  assert.equal(groups[0].layerId, 'flights');
-  assert.equal(groups[0].count, 501);
-  assert.equal(groups[0].items[0].title, 'FLT100');
+  assert.equal(group.layerId, 'flights');
+  assert.equal(group.count, 501);
+  assert.equal(group.items[0].title, 'FLT100');
 });
 
 test('the view summary counts a multipart cable once at its closest visible piece', () => {
@@ -319,12 +517,13 @@ test('the view summary counts a multipart cable once at its closest visible piec
   });
   const center = { lat: 0, lon: 179 };
   const rect = { west: 174, east: -178, south: -2, north: 2 };
+  const layer = cables.layers.get('telegeography-submarine-cables');
 
   for (const [view, options] of [
     [null, { hemisphere: true }],
     [rect, {}],
   ]) {
-    const [group] = viewSummary(cables, view, center, options);
+    const group = viewSummaryForLayer(cables, layer, view, center, options);
     assert.ok(group, 'the cable is in view even though its first piece is not');
     assert.equal(group.count, 1);
     assert.equal(group.items.length, 1);
@@ -332,6 +531,35 @@ test('the view summary counts a multipart cable once at its closest visible piec
     assert.equal(id, cable.id);
     assert.deepEqual({ lat, lon }, closest);
   }
+
+  delete cable.lat;
+  delete cable.lon;
+  const partOnly = viewSummaryForLayer(cables, layer, rect, center);
+  assert.equal(partOnly.count, 1, 'a visible part works without a main point');
+});
+
+test('Omnibar area counts use the closest qualifying cable part and count the cable once', () => {
+  const layerId = 'telegeography-submarine-cables';
+  const part = { lat: 0, lon: -179.9 };
+  const cable = {
+    id: 'example',
+    lat: 0,
+    lon: 0,
+    parts: [{ lat: 0, lon: 178 }, part],
+  };
+  const data = manager({ [layerId]: { records: [cable] } });
+  const center = { lat: 0, lon: 179.9 };
+  for (const area of [
+    { rect: { west: 177, east: -179, south: -1, north: 1 } },
+    { radiusKm: 30 },
+  ]) {
+    const { count, items } = layerMatches(data, layerId, { center, ...area });
+    assert.equal(count, 1);
+    assert.equal(items.length, 1);
+    const picked = describeEntity(data, items[0].identity);
+    assert.deepEqual({ lat: picked.lat, lon: picked.lon }, part);
+  }
+  assert.equal(layerMatches(data, layerId, { center, radiusKm: 5 }).count, 0);
 });
 
 test('the globe view counts only the cap a camera at its height can see', () => {
@@ -347,16 +575,111 @@ test('the globe view counts only the cap a camera at its height can see', () => 
     },
   });
   const center = { lat: 0, lon: 0 };
-  const [group] = viewSummary(places, null, center, {
+  const layer = places.layers.get('local-datacenters');
+  const group = viewSummaryForLayer(places, layer, null, center, {
     hemisphere: true,
     heightM: 10_000_000,
   });
   assert.equal(group.count, 1);
   assert.equal(group.items[0].title, 'Near');
   assert.equal(
-    viewSummary(places, null, center, { hemisphere: true })[0].count,
+    viewSummaryForLayer(places, layer, null, center, { hemisphere: true })
+      .count,
     2,
     'without a height, the hemisphere',
+  );
+});
+
+test('GeoJSON lines and points share the same Nearby radius threshold', () => {
+  const degreesAt = (km) => (km / 6371) * (180 / Math.PI);
+  const near = { lat: degreesAt(24.99998), lon: 0 };
+  const far = { lat: degreesAt(26), lon: 0 };
+  const layerId = 'local-dams';
+  const data = manager({
+    [layerId]: {
+      records: [
+        { id: 'point', ...near },
+        {
+          id: 'line',
+          key: 'geojson:id:line',
+          ...far,
+          [CONTEXT_LINES]: [contextLine([near, far])],
+        },
+      ],
+    },
+  });
+  const nearby = nearbyForLayer(
+    data,
+    data.layers.get(layerId),
+    { lat: 0, lon: 0 },
+    { radiusKm: 25 },
+  );
+  assert.equal(nearby.count, 2);
+  assert.equal(nearby.items[1].distanceKm, nearby.items[0].distanceKm);
+});
+
+test('a GeoJSON crest across the globe limb opens at its closest visible point', () => {
+  const layerId = 'local-dams';
+  const data = manager({
+    [layerId]: {
+      name: 'Dams',
+      records: [
+        {
+          id: 'crest',
+          key: 'geojson:id:crest',
+          name: 'Horizon Crest',
+          lat: 0,
+          lon: 57,
+          [CONTEXT_LINES]: [
+            contextLine([
+              { lat: 0, lon: 55 },
+              { lat: 0, lon: 57 },
+            ]),
+          ],
+        },
+        {
+          id: 'meridian',
+          key: 'geojson:id:meridian',
+          name: 'Meridian Crest',
+          lat: 15,
+          lon: 55,
+          [CONTEXT_LINES]: [
+            contextLine([
+              { lat: -15, lon: 55 },
+              { lat: 15, lon: 55 },
+            ]),
+          ],
+        },
+      ],
+    },
+  });
+  const center = { lat: 0, lon: 60 };
+  const group = viewSummaryForLayer(
+    data,
+    data.layers.get(layerId),
+    null,
+    center,
+    {
+      hemisphere: true,
+      heightM: 5_000_000,
+      eye: { lat: 0, lon: 0 },
+    },
+  );
+  assert.equal(group?.count, 2);
+  assert.deepEqual(
+    group.items.map((row) => row.title),
+    ['Horizon Crest', 'Meridian Crest'],
+  );
+  const card = describeEntity(data, group.items[0].identity);
+  assert.ok(
+    card.lon > 55.5 && card.lon < 56,
+    'the anchor is just inside the limb',
+  );
+  assert.equal(describeEntity(data, card.identity).lon, card.lon);
+  assert.equal(
+    group.items[1].identity.lat,
+    0,
+    'a segment can show its middle while both ends are hidden',
   );
 });
 
@@ -378,17 +701,76 @@ test('an elevated satellite beyond the surface horizon can still be in view', ()
   });
   // From 20,000 km, the surface horizon is at 76 degrees. The satellite
   // above longitude 80 clears the limb while the one at 110 is hidden.
-  const groups = viewSummary(layers, null, center, {
-    hemisphere: true,
-    heightM: 20_000_000,
-  });
+  const options = { hemisphere: true, heightM: 20_000_000 };
+  const satellites = viewSummaryForLayer(
+    layers,
+    layers.layers.get('satellites'),
+    null,
+    center,
+    options,
+  );
+  assert.equal(satellites.count, 2);
   assert.deepEqual(
-    groups.map(({ layerId, count, items }) => ({
-      layerId,
-      count,
-      ids: items.map((item) => item.identity.id),
-    })),
-    [{ layerId: 'satellites', count: 2, ids: ['front', 'over-limb'] }],
+    satellites.items.map((item) => item.identity.id),
+    ['front', 'over-limb'],
+  );
+  assert.equal(
+    viewSummaryForLayer(
+      layers,
+      layers.layers.get('local-datacenters'),
+      null,
+      center,
+      options,
+    ),
+    null,
+  );
+});
+
+test('globe search finds an airborne aircraft that clears the limb', () => {
+  const center = { lat: 0, lon: 0 };
+  const layers = manager({
+    flights: {
+      name: 'Live Flights',
+      records: [
+        {
+          callsign: 'LIMB1',
+          lat: 0,
+          lon: 57,
+          altitudeM: 10_000,
+          onGround: false,
+        },
+        {
+          callsign: 'LIMB2',
+          lat: 0,
+          lon: 57,
+          altitudeM: 10_000,
+          onGround: true,
+        },
+        {
+          callsign: 'LIMB3',
+          lat: 0,
+          lon: 80,
+          altitudeM: 10_000,
+          onGround: false,
+        },
+      ],
+    },
+  });
+  const group = viewSummaryForLayer(
+    layers,
+    layers.layers.get('flights'),
+    null,
+    center,
+    {
+      hemisphere: true,
+      heightM: 5_000_000,
+      query: 'LIMB',
+    },
+  );
+  assert.equal(group?.count, 1);
+  assert.deepEqual(
+    group.items.map(({ title }) => title),
+    ['LIMB1'],
   );
 });
 
@@ -406,8 +788,9 @@ test("on a tilted globe view the horizon is the camera's, while rows rank from t
       ],
     },
   });
-  const [group] = viewSummary(
+  const group = viewSummaryForLayer(
     places,
+    places.layers.get('local-datacenters'),
     null,
     { lat: 0, lon: 25 },
     {
@@ -426,8 +809,9 @@ test("on a tilted globe view the horizon is the camera's, while rows rank from t
 });
 
 test('the view summary with no rows wanted still counts, and never throws', () => {
-  const groups = viewSummary(
+  const group = viewSummaryForLayer(
     dm,
+    dm.layers.get('flights'),
     null,
     { lat: 34.1, lon: -118 },
     {
@@ -435,9 +819,9 @@ test('the view summary with no rows wanted still counts, and never throws', () =
       hemisphere: true,
     },
   );
-  assert.equal(groups[0].layerId, 'flights');
-  assert.ok(groups[0].count > 0);
-  assert.deepEqual(groups[0].items, []);
+  assert.equal(group.layerId, 'flights');
+  assert.ok(group.count > 0);
+  assert.deepEqual(group.items, []);
 });
 
 test('in-view satellites stand at their SGP4 catalogue positions (the layer records), not the renderer', () => {
@@ -483,8 +867,9 @@ test('in-view satellites stand at their SGP4 catalogue positions (the layer reco
     isEnabled: () => true,
   };
   const sgp4 = orbits.propagatePosition(satrec, at);
-  const [group] = viewSummary(
+  const group = viewSummaryForLayer(
     layers,
+    layer,
     null,
     { lat: sgp4.latitude, lon: sgp4.longitude },
     { hemisphere: true },
@@ -733,7 +1118,7 @@ test('a card shows the photo its layer looked up: the tracked airliner, the sele
   );
 });
 
-test('nearbyByLayer: one list per layer that is on, nearest first, with a count of what is in range', () => {
+test('Nearby reads one enabled layer, nearest first, with a count of what is in range', () => {
   const here = { lat: 30, lon: -97 };
   const layers = manager({
     flights: {
@@ -762,33 +1147,28 @@ test('nearbyByLayer: one list per layer that is on, nearest first, with a count 
       getAnalystRecords: () => [{ mmsi: '1', name: 'BOAT', lat: 30, lon: -97 }],
     },
   });
-  const lists = nearbyByLayer(layers, here, { radiusKm: 250, limit: 1 });
+  const ask = (id, options) =>
+    nearbyForLayer(layers, layers.layers.get(id), here, options);
+  const list = ask('flights', { radiusKm: 250, limit: 1 });
+  assert.equal(list.count, 2);
+  assert.equal(ask('earthquakes').count, 0);
+  assert.equal(ask('weather-radar'), null);
+  assert.equal(ask('vessels-off'), null);
   assert.deepEqual(
-    lists.map((list) => [list.layerId, list.count]),
-    [
-      ['flights', 2],
-      ['earthquakes', 0],
-    ],
-  );
-  assert.deepEqual(
-    lists[0].items.map((item) => item.title),
+    list.items.map((item) => item.title),
     ['NEAR'],
     'the nearest leads, up to the limit',
   );
-  assert.equal(lists[0].items[0].identity.layerId, 'flights');
-  assert.deepEqual(
-    nearbyByLayer(layers, here, {
-      query: 'far',
-      excludeLayers: ['earthquakes'],
-    }).map((list) => [list.layerId, list.count]),
-    [['flights', 1]],
-  );
+  assert.equal(list.items[0].identity.layerId, 'flights');
+  assert.equal(ask('flights', { query: 'far' }).count, 1);
   assert.equal(
-    nearbyByLayer(layers, here, { excludeKey: 'flights:near' })[0].items[0]
-      .title,
+    ask('flights', { excludeKey: 'flights:near' }).items[0].title,
     'FAR',
   );
-  assert.deepEqual(nearbyByLayer(layers, null), []);
+  assert.equal(
+    nearbyForLayer(layers, layers.layers.get('flights'), null),
+    null,
+  );
 });
 
 test('Nearby keeps counts and stable nearest rows when only a few of many matches are shown', () => {
@@ -806,8 +1186,9 @@ test('Nearby keeps counts and stable nearest rows when only a few of many matche
     .sort((a, b) => a.lat - b.lat);
   const options = { query: 'keep', excludeKey: 'flights:plane-1' };
   for (const limit of [0, 3, 12]) {
-    const [list] = nearbyByLayer(
+    const list = nearbyForLayer(
       layers,
+      layers.layers.get('flights'),
       { lat: 30, lon: -97 },
       { ...options, limit },
     );

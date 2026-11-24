@@ -22,7 +22,7 @@ test('local time comes from the zone a weather reading names, else its offset, e
   assert.equal(localClock({}, NOON_UTC), null);
 });
 
-test('the sun: long days north, polar night south, half the Earth lit', () => {
+test('summer has long days in the north and polar night in the south', () => {
   assert.equal(dayLengthMinutes(80, NOON_UTC), 1440, 'midnight sun');
   assert.equal(dayLengthMinutes(-80, NOON_UTC), 0, 'polar night');
   const equator = dayLengthMinutes(0, NOON_UTC);
@@ -30,11 +30,24 @@ test('the sun: long days north, polar night south, half the Earth lit', () => {
     equator > 715 && equator < 735,
     `about 12 h at the equator, got ${equator}`,
   );
-  const share = daylightShare(NOON_UTC);
-  assert.ok(
-    share > 0.48 && share < 0.53,
-    `about half the Earth is lit, got ${share}`,
-  );
+});
+
+test('Tromsø keeps one daylight duration for its civil date', () => {
+  const site = { lon: 18.96, zone: { timeZone: 'Europe/Oslo' } };
+  const duration = (iso) => dayLengthMinutes(69.65, Date.parse(iso), site);
+  const morning = duration('2026-11-26T23:00:00Z');
+  assert.equal(duration('2026-11-27T11:00:00Z'), morning);
+  assert.equal(duration('2026-11-27T22:59:00Z'), morning);
+  assert.ok(morning > 0 && morning < 35);
+  assert.equal(duration('2026-11-27T23:00:00Z'), 0);
+});
+
+test('the globe has the same daylit share as the Sun moves', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
+  const share = daylightShare();
+  assert.ok(Math.abs(share - 0.50727) < 0.00001);
+  t.mock.timers.setTime(Date.UTC(2026, 11, 21, 21));
+  assert.equal(daylightShare(), share);
 });
 
 test('the time line reads local and UTC, or UTC alone until the zone is known', () => {

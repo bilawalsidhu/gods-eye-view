@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useLayerFinderStore } from '../stores/layerFinder.js';
+import { bindLayerFinder } from '../layerFinderFilter.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -25,11 +26,15 @@ import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
 
 const finder = useLayerFinderStore();
 const toggleList = ref(null);
-const finderButtons = ref(null);
-const finderBar = ref(null);
 let detachFinderControls;
 onMounted(() => {
-  detachFinderControls = finder.attachControls(toggleList.value.ownerDocument);
+  const list = toggleList.value;
+  const unbind = bindLayerFinder(list, finder);
+  const detachControls = finder.attachControls(list);
+  detachFinderControls = () => {
+    unbind();
+    detachControls();
+  };
 });
 onBeforeUnmount(() => detachFinderControls?.());
 
@@ -90,9 +95,9 @@ onBeforeUnmount(() => stopOpenClass?.());
   <div id="left-panel-stack" ref="stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
-    <template #actions><LayerFinder ref="finderButtons" part="buttons" @focus-search-field="finderBar?.focusSearchField()" /></template>
-    <LayerFinder ref="finderBar" part="bar" @focus-search-button="finderButtons?.focusSearchButton()" @focus-filter-button="finderButtons?.focusFilterButton()" />
-    <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll" v-class-toggle="{ 'is-filtering': finder.narrowed }"></div>
+    <template #actions><LayerFinder part="buttons" /></template>
+    <LayerFinder part="bar" />
+    <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll"></div>
     <LayerSectionIndex />
     <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->
     <DataLibraryBrowse />

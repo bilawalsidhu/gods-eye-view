@@ -1,4 +1,31 @@
-import { computed, ref, shallowRef, watch } from 'vue';
+import { computed, ref, shallowReactive, shallowRef, watch } from 'vue';
+
+const findersByContainer = new WeakMap();
+const presentedFinders = shallowReactive(new WeakMap());
+
+/** Pair the standard row container with the Finder owned by its view. */
+export function bindLayerFinder(container, finder) {
+  findersByContainer.set(container, finder);
+  return () => findersByContainer.delete(container);
+}
+
+export function layerFinderFor(container) {
+  return findersByContainer.get(container);
+}
+
+/** Keep the Finder that actually renders this list, including an injected one. */
+export function bindPresentedLayerFinder(container, finder) {
+  const binding = { finder };
+  presentedFinders.set(container, binding);
+  return () => {
+    if (presentedFinders.get(container) === binding)
+      presentedFinders.delete(container);
+  };
+}
+
+export function finderForLayerRows(container) {
+  return presentedFinders.get(container)?.finder ?? layerFinderFor(container);
+}
 
 const allLayers = () => ({ query: '', show: 'all', category: '', picked: [] });
 
@@ -65,12 +92,6 @@ export function createLayerFinder() {
     pick,
     clearAll,
     publish,
-    setSearching(value) {
-      searching.value = value;
-    },
-    setFiltering(value) {
-      filtering.value = value;
-    },
     inputs: () => selection.value,
     onInputs: (listener) => watch(selection, listener, { flush: 'sync' }),
   };

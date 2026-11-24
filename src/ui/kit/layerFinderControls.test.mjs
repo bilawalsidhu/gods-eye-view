@@ -18,8 +18,7 @@ const finder = template('LayerFinder.vue');
 test('the Layer Finder hand-writes no button; each is a UiButton', () => {
   assert.deepEqual(finder.match(/<button\b/gi) ?? [], []);
   // Search, Filter, the Status and Category options, and the three chips,
-  // one of them the Suggested chip, which clears the layers a place
-  // suggested.
+  // including Suggested, which clears the suggested-layer filter.
   assert.equal(finder.match(/<UiButton\b/g)?.length, 7);
   assert.equal(finder.match(/<UiSearchField\b/g)?.length, 1);
 });

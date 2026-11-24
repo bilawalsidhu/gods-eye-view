@@ -39,7 +39,7 @@ body.context-docked #right-context-rail > .gev-panel-rail {
 }
 
 body.context-docked
-  #right-context-rail
+  #right-context-rail:not(.bhote-event-active)
   > :not(#global-context-panel):not(.gev-panel-rail) {
   display: none !important;
 }
@@ -187,10 +187,8 @@ body.mobile-shell .context-dock-btn {
     .view-context__hint,
     .view-context__problem,
     .view-context__suggest,
-    .view-context__pointer,
     .view-context__bar,
     .view-context__bar-key,
-    .sun-dial,
     .altitude-graph,
     .entity-card__route,
     .entity-card__route-stats,

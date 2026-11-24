@@ -3,10 +3,19 @@ import test from 'node:test';
 import { setImmediate } from 'node:timers/promises';
 import { createPinia } from 'pinia';
 import { nextTick, ref, watch } from 'vue';
+import { OrbitController } from '../orbit.js';
+import { bhoteKoshiPlaceRecords } from '../data/bhoteKoshiLocator.js';
+import { INCIDENT_OVERVIEW_PLACES } from '../data/bhoteKoshiIncidentPlaces.js';
+import { toLonLatH } from '../geo/ellipsoid.js';
+import { createControls as createWildlifeControls } from '../layers/wildlifeSightings/controls.js';
+import { normalizeInatObservations } from '../layers/wildlifeSightings/records.js';
+import { LocationSearch } from './locationSearch.js';
+import { NavigationController } from './navigationController.js';
 import { installEntityContext } from './entityContextBridge.js';
 import { createLayerCounts } from './layerCounts.js';
 import { useEntityCardStore } from './stores/entityCard.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
+import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { bindRenderer } from '../render/rendererOf.js';
@@ -148,15 +157,146 @@ test('a vessel announced by its layer is named by its own id', (t) => {
   assert.deepEqual(named, ['5fdca702', 'fire:1']);
 });
 
+test('Context keeps the selected source vessel when a different hull shares its MMSI', async (t) => {
+  const { createApplicationVessels } =
+    await import('../app/layers/aisLiveVessels.js');
+  const mmsi = '123456789';
+  const first = {
+    id: 'hull-first',
+    mmsi,
+    name: 'First Hull',
+    lat: 1,
+    lon: 1,
+    position: { x: 1, y: 2, z: 3 },
+  };
+  // A provider can use the MMSI as one row's id and another hull's attribute.
+  const second = { ...first, id: mmsi, name: 'Second Hull', lon: 2 };
+  const module = createApplicationVessels({});
+  const row = { id: module.id, name: module.name, enabled: true, module };
+  const dataManager = {
+    isEnabled: () => true,
+    layers: new Map([[row.id, row]]),
+    getAll: () => [row],
+  };
+  module.testing._setVesselStateForTest({ records: [first, second] });
+  registerPickOwner(row.id, (id) => id === second.id);
+  t.after(() => unregisterPickOwner(row.id));
+  const viewer = {
+    scene: { pick: () => ({ id: { id: second.id } }), drillPick: () => [] },
+  };
+  const input = fakeInput(viewer);
+  const pinia = createPinia();
+  const chrome = usePanelChromeStore(pinia);
+  const owner = chrome.connect({});
+  chrome.publish(owner, 'global-context-panel', { collapsed: false });
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => dataManager,
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const store = useEntityCardStore(pinia);
+  input.click();
+  assert.equal(store.card.title, 'Second Hull');
+  assert.equal(store.card.lon, 2);
+
+  module.testing._setVesselStateForTest({ records: [first] });
+  store.refresh();
+  assert.equal(store.card.title, 'Second Hull');
+  assert.equal(store.card.lon, 2);
+  assert.equal(store.lost, true);
+
+  // An untyped MMSI lookup still works for a caller with an old identity.
+  assert.equal(store.select({ layerId: row.id, id: mmsi }), true);
+  assert.equal(store.card.title, 'First Hull');
+
+  module.testing._setVesselStateForTest({ records: [first, second] });
+  const center = { lat: 1, lon: 1.5 };
+  const expected = [`${row.id}:${first.id}`, `${row.id}:${second.id}`].sort();
+  const keys = (items) => items.map((item) => item.key).sort();
+  assert.deepEqual(keys(store.search(mmsi)), expected);
+  assert.deepEqual(
+    keys(store.nearbyLayers(center.lat, center.lon)[0].items),
+    expected,
+  );
+  store.setView({ center, rect: { west: 0, south: 0, east: 3, north: 2 } });
+  assert.deepEqual(keys(store.inView({ viewport: true })[0].items), expected);
+});
+
+for (const [id, keyed] of [
+  ['geojson:park-7', false],
+  ['geojson:number:7', false],
+  ['geojson:number:7', true],
+]) {
+  test(`Nearby refresh preserves the ${keyed ? 'keyed' : 'ordinary'} ID ${id}`, (t) => {
+    const park = {
+      id,
+      name: 'Cedar Park',
+      lat: 30.27,
+      lon: -97.74,
+      ...(keyed ? { key: id } : {}),
+    };
+    const neighbor = { ...park, key: 'geojson:id:park-8' };
+    const counterpart = { ...park, lon: park.lon + 0.002 };
+    if (keyed) delete counterpart.key;
+    else counterpart.key = id;
+    let records = [park, neighbor];
+    const row = {
+      id: 'test-parks',
+      name: 'Parks',
+      enabled: true,
+      module: { getAnalystRecords: () => records },
+    };
+    const dataManager = {
+      layers: new Map([[row.id, row]]),
+      getAll: () => [row],
+      isEnabled: () => true,
+    };
+    const store = useEntityCardStore(createPinia());
+    store.connect({ dataManager: () => dataManager });
+    t.after(() => store.clear());
+
+    assert.ok(store.select({ layerId: row.id, id }));
+    assert.equal(store.card.basis, 'record', 'direct ID lookup still works');
+
+    const [list] = store.nearbyLayers(park.lat, park.lon, { radiusKm: 5 });
+    const selected = list.items.find((item) => item.identity.id === park.id);
+    assert.ok(store.select(selected.identity));
+    assert.equal(store.card.title, park.name);
+
+    const nextLon = park.lon + 0.001;
+    records = [{ ...park, lon: nextLon }, neighbor];
+    store.refresh();
+    assert.equal(store.lost, false);
+    assert.equal(store.card.lon, nextLon);
+
+    records = [neighbor, counterpart];
+    store.refresh();
+    assert.equal(
+      store.lost,
+      true,
+      'a namesake with the same ID in a different record field cannot take over',
+    );
+    assert.equal(store.card.lon, nextLon);
+
+    const restoredLon = park.lon - 0.001;
+    records = [counterpart, { ...park, lon: restoredLon }];
+    store.refresh();
+    assert.equal(store.lost, false);
+    assert.equal(store.card.lon, restoredLon);
+  });
+}
+
 // Nearby opens a cable laid in pieces at its nearest piece: the card stays
 // there and the camera flies there, not to the cable's first piece.
 test('opening a far piece of a multi-piece cable from Nearby flies to that piece', async (t) => {
   const { readFileSync } = await import('node:fs');
   const { bindFakeDraw } = await import('../testSupport/fakeDrawPort.mjs');
-  const { toLonLatH } = await import('../geo/ellipsoid.js');
   const { cableAnalystRecords } =
     await import('../layers/submarineCables/records.js');
-  const { nearbyByLayer } = await import('../data/entityContext.js');
   const cableJson = JSON.parse(
     readFileSync(
       new URL(
@@ -186,23 +326,58 @@ test('opening a far piece of a multi-piece cable from Nearby flies to that piece
   };
   const flown = [];
   const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const orbit = new OrbitController(viewer);
+  let followed = null;
   const { unbind } = bindFakeDraw(viewer, {
+    frame: { on: () => () => {} },
     camera: {
       pose: () => ({ heading: 0, pitch: -1, roll: 0 }),
       on: () => () => {},
-      followed: null,
-      flyToBounds: (bounds) => flown.push(bounds),
+      get followed() {
+        return followed;
+      },
+      follow(target) {
+        followed = target;
+      },
+      release() {},
+      cancelFlight() {},
+      flyToBounds(bounds) {
+        assert.equal(orbit.active, false, 'stop orbit before the card flight');
+        assert.equal(
+          followed,
+          null,
+          'release the previous follow target before the card flight',
+        );
+        flown.push(bounds);
+      },
     },
   });
   const input = fakeInput(viewer);
   const pinia = createPinia();
+  const navigation = new NavigationController({
+    viewer,
+    tracking: {
+      flightsLayer: {},
+      militaryFlightsLayer: {},
+      satellitesLayer: {},
+    },
+    isCockpitActive: () => false,
+    clearLocation() {},
+    interruptCameraMotion() {},
+    stopOrbit: () => orbit.stop(),
+    cancelShareSelection: () => false,
+    getDataManager: () => null,
+  });
   const disconnect = installEntityContext({
+    navigateToSelection: (fly) =>
+      navigation._runExplicitNavigation('target', fly),
     viewer,
     getDataManager: () => dataManager,
     pinia,
   });
   const store = useEntityCardStore(pinia);
   t.after(() => {
+    orbit.stop();
     store.clear();
     disconnect();
     input.destroy();
@@ -217,17 +392,221 @@ test('opening a far piece of a multi-piece cable from Nearby flies to that piece
     { lat: topaz.lat, lon: topaz.lon },
     'not its first piece',
   );
-  const [list] = nearbyByLayer(dataManager, far, {
+  const [list] = store.nearbyLayers(far.lat, far.lon, {
     radiusKm: 25,
     query: 'topaz',
   });
+  const lookup = Promise.withResolvers();
+  const search = new LocationSearch({
+    begin: () => navigation._beginDeferredNavigation('location'),
+    isCurrent: (ticket) => ticket === navigation._navigationGeneration,
+    beforeFly: () => true,
+    search: async (_query, { beforeFly }) => {
+      const place = await lookup.promise;
+      if (beforeFly()) flown.push(place);
+      return place;
+    },
+  });
+  t.after(() => search.destroy());
+  orbit.start({ x: 6378137, y: 0, z: 0 });
+  const pending = search.run('old destination');
+  const ticket = navigation._navigationGeneration;
+  assert.ok(store.select(list.items[0].identity));
+  assert.equal(
+    navigation._navigationGeneration,
+    ticket,
+    'selection alone leaves the lookup current',
+  );
+  assert.ok(orbit.active, 'passive selection leaves the active orbit alone');
   assert.ok(store.select(list.items[0].identity, { fly: true }));
+  lookup.resolve({ label: 'old destination' });
+  await pending;
   assert.equal(store.card.lat, far.lat, 'the card stays at that piece');
   assert.equal(store.card.lon, far.lon);
   assert.equal(flown.length, 1, 'the camera flew once');
+  followed = { key: 'flights:other' };
+  assert.ok(store.select(list.items[0].identity, { fly: true }));
+  assert.equal(flown.length, 2, 'the row also takes over an active follow');
   const landed = toLonLatH(flown[0].center);
   assert.ok(Math.abs(landed.lat - far.lat) < 1e-6, `lat ${landed.lat}`);
   assert.ok(Math.abs(landed.lon - far.lon) < 1e-6, `lon ${landed.lon}`);
+});
+
+test('Nearby rows give the navigation owner the wildlife cell and locator pin frames', async (t) => {
+  const nowMs = Date.UTC(2026, 10, 24, 12);
+  const [sighting] = normalizeInatObservations(
+    [
+      {
+        id: 1,
+        geojson: { coordinates: [-97.743, 30.271] },
+        obscured: true,
+        observed_on: '2026-11-24',
+        quality_grade: 'research',
+      },
+    ],
+    { nowMs },
+  );
+  const { methods: wildlife } = createWildlifeControls({
+    state: {
+      enabled: true,
+      rows: new Map([[sighting.stableId, sighting]]),
+    },
+    services: { now: () => nowMs },
+    parts: {},
+  });
+  const place = INCIDENT_OVERVIEW_PLACES.find(
+    ({ id }) => id === 'immediate-collapse-viewpoint',
+  );
+
+  for (const { id, module, center, height, radius, range } of [
+    {
+      id: 'wildlife-sightings',
+      module: wildlife,
+      center: { lat: 30.3, lon: -97.7 },
+      height: 0,
+      radius: 11_000,
+      range: 60_000,
+    },
+    {
+      id: 'bhote-koshi-locator',
+      module: { getAnalystRecords: () => bhoteKoshiPlaceRecords([place]) },
+      center: place,
+      height: place.heightM,
+      radius: 1,
+      range: 8_000,
+    },
+  ]) {
+    await t.test(id, (t) => {
+      const viewer = { scene: {} };
+      const input = fakeInput(viewer);
+      const flights = [];
+      const unbind = bindRenderer(viewer, {
+        camera: {
+          pose: () => ({ heading: 0 }),
+          on: () => () => {},
+          flyToBounds: (bounds, options) => flights.push({ bounds, options }),
+        },
+      });
+      const layer = { id, enabled: true, module };
+      const pinia = createPinia();
+      const pendingFlights = [];
+      const disconnect = installEntityContext({
+        viewer,
+        pinia,
+        getDataManager: () => ({
+          layers: new Map([[id, layer]]),
+          getAll: () => [layer],
+          isEnabled: () => true,
+        }),
+        navigateToSelection: (fly) => pendingFlights.push(fly),
+      });
+      const store = useEntityCardStore(pinia);
+      t.after(() => {
+        store.clear();
+        disconnect();
+        input.destroy();
+        unbind();
+      });
+      const [list] = store.nearbyLayers(center.lat, center.lon, {
+        radiusKm: 25,
+      });
+      assert.ok(store.select(list.items[0].identity, { fly: true }));
+      assert.equal(
+        flights.length,
+        0,
+        'the bridge lets the owner start the flight',
+      );
+      assert.equal(pendingFlights.length, 1);
+      pendingFlights[0]();
+      assert.equal(flights.length, 1);
+
+      const { bounds, options } = flights[0];
+      assert.equal(bounds.radius, radius);
+      assert.equal(options.offset.range, range);
+      const { lat, lon, height: atHeight } = toLonLatH(bounds.center);
+      assert.ok(Math.abs(lat - center.lat) < 1e-6, `latitude ${lat}`);
+      assert.ok(Math.abs(lon - center.lon) < 1e-6, `longitude ${lon}`);
+      assert.ok(Math.abs(atHeight - height) < 1e-3, `height ${atHeight}`);
+    });
+  }
+});
+
+test('without a tracking runner an explicit moving row takes over a pending place flight', async (t) => {
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const flights = [];
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ heading: 0 }),
+      on: () => () => {},
+      flyToBounds: () => flights.push('aircraft'),
+    },
+  });
+  const aircraft = { id: 'abc123', icao24: 'abc123', lat: 30, lon: -97 };
+  const layer = {
+    id: 'flights',
+    enabled: true,
+    module: { getAnalystRecords: () => [aircraft] },
+  };
+  const dm = {
+    layers: new Map([[layer.id, layer]]),
+    getAll: () => [layer],
+    isEnabled: () => true,
+  };
+  const pinia = createPinia();
+  let generation = 0;
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => dm,
+    navigateToSelection: (fly) => {
+      generation++;
+      return fly();
+    },
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    store.clear();
+    disconnect();
+    input.destroy();
+    unbind();
+  });
+  const pending = Promise.withResolvers();
+  const lookup = new LocationSearch({
+    begin: () => ++generation,
+    isCurrent: (ticket) => ticket === generation,
+    beforeFly: () => true,
+    search: async (_query, { beforeFly }) => {
+      await pending.promise;
+      if (beforeFly()) flights.push('place');
+    },
+  });
+  t.after(() => lookup.destroy());
+  const done = lookup.run('previous destination');
+  const target = store.nearbyLayers(30, -97, { radiusKm: 25 })[0].items[0]
+    .identity;
+  assert.ok(store.select(target));
+  assert.deepEqual(
+    flights,
+    [],
+    'passive selection does not move the host camera',
+  );
+  assert.equal(generation, 1, 'the place lookup still owns its flight');
+  assert.ok(store.select(target, { fly: true }));
+  pending.resolve();
+  await done;
+  assert.deepEqual(flights, ['aircraft']);
+  const tracked = [];
+  useOmnibarStore(pinia).connectRunner((name, args) =>
+    tracked.push([name, args.query]),
+  );
+  assert.ok(store.select(target, { fly: true }));
+  assert.deepEqual(tracked, [['track_entity', aircraft.id]]);
+  assert.deepEqual(
+    flights,
+    ['aircraft'],
+    'a runner handles the selection without a fallback flight',
+  );
 });
 
 test('a quiet spell between thresholded changes keeps an active camera move unsettled', (t) => {
@@ -546,9 +925,7 @@ test('the first pre-flush sample includes a manager attached during bridge setup
   f.show(true);
   f.replaceManager(null);
   f.connect();
-  f.replaceManager([
-    enabled('flights', { count: 17, lastUpdate: 2, scope: 'worldwide' }),
-  ]);
+  f.replaceManager([enabled('flights', { count: 17, lastUpdate: 2 })]);
   await setImmediate();
   assert.equal(f.store.inspectorRows[0].id, 'flights');
   assert.equal(f.countRequests.length, 0);
@@ -557,14 +934,11 @@ test('the first pre-flush sample includes a manager attached during bridge setup
     1,
     'subscribing does not sample the same entry twice',
   );
-  assert.deepEqual(
-    f.countStore.state.counts,
-    {},
-    'subscribing is not a feed update',
-  );
+  assert.deepEqual(f.countStore.state.counts, {});
   f.setRows(f.store.inspectorRows);
   await nextTick();
-  assert.equal(f.countStore.state.counts.flights.count, 17);
+  assert.equal(f.store.inspectorRows[0].stats.count, 17);
+  assert.deepEqual(f.countStore.state.counts, {});
 });
 
 test('counts admit only the settled Inspector state, and Directions does not fill it', async (t) => {
@@ -934,21 +1308,11 @@ test('an abort listener that disposes the bridge cannot restore its previous wea
 test('bridge replacement keeps saved counts, cancels both old requests, and waits for its own camera', async (t) => {
   const f = inspectorFixture(t);
   const disposeOld = f.disconnect;
-  f.setRows([
-    enabled('flights', { count: 900, lastUpdate: 2, scope: 'worldwide' }),
-  ]);
-  await nextTick();
+  f.countStore.publish({
+    ...f.countStore.state,
+    counts: { flights: { count: 900, at: 10 } },
+  });
   await f.openAndRead();
-  assert.deepEqual(
-    f.countStore.state.counts,
-    {},
-    'entry alone does not save live totals',
-  );
-  f.store.pulseInspector();
-  await nextTick();
-  assert.equal(f.countStore.state.counts.flights.count, 900);
-  f.setRows([]);
-  await nextTick();
   const [oldWeather] = f.weatherRequests;
   const [oldCount] = f.countRequests;
   f.disconnect();

@@ -1,33 +1,7 @@
-// Suggested layers for Context: at most three, by simple
-// rules, and only where a layer declares coverage. A suggestion never turns
-// a layer on: it opens Data Layers with those rows picked out. No model, no
-// requests: the rules read the layer list and the view alone.
+// Suggested rows open in Data Layers and leave the layer switches alone.
 
-/**
- * Where each layer has data, declared once. 'global' means everywhere. A
- * layer whose data comes from regional packs (cameras, transit) says nothing
- * until its packs publish their bounds, and a layer that says nothing is
- * never suggested.
- */
-export const LAYER_COVERAGE = Object.freeze({
-  satellites: 'global',
-  flights: 'global',
-  'ais-live-vessels': 'global',
-  'street-level': 'global',
-  'local-firms': 'global',
-  earthquakes: 'global',
-  wind: 'global',
-});
-
-/**
- * What to suggest by the view: the whole globe, or a local (zoomed-in) view.
- * Only layers that declare coverage are listed; cameras and transit join the
- * local list once they declare theirs.
- */
-const BY_VIEW = Object.freeze({
-  globe: ['satellites', 'flights', 'ais-live-vessels'],
-  local: ['street-level'],
-});
+/** With no local coverage information, only the globe has default suggestions. */
+const GLOBE_DEFAULTS = ['satellites', 'flights', 'ais-live-vessels'];
 
 /** With a layer on, what goes with it. */
 const COMPANIONS = Object.freeze({
@@ -42,17 +16,8 @@ const COMPANIONS = Object.freeze({
 export const MAX_SUGGESTIONS = 3;
 
 /**
- * Whether a layer declares data at a point. Only 'global' is declared today.
- * @param {string} layerId
- * @returns {boolean}
- */
-export function coversView(layerId) {
-  return LAYER_COVERAGE[layerId] === 'global';
-}
-
-/**
  * Up to three layer ids to suggest.
- * @param {Array<{id: string, enabled?: boolean, showInTogglePanel?: boolean, stats?: {keyRequired?: boolean}}>} rows
+ * @param {Array<{id: string, enabled?: boolean, showInTogglePanel?: boolean, stats?: {keyRequired?: boolean, sourceUnavailable?: boolean, lastUpdate?: number|null}}>} rows
  *   The data manager's layer rows.
  * @param {{globe?: boolean}} [view] Whether the view shows the whole globe.
  * @returns {string[]}
@@ -62,7 +27,7 @@ export function suggestLayers(rows, { globe = false } = {}) {
   const on = (rows || []).filter((row) => row.enabled).map((row) => row.id);
   const candidates = [
     ...on.flatMap((id) => COMPANIONS[id] || []),
-    ...BY_VIEW[globe ? 'globe' : 'local'],
+    ...(globe ? GLOBE_DEFAULTS : []),
   ];
   const picked = [];
   for (const id of candidates) {
@@ -73,9 +38,12 @@ export function suggestLayers(rows, { globe = false } = {}) {
       row.enabled ||
       picked.includes(id) ||
       row.showInTogglePanel === false ||
-      // Self-hosted without this layer's key: it could not show anything.
       row.stats?.keyRequired === true ||
-      !coversView(id)
+      row.stats?.sourceUnavailable === true ||
+      // AIS and FIRMS use server-side keys. Before a successful update the
+      // browser cannot distinguish a keyless host from an unused feed.
+      ((id === 'ais-live-vessels' || id === 'local-firms') &&
+        !row.stats?.lastUpdate)
     )
       continue;
     picked.push(id);

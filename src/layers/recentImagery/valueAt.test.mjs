@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRecentImageryLayer } from './index.js';
-import { boxContains, candidateAtPoint, groupGranulesByDay } from './model.js';
+import {
+  pointBoxMatches,
+  candidateAtPoint,
+  groupGranulesByDay,
+} from './model.js';
 import {
   BOX,
   candidate,
@@ -33,12 +37,19 @@ function fixture() {
   return { layer, catalog, thumbnails };
 }
 
-test('boxContains and candidateAtPoint read degrees boxes and footprints', () => {
-  assert.equal(boxContains(BOX, -97.75, 30.25), true);
-  assert.equal(boxContains(BOX, -97.6, 30.25), false);
-  assert.equal(
-    boxContains({ west: 179, south: -1, east: -179, north: 1 }, -179.5, 0),
-    true,
+test('pointBoxMatches and candidateAtPoint read degrees boxes and footprints', () => {
+  assert.deepEqual(
+    pointBoxMatches(BOX, -97.75, 30.25).map((p) => p.lon),
+    [-97.75],
+  );
+  assert.deepEqual(pointBoxMatches(BOX, -97.6, 30.25), []);
+  assert.deepEqual(
+    pointBoxMatches(
+      { west: 179, south: -1, east: -179, north: 1 },
+      -179.5,
+      0,
+    ).map((p) => p.lon),
+    [-179.5],
   );
   const footprinted = candidate('S30', '2026-09-18');
   assert.equal(candidateAtPoint(footprinted, -97.75, 30.25), null);
@@ -97,20 +108,58 @@ test('getValueAt names the newest day covering a point inside the box', async ()
   layer.destroy();
 });
 
-test('getValueAt falls back to a daily overview only once it has pixels', async () => {
+test('getValueAt distinguishes a positive area preview from point coverage', async () => {
   const { layer, catalog, thumbnails } = fixture();
   layer.setSources({ viirs: true });
   layer.enable();
   layer.setBox(BOX);
-  const unlocated = candidate('S30', '2026-09-21', 0);
-  catalog.resolveLast([unlocated, candidate('VIIRS', '2026-09-21')]);
+  const west = candidate('S30', '2026-09-20', 0);
+  west.granules[0].footprint = [
+    [-97.8, 30.2],
+    [-97.75, 30.2],
+    [-97.75, 30.3],
+    [-97.8, 30.3],
+  ];
+  catalog.resolveLast([west, candidate('VIIRS', '2026-09-21')]);
   await settle();
-  assert.equal(layer.getValueAt(30.25, -97.75), null, 'availability unknown');
+  assert.equal(layer.getValueAt(30.25, -97.72), null, 'availability unknown');
+  const hls = layer.getValueAt(30.25, -97.78);
+  assert.equal(hls.value, 'Sep 20, 2026');
   thumbnails.setStatus('VIIRS:2026-09-21', 'present');
-  const overview = layer.getValueAt(30.25, -97.75);
+  assert.deepEqual(layer.getValueAt(30.25, -97.78), hls);
+  const overview = layer.getValueAt(30.25, -97.72);
   assert.equal(overview.value, 'Sep 21, 2026');
-  assert.equal(plain(overview.detail), 'Daily overview · 250 m');
+  assert.match(plain(overview.detail), /^Daily overview · 250 m/);
+  assert.match(plain(overview.detail), /point coverage unknown/);
   assert.equal(overview.at, Date.parse('2026-09-21T00:00:00Z'));
+  layer.destroy();
+});
+
+test('getValueAt keeps an area preview on the dateline half with positive evidence', async () => {
+  const { layer, catalog, thumbnails } = fixture();
+  const box = { west: 179.85, south: 51.85, east: -179.85, north: 51.95 };
+  const overview = candidate('VIIRS', '2026-09-21');
+  const getThumbnail = thumbnails.get;
+  thumbnails.get = (key) =>
+    key === overview.key
+      ? {
+          status: 'present',
+          availableBoxes: [{ ...box, east: 180 }],
+          emptyBoxes: [{ ...box, west: -180 }],
+        }
+      : getThumbnail(key);
+
+  layer.setSources({ viirs: true });
+  layer.enable();
+  layer.setBox(box);
+  catalog.resolveLast([overview]);
+  await settle();
+
+  const present = layer.getValueAt(51.9, 179.95);
+  assert.match(plain(present.detail), /point coverage unknown/);
+  assert.equal(layer.getValueAt(51.9, -179.95), null, 'empty half');
+  assert.deepEqual(layer.getValueAt(51.9, 180), present);
+  assert.deepEqual(layer.getValueAt(51.9, -180), present);
   layer.destroy();
 });
 
@@ -170,19 +219,50 @@ test('getValueAt finds a dateline-crossing granule from either side', async () =
 });
 
 test('getValueAt accepts either sign on the dateline edge of a noncrossing box', async () => {
-  const { layer, catalog } = fixture();
-  const day = candidate('S30', '2026-09-18');
-  day.granules[0].footprint = [
-    [-180, 51.7],
-    [-179.7, 51.7],
-    [-179.7, 52.1],
-    [-180, 52.1],
-  ];
+  const { layer, catalog, thumbnails } = fixture();
+  const getThumbnail = thumbnails.get;
   layer.enable();
-  layer.setBox({ west: -180, south: 51.8, east: -179.8, north: 52 });
-  catalog.resolveLast([day]);
-  await settle();
-  assert.equal(layer.getValueAt(51.9, -180)?.at, Date.parse(day.timeRange.end));
-  assert.deepEqual(layer.getValueAt(51.9, 180), layer.getValueAt(51.9, -180));
+  for (const [west, east, footprintWest, footprintEast] of [
+    [-180, -179.8, -180, -179.7],
+    [179.8, 180, 179.7, 180],
+    [-180, -179.8, 179.7, 180],
+    [179.8, 180, -180, -179.7],
+  ]) {
+    const day = candidate('S30', '2026-09-18');
+    day.granules[0].footprint = [
+      [footprintWest, 51.7],
+      [footprintEast, 51.7],
+      [footprintEast, 52.1],
+      [footprintWest, 52.1],
+    ];
+    const box = { west, south: 51.8, east, north: 52 };
+    assert.equal(layer.setBox(box), true);
+    catalog.resolveLast([day]);
+    await settle();
+    for (const lon of [-180, 180]) {
+      assert.equal(
+        layer.getValueAt(51.9, lon)?.at,
+        Date.parse(day.timeRange.end),
+      );
+    }
+    const interior = layer.getValueAt(51.9, (west + east) / 2);
+    if (Math.sign(west) === Math.sign(footprintWest)) {
+      assert.equal(interior?.at, Date.parse(day.timeRange.end));
+    } else {
+      assert.equal(
+        interior,
+        null,
+        'opposite-side footprints meet only at the seam',
+      );
+    }
+
+    thumbnails.get = () => ({ status: 'present', emptyBoxes: [box] });
+    assert.equal(
+      layer.getValueAt(51.9, -180),
+      null,
+      'the matched search box is empty',
+    );
+    thumbnails.get = getThumbnail;
+  }
   layer.destroy();
 });

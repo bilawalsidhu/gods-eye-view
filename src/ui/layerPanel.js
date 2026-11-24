@@ -1,7 +1,13 @@
 import { h, render as renderVue } from 'vue';
-import { createLayerFinder, filterLayerRows } from './layerFinderFilter.js';
+import {
+  bindPresentedLayerFinder,
+  createLayerFinder,
+  filterLayerRows,
+  layerFinderFor,
+} from './layerFinderFilter.js';
 import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
+import { FEED_STATE_LABEL_KEYS } from './layerRowState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
 import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
@@ -25,18 +31,6 @@ import {
   onLocaleChange,
   t,
 } from '../i18n/index.js';
-
-// Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
-// label translates.
-const FEED_STATE_LABEL_KEYS = Object.freeze({
-  nominal: msg('ON'),
-  loading: msg('LOADING'),
-  degraded: msg('DEGRADED'),
-  stale: msg('STALE'),
-  partial: msg('PARTIAL'),
-  fallback: msg('FALLBACK'),
-  unavailable: msg('UNAVAILABLE'),
-});
 
 function lifecycleStateLabel(lifecycleState) {
   return t(lifecycleState === 'enabling' ? msg('ENABLING') : msg('DISABLING'));
@@ -272,7 +266,10 @@ export function presentLayerToggle(layer) {
   };
 }
 
-/** Layer row presentation over supplied state and actions; no layer imports. */
+/**
+ * Layer rows over supplied state and actions. An explicit Finder takes
+ * precedence over the standard row container's Finder or the private default.
+ */
 export class LayerPanel {
   constructor({
     getLayers,
@@ -286,7 +283,9 @@ export class LayerPanel {
     weatherClock,
     finder,
   }) {
-    this.finder = finder ?? createLayerFinder();
+    this._providedFinder = finder;
+    this._localFinder = finder == null ? createLayerFinder() : null;
+    this.finder = finder ?? this._localFinder;
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -306,6 +305,7 @@ export class LayerPanel {
     this._recentImageryPanel = null;
     this._rows = [];
     this._rowViews = new Map();
+    this._finderRows = [];
     this._pending = new Set();
   }
   mount(container) {
@@ -317,7 +317,13 @@ export class LayerPanel {
       renderVue(null, element);
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
+    this._unbindFinder?.();
     this._toggleContainer = container;
+    this.finder =
+      this._providedFinder ?? layerFinderFor(container) ?? this._localFinder;
+    this._unbindFinder = container
+      ? bindPresentedLayerFinder(container, this.finder)
+      : null;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();
@@ -372,6 +378,8 @@ export class LayerPanel {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._unbindFinder?.();
+    this._unbindFinder = null;
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
@@ -385,6 +393,7 @@ export class LayerPanel {
       renderVue(null, element);
     this._groupContainers = new Map();
     this._toggleContainer = null;
+    this._finderRows = [];
   }
   /** Rebuild the rows after the layer set changed (a Data Library add/remove). */
   rerender() {
@@ -393,7 +402,6 @@ export class LayerPanel {
   _renderToggles() {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
-    this._removers.push(this.finder.onInputs(() => this._paint()));
     // The rows are fixed here, in panel order under their group headings;
     // refreshes repaint them. A layer whose row is a rail readout keeps only
     // its toggle and metadata.
@@ -444,6 +452,7 @@ export class LayerPanel {
       }),
     );
     this._paint();
+    this._removers.push(this.finder.onInputs(() => this._paintFinder()));
     this._refreshWeatherPanel();
     this._refreshNewsPanel();
   }
@@ -465,29 +474,41 @@ export class LayerPanel {
       }
       if (item) lists.get(row.container ?? null).push(item);
     }
+    this._finderRows = lists.get(null);
+    this._paintFinder();
+    for (const [id, container] of this._groupContainers)
+      this._renderRows(container, lists.get(id));
+  }
+
+  /** Finder input changes only visibility, not the layer state or controls. */
+  _paintFinder() {
+    if (this._destroyed || !this._toggleContainer) return;
     const { filtered, groups, shown } = filterLayerRows(
-      lists.get(null),
+      this._finderRows,
       this.finder.inputs(),
     );
     this.finder.publish(groups, shown);
+    this._renderRows(this._toggleContainer, this._finderRows, filtered);
+  }
+
+  _renderRows(container, items, filtered) {
     const generation = this._generation;
-    for (const [id, items] of lists)
-      renderVue(
-        h(LayerRows, {
-          items,
-          filtered: id === null ? filtered : undefined,
-          onToggle: (layerId) => this._toggle(layerId, generation),
-          onChip: (layerId, chipId) =>
-            this._selectChip(layerId, chipId, generation),
-          onListItem: (layerId, itemId) =>
-            this._selectListItem(layerId, itemId, generation),
-          onSlider: (layerId, sliderId, value) =>
-            this._moveSlider(layerId, sliderId, value, generation),
-          onRange: (layerId, rangeId, end, value) =>
-            this._pickRangeEnd(layerId, rangeId, end, value, generation),
-        }),
-        id === null ? this._toggleContainer : this._groupContainers.get(id),
-      );
+    renderVue(
+      h(LayerRows, {
+        items,
+        filtered,
+        onToggle: (layerId) => this._toggle(layerId, generation),
+        onChip: (layerId, chipId) =>
+          this._selectChip(layerId, chipId, generation),
+        onListItem: (layerId, itemId) =>
+          this._selectListItem(layerId, itemId, generation),
+        onSlider: (layerId, sliderId, value) =>
+          this._moveSlider(layerId, sliderId, value, generation),
+        onRange: (layerId, rangeId, end, value) =>
+          this._pickRangeEnd(layerId, rangeId, end, value, generation),
+      }),
+      container,
+    );
   }
 
   _presentRow(row, layer) {

@@ -470,9 +470,27 @@ export function mergeCandidates(lists) {
   );
 }
 
-function pointInPolygon(lon, lat, ring) {
+function pointOnEdge(lon, lat, [x, y], [endX, endY]) {
+  if (
+    lon < Math.min(x, endX) ||
+    lon > Math.max(x, endX) ||
+    lat < Math.min(y, endY) ||
+    lat > Math.max(y, endY)
+  )
+    return false;
+  const dx = endX - x;
+  const dy = endY - y;
+  // Allow roundoff when looking up a coordinate on a diagonal edge.
+  return (
+    Math.abs((lon - x) * dy - (lat - y) * dx) <=
+    1e-10 * (Math.abs(dx) + Math.abs(dy))
+  );
+}
+
+function pointInPolygon(lon, lat, ring, includeBoundary = false) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    if (includeBoundary && pointOnEdge(lon, lat, ring[i], ring[j])) return true;
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     const crosses =
@@ -483,20 +501,19 @@ function pointInPolygon(lon, lat, ring) {
   return inside;
 }
 
-/**
- * Whether a point lies in a box, across the antimeridian too.
- * @param {object} box Degrees box.
- * @param {number} lon
- * @param {number} lat
- * @returns {boolean}
- */
-export function boxContains(box, lon, lat) {
-  const normalized = normalizeBox(box);
-  if (!normalized || !Number.isFinite(lon) || !Number.isFinite(lat))
-    return false;
-  const { west, south, east, north } = normalized;
-  if (lat < south || lat > north) return false;
-  return west <= east ? lon >= west && lon <= east : lon >= west || lon <= east;
+// Return the point in each intersecting search box's longitude coordinates.
+export function pointBoxMatches(box, lon, lat) {
+  if (!Number.isFinite(lon) || Math.abs(lon) > 180 || !Number.isFinite(lat))
+    return [];
+  const matches = [];
+  for (const part of nonCrossingBoxes(box)) {
+    if (lat < part.south || lat > part.north) continue;
+    for (const x of [lon + 360, lon, lon - 360]) {
+      if (x >= part.west && x <= part.east)
+        matches.push({ lon: x, key: boxKey(part) });
+    }
+  }
+  return matches;
 }
 
 /**
@@ -513,11 +530,17 @@ export function candidateAtPoint(candidate, lon, lat) {
     const crossesDateline = ring.some(
       ([x], i) => Math.abs(x - ring[(i + 1) % ring.length][0]) > 180,
     );
-    if (!crossesDateline) return pointInPolygon(lon, lat, ring);
+    if (!crossesDateline) {
+      // The matched box and footprint can use opposite signs on the seam.
+      return (
+        pointInPolygon(lon, lat, ring, true) ||
+        (Math.abs(lon) === 180 && pointInPolygon(-lon, lat, ring, true))
+      );
+    }
     // Shift the cut to Greenwich so a granule around ±180° stays together.
     const shift = (value) => (value < 0 ? value + 360 : value);
     const unwrapped = ring.map(([x, y]) => [shift(x), y]);
-    return pointInPolygon(shift(lon), lat, unwrapped);
+    return pointInPolygon(shift(lon), lat, unwrapped, true);
   });
   return granules.length
     ? buildCandidate(candidate.product, candidate.day, granules)

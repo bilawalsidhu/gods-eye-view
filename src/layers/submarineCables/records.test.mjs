@@ -8,7 +8,14 @@ import {
   cableLinePoints,
   cableRepresentativePoint,
 } from './records.js';
-import { entityKind, nearbyByLayer } from '../../data/entityContext.js';
+import {
+  describeEntity,
+  entityKind,
+  layerMatches,
+  nearbyForLayer,
+  viewSummaryForLayer,
+} from '../../data/entityContext.js';
+import { normalizeFeatures } from './geometry.js';
 import { greatCircleKm } from '../../geoDistance.js';
 
 const cable = {
@@ -43,6 +50,16 @@ const loaded = (extra = {}) => ({
   _cachedCableJson: { features: [cable] },
   _cachedLandingJson: { features: [landing] },
   ...extra,
+});
+
+test('a named cable with an empty provider ID keeps the same identity on the map and in records', () => {
+  const source = {
+    features: [{ ...cable, properties: { id: [], name: 'Pacific' } }],
+  };
+  const [feature] = normalizeFeatures(source, 'cable');
+  const [record] = cableAnalystRecords(loaded({ _cachedCableJson: source }));
+  assert.equal(feature.id, 'Pacific');
+  assert.equal(record.id, 'cable:Pacific');
 });
 
 test('a cable stands at the vertex nearest its label point', () => {
@@ -210,8 +227,9 @@ test('a bundled cable laid in pieces is one record, listed and counted once near
   // A point on each piece's first line.
   for (const piece of pieces) {
     const [lon, lat] = piece.geometry.coordinates[0][0];
-    const [list] = nearbyByLayer(
+    const list = nearbyForLayer(
       manager,
+      layer,
       { lat, lon },
       { radiusKm: 25, limit: 12, query: 'topaz' },
     );
@@ -271,14 +289,14 @@ test('Nearby finds a bundled cable by any of its lines', () => {
     Fortaleza: { lat: -3.72, lon: -38.54 },
   };
   for (const [place, here] of Object.entries(places)) {
-    const [list] = nearbyByLayer(manager, here, {
+    const list = nearbyForLayer(manager, layer, here, {
       radiusKm: 250,
       limit: 1000,
     });
     const found = new Set(list.items.map((item) => item.title));
     assert.equal(found.size, list.count, `${place}: each cable once`);
-    // Every cable with a vertex inside the radius is found; points along a
-    // line are at most 40 km apart, so one within 230 km always is.
+    // All cables with a vertex within 230 km must appear. The 250 km
+    // comparison allows for sampling near the edge.
     const expected = withVertexWithin(here, 250);
     const missing = [...withVertexWithin(here, 230)].filter(
       (name) => !found.has(name),
@@ -289,4 +307,69 @@ test('Nearby finds a bundled cable by any of its lines', () => {
       `${place}: ${list.count} found, ${expected.size} with a vertex within 250 km`,
     );
   }
+});
+
+test('rectangle results open a cable crossing the viewport between vertices', () => {
+  const state = loaded({
+    _cachedCableJson: {
+      features: [
+        {
+          type: 'Feature',
+          properties: { id: 'crossing', name: 'Crossing' },
+          geometry: {
+            type: 'MultiLineString',
+            coordinates: [
+              [
+                [179.85, 0],
+                [-179.85, 0],
+              ],
+              [
+                [-179.85, 1],
+                [179.85, 1],
+              ],
+            ],
+          },
+        },
+      ],
+    },
+    _cachedLandingJson: { features: [] },
+  });
+  const layer = {
+    id: 'telegeography-submarine-cables',
+    enabled: true,
+    module: { getAnalystRecords: () => cableAnalystRecords(state) },
+  };
+  const manager = { layers: new Map([[layer.id, layer]]) };
+  const rect = { west: 179.95, east: -179.95, south: -0.05, north: 0.05 };
+  const center = { lat: 0, lon: 180 };
+  const answer = layerMatches(manager, layer.id, { rect, center });
+  assert.equal(answer.count, 1);
+  const [item] = answer.items;
+  assert.equal(item.distanceKm, 0);
+  assert.deepEqual(
+    viewSummaryForLayer(manager, layer, rect, center)?.items.map(
+      (one) => one.key,
+    ),
+    [item.key],
+  );
+  const opened = describeEntity(manager, item.identity);
+  assert.equal(opened.lon, item.identity.lon);
+  assert.equal(describeEntity(manager, opened.identity).lon, opened.lon);
+
+  const gap = { west: -179.95, east: -179.8, south: 0.45, north: 0.55 };
+  assert.equal(
+    layerMatches(manager, layer.id, {
+      rect: gap,
+      center: { lat: 0.5, lon: -179.85 },
+    }).count,
+    0,
+    'separate lines do not create a segment across the gap',
+  );
+  const nearby = nearbyForLayer(
+    manager,
+    layer,
+    { lat: 0.215, lon: 180 },
+    { radiusKm: 25 },
+  );
+  assert.equal(nearby.count, 0, 'radius keeps its existing sampling contract');
 });

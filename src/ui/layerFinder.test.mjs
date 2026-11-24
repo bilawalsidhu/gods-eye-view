@@ -4,18 +4,18 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { createPinia } from 'pinia';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { createApp, nextTick } from 'vue';
 import { LayerPanel } from 'gods-eye-view/ui/layers';
-import { applicationPinia } from './vueRuntime.js';
+import { createGevActionRunner } from '../voice/gevActions.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { createLayerFinder } from './layerFinderFilter.js';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import { mountApplicationViews } from './views/index.js';
-import {
-  LAYER_FINDER_CLEAR_EVENT,
-  useLayerFinderStore,
-} from './stores/layerFinder.js';
+import { useLayerFinderStore } from './stores/layerFinder.js';
 
 const flush = async () => {
   await nextTick();
@@ -23,7 +23,7 @@ const flush = async () => {
   await nextTick();
 };
 
-function fixture(t) {
+function fixture(t, { rowFinder } = {}) {
   document.body.replaceChildren();
   // Frames run at once, so the observers' batching does not hold a test up.
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
@@ -48,7 +48,7 @@ function fixture(t) {
     stats: {},
   }));
   const rows = new LayerPanel({
-    finder,
+    finder: rowFinder ?? finder,
     getLayers: () => layers,
     getRowControls: () => null,
     hasRowControls: () => false,
@@ -83,13 +83,19 @@ function fixture(t) {
   return { list, panel, shown, search, openFilter, finder, rows, layers };
 }
 
-test('an explicit app finder filters its panel and leaves a standalone panel alone', async (t) => {
+test('the public LayerPanel uses its mounted page Finder and leaves a standalone panel alone', async (t) => {
   document.body.innerHTML = '<div data-gev-view="layer-panels"></div>';
   mountApplicationViews(document);
+  const style = document.head.appendChild(document.createElement('style'));
+  style.textContent = readFileSync(
+    new URL('./styles/layer-finder.css', import.meta.url),
+    'utf8',
+  );
+  t.after(() => style.remove());
   const list = document.getElementById('data-toggles');
   const standaloneList = document.createElement('div');
   standaloneList.id = list.id;
-  const layers = ['flights', 'ais-live-vessels'].map((id) => ({
+  const layers = ['flights', 'ais-live-vessels', 'weather-radar'].map((id) => ({
     id,
     name: id,
     enabled: false,
@@ -102,13 +108,9 @@ test('an explicit app finder filters its panel and leaves a standalone panel alo
     getRowControls: () => null,
     hasRowControls: () => false,
   };
-  const rows = new LayerPanel({
-    ...options,
-    finder: useLayerFinderStore(applicationPinia()),
-  });
+  const rows = new LayerPanel(options);
   const standalone = new LayerPanel(options);
   t.after(() => {
-    document.dispatchEvent(new CustomEvent(LAYER_FINDER_CLEAR_EVENT));
     standalone.destroy();
     rows.destroy();
     mountApplicationViews(document, { omit: ['layer-panels'] });
@@ -129,16 +131,29 @@ test('an explicit app finder filters its panel and leaves a standalone panel alo
     );
   assert.deepEqual(shown(list), ['ais-live-vessels']);
   assert.equal(document.querySelector('.layer-finder__empty'), null);
-  assert.deepEqual(shown(standaloneList), ['flights', 'ais-live-vessels']);
+  assert.deepEqual(shown(standaloneList), [
+    'flights',
+    'ais-live-vessels',
+    'weather-radar',
+  ]);
   standalone.finder.select({ query: 'flights' });
-  const next = document.createElement('div');
+  const next = document.body.appendChild(document.createElement('div'));
   standalone.mount(next);
   assert.deepEqual(shown(standaloneList), []);
   assert.deepEqual(shown(next), ['flights']);
+  const vessel = next.querySelector('[data-layer-id="ais-live-vessels"]');
+  assert.equal(getComputedStyle(vessel).display, 'none');
+  const heading = next.querySelector('.data-layer-group-heading.is-filtered');
+  assert.equal(getComputedStyle(heading).display, 'none');
+  assert.deepEqual(shown(list), ['ais-live-vessels']);
+
+  rows.mount(document.createElement('div'));
+  assert.deepEqual(shown(list), []);
+  rows.mount(list);
   assert.deepEqual(shown(list), ['ais-live-vessels']);
 });
 
-test('unmounting the old controls leaves the replacement able to clear the Finder', (t) => {
+test('unmounting the old controls leaves the replacement attached to the Finder', (t) => {
   const pinia = createPinia();
   const first = document.body.appendChild(document.createElement('div'));
   const next = document.body.appendChild(document.createElement('div'));
@@ -151,12 +166,12 @@ test('unmounting the old controls leaves the replacement able to clear the Finde
     first.remove();
     next.remove();
   });
-  oldApp.unmount();
-
   const finder = useLayerFinderStore(pinia);
   finder.select({ query: 'flights' });
-  document.dispatchEvent(new CustomEvent(LAYER_FINDER_CLEAR_EVENT));
-  assert.equal(finder.inputs().query, '');
+  oldApp.unmount();
+
+  assert.equal(finder.controlsMounted, true);
+  assert.equal(finder.inputs().query, 'flights');
 });
 
 test('search finds a layer by the name on screen or its English name', async (t) => {
@@ -180,6 +195,31 @@ test('search finds a layer by the name on screen or its English name', async (t)
     document.querySelector('.layer-finder__empty')?.textContent || '',
     /No layers match/,
   );
+});
+
+test('typing filters prepared rows and a feed refresh still updates them', async (t) => {
+  const { layers, list, rows, search, shown } = fixture(t);
+  const layerReads = t.mock.method(rows, 'getAll');
+  await search('vesse');
+  await search('vessels');
+  assert.deepEqual(shown(), ['ais-live-vessels']);
+  assert.equal(
+    layerReads.mock.callCount(),
+    0,
+    'search does not reread the presenter inputs',
+  );
+
+  const vessels = layers.find(({ id }) => id === 'ais-live-vessels');
+  vessels.stats = { count: 12 };
+  vessels.enabled = true;
+  rows._refreshTogglePanel();
+  const row = list.querySelector('[data-layer-id="ais-live-vessels"]');
+  assert.equal(row.querySelector('.data-count').textContent.trim(), '12');
+  assert.equal(
+    row.querySelector('.data-toggle-btn').classList.contains('active'),
+    true,
+  );
+  assert.deepEqual(shown(), ['ais-live-vessels']);
 });
 
 test('On and Off follow whether the layer is enabled', async (t) => {
@@ -240,6 +280,7 @@ test('Escape in the search field closes it without reaching the panel', async (t
   let reached = false;
   panel.addEventListener('keydown', () => (reached = true));
   await search('vessels');
+  assert.equal(document.activeElement?.id, 'layer-finder-input');
   document
     .getElementById('layer-finder-input')
     .dispatchEvent(
@@ -275,12 +316,12 @@ test('the filter menu takes focus, moves with the arrows and closes on Escape', 
   );
 });
 
-test('a clear request shows every row again', async (t) => {
-  const { shown, search, list, rows } = fixture(t);
+test('clearing the Finder shows every row again immediately', async (t) => {
+  const { shown, search, list, rows, finder } = fixture(t);
   const target = list.querySelector('[data-layer-id="flights"]');
   await search('vessels');
   assert.deepEqual(shown(), ['ais-live-vessels']);
-  document.dispatchEvent(new CustomEvent(LAYER_FINDER_CLEAR_EVENT));
+  finder.clearAll();
   assert.equal(
     target.classList.contains('is-filtered'),
     false,
@@ -291,6 +332,56 @@ test('a clear request shows every row again', async (t) => {
   assert.ok(target.classList.contains('gev-voice-focus'));
   await flush();
   assert.deepEqual(shown(), ['flights', 'ais-live-vessels', 'weather-radar']);
+});
+
+test('stock search and voice use the explicit Finder that owns the rows', async (t) => {
+  const rowFinder = createLayerFinder();
+  const { finder, layers, list, shown, search, rows } = fixture(t, {
+    rowFinder,
+  });
+  finder.select({ query: 'flights' });
+  await search('vessels');
+  assert.deepEqual(shown(), ['ais-live-vessels']);
+  assert.equal(document.querySelector('.layer-finder__empty'), null);
+  await search('no matching layer');
+  assert.ok(document.querySelector('.layer-finder__empty'));
+  await search('vessels');
+  rows.rerender();
+  assert.deepEqual(shown(), ['ais-live-vessels']);
+
+  const target = list.querySelector('[data-layer-id="flights"]');
+  const scroll = t.mock.method(target, 'scrollIntoView', () => {
+    assert.equal(target.classList.contains('is-filtered'), false);
+  });
+  const viewer = {};
+  t.after(bindRenderer(viewer, { canvas: document.createElement('canvas') }));
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: { setPanelCollapsed() {} },
+    dataManager: {
+      layers: new Map(layers.map((layer) => [layer.id, { module: {} }])),
+      getAll: () => layers,
+    },
+  });
+  t.after(runner.dispose);
+  const result = await runner('show_data_layers_menu', { layerId: 'flights' });
+  assert.equal(result.focusedLayer?.id, 'flights');
+  assert.equal(scroll.mock.callCount(), 1);
+  assert.equal(rowFinder.narrowed.value, false);
+  assert.equal(finder.inputs().query, 'flights');
+  await flush();
+  assert.equal(document.getElementById('layer-finder-input'), null);
+
+  const detached = document.createElement('div');
+  rows.mount(detached);
+  await search('weather');
+  assert.equal(finder.inputs().query, 'weather');
+  assert.equal(rowFinder.inputs().query, '');
+  rows.mount(list);
+  await flush();
+  await search('flights');
+  assert.deepEqual(shown(), ['flights']);
+  assert.equal(finder.inputs().query, 'weather');
 });
 
 test('the section index has a tick per group and drops filtered groups', async (t) => {

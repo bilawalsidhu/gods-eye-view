@@ -214,7 +214,7 @@ export async function hazardsNear(
 
 /** Title-case copy for a WMO weather code, and the icon that goes with it. */
 export function weatherLook(code) {
-  const value = Number(code);
+  const value = code == null || code === '' ? NaN : Number(code);
   if (!Number.isFinite(value))
     return { label: msg('Conditions unknown'), icon: 'partly_cloudy_day' };
   if (value === 0) return { label: msg('Clear'), icon: 'sunny' };

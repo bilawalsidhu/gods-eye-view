@@ -1,24 +1,21 @@
-import { greatCircleKm } from '../geoDistance.js';
+import { requestWithDeadline } from '../sources/requestDeadline.js';
 
 const SETTLE_MS = 400;
+const READ_TIMEOUT_MS = 15_000;
 const RETRY_MS = 60_000;
 const REFRESH_MS = 11 * 60_000;
-const ZONE_KEEP_KM = 300;
-
-// Match the proxy's 0.1 degree cells after rounding the request coordinates.
-const coordinate = (value) => Math.round(Number(value.toFixed(5)) * 10);
-
-export function weatherCell(center) {
+// The point-weather request sends coordinates to five decimal places.
+export function weatherPoint(center) {
   return Number.isFinite(center?.lat) && Number.isFinite(center?.lon)
-    ? `${coordinate(center.lat)},${coordinate(center.lon)}`
+    ? `${Number(center.lat.toFixed(5))},${Number(center.lon.toFixed(5))}`
     : '';
 }
 
-function freshnessOf(reading, brief, now) {
+function freshnessOf(reading, brief) {
   const observed = Date.parse(reading.observedAt);
   if (Number.isFinite(observed)) return observed;
   const retrieved = Date.parse(brief.retrievedAt);
-  return Number.isFinite(retrieved) ? retrieved : now();
+  return Number.isFinite(retrieved) ? retrieved : Date.now();
 }
 
 function listenForPageVisibility(callback) {
@@ -35,14 +32,13 @@ export function createViewWeather({
   setTimeout: scheduleTimeout = (...args) => globalThis.setTimeout(...args),
   clearTimeout: cancelTimeout = (...args) => globalThis.clearTimeout(...args),
   nowMonotonic = () => performance.now(),
-  now = Date.now,
   isPageVisible = () => globalThis.document?.visibilityState !== 'hidden',
   onPageVisibility = listenForPageVisibility,
 }) {
-  let cell = '';
+  let point = '';
   let mountId = null;
   let deadline = null;
-  let zoneMount = null;
+
   let shown = false;
   let active = null;
   let stopped = false;
@@ -86,7 +82,7 @@ export function createViewWeather({
       isPageVisible() &&
       !input.moving &&
       input.mountId === target.mountId &&
-      weatherCell(input.center) === target.cell
+      weatherPoint(input.center) === target.point
     );
   }
 
@@ -110,44 +106,67 @@ export function createViewWeather({
     const { signal } = request.controller;
     setState({ pending: true });
     if (active !== request) return;
-    let brief = null;
     try {
-      brief = await read(center.lat, center.lon, { signal });
-    } catch {
-      // An error from the current request has the same result as no reading.
+      await requestWithDeadline(
+        async (bounded) => {
+          // Publish inside the operation: live camera eligibility can change before
+          // the bridge delivers its next batched update.
+          const timeout = () => {
+            if (active !== request) return;
+            request.controller.abort(bounded.reason);
+            completeRead(request, null);
+          };
+          bounded.addEventListener('abort', timeout, { once: true });
+          let brief = null;
+          try {
+            brief = await read(center.lat, center.lon, {
+              signal,
+              exactPoint: true,
+            });
+          } catch {
+            // Failed reads use the same retry as missing observations.
+          } finally {
+            bounded.removeEventListener('abort', timeout);
+          }
+          completeRead(request, brief);
+        },
+        { signal, timeoutMs: READ_TIMEOUT_MS },
+      );
+    } catch (error) {
+      if (!signal.aborted) throw error;
     }
+  }
+
+  function completeRead(request, brief) {
     if (!currentInputFor(request)) return;
 
     active = null;
     syncClock(shown);
-    const reading = brief?.weather ?? null;
-    let { zone } = state;
-    if (reading) {
-      const { latitude, longitude } = brief.coordinates ?? {};
-      // A shared cache cell can return a reading taken across a border.
-      const observationCenter =
-        Number.isFinite(latitude) &&
-        Math.abs(latitude) <= 90 &&
-        Number.isFinite(longitude) &&
-        Math.abs(longitude) <= 180
-          ? { lat: latitude, lon: longitude }
-          : center;
-      zone = {
-        cell: request.cell,
-        center: observationCenter,
-        timeZone: reading.timeZone,
-        utcOffsetSeconds: reading.utcOffsetSeconds,
-      };
-      zoneMount = request.mountId;
-    } else if (zone?.cell !== request.cell) {
-      zone = null;
-    }
-    deadline = elapsed + (reading ? REFRESH_MS : RETRY_MS);
+    const reading = Number.isFinite(brief?.weather?.temperatureC)
+      ? brief.weather
+      : null;
+    // A host may share weather across a cell. Its zone belongs only to the
+    // observation point. A host without coordinates serves the requested point.
+    const observedPoint = brief?.coordinates
+      ? weatherPoint({
+          lat: brief.coordinates.latitude,
+          lon: brief.coordinates.longitude,
+        })
+      : request.point;
+    const zone =
+      reading && observedPoint === request.point
+        ? {
+            point: request.point,
+            timeZone: reading.timeZone,
+            utcOffsetSeconds: reading.utcOffsetSeconds,
+          }
+        : null;
+    deadline = reading ? elapsed + REFRESH_MS : Date.now() + RETRY_MS;
     setState({
       reading,
-      failed: !Number.isFinite(reading?.temperatureC),
+      failed: reading === null,
       zone,
-      freshnessAt: reading ? freshnessOf(reading, brief, now) : null,
+      freshnessAt: reading ? freshnessOf(reading, brief) : null,
       pending: false,
     });
   }
@@ -156,15 +175,15 @@ export function createViewWeather({
     if (
       stopped ||
       active ||
-      !cell ||
+      !point ||
       mountId === null ||
       !shown ||
-      !matches(input, { cell, mountId }) ||
+      !matches(input, { point, mountId }) ||
       deadline !== null
     )
       return;
     const request = {
-      cell,
+      point,
       mountId,
       controller: new AbortController(),
       timer: null,
@@ -178,30 +197,20 @@ export function createViewWeather({
     shown = input.shown;
     syncClock(shown);
     mountId = input.mountId;
-    const nextCell = weatherCell(input.center);
-    let { zone } = state;
-    if (
-      !nextCell ||
-      (zone &&
-        zone.cell !== nextCell &&
-        (zoneMount !== mountId ||
-          greatCircleKm(zone.center, input.center) > ZONE_KEEP_KM))
-    )
-      zone = null;
-
+    const nextPoint = weatherPoint(input.center);
     if (active && !matches(input, active)) retire();
-    if (cell !== nextCell) {
-      cell = nextCell;
+    if (point !== nextPoint) {
+      point = nextPoint;
       deadline = null;
       setState({
         reading: null,
         failed: false,
-        zone,
+        zone: null,
         freshnessAt: null,
         pending: false,
       });
     } else {
-      setState({ zone, pending: !!active && state.pending });
+      setState({ pending: !!active && state.pending });
     }
     schedule(input);
   }
@@ -213,7 +222,8 @@ export function createViewWeather({
     if (!input.shown || !isPageVisible()) return;
     // Only a visible pulse makes a completed reading eligible for renewal.
     // Once due, work stays eligible if a move or hide cancels the request.
-    if (deadline !== null && elapsed >= deadline) deadline = null;
+    if (deadline !== null && (state.reading ? elapsed : Date.now()) >= deadline)
+      deadline = null;
     schedule(input);
   }
 

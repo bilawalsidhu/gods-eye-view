@@ -1,8 +1,15 @@
-import { formatDate, t } from '../i18n/index.js';
+import { formatDate, formatNumber, t } from '../i18n/index.js';
 
-// Clocks and daylight for the Context panel: the local time at a spot (from
-// the time zone its weather reading names), UTC, how long the sun is up at a
-// latitude, and how much of the Earth is in daylight.
+/** Localized age of an elapsed observation. */
+export function contextAgeText(ms) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return t('{n} s ago', { n: formatNumber(seconds) });
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return t('{n} min ago', { n: formatNumber(minutes) });
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return t('{n} h ago', { n: formatNumber(hours) });
+  return t('{n} d ago', { n: formatNumber(Math.round(hours / 24)) });
+}
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -38,76 +45,70 @@ export function localClock(zone, now = Date.now()) {
   return null;
 }
 
-/**
- * The time line every Context state shows: "10:14 local, 16:14 UTC", or UTC
- * alone while the spot's time zone is not known.
- * @param {{timeZone?: ?string, utcOffsetSeconds?: ?number}|null} zone
- * @param {number} [now]
- */
-export function clockLine(zone, now = Date.now()) {
+/** Show local time only when the view point has its own zone. */
+export function clockLine(zone, now = Date.now(), loading = false) {
   const utc = utcClock(now);
   const local = localClock(zone, now);
-  return local
-    ? t('{local} local, {utc} UTC', { local, utc })
+  if (local) return t('{local} local, {utc} UTC', { local, utc });
+  return loading
+    ? t('{utc} UTC · local time loading…', { utc })
     : t('{utc} UTC', { utc });
 }
 
 const RAD = Math.PI / 180;
-const daysSince2000 = (now) => (now - Date.UTC(2000, 0, 1, 12)) / 86_400_000;
+const DAY_MS = 86_400_000;
+const SUNRISE_ALTITUDE_SINE = Math.sin(-0.833 * RAD);
+const daysSince2000 = (now) => (now - Date.UTC(2000, 0, 1, 12)) / DAY_MS;
 
-/** The sun's declination and right ascension, from the usual low-precision formula. */
-function sunPosition(now) {
+/** The sun's declination, from the low-precision solar formula. */
+function sunDeclination(now) {
   const d = daysSince2000(now);
   const g = (357.529 + 0.98560028 * d) * RAD;
   const q = 280.459 + 0.98564736 * d;
   const ecliptic = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * RAD;
   const tilt = (23.439 - 0.00000036 * d) * RAD;
-  return {
-    d,
-    ra: Math.atan2(Math.cos(tilt) * Math.sin(ecliptic), Math.cos(ecliptic)),
-    dec: Math.asin(Math.sin(tilt) * Math.sin(ecliptic)),
-  };
-}
-
-/** The sun's elevation above the horizon at a point, in degrees. */
-function sunElevation(lat, lon, now = Date.now()) {
-  const { d, ra, dec } = sunPosition(now);
-  const sidereal = ((18.697374558 + 24.06570982441908 * d) % 24) * 15;
-  const hourAngle = (sidereal + lon) * RAD - ra;
-  return (
-    Math.asin(
-      Math.sin(lat * RAD) * Math.sin(dec) +
-        Math.cos(lat * RAD) * Math.cos(dec) * Math.cos(hourAngle),
-    ) / RAD
-  );
+  return Math.asin(Math.sin(tilt) * Math.sin(ecliptic));
 }
 
 /**
- * How long the sun is up today at a latitude, in minutes (sunrise to sunset,
- * with the usual 0.833° for refraction and the sun's size): 0 in polar night,
- * 1440 in midnight sun.
+ * Approximate daylight on the spot's date, using one declination sample
+ * for that date and the usual 0.833° sunrise/sunset threshold.
  */
-export function dayLengthMinutes(lat, now = Date.now()) {
-  const { dec } = sunPosition(now);
+export function dayLengthMinutes(
+  lat,
+  now = Date.now(),
+  { lon = 0, zone = null } = {},
+) {
+  const offsetMs = Number.isFinite(zone?.utcOffsetSeconds)
+    ? zone.utcOffsetSeconds * 1000
+    : (lon / 360) * DAY_MS;
+  let day = Math.floor((now + offsetMs) / DAY_MS);
+  if (zone?.timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: zone.timeZone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+      }).formatToParts(now);
+      const number = (type) =>
+        Number(parts.find((part) => part.type === type)?.value);
+      day =
+        Date.UTC(number('year'), number('month') - 1, number('day')) / DAY_MS;
+    } catch {
+      // The runtime does not know the zone. Use its offset or solar time.
+    }
+  }
+  const dec = sunDeclination((day + 0.5) * DAY_MS);
   const cosH =
-    (Math.sin(-0.833 * RAD) - Math.sin(lat * RAD) * Math.sin(dec)) /
+    (SUNRISE_ALTITUDE_SINE - Math.sin(lat * RAD) * Math.sin(dec)) /
     (Math.cos(lat * RAD) * Math.cos(dec));
   if (cosH >= 1) return 0;
   if (cosH <= -1) return 1440;
   return Math.round(((2 * Math.acos(cosH)) / RAD / 15) * 60);
 }
 
-/** The share of the Earth's surface in daylight now, 0 to 1. */
-export function daylightShare(now = Date.now()) {
-  // Sampled on an equal-area grid: bands of equal sine of latitude.
-  let lit = 0;
-  let all = 0;
-  for (let band = 0; band < 36; band++) {
-    const lat = Math.asin(-1 + (2 * (band + 0.5)) / 36) / RAD;
-    for (let lon = -175; lon < 180; lon += 10) {
-      all++;
-      if (sunElevation(lat, lon, now) > -0.833) lit++;
-    }
-  }
-  return lit / all;
+/** The sunlit spherical cap rotates without changing its share of Earth. */
+export function daylightShare() {
+  return (1 - SUNRISE_ALTITUDE_SINE) / 2;
 }

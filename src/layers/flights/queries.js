@@ -1024,7 +1024,7 @@ export function createQueries({
 
     /**
      * Return layer health/status for the HUD stats chip.
-     * @returns {{count: number, lastUpdate: number|null, stale: boolean, error: string|null, status: number|null, retryInSec: number, scope?: 'worldwide', scopeCount?: number}}
+     * @returns {{count: number, lastUpdate: number|null, stale: boolean, error: string|null, status: number|null, retryInSec: number}}
      */
     getStats() {
       const retryInSec = flightState.feed._retryAt
@@ -1042,17 +1042,6 @@ export function createQueries({
         retryInSec,
         source: flightState.feed._lastSource,
         coverage: flightState.feed._lastCoverage,
-        // A worldwide snapshot is the whole world's aircraft, as the server's
-        // cached count is (Context's nothing-on tiles keep only those). Its
-        // own size, not `count`: the drawn count leaves out aircraft the
-        // military layer shows and keeps some a snapshot no longer has.
-        ...(String(flightState.feed._lastCoverage ?? '').startsWith(
-          'worldwide',
-        ) &&
-          flightState.feed._snapshotCount > 0 && {
-            scope: 'worldwide',
-            scopeCount: flightState.feed._snapshotCount,
-          }),
         // Following the world clock, the snapshot's age is told from its time.
         ...(followsClock(flightState) && { atMs: flightState.now() }),
       };

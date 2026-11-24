@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { bhoteKoshiEvidenceRecords } from './bhoteKoshiEvent.js';
+import {
+  BHOTE_KOSHI_LAYER_ID,
+  bhoteKoshiEvidenceRecords,
+} from './bhoteKoshiEvent.js';
+import { describeEntity } from './entityContext.js';
+import { setLocale } from '../i18n/index.js';
 import {
   bhoteKoshiPlaceRecords,
   createBhoteKoshiLocatorLayer,
@@ -23,10 +28,35 @@ test('every geolocated evidence observation becomes a positioned record', () => 
   assert.equal(first.name, 'Collapse viewpoint');
   assert.ok(Number.isFinite(first.lat) && Number.isFinite(first.lon));
   assert.equal(first.capturedAtMs, null);
+  assert.equal(first.source, pack.evidenceSpine[0].media.publisher);
+  assert.equal(first.website, pack.evidenceSpine[0].media.sourceUrl);
   assert.equal(
     new Set(records.map((record) => record.id)).size,
     records.length,
   );
+});
+
+test('a Syabru Besi card credits its own media and the geolocation map', () => {
+  const id = 'syabru-besi';
+  const observation = pack.evidenceSpine.find((item) => item.id === id);
+  const layer = {
+    id: BHOTE_KOSHI_LAYER_ID,
+    name: 'Bhote Koshi Flood',
+    source: 'Vantor + GeoPera',
+    module: {
+      getAnalystRecords: () => bhoteKoshiEvidenceRecords(pack.evidenceSpine),
+    },
+  };
+  const dataManager = { layers: new Map([[layer.id, layer]]) };
+  const card = describeEntity(dataManager, { layerId: layer.id, id });
+  assert.equal(card.source, observation.media.publisher);
+  assert.equal(
+    card.links.find(({ kind }) => kind === 'website')?.href,
+    observation.media.sourceUrl,
+  );
+  const geolocation = card.links.find(({ kind }) => kind === 'geolocation');
+  assert.equal(geolocation?.label, observation.provenance.via);
+  assert.equal(geolocation?.href, observation.provenance.viaUrl);
 });
 
 test('evidence records skip unplaced observations and honour the cap', () => {
@@ -48,9 +78,24 @@ test('incident places become title-cased, positioned records', () => {
   assert.equal(records.length, INCIDENT_OVERVIEW_PLACES.length);
   const syabru = records.find((record) => record.id === 'syabru-besi');
   assert.equal(syabru.name, 'Syabru Besi');
-  assert.equal(syabru.elevationM, 1417);
+  assert.equal(syabru.pinHeightM, 1417);
+  assert.equal(syabru.elevationM, undefined);
+  const [withElevation] = bhoteKoshiPlaceRecords([
+    { ...INCIDENT_OVERVIEW_PLACES[0], heightM: 3600, elevationM: 2900 },
+  ]);
+  assert.equal(withElevation.pinHeightM, 3600);
+  assert.equal(withElevation.elevationM, 2900);
   assert.ok(Number.isFinite(syabru.lat) && Number.isFinite(syabru.lon));
   assert.equal(bhoteKoshiPlaceRecords(INCIDENT_OVERVIEW_PLACES, 2).length, 2);
+});
+
+test('locator record names translate descriptive marks and preserve place names', (t) => {
+  t.after(() => setLocale('en'));
+  setLocale('fr');
+  const records = bhoteKoshiPlaceRecords(INCIDENT_OVERVIEW_PLACES);
+  const names = new Map(records.map(({ id, name }) => [id, name]));
+  assert.equal(names.get('debris-dammed-lake'), 'Lac de barrage');
+  assert.equal(names.get('syabru-besi'), 'Syabru Besi');
 });
 
 test('the locator lists no places while it is off', () => {

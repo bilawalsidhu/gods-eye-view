@@ -14,7 +14,7 @@ const row = (hex, lat, lon, degraded) => ({
   degraded,
 });
 
-function layerWith(rows) {
+function layerWith(rows, options = {}) {
   const viewer = { scene: { globe: { show: true } } };
   bindFakeDraw(viewer, { camera: fakeCameraPort().port });
   const layer = createGnssIntegrityLayer({
@@ -22,6 +22,7 @@ function layerWith(rows) {
     viewAnchor: () => ({ latitude: 50, longitude: 30 }),
     now: () => 10_000,
     monotonicNow: () => 10_000,
+    ...options,
   });
   layer.init(viewer);
   return layer;
@@ -67,4 +68,31 @@ test('getValueAt reads the same populated cell on either side of the dateline', 
   const east = layer.getValueAt(0, 179.999);
   assert.equal(east?.at, 9_500);
   assert.deepEqual(layer.getValueAt(0, -179.999), east);
+});
+
+test('a point keeps the newest observation time in its own GNSS cell', async (t) => {
+  let now = 10_000;
+  let rows = [row('a1', 50, 30, false)];
+  const layer = layerWith([], {
+    now: () => now,
+    windowMs: 5_000,
+    source: { getSnapshot: async () => ({ ageMs: 500, rows }) },
+  });
+  t.after(() => layer.destroy());
+  layer.enable();
+  await layer.update();
+  now += 2_000;
+  rows = [row('a2', 50, 30, true)];
+  await layer.update();
+  now += 2_000;
+  rows = [row('b1', 10, 10, false)];
+  await layer.update();
+  assert.equal(layer.getStats().lastUpdate, 13_500);
+  assert.equal(layer.getValueAt(10, 10).at, 13_500);
+  assert.equal(layer.getValueAt(50, 30).at, 11_500);
+  now = 17_000;
+  rows = [];
+  await layer.update();
+  assert.equal(layer.getValueAt(50, 30), null);
+  assert.equal(layer.getValueAt(10, 10).at, 13_500);
 });

@@ -107,8 +107,6 @@ export function createIngestion({
           ? applySnapshot(snapshot, viewer, { handover: true })
           : applySnapshot(snapshot, viewer);
       feed._count = accepted.count;
-      // The aircraft in the snapshot itself, whatever is drawn of them.
-      feed._snapshotCount = accepted.ids.size;
       // Freshness belongs to the source snapshot, not the moment this browser
       // received a cached 200 response.
       feed._lastUpdate = sourceEpochMs;
@@ -156,7 +154,6 @@ export function createFlightFeed(source) {
   const feed = {};
   feed._source = source;
   feed._count = 0;
-  feed._snapshotCount = 0;
   feed._lastUpdate = null;
   feed._backoff = false;
   feed._retryAt = 0;

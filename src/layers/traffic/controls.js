@@ -413,6 +413,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         motion: { ...layerState._motion },
         surfaceBudgetOmitted: layerState._surfaceBudgetOmitted || 0,
         lastUpdate: layerState._lastUpdate,
+        recordsRevision: layerState._flowRevision,
         loading,
         mode: feed.mode,
         // Cached proxy tiles (TomTom budget spent or upstream failing): the

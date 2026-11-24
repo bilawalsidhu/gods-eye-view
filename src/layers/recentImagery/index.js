@@ -21,7 +21,7 @@ import {
   boxCentre,
   boxFromPin,
   boxFromDegrees,
-  boxContains,
+  pointBoxMatches,
   boxKey,
   boxSideKm,
   candidateAtPoint,
@@ -29,7 +29,6 @@ import {
   dequantizeBox,
   fitViewHeightM,
   formatCandidateReadout,
-  nonCrossingBoxes,
   parseCandidateKey,
   quantizeBox,
   rankLatest,
@@ -818,19 +817,18 @@ export function createRecentImageryLayer({
     return _catalogError;
   }
 
+  function catalogNote(error) {
+    return t('{label} catalog unavailable · {detail}', {
+      label: PRODUCTS[error.product]?.label || error.product,
+      detail: error.message,
+    });
+  }
+
   function notes() {
     const out = [];
     if (_truncated)
       out.push(t('Catalog truncated · a newer clear day may exist'));
-    for (const error of _catalogErrors) {
-      const label = PRODUCTS[error.product]?.label || error.product;
-      out.push(
-        t('{label} catalog unavailable · {detail}', {
-          label,
-          detail: error.message,
-        }),
-      );
-    }
+    for (const error of _catalogErrors) out.push(catalogNote(error));
     const today = utcDay(now());
     const viirsToday = candidateFor(`VIIRS:${today}`);
     if (viirsToday?.availability === 'unknown' && _sources.viirs)
@@ -1526,26 +1524,16 @@ export function createRecentImageryLayer({
     },
 
     /**
-     * The latest imagery day over a point, from the catalog already
-     * searched for the chosen box: the newest Sentinel-2 or Landsat day
-     * whose footprints hold the point, else the newest daily overview known
-     * to have pixels in the point's part of the box. `value` is the day;
-     * `detail` is the sensor, resolution and scene cloud. Null while off or
-     * with no day.
+     * The latest Sentinel-2 or Landsat day whose footprints cover the point,
+     * using the loaded catalog. A daily overview is an area result: its
+     * thumbnail can show pixels without verifying coverage at the point.
      */
     getValueAt(lat, lon) {
       if (!_enabled) return null;
       // Imagery is searched inside the chosen area only: outside it there is
       // nothing to read, which is not the same as no pass.
       if (!_box) return { value: null, reason: t('No area chosen') };
-      // The dateline is a shared edge. Use each intersecting part's own
-      // longitude so either spelling of the edge gives the same lookup.
-      const longitudes = lon === 180 || lon === -180 ? [180, -180] : [lon];
-      const points = nonCrossingBoxes(_box).flatMap((part) =>
-        longitudes
-          .filter((pointLon) => boxContains(part, pointLon, lat))
-          .map((pointLon) => ({ lon: pointLon, key: boxKey(part) })),
-      );
+      const points = pointBoxMatches(_box, lon, lat);
       if (!points.length)
         return { value: null, reason: t('Outside the chosen area') };
       const crossesDateline = _box.west > _box.east;
@@ -1602,7 +1590,9 @@ export function createRecentImageryLayer({
         detail: [
           t(product.name),
           displayMetres(product.resolutionM),
-          ...(product.overview ? [] : [READOUT_WORDS.cloud(found.cloud)]),
+          product.overview
+            ? t('Area imagery · point coverage unknown')
+            : READOUT_WORDS.cloud(found.cloud),
         ].join(' · '),
         ...(Number.isFinite(at) ? { at } : {}),
       };
@@ -1612,10 +1602,19 @@ export function createRecentImageryLayer({
       // Without a controller subscription the stats poll is the only steady
       // heartbeat, so it doubles as the map-stack watch.
       if (!_unsubscribeMap) followMap();
+      const failures = _searching ? [] : _catalogErrors.filter(sourceOn);
+      // Both HLS collections can fail while the result still lists
+      // unprobed VIIRS days. Only proven coverage can keep the feed usable.
+      const unavailable =
+        ['S30', 'L30'].every((product) =>
+          failures.some((error) => error.product === product),
+        ) && !_candidates.some(drapable);
       return {
         count: _candidates.length,
+        loading: _searching,
         lastUpdate: _lastUpdate,
-        error: guidance(),
+        error: guidance() || failures.map(catalogNote).join(' · ') || null,
+        ...(unavailable ? { status: 'unavailable' } : {}),
       };
     },
 

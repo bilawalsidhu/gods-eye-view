@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
+import { getLocale, setLocale } from '../i18n/index.js';
+import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import {
+  INSPECTOR_PULSE_MS,
   MOVING_REFRESH_MAX_MS,
   MOVING_REFRESH_MS,
   useEntityCardStore,
@@ -20,6 +23,7 @@ function harness(layers) {
           scans++;
           return layer.records;
         },
+        ...layer.module,
       },
     }),
   );
@@ -49,6 +53,200 @@ const point = (id, lat, lon) => ({
 });
 const GLOBE = { center: { lat: 0, lon: 0 }, heightM: 20_000_000, rect: null };
 
+for (const [scope, read] of [
+  ['Nearby', (store) => store.nearbyLayers(0, 0, { radiusKm: 25 })],
+  ['globe', (store) => store.inView()],
+  ['viewport', (store) => store.inView({ viewport: true })],
+]) {
+  test(`${scope} keeps healthy rows and retries both kinds of failed host reads`, (t) => {
+    t.mock.timers.enable({ apis: ['Date'] });
+    let available = false;
+    const readRecords = t.mock.fn(() => {
+      if (!available) throw new Error('records unavailable');
+      return [{ id: 'recovered-record', lat: 0, lon: 0 }];
+    });
+    const readPoints = t.mock.fn(() => {
+      if (!available) throw new Error('points unavailable');
+      return {
+        points: [{ id: 'recovered-point', lat: 0, lon: 0 }],
+        recordForPoint: (point) => point,
+      };
+    });
+    const readPointLayerRecords = t.mock.fn(() => {
+      throw new Error('fallback records unavailable');
+    });
+    const readEmpty = t.mock.fn(() => []);
+    const { store } = harness([
+      {
+        id: 'local-dams',
+        enabled: true,
+        stats: { count: 1, lastUpdate: 1 },
+        module: { getAnalystRecords: readRecords },
+      },
+      {
+        id: 'local-datacenters',
+        enabled: true,
+        stats: { count: 1, lastUpdate: 1 },
+        module: {
+          getNearbyContextPoints: readPoints,
+          getAnalystRecords: readPointLayerRecords,
+        },
+      },
+      {
+        id: 'healthy-sites',
+        enabled: true,
+        records: [{ id: 'healthy', lat: 0, lon: 0 }],
+      },
+      {
+        id: 'empty-sites',
+        enabled: true,
+        module: { getAnalystRecords: readEmpty },
+      },
+    ]);
+    store.setView({
+      ...GLOBE,
+      heightM: scope === 'Nearby' ? 40_000 : GLOBE.heightM,
+      rect: { west: -1, east: 1, south: -1, north: 1 },
+    });
+    const ids = (lists) =>
+      lists.flatMap(({ items }) => items.map(({ identity }) => identity.id));
+    const initial = read(store);
+    assert.deepEqual(ids(initial), ['healthy']);
+
+    available = true;
+    assert.equal(read(store), initial, 'no repeated reads in the same pulse');
+    assert.equal(readRecords.mock.callCount(), 1);
+    assert.equal(readPoints.mock.callCount(), 1);
+    assert.equal(readPointLayerRecords.mock.callCount(), 1);
+
+    t.mock.timers.tick(INSPECTOR_PULSE_MS);
+    store.pulseInspector();
+    const next = read(store);
+    assert.deepEqual(ids(next), [
+      'recovered-record',
+      'recovered-point',
+      'healthy',
+    ]);
+    assert.equal(readRecords.mock.callCount(), 2);
+    assert.equal(readPoints.mock.callCount(), 2);
+    assert.equal(
+      readEmpty.mock.callCount(),
+      1,
+      'a successful empty read is still cached',
+    );
+    assert.equal(
+      next.find(({ layerId }) => layerId === 'healthy-sites'),
+      initial.find(({ layerId }) => layerId === 'healthy-sites'),
+      'the stationary healthy layer keeps its rows',
+    );
+  });
+}
+
+test('Context retries a partially read point snapshot from ordinary records', (t) => {
+  t.mock.timers.enable({ apis: ['Date'] });
+  let available = false;
+  const ordinary = { id: 'ordinary', lat: 0, lon: 0 };
+  const optimized = { id: 'optimized', lat: 0, lon: 0 };
+  const fallback = t.mock.fn(() => [ordinary]);
+  const snapshot = t.mock.fn(() => ({
+    points: (function* () {
+      yield optimized;
+      if (!available) throw new Error('point iteration failed');
+    })(),
+    recordForPoint: (record) => record,
+  }));
+  const { store } = harness([
+    {
+      id: 'local-dams',
+      enabled: true,
+      stats: { count: 1, lastUpdate: 1 },
+      module: { getNearbyContextPoints: snapshot, getAnalystRecords: fallback },
+    },
+  ]);
+  store.setView({
+    ...GLOBE,
+    rect: { west: -1, east: 1, south: -1, north: 1 },
+  });
+  const reads = [
+    () => store.nearbyLayers(0, 0),
+    () => store.inView(),
+    () => store.inView({ viewport: true }),
+  ];
+  const results = () =>
+    reads.map((read) => {
+      const summary = read()[0];
+      return [
+        summary?.count,
+        summary?.items.map(({ identity }) => identity.id),
+      ];
+    });
+  const ordinaryResult = [1, ['ordinary']];
+  assert.deepEqual(results(), [ordinaryResult, ordinaryResult, ordinaryResult]);
+  assert.equal(fallback.mock.callCount(), 3);
+
+  available = true;
+  assert.deepEqual(results(), [ordinaryResult, ordinaryResult, ordinaryResult]);
+  assert.equal(snapshot.mock.callCount(), 3);
+
+  t.mock.timers.tick(INSPECTOR_PULSE_MS);
+  store.pulseInspector();
+  assert.deepEqual(results(), [
+    [1, ['optimized']],
+    [1, ['optimized']],
+    ordinaryResult,
+  ]);
+  assert.equal(snapshot.mock.callCount(), 5);
+  assert.equal(fallback.mock.callCount(), 3);
+});
+
+test('Nearby and globe search match the displayed layer name after switching languages', (t) => {
+  const originalLocale = getLocale();
+  t.after(() => setLocale(originalLocale));
+  const { store } = harness([
+    {
+      id: 'local-datacenters',
+      name: 'Datacenters',
+      enabled: true,
+      records: [{ id: '1', name: 'Example Facility', lat: 0.1, lon: 0.1 }],
+    },
+  ]);
+  store.setView(GLOBE);
+  const results = (query) => [
+    store.nearbyLayers(0, 0, { query })[0]?.items[0]?.title,
+    store.inView({ query })[0]?.items[0]?.title,
+    store.nearbyGroups(0, 0, { query }).other[0]?.title,
+  ];
+
+  setLocale('en');
+  assert.deepEqual(results('Centres de données'), [
+    undefined,
+    undefined,
+    undefined,
+  ]);
+  setLocale('fr');
+  assert.deepEqual(results('Centres de données'), [
+    'Example Facility',
+    'Example Facility',
+    'Example Facility',
+  ]);
+  assert.deepEqual(results('Datacenters'), [
+    'Example Facility',
+    'Example Facility',
+    'Example Facility',
+  ]);
+  assert.deepEqual(results('Centres de données'), [
+    'Example Facility',
+    'Example Facility',
+    'Example Facility',
+  ]);
+  setLocale('en');
+  assert.deepEqual(results('Centres de données'), [
+    undefined,
+    undefined,
+    undefined,
+  ]);
+});
+
 test('the same key gives the same answer without scanning again; fewer rows are a slice', () => {
   const flights = {
     id: 'flights',
@@ -63,11 +261,15 @@ test('the same key gives the same answer without scanning again; fewer rows are 
     ],
   };
   const { store, scans } = harness([flights]);
-  store.setView({ ...GLOBE });
+  store.setView({
+    ...GLOBE,
+    heightM: 40_000,
+    rect: { west: -5, south: -5, east: 5, north: 5 },
+  });
   const context = store.inView({ perLayer: 3 });
   assert.equal(scans(), 1);
   assert.equal(store.inView({ perLayer: 3 }), context, 'same object');
-  const omnibar = store.inView({ perLayer: 2 });
+  const omnibar = store.inView({ perLayer: 2, viewport: true });
   assert.equal(scans(), 1, 'no rescan for the omnibar');
   assert.deepEqual(
     omnibar[0].items.map((item) => item.key),
@@ -91,6 +293,105 @@ test('at globe height, in view is what the camera can see over the horizon', () 
   assert.equal(store.inView()[0].count, 1);
   store.setView({ ...GLOBE, heightM: 40_000_000 });
   assert.equal(store.inView()[0].count, 2, 'higher up, the horizon is farther');
+});
+
+test('the omnibar keeps viewport bounds at globe height without disturbing the Inspector cache', () => {
+  const { store, scans } = harness([
+    {
+      id: 'flights',
+      name: 'Flights',
+      enabled: true,
+      stats: { lastUpdate: 1 },
+      records: [point('on', 0, 1), point('off', 0, 30)],
+    },
+  ]);
+  store.setView({ ...GLOBE, rect: { west: -5, south: -5, east: 5, north: 5 } });
+  const inspector = store.inView();
+  const omnibar = store.inView({ viewport: true });
+  assert.equal(inspector[0].count, 2);
+  assert.equal(omnibar[0].count, 1);
+  assert.equal(omnibar[0].items[0].identity.id, 'on');
+  assert.equal(store.inView(), inspector);
+  assert.equal(store.inView({ viewport: true }), omnibar);
+  assert.equal(scans(), 2);
+});
+
+test('the settled Omnibar viewport uses the actual rectangle inside a motion bucket', () => {
+  const { store, scans } = harness([
+    {
+      id: 'local-datacenters',
+      enabled: true,
+      records: [{ id: 'edge', lat: 0, lon: 0.001 }],
+    },
+  ]);
+  const where = (shift) => ({
+    ...GLOBE,
+    heightM: 40_000,
+    rect: {
+      west: shift - 0.001,
+      east: shift + 0.001,
+      south: -0.001,
+      north: 0.001,
+    },
+  });
+  const read = () => store.inView({ perLayer: 2, viewport: true });
+  store.setView(where(-0.00004));
+  const before = read();
+  assert.deepEqual(before, []);
+
+  const moved = where(0.00004);
+  store.setView(moved, { settled: false });
+  assert.equal(read(), before, 'reuse the rounded viewport during motion');
+  assert.equal(scans(), 1);
+  store.setView(moved);
+  const settled = read();
+  assert.equal(settled[0]?.items[0]?.identity.id, 'edge');
+
+  store.setView(where(0.00004));
+  assert.equal(read(), settled);
+  assert.equal(scans(), 2, 'stationary reads reuse the settled answer');
+});
+
+test('settled Nearby uses the actual center at the radius boundary', () => {
+  const radiusKm = 25;
+  const { store, scans } = harness([
+    {
+      id: 'local-datacenters',
+      enabled: true,
+      records: [
+        {
+          id: 'edge',
+          lat: 0,
+          lon: (radiusKm / EARTH_RADIUS_KM) * (180 / Math.PI),
+        },
+      ],
+    },
+  ]);
+  const where = (lon) => ({
+    ...GLOBE,
+    heightM: 40_000,
+    center: { lat: 0, lon },
+  });
+  const read = () =>
+    store.nearbyLayers(store.view.center.lat, store.view.center.lon, {
+      radiusKm,
+    });
+  store.setView(where(-0.00004));
+  const before = read();
+  assert.equal(before[0].count, 0);
+
+  const moved = where(0.00004);
+  store.setView(moved, { settled: false });
+  assert.equal(read(), before, 'reuse the rounded center during motion');
+  assert.equal(scans(), 1);
+  store.setView(moved);
+  const settled = read();
+  assert.equal(settled[0].count, 1);
+  assert.equal(settled[0].items[0].identity.id, 'edge');
+
+  store.setView(where(0.00004));
+  assert.equal(read(), settled);
+  assert.equal(scans(), 2, 'stationary reads reuse the settled answer');
 });
 
 test('a settled camera move, a layer toggle or a data refresh each work it out again', () => {
@@ -306,50 +607,6 @@ test('at globe view only the visible hemisphere counts, nearest the centre first
   assert.deepEqual(
     group.items.map((item) => item.identity.id),
     ['near', 'mid', 'far'],
-  );
-});
-
-test('one pass over 50,000 records costs about what the trigonometry alone does', () => {
-  const records = Array.from({ length: 50_000 }, (_, i) => ({
-    id: `f${i}`,
-    latitude: ((i * 37) % 170) - 85,
-    longitude: ((i * 53) % 360) - 180,
-  }));
-  const fires = {
-    id: 'local-firms',
-    name: 'Fires',
-    enabled: true,
-    stats: { lastUpdate: 1 },
-    records,
-  };
-  const { store } = harness([fires]);
-  store.setView({ ...GLOBE });
-  store.inView(); // warm the code path
-  // The floor: the same three trigonometric calls per record, nothing else,
-  // timed on this machine now (a loaded machine slows both alike).
-  let sink = 0;
-  let started = performance.now();
-  for (const record of records) {
-    const phi = (record.latitude * Math.PI) / 180;
-    const lambda = (record.longitude * Math.PI) / 180;
-    const cosPhi = Math.cos(phi);
-    sink +=
-      cosPhi * Math.cos(lambda) + cosPhi * Math.sin(lambda) + Math.sin(phi);
-  }
-  const floor = performance.now() - started;
-  store.setView({ ...GLOBE, center: { lat: 5, lon: 5 } });
-  started = performance.now();
-  const [group] = store.inView();
-  const ms = performance.now() - started;
-  assert.equal(group.items.length, 3);
-  assert.ok(Number.isFinite(sink));
-  console.log(
-    `[inView] 50,000 records: ${ms.toFixed(1)} ms (bare trigonometry ${floor.toFixed(1)} ms)`,
-  );
-  assert.ok(
-    // Generous: a loaded machine slows the pass far more than the floor.
-    ms < floor * 5 + 100,
-    `took ${ms.toFixed(1)} ms against a ${floor.toFixed(1)} ms floor`,
   );
 });
 

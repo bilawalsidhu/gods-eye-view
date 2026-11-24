@@ -61,7 +61,12 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {Array<object>}
      */
     getAnalystRecords(maxCount = Infinity) {
-      if (!layerState.enabled || !layerState.subject || !(maxCount >= 1))
+      if (
+        !layerState.enabled ||
+        layerState.passive ||
+        !layerState.subject ||
+        !(maxCount >= 1)
+      )
         return [];
       const subject = layerState.subject;
       const at = subject.position ? toLonLatH(subject.position) : null;

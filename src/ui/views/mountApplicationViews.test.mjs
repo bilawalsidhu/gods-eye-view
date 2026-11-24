@@ -14,7 +14,6 @@ import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { configureApplicationServices } from '../../services/application.js';
 import { createApplicationRequestServices } from '../../services/requests.js';
 import { ShareLinkManager } from '../../sharelink.js';
-import { LAYER_COUNTS_REFETCH_MS } from '../layerCounts.js';
 import { LocationSearch } from '../location.js';
 import { useEntityCardStore } from '../stores/entityCard.js';
 import { applicationPinia } from '../vueRuntime.js';
@@ -111,6 +110,7 @@ async function countInspector(t, requestServices, constructControls) {
   const services = {
     ShareLinkManager,
     LocationSearch,
+    interruptCameraMotion: noop,
     CITY_POIS: {},
     flightsLayer: {},
     militaryFlightsLayer: {},
@@ -288,6 +288,22 @@ test('mounted Context updates Nearby and In View when the shell replaces its dat
   assert.match(breakdown(), /Business jets 1.*Fast jets 1/);
 });
 
+function attachSatellites(styleManager) {
+  const manager = new LayerLifecycle();
+  manager.register({
+    id: 'satellites',
+    name: 'Satellites',
+    init() {},
+    enable() {},
+    update() {},
+    disable() {},
+  });
+  manager.finalizeRegistrations([
+    { id: 'satellites', disposition: 'enabled-only' },
+  ]);
+  styleManager.attachDataManager(manager);
+}
+
 test('stock Context uses the configured layer counts through either public shell path', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
   const countResponse = (count) => ({
@@ -304,6 +320,7 @@ test('stock Context uses the configured layer counts through either public shell
   });
   t.after(releaseFirst);
   const direct = await countInspector(t);
+  attachSatellites(direct.styleManager);
   await direct.show();
   assert.equal(direct.count(), '1,272');
   assert.equal(
@@ -315,24 +332,48 @@ test('stock Context uses the configured layer counts through either public shell
   );
   assert.equal(first.mock.callCount(), 1);
 
-  const replacement = t.mock.fn(async () => countResponse(1300));
+  await direct.hide();
+  await direct.show();
+  assert.equal(direct.count(), '1,272');
+  assert.equal(
+    first.mock.callCount(),
+    1,
+    'same-source reopening keeps its cooldown',
+  );
+  await direct.hide();
+
+  const pending = Promise.withResolvers();
+  const replacement = t.mock.fn(() => pending.promise);
   const releaseReplacement = configureApplicationServices({
     layerCounts: { getCounts: replacement },
   });
   t.after(releaseReplacement);
   releaseFirst();
-  await direct.hide();
-  t.mock.timers.tick(LAYER_COUNTS_REFETCH_MS);
+  assert.equal(
+    replacement.mock.callCount(),
+    0,
+    'the closed Inspector makes no request',
+  );
   await direct.show();
+  assert.deepEqual(
+    { count: direct.count(), requests: replacement.mock.callCount() },
+    { count: undefined, requests: 1 },
+    'reopening starts a fresh read without showing the old provider count or waiting out its cooldown',
+  );
+  pending.resolve(countResponse(1300));
+  await new Promise((resolve) => setImmediate(resolve));
+  await nextTick();
   assert.equal(direct.count(), '1,300');
   assert.equal(first.mock.callCount(), 1);
-  assert.equal(replacement.mock.callCount(), 1);
 
-  releaseReplacement();
   await direct.hide();
-  t.mock.timers.tick(LAYER_COUNTS_REFETCH_MS);
+  releaseReplacement();
   await direct.show();
-  assert.equal(direct.count(), '1,300');
+  assert.equal(
+    direct.count(),
+    undefined,
+    'a released source leaves no saved count',
+  );
   assert.equal(replacement.mock.callCount(), 1);
   await direct.hide();
   await direct.stop();
@@ -344,10 +385,10 @@ test('stock Context uses the configured layer counts through either public shell
     endpoints: { layerCounts: '/host/counts' },
   }).layerCounts;
   t.after(configureApplicationServices({ layerCounts: adapter }));
-  t.mock.timers.tick(LAYER_COUNTS_REFETCH_MS);
   const standard = await countInspector(t, {
     layerCounts: { getCounts: ordinary },
   });
+  attachSatellites(standard.styleManager);
   await standard.show();
   assert.equal(standard.count(), '1,400');
   assert.equal(configured.mock.callCount(), 1);
@@ -358,6 +399,56 @@ test('stock Context uses the configured layer counts through either public shell
       ({ arguments: [url] }) => url === '/api/layer-counts',
     ),
   );
+});
+
+test('remounting Context keeps counts only for the same configured source', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(null, { status: 503 }),
+  );
+  const countResponse = (count) => ({
+    counts: [{ layerId: 'satellites', count, at: Date.now() }],
+  });
+  const mount = async () => {
+    const inspector = await countInspector(t);
+    attachSatellites(inspector.styleManager);
+    await inspector.show();
+    return inspector;
+  };
+  const sourceA = t.mock.fn(async () => countResponse(7));
+  const releaseA = configureApplicationServices({
+    layerCounts: { getCounts: sourceA },
+  });
+  t.after(releaseA);
+  const first = await mount();
+  assert.equal(first.count(), '7');
+  await first.stop();
+
+  const sameSource = await mount();
+  assert.equal(sameSource.count(), '7');
+  assert.equal(sourceA.mock.callCount(), 1);
+  await sameSource.stop();
+  releaseA();
+
+  t.mock.timers.tick(60_000);
+  const pending = Promise.withResolvers();
+  const sourceB = t.mock.fn(() => pending.promise);
+  t.after(
+    configureApplicationServices({ layerCounts: { getCounts: sourceB } }),
+  );
+  const replacement = await mount();
+  assert.deepEqual(
+    { count: replacement.count(), requests: sourceB.mock.callCount() },
+    { count: undefined, requests: 1 },
+    'the replacement starts its own read with no previous count',
+  );
+
+  pending.resolve(countResponse(42));
+  await new Promise((resolve) => setImmediate(resolve));
+  await nextTick();
+  assert.equal(replacement.count(), '42');
 });
 
 test('stock controls use host weather in the Inspector and host regional conditions on the card', async (t) => {
@@ -459,75 +550,68 @@ test('stock controls use host weather in the Inspector and host regional conditi
   );
 });
 
-test('the composed shell uses the supplied weather service directly', async (t) => {
+test('the composed Inspector respects the host weather and regional readers', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  t.mock.method(
+  const fetchStub = t.mock.method(
     globalThis,
     'fetch',
     async () => new Response(null, { status: 503 }),
   );
+  const { StyleManager: ComposedStyleManager } =
+    await import('../composition.js');
   const weather = {
     getConditions: t.mock.fn(async () => ({
       weather: { temperatureC: 17, weatherCode: 0 },
     })),
   };
-  const { StyleManager: ComposedStyleManager } =
-    await import('../composition.js');
-  const f = await countInspector(
-    t,
-    { weather },
-    ({ scene, services, defer }) => {
-      const styleManager = new ComposedStyleManager(scene.viewer, {
-        services,
-        requestServices: scene.operations.requests,
-      });
-      defer(() => styleManager.dispose());
-      return { styleManager };
-    },
-  );
-
-  await f.show();
-  await f.point(47.6, -122.3);
-  t.mock.timers.tick(400);
-  await new Promise((resolve) => setImmediate(resolve));
-  await nextTick();
-  assert.equal(weather.getConditions.mock.callCount(), 1);
-  assert.equal(weather.getConditions.mock.calls[0].this, weather);
-  assert.match(
-    f.host.querySelector('.view-context__tiles--facts').textContent,
-    /17 °C/,
-  );
-  await f.stop();
-
   const regional = t.mock.fn(async () => ({
     weather: { temperatureC: 21, weatherCode: 0 },
   }));
-  const fallback = await countInspector(
-    t,
-    { weather },
-    ({ scene, services, defer }) => {
-      const styleManager = new ComposedStyleManager(scene.viewer, {
-        services: {
-          ...services,
-          fetchSpotWeather: null,
-          fetchRegionalBrief: regional,
-        },
-        requestServices: scene.operations.requests,
-      });
-      defer(() => styleManager.dispose());
-      return { styleManager };
-    },
-  );
-  await fallback.show();
-  await fallback.point(47.6, -122.3);
-  t.mock.timers.tick(400);
-  await new Promise((resolve) => setImmediate(resolve));
-  await nextTick();
-  assert.equal(weather.getConditions.mock.callCount(), 1);
-  assert.equal(regional.mock.callCount(), 1);
-  assert.match(
-    fallback.host.querySelector('.view-context__tiles--facts').textContent,
-    /21 °C/,
+  for (const [requests, overrides, reader, temperature] of [
+    [{ weather }, {}, weather.getConditions, '17 °C'],
+    [{ weather }, { fetchSpotWeather: null }, regional, '21 °C'],
+    [undefined, {}, regional, '21 °C'],
+  ]) {
+    const inspector = await countInspector(
+      t,
+      requests ?? {},
+      ({ scene, services, defer }) => {
+        const styleManager = new ComposedStyleManager(scene.viewer, {
+          services: { ...services, fetchRegionalBrief: regional, ...overrides },
+          requestServices: requests,
+        });
+        defer(() => styleManager.dispose());
+        return { styleManager };
+      },
+    );
+    await inspector.show();
+    await inspector.point(47.6, -122.3);
+    t.mock.timers.tick(400);
+    await new Promise((resolve) => setImmediate(resolve));
+    await nextTick();
+
+    assert.equal(reader.mock.callCount(), 1);
+    const [lat, lon, { signal }] = reader.mock.calls[0].arguments;
+    assert.deepEqual([lat, lon], [47.6, -122.3]);
+    assert.equal(signal.aborted, false);
+    assert.ok(
+      inspector.host
+        .querySelector('.view-context__tiles--facts')
+        .textContent.includes(temperature),
+    );
+    if (reader === weather.getConditions) {
+      assert.equal(reader.mock.calls[0].this, weather);
+      assert.equal(regional.mock.callCount(), 0);
+    } else {
+      assert.equal(weather.getConditions.mock.callCount(), 0);
+    }
+    await inspector.stop();
+    reader.mock.resetCalls();
+  }
+  assert.ok(
+    !fetchStub.mock.calls.some(({ arguments: [url] }) =>
+      String(url).startsWith('/api/weather-effects'),
+    ),
   );
 });
 

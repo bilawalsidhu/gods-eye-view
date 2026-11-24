@@ -1,7 +1,15 @@
 import { getContextStore } from './contextStore.js';
+import {
+  CONTEXT_FEATURE,
+  CONTEXT_LINES,
+  linePointInCap,
+  linePointInRect,
+  linePointWithinRadius,
+} from './contextGeometry.js';
 import { msg } from '../i18n/marker.js';
 import { AIRCRAFT_CLASS_LABELS } from './aircraftClass.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
+import { fireDetectionKey } from './firmsLabels.js';
 import { fromDegrees, fromRadians } from '../geo/ellipsoid.js';
 import { horizonFrom } from '../geo/horizon.js';
 
@@ -144,7 +152,7 @@ const KEY_FIELDS = ['icao24', 'mmsi', 'noradId', 'usgsId', 'id', 'key'];
 /**
  * How many records to ask a layer for when all are wanted. Layers read a
  * missing or unbounded count as their own small default, so this is a number
- * above any layer's size.
+ * large enough for most layers. FIRMS Nearby reads its filtered points directly.
  */
 const ALL_RECORDS = 100_000;
 /** Fields searched by the omnibar, besides the key fields. */
@@ -158,8 +166,12 @@ const SEARCH_FIELDS = [
   'mmsi',
 ];
 
-/** Never shown as facts: positions and identities already on the card. */
+/** Fields that the card uses separately or does not show. */
 const HIDDEN_FACTS = new Set([
+  // Used for a wildlife sighting's viewing guidance.
+  'cetacean',
+  // Locator pin placement guides the camera.
+  'pinHeightM',
   // Shown as the card's route line instead.
   'routeOrigin',
   'routeDestination',
@@ -397,14 +409,47 @@ export function recordTitle(record) {
   return id;
 }
 
+const isGeoJsonKey = (value) =>
+  typeof value === 'string' && value.startsWith('geojson:');
+
+const vesselIdOf = (layerId, value) =>
+  layerId === 'ais-live-vessels' ? text(value?.vesselId) : '';
+
 /** A key that stays the same for one item across feed refreshes. */
 export function recordKey(layerId, record) {
+  const vesselId = vesselIdOf(layerId, record);
+  if (vesselId) return `${layerId}:${vesselId}`;
+  if ((layerId === 'transit' && record?.key) || isGeoJsonKey(record?.key))
+    return `${layerId}:${record.key}`;
+  if (layerId === 'local-firms') {
+    if (record?.key) return `${layerId}:${record.key}`;
+    if (Number.isFinite(record?.lat) && Number.isFinite(record?.lon)) {
+      return `${layerId}:${fireDetectionKey({ ...record, acqMs: record.acqTime })}`;
+    }
+  }
   for (const field of KEY_FIELDS) {
     const value = text(record?.[field]);
     if (value) return `${layerId}:${value}`;
   }
   const at = recordPosition(record);
   return at ? `${layerId}:${at.lat.toFixed(4)},${at.lon.toFixed(4)}` : '';
+}
+
+const CONTACT_KEY_PREFIX = 'military-awareness:';
+
+// Contacts uses the underlying subject's full Context key as its record ID.
+function nearbySubjectKey(key) {
+  return key.startsWith(CONTACT_KEY_PREFIX)
+    ? key.slice(CONTACT_KEY_PREFIX.length)
+    : key;
+}
+
+function isExcludedNearRecord(layerId, record, excludeKey) {
+  return (
+    Boolean(excludeKey) &&
+    nearbySubjectKey(recordKey(layerId, record)) ===
+      nearbySubjectKey(excludeKey)
+  );
 }
 
 /** Great-circle distance in kilometres. */
@@ -487,6 +532,7 @@ const CODE_WORDS = Object.freeze({
   // Where a traffic segment's flow comes from (traffic/records.js).
   source: {
     'tomtom-live': msg('TomTom live flow'),
+    'simulated-flow-error': msg('TomTom flow unavailable'),
     'simulated-unmatched': msg('Simulated (no live flow on this road)'),
     'simulated-unavailable': msg('SIMULATED — traffic service unreachable'),
     'simulated-keyless': msg('Simulated (no TomTom key)'),
@@ -709,7 +755,7 @@ function propertyFacts(properties) {
   return recordFacts(keep);
 }
 
-/** A reference link a record carries (Wikipedia, Wikidata or a website). */
+/** Reference links a record carries. */
 function recordLinks(record, properties) {
   const flat = {
     ...(properties || {}),
@@ -743,6 +789,14 @@ function recordLinks(record, properties) {
   const website = text(flat.website);
   if (/^https?:\/\//.test(website))
     links.push({ kind: 'website', label: msg('Website'), href: website });
+  const geolocationLabel = text(record?.geolocation?.label);
+  const geolocationHref = text(record?.geolocation?.href);
+  if (geolocationLabel && /^https?:\/\//.test(geolocationHref))
+    links.push({
+      kind: 'geolocation',
+      label: geolocationLabel,
+      href: geolocationHref,
+    });
   return links;
 }
 
@@ -756,10 +810,15 @@ function enabledLayers(dataManager) {
 }
 
 /**
- * The items a layer has loaded, with a usable position. Empty while the layer
- * is off or keeps no list.
+ * Loaded items, empty while the layer is off or keeps no list.
+ * By default each item must have a usable main position.
  */
-export function layerRecords(dataManager, layerId, maxCount = ALL_RECORDS) {
+export function layerRecords(
+  dataManager,
+  layerId,
+  maxCount = ALL_RECORDS,
+  { requirePosition = true, throwOnReadError = false } = {},
+) {
   if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return [];
   let records = [];
   try {
@@ -767,15 +826,47 @@ export function layerRecords(dataManager, layerId, maxCount = ALL_RECORDS) {
       dataManager?.layers
         ?.get?.(layerId)
         ?.module?.getAnalystRecords?.(maxCount) || [];
-  } catch {
-    records = [];
+  } catch (error) {
+    if (throwOnReadError) throw error;
   }
-  return records.filter((record) => recordPosition(record));
+  return requirePosition
+    ? records.filter((record) => recordPosition(record))
+    : records;
+}
+
+/** Read and summarize a point snapshot, retrying from ordinary records if allowed. */
+function readLayerPoints(dataManager, layerId, module, options, summarize) {
+  try {
+    try {
+      const source = module?.getNearbyContextPoints?.();
+      const points = source?.points;
+      // A lazy snapshot can fail during iteration or retained-row conversion.
+      if (points != null) return summarize({ source, points });
+    } catch (error) {
+      if (!options.fallbackOnSnapshotError && !options.onSnapshotFallback)
+        throw error;
+      options.onSnapshotFallback?.();
+    }
+    return summarize({
+      points: layerRecords(dataManager, layerId, ALL_RECORDS, options),
+    });
+  } catch (error) {
+    if (options.throwOnReadError) throw error;
+    return null;
+  }
 }
 
 function layerName(dataManager, layerId) {
   const layer = dataManager?.layers?.get?.(layerId);
   return text(layer?.name) || text(layer?.module?.name) || layerId;
+}
+
+function layerNameMatches(layer, name, needle, shownLayerName) {
+  return (
+    Boolean(needle) &&
+    (text(layer.name).toLowerCase().includes(needle) ||
+      text(shownLayerName?.(name, layer.id)).toLowerCase().includes(needle))
+  );
 }
 
 const sameText = (a, b) =>
@@ -785,7 +876,7 @@ const sameText = (a, b) =>
  * The layer record behind an identity from a click, a search or the store:
  * matched by key, then by name, then as the nearest item to its position.
  * @param {object} dataManager
- * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null}} identity
+ * @param {{layerId: string, id?: string, label?: string, lat?: number|null, lon?: number|null, usesGeoJsonKey?: boolean}} identity
  * @returns {object|null}
  */
 export function findRecord(dataManager, identity) {
@@ -800,9 +891,51 @@ export function findRecord(dataManager, identity) {
       ?.module?.findByQuery?.(id);
     return camera ? { id, ...camera } : null;
   }
+  const prefix = `${layerId}:`;
+  const bare = id.startsWith(prefix) ? id.slice(prefix.length) : id;
+  const rawId = typeof identity.id === 'string' ? identity.id : id;
+  const rawBare = rawId.startsWith(prefix) ? rawId.slice(prefix.length) : rawId;
+  const vesselId = vesselIdOf(layerId, identity);
+  const module = dataManager?.layers?.get?.(layerId)?.module;
+  if (module?.getContextRecord) {
+    if (dataManager.isEnabled && !dataManager.isEnabled(layerId)) return null;
+    const exact = module.getContextRecord(vesselId || bare, {
+      exact: Boolean(vesselId),
+      fromDrawnPart: id !== bare,
+      drawnPartId: rawId === rawBare ? undefined : rawBare,
+    });
+    // null denotes a known identity that has left its feed.
+    if (exact !== undefined) return exact;
+  }
   const records = layerRecords(dataManager, layerId);
   if (!records.length) return null;
-  const bare = id.startsWith(`${layerId}:`) ? id.slice(layerId.length + 1) : id;
+  if (layerId === 'ais-live-vessels' && (vesselId || bare)) {
+    const vessel = records.find(
+      (record) => vesselIdOf(layerId, record) === (vesselId || bare),
+    );
+    if (vessel || vesselId) return vessel ?? null;
+  }
+  const exactKey = isGeoJsonKey(rawBare) ? rawBare : bare;
+  if (layerId === 'transit' && bare.includes(':')) {
+    return records.find((record) => record.key === exactKey) ?? null;
+  }
+  if (isGeoJsonKey(exactKey)) {
+    // A direct lookup can try either kind of exact ID. An open card knows
+    // which one it used and must stay with that kind.
+    const { usesGeoJsonKey } = identity;
+    if (usesGeoJsonKey !== false) {
+      const keyed = records.find((record) => record.key === exactKey);
+      if (keyed || usesGeoJsonKey === true) return keyed ?? null;
+    }
+    const contextKey = prefix + exactKey;
+    return (
+      records.find(
+        (record) =>
+          !isGeoJsonKey(record.key) &&
+          recordKey(layerId, record) === contextKey,
+      ) ?? null
+    );
+  }
   const at =
     finite(identity.lat) !== null && finite(identity.lon) !== null
       ? { lat: Number(identity.lat), lon: Number(identity.lon) }
@@ -811,7 +944,7 @@ export function findRecord(dataManager, identity) {
     let best = null;
     let bestKm = Infinity;
     for (const record of pool) {
-      const km = distanceKm(at, recordPosition(record));
+      const { km } = nearestPart(at, record);
       if (km < bestKm) {
         best = record;
         bestKm = km;
@@ -819,16 +952,24 @@ export function findRecord(dataManager, identity) {
     }
     return { best, bestKm };
   };
-  const byKey = records.filter((record) =>
-    KEY_FIELDS.some((field) => {
-      const value = text(record[field]);
-      return value && (sameText(value, id) || sameText(value, bare));
-    }),
+  const featureKey = `geojson:id:${rawBare}`;
+  const byKey = records.filter(
+    (record) =>
+      record.key === featureKey ||
+      KEY_FIELDS.some((field) => {
+        const value = text(record[field]);
+        return value && (sameText(value, id) || sameText(value, bare));
+      }),
   );
   // Sites can share a key (many are keyed by a name such as an operator's):
   // of several, the one where the identity says it is.
-  if (byKey.length === 1 || (byKey.length && !at)) return byKey[0];
-  if (byKey.length) return nearest(byKey).best;
+  if (byKey.length === 1) return byKey[0];
+  if (byKey.length) {
+    return (
+      byKey.find((record) => record.key === featureKey) ||
+      (at ? nearest(byKey).best : byKey[0])
+    );
+  }
   const label = text(identity.label);
   const byName = records.filter((record) =>
     SEARCH_FIELDS.some((field) => sameText(text(record[field]), label)),
@@ -844,11 +985,12 @@ export function findRecord(dataManager, identity) {
 }
 
 /** The context-store record for an identity, when the layer keeps one. */
-function storeRecord(identity) {
+function storeRecord(identity, { exact = false } = {}) {
   try {
     const store = getContextStore();
     const direct = store.entities.get(String(identity.id));
     if (direct?.layerId === identity.layerId) return direct;
+    if (exact) return null;
     // Of several stored sites with the same name, the one at the identity's
     // position; a name alone picks the first.
     const at = recordPosition(identity);
@@ -1066,28 +1208,58 @@ export function describeEntity(
   const { layerId } = identity;
   const record = identity.record || findRecord(dataManager, identity);
   const kind = entityKind(layerId, record);
-  // Sites drawn from GeoJSON keep their full tags in the context store; the
-  // layer's record holds only a summary of them.
+  const vesselId = vesselIdOf(layerId, record) || vesselIdOf(layerId, identity);
+  // GeoJSON tags belong to the exact feature. Line parts do not register
+  // store entries, so their layer record carries the feature's own metadata.
+  const normalizedId = text(identity.id);
+  const exact =
+    isGeoJsonKey(record?.key) ||
+    isGeoJsonKey(normalizedId) ||
+    normalizedId.startsWith(`${layerId}:geojson:`);
+  const id =
+    exact && typeof identity.id === 'string' ? identity.id : normalizedId;
   const stored =
-    record && kind.moving
+    (record && kind.moving) || vesselId
       ? null
-      : storeRecord({
-          ...identity,
-          label: identity.label || recordTitle(record),
-        });
+      : (storeRecord(
+          { ...identity, label: identity.label || recordTitle(record) },
+          { exact },
+        ) ?? record?.[CONTEXT_FEATURE]);
   if (!record && !stored && !identity.label) return null;
 
   // An item drawn in parts (a cable laid in pieces) opened from one part,
   // as Nearby opens it at its nearest part, stays at that part.
   const pickedPart = recordPosition(identity);
+  // The click registry rounds positions to six decimal places.
   const onPart =
     pickedPart &&
     Array.isArray(record?.parts) &&
-    record.parts.some(
+    (record.parts.find(
       (part) => part.lat === pickedPart.lat && part.lon === pickedPart.lon,
+    ) ||
+      record.parts.find((part) => {
+        const longitudeDelta = Math.abs(part.lon - pickedPart.lon);
+        return (
+          Math.abs(part.lat - pickedPart.lat) <= 1e-6 &&
+          Math.min(longitudeDelta, Math.abs(360 - longitudeDelta)) <= 1e-6
+        );
+      }));
+  const onLine =
+    identity.lineAnchor &&
+    pickedPart &&
+    linePointInRect(
+      record?.[CONTEXT_LINES],
+      {
+        west: pickedPart.lon - 1e-6,
+        east: pickedPart.lon + 1e-6,
+        south: pickedPart.lat - 1e-6,
+        north: pickedPart.lat + 1e-6,
+      },
+      pickedPart,
     );
   const at =
-    (onPart ? pickedPart : null) ||
+    (onLine && pickedPart) ||
+    onPart ||
     recordPosition(record) ||
     recordPosition(stored) ||
     recordPosition(identity);
@@ -1115,9 +1287,8 @@ export function describeEntity(
     text(stored?.properties?.name) ||
     text(identity.label) ||
     layerName(dataManager, layerId);
-  const key = record
-    ? recordKey(layerId, record)
-    : `${layerId}:${text(identity.id) || title}`;
+  const key = record ? recordKey(layerId, record) : `${layerId}:${id || title}`;
+  const recordId = record ? key.slice(layerId.length + 1) : id;
   const warnings = warningEntries(record);
   const aircraftClass =
     kind.kind === 'aircraft' ? text(record?.aircraftClass) || null : null;
@@ -1136,6 +1307,13 @@ export function describeEntity(
     lat: at?.lat ?? null,
     lon: at?.lon ?? null,
     altitudeM: finite(record?.altitudeM ?? identity.altitudeM),
+    ...(layerId === 'bhote-koshi-locator' &&
+      Number.isFinite(record?.pinHeightM) && {
+        pinHeightM: record.pinHeightM,
+      }),
+    obscured:
+      layerId === 'wildlife-sightings' &&
+      (record?.obscured ?? stored?.properties?.obscured) === true,
     facts: facts.filter((fact) => fact.value !== title),
     warnings: warnings.map((entry) => entry.value),
     // The same warnings for the UI to show: words, or null to show as given.
@@ -1185,24 +1363,49 @@ export function describeEntity(
           : null,
     observedAgeMs: fromRecord?.observedAgeMs ?? null,
     links: recordLinks(record, stored?.properties),
+    observationHref:
+      layerId === 'wildlife-sightings' &&
+      record?.source === 'iNaturalist' &&
+      /^https:\/\/www\.inaturalist\.org\/observations\/\d+$(?![\s\S])/.test(
+        record.link,
+      )
+        ? record.link
+        : null,
     acartiaProvider:
       layerId === 'wildlife-sightings'
         ? (record?.acartiaProvider ?? null)
         : null,
-    source: text(stored?.source) || null,
+    wildlifeViewingGuidance:
+      layerId === 'wildlife-sightings' &&
+      (record?.source === 'Acartia' || record?.cetacean === true),
+    source: text(stored?.source) || text(record?.source) || null,
     // What the card was built from: the layer's own record, the store's
     // properties, or only the click's identity.
     basis: record ? 'record' : stored ? 'store' : 'identity',
     identity: {
       layerId,
-      id: record
-        ? recordKey(layerId, record).slice(layerId.length + 1)
-        : text(identity.id),
+      id: recordId,
+      ...(record && isGeoJsonKey(recordId)
+        ? { usesGeoJsonKey: isGeoJsonKey(record.key) }
+        : {}),
       label: title,
       lat: at?.lat ?? null,
       lon: at?.lon ?? null,
+      // A source identity must not fall back to a different hull's MMSI.
+      ...(vesselId ? { vesselId } : {}),
+      ...(onLine ? { lineAnchor: true } : {}),
     },
   };
+}
+
+function insideRect(at, rect) {
+  return (
+    at.lat >= rect.south &&
+    at.lat <= rect.north &&
+    (rect.west > rect.east
+      ? at.lon >= rect.west || at.lon <= rect.east
+      : at.lon >= rect.west && at.lon <= rect.east)
+  );
 }
 
 /**
@@ -1211,19 +1414,67 @@ export function describeEntity(
  * point in `parts`, and the nearest part stands for it.
  * @param {{lat: number, lon: number}} here
  * @param {object} record
+ * @param {object} [options]
+ * @param {object|null} [options.rect] Limit the choice to parts inside this rectangle.
+ * @param {number} [options.radiusKm] Bound the GeoJSON path search for a radius query.
  * @returns {{at: ?{lat: number, lon: number}, km: number}}
  */
-function nearestPart(here, record) {
+function nearestPart(here, record, { rect, radiusKm } = {}) {
   let at = recordPosition(record);
-  let km = distanceKm(here, at);
+  if (at && rect && !insideRect(at, rect)) at = null;
+  let km = at ? distanceKm(here, at) : Infinity;
   for (const part of Array.isArray(record?.parts) ? record.parts : []) {
+    if (rect && !insideRect(part, rect)) continue;
     const partKm = distanceKm(here, part);
     if (partKm < km) {
       at = { lat: part.lat, lon: part.lon };
       km = partKm;
     }
   }
+  const paths = record?.[CONTEXT_LINES];
+  if (!paths) return { at, km };
+  const point = rect
+    ? linePointInRect(paths, rect, here, isGeoJsonKey(record.key))
+    : isGeoJsonKey(record.key) && Number.isFinite(radiusKm)
+      ? linePointWithinRadius(paths, here, Math.min(radiusKm, km), distanceKm)
+      : null;
+  if (point) {
+    const lineKm = distanceKm(here, point);
+    if (lineKm < km) return { at: { ...point, lineAnchor: true }, km: lineKm };
+  }
   return { at, km };
+}
+
+/** Keep the highest scores first and keep source order when scores tie. */
+function keepBest(best, limit, score, point, at) {
+  if (
+    !(limit > 0) ||
+    (best.length >= limit && !(score > best[best.length - 1].score))
+  )
+    return;
+  let index = best.length;
+  while (index > 0 && best[index - 1].score < score) index--;
+  best.splice(index, 0, { point, at, score });
+  if (best.length > limit) best.pop();
+}
+
+function spatialRow(layerId, name, record, at, distanceKm) {
+  const key = recordKey(layerId, record);
+  const label = recordTitle(record);
+  return {
+    key,
+    title: label || name,
+    distanceKm,
+    identity: {
+      layerId,
+      id: key.slice(layerId.length + 1),
+      label,
+      lat: at.lat,
+      lon: at.lon,
+      ...(at.lineAnchor ? { lineAnchor: true } : {}),
+      record,
+    },
+  };
 }
 
 /**
@@ -1244,35 +1495,28 @@ export function nearbyEntities(
   const empty = { same: [], other: [] };
   if (!card || card.lat === null || card.lon === null) return empty;
   const here = { lat: card.lat, lon: card.lon };
-  const row = (layerId, record, km, at) => ({
-    key: recordKey(layerId, record),
-    layerId,
-    layerName: layerName(dataManager, layerId),
-    icon: entityKind(layerId, record).icon,
-    kind: entityKind(layerId, record).kind,
-    title: recordTitle(record) || layerName(dataManager, layerId),
-    distanceKm: km,
-    identity: {
-      layerId,
-      id: recordKey(layerId, record).slice(layerId.length + 1),
-      label: recordTitle(record),
-      ...at,
-      record,
-    },
-  });
   const nearest = (layerId, count) => {
     const found = [];
     for (const record of layerRecords(dataManager, layerId)) {
-      const key = recordKey(layerId, record);
-      if (key === card.key) continue;
-      const { at, km } = nearestPart(here, record);
+      if (isExcludedNearRecord(layerId, record, card.key)) continue;
+      const { at, km } = nearestPart(here, record, { radiusKm });
       if (km > radiusKm) continue;
       found.push({ record, km, at });
     }
+    const name = layerName(dataManager, layerId);
     return found
       .sort((a, b) => a.km - b.km)
       .slice(0, count)
-      .map(({ record, km, at }) => row(layerId, record, km, at));
+      .map(({ record, km, at }) => {
+        const { icon, kind } = entityKind(layerId, record);
+        return {
+          ...spatialRow(layerId, name, record, at, km),
+          layerId,
+          layerName: name,
+          icon,
+          kind,
+        };
+      });
   };
   const same = nearest(card.layerId, limit);
   const other = enabledLayers(dataManager)
@@ -1296,6 +1540,7 @@ export function nearbyEntities(
  * @param {number} [options.limit] Rows per group.
  * @param {string} [options.excludeKey] A record to leave out (the selected one).
  * @param {string[]} [options.excludeLayers] Layers already presented by another section.
+ * @param {(name: string, id: string) => string} [options.shownLayerName] A display alias to match.
  * @returns {{flights: {count: number, items: Array<object>}, vessels: {count: number, items: Array<object>}, other: Array<object>}}
  */
 export function nearbyByKind(
@@ -1307,6 +1552,7 @@ export function nearbyByKind(
     excludeKey = '',
     excludeLayers = [],
     query = '',
+    shownLayerName,
   } = {},
 ) {
   const needle = text(query).toLowerCase();
@@ -1321,14 +1567,20 @@ export function nearbyByKind(
   const other = [];
   for (const layer of enabledLayers(dataManager)) {
     if (excludeLayers.includes(layer.id)) continue;
+    const matchesName = layerNameMatches(
+      layer,
+      layerName(dataManager, layer.id),
+      needle,
+      shownLayerName,
+    );
     const kind = entityKind(layer.id).kind;
     const group = found[kind];
     let closest = null;
     for (const record of layerRecords(dataManager, layer.id)) {
-      if (excludeKey && recordKey(layer.id, record) === excludeKey) continue;
-      const { at, km } = nearestPart(here, record);
+      if (isExcludedNearRecord(layer.id, record, excludeKey)) continue;
+      const { at, km } = nearestPart(here, record, { radiusKm });
       if (!(km <= radiusKm)) continue;
-      if (needle && !recordMatches(record, needle, layer.name)) continue;
+      if (needle && !matchesName && !recordMatches(record, needle)) continue;
       if (group) group.push({ layerId: layer.id, record, km, at });
       // A search lists every match, not only each layer's closest item.
       else if (needle) other.push({ layerId: layer.id, record, km, at });
@@ -1337,21 +1589,15 @@ export function nearbyByKind(
     }
     if (closest) other.push(closest);
   }
-  const row = ({ layerId, record, km, at }) => ({
-    key: recordKey(layerId, record),
-    layerId,
-    layerName: layerName(dataManager, layerId),
-    icon: entityKind(layerId).icon,
-    title: recordTitle(record) || layerName(dataManager, layerId),
-    distanceKm: km,
-    identity: {
+  const row = ({ layerId, record, km, at }) => {
+    const name = layerName(dataManager, layerId);
+    return {
+      ...spatialRow(layerId, name, record, at, km),
       layerId,
-      id: recordKey(layerId, record).slice(layerId.length + 1),
-      label: recordTitle(record),
-      ...at,
-      record,
-    },
-  });
+      layerName: name,
+      icon: entityKind(layerId).icon,
+    };
+  };
   const nearest = (rows) => ({
     count: rows.length,
     items: rows
@@ -1369,81 +1615,95 @@ export function nearbyByKind(
 }
 
 /**
- * What each layer that is on has within a radius of a point: one list per
- * layer, in the order the layers are listed, each sorted by distance so its
- * first row is the nearest. A layer that keeps no list of items (imagery,
- * weather maps) has none; a layer that keeps one but has nothing in range
- * has a count of 0 and no rows.
+ * One enabled layer's loaded items within a radius, nearest first.
+ * A layer without a record list has no group, and an empty list counts as 0.
  * @param {object} dataManager
+ * @param {object} layer Layer row from the data manager.
  * @param {{lat: number, lon: number}} here
  * @param {object} [options]
  * @param {number} [options.radiusKm]
- * @param {number} [options.limit] Rows per layer.
+ * @param {number} [options.limit] Rows to retain.
  * @param {string} [options.query] Only items that hold this text.
  * @param {string} [options.excludeKey] A record to leave out (the selected one).
- * @param {string[]} [options.excludeLayers] Layers shown elsewhere.
- * @returns {Array<{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}>}
+ * @param {(name: string, id: string) => string} [options.shownLayerName] A display alias to match.
+ * @param {boolean} [options.throwOnReadError] Let a caller with a retry policy handle a reader error.
+ * @param {() => void} [options.onSnapshotFallback] Use ordinary records and report an optional reader failure.
+ * @returns {?{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}}
  */
-export function nearbyByLayer(
+export function nearbyForLayer(
   dataManager,
+  layer,
   here,
   {
     radiusKm = 250,
     limit = 3,
     query = '',
     excludeKey = '',
-    excludeLayers = [],
+    shownLayerName,
+    throwOnReadError = false,
+    onSnapshotFallback,
   } = {},
 ) {
-  if (!here || !Number.isFinite(here.lat) || !Number.isFinite(here.lon))
-    return [];
+  if (
+    !layer?.enabled ||
+    !Number.isFinite(here?.lat) ||
+    !Number.isFinite(here?.lon)
+  )
+    return null;
+  const layerId = layer.id;
+  const module = dataManager?.layers?.get?.(layerId)?.module;
+  if (typeof module?.getAnalystRecords !== 'function') return null;
+  const name = layerName(dataManager, layerId);
   const needle = text(query).toLowerCase();
   const keep = Math.max(0, Math.floor(limit));
-  const lists = [];
-  for (const layer of enabledLayers(dataManager)) {
-    if (excludeLayers.includes(layer.id)) continue;
-    const module = dataManager?.layers?.get?.(layer.id)?.module;
-    if (typeof module?.getAnalystRecords !== 'function') continue;
-    const found = [];
+  const matchRecord =
+    needle && !layerNameMatches(layer, name, needle, shownLayerName);
+  // A degree of latitude exceeds 110 km. This cheap rejection leaves the
+  // exact great-circle test to handle the boundary, poles and date line.
+  const latitudeSpan = radiusKm / 110;
+  function summarize({ source, points }) {
+    const best = [];
     let count = 0;
-    for (const record of layerRecords(dataManager, layer.id)) {
-      if (excludeKey && recordKey(layer.id, record) === excludeKey) continue;
-      const { at, km } = nearestPart(here, record);
+    for (const point of points) {
+      if (source && Math.abs(point.lat - here.lat) > latitudeSpan) continue;
+      const { at, km } = source
+        ? { at: point, km: distanceKm(here, point) }
+        : nearestPart(here, point, { radiusKm });
       if (!(km <= radiusKm)) continue;
-      if (needle && !recordMatches(record, needle, layer.name)) continue;
-      count++;
-      // Count every match, but retain only the few rows Context can show.
-      // Strict comparisons keep equally distant records in source order.
-      if (found.length < keep || km < found[found.length - 1]?.km) {
-        let index = found.length;
-        while (index > 0 && found[index - 1].km > km) index--;
-        found.splice(index, 0, { record, km, at });
-        if (found.length > keep) found.pop();
+      if (excludeKey || matchRecord) {
+        const record = source
+          ? source.recordForPoint(point, Boolean(excludeKey))
+          : point;
+        if (isExcludedNearRecord(layerId, record, excludeKey)) continue;
+        if (matchRecord && !recordMatches(record, needle)) continue;
       }
+      count++;
+      keepBest(best, keep, -km, point, at);
     }
-    const name = layerName(dataManager, layer.id);
-    lists.push({
-      layerId: layer.id,
+    return {
+      layerId,
       layerName: name,
-      icon: entityKind(layer.id).icon,
+      icon: entityKind(layerId).icon,
       count,
-      items: found.map(({ record, km, at }) => ({
-        key: recordKey(layer.id, record),
-        layerId: layer.id,
-        title: recordTitle(record) || name,
-        distanceKm: km,
-        identity: {
-          layerId: layer.id,
-          id: recordKey(layer.id, record).slice(layer.id.length + 1),
-          label: recordTitle(record),
-          // Its nearest part, so opening it goes where it is near.
-          ...at,
-          record,
-        },
+      items: best.map(({ point, score, at }) => ({
+        ...spatialRow(
+          layerId,
+          name,
+          source ? source.recordForPoint(point) : point,
+          at,
+          -score,
+        ),
+        layerId,
       })),
-    });
+    };
   }
-  return lists;
+  return readLayerPoints(
+    dataManager,
+    layerId,
+    module,
+    { throwOnReadError, onSnapshotFallback },
+    summarize,
+  );
 }
 
 /** Counts of records by a label, largest first, the tail folded into "Other". */
@@ -1500,19 +1760,10 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
   )
     return null;
   let records = layerRecords(dataManager, layerId);
-  if (rect) {
-    const wraps = rect.west > rect.east;
-    records = records.filter((record) => {
-      const at = recordPosition(record);
-      return (
-        at.lat >= rect.south &&
-        at.lat <= rect.north &&
-        (wraps
-          ? at.lon >= rect.west || at.lon <= rect.east
-          : at.lon >= rect.west && at.lon <= rect.east)
-      );
-    });
-  }
+  if (rect)
+    records = records.filter((record) =>
+      insideRect(recordPosition(record), rect),
+    );
   if (!records.length) return null;
   const splits = [];
   if (kind === 'aircraft') {
@@ -1693,157 +1944,184 @@ export function searchEntities(
 }
 
 /** A point on the unit sphere, for comparing distances with one dot product. */
-function unitVector(lat, lon) {
+function unitVector(lat, lon, out = { x: 0, y: 0, z: 0 }) {
   const phi = (lat * Math.PI) / 180;
   const lambda = (lon * Math.PI) / 180;
   const cosPhi = Math.cos(phi);
-  return [cosPhi * Math.cos(lambda), cosPhi * Math.sin(lambda), Math.sin(phi)];
+  out.x = cosPhi * Math.cos(lambda);
+  out.y = cosPhi * Math.sin(lambda);
+  out.z = Math.sin(phi);
+  return out;
 }
 
 /**
- * A layer's analyst records for "in view" lists, positions unchecked: the
- * caller checks them in its single pass.
- */
-function layerViewRecords(dataManager, layerId) {
-  if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return [];
-  const module = dataManager?.layers?.get?.(layerId)?.module;
-  try {
-    return module?.getAnalystRecords?.(ALL_RECORDS) || [];
-  } catch {
-    return [];
-  }
-}
-
-/**
- * What the loaded layers have inside a view: for each enabled layer with
- * anything in view, how many and the few nearest the view's centre, as rows
- * the Context panel and the omnibar can open. Layers with the most in view
- * come first.
- *
- * One pass per layer: each item is scored by the dot product of its unit
- * vector with the centre's (higher is nearer), the best few are kept as it
- * goes, and nothing is sorted or measured by haversine in the loop. At
- * globe view (`hemisphere`), the horizon is a surface cap centred on `eye`
- * (the ground under the camera, or the view centre when no eye is given).
- * A satellite above the cap can still clear the WGS84 limb at its altitude.
- * The horizon check is independent of the screen edges. Items are ranked
- * from the view centre even when the camera is tilted. Zoomed in, the
- * view's rectangle sets the bounds. A multipart record counts once at its
- * closest visible point.
+ * One enabled layer's loaded items inside a view. A multipart record counts
+ * once at its closest visible point. Rank from the view centre, even when the
+ * horizon cap uses the camera's ground point. Satellites and airborne aircraft
+ * can clear the WGS84 limb at their altitude.
  * @param {object} dataManager
+ * @param {object} layer Layer row from the data manager.
  * @param {?{west: number, south: number, east: number, north: number}} rect Degrees.
  * @param {{lat: number, lon: number}} center
  * @param {object} [options]
- * @param {number} [options.perLayer] Nearest items to list for each layer.
+ * @param {number} [options.perLayer] Nearest items to retain.
  * @param {string} [options.query] Only items whose text holds this.
+ * @param {(name: string, id: string) => string} [options.shownLayerName] A display alias to match.
  * @param {boolean} [options.hemisphere] Globe view: the visible cap.
  * @param {number} [options.heightM] Camera height, for the globe view's cap.
- * @param {{lat: number, lon: number}} [options.eye] The ground under the
- *   camera, where the globe view's cap is centred.
- * @returns {Array<{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}>}
+ * @param {{lat: number, lon: number}} [options.eye] The ground under the camera.
+ * @param {boolean} [options.throwOnReadError] Let a caller with a retry policy handle a reader error.
+ * @param {boolean} [options.fallbackOnSnapshotError] Use ordinary records if the optional point reader fails.
+ * @param {() => void} [options.onSnapshotFallback] Use ordinary records and report an optional reader failure.
+ * @returns {?{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}}
  */
-export function viewSummary(
+export function viewSummaryForLayer(
   dataManager,
+  layer,
   rect,
   center,
-  { perLayer = 3, query = '', hemisphere = false, heightM, eye } = {},
+  {
+    perLayer = 3,
+    query = '',
+    hemisphere = false,
+    heightM,
+    eye,
+    shownLayerName,
+    throwOnReadError = false,
+    fallbackOnSnapshotError = false,
+    onSnapshotFallback,
+  } = {},
 ) {
-  if (!center || (!rect && !hemisphere)) return [];
-  // Over the horizon: a point's angle from the ground under the camera has
-  // a cosine of at most R/(R+h) for a camera h above it.
+  if (!layer?.enabled || !center || (!rect && !hemisphere)) return null;
+  const layerId = layer.id;
+  if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return null;
+  const module = dataManager?.layers?.get?.(layerId)?.module;
+  const name = layerName(dataManager, layerId);
+  const kind = entityKind(layerId);
+  const isSatelliteLayer = layerId === 'satellites';
+  const isAircraftLayer = kind.kind === 'aircraft';
+  const needle = text(query).toLowerCase();
+  const matchRecord =
+    needle && !layerNameMatches(layer, name, needle, shownLayerName);
+  // The cosine of the horizon angle is R/(R+h) for a camera h above the surface.
   const hasCameraHeight = Number.isFinite(heightM) && heightM > 0;
   const horizon = hasCameraHeight
     ? EARTH_RADIUS_KM / (EARTH_RADIUS_KM + heightM / 1000)
     : 0;
-  const needle = text(query).toLowerCase();
-  const wraps = rect ? rect.west > rect.east : false;
-  const inside = (at) =>
-    at.lat >= rect.south &&
-    at.lat <= rect.north &&
-    (wraps
-      ? at.lon >= rect.west || at.lon <= rect.east
-      : at.lon >= rect.west && at.lon <= rect.east);
-  const [cx, cy, cz] = unitVector(center.lat, center.lon);
+  const groundHorizonKm = Math.acos(horizon) * EARTH_RADIUS_KM;
+  const { x: cx, y: cy, z: cz } = unitVector(center.lat, center.lon);
   const seenFrom =
     Number.isFinite(eye?.lat) && Number.isFinite(eye?.lon) ? eye : center;
-  const [ex, ey, ez] = unitVector(seenFrom.lat, seenFrom.lon);
-  const satelliteHorizon =
+  const { x: ex, y: ey, z: ez } = unitVector(seenFrom.lat, seenFrom.lon);
+  const pointHorizon =
     hemisphere && hasCameraHeight
       ? horizonFrom(fromDegrees(seenFrom.lon, seenFrom.lat, heightM))
       : null;
+  const vector = { x: 0, y: 0, z: 0 };
   const scoreInView = (at, altitudeM) => {
-    if (!at || (!hemisphere && !inside(at))) return -Infinity;
-    const phi = (at.lat * Math.PI) / 180;
-    const lambda = (at.lon * Math.PI) / 180;
-    const cosPhi = Math.cos(phi);
-    const x = cosPhi * Math.cos(lambda);
-    const y = cosPhi * Math.sin(lambda);
-    const z = Math.sin(phi);
+    if (!at || (!hemisphere && !at.lineAnchor && !insideRect(at, rect)))
+      return -Infinity;
+    unitVector(at.lat, at.lon, vector);
+    const { x, y, z } = vector;
     if (hemisphere && ex * x + ey * y + ez * z <= horizon) {
       if (
-        !satelliteHorizon ||
+        !pointHorizon ||
         !Number.isFinite(altitudeM) ||
         altitudeM <= 0 ||
-        !satelliteHorizon.isPointVisible(fromRadians(lambda, phi, altitudeM))
+        !pointHorizon.isPointVisible(
+          fromRadians(
+            (at.lon * Math.PI) / 180,
+            (at.lat * Math.PI) / 180,
+            altitudeM,
+          ),
+        )
       )
         return -Infinity;
     }
     return cx * x + cy * y + cz * z;
   };
   const keep = Math.max(0, Math.floor(perLayer));
-  const groups = [];
-  for (const layer of enabledLayers(dataManager)) {
-    // The best few so far, nearest first.
+  function summarize({ source, points }) {
+    const hasPointReader = typeof source?.recordForPoint === 'function';
     const best = [];
     let count = 0;
-    const isSatelliteLayer = layer.id === 'satellites';
-    for (const record of layerViewRecords(dataManager, layer.id)) {
-      let at = recordPosition(record);
-      let score = scoreInView(at, isSatelliteLayer ? record?.altitudeM : null);
-      if (Array.isArray(record?.parts)) {
-        for (const part of record.parts) {
-          const point = recordPosition(part);
-          const partScore = scoreInView(point);
+    for (const point of points) {
+      let at = recordPosition(point);
+      const elevated =
+        isSatelliteLayer || (isAircraftLayer && point?.onGround === false);
+      let score = scoreInView(at, elevated ? point?.altitudeM : null);
+      if (Array.isArray(point?.parts)) {
+        for (const part of point.parts) {
+          const position = recordPosition(part);
+          const partScore = scoreInView(position);
           if (partScore > score) {
-            at = point;
+            at = position;
             score = partScore;
           }
         }
       }
-      if (score === -Infinity) continue;
-      if (needle && !recordMatches(record, needle, layer.name)) continue;
-      count++;
-      if (
-        keep > 0 &&
-        (best.length < keep || score > best[best.length - 1].score)
-      ) {
-        let index = best.length;
-        while (index > 0 && best[index - 1].score < score) index--;
-        best.splice(index, 0, { record, at, score });
-        if (best.length > keep) best.pop();
+      const paths = point?.[CONTEXT_LINES];
+      const geojson = paths && isGeoJsonKey(point.key);
+      const line = !hemisphere
+        ? linePointInRect(paths, rect, center, geojson)
+        : geojson
+          ? linePointInCap(
+              paths,
+              center,
+              seenFrom,
+              groundHorizonKm,
+              scoreInView,
+              distanceKm,
+            )
+          : null;
+      if (line) {
+        const location = { ...line, lineAnchor: true };
+        const lineScore = scoreInView(location);
+        if (lineScore > score) {
+          at = location;
+          score = lineScore;
+        }
       }
+      if (score === -Infinity) continue;
+      if (matchRecord) {
+        const record = hasPointReader
+          ? source.recordForPoint(point, false)
+          : point;
+        if (!recordMatches(record, needle)) continue;
+      }
+      count++;
+      keepBest(best, keep, score, point, at);
     }
-    if (!count) continue;
-    groups.push({
-      layerId: layer.id,
-      layerName: layerName(dataManager, layer.id),
-      icon: entityKind(layer.id).icon,
+    if (!count) return null;
+    return {
+      layerId,
+      layerName: name,
+      icon: kind.icon,
       count,
-      items: best.map(({ record, at, score }) => ({
-        key: recordKey(layer.id, record),
-        title: recordTitle(record) || layerName(dataManager, layer.id),
-        distanceKm: Math.acos(Math.min(1, Math.max(-1, score))) * 6371,
-        identity: {
-          layerId: layer.id,
-          id: recordKey(layer.id, record).slice(layer.id.length + 1),
-          label: recordTitle(record),
-          ...at,
-          record,
-        },
-      })),
-    });
+      items: best.map(({ point, at, score }) =>
+        spatialRow(
+          layerId,
+          name,
+          hasPointReader ? source.recordForPoint(point) : point,
+          at,
+          Math.acos(Math.min(1, Math.max(-1, score))) * EARTH_RADIUS_KM,
+        ),
+      ),
+    };
   }
-  return groups.sort((a, b) => b.count - a.count);
+  return readLayerPoints(
+    dataManager,
+    layerId,
+    module,
+    {
+      // Globe can find a visible part even if the record has no main point.
+      requirePosition: false,
+      throwOnReadError,
+      fallbackOnSnapshotError,
+      onSnapshotFallback,
+    },
+    summarize,
+  );
 }
 
 /**
@@ -1866,36 +2144,17 @@ export function layerMatches(
   { center, rect = null, radiusKm = 60, test = () => true, limit = 8 },
 ) {
   const found = [];
-  const wraps = rect && rect.west > rect.east;
   for (const record of layerRecords(dataManager, layerId)) {
-    const at = recordPosition(record);
-    if (!at) continue;
-    if (rect) {
-      const inLon = wraps
-        ? at.lon >= rect.west || at.lon <= rect.east
-        : at.lon >= rect.west && at.lon <= rect.east;
-      if (!inLon || at.lat < rect.south || at.lat > rect.north) continue;
-    }
-    const km = distanceKm(center, at);
-    if (!rect && km > radiusKm) continue;
-    if (!test(record)) continue;
-    found.push({ record, km });
+    const { at, km } = nearestPart(center, record, { rect, radiusKm });
+    if (!at || (!rect && km > radiusKm) || !test(record)) continue;
+    found.push({ record, at, km });
   }
   found.sort((a, b) => a.km - b.km);
   return {
     count: found.length,
-    items: found.slice(0, limit).map(({ record, km }) => ({
-      key: recordKey(layerId, record),
-      title: recordTitle(record) || layerName(dataManager, layerId),
+    items: found.slice(0, limit).map(({ record, at, km }) => ({
+      ...spatialRow(layerId, layerName(dataManager, layerId), record, at, km),
       icon: entityKind(layerId).icon,
-      distanceKm: km,
-      identity: {
-        layerId,
-        id: recordKey(layerId, record).slice(layerId.length + 1),
-        label: recordTitle(record),
-        ...recordPosition(record),
-        record,
-      },
     })),
   };
 }

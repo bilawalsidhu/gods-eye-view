@@ -11,18 +11,14 @@ import {
 } from '../data/trackingClickGesture.js';
 import { applicationHooksOf } from '../render/applicationHooks.js';
 import { findCamera, rendererOf } from '../render/rendererOf.js';
+import { WORLD_FOCUS_FRAMING } from '../worldFocus.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { isGlobeView, useEntityCardStore } from './stores/entityCard.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useVoiceStore } from './stores/voice.js';
-import {
-  inspectorHasLayers,
-  inspectorLayerRows,
-  presentLayerRow,
-  shownApart,
-} from './layerRowState.js';
+import { inspectorHasLayers } from './layerRowState.js';
 import { createViewWeather } from './viewWeather.js';
 
 /** Camera distance (m) that frames an item of each kind. */
@@ -55,10 +51,11 @@ const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
  *   The ground under a normalized screen point; the view's centre falls back
  *   to the point under the camera without it.
  * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.regionalBrief]
- *   The app's regional brief service, for a selected item's weather and local
- *   news; the unselected view's weather uses it only without spotWeather.
+ *   Provides weather for selected cards and is the Inspector's fallback
+ *   when no point-weather adapter is supplied.
  * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.spotWeather]
  *   The weather-only service for the unselected view.
+ * @param {(fly: () => void) => unknown} [options.navigateToSelection] Hand an explicit row flight to the navigation owner.
  * @param {object} [options.inspector] The Inspector count owner and optional weather clock.
  * @returns {() => void} disconnects
  */
@@ -70,6 +67,7 @@ export function installEntityContext({
   regionalBrief,
   spotWeather,
   inspector,
+  navigateToSelection = (fly) => fly(),
 }) {
   const store = useEntityCardStore(pinia);
   const omnibar = useOmnibarStore(pinia);
@@ -101,30 +99,36 @@ export function installEntityContext({
       button.click();
   }
 
-  function flyTo(card) {
+  function flyTo(card, { fromSelection = false } = {}) {
     const port = camera();
     if (!port || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
       return;
-    const height = Number.isFinite(card.altitudeM) ? card.altitudeM : 0;
-    const range = FRAME_RANGE[card.kind] ?? DEFAULT_RANGE;
-    port.flyToBounds(
-      {
-        center: fromDegreesInto(card.lon, card.lat, Math.max(0, height), {
-          x: 0,
-          y: 0,
-          z: 0,
-        }),
-        radius: 1,
-      },
-      {
-        offset: {
-          heading: port.pose().heading,
-          pitch: ((card.kind === 'satellite' ? -90 : -45) * Math.PI) / 180,
-          range,
+    const height = card.pinHeightM ?? card.altitudeM ?? 0;
+    const framing = card.obscured ? WORLD_FOCUS_FRAMING['sighting-area'] : null;
+    const pitchDeg =
+      framing?.pitchDeg ?? (card.kind === 'satellite' ? -90 : -45);
+    const range = framing?.rangeM ?? FRAME_RANGE[card.kind] ?? DEFAULT_RANGE;
+    const fly = () =>
+      port.flyToBounds(
+        {
+          center: fromDegreesInto(card.lon, card.lat, Math.max(0, height), {
+            x: 0,
+            y: 0,
+            z: 0,
+          }),
+          radius: framing?.radiusM ?? 1,
         },
-        durationS: 2,
-      },
-    );
+        {
+          offset: {
+            heading: port.pose().heading,
+            pitch: (pitchDeg * Math.PI) / 180,
+            range,
+          },
+          durationS: 2,
+        },
+      );
+    if (fromSelection) return navigateToSelection(fly);
+    return fly();
   }
 
   function follow(card) {
@@ -205,21 +209,28 @@ export function installEntityContext({
     }
   }
 
-  function askText(prompt) {
+  function askText(prompt, reference) {
     voice.controls?.emit('chat-restore');
-    voice.controls?.emit('chat-prompt', prompt);
+    voice.controls?.emit(
+      'chat-prompt',
+      reference ? { text: prompt, reference } : prompt,
+    );
     voice.controls?.emit('chat-submit');
   }
 
   function ask(card) {
-    const where =
-      Number.isFinite(card.lat) && Number.isFinite(card.lon)
-        ? ` at ${card.lat.toFixed(3)}, ${card.lon.toFixed(3)}`
-        : '';
-    const prompt = `Tell me about the ${card.kind} ${card.title} (${card.layerName})${where}, and what is around it.`;
-    voice.controls?.emit('chat-restore');
-    voice.controls?.emit('chat-prompt', prompt);
-    voice.controls?.emit('chat-submit');
+    const coordinates = {
+      lat: Number.isFinite(card.lat) ? Number(card.lat.toFixed(3)) : null,
+      lon: Number.isFinite(card.lon) ? Number(card.lon.toFixed(3)) : null,
+    };
+    askText('Tell me about this map item and what is around it.', {
+      name: card.title,
+      kind: card.kind,
+      layer: card.layerName,
+      ...(card.obscured
+        ? { approximateCellCenter: { ...coordinates, cellSizeDegrees: 0.2 } }
+        : coordinates),
+    });
   }
 
   store.connect({
@@ -234,7 +245,12 @@ export function installEntityContext({
       const pose = camera()?.pose();
       if (!pose || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
         return null;
-      return onScreen(pose, card.lat, card.lon, card.altitudeM ?? 0);
+      return onScreen(
+        pose,
+        card.lat,
+        card.lon,
+        card.pinHeightM ?? card.altitudeM ?? 0,
+      );
     },
     isOpen,
     regionalBrief,
@@ -246,7 +262,8 @@ export function installEntityContext({
     cockpit,
     canCockpit: (card) =>
       Boolean(omnibar.runner) && COCKPIT_LAYERS.has(card?.layerId),
-    canFollow: (card) => FOLLOWABLE.has(card?.layerId),
+    canFollow: (card, { auto = false } = {}) =>
+      FOLLOWABLE.has(card?.layerId) && (!auto || Boolean(omnibar.runner)),
     // Where the camera is, so a search prefers what is close by.
     here: () => {
       const pose = camera()?.pose();
@@ -267,6 +284,7 @@ export function installEntityContext({
     if (!port || (!isOpen() && doc?.activeElement?.id !== 'gev-omnibar-input'))
       return;
     const pose = port.pose();
+    // An invalid pose keeps the previous snapshot and leaves the motion fence set.
     if (![pose.lat, pose.lon, pose.height].every(Number.isFinite)) return;
     const middle = pickWorld?.(viewer, 0.5, 0.5);
     const center = middle
@@ -278,29 +296,20 @@ export function installEntityContext({
       east: 180,
       north: 90,
     };
-    // The ground under the camera (eye) bounds what it can see over the
-    // horizon; on a tilted view that is not the middle of the screen.
     hasCameraSnapshot = true;
     store.setView(
       {
         center,
         rect,
         heightM: pose.height,
+        // The horizon is measured from the camera, independently of screen center.
         eye: { lat: pose.lat, lon: pose.lon },
       },
       { settled },
     );
-    // Invalid camera reads leave the previous published pose in place.
     // Release the weather motion fence only after a valid settled snapshot.
     if (settled) motionPending.value = false;
   };
-  // Read when the camera settles. A camera that keeps moving (following an
-  // aircraft, a long fly-to) never settles, and a jump (a share link, a
-  // restored view) raises no moveEnd, so also read it on large changes: at
-  // most once a second, and once more after the last change, so the view it
-  // stops at is the one described. Those reads are of a camera still moving;
-  // a jump without movement events is read again as settled after a quiet
-  // spell. A known move lasts until moveEnd even between change events.
   let lastRead = 0;
   let trailing = null;
   let quiet = null;
@@ -313,12 +322,14 @@ export function installEntityContext({
     motionPending.value = true;
     clearTimeout(trailing);
     stopQuiet();
+    // A view jump can settle without moveEnd. An ongoing move needs moveEnd.
     if (!moving) {
       quiet = setTimeout(() => {
         quiet = null;
         readView();
       }, 1200);
     }
+    // Following and panning publish at most once a second while moving.
     const now = performance.now();
     if (now - lastRead >= 1000) {
       lastRead = now;
@@ -397,7 +408,7 @@ export function installEntityContext({
     let appliedSample = { inputs: metadataInputs.map((read) => read()) };
     const readCurrentInput = () => ({
       center: hasCameraSnapshot && !globe() ? store.view?.center : null,
-      moving: motionPending.value || store.viewMoving,
+      moving: motionPending.value,
       shown: store.readViewContextShown(),
       mountId: mountId(),
     });
@@ -420,9 +431,6 @@ export function installEntityContext({
           // Let the pre-flush publisher sample the latest inputs first.
           if (inputs.some((value, index) => value !== live[index])) return;
           const [visible, , missionsEnabled] = inputs;
-          const changed = inputs
-            .slice(1, countInputs.length)
-            .some((value, index) => value !== appliedSample.inputs[index + 1]);
           appliedSample = sample;
           if (!visible || !store.readViewContextShown()) {
             inspector.counts.update({ shown: false, nothingOn: false });
@@ -432,18 +440,11 @@ export function installEntityContext({
             shown: true,
             nothingOn: !inspectorHasLayers(rows, missionsEnabled),
           });
-          if (changed) {
-            inspector.counts.note(
-              inspectorLayerRows(rows)
-                .filter((row) => !shownApart(row.id, missionsEnabled))
-                .map(presentLayerRow),
-            );
-          }
         },
         { flush: 'post' },
       ),
       // Render and focus recovery use one pre-flush sample. A globe-only
-      // refresh updates suggestions without admitting or noting counts.
+      // refresh updates suggestions without admitting counts.
       watch(
         [metadataReady, ...metadataInputs],
         ([, ...inputs], [initialized, ...previous]) => {
@@ -466,7 +467,6 @@ export function installEntityContext({
           shown,
           mountId,
           () => store.view,
-          () => store.viewMoving,
           motionPending,
           () => store.inspectorPulse,
         ],
@@ -529,7 +529,11 @@ export function installEntityContext({
       // These layers start following on their own click; following again
       // from here would fight them (the flights layer reads a second track
       // of the same plane as a click on empty map and lets go).
-      store.select(identity, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
+      const picked =
+        identity.layerId === 'ais-live-vessels'
+          ? { ...identity, vesselId: identity.id }
+          : identity;
+      store.select(picked, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
       return;
     }
     // A click on open ground, sea or sky lets go of what was selected. A
@@ -543,14 +547,14 @@ export function installEntityContext({
   // installations) announce it; their selection opens the card too.
   const onSelected = ({ detail: record }) => {
     if (!record?.layerId || inCockpit()) return;
+    const vesselId =
+      record.layerId === 'ais-live-vessels'
+        ? record.properties?.vesselId
+        : null;
     store.select({
       layerId: record.layerId,
-      // A vessel goes by its own id, as a click on it names it, not by the
-      // context store's (src/data/pickedContext.js).
-      id:
-        record.layerId === 'ais-live-vessels' && record.properties?.vesselId
-          ? String(record.properties.vesselId)
-          : record.id,
+      id: vesselId ? String(vesselId) : record.id,
+      ...(vesselId ? { vesselId: String(vesselId) } : {}),
       label: record.label || record.properties?.name,
       lat: record.latitude,
       lon: record.longitude,

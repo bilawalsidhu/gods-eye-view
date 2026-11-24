@@ -27,6 +27,7 @@ const props = defineProps({
   /** Show the standard blocks for a selected item. */
   entity: { type: Boolean, default: false },
   withContacts: Boolean,
+  obscured: Boolean,
   /** The selected item's own key, left out of the nearby lists. */
   excludeKey: { type: String, default: '' },
   /** How far the spot moves before the weather and hazards are read again. */
@@ -189,8 +190,10 @@ const articles = computed(() =>
   props.entity ? [] : (brief.value?.articles || []).filter((article) => matchesContextSearch(article.title, article.domain)).slice(0, 3),
 );
 
-const distance = (km) =>
-  t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
+function distance({ distanceKm: km, identity }) {
+  const value = t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
+  return props.obscured || identity?.record?.obscured === true ? `${value} (${t('approximate')})` : value;
+}
 function ago(ms) {
   if (!Number.isFinite(ms)) return '';
   const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
@@ -310,7 +313,7 @@ const sources = computed(() => {
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ item.title }}</span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(item.distanceKm) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(item) }}</span>
           </UiButton>
         </li>
       </ul>
@@ -334,7 +337,7 @@ const sources = computed(() => {
                 <span class="spot-conditions__row-dot" aria-hidden="true"></span>{{ hazardLayers[hazard.kind].name }}
               </span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(hazard.distanceKm) }} {{ t(hazard.direction) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(hazard) }} {{ t(hazard.direction) }}</span>
           </UiButton>
         </li>
       </ul>
@@ -355,7 +358,7 @@ const sources = computed(() => {
               <span class="spot-conditions__row-title">{{ alert.title }}</span>
               <span class="spot-conditions__row-detail">{{ sayWords(alert.words, alert.text) }}</span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(alert.distanceKm) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(alert) }}</span>
           </UiButton>
         </li>
       </ul>
@@ -375,7 +378,7 @@ const sources = computed(() => {
               <span class="spot-conditions__row-title">{{ item.title }}</span>
               <span class="spot-conditions__row-detail">{{ shownLayerName(item.layerName, item.layerId) }}</span>
             </span>
-            <span class="spot-conditions__row-meta">{{ distance(item.distanceKm) }}</span>
+            <span class="spot-conditions__row-meta">{{ distance(item) }}</span>
           </UiButton>
         </li>
       </ul>

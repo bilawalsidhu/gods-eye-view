@@ -45,22 +45,26 @@ test('scoped layer counts use the supplied endpoint and respect both cancellatio
   for (const end of ['lifetime', 'call']) {
     const lifetime = new AbortController();
     const caller = new AbortController();
-    let receive;
+    const reading = Promise.withResolvers();
+    let cancelled = false;
     let request;
     const services = createApplicationRequestServices({
       endpoints: { layerCounts: '/custom/counts' },
       signal: lifetime.signal,
       fetchImpl: async (url, init) => {
         request = { url, init };
-        return {
-          ok: true,
-          status: 200,
-          json: () => new Promise((resolve) => { receive = resolve; }),
-        };
+        return new Response(new ReadableStream({
+          pull() {
+            reading.resolve();
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }, { highWaterMark: 0 }));
       },
     });
     const pending = services.layerCounts.getCounts({ signal: caller.signal });
-    while (!receive) await Promise.resolve();
+    await reading.promise;
     assert.equal(request.url, '/custom/counts');
     assert.equal(request.init.method, undefined);
     assert.equal(request.init.redirect, 'error');
@@ -68,8 +72,8 @@ test('scoped layer counts use the supplied endpoint and respect both cancellatio
     assert.equal(request.init.signal.aborted, false);
     (end === 'lifetime' ? lifetime : caller).abort();
     assert.ok(request.init.signal.aborted);
-    receive({ counts: [{ layerId: 'satellites', count: 1272, at: 1 }] });
     await assert.rejects(pending, { name: 'AbortError' });
+    assert.equal(cancelled, true);
   }
 });
 
@@ -113,6 +117,57 @@ test('an unsuccessful count response preserves its HTTP status', async () => {
     services.layerCounts.getCounts(),
     /Layer counts unavailable \(503\)/,
   );
+});
+
+test('count throttling exposes Retry-After without parsing the refusal body', async () => {
+  let cancelled = 0;
+  const serverDate = 'Wed, 21 Oct 2026 10:00:00 GMT';
+  for (const retry of ['60', 'Wed, 21 Oct 2026 10:01:00 GMT']) {
+    const services = createApplicationRequestServices({
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('not JSON'));
+            },
+            cancel() {
+              cancelled++;
+            },
+          }),
+          { status: 429, headers: { 'Retry-After': retry, Date: serverDate } },
+        ),
+    });
+    await assert.rejects(services.layerCounts.getCounts(), {
+      message: 'Layer counts unavailable (429)',
+      retryAfterMs: 60_000,
+    });
+  }
+  assert.equal(cancelled, 2);
+});
+
+test('layer counts reject oversized declared and streamed response bodies', async () => {
+  let cancelled = 0;
+  for (const declared of [true, false]) {
+    const services = createApplicationRequestServices({
+      fetchImpl: async () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new Uint8Array(9 * 1024));
+              controller.enqueue(new Uint8Array(9 * 1024));
+            },
+            cancel() {
+              cancelled++;
+            },
+          }),
+          { headers: declared ? { 'Content-Length': '1000000' } : {} },
+        ),
+    });
+    await assert.rejects(services.layerCounts.getCounts(), {
+      code: 'RESPONSE_TOO_LARGE',
+    });
+  }
+  assert.equal(cancelled, 2);
 });
 
 test('boundary throttle status survives empty or invalid error bodies', async () => {

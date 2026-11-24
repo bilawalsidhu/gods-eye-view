@@ -85,6 +85,7 @@ const showView = () => (activeTab.value = 'view');
 onMounted(() => {
   const body = globalThis.document?.body;
   if (body && globalThis.MutationObserver) {
+    // Keep rail visibility current and undock when phone layout or Cockpit starts.
     bodyWatch = new MutationObserver(() => {
       railCovered.value = isRailCovered();
       if (docked.value && (body.classList.contains('mobile-shell') || body.classList.contains('cockpit-mode'))) setDocked(false);
@@ -158,8 +159,6 @@ const searchHint = computed(() =>
 // panel closes.
 const docked = ref(false);
 const { panels: chromePanels } = storeToRefs(usePanelChromeStore());
-// The phone layout and Cockpit have no room for the column: either one
-// arriving lets it go.
 let bodyWatch = null;
 function setDocked(next) {
   docked.value = next;
@@ -200,6 +199,28 @@ const inspectorShown = computed(() =>
   (!phoneShell.value?.enabled || phoneShell.value.sheet === 'context') &&
   !cockpit.value?.active,
 );
+const inspectorTab = ref(null);
+let keyboardOrigin = null;
+async function focusKeyboardSelection(rowKey) {
+  const cardKey = entityCard.value?.key;
+  await nextTick();
+  const close = inspectorTab.value?.querySelector('.entity-card__close');
+  if (!cardKey || entityCard.value?.key !== cardKey || !close) return;
+  keyboardOrigin = { rowKey, cardKey };
+  close.focus();
+}
+watch(() => entityCard.value?.key, async (key, previous) => {
+  const origin = keyboardOrigin;
+  if (!origin || key === origin.cardKey) return;
+  keyboardOrigin = null;
+  if (key || previous !== origin.cardKey || !inspectorTab.value?.contains(document.activeElement)) return;
+  await nextTick();
+  if (!inspectorShown.value || entityCard.value) return;
+  const inspector = inspectorTab.value?.querySelector('.view-context');
+  const row = [...(inspector?.querySelectorAll('[data-row-key]') || [])]
+    .find((candidate) => candidate.dataset.rowKey === origin.rowKey);
+  (row || inspector)?.focus();
+});
 watch(
   [inspectorShown, inspectorMount],
   ([shown, mountId]) => entityCards.setViewContextShown(shown, mountId, readInspectorVisibility),
@@ -284,11 +305,11 @@ watch(
           </div>
           <AwarenessPanel v-if="!contactsMatchCard" />
         </section>
-        <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
+        <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" ref="inspectorTab" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>
-          <ViewContext v-if="viewContextPresent" @mounted="inspectorMount = Symbol()" @unmounting="inspectorMount = null" />
+          <ViewContext v-if="viewContextPresent" @mounted="inspectorMount = Symbol()" @unmounting="inspectorMount = null" @keyboard-selection="focusKeyboardSelection" />
         </div>
         </div>
     </RailPanel>

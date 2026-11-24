@@ -17,12 +17,8 @@ const ROAD_WORDS = Object.freeze({
 const segments = new WeakMap();
 
 /**
- * A segment's identity and position, the same for either direction: the
- * renderer's road identity (source, type and every vertex) without its
- * direction, so the two directions of a road, drawn over one geometry or
- * over reversed copies of it, share one id, and roads with the same ends but
- * different courses keep their own. The position is the middle vertex of
- * the line in the order the id reads it.
+ * The renderer's undirected road identity and middle vertex in its
+ * canonical direction.
  * @returns {{id: string, at: number[]}}
  */
 function segmentOf(road) {
@@ -56,6 +52,13 @@ function worseFlow(a, b) {
 /** A record's flow fields, from a road's live flow or none. */
 function flowFields(flow, state) {
   const level = Number.isFinite(flow?.level) ? flow.level : null;
+  const simulatedSource = state._liveMode
+    ? state._flowError
+      ? 'simulated-flow-error'
+      : 'simulated-unmatched'
+    : state._flowStatusUnavailable
+      ? 'simulated-unavailable'
+      : 'simulated-keyless';
   return {
     flow: flow
       ? flow.closure
@@ -68,13 +71,7 @@ function flowFields(flow, state) {
     flowPct: level === null ? null : Math.round(level * 100),
     simulated: !flow,
     // A code; the card says it in words (entityContext.js CODE_WORDS).
-    source: flow
-      ? 'tomtom-live'
-      : state._liveMode === true
-        ? 'simulated-unmatched'
-        : state._flowStatusUnavailable
-          ? 'simulated-unavailable'
-          : 'simulated-keyless',
+    source: flow ? 'tomtom-live' : simulatedSource,
     // Flow read from cached proxy tiles, not this minute's feed.
     stale: Boolean(flow && state._flowStale),
   };
@@ -84,10 +81,6 @@ function flowFields(flow, state) {
  * The road segments the Traffic layer draws, as plain records for the analyst
  * and the Context panel: one per drawn segment (the two directions of a
  * two-way road are one record, with the worse of their flows).
- *
- * A segment is a line; its position is its middle vertex (the vertex at the
- * middle index of its coordinates), which lies on the road, unlike the
- * midpoint of its bounding box.
  *
  * Simulated segments have `simulated` true and `flow` null. Their `source`
  * distinguishes unmatched roads, an unreachable traffic service, and a
@@ -105,7 +98,7 @@ export function trafficAnalystRecords(state, maxCount = Infinity) {
     const coords = road?.coords;
     if (!Array.isArray(coords) || coords.length < 2) continue;
     const live = state._liveMode === true;
-    const flow = live ? road.source?.flow || road.flow || null : null;
+    const flow = live ? ((road.source ?? road).flow ?? null) : null;
     if (live && !flow && state._uncoveredMode === 'hide') continue;
     const { id, at } = segmentOf(road);
     const known = listed.get(id);

@@ -32,7 +32,6 @@ const tags = (markup, name) =>
 const dock = template('CommandDockView.vue');
 const context = template('ContextView.vue');
 const inView = template('panels/ViewContext.vue');
-// The view context's suggested layers and nearby lists are their own views.
 const suggested = template('panels/SuggestedLayers.vue');
 const nearby = template('panels/NearbyLists.vue');
 const views = {
@@ -43,11 +42,7 @@ const views = {
   // Search and Expand in the header, the two tabs, Contacts, the cockpit
   // entry, SEARCH NEARBY SITES and the TR-3B chip.
   'ContextView.vue': { markup: context, buttons: 8, icons: 7, closes: 0 },
-  // The Data Layers pointer and a row nearest the centre. The glyphs: the
-  // layer tiles' three and the pointer's layers. The chips and the rows
-  // with a motion glyph are in the suggested layers and nearby lists below;
-  // Ask GEV and a layer's Turn off are gone. A globe-view block's head wears
-  // its layer's mark (EntityMark.vue), not a UiIcon of its own.
+  // Two buttons and five icons across the Inspector. Globe rows use EntityMark.
   'panels/ViewContext.vue': { markup: inView, buttons: 2, icons: 5, closes: 0 },
   // Open in Data Layers; a layer's glyph and the pointer's layers.
   'panels/SuggestedLayers.vue': {

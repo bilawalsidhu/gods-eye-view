@@ -975,94 +975,48 @@ projected image, a view ray or the far-plane outline opens that camera's card.
 A loaded camera's name and position are also available when the card opens
 from its icon.
 
-With nothing picked, the panel gives situational awareness of the layers
-that are on (`src/ui/views/panels/ViewContext.vue`): the place under the
-middle of the screen and the time there, "10:14 local, 16:14 UTC" (`clockLine`).
-The time zone comes from the configured spot-weather service
-(`/api/weather-effects` by default, without the regional brief's place
-lookup and news); UTC alone until it is read, at globe view,
-and when the read for a new spot fails. Within the same Inspector mount,
-a nearby zone stays as a hint only after bundled country boundaries confirm
-that the observation and the view are in the same country. When the weather
-cell changes, the prior observation is cleared and its request is cancelled.
-Context requests the new cell after the camera has settled for 400 ms. An
-observation refreshes after eleven minutes of visible Inspector time. A
-failed read retries after one minute of that time. A failed refresh clears
-the reading once the weather proxy stops returning an observation. With
-layers on and the view zoomed in, a weather block comes
-next, from that same reading (no read of its own): the temperature, the
-conditions and how warm it feels, then wind, cloud, visibility and rain; it
-reads "Reading conditions here…" until the reading is in, says so when the
-spot cannot be read. The weather block and the no-layers weather tile give
-the age of a reading over half an hour old and link to Open-Meteo.
-Then the radius (25 to 1,000 km, default 250 km, kept per
-browser; it only filters what is loaded), a count per layer that is on
-within it with a dot for its feed state and a line under the counts for a
-feed in trouble, and one Nearby section: one group per layer, sorted by
-distance, its first row the nearest (`NearbyLists.vue`, `nearbyByLayer`). A
-group with nothing in range is hidden; its 0 stays in the counts. Hazards are
-ordinary layers there. News reports stay in the News panel, and the
-Inspector shows that layer's map status. A submarine cable lists points along every
-line it is drawn as, at most 40 km apart. Near the radius boundary, the distance to stored
-samples can omit a cable whose line passes within the radius.
-Generic GeoJSON line features use a representative vertex.
-At globe view each layer shows once, with its
-loaded count at the provider's scope, feed state and a breakdown of the
-loaded records (`layerBreakdown`). The dedicated Bhote Koshi reconstruction
-panel takes over Context while active. The reconstruction's geolocated
-evidence can appear in Context search and Nearby. The independent locator
-lists places in the Inspector. Each map layer that is on has a tile at every zoom: a layer
-with items shows its count, or why it holds none ("Zoom in to see bikes") in
-place of a 0, and keeps a tile with nothing within the radius; a field (wind,
-GNSS integrity, recent imagery, air quality) shows its value at the centre of
-the view when zoomed in, or why it has none, and its state at globe view.
-GNSS shows the cell's low-accuracy score band and reporting sample. The
-imagery tile uses a granule with a known footprint covering that point, or
-a daily overview with pixels in the area.
-A map overlay (radar, lightning, satellite clouds, sea marks) shows that it is
-on the map, its state and how fresh its picture is ("Updated 4 min ago");
-neither shows a count. Space Missions
-counts its own list, worldwide. Each globe block lists up to three items
-nearest the centre of the view that clear Earth's horizon. The horizon is
-measured from the camera and is independent of the viewport edges. The
-satellite check uses the SGP4 altitude for objects above the limb
-(`src/layers/satellites/records.js`). Context search shows up to 12 matches
-per layer and keeps the loaded total. The omnibar's in-view strip shares
-the store's `inView`, which scores each record by the dot product of unit
-vectors in one pass per layer.
+With nothing selected, the Inspector shows the place under the center of the
+screen, or coordinates when there is no nearby bundled city. A new point
+shows UTC and “local time loading…” while its own time zone is pending. A
+confirmed zone shows local time and UTC. Globe view and failed zone reads
+show UTC. Local weather uses the same reading. It shows conditions,
+temperature, feels-like, wind, cloud, visibility and rain, with an
+Open-Meteo credit and the age of older readings. A stalled read times out
+after 15 seconds. A failed reading can retry after one minute when the
+Inspector is visible again.
 
-Both the in-view rows and the Nearby lists are remembered per layer
-(`readLayers` in `src/ui/stores/entityCard.js`): a layer is read again when
-the view (or, for Nearby, the centre, radius or search) changes, when it is
-turned on, or when its own data changes, never for another layer's refresh.
-A moving layer's In View rows (satellites, aircraft, vessels, transit, rail)
-are reread once they are 10 s old while something asks. A layer whose read
-costs more waits longer (at least 100 times its last read's cost, up to
-60 s: a 200 ms propagation of a large catalogue waits 20 s). Moving Nearby
-rows expire within 6 s so the visible Inspector's next 4 s refresh updates
-them within 10 s, even when a feed's revision has not changed. While the camera
-is still moving, a layer whose last read took longer than a frame (16 ms)
-keeps its rows for that same wait instead of being read for each step; a
-settled camera move, or the layer's own new data, reads it at once, so one
-long read still follows each settled move. Context refreshes its presentation
-every 4 s while its View tab is visible. Inspector weather and worldwide
-count work pauses in Properties, on another phone sheet, in Cockpit, in
-Clean View, Stories or embed mode, while recording with panels hidden, when
-the docked Assistant or the Bhote Koshi event covers Context, and when the Inspector or page
-is hidden. Returning to the same
-weather cell retains its reading and resumes its refresh or retry clock.
-With no layer on, Context starts closed, as it
-did before, and, opened, shows display-only count tiles for what layers whose
-feeds are not billed per request would show, worldwide and last known (see
-"Nothing-on count tiles" below), then a few facts (the weather, day length
-zoomed in; UTC and the share of Earth in daylight at globe view), a strip with the camera's height, and
-up to three suggested layers (`src/ui/layerSuggestions.js`), or a pointer to
-Data Layers when there are none. The phone opens its Layers sheet for either
-action. Opening Suggested moves focus to its chip in Data Layers.
-With layers on, suggestions of what goes with
-them sit at the end of the view, under the Nearby lists. The search field
-in the header filters item rows. Expanded, Context becomes a full-height column at the right edge
-(the left edge right to left) and the map credits stop short of it.
+The Inspector and selected cards share a radius of 25 to 1,000 km (default
+250 km). The browser saves the choice and uses it to filter loaded items.
+A saved 2,500 km choice reads as 1,000 km. Nearby groups results by enabled
+layer and sorts each group by distance. An empty group disappears while
+its count remains. Unavailable counts show the feed state. Field readings
+appear beside the counts, including observation age for Air Quality and
+GNSS. Air Quality also lists nearby stations. Overlay tiles show their map
+and feed state. News reports stay in the News panel. For GeoJSON lines such
+as dam crests, distance uses the nearest mapped part of the line. Cable distance
+uses samples along each line, so a cable can fall just outside the radius near
+a boundary even when its line passes inside.
+
+At globe height, a layer's block shows what it has loaded at the feed's
+scope, with feed state and a breakdown where available. A satellite class
+bar identifies how many satellites it represents when that differs from
+the loaded count. Each block can show the three items nearest the center of
+the visible hemisphere. Context search returns up to 12 matches per layer
+and keeps the loaded total. The Omnibar's in-view results use the viewport.
+The Bhote Koshi reconstruction panel owns its evidence controls while open.
+The independent locator lists places from its active presentation.
+
+With all layers off, the open Inspector shows [last-known worldwide
+counts](#nothing-on-count-tiles), then local weather and daylight or globe
+UTC and daylight, followed by camera height. It offers up to three Suggested
+layers, or a Data Layers action. On a phone either action opens Layers.
+Suggested focuses its chip. With layers on, suggestions appear below
+Nearby. Expanded Context uses the full-height side column.
+
+Weather and count work pauses when the Inspector is covered or hidden,
+including when the page is hidden. Returning to the same point retains
+its successful reading. A due retry waits until the Inspector can read
+again.
 
 The Contacts mode and the Radio strip stay in the panel's main tab, below
 the card. When Contacts follows the aircraft the card shows, its list sits
@@ -1088,39 +1042,40 @@ application hook (`src/render/cesium/cardPreviews.js`), each in a small scene
 of its own that frees its graphics context as it closes; the model comes from
 the fleet set loaded at startup, so opening a card fetches no model.
 
+The sundial has been removed from Context.
+
 ### Nothing-on count tiles
 
-With no layer on, Context's "Worldwide, last known" tiles show how much a
-layer would show if turned on. The counts come only from what this server's
-providers already hold: the positioned aircraft in the OpenSky response
-cache (Live Flights), the
-CelesTrak core groups (unique satellite IDs, with the oldest group’s cache time;
-a normal feed read upgrades older caches to the compact count index), the CCTV catalog
+With no layer on, Context's "Worldwide, last known" tiles count eligible
+records in this server's provider caches. The client can load fewer records
+when a layer is enabled. The tiles count positioned aircraft in the OpenSky
+response cache (Live Flights), records in the CelesTrak core-group TLE caches (unique satellite IDs, dated by the oldest
+contributing group), the CCTV catalog
 once it has been built, the live AIS store (ships seen recently, not aids to
 navigation, and only with the default worldwide subscription) and FIRMS detections
 in the layer’s trailing 24-hour window. FIRMS needs a key and counts from
-acquisition-minute totals in memory or on disk. A legacy disk total has no
-times and contributes no tile until the feed loads. `GET /api/layer-counts` (`server/providers/common/layerCounts.js`)
-makes no upstream request and uses no quota; it is same-site, keyless, GET
-and HEAD only and `no-store`, with 60 requests per network peer per minute
-and 1,200 overall (the browser gives up after 10 s),
-and a provider with an empty cache gives no tile. Metered layers, such as
-TomTom traffic and the Google-backed layers, are never counted, even when
-cached. The browser asks on first entry to the nothing-on view and again on a
-later entry at least 30 minutes after it sent the last request, and never polls
-(`src/ui/layerCounts.js`, through the application's configured count service).
-Closing the Inspector cancels a request still in progress and releases that
-request's cooldown. A timed-out request retains its cooldown.
-While the Inspector is shown and a layer whose count is of the
-whole world is on (`stats.scope: 'worldwide'`, which Live Flights reports for
-a worldwide snapshot, with the snapshot's own size as `stats.scopeCount`) and
-its feed is healthy, its own live count, stamped
-with when the feed last read, replaces the cached one unless that is newer;
-an area count (vessels in view) or a wider catalogue (satellites with
-Starlink) never does. A last-known count shows its age ("10 h ago") when
-the source has a timestamp. A self-hosted server with empty caches shows
-no tiles until the layers have been used; the CelesTrak cache and the saved
-fires count are on disk and survive a restart, the others are in memory.
+acquisition-minute totals in memory or on disk. A successful feed refresh
+writes the disk summary. Restoring the raw cache can supply an in-memory
+count without writing the summary.
+
+`GET /api/layer-counts` is keyless, same-site, and `no-store`. It reads provider
+caches and accepts GET and HEAD, with 60 requests per network peer per minute
+and 1,200 overall. Metered layers such as TomTom traffic and Google-backed
+layers are excluded. The browser caps the response at 16 KiB and waits up to
+10 seconds.
+
+The browser requests counts when entering the nothing-on view. Another entry
+can refresh them after a 30-minute cooldown, or after the wait named by a
+valid `Retry-After` on a 429 response. Closing the Inspector cancels a pending
+request and restores its previous cooldown. A timeout keeps the cooldown.
+
+A complete cache response updates the worldwide counts. If a layer reports a
+count without an observation time, the Inspector keeps its previous dated count
+for that layer when one exists. Layers omitted from the response show no worldwide
+count. Area counts and wider catalogues
+such as satellites with Starlink are excluded.
+The age of a cached count uses the server clock. The CelesTrak TLE caches and
+the saved FIRMS count survive a restart. The other counts are in memory.
 
 ## Wikidata cities pack — November 15, 2026
 
@@ -1151,8 +1106,8 @@ active filters and clear them, and "No layers match" says when nothing is
 left. The application passes its Finder store's filter to the layer list.
 A standalone layer panel keeps its own filter through remounts. Neither
 the search nor the filter is saved or put in share links. A
-voice request that points at a hidden layer clears the finder first
-(`gev:layer-finder-clear`).
+voice request that points at a hidden layer clears its list's Finder before
+scrolling the row into view.
 
 A column of ticks down the list's inline end
 (`src/ui/views/panels/LayerSectionIndex.vue`) has one tick per group still
@@ -9051,6 +9006,11 @@ Programmatic boxes passed to the exported `setBox` and `searchHls` operations
 reject missing, blank or boolean edges instead of interpreting them as zero
 coordinates. Valid finite numeric edges remain accepted; the app’s drag tool,
 pins and share links already supply complete boxes.
+
+The Inspector shows a Sentinel-2 or Landsat date when a loaded footprint
+covers the view center. A positive VIIRS thumbnail reports imagery in the
+chosen area, or its matching half at the date line. The tile marks coverage
+at the view center as unknown.
 
 - The layer sits in the Data Layers panel's Cameras group beside Cameras (CCTV); Mapped ALPR Cameras moved to the Infrastructure group to make room.
 - DATA ▸ **Recent Imagery** (`recent-imagery`, `src/layers/recentImagery/`) lists the last 30 UTC days of imagery for a selected box and drapes the days you pick: HLS S30 (Sentinel-2) and L30 (Landsat 8/9) at 30 m, and the VIIRS NOAA-21 daily overview at 250 m. Keyless and browser-direct: NASA CMR for which days have HLS granules in the box (`catalog.js`, both collections concurrently, paged with `CMR-Search-After` up to 2,000 records each, `truncated` against CMR `hits`), GIBS WMTS for tiles, Worldview Snapshots for thumbnails and exports. CMR gets a box across the dateline as one bounding box with west > east and reads it as the short box. Worldview's `Data-Present` header is the only availability signal: GIBS answers an empty tile with HTTP 200, and the JPEG overview would drape black, so a day confirmed empty never drapes.

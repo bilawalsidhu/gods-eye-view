@@ -1,24 +1,30 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
-import { createJsonRequest, requireOk } from './jsonRequest.js';
-import {
-  createLayerCountService,
-  LAYER_COUNTS_ENDPOINT,
-} from './layerCountService.js';
+import { readResponseJsonCapped } from '../sources/httpBody.js';
+
+const LAYER_COUNTS_MAX_BYTES = 16 * 1024;
+
+function requireOk(response, label) {
+  if (!response.ok)
+    throw new Error(`${label} unavailable (${response.status})`);
+  return response.data;
+}
 
 /** Parse bounded retry information from a service response. */
-function retryAfterMs(value) {
+function retryAfterMs(value, now = Date.now()) {
   if (value == null || String(value).trim() === '') return null;
   const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.ceil(seconds * 1000);
+  if (Number.isFinite(seconds)) {
+    const ms = Math.ceil(seconds * 1000);
+    return seconds >= 0 && Number.isFinite(ms) ? ms : null;
+  }
   const at = Date.parse(String(value));
-  return Number.isFinite(at) ? Math.max(0, at - Date.now()) : null;
+  return Number.isFinite(at) ? Math.max(0, at - now) : null;
 }
 
 /** Construct independent request services for compatible application protocols. */
 export function createApplicationRequestServices({
-  fetchImpl,
+  fetchImpl = (...args) => fetch(...args),
   signal: lifetime,
   endpoints = {},
   features,
@@ -29,11 +35,38 @@ export function createApplicationRequestServices({
     terrain: '/api/terrain/heights',
     regional: '/api/regional-brief',
     weather: '/api/weather-effects',
-    layerCounts: LAYER_COUNTS_ENDPOINT,
+    layerCounts: '/api/layer-counts',
     summary: '/api/openai/hud-summary',
     ...endpoints,
   };
-  const request = createJsonRequest({ fetchImpl, signal: lifetime });
+  async function request(endpoint, { signal, maxJsonBytes, ...init } = {}) {
+    signal = AbortSignal.any([lifetime, signal].filter(Boolean));
+    signal.throwIfAborted();
+    const response = await fetchImpl(endpoint, {
+      ...init,
+      signal,
+      redirect: 'error',
+    });
+    signal.throwIfAborted();
+    let data = null;
+    try {
+      if (maxJsonBytes === undefined) data = await response.json();
+      else if (response.ok)
+        data = await readResponseJsonCapped(response, maxJsonBytes, signal);
+      else void response.body?.cancel().catch(() => {});
+    } catch (error) {
+      if (maxJsonBytes !== undefined && error?.code === 'RESPONSE_TOO_LARGE')
+        throw error;
+      // A non-JSON reply still carries its HTTP status.
+    }
+    signal.throwIfAborted();
+    return {
+      ok: response.ok,
+      status: response.status,
+      headers: response.headers,
+      data,
+    };
+  }
   function pointUrl(endpoint, latitude, longitude) {
     if (
       !Number.isFinite(latitude) ||
@@ -88,7 +121,6 @@ export function createApplicationRequestServices({
         .finally(() => signal.removeEventListener('abort', abort));
     });
   }
-  let layerCounts;
   const services = {
     boundaries: {
       async query(query, { signal } = {}) {
@@ -162,19 +194,37 @@ export function createApplicationRequestServices({
       },
     },
     weather: {
-      async getConditions(latitude, longitude, options) {
+      async getConditions(
+        latitude,
+        longitude,
+        { exactPoint = false, ...options } = {},
+      ) {
+        const url = pointUrl(urls.weather, latitude, longitude);
         return requireOk(
-          await request(pointUrl(urls.weather, latitude, longitude), options),
+          await request(exactPoint ? url + '&exactPoint=1' : url, options),
           'Weather',
         );
       },
     },
-    // Scene-only consumers never allocate a second Inspector adapter.
-    get layerCounts() {
-      return (layerCounts ??= createLayerCountService(
-        request,
-        urls.layerCounts,
-      ));
+    layerCounts: {
+      async getCounts(options) {
+        const response = await request(urls.layerCounts, {
+          ...options,
+          headers: { Accept: 'application/json' },
+          maxJsonBytes: LAYER_COUNTS_MAX_BYTES,
+        });
+        if (response.status === 429) {
+          const serverNow = Date.parse(response.headers?.get?.('Date'));
+          const delay = retryAfterMs(
+            response.headers?.get?.('Retry-After'),
+            Number.isFinite(serverNow) ? serverNow : Date.now(),
+          );
+          const error = new Error('Layer counts unavailable (429)');
+          error.retryAfterMs = delay;
+          throw error;
+        }
+        return requireOk(response, 'Layer counts');
+      },
     },
     summary: {
       // The capability probe, asked once per page: true or false from a

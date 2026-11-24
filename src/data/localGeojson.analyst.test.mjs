@@ -3,7 +3,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
-import { nearbyByLayer } from './entityContext.js';
+import {
+  getContextStore,
+  getSelectedEntityContext,
+  selectEntityContext,
+} from './contextStore.js';
+import {
+  describeEntity,
+  findRecord,
+  layerMatches,
+  nearbyForLayer,
+  viewSummaryForLayer,
+} from './entityContext.js';
 import {
   createLocalGeoJsonLayer as createLayer,
   mapAnalystRecord,
@@ -305,11 +316,11 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
         ],
       },
     },
-    // Crest lines alone: listed at the middle vertex of the longest part.
+    // Crest lines use the middle vertex of the part with the most vertices.
     {
       type: 'Feature',
       id: 'split-crest',
-      properties: { name: 'Split Crest Dam' },
+      properties: { name: 'Split Crest Dam', operator: 'Crest operator' },
       geometry: {
         type: 'MultiLineString',
         coordinates: [
@@ -324,6 +335,34 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
           ],
         ],
       },
+    },
+    {
+      type: 'Feature',
+      id: 'polar-crest',
+      properties: { name: 'Polar Crest' },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [48.5, 89.76],
+          [48.5, 89.84],
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      id: 'polar-pin',
+      properties: { name: 'Polar Pin' },
+      geometry: { type: 'Point', coordinates: [0, 89.4742703] },
+    },
+    {
+      type: 'Feature',
+      id: 'visitor-centre',
+      properties: {
+        name: 'Split Crest Dam',
+        operator: 'Visitor centre operator',
+        website: 'https://example.org/visitor-centre',
+      },
+      geometry: { type: 'Point', coordinates: [10, 10] },
     },
   ];
   globalThis.fetch = async () => ({
@@ -352,11 +391,161 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     const rows = layer.getAnalystRecords();
     const plants = rows.filter((row) => row.name === 'Two Crest Plant');
     assert.equal(plants.length, 1, 'the outlined dam is listed once');
-    const crests = rows.filter((row) => row.name === 'Split Crest Dam');
-    assert.equal(crests.length, 1, 'the split crest is listed once');
-    assert.equal(crests[0].lat, 30.302);
-    assert.equal(crests[0].lon, -97.81);
-    assert.equal(rows.length, 2);
+    const crest = rows.find((row) => row.key === 'geojson:id:split-crest');
+    assert.equal(crest.lat, 30.302);
+    assert.equal(crest.lon, -97.81);
+    assert.equal(rows.length, 5, 'the split crest is listed once');
+    const row = { id: 'local-dams', enabled: true, module: layer };
+    const manager = { layers: new Map([[row.id, row]]) };
+    for (const [lon, lat, name] of [
+      [14.2915, 46.169, 'Two Crest Plant'],
+      [-97.905, 30.39, 'Split Crest Dam'],
+    ]) {
+      const center = { lat, lon };
+      const rect = {
+        west: lon - 0.0001,
+        east: lon + 0.0001,
+        south: lat - 0.0001,
+        north: lat + 0.0001,
+      };
+      const found = layerMatches(manager, row.id, { rect, center });
+      assert.deepEqual(
+        found.items.map((item) => item.title),
+        [name],
+      );
+      assert.deepEqual(
+        viewSummaryForLayer(manager, row, rect, center)?.items.map(
+          (item) => item.title,
+        ),
+        [name],
+      );
+      const card = describeEntity(manager, found.items[0].identity);
+      assert.ok(Math.abs(card.lon - lon) < 0.0001);
+      assert.equal(describeEntity(manager, card.identity).lon, card.lon);
+    }
+    const center = { lat: 30.56, lon: -97.905 };
+    const nearby = nearbyForLayer(manager, row, center, { radiusKm: 25 });
+    assert.equal(nearby.count, 1);
+    assert.equal(nearby.items[0].title, 'Split Crest Dam');
+    const card = describeEntity(manager, nearby.items[0].identity);
+    assert.ok(Math.abs(card.lat - 30.39) < 0.0001);
+    assert.ok(Math.abs(card.lon - center.lon) < 0.0001);
+    assert.equal(describeEntity(manager, card.identity).lat, card.lat);
+    // The crest crosses the 25 km radius even though both vertices lie outside.
+    const polarCenter = { lat: 89.7, lon: 0 };
+    const polar = nearbyForLayer(manager, row, polarCenter, { radiusKm: 25 });
+    assert.equal(polar.count, 1);
+    const [polarCrest] = polar.items;
+    assert.equal(polarCrest.title, 'Polar Crest');
+    assert.ok(polarCrest.distanceKm < 25);
+    const polarCard = describeEntity(manager, polarCrest.identity);
+    assert.ok(polarCard.lat > 89.76 && polarCard.lat < 89.84);
+    assert.equal(polarCard.lon, 48.5);
+    assert.equal(
+      describeEntity(manager, polarCard.identity).lat,
+      polarCard.lat,
+    );
+
+    // The pin is 25.1 km away, between the true line minimum and its end.
+    const polarRect = { west: -1, east: 49, south: 89.4, north: 89.9 };
+    const visible = [
+      nearbyForLayer(manager, row, polarCenter, { radiusKm: 26, limit: 1 }),
+      layerMatches(manager, row.id, {
+        center: polarCenter,
+        rect: polarRect,
+        limit: 1,
+      }),
+      viewSummaryForLayer(manager, row, polarRect, polarCenter, {
+        perLayer: 1,
+      }),
+      viewSummaryForLayer(manager, row, null, polarCenter, {
+        hemisphere: true,
+        perLayer: 1,
+      }),
+    ];
+    assert.deepEqual(
+      visible.map(({ items }) => items[0].title),
+      Array(4).fill('Polar Crest'),
+    );
+    for (const {
+      items: [item],
+    } of visible) {
+      const opened = describeEntity(manager, item.identity);
+      assert.ok(Math.abs(opened.lat - 89.801213) < 0.00001);
+      assert.equal(describeEntity(manager, opened.identity).lat, opened.lat);
+    }
+    const northEdge = 89.79;
+    const clipped = viewSummaryForLayer(
+      manager,
+      row,
+      { ...polarRect, south: 89.69, north: northEdge },
+      polarCenter,
+    ).items[0];
+    assert.equal(clipped.title, 'Polar Crest');
+    assert.equal(
+      clipped.identity.lat,
+      northEdge,
+      'nearest point is on the viewport edge',
+    );
+    const globeHeight = 20_000_000;
+    const horizonAngle =
+      (Math.acos(6371 / (6371 + globeHeight / 1000)) * 180) / Math.PI;
+    const atLimb = viewSummaryForLayer(manager, row, null, polarCenter, {
+      hemisphere: true,
+      heightM: globeHeight,
+      eye: { lat: northEdge - horizonAngle, lon: 48.5 },
+      query: 'Polar Crest',
+    }).items[0];
+    assert.ok(
+      atLimb.identity.lat > northEdge - 0.00001 &&
+        atLimb.identity.lat < northEdge,
+    );
+
+    const websiteOf = (item) =>
+      item.links.find(({ kind }) => kind === 'website')?.href;
+    assert.equal(card.operator, 'Crest operator');
+    assert.equal(websiteOf(card), undefined, 'a namesake supplies no link');
+
+    const point = describeEntity(manager, {
+      layerId: row.id,
+      id: 'local-dams:visitor-centre',
+    });
+    assert.equal(point.operator, 'Visitor centre operator');
+    assert.equal(websiteOf(point), 'https://example.org/visitor-centre');
+    assert.equal(
+      websiteOf(describeEntity(manager, point.identity)),
+      websiteOf(point),
+    );
+
+    const withCrestWebsite = features.map((feature) =>
+      feature.id === 'split-crest'
+        ? {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              website: 'https://example.org/crest',
+            },
+          }
+        : feature,
+    );
+    await layer.replaceFeatures(viewer, withCrestWebsite);
+    const refreshed = describeEntity(manager, card.identity);
+    assert.equal(refreshed.operator, 'Crest operator');
+    assert.equal(websiteOf(refreshed), 'https://example.org/crest');
+
+    await layer.replaceFeatures(
+      viewer,
+      features.filter(({ id }) => id !== 'split-crest'),
+    );
+    const missing = describeEntity(manager, {
+      ...card.identity,
+      id: `${row.id}:${card.identity.id}`,
+    });
+    assert.equal(
+      websiteOf(missing),
+      undefined,
+      'a missing crest cannot borrow the pin link',
+    );
   } finally {
     layer.destroy(viewer);
     globalThis.fetch = originalFetch;
@@ -364,6 +553,74 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   }
+});
+
+test('infra records distinguish numeric and string IDs across draws and refreshes', async (t) => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { dispatchEvent() {} };
+  const [north, south, literal] = [
+    [7, 'North', [1, 2]],
+    ['7', 'South', [3, 4]],
+    ['geojson:number:7', 'Literal identifier', [5, 6]],
+  ].map(([id, name, coordinates]) => ({
+    type: 'Feature',
+    id,
+    properties: { name },
+    geometry: { type: 'Point', coordinates },
+  }));
+  const viewer = {};
+  const fake = bindFakeGroundRenderer(viewer, {
+    eye: { lon: 2, lat: 3, height: 100_000 },
+  });
+  const layer = createLocalGeoJsonLayer({
+    id: 'local-dams',
+    name: 'Typed sites',
+    loadFeatures: async () => [north, south, literal],
+    color: '#0088ff',
+    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
+    inputFor: () => ({ onClick: () => () => {} }),
+  });
+  t.after(() => {
+    layer.destroy(viewer);
+    fake.unbind();
+    if (originalWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalWindow;
+  });
+
+  await layer.enable(viewer);
+  assert.equal(layer.getStats().count, 3);
+  assert.equal(layer.getAnalystRecords().length, 3);
+  const row = { id: 'local-dams', enabled: true, module: layer };
+  const manager = { layers: new Map([[row.id, row]]) };
+  const picks = ['7', '7_2', literal.id].map((id) =>
+    describeEntity(manager, { layerId: row.id, id: `${row.id}:${id}` }),
+  );
+  assert.deepEqual(
+    picks.map(({ title }) => title),
+    ['North', 'South', 'Literal identifier'],
+  );
+  assert.equal(new Set(picks.map(({ key }) => key)).size, 3);
+  assert.deepEqual(
+    picks.map(({ identity }) => findRecord(manager, identity)?.name),
+    ['North', 'South', 'Literal identifier'],
+  );
+
+  const southPick = picks[1];
+  selectEntityContext(getContextStore().entities.get('local-dams:7_2').entity);
+  const secondNorth = {
+    ...north,
+    geometry: { type: 'Point', coordinates: [1.025, 2] },
+  };
+  await layer.replaceFeatures(viewer, [south, north, literal, secondNorth]);
+  assert.equal(getSelectedEntityContext()?.label, 'South');
+  assert.equal(layer.getStats().count, 3);
+  assert.equal(findRecord(manager, picks[0].identity).parts.length, 2);
+  assert.equal(findRecord(manager, southPick.identity).name, 'South');
+
+  await layer.replaceFeatures(viewer, [north, literal, secondNorth]);
+  assert.equal(getSelectedEntityContext(), null);
+  assert.equal(findRecord(manager, southPick.identity), null);
+  assert.equal(findRecord(manager, picks[0].identity).name, 'North');
 });
 
 test('infra records list and count multi-part features across the dateline once', async () => {
@@ -386,7 +643,7 @@ test('infra records list and count multi-part features across the dateline once'
       properties: { name: 'Split Campus' },
       geometry: {
         type: 'MultiPolygon',
-        coordinates: [square(179.7, 30.3), square(-179.99, 30.3)],
+        coordinates: [square(179.7, 30.3), square(179.75, 30.3)],
       },
     },
     {
@@ -402,10 +659,33 @@ test('infra records list and count multi-part features across the dateline once'
     },
     {
       type: 'Feature',
+      id: 'campus',
+      properties: { name: 'Split Campus' },
+      geometry: { type: 'Polygon', coordinates: square(-179.99, 30.3) },
+    },
+    {
+      type: 'Feature',
       id: 'single',
       properties: { name: 'Single Hall' },
       geometry: { type: 'Polygon', coordinates: square(179.7, 30.4) },
     },
+    {
+      type: 'Feature',
+      // This source ID also names the second rendered part of campus.
+      id: 'campus_2',
+      properties: { name: 'Single Hall' },
+      geometry: { type: 'Point', coordinates: [179.72, 30.39] },
+    },
+    ...[
+      { properties: { operator: 'First operator' } },
+      { properties: { operator: 'Second operator' } },
+      { id: 42, properties: { operator: 'Source ID operator' } },
+      { properties: { osm_id: 42, operator: 'OSM operator' } },
+    ].map((feature) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [8, 47] },
+      ...feature,
+    })),
   ];
   globalThis.fetch = async () => ({
     ok: true,
@@ -432,19 +712,27 @@ test('infra records list and count multi-part features across the dateline once'
     await layer.enable(viewer);
     const rows = layer.getAnalystRecords();
     assert.deepEqual(
-      rows.map((row) => row.name).sort(),
-      ['Single Hall', 'Split Campus', 'Twin Pins'],
+      rows
+        .filter((row) => row.lon !== 8)
+        .map((row) => row.name)
+        .sort(),
+      ['Single Hall', 'Single Hall', 'Split Campus', 'Twin Pins'],
       'one row per feature, not per part',
     );
-    assert.equal(layer.getStats().count, 3, 'counted per feature');
+    assert.equal(layer.getStats().count, 8, 'counted per feature');
     const campus = rows.find((row) => row.name === 'Split Campus');
-    assert.equal(campus.parts.length, 2, 'each part keeps its point');
+    assert.equal(campus.parts.length, 3, 'each part keeps its point');
+    assert.deepEqual(
+      layer.getAnalystRecords(1),
+      [campus],
+      'the cap keeps one feature and all its parts, including the later row',
+    );
     assert.equal(rows.find((row) => row.name === 'Twin Pins').parts.length, 2);
     assert.equal(
       rows.find((row) => row.name === 'Single Hall').parts,
       undefined,
     );
-    // The first campus part is outside the radius. Its other part is just
+    // The first campus parts are outside the radius. Its third part is just
     // across the dateline, so Nearby must list the campus at that part.
     const row = {
       id: 'local-datacenters',
@@ -453,16 +741,126 @@ test('infra records list and count multi-part features across the dateline once'
       module: layer,
     };
     const dm = { getAll: () => [row], layers: new Map([[row.id, row]]) };
+    const coincident = nearbyForLayer(
+      dm,
+      row,
+      { lat: 47, lon: 8 },
+      { radiusKm: 5, limit: 4 },
+    );
+    assert.equal(coincident.count, 4);
+    const opened = coincident.items.map(({ identity }) =>
+      describeEntity(dm, identity),
+    );
+    assert.deepEqual(
+      opened.map(({ identity }) => findRecord(dm, identity)?.operator),
+      coincident.items.map(({ identity }) => identity.record.operator),
+      'rereading each selected card keeps its source operator',
+    );
+    assert.equal(new Set(opened.map(({ key }) => key)).size, 4);
+
+    const twin = rows.find(({ name }) => name === 'Twin Pins');
+    const twinPick = describeEntity(dm, {
+      layerId: row.id,
+      // Twin Pins follows the campus's two rendered parts in this fixture.
+      id: 'local-datacenters:local-part:3',
+      ...twin.parts[1],
+    });
+    assert.equal(twinPick.identity.id, twin.key);
+    assert.equal(describeEntity(dm, twinPick.identity).lon, twin.parts[1].lon);
+
     const center = { lat: 30.305, lon: 179.995 };
-    const [nearby] = nearbyByLayer(dm, center, { radiusKm: 5 });
+    const nearby = nearbyForLayer(dm, row, center, { radiusKm: 5 });
     assert.equal(nearby?.count, 1);
     assert.equal(nearby.items[0].title, 'Split Campus');
-    assert.equal(nearby.items[0].identity.lon, campus.parts[1].lon);
-    const [wider] = nearbyByLayer(dm, center, { radiusKm: 40 });
+    assert.equal(nearby.items[0].identity.lon, campus.parts[2].lon);
+    const wider = nearbyForLayer(dm, row, center, { radiusKm: 40, limit: 4 });
     assert.equal(
       wider.count,
-      3,
+      4,
       'still one row per feature when both parts qualify',
+    );
+    const halls = wider.items.filter((item) => item.title === 'Single Hall');
+    assert.equal(halls.length, 2);
+    assert.notEqual(halls[0].key, halls[1].key);
+    const mapPick = describeEntity(dm, {
+      layerId: row.id,
+      id: 'local-datacenters:campus_2',
+      ...campus.parts[1],
+    });
+    assert.equal(mapPick.key, nearby.items[0].key);
+    assert.equal(mapPick.lon, campus.parts[1].lon);
+    assert.equal(describeEntity(dm, mapPick.identity).lon, mapPick.lon);
+    const hallPick = describeEntity(dm, {
+      layerId: row.id,
+      id: 'local-datacenters:campus_2_2',
+    });
+    assert.equal(hallPick.lon, 179.72);
+    for (const hall of halls) {
+      const card = describeEntity(dm, hall.identity);
+      assert.equal(card.key, hall.key);
+      const fresh = findRecord(dm, { layerId: row.id, id: card.identity.id });
+      assert.deepEqual([fresh.lat, fresh.lon], [card.lat, card.lon]);
+    }
+
+    const inserted = {
+      type: 'Feature',
+      properties: { name: 'Newer site' },
+      geometry: { type: 'Point', coordinates: [7, 48] },
+    };
+    // New datasets contain fresh feature objects, and may arrive sorted
+    // differently when a new feature enters the feed.
+    const reordered = [inserted, ...structuredClone(features).reverse()];
+    const pins = reordered.find(
+      ({ properties }) => properties.name === 'Twin Pins',
+    );
+    pins.properties.__gevRank = 200;
+    await layer.replaceFeatures(viewer, reordered);
+    assert.deepEqual(
+      opened.map(({ identity }) => findRecord(dm, identity)?.operator),
+      opened.map(({ operator }) => operator),
+      'already-selected records retain their operators through insertion and reorder',
+    );
+    assert.equal(describeEntity(dm, twinPick.identity).key, twinPick.key);
+    assert.equal(describeEntity(dm, twinPick.identity).lon, twinPick.lon);
+
+    const retained = reordered.filter(
+      ({ properties }) =>
+        !['Second operator', 'OSM operator'].includes(properties.operator),
+    );
+    await layer.replaceFeatures(viewer, retained);
+    const first = opened.find(({ operator }) => operator === 'First operator');
+    const second = opened.find(
+      ({ operator }) => operator === 'Second operator',
+    );
+    assert.equal(findRecord(dm, first.identity)?.operator, first.operator);
+    assert.equal(
+      findRecord(dm, second.identity),
+      null,
+      'a removed feature cannot retarget',
+    );
+
+    const newTwin = {
+      type: 'Feature',
+      properties: { name: 'Twin Pins', operator: 'Another operator' },
+      geometry: { type: 'Point', coordinates: pins.geometry.coordinates[0] },
+    };
+    await layer.replaceFeatures(viewer, [newTwin, ...retained]);
+    assert.equal(describeEntity(dm, twinPick.identity).lon, twinPick.lon);
+    const newTwinRecord = layer
+      .getAnalystRecords()
+      .find(({ operator }) => operator === 'Another operator');
+    assert.notEqual(newTwinRecord.key, twinPick.identity.id);
+    assert.ok(!newTwinRecord.key.includes('Another operator'));
+
+    await layer.replaceFeatures(viewer, [
+      newTwin,
+      ...retained.filter((feature) => feature !== pins),
+    ]);
+    assert.equal(findRecord(dm, twinPick.identity), null);
+    assert.equal(
+      findRecord(dm, { layerId: row.id, id: newTwinRecord.key })?.operator,
+      'Another operator',
+      'a surviving twin cannot inherit the old singleton key',
     );
   } finally {
     layer.destroy(viewer);

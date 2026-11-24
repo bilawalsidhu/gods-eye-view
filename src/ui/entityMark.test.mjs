@@ -7,13 +7,7 @@ import assert from 'node:assert/strict';
 import { installVueDom } from '../testSupport/vueDom.mjs';
 import { aircraftIcon } from '../data/aircraftIcons.js';
 import { aidSprite, vesselSprite } from '../data/vesselSprites.js';
-import {
-  AID_MARK,
-  markKind,
-  markSprite,
-  markStyle,
-  spriteKind,
-} from './entityMark.js';
+import { AID_MARK, markKind, markSprite } from './entityMark.js';
 
 let mount;
 let EntityMark;
@@ -62,8 +56,8 @@ test('an airliner, a helicopter, a vessel type and a ground vehicle each get the
   assert.equal(new Set(Object.values(sprites)).size, 4, 'four sprites');
   assert.equal(markSprite('ais-live-vessels', AID_MARK), aidSprite());
   // What the map draws for a kind it does not know.
-  assert.equal(spriteKind('flights', 'tr3b'), 'airliner');
-  assert.equal(spriteKind('ais-live-vessels', ''), 'other');
+  assert.equal(markSprite('flights', 'tr3b'), aircraftIcon('airliner'));
+  assert.equal(markSprite('ais-live-vessels', ''), vesselSprite('other'));
 });
 
 test('each sprite mounts as its own mask', () => {
@@ -73,21 +67,21 @@ test('each sprite mounts as its own mask', () => {
     ['ais-live-vessels', 'passenger'],
     ['local-adsb', 'vehicle'],
   ].map(([layer, kind]) => {
-    const wrapper = mount(EntityMark, { props: { layer, kind } });
+    const wrapper = mount(EntityMark, {
+      props: { layer, kind, icon: 'place' },
+    });
     const mark = wrapper.get('.entity-mark');
     assert.equal(mark.attributes('aria-hidden'), 'true');
-    assert.equal(mark.attributes('data-mark'), kind);
     assert.equal(mark.text(), '', 'no glyph text');
+    assert.ok(mark.classes().includes('entity-mark--sprite'));
     assert.ok(!mark.classes().includes('material-symbols-outlined'));
-    const style = mark.attributes('style') || '';
-    assert.match(style, /background-color:\s*currentcolor/i);
-    assert.match(style, /width:\s*1em;\s*height:\s*1em/);
-    const uri = /mask-image:\s*url\("?([^")]+)/.exec(style)?.[1] || '';
+    const mask = mark.element.style.getPropertyValue('--mark');
+    assert.equal(mask, `url("${markSprite(layer, kind)}")`);
+    assert.equal(mark.element.style.fontSize, '', 'sized by its row');
     wrapper.unmount();
-    return uri;
+    return mask;
   });
   assert.equal(new Set(uris).size, 4);
-  assert.ok(uris.every((uri) => uri.startsWith('data:image/svg+xml;')));
 });
 
 test('a fire, a place and a camera keep their layer glyph', () => {
@@ -97,7 +91,7 @@ test('a fire, a place and a camera keep their layer glyph', () => {
     ['cctv', 'videocam'],
   ]) {
     assert.equal(markSprite(layer, 'airliner'), '', layer);
-    const wrapper = mount(EntityMark, { props: { layer } });
+    const wrapper = mount(EntityMark, { props: { layer, icon: glyph } });
     const icon = wrapper.get('.entity-mark');
     assert.ok(icon.classes().includes('ui-icon'), layer);
     assert.ok(icon.classes().includes('entity-mark--glyph'), layer);
@@ -106,7 +100,7 @@ test('a fire, a place and a camera keep their layer glyph', () => {
     assert.equal(icon.attributes('style'), undefined, 'sized by its row');
     wrapper.unmount();
   }
-  // A card's own glyph wins over its layer's.
+  // A card can supply its own glyph and size.
   const wrapper = mount(EntityMark, {
     props: { layer: 'cctv', icon: 'streetview', size: 14 },
   });
@@ -115,21 +109,15 @@ test('a fire, a place and a camera keep their layer glyph', () => {
   wrapper.unmount();
 });
 
-test('the mask is drawn in currentColor, one em square', () => {
-  const uri = markSprite('flights', 'glider');
-  const style = markStyle(uri);
-  assert.equal(style.backgroundColor, 'currentColor');
-  assert.equal(style.width, '1em');
-  assert.equal(style.height, '1em');
-  assert.equal(style.fontSize, undefined, 'the font size around it');
-  for (const prefix of ['mask', 'WebkitMask']) {
-    assert.equal(style[`${prefix}Image`], `url("${uri}")`);
-    assert.equal(style[`${prefix}Size`], 'contain');
-    assert.equal(style[`${prefix}Repeat`], 'no-repeat');
-    assert.equal(style[`${prefix}Position`], 'center');
-  }
-  assert.equal(markStyle(uri, 16).fontSize, '16px');
-  // No colour of its own: it is tinted with the text around it.
-  const { maskImage, WebkitMaskImage, ...rest } = style;
-  assert.doesNotMatch(JSON.stringify(rest), /#[0-9a-f]{3,8}\b|rgb|hsl/i);
+test('a sprite can override the size inherited from its row', () => {
+  const wrapper = mount(EntityMark, {
+    props: { layer: 'flights', kind: 'glider', icon: 'flight', size: 16 },
+  });
+  const mark = wrapper.get('.entity-mark');
+  assert.equal(mark.element.style.fontSize, '16px');
+  assert.equal(
+    mark.element.style.getPropertyValue('--mark'),
+    `url("${aircraftIcon('glider')}")`,
+  );
+  wrapper.unmount();
 });

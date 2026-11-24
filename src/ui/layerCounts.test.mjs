@@ -4,9 +4,15 @@ import { createPinia } from 'pinia';
 import {
   configureApplicationServices,
   getConfiguredLayerCounts,
+  getLayerCountsServiceBinding,
+  LAYER_COUNTS_TIMEOUT_MS,
 } from '../services/application.js';
-import { LAYER_COUNTS_TIMEOUT_MS } from '../services/layerCountService.js';
-import { createLayerCounts, LAYER_COUNTS_REFETCH_MS } from './layerCounts.js';
+import { createApplicationRequestServices } from '../services/requests.js';
+import {
+  countAgeMs,
+  createLayerCounts,
+  LAYER_COUNTS_REFETCH_MS,
+} from './layerCounts.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 
 const hidden = { shown: false, nothingOn: true };
@@ -19,13 +25,14 @@ const satellites = (count, at) => ({
 function harness() {
   const store = useLayerCountsStore(createPinia());
   const live = { shown: false, at: 0 };
-  function owner(getCounts) {
+  function owner(getCounts, sourceOptions = {}) {
     return createLayerCounts({
       getCounts,
       readState: () => store.state,
       writeState: store.publish,
       readShown: () => live.shown,
       now: () => live.at,
+      ...sourceOptions,
     });
   }
   return { store, live, owner };
@@ -70,12 +77,14 @@ test('one request per eligible entry, with a half-hour cooldown across owners on
   });
 });
 
-test('counts keep their source and timestamp; only allowed cached and nominal worldwide totals get tiles', async () => {
+test('only positive counts for the allowed layers are retained with their timestamps', async () => {
   const { store, live, owner } = harness();
   const body = {
     counts: [
       { layerId: 'traffic', count: 50, at: 10 },
       { layerId: 'flights', count: 8700, at: 10 },
+      { layerId: 'flights', count: 8500, at: 9 },
+      { layerId: 'flights', count: 8600 },
       { layerId: 'satellites', count: 1272, at: 10 },
       { layerId: 'ais-live-vessels', count: 9, at: null },
       { layerId: 'cctv', count: 0, at: 10 },
@@ -85,68 +94,233 @@ test('counts keep their source and timestamp; only allowed cached and nominal wo
   live.shown = true;
   await counts.update(empty);
   assert.deepEqual(store.state.counts, {
-    flights: { count: 8700, at: 10, live: false },
-    satellites: { count: 1272, at: 10, live: false },
-    'ais-live-vessels': { count: 9, at: null, live: false },
+    flights: { count: 8700, at: 10 },
+    satellites: { count: 1272, at: 10 },
+    'ais-live-vessels': { count: 9, at: null },
   });
-  const nominal = { id: 'flights', tone: 'nominal' };
-  const prior = store.state;
+});
+
+test('the returned server clock calibrates the displayed age without changing the observation timestamp', async () => {
+  const { store, live, owner } = harness();
+  const fromServer = 6 * 60 * 60_000;
+  const observation = fromServer - 60_000;
+  const counts = owner(() => ({
+    ...satellites(1272, observation),
+    now: fromServer,
+  }));
+  live.shown = true;
+  live.at = fromServer - 2 * 60 * 60_000;
+  await counts.update(empty);
+  const row = store.state.counts.satellites;
+  assert.equal(row.count, 1272);
+  assert.equal(row.at, observation);
+  assert.equal(countAgeMs(row, live.at), 60_000);
+  assert.equal(countAgeMs(row, live.at + 120_000), 180_000);
+  assert.equal(countAgeMs({ at: live.at - 5000 }, live.at), 5000);
+  assert.equal(countAgeMs({ at: null }, live.at), null);
+
+  // A later response with the same row can carry a different clock offset.
+  live.at = fromServer + 2 * 60 * 60_000;
   counts.update(layersOn);
-  counts.note([
-    { ...nominal, worldTotal: 9000, updatedAt: null },
-    { ...nominal, worldTotal: 9000, updatedAt: 9 },
-    { ...nominal, worldTotal: null, updatedAt: 30 },
-    { ...nominal, tone: 'loading', worldTotal: 9000, updatedAt: 30 },
-    { ...nominal, id: 'traffic', worldTotal: 9000, updatedAt: 30 },
-  ]);
-  assert.equal(store.state, prior);
-  counts.note([{ ...nominal, worldTotal: 9100, updatedAt: 30 }]);
-  assert.deepEqual(store.state.counts.flights, {
-    count: 9100,
-    at: 30,
-    live: true,
+  await counts.update(empty);
+  const recalibrated = store.state.counts.satellites;
+  assert.equal(recalibrated.at, observation);
+  assert.equal(countAgeMs(recalibrated, live.at), 60_000);
+});
+
+test('a throttled count retries on an eligible entry after Retry-After, including after an aborted retry', async () => {
+  const { store, live, owner } = harness();
+  const waiting = Promise.withResolvers();
+  const replies = [
+    () => Response.json(satellites(1272, 1)),
+    () =>
+      new Response('rate limited', {
+        status: 429,
+        headers: { 'Retry-After': '60' },
+      }),
+    ({ signal }) => {
+      waiting.resolve(signal);
+      return new Promise((_, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), {
+          once: true,
+        }),
+      );
+    },
+    () => Response.json(satellites(1300, 2)),
+  ];
+  let requests = 0;
+  const services = createApplicationRequestServices({
+    fetchImpl: async (_url, options) => replies[requests++](options),
   });
+  const counts = owner(services.layerCounts.getCounts);
+  live.shown = true;
+  await counts.update(empty);
+  const known = store.state.counts;
+  const enter = () => {
+    counts.update(layersOn);
+    return counts.update(empty);
+  };
+  live.at += LAYER_COUNTS_REFETCH_MS;
+  await enter();
+  assert.equal(store.state.counts, known);
+  live.at += 59_999;
+  await enter();
+  assert.equal(requests, 2);
+  live.at++;
+  counts.update(empty);
+  assert.equal(requests, 2, 'staying in the view does not poll');
+
+  const pending = enter();
+  const signal = await waiting.promise;
+  counts.update(hidden);
+  assert.equal(signal.aborted, true);
+  await pending;
+  await counts.update(empty);
+  assert.equal(requests, 4);
+  assert.equal(store.state.counts.satellites.count, 1300);
+});
+
+test('a late throttle from a replaced count adapter does not delay the next eligible entry', async (t) => {
+  const { store, live, owner } = harness();
+  const oldRequest = Promise.withResolvers();
+  const rateLimit = Object.assign(new Error('Layer counts unavailable (429)'), {
+    retryAfterMs: 9_000_000,
+  });
+  let firstCall = true;
+  t.after(
+    configureApplicationServices({
+      layerCounts: {
+        getCounts() {
+          if (!firstCall) return oldRequest.promise;
+          firstCall = false;
+          return Promise.reject(rateLimit);
+        },
+      },
+    }),
+  );
+  await assert.rejects(
+    getConfiguredLayerCounts(),
+    (error) => error === rateLimit,
+  );
+
+  const counts = owner(getConfiguredLayerCounts);
+  live.shown = true;
+  const pending = counts.update(empty);
+  let replacementCalls = 0;
+  t.after(
+    configureApplicationServices({
+      layerCounts: {
+        async getCounts() {
+          replacementCalls++;
+          return satellites(1300, 2);
+        },
+      },
+    }),
+  );
+  oldRequest.reject(rateLimit);
+  await pending;
 
   live.at += LAYER_COUNTS_REFETCH_MS;
-  body.counts = [
-    { layerId: 'flights', count: 9300, at: 30 },
-    { layerId: 'flights', count: 8700, at: 10 },
-    { layerId: 'flights', count: 8500 },
-  ];
-  const noted = store.state.counts;
+  counts.update(layersOn);
+  await counts.update(empty);
+  assert.equal(replacementCalls, 1);
+  assert.equal(store.state.counts.satellites.count, 1300);
+  assert.equal(store.state.retryAt, undefined);
+});
+
+test('a complete response withdraws omitted and zero counts', async () => {
+  const { store, live, owner } = harness();
+  let response = {
+    counts: [
+      { layerId: 'local-firms', count: 42, at: 1 },
+      { layerId: 'flights', count: 900, at: 1 },
+      { layerId: 'cctv', count: 5, at: 1 },
+    ],
+  };
+  const counts = owner(() => response);
+  live.shown = true;
+  await counts.update(empty);
+  assert.equal(store.state.counts['local-firms'].count, 42);
+
+  live.at += LAYER_COUNTS_REFETCH_MS;
+  response = {
+    counts: [
+      { layerId: 'flights', count: 950, at: 2 },
+      { layerId: 'cctv', count: 0, at: 2 },
+    ],
+  };
+  counts.update(layersOn);
+  await counts.update(empty);
+  assert.deepEqual(store.state.counts, {
+    flights: { count: 950, at: 2 },
+  });
+});
+
+test('a later satellite snapshot can have more IDs and an older contributing timestamp', async () => {
+  const { store, live, owner } = harness();
+  const hour = 60 * 60_000;
+  let response = satellites(2, 4 * hour);
+  const counts = owner(() => response);
+  live.shown = true;
+  live.at = 5 * hour;
+  await counts.update(empty);
+  assert.equal(store.state.counts.satellites.count, 2);
+
+  // Restoring an older CelesTrak group adds an ID and lowers the source timestamp.
+  response = satellites(3, 2 * hour);
+  live.at += LAYER_COUNTS_REFETCH_MS;
+  counts.update(layersOn);
+  await counts.update(empty);
+  assert.deepEqual(store.state.counts.satellites, {
+    count: 3,
+    at: 2 * hour,
+  });
+
+  const dated = store.state.counts;
+  response = satellites(4, null);
+  live.at += LAYER_COUNTS_REFETCH_MS;
+  counts.update(layersOn);
   await counts.update(empty);
   assert.equal(
     store.state.counts,
-    noted,
-    'cache results must be newer than an existing live count',
+    dated,
+    'an undated row does not replace a dated one',
   );
-  live.shown = false;
-  counts.note([{ ...nominal, worldTotal: 9200, updatedAt: 40 }]);
-  assert.equal(
-    store.state.counts,
-    noted,
-    'live visibility fences notes before the watcher',
-  );
+});
+
+test('a malformed response does not retire cached counts', async () => {
+  const { store, live, owner } = harness();
+  let response = satellites(1272, 1);
+  const counts = owner(() => response);
+  live.shown = true;
+  await counts.update(empty);
+  const before = store.state.counts;
+
+  response = { counts: [null] };
+  live.at += LAYER_COUNTS_REFETCH_MS;
+  counts.update(layersOn);
+  await counts.update(empty);
+  assert.equal(store.state.counts, before);
 });
 
 test('a failed request keeps the known counts and its cooldown', async () => {
   const { store, live, owner } = harness();
   let asks = 0;
   const counts = owner(async () => {
-    asks++;
+    if (++asks === 1) return satellites(900, 1);
     throw new TypeError('offline');
   });
   live.shown = true;
+  await counts.update(empty);
+  const saved = store.state.counts;
+  live.at += LAYER_COUNTS_REFETCH_MS;
   counts.update(layersOn);
-  counts.note([
-    { id: 'satellites', tone: 'nominal', worldTotal: 900, updatedAt: 1 },
-  ]);
   await counts.update(empty);
   counts.update(hidden);
   counts.update(empty);
-  assert.equal(asks, 1);
-  assert.equal(store.state.lastAttemptAt, 0);
-  assert.equal(store.state.counts.satellites.count, 900);
+  assert.equal(asks, 2);
+  assert.equal(store.state.lastAttemptAt, live.at);
+  assert.equal(store.state.counts, saved);
 });
 
 test('hide releases the old request immediately; a late answer cannot touch the replacement', async () => {
@@ -196,6 +370,114 @@ test('a completion that observes a coalesced hide admits one replacement on the 
   asks[1].resolve(satellites(1300, 50));
   await retry;
   assert.equal(store.state.counts.satellites.count, 1300);
+});
+
+test('a binding change aborts the old provider without blocking the new read', async (t) => {
+  const { store, live, owner } = harness();
+  const previous = Promise.withResolvers();
+  const sourceA = t.mock.fn(() => previous.promise);
+  const releaseA = configureApplicationServices({
+    layerCounts: { getCounts: sourceA },
+  });
+  t.after(releaseA);
+  const counts = owner(getConfiguredLayerCounts, {
+    readSourceBinding: getLayerCountsServiceBinding,
+    bindSource: store.bindSource,
+  });
+  t.after(() => counts.stop());
+  live.shown = true;
+  const oldRequest = counts.update(empty);
+  assert.equal(sourceA.mock.callCount(), 1);
+
+  const sourceB = t.mock.fn(async () => satellites(42, 2));
+  t.after(
+    configureApplicationServices({ layerCounts: { getCounts: sourceB } }),
+  );
+  releaseA();
+  await counts.update(empty);
+  assert.equal(sourceA.mock.calls[0].arguments[0].signal.aborted, true);
+  assert.equal(sourceB.mock.callCount(), 1);
+  assert.equal(store.state.counts.satellites.count, 42);
+
+  previous.resolve(satellites(7, 1));
+  await oldRequest;
+  assert.equal(store.state.counts.satellites.count, 42);
+  assert.equal(store.state.lastAttemptAt, 0, 'the start times need not differ');
+});
+
+test('a provider abort can hide the Inspector before the replacement starts', async () => {
+  const { store, live, owner } = harness();
+  const previous = Promise.withResolvers();
+  const sourceA = ({ signal }) => {
+    signal.addEventListener(
+      'abort',
+      () => {
+        live.shown = false;
+      },
+      { once: true },
+    );
+    return previous.promise;
+  };
+  let replacementReads = 0;
+  const sourceB = () => {
+    replacementReads++;
+    return satellites(42, 2);
+  };
+  let source = sourceA;
+  const counts = owner((request) => source(request), {
+    readSourceBinding: () => source,
+    bindSource: store.bindSource,
+  });
+
+  live.shown = true;
+  const oldRequest = counts.update(empty);
+  assert.equal(store.state.lastAttemptAt, 0);
+  source = sourceB;
+  live.at = 100;
+  await counts.update(empty);
+  assert.equal(replacementReads, 0);
+  assert.deepEqual(store.state, { counts: {}, lastAttemptAt: null });
+
+  live.shown = true;
+  await counts.update(empty);
+  previous.resolve(satellites(7, 1));
+  await oldRequest;
+  assert.equal(replacementReads, 1);
+  assert.equal(store.state.lastAttemptAt, 100);
+  assert.equal(store.state.counts.satellites.count, 42);
+});
+
+test('a provider abort can deliver a newer layer sample before the replacement starts', async () => {
+  const { store, live, owner } = harness();
+  const previous = Promise.withResolvers();
+  let replacementReads = 0;
+  const sourceB = () => {
+    replacementReads++;
+    return satellites(42, 2);
+  };
+  let source = ({ signal }) => {
+    signal.addEventListener('abort', () => counts.update(layersOn), {
+      once: true,
+    });
+    return previous.promise;
+  };
+  const counts = owner((request) => source(request), {
+    readSourceBinding: () => source,
+    bindSource: store.bindSource,
+  });
+
+  live.shown = true;
+  const oldRequest = counts.update(empty);
+  source = sourceB;
+  await counts.update(empty);
+  assert.equal(replacementReads, 0);
+  assert.equal(store.state.lastAttemptAt, null);
+
+  await counts.update(empty);
+  previous.resolve(satellites(7, 1));
+  await oldRequest;
+  assert.equal(replacementReads, 1);
+  assert.equal(store.state.counts.satellites.count, 42);
 });
 
 test('the configured deadline releases a noncooperating request and preserves its cooldown', async (t) => {
@@ -287,7 +569,7 @@ test('stopping during count reservation prevents the adapter from starting', () 
   assert.equal(snapshot.lastAttemptAt, null);
 });
 
-test('stop aborts in-flight work without changing live totals or touching the next owner', async () => {
+test('stop aborts in-flight work without changing server totals or touching the next owner', async () => {
   const { store, live, owner } = harness();
   let resolve;
   let signal;
@@ -298,10 +580,10 @@ test('stop aborts in-flight work without changing live totals or touching the ne
     });
   });
   live.shown = true;
-  first.update(layersOn);
-  first.note([
-    { id: 'satellites', tone: 'nominal', worldTotal: 900, updatedAt: 1 },
-  ]);
+  store.publish({
+    ...store.state,
+    counts: { satellites: { count: 900, at: 1 } },
+  });
   const request = first.update(empty);
   first.stop();
   assert.ok(signal.aborted);
@@ -314,11 +596,8 @@ test('stop aborts in-flight work without changing live totals or touching the ne
   resolve(satellites(1272, 100));
   await request;
   first.update(empty);
-  first.note([
-    { id: 'satellites', tone: 'nominal', worldTotal: 917, updatedAt: 60 },
-  ]);
-  assert.deepEqual(store.state, {
-    counts: { satellites: { count: 1300, at: 50, live: false } },
-    lastAttemptAt: 1,
+  assert.deepEqual(store.state.counts, {
+    satellites: { count: 1300, at: 50 },
   });
+  assert.equal(store.state.lastAttemptAt, 1);
 });

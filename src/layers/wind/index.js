@@ -6,8 +6,11 @@ import {
   windUnitChips,
   windValueText,
 } from './presentation.js';
-import { inspectWindAtCenter, windFrom, WIND_UNITS } from './inspection.js';
-import { sampleWind, windSpeed } from './model.js';
+import {
+  inspectWindAtCenter,
+  sampleWindReading,
+  WIND_UNITS,
+} from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
 import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
@@ -102,6 +105,11 @@ export function createWindLayer({
     sampledPosition = reading.position || position || null;
     inspectionMarker?.show(sampledPosition);
   };
+  const forecastDetail = (valid) =>
+    t('{model} forecast · {time}', {
+      model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
+      time: valid || t('Unavailable'),
+    });
   const requestedScalar = () =>
     ['temperature', 'pressure'].includes(overlay) ? overlay : 'none';
   let generation = 0;
@@ -267,31 +275,12 @@ export function createWindLayer({
     getValueAt(lat, lon) {
       if (!enabled || !Number.isFinite(lat) || !Number.isFinite(lon))
         return null;
-      if (
-        !manifest?.u ||
-        !manifest?.v ||
-        !manifest.grid ||
-        manifest.unavailable
-      )
-        return null;
-      const vector = sampleWind(
-        { ...manifest.grid, u: manifest.u, v: manifest.v },
-        lon,
-        lat,
-      );
-      if (!Number.isFinite(vector.u) || !Number.isFinite(vector.v)) return null;
+      const sample = sampleWindReading(manifest, lon, lat);
+      if (!sample) return null;
       const valid = Date.parse(manifest.cycle?.validIso);
       return {
-        value: windValueText(
-          windSpeed(vector.u, vector.v),
-          windFrom(vector.u, vector.v),
-          units,
-        ),
-        detail: t('{model} forecast · {time}', {
-          model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
-          time:
-            formatWindValidTime(manifest.cycle?.validIso) || t('Unavailable'),
-        }),
+        value: windValueText(sample.speed, sample.from, units),
+        detail: forecastDetail(formatWindValidTime(manifest.cycle?.validIso)),
         ...(Number.isFinite(valid) ? { at: valid } : {}),
       };
     },
@@ -353,10 +342,7 @@ export function createWindLayer({
           coverage: t('Global · 1° grid'),
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: t('{model} forecast · {time}', {
-            model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
-            time: valid || t('Unavailable'),
-          }),
+          detail: forecastDetail(valid),
           status: loading
             ? t('Loading forecast')
             : preparing

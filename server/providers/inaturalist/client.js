@@ -1,7 +1,10 @@
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { normalizeInatObservations } from '../../../src/layers/wildlifeSightings/records.js';
+import {
+  INAT_CETACEA_TAXON_ID,
+  normalizeInatObservations,
+} from '../../../src/layers/wildlifeSightings/records.js';
 import { readResponseJsonCapped } from '../common/http.js';
 import { clampInt } from '../common/query.js';
 import { providerUserAgent } from '../common/userAgent.js';
@@ -22,7 +25,7 @@ const OBSERVATION_FIELDS =
   'time_observed_at:!t,faves_count:!t,' +
   'num_identification_agreements:!t,' +
   'photos:(url:!t,attribution:!t,license_code:!t),' +
-  'taxon:(name:!t,preferred_common_name:!t,iconic_taxon_name:!t,' +
+  'taxon:(id:!t,ancestor_ids:!t,name:!t,preferred_common_name:!t,iconic_taxon_name:!t,' +
   'threatened:!t))';
 const COOLDOWN_MS = 60_000;
 const FAILURE_COOLDOWN_MS = 15_000;
@@ -60,7 +63,8 @@ function observationFilters(params) {
   });
   if (params.taxa !== 'whales') query.set('photos', 'true');
   if (params.quality === 'research') query.set('quality_grade', 'research');
-  if (params.taxa === 'whales') query.set('taxon_id', '152871');
+  if (params.taxa === 'whales')
+    query.set('taxon_id', String(INAT_CETACEA_TAXON_ID));
   else if (['Aves', 'Mammalia', 'Insecta', 'Plantae'].includes(params.taxa))
     query.set('iconic_taxa', params.taxa);
   return query;

@@ -1,4 +1,26 @@
+import { getLocale, msg, t } from '../i18n/index.js';
 import { layerFeedState } from '../data/feedState.js';
+
+// Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
+// label translates.
+export const FEED_STATE_LABEL_KEYS = Object.freeze({
+  nominal: msg('ON'),
+  loading: msg('LOADING'),
+  degraded: msg('DEGRADED'),
+  stale: msg('STALE'),
+  partial: msg('PARTIAL'),
+  fallback: msg('FALLBACK'),
+  unavailable: msg('UNAVAILABLE'),
+});
+
+export function inspectorFeedLabel(tone) {
+  if (tone === 'nominal') return t('Live');
+  if (tone === 'loading') return t('Loading');
+  if (tone === 'stale') return t('Stale');
+  const locale = getLocale();
+  const label = t(FEED_STATE_LABEL_KEYS[tone]).toLocaleLowerCase(locale);
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+}
 
 export const CONTEXT_EXEMPT = Object.freeze(['radio', 'directions']);
 export const MISSIONS_LAYER = 'rocket-launches';
@@ -31,8 +53,6 @@ export function presentLayerRow(row) {
       Number.isFinite(stats.count) && !(stats.loading && !stats.count)
         ? stats.count
         : null,
-    worldTotal:
-      stats.scope === 'worldwide' ? (stats.scopeCount ?? stats.count) : null,
     updatedAt: Number.isFinite(stats.lastUpdate) ? stats.lastUpdate : null,
   };
 }

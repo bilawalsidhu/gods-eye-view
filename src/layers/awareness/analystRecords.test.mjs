@@ -40,13 +40,15 @@ test('Contacts lists its chosen contact at its position with cohort counts', () 
   assert.equal(record.radiusKm, 185.2);
 });
 
-test('Contacts lists nothing while off or with no contact', () => {
+test('Contacts lists nothing while off, passive or with no contact', () => {
+  const subject = { layerId: 'flights', id: 'a', position: fromDegrees(0, 0) };
   assert.deepEqual(controlsWith({}).getAnalystRecords(), []);
   assert.deepEqual(
-    controlsWith({
-      enabled: false,
-      subject: { layerId: 'flights', id: 'a', position: fromDegrees(0, 0) },
-    }).getAnalystRecords(),
+    controlsWith({ enabled: false, subject }).getAnalystRecords(),
+    [],
+  );
+  assert.deepEqual(
+    controlsWith({ passive: true, subject }).getAnalystRecords(),
     [],
   );
 });

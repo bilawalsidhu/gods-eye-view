@@ -1,3 +1,4 @@
+import { analystRecordLimit } from './analystRecordLimit.js';
 import { isPointerFree } from './inputOwnership.js';
 import {
   clearOverlaySource,
@@ -1024,9 +1025,7 @@ function createPanelRecords(event) {
  * @returns {Array<object>}
  */
 export function bhoteKoshiEvidenceRecords(spine, maxCount = Infinity) {
-  const limit = Number.isFinite(maxCount)
-    ? Math.max(0, Math.floor(maxCount))
-    : Infinity;
+  const limit = analystRecordLimit(maxCount);
   const clean = (value) =>
     typeof value === 'string' && value.trim() ? value.trim() : null;
   const result = [];
@@ -1041,6 +1040,8 @@ export function bhoteKoshiEvidenceRecords(spine, maxCount = Infinity) {
     )
       continue;
     const captured = Date.parse(observation.timing?.capturedAt ?? '');
+    const geolocationName = clean(observation.provenance?.via);
+    const geolocationUrl = clean(observation.provenance?.viaUrl);
     result.push({
       id: observation.id,
       name: clean(observation.shortTitle) || clean(observation.title),
@@ -1052,7 +1053,14 @@ export function bhoteKoshiEvidenceRecords(spine, maxCount = Infinity) {
       locationConfidence: clean(observation.confidence?.location),
       timeConfidence: clean(observation.confidence?.time),
       platform: clean(observation.media?.platform),
-      source: 'Vantor + GeoPera',
+      source:
+        clean(observation.media?.publisher) ||
+        clean(observation.media?.platform),
+      website: clean(observation.media?.sourceUrl),
+      geolocation:
+        geolocationName && geolocationUrl
+          ? { label: geolocationName, href: geolocationUrl }
+          : null,
     });
   }
   return result;

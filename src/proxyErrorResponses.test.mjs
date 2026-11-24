@@ -37,6 +37,7 @@ function fixture(name, overrides = {}, preview = false) {
       readFile: async () => { throw new Error('cache absent'); },
       stat: async () => { throw new Error('cache absent'); },
       mkdir: async () => {}, writeFile: async () => {},
+      rename: async () => {},
     },
     fetch: async () => { throw new Error(detail); },
     console: { warn: (...args) => logs.push(args.join(' ')), error: (...args) => logs.push(args.join(' ')) },
@@ -46,7 +47,7 @@ function fixture(name, overrides = {}, preview = false) {
     resolveTerrainHeightRequest: async () => { throw new Error(detail); },
     ...overrides,
   };
-  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'celestrakSatcatUrl', 'launchLibraryRecentUrl', 'catalogNumbers'].map(extract).join('\n');
+  const helpers = ['launchLibraryRequestHeaders', 'celestrakTleUrl', 'celestrakSatcatUrl', 'launchLibraryRecentUrl'].map(extract).join('\n');
   const plugin = new Function(...Object.keys(deps), `${helpers}\n${extract(name)}\nreturn ${name}();`)(...Object.values(deps));
   let middleware;
   // A plugin with several routes (CelesTrak: TLEs, then SATCAT) is tested on its first.

@@ -2,8 +2,9 @@ import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
 import { FEATURE_SOURCE_METHODS } from '../sources/featureSource.js';
 import { requestWithDeadline } from '../sources/requestDeadline.js';
 import { createSourceSlot } from '../sources/sourceSlot.js';
-import { LAYER_COUNTS_TIMEOUT_MS } from './layerCountService.js';
 import { createApplicationRequestServices } from './requests.js';
+
+export const LAYER_COUNTS_TIMEOUT_MS = 10_000;
 
 // Compatibility owners are page-scoped, like the viewer and its layer registry.
 const defaults = createApplicationRequestServices();
@@ -47,6 +48,11 @@ export function configureApplicationServices(services) {
   return () => {
     for (const release of releases.reverse()) release();
   };
+}
+
+/** The owner of snapshots read through the configured count service. */
+export function getLayerCountsServiceBinding() {
+  return slots.layerCounts.binding;
 }
 
 /** Bound the configured source even when its adapter ignores abort. */

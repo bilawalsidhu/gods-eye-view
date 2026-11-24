@@ -14,6 +14,7 @@ const OPEN_PHOTO_LICENCES = Object.freeze([
 const DAY_MS = 86_400_000;
 const ACARTIA_MAX_AGE_MS = 8 * DAY_MS;
 const OBSERVATION_FUTURE_TOLERANCE_MS = 10 * 60_000;
+export const INAT_CETACEA_TAXON_ID = 152871;
 // A JavaScript $ can match before a final newline; require the true end too.
 const INAT_PHOTO =
   /^https:\/\/inaturalist-open-data\.s3\.amazonaws\.com\/photos\/\d+\/square\.(jpe?g|png)$(?![\s\S])/i;
@@ -226,6 +227,10 @@ export function normalizeInatObservations(
       commonName: cleanText(taxon?.preferred_common_name, 100),
       scientificName: cleanText(taxon?.name, 100),
       iconic: cleanText(taxon?.iconic_taxon_name, 40) || 'Unknown',
+      cetacean:
+        taxon?.id === INAT_CETACEA_TAXON_ID ||
+        (Array.isArray(taxon?.ancestor_ids) &&
+          taxon.ancestor_ids.includes(INAT_CETACEA_TAXON_ID)),
       threatened: taxon?.threatened === true,
       provider: null,
       link:

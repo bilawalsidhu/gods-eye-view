@@ -9,7 +9,9 @@ const WEATHER_EFFECTS_STALE_MS = 30 * 60_000;
 
 const WEATHER_EFFECTS_MAX_CACHE = 180;
 
-const _weatherEffectsCache = new Map();
+// Exact camera points have much higher cardinality than the shared 0.1° cells.
+const _weatherEffectsCellCache = new Map();
+const _weatherEffectsPointCache = new Map();
 
 const _weatherEffectsInFlight = new Map();
 
@@ -19,16 +21,16 @@ const _weatherEffectsRateLimiter = makeRateLimiter({
   globalMax: 120,
 });
 
-function trimWeatherEffectsCache() {
-  while (_weatherEffectsCache.size > WEATHER_EFFECTS_MAX_CACHE) {
-    const oldest = _weatherEffectsCache.keys().next().value;
+function trimWeatherEffectsCache(cache) {
+  while (cache.size > WEATHER_EFFECTS_MAX_CACHE) {
+    const oldest = cache.keys().next().value;
     if (oldest === undefined) break;
-    _weatherEffectsCache.delete(oldest);
+    cache.delete(oldest);
   }
 }
 
 function weatherEffectsProxy() {
-  async function refresh(point, key) {
+  async function refresh(point, key, cache) {
     const weather = await fetchRegionalWeather(point);
     if (!weather) throw new Error('Weather observation unavailable');
     const payload = {
@@ -37,8 +39,8 @@ function weatherEffectsProxy() {
       coordinates: point,
       weather,
     };
-    _weatherEffectsCache.set(key, { payload, cachedAt: Date.now() });
-    trimWeatherEffectsCache();
+    cache.set(key, { payload, cachedAt: Date.now() });
+    trimWeatherEffectsCache(cache);
     return payload;
   }
 
@@ -68,9 +70,17 @@ function weatherEffectsProxy() {
         );
         return;
       }
-      const key = `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
+      // Inspector local time needs the requested point even at a zone border.
+      // Other weather consumers can continue to share a 0.1° observation.
+      const exactPoint = url.searchParams.get('exactPoint') === '1';
+      const cache = exactPoint
+        ? _weatherEffectsPointCache
+        : _weatherEffectsCellCache;
+      const key = exactPoint
+        ? `point:${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`
+        : `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
       const now = Date.now();
-      const cached = _weatherEffectsCache.get(key);
+      const cached = cache.get(key);
       if (cached && now - cached.cachedAt <= WEATHER_EFFECTS_CACHE_MS) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
@@ -81,7 +91,7 @@ function weatherEffectsProxy() {
         return;
       }
       const request = coalesceProxyRequest(_weatherEffectsInFlight, key, () =>
-        refresh(point, key),
+        refresh(point, key, cache),
       );
       try {
         const payload = await request.promise;

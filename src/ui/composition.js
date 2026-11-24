@@ -73,6 +73,8 @@ import {
 export class StyleManager extends ApplicationShell {
   constructor(viewer, options = {}) {
     const weather = options.requestServices?.weather;
+    const hasRegionalOverride =
+      typeof options.services?.fetchRegionalBrief === 'function';
     super(viewer, {
       ...options,
       services: {
@@ -128,7 +130,8 @@ export class StyleManager extends ApplicationShell {
         weatherCodeLabel,
         LocationSearch,
         fetchSpotWeather:
-          weather?.getConditions?.bind(weather) ?? fetchSpotWeather,
+          weather?.getConditions?.bind(weather) ??
+          (hasRegionalOverride ? undefined : fetchSpotWeather),
         ...options.services,
       },
     });

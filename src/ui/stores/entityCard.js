@@ -1,19 +1,20 @@
 import { defineStore } from 'pinia';
 import { markRaw, ref, shallowRef, triggerRef } from 'vue';
-import { sourceLabel } from '../layerNames.js';
+import { shownLayerName, sourceLabel } from '../layerNames.js';
 import {
   alertsNear,
   describeEntity,
   entityKind,
+  formatFact,
   layerBreakdown,
   nearbyByKind,
-  nearbyByLayer,
+  nearbyForLayer,
   nearbyEntities,
   layerMatches,
   searchEntities,
-  viewSummary,
+  viewSummaryForLayer,
 } from '../../data/entityContext.js';
-import { formatDate, formatNumber, t } from '../../i18n/index.js';
+import { formatDate, formatNumber, getLocale, t } from '../../i18n/index.js';
 
 const FACT_DATE = Object.freeze({
   day: 'numeric',
@@ -96,7 +97,7 @@ const MOVING_REFRESH_COST_SHARE = 0.01;
  */
 const COSTLY_READ_MS = 16;
 
-/** At or above this camera height the whole globe is in view (Context's globe view). */
+/** Camera height at which the Inspector switches to its globe layout. */
 const GLOBE_HEIGHT_M = 5_000_000;
 /** Whether a view is the globe view, where "in view" is what the camera's height can see. */
 export const isGlobeView = (where) =>
@@ -192,6 +193,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       (change?.type === 'visibility' && change.enabled === false)
     ) {
       inViewLayers.delete(change.layerId);
+      viewportLayers.delete(change.layerId);
       inViewSearchLayers.delete(change.layerId);
       nearbyMemo.delete(change.layerId);
     }
@@ -205,9 +207,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     subscription = next;
     previous.off?.();
     inViewLayers.clear();
+    viewportLayers.clear();
     inViewSearchLayers.clear();
     nearbyMemo.clear();
-    inViewMemo = null;
+    inViewMemo.clear();
     nearbyLast = null;
     try {
       next.off = manager?.subscribe?.((change) => {
@@ -254,7 +257,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    */
   function sourceOf(current) {
     if (!current) return '';
-    if (current.source) return current.source;
+    if (current.source) {
+      if (current.layerId === 'traffic') {
+        const words = formatFact('source', current.source)?.words;
+        if (typeof words?.text === 'string') return sayWords(words);
+      }
+      return current.source;
+    }
     const dm = shell.value?.dataManager?.();
     const layer = dm?.getAll?.().find((row) => row.id === current.layerId);
     const stats = layer?.stats || {};
@@ -299,16 +308,17 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
 
   const roundTo = (n, step) =>
     Number.isFinite(n) ? Math.round(n / step) : 'x';
-  function viewKey(where) {
+  const exactNumber = (n) => (Number.isFinite(n) ? n : 'x');
+  function viewKey(where, numberKey) {
     const rect = where.rect
       ? [where.rect.west, where.rect.south, where.rect.east, where.rect.north]
-          .map((n) => roundTo(n, 0.001))
+          .map((n) => numberKey(n, 0.001))
           .join(',')
       : '';
     const eye = where.eye
-      ? `${roundTo(where.eye.lat, 0.0001)},${roundTo(where.eye.lon, 0.0001)}`
+      ? `${numberKey(where.eye.lat, 0.0001)},${numberKey(where.eye.lon, 0.0001)}`
       : '';
-    return `${roundTo(where.center.lat, 0.0001)},${roundTo(where.center.lon, 0.0001)},${roundTo(where.heightM, 10)}|${rect}|${eye}`;
+    return `${numberKey(where.center.lat, 0.0001)},${numberKey(where.center.lon, 0.0001)},${numberKey(where.heightM, 10)}|${rect}|${eye}`;
   }
   /** How long a moving layer's rows are kept, from what its last read cost. */
   const movingWait = (costMs) =>
@@ -320,12 +330,12 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /**
    * Reads each layer that is on on its own, keeping each one's answer in
    * `cache` (per layer: `{place, options, revision, value, at, costMs}`)
-   * while its key holds: `place` (where), `options` (what was asked) and
-   * the layer's data revision (`lastUpdate:count`). Another layer's refresh
-   * never reads it again. A layer of moving items (satellites, aircraft) is
-   * also read again once its answer expires, since satellites stamp a
-   * revision only when new orbits arrive. Nearby limits the adaptive wait
-   * so a moving row that leaves the radius disappears within ten seconds.
+   * while its key holds: the exact place (rounded while moving), the options
+   * and the layer's update time, count and optional records revision. A refresh
+   * from another layer never rereads it. Moving items (satellites, aircraft)
+   * are also read again once their answer expires, since satellites stamp a
+   * revision only when new orbits arrive. Wildlife also ages out without a
+   * feed revision. Nearby limits the adaptive wait for both cases.
    * While the camera is still moving, a costly layer (its last read over
    * COSTLY_READ_MS) whose revision and options are unchanged keeps its
    * answer for movingWait(costMs) too; a settled view reads it at once.
@@ -333,7 +343,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    */
   function readLayers(
     cache,
-    dm,
     rows,
     place,
     options,
@@ -341,6 +350,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     maxMovingWait = Infinity,
   ) {
     const now = Date.now();
+    const moving = viewMoving.value;
     let changed = false;
     for (const id of cache.keys())
       if (!rows.some((row) => row.id === id)) {
@@ -348,113 +358,144 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         changed = true;
       }
     for (const row of rows) {
-      const revision = `${row.stats?.lastUpdate ?? ''}:${row.stats?.count ?? ''}`;
+      const revision = `${row.stats?.lastUpdate ?? ''}:${row.stats?.count ?? ''}:${row.stats?.recordsRevision ?? ''}`;
       const kept = cache.get(row.id);
-      const moving = entityKind(row.id).moving;
+      const refreshByAge =
+        entityKind(row.id).moving || row.id === 'wildlife-sightings';
       const fresh =
         kept &&
         now - kept.at <
-          Math.min(movingWait(kept.costMs), moving ? maxMovingWait : Infinity);
+          Math.min(
+            movingWait(kept.costMs),
+            refreshByAge ? maxMovingWait : Infinity,
+          );
       const same =
         kept && kept.options === options && kept.revision === revision;
-      if (same && kept.place === place && (fresh || !moving)) continue;
-      if (same && fresh && viewMoving.value && kept.costMs > COSTLY_READ_MS)
-        continue;
-      // One layer's read: the data manager narrowed to this row.
-      const one = {
-        layers: dm.layers,
-        isEnabled: (id) => (dm.isEnabled ? dm.isEnabled(id) : true),
-        getAll: () => [row],
-      };
+      const samePlace =
+        kept &&
+        (kept.place.exact === place.exact ||
+          (moving && kept.place.rounded === place.rounded));
+      if (same && (kept.failed || kept.usedFallback)) {
+        if (samePlace && now - kept.at < INSPECTOR_PULSE_MS) continue;
+      } else if (same) {
+        if (samePlace && (fresh || !refreshByAge)) continue;
+        if (fresh && moving && kept.costMs > COSTLY_READ_MS) continue;
+      }
       const started = globalThis.performance?.now?.() ?? now;
-      const value = readOne(one);
+      let value = null;
+      let failed = false;
+      let usedFallback = false;
+      try {
+        value = readOne(row, () => {
+          usedFallback = true;
+        });
+      } catch {
+        // A host layer can recover without publishing a new data revision.
+        // Retry its failed read on a later Inspector pulse.
+        failed = true;
+      }
       const costMs = (globalThis.performance?.now?.() ?? now) - started;
-      cache.set(row.id, { place, options, revision, value, at: now, costMs });
+      cache.set(row.id, {
+        place,
+        options,
+        revision,
+        value,
+        at: now,
+        costMs,
+        failed,
+        usedFallback,
+      });
       changed = true;
     }
     return changed;
   }
 
-  /** The layers that are on, as the data manager lists them. */
-  const enabledRows = (dm) =>
-    (dm.getAll?.() || []).filter((row) => row.enabled);
-
   const IN_VIEW_PER_LAYER = 3;
   /** Per layer, as readLayers keeps it. */
   const inViewLayers = new Map();
+  const viewportLayers = new Map();
   const inViewSearchLayers = new Map();
-  let inViewMemo = null;
+  const inViewMemo = new Map();
   /**
    * What the loaded layers have in the current view, by layer, nearest the
-   * centre first (`viewSummary`). Shared by Context's globe view and the
-   * omnibar's in-view strip, so both show the same items and counts.
+   * centre first (`viewSummaryForLayer`). At globe height Context uses the visible
+   * hemisphere while the omnibar keeps the viewport bounds.
    *
-   * Lazy and remembered per layer (readLayers): each layer's rows are worked
-   * out when asked, at the widest size anyone asks for (IN_VIEW_PER_LAYER),
-   * and reused while the view and that layer's data hold, and only while
-   * something asks (Context's panel while it is open and the page visible,
-   * the omnibar). Satellites' records are SGP4 positions worked out for the
-   * whole catalogue, a long read, so the wait before reading them again
-   * grows with what the last read cost: at least 100 times it (about 1% of
-   * the main thread), up to MOVING_REFRESH_MAX_MS. A caller asking for fewer
-   * rows gets a slice of the same answer. The active search keeps its
-   * own per-layer rows and refreshes on a different query or limit.
-   * @param {{perLayer?: number, query?: string}} [options]
+   * Callers asking for fewer rows get a slice of the shared answer. Search
+   * keeps its own per-layer cache keyed by query and limit. Globe search
+   * includes unavailable layer reads so Context can report partial results.
+   * @param {{perLayer?: number, query?: string, viewport?: boolean}} [options]
    */
   function inView(options = {}) {
     void managerVersion.value;
     const dm = dataManager();
     const where = view.value;
     if (!dm || !where?.center) return [];
-    const hemisphere = isGlobeView(where);
+    const globe = isGlobeView(where);
+    const hemisphere = globe && !options.viewport;
     const query = options.query || '';
     const limit = query
       ? (options.perLayer ?? IN_VIEW_PER_LAYER)
       : IN_VIEW_PER_LAYER;
-    const cache = query ? inViewSearchLayers : inViewLayers;
-    const rows = enabledRows(dm);
+    const visibleLayers =
+      globe && options.viewport ? viewportLayers : inViewLayers;
+    const cache = query ? inViewSearchLayers : visibleLayers;
+    const rows = liveLayers(dm);
     const layers = rows.map((row) => row.id).join('|');
     const changed = readLayers(
       cache,
-      dm,
       rows,
-      viewKey(where),
-      JSON.stringify([hemisphere, query, limit]),
-      (one) =>
-        viewSummary(one, where.rect, where.center, {
+      { exact: viewKey(where, exactNumber), rounded: viewKey(where, roundTo) },
+      JSON.stringify([hemisphere, query, limit, getLocale()]),
+      (row, onSnapshotFallback) =>
+        viewSummaryForLayer(dm, row, where.rect, where.center, {
           perLayer: limit,
           query,
+          shownLayerName,
           hemisphere,
           heightM: where.heightM,
           eye: where.eye,
-        })[0] ?? null,
+          throwOnReadError: true,
+          // The Omnibar can stay open without Inspector pulses. Keep its
+          // ordinary viewport records if the optional snapshot is unavailable.
+          fallbackOnSnapshotError: !hemisphere,
+          onSnapshotFallback: hemisphere ? onSnapshotFallback : undefined,
+        }),
     );
     // Layers with the most in view first; ties keep the layer order.
     const sorted = () =>
       rows
-        .map((row) => cache.get(row.id)?.value)
+        .map(({ id }) => {
+          const cached = cache.get(id);
+          return query && hemisphere && cached?.failed
+            ? { layerId: id, count: null, items: [], readFailed: true }
+            : cached?.value;
+        })
         .filter(Boolean)
-        .sort((a, b) => b.count - a.count);
+        .sort((a, b) => (b.count ?? -1) - (a.count ?? -1));
     if (query) return sorted();
-    if (changed || inViewMemo?.layers !== layers)
-      inViewMemo = {
+    let memo = inViewMemo.get(cache);
+    if (changed || memo?.layers !== layers) {
+      memo = {
         layers,
         full: sorted(),
         sliced: new Map(),
       };
+      inViewMemo.set(cache, memo);
+    }
     const perLayer = Number.isFinite(options.perLayer)
       ? Math.min(options.perLayer, IN_VIEW_PER_LAYER)
       : IN_VIEW_PER_LAYER;
-    if (perLayer >= IN_VIEW_PER_LAYER) return inViewMemo.full;
-    if (!inViewMemo.sliced.has(perLayer))
-      inViewMemo.sliced.set(
+    if (perLayer >= IN_VIEW_PER_LAYER) return memo.full;
+    if (!memo.sliced.has(perLayer))
+      memo.sliced.set(
         perLayer,
-        inViewMemo.full.map((group) => ({
+        memo.full.map((group) => ({
           ...group,
           items: group.items.slice(0, perLayer),
         })),
       );
-    return inViewMemo.sliced.get(perLayer);
+    return memo.sliced.get(perLayer);
   }
   /** Ask GEV about the view, with what is in it. */
   function askAboutView(summary) {
@@ -469,14 +510,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   /** The layers that are on, as the data manager lists them. */
-  function liveLayers() {
-    return allLayers().filter((row) => row.enabled);
+  function liveLayers(dm) {
+    return allLayers(dm).filter((row) => row.enabled);
   }
 
   /** Every layer row, on or off (Context's suggested layers). */
-  function allLayers() {
+  function allLayers(dm) {
     try {
-      return dataManager()?.getAll?.() || [];
+      return (dm ?? dataManager())?.getAll?.() || [];
     } catch {
       return [];
     }
@@ -497,13 +538,20 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * every card lists it: `{flights, vessels, other}` (see nearbyByKind).
    */
   function nearbyGroups(lat, lon, options) {
-    return nearbyByKind(shell.value?.dataManager?.(), { lat, lon }, options);
+    return nearbyByKind(
+      shell.value?.dataManager?.(),
+      { lat, lon },
+      {
+        ...options,
+        shownLayerName,
+      },
+    );
   }
 
   /**
    * A field layer's value at a point (wind, GNSS integrity, imagery, air
-   * quality): `{value, detail?, at?}`, null where it has none, or undefined
-   * for a layer that is not a field (it lists items instead).
+   * quality): `{value, detail?, at?}`, `{value: null, readFailed: true}` if
+   * the read throws, null where it has none, or undefined for a non-field.
    * @param {string} layerId
    * @param {number} lat
    * @param {number} lon
@@ -514,7 +562,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     try {
       return module.getValueAt(lat, lon) ?? null;
     } catch {
-      return null;
+      return { value: null, readFailed: true };
     }
   }
 
@@ -531,10 +579,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const nearbyMemo = new Map();
   let nearbyLast = null;
   /**
-   * What each layer that is on has within a radius (see nearbyByLayer),
+   * What each layer that is on has within a radius (see nearbyForLayer),
    * remembered per layer as the in-view answer is (readLayers): the centre,
    * the radius and what was asked are the key, with each layer's data
-   * revision. The same answer comes back while nothing changed.
+   * revision. A failed radius read has no count and no selectable items.
    * @param {number} lat
    * @param {number} lon
    * @param {{radiusKm?: number, limit?: number, query?: string, excludeKey?: string, excludeLayers?: string[]}} [options]
@@ -544,14 +592,16 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const dm = dataManager();
     if (!dm || !Number.isFinite(lat) || !Number.isFinite(lon)) return [];
     const { excludeLayers = [], ...asked } = options;
-    const rows = enabledRows(dm).filter(
+    const rows = liveLayers(dm).filter(
       (row) => !excludeLayers.includes(row.id),
     );
     const layers = rows.map((row) => row.id).join('|');
-    const place = `${roundTo(lat, 0.0001)},${roundTo(lon, 0.0001)}`;
+    const place = {
+      exact: `${lat},${lon}`,
+      rounded: `${roundTo(lat, 0.0001)},${roundTo(lon, 0.0001)}`,
+    };
     const changed = readLayers(
       nearbyMemo,
-      dm,
       rows,
       place,
       JSON.stringify([
@@ -559,14 +609,33 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
         asked.limit,
         asked.query || '',
         asked.excludeKey || '',
+        getLocale(),
       ]),
-      (one) => nearbyByLayer(one, { lat, lon }, asked)[0] ?? null,
+      (row, onSnapshotFallback) =>
+        nearbyForLayer(
+          dm,
+          row,
+          { lat, lon },
+          {
+            ...asked,
+            shownLayerName,
+            throwOnReadError: true,
+            onSnapshotFallback,
+          },
+        ),
       NEARBY_MOVING_MAX_MS,
     );
     if (changed || nearbyLast?.layers !== layers)
       nearbyLast = {
         layers,
-        lists: rows.map((row) => nearbyMemo.get(row.id)?.value).filter(Boolean),
+        lists: rows
+          .map(({ id }) => {
+            const cached = nearbyMemo.get(id);
+            return cached?.failed
+              ? { layerId: id, count: null, items: [], readFailed: true }
+              : cached?.value;
+          })
+          .filter(Boolean),
       };
     return nearbyLast.lists;
   }
@@ -740,7 +809,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const followNow =
       autoFollow &&
       AUTO_FOLLOW.has(current?.layerId) &&
-      shell.value?.canFollow?.(current);
+      shell.value?.canFollow?.(current, { auto: true });
     if (followNow) {
       // Tracking can announce the craft again; following what is already
       // followed would loop, so it only starts once per item.
@@ -750,7 +819,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       }
     } else {
       asked = null;
-      if (fly) shell.value?.flyTo?.(current);
+      if (fly) shell.value?.flyTo?.(current, { fromSelection: true });
     }
     requestRoute(current?.identity);
     return true;
@@ -784,7 +853,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const isFollowing = () =>
     Boolean(card.value && following.value === card.value.key);
   const ask = () => currentActionCard() && shell.value?.ask?.(card.value);
-  /** The regional brief (weather, local news) for a spot, from the shell. */
+  /** Reads the shell's regional brief for the selected card's weather. */
   const readBrief = (lat, lon, options) =>
     shell.value?.regionalBrief
       ? shell.value.regionalBrief(lat, lon, options)

@@ -1,3 +1,5 @@
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
+import { CONTEXT_LINES, contextLine } from '../../data/contextGeometry.js';
 import { densifyRhumb } from '../../geo/rhumb.js';
 import { greatCircleKm } from '../../geoDistance.js';
 import {
@@ -6,6 +8,7 @@ import {
   geometryParts,
   normalizeFeatures,
 } from './geometry.js';
+import { CABLE_LINE_GRANULARITY_M } from './policy.js';
 
 /** Target maximum spacing along a cable, in km. */
 const PART_SPACING_KM = 40;
@@ -22,21 +25,13 @@ const RADIANS = Math.PI / 180;
  * @returns {Array<{lat: number, lon: number}>}
  */
 export function cableLinePoints(feature) {
+  return samplePaths(cablePaths(feature));
+}
+
+function samplePaths(paths) {
   const out = [];
-  for (const line of geometryParts(feature?.geometry).lines) {
-    const path = [];
-    for (const coordinate of line ?? []) {
-      const lon = Number(coordinate?.[0]);
-      const lat = Number(coordinate?.[1]);
-      if (Number.isFinite(lon) && Number.isFinite(lat))
-        path.push({ lon: lon * RADIANS, lat: lat * RADIANS, at: { lat, lon } });
-    }
-    if (!path.length) continue;
-    // The line's own vertices keep their exact degrees.
-    const dense = densifyRhumb(path, PART_SPACING_KM * 1000).map(
-      (point) =>
-        point.at || { lat: point.lat * DEGREES, lon: point.lon * DEGREES },
-    );
+  for (const path of paths) {
+    const dense = drawnPath(path, PART_SPACING_KM * 1000);
     out.push(dense[0]);
     let kmSinceSample = 0;
     for (let i = 1; i < dense.length; i++) {
@@ -58,7 +53,29 @@ export function cableLinePoints(feature) {
   return out;
 }
 
-/** A record can use a drawn line even when there is no map label point. */
+function* cablePaths(feature) {
+  for (const line of geometryParts(feature?.geometry).lines) {
+    const path = [];
+    for (const coordinate of line ?? []) {
+      const lon = Number(coordinate?.[0]);
+      const lat = Number(coordinate?.[1]);
+      if (Number.isFinite(lon) && Number.isFinite(lat)) path.push({ lat, lon });
+    }
+    if (path.length) yield path;
+  }
+}
+
+function drawnPath(path, spacingM) {
+  return densifyRhumb(
+    path.map((at) => ({ lon: at.lon * RADIANS, lat: at.lat * RADIANS, at })),
+    spacingM,
+  ).map(
+    (point) =>
+      point.at || { lat: point.lat * DEGREES, lon: point.lon * DEGREES },
+  );
+}
+
+/** Return the map label point, the first valid line coordinate, or null. */
 export function cableRecordReference(feature) {
   const reference = featureReference(feature);
   if (reference) return reference;
@@ -132,12 +149,16 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
     for (const feature of normalizeFeatures(cables, 'cable')) {
       const at = cableRepresentativePoint(feature);
       if (!at) continue;
-      // The cable's own id (its pieces share it), else its name.
-      const cable = feature.id || featureLabel(feature);
-      const points = cableLinePoints(feature);
+      const cable = feature.id;
+      const paths = [...cablePaths(feature)];
+      const points = samplePaths(paths);
+      const lines = paths.map((path) =>
+        contextLine(path, () => drawnPath(path, CABLE_LINE_GRANULARITY_M)),
+      );
       const known = byCable.get(cable);
       if (known) {
         known.parts.push(...points);
+        known[CONTEXT_LINES].push(...lines);
         continue;
       }
       const record = {
@@ -147,6 +168,7 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
         lat: at.lat,
         lon: at.lon,
         parts: points,
+        [CONTEXT_LINES]: lines,
       };
       byCable.set(cable, record);
       records.list.push(record);
@@ -154,6 +176,7 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
     for (const record of records.list) {
       for (const part of record.parts) Object.freeze(part);
       Object.freeze(record.parts);
+      Object.freeze(record[CONTEXT_LINES]);
     }
     const landingIds = new Set();
     for (const feature of normalizeFeatures(landings, 'landing')) {
@@ -171,10 +194,13 @@ export function cableAnalystRecords(state, maxCount = Infinity) {
     }
     built.set(cables, records);
   }
-  const limit = Number.isFinite(maxCount)
-    ? Math.max(0, Math.floor(maxCount))
-    : records.list.length;
+  const limit = analystRecordLimit(maxCount);
   // Copies (parts are frozen): a caller may not change what the next call
   // returns.
-  return records.list.slice(0, limit).map((record) => ({ ...record }));
+  return records.list
+    .slice(0, limit)
+    .map(({ [CONTEXT_LINES]: paths, ...record }) => {
+      if (paths) Object.defineProperty(record, CONTEXT_LINES, { value: paths });
+      return record;
+    });
 }

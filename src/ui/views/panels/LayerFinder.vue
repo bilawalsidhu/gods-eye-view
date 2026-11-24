@@ -1,6 +1,5 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
-import { storeToRefs } from 'pinia';
 import { useLayerFinderStore } from '../../stores/layerFinder.js';
 import { msg, t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
@@ -12,11 +11,14 @@ const props = defineProps({
   part: { type: String, default: 'buttons' },
 });
 
-const finder = useLayerFinderStore();
-const { selection, searching, filtering, categories, shown, narrowed } = storeToRefs(finder);
-const emit = defineEmits(['focus-search-field', 'focus-search-button', 'focus-filter-button']);
-const searchTrigger = ref(null);
-const searchField = ref(null);
+const store = useLayerFinderStore();
+const finder = computed(() => store.activeFinder);
+const selection = computed(() => finder.value.selection);
+const searching = computed(() => finder.value.searching);
+const filtering = computed(() => finder.value.filtering);
+const categories = computed(() => finder.value.categories);
+const shown = computed(() => finder.value.shown);
+const narrowed = computed(() => finder.value.narrowed);
 const suggestionChip = ref(null);
 const SHOWS = [
   { id: 'all', label: msg('All layers') },
@@ -27,19 +29,22 @@ const SHOWS = [
 const categoryLabel = computed(
   () => categories.value.find((c) => c.key === selection.value.category)?.label || '',
 );
-async function toggleSearch() {
-  finder.setSearching(!searching.value);
-  if (!searching.value) finder.select({ query: '' });
+async function toggleSearch(event) {
+  const doc = event.currentTarget.ownerDocument;
+  finder.value.searching = !searching.value;
+  if (!searching.value) finder.value.select({ query: '' });
   await nextTick();
-  if (searching.value) emit('focus-search-field');
+  if (searching.value) doc.getElementById('layer-finder-input')?.focus();
 }
 // Escape in the field closes the search and stays there: it must not also
 // fold the panel or leave the cockpit.
-async function closeSearch() {
-  finder.setSearching(false);
-  finder.select({ query: '' });
+async function closeSearch(event) {
+  event.preventDefault();
+  const doc = event.currentTarget.ownerDocument;
+  finder.value.searching = false;
+  finder.value.select({ query: '' });
   await nextTick();
-  emit('focus-search-button');
+  doc.getElementById('layer-finder-search-btn')?.focus();
 }
 
 // The filter is a disclosure of two groups of toggle buttons. Opening it moves
@@ -47,10 +52,9 @@ async function closeSearch() {
 // focus back to its button.
 const filterEl = ref(null);
 const menuEl = ref(null);
-const triggerEl = ref(null);
 const options = () => [...(menuEl.value?.querySelectorAll('button') || [])];
 async function toggleFilter() {
-  finder.setFiltering(!filtering.value);
+  finder.value.filtering = !filtering.value;
   if (!filtering.value) return;
   await nextTick();
   const menu = menuEl.value;
@@ -64,9 +68,8 @@ async function toggleFilter() {
   (menu.querySelector('[aria-pressed="true"]') || options()[0])?.focus();
 }
 function closeFilter({ refocus = false } = {}) {
-  finder.setFiltering(false);
-  // The trigger is a UiButton; its root is the button.
-  if (refocus) triggerEl.value?.$el?.focus();
+  finder.value.filtering = false;
+  if (refocus) filterEl.value?.ownerDocument.getElementById('layer-finder-filter-btn')?.focus();
 }
 function onMenuKey(event) {
   if (event.key === 'Escape') {
@@ -92,12 +95,13 @@ function onOutside(e) {
     closeFilter();
 }
 function pickCategory(key) {
-  finder.select({ category: selection.value.category === key ? '' : key });
+  finder.value.select({ category: selection.value.category === key ? '' : key });
 }
-async function showAllLayers() {
-  finder.clearAll();
+async function showAllLayers(event) {
+  const doc = event.currentTarget.ownerDocument;
+  finder.value.clearAll();
   await nextTick();
-  emit('focus-filter-button');
+  doc.getElementById('layer-finder-filter-btn')?.focus();
 }
 if (props.part === 'buttons') {
   onMounted(() => document.addEventListener('pointerdown', onOutside, true));
@@ -115,20 +119,15 @@ if (props.part === 'buttons') {
     { flush: 'post' },
   );
 }
-defineExpose({
-  focusSearchField: () => searchField.value?.focus(),
-  focusSearchButton: () => searchTrigger.value?.$el.focus(),
-  focusFilterButton: () => triggerEl.value?.$el.focus(),
-});
 </script>
 
 <template>
   <template v-if="part === 'buttons'">
-    <UiButton ref="searchTrigger" id="layer-finder-search-btn" class="layer-finder__btn" :class="{ active: searching || selection.query }" :pressed="Boolean(searching)" :aria-label="t('Search layers')" :title="t('Search layers')" @click="toggleSearch">
+    <UiButton id="layer-finder-search-btn" class="layer-finder__btn" :class="{ active: searching || selection.query }" :pressed="Boolean(searching)" :aria-label="t('Search layers')" :title="t('Search layers')" @click="toggleSearch">
       <UiIcon name="search" :size="null" />
     </UiButton>
     <span ref="filterEl" class="layer-finder__filter">
-      <UiButton ref="triggerEl" class="layer-finder__btn" :class="{ active: selection.show !== 'all' || selection.category }" :aria-expanded="String(filtering)" aria-controls="layer-finder-menu" :aria-label="t('Filter layers')" :title="t('Filter layers')" @click="toggleFilter">
+      <UiButton id="layer-finder-filter-btn" class="layer-finder__btn" :class="{ active: selection.show !== 'all' || selection.category }" :aria-expanded="String(filtering)" aria-controls="layer-finder-menu" :aria-label="t('Filter layers')" :title="t('Filter layers')" @click="toggleFilter">
         <UiIcon name="filter_list" :size="null" />
       </UiButton>
       <span v-if="filtering" id="layer-finder-menu" ref="menuEl" class="layer-finder__menu" role="group" :aria-label="t('Filter layers')" @keydown="onMenuKey">
@@ -148,7 +147,7 @@ defineExpose({
     </span>
   </template>
   <div v-else-if="searching || narrowed" class="layer-finder__bar">
-    <UiSearchField v-if="searching" ref="searchField" :model-value="selection.query" @update:model-value="finder.select({ query: $event })" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="(event) => { event.preventDefault(); closeSearch(); }" />
+    <UiSearchField v-if="searching" :model-value="selection.query" @update:model-value="finder.select({ query: $event })" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="closeSearch" />
     <UiButton v-if="selection.show !== 'all'" class="layer-finder__chip" @click="finder.select({ show: 'all' })">
       {{ selection.show === 'on' ? t('On') : t('Off') }}<UiIcon name="close" :size="null" />
     </UiButton>

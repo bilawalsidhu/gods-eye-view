@@ -1,8 +1,10 @@
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
 import { t, tn, formatNumber, translateKnown } from '../../i18n/index.js';
 import { msg } from '../../i18n/marker.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { wildlifeIconicGroup } from './model.js';
 import { formatAge } from './photoText.js';
+import { isRecentWildlifeSighting } from './records.js';
 import { wildlifeEyeHeight } from './view.js';
 import {
   ICONIC_TINTS,
@@ -26,6 +28,26 @@ const LEGEND_LABELS = Object.freeze({
   Animalia: msg('Other animals'),
   Unknown: msg('Other or unknown'),
 });
+
+function* loadedSightings(state) {
+  yield* state.rows.values();
+  const { selectedId, selectedRow } = state;
+  if (
+    selectedId &&
+    selectedRow?.stableId === selectedId &&
+    !state.rows.has(selectedId)
+  )
+    yield selectedRow;
+}
+
+function isInspectableSighting(row, nowMs, taxa, selectedId) {
+  return (
+    Number.isFinite(row?.lat) &&
+    Number.isFinite(row?.lon) &&
+    ((selectedId && row.stableId === selectedId) ||
+      isRecentWildlifeSighting(row, nowMs, taxa))
+  );
+}
 
 /** Own layer-row descriptors and serializable filter options. */
 export function createControls({ state, services, parts }) {
@@ -198,13 +220,14 @@ export function createControls({ state, services, parts }) {
      */
     getAnalystRecords(maxCount = Infinity) {
       if (!state.enabled) return [];
-      const limit = Number.isFinite(maxCount)
-        ? Math.max(0, Math.floor(maxCount))
-        : Infinity;
+      const limit = analystRecordLimit(maxCount);
       const result = [];
-      for (const row of state.rows.values()) {
+      const nowMs = services.now();
+      const taxa = state.drawnParams?.taxa ?? state.taxa;
+      for (const row of loadedSightings(state)) {
         if (result.length >= limit) break;
-        if (!Number.isFinite(row?.lat) || !Number.isFinite(row?.lon)) continue;
+        if (!isInspectableSighting(row, nowMs, taxa, state.selectedId))
+          continue;
         result.push({
           id: row.stableId,
           name: row.commonName || row.scientificName || null,
@@ -216,6 +239,7 @@ export function createControls({ state, services, parts }) {
           observedOn: row.observedOn || null,
           quality: row.quality || null,
           threatened: row.threatened === true,
+          cetacean: row.cetacean === true,
           obscured: row.obscured === true,
           source: row.origin === 'acartia' ? 'Acartia' : 'iNaturalist',
           link: row.link || null,
@@ -224,6 +248,17 @@ export function createControls({ state, services, parts }) {
         });
       }
       return result;
+    },
+    /** Count the observations Context can inspect without mapping each record. */
+    getInspectableCount() {
+      if (!state.enabled) return 0;
+      const nowMs = services.now();
+      const taxa = state.drawnParams?.taxa ?? state.taxa;
+      let count = 0;
+      for (const row of loadedSightings(state)) {
+        if (isInspectableSighting(row, nowMs, taxa, state.selectedId)) count++;
+      }
+      return count;
     },
     /** Report the visible count, feed state and retry guidance. */
     getStats() {
@@ -248,6 +283,8 @@ export function createControls({ state, services, parts }) {
       const stats = {
         count,
         lastUpdate: state.lastUpdate,
+        // Selection can keep an expired record inspectable without a feed update.
+        recordsRevision: state.selectedId,
         error: state.error,
         stale: state.stale,
         loading,

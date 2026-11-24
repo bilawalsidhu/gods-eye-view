@@ -12,10 +12,12 @@ export async function fetchRegionalBrief(latitude, longitude, { signal } = {}) {
  * has it (the same normalized observation, with the spot's time zone),
  * without the brief's reverse geocode and news search.
  */
-export async function fetchSpotWeather(latitude, longitude, { signal } = {}) {
+export async function fetchSpotWeather(latitude, longitude, options) {
   if (![latitude, longitude].every(Number.isFinite))
     throw new Error('Valid coordinates are required');
-  return applicationServices.weather.getConditions(latitude, longitude, {
-    signal,
-  });
+  return applicationServices.weather.getConditions(
+    latitude,
+    longitude,
+    options,
+  );
 }
