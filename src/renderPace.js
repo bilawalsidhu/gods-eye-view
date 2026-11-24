@@ -201,8 +201,12 @@ export function createScreenSpeed() {
       focal = (heightPx || 900) / 2 / Math.tan(pose.fovy / 2);
       return true;
     },
-    /** One mark's move from `from` to `to` (ECEF metres). */
-    add(from, to) {
+    /**
+     * One mark's move from `from` to `to` (ECEF metres), made over `scale`
+     * times less time than the moves `pxPerSec` is asked for: a mark whose
+     * drawn path ends sooner is read over what is left of it.
+     */
+    add(from, to, scale = 1) {
       if (!eye || !from || !to) return;
       const dx = to.x - eye.x;
       const dy = to.y - eye.y;
@@ -210,9 +214,9 @@ export function createScreenSpeed() {
       const range2 = dx * dx + dy * dy + dz * dz;
       const along = dx * dir.x + dy * dir.y + dz * dir.z;
       if (!(along > 0) || along * along < VIEW_COS * VIEW_COS * range2) return;
-      const mx = to.x - from.x - ex;
-      const my = to.y - from.y - ey;
-      const mz = to.z - from.z - ez;
+      const mx = (to.x - from.x) * scale - ex;
+      const my = (to.y - from.y) * scale - ey;
+      const mz = (to.z - from.z) * scale - ez;
       // The angle the move subtends, stretched by 1 / cos² off the centre.
       const turn2 =
         ((mx * mx + my * my + mz * mz) * range2) /

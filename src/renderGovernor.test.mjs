@@ -373,7 +373,11 @@ test('steering ends when the page loses focus, and a wheel moment ending never e
     assert.equal(scene.targetFps, 0, 'dragging: the display rate');
     // Let go over another window: the page never hears the release.
     page.dispatchEvent(new Event('blur'));
-    assert.equal(scene.targetFps, FOLLOW_FRAME_RATE, 'focus lost: steering ends');
+    assert.equal(
+      scene.targetFps,
+      FOLLOW_FRAME_RATE,
+      'focus lost: steering ends',
+    );
     // A wheel turn, then a drag begun before its moment ends.
     page.dispatchEvent(new Event('wheel'));
     page.dispatchEvent(new Event('pointerdown'));
@@ -397,7 +401,8 @@ test('a pinch steers until its last finger lifts; an element losing focus is not
     installRenderGovernor(framePortFor(viewer.scene), fakeTimers());
     holdContinuousRender('tracked-entity', { maxFps: FOLLOW_FRAME_RATE });
     holdContinuousRender('camera');
-    const pointer = (type, pointerId) => Object.assign(new Event(type), { pointerId });
+    const pointer = (type, pointerId) =>
+      Object.assign(new Event(type), { pointerId });
     page.dispatchEvent(pointer('pointerdown', 1));
     page.dispatchEvent(pointer('pointerdown', 2));
     page.dispatchEvent(pointer('pointerup', 1));

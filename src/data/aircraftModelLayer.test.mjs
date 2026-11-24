@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAircraftModels } from './aircraftModelLayer.js';
+import { createAircraftModels, paceSpanMs } from './aircraftModelLayer.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
@@ -493,4 +493,13 @@ test('the fleet tick re-plans the icons with the camera: its eye, and what it se
   const behind = { x: f.eye.x, y: f.eye.y, z: f.eye.z + 10_000 };
   assert.equal(view.inView(ahead), true);
   assert.equal(view.inView(behind), false);
+});
+
+test("an icon's speed is read over what is left of its drawn path", () => {
+  assert.equal(paceSpanMs(1_000, null), 1_000);
+  assert.equal(paceSpanMs(1_000, Infinity), 1_000);
+  assert.equal(paceSpanMs(1_000, 5_000), 1_000);
+  assert.equal(paceSpanMs(1_000, 1_050), 50);
+  assert.equal(paceSpanMs(1_000, 1_010), 0);
+  assert.equal(paceSpanMs(1_000, 900), 0);
 });

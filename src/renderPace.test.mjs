@@ -189,3 +189,20 @@ test('a need of ten a second, once held, falls back to single frames at ten', ()
   assert.equal(Math.round(pace.state().hz), 10);
   assert.equal(timers.size, 1);
 });
+
+test('a mark read over less time counts at the speed it moves, not slower', () => {
+  const speed = createScreenSpeed();
+  const pose = {
+    position: { x: 0, y: 0, z: 0 },
+    direction: { x: 0, y: 0, z: -1 },
+    fovy: Math.PI / 3,
+  };
+  // 100 m a second, 10 km ahead: read over a full second, and over 50 ms.
+  speed.begin(pose, 900);
+  speed.add({ x: 0, y: 0, z: -10_000 }, { x: 100, y: 0, z: -10_000 });
+  const full = speed.pxPerSec(1);
+  speed.begin(pose, 900);
+  speed.add({ x: 0, y: 0, z: -10_000 }, { x: 5, y: 0, z: -10_000 }, 20);
+  assert.ok(full > 0);
+  assert.ok(Math.abs(speed.pxPerSec(1) - full) < 1e-3 * full);
+});

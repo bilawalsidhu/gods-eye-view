@@ -62,6 +62,25 @@ function inView(pose, point) {
   );
 }
 
+/** Each icon's move is read over at most this much of its drawn path, in ms. */
+const PACE_SPAN_MS = 1000;
+/** A drawn path that ends sooner than this is not read: it is replanned. */
+const PACE_MIN_SPAN_MS = 20;
+
+/**
+ * How much of an icon's drawn path, from display time `t`, its on-screen
+ * speed is read over: PACE_SPAN_MS, or what is left of a path that ends
+ * sooner (past its end it stands still, which is no speed), or 0 when too
+ * little is left to read.
+ * @param {number} t Display ms.
+ * @param {number|null|undefined} endsAt When the icon's drawn path ends, if it does.
+ */
+export function paceSpanMs(t, endsAt) {
+  if (endsAt == null || !(endsAt - t < PACE_SPAN_MS)) return PACE_SPAN_MS;
+  const left = endsAt - t;
+  return left >= PACE_MIN_SPAN_MS ? left : 0;
+}
+
 /**
  * An aircraft layer's 3D models: the fleet regime and its gap-proof handoff
  * from the icon set (`createAircraftIcons`), the standalone tracked model, and
@@ -135,8 +154,6 @@ export function createAircraftModels({
   const screenSpeed = createScreenSpeed();
   /** How often the icons' on-screen speed is read, in ms. */
   const PACE_READ_MS = 250;
-  /** Each icon's move is read over this much of its drawn path, in ms. */
-  const PACE_SPAN_MS = 1000;
   /** While icons fade for a focus change, they are drawn this often. */
   const PACE_FADE_HZ = 20;
   /** A rotor drawn this recently is in view. */
@@ -155,9 +172,12 @@ export function createAircraftModels({
     const t = parts.icons._displayMs();
     for (const id of icons.ids()) {
       if (!icons.shown(id)) continue;
+      const spanMs = paceSpanMs(t, icons.expires(id));
+      if (!spanMs) continue;
       screenSpeed.add(
         icons.position(id, t),
-        icons.position(id, t + PACE_SPAN_MS),
+        icons.position(id, t + spanMs),
+        PACE_SPAN_MS / spanMs,
       );
     }
     return screenSpeed.pxPerSec(PACE_SPAN_MS / 1000);
@@ -1022,7 +1042,12 @@ export function createAircraftModels({
         }
       }
       state._icons?.flush();
-      pace.set(_paceHz());
+      // The pass's own error, if any, is the one that goes on.
+      try {
+        pace.set(_paceHz());
+      } catch (error) {
+        console.warn(`[${logLabel}] fleet pace failed`, error);
+      }
     }
   }
 
