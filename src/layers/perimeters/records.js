@@ -2,9 +2,12 @@
  * WFIGS perimeters: the proxy's rows (normalizeFirePerimeterSnapshot) and
  * the snapshot the layer draws (firePerimeterSnapshot).
  *
- * The server and the package's `./layers/perimeters/source` export import
- * this module, so it marks text with msg() only. The layer translates `note`
- * when it shows it.
+ * The server and the package's `./layers/perimeters/source` and
+ * `./layers/perimeters/records` exports import this module, so it marks text
+ * with msg() only and imports no rendering code. The layer translates `note`
+ * when it shows it. A host that places incident cards itself (a server, a
+ * worker) takes `perimeterAnchorDegrees` from `./layers/perimeters/records`
+ * and stands them where the map does.
  */
 
 import { msg } from '../../i18n/marker.js';
