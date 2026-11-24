@@ -216,6 +216,10 @@ export function presentCctvSourceBadge(activeCamera, enabled, frame) {
 
 export function _syncCctvSourceBadge(activeCamera, enabled) {
   this.store.setSourceBadge(
-    presentCctvSourceBadge(activeCamera, enabled, this._frame),
+    presentCctvSourceBadge(
+      activeCamera,
+      enabled,
+      this.store.live ? EMPTY_CCTV_FRAME : this._frame,
+    ),
   );
 }

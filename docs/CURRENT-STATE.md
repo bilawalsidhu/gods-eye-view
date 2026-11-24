@@ -969,8 +969,11 @@ within the radius the panel sets (25 to 2,500 km). Aircraft, satellites and
 vessels are followed as they are picked; the card says Following only while
 the camera follows the card's own item, and closing the card lets go.
 Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
-vehicles show their motion and fleet. A camera's card shows its latest frame
-from the CCTV panel.
+vehicles show their motion and fleet. A camera's card shows its latest still
+when available, while live video plays in the CCTV panel. Clicking the
+projected image, a view ray or the far-plane outline opens that camera's card.
+A loaded camera's name and position are also available when the card opens
+from its icon.
 
 With nothing picked, the panel describes the view
 (`src/ui/views/panels/ViewContext.vue`): the place under the middle of the
