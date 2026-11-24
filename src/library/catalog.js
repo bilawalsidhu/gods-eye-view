@@ -100,6 +100,7 @@ import unionCountyOh from './entries/union-county-oh.json' with { type: 'json' }
 import usgsHydrography from './entries/usgs-hydrography.json' with { type: 'json' };
 import usgsTopo from './entries/usgs-topo.json' with { type: 'json' };
 import vaStatewideImagery from './entries/va-statewide-imagery.json' with { type: 'json' };
+import vegagerdinRoadWeather from './entries/vegagerdin-road-weather.json' with { type: 'json' };
 import vtStatewideImagery from './entries/vt-statewide-imagery.json' with { type: 'json' };
 import wallonieOrtho from './entries/wallonie-ortho.json' with { type: 'json' };
 import wiStatewideImagery from './entries/wi-statewide-imagery.json' with { type: 'json' };
@@ -199,6 +200,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   usgsHydrography,
   usgsTopo,
   vaStatewideImagery,
+  vegagerdinRoadWeather,
   vtStatewideImagery,
   wallonieOrtho,
   wiStatewideImagery,
