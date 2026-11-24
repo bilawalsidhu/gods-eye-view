@@ -64,7 +64,8 @@ export const ANALYST_LAYERS = Object.freeze(
 
 /** Fields every record carries regardless of layer. */
 const COMMON_FIELDS = Object.freeze(['id', 'lat', 'lon']);
-/** Derived per-record field for layers with a time field (hours before now). */
+/** Derived per-record field for layers with a time field (hours before the
+ * moment the layer's records show: now, or its past snapshot's time). */
 const AGE_FIELD = 'ageHours';
 /** Spatial scope kinds `query()` accepts. */
 const ANALYST_SCOPE_KINDS = Object.freeze([
@@ -582,6 +583,8 @@ function offerTop(top, candidate, limit, dir) {
  * engine and the Contacts-window path so both format and rank alike.
  * @param {Array<{key: string, rows: object[]}>} groups Candidate rows.
  * @param {object} options
+ * @param {Map<string, number|null>} [options.recordsAt] Per-layer snapshot times in epoch ms.
+ *   Ages count from the layer’s snapshot time when given, otherwise from now.
  * @returns {Promise<object|null>} Selection, or null when cancelled.
  */
 export async function selectAnalystRows(
@@ -595,6 +598,7 @@ export async function selectAnalystRows(
     ref = null,
     inScope = null,
     now = Date.now(),
+    recordsAt = null,
     isCurrent = () => true,
     distanceOf = null,
   } = {},
@@ -603,8 +607,10 @@ export async function selectAnalystRows(
   const ageOf = (key, row) => {
     const field = timeFieldOf(key);
     const t = field ? row[field] : null;
+    const from = recordsAt?.get(key);
+    const ref = Number.isFinite(from) ? from : now;
     return Number.isFinite(t)
-      ? Math.round(((now - t) / 3_600_000) * 10) / 10
+      ? Math.round(((ref - t) / 3_600_000) * 10) / 10
       : null;
   };
   const distance = (row) => {
@@ -771,6 +777,7 @@ export function createAnalystEngine(providers) {
     spec = normalized.spec;
 
     // 1) Source records, grouped by layer and never copied.
+    const recordsAt = followUp ? lastResult.recordsAt : new Map();
     let groups;
     let layersQueried;
     let queriedSnapshots;
@@ -786,6 +793,7 @@ export function createAnalystEngine(providers) {
       queriedSnapshots = [];
       for (const key of layers) {
         const rows = providers.getRecords(key) || [];
+        recordsAt.set(key, providers.getRecordsAt?.(key) ?? null);
         const snapshot = providers.getLayerSnapshot?.(key);
         if (snapshot) queriedSnapshots.push(snapshot);
         const coverage = providers.getRecordCoverage?.(key, rows) || {};
@@ -1048,6 +1056,7 @@ export function createAnalystEngine(providers) {
           : null,
       inScope,
       now: providers.now?.() ?? Date.now(),
+      recordsAt,
       isCurrent,
     });
     if (!selection || !isCurrent()) return cancelled();
@@ -1147,6 +1156,7 @@ export function createAnalystEngine(providers) {
     if (!isCurrent()) return cancelled();
     lastResult = {
       matched: memoryOverride?.matched || selection.matched,
+      recordsAt,
       distanceOf: memoryOverride?.distanceOf || rememberedDistanceOf,
       layerKeys: [...(memoryOverride?.layerKeys || layers)],
       coverage: memoryOverride?.coverage || result.coverage,

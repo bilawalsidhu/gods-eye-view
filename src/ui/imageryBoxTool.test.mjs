@@ -10,6 +10,7 @@ import {
   IMAGERY_BOX_POINTER_OWNER,
   initImageryBoxTool,
 } from './imageryBoxTool.js';
+import { lonSpanDeg, validateBox } from '../layers/recentImagery/model.js';
 import { boxToolFakes } from '../layers/recentImagery/testDoubles.mjs';
 import { createImageryBoxPreview } from '../layers/recentImagery/rendering.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
@@ -208,4 +209,41 @@ test('destroy mid-drag restores the camera, releases the claim and detaches the 
   assert.equal(f.stockAction('LEFT_CLICK'), f.originalClick);
   assert.equal(f.tool.start(), false);
   assert.equal(initImageryBoxTool({ viewer: null, onBox() {} }), null);
+});
+
+test('a drag across the dateline is the short box, not a box round the world', async () => {
+  const pickWorld = (_viewer, nx, ny) =>
+    ny < 0.05 ? null : { lon: nx < 0.5 ? 179.99 : -179.99, lat: ny };
+  const f = fixture({ pickWorld });
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 100, y: 200 } });
+  f.fire('LEFT_UP', { position: { x: 800, y: 250 } });
+  assert.deepEqual(f.cancels, []);
+  assert.equal(f.boxes.length, 1);
+  const { west, east } = f.boxes[0];
+  assert.ok(west > east, `west ${west} is east of east ${east}`);
+  assert.ok(Math.abs(east + 360 - west - 0.02) < 1e-9, 'a 0.02 degree span');
+  await f.tool.destroy();
+});
+
+test('a drag whose short arc is still over the size limit is refused as too large', async () => {
+  const pickWorld = (_viewer, nx, ny) => ({
+    lon: nx < 0.5 ? 100 : -100,
+    lat: ny,
+  });
+  const refused = [];
+  const f = fixture({
+    pickWorld,
+    onCancel: (reason, message, box) => refused.push({ reason, message, box }),
+  });
+  f.tool.start();
+  f.fire('LEFT_DOWN', { position: { x: 100, y: 200 } });
+  f.fire('LEFT_UP', { position: { x: 800, y: 250 } });
+  assert.equal(f.boxes.length, 0);
+  const { reason, message, box } = refused.at(-1);
+  assert.equal(reason, 'too-large');
+  assert.deepEqual([box.west, box.east], [100, -100], 'the short arc');
+  assert.equal(lonSpanDeg(box.west, box.east), 160);
+  assert.equal(message, validateBox(box).message);
+  await f.tool.destroy();
 });

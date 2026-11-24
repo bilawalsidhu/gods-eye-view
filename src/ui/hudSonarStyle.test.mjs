@@ -502,7 +502,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   const timeline = read('./styles/world-timeline.css');
   const timelineLift = value(
     timeline,
-    /body:has\(#world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
+    /body:is\(\.has-world-timeline \*, #world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
   );
 
   // From 1200px the dock and the World Timeline leave the bottom 74px; below
@@ -549,7 +549,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       );
       assert.match(
         trays,
-        /:has\(#command-dock > #gev-voice-control\)\s*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
+        /:where\(\.has-omnibar\.dock-has-voice \*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
       );
       return anchor && box && [null, anchor[1], box[1]];
     })(),
@@ -578,7 +578,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   // right, with the Minimal HUD too (its placement names #intel-hud).
   assert.match(
     trayWide,
-    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
+    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):is\(\s*\.hud-minimal-active \*,\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
   // Its box hangs from the anchor's right edge there, and in the Omnibar
   // layout at every width; never in clean view or recording, where the
@@ -791,7 +791,7 @@ test('the Omnibar dock sits above the World Timeline, and narrow corners clear t
   );
   assert.doesNotMatch(css, /--world-timeline-lift\s*:/);
   const lift = read('./styles/world-timeline.css').match(
-    /body:has\(#world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
+    /body:is\(\.has-world-timeline \*, #world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
   );
   const height = read('./styles/world-timeline.css').match(
     /#world-timeline \{[^}]*\n {2}height: (\d+)px;/,

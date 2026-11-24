@@ -17,14 +17,17 @@ body.context-docked #right-context-rail {
 }
 
 /* The map credits stay readable beside the column: their row ends short of
-   it. creditAttribution.test.mjs pins this. */
+   it. creditAttribution.test.mjs pins this. `.hud-minimal-active` is a
+   page-root class (src/ui/rail/rootClass.js). */
 body.context-docked:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
 body.context-docked:not(.ui-clean-view):not(.recording-mode) #gev-credits,
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #cesium-credits,
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   #gev-credits {
@@ -197,7 +200,8 @@ body.mobile-shell .context-dock-btn {
 
 /* With the minimal HUD the credits sit at the bottom right, where the
    column is: they move out to its left. */
-body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   :is(#cesium-credits, #gev-credits) {
@@ -213,7 +217,8 @@ html[dir='rtl']
 }
 
 html[dir='rtl']
-  body.context-docked:not(.ui-clean-view):not(.recording-mode):has(
+  body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
     #intel-hud[data-variant='minimal'].active
   )
   :is(#cesium-credits, #gev-credits) {

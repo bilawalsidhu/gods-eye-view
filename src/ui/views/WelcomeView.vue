@@ -1,13 +1,28 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { nextTick, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { msg, t } from '../../i18n/index.js';
 import { FIRST_RUN_LINKS, environmentalLabel } from '../../firstRunCopy.js';
 import UiButton from '../kit/UiButton.vue';
 import UiCheckbox from '../kit/UiCheckbox.vue';
 import UiIcon from '../kit/UiIcon.vue';
+import { followSelectorRootClass } from '../rail/rootClass.js';
 import { useFirstRunStore } from '../stores/firstRun.js';
 import { useStoriesStore } from '../stores/stories.js';
+
+// While the launcher is on the page, `launcher-shown` is on the page root
+// (src/ui/rail/rootClass.js; first-run.css reads it). It follows the element
+// itself, so a launcher removed by anything, not only this view, clears it.
+let stopLauncherClass = null;
+onMounted(() => {
+  stopLauncherClass = followSelectorRootClass(
+    document,
+    'launcher-shown',
+    '#first-run-launcher',
+    '#first-run-launcher',
+  );
+});
+onBeforeUnmount(() => stopLauncherClass?.());
 
 // The launcher initFirstRunExperience presents, and the controls it connects.
 const { launcher, controls } = storeToRefs(useFirstRunStore());
