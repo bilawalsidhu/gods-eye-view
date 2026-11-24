@@ -1273,9 +1273,8 @@ coordinates, interpolated wind speed and meteorological direction, selected
 scalar, model, valid time and freshness. Clear reading removes the sample and
 map marker. Model/field changes or refresh also clear them. Unit chips reformat
 the captured sample without resampling or moving its marker. There is no separate
-floating reading surface. The card shows forecast issue and valid times; the
-observed-history timeline labels the oldest and newest available ticks. Animation
-moves through a fixed forecast; it does not advance forecast time.
+floating reading surface. The card shows forecast issue and valid times.
+Animation moves through a fixed forecast and leaves the forecast time unchanged.
 
 Temperature is air temperature at 2 m in °C; pressure is mean sea-level pressure
 in hPa. Optional companion fields come from the same model run/forecast as the
@@ -1370,8 +1369,8 @@ avoid restaging for every pointer event. Status refreshes retain the uncommitted
 drag preview; changed model values or disabled controls supersede it.
 Satellite share links carry the filter
 strength; legacy `f`/`a` values keep their Clouds only / Full meanings. Soft and
-Vivid remain layer-opacity presets (40%/70%); history remains transient and links
-open latest.
+Vivid remain layer-opacity presets (40%/70%). A link made away from Live opens
+at its world time, paused.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
@@ -1412,15 +1411,16 @@ were reused, and the study found no application licence granting reuse. Native
 hardware GPU behavior remains unverified; software-rendered checks do not
 establish native GPU performance or compatibility.
 
-The right-rail WEATHER panel owns active-product readouts, coverage badges,
-legends and the single observed-history timeline. The timeline appears with an
-active observed layer and at least two union times; wind alone does not show it.
-Dragging previews UTC and age locally and coalesces clock commits at 150 ms;
-release commits immediately. Latest selects the newest frame per product, and
-history labels the actual displayed frame as synced or nearest. Missing-frame
-messages use each product's eligibility gap (30 minutes, or three hours for the
-global mosaic). Wind shows forecast valid and issue times and does not follow
-history. Satellite clouds uses Clouds only / Full controls, a continuous cloud
+The right-rail WEATHER panel shows active-product readouts, coverage badges
+and legends; its heading shows the newest selected frame and its age while
+live, or the timeline time in history, and each product card shows its
+displayed frame's UTC time and age, marked synced or nearest in history.
+With Rain radar, Satellite clouds or Lightning density on, the world timeline
+appears and moves observation history (drag back, Play, Live); wind alone does
+not show it. Frame selection, eligibility gaps and Play are described under
+Local Weather review candidate below. Wind shows forecast valid and issue times
+and does not follow history.
+Satellite clouds uses Clouds only / Full controls, a continuous cloud
 filter slider and Soft/Vivid opacity presets in its right-rail settings.
 
 Left weather rows retain only the toggle and one status line with a source
@@ -1428,8 +1428,8 @@ tooltip. Configuration and the cyclone Storms list live in the cards, as do the
 cyclone advisory, position time, wind, pressure, geometry status and the
 official advisory link. The panel hides when empty, auto-expands once per page
 session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
-per frame. Generic keyed rail cards and the native rail timeline preserve DOM
-nodes and avoid identical writes; the weather panel owns descriptor mapping.
+per frame. Generic keyed rail cards preserve DOM nodes and avoid identical
+writes; the weather panel owns descriptor mapping.
 Inspection emphasizes the chosen scalar and marks the exact sampled location;
 the passive marker follows that snapshot, respects globe occlusion and disappears
 on dismissal, field/model changes, disable or teardown. Clean view and
@@ -10037,13 +10037,14 @@ The Weather panel's frame time shows the newest frame and its age while live
 alone at a past time.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
 has no time controls of its own: `weatherClock.world` is the world clock it
-follows, where time moves. A weather row's `play`, `latest` and `step` params
-move that world clock as the timeline does: `play` runs at the speed chosen on
-the timeline (the world clock keeps its rate while paused and live, and the
-timeline's speed selector shows the clock's rate, or the nearest offered speed
-for a rate a host set), from the start of the covered time when live or at its
-end, and does nothing while every product the row shows is suspended or while
-there is no covered time. A weather layer built without a
+follows, where time moves. The World Timeline's Play button leaves the clock
+live when it is already live. A weather layer also exposes `play`, `latest`
+and `step` parameters. The layer's `play` starts from the beginning of the
+covered time when invoked at Live or at the end. It runs at the world clock's
+rate and does nothing when every product the layer shows is suspended or when
+there is no covered time. The clock retains its rate while paused and live.
+The timeline's speed selector shows the clock's rate or the nearest offered
+speed for a rate a host set. A weather layer built without a
 shared clock builds one of its own on the page's world clock when first
 enabled (`createWeatherClock({ shared: false })`) and keeps it for its
 lifetime; destroying it leaves the world's time where it is, and enabling it
@@ -10054,8 +10055,9 @@ of its own.
 Source, opacity and coverage navigation live in the WEATHER panel's cards, not
 in the rows; the panel shows the frame time and has no time controls. The
 viewer clock is untouched.
-Observation layers are off by default; share/persist includes appearance and product, while history
-is transient and shared links open latest. Rendering retains the previous frame
+Observation layers are off by default; share/persist includes appearance and
+product; a share link made away from Live also carries the world time and opens
+there, paused. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
 
 Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at
