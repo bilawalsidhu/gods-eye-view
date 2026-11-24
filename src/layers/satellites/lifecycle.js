@@ -30,7 +30,6 @@ export function createLifecycle({
   // Unregistered on destroy, so a page that builds the app again holds no old layer; init
   // registers it again.
   let uncover = worldClock.register(clockSource);
-  const { holdContinuousRender, releaseContinuousRender } = services.render;
   const { registerPickOwner, unregisterPickOwner } = services.picking;
 
   /** Run the shared per-frame tick before each frame draws. */
@@ -98,7 +97,8 @@ export function createLifecycle({
 
     enable(viewer) {
       layerState._enabled = true;
-      holdContinuousRender('satellites'); // per-frame animator (perf wave 2)
+      // Drawn as often as the dots move on screen (rendering.js, the pace).
+      parts.rendering._startPace();
       parts.rendering._setPointsShown(
         parts.controls.satelliteVisualsVisible(
           layerState._enabled,
@@ -137,7 +137,7 @@ export function createLifecycle({
       parts.catalog._abortActiveUpdates();
       parts.tracking._cancelPendingTrackingRestore();
       layerState._enabled = false;
-      releaseContinuousRender('satellites');
+      parts.rendering._stopPace();
       parts.rendering._setPointsShown(false);
       parts.rendering._setOrbitPathsShown(false);
       for (const model of parts.stationModels ?? [])
@@ -165,7 +165,7 @@ export function createLifecycle({
       parts.catalog._abortActiveUpdates();
       uncover?.();
       uncover = null;
-      releaseContinuousRender('satellites'); // direct-destroy path (perf wave 2 fix)
+      parts.rendering._stopPace(); // direct-destroy path (perf wave 2 fix)
       layerState._enabled = false;
       parts.tracking._clearTracking();
       parts.tracking._cancelPendingTrackingRestore();

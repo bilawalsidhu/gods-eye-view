@@ -870,7 +870,13 @@ export function createGpuIcons({
       },
       /** Whether a live-clock row is still moving: frames should keep coming. */
       animating() {
-        if (spec.motionClock?.kind === 'scene' || spec.show === false)
+        // A set whose owner asks for its frames (`frames: 'owner'`) is not
+        // kept drawing by its moving rows.
+        if (
+          spec.motionClock?.kind === 'scene' ||
+          spec.motionClock?.frames === 'owner' ||
+          spec.show === false
+        )
           return false;
         return set.count > 0 && clockMs() < movingUntil;
       },

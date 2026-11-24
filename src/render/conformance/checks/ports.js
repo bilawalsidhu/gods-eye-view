@@ -6619,6 +6619,26 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
       },
     ),
     check(
+      'frame.onHoldsChange',
+      'onHoldsChange is told every hold and release, whoever holds, and nothing once off',
+      (h, r) => {
+        let heard = 0;
+        const off = r.frame.onHoldsChange(() => (heard += 1));
+        try {
+          const one = r.frame.holdContinuous('conformance:one');
+          const two = r.frame.holdContinuous('conformance:two');
+          one();
+          two();
+          equal(heard, 4, 'two holds and two releases');
+        } finally {
+          off();
+        }
+        r.frame.holdContinuous('conformance:after')();
+        equal(heard, 4, 'nothing once off');
+      },
+      { capability: 'holdChanges' },
+    ),
+    check(
       'frame.setTargetFps',
       'setTargetFps caps the loop; diagnostics say the cap, 0 the display rate',
       (h, r) => {

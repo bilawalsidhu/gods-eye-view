@@ -364,6 +364,7 @@
       "src/sky/stars.js",
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/sky/icrf.js",
       "src/sky/assets.js",
       "src/globeInView.js",
@@ -1398,6 +1399,7 @@
       "src/maps/startupRoute.js",
       "src/sky/stars.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/data/bundledJson.js",
       "src/render/cesium/iconSetPrimitive.js",
       "src/render/recession.js",
@@ -2089,7 +2091,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/layers/flights/placed.js",
-      "src/data/courseFromFixes.js"
+      "src/data/courseFromFixes.js",
+      "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -2235,7 +2238,8 @@
       "src/data/detectionOcclusion.js",
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
-      "src/data/approxDistance.js"
+      "src/data/approxDistance.js",
+      "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -2393,7 +2397,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/layers/vessels/photos.js",
-      "src/data/openVesselPhoto.js"
+      "src/data/openVesselPhoto.js",
+      "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -2461,6 +2466,7 @@
       "src/cockpitOrbital.js",
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/sky/stars.js",
       "src/data/entityRecords.js",
       "src/sky/icrf.js",
@@ -2605,6 +2611,7 @@
       "src/render/cesium/mapEngine.js",
       "src/data/bundledJson.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/sky/icrf.js",
       "src/sky/stars.js",
       "src/sky/assets.js",
@@ -2897,7 +2904,8 @@
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/renderPace.js"
     ],
     "external": ["cesium", "satellite.js", "kdbush"]
   },
@@ -4307,6 +4315,7 @@
       "src/render/contract/index.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
+      "src/app/openingIntro.js",
       "src/app/startupChrome.js",
       "src/app/stateChannel.js",
       "src/app/surfaceServices.js",
@@ -4761,6 +4770,7 @@
       "src/overlays/worldOverlayTokens.js",
       "src/panelStackLayout.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/rightRailPolicy.js",
       "src/scenes/director.js",
       "src/scenes/sceneSaveError.js",
@@ -6065,6 +6075,7 @@
       "src/overlays/worldOverlayDraw.js",
       "src/overlays/worldOverlayTokens.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/search/alpsGeocoder.js",
       "src/search/defaults.js",
       "src/search/geospatial.js",
@@ -7510,6 +7521,7 @@
       "src/overlays/worldOverlayDraw.js",
       "src/overlays/worldOverlayTokens.js",
       "src/renderGovernor.js",
+      "src/renderPace.js",
       "src/services/application.js",
       "src/services/groundFloor.js",
       "src/services/meshFloorSampler.js",
