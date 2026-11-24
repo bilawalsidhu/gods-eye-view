@@ -9065,6 +9065,12 @@ apply to `public/` assets or built-preview serving.
   Pixel-mode pinch deltas receive bounded amplification before reaching the
   canvas; ordinary wheel, line/page-mode and native touch-pinch paths are left
   unchanged. The application scene owns and removes the relay listener.
+- On macOS, Command+drag on the globe tilts and rotates the camera as
+  Ctrl+drag does, since Ctrl+click is a right click there; Ctrl+drag still
+  works. Pointer and mouse events with Command held (and Ctrl not) report
+  Ctrl to Cesium's camera controller (`src/render/cesium/commandDrag.js`).
+  Wheel events are never remapped, so Ctrl+wheel stays the trackpad pinch.
+  Other platforms are unchanged.
 - Z ladder: panels around 100, voice pill 150, toast 200, clean-view exit 300.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
 - Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
