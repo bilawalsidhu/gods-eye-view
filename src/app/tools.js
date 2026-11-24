@@ -22,6 +22,7 @@ import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createDataLibrary } from '../library/controller.js';
 import { flyToLibraryExtent } from '../library/camera.js';
+import { openingPlaying } from './openingIntro.js';
 import { createLibraryBrowser } from '../ui/libraryBrowser.js';
 import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -89,8 +90,9 @@ export function createApplicationTools({
     installGlobeInViewRecovery(viewer, {
       // The scope mask hides everything outside its keyhole.
       keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
-      // An authored scene frames its own shots, holds included.
-      paused: () => sceneDirector.running,
+      // An authored scene frames its own shots, holds included, and the
+      // opening starts with the globe as a speck.
+      paused: () => sceneDirector.running || openingPlaying(),
     }),
   );
   onSceneDirector?.(sceneDirector);

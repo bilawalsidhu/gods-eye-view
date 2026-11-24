@@ -4313,6 +4313,7 @@
       "src/render/contract/index.js",
       "src/sources/sourceSlot.js",
       "src/app/sources.js",
+      "src/app/openingIntro.js",
       "src/app/startupChrome.js",
       "src/app/stateChannel.js",
       "src/app/surfaceServices.js",
