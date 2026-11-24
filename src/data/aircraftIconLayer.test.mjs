@@ -504,7 +504,7 @@ test('back at live, a placed contact eases from where it is drawn over a recover
 });
 
 /** A layer whose placement has every contact flying east from `at(id)`. */
-function placedFleet(ids, at) {
+function placedFleet(ids, at, { displayDelay } = {}) {
   const state = {
     now: () => Date.now(),
     _icons: createContactIcons(),
@@ -520,8 +520,11 @@ function placedFleet(ids, at) {
     layerId: 'flights',
     courseMaxDps: 3,
     cockpitContactSizePx: 8,
+    ...(displayDelay ? { displayDelay } : {}),
     placeAt: (id, wallMs, _info, _history, out) => {
-      Object.assign(out, at(id, wallMs));
+      const placed = at(id, wallMs);
+      if (!placed) return null;
+      Object.assign(out, placed);
       return { courseDeg: 90, speedMps: 200 };
     },
   });
@@ -608,4 +611,201 @@ test('a placed contact far from the eye or out of view is planned for longer tha
   );
   icons._planIcon('f');
   assert.ok(Math.abs(length('f') - 1_000) < 1, `after a throw ${length('f')}`);
+});
+
+test('a new report moving where a placed contact is placed eases it there from where it is drawn, not in a jump', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  // Flying east at 200 m/s; `shiftM` east of that once a new report lands.
+  let shiftM = 0;
+  const at = (_id, wallMs) => {
+    const east = shiftM + (200 * (wallMs - WORLD_MS)) / 1000;
+    return fromDegrees(east / (111_320 * Math.cos(Math.PI / 6)), 30, 3_000);
+  };
+  const { icons, set } = placedFleet(['c'], at);
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  icons._planIcon('c');
+  assert.ok(metres(set.position('c', WORLD_MS, {}), at('c', WORLD_MS)) < 1);
+  // Its plan runs out with no new report: drawn on where it is placed.
+  t.mock.timers.tick(set.expires('c') - Date.now());
+  icons._replanExpired(Date.now());
+  assert.ok(metres(set.position('c', Date.now(), {}), at('c', Date.now())) < 1);
+
+  // A report a kilometre on: it eases there from where it is drawn.
+  t.mock.timers.tick(set.expires('c') - Date.now());
+  const drawn = set.position('c', Date.now(), {});
+  shiftM = 1_000;
+  icons._replanExpired(Date.now());
+  assert.ok(metres(set.position('c', Date.now(), {}), drawn) < 1, 'no jump');
+  const end = set.expires('c');
+  const errorM = metres(drawn, at('c', Date.now()));
+  assert.ok(Math.abs(errorM - 1_000) < 5, `${errorM} m off`);
+  assert.equal(end, Date.now() + recoveryMs(errorM, 200));
+  assert.ok(metres(set.position('c', end, {}), at('c', end)) < 1);
+
+  // One farther than a recovery covers jumps: drawn where it is placed.
+  t.mock.timers.tick(end - Date.now() + 1);
+  icons._replanExpired(Date.now());
+  shiftM = 50_000;
+  t.mock.timers.tick(set.expires('c') - Date.now());
+  icons._replanExpired(Date.now());
+  assert.ok(metres(set.position('c', Date.now(), {}), at('c', Date.now())) < 1);
+});
+
+test('a placed contact replanned a little after its plan ran out, with nothing moved, is not eased', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const at = (_id, wallMs) =>
+    fromDegrees(
+      (200 * (wallMs - WORLD_MS)) / 1000 / (111_320 * Math.cos(Math.PI / 6)),
+      30,
+      3_000,
+    );
+  const { icons, set } = placedFleet(['c'], at);
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  icons._planIcon('c');
+  const planMs = 1_000 * placedPlanSpread('c');
+  // Passes every 80 ms for 20 s: each plan is picked up up to 80 ms late.
+  let plans = 0;
+  for (let ms = 80; ms <= 20_000; ms += 80) {
+    t.mock.timers.tick(80);
+    if (set.expires('c') > Date.now()) continue;
+    const drawn = set.position('c', Date.now(), {});
+    icons._replanExpired(Date.now());
+    plans++;
+    assert.ok(
+      metres(set.position('c', Date.now(), {}), drawn) < 0.01,
+      `plan ${plans} goes on from where it is drawn`,
+    );
+    const item = set.item('c');
+    assert.equal(item.motion.kind, 'lerp', `plan ${plans}`);
+    assert.ok(
+      Math.abs(set.expires('c') - Date.now() - planMs) < 1,
+      `plan ${plans} runs ${set.expires('c') - Date.now()} ms`,
+    );
+  }
+  assert.ok(plans > 10, `${plans} plans`);
+});
+
+test('a placed contact is not eased while the display delay moves, nothing else moving', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const at = (_id, wallMs) =>
+    fromDegrees(
+      (200 * (wallMs - WORLD_MS)) / 1000 / (111_320 * Math.cos(Math.PI / 6)),
+      30,
+      3_000,
+    );
+  // The delay rises a fifth of a millisecond a millisecond, as it does
+  // catching up to the feed's lag.
+  const delay = { currentMs: 2_000, step: () => delay.currentMs };
+  const { icons, set } = placedFleet(['c'], at, { displayDelay: delay });
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  icons._planIcon('c');
+  let plans = 0;
+  for (let ms = 80; ms <= 20_000; ms += 80) {
+    t.mock.timers.tick(80);
+    delay.currentMs += 16;
+    const shown = icons._displayMs();
+    if (set.expires('c') > shown) continue;
+    const drawn = set.position('c', shown, {});
+    icons._replanExpired(shown);
+    plans++;
+    assert.ok(
+      metres(set.position('c', shown, {}), drawn) < 0.01,
+      `plan ${plans} goes on from where it is drawn`,
+    );
+    // ...and ends where it is placed then.
+    const end = set.expires('c');
+    assert.ok(
+      metres(set.position('c', end, {}), at('c', end + delay.currentMs)) < 0.01,
+    );
+    assert.equal(set.item('c').motion.kind, 'lerp', `plan ${plans}`);
+    assert.ok(
+      Math.abs(set.expires('c') - shown - 1_000 * placedPlanSpread('c')) < 1,
+      `plan ${plans} runs ${set.expires('c') - shown} ms`,
+    );
+  }
+  assert.ok(plans > 10, `${plans} plans`);
+});
+
+test('a placed contact on a turn, planned far with the display delay moving, is not eased and its path never breaks', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  // A standard-rate turn at 200 m/s: 3 degrees a second round a circle.
+  const centre = { lon: 0, lat: 30 };
+  const radiusM = 200 / ((3 * Math.PI) / 180);
+  const at = (_id, wallMs) => {
+    const a = (((wallMs - WORLD_MS) / 1000) * 3 * Math.PI) / 180;
+    return fromDegrees(
+      centre.lon +
+        (radiusM * Math.cos(a)) /
+          (111_320 * Math.cos((centre.lat * Math.PI) / 180)),
+      centre.lat + (radiusM * Math.sin(a)) / 110_574,
+      3_000,
+    );
+  };
+  const delay = { currentMs: 2_000, step: () => delay.currentMs };
+  const { icons, set } = placedFleet(['c'], at, { displayDelay: delay });
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const far = { eye: fromDegrees(20, 30, 60_000), inView: () => true };
+  icons._replanExpired(icons._displayMs(), far);
+  let plans = 0;
+  for (let ms = 80; ms <= 30_000; ms += 80) {
+    t.mock.timers.tick(80);
+    delay.currentMs += 16;
+    const shown = icons._displayMs();
+    if (set.expires('c') > shown) continue;
+    const drawn = set.position('c', shown, {});
+    icons._replanExpired(shown, far);
+    plans++;
+    assert.equal(set.item('c').motion.kind, 'lerp', `plan ${plans}`);
+    assert.ok(
+      Math.abs(set.expires('c') - shown - 4_000 * placedPlanSpread('c')) < 1,
+      `plan ${plans} runs ${set.expires('c') - shown} ms`,
+    );
+    assert.ok(metres(set.position('c', shown, {}), drawn) < 0.01);
+  }
+  assert.ok(plans >= 4, `${plans} plans`);
+});
+
+test('a hidden placed contact, or one the placement has no end for, is drawn where it is placed', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  let shiftM = 0;
+  // No answer from this wall time on.
+  let answersUntil = Infinity;
+  const at = (_id, wallMs) =>
+    wallMs >= answersUntil
+      ? null
+      : fromDegrees(
+          (shiftM + (200 * (wallMs - WORLD_MS)) / 1000) /
+            (111_320 * Math.cos(Math.PI / 6)),
+          30,
+          3_000,
+        );
+  const metres = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+
+  // Hidden (as the tracked contact's row is): a report a kilometre on is not
+  // slid onto over the next plan.
+  const hidden = placedFleet(['h'], at);
+  hidden.icons._planIcon('h');
+  hidden.set.setShown('h', false);
+  t.mock.timers.tick(hidden.set.expires('h') - Date.now() + 40);
+  shiftM = 1_000;
+  hidden.icons._replanExpired(Date.now());
+  assert.ok(
+    metres(hidden.set.position('h', Date.now(), {}), at('h', Date.now())) <
+      0.01,
+    'hidden: where it is placed',
+  );
+
+  // Shown, picked up late, with no answer for its next plan's end: it holds
+  // where it is placed now, not where its last plan stopped.
+  shiftM = 0;
+  const { icons, set } = placedFleet(['e'], at);
+  icons._planIcon('e');
+  t.mock.timers.tick(set.expires('e') - Date.now() + 80);
+  answersUntil = Date.now() + 1;
+  icons._replanExpired(Date.now());
+  assert.equal(set.item('e').motion.kind, 'hold');
+  assert.ok(
+    metres(set.position('e', Date.now(), {}), at('e', Date.now())) < 0.01,
+    'held where it is placed',
+  );
 });

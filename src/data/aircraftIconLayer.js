@@ -586,6 +586,7 @@ export function createAircraftIcons({
     rotors.clear();
     planFrom.clear();
     easeEnds.clear();
+    placedPlans.clear();
     replannedAt = -Infinity;
   }
 
@@ -843,6 +844,10 @@ export function createAircraftIcons({
     planFrom.set(icao24, validFrom);
   }
 
+  /** Each placed contact's last placed plan or ease: when it ends (display
+   *  ms), the wall time that stands for, and where it ends. */
+  const placedPlans = new Map();
+
   /** The camera, while the fleet pass re-plans the rows that ran out:
    *  `{eye, inView(position)}` (null: every plan is a near one). */
   let planView = null;
@@ -857,6 +862,20 @@ export function createAircraftIcons({
     return (
       (near ? PLACED_PLAN_MS : PLACED_FAR_PLAN_MS) * placedPlanSpread(icao24)
     );
+  }
+
+  /**
+   * Whether a new report moved where a placed contact's last placed plan
+   * ends: the placement asked again for that plan's end (the same wall time)
+   * puts it more than a recovery's least from where the plan ends. Only
+   * while that plan is still the row's (its end unchanged).
+   */
+  function _placementMoved(icao24, info, history) {
+    const plan = placedPlans.get(icao24);
+    if (!plan || state._icons.expires(icao24) !== plan.expiresAt) return false;
+    const now = vec();
+    if (!placeAt(icao24, plan.wallMs, info, history, now)) return false;
+    return distance(now, plan.at) > RECOVER_MIN_M;
   }
 
   /**
@@ -875,10 +894,15 @@ export function createAircraftIcons({
     const start = placeAt(icao24, t + leadMs, info, history, from);
     if (!start) return false;
     const { courseDeg: course } = start;
-    // Back at live, or while an ease runs, it eases on from where it is drawn.
+    // Back at live, while an ease runs, or when a new report moved where its
+    // last placed plan has it, it eases on from where it is drawn: a
+    // correction is never drawn as a jump. Its first placed plan draws it
+    // where it is placed.
     const easing = easeEnds.get(icao24) > t;
+    const moved =
+      !handover && !easing && _placementMoved(icao24, info, history);
     if (
-      (handover || easing) &&
+      (handover || easing || moved) &&
       _easePlaced(icao24, info, history, t, from, start)
     )
       return true;
@@ -886,6 +910,24 @@ export function createAircraftIcons({
     const t1 = t + _placedPlanMs(icao24, from);
     const to = vec();
     const end = placeAt(icao24, t1 + leadMs, info, history, to);
+    // Shown and going on from its last placed plan, nothing moved, it starts
+    // where that is drawn: the pass came a little after it ended, or the
+    // display delay moved since it was asked, and either is taken up over
+    // this plan, never drawn as a step. It still ends where it is placed. (A
+    // hidden row, or one with no end to go to, is drawn where it is placed.)
+    const last = placedPlans.get(icao24);
+    if (
+      end &&
+      !moved &&
+      last &&
+      state._icons.expires(icao24) === last.expiresAt &&
+      state._icons.shown(icao24)
+    ) {
+      const prev = state._icons.item(icao24);
+      const drawn = prev && motionPosition(prev.motion, prev.pos, t);
+      if (drawn && distance(drawn, from) < RECOVER_SNAP_M)
+        copyInto(drawn, from);
+    }
     const motion = end
       ? {
           kind: 'lerp',
@@ -904,6 +946,13 @@ export function createAircraftIcons({
       { expiresAt: t1 },
     );
     planFrom.set(icao24, t);
+    if (end)
+      placedPlans.set(icao24, {
+        expiresAt: t1,
+        wallMs: t1 + leadMs,
+        at: clone(to),
+      });
+    else placedPlans.delete(icao24);
     return true;
   }
 
@@ -938,6 +987,11 @@ export function createAircraftIcons({
     );
     planFrom.set(icao24, t);
     easeEnds.set(icao24, end);
+    placedPlans.set(icao24, {
+      expiresAt: end,
+      wallMs: end + displayDelay.currentMs,
+      at: clone(target),
+    });
     return true;
   }
 
@@ -1201,6 +1255,7 @@ export function createAircraftIcons({
     rotors.delete(icao24);
     planFrom.delete(icao24);
     easeEnds.delete(icao24);
+    placedPlans.delete(icao24);
     parts.rendering._releaseModel(icao24);
     state.records.forget(icao24);
     // The host-supplied placement, if any, forgets it as well.
