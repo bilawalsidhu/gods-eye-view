@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync, statSync, readdirSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { dataDir } from '../server/providers/common/data-dir.js';
+import { dataDir, mergeDotenv } from '../server/providers/common/data-dir.js';
 
 test('dataDir is the fallback unless GEV_DATA_DIR is set', () => {
   assert.equal(dataDir('/repo', {}), '/repo', 'unset keeps today\'s repo-root behaviour');
@@ -19,6 +19,22 @@ test('dataDir is the fallback unless GEV_DATA_DIR is set', () => {
     'a relative value is resolved, never joined onto the repo',
   );
   assert.equal(dataDir(undefined, {}), process.cwd(), 'the default fallback is the working directory');
+});
+
+test('a .env line cannot move the data dir it was read from', () => {
+  const env = { OPENSKY_CLIENT_ID: 'exported' };
+  mergeDotenv(
+    { GEV_DATA_DIR: './another-directory', OPENSKY_CLIENT_ID: 'dotenv', CESIUM_ION_TOKEN: 'dotenv' },
+    env,
+  );
+  assert.equal(env.GEV_DATA_DIR, undefined, 'GEV_DATA_DIR stays unset');
+  assert.equal(dataDir('/repo', env), '/repo', 'Provider Settings keeps the store Vite read');
+  assert.equal(env.OPENSKY_CLIENT_ID, 'exported', 'an exported value still wins');
+  assert.equal(env.CESIUM_ION_TOKEN, 'dotenv', 'other dotenv keys still load');
+
+  const docker = { GEV_DATA_DIR: '/data' };
+  mergeDotenv({ GEV_DATA_DIR: './elsewhere' }, docker);
+  assert.equal(docker.GEV_DATA_DIR, '/data', 'an exported GEV_DATA_DIR is kept');
 });
 
 function request(body) {
