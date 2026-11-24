@@ -580,7 +580,11 @@ export function createMotion({
         flightState._trackedTrailPos,
       );
     }
-    return _trackedDisplayCached();
+    // Only this frame's: the trail head is drawn before the frame's own
+    // position callbacks run, and the frame before may be long gone.
+    return flightState._cachedDRFrame === renderedFrames(flightState._viewer)
+      ? _trackedDisplayCached()
+      : null;
   }
 
   /** Smoothed world course for the tracked aircraft this frame. Reads the
