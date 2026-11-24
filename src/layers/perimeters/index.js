@@ -193,7 +193,7 @@ export function createFirePerimetersLayer({
       layerId: 'fire-perimeters',
       layerName: 'Fire Perimeters',
       source: 'NIFC WFIGS',
-      dataSource: _fills,
+      // No dataSource: disable and destroy remove the record outright.
       // Context already carries the translated layer name; use the source's
       // own incident name rather than an untranslated fixed prefix.
       label: row.name || t('Fire Perimeters'),
