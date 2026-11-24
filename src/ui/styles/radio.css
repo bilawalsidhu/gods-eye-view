@@ -942,35 +942,18 @@ html:not([lang='en'])
   background: var(--accent-dim);
 }
 
-/* A keyed chip (RailChips.vue `keyed`): the colour of what it turns on before
-   its label and the count after it, while it is on; off, its name alone. Its
-   text is the row's body text (.data-name's size and colour), on or off, so
-   the key reads at a glance; on and off differ by the accent border and fill. */
+/* A keyed chip (RailChips.vue `swatch`): the colour of what it turns on before
+   its label and the count after it, while it is on. Off, it is a plain chip. */
 .data-toggle-chip.chip-keyed {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: var(--text-primary);
-}
-
-.data-toggle-chip.chip-keyed:hover,
-.data-toggle-chip.chip-keyed:focus-visible,
-.data-toggle-chip.chip-keyed.active {
-  color: var(--text-primary);
-}
-
-.data-toggle-chip.chip-keyed .data-toggle-chip-swatch {
-  width: 8px;
-  height: 8px;
+  gap: 4px;
 }
 
 .data-toggle-chip-count {
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
 }
 
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns

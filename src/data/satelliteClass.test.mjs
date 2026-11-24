@@ -452,10 +452,6 @@ test('every class but Starlink shows by default; each class chip turns its class
     // point colour and its count beside its name, an off one only its name.
     const controls = satellitesLayer.getRowControls();
     assert.equal(controls.legend, undefined, 'no separate list of counts');
-    assert.ok(
-      controls.chips.every((entry) => entry.keyed === true),
-      'every class chip, on or off, is a keyed chip',
-    );
     assert.deepEqual(
       controls.chips.map((entry) => [entry.id, entry.swatch, entry.count]),
       [
