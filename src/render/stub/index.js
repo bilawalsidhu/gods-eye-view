@@ -190,6 +190,16 @@ export function createStubRenderer(options = {}) {
   let holdSeq = 0;
   // Told when the first hold is taken and the last released.
   const heldListeners = new Set();
+  const holdsListeners = new Set();
+  function tellHolds() {
+    for (const entry of [...holdsListeners])
+      if (holdsListeners.has(entry))
+        try {
+          entry.cb();
+        } catch (error) {
+          report(error);
+        }
+  }
   function tellHeld(held) {
     for (const entry of [...heldListeners])
       try {
@@ -359,9 +369,11 @@ export function createStubRenderer(options = {}) {
       const key = ++holdSeq;
       continuous.set(key, String(reason));
       if (continuous.size === 1) tellHeld(true);
+      tellHolds();
       return () => {
         if (!continuous.delete(key)) return;
         if (continuous.size === 0) tellHeld(false);
+        tellHolds();
       };
     },
     onHeldChange(cb) {
@@ -369,6 +381,15 @@ export function createStubRenderer(options = {}) {
       heldListeners.add(entry);
       return () => heldListeners.delete(entry);
     },
+    ...(capabilities.has('holdChanges')
+      ? {
+          onHoldsChange(cb) {
+            const entry = { cb };
+            holdsListeners.add(entry);
+            return () => holdsListeners.delete(entry);
+          },
+        }
+      : {}),
     mode: () => 'demand',
     diagnostics: () => ({
       mode: 'demand',

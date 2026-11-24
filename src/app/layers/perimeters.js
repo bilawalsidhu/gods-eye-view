@@ -6,8 +6,11 @@ import {
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 
-/** Wire WFIGS fire perimeters into the application catalog. */
-export function createApplicationFirePerimeters(options) {
+/** Wire fire perimeters into the application catalog. */
+export function createApplicationFirePerimeters({
+  inciweb = true,
+  ...options
+} = {}) {
   return createFirePerimetersLayer({
     overlayHost: {
       setEntries: overlays.setOverlayEntries,
@@ -15,10 +18,17 @@ export function createApplicationFirePerimeters(options) {
       clearSource: overlays.clearOverlaySource,
       hitTest: overlays.hitTestWorldOverlay,
     },
-    inciwebSource: createInciwebIndexSource(),
-    inciwebPublications: createInciwebPublicationSource(),
+    ...(inciweb !== false && {
+      inciwebSource: createInciwebIndexSource(),
+      inciwebPublications: createInciwebPublicationSource(),
+    }),
     openExternal: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
     picking,
     ...options,
+    // inciweb: false outranks InciWeb sources in options.
+    ...(inciweb === false && {
+      inciwebSource: null,
+      inciwebPublications: null,
+    }),
   });
 }

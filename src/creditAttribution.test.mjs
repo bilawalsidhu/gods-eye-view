@@ -243,7 +243,7 @@ const RECOGNIZED = new Set([
   // credit
   '#cesium-credits',
   'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
-  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits",
+  "body:not(.ui-clean-view):not(.recording-mode):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #cesium-credits",
   'body.ui-clean-view #cesium-credits',
   'body.recording-mode #cesium-credits',
   // dock
@@ -274,12 +274,12 @@ const DOCKED_RAIL = 'body.context-docked #right-context-rail';
 // the Omnibar and the voice control share the dock; outside it the legacy
 // layout below governs.
 const OMNIBAR_SCOPE =
-  'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(:has(#gev-omnibar):has(#command-dock > #gev-voice-control))';
+  'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(.has-omnibar.dock-has-voice *)';
 const OMNIBAR = Object.freeze({
   dock: `${OMNIBAR_SCOPE} #command-dock`,
   credit: `${OMNIBAR_SCOPE} :is(#cesium-credits, #gev-credits)`,
-  minimalCredit: `${OMNIBAR_SCOPE}:has(#intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
-  minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):has(#intel-hud[data-variant='minimal'].active) #right-context-rail`,
+  minimalCredit: `${OMNIBAR_SCOPE}:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
+  minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #right-context-rail`,
   trays: `${OMNIBAR_SCOPE} #command-dock > :is(#location-bar, #control-panel)`,
 });
 // What each Omnibar-scope rule may set on a modelled box; the Omnibar
@@ -518,7 +518,7 @@ const CREDIT_SELECTORS = [
   'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
 ];
 const MINIMAL_HUD_CREDIT =
-  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
+  "body:not(.ui-clean-view):not(.recording-mode):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #cesium-credits";
 const TRAY_ORDINARY = [
   '#command-dock .dock-popover-content',
   '#command-dock #location-bar .dock-popover-content',
@@ -1279,7 +1279,7 @@ test('expanded Context keeps the credits beside it right to left and with the mi
   // The minimal HUD puts the credits bottom right, where the column docks.
   assert.ok(
     rule(
-      "^.*body\\.context-docked:not\\(\\.ui-clean-view\\):not\\(\\.recording-mode\\):has\\( #intel-hud\\[data-variant='minimal'\\]\\.active \\)",
+      "^.*body\\.context-docked:not\\(\\.ui-clean-view\\):not\\(\\.recording-mode\\):is\\( \\.hud-minimal-active \\*, #intel-hud\\[data-variant='minimal'\\]\\.active \\)",
       'right: calc\\(36px \\+ var\\(--context-dock-width\\)\\)',
     ),
     'with the minimal HUD, the credits end before the expanded column',

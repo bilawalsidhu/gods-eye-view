@@ -1024,11 +1024,6 @@
   "Unnamed incident": "名称未設定の火災",
   "Open {title} on InciWeb": "InciWebで{title}を開く",
   "Perimeter source unavailable": "延焼範囲のソースを利用できません",
-  "Not contained or unknown": "封じ込め率0%または不明",
-  "Under 50% contained": "封じ込め率50%未満",
-  "50–99% contained": "封じ込め率50–99%",
-  "Fully contained": "封じ込め率100%",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "色は報告された封じ込め率を示します。延焼範囲の輪郭は約100 mの精度で簡略化されています。",
   "Malformed perimeter snapshot": "延焼範囲スナップショットの形式が不正です",
   "radio tag|All": "すべて",
   "News": "ニュース",
@@ -4326,5 +4321,12 @@
   "JTWC warning ↗": "JTWC警報 ↗",
   "Active cyclone advisories and warnings": "発表中のサイクロン情報と警報",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "地図上の嵐を選ぶか、リストから嵐を選ぶと選択され、カメラが移動します。地図の何もない場所をクリックすると選択を解除します。NOAA NHC/CPHCの情報とJTWCの警報です。NHCの予報円は中心の予報進路の不確かさを表すもので、嵐の大きさや危険域全体ではありません。JTWCの34ノット風の危険域は、34ノットの風が及ぶおそれのある範囲を進路予報の誤差分だけ広げたもので、予報円ではありません。予報点のラベルは情報源の予報時間で、発表時刻から計算した時刻ではありません。形状は地表に沿って描かれ、高さは気象上の高度ではありません。公式の情報または地域の警報センターを確認してください。",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第{number}号警報 · {time} 発表"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · 第{number}号警報 · {time} 発表",
+  "last growth {age} ago": "{age}前に最終拡大",
+  "Last 6 hours": "過去6時間",
+  "6–24 hours": "6–24時間",
+  "1–3 days": "1–3日",
+  "Older or unknown": "それ以前または不明",
+  "Colour shows the age of each area.": "色は各区域の経過時間を示します。",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "経過時間は WFIGS の測図時刻から、なければ記録の最終編集時刻から数えます。境界線は約 100 m に簡略化されています。"
 }

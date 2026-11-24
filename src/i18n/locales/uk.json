@@ -1092,11 +1092,6 @@
   "Unnamed incident": "Без назви",
   "Open {title} on InciWeb": "Відкрити {title} в InciWeb",
   "Perimeter source unavailable": "Джерело контурів пожеж недоступне",
-  "Not contained or unknown": "Не локалізовано або невідомо",
-  "Under 50% contained": "Локалізовано менш ніж на 50%",
-  "50–99% contained": "Локалізовано на 50–99%",
-  "Fully contained": "Повністю локалізовано",
-  "Colour shows reported containment. Perimeters are simplified to about 100 m.": "Колір показує заявлений ступінь локалізації. Контури спрощено приблизно до 100 м.",
   "Malformed perimeter snapshot": "Некоректний знімок контурів пожеж",
   "radio tag|All": "Усі",
   "News": "Новини",
@@ -4644,5 +4639,12 @@
   "JTWC warning ↗": "Попередження JTWC ↗",
   "Active cyclone advisories and warnings": "Чинні зведення та попередження про циклони",
   "Select a storm on the map, or choose a storm in the list to select it and move the camera. Click empty map space to clear the selection. NOAA NHC/CPHC advisories and JTWC warnings. The NHC cone describes forecast center-track uncertainty, not storm size or the full hazard area. The JTWC 34-knot wind danger area is where 34-knot winds may reach, widened by forecast track error; it is not a cone. Forecast point labels are source lead hours, not times computed from advisory issuance. Geometry follows the surface; height is not weather altitude. Consult the official advisory or the regional warning centre.": "Виберіть шторм на карті або у списку, щоб виділити його й перемістити камеру. Клацання по порожньому місцю карти знімає виділення. Зведення NOAA NHC/CPHC та попередження JTWC. Конус NHC показує невизначеність прогнозного треку центру, а не розмір шторму чи всю небезпечну зону. Небезпечна зона вітру 34 вузли JTWC — це область, куди може дійти вітер 34 вузли, розширена на похибку прогнозу треку; це не конус. Підписи прогнозних точок — завчасність джерела в годинах, а не час, обчислений від випуску. Геометрія повторює поверхню; висота не є метеорологічною висотою. Звіряйтеся з офіційним зведенням або регіональним центром попереджень.",
-  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Попередження № {number} · випущено {time}"
+  "{name} · {classification} · Warning {number} · issued {time}": "{name} · {classification} · Попередження № {number} · випущено {time}",
+  "last growth {age} ago": "останнє зростання {age} тому",
+  "Last 6 hours": "Останні 6 годин",
+  "6–24 hours": "6–24 години",
+  "1–3 days": "1–3 дні",
+  "Older or unknown": "Старше або невідомо",
+  "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м."
 }
