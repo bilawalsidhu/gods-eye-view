@@ -1678,7 +1678,12 @@ async function main() {
     const headSamples = await sampleFrames(page, 40, (icao) => {
       const fl = window.__godsEyeView.dataManager.layers.get('flights').module;
       const line = window.__qaTrailHead();
-      const drawn = window.__qaFollowed()?.position?.();
+      // Where the frame just drawn put it: the display cache. Not
+      // `position()`: in postRender the frame key has already moved on, so
+      // that dead-reckons anew, a frame interval ahead of the drawn icon,
+      // and hands the stale result to the next frame.
+      const followed = window.__qaFollowed();
+      const drawn = followed?.displayPosition?.() ?? followed?.position?.();
       if (!line?.length || !drawn) return null;
       const end = line[line.length - 1];
       const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -1725,7 +1730,8 @@ async function main() {
       await sleep(600);
       betweenFrames.push(await evalPage((icao) => {
         const line = window.__qaTrailHead();
-        const drawn = window.__qaFollowed()?.position?.();
+        const followed = window.__qaFollowed();
+        const drawn = followed?.displayPosition?.() ?? followed?.position?.();
         if (!line?.length || !drawn) return null;
         const end = line[line.length - 1];
         return Math.hypot(end.x - drawn.x, end.y - drawn.y, end.z - drawn.z);
