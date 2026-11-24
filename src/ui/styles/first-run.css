@@ -1869,8 +1869,9 @@ body:not(.mobile-shell) #first-run-launcher.visible {
 /* The Stories announcement waits behind onboarding without consuming its
    unseen state: from startup while the card is pending, through its reveal,
    until it is removed (not shown this session, or dismissed). It also stays
-   hidden while BROWSE STORIES is loading Stories. */
-body:has(#first-run-launcher) #gev-stories #hPop,
+   hidden while BROWSE STORIES is loading Stories. `.launcher-shown`
+   is a page-root class (src/ui/rail/rootClass.js). */
+body:is(.launcher-shown *, #first-run-launcher) #gev-stories #hPop,
 body.first-run-opening-stories #gev-stories #hPop {
   visibility: hidden;
   pointer-events: none;

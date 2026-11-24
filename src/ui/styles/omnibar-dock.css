@@ -1,9 +1,9 @@
-/* Shared desktop command surface. Mobile and exclusive owners keep their layout. */
+/* Shared desktop command surface. Mobile and exclusive owners keep their layout.
+   It applies while the Omnibar is on the page and the voice control is in the
+   dock; that state, and the states its rules select on below, are the page-root classes of src/ui/rail/rootClass.js. */
 body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .ui-clean-view
-  ):not(.recording-mode):where(
-    :has(#gev-omnibar):has(#command-dock > #gev-voice-control)
-  ) {
+  ):not(.recording-mode):where(.has-omnibar.dock-has-voice *) {
   --omnibar-dock-width: clamp(400px, 32vw, 460px);
   /* Clear of the attribution line under it, however many lines it wraps
      onto (--credit-line-height, src/ui/creditLineHeight.js). */
@@ -89,7 +89,9 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
       0 12px 32px rgba(0, 0, 0, 0.45);
     backdrop-filter: none;
   }
-  &:has(#gev-omnibar:focus-within) #command-dock > #gev-voice-control {
+  &:is(.omnibar-focus-within *, #gev-omnibar:focus-within)
+    #command-dock
+    > #gev-voice-control {
     border-color: rgba(54, 220, 255, 0.5);
     box-shadow:
       0 12px 32px rgba(0, 0, 0, 0.45),
@@ -252,8 +254,9 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     -webkit-backdrop-filter: blur(26px) saturate(1.2);
     box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
   }
-  &:has(#gev-omnibar.has-results):not(
-      :has(#gev-voice-control[data-assistant-mode='voice'])
+  &:is(.omnibar-has-results *, #gev-omnibar.has-results):not(
+      .assistant-voice-mode *,
+      #gev-voice-control[data-assistant-mode='voice']
     )
     #command-dock
     > #gev-voice-control {
@@ -308,7 +311,8 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     stroke-width: 1;
     opacity: 0.6;
   }
-  &:has(#gev-voice-control[data-assistant-mode='voice']) #gev-omnibar {
+  &:is(.assistant-voice-mode *, #gev-voice-control[data-assistant-mode='voice'])
+    #gev-omnibar {
     .omnibar-field {
       background: transparent;
     }
@@ -336,7 +340,7 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
      rather than running under the corner row (Power Up and the language
      picker), whose side it stays clear of. */
   :is(#cesium-credits, #gev-credits),
-  &:has(#intel-hud[data-variant='minimal'].active)
+  &:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active)
     :is(#cesium-credits, #gev-credits) {
     bottom: 1rem;
   }
@@ -349,7 +353,7 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
      the bottom right at every width. Expanded Context places it itself. */
   &:where(html[dir='rtl'] *):not(.context-docked) {
     :is(#cesium-credits, #gev-credits),
-    &:has(#intel-hud[data-variant='minimal'].active)
+    &:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active)
       :is(#cesium-credits, #gev-credits) {
       right: 1.5rem;
       left: auto;
@@ -386,7 +390,10 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
     .hud-bottom-left {
     bottom: var(--omnibar-coordinates-bottom);
   }
-  &:not(.context-docked):has(#intel-hud[data-variant='minimal'].active)
+  &:not(.context-docked):is(
+      .hud-minimal-active *,
+      #intel-hud[data-variant='minimal'].active
+    )
     #right-context-rail {
     --omnibar-minimal-rail-height: min(
       var(--right-stack-max-height, 70vh),

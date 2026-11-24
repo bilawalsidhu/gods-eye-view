@@ -164,7 +164,12 @@
   text-align: left;
   transform: rotateY(-24deg) translateZ(-18px);
 }
-body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
+/* `.left-panel-open`: a panel in the left stack is open, a page-root class
+   (src/ui/rail/rootClass.js). */
+body.cockpit-mode:is(
+    .left-panel-open *,
+    #left-panel-stack > .panel-collapsible:not(.collapsed)
+  )
   .cockpit-pitch-rail-left {
   opacity: 0;
   transition: opacity 0.25s;
