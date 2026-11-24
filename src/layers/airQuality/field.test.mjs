@@ -20,7 +20,6 @@ import { formatUtcDayMonth } from '../../i18n/index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import { WEATHER_SHELL_HEIGHTS } from '../weather/shellPlacement.js';
-import { ECCC_DEFINITION } from './providers.js';
 
 const HOUR = 3600_000;
 const SCALE = Object.freeze({
@@ -994,30 +993,6 @@ test('the field fades with camera height: full from 600 km, nothing at 60 km', a
   moveTo(1_000_000);
   assert.equal(image.show, true);
   assert.equal(image.alpha, 0.85);
-});
-
-test("Canada's AQHI view lets the clock go and draws no field; its tiles and time line read the model", async (t) => {
-  fakeDocument(t);
-  const host = hostField();
-  const { layer, clock, live } = fieldHarness({
-    fieldSource: host.source,
-    definitions: [SAAQIS, ECCC_DEFINITION],
-  });
-  await layer.update();
-  await settle();
-  assert.equal(clock.follows('air-quality'), true);
-  assert.equal(live().length, 1);
-  clock.seek(host.run + 24 * HOUR);
-  await settle();
-  layer.setParams({ view: 'aqhi' });
-  await settle();
-  assert.equal(clock.follows('air-quality'), false);
-  assert.equal(clock.coverage(), null);
-  assert.equal(live().length, 0);
-  const controls = layer.getRowControls();
-  assert.equal(controls.summary.detail, 'CAMS · updated 6h ago');
-  assert.equal(controls.sublists[0].subtitle, 'model at view centre');
-  assert.equal(tileOf(controls, 'index', 'aqi').value, '44');
 });
 
 test('while the timeline plays the clock waits for the next step, at most 20 s', async (t) => {

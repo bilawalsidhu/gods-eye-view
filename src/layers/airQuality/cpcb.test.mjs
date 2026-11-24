@@ -399,15 +399,24 @@ test('an already aborted India request does not fetch', async () => {
   );
 });
 
-/** Default provider definitions with a hand-driven snapshot per provider. */
+/**
+ * Default provider definitions with a hand-driven snapshot per provider:
+ * rows, `'hold'`, or a function of the request returning either.
+ */
 function heldLayer(answers) {
   const pending = new Map();
   const source = {
     definitions: createAirQualitySource().definitions,
-    getSnapshot: ({ provider }) =>
-      answers[provider] === 'hold'
+    getSnapshot: (request) => {
+      const { provider } = request;
+      const answer =
+        typeof answers[provider] === 'function'
+          ? answers[provider](request)
+          : answers[provider];
+      return answer === 'hold'
         ? new Promise((resolve) => pending.set(provider, resolve))
-        : Promise.resolve(answers[provider] ?? []),
+        : Promise.resolve(answer ?? []);
+    },
   };
   const layer = createAirQualityLayer({
     source,
@@ -457,25 +466,29 @@ const indiaRows = () =>
     { records: [row({ last_update: recent() })] },
     { now: Date.now() },
   ).readings;
-const canadaRows = () => [
+/** A South African station's PM2.5, rated. */
+const southAfricaRows = () => [
   {
     ...indiaRows()[0],
-    id: 'eccc:test-station',
-    provider: 'eccc',
-    scale: 'AQHI',
-    value: 3,
-    label: '3',
+    id: 'saaqis:test-station:PM2.5',
+    provider: 'saaqis',
+    rated: undefined,
   },
 ];
+/** PM2.5 rows in the PM2.5 view, nothing in the others. */
+const pm25Only = (rows) => (request) =>
+  request.parameter === 'PM2.5' ? rows : [];
 
-test('switching view clears old markers and a late Canadian response cannot replace India', async () => {
-  const { layer, release } = heldLayer({ eccc: 'hold', cpcb: indiaRows() });
-  layer.setParams({ view: 'aqhi' });
+test('switching view clears old markers and a late answer for the old view cannot replace India', async () => {
+  const { layer, release } = heldLayer({
+    saaqis: (request) => (request.mode === 'aqi' ? 'hold' : []),
+    cpcb: pm25Only(indiaRows()),
+  });
   layer.enable();
   const pending = layer.update();
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
-  release('eccc', canadaRows());
+  release('saaqis', southAfricaRows());
   await pending;
   assert.deepEqual(
     layer.getAnalystRecords().map((record) => record.provider),
@@ -487,21 +500,24 @@ test('switching view clears old markers and a late Canadian response cannot repl
 });
 
 test('a late India response after the view changes is dropped', async () => {
-  const { layer, release } = heldLayer({ cpcb: 'hold', eccc: canadaRows() });
+  const { layer, release } = heldLayer({
+    cpcb: (request) => (request.parameter === 'PM2.5' ? 'hold' : []),
+    saaqis: (request) => (request.mode === 'aqi' ? southAfricaRows() : []),
+  });
   layer.setParams({ view: 'PM2.5' });
   layer.enable();
   const pendingIndia = layer.update();
-  layer.setParams({ view: 'aqhi' });
+  layer.setParams({ view: 'aqi' });
   assert.equal(await layer.update(), true);
   release('cpcb', indiaRows());
   await pendingIndia;
-  assert.equal(layer.getParams().view, 'aqhi');
+  assert.equal(layer.getParams().view, 'aqi');
   assert.equal(layer.getStats().count, 1);
   assert.deepEqual(
     layer.getAnalystRecords().map((record) => record.provider),
-    ['eccc'],
+    ['saaqis'],
   );
-  assert.ok(layer.getRowControls().legend.length > 0);
+  assert.equal(layer.getRowControls().legend.length, 6);
   layer.destroy();
 });
 

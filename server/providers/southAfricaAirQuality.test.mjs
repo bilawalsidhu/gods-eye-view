@@ -59,7 +59,8 @@ test('one coalesced national acquisition uses a private session and fixed bulk p
     source.getSnapshot(),
     source.getSnapshot(),
   ]);
-  assert.equal(calls.length, 4);
+  // Session, regions and the latest concentrations: no index request.
+  assert.equal(calls.length, 3);
   assert.equal(results[0].stations.length, 1);
   assert.equal(results[0].readings.length, 1);
   assert.ok(!JSON.stringify(results).includes('test-session'));
@@ -68,7 +69,7 @@ test('one coalesced national acquisition uses a private session and fixed bulk p
     /regionsIds=2&timebase=60$/,
   );
   await source.getSnapshot();
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 3);
 });
 
 test('last-good fallback is marked stale, expires, and failed acquisitions back off', async () => {
@@ -156,40 +157,6 @@ test('route rejects arbitrary queries and writes; dev and preview both register'
   }
 });
 
-test('optional index endpoint attaches ratings and failure preserves concentrations', async () => {
-  for (const failIndex of [false, true]) {
-    const source = createSaAcquisition({
-      fetchImpl: async (url, options) => {
-        if (url.endsWith('GetApiFromBackToken'))
-          return Response.json({ key: 'private' });
-        const path = JSON.parse(options.body).url;
-        if (path.startsWith('stations/index/')) {
-          if (failIndex) return new Response('', { status: 503 });
-          return Response.json({
-            indexType: 1,
-            data: [
-              {
-                stationId: 1,
-                datetime: '2026-10-20T12:00:00+02:00',
-                indexes: [
-                  { pollutant: 'PM2.5', index: 1, description: 'Good' },
-                ],
-              },
-            ],
-          });
-        }
-        return Response.json(path === 'regions' ? regions : latest);
-      },
-    });
-    const result = await source.getSnapshot();
-    assert.equal(result.readings.length, 1);
-    assert.equal(
-      result.readings[0].rating?.label ?? null,
-      failIndex ? null : 'Good',
-    );
-  }
-});
-
 test('only SAAQIS_ENABLED=1 switches South Africa on', () => {
   assert.equal(saaqisEnabled({}), false);
   assert.equal(saaqisEnabled({ SAAQIS_ENABLED: '' }), false);
@@ -246,4 +213,36 @@ test('off by default the route answers not configured and never contacts the por
   assert.equal(on.status, 200);
   assert.equal(on.body.readings.length, 1);
   assert.ok(on.fetched > 0);
+});
+
+test("SAAQIS's own index is neither requested nor attached", async () => {
+  const paths = [];
+  const source = createSaAcquisition({
+    fetchImpl: async (url, options) => {
+      if (url.endsWith('GetApiFromBackToken'))
+        return Response.json({ key: 'private' });
+      const path = JSON.parse(options.body).url;
+      paths.push(path);
+      if (path.startsWith('stations/index/'))
+        return Response.json({
+          indexType: 1,
+          data: [
+            {
+              stationId: 1,
+              datetime: '2026-10-20T12:00:00+02:00',
+              indexes: [{ pollutant: 'PM2.5', index: 1, description: 'Good' }],
+            },
+          ],
+        });
+      return Response.json(path === 'regions' ? regions : latest);
+    },
+  });
+  const result = await source.getSnapshot();
+  assert.equal(result.readings.length, 1);
+  assert.equal(
+    paths.some((path) => path.startsWith('stations/index')),
+    false,
+    paths.join(' '),
+  );
+  assert.equal('rating' in result.readings[0], false);
 });

@@ -354,7 +354,8 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
             ]
           : [],
       ),
-    // SAAQIS keeps one row per pollutant: PM2.5 5 µg/m³ and NO2 10 ppb.
+    // SAAQIS keeps one row per pollutant: PM2.5 5 µg/m³ and NO2 10 ppb. A
+    // network's own index, if a row carried one, is not used or shown.
     '/api/air-quality/south-africa': snapshotOf([
       site('saaqis', '2', -25.5, {
         value: 5,
@@ -423,11 +424,8 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
   assert.equal(card.list.items[0].text, 'openaq 1');
   assert.match(card.list.items[0].title, /PM2\.5/);
   assert.equal(card.summary.status, '3 stations');
-  // SAAQIS's own index stays in its station's details in the AQI view too.
-  assert.match(
-    card.list.items[1].title,
-    /SAAQIS index PM2\.5 4\/10 · Moderate/,
-  );
+  // The computed US AQI is the one index: no network's own index.
+  assert.doesNotMatch(card.list.items[1].title, /SAAQIS index|4\/10/);
   const record = layer
     .getAnalystRecords()
     .find((row) => row.provider === 'openaq');
@@ -528,8 +526,8 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
             ]
           : [],
       ),
-    // SAAQIS rates this station "Moderate" (4/10) on its own index, and
-    // reports NO2 as a mixing ratio.
+    // A row carrying SAAQIS's own index ("Moderate", 4/10), which is not
+    // shown; NO2 as a mixing ratio.
     '/api/air-quality/south-africa': snapshotOf([
       site('saaqis', '2', -25.5, {
         value: 10,
@@ -557,12 +555,12 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
     card.legend.map((band) => band.color),
     ['#50c9b5', '#a3cf62', '#f2d45c', '#f29457', '#e96070', '#bb6bbd'],
   );
-  // The 400 µg/m³ station ranks first; SAAQIS's own index stays in details.
+  // The 400 µg/m³ station ranks first; no network's own index is shown.
   assert.deepEqual(
     card.list.items.map((item) => item.swatch),
     ['#bb6bbd', '#a3cf62'],
   );
-  assert.match(card.list.items[1].title, /SAAQIS index 4\/10/);
+  assert.doesNotMatch(card.list.items[1].title, /SAAQIS index|4\/10/);
   // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C: "Fair" on the EEA NO2 bands.
   const national = () =>
     requests.filter((url) => url.startsWith('/api/air-quality/south-africa'))

@@ -611,7 +611,7 @@ export function recordFacts(
     if (facts.length < MAX_FACTS)
       facts.push({
         field,
-        // An index goes by the scale it is on (AQHI, AQI).
+        // An index goes by the scale it is on (US AQI).
         label:
           (field === 'value' && text(record.scale)) ||
           FACT_LABELS[field] ||

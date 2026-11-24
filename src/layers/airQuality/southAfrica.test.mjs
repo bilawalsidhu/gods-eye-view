@@ -7,7 +7,6 @@ import {
   selectSaReadings,
   saObservationTime,
   SA_POLLUTANTS,
-  attachSaIndexes,
 } from './southAfrica.js';
 import { createAirQualitySource } from './providers.js';
 import { createAirQualityLayer } from './index.js';
@@ -193,19 +192,19 @@ test('duplicate station/pollutant observations keep the newest valid value', () 
   assert.equal(p.readings[0].value, 20);
 });
 
-test('provider composition preserves Canada, propagates errors and rechecks cached measurement age', async () => {
+test('provider composition propagates errors and rechecks cached measurement age', async () => {
   let clock = now;
   let calls = 0;
   const source = createAirQualitySource({
-    canada: { getSnapshot: async () => ['canada'] },
     now: () => clock,
     fetchImpl: async () => {
       calls++;
       return Response.json(snapshot([channel()]));
     },
   });
-  assert.deepEqual(await source.getSnapshot(), ['canada']);
-  assert.equal(calls, 0);
+  // South Africa is the first provider: the default one asked.
+  assert.equal((await source.getSnapshot()).length, 1);
+  assert.equal(calls, 1);
   assert.equal((await source.getSnapshot({ provider: 'saaqis' })).length, 1);
   assert.equal(source.getCoverage().stations.length, 2);
   clock += 7 * 3600_000;
@@ -223,19 +222,21 @@ test('provider composition preserves Canada, propagates errors and rechecks cach
 test('view switch clears old markers and ignores late requests; camera changes unsubscribe on destroy', async (t) => {
   // The layer's clock at the snapshot's time: its readings are an hour old.
   t.mock.timers.enable({ apis: ['Date'], now });
-  let resolveCanada;
+  const late = [];
   let removed = false;
   let listener;
   const source = {
     definitions: createAirQualitySource().definitions.filter((p) =>
-      ['eccc', 'saaqis'].includes(p.id),
+      ['saaqis', 'cpcb'].includes(p.id),
     ),
-    getSnapshot: ({ provider }) =>
+    getSnapshot: ({ provider, parameter }) =>
       provider === 'saaqis'
-        ? Promise.resolve(selectSaReadings(snapshot([channel()]), 'PM2.5', now))
-        : new Promise((resolve) => {
-            resolveCanada = resolve;
-          }),
+        ? Promise.resolve(
+            parameter === 'PM2.5'
+              ? selectSaReadings(snapshot([channel()]), 'PM2.5', now)
+              : [],
+          )
+        : new Promise((resolve) => late.push(resolve)),
   };
   const layer = createAirQualityLayer({
     source,
@@ -264,12 +265,27 @@ test('view switch clears old markers and ignores late requests; camera changes u
       },
     },
   });
-  layer.setParams({ view: 'aqhi' });
   layer.enable();
   const old = layer.update();
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
-  resolveCanada([]);
+  // India's answer for the US AQI view lands after the switch, in view.
+  late[0]([
+    {
+      id: 'cpcb:late:PM2.5',
+      provider: 'cpcb',
+      stationId: 'late',
+      name: 'Late station',
+      lat: 0.05,
+      lon: 0.05,
+      parameter: 'PM2.5',
+      units: 'µg/m³',
+      value: 30,
+      kind: 'observation',
+      averagingMinutes: 60,
+      observedMs: now,
+    },
+  ]);
   assert.equal(await old, true);
   assert.equal(layer.getStats().count, 1);
   const card = layer.getRowControls();
@@ -278,84 +294,13 @@ test('view switch clears old markers and ignores late requests; camera changes u
   assert.deepEqual(
     card.list.items,
     [],
-    'no distant Canadian or South African fallback',
+    'no late answer and no distant South African fallback',
   );
   assert.equal(card.summary.status, '0 stations');
   assert.equal(layer.getAnalystRecords()[0].units, 'µg/m³');
   listener();
   layer.destroy();
   assert.equal(removed, true);
-});
-
-test('a Canada-only injected source offers only the AQHI view', () => {
-  const layer = createAirQualityLayer({
-    source: { getSnapshot: async () => [] },
-    overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
-  });
-  assert.equal(layer.getParams().view, 'aqhi');
-  for (const view of ['PM2.5', 'NO2'])
-    assert.equal(layer.setParams({ view }), false);
-  // The default view, restored, falls back to the source's own.
-  assert.notEqual(layer.setParams({ view: 'aqi' }), false);
-  assert.equal(layer.getParams().view, 'aqhi');
-  assert.deepEqual(
-    layer
-      .getRowControls()
-      .sublists.map((group) => group.tiles.map((tile) => tile.id)),
-    [['aqhi'], []],
-  );
-});
-
-test('provider index requires matching time, pollutant, category and supported scale', async () => {
-  const { attachSaIndexes } = await import('./southAfrica.js');
-  const row = {
-    stationId: '1',
-    parameter: 'PM2.5',
-    observedMs: Date.parse('2026-10-20T10:00:00Z'),
-  };
-  const payload = (score, description, overrides = {}) => ({
-    indexType: 1,
-    data: [
-      {
-        stationId: 1,
-        datetime: '2026-10-20T12:00:00+02:00',
-        indexes: [{ pollutant: 'PM2.5', index: score, description }],
-        ...overrides,
-      },
-    ],
-  });
-  for (const [score, label] of [
-    [1, 'Good'],
-    [3, 'Good'],
-    [4, 'Moderate'],
-    [5, 'Moderate'],
-    [6, 'Unhealthy'],
-    [7, 'Unhealthy'],
-    [8, 'Very Unhealthy'],
-    [9, 'Very Unhealthy'],
-    [10, 'Hazardous'],
-  ]) {
-    assert.equal(
-      attachSaIndexes([row], payload(score, label))[0].rating.label,
-      label,
-    );
-  }
-  for (const p of [
-    null,
-    payload(-9999, 'Good'),
-    payload(11, 'Hazardous'),
-    payload(1.5, 'Good'),
-    payload(1, 'Hazardous'),
-    payload(1, 'Good', { datetime: '2026-10-19T12:00:00+02:00' }),
-    { ...payload(1, 'Good'), indexType: 2 },
-  ]) {
-    assert.equal(attachSaIndexes([row], p)[0].rating, null);
-  }
-  assert.equal(
-    attachSaIndexes([{ ...row, parameter: 'CO2' }], payload(1, 'Good'))[0]
-      .rating,
-    null,
-  );
 });
 
 test('view-driven providers debounce navigation, abort old requests, and separate loading from empty coverage', async () => {
@@ -637,26 +582,4 @@ test('navigation cancels the old view retry and only refreshes the new camera', 
   } finally {
     layer.destroy();
   }
-});
-
-test('a null or broken index row is skipped, never thrown', () => {
-  const readings = snapshot([channel()]).readings;
-  const rated = attachSaIndexes(readings, {
-    indexType: 1,
-    data: [
-      null,
-      { stationId: 1, indexes: null },
-      {
-        stationId: 1,
-        datetime: '2026-10-20T11:00:00+02:00',
-        indexes: [
-          null,
-          7,
-          { pollutant: 'PM2.5', index: 2, description: 'Good' },
-        ],
-      },
-    ],
-  });
-  assert.equal(rated.length, 1);
-  assert.equal(rated[0].rating?.label, 'Good');
 });

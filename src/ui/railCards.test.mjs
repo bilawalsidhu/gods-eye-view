@@ -461,7 +461,7 @@ test('a summary overview draws nothing: no layer gives one', () => {
 const tilesBlock = (active = 'aqi') => ({
   id: 'tiles-index',
   type: 'tiles',
-  title: 'Index',
+  title: 'Pollutants',
   subtitle: 'nearest station · Cape Town',
   tiles: [
     {
@@ -475,12 +475,12 @@ const tilesBlock = (active = 'aqi') => ({
       params: { view: 'aqi' },
     },
     {
-      id: 'aqhi',
-      value: 'Canada',
-      label: 'AQHI',
+      id: 'PM2.5',
+      value: '12',
+      label: 'PM2.5',
       accent: '#6b7785',
-      active: active === 'aqhi',
-      params: { view: 'aqhi' },
+      active: active === 'PM2.5',
+      params: { view: 'PM2.5' },
     },
   ],
 });
@@ -492,7 +492,7 @@ test('a tiles block draws one button per tile with its value, bracketed note and
   const block = f.find((n) => n.dataset.blockId === 'tiles-index');
   // The Globe view's worldwide tiles, two to a row.
   assert.ok(block.classList.contains('view-context__world'));
-  assert.equal(block.querySelector('h4').firstChild.textContent, 'Index');
+  assert.equal(block.querySelector('h4').firstChild.textContent, 'Pollutants');
   assert.equal(
     block.querySelector('.rail-card-tiles-sub').textContent,
     'nearest station · Cape Town',
@@ -500,12 +500,12 @@ test('a tiles block draws one button per tile with its value, bracketed note and
   const tiles = [...block.querySelectorAll('button')];
   assert.deepEqual(
     tiles.map((tile) => tile.dataset.tileId),
-    ['aqi', 'aqhi'],
+    ['aqi', 'PM2.5'],
   );
   assert.ok(
     tiles.every((tile) => tile.classList.contains('view-context__world-tile')),
   );
-  const [aqi, aqhi] = tiles;
+  const [aqi, pm25] = tiles;
   assert.equal(aqi.querySelector('strong').textContent, '56 (Moderate)');
   assert.equal(aqi.querySelector('span').textContent, 'US AQI');
   assert.equal(aqi.title, 'US AQI · Moderate');
@@ -514,14 +514,27 @@ test('a tiles block draws one button per tile with its value, bracketed note and
     aqi.querySelector('.rail-card-tile-swatch').style.background,
     /^(#ffff00|rgb\(255, 255, 0\))$/,
   );
-  assert.equal(aqhi.querySelector('strong').textContent, 'Canada');
+  assert.equal(pm25.querySelector('strong').textContent, '12');
   assert.equal(aqi.getAttribute('aria-pressed'), 'true');
   assert.ok(aqi.classList.contains('is-active'));
-  assert.equal(aqhi.getAttribute('aria-pressed'), 'false');
+  assert.equal(pm25.getAttribute('aria-pressed'), 'false');
   f.writes();
   view.update([{ ...card, blocks: [tilesBlock()] }]);
   assert.equal(f.writes(), 0);
   view.destroy();
+});
+
+test('a group of one tile fills its row', async () => {
+  // The Index group holds one tile, the US AQI: it spans both columns.
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(
+    new URL('./styles/weather.css', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    css,
+    /\.rail-card-tile:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1\s*;/,
+  );
 });
 
 test('a tile click dispatches its params', () => {
@@ -532,11 +545,11 @@ test('a tile click dispatches its params', () => {
     onParams: (...args) => calls.push(args),
   });
   view.update([{ ...card, blocks: [tilesBlock()] }]);
-  f.find((n) => n.dataset.tileId === 'aqhi').click();
-  assert.deepEqual(calls, [['a', { view: 'aqhi' }]]);
-  view.update([{ ...card, blocks: [tilesBlock('aqhi')] }]);
+  f.find((n) => n.dataset.tileId === 'PM2.5').click();
+  assert.deepEqual(calls, [['a', { view: 'PM2.5' }]]);
+  view.update([{ ...card, blocks: [tilesBlock('PM2.5')] }]);
   assert.ok(
-    f.find((n) => n.dataset.tileId === 'aqhi').classList.contains('is-active'),
+    f.find((n) => n.dataset.tileId === 'PM2.5').classList.contains('is-active'),
   );
   view.destroy();
 });

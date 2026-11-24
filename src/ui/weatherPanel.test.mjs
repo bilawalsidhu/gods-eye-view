@@ -712,30 +712,42 @@ test('history time keeps the hour whatever the length of the localized date', ()
   }
 });
 
-test('air-quality readout renders its band legend, Canada coverage and worst-first list', async () => {
+test('air-quality readout renders the US AQI ramp, its coverage, one index tile and a worst-first list', async () => {
   const observedMs = Date.now() - 10 * 60_000;
-  const reading = (stationId, value, band, name) => ({
-    id: `eccc:${stationId}`,
-    provider: 'eccc',
-    scale: 'AQHI',
-    value,
-    band,
+  /** A PM2.5 concentration (µg/m³) at a station. */
+  const reading = (stationId, value, name, lat) => ({
+    id: `regional:${stationId}:PM2.5`,
+    provider: 'regional',
     stationId,
     name,
     zone: 'on',
-    lat: 43.65,
+    lat,
     lon: -79.38,
+    parameter: 'PM2.5',
+    scale: 'PM2.5',
+    units: 'µg/m³',
+    value,
+    kind: 'observation',
+    averagingMinutes: 60,
     observedMs,
-    color: '#4cc9f0',
+    color: '#8cb4ce',
     label: String(value),
-    risk: `${band} risk`,
     note: null,
   });
   const layer = createAirQualityLayer({
     source: {
+      definitions: [
+        {
+          id: 'regional',
+          title: 'Ontario',
+          label: 'Air quality · Ontario',
+          network: 'Ontario network',
+          parameters: ['PM2.5'],
+        },
+      ],
       getSnapshot: async () => [
-        reading('B', 8, 'high', 'Hamilton'),
-        reading('A', 2, 'low', 'Toronto'),
+        reading('B', 60, 'Hamilton', 43.25),
+        reading('A', 2, 'Toronto', 43.65),
       ],
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -753,21 +765,27 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   assert.equal(aq.dataset.open, 'true');
   assert.match(
     f.find((n) => n.classList?.contains?.('rail-card-badge'), aq).textContent,
-    /^Canada$/,
+    /^Ontario$/,
   );
   assert.match(line(f, 'air-quality', 'status').textContent, /2 stations/);
-  const entries = f.find((n) => n.className === 'rail-card-legend-entries', aq);
-  assert.equal(entries.hidden, false);
-  assert.deepEqual(
-    [...entries.children].map((entry) => entry.children[1].textContent),
-    ['Low', 'Moderate', 'High', 'Very High'],
-  );
+  // The US AQI as a ramp, never a band list.
   assert.equal(
     f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
+    false,
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-legend-entries', aq).hidden,
     true,
+  );
+  // The index group holds one tile, the US AQI.
+  const index = f.find((n) => n.dataset.blockId === 'tiles-index', aq);
+  assert.deepEqual(
+    [...index.querySelectorAll('button')].map((tile) => tile.dataset.tileId),
+    ['aqi'],
   );
   const list = f.find((n) => n.dataset.blockId === 'list', aq);
   assert.equal(list.hidden, false);
+  // PM2.5 60 µg/m³ is a US AQI of 154; 2 µg/m³ of 11.
   assert.deepEqual(
     [...list.children].map((item) =>
       [...item.children[0].children]
@@ -775,10 +793,13 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
         .filter(Boolean)
         .join(' '),
     ),
-    ['8 Hamilton', '2 Toronto'],
+    ['154 Hamilton', '11 Toronto'],
   );
-  // One line a row; the risk is the tooltip.
-  assert.equal(list.children[0].children[0].title, 'Hamilton · high risk');
+  // One line a row; the station's details are the tooltip.
+  assert.match(
+    list.children[0].children[0].title,
+    /^Hamilton · on · Ontario network · Hourly average · /,
+  );
   view.destroy();
   layer.destroy();
 });

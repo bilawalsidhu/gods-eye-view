@@ -8950,7 +8950,7 @@ test('a failed military voice entry switches off only the layer it switched on',
   }
 });
 
-test('the aqhi alias opens air quality on the AQHI view', async () => {
+test('"AQHI" opens air quality and chooses no view: the US AQI is its one index', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
@@ -8991,10 +8991,8 @@ test('the aqhi alias opens air quality on the AQHI view', async () => {
     enabled: true,
   });
   assert.equal(result.ok, true);
-  assert.deepEqual(steps, [
-    ['params', 'air-quality', { view: 'aqhi' }, 'voice'],
-    ['enabled', 'air-quality', true],
-  ]);
+  // Canada's AQHI is retired: the alias names the layer, not a view of it.
+  assert.deepEqual(steps, [['enabled', 'air-quality', true]]);
   steps.length = 0;
   await runner('set_layer_visibility', {
     layerId: 'air quality',

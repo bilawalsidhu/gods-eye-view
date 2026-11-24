@@ -1,6 +1,6 @@
 import { initAirQualityTestLayer } from '../../testSupport/airQualityViewer.mjs';
-// The Air quality layer (AQHI) reads in the UI language: layer name, Weather
-// card (title, coverage, status, legend, risk) and its own failure text.
+// The Air quality layer reads in the UI language: layer name, Weather card
+// (title, coverage, status, legend, categories) and its own failure text.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { setLocale, t } from '../../i18n/index.js';
@@ -10,7 +10,6 @@ import { translateFeedError } from '../../ui/statusText.js';
 import { createAirQualityLayer } from './index.js';
 import { createDefaultAirQualityProviders } from './providers.js';
 import { interpretHourly, hourlyLegend } from './interpretation.js';
-import { attachSaIndexes, SA_INDEX_BANDS } from './southAfrica.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 function inLocale(locale, run) {
@@ -22,9 +21,14 @@ function inLocale(locale, run) {
   }
 }
 
+/** South Africa's default provider definition. */
+const SAAQIS = createDefaultAirQualityProviders().find(
+  (entry) => entry.id === 'saaqis',
+);
+
 function harness(source) {
   const layer = createAirQualityLayer({
-    source,
+    source: { definitions: [SAAQIS], ...source },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   const viewer = {};
@@ -35,21 +39,23 @@ function harness(source) {
 }
 
 const reading = {
-  id: 'eccc:A',
-  provider: 'eccc',
-  scale: 'AQHI',
-  value: 2,
-  band: 'low',
+  id: 'saaqis:A:PM2.5',
+  provider: 'saaqis',
   stationId: 'A',
   name: 'Toronto',
   zone: 'ont',
   lat: 43.65,
   lon: -79.38,
+  parameter: 'PM2.5',
+  scale: 'PM2.5',
+  units: 'µg/m³',
+  value: 12,
+  kind: 'observation',
+  averagingMinutes: 60,
   // Recent: a reading older than six hours is not drawn.
   observedMs: Date.now() - 10 * 60_000,
-  color: '#4cc9f0',
-  label: '2',
-  risk: 'Low health risk',
+  color: '#8cb4ce',
+  label: '12',
   note: null,
 };
 
@@ -73,9 +79,7 @@ for (const locale of ['es', 'ru']) {
       ...controls.legend.map((entry) => entry.label),
       ...controls.list.items.map((item) => item.text),
     ].filter((text) =>
-      /\b(Air quality|Canada only|stations reporting|Low|Moderate|High|health risk)\b/.test(
-        text,
-      ),
+      /\b(Air quality|South Africa|stations?|Good|Moderate)\b/.test(text),
     );
     assert.deepEqual(english, [], `English left in the ${locale} card`);
   });
@@ -88,7 +92,7 @@ for (const locale of ['es', 'ru']) {
         stats: {
           count: 0,
           error: 'Air quality request failed',
-          source: 'ECCC',
+          source: 'SAAQIS · South Africa',
           lastUpdate: null,
         },
       }),
@@ -101,7 +105,7 @@ for (const locale of ['en', 'es', 'ru']) {
   test(`${locale}: the Weather card names a failed network in its language; the row keeps the error`, async () => {
     const layer = harness({
       getSnapshot: async () => {
-        throw new Error('ECCC HTTP 503');
+        throw new Error('Air quality provider unavailable');
       },
     });
     await layer.update();
@@ -110,19 +114,15 @@ for (const locale of ['en', 'es', 'ru']) {
       () =>
         layer
           .getRowControls()
-          .summary.lines.find((item) => item.id === 'provider-eccc').text,
+          .summary.lines.find((item) => item.id === 'provider-saaqis').text,
     );
     assert.equal(
       line,
-      inLocale(locale, () =>
-        t('{network} unavailable', {
-          network: 'Environment and Climate Change Canada',
-        }),
-      ),
+      inLocale(locale, () => t('{network} unavailable', { network: 'SAAQIS' })),
     );
-    // The HTTP failure itself stays the layer's error, for the Layers row.
-    assert.equal(layer.getStats().error, 'ECCC HTTP 503');
-    assert.ok(translateFeedError('ECCC HTTP 503'));
+    // The failure itself stays the layer's error, for the Layers row.
+    assert.equal(layer.getStats().error, 'Air quality provider unavailable');
+    assert.ok(translateFeedError('Air quality provider unavailable'));
   });
 }
 
@@ -135,13 +135,8 @@ const eeaRussian = [
   'Крайне плохое',
 ];
 const russianScales = {
-  eccc: {
-    view: 'aqhi',
-    labels: ['Низкий', 'Умеренный', 'Высокий', 'Очень высокий'],
-  },
   openaq: { view: 'PM2.5', labels: eeaRussian },
-  // SAAQIS stations are rated on the EEA bands too; SAAQIS's own index keeps
-  // its own grammar in the station's details.
+  // SAAQIS stations are rated on the EEA bands too.
   saaqis: { view: 'PM2.5', labels: eeaRussian },
   'US AQI': {
     provider: 'openaq',
@@ -156,14 +151,6 @@ const russianScales = {
     ],
   },
 };
-const saaqisRussian = [
-  'Хорошо',
-  'Умеренно',
-  'Вредно',
-  'Очень вредно',
-  'Опасно',
-];
-
 for (const [scale, { provider = scale, view, labels }] of Object.entries(
   russianScales,
 )) {
@@ -206,17 +193,12 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
     try {
       await layer.update();
       const controls = layer.getRowControls();
-      // The AQHI names its bands; the other views show a numeric ramp.
+      // Every view shows a numeric ramp.
       assert.deepEqual(
         controls.legend.map((entry) => entry.label),
-        view === 'aqhi'
-          ? labels.map(
-              (label, i) =>
-                `${label}${definition.legend[i].range ? ` ${definition.legend[i].range}` : ''}`,
-            )
-          : view === 'aqi'
-            ? ['0', '50', '100', '150', '200', '300+']
-            : ['0', '5', '15', '50', '90', '140+'],
+        view === 'aqi'
+          ? ['0', '50', '100', '150', '200', '300+']
+          : ['0', '5', '15', '50', '90', '140+'],
       );
       assert.equal(
         t('Moderate'),
@@ -227,7 +209,6 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
         t('Moderate', { context: 'fire behavior' }),
         'умеренная активность',
       );
-      if (view === 'aqhi') return;
       for (const [i, label] of labels.entries()) {
         const raw = {
           ...reading,
@@ -243,28 +224,7 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
               ? [5, 20, 45, 100, 200, 300][i]
               : [4, 10, 25, 60, 100, 150][i],
         };
-        const band = SA_INDEX_BANDS[Math.min(i, SA_INDEX_BANDS.length - 1)];
-        rows =
-          view === 'aqi'
-            ? [raw]
-            : provider === 'openaq'
-              ? [interpretHourly(raw)]
-              : attachSaIndexes([raw], {
-                  indexType: 1,
-                  data: [
-                    {
-                      stationId: raw.stationId,
-                      datetime: new Date(raw.observedMs).toISOString(),
-                      indexes: [
-                        {
-                          pollutant: raw.parameter,
-                          index: band.max,
-                          description: band.label,
-                        },
-                      ],
-                    },
-                  ],
-                }).map(interpretHourly);
+        rows = view === 'aqi' ? [raw] : [interpretHourly(raw)];
         await layer.update();
         const card = layer.getRowControls();
         const tile = card.sublists
@@ -272,13 +232,6 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
           .find((item) => item.id === view);
         assert.ok(tile.title.endsWith(` · ${label}`), tile.title);
         assert.ok(overlays[0].title.endsWith(` · ${label}`));
-        if (provider === 'saaqis')
-          assert.ok(
-            card.list.items[0].title.includes(
-              `Индекс SAAQIS ${band.max}/10 · ${saaqisRussian[SA_INDEX_BANDS.indexOf(band)]}`,
-            ),
-            card.list.items[0].title,
-          );
         if (view !== 'aqi')
           assert.equal(
             rows[0].assessment.label,
@@ -299,7 +252,6 @@ test('every catalogue names each band of a scale differently', async () => {
   // Each band, with its short form where it has one: a band may share its
   // short name with its own long one, never with another band.
   const scales = {
-    'air quality risk': [['Low'], ['Moderate'], ['High'], ['Very High']],
     'EEA hourly quality': [
       ['Good'],
       ['Fair'],
@@ -312,13 +264,6 @@ test('every catalogue names each band of a scale differently', async () => {
       ['Good'],
       ['Moderate'],
       ['Unhealthy for Sensitive Groups', 'Sensitive groups'],
-      ['Unhealthy'],
-      ['Very Unhealthy'],
-      ['Hazardous'],
-    ],
-    'SAAQIS category': [
-      ['Good'],
-      ['Moderate'],
       ['Unhealthy'],
       ['Very Unhealthy'],
       ['Hazardous'],

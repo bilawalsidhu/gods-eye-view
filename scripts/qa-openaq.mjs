@@ -202,11 +202,12 @@ try {
     new Set(state.records.map((r) => r.country)),
     new Set(fixtures.map((r) => r[0])),
   );
-  // The slim tile card: the indices and six pollutants, no provider picker.
+  // The slim tile card: the one index (the US AQI) and six pollutants, no
+  // provider picker.
   assert.deepEqual(
     state.controls.sublists.map((group) => [group.id, group.tiles.length]),
     [
-      ['index', 2],
+      ['index', 1],
       ['pollutants', 6],
     ],
   );

@@ -25,6 +25,17 @@ test('every credit carries a unique key and some markup to render', () => {
   }
 });
 
+test("Canada's retired AQHI has no credit: no layer reads ECCC data", () => {
+  assert.deepEqual(
+    DATA_CREDITS.filter(
+      (entry) =>
+        entry.key === 'eccc-aqhi' ||
+        /AQHI|Environment and Climate Change Canada/.test(entry.html),
+    ).map((entry) => entry.key),
+    [],
+  );
+});
+
 test('adsbdb is credited and carries its published route-data restriction', () => {
   const credit = DATA_CREDITS.find((entry) => entry.key === 'adsbdb');
   assert.ok(
@@ -242,16 +253,6 @@ test('a credit with several links becomes one credit per link, in order', async 
       'https://data-nifc.opendata.arcgis.com/',
     ],
     ['Incident information: InciWeb', 'https://inciweb.wildfire.gov/'],
-  ]);
-  assert.deepEqual(read(html('eccc-aqhi')), [
-    [
-      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet (eccc-msc.github.io/open-data)',
-      'https://eccc-msc.github.io/open-data/',
-    ],
-    [
-      'ECCC Data Servers End-use Licence',
-      'https://eccc-msc.github.io/open-data/licence/readme_en/',
-    ],
   ]);
   assert.deepEqual(
     read(BHOTE_KOSHI_CREDIT.html)[1][0].slice(0, 15),

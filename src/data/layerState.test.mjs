@@ -2953,7 +2953,7 @@ test('explicit provider switches reach durable state without adopting unrelated 
   }
 });
 
-for (const view of ['aqi', 'aqhi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+for (const view of ['aqi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
   test(`air-quality view round-trips through a share token: ${view}`, () => {
     const state = normalizeLayerState({
       enabledLayerIds: ['air-quality'],
@@ -2978,6 +2978,23 @@ test('the plain token 4 opens the layer on the US AQI', () => {
       options: {
         'air-quality': { provider: 'saaqis', parameter: 'CO2', view: 'CO2' },
       },
+    }).options['air-quality'],
+    { view: 'aqi' },
+  );
+});
+
+test("Canada's retired AQHI view opens on the US AQI", () => {
+  // The token `k` was never released; a link or a saved state carrying it,
+  // or the view's name, opens the default view.
+  const decoded = decodeLayerStateParams(
+    new URLSearchParams('v=2&l=4&lo=4.v.k'),
+  );
+  assert.deepEqual(decoded.enabledLayerIds, ['air-quality']);
+  assert.deepEqual(decoded.options['air-quality'], { view: 'aqi' });
+  assert.deepEqual(
+    normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: { 'air-quality': { view: 'aqhi' } },
     }).options['air-quality'],
     { view: 'aqi' },
   );

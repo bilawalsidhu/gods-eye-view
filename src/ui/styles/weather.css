@@ -399,6 +399,11 @@ html:not([lang='en']) .rail-card-setting {
   cursor: pointer;
 }
 
+/* A group of one tile (the Index group's US AQI) spans its row. */
+.rail-card-tile:only-child {
+  grid-column: 1 / -1;
+}
+
 .rail-card-tile:hover,
 .rail-card-tile:focus-visible {
   background: rgba(54, 220, 255, 0.08);

@@ -6351,7 +6351,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢                  | AISStream websocket                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/data/aisLiveVessels.js`                                                                                                                              | `/api/vessels`                                                                                                               | 60s (+800ms visibility pass)                                                                                                |
 | Mapped Installations ⌖               | OpenFreeMap military areas; optional configured Overpass names and Google Places search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/militaryInstallations.js`                                                                                                                       | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search`                                                  | viewport-driven; transient errors back off, missing capability switches to tiles                                            |
 | Earthquakes                          | USGS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `src/data/earthquakes.js`                                                                                                                                 | —                                                                                                                            | 60s                                                                                                                         |
-| Air quality            | US AQI computed per station (default view); EEA-band per-pollutant views (CO on WHO-based bands); ECCC AQHI (Canada); SAAQIS (South Africa); OpenAQ observations (worldwide, optional key); CPCB / OGD India (optional key); optional host-supplied model field and forecast                                                                                                                                                      | `src/layers/airQuality/`                              | —                                                        | 20 min readings, 12 h station catalog                                             |
+| Air quality            | US AQI computed per station (default view, the one index); EEA-band per-pollutant views (CO on WHO-based bands); SAAQIS (South Africa, off by default); OpenAQ observations (worldwide, optional key); CPCB / OGD India (optional key); optional host-supplied model field and forecast                                                                                                                                             | `src/layers/airQuality/`                              | —                                                        | 20 min national snapshots; OpenAQ per view                                        |
 | Satellites                           | CelesTrak TLE + SATCAT; bundled UCS pack (purpose)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/satellites.js`                                                                                                                                  | `/api/celestrak` + `/api/celestrak-satcat`                                                                                   | 120s                                                                                                                        |
 | Space Missions (30d)                 | Launch Library 2 + CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/data/rocketLaunches.js`                                                                                                                              | `/api/launches` + `/api/celestrak/active`                                                                                    | 5 min                                                                                                                       |
 | Traffic                              | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/traffic.js`                                                                                                                                     | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                                                                     | viewport-driven; capped tile cache                                                                                          |
@@ -10097,22 +10097,28 @@ when their footprints touch or contain one another, never across a seam toleranc
 
 Weather → Air quality draws every observation provider together, de-duplicated
 (SAAQIS for South Africa, CPCB for India through OGD, and OpenAQ worldwide), as
-one station set; Canada's AQHI (ECCC) is a view of its own, never merged into
-it. SAAQIS is off by default (its portal session API has no established reuse
+one station set. The US AQI that GEV computes from concentrations is the one
+index: Canada's AQHI (ECCC) is retired, as it covered Canada only, Canadian
+stations come through OpenAQ like every other country's, and no network's own
+index is used. SAAQIS is off by default (its portal session API has no established reuse
 licence): the server reads it only with `SAAQIS_ENABLED=1`, and without it the
 layer leaves South Africa out with no card line and no failure. A network that
 needs its key or is switched off is guidance, not a failure: the layer turns on
-with its key lines and Canada's AQHI a click away, and an update fails only when
-every network asked failed and no other view is on offer. There is no provider picker: the card
-offers views only, the US AQI (the default), Canada's AQHI, or one pollutant
+with its key lines, its Layers row names the keys it lacks (the layer's
+key-required stat) instead of reading UNAVAILABLE, and an update fails only when
+every network asked failed and no other view is on offer. Without the keys and
+with South Africa off (the stand-alone default) an install shows no stations,
+and the card names the keys to add; hosts and installs with keys are unaffected.
+There is no provider picker: the card
+offers views only, the US AQI (the default) or one pollutant
 (PM2.5, PM10, NO2, O3, SO2, CO). Observations retain original units and
-channel timestamps; each view rates them on its own scale (below), and a
-network's own index (SAAQIS's 1–10) stays in a station's details. A view with
+channel timestamps; each view rates them on its own scale (below), and no
+network's own index (such as SAAQIS's 1–10) is requested or shown. A view with
 no reporting station in sight is displayed as a coverage gap. Stations that
 would overlap on screen draw as one cluster dot at far zoom, coloured by the
 mean of its rated members (`groups.js`); a click on a cluster zooms into it.
-The card is a slim tile card: an Index group (the US AQI, Canada's AQHI) and a
-Pollutants group, each tile coloured by its band and reading the model at the
+The card is a slim tile card: an Index group of one tile, the US AQI, across its
+row, and a Pollutants group of six, each tile coloured by its band and reading the model at the
 view centre where a model field is held, else the station nearest the view
 (or the selected station). It shows each provider's status and says when data
 is cached, when a key was rejected, and while OpenAQ is still discovering a
@@ -10120,7 +10126,8 @@ view, how many of its stations it has checked. A US AQI above 500 reads "500+"
 (the computed value stays in the data), and a station adds at most 500 to its
 cluster's mean. Readings older than six hours are not drawn, judged at draw
 time, even when no fetch has succeeded since; in the AQI view such a value
-leaves the index ("too old"). A station's originating network and its licence
+leaves the index ("too old"), and the remembered AQI-view values another view's
+tiles read obey the same age. A station's originating network and its licence
 are named in its row's tooltip and in the selected station's header tooltip.
 Share links carry only the view; whether stations are shown and the selected
 station are session state. See [the source audit and adapter contract](SOUTH-AFRICA-AIR-QUALITY.md).
@@ -10130,8 +10137,9 @@ The deterministic real-app gates are `scripts/qa-air-quality.mjs`,
 separate national/Western Cape coverage audit.
 
 Air quality accepts injected provider definitions through its source
-composition. Standalone defaults add optional worldwide OpenAQ and India's CPCB
-to ECCC and SAAQIS. OpenAQ uses the existing Provider Settings registry
+composition. Standalone defaults are South Africa's SAAQIS (off unless
+`SAAQIS_ENABLED=1`), India's CPCB and worldwide OpenAQ (both with their keys).
+OpenAQ uses the existing Provider Settings registry
 (`OPENAQ_API_KEY`, server-only) and a fixed local proxy, with bounded
 progressive acquisition across all available countries/areas, explicit
 incomplete coverage and source attribution.
@@ -10140,7 +10148,7 @@ map focus and continuing through the visible bounds (including dateline crossing
 Loading and partial discovery are distinct from completed searches with no recent
 observations. The OpenAQ fixture gate is `scripts/qa-openaq.mjs`; live coverage
 requires the operator's key.
-SAAQIS's source-reported index is kept in station details and ECCC retains AQHI semantics.
+SAAQIS's source-reported index is not requested.
 OpenAQ navigation reuses stable catalog regions and recent station observations.
 Each pass fetches at most one new catalog page and four nearby station hours;
 nearby enrichment waits eight seconds and yields capacity to new regions.
@@ -10163,11 +10171,11 @@ poor. CO is not in the EEA index: its bands are WHO-based (4, 7, 10, 35 and
 comparison, not an overall station AQI or a local official index. Unknown periods,
 incomplete or flagged hours, unsupported units and unclassified pollutants remain
 neutral and explain why. CO2 concentration is never described as emissions.
-The Weather card is the slim tile card: an Index group (US AQI, AQHI) and a
+The Weather card is the slim tile card: an Index group (the US AQI) and a
 Pollutants group of tiles coloured by band, a Stations switch, a ramp legend of
 the view's scale, a one-line HIGHEST IN VIEW list (rank, band colour, value,
-name; the station's method, observation age, provenance and the network's own
-index are its tooltip) and, for a selected station, a header with its name,
+name; the station's method, observation age and provenance are its
+tooltip) and, for a selected station, a header with its name,
 who measures it and how old the reading is. It has no headline, status badge or
 activity guidance; the per-reading `general` and `sensitive` guidance texts
 exist only on the assessment in analyst records. Hourly acquisition replaces the
@@ -10190,12 +10198,11 @@ The pollutant views leave a value above the same ceilings unrated (CO's at
 mixing ratios convert at 25 °C (`units.js`) for both the US AQI and the EEA
 comparison. A pollutant view rates every network's concentration on the
 EEA hourly bands, so a SAAQIS station is coloured, ranked and listed like any
-other and its own 1–10 index appears in its details only.
-Scale-specific translations: AQHI
-health risk, EEA hourly quality, US AQI and SAAQIS categories are translated independently
-across legends, summaries, station badges and map labels. Source category values
-remain English data; Russian risk, quality and SAAQIS wording retain their own
-grammatical forms.
+other.
+Scale-specific translations: EEA hourly quality and US AQI categories are
+translated independently across legends, tiles, list rows and map labels.
+Source category values remain English data; Russian quality and US AQI wording
+retain their own grammatical forms.
 
 #### India air-quality observations
 
@@ -10225,7 +10232,7 @@ Europe inset (`fieldSource`, `sources['air-quality-field']`; the contract is in
 16-bit grids with a per-id scale and 65535 for no data). Stand-alone Core has
 none unless one is configured (below), and then shows stations only.
 
-With a field, a station view (the US AQI or a pollutant, not Canada's AQHI)
+With a field, every view (the US AQI or a pollutant)
 draws that view's field under the stations, in the same bands as the stations:
 each band's colour at its middle, opacity `min(0.82, 0.05 + 0.26 · p)` for scale
 position `p`. It is one `single-image` imagery layer per image on the globe (the
@@ -10258,7 +10265,7 @@ too). The tiles read the model at the view centre ("model at view centre"),
 a selected station its own values at now ("measured at the station"), and the
 card's one time line names the model by the manifest's `sourceShort`, else
 `source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
-behind it (in Canada's AQHI view too, whose tiles read the model at now).
+behind it.
 Outside the run, with no run covering the time on its way, one muted line says
 "{source}: no forecast for this time". "Model field unavailable" shows only
 once a manifest has been read: before that a failure may only mean nobody

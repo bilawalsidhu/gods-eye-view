@@ -1,6 +1,5 @@
 import { readResponseJsonCapped } from './common/http.js';
 import {
-  attachSaIndexes,
   normalizeSaStations,
   normalizeSaMeasurements,
 } from '../../src/layers/airQuality/southAfrica.js';
@@ -74,13 +73,7 @@ export function createSaAcquisition({
     const entries = await get(
       `regions/data/latest?unitConversion=true&regionsIds=${ids.join(',')}&timebase=60`,
     );
-    // Index availability must not suppress valid concentrations.
-    let indexes = null;
-    try {
-      indexes = await get('stations/index/latest?hoursBack=6');
-    } catch {
-      /* optional provider rating */
-    }
+    // Concentrations only: SAAQIS's own index is not asked for.
     return {
       schemaVersion: 1,
       fetchedAt: now(),
@@ -89,10 +82,7 @@ export function createSaAcquisition({
         'South African Air Quality Information System; originating monitoring networks',
       sourceUrl: ROOT,
       stations,
-      readings: attachSaIndexes(
-        normalizeSaMeasurements(entries, stations),
-        indexes,
-      ),
+      readings: normalizeSaMeasurements(entries, stations),
     };
   }
   return {

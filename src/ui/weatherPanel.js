@@ -147,7 +147,7 @@ export function createWeatherPanel({
         : '';
     const models = active.map((entry) => {
       const { id, icon, summary, legend = [], list, sublists = [] } = entry;
-      // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
+      // Discrete classes (storm geometry) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);

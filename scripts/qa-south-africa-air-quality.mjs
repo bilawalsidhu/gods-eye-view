@@ -111,17 +111,6 @@ const snapshot = {
     stations,
   ),
 };
-for (const row of snapshot.readings) {
-  if (row.parameter === 'PM2.5') {
-    row.rating = {
-      score: 4,
-      label: 'Moderate',
-      method: 'SAAQIS index',
-      observedMs: row.observedMs,
-    };
-    row.color = '#F7FF00';
-  }
-}
 let fail = false;
 const browser = await puppeteer.launch({
   headless: !process.argv.includes('--headful'),
@@ -202,10 +191,10 @@ try {
   assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
   // One scale for every network: the six EEA PM2.5 bands. 12 µg/m³ is
-  // "Fair"; SAAQIS's own index (4/10) stays in the details.
+  // "Fair"; SAAQIS's own index is neither read nor shown.
   assert.equal(result.controls.legend.length, 6);
   assert.equal(result.records[0].assessment.label, 'Fair');
-  assert.match(result.controls.list.items[0].title, /SAAQIS index 4\/10/);
+  assert.doesNotMatch(result.controls.list.items[0].title, /SAAQIS index/);
   // The keyed providers say they need a key.
   assert.ok(
     result.controls.summary.lines.some((row) =>
@@ -213,7 +202,7 @@ try {
     ),
   );
   console.log(
-    'PASS: national source → layer → map-view card with the EEA band and the SAAQIS index in details',
+    'PASS: national source → layer → map-view card with the EEA band, no network index',
   );
 
   // Open the Weather air-quality card, then exercise the real pollutant button.
@@ -255,9 +244,7 @@ try {
   assert.equal(result.records[0].value, 20);
   assert.equal(result.records[0].units, 'µg/m³');
   assert.equal(result.params.view, 'NO2');
-  console.log(
-    'PASS: real NO2 control selects concentration, with an unavailable index badge',
-  );
+  console.log('PASS: real NO2 control selects concentration');
   if (process.env.QA_SA_SCREENSHOT)
     await page.screenshot({ path: process.env.QA_SA_SCREENSHOT });
 

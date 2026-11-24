@@ -11,7 +11,6 @@ import {
   VOICE_QUERY_LAYER_IDS,
   voiceLayerAliasHint,
   voiceLayerAliasMap,
-  voiceLayerAliasParams,
 } from './layerManifest.js';
 
 const catalogIds = APPLICATION_LAYER_METADATA.map((layer) => layer.id);
@@ -131,11 +130,4 @@ test('spoken aliases resolve to real layers, keep every legacy phrase and never 
       assert.ok(!claimed.has(alias), `"${alias}" claimed by ${claimed.get(alias)} and ${entry.id}`);
       claimed.set(alias, entry.id);
     }
-});
-
-test('an alias that names one view of a layer opens that view', () => {
-  assert.deepEqual(voiceLayerAliasParams('AQHI'), { view: 'aqhi' });
-  assert.equal(voiceLayerAliasParams('air quality'), null);
-  assert.equal(voiceLayerAliasParams('air-quality'), null);
-  assert.equal(voiceLayerAliasParams(''), null);
 });

@@ -1,31 +1,9 @@
 import { msg } from '../../i18n/marker.js';
-import { createEcccAirQualitySource } from './source.js';
-import { AIR_QUALITY_PROVIDERS, AIR_QUALITY_BANDS } from './model.js';
 import { SA_POLLUTANTS } from './southAfrica.js';
 import { interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { CPCB_POLLUTANTS } from './cpcb.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
-
-/**
- * Descriptor for a legacy ECCC-only injected snapshot source.
- *
- * `observation: false` makes a provider an index view of its own (Canada's
- * AQHI); every `observation: true` provider is drawn together in the station
- * views. `direct: true` marks a network publishing its own monitors, which
- * wins over an aggregator's copy of the same site (`merge.js`).
- */
-export const ECCC_DEFINITION = Object.freeze({
-  ...AIR_QUALITY_PROVIDERS.eccc,
-  title: msg('Canada'),
-  sourceLabel: 'ECCC MSC GeoMet',
-  parameters: [],
-  legend: AIR_QUALITY_BANDS,
-  bandContext: 'air quality risk',
-  observation: false,
-  direct: true,
-  refreshMs: 1_200_000,
-});
 
 /**
  * Fixed-route snapshot adapter; caller supplies the acquisition endpoint.
@@ -141,26 +119,28 @@ export function createAirQualitySnapshotSource({
   };
 }
 
-/** Standalone-compatible defaults. Hosts can replace the entire provider list. */
-export function createDefaultAirQualityProviders({
-  canada = createEcccAirQualitySource(),
-  fetchImpl,
-  now,
-} = {}) {
+/**
+ * Standalone-compatible defaults. Hosts can replace the entire provider list.
+ *
+ * Every provider is a station network, drawn together with the others in
+ * one de-duplicated set; `direct: true` marks a network publishing its own
+ * monitors, which wins over an aggregator's copy of the same site
+ * (`merge.js`). No network's own index is used: the layer rates each station
+ * from its concentrations. Canada's stations come through OpenAQ, as every
+ * other country's do.
+ */
+export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
   return [
-    { ...ECCC_DEFINITION, source: canada },
     {
-      ...AIR_QUALITY_PROVIDERS.saaqis,
+      id: 'saaqis',
       title: msg('South Africa'),
+      label: msg('Air quality · South Africa'),
+      coverage: msg('South Africa · SAAQIS'),
+      network: 'SAAQIS',
       sourceLabel: 'SAAQIS · South Africa',
-      observation: true,
       direct: true,
       parameters: SA_POLLUTANTS,
       averagingLabel: msg('Hourly average'),
-      // SAAQIS's own index (1–10) is shown in a station's details only; the
-      // views rate its concentrations on their own scale.
-      indexLabel: msg('SAAQIS index'),
-      bandContext: 'SAAQIS category',
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
         hourly: true,
@@ -177,13 +157,11 @@ export function createDefaultAirQualityProviders({
       coverage: msg('India · CPCB via OGD'),
       network: 'CPCB',
       sourceLabel: 'CPCB · data.gov.in',
-      observation: true,
       direct: true,
       parameters: CPCB_POLLUTANTS,
       requiresKeyId: 'data-gov-in',
       // The India route refreshes its national snapshot every 20 minutes.
       refreshMs: 1_200_000,
-      indexLabel: msg('Index unavailable'),
       // Unrated until both the units and the averaging period are confirmed
       // (CPCB_UNITS_VERIFIED, CPCB_AVERAGING_MINUTES).
       source: createAirQualitySnapshotSource({
@@ -204,12 +182,10 @@ export function createDefaultAirQualityProviders({
       coverage: msg('Worldwide · available OpenAQ stations'),
       network: 'OpenAQ',
       sourceLabel: 'OpenAQ · Worldwide',
-      observation: true,
       direct: false,
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
       averagingLabel: msg('Hourly average'),
-      indexLabel: msg('Index unavailable'),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/openaq',
         hourly: true,

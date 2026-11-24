@@ -5,12 +5,21 @@ import { layerFeedState } from '../../data/feedState.js';
 import { STALE_AFTER_MS } from './model.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
+/** One station network measuring PM2.5, the provider of these readings. */
+const NETWORK = Object.freeze({
+  id: 'regional',
+  title: 'Regional',
+  label: 'Air quality · Regional',
+  network: 'Regional network',
+  parameters: ['PM2.5'],
+});
+
 function harness(source, renderer = {}) {
   const events = [];
   const viewer = {};
   const { draw } = bindFakeDraw(viewer, renderer);
   const layer = createAirQualityLayer({
-    source,
+    source: { definitions: [NETWORK], ...source },
     overlayHost: {
       setEntries(...args) {
         events.push(args);
@@ -21,27 +30,29 @@ function harness(source, renderer = {}) {
   });
   layer.init(viewer);
   layer.enable(viewer);
-  const markers = () => draw.find('air-quality:');
+  const markers = () => draw.find('air-quality:points:');
   return { layer, viewer, draw, markers, events };
 }
 
+/** A PM2.5 concentration (µg/m³) at a station of the network. */
 const reading = (id, value, overrides = {}) => ({
-  id: `eccc:${id}`,
-  provider: 'eccc',
-  scale: 'AQHI',
-  value,
-  band: 'low',
+  id: `regional:${id}:PM2.5`,
+  provider: 'regional',
   stationId: id,
   name: id,
-  zone: 'ont',
+  zone: 'Ontario',
   lat: 43.65,
   lon: -79.38,
+  parameter: 'PM2.5',
+  scale: 'PM2.5',
+  units: 'µg/m³',
+  value,
+  kind: 'observation',
+  averagingMinutes: 60,
   // Recent: a reading older than six hours is not drawn.
   observedMs: Date.now() - 10 * 60_000,
-  color: '#4cc9f0',
+  color: '#8cb4ce',
   label: String(value),
-  risk: 'Low health risk',
-  note: null,
   ...overrides,
 });
 
@@ -55,13 +66,53 @@ test('a layer requires both a snapshot source and an overlay host', () => {
   );
 });
 
-test('initialization is single-use and owns separate shape and point draw sets', () => {
+test('a source that names no providers is one station network, not an AQHI source', async () => {
+  // Canada's AQHI is retired: a plain source (a host's, or the catalog's
+  // stand-in for an absent one) is no longer taken for its index provider.
+  for (const definitions of [undefined, []]) {
+    const calls = [];
+    const viewer = {};
+    const { draw } = bindFakeDraw(viewer);
+    const layer = createAirQualityLayer({
+      source: {
+        definitions,
+        getSnapshot: async (request) => {
+          calls.push(request);
+          return [reading('A', 12)];
+        },
+      },
+      overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+    });
+    assert.equal(layer.getParams().view, 'aqi');
+    assert.equal(layer.setParams({ view: 'aqhi' }), false);
+    layer.init(viewer);
+    layer.enable();
+    assert.equal(await layer.update(), true);
+    assert.deepEqual(
+      calls.map(({ provider, mode }) => [provider, mode]),
+      [['air-quality', 'aqi']],
+    );
+    assert.deepEqual(
+      [...draw.find('air-quality:points:').items.keys()],
+      ['air-quality:regional:A:aqi'],
+    );
+    assert.equal(draw.find('air-quality:points:').items.size, 1);
+    assert.equal(
+      [...draw.sets.values()].some((set) => set.kind === 'shapes'),
+      false,
+    );
+    assert.notEqual(layer.setParams({ view: 'NO2' }), false);
+    layer.destroy();
+  }
+});
+
+test('initialization is single-use and owns one point draw set', () => {
   const { layer, viewer, draw, markers } = harness(staticSource([]));
   const owned = markers();
-  assert.equal(owned.kind, 'shapes');
+  assert.equal(owned.kind, 'points');
   assert.equal(
     [...draw.sets.values()].filter((set) => !set.disposed).length,
-    2,
+    1,
   );
   assert.throws(() => layer.init(viewer), /already initialized/);
   layer.destroy(viewer);
@@ -69,30 +120,29 @@ test('initialization is single-use and owns separate shape and point draw sets',
   assert.ok([...draw.sets.values()].every((set) => set.disposed));
 });
 
-test('stations are ground discs in their band colour, shown only while enabled', async () => {
+test('stations are ground points in their US AQI colour, shown only while enabled', async () => {
+  // Apart from each other: neither joins a group.
   const { layer, markers } = harness(
-    staticSource([reading('A', 2), reading('B', 7, { color: '#c1121f' })]),
+    staticSource([
+      reading('A', 2),
+      reading('B', 60, { lat: 49.28, lon: -123.12 }),
+    ]),
   );
   assert.equal(await layer.update(), true);
   const set = markers();
   assert.equal(set.show, true);
   assert.deepEqual(
     [...set.items.keys()],
-    ['air-quality:eccc:A', 'air-quality:eccc:B'],
+    ['air-quality:regional:A:aqi', 'air-quality:regional:B:aqi'],
   );
-  const disc = set.items.get('air-quality:eccc:B');
-  assert.deepEqual(disc.geometry, {
-    kind: 'ellipse',
-    center: { lon: -79.38, lat: 43.65 },
-    semiMajor: 6_000,
-    semiMinor: 6_000,
-  });
-  assert.equal(disc.height, 'clampGround');
-  assert.equal(disc.clampTo, 'both');
-  assert.deepEqual(disc.fill, [0xc1 / 255, 0x12 / 255, 0x1f / 255, 0.35]);
-  assert.equal(disc.outline, undefined);
-  assert.equal(disc.meta.name, 'B');
-  assert.equal(disc.meta.value, 7);
+  const point = set.items.get('air-quality:regional:B:aqi');
+  assert.deepEqual(point.pos, { lon: -123.12, lat: 49.28, height: 0 });
+  assert.equal(point.height, 'clampGround');
+  // PM2.5 60 µg/m³ is a US AQI of 154: Unhealthy.
+  assert.equal(point.color, '#ff0000');
+  assert.equal(point.meta.name, 'B');
+  assert.equal(point.meta.value, 154);
+  assert.equal(set.items.get('air-quality:regional:A:aqi').color, '#00e400');
   layer.disable();
   assert.equal(set.show, false);
   layer.enable();
@@ -116,8 +166,8 @@ test('the readout lists only readings inside the camera port view rectangle', as
   );
   await layer.update();
   assert.deepEqual(
-    layer.getRowControls().list.items.map((item) => item.title),
-    ['Toronto · Low health risk'],
+    layer.getRowControls().list.items.map((item) => item.text),
+    ['Toronto'],
   );
 });
 
@@ -209,27 +259,33 @@ test('update is a no-op while the layer is disabled', async () => {
 
 // ── readout descriptor ─────────────────────────────────────────────────────
 
-test('the readout descriptor carries the band legend and coverage', async () => {
-  const { layer } = harness(staticSource([reading('A', 2), reading('B', 9)]));
+test('the readout descriptor carries the US AQI ramp and coverage', async () => {
+  const { layer } = harness(
+    staticSource([
+      reading('A', 2),
+      reading('B', 60, { lat: 43.7, lon: -79.4 }),
+    ]),
+  );
   await layer.update();
   const controls = layer.getRowControls();
   assert.equal(controls.readout, true);
-  assert.equal(controls.summary.coverage, 'Canada');
-  // The Weather panel's legend shape: one {color, label} per band.
-  assert.equal(controls.legendCategorical, true);
+  // The network's place, by its title.
+  assert.equal(controls.summary.coverage, 'Regional');
+  // The Weather panel's legend shape: one {color, label} per band, a ramp.
+  assert.equal(controls.legendCategorical, false);
   assert.deepEqual(
     controls.legend.map((entry) => entry.label),
-    ['Low', 'Moderate', 'High', 'Very High'],
+    ['0', '50', '100', '150', '200', '300+'],
   );
   assert.ok(
     controls.legend.every((entry) => /^#[0-9a-f]{6}$/i.test(entry.color)),
   );
   // Worst first, and every item keyed.
   assert.deepEqual(
-    controls.list.items.map((i) => [i.lead, i.text, i.title]),
+    controls.list.items.map((i) => [i.lead, i.text]),
     [
-      ['9', 'B', 'B · Low health risk'],
-      ['2', 'A', 'A · Low health risk'],
+      ['154', 'B'],
+      ['11', 'A'],
     ],
   );
   assert.ok(controls.list.items.every((i) => i.id));
@@ -239,19 +295,19 @@ test('the readout descriptor carries the band legend and coverage', async () => 
 test('the readout reports an error rather than a silent empty card', async () => {
   const { layer } = harness({
     getSnapshot: async () => {
-      throw new Error('ECCC HTTP 503');
+      throw new Error('Air quality provider unavailable');
     },
   });
   await layer.update();
   // The card names the network; the error itself stays the layer's.
   assert.deepEqual(layer.getRowControls().summary.lines, [
     {
-      id: 'provider-eccc',
+      id: 'provider-regional',
       muted: true,
-      text: 'Environment and Climate Change Canada unavailable',
+      text: 'Regional network unavailable',
     },
   ]);
-  assert.match(layer.getStats().error, /503/);
+  assert.equal(layer.getStats().error, 'Air quality provider unavailable');
 });
 
 test('row-control listeners are notified on refresh and teardown-safe', async () => {
@@ -324,7 +380,7 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
   let fail = false;
   const { layer } = harness({
     getSnapshot: async () => {
-      if (fail) throw new Error('ECCC HTTP 503');
+      if (fail) throw new Error('Air quality provider unavailable');
       return [reading('A', 2, { observedMs: Date.now() - 10 * 60_000 })];
     },
   });
@@ -341,7 +397,7 @@ test('a failed refresh over good readings reports degraded, not nominal', async 
   );
 });
 
-test('injected observations use point markers and dispose both render sets', async () => {
+test('a pollutant view draws its observations as points and dispose lets go of them', async () => {
   const row = reading('sample', 12, {
     provider: 'custom',
     scale: 'PM2.5',
@@ -361,8 +417,6 @@ test('injected observations use point markers and dispose both render sets', asy
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
   const points = [...draw.sets.values()].find((set) => set.kind === 'points');
-  const shapes = [...draw.sets.values()].find((set) => set.kind === 'shapes');
-  assert.equal(shapes.items.size, 0);
   const point = points.items.get(`air-quality:${row.id}`);
   assert.deepEqual(point.pos, { lon: row.lon, lat: row.lat, height: 0 });
   assert.equal(point.color, row.color);
@@ -463,7 +517,6 @@ function multiProvider(answers) {
       definition('openaq', { direct: false, requiresKeyId: 'openaq' }),
       definition('saaqis'),
       definition('regional', { parameters: ['PM2.5'] }),
-      { ...definition('eccc'), observation: false, parameters: [] },
     ],
     getSnapshot: (request) => {
       calls.push(request);
@@ -501,7 +554,7 @@ test('every observation provider is asked in parallel and drawn as one de-duplic
   assert.deepEqual(
     calls.map((call) => call.provider),
     ['openaq', 'saaqis', 'regional'],
-    'all asked before any answers; Canada is not a station provider',
+    'all asked before any answers',
   );
   settle();
   assert.equal(await pending, true);
@@ -556,27 +609,17 @@ test('when every provider fails the layer reports the error', async () => {
   });
   const pending = layer.update();
   settle();
-  // Canada's AQHI is still on offer: the layer stays on, saying so.
-  assert.equal(await pending, true);
+  // The US AQI asks every network: no other view is on offer.
+  assert.equal(await pending, false);
   assert.equal(layer.getStats().error, 'Air quality provider unavailable');
 });
 
-test('the AQHI view asks only Canada, and a pollutant view only its networks', async () => {
+test('a pollutant view asks only the networks measuring it', async () => {
   const { layer, calls, settle, drawn } = multiProvider({
-    eccc: [reading('A', 2)],
     openaq: [observed('openaq', 'paris', 48.85, 2.35)],
     saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
   });
-  layer.setParams({ view: 'aqhi' });
-  settle();
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(
-    calls.map((call) => call.provider),
-    ['eccc'],
-  );
-  assert.deepEqual([...drawn('shapes').items.keys()], ['air-quality:eccc:A']);
-  assert.equal(drawn('points').items.size, 0);
-  calls.length = 0;
+  assert.equal(layer.setParams({ view: 'aqhi' }), false);
   layer.setParams({ view: 'NO2' });
   settle();
   await new Promise((resolve) => setImmediate(resolve));
@@ -587,7 +630,6 @@ test('the AQHI view asks only Canada, and a pollutant view only its networks', a
       ['saaqis', 'NO2'],
     ],
   );
-  assert.equal(drawn('shapes').items.size, 0);
   assert.equal(drawn('points').items.size, 2);
   assert.deepEqual(layer.getParams(), {
     view: 'NO2',

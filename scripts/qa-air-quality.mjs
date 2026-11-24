@@ -1,13 +1,12 @@
 /**
  * qa-air-quality.mjs — headless proof for the Air quality layer.
  *
- * Checks what unit tests cannot: that the live ECCC feed answers, that readings
- * reach the app in the provider-shaped form other networks will share, and that
- * the Weather readout descriptor carries a legend and an in-view list.
- *
- * AQHI is reported by ECCC as an integer from 1 with "10+" above ten. The API
- * returns the underlying decimal, so a reading arriving as 1.08 — or a station
- * with no reading surfacing as a confident 1 — is a real defect this catches.
+ * Checks what unit tests cannot, in the real app with no provider keys and
+ * South Africa off (the stand-alone default): the layer turns on, its Layers
+ * row is not UNAVAILABLE and names the keys it needs, and the Weather card
+ * offers the US AQI as its one index (its tile across the row), six pollutant
+ * tiles, the US AQI ramp and a line for each key to add. No index of a
+ * network's own (Canada's AQHI is retired) is offered anywhere.
  *
  * The model field a host may give the layer is checked against a small cut of
  * baked grids (src/layers/airQuality/fixtures/field: a 10° box over northern
@@ -134,93 +133,65 @@ async function main() {
     );
     await sleep(1500);
 
-    const stats = await page.evaluate(async () => {
+    const keyless = await page.evaluate(async () => {
       const dm = window.__godsEyeView.dataManager;
-      // Canada's AQHI is a view of its own; the default view is the US AQI.
-      dm.setLayerParams('air-quality', { view: 'aqhi' });
-      await dm.setEnabled('air-quality', true);
+      const enabled = await dm.setEnabled('air-quality', true);
       const mod = dm.layers.get('air-quality')?.module;
       if (!mod) return { missing: true };
-      let s = null;
+      // Every network answers at once without a key; wait until none asks.
       for (let i = 0; i < 45; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        s = mod.getStats();
-        if (s.count > 0 || s.error) break;
+        await new Promise((r) => setTimeout(r, 500));
+        if (!mod.getProviderStates().some((s) => s.status === 'loading'))
+          break;
       }
-      return s;
+      const row = dm.getAll().find((entry) => entry.id === 'air-quality');
+      return {
+        enabled,
+        stats: mod.getStats(),
+        requiresKeyId: row?.requiresKeyId ?? null,
+        rowError: row?.stats?.error ?? null,
+        states: mod.getProviderStates().map((s) => [s.id, s.status]),
+      };
     });
-
-    const loaded = !stats?.missing && !stats?.error && stats?.count > 0;
+    const turnedOn =
+      keyless.enabled === true &&
+      keyless.stats?.error === null &&
+      keyless.stats?.keyRequired === true;
     record(
-      'stations report a current index',
-      loaded,
-      `count=${stats?.count} error=${stats?.error}`,
+      'keyless, the layer turns on and reports its keys as required, not as an error',
+      turnedOn,
+      `enabled=${keyless.enabled} error=${keyless.stats?.error} keyRequired=${keyless.stats?.keyRequired} states=${JSON.stringify(keyless.states)}`,
     );
-    if (!loaded) exitCode = 1;
+    if (!turnedOn) exitCode = 1;
 
-    const records = await page.evaluate(
-      () =>
-        window.__godsEyeView.dataManager.layers
-          .get('air-quality')
-          ?.module.getAnalystRecords(500) || [],
-    );
-
-    // The provider-neutral contract other networks will share.
-    const shaped = records.every(
-      (r) => r.provider && r.scale && Number.isFinite(r.value) && r.band,
-    );
-    record(
-      'every reading carries provider, scale, value and band',
-      shaped,
-      records.length
-        ? `sample={provider:${records[0].provider}, scale:${records[0].scale}, value:${records[0].value}, band:${records[0].band}}`
-        : 'no records',
-    );
-    if (!shaped) exitCode = 1;
-
-    const published = records.every(
-      (r) => Number.isInteger(r.value) && r.value >= 1,
-    );
-    record(
-      'every AQHI value is in the published integer form, floored at 1',
-      published,
-      `values=${[...new Set(records.map((r) => r.value))].sort((a, b) => a - b).join(',')}`,
-    );
-    if (!published) exitCode = 1;
-
-    const zones = [
-      ...new Set(records.map((r) => r.zone).filter(Boolean)),
-    ].sort();
-    record(
-      'coverage spans multiple ECCC administrative zones',
-      zones.length >= 3,
-      `zones=${zones.join(',') || 'none'} stations=${records.length}`,
-    );
-    if (zones.length < 3) exitCode = 1;
-
-    // The card's whole point is "highest readings in view", so put the camera
-    // over Canada before asserting on it — the default view is over Austin,
-    // where an empty in-view list is correct and proves nothing.
-    await page.evaluate(() => {
-      const gev = window.__godsEyeView;
-      const ellipsoid = gev.viewer.scene.globe.ellipsoid;
-      const d2r = Math.PI / 180;
-      try {
-        gev.viewer.camera.cancelFlight();
-      } catch {
-        /* no flight in progress */
-      }
-      gev.viewer.camera.setView({
-        destination: ellipsoid.cartographicToCartesian({
-          longitude: -100 * d2r,
-          latitude: 55 * d2r,
-          height: 4_000_000,
-        }),
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+    // The Layers row: not UNAVAILABLE, and its title names both keys.
+    let toggle = null;
+    for (let i = 0; i < 20 && !toggle?.title?.includes('OPENAQ_API_KEY'); i++) {
+      await sleep(250);
+      toggle = await page.evaluate(() => {
+        const button = document.querySelector(
+          '[data-layer-id="air-quality"] .data-toggle-btn',
+        );
+        return button
+          ? { state: button.dataset.feedState, title: button.title }
+          : null;
       });
-      gev.viewer.scene.requestRender?.();
-    });
-    await sleep(2500);
+    }
+    const rowOk =
+      toggle !== null &&
+      toggle.state !== 'unavailable' &&
+      /OPENAQ_API_KEY/.test(toggle.title) &&
+      /DATA_GOV_IN_API_KEY/.test(toggle.title) &&
+      JSON.stringify(keyless.requiresKeyId) ===
+        JSON.stringify(['data-gov-in', 'openaq']);
+    record(
+      'the Layers row is not UNAVAILABLE and names the missing keys',
+      rowOk,
+      toggle
+        ? `state=${toggle.state} title="${toggle.title}" requiresKeyId=${JSON.stringify(keyless.requiresKeyId)}`
+        : 'no row',
+    );
+    if (!rowOk) exitCode = 1;
 
     const controls = await page.evaluate(
       () =>
@@ -228,33 +199,63 @@ async function main() {
           .get('air-quality')
           ?.module.getRowControls?.() || null,
     );
-    const readoutOk =
+    const indexTiles =
+      controls?.sublists?.find((group) => group.id === 'index')?.tiles ?? [];
+    const cardOk =
       controls?.readout === true &&
-      Array.isArray(controls?.legend) &&
-      controls.legend.length === 4 &&
-      controls.legend.every(
-        (band) => /^#[0-9a-f]{6}$/i.test(band.color) && band.label,
-      ) &&
-      controls.legendCategorical === true &&
-      Array.isArray(controls?.list?.items) &&
-      controls.list.items.length > 0 &&
-      controls.list.items.every((item) => item.id && item.lead && item.text) &&
-      controls.summary?.coverage === 'Canada' &&
-      // The slim tile card: an Index group holding the AQHI tile, active, and
-      // a Pollutants group of six.
-      controls.sublists
-        ?.find((group) => group.id === 'index')
-        ?.tiles.find((tile) => tile.id === 'aqhi')?.active === true &&
+      indexTiles.length === 1 &&
+      indexTiles[0].id === 'aqi' &&
+      indexTiles[0].active === true &&
       controls.sublists?.find((group) => group.id === 'pollutants')?.tiles
-        .length === 6;
+        .length === 6 &&
+      controls.legendCategorical === false &&
+      JSON.stringify(controls.legend?.map((band) => band.label)) ===
+        JSON.stringify(['0', '50', '100', '150', '200', '300+']) &&
+      ['CPCB: add a key', 'OpenAQ: add a key'].every((text) =>
+        controls.summary?.lines?.some((line) => line.text.includes(text)),
+      ) &&
+      !/AQHI|Canada/.test(JSON.stringify(controls));
     record(
-      'the Weather card lists the worst readings in view, with a legend and tiles',
-      readoutOk,
+      'the card offers the US AQI as its one index, the six pollutants, the US AQI ramp and the keys to add',
+      cardOk,
       controls
-        ? `bands=${controls.legend?.map((band) => band.label).join('/')} inView=${controls.list?.items?.length} coverage="${controls.summary?.coverage}"`
+        ? `index=${indexTiles.map((tile) => tile.id).join('/')} bands=${controls.legend?.map((band) => band.label).join('/')} lines=${JSON.stringify(controls.summary?.lines?.map((line) => line.text))}`
         : 'no descriptor',
     );
-    if (!readoutOk) exitCode = 1;
+    if (!cardOk) exitCode = 1;
+
+    // The Weather card itself, opened: the US AQI tile spans its row.
+    await page.evaluate(() => {
+      const card = document.querySelector('[data-card-id="air-quality"]');
+      if (card?.dataset.open !== 'true') card?.querySelector('button')?.click();
+    });
+    let tile = null;
+    for (let i = 0; i < 20 && !tile; i++) {
+      await sleep(250);
+      tile = await page.evaluate(() => {
+        const button = document.querySelector(
+          '[data-card-id="air-quality"] [data-tile-id="aqi"]',
+        );
+        const grid = button?.parentElement;
+        if (!button || !grid || !grid.getBoundingClientRect().width)
+          return null;
+        return {
+          tile: button.getBoundingClientRect().width,
+          grid: grid.getBoundingClientRect().width,
+          tiles: grid.querySelectorAll('[data-tile-id]').length,
+        };
+      });
+    }
+    const spans =
+      tile !== null && tile.tiles === 1 && Math.abs(tile.tile - tile.grid) < 1;
+    record(
+      'the US AQI tile spans its row',
+      spans,
+      tile
+        ? `tile ${tile.tile.toFixed(1)} px of ${tile.grid.toFixed(1)} px, ${tile.tiles} tile(s)`
+        : 'no tile on screen',
+    );
+    if (!spans) exitCode = 1;
 
     await checkField(page);
 

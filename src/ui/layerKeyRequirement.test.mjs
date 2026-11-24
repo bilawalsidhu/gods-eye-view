@@ -157,3 +157,28 @@ test('a key-gated layer with another source ready says how to use it', () => {
     'Needs MAPILLARY_CLIENT_TOKEN — add it in Provider Settings, or light STREET VIEW to use your Google Maps key',
   );
 });
+
+test('a layer reading several keyed networks names each key it lacks', () => {
+  const text = layerKeyRequirementTooltip({
+    requiresKeyId: ['openaq', 'data-gov-in', 'openaq', 'not-a-provider'],
+    stats: { keyRequired: true },
+  });
+  assert.equal(
+    text,
+    'Needs OPENAQ_API_KEY — add it in Provider Settings; Needs DATA_GOV_IN_API_KEY — add it in Provider Settings',
+  );
+  assert.equal(
+    layerKeyRequirementTooltip({
+      requiresKeyId: ['openaq'],
+      stats: { keyRequired: false },
+    }),
+    '',
+  );
+  assert.equal(
+    layerKeyRequirementTooltip({
+      requiresKeyId: [],
+      stats: { keyRequired: true },
+    }),
+    '',
+  );
+});

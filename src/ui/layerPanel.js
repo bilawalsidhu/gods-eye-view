@@ -149,7 +149,8 @@ function panelLabel(layer) {
  * The key registry already owns what each key is called and which environment
  * variables enable it, so a layer only declares WHICH key it needs
  * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
- * Naming the variable turns an unexplained dead control into a next step.
+ * Naming the variable turns an unexplained dead control into a next step. A
+ * layer reading several keyed networks may name each key it lacks (an array).
  *
  * An unnamed or unknown key returns '' rather than guessing: guidance naming
  * the wrong variable sends the operator to the wrong provider.
@@ -159,10 +160,15 @@ function panelLabel(layer) {
  */
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
-  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  const needs = [layer.requiresKeyId]
+    .flat()
+    .map((id) => String(id || '').trim())
+    .filter(Boolean)
+    .map((id) => keyRequirementText(id))
+    .filter(Boolean);
   // A layer with several sources also names the ones it could use instead.
   return keyGuidanceText(
-    requiresKeyId ? keyRequirementText(requiresKeyId) : '',
+    [...new Set(needs)].join('; '),
     layer.stats.keyAlternatives || [],
   );
 }

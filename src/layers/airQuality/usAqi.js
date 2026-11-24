@@ -332,8 +332,8 @@ const POLLUTANT_FIELDS = [
  * with `valueTimes`, `valueAveraging` and (where given) `valueCoverage` per
  * value; `excluded` names the
  * readings left out (`'units'` when their units do not convert, `'flagged'`
- * when their source flagged them), and `ratings` keeps a network's own
- * index per pollutant. A reading its provider leaves unrated
+ * when their source flagged them). A network's own index, if a reading
+ * carries one, is not kept. A reading its provider leaves unrated
  * (`rated: false`) gives no value, and a station with no rated reading stays
  * `rated: false`. Stations reporting none of the index's pollutants are left
  * out. The station's time is its newest value's (its newest reading's when
@@ -365,7 +365,6 @@ export function aqiStations(readings) {
         valueAveraging: {},
         valueCoverage: {},
         excluded: {},
-        ratings: {},
         observedMs: null,
         reportedMs: -Infinity,
         anyRated: false,
@@ -379,7 +378,6 @@ export function aqiStations(readings) {
     }
     const at = Number.isFinite(reading.observedMs) ? reading.observedMs : null;
     if (at !== null) station.reportedMs = Math.max(station.reportedMs, at);
-    if (reading.rating) station.ratings[key] = reading.rating;
     if (reading.rated === false) continue;
     station.anyRated = true;
     // One reading per pollutant: the newest.
