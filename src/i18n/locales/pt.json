@@ -4540,5 +4540,16 @@
   "1–3 days": "1–3 dias",
   "Older or unknown": "Mais antigo ou desconhecido",
   "Colour shows the age of each area.": "A cor indica a idade de cada área.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Idade a partir do mapeamento do WFIGS ou, na falta dele, da última edição do registro. Perímetros simplificados a ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Idade a partir do mapeamento do WFIGS ou, na falta dele, da última edição do registro. Perímetros simplificados a ~100 m.",
+  "Last 30 days": "Últimos 30 dias",
+  "Last 12 months": "Últimos 12 meses",
+  "Older": "Mais antigos",
+  "Estimated impact energy {kt} kt TNT": "Energia de impacto estimada {kt} kt de TNT",
+  "Radiated energy {energy} × 10¹⁰ J": "Energia irradiada {energy} × 10¹⁰ J",
+  "Peak brightness at {km} km": "Brilho máximo a {km} km",
+  "Speed {speed} km/s": "Velocidade {speed} km/s",
+  "Fireball {time}": "Bólido {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "Meteoros brilhantes e bólidos detectados por sensores do governo dos EUA desde 1988, da NASA/JPL CNEOS, desenhados onde foram mais brilhantes (nessa altitude, quando conhecida) e dimensionados pela energia de impacto estimada. Os eventos são publicados dias ou semanas depois, e muitos bólidos menores nunca são relatados.",
+  "Fireballs": "Bólidos",
+  "fireball": "bólido"
 }

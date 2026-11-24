@@ -289,6 +289,29 @@ Clicking the card opens the Wikipedia article (else the Wikidata item), the
 wreck's own web page when EMODnet lists one, else EMODnet's portal. Voice does
 not toggle this layer yet (prompt budget, as for the airspace layer).
 
+## Fireballs — NASA/JPL CNEOS
+
+The Events group includes **Fireballs** (`fireballs`, share-link token `03`),
+off by default. `/api/fireballs/events` reads the JPL CNEOS Fireball Data API
+(`ssd-api.jpl.nasa.gov/fireball.api?req-loc=true`: every located event since
+1988, about a thousand rows), because JPL serves no CORS headers. The proxy
+normalizes the table (signed latitude and longitude, UTC time, peak-brightness
+altitude, speed, radiated and estimated impact energy; rows without a time or
+position are dropped), caches it for an hour, serves the last copy for up to
+seven days while JPL is down (`stale: true`), backs off for a minute after a
+failure and limits each client to 30 requests a minute. The layer refreshes
+hourly. Each event is a glowing marker where it was brightest, drawn at that
+altitude when JPL gives one (otherwise on the ground), always over depth and
+hidden past the horizon; marker size follows estimated impact energy (14 to
+40 px) and colour its age (last 30 days, last 12 months, older), with counts
+per band in the legend. Clicking a marker opens a card with the UTC time,
+position and whatever energy, altitude and speed JPL reports; activating the
+card opens the CNEOS fireball page. `getAnalystRecords` gives Context each
+event by name (`Fireball <UTC time>`), keyed by its pick id, with time, speed
+and energies. Events are posted days to weeks after they
+happen, and the list is not a complete record of meteors. Voice control does
+not name the layer yet.
+
 ## Wildlife Sightings — iNaturalist and Acartia
 
 **Wildlife Sightings** (`wildlife-sightings`, share-link token `9`) is off by

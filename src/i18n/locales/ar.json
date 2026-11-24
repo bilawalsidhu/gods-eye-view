@@ -4858,5 +4858,16 @@
   "1–3 days": "1–3 أيام",
   "Older or unknown": "أقدم أو غير معروف",
   "Colour shows the age of each area.": "يبيّن اللون عمر كل منطقة.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م.",
+  "Last 30 days": "آخر 30 يومًا",
+  "Last 12 months": "آخر 12 شهرًا",
+  "Older": "أقدم",
+  "Estimated impact energy {kt} kt TNT": "طاقة الاصطدام المقدّرة {kt} كيلوطن TNT",
+  "Radiated energy {energy} × 10¹⁰ J": "الطاقة المشعّة {energy} × 10¹⁰ جول",
+  "Peak brightness at {km} km": "ذروة السطوع على ارتفاع {km} كم",
+  "Speed {speed} km/s": "السرعة {speed} كم/ث",
+  "Fireball {time}": "كرة نارية {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "شهب ساطعة وكرات نارية رصدتها مستشعرات حكومة الولايات المتحدة منذ 1988، من NASA/JPL CNEOS، مرسومة حيث كانت في ذروة سطوعها (على ذلك الارتفاع إن كان معروفًا) وبحجم يتبع طاقة الاصطدام المقدّرة. تُنشر الأحداث بعد أيام إلى أسابيع، وكثير من الكرات النارية الصغيرة لا يُبلَّغ عنها أبدًا.",
+  "Fireballs": "الكرات النارية",
+  "fireball": "كرة نارية"
 }

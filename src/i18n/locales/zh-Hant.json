@@ -4328,5 +4328,16 @@
   "1–3 days": "1–3 天",
   "Older or unknown": "更早或未知",
   "Colour shows the age of each area.": "顏色表示各區域在所示時刻的年齡。",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "時長從 WFIGS 測繪時間算起，否則從記錄的最後編輯時間算起。邊界已簡化至約 100 米。"
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "時長從 WFIGS 測繪時間算起，否則從記錄的最後編輯時間算起。邊界已簡化至約 100 米。",
+  "Last 30 days": "過去 30 天",
+  "Last 12 months": "過去 12 個月",
+  "Older": "更早",
+  "Estimated impact energy {kt} kt TNT": "估計撞擊能量 {kt} 千噸 TNT",
+  "Radiated energy {energy} × 10¹⁰ J": "輻射能量 {energy} × 10¹⁰ 焦耳",
+  "Peak brightness at {km} km": "最亮點高度 {km} 公里",
+  "Speed {speed} km/s": "速度 {speed} km/s",
+  "Fireball {time}": "火流星 {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "自 1988 年以來美國政府傳感器探測到的明亮流星和火流星，數據來自 NASA/JPL CNEOS。繪製於最亮處（已知時按該高度），大小按估計撞擊能量。事件在發生數天至數週後發布，許多較小的火流星從未被報告。",
+  "Fireballs": "火流星",
+  "fireball": "火流星"
 }

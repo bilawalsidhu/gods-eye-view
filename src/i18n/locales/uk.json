@@ -4646,5 +4646,16 @@
   "1–3 days": "1–3 дні",
   "Older or unknown": "Старше або невідомо",
   "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м.",
+  "Last 30 days": "Останні 30 днів",
+  "Last 12 months": "Останні 12 місяців",
+  "Older": "Раніше",
+  "Estimated impact energy {kt} kt TNT": "Оцінка енергії удару {kt} кт ТНТ",
+  "Radiated energy {energy} × 10¹⁰ J": "Випромінена енергія {energy} × 10¹⁰ Дж",
+  "Peak brightness at {km} km": "Пік яскравості на висоті {km} км",
+  "Speed {speed} km/s": "Швидкість {speed} км/с",
+  "Fireball {time}": "Болід {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "Яскраві метеори й боліди, зафіксовані датчиками уряду США з 1988 року, за даними NASA/JPL CNEOS. Показані там, де вони були найяскравіші (на цій висоті, якщо вона відома), розмір — за оцінкою енергії удару. Події публікуються через дні чи тижні, а багато менших болідів не потрапляють у звіти.",
+  "Fireballs": "Боліди",
+  "fireball": "болід"
 }

@@ -4434,5 +4434,16 @@
   "1–3 days": "1–3 dagar",
   "Older or unknown": "Äldre eller okänt",
   "Colour shows the age of each area.": "Färgen visar åldern på varje område.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m.",
+  "Last 30 days": "Senaste 30 dagarna",
+  "Last 12 months": "Senaste 12 månaderna",
+  "Older": "Äldre",
+  "Estimated impact energy {kt} kt TNT": "Uppskattad nedslagsenergi {kt} kt TNT",
+  "Radiated energy {energy} × 10¹⁰ J": "Utstrålad energi {energy} × 10¹⁰ J",
+  "Peak brightness at {km} km": "Starkast på {km} km höjd",
+  "Speed {speed} km/s": "Hastighet {speed} km/s",
+  "Fireball {time}": "Eldkula {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "Ljusstarka meteorer och bolider som upptäckts av amerikanska myndigheters sensorer sedan 1988, från NASA/JPL CNEOS, ritade där de var starkast (på den höjden om den är känd) och i storlek efter uppskattad nedslagsenergi. Händelser publiceras dagar till veckor i efterhand, och många mindre eldkulor rapporteras aldrig.",
+  "Fireballs": "Eldkulor",
+  "fireball": "eldkula"
 }

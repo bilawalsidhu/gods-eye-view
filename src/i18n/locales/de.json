@@ -4434,5 +4434,16 @@
   "1–3 days": "1–3 Tage",
   "Older or unknown": "Älter oder unbekannt",
   "Colour shows the age of each area.": "Die Farbe zeigt das Alter jeder Fläche.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht.",
+  "Last 30 days": "Letzte 30 Tage",
+  "Last 12 months": "Letzte 12 Monate",
+  "Older": "Älter",
+  "Estimated impact energy {kt} kt TNT": "Geschätzte Einschlagenergie {kt} kt TNT",
+  "Radiated energy {energy} × 10¹⁰ J": "Abgestrahlte Energie {energy} × 10¹⁰ J",
+  "Peak brightness at {km} km": "Größte Helligkeit in {km} km Höhe",
+  "Speed {speed} km/s": "Geschwindigkeit {speed} km/s",
+  "Fireball {time}": "Feuerkugel {time}",
+  "Bright meteors and bolides detected by U.S. Government sensors since 1988, from NASA/JPL CNEOS, drawn where each was brightest (at that height when known) and sized by estimated impact energy. Events are posted days to weeks after they happen, and many smaller fireballs are never reported.": "Helle Meteore und Boliden, von Sensoren der US-Regierung seit 1988 erfasst, aus NASA/JPL CNEOS. Dargestellt dort, wo sie am hellsten waren (in dieser Höhe, wenn bekannt), Größe nach geschätzter Einschlagenergie. Ereignisse werden Tage bis Wochen später veröffentlicht, und viele kleinere Feuerkugeln werden nie gemeldet.",
+  "Fireballs": "Feuerkugeln",
+  "fireball": "Feuerkugel"
 }
