@@ -3,3 +3,8 @@
   added, gone ones removed and aged ones recoloured in place. On a synthetic
   peak day of 1,000 pieces an hourly step's longest task on Cesium drops from
   about 450 ms to under 80 ms (German, @gekh, #1922).
+- Hosts can place fire-perimeter cards and cancel stale reads without
+  workarounds: the package's `./layers/perimeters/records` export carries
+  `perimeterAnchorDegrees` with no rendering code, so a server or worker
+  stands a card where the map does, and `refreshLayer(id, { supersede: true })`
+  cancels a read in flight instead of waiting for it (German, @gekh, #1922).
