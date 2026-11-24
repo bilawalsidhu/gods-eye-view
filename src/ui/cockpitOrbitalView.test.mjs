@@ -15,8 +15,6 @@ import CockpitView from './views/CockpitView.vue';
 import ContextView from './views/ContextView.vue';
 import IntelHudView from './views/IntelHudView.vue';
 import {
-  ORBITAL_PREFETCH_INTERVAL_MS,
-  ORBITAL_PREFETCH_MAX_TILES,
   ORBITAL_SETTLE_BLUR_PX,
   ORBITAL_SETTLE_MAX_MS,
   ORBITAL_ZOOM_TRANSITION_MS,
@@ -25,8 +23,15 @@ import {
   orbitalBaseFovRad,
 } from '../cockpitOrbital.js';
 import { vesselCockpitInfo } from '../layers/vessels/cockpitSubject.js';
-import { prefetchImageryAhead } from './cockpitOrbitalView.js';
 import { claimPointer, releasePointer } from '../data/inputOwnership.js';
+import {
+  bindFakeCesiumCamera,
+  followEntity,
+  followedEntity,
+} from '../testSupport/fakeCameraPort.mjs';
+import { followedOf } from '../data/followed.js';
+import { fakeScenePorts } from '../testSupport/fakeCesiumScene.mjs';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 const ISS = Object.freeze({
   kind: 'satellite',
@@ -97,7 +102,7 @@ function stockEventHandler(viewer) {
   };
   actions.set(DOUBLE_CLICK, () => {
     handler.stockCalls += 1;
-    viewer.trackedEntity = undefined;
+    followEntity(viewer, null);
   });
   return handler;
 }
@@ -141,10 +146,18 @@ function fixture(
     gevTrackedId: aircraftInfo ? `flights:${aircraftInfo.icao24}` : '',
   };
   const viewer = {
-    trackedEntity: undefined,
     clock: { currentTime: null },
     camera: {
-      frustum: { fov: SAVED_FOV, aspectRatio: ASPECT },
+      // Cesium's frustum: `fov` the wider angle, `fovy` the vertical one.
+      frustum: {
+        fov: SAVED_FOV,
+        aspectRatio: ASPECT,
+        get fovy() {
+          return this.aspectRatio > 1
+            ? 2 * Math.atan(Math.tan(this.fov / 2) / this.aspectRatio)
+            : this.fov;
+        },
+      },
       cancelFlight() {},
       setView({ destination, orientation }) {
         shots.push({
@@ -164,6 +177,26 @@ function fixture(
   // Cesium's Viewer installs a double-click that untracks on any pick that
   // is not an Entity; the Cockpit routes it.
   viewer.screenSpaceEventHandler = stockEventHandler(viewer);
+  // The Cockpit drives the camera, reads frames and the globe through ports:
+  // the Cesium camera port over the fake camera, and a globe whose imagery
+  // has loaded unless the test's `scene.globe` says otherwise.
+  const ports = fakeScenePorts(viewer);
+  bindFakeCesiumCamera(viewer, {
+    ...ports,
+    // Where the test's scene says a position is drawn.
+    query: {
+      ...ports.query,
+      project: (position) =>
+        viewer.scene.cartesianToCanvasCoordinates?.(position, {}) ?? null,
+    },
+    globe: {
+      isGlobeVisible: () => viewer.scene.globe?.show !== false,
+      isSettled: () => viewer.scene.globe?.tilesLoaded !== false,
+    },
+  });
+  // The scene's input; the renderer's own double-click follow runs unless
+  // something holds it off, as `stockEventHandler` counts it.
+  const input = fakeInput(viewer);
   const satellites = satelliteLayer(satellite);
   const cockpit = new CockpitViewController(viewer, {
     services: {
@@ -213,12 +246,22 @@ function fixture(
     updateContext() {},
     updateRoute() {},
   });
+  let stockHolds = 0;
+  cockpit.holdStockFollow = () => {
+    stockHolds += 1;
+    let held = true;
+    return () => {
+      if (held) stockHolds -= 1;
+      held = false;
+    };
+  };
   const events = [];
   const onMode = (event) => events.push(event.detail);
   window.addEventListener('gev:cockpit-mode-changed', onMode);
   t.after(() => {
     window.removeEventListener('gev:cockpit-mode-changed', onMode);
     cockpit.stop();
+    input.destroy();
     app.unmount();
     globalThis.matchMedia = previousMatchMedia;
     document.body.classList.remove(
@@ -232,6 +275,8 @@ function fixture(
     $,
     cockpit,
     viewer,
+    input,
+    stockHeld: () => stockHolds > 0,
     satellites,
     store,
     shots,
@@ -368,7 +413,7 @@ test('entering takes the camera and shows only the orbital HUD', async (t) => {
   assert.equal(cockpit.subjectKind, 'satellite');
   assert.equal(cockpit.subjectId, ISS.noradId);
   assert.deepEqual(satellites.calls, [['subject', ISS.noradId]]);
-  assert.equal(viewer.trackedEntity, undefined);
+  assert.equal(followedOf(viewer), null);
   assert.equal(viewer.scene.screenSpaceCameraController.enableInputs, false);
   assert.ok(document.body.classList.contains('cockpit-mode'));
   assert.ok(document.body.classList.contains('cockpit-orbit'));
@@ -718,11 +763,11 @@ test('losing the satellite ends the view without refocusing it', async (t) => {
 
 test('tracking an aircraft from orbit ends the view and keeps that tracking', async (t) => {
   const { cockpit, viewer, satellites, aircraft, clock } = await orbitAt(t);
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   clock.advance(16);
   cockpit.update();
   assert.equal(cockpit.active, false);
-  assert.equal(viewer.trackedEntity, aircraft);
+  assert.equal(followedEntity(viewer), aircraft);
   assert.ok(!satellites.calls.some(([call]) => call === 'refocus'));
 });
 
@@ -744,7 +789,7 @@ test('+ and − mean nothing new in an aircraft cockpit or on a bridge', async (
     onGround: false,
   };
   const air = fixture(t, { satellite: null, aircraftInfo });
-  air.viewer.trackedEntity = air.aircraft;
+  followEntity(air.viewer, air.aircraft);
   assert.equal(air.cockpit.enter({ kind: 'aircraft' }), true);
   for (const key of ['+', '=', '-', '_'])
     assert.equal(press(air.cockpit, key).defaultPrevented, false, key);
@@ -829,44 +874,53 @@ test('a map already leased elsewhere does not keep orbit out', async (t) => {
  * A double-click `offsetPx` from where the followed satellite is drawn, at
  * (400, 300) on the canvas, through Cesium's double-click handler.
  */
-function doubleClickNearSatellite(viewer, offsetPx) {
+function doubleClickNearSatellite(scene, offsetPx) {
+  const { viewer, input, stockHeld } = scene;
   viewer.scene.cartesianToCanvasCoordinates = (position, result) =>
     position ? Object.assign(result, { x: 400, y: 300 }) : undefined;
   const handler = viewer.screenSpaceEventHandler;
   const before = handler.stockCalls;
-  handler.doubleClick({ x: 400 + offsetPx, y: 300 });
+  const position = { x: 400 + offsetPx, y: 300 };
+  input.tap(position);
+  input.down(position);
+  input.up(position);
+  // The renderer's own follow runs unless the second press held it off.
+  if (!stockHeld()) handler.doubleClick(position);
+  input.dblclick(position);
   return { stock: handler.stockCalls > before };
 }
 
 test('double-clicking the followed satellite enters the orbital view', async (t) => {
-  const { viewer, store } = fixture(t);
-  const miss = doubleClickNearSatellite(viewer, 60);
+  const scene = fixture(t);
+  const { store } = scene;
+  const miss = doubleClickNearSatellite(scene, 60);
   assert.equal(miss.stock, true, 'a double-click elsewhere goes to Cesium');
   assert.equal(store.orbital, null);
-  const hit = doubleClickNearSatellite(viewer, 20);
+  const hit = doubleClickNearSatellite(scene, 20);
   assert.equal(hit.stock, false, 'Cesium never sees it');
   await settle();
   assert.ok(store.orbital, 'the orbital HUD is up');
   assert.equal(
-    doubleClickNearSatellite(viewer, 0).stock,
+    doubleClickNearSatellite(scene, 0).stock,
     true,
     'inside, a double-click is not the entry',
   );
 });
 
 test('a double-click a tool owns, or one the gate refuses, does not enter', async (t) => {
-  const { cockpit, viewer, store } = fixture(t, { orbitAllowed: false });
+  const scene = fixture(t, { orbitAllowed: false });
+  const { cockpit, store } = scene;
   // On the track but refused: no entry, and no untracking either.
-  assert.equal(doubleClickNearSatellite(viewer, 0).stock, false);
+  assert.equal(doubleClickNearSatellite(scene, 0).stock, false);
   assert.equal(store.orbital, null);
   cockpit.isOrbitEntryAllowed = () => true;
   // Drawing ends a shape with a double-click.
   const lease = claimPointer('draw');
   t.after(() => releasePointer(lease));
-  doubleClickNearSatellite(viewer, 0);
+  doubleClickNearSatellite(scene, 0);
   assert.equal(store.orbital, null);
   releasePointer(lease);
-  doubleClickNearSatellite(viewer, 0);
+  doubleClickNearSatellite(scene, 0);
   await settle();
   assert.ok(store.orbital);
 });
@@ -882,20 +936,22 @@ test('a double-click on the followed aircraft model enters instead of untracking
     track: 45,
     onGround: false,
   };
-  const { viewer, aircraft, store } = fixture(t, { aircraftInfo });
-  viewer.trackedEntity = aircraft;
+  const scene = fixture(t, { aircraftInfo });
+  const { viewer, aircraft, store } = scene;
+  followEntity(viewer, aircraft);
   // The model is a primitive, not an Entity: Cesium's own double-click
   // would untrack it.
-  doubleClickNearSatellite(viewer, 0);
+  doubleClickNearSatellite(scene, 0);
   await settle();
   assert.equal(viewer.screenSpaceEventHandler.stockCalls, 0);
   assert.equal(store.presence.active, true, 'the cockpit is entered');
 });
 
 test('the Cockpit hands the double-click back to Cesium when it stops', async (t) => {
-  const { cockpit, viewer } = fixture(t);
+  const scene = fixture(t);
+  const { cockpit, viewer } = scene;
   cockpit.stop();
-  doubleClickNearSatellite(viewer, 0);
+  doubleClickNearSatellite(scene, 0);
   assert.equal(viewer.screenSpaceEventHandler.stockCalls, 1);
 });
 
@@ -1006,7 +1062,7 @@ test('an aircraft and a satellite first seen in one sync: the aircraft takes ent
     onGround: false,
   };
   const { cockpit, viewer, aircraft, store } = fixture(t, { aircraftInfo });
-  viewer.trackedEntity = aircraft;
+  followEntity(viewer, aircraft);
   // The satellite and the aircraft are both new to this sync; the fixed order
   // decides between subjects first seen together. Selected one after the
   // other, the later one takes entry (cockpitEntryGate.test.mjs).
@@ -1136,33 +1192,6 @@ test('S does nothing in an orbital view, even with a SENSOR step', async (t) => 
   );
 });
 
-/** A globe draping one Web Mercator imagery layer that records requests. */
-function imageryGlobe(viewer, { requestImage } = {}) {
-  const requests = [];
-  const requestObjects = [];
-  const provider = {
-    tilingScheme: new Cesium.WebMercatorTilingScheme(),
-    tileWidth: 256,
-    maximumLevel: 19,
-    requestImage:
-      requestImage ??
-      ((x, y, level, request) => {
-        requests.push(`${level}/${x}/${y}`);
-        requestObjects.push(request);
-        return Promise.resolve({});
-      }),
-  };
-  viewer.scene.globe = { show: true, tilesLoaded: true };
-  viewer.scene.canvas = { clientWidth: 1600, clientHeight: 900 };
-  viewer.imageryLayers = {
-    length: 1,
-    get: () => ({ show: true, alpha: 1, imageryProvider: provider }),
-  };
-  return { requests, requestObjects, provider };
-}
-
-const WORLDVIEW_ON_TRACK = Object.freeze({ ...WORLDVIEW, groundTrackDeg: 52 });
-
 test('the sensor strip follows the view through a zoom step, not ahead of it', async (t) => {
   const { cockpit, store, clock } = await orbitAt(t, {
     satellite: WORLDVIEW,
@@ -1182,84 +1211,6 @@ test('the sensor strip follows the view through a zoom step, not ahead of it', a
   const atTwo = strip();
   assert.ok(atTwo > atOne * 1.5, 'twice the zoom, about twice the share');
   assert.ok(midway > atOne && midway < atTwo, 'part-way through the step');
-});
-
-test('from 16x the imagery ahead of the ground track is pre-loaded', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: WORLDVIEW_ON_TRACK,
-  });
-  const { requests } = imageryGlobe(viewer);
-  for (const zoom of [2, 4, 8]) {
-    press(cockpit, '+');
-    assert.equal(store.orbital.zoom, zoom);
-    clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-    cockpit.update();
-  }
-  assert.deepEqual(requests, [], 'nothing below 16x');
-  press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  clock.advance(16);
-  cockpit.update();
-  assert.ok(requests.length > 0, 'tiles ahead are asked for');
-  assert.ok(requests.length <= ORBITAL_PREFETCH_MAX_TILES, 'bounded');
-  assert.equal(new Set(requests.map((key) => key.split('/')[0])).size, 1);
-  const first = requests.length;
-  // Not again until the interval has passed, and never the same tile twice.
-  clock.advance(16);
-  cockpit.update();
-  assert.equal(requests.length, first);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.equal(new Set(requests).size, requests.length, 'no repeats');
-  // A tighter zoom needs a finer level.
-  press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 32);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  const levels = requests.map((key) => Number(key.split('/')[0]));
-  assert.equal(levels.at(-1), levels[0] + 1);
-  // Back below 16x, and after the exit: no more work.
-  const before = requests.length;
-  press(cockpit, '-');
-  press(cockpit, '-');
-  assert.equal(store.orbital.zoom, 8);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.equal(requests.length, before, 'stops below 16x');
-  press(cockpit, '+');
-  cockpit.exit();
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.equal(
-    prefetchImageryAhead.call(cockpit, WORLDVIEW_ON_TRACK, Infinity),
-    0,
-  );
-  assert.equal(requests.length, before, 'stops after the exit');
-});
-
-test('the pre-load skips a hidden globe and a provider that cannot fetch', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: WORLDVIEW_ON_TRACK,
-  });
-  const { requests, provider } = imageryGlobe(viewer);
-  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  // Google 3D tiles drawn, the globe hidden: nothing to pre-load.
-  viewer.scene.globe.show = false;
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.deepEqual(requests, []);
-  viewer.scene.globe.show = true;
-  // No requestImage, or one that throws: no error, nothing remembered.
-  delete provider.requestImage;
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  assert.doesNotThrow(() => cockpit.update());
-  provider.requestImage = () => {
-    throw new Error('offline');
-  };
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  assert.doesNotThrow(() => cockpit.update());
-  assert.equal(store.orbital.zoom, 16, 'the view carries on');
 });
 
 test('an unconfirmed sensor swath is drawn but adds no zoom steps', async (t) => {
@@ -1437,45 +1388,6 @@ test('the readout says OFF-NADIR while the view is tilted', async (t) => {
   );
 });
 
-test('the pre-load is throttled, at the level Cesium draws, and waits out a tilt', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: WORLDVIEW_ON_TRACK,
-  });
-  const { requests, requestObjects } = imageryGlobe(viewer);
-  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  // Tilted off nadir the view looks away from the track: nothing asked.
-  press(cockpit, 'ArrowRight');
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.deepEqual(requests, [], 'nothing while tilted');
-  press(cockpit, 'Home');
-  for (let frame = 0; frame < 30; frame += 1) {
-    clock.advance(16);
-    cockpit.update();
-  }
-  assert.ok(requests.length > 0, 'back at nadir it pre-loads');
-  // Every request may be declined while Cesium is busy with the screen.
-  for (const request of requestObjects) {
-    assert.ok(request instanceof Cesium.Request);
-    assert.equal(request.throttle, true);
-    assert.equal(request.throttleByServer, true);
-    assert.equal(
-      request.priority,
-      Number.MAX_VALUE,
-      'never ahead of the screen',
-    );
-    assert.equal(request.type, Cesium.RequestType.IMAGERY);
-  }
-  // The level Cesium's own selection takes for this view, worked by hand:
-  // at 16x from 617 km the 900 px canvas is ~49.5 m a pixel. The ellipsoid
-  // terrain's level-zero error is 6378137 · 2π / 4 / 128 ≈ 78,272 m; it first
-  // meets Cesium's screen-space error of 2 px (≤ 99 m) at level 10, 76.4 m.
-  // A Web Mercator level-zero texel at 30° is 6378137 · 2π · cos 30° / 256
-  // ≈ 135,570 m, so the imagery level is round(log2(135,570 / 76.4)) = 11.
-  assert.equal(Number(requests[0].split('/')[0]), 11);
-});
-
 test('the TLE age is measured from the time the satellite is shown at', async (t) => {
   const DAY = 86_400_000;
   const { store } = await orbitAt(t, {
@@ -1530,76 +1442,6 @@ test('a SAR swath reads but draws no strip under nadir', async (t) => {
   assert.equal(store.orbital.sensor.stripFraction, null);
 });
 
-test('exit cancels pending pre-loads, and a dropped one is asked again', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: WORLDVIEW_ON_TRACK,
-  });
-  const asked = [];
-  let fail = true;
-  const pending = [];
-  imageryGlobe(viewer, {
-    requestImage: (x, y, level, request) => {
-      asked.push(`${level}/${x}/${y}`);
-      // Cesium's scheduler drops a request by rejecting with no error.
-      if (fail) return Promise.reject(undefined);
-      pending.push(request);
-      return new Promise(() => {});
-    },
-  });
-  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  await settle();
-  const firstAsk = asked.slice();
-  assert.ok(firstAsk.length > 0);
-  fail = false;
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.deepEqual(asked.slice(firstAsk.length), firstAsk, 'asked again');
-  assert.ok(pending.length > 0);
-  cockpit.exit();
-  assert.ok(
-    pending.every((request) => request.cancelled === true),
-    'cancelled on exit',
-  );
-});
-
-test('the pre-load waits while the world clock is away from now', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: { ...WORLDVIEW_ON_TRACK, atMs: START_MS - 3_600_000 },
-  });
-  const { requests } = imageryGlobe(viewer);
-  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.deepEqual(requests, []);
-});
-
-test('a tile that fails to load is not asked again', async (t) => {
-  const { cockpit, viewer, store, clock } = await orbitAt(t, {
-    satellite: WORLDVIEW_ON_TRACK,
-  });
-  const asked = [];
-  imageryGlobe(viewer, {
-    requestImage: (x, y, level) => {
-      asked.push(`${level}/${x}/${y}`);
-      return Promise.reject(new Error('404'));
-    },
-  });
-  for (let i = 0; i < 4; i += 1) press(cockpit, '+');
-  assert.equal(store.orbital.zoom, 16);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  await settle();
-  const first = asked.length;
-  assert.ok(first > 0);
-  clock.advance(ORBITAL_PREFETCH_INTERVAL_MS);
-  cockpit.update();
-  assert.equal(new Set(asked).size, asked.length, 'none asked twice');
-});
-
 test('back to nadir from past the limb, the sensor waits for the view', async (t) => {
   const { cockpit, store, clock } = await orbitAt(t, {
     satellite: GEO_IMAGER,
@@ -1623,4 +1465,536 @@ test('back to nadir from past the limb, the sensor waits for the view', async (t
   }
   await settle();
   assert.ok(store.orbital.sensor, 'back on the Earth');
+});
+
+/** A mount on the station: 20 m from the satellite's position, looking along the track. */
+function stationMount() {
+  const centre = satellitePosition();
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(centre);
+  const axis = (x, y, z) =>
+    Cesium.Matrix4.multiplyByPointAsVector(
+      enu,
+      new Cesium.Cartesian3(x, y, z),
+      new Cesium.Cartesian3(),
+    );
+  const direction = axis(0, 1, 0);
+  const up = axis(0, 0, 1);
+  return {
+    position: Cesium.Cartesian3.add(
+      centre,
+      Cesium.Cartesian3.multiplyByScalar(up, 20, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3(),
+    ),
+    direction,
+    up,
+    right: Cesium.Cartesian3.cross(direction, up, new Cesium.Cartesian3()),
+    label: 'ZARYA',
+  };
+}
+
+test('the station is ridden from its mount: the camera sits there and looks along it', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const mount = stationMount();
+  satellites.getCockpitMount = () => mount;
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  const shot = shots.at(-1);
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(shot.destination, mount.position, 1e-9),
+    'the camera is at the mount, not at the satellite',
+  );
+  near(
+    angleDeg(shot.direction, mount.direction),
+    0,
+    'looks along the mount',
+    1e-9,
+  );
+  near(angleDeg(shot.up, mount.up), 0, 'the mount is upright', 1e-9);
+
+  // The HUD names the view and drops what describes the nadir picture.
+  assert.equal(store.orbital.mount, 'ZARYA');
+  assert.equal(store.orbital.footprintKm, null);
+  assert.equal(store.orbital.sensor, null);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · ZARYA',
+  );
+  assert.equal($('.cockpit-orbital-reticle'), null);
+  assert.equal($('.cockpit-orbital-north'), null);
+  assert.match($('.cockpit-help').textContent, /ARROWS LOOK/);
+  assert.match($('.cockpit-help').textContent, /HOME RESET/);
+  assert.doesNotMatch($('.cockpit-help').textContent, /NADIR/);
+
+  // The arrows turn the view about the mount's own frame, and Home returns.
+  press(cockpit, 'ArrowRight');
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  const turned = shots.at(-1);
+  near(angleDeg(turned.direction, mount.direction), 5, 'one step is 5°', 1e-6);
+  assert.ok(
+    Cesium.Cartesian3.dot(turned.direction, mount.right) > 0,
+    'right turns toward the mount’s right',
+  );
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(turned.destination, mount.position, 1e-9),
+  );
+  assert.equal($('#cockpit-orbital-nadir').textContent, 'RESET');
+  assert.equal($('#cockpit-orbital-look-readout').textContent, '');
+  press(cockpit, 'Home');
+  clock.advance(16);
+  cockpit.update();
+  near(angleDeg(shots.at(-1).direction, mount.direction), 0, 'Home', 1e-9);
+});
+
+test('without a mount the same satellite keeps the nadir picture, and gets it back', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const position = satellitePosition();
+  const toCentre = Cesium.Cartesian3.negate(
+    Cesium.Cartesian3.normalize(position, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3(),
+  );
+  const signals = [];
+  cockpit.pushCockpitSignal = (key, kind, title, detail) =>
+    signals.push(detail);
+  // The model has not loaded yet: straight down, as for any satellite.
+  satellites.getCockpitMount = () => null;
+  clock.advance(16);
+  cockpit.update();
+  await settle();
+  assert.deepEqual(signals, [], 'nothing changed: nothing to say');
+  near(angleDeg(shots.at(-1).direction, toCentre), 0, 'nadir', 1e-9);
+  assert.equal(store.orbital.mount, null);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'ORBITAL VIEW · NADIR',
+  );
+  assert.ok($('.cockpit-orbital-reticle'));
+
+  // It loads: the view moves to the mount. It goes again: back to nadir.
+  const mount = stationMount();
+  satellites.getCockpitMount = () => mount;
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  near(angleDeg(shots.at(-1).direction, mount.direction), 0, 'mount', 1e-9);
+  // The TRACK ACQUIRED line follows the picture, once per change.
+  cockpit.update();
+  assert.deepEqual(signals, ['ISS (ZARYA) · STATION VIEW']);
+  satellites.getCockpitMount = () => null;
+  clock.advance(1000);
+  cockpit.update();
+  await settle();
+  assert.deepEqual(signals, [
+    'ISS (ZARYA) · STATION VIEW',
+    'ISS (ZARYA) · NADIR VIEW',
+  ]);
+  assert.equal(store.orbital.mount, null);
+  near(angleDeg(shots.at(-1).direction, toCentre), 0, 'nadir again', 1e-9);
+  assert.ok(
+    Cesium.Cartesian3.equalsEpsilon(shots.at(-1).destination, position, 1e-6),
+  );
+});
+
+/** The station's views as the satellites layer offers them, by key. */
+function stationViews({ docked = true } = {}) {
+  const views = [
+    { key: 'nauka', label: 'NAUKA' },
+    { key: 'zarya', label: 'ZARYA' },
+    ...(docked ? [{ key: 'docked', label: 'PROGRESS-MS 34' }] : []),
+  ];
+  const base = stationMount();
+  // Each view sits a different distance above the satellite's position.
+  const heights = { nauka: 10, zarya: 20, docked: 30 };
+  const asked = [];
+  return {
+    asked,
+    views,
+    heightOf(shot) {
+      return Math.round(
+        Cesium.Cartesian3.distance(shot.destination, satellitePosition()),
+      );
+    },
+    getCockpitMount(key) {
+      asked.push(key);
+      const view = views.find((entry) => entry.key === key) ?? views[0];
+      return {
+        ...base,
+        position: Cesium.Cartesian3.add(
+          satellitePosition(),
+          Cesium.Cartesian3.multiplyByScalar(
+            base.up,
+            heights[view.key],
+            new Cesium.Cartesian3(),
+          ),
+          new Cesium.Cartesian3(),
+        ),
+        key: view.key,
+        label: view.label,
+        views,
+      };
+    },
+  };
+}
+
+test('the station opens on its first view and the arrows step through the rest', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const station = stationViews();
+  satellites.getCockpitMount = station.getCockpitMount;
+  const frame = async () => {
+    clock.advance(16);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  // Nothing was chosen: the layer is asked for its first view, Nauka's,
+  // though the entry ridden is ISS (ZARYA).
+  assert.equal(station.asked[0], null);
+  assert.equal(store.orbital.mount, 'NAUKA');
+  assert.equal(store.orbital.mountViews, 3);
+  assert.equal(station.heightOf(shots.at(-1)), 10);
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · NAUKA',
+  );
+  assert.equal(
+    $('#cockpit-orbital-view-next').getAttribute('aria-label'),
+    'Next station view',
+  );
+  assert.equal(
+    $('#cockpit-orbital-view-previous').getAttribute('aria-label'),
+    'Previous station view',
+  );
+  assert.equal($('#cockpit-orbital-view-name').textContent, 'NAUKA');
+
+  // A look off to one side is dropped by the step: each view looks its own way.
+  press(cockpit, 'ArrowRight');
+  await frame();
+  assert.equal(store.orbital.look.offset, true);
+
+  // The button, as a click anywhere inside it.
+  $('#cockpit-orbital-view-next').dispatchEvent(
+    new Event('click', { bubbles: true }),
+  );
+  await settle();
+  assert.equal(store.orbital.mount, 'ZARYA', 'named at once, before a frame');
+  await frame();
+  assert.equal(station.asked.at(-1), 'zarya');
+  assert.equal(station.heightOf(shots.at(-1)), 20);
+  assert.equal(store.orbital.look.offset, false);
+  near(
+    angleDeg(shots.at(-1).direction, stationMount().direction),
+    0,
+    'reset',
+    1e-9,
+  );
+  assert.equal(
+    $('.cockpit-orbital-kicker').textContent,
+    'STATION VIEW · ZARYA',
+  );
+
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
+  assert.equal(station.heightOf(shots.at(-1)), 30);
+  // Round again to the first.
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA');
+  assert.equal(station.heightOf(shots.at(-1)), 10);
+});
+
+test('the chosen view is kept while the model is away, and one view has no arrows', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  const station = stationViews({ docked: false });
+  satellites.getCockpitMount = station.getCockpitMount;
+  // A second per frame: the HUD republishes on its own cadence.
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.mountViews, 2);
+  cockpit.nextOrbitalView();
+  await frame();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  // The model goes: nadir, no control, nothing to step.
+  satellites.getCockpitMount = () => null;
+  await frame();
+  assert.equal(store.orbital.mount, null);
+  assert.equal(store.orbital.mountViews, 0);
+  assert.equal($('#cockpit-orbital-view-next'), null);
+  assert.equal($('#cockpit-orbital-view-previous'), null);
+  assert.equal(cockpit.nextOrbitalView(), false);
+  // It comes back: the same view is asked for again.
+  satellites.getCockpitMount = station.getCockpitMount;
+  await frame();
+  assert.equal(station.asked.at(-1), 'zarya');
+  assert.equal(store.orbital.mount, 'ZARYA');
+
+  // A station offering a single view shows no control.
+  station.views.length = 1;
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA', 'the view on offer');
+  assert.equal(store.orbital.mountViews, 1);
+  assert.equal($('#cockpit-orbital-view-next'), null);
+  assert.equal($('#cockpit-orbital-view-previous'), null);
+  assert.equal(cockpit.nextOrbitalView(), false);
+});
+
+test('the view arrows do nothing outside a station view', async (t) => {
+  const { cockpit, clock } = await orbitAt(t);
+  clock.advance(16);
+  cockpit.update();
+  assert.equal(cockpit.nextOrbitalView(), false);
+  assert.equal(cockpit.previousOrbitalView(), false);
+  cockpit.exit();
+  assert.equal(cockpit.nextOrbitalView(), false);
+  assert.equal(cockpit.previousOrbitalView(), false);
+});
+
+test('each station view rides its own entry, so the card describes that module', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  // The layer, as it behaves: tracking another entry makes it the subject.
+  const names = {
+    25544: 'ISS (ZARYA)',
+    49044: 'ISS (NAUKA)',
+    36086: 'POISK',
+    68837: 'PROGRESS-MS 34',
+  };
+  let subject = { ...ISS, noradId: 68837, id: '68837', name: names[68837] };
+  const tracked = [];
+  satellites.getCockpitSubject = () => ({ ...subject });
+  satellites.trackById = (noradId) => {
+    tracked.push(Number(noradId));
+    const id = Number(noradId);
+    subject = { ...ISS, noradId: id, id: String(id), name: names[id] };
+    return true;
+  };
+  cockpit.subjectId = 68837;
+  const base = stationMount();
+  const views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044 },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+    { key: 'poisk', label: 'POISK', noradId: 36086 },
+    { key: 'docked', label: 'PROGRESS-MS 34', noradId: 68837 },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  // Entered on the Progress; the view opens on Nauka and rides Nauka.
+  await frame();
+  await frame();
+  assert.deepEqual(tracked, [49044]);
+  assert.equal(cockpit.subjectId, 49044);
+  assert.equal(store.orbital.name, 'ISS (NAUKA)');
+  assert.equal($('.cockpit-orbital-name').textContent, 'ISS (NAUKA)');
+  assert.equal(store.orbital.mount, 'NAUKA');
+
+  // Each step rides the next view's entry.
+  for (const [noradId, name] of [
+    [25544, 'ISS (ZARYA)'],
+    [36086, 'POISK'],
+    [68837, 'PROGRESS-MS 34'],
+    [49044, 'ISS (NAUKA)'],
+  ]) {
+    assert.equal(cockpit.nextOrbitalView(), true);
+    await frame();
+    await frame();
+    assert.equal(cockpit.subjectId, noradId);
+    assert.equal(store.orbital.name, name);
+    assert.equal($('.cockpit-orbital-name').textContent, name);
+  }
+  assert.deepEqual(tracked, [49044, 25544, 36086, 68837, 49044]);
+});
+
+test('a view with no entry, or one that cannot be ridden, keeps the subject', async (t) => {
+  const { cockpit, satellites, store, clock } = await orbitAt(t);
+  const base = stationMount();
+  let views = [
+    { key: 'nauka', label: 'NAUKA', noradId: null },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  let asked = 0;
+  satellites.trackById = () => {
+    asked += 1;
+    return false;
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  // No entry for Nauka: the ISS stays the subject, and nothing is tracked.
+  await frame();
+  assert.equal(asked, 0);
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(store.orbital.mount, 'NAUKA');
+  // An entry the layer will not track: asked once, not every frame.
+  views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044 },
+    { key: 'zarya', label: 'ZARYA', noradId: 25544 },
+  ];
+  await frame();
+  await frame();
+  await frame();
+  assert.equal(asked, 1);
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(document.body.classList.contains('cockpit-orbit'), true);
+});
+
+const CUPOLA_CARD = Object.freeze({
+  name: 'CUPOLA',
+  classLabel: 'OBSERVATION MODULE · ISS',
+  operator: 'European Space Agency (ESA)',
+  facts: ['7 WINDOWS', 'LAUNCHED 8 FEB 2010 · STS-130'],
+});
+
+test('a view with a card of its own shows it in place of the entry’s identity', async (t) => {
+  const { $, cockpit, satellites, store, clock } = await orbitAt(t);
+  const base = stationMount();
+  const views = [
+    { key: 'zarya', label: 'ZARYA', noradId: 25544, card: null },
+    { key: 'cupola', label: 'CUPOLA', noradId: 25544, card: CUPOLA_CARD },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.name, 'ISS (ZARYA)');
+  assert.equal(store.orbital.noradId, 25544);
+  assert.equal(store.orbital.facts, null);
+
+  cockpit.nextOrbitalView();
+  await frame();
+  // Same entry ridden (nothing to switch), the Cupola's own card shown.
+  assert.equal(cockpit.subjectId, 25544);
+  assert.equal(store.orbital.mount, 'CUPOLA');
+  assert.equal(store.orbital.name, 'CUPOLA');
+  assert.equal($('.cockpit-orbital-name').textContent, 'CUPOLA');
+  assert.equal(store.orbital.classLabel, 'OBSERVATION MODULE · ISS');
+  assert.equal(store.orbital.operator, 'European Space Agency (ESA)');
+  assert.equal(store.orbital.noradId, null);
+  assert.equal(store.orbital.tle, null);
+  assert.equal(store.orbital.owner, null);
+  assert.equal(
+    $('.cockpit-orbital-ident-text').textContent,
+    '7 WINDOWS · LAUNCHED 8 FEB 2010 · STS-130',
+  );
+  assert.equal($('#cockpit-orbital-tle-toggle'), null);
+  // Altitude, velocity and the sub-satellite point are the station's still.
+  assert.ok($('.cockpit-orbital-altitude').textContent.length > 0);
+
+  // Back round to Zarya: the entry's own card again.
+  cockpit.nextOrbitalView();
+  await frame();
+  assert.equal(store.orbital.name, 'ISS (ZARYA)');
+  assert.equal(store.orbital.noradId, 25544);
+  assert.equal(store.orbital.facts, null);
+});
+
+test('leaving a station view selects Nauka; leaving any other keeps the satellite', async (t) => {
+  const { cockpit, satellites, clock } = await orbitAt(t);
+  const names = { 25544: 'ISS (ZARYA)', 49044: 'ISS (NAUKA)' };
+  let subject = { ...ISS };
+  const tracked = [];
+  satellites.getCockpitSubject = () => ({ ...subject });
+  satellites.trackById = (noradId) => {
+    const id = Number(noradId);
+    tracked.push(id);
+    subject = { ...ISS, noradId: id, id: String(id), name: names[id] };
+    return true;
+  };
+  const base = stationMount();
+  const views = [
+    { key: 'nauka', label: 'NAUKA', noradId: 49044, card: null },
+    { key: 'cupola', label: 'CUPOLA', noradId: 25544, card: CUPOLA_CARD },
+  ];
+  satellites.getCockpitMount = (key) => {
+    const view = views.find((entry) => entry.key === key) ?? views[0];
+    return { ...base, ...view, views };
+  };
+  const frame = async () => {
+    clock.advance(1000);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  await frame();
+  // On the Cupola, riding the ISS's entry, when the Cockpit is left.
+  cockpit.nextOrbitalView();
+  await frame();
+  await frame();
+  assert.equal(cockpit.subjectId, 25544);
+  satellites.calls.length = 0;
+  tracked.length = 0;
+  assert.equal(cockpit.exit(), true);
+  assert.deepEqual(tracked, [49044], 'Nauka is selected');
+  assert.deepEqual(satellites.calls, [
+    ['subject', null],
+    ['refocus', 49044],
+  ]);
+});
+
+test('leaving the plain orbital view refocuses the satellite ridden', async (t) => {
+  const { cockpit, satellites } = await orbitAt(t);
+  const tracked = [];
+  satellites.trackById = (noradId) => {
+    tracked.push(noradId);
+    return true;
+  };
+  satellites.calls.length = 0;
+  assert.equal(cockpit.exit(), true);
+  assert.deepEqual(tracked, []);
+  assert.deepEqual(satellites.calls, [
+    ['subject', null],
+    ['refocus', 25544],
+  ]);
+});
+
+test('the left arrow steps back through the views, wrapping round', async (t) => {
+  const { $, cockpit, satellites, shots, store, clock } = await orbitAt(t);
+  const station = stationViews();
+  satellites.getCockpitMount = station.getCockpitMount;
+  const frame = async () => {
+    clock.advance(16);
+    cockpit.update();
+    await settle();
+  };
+  await frame();
+  assert.equal(store.orbital.mount, 'NAUKA');
+  // From the first view back to the last.
+  $('#cockpit-orbital-view-previous').dispatchEvent(
+    new Event('click', { bubbles: true }),
+  );
+  await settle();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
+  await frame();
+  // The camera is at the docked vehicle's view (30 m up in this stand-in).
+  assert.equal(station.heightOf(shots.at(-1)), 30);
+  assert.equal(cockpit.previousOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'ZARYA');
+  assert.equal(cockpit.nextOrbitalView(), true);
+  await frame();
+  assert.equal(store.orbital.mount, 'PROGRESS-MS 34');
 });

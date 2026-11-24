@@ -501,14 +501,6 @@ export class ShellFacade {
     return this._visualSettings.sharpenEnabled;
   }
 
-  get _bloomStage() {
-    return this._visualEffects.bloomStage;
-  }
-
-  get _sharpenStage() {
-    return this._visualEffects.sharpenStage;
-  }
-
   /** Settle only the search generation that still owns the shared input UI. */
   _settleLocationSearchUi(generation, options) {
     return this._navigation._settleLocationSearchUi(...arguments);
@@ -1046,15 +1038,16 @@ export class ShellFacade {
 
   /**
    * Reads global context mode state for voice/state-sync consumers.
-   * @returns {{mode: 'flights'|'space-missions'|null, active: boolean, changing: boolean, entering: 'flights'|'space-missions'|null, snapshotCaptured: boolean}}
+   * @returns {{mode: 'flights'|null, active: boolean, changing: boolean, entering: 'flights'|null, snapshotCaptured: boolean}}
    */
   getContextModeState(...args) {
     return this._contextControls?.getContextModeState(...args);
   }
 
   /**
-   * Sets global context mode (Contacts / Space Missions / off) for voice.
-   * @param {'contacts'|'space-missions'|'off'|null} mode - Requested context target.
+   * Sets global context mode (Contacts / off) for voice. Space Missions is
+   * an ordinary layer, not a Context mode.
+   * @param {'contacts'|'off'|null} mode - Requested context target.
    * @param {object} [options]
    * @param {string|Symbol|null} [options.notificationToken]
    * @param {AbortSignal|null} [options.signal]
@@ -1064,7 +1057,7 @@ export class ShellFacade {
    *   lane. Cockpit choreography calls this facade INTERNALLY for its own
    *   enter/rollback steps; those transitions are not a Context request by the
    *   operator and must stay inert, so they pass `false`.
-   * @returns {Promise<{ok:boolean, mode:'flights'|'space-missions'|null, active:boolean, action:string, error?:string}>}
+   * @returns {Promise<{ok:boolean, mode:'flights'|null, active:boolean, action:string, error?:string}>}
    */
   setContextMode(...args) {
     return this._contextControls?.setContextMode(...args);
@@ -1300,6 +1293,11 @@ export class ShellFacade {
 
   resetToGlobeView(...args) {
     return this._locationNavigation.resetToGlobeView(...args);
+  }
+
+  /** Back to live, at the view the app started from (the title's logo). */
+  returnToStart() {
+    return this._locationNavigation.returnToStart();
   }
 
   /**

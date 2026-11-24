@@ -37,7 +37,7 @@ test('normalizeEarthquakeSnapshot parses valid GeoJSON earthquake features', () 
   });
 });
 
-test('normalizeEarthquakeSnapshot generates index-based stable IDs when id is missing or blank', () => {
+test('normalizeEarthquakeSnapshot names id-less events by their content, not their row', () => {
   const geojson = {
     features: [
       {
@@ -55,10 +55,35 @@ test('normalizeEarthquakeSnapshot generates index-based stable IDs when id is mi
 
   const rows = normalizeEarthquakeSnapshot(geojson);
   assert.equal(rows.length, 2);
-  assert.equal(rows[0].stableId, 'event-1');
+  assert.equal(rows[0].stableId, 'event-1711930000000:139.6917:35.6895:25:3.5');
   assert.equal(rows[0].usgsId, null);
-  assert.equal(rows[1].stableId, 'event-2');
+  assert.equal(
+    rows[1].stableId,
+    'event-1711931000000:-70.6693:-33.4489:45.2:5.1',
+  );
   assert.equal(rows[1].usgsId, '');
+  // A row inserted ahead of them keeps each id-less quake's id, so a selected
+  // one stays selected across the refresh.
+  const inserted = normalizeEarthquakeSnapshot({
+    features: [
+      {
+        id: 'us7000new',
+        geometry: { type: 'Point', coordinates: [10, 20, 5] },
+        properties: { mag: 4, place: 'New', time: 1711932000000 },
+      },
+      ...geojson.features,
+    ],
+  });
+  assert.deepEqual(
+    inserted.map((row) => row.stableId).slice(1),
+    rows.map((row) => row.stableId),
+  );
+  // Two id-less events that match exactly stay apart.
+  const twins = normalizeEarthquakeSnapshot({
+    features: [geojson.features[0], geojson.features[0]],
+  });
+  assert.equal(twins.length, 2);
+  assert.notEqual(twins[0].stableId, twins[1].stableId);
 });
 
 test('normalizeEarthquakeSnapshot filters events below M2.5 without dropping the feed', () => {

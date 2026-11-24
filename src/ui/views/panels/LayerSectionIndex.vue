@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { t } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // A slim index beside the Data Layers list: one tick per group (Movement,
 // Cameras, Infrastructure…). Hovering a tick names its group, clicking it
@@ -102,10 +103,9 @@ onBeforeUnmount(() => {
 
 <template>
   <nav v-if="sections.length > 1" class="layer-section-index" :aria-label="t('Layer groups')">
-    <button
+    <UiButton
       v-for="section in sections"
       :key="section.i"
-      type="button"
       class="layer-section-index__tick"
       :class="{ 'is-current': section.i === current }"
       :aria-label="t('Jump to {name}', { name: section.label })"
@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
       @mouseleave="hideTip"
       @focus="showTip($event, section)"
       @blur="hideTip"
-    ></button>
+    ></UiButton>
     <Teleport to="body">
       <span v-if="tip" class="layer-section-index__label"
         :class="{ 'layer-section-index__label--before': tip.before }" :style="{ left: tip.left, top: tip.top }" aria-hidden="true">{{ tip.label }}</span>

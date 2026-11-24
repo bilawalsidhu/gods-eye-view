@@ -261,6 +261,8 @@ export function createVesselSource({
           closed: 'feed disconnected',
         };
         error.message = reasons[payload?.status] || error.message;
+        // No key is not an outage: the feed waits for one.
+        if (payload?.status === 'missing-key') error.code = 'key-required';
         throw error;
       }
       return {

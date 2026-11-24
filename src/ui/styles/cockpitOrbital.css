@@ -482,6 +482,21 @@
   color: #fff;
   outline: none;
 }
+/* A station view's arrows either side of its name. */
+.cockpit-orbital-views .cockpit-orbital-look-readout {
+  flex: 1;
+  text-align: center;
+}
+.cockpit-orbital-view-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 4px;
+  line-height: 1;
+}
+.cockpit-orbital-view-step .material-symbols-outlined {
+  font-size: 18px;
+}
 
 /* The Cockpit HUD in orbit (#cockpit-hud[data-subject='satellite']): the
    orbital readout names the satellite, so the topline keeps only the
@@ -489,10 +504,8 @@
 #cockpit-hud[data-subject='satellite'] .cockpit-topline > div:first-child {
   visibility: hidden;
 }
-:root[data-ui-theme='cyber'] #cockpit-hud[data-subject='satellite']::before {
-  clip-path: none;
-}
-:root:not([data-ui-theme='cyber']) body.cockpit-orbit {
+
+:root body.cockpit-orbit {
   --panel-radius: 2px;
   --btn-radius: 2px;
 }

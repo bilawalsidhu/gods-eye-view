@@ -14,6 +14,7 @@ import satellitesLayer, {
   _setDenseCatalogStateForTest,
 } from './satellites.js';
 import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense
@@ -201,11 +202,12 @@ test('STARLINK reports loading, then ACTIVE only once the points exist', async (
     assert.equal(settled.label, 'STARLINK');
     assert.deepEqual(settled.params, { catalog: 'core' }, 'a settled chip toggles back off');
 
-    // The completion pushed a refresh, and the legend gained STARLINK with it —
-    // without that push the row would keep the pre-load counts for 5 minutes.
+    // The completion pushed a refresh, and the STARLINK chip gained its swatch
+    // and count with it — without that push the row would keep the pre-load
+    // counts for 5 minutes.
     assert.ok(refreshes.length >= 2, 'load start and load completion each pushed a refresh');
-    const legend = satellitesLayer.getRowControls().legend;
-    assert.equal(legend.some((row) => row.klass === 'starlink'), true);
+    assert.equal(settled.swatch, SATELLITE_CLASS_DISPLAY.starlink.color);
+    assert.equal(settled.count, 1);
   } finally {
     globalThis.fetch = originalFetch;
     _clearDenseCatalogStateForTest();
@@ -231,11 +233,8 @@ test('a failed STARLINK load reverts the mode rather than leaving an active chip
     assert.match(settled.title, /502/, 'the chip explains why');
     assert.equal(satellitesLayer.getParams().catalog, 'core', 'the mode reverts to reality');
     assert.deepEqual(settled.params, { catalog: 'dense' }, 'clicking retries');
-    assert.equal(
-      satellitesLayer.getRowControls().legend.some((row) => row.klass === 'starlink'),
-      false,
-      'no STARLINK class is advertised when nothing loaded',
-    );
+    assert.equal(settled.swatch, undefined, 'no STARLINK swatch when nothing loaded');
+    assert.equal(settled.count, undefined, 'and no STARLINK count');
     assert.ok(pushes >= 2, 'the failure pushed its own refresh');
 
     // Retrying against a healthy feed clears the error — it does not latch.
@@ -318,10 +317,10 @@ test('an explicit return to core clears a failure the user never caused', async 
   }
 });
 
-test('a real stations-feed outage keeps the ISS under STATIONS in the legend', async () => {
+test('a real stations-feed outage keeps the ISS counted under STATIONS', async () => {
   // End-to-end version of the tally rule: drive a real rebuild in which only
   // the `visual` group answers, so the ISS is genuinely ingested as `visual`.
-  // The legend must still file it under STATION or it disagrees with the card.
+  // The STATIONS chip must still count it or it disagrees with the card.
   const originalFetch = globalThis.fetch;
   const log = console.log;
   const warn = console.warn;
@@ -339,13 +338,14 @@ test('a real stations-feed outage keeps the ISS under STATIONS in the legend', a
     assert.equal(_catalogGroupForTest(25544), 'visual',
       'the outage really did ingest the ISS from the visual group');
 
-    const legend = satellitesLayer.getRowControls().legend;
-    assert.equal(legend.find((row) => row.klass === 'stations')?.count, 1,
-      'STATIONS survives the outage because the ISS is counted there');
-    assert.equal(legend.length, 1, 'and it is not also counted under another class');
+    const counted = satellitesLayer
+      .getRowControls()
+      .chips.filter((entry) => entry.count !== undefined);
+    assert.deepEqual(counted.map((entry) => [entry.id, entry.count]), [['class-stations', 1]],
+      'STATIONS survives the outage because the ISS is counted there, and only there');
     const [iss] = satellitesLayer.getAnalystRecords();
     assert.equal(iss?.satelliteClass, 'STATIONS · ISS',
-      'the card says the same thing the legend does');
+      'the card says the same thing the chip does');
   } finally {
     console.log = log;
     console.warn = warn;
@@ -405,7 +405,7 @@ test('a dependency owner hiding the points surrenders the whole row', async () =
     satellitesLayer.setParams({ showPoints: false });
     const owned = satellitesLayer.getRowControls();
     assert.deepEqual(owned.chips, [], 'no chip to click while the owner holds the params');
-    assert.deepEqual(owned.legend, [], 'no legend describing an empty sky');
+    assert.equal(owned.legend, undefined, 'no counts describing an empty sky');
 
     satellitesLayer.setParams({ showPoints: true });
     assert.equal(satellitesLayer.getRowControls().chips.length, 6, 'released on restore');
@@ -448,16 +448,30 @@ test('every class but Starlink shows by default; each class chip turns its class
       false,
     );
     assert.deepEqual(chip('telecom').params, { classes: { telecom: false } });
+    // One pill per class carries what the legend did: an on class shows its
+    // point colour and its count beside its name, an off one only its name.
+    const controls = satellitesLayer.getRowControls();
+    assert.equal(controls.legend, undefined, 'no separate list of counts');
     assert.deepEqual(
-      satellitesLayer.getRowControls().legend.map((row) => row.klass),
-      ['stations', 'imaging', 'telecom', 'debris'],
-      'the legend keys only what is on screen',
+      controls.chips.map((entry) => [entry.id, entry.swatch, entry.count]),
+      [
+        ['class-stations', SATELLITE_CLASS_DISPLAY.stations.color, 1],
+        ['class-imaging', SATELLITE_CLASS_DISPLAY.imaging.color, 1],
+        ['class-telecom', SATELLITE_CLASS_DISPLAY.telecom.color, 1],
+        ['catalog', undefined, undefined],
+        // On, but nothing of the class is loaded: the colour shows, no count.
+        ['class-probes', SATELLITE_CLASS_DISPLAY.probes.color, undefined],
+        ['class-debris', SATELLITE_CLASS_DISPLAY.debris.color, 1],
+      ],
     );
 
     satellitesLayer.setParams(chip('telecom').params);
     satellitesLayer.setParams(chip('debris').params);
     assert.deepEqual(shown(), [25544, 90002], 'telecom and debris off');
     assert.equal(chip('debris').active, false);
+    assert.equal(chip('debris').swatch, undefined, 'an off pill drops its colour');
+    assert.equal(chip('debris').count, undefined, 'and its count');
+    assert.equal(chip('debris').label, 'DEBRIS', 'and keeps its name');
     assert.deepEqual(satellitesLayer.getParams().classes, {
       stations: true,
       imaging: true,

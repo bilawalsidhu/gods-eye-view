@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindFakeCesiumCamera } from './testSupport/fakeCameraPort.mjs';
 import {
   WORLD_CLICK_FOCUS_DURATION_SEC,
   WORLD_FOCUS_FRAMING,
@@ -165,10 +166,11 @@ test('an unflyable request never reaches the release policy', () => {
 test('the transfer flight supersedes any flight in progress and keeps the operator heading', () => {
   const camera = stubCamera();
   assert.equal(
-    flyToWorldTarget(
-      { camera },
-      { kind: 'vessel', id: '123', position: POSITION },
-    ),
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'vessel',
+      id: '123',
+      position: POSITION,
+    }),
     true,
   );
   assert.equal(
@@ -188,10 +190,11 @@ test('the transfer flight supersedes any flight in progress and keeps the operat
 
 test('fires frame wider than vessels — a fire is read by its surroundings', () => {
   const camera = stubCamera();
-  flyToWorldTarget(
-    { camera },
-    { kind: 'fire', id: 'fire-1', position: POSITION },
-  );
+  flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+    kind: 'fire',
+    id: 'fire-1',
+    position: POSITION,
+  });
   const { sphere, options } = camera.calls.flights[0];
   assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.fire.radiusM);
   assert.equal(options.offset.range, WORLD_FOCUS_FRAMING.fire.rangeM);
@@ -203,9 +206,52 @@ test('fires frame wider than vessels — a fire is read by its surroundings', ()
   );
 });
 
+// A large quake's disc does not fit the earthquake framing, so the target
+// asks for more room; it never gets less than the framing.
+test('a target can widen its framing sphere, never narrow it', () => {
+  const fly = (extra) => {
+    const camera = stubCamera();
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'earthquake',
+      id: 'earthquake:us1',
+      position: POSITION,
+      ...extra,
+    });
+    return camera.calls.flights[0];
+  };
+  const m72 = fly({ radiusM: 147000, rangeM: 514000 });
+  assert.equal(m72.sphere.radius, 147000);
+  assert.equal(m72.options.offset.range, 514000);
+  const m3 = fly({ radiusM: 8000 });
+  assert.equal(m3.sphere.radius, WORLD_FOCUS_FRAMING.earthquake.radiusM);
+  assert.equal(m3.options.offset.range, WORLD_FOCUS_FRAMING.earthquake.rangeM);
+  const bad = fly({ radiusM: NaN, rangeM: -1 });
+  assert.equal(bad.options.offset.range, WORLD_FOCUS_FRAMING.earthquake.rangeM);
+});
+
+test("a target's own range stands the camera off that far, past the framed radius", () => {
+  const range = (rangeM) => {
+    const camera = stubCamera();
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'fire',
+      id: 'fire-1',
+      position: POSITION,
+      rangeM,
+    });
+    const { sphere, options } = camera.calls.flights[0];
+    assert.equal(sphere.radius, WORLD_FOCUS_FRAMING.fire.radiusM);
+    return options.offset.range;
+  };
+  assert.equal(range(24_000), 24_000);
+  // Inside the framed sphere, or not a number: the kind's own range.
+  for (const value of [WORLD_FOCUS_FRAMING.fire.radiusM, 0, -5, NaN, '9000'])
+    assert.equal(range(value), WORLD_FOCUS_FRAMING.fire.rangeM);
+});
+
 test('every framing is a real oblique standoff, not a nadir or an inside-out sphere', () => {
   const kinds = Object.keys(WORLD_FOCUS_FRAMING);
   assert.deepEqual(kinds.sort(), [
+    'earthquake',
     'fire',
     'sighting',
     'sighting-area',
@@ -229,8 +275,10 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
       framing.rangeM > framing.radiusM,
       `${kind}: range ${framing.rangeM} must stand off outside radius ${framing.radiusM}`,
     );
-    // An obscured sighting frames its entire 0.2° privacy cell.
-    const maximumRange = kind === 'sighting-area' ? 60000 : 10000;
+    // An obscured sighting frames its entire 0.2° privacy cell, and a quake
+    // its disc, up to 128 km across at M6.
+    const maximumRange =
+      { 'sighting-area': 60000, earthquake: 250000 }[kind] ?? 10000;
     assert.ok(
       framing.rangeM <= maximumRange,
       `${kind}: range must fit its surface extent, got ${framing.rangeM}`,
@@ -262,10 +310,16 @@ test('every framing is a real oblique standoff, not a nadir or an inside-out sph
 test('unknown kinds and missing viewers issue no flight', () => {
   const camera = stubCamera();
   assert.equal(
-    flyToWorldTarget({ camera }, { kind: 'plane', position: POSITION }),
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), {
+      kind: 'plane',
+      position: POSITION,
+    }),
     false,
   );
-  assert.equal(flyToWorldTarget({ camera }, { kind: 'vessel' }), false);
+  assert.equal(
+    flyToWorldTarget(bindFakeCesiumCamera({ camera }), { kind: 'vessel' }),
+    false,
+  );
   assert.equal(
     flyToWorldTarget(null, { kind: 'vessel', position: POSITION }),
     false,

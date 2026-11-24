@@ -1,14 +1,21 @@
-import * as Cesium from 'cesium';
+import { hexColor } from '../../render/color.js';
 
 /**
  * @file Street Traffic selects TomTom, OpenMapTiles or Hybrid motor roads,
  * with directional TomTom congestion in live mode. Tile acquisition is
- * bounded and camera-driven; animation lerps precomputed Cartesian waypoints.
+ * bounded and camera-driven; animation lerps precomputed ECEF waypoints.
  */
 
 /** @const {number} Meters — hide all traffic dots above this camera altitude */
 
 export const ACTIVATION_ALTITUDE = 8000;
+
+/**
+ * How far the view moves before the camera tells the layer (the camera's
+ * `changed` threshold): fine, so it notices entering a coverage area.
+ */
+
+export const CAMERA_CHANGED_THRESHOLD = 0.05;
 
 /** @const {number} Meters — above this altitude, only major roads are fetched */
 
@@ -108,14 +115,20 @@ export const SIZE_BY_TYPE = {
  * Live-flow bucket colors (thresholds live in `trafficFlowStyle.js`):
  * green free flow / amber slow / red jam, all at 0.9 alpha.
  * Roads without flow data (`road.flow == null`) keep the sim's white.
- * @const {Object<string, Cesium.Color>}
+ * Renderer colours (`[r, g, b, a]`, 0..1), frozen: painted colours are
+ * cached by identity.
+ * @const {Object<string, number[]>}
  */
 
-export const FLOW_BUCKET_COLORS = {
-  free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
-  slow: Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.9),
-  jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
-};
+export const FLOW_BUCKET_COLORS = Object.freeze({
+  free: Object.freeze(hexColor('#2ecc71', 0.9)),
+  slow: Object.freeze(hexColor('#f0b23e', 0.9)),
+  jam: Object.freeze(hexColor('#e05252', 0.9)),
+});
+
+/** @const {number[]} Simulated (no flow data) dot colour: white at 0.85. */
+
+export const SIM_DOT_COLOR = Object.freeze([1, 1, 1, 0.85]);
 
 // ─── Flow road lines (`lines` row toggle, live mode only) ────────────────
 /**
@@ -155,14 +168,13 @@ export const HEAT_JAM_BASE_ALPHA = 0.55;
 
 export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
-/** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
+/** @const {number[]} Jam corridor color (bucket red, alpha pulsed live). */
 
-export const HEAT_JAM_COLOR = Cesium.Color.fromCssColorString('#e05252');
+export const HEAT_JAM_COLOR = Object.freeze(hexColor('#e05252'));
 
-/** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
+/** @const {number[]} Slow corridor color (bucket amber, faint + static). */
 
-export const HEAT_SLOW_COLOR =
-  Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2);
+export const HEAT_SLOW_COLOR = Object.freeze(hexColor('#f0b23e', 0.2));
 
 /** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import {
   createShipwrecksLayer,
   markerPixelSize,
@@ -36,50 +37,19 @@ function deferred() {
   return { promise, resolve };
 }
 
-/** A fake billboard collection that records what the layer adds. */
-function fakeMarkers() {
-  const collection = {
-    show: true,
-    billboards: [],
-    rebuilds: 0,
-    add(options) {
-      const billboard = { show: true, ...options };
-      collection.billboards.push(billboard);
-      return billboard;
-    },
-    removeAll() {
-      collection.rebuilds++;
-      collection.billboards = [];
-    },
-  };
-  return collection;
-}
-
-function harness({ snapshots, now = () => 1 } = {}) {
-  const markers = fakeMarkers();
-  const primitives = [];
+function harness({ snapshots, now = () => 1, cardHit = () => null } = {}) {
   const cards = [];
   const handlers = [];
   const opened = [];
   let pickResult = null;
-  const viewer = {
-    camera: { positionWC: Cesium.Cartesian3.fromDegrees(-1, 50, 2e6) },
-    scene: {
-      canvas: {},
-      requestRender() {},
-      pick: () => pickResult,
-      preRender: { addEventListener: () => () => {} },
-      primitives: {
-        add: (primitive) => primitives.push(primitive),
-        remove: (primitive) =>
-          primitives.splice(primitives.indexOf(primitive), 1),
-        raiseToTop() {},
-        contains: (primitive) => primitives.includes(primitive),
-      },
-    },
-  };
+  // A touch's wider contact search, when it finds what the exact pick missed.
+  let nearResult = null;
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
   const queue = [...(snapshots || [])];
   const requests = [];
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest((x, y) => cardHit(x, y));
   const layer = createShipwrecksLayer({
     source: {
       getSnapshot({ signal }) {
@@ -89,48 +59,72 @@ function harness({ snapshots, now = () => 1 } = {}) {
         return next instanceof Promise ? next : Promise.resolve(next);
       },
     },
-    createMarkers: () => markers,
     overlayHost: {
       setEntries: (_source, entries) => cards.push(entries),
       setVisible() {},
-      hitTest: () => null,
+      hitTest: cardHit,
     },
-    screenSpaceEventHandlerFactory: () => {
-      const handler = {
-        setInputAction(callback) {
-          handler.click = callback;
-        },
-        destroy() {
+    // The globe's clicks: one listener per click handler installed.
+    input: () => ({
+      onClick(callback) {
+        const handler = {
+          click: (event) =>
+            callback({
+              ...event,
+              topHit: pickResult
+                ? { set: 'shipwrecks:', id: pickResult, surface: false }
+                : null,
+              id: pickResult ?? nearResult,
+            }),
+          destroyed: false,
+        };
+        handlers.push(handler);
+        return () => {
           handler.destroyed = true;
-        },
-      };
-      handlers.push(handler);
-      return handler;
-    },
+        };
+      },
+    }),
     picking,
     pointer: { isPointerFree: () => true },
     openExternal: (url) => opened.push(url),
     now: () => now(),
   });
   layer.init(viewer);
+  const markerSet = () => draw.find('shipwrecks:');
   return {
     layer,
-    markers,
-    primitives,
+    // The markers' set, its items in drawing order.
+    markers: {
+      get set() {
+        return markerSet();
+      },
+      get show() {
+        return markerSet()?.show;
+      },
+      get billboards() {
+        const set = markerSet();
+        return set && !set.disposed ? [...set.items.values()] : [];
+      },
+    },
     cards,
     handlers,
     requests,
     opened,
     pick(id) {
-      pickResult = id ? { id: `shipwreck:${id}` } : null;
+      pickResult = id ? `shipwreck:${id}` : null;
+    },
+    // What a touch's contact search finds near the tap, the exact pick
+    // being `pick`'s.
+    near(pickId) {
+      nearResult = pickId;
     },
     lastCard: () => cards.at(-1),
   };
 }
 
-test('markers live in one collection, shown only while the layer is on', async () => {
+test('markers live in one set, shown only while the layer is on', async () => {
   const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
-  assert.deepEqual(h.primitives, [h.markers]);
+  assert.ok(h.markers.set, 'one set for every marker');
   assert.equal(h.markers.show, false);
   h.layer.enable();
   assert.equal(h.markers.show, true);
@@ -141,7 +135,7 @@ test('markers live in one collection, shown only while the layer is on', async (
   assert.equal(h.markers.show, false);
   assert.equal(h.handlers[0].destroyed, true);
   h.layer.destroy();
-  assert.deepEqual(h.primitives, [], 'the collection leaves the scene');
+  assert.equal(h.markers.set, undefined, 'the set is disposed');
 });
 
 test('markers sit on the wreck: no eye offset, bigger toll drawn last', async () => {
@@ -160,7 +154,10 @@ test('markers sit on the wreck: no eye offset, bigger toll drawn last', async ()
   assert.deepEqual(ids, ['shipwreck:none', 'shipwreck:small', 'shipwreck:big']);
   for (const billboard of h.markers.billboards)
     assert.equal(billboard.eyeOffset, undefined);
-  assert.equal(h.markers.billboards[2].width, markerPixelSize(1500));
+  assert.deepEqual(h.markers.billboards[2].size, [
+    markerPixelSize(1500),
+    markerPixelSize(1500),
+  ]);
 });
 
 test('an unchanged snapshot does not rebuild the markers', async () => {
@@ -175,9 +172,9 @@ test('an unchanged snapshot does not rebuild the markers', async () => {
   h.layer.enable();
   await h.layer.update();
   await h.layer.update();
-  assert.equal(h.markers.rebuilds, 1);
+  assert.equal(h.markers.set.writes, 1);
   await h.layer.update();
-  assert.equal(h.markers.rebuilds, 2);
+  assert.equal(h.markers.set.writes, 2);
   assert.equal(h.markers.billboards.length, 2);
 });
 
@@ -202,7 +199,7 @@ test('a click opens the card; a period that excludes the wreck closes it', async
   h.layer.enable();
   await h.layer.update();
   h.pick('old');
-  h.handlers[0].click({ position: { x: 1, y: 1 } });
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
   const [card] = h.lastCard();
   assert.equal(card.id, 'shipwreck-card:old');
   h.layer.setParams({ from: 1900, to: 1990 });
@@ -213,6 +210,24 @@ test('a click opens the card; a period that excludes the wreck closes it', async
     ['shipwreck:new'],
   );
   assert.equal(h.layer.getStats().count, 1);
+});
+
+test('a tap selects only the wreck exactly under it, as a click does', async () => {
+  const h = harness({ snapshots: [snapshot([wreck('a')])] });
+  h.layer.enable();
+  await h.layer.update();
+  // Near a wreck but on nothing: no card.
+  h.near('shipwreck:a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.cards.flat().length, 0);
+  h.pick('a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.lastCard()[0].id, 'shipwreck-card:a');
+  // On nothing, near another layer's contact: the card is closed.
+  h.pick(null);
+  h.near('flight:abc');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.deepEqual(h.lastCard(), []);
 });
 
 test('the year pickers list only years with a wreck, and each era is counted', async () => {
@@ -380,4 +395,98 @@ test('the page deadline subtracts the newest available source age from the limit
     'an unavailable source does not count',
   );
   assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  let picked = null;
+  const viewer = { scene: { canvas: {}, pick: () => picked } };
+  bindFakeDraw(viewer);
+  let cardUnder = null;
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () =>
+      cardUnder ? { sourceId: 'shipwrecks', entryId: cardUnder } : null,
+  });
+  t.after(() => fake.destroy());
+  const cards = [];
+  const opened = [];
+  const layer = createShipwrecksLayer({
+    source: { getSnapshot: () => Promise.resolve(snapshot([wreck('a')])) },
+    overlayHost: {
+      setEntries: (_source, entries) => cards.push(entries),
+      setVisible() {},
+    },
+    input: () => fake.input,
+    picking,
+    pointer: { isPointerFree: () => true },
+    openExternal: (url) => opened.push(url),
+    now: () => 1,
+  });
+  layer.init(viewer);
+  t.after(() => layer.destroy());
+  layer.enable();
+  await layer.update();
+  picked = { primitive: {}, id: { set: 'shipwrecks:', id: 'shipwreck:a' } };
+  fake.click();
+  const [card] = cards.at(-1);
+  assert.equal(card.id, 'shipwreck-card:a');
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  picked = null;
+  cardUnder = card.id;
+  fake.label.over = true;
+  fake.click();
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(opened.length, 1);
+});
+
+test('a covered selected card and covered markers yield; bare markers select', async () => {
+  let painted = [];
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { url: 'https://example.com/a' }),
+        wreck('b', { url: 'https://example.com/b' }),
+      ]),
+    ],
+    cardHit: (_x, _y, { sourceId } = {}) =>
+      painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+  });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const click = () => h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+    h.pick('a');
+    click();
+    const first = h.lastCard()[0];
+    painted = [
+      { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' },
+      { sourceId: 'shipwrecks', entryId: first.id },
+    ];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, []);
+    assert.equal(h.lastCard()[0].id, first.id);
+    // A marker under another layer's card is that card's click too.
+    h.pick('b');
+    click();
+    assert.equal(h.lastCard()[0].id, first.id, 'a covered marker yields');
+    painted = [];
+    click();
+    assert.equal(h.lastCard()[0].id, 'shipwreck-card:b');
+    painted = [{ sourceId: 'shipwrecks', entryId: 'shipwreck-card:b' }];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, ['https://example.com/b']);
+    painted = [];
+    click();
+    assert.deepEqual(h.lastCard(), [], 'bare map still clears the selection');
+  } finally {
+    h.layer.destroy();
+  }
 });

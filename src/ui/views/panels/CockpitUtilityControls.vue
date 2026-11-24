@@ -8,6 +8,7 @@ import { useRadioStore } from '../../stores/radio.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
 import { useDisplayStore } from '../../stores/display.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The Cockpit's Display and Radio launchers and their popovers, and the
 // desktop look's rail, whose icons stay at the edge and open one panel at a
@@ -54,8 +55,8 @@ const radioLabel = computed(() =>
       <div class="cockpit-utility-launcher" data-cockpit-launcher="display">
         <span>{{ t('DISPLAY') }}</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
-        <button v-if="open.display" type="button" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="act('toggleCockpitUtility', 'display', { returnFocus: true })">−</button>
-        <button id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel">{{ open.display ? '▶' : '◀' }}</button>
+        <UiButton v-if="open.display" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="act('toggleCockpitUtility', 'display', { returnFocus: true })">−</UiButton>
+        <UiButton id="cockpit-display-toggle-btn" class="cockpit-utility-glyph" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel">{{ open.display ? '▶' : '◀' }}</UiButton>
       </div>
       <div id="cockpit-display-panel" class="cockpit-utility-popover ui-scroll" v-class-toggle="{ 'uses-shared-display-controls': !!cockpitPortal }" role="group" :aria-label="t('Cockpit display options')" :hidden="!open.display">
         <div class="cockpit-display-slot" data-cockpit-display-slot="hud"></div>
@@ -68,16 +69,16 @@ const radioLabel = computed(() =>
       <div class="cockpit-utility-launcher" data-cockpit-launcher="radio">
         <span>{{ t('RADIO') }}</span>
         <span class="cockpit-utility-divider" aria-hidden="true"></span>
-        <button v-if="open.radio" type="button" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="act('toggleCockpitUtility', 'radio', { returnFocus: true })">−</button>
-        <button id="cockpit-radio-toggle-btn" @click="act('toggleCockpitRadio')" class="cockpit-utility-glyph" type="button" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel">{{ open.radio ? '▶' : '◀' }}</button>
+        <UiButton v-if="open.radio" class="cockpit-utility-collapse" :aria-label="t('Collapse panel')" :title="t('Collapse panel')" @click="act('toggleCockpitUtility', 'radio', { returnFocus: true })">−</UiButton>
+        <UiButton id="cockpit-radio-toggle-btn" @click="act('toggleCockpitRadio')" class="cockpit-utility-glyph" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel">{{ open.radio ? '▶' : '◀' }}</UiButton>
       </div>
       <div id="cockpit-radio-panel" class="cockpit-utility-popover cockpit-radio-compact" role="group" :aria-label="t('Cockpit compact Radio controls')" :hidden="!open.radio">
         <strong id="cockpit-radio-station" class="cockpit-radio-station">{{ cockpit ? cockpit.station : t('READY') }}</strong>
-        <UiButton id="cockpit-radio-enable-btn" @click="act('toggleRadio', 'cockpit')" class="panel-layer-toggle" :pressed="cockpit?.enable.active ?? false" pressed-class="active" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</UiButton>
+        <UiButton id="cockpit-radio-enable-btn" @click="act('toggleRadio', 'cockpit')" class="panel-layer-toggle" :pressed="Boolean(cockpit?.enable.active)" pressed-class="active" :aria-label="cockpit?.enable.label" :aria-disabled="cockpit ? String(cockpit.enable.busy) : undefined" :aria-busy="cockpit ? String(cockpit.enable.busy) : undefined">{{ cockpit ? cockpit.enable.text : t('ENABLE') }}</UiButton>
         <div class="cockpit-radio-transport">
-          <button id="cockpit-radio-prev-btn" @click="act('cycleRadio', -1, { rotate: false })" type="button" :aria-label="t('Previous filtered radio station')" :disabled="radio ? radio.transport.stepDisabled : true">◀◀</button>
-          <button id="cockpit-radio-play-btn" @click="act('toggleRadioPlayback')" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected radio station')" :title="cockpit?.play.title" :disabled="radio ? radio.transport.play.disabled : true">{{ cockpit ? cockpit.play.glyph : '▶' }}</button>
-          <button id="cockpit-radio-next-btn" @click="act('cycleRadio', 1, { rotate: false })" type="button" :aria-label="t('Next filtered radio station')" :disabled="radio ? radio.transport.stepDisabled : true">▶▶</button>
+          <UiButton id="cockpit-radio-prev-btn" @click="act('cycleRadio', -1, { rotate: false })" :aria-label="t('Previous filtered radio station')" :disabled="radio ? radio.transport.stepDisabled : true">◀◀</UiButton>
+          <UiButton id="cockpit-radio-play-btn" @click="act('toggleRadioPlayback')" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected radio station')" :title="cockpit?.play.title" :disabled="radio ? radio.transport.play.disabled : true">{{ cockpit ? cockpit.play.glyph : '▶' }}</UiButton>
+          <UiButton id="cockpit-radio-next-btn" @click="act('cycleRadio', 1, { rotate: false })" :aria-label="t('Next filtered radio station')" :disabled="radio ? radio.transport.stepDisabled : true">▶▶</UiButton>
         </div>
         <label class="cockpit-radio-volume" for="cockpit-radio-volume">
           <span>{{ t('VOLUME') }}</span>
@@ -92,8 +93,8 @@ const radioLabel = computed(() =>
         <span>{{ t('RADIO') }}</span>
       </span>
       <span class="cockpit-utility-rail__icons">
-        <button type="button" class="cockpit-utility-rail__item" data-cockpit-rail-item="display" :class="{ 'is-on': open.display }" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel" @click="act('toggleCockpitUtility', 'display')"><span class="material-symbols-outlined" aria-hidden="true">tune</span></button>
-        <button type="button" class="cockpit-utility-rail__item" data-cockpit-rail-item="radio" :class="{ 'is-on': open.radio }" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel" @click="act('toggleCockpitUtility', 'radio')"><span class="material-symbols-outlined" aria-hidden="true">radio</span></button>
+        <UiButton class="cockpit-utility-rail__item" data-cockpit-rail-item="display" :class="{ 'is-on': open.display }" :aria-expanded="String(open.display)" aria-controls="cockpit-display-panel" :aria-label="displayLabel" :title="displayLabel" @click="act('toggleCockpitUtility', 'display')"><UiIcon name="tune" :size="null" /></UiButton>
+        <UiButton class="cockpit-utility-rail__item" data-cockpit-rail-item="radio" :class="{ 'is-on': open.radio }" :aria-expanded="String(open.radio)" aria-controls="cockpit-radio-panel" :aria-label="radioLabel" :title="radioLabel" @click="act('toggleCockpitUtility', 'radio')"><UiIcon name="radio" :size="null" /></UiButton>
       </span>
     </div>
   </aside>

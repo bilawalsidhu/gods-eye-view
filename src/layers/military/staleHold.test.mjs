@@ -191,9 +191,12 @@ test('a holding military contact draws no head and its trail ends at the last re
     layer: {},
   });
   tracking._startTrail('00a003');
-  assert.equal(calls.at(-1).length, 3);
-  const head = added.find((d) =>
-    String(d.id).startsWith('gev-trail:mil-head-'),
-  );
-  assert.deepEqual(head.polyline.positions.getValue(), []);
+  // The body runs through every report and ends at the last one.
+  const body = calls.at(-1);
+  for (const report of fixes)
+    assert.ok(
+      body.some((p) => Cesium.Cartesian3.distance(p, report.position) < 0.01),
+    );
+  assert.ok(Cesium.Cartesian3.distance(body.at(-1), last) < 0.01);
+  assert.deepEqual(tracking._trailHeadPositions(), []);
 });

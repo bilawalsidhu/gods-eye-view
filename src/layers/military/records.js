@@ -1,5 +1,6 @@
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { stickyText, stickyNumber } from '../../data/aircraftMeta.js';
+import { courseFromFixes } from '../../data/courseFromFixes.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { aircraftEmergency } from '../../data/aircraftEmergency.js';
 import {
@@ -69,19 +70,25 @@ export class MilitaryFlightRecords {
     this.missingPolls.delete(icao24);
     const prevMeta = this.data.get(icao24);
     // adsb.lol/readsb reports GROUND traffic as alt_baro === "ground" (no
-    // separate boolean). Grounded planes fall back to their last known
-    // altitude (field elevation is unknowable here), else 0 m — never the
-    // 3 km airborne default (a parked plane must not float).
+    // separate boolean). Grounded planes fall back to an altitude they
+    // reported while on the ground (field elevation is unknowable here),
+    // else 0 m — never the 3 km airborne default, and never the last
+    // AIRBORNE altitude: `altitudeFt` is sticky across the landing, so it
+    // still holds the approach height, and the icon would hang there while
+    // the ground-snapped model sits on the field (a parked plane must not
+    // float). `groundAltitudeM` is that ground-only altitude: set by a
+    // grounded report that carries one, held while grounded, dropped on
+    // takeoff.
     const onGround = aircraft.onGround;
     const altitudeFt =
       aircraft.baroAltitudeM == null ? null : aircraft.baroAltitudeM / 0.3048;
+    const groundAltitudeM = onGround
+      ? (aircraft.baroAltitudeM ??
+        (prevMeta?.onGround === true ? prevMeta.groundAltitudeM : null) ??
+        null)
+      : null;
     const altitudeM =
-      aircraft.baroAltitudeM ??
-      (onGround
-        ? Number.isFinite(prevMeta?.altitudeFt)
-          ? prevMeta.altitudeFt * 0.3048
-          : 0
-        : 3048);
+      aircraft.baroAltitudeM ?? (onGround ? (groundAltitudeM ?? 0) : 3048);
     const verticalRateMps = aircraft.verticalRateMps;
     const callsign = aircraft.callsign;
     const type = aircraft.typeCode;
@@ -102,14 +109,14 @@ export class MilitaryFlightRecords {
     // GROUND-SNAP INTERPLAY (brief item 3 — "don't double-correct"): a
     // grounded plane's MODEL already rides groundSnap.js's one-shot tileset
     // sample (_modelDisplayPosition), which is the visual on the ground, and
-    // its billboard is depth-test-free (_groundDepthDistance) so its exact
+    // its icon is depth-test-free (the icon set draws on the near plane) so its exact
     // height is cosmetic. Deliberately pass surfaceM=null so
     // pickRenderAltitudeM's on-ground surface branch never fires here:
     //  1. It would be the SECOND correction of the same grounded plane
     //     (model tileset-snap is the first) — the exact double-correct the
     //     brief forbids.
     //  2. Military ground rows carry NO baro ("alt_baro":"ground"), so the
-    //     grounded billboard sits at 0 m until a surface value warms; letting
+    //     grounded icon sits at 0 m until a surface value warms; letting
     //     surfaceM then jump it 0 -> ~surface (often ~100 m) BETWEEN polls
     //     drags the model's ground-snap input past groundSnap's 50 m
     //     move-invalidation threshold and forces a re-sample every time the
@@ -142,7 +149,7 @@ export class MilitaryFlightRecords {
     // ellipsoidal ground (warm-cache read only — the batch warm below
     // fills cells for later polls). Grounded contacts are deliberately
     // NOT touched: their model rides groundSnap's tileset sample and
-    // their billboard is depth-test-free (see the surfaceM:null block
+    // their icon is depth-test-free (see the surfaceM:null block
     // above — same one-shot-invariant reasoning).
     if (!onGround && renderAltitudeM < GROUND_FLOOR_WARM_MAX_ALT_M) {
       renderAltitudeM = floorAltitudeM(
@@ -152,10 +159,10 @@ export class MilitaryFlightRecords {
       _floorWarmPoints.push({ lat, lon });
     } else if (onGround) {
       // Grounded contacts: warm the floor cell, and — round 4 — when NO
-      // 3D model owns this contact's visual, lift the billboard itself
+      // 3D model owns this contact's visual, lift the icon itself
       // onto the floor (mesh-first): the R20053 heli sat "straight up in
       // the ground" because grounded rows render at the legacy ~0 m.
-      // With a model present the billboard stays put (it hides behind
+      // With a model present the icon stays put (it hides behind
       // the tileset-snapped model, and moving it would drag groundSnap's
       // input past its move-invalidation threshold — the T7 one-shot
       // invariant the track regression locks).
@@ -175,6 +182,12 @@ export class MilitaryFlightRecords {
     // last-known-good (bounded by the layer's eviction, which deletes the entry).
     const stickyType = stickyText(type, prevMeta?.type);
     const fixEpochMs = aircraft.positionTimeMs ?? observedAtMs;
+    const course = courseFromFixes(prevMeta?.courseAnchor, {
+      lat,
+      lon,
+      ms: fixEpochMs,
+      speedMps: aircraft.speedMps,
+    });
     const meta = {
       sourceReference: aircraft.reference,
       observedReceiptMs: this.now(),
@@ -191,6 +204,7 @@ export class MilitaryFlightRecords {
       registration: stickyText(registration, prevMeta?.registration),
       operator: stickyText(operator, prevMeta?.operator),
       altitudeFt: stickyNumber(altitudeFt, prevMeta?.altitudeFt, null),
+      groundAltitudeM,
       // geoAltitudeM/renderAltitudeM are ADDITIVE fields alongside the
       // untouched aviation `altitudeFt` — never rename/replace it (labels,
       // the FL readout, and the landed-fast-cull heuristic all still read
@@ -206,7 +220,14 @@ export class MilitaryFlightRecords {
         onGround ? 0 : prevMeta?.speedMps,
         0,
       ),
-      track: stickyNumber(aircraft.courseDeg, prevMeta?.track, 0),
+      // With no reported track or true heading, a moving contact faces the
+      // way its fixes went (src/data/courseFromFixes.js); else the last one.
+      track: stickyNumber(
+        aircraft.courseDeg,
+        course.courseDeg ?? prevMeta?.track,
+        0,
+      ),
+      courseAnchor: course.anchor,
       // Analyst seam (additive): sticky like the other kinematics.
       verticalRateMps: stickyNumber(
         verticalRateMps,
