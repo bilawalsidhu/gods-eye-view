@@ -25,13 +25,13 @@ export const OPENING = Object.freeze({
   zoomMs: 1120,
   /** It turns there, slowing to a stop over the view it ends at: the turn
    * starts halfway through the zoom and ends this long after it. */
-  spinMs: 1820,
+  spinMs: 600,
   /** Then the camera closes in on a closer view (a shared one), per tenfold
    * change of height, within `approachMs`. */
   approachPerDecadeMs: 770,
   approachMs: Object.freeze([840, 2800]),
   /** How far the globe turns, degrees. */
-  spinDeg: 360,
+  spinDeg: 120,
 });
 
 const EARTH_RADIUS_M = 6371000;
