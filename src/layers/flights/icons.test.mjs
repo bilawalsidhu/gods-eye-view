@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createFlightState } from './state.js';
 import { createIcons } from './icons.js';
-import { createContactIcons } from '../../data/aircraftIconLayer.js';
+import {
+  createContactIcons,
+  placedPlanSpread,
+} from '../../data/aircraftIconLayer.js';
 import { layerPlacement } from '../../data/placementProvider.js';
 import {
   aircraftMotionRegime,
@@ -269,8 +272,10 @@ test('a live contact a placement places is drawn along where it places it', (t) 
   const now = icons._displayMs();
   const leadMs = Date.now() - now;
   icons._planIcon('p');
+  // A plan's length, as this contact's are spread (a second on average).
+  const planMs = 1000 * placedPlanSpread('p');
   // Asked for the wall times the segment's ends stand for.
-  assert.deepEqual(asked, [now + leadMs, now + 1000 + leadMs]);
+  assert.deepEqual(asked, [now + leadMs, now + planMs + leadMs]);
   assert.equal(regimes.length, 0, 'its own motion is not planned');
   const item = set.item('p');
   assert.equal(item.motion.kind, 'lerp');
@@ -284,16 +289,16 @@ test('a live contact a placement places is drawn along where it places it', (t) 
     Cesium.Cartesian3.distance(
       item.motion.to,
       Cesium.Cartesian3.fromDegrees(
-        (now + 1000 + leadMs - t0) / 10_000,
+        (now + planMs + leadMs - t0) / 10_000,
         30,
         2000,
       ),
     ) < 1e-6,
   );
   assert.equal(item.motion.t0, now);
-  assert.equal(item.motion.t1, now + 1000);
-  assert.ok(Math.abs(item.motion.courseSlopeDeg - 1) < 1e-9);
-  assert.equal(set.expires('p'), now + 1000);
+  assert.equal(item.motion.t1, now + planMs);
+  assert.ok(Math.abs(item.motion.courseSlopeDeg - planMs / 1000) < 1e-9);
+  assert.equal(set.expires('p'), now + planMs);
 
   // No answer: the layer's own motion plans it.
   places = false;
