@@ -32,8 +32,8 @@ const tune = () => act('tuneSdr', frequency.value.value);
   <p>{{ t('Chrome/Edge · WebUSB · one local tuner shared by FM and the Local ADS-B layer.') }}</p>
   <div class="sdr-radio-actions">
     <UiButton id="sdr-connect-btn" @click="act('toggleSdrConnection')" class="panel-layer-toggle" :pressed="sdr?.connectPressed ?? false" pressed-class="active" :disabled="sdr?.connectDisabled">{{ sdr ? sdr.connectLabel : t('CONNECT') }}</UiButton>
-    <button id="sdr-locate-btn" type="button" @click="act('locateSdr')" v-class-toggle="{ active: sdr?.locateActive }" :title="t('Use your location for faster ADS-B position decoding')" :disabled="sdr?.locateDisabled">{{ sdr ? sdr.locateLabel : t('LOCATE') }}</button>
-    <button id="sdr-change-device-btn" type="button" @click="act('changeSdrDevice')" :title="t('Choose a different RTL-SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</button>
+    <UiButton id="sdr-locate-btn" @click="act('locateSdr')" v-class-toggle="{ active: sdr?.locateActive }" :title="t('Use your location for faster ADS-B position decoding')" :disabled="sdr?.locateDisabled">{{ sdr ? sdr.locateLabel : t('LOCATE') }}</UiButton>
+    <UiButton id="sdr-change-device-btn" @click="act('changeSdrDevice')" :title="t('Choose a different RTL-SDR or receiver channel')" :disabled="sdr?.changeDeviceDisabled">{{ t('CHANGE DEVICE') }}</UiButton>
   </div>
   <div class="sdr-mode-row" role="group" :aria-label="t('RTL-SDR receiver mode')">
     <UiButton id="sdr-mode-fm-btn" @click="act('setSdrMode', 'fm')" :pressed="sdr ? sdr.fmActive : true" pressed-class="active" :disabled="sdr?.modeDisabled" translate="no">FM</UiButton>
@@ -55,11 +55,11 @@ const tune = () => act('tuneSdr', frequency.value.value);
   <div class="sdr-frequency-row">
     <label for="sdr-frequency-input">{{ t('FM MHZ') }}</label>
     <input ref="frequency" class="gev-field" id="sdr-frequency-input" @keydown.enter.prevent="tune" type="number" min="87.5" max="108" step="0.1" value="98.5" inputmode="decimal" :disabled="sdr?.frequencyDisabled" v-field-value="sdr ? sdr.frequency : '98.5'" />
-    <button id="sdr-tune-btn" type="button" @click="tune" :disabled="sdr?.tuneDisabled">{{ t('TUNE') }}</button>
+    <UiButton id="sdr-tune-btn" @click="tune" :disabled="sdr?.tuneDisabled">{{ t('TUNE') }}</UiButton>
   </div>
   <div class="sdr-seek-row" role="group" :aria-label="t('Seek broadcast FM stations')">
-    <button id="sdr-seek-back-btn" type="button" @click="act('seekSdr', -1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('◀ SEEK') }}</button>
-    <button id="sdr-seek-forward-btn" type="button" @click="act('seekSdr', 1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('SEEK ▶') }}</button>
+    <UiButton id="sdr-seek-back-btn" @click="act('seekSdr', -1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('◀ SEEK') }}</UiButton>
+    <UiButton id="sdr-seek-forward-btn" @click="act('seekSdr', 1)" :disabled="sdr ? sdr.seekDisabled : true">{{ t('SEEK ▶') }}</UiButton>
   </div>
   <label class="radio-volume-row" for="sdr-volume">
     <span>{{ t('SDR VOL') }}</span>

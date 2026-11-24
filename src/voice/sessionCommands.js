@@ -11,6 +11,31 @@ import { PointerReticle } from './pointerReticle.js';
 import { VOICE_PROVIDERS } from './providerCapabilities.js';
 import { t, translateKnown } from '../i18n/index.js';
 
+/**
+ * Actions whose success selects an entity on the map, and the identity each
+ * result names it by.
+ */
+const SELECTION_ACTIONS = new Map([
+  [
+    'select_nearest_aircraft',
+    (result) => ({
+      layerId: result.layerId,
+      id: result.aircraft?.id,
+      label: result.label || result.aircraft?.callsign,
+    }),
+  ],
+  [
+    'track_entity',
+    (result) => ({
+      layerId: result.layerId,
+      id: result.id,
+      label: result.label,
+      lat: result.latitude,
+      lon: result.longitude,
+    }),
+  ],
+]);
+
 function createDefaultReticle(pointer) {
   const element = pointer?.element;
   if (!element?.ownerDocument) return null;
@@ -38,6 +63,12 @@ export function createVoiceCommands({
   onSessionEvent,
   canStartVoice,
   createCard = (options) => new VoiceCardControls(options),
+  // Cockpit's own state; Context stays hidden while it runs.
+  styleManager = null,
+  // Opens a selection's card in the Context panel, as a click does
+  // (`createContextCardOpener` in src/ui/stores/entityCard.js); the app
+  // hands it in. Without one, selections open no card.
+  contextCard = null,
   pointer = null,
   referents = null,
   createReticle = createDefaultReticle,
@@ -147,10 +178,14 @@ export function createVoiceCommands({
     });
   });
   // Captions, plan and result card nested in the control; it only reads
-  // provider-neutral session events.
+  // provider-neutral session events. In the voice panel the card is the
+  // Preview's content, so the last reply stays until the next turn replaces
+  // it; only the card floating on the control hides when idle.
   const card = createCard({
     ui,
-    ...(panelHost ? { onRender: () => panelMount?.panel.sync() } : {}),
+    ...(panelHost
+      ? { onRender: () => panelMount?.panel.sync(), idleMs: null }
+      : {}),
   });
   panelMount = panelHost?.mount({
     ui,
@@ -279,6 +314,53 @@ export function createVoiceCommands({
         }),
       ]
     : [];
+  // A voice or chat selection shows in the right rail's Context panel, as a
+  // click's does: its card opens there, and the assistant panel docked over
+  // the rail steps down to its bar, where the latest reply stays readable. A
+  // panel above the dock leaves the rail in view, so it stays as it is.
+  const dockedOverRail = (name) => {
+    const panel = ui.element(name);
+    return Boolean(
+      panel &&
+      !panel.hidden &&
+      panel.dataset?.placement === 'docked' &&
+      !panel.dataset.minimized,
+    );
+  };
+  // The Context card generation each selection was asked at, by call, so a
+  // slow selection never replaces a card picked since.
+  const askedAt = new Map();
+  const callKey = (event) => event.callId ?? event.name;
+  const cockpitActive = () =>
+    typeof styleManager?.getCockpitState === 'function'
+      ? styleManager.getCockpitState()?.active === true
+      : globalThis.document?.body?.classList?.contains('cockpit-mode') === true;
+  layouts.push(
+    session.subscribe((event) => {
+      if (!SELECTION_ACTIONS.has(event.name)) return;
+      if (event.type === 'action-call') {
+        askedAt.set(callKey(event), contextCard?.generation?.() ?? null);
+        return;
+      }
+      if (event.type !== 'action-result') return;
+      const since = askedAt.get(callKey(event)) ?? null;
+      askedAt.delete(callKey(event));
+      if (event.result?.ok !== true) return;
+      contextCard?.show?.(SELECTION_ACTIONS.get(event.name)(event.result), {
+        since,
+        cockpitActive: cockpitActive(),
+      });
+      if (!panelMount) return;
+      if (adapter.getStartOptions?.().textOnly) {
+        if (ui.state.chat.open && dockedOverRail('chatPanel'))
+          chat?.minimize({ focus: false });
+      } else if (
+        panelMount.panel.snapshot().panelOpen &&
+        dockedOverRail('voicePanel')
+      )
+        minimizeVoicePanel();
+    }),
+  );
   const unbindMiniPreview = panelMount
     ? bindVoiceMiniPreview({ ui, session })
     : null;

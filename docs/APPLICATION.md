@@ -396,7 +396,9 @@ their `this`; one that throws or returns a promise is treated as having
 failed. What a method returns may carry getters: one that throws when read
 makes a candidate none, a frame malformed (the view ends) and a HUD view keep
 the last; a worded member (labels, entry face, look) that throws keeps its
-last good words.
+last good words. An entry face's `icon` is a Material Symbols name whose glyph
+the application's page must load (GEV's own `index.html` loads a subset, its
+`icon_names`); a glyph the page does not load renders as its name.
 
 ```js
 import { getLocale, onLocaleChange } from 'gods-eye-view/i18n';

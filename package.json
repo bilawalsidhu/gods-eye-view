@@ -350,6 +350,7 @@
     "./render/weather": "./src/render/weather.js",
     "./weather/effects": "./src/weatherEffectsMath.js",
     "./geo/screenCluster": "./src/geo/screenCluster.js",
+    "./fleet": "./src/fleet/index.js",
     "./layers/wildlife-sightings": "./src/layers/wildlifeSightings/index.js",
     "./layers/wildlife-sightings/source": "./src/layers/wildlifeSightings/source.js"
   }

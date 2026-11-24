@@ -48,13 +48,19 @@ import { isAidToNavigation, vesselKind } from '../../data/vesselTypes.js';
 import { aidSprite, vesselSprite } from '../../data/vesselSprites.js';
 import { cssColor } from '../../render/color.js';
 import { KNOT_MPS } from '../../data/units.js';
+import { PACE_MAX_HZ, PACE_MIN_HZ, PACE_STEP_PX } from '../../renderPace.js';
 
 /** A moving vessel's next frame is asked for once it would move this far on
  * screen (pixels), so it glides when it moves visibly and the scene idles
  * when it does not. */
-const VESSEL_STEP_PX = 0.5;
-/** A frame is asked for at least this often while any drawn vessel moves. */
-const PLACEMENT_FRAME_MS = 1000;
+const VESSEL_STEP_PX = PACE_STEP_PX;
+/** A frame is asked for at least this often while any drawn vessel moves:
+ * the floor every moving layer keeps (renderPace.js). */
+const PLACEMENT_FRAME_MS = 1000 / PACE_MIN_HZ;
+/** And at most this often: the most a moving layer draws (renderPace.js). */
+const PLACEMENT_MIN_WAIT_MS = 1000 / PACE_MAX_HZ;
+/** While vessels' emphasis changes for a focus, they are drawn this often. */
+const VESSEL_FOCUS_FPS = 20;
 /** How often each vessel not drawn moves on as the world clock plays (wall
  * ms), so one that comes into view is judged where it is. */
 const HIDDEN_FOLLOW_MS = 250;
@@ -482,6 +488,12 @@ export function createRendering({
   function putIcon(visual, item) {
     if (!segmentsOn()) {
       planFrom.delete(item.id);
+      // In a placement pass, written with the pass's others at its end:
+      // one write to the set, not one a vessel.
+      if (placedIcons && state.icons.expiresAt(item.id) === undefined) {
+        placedIcons.push(item);
+        return;
+      }
       state.icons.put(item, { expiresAt: null });
       return;
     }
@@ -989,26 +1001,88 @@ export function createRendering({
     return Math.abs(atMs - clockStep.atMs) * clockStep.pxPerMs < VESSEL_STEP_PX;
   }
 
-  // Live with a host-supplied placement, vessels move on between refreshes:
-  // drawn where it places them every frame, with the next frame asked for
-  // as soon as a drawn vessel would move visibly, so they move while the
-  // scene idles.
+  // Live with a host-supplied placement, vessels move on between refreshes.
+  // Drawn ones move once the fastest would have moved VESSEL_STEP_PX on
+  // screen since the pass that last moved them, at least three times a second
+  // and at most thirty (renderPace.js), and
+  // at once when the camera moves or zooms, new rows come or a vessel comes
+  // into view (underClockStep, on wall time). Moving an icon asks for a
+  // frame, so moving them on every frame would draw every frame: the frames
+  // between are left alone, and the next one is asked for when it is due.
+  let placementDue = true;
+  /** The icons a placement pass moved, while it runs (`putIcon`). */
+  let placedIcons = null;
+  /** Wall ms of the last pass that moved live-placed vessels. */
+  let placedWallMs = -Infinity;
   function followPlacements() {
     const nowMs = vesselState._aisRuntime.now();
+    const wallMs = performance.now();
+    // Never more often than a moving layer draws: a pass moving icons asks
+    // for a frame of its own, so without this a vessel close by moving
+    // over half a pixel a frame would draw every frame.
+    const sinceMs = wallMs - placedWallMs;
+    if (!placementDue && sinceMs < PLACEMENT_MIN_WAIT_MS) {
+      askFrameIn(PLACEMENT_MIN_WAIT_MS - sinceMs);
+      return;
+    }
+    if (!placementDue && underClockStep(nowMs, wallMs)) {
+      askFrameIn(
+        Math.max(
+          0,
+          Math.min(
+            PLACEMENT_FRAME_MS - (wallMs - clockStep.wallMs),
+            VESSEL_STEP_PX / clockStep.pxPerMs - (nowMs - clockStep.atMs),
+          ),
+        ),
+      );
+      return;
+    }
+    placementDue = false;
+    placedWallMs = wallMs;
     const motion = startMotionPass();
-    // Drawn vessels only, as a sprite or a model: a hidden one is placed
-    // again when it is drawn.
-    for (const record of state.records.all) {
-      const visual = visualRecords.get(record);
-      if (!visual?.position) continue;
-      if (!drawnNow(record, visual)) continue;
-      const placed = services.placement.place(record.id, nowMs);
-      if (placed) motion.moving = true;
-      const { lat, lon } = placed ?? record;
-      if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
-      moveDrawnVisual(record, visual, lat, lon, motion);
+    placedIcons = [];
+    try {
+      // Drawn vessels only, as a sprite or a model: a hidden one is placed
+      // again when it is drawn.
+      for (const record of state.records.all) {
+        const visual = visualRecords.get(record);
+        if (!visual?.position) continue;
+        if (!drawnNow(record, visual)) continue;
+        const placed = services.placement.place(record.id, nowMs);
+        if (placed) motion.moving = true;
+        const { lat, lon } = placed ?? record;
+        // How fast it moves is measured over the time since it was last
+        // placed.
+        const elapsedMs =
+          placed && visual.placedAtMs > 0
+            ? nowMs - visual.placedAtMs
+            : undefined;
+        visual.placedAtMs = placed ? nowMs : undefined;
+        if (lat === visual.drawnLat && lon === visual.drawnLon) continue;
+        moveDrawnVisual(
+          record,
+          visual,
+          lat,
+          lon,
+          motion,
+          elapsedMs > 0 ? elapsedMs : undefined,
+        );
+      }
+    } finally {
+      const moved = placedIcons;
+      placedIcons = null;
+      state.icons?.putMany(moved);
     }
     askMotionFrame(motion);
+    noteClockStep(nowMs, motion);
+  }
+
+  /** Move live-placed vessels on the next frame however little they moved,
+   * and ask for that frame: new rows came, or a vessel came into view. */
+  function placeNow() {
+    if (!services.placement || followsClock(vesselState)) return;
+    placementDue = true;
+    if (state.feed.enabled) governorRequestRender('ais-vessels-placement');
   }
 
   // One pass of moving vessels: whether any drawn vessel is moving, how far
@@ -1126,6 +1200,12 @@ export function createRendering({
   /** Ask for a vessel frame `waitMs` from now; one already asked for no
    * later stands. */
   function askFrameIn(waitMs) {
+    // A frame sooner than the next pass may come would move nothing, then
+    // ask again: two frames a move.
+    waitMs = Math.max(
+      waitMs,
+      PLACEMENT_MIN_WAIT_MS - (performance.now() - placedWallMs),
+    );
     const runtime = vesselState._aisRuntime;
     const dueMs = runtime.now() + waitMs;
     if (placementFrameTimer !== null) {
@@ -1143,6 +1223,7 @@ export function createRendering({
   function cancelPlacementFrame() {
     motionPassWallMs = null;
     forgetClockStep();
+    placementDue = true;
     drawnBehind = false;
     hiddenFollowedAtWallMs = null;
     if (placementFrameTimer === null) return;
@@ -1171,6 +1252,8 @@ export function createRendering({
   function updateVisibility(force = false) {
     if (!state.feed.enabled) return;
     if (force) governorRequestRender('ais-vessels-update');
+    // New rows are drawn where they were reported: placed before they show.
+    if (force) placementDue = true;
     const now = focusNowMs(performance.now());
     const focusTarget = getFocusTarget();
     const regularPass =
@@ -1230,9 +1313,13 @@ export function createRendering({
       // The time the clock pass drew (a playing clock's time moves on within
       // the frame), so only vessels it did not reach are moved.
       const catchUpAtMs = worldMs === null ? null : (clockPassAtMs ?? worldMs);
+      let cameIntoView = false;
       for (const record of state.records.all) {
         const visual = getVisual(record);
+        const wasVisible = visual.visible;
         visual.visible = isVisible(visual.cullPosition, occluder, record);
+        // One that comes into view was not placed while hidden.
+        if (visual.visible && wasVisible === false) cameIntoView = true;
         // One in view that the clock passes have not moved to the time yet
         // (a seek while paused shows it before its turn) is moved there and
         // judged again: no later pass would move it while the clock rests.
@@ -1246,6 +1333,7 @@ export function createRendering({
         if (visual.seen !== seenYet(record)) syncRecordIcon(record);
         if (visual.visible) labelCandidates.push(record);
       }
+      if (cameIntoView) placeNow();
       updateClusteredLabels(labelCandidates);
     }
     if (focusPass && query && pose) {
@@ -1258,8 +1346,9 @@ export function createRendering({
         cameraDistanceFor: (position) => distance(pose.position, position),
       });
       state.activeFocusCount = result.activeCount;
+      // Drawn while emphasis changes, at the rate fades draw elsewhere.
       if (result.activeCount > 0 || result.transitioning)
-        holdContinuousRender('ais-vessels');
+        holdContinuousRender('ais-vessels', { maxFps: VESSEL_FOCUS_FPS });
       else releaseContinuousRender('ais-vessels');
     }
   }

@@ -194,7 +194,6 @@ test('cyclones flatten the storm position and stay empty while off', async () =>
       ownsPickId: () => false,
       getDiagnostics: () => ({}),
     }),
-    hitTestOverlay: () => null,
   });
   const viewer = {
     scene: { canvas: new EventTarget(), pick: () => null },

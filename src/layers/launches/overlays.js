@@ -135,7 +135,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       protected: selected,
       paintLane: selected ? 'selected' : 'ambient-label',
       collisionGroup: 'ambient-label',
-      interactive: false,
+      interactive: true,
       distanceScale: {
         near: 1000,
         nearValue: 1.08,

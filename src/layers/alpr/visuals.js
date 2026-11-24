@@ -1,5 +1,7 @@
 import { fromDegrees } from '../../geo/index.js';
 import { destinationPointDeg } from './model.js';
+import { lookupAlprModelSpec } from './modelSpecs.js';
+import { specSummary } from '../cctv/modelSpecs.js';
 import {
   DIRECTION_CONE_M,
   DIRECTION_CONE_HALF_ANGLE_DEG,
@@ -64,6 +66,15 @@ export function alprLabelDetails(record, source) {
     ),
   ];
   if (equipment.length) details.push(equipment.join(' · '));
+  // Only a datasheet match is shown: the raw OSM `model` text never is.
+  const spec = lookupAlprModelSpec(record.model, record.manufacturer);
+  if (spec) {
+    // The equipment line usually names the maker already; the card does not wrap.
+    const withBrand = !equipment.some((line) =>
+      line.includes(spec.brand.toUpperCase()),
+    );
+    details.push(`SPEC ${specSummary(spec, { withBrand }).toUpperCase()}`);
+  }
   if (sourceName === 'OpenStreetMap') details.push('PUBLIC MAP DATA');
   return details;
 }

@@ -1066,7 +1066,7 @@ const STEP_TITLES = Object.freeze({
   control_cockpit: msg('Control cockpit'),
   set_visual_style: msg('Change visual style'),
   set_hud: msg('Adjust HUD'),
-  set_cyber_sonar: msg('Adjust cyber sonar'),
+  set_cyber_sonar: msg('Adjust sonar'),
   set_detection: msg('Adjust detection overlay'),
   set_map_stack: msg('Change map stack'),
   set_post_processing: msg('Adjust post-processing'),

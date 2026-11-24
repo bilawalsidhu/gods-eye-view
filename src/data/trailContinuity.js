@@ -410,6 +410,25 @@ function keepTrailLimit(fixes, maxPoints) {
   return fixes;
 }
 
+/**
+ * Take the estimated reports out of the trail, judging again the break before
+ * each report that followed one.
+ */
+function dropEstimatedFixes(fixes) {
+  let dropped = false;
+  let kept = 0;
+  for (const fix of fixes) {
+    if (fix.estimated) {
+      dropped = true;
+      continue;
+    }
+    if (dropped) fix.breakBefore = trailFixBreaks(fixes[kept - 1], fix);
+    dropped = false;
+    fixes[kept++] = fix;
+  }
+  fixes.length = kept;
+}
+
 /** Index a fix at `timeMs` goes in at: after every entry at or before it. */
 function insertionIndex(fixes, timeMs) {
   let i = fixes.length;
@@ -425,9 +444,13 @@ function insertionIndex(fixes, timeMs) {
  * @param {{x: number, y: number, z: number}} position - Owned position.
  * @param {number} timeMs - The report's epoch ms.
  * @param {number} maxPoints - Point limit across all segments.
- * @param {{nullAltitude?: boolean, onGround?: boolean, track?: number}} [options]
+ * @param {{nullAltitude?: boolean, onGround?: boolean, track?: number, estimated?: boolean}} [options]
  *   `onGround`: whether the report was on the ground, when known;
- *   `track`: its reported track, which the curve leaves it along.
+ *   `track`: its reported track, which the curve leaves it along;
+ *   `estimated`: the feed estimated the position rather than received it. An
+ *   estimated report stands in only until the next received one, which takes
+ *   every estimated report out of the trail: the line runs between received
+ *   positions, never through a feed's guesses and the jump back.
  * @returns {object[]} `fixes`.
  */
 export function insertTrailFix(
@@ -435,14 +458,21 @@ export function insertTrailFix(
   position,
   timeMs,
   maxPoints,
-  { nullAltitude = false, onGround = undefined, track = undefined } = {},
+  {
+    nullAltitude = false,
+    onGround = undefined,
+    track = undefined,
+    estimated = false,
+  } = {},
 ) {
+  if (!estimated) dropEstimatedFixes(fixes);
   const entry = {
     position: nullAltitude ? null : position,
     timeMs,
     nullAltitude,
     breakBefore: false,
   };
+  if (estimated) entry.estimated = true;
   if (Number.isFinite(track)) entry.track = track;
   // Whether the report was on the ground, when known: a history backfill
   // joins it only across a landing or take-off it saw.

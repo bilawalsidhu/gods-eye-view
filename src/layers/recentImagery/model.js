@@ -72,13 +72,11 @@ export const PRODUCTS = Object.freeze({
 
 const finite = (value) => typeof value === 'number' && Number.isFinite(value);
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
+/** A longitude brought back into ±180 after one step past it. */
+const wrapLon = (value) =>
+  value > 180 ? value - 360 : value < -180 ? value + 360 : value;
 const pad2 = (value) => String(value).padStart(2, '0');
 
-/**
- * Coerce a box to `{ west, south, east, north }` with south ≤ north. West and
- * east are not swapped: west > east crosses the dateline and `validateBox`
- * rejects it. Null when any edge is nonfinite.
- */
 /** A box edge as a number, or null when it is missing, blank or not numeric. */
 function edgeNumber(value) {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -87,6 +85,11 @@ function edgeNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+/**
+ * Coerce a box to `{ west, south, east, north }` with south ≤ north. West and
+ * east are not swapped: west > east is the short arc across the dateline.
+ * Null when any edge is nonfinite.
+ */
 function normalizeBox(box) {
   if (!box || typeof box !== 'object') return null;
   const [west, south, east, north] = [
@@ -105,8 +108,45 @@ function normalizeBox(box) {
 }
 
 /**
- * Side lengths of a box in km: the box's own longitude span (never the
- * shorter way round the globe) at its mid-latitude, and its latitude span.
+ * Degrees of longitude going east from `west` to `east`. A west > east pair
+ * wraps across the antimeridian (`lonSpanDeg(170, -170)` is 20 and
+ * `lonSpanDeg(10, -10)` is 340). A west <= east pair is `east - west`,
+ * even the long way round.
+ * @param {number} west Degrees.
+ * @param {number} east Degrees.
+ * @returns {number}
+ */
+export function lonSpanDeg(west, east) {
+  return east >= west ? east - west : east + 360 - west;
+}
+
+/** A comparable key for a degrees box. */
+export const boxKey = (box) =>
+  [box.west, box.south, box.east, box.north].map(Number).join(',');
+
+/**
+ * One or two boxes with west <= east that cover the same area. A dateline
+ * box is split at ±180 so each side is a plain rectangle for a draped layer
+ * or a Worldview request. A box with a missing or nonfinite edge is [].
+ * So is a dateline box of zero width (west 180, east -180).
+ * @param {object} box Degrees box.
+ * @returns {Array<object>}
+ */
+export function nonCrossingBoxes(box) {
+  const normalized = normalizeBox(box);
+  if (!normalized) return [];
+  const { west, south, east, north } = normalized;
+  if (!(west > east)) return [normalized];
+  const parts = [];
+  if (west < 180) parts.push({ west, south, east: 180, north });
+  if (east > -180) parts.push({ west: -180, south, east, north });
+  return parts;
+}
+
+/**
+ * Side lengths of a box in km: the longitude span at its mid-latitude (the
+ * short arc when the box crosses the dateline; a west <= east box is not
+ * shortened), and its latitude span.
  * @param {object} box Degrees box.
  * @returns {{ width: number, height: number }}
  */
@@ -116,7 +156,7 @@ export function boxSideKm(box) {
   const midLat = (normalized.south + normalized.north) / 2;
   return {
     width:
-      (normalized.east - normalized.west) *
+      lonSpanDeg(normalized.west, normalized.east) *
       KM_PER_DEG_LAT *
       Math.cos(toRadians(midLat)),
     height: (normalized.north - normalized.south) * KM_PER_DEG_LAT,
@@ -126,9 +166,11 @@ export function boxSideKm(box) {
 const refuse = (reason, message) => ({ ok: false, reason, message });
 
 /**
- * Validate a selection box for the catalog and the tile providers.
+ * Validate a selection box for the catalog and the tile providers. A box
+ * with west > east is the short arc across the dateline and is accepted
+ * when that arc is under the size cap.
  * @param {object} box Degrees box.
- * @returns {{ ok: true, box: object } | { ok: false, reason: 'dateline' | 'polar' | 'degenerate' | 'too-large' | 'invalid', message: string }}
+ * @returns {{ ok: true, box: object } | { ok: false, reason: 'polar' | 'degenerate' | 'too-large' | 'invalid', message: string }}
  */
 export function validateBox(box) {
   const normalized = normalizeBox(box);
@@ -136,8 +178,6 @@ export function validateBox(box) {
   const { west, south, east, north } = normalized;
   if (Math.abs(west) > 180 || Math.abs(east) > 180)
     return refuse('invalid', msg('Longitudes must be within ±180°'));
-  if (west > east)
-    return refuse('dateline', msg('Select one side of the dateline'));
   if (
     Math.abs(south) > MERCATOR_LAT_LIMIT ||
     Math.abs(north) > MERCATOR_LAT_LIMIT
@@ -146,7 +186,7 @@ export function validateBox(box) {
       'polar',
       `Imagery stops at ±${MERCATOR_LAT_LIMIT.toFixed(2)}° latitude`,
     );
-  if (east === west || north === south)
+  if (lonSpanDeg(west, east) === 0 || north === south)
     return refuse('degenerate', msg('Box must enclose an area'));
   const { width, height } = boxSideKm(normalized);
   if (width > MAX_BOX_SIDE_KM || height > MAX_BOX_SIDE_KM)
@@ -183,7 +223,9 @@ export function fitViewHeightM({ width, height, fovy } = {}) {
 }
 
 /**
- * The centre of a box that does not cross the dateline, in degrees.
+ * The centre of a box, in degrees. A dateline box (west > east) is centred
+ * on the short arc, not the arithmetic mean, which would be the other side
+ * of the globe.
  * @param {object} box Degrees box.
  * @returns {{ lon: number, lat: number } | null}
  */
@@ -191,14 +233,18 @@ export function boxCentre(box) {
   const normalized = normalizeBox(box);
   if (!normalized) return null;
   return {
-    lon: (normalized.west + normalized.east) / 2,
+    lon: wrapLon(
+      normalized.west + lonSpanDeg(normalized.west, normalized.east) / 2,
+    ),
     lat: (normalized.south + normalized.north) / 2,
   };
 }
 
 /**
  * A square box centred on a pin, `sideKm` on the ground (the east–west extent
- * widens by 1/cos(lat)); null when the result would not validate.
+ * widens by 1/cos(lat)); null when the result would not validate. A pin whose
+ * box passes ±180 gets the short-arc box (west > east), the same convention
+ * as a dragged dateline box, with edges wrapped into ±180.
  * @param {number} lon Degrees.
  * @param {number} lat Degrees.
  * @param {number} [sideKm]
@@ -207,16 +253,19 @@ export function boxCentre(box) {
 export function boxFromPin(lon, lat, sideKm = PIN_BOX_SIDE_KM) {
   if (!finite(lon) || !finite(lat) || !finite(sideKm) || sideKm <= 0)
     return null;
+  if (Math.abs(lon) > 180) return null;
   const cosLat = Math.cos(toRadians(lat));
   if (cosLat <= 0) return null;
   const halfLat = sideKm / 2 / KM_PER_DEG_LAT;
   const halfLon = sideKm / 2 / (KM_PER_DEG_LAT * cosLat);
+  // A half-width of 90° or more is not a short arc; refuse rather than wrap.
+  if (halfLon >= 90) return null;
   const clampLat = (value) =>
     Math.max(-MERCATOR_LAT_LIMIT, Math.min(MERCATOR_LAT_LIMIT, value));
   const result = validateBox({
-    west: lon - halfLon,
+    west: wrapLon(lon - halfLon),
     south: clampLat(lat - halfLat),
-    east: lon + halfLon,
+    east: wrapLon(lon + halfLon),
     north: clampLat(lat + halfLat),
   });
   return result.ok ? result.box : null;
@@ -449,15 +498,31 @@ export function coverageFor(candidate, box) {
     .filter((ring) => Array.isArray(ring) && ring.length >= 3);
   if (!normalized || !footprints.length) return 'unknown';
   const { west, south, east, north } = normalized;
+  const centre = boxCentre(normalized);
+  // A dateline box is one continuous range starting at its west edge. A
+  // longitude on the east side (at or past ±180) shifts by 360. One just
+  // outside the west corner stays put: shifting every value below west would
+  // send that corner the long way round and miss a footprint that covers it.
+  const crossing = west > east;
+  const project = (lon) =>
+    crossing && lon < west && (lon <= east || lon - east < west - lon)
+      ? lon + 360
+      : lon;
   const samples = [
-    [west, south],
-    [east, south],
-    [east, north],
-    [west, north],
-    [(west + east) / 2, (south + north) / 2],
+    [project(west), south],
+    [project(east), south],
+    [project(east), north],
+    [project(west), north],
+    [project(centre.lon), centre.lat],
   ];
   return samples.every(([lon, lat]) =>
-    footprints.some((ring) => pointInPolygon(lon, lat, ring)),
+    footprints.some((ring) =>
+      pointInPolygon(
+        lon,
+        lat,
+        crossing ? ring.map(([x, y]) => [project(x), y]) : ring,
+      ),
+    ),
   )
     ? 'full'
     : 'partial';
@@ -606,6 +671,10 @@ export function wvsSnapshotUrl({
   const normalized = normalizeBox(box);
   if (!spec) throw new TypeError(`Unknown imagery product: ${product}`);
   if (!normalized) throw new TypeError('A finite box is required');
+  // Worldview Snapshots rejects a BBOX whose west is greater than its east
+  // (HTTP 200, XML "Invalid value for BBOX"). Callers split or refuse.
+  if (normalized.west > normalized.east)
+    throw new TypeError('A snapshot cannot cross the dateline');
   const bbox = [
     normalized.south,
     normalized.west,

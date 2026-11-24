@@ -1,4 +1,5 @@
 import { worldClock, worldTimeFor } from '../../time/worldClock.js';
+import { SATELLITE_SETTLE_TIMEOUT_MS } from './policy.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -19,8 +20,6 @@ export function createState({ services }) {
   state._lastUpdate = null;
 
   state._lastError = null;
-
-  state._lastErrorAt = null;
 
   state._entryCameraView = null;
 
@@ -53,6 +52,9 @@ export function createState({ services }) {
 
   state._lifecycleToken = 0;
 
+  /** Bound on waiting for pending Satellites work around a mission. */
+  state.satelliteSettleTimeoutMs = SATELLITE_SETTLE_TIMEOUT_MS;
+
   state._enabled = false;
 
   state._selectedLaunchId = null;
@@ -68,6 +70,7 @@ export function createState({ services }) {
   state._missionPanelSignature = null;
 
   state._missionPanelListeners = new Set();
+  state._globePickListeners = new Set();
 
   state._missionRosterView = null;
 

@@ -9,6 +9,7 @@ function fixture() {
   const state = createState({
     services: { overlays: {}, render: {} },
   });
+  state._enabled = true;
   const calls = [];
   const parts = {
     overlays: {
@@ -193,4 +194,27 @@ test('the panel commands act on the selected mission', () => {
     ['speed', '2'],
     ['select', null, undefined],
   ]);
+});
+
+test('a roster row hovered or focused while the layer goes off moves no camera', async () => {
+  const { state, panel, calls } = fixture();
+  state._launches = [launch('a'), launch('b')];
+  panel.createMissionPanel();
+  panel.renderMissionRoster();
+
+  // Hovered just before the layer goes off: the pending preview is dropped.
+  panel.commands.rosterPointerEnter(0);
+  state._enabled = false;
+  await new Promise((resolve) => setTimeout(resolve, 160));
+
+  // Hovered or focused after it went off, while the panel still shows.
+  panel.commands.rosterPointerEnter(1);
+  panel.commands.rosterFocus(1);
+  assert.equal(state._missionRosterHoverTimer, null, 'no preview is pending');
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  assert.deepEqual(
+    calls.filter(([name]) => name === 'preview'),
+    [],
+  );
+  panel.clearMissionPanel();
 });

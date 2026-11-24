@@ -5,7 +5,7 @@
  * item's `url` re-poses and restyles its model in place (position,
  * orientation, scale, `axisScale` and pixel bounds, `shading`, `tint`,
  * `colorBlend`, `maskColor`, `clip`, `environmentMap`, `displayRange`,
- * `show`); only a new `url` loads again, and the old model keeps drawing
+ * `nodes`, `show`); only a new `url` loads again, and the old model keeps drawing
  * until the new one is ready, so a swap never blinks. `ready` fires once per
  * load, when the model has loaded and is posed. An item with its `gltf`
  * bytes is built from them; its url is then not fetched.
@@ -77,6 +77,62 @@ export const MODEL_RETRY_MS = 5000;
  * model's colour every frame.
  */
 export const RECEDE_WRITE_EPSILON = 0.005;
+
+/**
+ * Each model's posed nodes (`ModelItem.nodes`): name → the 16 numbers last
+ * written, so an update that keeps a node's matrix writes nothing.
+ */
+const posedNodes = new WeakMap();
+/** A posed name the model has no node for: looked up once, then skipped. */
+const NO_NODE = Symbol('no such node');
+const scratchNodeMatrix = new Cesium.Matrix4();
+
+/**
+ * Write the item's node transforms to `model` once it is ready: changed
+ * ones only, and a node whose name left the map back to its authored pose.
+ * Names the model lacks are skipped.
+ */
+function poseNodes(item, model) {
+  if (model.ready !== true) return;
+  const wanted = item.nodes;
+  let posed = posedNodes.get(model);
+  if (!wanted && !posed) return;
+  if (!posed) posedNodes.set(model, (posed = new Map()));
+  for (const [name, last] of posed) {
+    if (wanted && Object.hasOwn(wanted, name)) continue;
+    posed.delete(name);
+    if (last === NO_NODE) continue;
+    const node = model.getNode(name);
+    if (node) node.matrix = Cesium.Matrix4.clone(node.originalMatrix);
+  }
+  if (!wanted) return;
+  for (const name of Object.keys(wanted)) {
+    const matrix = wanted[name];
+    if (!matrix || matrix.length < 16) continue;
+    const last = posed.get(name);
+    if (last === NO_NODE) continue;
+    if (last && sameMatrix(last, matrix)) continue;
+    const node = model.getNode(name);
+    if (!node) {
+      posed.set(name, NO_NODE);
+      continue;
+    }
+    // The last matrix written, kept in one array per node, copied in place.
+    let kept = last;
+    if (!(kept instanceof Float64Array)) {
+      kept = new Float64Array(16);
+      posed.set(name, kept);
+    }
+    for (let i = 0; i < 16; i++) kept[i] = matrix[i];
+    // The node copies the matrix it is given.
+    node.matrix = Cesium.Matrix4.fromArray(matrix, 0, scratchNodeMatrix);
+  }
+}
+
+function sameMatrix(a, b) {
+  for (let i = 0; i < 16; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 /** Cesium's own blend amount, for a `mix` that names none. */
 const DEFAULT_MIX = 0.5;
@@ -1057,6 +1113,7 @@ export function createModelSets({
     const hidden = range && !(range[1] > range[0]);
     if (entry.styled?.range !== rangeKey) entry.styled = { range: rangeKey };
     entry.dynamic = needsFrame(item, record.spec);
+    poseNodes(item, model);
     apply(entry, model, entry.frame ?? STILL, hidden);
   }
 

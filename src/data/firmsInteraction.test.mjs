@@ -11,7 +11,12 @@ import {
   buildCellCard,
 } from './firmsHeatmap.js';
 import { fireDetectionKey } from './firmsLabels.js';
-import { registerPickOwner, unregisterPickOwner } from './pickRegistry.js';
+import {
+  isUnderOtherCard,
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { getSelectedEntityContext } from './contextStore.js';
 import { setLocale } from '../i18n/index.js';
 import { shownEntityLabel } from '../voice/speech.js';
@@ -25,6 +30,8 @@ import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
 import { HEAT_REBUILD_MS } from '../layers/firms/policy.js';
+import { registerStyleStages } from '../styles/styleStages.js';
+import { sensorPickPosition } from '../input/sensorPick.js';
 
 const LAYER_SOURCE = readLayerSource(
   path.join(path.dirname(fileURLToPath(import.meta.url)), 'firmsHeatmap.js'),
@@ -58,10 +65,13 @@ function harness({
   fires = [makeFire()],
   picked = null,
   cardHit = null,
+  topCard = null,
   cameraPosition = null,
   withDataSource = false,
   withGlobe = false,
   feed = null,
+  drilled = null,
+  firstClick = null,
 } = {}) {
   const hadWindow = Object.hasOwn(globalThis, 'window');
   const priorWindow = globalThis.window;
@@ -77,16 +87,24 @@ function harness({
   };
 
   const published = [];
+  const overlayHost = {
+    setEntries: (sourceId, entries) => published.push(...entries),
+    setVisible() {},
+    clearSource() {},
+    hitTest: (_x, _y, { sourceId } = {}) =>
+      !sourceId && topCard
+        ? topCard
+        : cardHit
+          ? { sourceId: 'firms', entryId: cardHit }
+          : null,
+  };
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest((x, y) => overlayHost.hitTest(x, y));
   const layer = createFirmsHeatmapLayer({
     ...(feed ? { feed } : {}),
     id: 'firms-test',
     name: 'Fires',
-    overlayHost: {
-      setEntries: (sourceId, entries) => published.push(...entries),
-      setVisible() {},
-      clearSource() {},
-      hitTest: () => (cardHit ? { sourceId: 'firms', entryId: cardHit } : null),
-    },
+    overlayHost,
   });
 
   const draw = fakeDrawPort();
@@ -106,6 +124,7 @@ function harness({
   const viewer = {
     scene: {
       pick,
+      ...(drilled ? { drillPick: () => drilled } : {}),
       canvas: { clientWidth: 1280, clientHeight: 800 },
       camera: cameraPosition ? { positionWC: cameraPosition } : undefined,
       globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
@@ -129,6 +148,8 @@ function harness({
   if (!withGlobe)
     layer.attachShellServices({ imageryHost: () => ({ kind: 'none' }) });
   const input = fakeInput(viewer);
+  // A subscriber that runs before the layer's own (an aircraft layer).
+  if (firstClick) input.input.onClick(firstClick);
   // The LOD rebuild (and with it the context-registration sweep) is inert
   // without a data source, so tests that drive a real refresh need one.
   if (withDataSource) layer.init(viewer);
@@ -153,7 +174,14 @@ function harness({
         (record) => record.kind === 'icons' && !record.disposed,
       ),
     click: () => input.click({ x: 400, y: 300 }),
+    cover: (hit) => {
+      topCard = hit;
+    },
+    setPicked: (next) => {
+      picked = next;
+    },
     cleanup() {
+      setClickCardHitTest(null);
       Cesium.SceneTransforms.worldToWindowCoordinates = priorProjection;
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -308,8 +336,16 @@ test('far-side detections cannot consume the bounded ambient-card cohort', () =>
 
 test('clicking a fire sprite selects it and requests the camera transfer', () => {
   const fire = makeFire();
-  const h = harness({ fires: [fire], picked: glowPick('firms-7') });
+  const h = harness({
+    fires: [fire],
+    picked: glowPick('firms-7'),
+    topCard: { sourceId: 'earthquakes', entryId: 'quake:cover' },
+  });
   try {
+    // Under another layer's card the sprite is that card's click.
+    h.click();
+    assert.equal(h.requests.length, 0, 'covered: the card takes it');
+    h.cover(null);
     h.click();
     assert.equal(h.requests.length, 1);
     assert.equal(h.requests[0].kind, 'fire');
@@ -355,6 +391,34 @@ test('clicking a fire CARD behaves exactly like clicking its sprite', () => {
   }
 });
 
+test('a covered fire card does not act, and keeps an existing selection', () => {
+  const fire = makeFire();
+  const h = harness({
+    fires: [fire],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    // Covered by another layer's card from the start: nothing selects or flies.
+    h.cover({ sourceId: 'earthquakes', entryId: 'quake:cover' });
+    h.click();
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.layer.getSelectedInfo(), null);
+    // Uncovered, the card selects; covered again, the click is the other
+    // layer's and leaves that selection alone.
+    h.cover(null);
+    h.click();
+    assert.equal(h.requests.length, 1);
+    const selected = h.layer.getSelectedInfo();
+    assert.ok(selected);
+    h.cover({ sourceId: 'earthquakes', entryId: 'quake:cover' });
+    h.click();
+    assert.equal(h.requests.length, 1);
+    assert.deepEqual(h.layer.getSelectedInfo(), selected);
+  } finally {
+    h.cleanup();
+  }
+});
+
 // The voice model reads these labels as data (track_entity, get_entity_context,
 // pointer_context); the voice card translates them where it shows them.
 test('fire labels stay English data in a translated interface', () => {
@@ -386,9 +450,9 @@ test('a click on neither sprite nor card clears without moving the camera', () =
   }
 });
 
-// Sibling layers surface heterogeneous pick shapes. Reading `picked.id`
-// directly recognized only bare strings, so an AIS sprite (or satellite, or
-// entity) under a fire card let BOTH layers issue a camera command.
+// Sibling layers surface heterogeneous pick shapes. Whatever is drawn under
+// it, the fire card painted on top takes the click (those layers stand aside
+// under another layer's card, so one click does one thing).
 const SIBLING_PICKS = [
   ['flights', 'a1b2c3', { id: 'a1b2c3' }],
   ['flights', 'a1b2c3', { primitive: { id: 'a1b2c3' } }],
@@ -398,7 +462,7 @@ const SIBLING_PICKS = [
 ];
 
 for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
-  test(`a ${layerId} pick shaped ${JSON.stringify(picked)} wins over a card hit`, () => {
+  test(`a fire card wins over a ${layerId} pick shaped ${JSON.stringify(picked)}`, () => {
     const fire = makeFire();
     registerPickOwner(layerId, (pickedId) => pickedId === ownedId);
     const h = harness({
@@ -408,17 +472,142 @@ for (const [layerId, ownedId, picked] of SIBLING_PICKS) {
     });
     try {
       h.click();
-      assert.equal(
-        h.requests.length,
-        0,
-        `the ${layerId} layer is already acting on this click`,
-      );
+      assert.equal(h.requests.length, 1, 'the card on top acts');
     } finally {
       h.cleanup();
       unregisterPickOwner(layerId);
     }
   });
 }
+
+// A passive owner's pick (a directions route, a flight trail) acts for nobody:
+// a fire card over it still takes the click, and with no card the pick is
+// still not empty space, so the selection stays.
+test('a fire card acts over a passive pick; the bare pick leaves the selection', () => {
+  const fire = makeFire();
+  registerPickOwner('test-route', (pickedId) => pickedId === 'route:line');
+  const carded = harness({
+    fires: [fire],
+    picked: { id: 'route:line' },
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    carded.click();
+    assert.equal(carded.requests.length, 1, 'the card acts over the route');
+    assert.ok(carded.layer.getSelectedInfo());
+  } finally {
+    carded.cleanup();
+  }
+  const bare = harness({ fires: [fire], picked: { id: 'route:line' } });
+  try {
+    bare.click();
+    assert.equal(bare.requests.length, 0);
+    assert.equal(
+      bare.layer.getSelectedInfo(),
+      null,
+      'nothing to clear or pick',
+    );
+  } finally {
+    bare.cleanup();
+    unregisterPickOwner('test-route');
+  }
+});
+
+// A coarse tap on a fire card finds an aircraft nearby through the shared
+// touch contact. The card on top takes it; the aircraft layer stands aside.
+test('a fire card takes a tap over a touch contact its layer acts on', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = makeFire();
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1');
+  t.after(() => unregisterPickOwner('test-planes'));
+  const h = harness({
+    fires: [fire],
+    drilled: [{ id: 'plane:1' }],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    h.click();
+    assert.equal(h.requests.length, 1, 'the card takes the tap');
+    assert.ok(h.layer.getSelectedInfo());
+  } finally {
+    h.cleanup();
+  }
+});
+
+// A touch contact whose layer acts only on exact hits does not take the tap
+// from our card; with no card, a coarse tap near an aircraft still clears.
+test('a fire card keeps a tap whose contact does not act; bare taps still clear', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: true });
+  t.after(() => {
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const fire = makeFire();
+  registerPickOwner('test-cameras', (pickedId) => pickedId === 'cam:1');
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:1');
+  t.after(() => {
+    unregisterPickOwner('test-cameras');
+    unregisterPickOwner('test-planes');
+  });
+  const carded = harness({
+    fires: [fire],
+    drilled: [{ id: 'cam:1' }],
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+  });
+  try {
+    carded.click();
+    assert.equal(carded.requests.length, 1, 'the card acts');
+  } finally {
+    carded.cleanup();
+  }
+  const bare = harness({
+    fires: [fire],
+    picked: glowPick('firms-7'),
+    drilled: [{ id: 'plane:1' }],
+  });
+  try {
+    bare.click();
+    assert.ok(bare.layer.getSelectedInfo(), 'a fire is selected');
+    // Nothing exact now; the touch contact is an aircraft, with no card.
+    bare.setPicked(null);
+    bare.click();
+    assert.equal(bare.layer.getSelectedInfo(), null, 'the bare tap clears');
+  } finally {
+    bare.cleanup();
+  }
+});
+
+// The aircraft layer runs first. Under the fire card painted over its plane
+// it stands aside, so the card takes the click: one action, in either order.
+test('a fire card over an aircraft takes the click; the aircraft does not track', (t) => {
+  const fire = makeFire();
+  let tracked = null;
+  registerPickOwner('test-planes', (pickedId) => pickedId === 'plane:9');
+  t.after(() => unregisterPickOwner('test-planes'));
+  const h = harness({
+    fires: [fire],
+    picked: { id: 'plane:9' },
+    cardHit: `fire:${fireDetectionKey(fire)}`,
+    firstClick: (event) => {
+      if (isUnderOtherCard(event)) return;
+      if (event.hit?.id === 'plane:9') tracked = 'plane:9';
+    },
+  });
+  try {
+    h.click();
+    assert.equal(tracked, null, 'the aircraft does not track');
+    assert.equal(h.requests.length, 1, 'the fire card acts');
+    assert.ok(h.layer.getSelectedInfo());
+  } finally {
+    h.cleanup();
+  }
+});
 
 test('a stale card id resolves to nothing instead of an arbitrary fire', () => {
   const h = harness({
@@ -649,6 +838,16 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
     assert.equal(added[0].alpha, 0.5);
     assert.equal(glow(1).alpha, 0.5, 'rebuilt markers get the fade');
 
+    // An application drawing the detections in their place hides both.
+    h.layer.setMarkerStandIn({ hitTest: () => null });
+    assert.equal(added[0].show, false, 'a stand-in hides the heatmap');
+    assert.equal(markers().show, false, 'and the markers');
+    h.layer._renderLodForTest('global');
+    assert.equal(added[0].show, false, 'through a rebuild too');
+    h.layer.setMarkerStandIn(null);
+    assert.equal(added[0].show, true);
+    assert.equal(markers().show, true);
+
     h.layer.disable();
     assert.equal(added[0].show, false, 'disable hides the heatmap');
 
@@ -658,5 +857,163 @@ test('far zoom drapes one heatmap and the hand-off cross-fades it with the marke
   } finally {
     h.cleanup();
     restoreDocument();
+  }
+});
+
+test('a click on a fire an application draws in place of the markers selects it as a marker click does', () => {
+  const fire = makeFire();
+  const other = makeFire({ index: 8, lat: 31.2, lon: -97.9, frp: 40 });
+  // The application's records come from the same source, adapted on their own.
+  let answer = { ...fire };
+  const asked = [];
+  const h = harness({ fires: [fire, other], picked: glowPick('firms-8') });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: (screen) => {
+        asked.push(screen);
+        return answer;
+      },
+    });
+    assert.equal(h.icons().show, false, 'the glows are hidden');
+    h.published.length = 0;
+    h.click();
+    assert.deepEqual(asked, [{ x: 400, y: 300 }]);
+    assert.equal(h.requests.length, 1, 'the camera moves as for a marker');
+    assert.equal(h.requests[0].kind, 'fire');
+    assert.equal(
+      h.requests[0].id,
+      fireDetectionKey(fire),
+      'the stand-in decides, not the hidden glow under the click',
+    );
+    assert.equal('rangeM' in h.requests[0], false, 'the usual fire framing');
+    assert.equal(h.layer.getSelectedInfo().id, fireDetectionKey(fire));
+    assert.equal(getSelectedEntityContext().label, 'Fire · FRP 1520 MW');
+    assert.deepEqual(
+      h.published.map((entry) => entry.id),
+      [`selected-fire:${fireDetectionKey(fire)}`],
+      "only the selected fire's card shows",
+    );
+
+    // Nothing of the application's under the click: empty space.
+    answer = null;
+    h.click();
+    assert.equal(h.requests.length, 1, 'no camera move');
+    assert.equal(h.layer.getSelectedInfo(), null, 'the selection is cleared');
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('a stand-in that draws a fire larger says how far the camera stands from it', () => {
+  const fire = makeFire();
+  const asked = [];
+  let range = 24_000;
+  const h = harness({ fires: [fire] });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => ({ ...fire }),
+      focusRangeM: (record) => {
+        asked.push(fireDetectionKey(record));
+        return range;
+      },
+    });
+    h.click();
+    assert.deepEqual(asked, [fireDetectionKey(fire)]);
+    assert.equal(h.requests.at(-1).rangeM, 24_000);
+    // No range for this fire: the usual fire framing.
+    range = null;
+    h.click();
+    assert.equal(h.requests.length, 2);
+    assert.equal('rangeM' in h.requests.at(-1), false);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('a stand-in hit on a fire the layer does not show selects nothing', () => {
+  const fire = makeFire();
+  const h = harness({ fires: [fire] });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => makeFire({ lat: 12.5, lon: 40.1 }),
+    });
+    h.click();
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('taking the stand-in away brings the markers and their cards back and keeps the selection', () => {
+  const fire = makeFire();
+  const h = harness({
+    fires: [fire],
+    // Near enough for the markers rather than the heatmap.
+    cameraPosition: Cesium.Cartesian3.fromDegrees(fire.lon, fire.lat, 500_000),
+  });
+  try {
+    h.layer.setMarkerStandIn({ hitTest: () => fire });
+    assert.equal(h.icons().show, false);
+    h.click();
+    h.layer.setMarkerStandIn(null);
+    assert.equal(h.icons().show, true);
+    assert.equal(h.layer.getSelectedInfo().id, fireDetectionKey(fire));
+    const ids = h.published.map((entry) => entry.id);
+    assert.ok(ids.includes(`selected-fire:${fireDetectionKey(fire)}`));
+  } finally {
+    h.cleanup();
+  }
+});
+
+test('the stand-in is asked where a marker is picked: the click as the sensor style draws it', () => {
+  const fire = makeFire();
+  const asked = [];
+  const h = harness({ fires: [fire] });
+  try {
+    registerStyleStages(h.viewer.scene, {
+      surveillance: {
+        enabled: true,
+        uniforms: { intensity: 1, pixelation: 4 },
+      },
+    });
+    h.layer.setMarkerStandIn({
+      hitTest: (screen) => {
+        asked.push(screen);
+        return fire;
+      },
+    });
+    h.click();
+    const expected = sensorPickPosition(
+      h.viewer.scene,
+      { x: 400, y: 300 },
+      h.viewer.scene.canvas,
+    );
+    assert.notDeepEqual([expected.x, expected.y], [400, 300]);
+    assert.deepEqual([asked[0].x, asked[0].y], [expected.x, expected.y]);
+  } finally {
+    h.cleanup();
+  }
+});
+
+test("a sibling layer's item over a stand-in fire wins the click", () => {
+  const fire = makeFire();
+  let asked = 0;
+  registerPickOwner('flights', (pickedId) => pickedId === 'a1b2c3');
+  const h = harness({ fires: [fire], picked: { id: 'a1b2c3' } });
+  try {
+    h.layer.setMarkerStandIn({
+      hitTest: () => {
+        asked++;
+        return fire;
+      },
+    });
+    h.click();
+    assert.equal(asked, 0, 'the stand-in is not asked');
+    assert.equal(h.requests.length, 0, 'no camera move');
+    assert.equal(h.layer.getSelectedInfo(), null);
+  } finally {
+    h.cleanup();
+    unregisterPickOwner('flights');
   }
 });

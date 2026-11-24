@@ -1,6 +1,6 @@
+import '../testSupport/registerDom.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Window } from 'happy-dom';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
@@ -22,23 +22,36 @@ const CAMERA = Object.freeze({
 });
 
 /**
- * Mount the overlay in a happy-dom window with recorded media loads, timers
- * and postRender listeners. `play` decides what each play() returns.
+ * Mount the overlay in the registered happy-dom window (Vue binds the
+ * document it loads with) with recorded media loads, timers and postRender
+ * listeners. `play` decides what each play() returns.
  */
 function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
-  const window = new Window({ url: 'http://localhost:4173/' });
-  const previousWindow = globalThis.window;
-  const previousDocument = globalThis.document;
-  globalThis.window = window;
-  globalThis.document = window.document;
+  const { window } = globalThis;
+  const media = window.HTMLMediaElement.prototype;
+  const previous = {
+    load: media.load,
+    play: media.play,
+    pause: media.pause,
+    setInterval: window.setInterval,
+    clearInterval: window.clearInterval,
+  };
+  t.after(() => {
+    media.load = previous.load;
+    media.play = previous.play;
+    media.pause = previous.pause;
+    window.setInterval = previous.setInterval;
+    window.clearInterval = previous.clearInterval;
+    delete window.document.hidden;
+  });
   const loads = [];
-  window.HTMLMediaElement.prototype.load = function () {
+  media.load = function () {
     if (this.getAttribute('src')) loads.push(this.getAttribute('src'));
   };
-  window.HTMLMediaElement.prototype.play = function () {
+  media.play = function () {
     return play(this);
   };
-  window.HTMLMediaElement.prototype.pause = function () {};
+  media.pause = function () {};
   const intervals = new Map();
   let nextTimer = 1;
   window.setInterval = (fn) => {
@@ -65,12 +78,7 @@ function mountOverlay(t, { play = () => Promise.resolve() } = {}) {
   });
   t.after(unbind);
   const overlay = createQuebecCctvOverlay(viewer);
-  t.after(() => {
-    overlay?.dispose();
-    globalThis.window = previousWindow;
-    globalThis.document = previousDocument;
-    window.close();
-  });
+  t.after(() => overlay?.dispose());
   const [live, still] = window.document.querySelectorAll('video');
   return {
     window,
@@ -202,4 +210,22 @@ test('the refresh timer reloads with a cache-buster, skips hidden tabs, and stop
   assert.equal(ui.intervals.size, 0);
   assert.equal(ui.renderListeners.size, 0);
   assert.equal(ui.window.document.querySelector('.qci-panel') === null, true);
+});
+
+test('Escape in the window closes it and stops the refresh until the camera is picked again', (t) => {
+  const ui = mountOverlay(t);
+  ui.overlay.setCamera(CAMERA);
+  ui.playButton().click();
+  const panel = ui.window.document.querySelector('.qci-panel');
+  panel.dispatchEvent(
+    new ui.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  assert.equal(panel.hidden, true);
+  assert.equal(ui.intervals.size, 0);
+
+  ui.overlay.setCamera({ ...CAMERA });
+  assert.equal(panel.hidden, true, 'a routine update keeps it closed');
+  ui.overlay.setCamera({ ...CAMERA }, { reselected: true });
+  assert.equal(panel.hidden, false, 'picking the camera again reopens it');
+  assert.equal(ui.intervals.size, 1);
 });

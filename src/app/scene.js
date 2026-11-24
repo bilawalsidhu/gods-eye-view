@@ -1,6 +1,7 @@
 import { createApplicationOperations } from './operations.js';
 import { registerDataCredits } from '../data/dataCredits.js';
 import { mountCreditsView } from '../ui/creditsView.js';
+import { trackCreditLineHeight } from '../ui/creditLineHeight.js';
 import { MapStackController } from '../mapStackController.js';
 import { mapEngineFor } from '../maps/engine.js';
 import { initLogoGaze } from '../logoGaze.js';
@@ -173,6 +174,8 @@ export async function createApplicationScene({
   // The credits, in the application's own line, unless the renderer shows
   // them in a display of its own.
   if (!hooks.ownCreditDisplay) defer(mountCreditsView(viewer));
+  // The HUD corners above the line clear it when it wraps.
+  defer(trackCreditLineHeight(document));
   loaderStatus.textContent =
     googleApiKey || googleTokens || cesiumToken
       ? t('Loading Google 3D Tiles...')

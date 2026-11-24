@@ -9,7 +9,7 @@ import { poseSignature } from '../../render/camera/poseSignature.js';
 import { heightsOf } from '../../queries/heights.js';
 import { fromDegreesInto } from '../../geo/ellipsoid.js';
 import { Vec3 } from '../../geo/vector.js';
-import { frustumPlanes } from '../../geo/frustum.js';
+import { viewPlanes } from '../../geo/frustum.js';
 import { perspectiveCourseRotation } from '../../data/screenRotation.js';
 import {
   PLACED_WAKE_MS,
@@ -1074,23 +1074,6 @@ export function createRendering({ state, services, parts }) {
     );
   }
 
-  /**
-   * The planes of the frustum the camera looks through, as the default
-   * renderer culls with them, or null when the pose does not describe one.
-   */
-  function viewPlanes(pose) {
-    if (
-      !pose?.position ||
-      !pose.direction ||
-      !pose.up ||
-      !Number.isFinite(pose.fovy) ||
-      !Number.isFinite(pose.aspectRatio) ||
-      !Number.isFinite(pose.near)
-    )
-      return null;
-    return frustumPlanes(pose);
-  }
-
   function refreshVisibility() {
     if (!state._enabled) return 0;
     const now = Date.now();
@@ -1154,13 +1137,18 @@ export function createRendering({ state, services, parts }) {
       visibility.noSample = noSample;
       const wasShown = entry.marker.show;
       const wasVisible = state._visible.has(entry);
+      // Just let go of a hold (cockpitSubject.js): it played on, so keep
+      // its clock.
+      const playedOn = entry.releasedFromHold === true;
+      entry.releasedFromHold = false;
       if (visible) state._visible.add(entry);
       else state._visible.delete(entry);
       // Turned afresh once back in view: the camera may have moved while it
       // was out, after the pass that would have turned it.
       if (visible && !wasVisible) entry.rotationCourse = undefined;
       if (visible && entry.track?.count) {
-        if (!wasVisible && !entry.qaFixture) syncPlayback(entry, now);
+        if (!wasVisible && !playedOn && !entry.qaFixture)
+          syncPlayback(entry, now);
         // Re-entry can advance into an unprepared corridor; loaded tiles can
         // also resolve a cold path without a poll or a render-loop wakeup.
         if (!wasVisible || entry.surfaceReady === false || entry.heightPending)
