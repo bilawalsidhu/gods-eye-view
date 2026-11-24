@@ -146,7 +146,7 @@ function stage({
   width = 1280,
   height = 800,
   fovy = Math.PI / 4,
-  disc = null,
+  planet = null,
 } = {}) {
   const window = new Window({ width, height });
   const doc = window.document;
@@ -165,12 +165,12 @@ function stage({
     width,
     height,
   });
-  if (disc) {
-    doc.getElementById('inner_eye').getBoundingClientRect = () => ({
-      left: (width - disc) / 2,
-      top: (height - disc) / 2,
-      width: disc,
-      height: disc,
+  if (planet) {
+    doc.getElementById('globe').getBoundingClientRect = () => ({
+      left: (width - planet) / 2,
+      top: (height - planet) / 2,
+      width: planet,
+      height: planet,
     });
   }
   let now = 0;
@@ -347,7 +347,7 @@ test('on any screen the drawn planet matches the globe once the logo is centred'
     [3840, 2160],
   ]) {
     const fovy = 2 * Math.atan((Math.tan(Math.PI / 6) * height) / width);
-    const s = stage({ target: HOME, width, height, fovy, disc: 64 });
+    const s = stage({ target: HOME, width, height, fovy, planet: 64 });
     const opening = s.play();
     const logo = s.screen.querySelector('.loader-logo');
     for (const at of [900, 1800]) {

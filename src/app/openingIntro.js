@@ -278,7 +278,9 @@ export function playOpeningIntro({
   playing += 1;
   // Cancel the logo gaze's offset (src/logoGaze.js): the pupil starts centred.
   for (const element of pupil) element.style.transform = 'none';
-  const pupilRect = disc.getBoundingClientRect();
+  // The globe takes over from the drawn planet inside the blue disc, at its size.
+  const planet = svg.querySelector('#globe') ?? disc;
+  const pupilRect = planet.getBoundingClientRect();
   const eyeRect = eye.getBoundingClientRect();
   const view = (
     doc.getElementById('cesiumContainer') ?? doc.documentElement
