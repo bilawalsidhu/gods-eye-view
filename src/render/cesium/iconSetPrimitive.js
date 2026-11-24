@@ -20,16 +20,10 @@
  * above, taken between the heights under its segment's two ends. On WebGL 1
  * the extras are not drawn (the draw port refuses rows that need them).
  *
- * A row flagged `ICON_VIEWS` draws from the set's view sheet
- * ({@link module:viewSheet}), a texture of its own, in place of the atlas
- * (on WebGL 2; the shader has none of it on WebGL 1): it lies flat on the
- * ground, forward along its course, and draws the frame nearest the eye's
- * direction, mirrored for the eye on its left. The frame is a card standing
- * at the row's anchor, square to the frame's own direction, so between
- * frames the sprite is tilted (foreshortened and turned) as its subject is,
- * with no blending of frames; the row's quad stays upright on screen. Until the
- * sheet has loaded it draws its near image from the atlas, turned along its
- * course as any row, if it has one.
+ * A row flagged `ICON_VIEWS` draws its frame from the set's view sheet
+ * (WebGL 2 only, see `data/viewSheet.js`). Until the sheet is ready, and for
+ * good if it fails, the row draws its fallback from the atlas (held in the
+ * near slot), turned along its course.
  *
  * This module is the one place the icon sets touch Cesium's renderer internals.
  */
@@ -52,12 +46,7 @@ import {
 } from '../../data/iconAtlas.js';
 import { recedeFrame, recedeParams } from '../recession.js';
 import { rawTexture, webglContext } from './internals.js';
-import {
-  VIEW_RINGS_MAX,
-  VIEW_SHEET_FRAGMENT_GLSL,
-  VIEW_SHEET_GLSL,
-  viewUniforms,
-} from '../../data/viewSheet.js';
+import { VIEW_RINGS_MAX, viewUniforms } from '../../data/viewSheet.js';
 
 /** The parameters the uniforms hold while the set does not recede. */
 const NO_RECEDE = recedeParams({});
@@ -77,6 +66,73 @@ const ATTRIBUTE_LOCATIONS = Object.freeze({
   pickColor: 11,
   style3: 12,
 });
+
+/**
+ * The frame for an eye direction (viewNearest) and a frame's direction and
+ * image up (viewFrameAxes). u_viewGrid holds columns, rows, ring step in
+ * radians and ring count. u_viewRings holds the frame count and first frame
+ * for each ring, two rings per vector.
+ */
+const VIEW_SHEET_GLSL = /* glsl */ `
+uniform vec4 u_viewGrid;
+uniform vec4 u_viewRings[${VIEW_RINGS_MAX / 2}];
+
+// A ring's frames and its first frame, from the subject's first cell.
+vec2 viewRing(float ring) {
+  vec4 pair = u_viewRings[int(ring * 0.5)];
+  return ring - 2.0 * floor(ring * 0.5) < 0.5 ? pair.xy : pair.zw;
+}
+
+// The frame that shows a subject from d (unit, toward the eye, as forward,
+// right, up): its ring, its index in the ring, and 1 when it is drawn
+// mirrored (the eye on the left side).
+vec3 viewNearest(vec3 d) {
+  float ring = clamp(
+    floor(acos(clamp(d.z, -1.0, 1.0)) / u_viewGrid.z + 0.5),
+    0.0, u_viewGrid.w - 1.0);
+  float span = viewRing(ring).x - 1.0;
+  float side = abs(d.y);
+  float bearing = side + abs(d.x) > 0.0 ? atan(side, d.x) : 0.0;
+  return vec3(
+    ring,
+    span > 0.0 ? floor(bearing / 3.141592653589793 * span + 0.5) : 0.0,
+    d.y < 0.0 ? 1.0 : 0.0);
+}
+
+// The direction a frame shows its subject from (toward the eye, as forward,
+// right, up; flip 1 for the left side) and the frame's image up.
+void viewFrameAxes(float ring, float index, float flip, out vec3 toEye, out vec3 up) {
+  float span = viewRing(ring).x - 1.0;
+  float off = ring * u_viewGrid.z;
+  float turn = span > 0.0 ? index / span * 3.141592653589793 : 0.0;
+  toEye = vec3(
+    sin(off) * cos(turn),
+    sin(off) * sin(turn) * (1.0 - 2.0 * flip),
+    cos(off));
+  float k = 1.0 / max(1.0 + toEye.z, 1.0e-6);
+  up = vec3(1.0 - toEye.x * toEye.x * k, -toEye.x * toEye.y * k, -toEye.x);
+}
+`;
+
+/**
+ * Reading a view sheet's cells in a fragment shader: `viewCell(cell, uv,
+ * lod)` is the colour of a cell at `uv` (0..1 across it, v down) and that
+ * level of detail, nothing outside it, from `u_views` over `u_viewGrid`.
+ */
+const VIEW_SHEET_FRAGMENT_GLSL = /* glsl */ `
+uniform sampler2D u_views;
+uniform vec4 u_viewGrid;
+
+vec4 viewCell(float cell, vec2 uv, float lod) {
+  float at = floor(cell + 0.5);
+  float row = floor((at + 0.5) / u_viewGrid.x);
+  float column = at - row * u_viewGrid.x;
+  vec2 inside = step(vec2(0.0), uv) * step(uv, vec2(1.0));
+  vec4 color = textureLod(
+    u_views, (vec2(column, row) + clamp(uv, 0.0, 1.0)) / u_viewGrid.xy, lod);
+  return color * (inside.x * inside.y);
+}
+`;
 
 const VERTEX_SHADER = /* glsl */ `
 in vec2 corner;
@@ -113,7 +169,6 @@ out vec4 v_color;
 out vec4 v_pickColor;
 out float v_proxy;
 out float v_overDepth; // 1 for a row drawn over depth, on the near plane
-out float v_views; // 1 for a row drawn from the view sheet
 #ifdef ICON_VIEW_SHEETS
 // A view row's frame: its cell in the sheet (v_uv is then this corner's
 // place in that cell, not in the atlas).
@@ -128,12 +183,9 @@ ${ICON_SEGMENT_GLSL}
 #ifdef ICON_VIEW_SHEETS
 ${VIEW_SHEET_GLSL}
 
-// Where a corner of the row's quad falls in a frame's cell (0..1 across it,
-// v down). The frame is a card standing at the row's anchor, square to the
-// direction it shows its subject from: the corner (offset, in the eye's
-// axes) is carried along the eye's ray onto that card, so a frame seen from
-// a little off its direction is tilted (foreshortened and turned) as its
-// subject is, until the next frame is the nearer.
+// Where a corner of the quad falls in its cell (0..1, v down). The frame is
+// a card at the anchor, square to its own direction (data/viewSheet.js,
+// "Between frames").
 // axes takes the subject's forward, right and up to the eye's axes; cardHalf
 // is the card's half size, in the offset's units.
 vec2 viewCardUv(float ring, float index, float flip, mat3 axes, vec3 offset, vec3 ray, vec2 cardHalf) {
@@ -177,9 +229,8 @@ void main() {
   v_color = vec4(0.0);
   v_proxy = 0.0;
   v_overDepth = 0.0;
-  v_views = 0.0;
 #ifdef ICON_VIEW_SHEETS
-  v_viewCell = 0.0;
+  v_viewCell = -1.0;
 #endif
   gl_Position = vec4(0.0, 0.0, 2.0, 1.0); // outside the clip volume: not drawn
 
@@ -250,8 +301,8 @@ void main() {
     ? glyphPx / czm_pixelRatio > style3.x
     : glyphPx > ${NEAR_IMAGE_DEVICE_PX.toFixed(1)};
   // A view row's far image is its subject's first cell in the view sheet,
-  // its near image the atlas slot drawn in its place while the sheet is not
-  // registered or loaded.
+  // its near image the fallback drawn until the sheet is ready, or for good
+  // if it fails.
   bool views = false;
   vec2 viewUv = vec2(0.0);
   float slot = nearImage ? style1.y : style1.x;
@@ -302,10 +353,8 @@ void main() {
       // The subject's axes in the eye's (x right, y up, z back).
       mat3 axes = transpose(mat3(u_cameraRight, u_cameraUp, cross(u_cameraRight, u_cameraUp))) *
         mat3(forward, right, up);
-      // This corner, square to the eye's ray (the eye's right and up, turned
-      // as its back turns onto the ray): a card facing the eye then fills
-      // the quad wherever on screen it is, without the stretch a wide view
-      // gives what is off its centre.
+      // The corner on the plane square to the eye's ray, so an off-centre
+      // card is not stretched by the field of view.
       vec3 ray = normalize(positionEC.xyz);
       vec3 turned = vec3(0.0, 0.0, 1.0) - ray;
       vec3 offset =
@@ -367,7 +416,6 @@ void main() {
   v_uv = views
     ? viewUv
     : mix(rect.xy, rect.zw, vec2(corner.x * 0.5 + 0.5, 0.5 - corner.y * 0.5));
-  v_views = views ? 1.0 : 0.0;
   v_color = vec4(color.rgb, color.a * alpha);
 }
 `;
@@ -384,17 +432,14 @@ in vec4 v_color;
 in vec4 v_pickColor;
 in float v_proxy;
 in float v_overDepth;
-in float v_views;
 
 void main() {
   vec4 color = texture(u_atlas, v_uv);
 #ifdef ICON_VIEW_SHEETS
-  // How small the sheet's cells are drawn (v_uv runs 0..1 across a view
-  // row's cell), worked out for every row so the cell can be read inside
-  // the branch.
+  // The sheet's lod, before the branch: derivatives need uniform control flow.
   vec2 texels = v_uv * (float(textureSize(u_views, 0).x) / max(u_viewGrid.x, 1.0));
   float lod = log2(max(max(length(dFdx(texels)), length(dFdy(texels))), 1.0e-6));
-  if (v_views > 0.5) color = viewCell(v_viewCell, v_uv, lod);
+  if (v_viewCell >= 0.0) color = viewCell(v_viewCell, v_uv, lod);
 #endif
   color = czm_gammaCorrect(color);
   color *= czm_gammaCorrect(v_color);
@@ -428,91 +473,99 @@ const VIEW_SHEET_MAX_LOD = 1;
 /** Each context's view sheet textures, by URL. */
 const sheetTextures = new WeakMap();
 
+// Atlas textures shared by sets drawing the same version in a context.
+const atlasTextures = new WeakMap();
+
 /**
- * A view sheet's image as a texture on `context`, loaded once however many
- * icon sets draw from it: `{state, texture}`, `state` going from `loading`
- * to `ready` (its `texture` set) or `failed`. `onChange` runs when it does.
- * Mipmapped where the context can (to `VIEW_SHEET_MAX_LOD`), so a sprite
- * drawn smaller than its cell stays smooth; a cell's transparent margin
- * keeps its neighbours out. The texture lives as long as its context.
- * A sheet larger than the context's textures fails, as one that cannot load.
- * @param {object} context A Cesium Context.
- * @param {string} url
- * @param {() => void} [onChange]
- * @param {boolean} [grey] The sheet's pixels are grey: kept as one channel
- *   and alpha.
+ * Fetch and decode a shared grey-and-alpha texture asynchronously. Keep levels
+ * 0 through VIEW_SHEET_MAX_LOD for the life of its context. A load failure,
+ * a grid size mismatch or a context texture limit leaves the fallback in use.
  */
-export function viewSheetTexture(context, url, onChange, grey = false) {
+function viewSheetTexture(context, sheet) {
   let byUrl = sheetTextures.get(context);
   if (!byUrl) sheetTextures.set(context, (byUrl = new Map()));
-  const key = `${grey ? 'grey' : 'colour'}|${url}`;
-  let entry = byUrl.get(key);
-  if (!entry) {
-    entry = { state: 'loading', texture: null, listeners: new Set() };
-    byUrl.set(key, entry);
-    const settle = (state) => {
-      entry.state = state;
-      for (const listener of entry.listeners) listener();
-      entry.listeners.clear();
-    };
-    if (typeof Image === 'undefined') settle('failed');
-    else {
-      const image = new Image();
-      image.decoding = 'async';
-      // A cross-origin image would taint the upload.
-      image.crossOrigin = 'anonymous';
-      image.onload = () => {
-        if (context.isDestroyed?.()) return;
-        // This context's own limit (Cesium's is the last context's made).
-        const gl = webglContext({ context });
-        const limit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        if (Math.max(image.naturalWidth, image.naturalHeight) > limit) {
-          console.warn(
-            `[iconSetPrimitive] View sheet is larger than this context's textures (${limit} px): ${url}`,
-          );
-          settle('failed');
-          return;
-        }
-        const mipmapped = context.webgl2 === true;
-        entry.texture = new Cesium.Texture({
-          context,
-          source: image,
-          // A grey sheet as its grey (its red) and alpha: half the memory.
-          pixelFormat: grey
-            ? Cesium.PixelFormat.LUMINANCE_ALPHA
-            : Cesium.PixelFormat.RGBA,
-          flipY: false,
-          sampler: new Cesium.Sampler({
-            wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
-            wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
-            minificationFilter: mipmapped
-              ? Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR
-              : Cesium.TextureMinificationFilter.LINEAR,
-            magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
-          }),
-        });
-        if (mipmapped) {
-          entry.texture.generateMipmap();
-          // No coarser than this: past it a cell's transparent margin is
-          // under a texel, and its neighbours would show at its edges.
-          gl.bindTexture(gl.TEXTURE_2D, rawTexture(entry.texture));
-          gl.texParameterf(
-            gl.TEXTURE_2D,
-            gl.TEXTURE_MAX_LOD,
-            VIEW_SHEET_MAX_LOD,
-          );
-          gl.bindTexture(gl.TEXTURE_2D, null);
-        }
-        settle('ready');
-      };
-      image.onerror = () => {
-        console.warn(`[iconSetPrimitive] View sheet failed to load: ${url}`);
-        settle('failed');
-      };
-      image.src = url;
-    }
+  const url = sheet.image;
+  const { columns, rows, cellPx } = sheet.layout;
+  const width = columns * cellPx;
+  const height = rows * cellPx;
+  const cached = byUrl.get(url);
+  if (cached?.width === width && cached.height === height) return cached;
+  const entry = {
+    state: 'loading',
+    texture: null,
+    listeners: new Set(),
+    width,
+    height,
+  };
+  byUrl.set(url, entry);
+  const settle = (state) => {
+    entry.state = state;
+    const listeners = [...entry.listeners];
+    entry.listeners.clear();
+    for (const listener of listeners) listener();
+  };
+  if (typeof fetch !== 'function' || typeof createImageBitmap !== 'function') {
+    settle('failed');
+    return entry;
   }
-  if (onChange && entry.state === 'loading') entry.listeners.add(onChange);
+  async function load() {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bitmap = await createImageBitmap(await response.blob(), {
+      premultiplyAlpha: 'none',
+      colorSpaceConversion: 'none',
+    });
+    try {
+      if (context.isDestroyed?.()) return;
+      if (bitmap.width !== width || bitmap.height !== height)
+        throw new Error(
+          `Image is ${bitmap.width}×${bitmap.height} px, expected ${width}×${height}`,
+        );
+      const gl = webglContext({ context });
+      const limit = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      if (Math.max(bitmap.width, bitmap.height) > limit)
+        throw new Error(
+          `View sheet is larger than this context's textures (${limit} px)`,
+        );
+      const texture = new Cesium.Texture({
+        context,
+        source: bitmap,
+        pixelFormat: Cesium.PixelFormat.LUMINANCE_ALPHA,
+        flipY: false,
+        sampler: new Cesium.Sampler({
+          wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
+          wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+          minificationFilter:
+            Cesium.TextureMinificationFilter.LINEAR_MIPMAP_LINEAR,
+          magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
+        }),
+      });
+      try {
+        gl.bindTexture(gl.TEXTURE_2D, rawTexture(texture));
+        gl.texParameteri(
+          gl.TEXTURE_2D,
+          gl.TEXTURE_MAX_LEVEL,
+          VIEW_SHEET_MAX_LOD,
+        );
+        gl.texParameterf(gl.TEXTURE_2D, gl.TEXTURE_MAX_LOD, VIEW_SHEET_MAX_LOD);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        texture.generateMipmap();
+        entry.texture = texture;
+      } catch (error) {
+        texture.destroy();
+        throw error;
+      }
+    } finally {
+      bitmap.close();
+    }
+    settle('ready');
+  }
+  load().catch((error) => {
+    console.warn(
+      `[iconSetPrimitive] View sheet failed to load: ${url} (${error.message})`,
+    );
+    settle('failed');
+  });
   return entry;
 }
 
@@ -553,7 +606,7 @@ const EARTH_BOUNDS = new Cesium.BoundingSphere(
  *   pass and a translucent one (by default never). `pickObject` builds a row's pick object around the
  *   `primitive` drill picks hide it by (by default `{ id, iconSet, meta,
  *   primitive }`). `views` gives the view sheet the set's view rows draw from
- *   (`{image, layout, grey}`, `layout` as `viewLayout` returns; null: none),
+ *   (`{image, layout}`, `layout` as `viewLayout` returns; null: none),
  *   the same object until the sheet changes.
  */
 export class IconSetPrimitive {
@@ -570,6 +623,7 @@ export class IconSetPrimitive {
     this.set = set;
     this.renderTime = renderTime;
     this._requestRender = requestRender ?? null;
+    this._onViewSheet = () => this._requestRender?.();
     // The set's view sheet: what it was last read as, its texture's entry
     // and its layout as uniforms.
     this._views = views ?? (() => null);
@@ -578,7 +632,7 @@ export class IconSetPrimitive {
     this._viewGrid = new Cesium.Cartesian4();
     this._viewRings = Array.from(
       { length: VIEW_RINGS_MAX / 2 },
-      () => new Cesium.Cartesian4(1, 0, 1, 0),
+      () => new Cesium.Cartesian4(),
     );
     this._blank = null;
     this._cull = cull ?? (() => true);
@@ -697,28 +751,59 @@ export class IconSetPrimitive {
   }
 
   _syncAtlas(context) {
-    if (iconAtlas.version === this._atlasVersion || !iconAtlas.canvas) return;
-    this._atlasVersion = iconAtlas.version;
-    this._texture?.destroy();
-    this._texture = new Cesium.Texture({
-      context,
-      source: iconAtlas.canvas,
-      flipY: false,
-      sampler: new Cesium.Sampler({
-        wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
-        wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
-        minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
-        magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
-      }),
-    });
+    if (
+      (context === this._atlasContext &&
+        iconAtlas.version === this._atlasVersion) ||
+      !iconAtlas.canvas
+    )
+      return;
+    this._releaseAtlas();
+    let versions = atlasTextures.get(context);
+    if (!versions) atlasTextures.set(context, (versions = new Map()));
+    const version = iconAtlas.version;
+    let entry = versions.get(version);
+    if (!entry) {
+      const texture = new Cesium.Texture({
+        context,
+        source: iconAtlas.canvas,
+        flipY: false,
+        sampler: new Cesium.Sampler({
+          wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
+          wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+          minificationFilter: Cesium.TextureMinificationFilter.LINEAR,
+          magnificationFilter: Cesium.TextureMagnificationFilter.LINEAR,
+        }),
+      });
+      entry = { texture, users: new Set() };
+      versions.set(version, entry);
+    }
+    entry.users.add(this);
+    this._atlasEntry = entry;
+    this._atlasContext = context;
+    this._atlasVersion = version;
+    this._texture = entry.texture;
     for (let slot = 0; slot < MAX_ICON_SLOTS; slot++)
       Cesium.Cartesian4.unpack(iconAtlas.rects, slot * 4, this._slots[slot]);
+  }
+
+  _releaseAtlas() {
+    const entry = this._atlasEntry;
+    if (!entry) return;
+    entry.users.delete(this);
+    if (!entry.users.size) {
+      entry.texture.destroy();
+      atlasTextures.get(this._atlasContext).delete(this._atlasVersion);
+    }
+    this._atlasEntry = null;
+    this._atlasContext = null;
+    this._texture = null;
   }
 
   /** Follow the set's view sheet: its layout's uniforms and its texture. */
   _syncViews(context) {
     const sheet = this._views();
     if (sheet === this._viewsFrom) return;
+    this._viewEntry?.listeners.delete(this._onViewSheet);
     this._viewsFrom = sheet;
     this._viewEntry = null;
     if (!sheet) return;
@@ -727,17 +812,15 @@ export class IconSetPrimitive {
     rings.forEach((pair, k) =>
       Cesium.Cartesian4.fromArray(pair, 0, this._viewRings[k]),
     );
-    this._viewEntry = viewSheetTexture(
-      context,
-      sheet.image,
-      () => this._requestRender?.(),
-      sheet.grey === true,
-    );
+    this._viewEntry = viewSheetTexture(context, sheet);
+    if (this._viewEntry.state === 'loading')
+      this._viewEntry.listeners.add(this._onViewSheet);
   }
 
-  /** The set's view sheet: `none`, `loading`, `failed` or `ready`. */
+  /** The set's view sheet: `loading`, `failed` or `ready`. */
   viewsState() {
-    return this._viewEntry?.state ?? (this._views() ? 'loading' : 'none');
+    if (this._viewsFrom !== this._views()) return 'loading';
+    return this._viewEntry?.state ?? 'loading';
   }
 
   _allocate(context) {
@@ -1101,12 +1184,13 @@ export class IconSetPrimitive {
   }
 
   destroy() {
+    this._viewEntry?.listeners.delete(this._onViewSheet);
     this._stopAtlasListener?.();
     this._destroyBuffers();
     this._programs?.opaque.destroy();
     this._programs?.translucent.destroy();
     this._programs?.single.destroy();
-    this._texture?.destroy();
+    this._releaseAtlas();
     // The set outlives its renderer: release only the pick ids this one made.
     const set = this.set;
     for (let row = 0; row < set.count; row++) {

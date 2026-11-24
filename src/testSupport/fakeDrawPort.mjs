@@ -8,7 +8,6 @@ import { bindRenderer } from '../render/rendererOf.js';
 
 export function fakeDrawPort() {
   const sets = new Map();
-  // Every `views(id, sheet)` call, in order.
   const viewSheets = [];
   const make = (kind) => (spec) => {
     const live = sets.get(spec.id);

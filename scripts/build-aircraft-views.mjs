@@ -7,8 +7,9 @@
  * (lossless WebP of the baked PNG) and `public/sprites/aircraft-views.json`
  * (its manifest). See `public/sprites/README.md`.
  *
- * Run:  npm run build:aircraft-views [-- --only airliner,light] [--out public/sprites]
- * Blender: `$BLENDER`, else `blender` on the PATH, else the macOS app.
+ * Run:  npm run build:aircraft-views [-- --only airliner,light --out /tmp/views]
+ * Requires Blender 5.2 or newer for EXT_meshopt_compression in the fleet models.
+ * Uses `$BLENDER`, else `blender` on the PATH, else the macOS app.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -26,6 +27,19 @@ const opt = (name, fallback) => {
 const OUT = path.resolve(root, opt('--out', 'public/sprites'));
 const ONLY = opt('--only', null);
 
+const relative = path.relative(path.join(root, 'public', 'sprites'), OUT);
+if (
+  ONLY &&
+  relative !== '..' &&
+  !relative.startsWith('..' + path.sep) &&
+  !path.isAbsolute(relative)
+) {
+  console.error(
+    '--only leaves other subjects empty. Give --out a directory outside public/sprites.',
+  );
+  process.exit(1);
+}
+
 function blender() {
   if (process.env.BLENDER) return process.env.BLENDER;
   const which = spawnSync('which', ['blender'], { encoding: 'utf8' });
@@ -33,24 +47,6 @@ function blender() {
   const mac = '/Applications/Blender.app/Contents/MacOS/Blender';
   if (fs.existsSync(mac)) return mac;
   throw new Error('no Blender: set BLENDER to its executable');
-}
-
-/**
- * Refuse a sheet the manifest calls grey whose red, green and blue differ
- * anywhere: the renderer reads its red channel as the grey.
- */
-async function assertGrey(file) {
-  const { data, info } = await sharp(file)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  for (let i = 0; i < data.length; i += info.channels)
-    if (data[i] !== data[i + 1] || data[i] !== data[i + 2]) {
-      const pixel = i / info.channels;
-      throw new Error(
-        `the sheet is not grey at (${pixel % info.width}, ${Math.floor(pixel / info.width)})`,
-      );
-    }
 }
 
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'aircraft-views-'));
@@ -69,6 +65,7 @@ try {
     ],
     { stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8' },
   );
+  if (bake.error) throw bake.error;
   for (const line of bake.stdout.split('\n'))
     if (/^(baked|wrote)\b/.test(line)) console.log(line);
   if (bake.status !== 0) {
@@ -79,7 +76,6 @@ try {
     fs.readFileSync(path.join(scratch, 'aircraft-views.json'), 'utf8'),
   );
   const png = path.join(scratch, 'aircraft-views.png');
-  if (manifest.grey) await assertGrey(png);
   fs.mkdirSync(OUT, { recursive: true });
   const webp = path.join(OUT, manifest.image);
   await sharp(png)

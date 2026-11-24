@@ -263,6 +263,15 @@ optional:
   nothing, a move stretches with `axisScale`, and a slide and a hinge stop
   at their limits. The live layers drive it from each vehicle's record
   (`src/data/modelPartDrivers.js`).
+- `DrawPort.views(id, sheet)` (capability `viewSheets`, type `ViewSheet`)
+  registers a grey sheet of views. Registering the same id again replaces it.
+  Register the sheet before drawing an icon with a `ViewRef` image
+  (`{views, first, fallback?}`). The icon draws the frame that shows its subject
+  from the eye. It requires `rotationMode: 'course'`, takes no `imageLod`, and
+  shares one sheet with the set's other view icons. Until the sheet loads, and
+  for good if it fails, the icon draws its fallback or nothing if omitted.
+  Cesium offers this on WebGL 2 and keeps the texture for the context's life.
+  Layers send flat images to renderers without the capability.
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
@@ -867,9 +876,9 @@ software rasterizer such as SwiftShader draws the glow line differently.
 It has only the members the scenes need.
 
 Some behaviour is only drawn, so the logic checks cannot see it: course
-easing (`courseGlide`), and a hidden row keeping its eased
-course. The stub keeps no drawn course. These wait for scenes that capture
-an icon mid-turn. Height queries that count a set
-(`includeInHeightQueries`) are not checked either: the stub's heights are
-scripted, so it does not model them. Nor are video frames (a check needs a
-video) or `fetchTile` (the stub fetches nothing).
+easing (`courseGlide`), view sheets (`viewSheets`), and a hidden row keeping
+its eased course. The stub keeps no drawn course. These checks still need
+scenes that capture an icon mid-turn or from an oblique angle. Height
+queries that count a set (`includeInHeightQueries`) are not checked either:
+the stub's heights are scripted, so it does not model them. Nor are video
+frames (a check needs a video) or `fetchTile` (the stub fetches nothing).

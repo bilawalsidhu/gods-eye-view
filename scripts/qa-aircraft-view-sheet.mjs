@@ -14,7 +14,7 @@
  * Run:  node scripts/qa-aircraft-view-sheet.mjs [--manifest public/sprites/aircraft-views.json]
  *         [--sheet <image>] [--out qa-shots/aircraft-views] [--zoom 2] [--sizes 40,30,20]
  *         [--only airliner,glider]
- * `--sheet` defaults to the manifest's `image`, next to it.
+ * `--sheet` defaults to the manifest's `image`, a file next to it.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,16 +42,27 @@ const GROUNDS = [
 /** The layers' tints, multiplied into the neutral sprite. */
 const TINTS = [
   { name: 'fleet', rgb: [1, 1, 1] },
-  { name: 'tracked', rgb: [0.22, 0.82, 1] },
   { name: 'military', rgb: [1, 0.72, 0] },
 ];
 const GAP = 8;
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-const sheetPath = path.resolve(
-  opt('--sheet', path.join(path.dirname(MANIFEST), manifest.image)),
-);
-const { cellPx: cell, columns, rings } = manifest;
+for (const name of Object.keys(manifest.subjects))
+  if (!/^[\w-]+$/.test(name))
+    throw new Error(`Invalid subject name: ${JSON.stringify(name)}`);
+const override = opt('--sheet', null);
+if (
+  !override &&
+  (typeof manifest.image !== 'string' ||
+    !manifest.image ||
+    path.basename(manifest.image) !== manifest.image ||
+    ['.', '..'].includes(manifest.image))
+)
+  throw new Error(
+    "The manifest's image must be a file next to it. Pass --sheet for another.",
+  );
+const sheetPath = override ?? path.join(path.dirname(MANIFEST), manifest.image);
+const { cellPx: cell, columns, rows, rings } = manifest;
 const firsts = [];
 rings.reduce((at, count) => (firsts.push(at), at + count), 0);
 const widest = Math.max(...rings);
@@ -67,7 +78,10 @@ const PICKS = [
   [rings.length - 1, Math.round((rings[rings.length - 1] - 1) / 2)],
 ];
 
-const sheet = sharp(sheetPath, { limitInputPixels: false });
+const sheet = sharp(sheetPath);
+const meta = await sheet.metadata();
+if (meta.width !== columns * cell || meta.height !== rows * cell)
+  throw new Error('The sheet dimensions must match the manifest grid.');
 const { data: pixels, info } = await sheet
   .ensureAlpha()
   .raw()
@@ -146,6 +160,8 @@ async function subjectSheet(name, first) {
     }
   }
   const file = path.join(OUT, `${name}.png`);
+  if (path.dirname(file) !== OUT)
+    throw new Error('Invalid subject output path');
   await sharp({
     create: { width, height, channels: 4, background: '#111111' },
   })
@@ -158,6 +174,5 @@ async function subjectSheet(name, first) {
 fs.mkdirSync(OUT, { recursive: true });
 for (const [name, entry] of Object.entries(manifest.subjects)) {
   if (ONLY.length && !ONLY.includes(name)) continue;
-  const first = typeof entry === 'number' ? entry : entry.first;
-  console.log('wrote', await subjectSheet(name, first));
+  console.log('wrote', await subjectSheet(name, entry.first));
 }

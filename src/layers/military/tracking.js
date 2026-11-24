@@ -396,12 +396,7 @@ export function createTracking({
   /** The tracked billboard's images, from the current class/conversion: the
    *  fleet icon's own (`_fleetLook`), so selecting it changes only its colour. */
   function _trackedBillboardLook() {
-    // Drawn along its course, as the fleet icon is: from the view sheet
-    // where the renderer draws one.
-    const id = flightState._trackedIcao;
-    return parts.icons._fleetLook(id, undefined, undefined, {
-      alongCourse: true,
-    });
+    return parts.icons._fleetLook(flightState._trackedIcao);
   }
 
   /**

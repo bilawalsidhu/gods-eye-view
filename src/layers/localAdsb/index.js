@@ -388,7 +388,11 @@ export function createLocalAdsbLayer({
       color: kind === 'vehicle' ? vehicleColor : color,
       scaleByDistance: MARKER_SPRITE.scaleByDistance,
       ...(view
-        ? { rotationMode: 'course', course: marker.courseDeg ?? 0 }
+        ? {
+            rotationMode: 'course',
+            course: marker.courseDeg ?? 0,
+            pickProxy: { size: [MARKER_SPRITE.width, MARKER_SPRITE.height] },
+          }
         : {
             rotationMode: 'screen',
             rotation: kind === 'station' ? 0 : markerRotation(marker, basis),

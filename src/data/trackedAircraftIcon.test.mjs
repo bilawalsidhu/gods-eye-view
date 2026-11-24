@@ -212,7 +212,6 @@ test('given a view-sheet image and a course, the tracked icon is drawn along its
   icon.show({
     id: 'abc123',
     image: aircraftViewRef('airliner'),
-    imageLod: { near: 'near', switchPx: 30 },
     sprite: SPRITE,
     position: () => ({ x: 1, y: 2, z: 3 }),
     rotation: () => {
@@ -226,6 +225,7 @@ test('given a view-sheet image and a course, the tracked icon is drawn along its
   tick();
   const item = set.items.get('abc123');
   assert.equal(item.image, aircraftViewRef('airliner'));
+  assert.deepEqual(item.pickProxy.size, item.size);
   assert.equal('imageLod' in item, false);
   assert.equal(item.rotationMode, 'course');
   assert.equal(item.course, 45);

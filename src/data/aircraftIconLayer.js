@@ -33,7 +33,7 @@ import {
 } from './aircraftIcons.js';
 import { cockpitContactDotImage } from './cockpitContactDot.js';
 import { rotorFrame, rotorTurns } from './rotorFrames.js';
-import { registerAircraftViews, withAircraftView } from './aircraftViews.js';
+import { aircraftViewRef, registerAircraftViews } from './aircraftViews.js';
 import { aircraftRecedeSpec } from './aircraftRecession.js';
 import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
 
@@ -970,15 +970,13 @@ export function createAircraftIcons({
    * How a contact's icon is drawn outside Cockpit: its image (and the sharper
    * one it switches to up close), size, scale and scale by distance. The
    * tracked contact's own icon is drawn with this too, so selecting a contact
-   * changes its colour and nothing else. Drawn along its course
-   * (`alongCourse`) on a renderer that draws view sheets, a kind with
-   * rendered views draws from the aircraft view sheet, with no near image
-   * (`aircraftViews.js`); otherwise it is the flat glyph.
+   * changes only its alpha. On a renderer with view sheets, a kind with
+   * rendered views draws from the aircraft sheet with no near image.
+   * Otherwise it draws the flat glyph.
    * @param {string} icao24
    * @param {object} [info] Its record.
    * @param {number} [frame] A helicopter's rotor frame.
-   * @param {{alongCourse?: boolean}} [options]
-   * @returns {{image: string|{views: string, first: number},
+   * @returns {{image: string|{views: string, first: number, fallback: string},
    *   imageLod: {near: string, switchPx: number}|undefined,
    *   size: [number, number], scale: number, scaleByDistance: object}}
    */
@@ -986,38 +984,21 @@ export function createAircraftIcons({
     icao24,
     info = state.records.data.get(icao24),
     frame = _rotorFrameOf(icao24, info, Date.now()),
-    { alongCourse = false } = {},
   ) {
     const rendering = parts.rendering;
-    const look = {
-      image: aircraftIcon(
-        rendering._iconKind(icao24, info?.klass),
-        FLEET_ICON_PX,
-        frame,
-      ),
-      imageLod: {
-        near: aircraftIcon(
-          rendering._iconKind(icao24, info?.klass),
-          TRACKED_ICON_PX,
-          frame,
-        ),
-        switchPx,
-      },
-      size: [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX],
+    const kind = rendering._iconKind(icao24, info?.klass);
+    const size = [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX];
+    const view = views ? aircraftViewRef(kind, frame) : null;
+    return {
+      image: view ?? aircraftIcon(kind, FLEET_ICON_PX, frame),
+      imageLod: view
+        ? undefined
+        : { near: aircraftIcon(kind, TRACKED_ICON_PX, frame), switchPx },
+      pickProxy: view ? { size } : undefined,
+      size,
       scale: rendering._fleetBillboardScale(icao24),
       scaleByDistance: NORMAL_SCALE_BY_DISTANCE,
     };
-    return withAircraftView(look, {
-      views,
-      kind: rendering._iconKind(icao24, info?.klass),
-      frame,
-      rotationMode: alongCourse ? 'course' : undefined,
-    });
-  }
-
-  /** Whether contacts drawn along their course draw from the view sheet. */
-  function _drawsViews() {
-    return views;
   }
 
   /**
@@ -1077,7 +1058,6 @@ export function createAircraftIcons({
         id,
         state.records.data.get(id),
         frame,
-        { alongCourse: icons.item(id)?.rotationMode === 'course' },
       );
       icons.update(id, { image, imageLod });
     }
@@ -1103,6 +1083,7 @@ export function createAircraftIcons({
     const look = cockpitDot
       ? {
           image: cockpitDotImage(),
+          pickProxy: undefined,
           imageLod: undefined,
           size: [cockpitContactSizePx, cockpitContactSizePx],
           scale: 1,
@@ -1111,7 +1092,7 @@ export function createAircraftIcons({
           rotationMode: 'screen',
         }
       : {
-          ..._fleetLook(icao24, info, heliFrame, { alongCourse: !station }),
+          ..._fleetLook(icao24, info, heliFrame),
           color: rgba(rendering._fleetBillboardColor(icao24, info)),
           rotationMode: 'course',
         };
@@ -1205,7 +1186,6 @@ export function createAircraftIcons({
     _focusIcons,
     _applyIconPresentation,
     _fleetLook,
-    _drawsViews,
     _turnRotors,
     _rotorsTurning,
     _addIcon,

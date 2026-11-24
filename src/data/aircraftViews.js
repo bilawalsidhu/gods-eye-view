@@ -1,28 +1,18 @@
 /**
  * @module data/aircraftViews
- * @description Which block of the aircraft view sheet (`viewSheet.js`) a
- * contact's icon draws from. Each aircraft class is rendered there from a
- * sphere of camera angles; a renderer with the `viewSheets` capability lays
- * the icon flat on the earth along its course and draws the view that
- * matches where the eye is, so an oblique contact looks solid instead of
- * like a paper cut-out. Only an icon drawn along its course
- * (`rotationMode: 'course'`) can do this: a screen-rotated or upright icon
- * keeps its flat glyph. Kinds with no rendered views (the TR-3B triangle,
- * airport vehicles, ground stations) keep their flat glyph as well.
+ * @description Maps an icon kind and rotor frame to its block of AIRCRAFT_VIEWS
+ * and registers the sheet on a draw port. Course-rotated icons of rendered
+ * kinds take a view. Other icons keep the flat glyph.
+ * AIRCRAFT_VIEWS is the layout `scripts/build-aircraft-view-sheet.py` bakes.
  */
-import { AIRCRAFT_VIEWS } from './viewSheet.js';
 import {
   aircraftIcon,
   FLEET_ICON_PX,
-  ROTOR_FRAMES,
-  ROTOR_STILL_FRAME,
+  rotorFrameIndex,
 } from './aircraftIcons.js';
 
-/** The renderer capability that draws view sheets. */
-export const VIEW_SHEETS_CAPABILITY = 'viewSheets';
-
-/** Kinds drawn from the sheet with one block each (helicopters have three). */
-const STILL_KINDS = new Set([
+// The bake's SUBJECTS order.
+const SUBJECTS = [
   'airliner',
   'widebody',
   'quadjet',
@@ -32,7 +22,32 @@ const STILL_KINDS = new Set([
   'fastjet',
   'bizjet',
   'uav',
-]);
+  'helicopter0',
+  'helicopter1',
+  'helicopter2',
+];
+const SHEET = Object.freeze({
+  image: '/sprites/aircraft-views.webp',
+  cellPx: 64,
+  columns: 64,
+  rows: 57,
+  ringStepDeg: 7.5,
+  rings: Object.freeze([
+    1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22,
+  ]),
+});
+const FRAMES = SHEET.rings.reduce((sum, n) => sum + n, 0);
+export const AIRCRAFT_VIEWS = Object.freeze({
+  id: 'aircraft-views',
+  sheet: SHEET,
+  frames: FRAMES,
+  subjects: Object.freeze(
+    Object.fromEntries(SUBJECTS.map((name, i) => [name, i * FRAMES])),
+  ),
+});
+const STILL_KINDS = new Set(
+  SUBJECTS.filter((name) => !name.startsWith('helicopter')),
+);
 
 /** One frozen image ref per block, so equal refs are the same object. */
 const refs = new Map();
@@ -57,8 +72,7 @@ function refAt(first, kind, frame) {
 
 /**
  * The view image of an icon kind: `{views, first, fallback}`, the sheet's
- * id, the first cell of the kind's block and its flat glyph (drawn while
- * the sheet loads, or if it fails), or null for a kind with no views.
+ * id, the first cell of the kind's block and its flat glyph, or null for a kind with no views.
  * @param {string} kind An icon kind (`rendering._iconKind`).
  * @param {number} [frame] A helicopter's rotor frame, 0 to `ROTOR_FRAMES - 1`
  *   (the still frame otherwise, as `aircraftIcon` takes it).
@@ -67,21 +81,10 @@ function refAt(first, kind, frame) {
 export function aircraftViewRef(kind, frame) {
   const subjects = AIRCRAFT_VIEWS.subjects;
   if (kind === 'helicopter') {
-    const f =
-      Number.isInteger(frame) && frame >= 0 && frame < ROTOR_FRAMES
-        ? frame
-        : ROTOR_STILL_FRAME;
-    const first = subjects[`helicopter${f}`];
-    return Number.isInteger(first) ? refAt(first, kind, f) : null;
+    const f = rotorFrameIndex(frame);
+    return refAt(subjects[`helicopter${f}`], kind, f);
   }
-  if (!STILL_KINDS.has(kind)) return null;
-  const first = subjects[kind];
-  return Number.isInteger(first) ? refAt(first, kind) : null;
-}
-
-/** Whether an icon image is a view-sheet ref. */
-export function isAircraftViewRef(image) {
-  return Boolean(image) && typeof image === 'object' && 'views' in image;
+  return STILL_KINDS.has(kind) ? refAt(subjects[kind], kind) : null;
 }
 
 /** Draw ports the sheet is registered on. */
@@ -103,7 +106,7 @@ export function registerAircraftViews(
   resolveAsset = (url) => url,
 ) {
   if (!drawPort || typeof drawPort.views !== 'function') return false;
-  if (!capabilities?.has?.(VIEW_SHEETS_CAPABILITY)) return false;
+  if (!capabilities?.has?.('viewSheets')) return false;
   if (!registered.has(drawPort)) {
     const sheet = AIRCRAFT_VIEWS.sheet;
     drawPort.views(AIRCRAFT_VIEWS.id, {
@@ -113,26 +116,4 @@ export function registerAircraftViews(
     registered.add(drawPort);
   }
   return true;
-}
-
-/**
- * An icon's look drawn from the view sheet where it can be: with views on,
- * the item drawn along its course and the kind rendered, the image is the
- * view ref and there is no near image (`imageLod: undefined`, so an update
- * clears it); otherwise the look as given, the very same object.
- * @template {{image: unknown, imageLod?: unknown}} T
- * @param {T} look
- * @param {object} options
- * @param {boolean} options.views Whether the renderer draws views
- *   (`registerAircraftViews`).
- * @param {string} options.kind The icon kind.
- * @param {number} [options.frame] A helicopter's rotor frame.
- * @param {string} [options.rotationMode] How the item is rotated.
- * @returns {T}
- */
-export function withAircraftView(look, { views, kind, frame, rotationMode }) {
-  if (!views || rotationMode !== 'course') return look;
-  const ref = aircraftViewRef(kind, frame);
-  if (!ref) return look;
-  return { ...look, image: ref, imageLod: undefined };
 }

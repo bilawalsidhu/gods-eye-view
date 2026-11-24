@@ -2,12 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   aircraftViewRef,
-  isAircraftViewRef,
   registerAircraftViews,
-  VIEW_SHEETS_CAPABILITY,
-  withAircraftView,
+  AIRCRAFT_VIEWS,
 } from './aircraftViews.js';
-import { AIRCRAFT_VIEWS } from './viewSheet.js';
 import { ROTOR_FRAMES, ROTOR_STILL_FRAME } from './rotorFrames.js';
 import { aircraftIcon, FLEET_ICON_PX } from './aircraftIcons.js';
 
@@ -90,22 +87,10 @@ test('the TR-3B, airport vehicles, ground stations and unknown kinds have no vie
   );
 });
 
-test('a view ref is told apart from flat images', () => {
-  assert.equal(isAircraftViewRef(aircraftViewRef('glider')), true);
-  for (const image of [
-    'data:image/svg+xml;base64,AAA',
-    null,
-    undefined,
-    { atlas: 'a', slot: 's' },
-  ])
-    assert.equal(isAircraftViewRef(image), false, String(image));
-});
-
 test('the sheet is registered once per draw port, only with the capability', () => {
   const calls = [];
   const port = { views: (id, sheet) => calls.push([id, sheet]) };
-  const caps = new Set([VIEW_SHEETS_CAPABILITY]);
-  assert.equal(VIEW_SHEETS_CAPABILITY, 'viewSheets');
+  const caps = new Set(['viewSheets']);
   assert.equal(registerAircraftViews(port, new Set()), false);
   assert.equal(registerAircraftViews(port, null), false);
   assert.equal(calls.length, 0, 'nothing registered without the capability');
@@ -123,41 +108,10 @@ test('the sheet is registered once per draw port, only with the capability', () 
   assert.equal(registerAircraftViews(null, caps), false);
 });
 
-test('a look takes the view only when views are on and it is drawn along its course', () => {
-  const look = {
-    image: 'flat',
-    imageLod: { near: 'near', switchPx: 30 },
-    size: [20, 20],
-    scale: 1.5,
-  };
-  const on = { views: true, kind: 'airliner', rotationMode: 'course' };
-  const viewed = withAircraftView(look, on);
-  assert.deepEqual(viewed, {
-    image: aircraftViewRef('airliner'),
-    imageLod: undefined,
-    size: [20, 20],
-    scale: 1.5,
-  });
-  assert.ok('imageLod' in viewed, 'imageLod is cleared, so an update drops it');
-  assert.equal(look.image, 'flat', 'the look given is left as it was');
-  assert.equal(withAircraftView(look, { ...on, views: false }), look);
-  assert.equal(withAircraftView(look, { ...on, rotationMode: 'screen' }), look);
-  assert.equal(
-    withAircraftView(look, { ...on, rotationMode: undefined }),
-    look,
-  );
-  assert.equal(withAircraftView(look, { ...on, kind: 'tr3b' }), look);
-  assert.equal(withAircraftView(look, { ...on, kind: 'station' }), look);
-  assert.equal(
-    withAircraftView(look, { ...on, kind: 'helicopter', frame: 2 }).image,
-    aircraftViewRef('helicopter', 2),
-  );
-});
-
 test('the sheet is registered with its image resolved as the layer resolves its assets', () => {
   const calls = [];
   const port = { views: (id, sheet) => calls.push([id, sheet]) };
-  const caps = new Set([VIEW_SHEETS_CAPABILITY]);
+  const caps = new Set(['viewSheets']);
   registerAircraftViews(port, caps, (url) => `https://cdn.example/app${url}`);
   assert.equal(calls.length, 1);
   const [id, sheet] = calls[0];

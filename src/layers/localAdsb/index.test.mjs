@@ -322,7 +322,7 @@ test('local aircraft use their class silhouette at one size in magenta', async (
 
 test('on a renderer that draws view sheets, local aircraft draw their view along their track; vehicles and masts stay flat', async (t) => {
   const { aircraftViewRef } = await import('../../data/aircraftViews.js');
-  const { AIRCRAFT_VIEWS } = await import('../../data/viewSheet.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
   const viewer = { scene: {} };
   const camera = fakeCameraPort({
     pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },

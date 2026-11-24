@@ -1,48 +1,12 @@
-"""Bake the aircraft view sheet: every aircraft class seen from a sphere of
-directions, as one image of small shaded sprites.
+"""Bake shaded aircraft sprites from the fleet models.
 
-    blender -b --factory-startup --python scripts/build-aircraft-view-sheet.py -- \
-        --out <dir> [--cell 64] [--supersample 4] [--only airliner,light]
-        [--preview <dir>]
+    blender -b --factory-startup --python scripts/build-aircraft-view-sheet.py -- --out <dir> [--only airliner,light]
 
-It writes `aircraft-views.png` and its manifest `aircraft-views.json` to
-`--out`. The manifest names the shipped image, `aircraft-views.webp`, which
-`npm run build:aircraft-views` (scripts/build-aircraft-views.mjs) makes from
-the PNG (lossless) and writes to `public/sprites/` with the manifest.
-
-The layers draw a contact with the frame that shows it from where the eye is
-(`src/data/viewSheet.js` holds the same layout and maths; its test,
-`src/data/viewSheet.test.mjs`, checks this script's constants and the shipped
-manifest against it). A frame is an orthographic view of the class's
-fleet model (`public/models/fleet/`, nose toward -X, +Y starboard, +Z up),
-centred on the model's origin, the model's bounding sphere filling
-`FILL` of the cell.
-
-Directions. `d` is the unit vector from the aircraft to the eye in the
-aircraft's own frame (forward, right, up), the aircraft lying flat on the
-earth: up is the ground's normal, forward its course. Rings of frames lie
-`RING_STEP_DEG` apart from straight above (ring 0, one frame) down to
-`RINGS[-1]` below the horizon. A ring holds the eye's bearings from dead ahead
-(first frame) round the starboard side to dead astern (last frame); the port
-side is the starboard frame mirrored, which is why the light is symmetric
-about the aircraft's centre plane.
-
-Roll. A frame's image up is where the aircraft's forward goes under the
-smallest rotation that takes "up" to `d`: straight above, the nose points up
-the image, and the roll then changes smoothly all the way round and below
-(it has no meaning only from straight below, which no ring reaches).
-
-The sprites are neutral (white paint, grey shading, dark glass and a dark
-edge) so a layer's tint multiplies them, as it does the flat glyphs; every
-pixel's red, green and blue are equal (`"grey": true` in the manifest), as
-the renderer keeps the sheet as grey and alpha, and the bake refuses a frame
-that is not. A
-helicopter's body and blades are painted light as well (its blades a solid
-light grey), and its rotor frames share one scale: each rotor vertex counts
-at the farthest point of the circle it sweeps about the rotor's axis. Thin
-subjects are thickened before their edge (`BOLD_PX`), and every cell keeps
-`CLEAR_EDGE_PX` clear at its edges for the renderer's mipmaps; the bake
-refuses a frame that does not.
+Writes aircraft-views.png and aircraft-views.json in --out. The npm script
+build:aircraft-views encodes the PNG as lossless WebP. The models face -X,
+with +Y starboard and +Z up. Helicopter frames share one scale based on the
+farthest point each vertex reaches over its rotor sweep.
+The layout and frame maths are described in src/data/viewSheet.js.
 """
 
 import json
@@ -55,19 +19,21 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-# --- The sheet's layout (mirrored in src/data/viewSheet.js) -----------------
-
+# Layout mirrored in src/data/aircraftViews.js.
 RING_STEP_DEG = 7.5
 # Frames in each ring, from dead ahead round starboard to dead astern.
 RINGS = [1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22]
 FRAMES = sum(RINGS)
 COLUMNS = 64
+CELL_PX = 64
+SUPERSAMPLE = 4
+SAMPLES = 48
 # How much of a cell the model's bounding sphere spans.
 FILL = 0.92
 
-# Each class's model, in the order of its block of frames in the sheet. A
-# helicopter has one block for each rotor frame (rotorFrames.js).
+# Copy of ROTOR_ANGLES_DEG in src/data/aircraftIcons.js. Keep them equal.
 ROTOR_ANGLES_DEG = [15, 45, 75]
+# Each class's model in sheet order. Helicopters use one block per rotor frame.
 SUBJECTS = [
     ("airliner", "aircraft/a320.glb", None),
     ("widebody", "aircraft/b789.glb", None),
@@ -125,19 +91,10 @@ def frame_up(d):
     return (UP.rotation_difference(d) @ FORWARD).normalized()
 
 
-# --- Scene -------------------------------------------------------------------
-
 
 def args_after_dashes():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
-    opts = {
-        "out": "public/sprites",
-        "cell": 64,
-        "supersample": 4,
-        "only": None,
-        "preview": None,
-        "samples": 48,
-    }
+    opts = {"out": "public/sprites", "only": None}
     i = 0
     while i < len(argv):
         key = argv[i].lstrip("-")
@@ -145,9 +102,6 @@ def args_after_dashes():
             raise SystemExit(f"unknown option {argv[i]}")
         opts[key] = argv[i + 1]
         i += 2
-    opts["cell"] = int(opts["cell"])
-    opts["supersample"] = int(opts["supersample"])
-    opts["samples"] = int(opts["samples"])
     return opts
 
 
@@ -345,8 +299,6 @@ def aim(camera, fill, d, radius):
     camera.data.ortho_scale = 2 * radius / FILL
 
 
-# --- Pixels ------------------------------------------------------------------
-
 
 def read_pixels(path):
     image = bpy.data.images.load(path)
@@ -356,34 +308,30 @@ def read_pixels(path):
     return pixels[::-1]  # top row first
 
 
-def dilate(alpha, radius):
-    out = alpha.copy()
+def disk_shifts(shape, radius):
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
             if dx * dx + dy * dy > radius * radius or (dx == 0 and dy == 0):
                 continue
-            shifted = np.zeros_like(alpha)
-            ys = slice(max(dy, 0), alpha.shape[0] + min(dy, 0))
-            xs = slice(max(dx, 0), alpha.shape[1] + min(dx, 0))
-            yd = slice(max(-dy, 0), alpha.shape[0] + min(-dy, 0))
-            xd = slice(max(-dx, 0), alpha.shape[1] + min(-dx, 0))
-            shifted[ys, xs] = alpha[yd, xd]
-            np.maximum(out, shifted, out=out)
+            ys = slice(max(dy, 0), shape[0] + min(dy, 0))
+            xs = slice(max(dx, 0), shape[1] + min(dx, 0))
+            yd = slice(max(-dy, 0), shape[0] + min(-dy, 0))
+            xd = slice(max(-dx, 0), shape[1] + min(-dx, 0))
+            yield (ys, xs), (yd, xd)
+
+
+def dilate(alpha, radius):
+    out = alpha.copy()
+    for dst, src in disk_shifts(alpha.shape, radius):
+        np.maximum(out[dst], alpha[src], out=out[dst])
     return out
 
 
 def disk_sum(values, radius):
     """Each pixel's sum of `values` over a disk of `radius` around it."""
     out = values.copy()
-    for dy in range(-radius, radius + 1):
-        for dx in range(-radius, radius + 1):
-            if dx * dx + dy * dy > radius * radius or (dx == 0 and dy == 0):
-                continue
-            ys = slice(max(dy, 0), values.shape[0] + min(dy, 0))
-            xs = slice(max(dx, 0), values.shape[1] + min(dx, 0))
-            yd = slice(max(-dy, 0), values.shape[0] + min(-dy, 0))
-            xd = slice(max(-dx, 0), values.shape[1] + min(-dx, 0))
-            out[ys, xs] += values[yd, xd]
+    for dst, src in disk_shifts(values.shape, radius):
+        out[dst] += values[src]
     return out
 
 
@@ -447,7 +395,7 @@ GREY_TOLERANCE = 1.5 / 255
 def to_grey(frame, name, n):
     """The frame with equal red, green and blue (their mean), refusing one
     whose channels differ by more than rendering noise: the sheet ships as
-    grey (`"grey": true`), its red channel read as the grey."""
+    grey, its red channel read as the grey."""
     rgb = frame[..., :3]
     lit = frame[..., 3] > 0
     spread = (rgb.max(axis=2) - rgb.min(axis=2))[lit]
@@ -485,17 +433,13 @@ def save_png(path, pixels):
     bpy.data.images.remove(image)
 
 
-# --- Bake --------------------------------------------------------------------
-
 
 def main():
     opts = args_after_dashes()
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     models = os.path.join(root, "public", "models", "fleet")
-    cell = opts["cell"]
-    supersample = opts["supersample"]
     only = set(opts["only"].split(",")) if opts["only"] else None
-    scene, camera, fill = setup_scene(cell * supersample, opts["samples"])
+    scene, camera, fill = setup_scene(CELL_PX * SUPERSAMPLE, SAMPLES)
     material = paint_material()
     helicopter_material = paint_material(HELICOPTER_PAINT_RAMP)
     rotor_material = paint_material(solid=0.82)
@@ -503,17 +447,15 @@ def main():
     tmp = os.path.join(bpy.app.tempdir, "view-frame.png")
 
     rows = math.ceil(len(SUBJECTS) * FRAMES / COLUMNS)
-    sheet = np.zeros((rows * cell, COLUMNS * cell, 4), dtype=np.float32)
+    sheet = np.zeros((rows * CELL_PX, COLUMNS * CELL_PX, 4), dtype=np.float32)
     manifest = {
         "image": "aircraft-views.webp",
-        "cellPx": cell,
+        "cellPx": CELL_PX,
         "columns": COLUMNS,
         "rows": rows,
         "ringStepDeg": RING_STEP_DEG,
         "rings": RINGS,
         "fill": FILL,
-        # Every pixel's red, green and blue are equal.
-        "grey": True,
         "subjects": {},
     }
 
@@ -529,22 +471,17 @@ def main():
             rotor_material,
         )
         manifest["subjects"][name]["radiusM"] = round(radius, 3)
-        for n, (ring, i, d) in enumerate(directions):
+        for n, (_, _, d) in enumerate(directions):
             aim(camera, fill, d, radius)
             scene.render.filepath = tmp
             bpy.ops.render.render(write_still=True)
-            frame = finish(read_pixels(tmp), supersample, BOLD_PX.get(name, 0.0))
+            frame = finish(read_pixels(tmp), SUPERSAMPLE, BOLD_PX.get(name, 0.0))
             check_clear_edge(frame, name, n)
             frame = to_grey(frame, name, n)
             at = first + n
-            y = (at // COLUMNS) * cell
-            x = (at % COLUMNS) * cell
-            sheet[y : y + cell, x : x + cell] = frame
-            if opts["preview"]:
-                os.makedirs(opts["preview"], exist_ok=True)
-                save_png(
-                    os.path.join(opts["preview"], f"{name}-r{ring}-{i:02d}.png"), frame
-                )
+            y = (at // COLUMNS) * CELL_PX
+            x = (at % COLUMNS) * CELL_PX
+            sheet[y : y + CELL_PX, x : x + CELL_PX] = frame
         for obj in objects:
             bpy.data.objects.remove(obj, do_unlink=True)
         print(f"baked {name}: {FRAMES} frames, radius {radius:.2f} m", flush=True)
@@ -555,7 +492,7 @@ def main():
     with open(os.path.join(out, "aircraft-views.json"), "w") as f:
         json.dump(manifest, f, indent=1)
         f.write("\n")
-    print(f"wrote {out}/aircraft-views.png ({COLUMNS * cell}x{rows * cell})")
+    print(f"wrote {out}/aircraft-views.png ({COLUMNS * CELL_PX}x{rows * CELL_PX})")
 
 
 main()

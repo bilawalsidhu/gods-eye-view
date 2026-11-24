@@ -8876,7 +8876,7 @@ test('a disposed set, and every set once the port is disposed, does nothing on l
 
 test('a draw port registers view sheets only with viewSheets, each port its own', async () => {
   const { PORTS } = await import('../contract/index.js');
-  const { AIRCRAFT_VIEWS } = await import('../../data/viewSheet.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
   assert.equal(PORTS.draw.views, 'viewSheets', 'an optional port method');
   const report = (error) => assert.fail(error);
   const without = createCesiumDraw({
@@ -8899,13 +8899,11 @@ test('a draw port registers view sheets only with viewSheets, each port its own'
   };
   const setOne = one.port.icons({ id: 'views:one' });
   const setTwo = two.port.icons({ id: 'views:two' });
-  setOne.set([view]);
-  setTwo.set([view]);
   one.port.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  setOne.set([view]);
+  assert.throws(() => setTwo.set([view]), /call views\(\) first/);
   const rowsOne = one.sets.get('views:one').gpu.set;
-  const rowsTwo = two.sets.get('views:two').gpu.set;
   assert.equal(rowsOne.imageFar(rowsOne.row('a')), AIRCRAFT_VIEWS.subjects.uav);
-  assert.equal(rowsTwo.imageFar(rowsTwo.row('a')), -1, 'not on this port');
   setOne.dispose();
   setTwo.dispose();
 });

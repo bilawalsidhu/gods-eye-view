@@ -22,7 +22,7 @@
  * the eye and tracking a contact does not flatten it.
  */
 import { findDraw, findFrame } from '../render/rendererOf.js';
-import { isAircraftViewRef } from './aircraftViews.js';
+import { isViewRef } from './viewSheet.js';
 
 /** Uniquifier for the sets' ids. */
 let instances = 0;
@@ -111,20 +111,23 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
   function draw() {
     if (!shown || !set) return;
     const pos = shown.position();
-    const alongCourse =
-      typeof shown.course === 'function' && isAircraftViewRef(shown.image);
+    const alongCourse = isViewRef(shown.image);
     const item = {
       id: shown.id,
       pos: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: 0, y: 0, z: 0 },
       show: Boolean(pos) && visible,
       image: shown.image,
-      ...(shown.imageLod && !alongCourse ? { imageLod: shown.imageLod } : {}),
+      ...(shown.imageLod ? { imageLod: shown.imageLod } : {}),
       size: [shown.sprite.width, shown.sprite.height],
       scale: shown.sprite.scale,
       scaleByDistance: shown.sprite.scaleByDistance,
       color: shown.color(),
       ...(alongCourse
-        ? { rotationMode: 'course', course: pos ? shown.course() : 0 }
+        ? {
+            rotationMode: 'course',
+            course: pos ? shown.course() : 0,
+            pickProxy: { size: [shown.sprite.width, shown.sprite.height] },
+          }
         : { rotationMode: 'screen', rotation: pos ? shown.rotation() : 0 }),
       disableDepthTest: Number.POSITIVE_INFINITY,
     };
@@ -157,7 +160,7 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
      * next one on.
      * @param {object} target
      * @param {string} target.id The contact's id.
-     * @param {string|{views: string, first: number}} target.image A flat
+     * @param {string|{views: string, first: number, fallback: string}} target.image A flat
      *   glyph, or a view-sheet image (drawn along `course`).
      * @param {{near: string, switchPx: number}} [target.imageLod] The
      *   sharper image a flat glyph switches to once drawn larger than

@@ -531,8 +531,8 @@ function viewsFixture(
 
 test('with view sheets, every aircraft class draws from the sheet along its course, with no near image', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
-  const { aircraftViewRef } = await import('./aircraftViews.js');
-  const { AIRCRAFT_VIEWS } = await import('./viewSheet.js');
+  const { aircraftViewRef, AIRCRAFT_VIEWS } =
+    await import('./aircraftViews.js');
   const records = new Map([
     ['p1', { klass: 'airliner' }],
     ['p2', { klass: 'glider' }],
@@ -555,25 +555,15 @@ test('with view sheets, every aircraft class draws from the sheet along its cour
     state._icons.item('h1').image,
     aircraftViewRef('helicopter', ROTOR_STILL_FRAME),
   );
-  // The plain fleet look (the tracked icon's sizing, a screen-rotated
-  // caller) stays the flat glyph.
-  assert.equal(
-    icons._fleetLook('p1').image,
-    aircraftIcon('airliner', FLEET_ICON_PX),
-  );
-  assert.equal(
-    icons._fleetLook('p1', undefined, undefined, { alongCourse: true }).image,
-    aircraftViewRef('airliner'),
-  );
-  assert.equal(icons._drawsViews(), true);
+  assert.equal(icons._fleetLook('p1').image, aircraftViewRef('airliner'));
+  assert.deepEqual(p1.pickProxy.size, p1.size);
   icons._disposeIcons();
-  assert.equal(icons._drawsViews(), false);
 });
 
 test('without view sheets the icons are the flat glyphs with their near image, as before', (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
   const records = new Map([['p1', { klass: 'airliner' }]]);
-  const { state, icons, registered, unbind } = viewsFixture(records, {
+  const { state, registered, unbind } = viewsFixture(records, {
     viewSheets: false,
   });
   t.after(unbind);
@@ -582,7 +572,6 @@ test('without view sheets the icons are the flat glyphs with their near image, a
   assert.equal(p1.image, aircraftIcon('airliner', FLEET_ICON_PX));
   assert.equal(p1.imageLod.near, aircraftIcon('airliner', 192));
   assert.equal(p1.rotationMode, 'course');
-  assert.equal(icons._drawsViews(), false);
 });
 
 test('with view sheets, the TR-3B, airport vehicles and ground stations stay flat', (t) => {
@@ -633,7 +622,7 @@ test('with view sheets, an airborne helicopter turns its rotor through the sheet
 
 test('the layer registers the view sheet at its own asset URL', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
-  const { AIRCRAFT_VIEWS } = await import('./viewSheet.js');
+  const { AIRCRAFT_VIEWS } = await import('./aircraftViews.js');
   const { registered, unbind } = viewsFixture(
     new Map([['p1', { klass: 'airliner' }]]),
     { resolveAsset: (url) => `/gev/${url.replace(/^\//, '')}` },

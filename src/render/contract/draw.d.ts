@@ -167,10 +167,9 @@ export interface Placed {
  * frames, from the eye dead ahead of the subject, round its right side, to
  * dead astern. The eye on its left side draws the right side's frame
  * mirrored. A frame's up is the subject's forward, turned by the smallest
- * rotation that takes its up onto the frame's direction. The frame nearest
- * the eye's direction is drawn, as a card square to its own direction, so
- * between frames it is tilted as its subject is (`data/viewSheet.js` holds
- * the maths).
+ * rotation that takes its up onto the frame's direction.
+ * The sheet is grey (equal red, green and blue). A renderer reads its red
+ * channel as grey. Keep each cell's outer 2 px transparent for half-size mips.
  */
 export interface ViewSheet {
   /** The sheet's URL. */
@@ -181,24 +180,22 @@ export interface ViewSheet {
   ringStepDeg: number;
   /** Frames in each ring; the first is 1. At most 18 rings. */
   rings: readonly number[];
-  /**
-   * The sheet's pixels are grey (red, green and blue equal): a renderer may
-   * keep it as one channel and alpha.
-   */
-  grey?: boolean;
 }
 
-/**
- * An image an icon draws: a URL, a slot in a shared atlas, generated, or
- * (`viewSheets`, icons only) a subject of a view sheet by its first cell.
- */
+/** An image an icon draws: a URL, a slot in a shared atlas, or generated. */
 export type ImageRef =
   | string
   | { atlas: string; slot: string }
-  | { views: string; first: number; fallback?: ImageRef }
   | { svg: string }
   | { blob: Blob }
   | { canvas: HTMLCanvasElement | OffscreenCanvas; key: string };
+
+/** `viewSheets`: a subject of a registered sheet, by its first cell (icons only). */
+export interface ViewRef {
+  views: string;
+  first: number;
+  fallback?: ImageRef;
+}
 
 /**
  * How an icon moves between updates, on its set's `motionClock`. Times are
@@ -251,11 +248,11 @@ export interface CourseGlide {
 export interface IconItem extends Placed {
   /**
    * A view (`{views, first}`) needs `rotationMode: 'course'` and takes no
-   * `imageLod`; a set draws views from one sheet. Until its sheet is
-   * registered and loaded, and if that cannot load, it draws its `fallback`
+   * `imageLod`. Register the sheet before drawing its icons. A set draws
+   * from one sheet. Until it loads, and if it fails, the icon draws its `fallback`
    * (any image but a view) along its course, or nothing without one.
    */
-  image: ImageRef;
+  image: ImageRef | ViewRef;
   /** Drawn size in CSS pixels. */
   size: [width: number, height: number];
   color?: Color;
@@ -796,6 +793,6 @@ export interface DrawPort {
   on(event: 'clampState', cb: (state: 'draped' | 'overlay') => void): Off;
   /** Register an atlas of images icons refer to by slot. */
   atlas(id: string, images: Record<string, ImageRef>): void;
-  /** `viewSheets`: register a sheet of views icons refer to by id. */
+  /** `viewSheets`: register the sheet before an icon draws from it. */
   views?(id: string, sheet: ViewSheet): void;
 }

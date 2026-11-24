@@ -2,15 +2,13 @@
 /**
  * qa-aircraft-views.mjs: screenshots of the aircraft view sheet in the app.
  *
- * Seeds a grid of synthetic military contacts (every icon class down the
- * rows, eight courses across) through a fetch shim, then photographs it from
- * straight above, tilted from several sides and from below, so a person can
- * check that each sprite shows its aircraft from where the camera is: the
- * nose along the course, the far wing foreshortened, the underside from
- * below.
+ * Seeds synthetic Military Flights contacts (Flights with `--layer flights`),
+ * one row per class and eight courses across. Shots from above, below and
+ * several oblique angles show the nose direction, wing shape and underside.
+ * The sheet must load, or fail with `--block-sheet` for the glyph fallback.
  *
  * Run:  node scripts/qa-aircraft-views.mjs --url http://localhost:4173 [--out qa-shots/views]
- *         [--layer military|flights] [--block-sheet] [--headful]
+ *         [--layer military|flights] [--block-sheet] [--headful] [--gpu] (default: SwiftShader)
  *         [--orbit [--orbit-step 2] [--orbit-pitch -35]]
  * Needs the dev server (`npm run dev`).
  */
@@ -112,10 +110,7 @@ async function main() {
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
       ...(GPU ? [] : ['--use-gl=angle', '--use-angle=swiftshader']),
-      '--disable-web-security',
       '--disable-background-timer-throttling',
       '--disable-renderer-backgrounding',
       '--window-size=1500,1000',
@@ -235,7 +230,7 @@ async function main() {
       { layer: LAYER, contacts },
     );
 
-    console.log(`Loading ${APP_URL} ...`);
+    console.log(`Loading ${new URL(APP_URL).origin} ...`);
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
@@ -256,6 +251,23 @@ async function main() {
       );
     // Past the layer's render delay, so every contact is drawn.
     await sleep(20000);
+    const states = await page.evaluate(() => {
+      const result = [];
+      function visit(p) {
+        if (typeof p.viewsState === 'function' && p._views?.())
+          result.push(p.viewsState());
+        if (typeof p.get === 'function')
+          for (let i = 0; i < p.length; i++) visit(p.get(i));
+      }
+      visit(window.__godsEyeView.viewer.scene.primitives);
+      return result;
+    });
+    const expected = BLOCK_SHEET ? 'failed' : 'ready';
+    console.log(`  view sheet: ${states.join(', ')}`);
+    if (!states.length || states.some((state) => state !== expected))
+      throw new Error(
+        `View sheet states [${states.join(', ')}], expected ${expected}`,
+      );
 
     for (const shot of argv.includes('--orbit') ? ORBIT_SHOTS : SHOTS) {
       await page.evaluate(

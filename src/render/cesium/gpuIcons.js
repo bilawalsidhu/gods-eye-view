@@ -77,20 +77,19 @@ import {
   motionEndsAt,
 } from '../motion/iconMotion.js';
 import { blobUrl, toCartesian } from './common.js';
+import { isViewRef } from '../../data/viewSheet.js';
 import { heightsFor } from './heights.js';
 
 /** The capabilities GPU icon sets bring. */
-export const GPU_ICON_CAPABILITIES = Object.freeze([
+const GPU_ICON_CAPABILITIES = Object.freeze([
   'columns',
   'motionSegments',
   'courseGlide',
 ]);
 
 /**
- * The capabilities GPU icon sets bring on `scene`: `viewSheets` too, but on
- * WebGL 1, where a set that draws views could not also draw what its rows
- * read from their extras (a display range, a fade, an offset), and a layer
- * that uses those would lose its icons to the sheet.
+ * GPU icon sets also offer `viewSheets` except on WebGL 1, where a set
+ * drawing views could not read its rows' display range, fade and offset.
  * @param {object} [scene] A Cesium scene; none (a test's) is taken as WebGL 2.
  */
 export function gpuIconCapabilities(scene) {
@@ -98,9 +97,6 @@ export function gpuIconCapabilities(scene) {
     ? [...GPU_ICON_CAPABILITIES]
     : [...GPU_ICON_CAPABILITIES, 'viewSheets'];
 }
-
-/** Whether an image is a subject of a view sheet (`{views, first}`). */
-const isView = (image) => typeof image?.views === 'string';
 
 /** Whether a subject's block of frames, from its first cell, is in `layout`. */
 const blockFits = (first, layout) =>
@@ -251,28 +247,15 @@ export function createGpuIcons({
   requestRender,
 }) {
   const can = (capability) => capabilities.has(capability);
-  /** Whether a view's frames are in its sheet (true while not registered). */
-  const viewFits = (view) => {
-    const sheet = viewsOf(view.views);
-    return !sheet || blockFits(view.first, sheet.layout);
-  };
-
-  /** Whether drawing these items (in a set of `spec`) needs a GPU icon set. */
-  function wants(items, spec = {}) {
-    if (spec.recede) return true;
-    for (const item of items) {
-      if (
-        (item.motion && can('motionSegments')) ||
-        (item.courseGlide && can('courseGlide')) ||
-        item.pickProxy ||
-        item.imageLod ||
-        // A view turns along its course: an item that does not is not asked
-        // for its image here.
-        (item.rotationMode === 'course' && isView(item.image))
-      )
-        return true;
-    }
-    return false;
+  /** Whether this item needs a GPU icon set. */
+  function wants(item, image) {
+    return (
+      (item.motion && can('motionSegments')) ||
+      (item.courseGlide && can('courseGlide')) ||
+      item.pickProxy ||
+      item.imageLod ||
+      isViewRef(image)
+    );
   }
 
   /** Refuse what a GPU icon set cannot draw, before anything changes. */
@@ -286,13 +269,18 @@ export function createGpuIcons({
       const refuse = (what) => {
         throw new Error(`the Cesium renderer's GPU icons have no ${what}`);
       };
-      if (isView(item.imageLod?.near)) refuse('views as near images');
-      if (isView(item.image?.fallback)) refuse('views as fallbacks');
-      if (isView(item.image)) {
+      if (isViewRef(item.imageLod?.near)) refuse('views as near images');
+      if (isViewRef(item.image?.fallback)) refuse('views as fallbacks');
+      if (isViewRef(item.image)) {
         if (!can('viewSheets')) refuse('view sheets');
         if (!Number.isInteger(item.image.first) || item.image.first < 0)
           throw new TypeError("a view's first cell is a whole number from 0");
-        if (!viewFits(item.image))
+        const registered = viewsOf(item.image.views);
+        if (!registered)
+          throw new Error(
+            `no view sheet '${item.image.views}' is registered: call views() first`,
+          );
+        if (!blockFits(item.image.first, registered.layout))
           throw new RangeError("a view's frames run past its sheet");
         if (item.rotationMode !== 'course')
           refuse("views but along a course (rotationMode: 'course')");
@@ -320,7 +308,7 @@ export function createGpuIcons({
       }
       for (const given of [
         // A view is not in the atlas; the image it falls back to is.
-        isView(item.image) ? item.image.fallback : item.image,
+        isViewRef(item.image) ? item.image.fallback : item.image,
         item.imageLod?.near,
       ]) {
         if (given === undefined) continue;
@@ -477,22 +465,15 @@ export function createGpuIcons({
       const added = row < 0;
       if (added) row = set.add(item.id);
       const [width = 0, height = 0] = item.size ?? [];
-      const view = isView(item.image);
+      const view = isViewRef(item.image);
       if (view) {
-        // Its subject's first cell, once its sheet is registered, and the
-        // slot of the image drawn in its place until the sheet has loaded.
-        // (A subject past the sheet, registered since, draws no cell.)
+        // First sheet cell and the atlas slot used until the sheet is ready.
         record.views ??= item.image.views;
-        const sheet = viewsOf(item.image.views);
-        const first =
-          sheet && blockFits(item.image.first, sheet.layout)
-            ? item.image.first
-            : -1;
         const fallback =
           item.image.fallback === undefined
             ? -1
             : slotOf(item.image.fallback, item);
-        set.setImage(row, first, fallback);
+        set.setImage(row, item.image.first, fallback);
         set.setImageSwitch(row, 0);
       } else {
         const far = slotOf(item.image, item);
@@ -842,12 +823,6 @@ export function createGpuIcons({
         if (fresh) return sync();
         for (const item of drawing) writeRow(item);
       },
-      /** Rewrite the rows drawing views, once their sheet is registered. */
-      reviews() {
-        if (fresh) return sync();
-        for (const item of record.items.values())
-          if (isView(item.image)) writeRow(item);
-      },
       /**
        * After a frame: sample the ground under clamped rows' segment ends,
        * from `budget` (`{ends, surface}`, spent). Whether a row's ground
@@ -972,20 +947,20 @@ export function createGpuIcons({
       },
       /** The images shown rows draw: `failed`, `loading` or `settled`. */
       imageState() {
+        const views = host.viewsState();
         let loading = false;
         for (let row = 0; row < set.count; row++) {
           if (!set.shown(row)) continue;
           if (set.flags(row) & ICON_VIEWS) {
-            // Its sheet, or while that is not drawn, the image it falls
-            // back to.
-            const views = host.viewsState();
-            if (views === 'ready' && set.imageFar(row) >= 0) continue;
-            const fallback = set.imageNear(row);
-            if (fallback < 0) {
-              if (views === 'failed') return 'failed';
+            // A view row waits on its sheet. Once it fails, the fallback decides.
+            if (views === 'ready') continue;
+            if (views === 'loading') {
               loading = true;
-            } else if (iconAtlas.failed(fallback)) return 'failed';
-            else if (!iconAtlas.ready(fallback)) loading = true;
+              continue;
+            }
+            const fallback = set.imageNear(row);
+            if (fallback < 0 || iconAtlas.failed(fallback)) return 'failed';
+            if (!iconAtlas.ready(fallback)) loading = true;
             continue;
           }
           for (const slot of [set.imageFar(row), set.imageNear(row)]) {
