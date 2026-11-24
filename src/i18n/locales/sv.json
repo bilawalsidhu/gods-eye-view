@@ -2619,6 +2619,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live är otillgängligt för den konfigurerade modellen.",
   "Token request is too large": "Tokenbegäran är för stor",
   "Use an empty JSON token request": "Använd en tom JSON-tokenbegäran",
+  "Shared layer selection could not be restored": "Det delade lagervalet kunde inte återställas",
   "Voice command context is too large": "Kontexten för röstkommandot är för stor",
   "Gemini reliable transport exceeded its queue limit. Start voice again.": "Gemini-sändkön är full. Starta röststyrningen igen.",
   "Gemini reliable transport did not drain. Start voice again.": "Gemini-meddelandena kunde inte skickas i tid. Starta röststyrningen igen.",

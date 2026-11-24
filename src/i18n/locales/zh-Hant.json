@@ -2178,6 +2178,7 @@
   "entity": "實體",
   "Shared {subject} follow expired": "分享的 {subject} 跟隨已過期",
   "Shared {subject} could not be restored — feed unavailable": "無法恢復分享的 {subject}——數據源不可用",
+  "Shared layer selection could not be restored": "無法恢復分享鏈接中的圖層選擇",
   "Shared {subject} is unavailable": "分享的 {subject} 不可用",
   "ACQUIRING": "獲取中",
   "SHARED {subject}": "分享的 {subject}",

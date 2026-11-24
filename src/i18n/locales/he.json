@@ -2826,6 +2826,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live אינו זמין למודל המוגדר.",
   "Token request is too large": "בקשת האסימון גדולה מדי",
   "Use an empty JSON token request": "שימוש בבקשת אסימון JSON ריקה",
+  "Shared layer selection could not be restored": "לא ניתן לשחזר את בחירת השכבות המשותפת",
   "Release Space to send": "שחרר את Space כדי לשלוח",
   "Hold Space to talk": "החזק את Space כדי לדבר",
   "Voice command context is too large": "הקשר פקודת הקול גדול מדי",

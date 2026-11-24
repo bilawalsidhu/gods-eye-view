@@ -2511,6 +2511,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live n'est pas disponible pour le modèle configuré.",
   "Token request is too large": "La demande de jeton est trop volumineuse",
   "Use an empty JSON token request": "Utilisez une demande de jeton avec un objet JSON vide",
+  "Shared layer selection could not be restored": "Impossible de restaurer la sélection de couches partagée",
   "Release Space to send": "Relâchez Space pour envoyer",
   "Hold Space to talk": "Maintenez Space pour parler",
   "Voice command context is too large": "Le contexte de la commande vocale est trop volumineux",

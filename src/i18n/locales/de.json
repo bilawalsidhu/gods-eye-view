@@ -2703,6 +2703,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live ist für das konfigurierte Modell nicht verfügbar.",
   "Token request is too large": "Token-Anfrage ist zu groß",
   "Use an empty JSON token request": "Eine leere JSON-Token-Anfrage verwenden",
+  "Shared layer selection could not be restored": "Geteilte Ebenenauswahl konnte nicht wiederhergestellt werden",
   "Voice command context is too large": "Kontext des Sprachbefehls ist zu groß",
   "Gemini reliable transport exceeded its queue limit. Start voice again.": "Die Gemini-Sendewarteschlange ist voll. Sprachsteuerung neu starten.",
   "Gemini reliable transport did not drain. Start voice again.": "Gemini-Nachrichten konnten nicht rechtzeitig gesendet werden. Sprachsteuerung neu starten.",

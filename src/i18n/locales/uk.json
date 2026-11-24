@@ -2565,6 +2565,7 @@
   "Gemini Live is unavailable for the configured model.": "Gemini Live недоступний для вибраної моделі.",
   "Token request is too large": "Запит токена надто великий",
   "Use an empty JSON token request": "Використовуйте запит токена з порожнім обʼєктом JSON",
+  "Shared layer selection could not be restored": "Не вдалося відновити вибір шарів за посиланням",
   "Release Space to send": "Відпустіть Space, щоб надіслати",
   "Hold Space to talk": "Утримуйте Space, щоб говорити",
   "Voice command context is too large": "Контекст голосової команди надто великий",
