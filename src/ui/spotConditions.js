@@ -92,19 +92,6 @@ export function compassName(deg) {
   return COMPASS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 }
 
-// The middle of a perimeter's first ring, close enough for "how far".
-function perimeterMiddle(row) {
-  const ring = row?.polygons?.[0]?.[0];
-  if (!Array.isArray(ring) || !ring.length) return null;
-  let lat = 0;
-  let lon = 0;
-  for (const [x, y] of ring) {
-    lon += x;
-    lat += y;
-  }
-  return { lat: lat / ring.length, lon: lon / ring.length };
-}
-
 /** A storm as "Hurricane Melissa": its class in words when the code has them. */
 function stormTitle(storm) {
   const word = codeWord('classification', storm.classification);
@@ -129,7 +116,7 @@ export async function hazardsNear(
   { fires: withFires = false, force = false } = {},
 ) {
   const here = { lat, lon };
-  const [quakeRows, stormSnap, perimeterRows, fireSnap] = await Promise.all([
+  const [quakeRows, stormSnap, perimeterSnap, fireSnap] = await Promise.all([
     quakes(force),
     storms(force),
     perimeters(force),
@@ -171,8 +158,9 @@ export async function hazardsNear(
       at,
     });
   }
-  for (const fire of Array.isArray(perimeterRows) ? perimeterRows : []) {
-    const at = perimeterMiddle(fire);
+  for (const fire of perimeterSnap?.fires || []) {
+    // The point the fire's card stands on, close enough for "how far".
+    const at = fire.anchor;
     if (!at || !(distanceKm(here, at) <= radiusKm)) continue;
     const acres = Number(fire.acres);
     add({

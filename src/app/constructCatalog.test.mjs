@@ -7,6 +7,8 @@ import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
 import { worldClock } from '../time/worldClock.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 const flush = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -253,4 +255,49 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
       30,
       `${String(windowMs)} falls back to the default`,
     );
+});
+
+test('perimeterOptions reach Fire Perimeters: inciweb false never asks InciWeb', async (t) => {
+  const lifetime = new AbortController();
+  const { signal } = lifetime;
+  const sources = fixtureSources([], []);
+  sources['fire-perimeters'] = {
+    getSnapshot: async () => ({
+      at: null,
+      fetchedAt: null,
+      stale: false,
+      revision: 'r',
+      note: null,
+      fires: [],
+      pieces: [],
+    }),
+  };
+  const requested = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requested.push(String(url));
+    return Response.json([]);
+  });
+  const viewer = { scene: { pick: () => null } };
+  bindFakeDraw(viewer);
+  const input = fakeInput(viewer);
+  const layer = createApplicationCatalog({
+    sources,
+    signal,
+    surface: fixtureSurface(signal),
+    perimeterOptions: { inciweb: false, inputFor: () => input.input },
+  }).get('fire-perimeters');
+  t.after(() => {
+    layer.destroy();
+    input.destroy();
+    lifetime.abort();
+    worldClock.goLive();
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  assert.equal(await layer.update(viewer), true);
+  await new Promise(setImmediate);
+  assert.deepEqual(
+    requested.filter((url) => url.includes('inciweb')),
+    [],
+  );
 });

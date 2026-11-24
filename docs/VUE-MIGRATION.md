@@ -629,7 +629,12 @@ slot whenever its view is drawn.
    store, which IntelHUD publishes to through its `publish` option: the
    readouts, the typing summary, the REC blink, visibility, layout variant
    and style colors; the vessel layer presents the selected vessel's
-   readout through `src/hudReadouts.js` instead of writing into the HUD),
+   readout through `src/hudReadouts.js` instead of writing into the HUD;
+   the view reports through the store whether `#intel-hud` is displayed
+   (not displayed once it is unmounted), and while it is not IntelHUD runs
+   no timers and publishes only the root's `active`, variant and colors,
+   then shows current readouts as soon as it is; the readouts that change many times a
+   second keep their text node through `v-text-data`),
    the first-run mission launcher (the welcome view renders the card's
    visibility, busy state, status line, copy and scroll fade from the
    `gev-first-run` store that `initFirstRunExperience` publishes to, and its
@@ -699,6 +704,28 @@ slot whenever its view is drawn.
    markup (the loading screen and a host's own markup). An explicit API for
    hosts to register panels and rail items is deferred until a host needs
    one.
+
+## Page-root state classes
+
+A stylesheet that styles one surface by the state of another, in a different
+view (the dock and credits while the Omnibar is on the page, the Stories
+entry while the loading screen shows), selects a class on `<html>` rather
+than `body:has(...)`. Chrome checks a `:has()` on body again after every node
+added or removed anywhere on the page and restyles the whole page when it
+does; a class changes only with the state it names. `src/ui/rail/rootClass.js`
+holds them: `v-root-class` on the element whose presence or state it names
+(the Omnibar, the voice control in the dock, `#intel-hud`, the first-run
+launcher, the World Timeline, the language picker), its hooks running inside
+Vue's patch so the class changes with the element; `followSelectorRootClass()`
+for markup Vue does not render (the loading screen, followed by the Stories
+view wherever in body it is added, removed or shown, as `:has()` would); and
+`followRootClass()` for nodes that move at run time (the left panel stack's
+own panels, followed by the layer panels view). They live on `<html>`, not
+`<body>`, whose class changes several owners follow to lay the page out
+again. A rule selects one as `body:is(.has-omnibar *, #gev-omnibar)`: the
+second argument never matches body and keeps the specificity the
+`:has(#gev-omnibar)` it replaced had. `src/ui/pageRootClasses.test.mjs`
+holds each class to its state and every stylesheet to the pattern.
 
 ## Verification
 

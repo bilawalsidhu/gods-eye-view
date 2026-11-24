@@ -19,6 +19,7 @@ import {
 } from '../../stories/format.js';
 import { guardStoriesKeyboard } from '../../stories/keyboard.js';
 import UiButton from '../kit/UiButton.vue';
+import { followSelectorRootClass } from '../rail/rootClass.js';
 
 // The screens, their styles and the story data load with Stories (see
 // src/stories/boot.js); only the button, popup and toast load with GEV.
@@ -262,7 +263,18 @@ function onKey(e) {
   else store.controller.close();
 }
 
+// The entry and its popup wait while the page's loading screen shows
+// (stories-entry.css), through a class on the page root
+// (src/ui/rail/rootClass.js). The page owns the loading screen, so it is
+// followed wherever and whenever it comes and goes.
+let stopLoadingClass = null;
 onMounted(() => {
+  stopLoadingClass = followSelectorRootClass(
+    document,
+    'loading-screen-shown',
+    '#loading-screen:not(.hidden)',
+    '#loading-screen',
+  );
   watchCorner();
   addEventListener('resize', placeEntry);
   addEventListener('resize', placeCredit);
@@ -278,6 +290,7 @@ onMounted(() => {
   watchCredit();
 });
 onBeforeUnmount(() => {
+  stopLoadingClass?.();
   clearTimeout(entryTimer);
   clearTimeout(openedTimer);
   cancelAnimationFrame(creditFrame);
