@@ -3,10 +3,14 @@
  *
  * Checks what unit tests cannot, in the real app with no provider keys and
  * South Africa off (the stand-alone default): the layer turns on, its Layers
- * row is not UNAVAILABLE and names the keys it needs, and the Weather card
- * offers the US AQI as its one index (its tile across the row), six pollutant
- * tiles, the US AQI ramp and a line for each key to add. No index of a
- * network's own (Canada's AQHI is retired) is offered anywhere.
+ * row is not UNAVAILABLE, says KEY REQUIRED and names the keys it needs
+ * (OpenAQ's first), and the Weather card offers the US AQI as its one index
+ * (its tile across the row), six pollutant tiles, the US AQI ramp and a line
+ * for each key to add. No index of a network's own (Canada's AQHI is retired)
+ * is offered anywhere. The script answers the air-quality routes itself
+ * (/api/air-quality/openaq and /india: 428, no key; /south-africa: not
+ * configured), so it gives the same answers whatever keys or SAAQIS_ENABLED
+ * the server has, and reads nothing upstream.
  *
  * The model field a host may give the layer is checked against a small cut of
  * baked grids (src/layers/airQuality/fixtures/field: a 10° box over northern
@@ -14,9 +18,9 @@
  * server's /api/air-quality/field routes with the run moved to the present:
  * the field draws, the timeline spans its forecast, and the step 24 h ahead
  * changes the tiles. It reads the world clock as the app's own module, so it
- * needs the dev server (npm run dev).
+ * needs the dev server (npm run dev); any keys the server holds are not used.
  *
- * Run:  node scripts/qa-air-quality.mjs --url http://localhost:4173
+ * Run:  node scripts/qa-air-quality.mjs --url <the dev server, e.g. http://localhost:4173>
  */
 
 import { readFileSync } from 'node:fs';
@@ -68,13 +72,41 @@ async function main() {
       }
     });
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
-    // The model field: the fixture's grids, its run moved to now.
+    // The model field: the fixture's grids, its run moved to now. The
+    // station routes: a stand-alone server with no keys and South Africa off.
     const cdp = await page.createCDPSession();
     await cdp.send('Fetch.enable', {
-      patterns: [{ urlPattern: '*/api/air-quality/field/*' }],
+      patterns: [
+        { urlPattern: '*/api/air-quality/field/*' },
+        { urlPattern: '*/api/air-quality/openaq*' },
+        { urlPattern: '*/api/air-quality/india*' },
+        { urlPattern: '*/api/air-quality/south-africa*' },
+      ],
+    });
+    const STATION_ROUTES = Object.freeze({
+      '/api/air-quality/openaq': [428, { error: 'no_key' }],
+      '/api/air-quality/india': [428, { error: 'no_key' }],
+      '/api/air-quality/south-africa': [
+        200,
+        { unavailable: true, code: 'not_configured' },
+      ],
     });
     cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
       const path = new URL(request.url).pathname;
+      const station = STATION_ROUTES[path];
+      if (station) {
+        await cdp
+          .send('Fetch.fulfillRequest', {
+            requestId,
+            responseCode: station[0],
+            responseHeaders: [
+              { name: 'Content-Type', value: 'application/json' },
+            ],
+            body: Buffer.from(JSON.stringify(station[1])).toString('base64'),
+          })
+          .catch(() => {});
+        return;
+      }
       let body = null;
       let type = 'application/octet-stream';
       if (path.endsWith('/manifest')) {
@@ -117,7 +149,7 @@ async function main() {
       )
         return;
       // Without a key the OpenAQ and India routes answer 428 by design (the
-      // layer says the provider needs a key); this run has none.
+      // layer says the provider needs a key); this run answers them so.
       if (
         /\/api\/air-quality\/(openaq|india)(\?|$)/.test(sourceUrl) &&
         /Failed to load resource.*428/i.test(m.text())
@@ -138,57 +170,68 @@ async function main() {
       const enabled = await dm.setEnabled('air-quality', true);
       const mod = dm.layers.get('air-quality')?.module;
       if (!mod) return { missing: true };
-      // Every network answers at once without a key; wait until none asks.
-      for (let i = 0; i < 45; i++) {
+      // Every network answers at once without a key; OpenAQ asks only once
+      // the camera has a view. Wait until every network has answered.
+      const answered = () =>
+        mod
+          .getProviderStates()
+          .every((s) => ['no-key', 'disabled', 'failed', 'ok'].includes(s.status));
+      for (let i = 0; i < 90 && !answered(); i++)
         await new Promise((r) => setTimeout(r, 500));
-        if (!mod.getProviderStates().some((s) => s.status === 'loading'))
-          break;
-      }
       const row = dm.getAll().find((entry) => entry.id === 'air-quality');
       return {
         enabled,
+        settled: answered(),
         stats: mod.getStats(),
         requiresKeyId: row?.requiresKeyId ?? null,
-        rowError: row?.stats?.error ?? null,
+        rowSource: row?.stats?.source ?? null,
         states: mod.getProviderStates().map((s) => [s.id, s.status]),
       };
     });
     const turnedOn =
       keyless.enabled === true &&
+      keyless.settled === true &&
       keyless.stats?.error === null &&
-      keyless.stats?.keyRequired === true;
+      keyless.stats?.keyRequired === true &&
+      keyless.stats?.loadingLabel === 'KEY REQUIRED' &&
+      !/SAAQIS/.test(keyless.rowSource);
     record(
       'keyless, the layer turns on and reports its keys as required, not as an error',
       turnedOn,
-      `enabled=${keyless.enabled} error=${keyless.stats?.error} keyRequired=${keyless.stats?.keyRequired} states=${JSON.stringify(keyless.states)}`,
+      `enabled=${keyless.enabled} settled=${keyless.settled} error=${keyless.stats?.error} keyRequired=${keyless.stats?.keyRequired} label=${keyless.stats?.loadingLabel} source="${keyless.rowSource}" states=${JSON.stringify(keyless.states)}`,
     );
     if (!turnedOn) exitCode = 1;
 
-    // The Layers row: not UNAVAILABLE, and its title names both keys.
+    // The Layers row: not UNAVAILABLE, says KEY REQUIRED, and its title names
+    // both keys, OpenAQ's first.
     let toggle = null;
-    for (let i = 0; i < 20 && !toggle?.title?.includes('OPENAQ_API_KEY'); i++) {
+    for (let i = 0; i < 20 && !/KEY REQUIRED/.test(toggle?.meta ?? ''); i++) {
       await sleep(250);
       toggle = await page.evaluate(() => {
-        const button = document.querySelector(
-          '[data-layer-id="air-quality"] .data-toggle-btn',
-        );
+        const row = document.querySelector('[data-layer-id="air-quality"]');
+        const button = row?.querySelector('.data-toggle-btn');
         return button
-          ? { state: button.dataset.feedState, title: button.title }
+          ? {
+              state: button.dataset.feedState,
+              title: button.title,
+              meta: row.querySelector('.data-toggle-meta')?.textContent ?? '',
+            }
           : null;
       });
     }
     const rowOk =
       toggle !== null &&
       toggle.state !== 'unavailable' &&
-      /OPENAQ_API_KEY/.test(toggle.title) &&
-      /DATA_GOV_IN_API_KEY/.test(toggle.title) &&
+      /KEY REQUIRED/.test(toggle.meta) &&
+      !/SAAQIS/.test(toggle.meta) &&
+      /OPENAQ_API_KEY.*DATA_GOV_IN_API_KEY/.test(toggle.title) &&
       JSON.stringify(keyless.requiresKeyId) ===
-        JSON.stringify(['data-gov-in', 'openaq']);
+        JSON.stringify(['openaq', 'data-gov-in']);
     record(
-      'the Layers row is not UNAVAILABLE and names the missing keys',
+      'the Layers row is not UNAVAILABLE, says KEY REQUIRED and names the missing keys',
       rowOk,
       toggle
-        ? `state=${toggle.state} title="${toggle.title}" requiresKeyId=${JSON.stringify(keyless.requiresKeyId)}`
+        ? `state=${toggle.state} meta="${toggle.meta}" title="${toggle.title}" requiresKeyId=${JSON.stringify(keyless.requiresKeyId)}`
         : 'no row',
     );
     if (!rowOk) exitCode = 1;
@@ -211,9 +254,12 @@ async function main() {
       controls.legendCategorical === false &&
       JSON.stringify(controls.legend?.map((band) => band.label)) ===
         JSON.stringify(['0', '50', '100', '150', '200', '300+']) &&
-      ['CPCB: add a key', 'OpenAQ: add a key'].every((text) =>
-        controls.summary?.lines?.some((line) => line.text.includes(text)),
-      ) &&
+      JSON.stringify(controls.summary?.lines?.map((line) => line.text)) ===
+        JSON.stringify([
+          'OpenAQ: add a key in Provider Settings',
+          'CPCB: add a key in Provider Settings',
+        ]) &&
+      controls.summary?.compact === 'OpenAQ: add a key in Provider Settings' &&
       !/AQHI|Canada/.test(JSON.stringify(controls));
     record(
       'the card offers the US AQI as its one index, the six pollutants, the US AQI ramp and the keys to add',

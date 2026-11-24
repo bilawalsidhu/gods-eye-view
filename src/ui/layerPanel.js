@@ -3,7 +3,7 @@ import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
+import { keyGuidanceText, keysRequirementText } from './keyGuidance.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS as PANEL_LABELS,
@@ -160,15 +160,13 @@ function panelLabel(layer) {
  */
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
-  const needs = [layer.requiresKeyId]
+  const ids = [layer.requiresKeyId]
     .flat()
     .map((id) => String(id || '').trim())
-    .filter(Boolean)
-    .map((id) => keyRequirementText(id))
     .filter(Boolean);
   // A layer with several sources also names the ones it could use instead.
   return keyGuidanceText(
-    [...new Set(needs)].join('; '),
+    keysRequirementText(ids),
     layer.stats.keyAlternatives || [],
   );
 }

@@ -32,7 +32,7 @@ test('en: status lines and errors show as they came', () => {
   setLocale('en');
   for (const text of [
     ...STATUS_LINES,
-    'ECCC HTTP 503',
+    'Provider HTTP 503',
     'GNSS feed unavailable (HTTP 503)',
     'Upstream response too large',
   ]) {

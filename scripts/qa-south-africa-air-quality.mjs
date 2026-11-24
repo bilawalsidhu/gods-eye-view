@@ -111,6 +111,13 @@ const snapshot = {
     stations,
   ),
 };
+// A provider-reported index on the PM2.5 row, as the portal publishes one: the
+// layer must neither use nor show it.
+snapshot.readings.find((row) => row.parameter === 'PM2.5').rating = {
+  score: 4,
+  label: 'Moderate',
+  method: 'SAAQIS index',
+};
 let fail = false;
 const browser = await puppeteer.launch({
   headless: !process.argv.includes('--headful'),
@@ -188,13 +195,16 @@ try {
   let result = await state();
   assert.equal(result.stats.count, 1);
   assert.equal(result.records[0].units, 'µg/m³');
-  assert.equal(result.records[0].band, null);
   assert.equal(result.controls.list.items.length, 1);
   // One scale for every network: the six EEA PM2.5 bands. 12 µg/m³ is
-  // "Fair"; SAAQIS's own index is neither read nor shown.
+  // "Fair", the record's band; SAAQIS's own index is neither read nor shown.
   assert.equal(result.controls.legend.length, 6);
   assert.equal(result.records[0].assessment.label, 'Fair');
-  assert.doesNotMatch(result.controls.list.items[0].title, /SAAQIS index/);
+  assert.equal(result.records[0].band, 'Fair');
+  assert.doesNotMatch(
+    result.controls.list.items[0].title,
+    /SAAQIS index|4\/10/,
+  );
   // The keyed providers say they need a key.
   assert.ok(
     result.controls.summary.lines.some((row) =>

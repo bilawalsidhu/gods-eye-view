@@ -17,14 +17,19 @@
   to use OpenAQ and CPCB. South Africa is off by default, since no reuse
   licence is established for the portal's session API: set `SAAQIS_ENABLED=1`
   to read it. A stand-alone install without keys therefore shows no stations:
-  the layer still turns on, its Layers row names the keys it needs instead of
-  reading unavailable, and its card says which keys to add; installs with keys
-  and hosts with their own providers are unaffected. For hosts:
+  the layer still turns on, its Layers row says KEY REQUIRED and names the keys
+  it needs instead of reading unavailable, and its card says which keys to add,
+  OpenAQ's first. For hosts: installs with keys and hosts with their own
+  providers are unaffected; a host using the reference source needs the
+  `/api/air-quality` routes or its own providers, or should withhold the
+  layer, since Canada's readings no longer come from the browser directly.
   `createEcccAirQualitySource` is removed from `./layers/air-quality` and
   `./layers/air-quality/source`, as are the AQHI helpers `./layers/air-quality`
   exported (`AIR_QUALITY_BANDS`, `AIR_QUALITY_PROVIDERS`, `airQualityBandById`,
   `airQualityColor`, `aqhiDisplayValue`, `bandForValue`, `bandRiskText`,
-  `valueLabel`, `normalizeAqhiStations`, `normalizeAqhiObservations`), and a
-  layer source without provider definitions is read as one station network.
+  `valueLabel`, `normalizeAqhiStations`, `normalizeAqhiObservations`). A layer
+  source without provider definitions is read as one station network, and an
+  empty list of them is refused. A layer's `requiresKeyId` may now be a string
+  or an array of key ids, all of which the Layers row names.
 - Reject calendar-impossible SAAQIS observation timestamps instead of
   silently rolling them into another day (khanmjk, #1291).

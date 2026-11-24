@@ -400,7 +400,7 @@ html:not([lang='en']) .rail-card-setting {
 }
 
 /* A group of one tile (the Index group's US AQI) spans its row. */
-.rail-card-tile:only-child {
+.rail-card-tile.is-wide {
   grid-column: 1 / -1;
 }
 

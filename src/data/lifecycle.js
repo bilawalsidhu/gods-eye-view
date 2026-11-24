@@ -2347,8 +2347,10 @@ export class LayerLifecycle {
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
         // Registry id of the provider key this layer needs, if any (mirrors
-        // showInTogglePanel). The layer reports stats.keyRequired while that
-        // key is absent; the panel builds the guidance text from the pair.
+        // showInTogglePanel), or an array of ids when a layer reads several
+        // keyed networks (Air quality names those it lacks). The layer reports
+        // stats.keyRequired while a key is absent; the panel builds the
+        // guidance text from the pair.
         requiresKeyId: entry.module.requiresKeyId || null,
         // Data Library entry id; the panel groups these under Library.
         libraryEntryId: this._libraryLayerIds.has(id)

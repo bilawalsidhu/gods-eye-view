@@ -69,7 +69,7 @@ test('a layer requires both a snapshot source and an overlay host', () => {
 test('a source that names no providers is one station network, not an AQHI source', async () => {
   // Canada's AQHI is retired: a plain source (a host's, or the catalog's
   // stand-in for an absent one) is no longer taken for its index provider.
-  for (const definitions of [undefined, []]) {
+  for (const definitions of [undefined]) {
     const calls = [];
     const viewer = {};
     const { draw } = bindFakeDraw(viewer);
@@ -104,6 +104,16 @@ test('a source that names no providers is one station network, not an AQHI sourc
     assert.notEqual(layer.setParams({ view: 'NO2' }), false);
     layer.destroy();
   }
+  // An explicit empty list names no network: refused, as the source
+  // composition refuses it.
+  assert.throws(
+    () =>
+      createAirQualityLayer({
+        source: { definitions: [], getSnapshot: async () => [] },
+        overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
+      }),
+    { name: 'TypeError', message: /requires providers/ },
+  );
 });
 
 test('initialization is single-use and owns one point draw set', () => {

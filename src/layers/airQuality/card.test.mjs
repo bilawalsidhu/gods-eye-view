@@ -6,6 +6,7 @@ import { interpretHourly } from './interpretation.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import {
+  LayerPanel,
   layerKeyRequirementTooltip,
   presentLayerToggle,
 } from '../../ui/layerPanel.js';
@@ -1065,10 +1066,11 @@ test('with no keys and South Africa failing the layer still turns on, its key li
   const controls = layer.getRowControls();
   assert.deepEqual(
     controls.summary.lines.map((line) => [line.id, line.text]),
+    // The worldwide network's line first.
     [
+      ['provider-openaq', 'OpenAQ: add a key in Provider Settings'],
       ['provider-saaqis', 'SAAQIS unavailable'],
       ['provider-cpcb', 'CPCB: add a key in Provider Settings'],
-      ['provider-openaq', 'OpenAQ: add a key in Provider Settings'],
     ],
   );
   // The US AQI is the one index tile; the pollutants stay a click away.
@@ -1094,7 +1096,7 @@ test('all keyless with South Africa off the layer turns on, with only the key li
   // A network switched off on this server is no failure and no line.
   assert.deepEqual(
     controls.summary.lines.map((line) => line.id),
-    ['provider-cpcb', 'provider-openaq'],
+    ['provider-openaq', 'provider-cpcb'],
   );
   const states = Object.fromEntries(
     layer.getProviderStates().map((state) => [state.id, state]),
@@ -1470,7 +1472,7 @@ test("a network's own index is never shown, in the AQI view or a pollutant view"
   );
 });
 
-test('keyless by default the layer turns on, its Layers row is not UNAVAILABLE and names the missing keys', async () => {
+test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, not UNAVAILABLE, and names the missing keys', async () => {
   const { layer } = routedLayer({
     '/api/air-quality/south-africa': NOT_ENABLED,
     '/api/air-quality/openaq': NO_KEY_ROUTE,
@@ -1482,6 +1484,10 @@ test('keyless by default the layer turns on, its Layers row is not UNAVAILABLE a
   assert.equal(stats.count, 0);
   assert.equal(stats.error, null);
   assert.equal(stats.keyRequired, true);
+  assert.equal(stats.loadingLabel, 'KEY REQUIRED');
+  // South Africa, off on this server, is not named as a source.
+  assert.equal(stats.source, 'CPCB · data.gov.in · OpenAQ · Worldwide');
+  assert.equal(layer.source, stats.source);
   // The row as the layer manager publishes it (DataLayerManager.getAll).
   const row = {
     id: layer.id,
@@ -1491,18 +1497,60 @@ test('keyless by default the layer turns on, its Layers row is not UNAVAILABLE a
     stats: { count: 0, lastUpdate: null, ...stats },
   };
   assert.notEqual(presentLayerToggle(row).feedState, 'unavailable');
-  const guidance = layerKeyRequirementTooltip(row);
-  assert.match(guidance, /OPENAQ_API_KEY/);
-  assert.match(guidance, /DATA_GOV_IN_API_KEY/);
-  // The card names the keys to add.
+  assert.equal(
+    LayerPanel.prototype._buildMetaText(row),
+    'CPCB · data.gov.in · OpenAQ · Worldwide · KEY REQUIRED',
+  );
+  // The worldwide network's key first, the keys in one list.
+  assert.deepEqual(row.requiresKeyId, ['openaq', 'data-gov-in']);
+  assert.equal(
+    layerKeyRequirementTooltip(row),
+    'Needs OPENAQ_API_KEY and DATA_GOV_IN_API_KEY — add it in Provider Settings',
+  );
+  // The card names the keys to add, OpenAQ's first, also collapsed.
+  const { summary } = layer.getRowControls();
   assert.deepEqual(
-    layer.getRowControls().summary.lines.map((line) => line.text),
+    summary.lines.map((line) => line.text),
     [
-      'CPCB: add a key in Provider Settings',
       'OpenAQ: add a key in Provider Settings',
+      'CPCB: add a key in Provider Settings',
     ],
   );
+  assert.equal(summary.compact, 'OpenAQ: add a key in Provider Settings');
   layer.destroy();
+});
+
+test("a reading's band is its category on the view's scale, for voice queries and context", async () => {
+  const { layer } = cardHarness({
+    saaqis: (request) => {
+      const rows = station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES);
+      return request.mode === 'aqi'
+        ? rows
+        : rows
+            .filter((row) => row.parameter === request.parameter)
+            .map(interpretHourly);
+    },
+  });
+  await layer.update();
+  await flush();
+  // PM2.5 12 µg/m³ leads: US AQI 56, Moderate.
+  let [record] = layer.getAnalystRecords();
+  assert.equal(record.band, 'Moderate');
+  assert.equal('risk' in record, false);
+  layer.setParams({ view: 'PM2.5' });
+  await flush();
+  [record] = layer.getAnalystRecords();
+  assert.equal(record.band, 'Fair');
+  // A reading no index rates has no band.
+  const unrated = cardHarness({
+    saaqis: station('saaqis', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
+      ...row,
+      rated: false,
+    })),
+  });
+  await unrated.layer.update();
+  await flush();
+  assert.equal(unrated.layer.getAnalystRecords()[0].band, null);
 });
 
 test('remembered AQI-view values obey the six-hour observation age in other views', async (t) => {

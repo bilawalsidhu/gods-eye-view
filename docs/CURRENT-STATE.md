@@ -10104,11 +10104,15 @@ index is used. SAAQIS is off by default (its portal session API has no establish
 licence): the server reads it only with `SAAQIS_ENABLED=1`, and without it the
 layer leaves South Africa out with no card line and no failure. A network that
 needs its key or is switched off is guidance, not a failure: the layer turns on
-with its key lines, its Layers row names the keys it lacks (the layer's
-key-required stat) instead of reading UNAVAILABLE, and an update fails only when
-every network asked failed and no other view is on offer. Without the keys and
-with South Africa off (the stand-alone default) an install shows no stations,
-and the card names the keys to add; hosts and installs with keys are unaffected.
+with its key lines (OpenAQ's, the worldwide network's, first), its Layers row
+says KEY REQUIRED and names the keys it lacks (the layer's key-required stat)
+instead of reading UNAVAILABLE, a network this server leaves off is not named as
+a source, and an update fails only when every network asked failed and no other
+view is on offer. Without the keys and with South Africa off (the stand-alone
+default) an install shows no stations, and the card names the keys to add.
+Installs with keys and hosts with their own providers are unaffected; a host
+using the reference source needs the `/api/air-quality` routes or its own
+providers, or should withhold the layer.
 There is no provider picker: the card
 offers views only, the US AQI (the default) or one pollutant
 (PM2.5, PM10, NO2, O3, SO2, CO). Observations retain original units and
@@ -10133,8 +10137,11 @@ Share links carry only the view; whether stations are shown and the selected
 station are session state. See [the source audit and adapter contract](SOUTH-AFRICA-AIR-QUALITY.md).
 The deterministic real-app gates are `scripts/qa-air-quality.mjs`,
 `scripts/qa-openaq.mjs`, `scripts/qa-south-africa-air-quality.mjs` and
-`scripts/qa-india-air-quality.mjs`; the South Africa gate's `--live` performs a
-separate national/Western Cape coverage audit.
+`scripts/qa-india-air-quality.mjs`, each against a dev server;
+`qa-air-quality.mjs` answers `/api/air-quality/openaq`, `/india` (no key) and
+`/south-africa` (not configured) itself, so its keyless checks hold whatever
+keys or `SAAQIS_ENABLED` the server has. The South Africa gate's `--live`
+performs a separate national/Western Cape coverage audit.
 
 Air quality accepts injected provider definitions through its source
 composition. Standalone defaults are South Africa's SAAQIS (off unless

@@ -42,8 +42,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality adds source units, pollutant, averaging period and observation kind; value is no longer universally AQHI.
-    // Air quality (ECCC AQHI) extends the manifest.
+    // Air quality adds source units, pollutant, averaging period and observation kind; value is the view's own figure.
+    // Air quality extends the manifest; its always-empty risk field leaves it.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
@@ -64,7 +64,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // The Cyber HUD layout leaves set_hud's layout enum (its sonar is a
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
-    'dc2819ed30c42cc7c4812d0e92b512c40d6053e0cebbf8bc9b15a07668125b7e',
+    '124481ac3c57d825757a3b162270aad9c95ff25a099fb9d58f77ac1710a6f2c9',
   );
 });
 

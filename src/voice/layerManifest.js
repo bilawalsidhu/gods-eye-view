@@ -292,7 +292,6 @@ const layers = [
         provider: ['t'],
         name: ['t'],
         zone: ['t'],
-        risk: ['t'],
         observedMs: ['ms'],
       },
       timeField: 'observedMs',

@@ -524,17 +524,39 @@ test('a tiles block draws one button per tile with its value, bracketed note and
   view.destroy();
 });
 
-test('a group of one tile fills its row', async () => {
+test('a group of one tile fills its row; a group of two shares it', async () => {
   // The Index group holds one tile, the US AQI: it spans both columns.
   const { readFileSync } = await import('node:fs');
-  const css = readFileSync(
+  const style = document.createElement('style');
+  style.textContent = readFileSync(
     new URL('./styles/weather.css', import.meta.url),
     'utf8',
   );
-  assert.match(
-    css,
-    /\.rail-card-tile:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1\s*;/,
-  );
+  document.head.appendChild(style);
+  try {
+    const f = railFixture();
+    const view = createRailCards(f);
+    const [aqi, pm25] = tilesBlock().tiles;
+    const span = () =>
+      [...f.container.querySelectorAll('[data-tile-id]')].map((tile) => [
+        tile.dataset.tileId,
+        getComputedStyle(tile).gridColumn,
+      ]);
+    view.update([{ ...card, blocks: [{ ...tilesBlock(), tiles: [aqi] }] }]);
+    assert.deepEqual(span(), [['aqi', '1 / -1']]);
+    view.update([{ ...card, blocks: [tilesBlock()] }]);
+    await nextTick();
+    assert.deepEqual(
+      span().map(([id, column]) => [id, column || 'auto']),
+      [
+        ['aqi', 'auto'],
+        [pm25.id, 'auto'],
+      ],
+    );
+    view.destroy();
+  } finally {
+    style.remove();
+  }
 });
 
 test('a tile click dispatches its params', () => {

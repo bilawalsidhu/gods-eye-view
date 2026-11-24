@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { layerKeyRequirementTooltip } from './layerPanel.js';
 import { DataLayerManager } from '../data/manager.js';
 import { KEY_SETUP_KEYS } from '../keySetupCore.mjs';
+import { setLocale } from '../i18n/index.js';
 import { createFirmsState } from '../layers/firms/state.js';
 import { createModel } from '../layers/firms/model.js';
 import { createQueries } from '../layers/firms/queries.js';
@@ -158,15 +159,25 @@ test('a key-gated layer with another source ready says how to use it', () => {
   );
 });
 
-test('a layer reading several keyed networks names each key it lacks', () => {
-  const text = layerKeyRequirementTooltip({
+test('a layer reading several keyed networks names each key it lacks, in one list', () => {
+  const several = {
     requiresKeyId: ['openaq', 'data-gov-in', 'openaq', 'not-a-provider'],
     stats: { keyRequired: true },
-  });
+  };
   assert.equal(
-    text,
-    'Needs OPENAQ_API_KEY — add it in Provider Settings; Needs DATA_GOV_IN_API_KEY — add it in Provider Settings',
+    layerKeyRequirementTooltip(several),
+    'Needs OPENAQ_API_KEY and DATA_GOV_IN_API_KEY — add it in Provider Settings',
   );
+  // The list follows the UI language.
+  setLocale('ru');
+  try {
+    assert.match(
+      layerKeyRequirementTooltip(several),
+      /OPENAQ_API_KEY и DATA_GOV_IN_API_KEY/,
+    );
+  } finally {
+    setLocale('en');
+  }
   assert.equal(
     layerKeyRequirementTooltip({
       requiresKeyId: ['openaq'],

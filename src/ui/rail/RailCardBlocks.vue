@@ -212,6 +212,7 @@ function legendView(legend) {
             v-for="tile in block.tiles || []"
             :key="tile.id"
             class="view-context__world-tile rail-card-tile"
+            :class="{ 'is-wide': (block.tiles || []).length === 1 }"
             :data-tile-id="tile.id"
             :title="tile.title || undefined"
             :pressed="Boolean(tile.active)"

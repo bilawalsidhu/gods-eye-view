@@ -115,7 +115,7 @@ export const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
   'CO',
 ]);
 /**
- * A source that names no providers (`definitions`) is one station network
+ * A source that names no providers (no `definitions`) is one station network
  * of its own, offering every view.
  */
 const SOURCE_DEFINITION = Object.freeze({
@@ -245,9 +245,9 @@ export function createAirQualityLayer({
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
   if (!overlayHost) throw new TypeError('Air quality requires an overlay host');
-  const definitions = source.definitions?.length
-    ? source.definitions
-    : [SOURCE_DEFINITION];
+  const definitions = source.definitions ?? [SOURCE_DEFINITION];
+  if (!Array.isArray(definitions) || !definitions.length)
+    throw new TypeError('Air quality requires providers');
   if (
     fieldSource != null &&
     (typeof fieldSource.getManifest !== 'function' ||
@@ -384,10 +384,25 @@ export function createAirQualityLayer({
   let imageryHost = null;
   let fieldDrawing = null;
 
-  const sourceLabel = () =>
-    asked()
+  /**
+   * The networks the view asks, as the Layers row names them; one this server
+   * leaves switched off (`'disabled'`) is left out.
+   */
+  const sourceLabel = () => {
+    const on = asked().filter(
+      (entry) =>
+        stateOf(entry).status !== 'disabled' &&
+        parkedStatus(entry) !== 'disabled',
+    );
+    return (on.length ? on : asked())
       .map((entry) => entry.sourceLabel || entry.network)
       .join(' · ');
+  };
+  /** Networks in the order the card names them: a worldwide one first. */
+  const worldwideFirst = (entries) => [
+    ...entries.filter((entry) => entry.worldwide === true),
+    ...entries.filter((entry) => entry.worldwide !== true),
+  ];
   const isLoading = () =>
     asked().some((entry) => stateOf(entry).status === 'loading');
   /** Whether a provider's answer counts: it answered, or drew readings. */
@@ -426,10 +441,10 @@ export function createAirQualityLayer({
       return null;
     return list.find((state) => state.error && !isParked(state))?.error ?? null;
   };
-  /** The registry ids of the keys the asked networks lack, in their order. */
+  /** The registry ids of the keys the asked networks lack, worldwide first. */
   const missingKeys = () => [
     ...new Set(
-      asked()
+      worldwideFirst(asked())
         .filter(
           (entry) => entry.requiresKeyId && stateOf(entry).status === 'no-key',
         )
@@ -558,10 +573,16 @@ export function createAirQualityLayer({
    * One reading as the current view presents it. In the AQI view a station
    * gets its index from its plausible, recent values (`stationIndex`), unless
    * its provider leaves it unrated; its time is then that of the pollutant
-   * leading the index, and its averaging that of the values used.
+   * leading the index, and its averaging that of the values used. In every
+   * view `band` is the reading's category on the view's scale (the US AQI
+   * category, or the pollutant's EEA band), null when unrated.
    */
   const present = (reading) => {
-    if (view !== 'aqi') return reading;
+    if (view !== 'aqi')
+      return {
+        ...reading,
+        band: isRatedReading(reading, view) ? reading.assessment.label : null,
+      };
     const result =
       reading.rated === false ? null : stationIndex(currentValuesOf(reading));
     const aqi = result?.aqi ?? null;
@@ -583,6 +604,7 @@ export function createAirQualityLayer({
             : null
           : reading.averagingMinutes,
       value: aqi?.index ?? null,
+      band: aqi ? band.label : null,
       color: band?.color ?? UNRATED_COLOR,
       label: aqi ? aqiText(aqi.index) : '—',
     };
@@ -1709,7 +1731,9 @@ export function createAirQualityLayer({
     id: 'air-quality',
     name: 'Air quality',
     icon: '◍',
-    source: sourceLabel(),
+    get source() {
+      return sourceLabel();
+    },
     updateInterval: 60_000,
 
     init(viewer) {
@@ -1879,7 +1903,6 @@ export function createAirQualityLayer({
       halt();
       view = nextView;
       states = new Map(asked().map((entry) => [entry.id, freshState()]));
-      this.source = sourceLabel();
       _lastUpdate = null;
       apply();
       syncVisibility();
@@ -2108,8 +2131,9 @@ export function createAirQualityLayer({
         newestOf(drawing.flatMap((entry) => stateOf(entry).readings));
       // One short line for each network that needs a key, had its key
       // refused, failed, is out of requests for now, serves cached data, or
-      // is still discovering the stations in view.
-      const providerLines = entries.flatMap((entry) => {
+      // is still discovering the stations in view; a worldwide network's
+      // first, so a collapsed card shows it.
+      const providerLines = worldwideFirst(entries).flatMap((entry) => {
         const state = stateOf(entry);
         const { coverage: covered } = state;
         const discovering =
@@ -2331,7 +2355,7 @@ export function createAirQualityLayer({
       // than being narrated as live by the HUD and voice provenance envelope.
       return {
         count: _count,
-        source: this.source,
+        source: sourceLabel(),
         lastUpdate: _lastUpdate,
         // Until the first network answers in this view the Layers row shows
         // progress; a refresh in flight after that does not flicker it.
@@ -2340,9 +2364,11 @@ export function createAirQualityLayer({
           isLoading() &&
           !asked().some((entry) => stateOf(entry).settled),
         error: lastError(),
-        // A network that needs its key is guidance: the Layers row names the
-        // keys (`requiresKeyId`) instead of reading the layer unavailable.
+        // A network that needs its key is guidance: the Layers row says so
+        // and names the keys (`requiresKeyId`) instead of reading the layer
+        // unavailable. English data: the row translates it.
         keyRequired: keyRequired(),
+        ...(keyRequired() ? { loadingLabel: msg('KEY REQUIRED') } : {}),
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.
         stale:
@@ -2353,13 +2379,6 @@ export function createAirQualityLayer({
   };
   return layer;
 }
-
-// Provider category labels are translated at presentation time.
-msg('Good');
-msg('Moderate');
-msg('Unhealthy');
-msg('Very Unhealthy');
-msg('Hazardous');
 
 /** Translate each scale in its own grammatical context, only when rendered. */
 function bandLabel(label, context) {

@@ -175,7 +175,6 @@ export function mapAnalystRecord(raw, index = 0) {
     band: text(raw?.band),
     name: text(raw?.name),
     zone: text(raw?.zone),
-    risk: text(raw?.risk),
     lat: num(raw?.lat),
     lon: num(raw?.lon),
     observedMs: num(raw?.observedMs),

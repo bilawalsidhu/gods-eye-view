@@ -756,7 +756,6 @@
     "3D",
     "KT",
     "{seconds} s",
-    "Canada",
     "{count} stations"
   ],
   "it": [
@@ -992,8 +991,7 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s",
-    "Canada"
+    "{seconds} s"
   ],
   "ja": [
     "1090 MHz",
