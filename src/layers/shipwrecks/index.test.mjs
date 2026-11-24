@@ -1,0 +1,492 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import * as picking from '../../data/pickRegistry.js';
+import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
+import {
+  createShipwrecksLayer,
+  markerPixelSize,
+  snapshotDeadline,
+} from './index.js';
+
+const wreck = (id, extra = {}) => ({
+  id,
+  source: 'wikidata',
+  name: id,
+  lat: 50,
+  lon: -1,
+  year: 1912,
+  date: null,
+  casualties: null,
+  ...extra,
+});
+
+const snapshot = (records, version = 'v1') => ({
+  records,
+  fetchedAt: 1,
+  stale: false,
+  version,
+  sources: { emodnet: true, wikidata: true },
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function harness({ snapshots, now = () => 1, cardHit = () => null } = {}) {
+  const cards = [];
+  const handlers = [];
+  const opened = [];
+  let pickResult = null;
+  // A touch's wider contact search, when it finds what the exact pick missed.
+  let nearResult = null;
+  const viewer = {};
+  const { draw } = bindFakeDraw(viewer);
+  const queue = [...(snapshots || [])];
+  const requests = [];
+  // The card on top at a click, as the host answers the pick registry.
+  picking.setClickCardHitTest((x, y) => cardHit(x, y));
+  const layer = createShipwrecksLayer({
+    source: {
+      getSnapshot({ signal }) {
+        requests.push(signal);
+        const next = queue.shift();
+        if (next instanceof Error) return Promise.reject(next);
+        return next instanceof Promise ? next : Promise.resolve(next);
+      },
+    },
+    overlayHost: {
+      setEntries: (_source, entries) => cards.push(entries),
+      setVisible() {},
+      hitTest: cardHit,
+    },
+    // The globe's clicks: one listener per click handler installed.
+    input: () => ({
+      onClick(callback) {
+        const handler = {
+          click: (event) =>
+            callback({
+              ...event,
+              topHit: pickResult
+                ? { set: 'shipwrecks:', id: pickResult, surface: false }
+                : null,
+              id: pickResult ?? nearResult,
+            }),
+          destroyed: false,
+        };
+        handlers.push(handler);
+        return () => {
+          handler.destroyed = true;
+        };
+      },
+    }),
+    picking,
+    pointer: { isPointerFree: () => true },
+    openExternal: (url) => opened.push(url),
+    now: () => now(),
+  });
+  layer.init(viewer);
+  const markerSet = () => draw.find('shipwrecks:');
+  return {
+    layer,
+    // The markers' set, its items in drawing order.
+    markers: {
+      get set() {
+        return markerSet();
+      },
+      get show() {
+        return markerSet()?.show;
+      },
+      get billboards() {
+        const set = markerSet();
+        return set && !set.disposed ? [...set.items.values()] : [];
+      },
+    },
+    cards,
+    handlers,
+    requests,
+    opened,
+    pick(id) {
+      pickResult = id ? `shipwreck:${id}` : null;
+    },
+    // What a touch's contact search finds near the tap, the exact pick
+    // being `pick`'s.
+    near(pickId) {
+      nearResult = pickId;
+    },
+    lastCard: () => cards.at(-1),
+  };
+}
+
+test('markers live in one set, shown only while the layer is on', async () => {
+  const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
+  assert.ok(h.markers.set, 'one set for every marker');
+  assert.equal(h.markers.show, false);
+  h.layer.enable();
+  assert.equal(h.markers.show, true);
+  assert.equal(await h.layer.update(), true);
+  assert.equal(h.markers.billboards.length, 2);
+  assert.equal(h.layer.getStats().count, 2);
+  h.layer.disable();
+  assert.equal(h.markers.show, false);
+  assert.equal(h.handlers[0].destroyed, true);
+  h.layer.destroy();
+  assert.equal(h.markers.set, undefined, 'the set is disposed');
+});
+
+test('markers sit on the wreck: no eye offset, bigger toll drawn last', async () => {
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('big', { casualties: 1500 }),
+        wreck('none'),
+        wreck('small', { casualties: 3 }),
+      ]),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  const ids = h.markers.billboards.map((billboard) => billboard.id);
+  assert.deepEqual(ids, ['shipwreck:none', 'shipwreck:small', 'shipwreck:big']);
+  for (const billboard of h.markers.billboards)
+    assert.equal(billboard.eyeOffset, undefined);
+  assert.deepEqual(h.markers.billboards[2].size, [
+    markerPixelSize(1500),
+    markerPixelSize(1500),
+  ]);
+});
+
+test('an unchanged snapshot does not rebuild the markers', async () => {
+  const records = [wreck('a')];
+  const h = harness({
+    snapshots: [
+      snapshot(records, 'v1'),
+      snapshot(records, 'v1'),
+      snapshot([wreck('a'), wreck('b')], 'v2'),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  await h.layer.update();
+  assert.equal(h.markers.set.writes, 1);
+  await h.layer.update();
+  assert.equal(h.markers.set.writes, 2);
+  assert.equal(h.markers.billboards.length, 2);
+});
+
+test('a response that arrives after the layer is turned off is ignored', async () => {
+  const late = deferred();
+  const h = harness({ snapshots: [late.promise] });
+  h.layer.enable();
+  const pending = h.layer.update();
+  h.layer.disable();
+  assert.equal(h.requests[0].aborted, true);
+  late.resolve(snapshot([wreck('a')]));
+  assert.equal(await pending, false);
+  assert.equal(h.markers.billboards.length, 0);
+});
+
+test('a click opens the card; a period that excludes the wreck closes it', async () => {
+  const h = harness({
+    snapshots: [
+      snapshot([wreck('old', { year: 1850 }), wreck('new', { year: 1990 })]),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  h.pick('old');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  const [card] = h.lastCard();
+  assert.equal(card.id, 'shipwreck-card:old');
+  h.layer.setParams({ from: 1900, to: 1990 });
+  assert.deepEqual(h.lastCard(), [], 'the hidden wreck loses its card');
+  const shown = h.markers.billboards.filter((billboard) => billboard.show);
+  assert.deepEqual(
+    shown.map((billboard) => billboard.id),
+    ['shipwreck:new'],
+  );
+  assert.equal(h.layer.getStats().count, 1);
+});
+
+test('a tap selects only the wreck exactly under it, as a click does', async () => {
+  const h = harness({ snapshots: [snapshot([wreck('a')])] });
+  h.layer.enable();
+  await h.layer.update();
+  // Near a wreck but on nothing: no card.
+  h.near('shipwreck:a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.cards.flat().length, 0);
+  h.pick('a');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.equal(h.lastCard()[0].id, 'shipwreck-card:a');
+  // On nothing, near another layer's contact: the card is closed.
+  h.pick(null);
+  h.near('flight:abc');
+  h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+  assert.deepEqual(h.lastCard(), []);
+});
+
+test('the year pickers list only years with a wreck, and each era is counted', async () => {
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { year: 300 }),
+        wreck('b', { year: 1912 }),
+        wreck('c', { year: 1912 }),
+        wreck('d', { year: 1990 }),
+        wreck('e', { year: null }),
+      ]),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  let controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.range.options.map((option) => option.value),
+    [1990, 1912, 300],
+  );
+  assert.deepEqual(
+    controls.legend.map((era) => era.count),
+    [1, 2, 1, 1],
+  );
+  h.layer.setParams({ from: 1900, to: 1950 });
+  controls = h.layer.getRowControls();
+  assert.deepEqual(
+    controls.range.options.map((option) => option.value),
+    [1990, 1950, 1912, 1900, 300],
+    'the chosen ends are listed too',
+  );
+  assert.deepEqual(
+    controls.legend.map((era) => era.count),
+    [0, 2, 0, 0],
+  );
+});
+
+test('a source without a version rebuilds on every new snapshot', async () => {
+  const bare = (records) => {
+    const value = snapshot(records);
+    delete value.version;
+    return value;
+  };
+  const h = harness({
+    snapshots: [
+      bare([wreck('a')]),
+      bare([wreck('a'), wreck('b')]),
+      { ...snapshot([wreck('a')]), version: null },
+      { ...snapshot([wreck('a'), wreck('b'), wreck('c')]), version: null },
+    ],
+  });
+  h.layer.enable();
+  for (const expected of [1, 2, 1, 3]) {
+    await h.layer.update();
+    assert.equal(h.markers.billboards.length, expected);
+  }
+});
+
+test('a failed refresh marks the shown wrecks stale, and clears them after seven days', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  let clock = 1;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      snapshot([wreck('a')]),
+      new Error('Shipwrecks unavailable (HTTP 502)'),
+      new Error('Shipwrecks unavailable (HTTP 502)'),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  assert.equal(h.layer.getStats().stale, false);
+  clock = 1 + 2 * DAY;
+  assert.equal(await h.layer.update(), false);
+  assert.equal(h.layer.getStats().stale, true);
+  assert.equal(h.layer.getStats().count, 1, 'still shown, as stale');
+  clock = 1 + 8 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0, 'expired wrecks leave the map');
+  assert.equal(h.markers.billboards.length, 0);
+});
+
+test('expiry runs on the page clock and keeps every wreck until the newest source is too old', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const down = () => new Error('Shipwrecks unavailable (HTTP 502)');
+  // The page clock is far from the proxy's fetchedAt: only reported ages count.
+  let clock = 5e12;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      {
+        ...snapshot([
+          wreck('fresh', { source: 'emodnet' }),
+          wreck('merged', { source: 'wikidata', alsoIn: 'emodnet' }),
+        ]),
+        fetchedAt: 1,
+        ages: { emodnet: 0, wikidata: 6.5 * DAY },
+        maxAgeMs: 7 * DAY,
+      },
+      down(),
+      down(),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  clock += 1 * DAY;
+  await h.layer.update();
+  assert.equal(
+    h.layer.getStats().count,
+    2,
+    'nothing leaves while EMODnet is in date',
+  );
+  assert.equal(h.layer.getStats().stale, true);
+  clock += 6.5 * DAY;
+  await h.layer.update();
+  assert.equal(
+    h.layer.getStats().count,
+    0,
+    'all leave once the newest is too old',
+  );
+});
+
+test('a snapshot with no timestamp or ages still expires seven days after it arrived', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  let clock = 100;
+  const h = harness({
+    now: () => clock,
+    snapshots: [
+      { ...snapshot([wreck('a')]), fetchedAt: null },
+      new Error('down'),
+    ],
+  });
+  h.layer.enable();
+  await h.layer.update();
+  clock += 8 * DAY;
+  await h.layer.update();
+  assert.equal(h.layer.getStats().count, 0);
+});
+
+test('the page deadline subtracts the newest available source age from the limit', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const both = { emodnet: true, wikidata: true };
+  assert.equal(
+    snapshotDeadline(
+      {
+        sources: both,
+        ages: { emodnet: 2 * DAY, wikidata: 6.5 * DAY },
+        maxAgeMs: 5 * DAY,
+      },
+      100,
+    ),
+    100 + 3 * DAY,
+  );
+  assert.equal(
+    snapshotDeadline(
+      {
+        sources: { emodnet: false, wikidata: true },
+        ages: { emodnet: null, wikidata: 4 * DAY },
+        maxAgeMs: 5 * DAY,
+      },
+      0,
+    ),
+    1 * DAY,
+    'an unavailable source does not count',
+  );
+  assert.equal(snapshotDeadline({ sources: both }, 0), 7 * DAY, 'defaults');
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  let picked = null;
+  const viewer = { scene: { canvas: {}, pick: () => picked } };
+  bindFakeDraw(viewer);
+  let cardUnder = null;
+  const fake = fakeInputUnderLabel(viewer, {
+    beneath: () =>
+      cardUnder ? { sourceId: 'shipwrecks', entryId: cardUnder } : null,
+  });
+  t.after(() => fake.destroy());
+  const cards = [];
+  const opened = [];
+  const layer = createShipwrecksLayer({
+    source: { getSnapshot: () => Promise.resolve(snapshot([wreck('a')])) },
+    overlayHost: {
+      setEntries: (_source, entries) => cards.push(entries),
+      setVisible() {},
+    },
+    input: () => fake.input,
+    picking,
+    pointer: { isPointerFree: () => true },
+    openExternal: (url) => opened.push(url),
+    now: () => 1,
+  });
+  layer.init(viewer);
+  t.after(() => layer.destroy());
+  layer.enable();
+  await layer.update();
+  picked = { primitive: {}, id: { set: 'shipwrecks:', id: 'shipwreck:a' } };
+  fake.click();
+  const [card] = cards.at(-1);
+  assert.equal(card.id, 'shipwreck-card:a');
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  picked = null;
+  cardUnder = card.id;
+  fake.label.over = true;
+  fake.click();
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  fake.label.over = false;
+  fake.click();
+  assert.equal(opened.length, 1);
+});
+
+test('a covered selected card and covered markers yield; bare markers select', async () => {
+  let painted = [];
+  const h = harness({
+    snapshots: [
+      snapshot([
+        wreck('a', { url: 'https://example.com/a' }),
+        wreck('b', { url: 'https://example.com/b' }),
+      ]),
+    ],
+    cardHit: (_x, _y, { sourceId } = {}) =>
+      painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+  });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const click = () => h.handlers[0].click({ screenPosition: { x: 1, y: 1 } });
+    h.pick('a');
+    click();
+    const first = h.lastCard()[0];
+    painted = [
+      { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' },
+      { sourceId: 'shipwrecks', entryId: first.id },
+    ];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, []);
+    assert.equal(h.lastCard()[0].id, first.id);
+    // A marker under another layer's card is that card's click too.
+    h.pick('b');
+    click();
+    assert.equal(h.lastCard()[0].id, first.id, 'a covered marker yields');
+    painted = [];
+    click();
+    assert.equal(h.lastCard()[0].id, 'shipwreck-card:b');
+    painted = [{ sourceId: 'shipwrecks', entryId: 'shipwreck-card:b' }];
+    h.pick(null);
+    click();
+    assert.deepEqual(h.opened, ['https://example.com/b']);
+    painted = [];
+    click();
+    assert.deepEqual(h.lastCard(), [], 'bare map still clears the selection');
+  } finally {
+    h.layer.destroy();
+  }
+});

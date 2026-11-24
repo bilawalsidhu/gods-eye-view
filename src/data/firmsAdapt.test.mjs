@@ -63,10 +63,37 @@ test('unpadded acq_time parses in the adapter path ("45" = 00:45Z)', () => {
 
 test('parseAcquisitionMs: memo cache is honored, invalid input → 0', () => {
   const cache = new Map();
-  assert.equal(parseAcquisitionMs('2026-07-16', '1006', cache), Date.UTC(2026, 6, 16, 10, 6));
+  assert.equal(
+    parseAcquisitionMs('2026-07-16', '1006', cache),
+    Date.UTC(2026, 6, 16, 10, 6),
+  );
   assert.equal(cache.size, 1);
-  assert.equal(parseAcquisitionMs('2026-07-16', '1006', cache), Date.UTC(2026, 6, 16, 10, 6));
+  assert.equal(
+    parseAcquisitionMs('2026-07-16', '1006', cache),
+    Date.UTC(2026, 6, 16, 10, 6),
+  );
   assert.equal(parseAcquisitionMs(undefined, '1006', cache), 0);
+});
+
+test('impossible acquisition dates stay untimed instead of rolling forward', () => {
+  for (const [date, time] of [
+    ['2026-02-30', '1200'],
+    ['2026-04-31', '1200'],
+    ['2026-13-01', '1200'],
+    ['2026-07-16', '2400'],
+    ['2026-07-16', '1260'],
+  ]) {
+    assert.equal(parseAcquisitionMs(date, time), 0, `${date}:${time}`);
+    const [fire] = adaptFirmsRecords([
+      proxyRecord({ acqDate: date, acqTime: time }),
+    ]);
+    assert.equal(fire.acqMs, 0, `${date}:${time}`);
+    assert.equal(fire.lat, 38.99488);
+  }
+  const [leap] = adaptFirmsRecords([
+    proxyRecord({ acqDate: '2024-02-29', acqTime: '45' }),
+  ]);
+  assert.equal(leap.acqMs, Date.UTC(2024, 1, 29, 0, 45));
 });
 
 test('daynight "D" → night false', () => {
@@ -89,11 +116,16 @@ test('records with non-finite lat/lon are skipped; index stays sequential', () =
     proxyRecord({ lat: 40.1 }),
   ]);
   assert.equal(fires.length, 2);
-  assert.deepEqual(fires.map((f) => f.index), [0, 1]);
+  assert.deepEqual(
+    fires.map((f) => f.index),
+    [0, 1],
+  );
 });
 
 test('non-finite frp/brightness → 0; empty input → []', () => {
-  const [fire] = adaptFirmsRecords([proxyRecord({ frp: 'n/a', brightness: undefined })]);
+  const [fire] = adaptFirmsRecords([
+    proxyRecord({ frp: 'n/a', brightness: undefined }),
+  ]);
   assert.equal(fire.frp, 0);
   assert.equal(fire.brightness, 0);
   assert.deepEqual(adaptFirmsRecords([]), []);

@@ -39,6 +39,26 @@ test('en: the copy is unchanged with and without the i18n t()', () => {
   ]);
 });
 
+test('a report 90 seconds old reads as 1 minute, not 2', () => {
+  setLocale('en');
+  const line = (ageMs) =>
+    buildTransitSelectionCopy(
+      feed,
+      {
+        id: 'age',
+        lat: 1,
+        lon: 1,
+        timestamp: Math.floor((now - ageMs) / 1000),
+        timestampSource: 'vehicle',
+      },
+      'bus',
+      now,
+    ).details[1];
+  assert.equal(line(89_000), 'Reported 89 s ago');
+  assert.equal(line(90_000), 'Reported 1 min ago');
+  assert.equal(line(120_000), 'Reported 2 min ago');
+});
+
 for (const locale of ['es', 'ru']) {
   test(`${locale}: the Transit card is in the UI language`, () => {
     setLocale(locale);

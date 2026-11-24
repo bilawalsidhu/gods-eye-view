@@ -80,14 +80,13 @@ try {
       page.evaluate(() => {
         const { viewer, dataManager } = window.__godsEyeView;
         let upper = 0,
-          lower = 0,
-          near = 0;
-        const camera = viewer.camera.positionWC;
+          lower = 0;
         dataManager.layers
           .get('traffic')
-          .module.visitMotionDots((id, key, p) => {
-            if (!p.show) return;
-            const s = viewer.scene.cartesianToCanvasCoordinates(p.position);
+          .module.visitMotionDots((id, key, dot) => {
+            // A dot is its draw item: `pos`, hidden only when `show` is false.
+            if (dot.show === false) return;
+            const s = viewer.scene.cartesianToCanvasCoordinates(dot.pos);
             if (s && s.x >= 240 && s.x <= 1040 && s.y >= 0 && s.y <= 800) {
               if (s.y < 400) upper++;
               else lower++;
@@ -199,8 +198,10 @@ try {
         const camera = viewer.camera.positionWC;
         dataManager.layers
           .get('traffic')
-          .module.visitMotionDots((id, key, p) => {
-            if (!p.show) return;
+          .module.visitMotionDots((id, key, dot) => {
+            // A dot is its draw item: `pos`, hidden only when `show` is false.
+            if (dot.show === false) return;
+            const p = { position: dot.pos };
             const q = viewer.scene.cartesianToCanvasCoordinates(p.position);
             if (q && q.x >= 240 && q.x <= 1040 && q.y >= 0 && q.y <= 800) {
               if (q.y < 400) upper++;

@@ -4,10 +4,12 @@ import { defaultSweepClock } from './policy.js';
 import { createRendering } from './rendering.js';
 import { createIngestion } from './ingestion.js';
 import { createInteraction } from './interaction.js';
+import { inputFor as defaultInputFor } from '../../input/dispatcher.js';
 export function createSubmarineCableLayer({
   source,
   overlayHost,
-  screenSpaceEventHandlerFactory,
+  picking = null,
+  inputFor = defaultInputFor,
   mapStackEventTarget = null,
   sweepClock = defaultSweepClock,
 }) {
@@ -21,7 +23,8 @@ export function createSubmarineCableLayer({
     state,
     parts,
     source,
-    screenSpaceEventHandlerFactory,
+    inputFor,
+    picking,
     mapStackEventTarget,
   };
   parts.rendering = createRendering(context);
@@ -40,7 +43,6 @@ export {
 export {
   cableClassificationTypeForStack,
   cableClassificationTypeForScene,
-  applyTranslucentMarkerBlend,
 } from './surface.js';
 export {
   CABLE_REFERENCE_LABEL_WINNER_CAP,

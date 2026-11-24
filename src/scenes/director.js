@@ -12,14 +12,23 @@
  * State is persisted to localStorage and can be exported/imported as JSON.
  */
 
+import { isFollowing } from '../data/followed.js';
 import { cancelCameraArrival } from '../data/cameraArrival.js';
 import { resolveCameraPose, resolveCameraMove } from '../director/camera.js';
 import { createCameraMotion } from './cameraMotion.js';
 import { createStateChannel } from '../app/stateChannel.js';
 import { SceneControls } from '../ui/scenes.js';
+import { createToast } from '../ui/toast.js';
 import { buildPlaybackQueue, playSceneQueue } from '../director/playback.js';
 import { createScenePlaybackAdapter } from './playbackAdapter.js';
-import * as Cesium from 'cesium';
+import { toRadians } from '../geo/vector.js';
+import {
+  cameraOf,
+  canvasOf,
+  findCamera,
+  findCredits,
+  findFrame,
+} from '../render/rendererOf.js';
 import {
   SCENE_APPEND_RECIPES,
   SCENE_RECIPES,
@@ -27,8 +36,8 @@ import {
   displayShotTitle,
   getSceneAppendRecipeById,
 } from './recipes.js';
-import { sceneLayerPlan, sceneRequiresContextModeExit } from './scenePolicy.js';
-import { t, tn, msg } from '../i18n/index.js';
+import { sceneLayerPlan } from './scenePolicy.js';
+import { t, tn, msg, onLocaleChange } from '../i18n/index.js';
 import { createSceneDataPacks } from './dataPacks/controller.js';
 import { createSceneInteractions } from './interactions.js';
 import { createSceneSharing } from './sharing.js';
@@ -44,7 +53,11 @@ import {
   effectiveShotHoldSec,
   shotRuntimeDurationSec,
 } from './shotPresentation.js';
-import { sceneTimingForShot, sceneSeekState } from '../director/timeline.js';
+import {
+  sceneTimingForShot,
+  sceneSeekState,
+  cameraAtProgress,
+} from '../director/timeline.js';
 import { createPlaybackClock } from '../director/clock.js';
 import {
   normalizeLayerEntry,
@@ -64,6 +77,13 @@ import {
   SceneDocumentError,
 } from '../director/document.js';
 import { sceneSaveFailureReason } from './sceneSaveError.js';
+import { STORY_TAG_LIMIT, STORY_TAGS } from './storyTags.js';
+import { captureStoryThumb } from './storyThumb.js';
+
+/** Scenes GEV ships (recipes and appended packs), as opposed to a person's own. */
+const BUILT_IN_SCENE_IDS = new Set(
+  [...SCENE_RECIPES, ...SCENE_APPEND_RECIPES].map(({ id }) => id),
+);
 
 /** @constant {string} localStorage key for the serialized project */
 const STORAGE_KEY = 'godsEyeView.sceneProject.v2';
@@ -72,13 +92,16 @@ const STORAGE_CHECKPOINT_KEY = 'godsEyeView.sceneProject.checkpoint.v1';
  * Orchestrates deterministic cinematic scene playback.
  *
  * The director owns a mutable project (persisted in localStorage) containing
- * scenes and shots. It drives camera flights via Cesium, applies visual/style
- * state through the styleManager, toggles data layers via the dataManager, and
- * records timestamped telemetry events during each run for later export.
+ * scenes and shots. It drives camera flights via the renderer, applies
+ * visual/style state through the styleManager, toggles data layers via the
+ * dataManager, and records timestamped telemetry events during each run for
+ * later export.
  */
 export class SceneDirector {
   /**
-   * @param {Cesium.Viewer} viewer - The Cesium viewer instance
+   * @param {object} viewer - The scene's viewer (its renderer's host). Given
+   *   a viewer with no renderer bound, the caller loads
+   *   the package's `./render/cesium/unbound` export first.
    * @param {Object} styleManager - Controls visual state (bloom, sharpen, HUD, detection, style presets)
    * @param {Object} dataManager - Manages data layer enable/disable and per-layer params
    */
@@ -111,7 +134,7 @@ export class SceneDirector {
     this._interactionTransitions = 0;
     this._interactions = createSceneInteractions(viewer, {
       available: () =>
-        !this._destroyed && !this._running && !this.viewer.trackedEntity,
+        !this._destroyed && !this._running && !isFollowing(this.viewer),
       execute: (action, signal) =>
         this._trackWork(this._executeInteraction(action, signal)),
     });
@@ -130,7 +153,8 @@ export class SceneDirector {
     };
     this._cameraHandoffUnsubscribe =
       styleManager.subscribeCameraHandoff?.(yieldCamera);
-    const canvas = viewer.scene?.canvas;
+    // A viewer of the caller's own, with no renderer bound, has its canvas.
+    const canvas = canvasOf(viewer);
     for (const event of ['pointerdown', 'wheel'])
       canvas?.addEventListener(event, yieldCamera, { passive: true });
     this._removeCameraInput = () => {
@@ -153,6 +177,8 @@ export class SceneDirector {
     this._runAbort = null;
     /** @type {AbortController|null} Aborts the in-flight LOAD's layer transitions */
     this._loadAbort = null;
+    /** @type {AbortController|null} Aborts a same-shot seek's layer reconcile */
+    this._seekAbort = null;
     this._clock = createPlaybackClock({
       isRunning: () => this._running,
       timingForShot: (scene, shot) => this._sceneTimingForShot(scene, shot),
@@ -173,17 +199,21 @@ export class SceneDirector {
     /** @type {string|null} Scene whose layer state most recently landed. */
     this._loadedSceneId = null;
 
+    const readError = this._storageReadError;
     this._presentation = {
-      status: this._storageReadError
-        ? t(
-            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
-          )
-        : t('Ready'),
+      status: '',
       progress: 0,
       runtime: '',
       playbackActive: false,
       keyboardEnabled: false,
     };
+    this._setStatus(() =>
+      readError
+        ? t(
+            'Saved project could not be read; storage preserved. Import a valid file to resume saving.',
+          )
+        : t('Ready'),
+    );
     this._state = createStateChannel(() => ({
       ...this.getPlaybackStatus(),
       ...this._presentation,
@@ -208,7 +238,17 @@ export class SceneDirector {
         }
       }
     }
+    // Upgrades select the scene they change; startup still opens on the
+    // first scene and shot.
+    this._selectedSceneId = this._project.scenes[0]?.id || null;
+    this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._initUI();
+    // A status the director wrote itself follows the language; one it was
+    // handed (an error message) stays as it is.
+    this._offLocale = onLocaleChange(() => {
+      if (typeof this._statusText === 'function')
+        this._updateStatus(this._statusText);
+    });
     this._visibilityUnsubscribe =
       this.dataManager.subscribeVisibilityRequests?.((change) => {
         if (
@@ -234,7 +274,7 @@ export class SceneDirector {
   destroy() {
     if (this._destroyPromise) return this._destroyPromise;
     this._destroyed = true;
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._visibilityUnsubscribe?.();
     this._cameraHandoffUnsubscribe?.();
     this._removeCameraInput?.();
@@ -244,13 +284,15 @@ export class SceneDirector {
     this._interactions?.destroy();
     this._dataPacks?.destroy();
     this._controls?.destroy();
+    this._offLocale?.();
     this._state.destroy();
     this._destroyPromise = Promise.resolve().then(async () => {
       this.stopScene(msg('Stopped'));
       this._loadAbort?.abort();
       this._loadGeneration++;
-      this.viewer.camera.cancelFlight();
-      clearTimeout(this._storageToastTimer);
+      // The viewer may be gone by now: then there is no flight to stop.
+      findCamera(this.viewer)?.cancelFlight();
+      this._storageToast?.cancel();
       await Promise.allSettled(this._pendingWork || []);
       this._clock.destroy();
       this._cancelActiveSceneTravel();
@@ -321,7 +363,7 @@ export class SceneDirector {
   /** Persist the current project state to localStorage with an updated timestamp. */
   _saveProject() {
     if (this._storageReadError) {
-      this._toastStorageError(
+      this._toastStorageError(() =>
         t(
           'Scene not saved — existing saved project could not be read. Export edits or import a valid file.',
         ),
@@ -349,33 +391,26 @@ export class SceneDirector {
       );
       this._toastStorageError(
         invalid
-          ? t('Scene not saved — {reason}', {
-              reason: sceneSaveFailureReason(e),
-            })
+          ? () =>
+              t('Scene not saved — {reason}', {
+                reason: sceneSaveFailureReason(e),
+              })
           : undefined,
       );
       return false;
     }
   }
 
-  /** Surface a "scene not saved" notice via the global toast + scene status line. */
+  /**
+   * Surface a "scene not saved" notice via the global toast + scene status
+   * line. `message` words it, so the status line follows the locale.
+   */
   _toastStorageError(
-    message = t('Scene not saved — browser storage unavailable'),
+    message = () => t('Scene not saved — browser storage unavailable'),
   ) {
     this._updateStatus(message);
-    try {
-      const toast = document.getElementById('toast');
-      if (toast) {
-        toast.textContent = message;
-        toast.classList.add('visible');
-        clearTimeout(this._storageToastTimer);
-        this._storageToastTimer = setTimeout(() => {
-          toast.classList.remove('visible');
-        }, 2600);
-      }
-    } catch {
-      /* toast is best-effort */
-    }
+    this._storageToast ??= createToast({ durationMs: 2600 });
+    this._storageToast.show(message());
   }
 
   /** Immutable playback snapshots and completed editing actions. */
@@ -389,10 +424,12 @@ export class SceneDirector {
 
   _shotOutcome(type, scene, shot, index = scene.shots.indexOf(shot)) {
     if (type === 'shot-loaded')
-      this._presentation.status = t('Loaded: {scene} / {shot}', {
-        scene: displaySceneTitle(scene),
-        shot: displayShotTitle(shot.title, shot, scene),
-      });
+      this._setStatus(() =>
+        t('Loaded: {scene} / {shot}', {
+          scene: displaySceneTitle(scene),
+          shot: displayShotTitle(shot.title, shot, scene),
+        }),
+      );
     this._publish({
       type,
       sceneId: scene.id,
@@ -403,8 +440,8 @@ export class SceneDirector {
   }
 
   /**
-   * Wire up all scene-panel DOM event listeners and render the initial UI state.
-   * Exits silently if the scene-select element is missing (headless/test mode).
+   * Present the Scene panel through SceneControls, which publishes it to the
+   * store the panel views render; a page without them simply draws nothing.
    */
   _initUI() {
     this._sharing?.mount();
@@ -427,11 +464,7 @@ export class SceneDirector {
         hasRun: !!this._lastRunJson,
       }),
       actions: {
-        selectScene: (id) => {
-          this._selectedSceneId = id;
-          this._selectedShotId = this._getSelectedScene()?.shots[0]?.id || null;
-          this._renderShotList();
-        },
+        selectScene: (id) => this.selectShot(id),
         selectShot: (id) => {
           this._selectedShotId = id;
           this._publish({ type: 'selection-changed' });
@@ -445,6 +478,9 @@ export class SceneDirector {
         },
         create: (name) => this._createScene(name),
         deleteScene: () => this._deleteSelectedScene(),
+        stories: () => this._toggleSelectedSceneInStories(),
+        thumb: () => this.captureSceneThumb(),
+        tag: (tag) => this._toggleSelectedSceneTag(tag),
         capture: () => this.captureShot(),
         update: () => this.updateSelectedShot(),
         start: (id) => this.startScene(id),
@@ -456,6 +492,8 @@ export class SceneDirector {
         download: () => this.downloadLastRunMetadata(),
         load: (sceneId, shotId) => this.loadShot(sceneId, shotId),
         deleteShot: (sceneId, shotId) => this.deleteShot(sceneId, shotId),
+        moveShot: (sceneId, shotId, index) =>
+          this.moveShot(sceneId, shotId, index),
       },
     });
   }
@@ -545,6 +583,131 @@ export class SceneDirector {
     this._selectedShotId = this._project.scenes[0]?.shots[0]?.id || null;
     this._saveProject();
     this._publish({ type: 'scene-deleted', scene });
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+  }
+
+  /** SAVE TO STORIES / REMOVE FROM STORIES for the selected scene. */
+  _toggleSelectedSceneInStories() {
+    const scene = this._getSelectedScene();
+    if (!scene) return;
+    const on = !scene.stories;
+    if (!this.setSceneInStories(scene.id, on)) return;
+    this._updateStatus(() =>
+      on ? t('Saved to Stories') : t('Removed from Stories'),
+    );
+  }
+
+  /** A tag chip: add the tag to the selected scene, or take it off. */
+  _toggleSelectedSceneTag(tag) {
+    const scene = this._getSelectedScene();
+    if (!scene || !STORY_TAGS.includes(tag)) return;
+    const tags = scene.storyTags ?? [];
+    const next = tags.includes(tag)
+      ? tags.filter((item) => item !== tag)
+      : [...tags, tag];
+    // The panel disables the other chips once a scene has the most tags.
+    this.setSceneStoryTags(scene.id, next);
+  }
+
+  /**
+   * Set the tags a scene shows on its Stories card.
+   * @param {string} sceneId
+   * @param {string[]} tags Keys from STORY_TAGS, at most STORY_TAG_LIMIT.
+   * @returns {boolean} False when the scene does not exist, a tag is not
+   *   one of STORY_TAGS, or the project could not be saved (the tags stay as
+   *   they were and the save error is shown).
+   */
+  setSceneStoryTags(sceneId, tags) {
+    const scene = this._project.scenes.find(({ id }) => id === sceneId);
+    const next = [...new Set(tags)];
+    if (
+      !scene ||
+      next.length > STORY_TAG_LIMIT ||
+      !next.every((tag) => STORY_TAGS.includes(tag))
+    )
+      return false;
+    const previous = scene.storyTags;
+    if (next.length) scene.storyTags = next;
+    else delete scene.storyTags;
+    if (!this._saveProject()) {
+      if (previous === undefined) delete scene.storyTags;
+      else scene.storyTags = previous;
+      return false;
+    }
+    this._publish({ type: 'story-details-changed', scene });
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+    return true;
+  }
+
+  /**
+   * THUMBNAIL: keep the globe as drawn now as the selected scene's
+   * Stories card image.
+   * @returns {Promise<boolean>} Whether a thumbnail was stored.
+   */
+  async captureSceneThumb() {
+    const scene = this._getSelectedScene();
+    if (!scene || this._destroyed) return false;
+    const canCapture = () => {
+      const map = this.styleManager.mapStackController?.getState();
+      return map?.activeId === 'esri-imagery' && map.status === 'ready';
+    };
+    if (!canCapture()) {
+      this._updateStatus(() =>
+        t('Switch to Esri World Imagery to capture a thumbnail'),
+      );
+      return false;
+    }
+    let thumb;
+    try {
+      thumb = await captureStoryThumb(
+        { frame: findFrame(this.viewer), canvas: canvasOf(this.viewer) },
+        {
+          createCanvas: () => document.createElement('canvas'),
+          creditForFrame: () =>
+            canCapture()
+              ? findCredits(this.viewer)
+                  ?.list()
+                  .find(({ text }) => text.startsWith('Powered by Esri'))?.text
+              : null,
+        },
+      );
+    } catch (error) {
+      console.warn('[Scenes] Could not capture the thumbnail:', error);
+      if (!this._destroyed)
+        this._updateStatus(() => t('Thumbnail could not be captured'));
+      return false;
+    }
+    if (!thumb) {
+      if (!this._destroyed)
+        this._updateStatus(() => t('Thumbnail could not be captured'));
+      return false;
+    }
+    // The scene may have gone while the frame was drawn.
+    if (this._destroyed || !this._project.scenes.includes(scene)) return false;
+    return this.setSceneStoryThumb(scene.id, thumb);
+  }
+
+  /**
+   * Store a scene's Stories card thumbnail.
+   * @param {string} sceneId
+   * @param {string} thumb A JPEG or PNG data URL (see storyThumb.js).
+   * @returns {boolean} False when the scene does not exist.
+   */
+  setSceneStoryThumb(sceneId, thumb) {
+    const scene = this._project.scenes.find(({ id }) => id === sceneId);
+    if (!scene) return false;
+    const previous = scene.storyThumb;
+    scene.storyThumb = thumb;
+    if (!this._saveProject()) {
+      // An invalid or oversized image is not kept; the save error is shown.
+      if (previous === undefined) delete scene.storyThumb;
+      else scene.storyThumb = previous;
+      return false;
+    }
+    this._publish({ type: 'story-details-changed', scene });
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+    this._updateStatus(() => t('Thumbnail captured'));
+    return true;
   }
 
   /**
@@ -794,7 +957,7 @@ export class SceneDirector {
               (shot, index) => shot.title === requiredShotTitles[index],
             ));
       if (!inventoryMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: shot inventory changed', {
             scene: t(recipe.title),
           }),
@@ -827,7 +990,7 @@ export class SceneDirector {
           (beatId, index) => beatId === requiredSourcePackBeatIds[index],
         );
       if (!sourcePackMatches) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Cannot update {scene}: evidence beats changed', {
             scene: t(recipe.title),
           }),
@@ -852,7 +1015,7 @@ export class SceneDirector {
       shot: resolvePatchedShot(patch),
     }));
     if (resolvedPatches.some(({ shot }) => !shot)) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Cannot update {scene}: shot bindings are incomplete', {
           scene: t(recipe.title),
         }),
@@ -933,7 +1096,7 @@ export class SceneDirector {
       this._renderShotList();
     }
     if (announce && saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         marker
           ? tn(
               patchedShotCount,
@@ -960,17 +1123,23 @@ export class SceneDirector {
 
   /**
    * Capture the current camera position, visual state, and layer states as a
-   * new shot appended to the selected scene. No-op if no scene is selected.
+   * new shot appended to the selected scene, creating a scene first when none
+   * is selected.
    */
   captureShot() {
-    const scene = this._getSelectedScene();
-    if (!scene) return;
-
     const camera = this.styleManager.getCameraState();
     if (!camera) {
-      this._updateStatus(t('Cannot capture shot: camera not ready'));
+      this._updateStatus(() => t('Cannot capture shot: camera not ready'));
       return;
     }
+    // With no scene, start one first, as NEW SCENE does.
+    if (!this._getSelectedScene())
+      this._createScene(
+        // i18n-ignore: stored English, like _createScene's own fallback.
+        `Scene ${this._project.scenes.length + 1}`,
+      );
+    const scene = this._getSelectedScene();
+    if (!scene) return;
 
     const shot = normalizeShot(
       {
@@ -990,8 +1159,9 @@ export class SceneDirector {
     this._selectedShotId = shot.id;
     const saved = this._saveProject();
     this._shotOutcome('shot-captured', scene, shot);
+    if (scene.stories) this._publish({ type: 'stories-changed' });
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Captured: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1010,7 +1180,7 @@ export class SceneDirector {
 
     const shot = scene.shots.find((item) => item.id === this._selectedShotId);
     if (!shot) {
-      this._updateStatus(t('Select a shot first'));
+      this._updateStatus(() => t('Select a shot first'));
       return;
     }
 
@@ -1025,8 +1195,10 @@ export class SceneDirector {
 
     const saved = this._saveProject();
     this._shotOutcome('shot-updated', scene, shot);
+    if (scene.stories && scene.shots[0] === shot)
+      this._publish({ type: 'stories-changed' });
     if (saved) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Updated: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1047,8 +1219,37 @@ export class SceneDirector {
     const index = scene.shots.indexOf(shot);
     scene.shots = scene.shots.filter((item) => item.id !== shot.id);
     this._selectedShotId = scene.shots[0]?.id || null;
+    const inStories = !!scene.stories;
+    // A scene without shots has nothing to show in Stories.
+    if (!scene.shots.length) delete scene.stories;
     this._saveProject();
     this._shotOutcome('shot-deleted', scene, shot, index);
+    if (inStories) this._publish({ type: 'stories-changed' });
+  }
+
+  /**
+   * Move a shot to another place in its scene's playback order, the shots
+   * between shifting over (the shot list's up and down buttons swap it with
+   * its neighbour). Not while the scene plays.
+   * @param {string} sceneId
+   * @param {string} shotId
+   * @param {number} index Its new place, kept within the scene's shots.
+   * @returns {boolean} Whether it moved.
+   */
+  moveShot(sceneId, shotId, index) {
+    if (this._running || !Number.isInteger(index)) return false;
+    const { scene, shot } = this._getShot(sceneId, shotId);
+    if (!scene || !shot) return false;
+    const from = scene.shots.indexOf(shot);
+    const to = Math.max(0, Math.min(scene.shots.length - 1, index));
+    if (from === to) return false;
+    const shots = scene.shots.filter((item) => item !== shot);
+    shots.splice(to, 0, shot);
+    scene.shots = shots;
+    this._saveProject();
+    this._shotOutcome('shot-moved', scene, shot, to);
+    if (scene.stories) this._publish({ type: 'stories-changed' });
+    return true;
   }
 
   /**
@@ -1071,7 +1272,7 @@ export class SceneDirector {
   loadShot(sceneId, shotId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._interactionTransitions = 0;
     const previousGeneration = this._loadGeneration;
     const work = this._loadShot(sceneId, shotId, options);
@@ -1111,6 +1312,7 @@ export class SceneDirector {
     const { scene, shot } = this._getShot(sceneId, shotId);
     if (!scene || !shot) return { started: false, reason: 'shot-not-found' };
     flyDuration ??= shot.move ? shot.durationSec : 2.2;
+    const releaseAuthority = this._releaseAuthority();
     const previousScene =
       this._project.scenes.find((item) => item.id === this._loadedSceneId) ||
       null;
@@ -1135,10 +1337,14 @@ export class SceneDirector {
     this._setProgress(0);
 
     if (previousScene && previousScene.id !== scene.id) {
-      const released = await this._releaseSceneLayers(previousScene, token);
+      const released = await this._releaseSceneLayers(
+        previousScene,
+        token,
+        releaseAuthority,
+      );
       if (!released || token.cancelled) {
         if (!token.cancelled)
-          this._updateStatus(
+          this._updateStatus(() =>
             t('Could not leave scene: {scene}', {
               scene: displaySceneTitle(previousScene),
             }),
@@ -1192,7 +1398,7 @@ export class SceneDirector {
         seeking: true,
       });
       if (this._loadAbort === controller) this._loadAbort = null;
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Seeked: {scene} / {shot}', {
           scene: displaySceneTitle(scene),
           shot: displayShotTitle(shot.title, shot, scene),
@@ -1352,7 +1558,7 @@ export class SceneDirector {
     return travel;
   }
 
-  /** Publish a travel phase only after Cesium has accepted the camera flight. */
+  /** Publish a travel phase only after the renderer has accepted the camera flight. */
   _publishShotTravel(scene, shot, cameraTravel) {
     const states = this._layerStatesForShot(scene, shot, { cameraTravel });
     for (const [layerId, state] of Object.entries(states)) {
@@ -1510,15 +1716,55 @@ export class SceneDirector {
     return this._clock.publish(scene, shot, sceneElapsedSec, options);
   }
 
+  /**
+   * Resolves once no run is in progress and every LOAD, seek and interaction
+   * tracked so far has settled, including work started while waiting. Callers
+   * that put a view back after a scene (Stories' Close) wait on this rather
+   * than on `running`, which a LOAD never sets.
+   * @returns {Promise<void>}
+   */
+  async whenIdle() {
+    for (;;) {
+      await this._waitForRunIdle();
+      const pending = [...(this._pendingWork || [])];
+      if (!pending.length) {
+        if (!this._running) return;
+        continue;
+      }
+      await Promise.allSettled(pending);
+    }
+  }
+
   /** Wait for an interrupted run to release camera and layer ownership. */
   _waitForRunIdle() {
     if (!this._running) return Promise.resolve();
     return new Promise((resolve) => this._runIdleResolvers.add(resolve));
   }
 
-  /** Apply a new time inside the already-loaded shot without rebuilding its stack. */
-  _seekLoadedShot(scene, seekState) {
-    if (this._destroyed) return false;
+  /**
+   * Supersede any pending seek. Only a seek's own layer reconcile is aborted:
+   * a request that is later rejected must not cancel an in-flight LOAD.
+   */
+  _bumpSceneSeekGeneration() {
+    if (this._seekAbort) {
+      this._seekAbort.abort();
+      if (this._loadAbort === this._seekAbort) this._loadAbort = null;
+      this._seekAbort = null;
+    }
+    return ++this._sceneSeekGeneration;
+  }
+
+  /**
+   * Apply a new time inside the already-loaded shot without rebuilding its stack.
+   * @returns {Promise<boolean|null>} Null when the shortcut does not apply and
+   *   LOAD must rebuild the shot; otherwise whether the seek settled.
+   */
+  async _seekLoadedShot(
+    scene,
+    seekState,
+    seekGeneration = this._sceneSeekGeneration,
+  ) {
+    if (this._destroyed) return null;
     const shot = seekState?.shot;
     if (
       !scene ||
@@ -1528,17 +1774,77 @@ export class SceneDirector {
       this._loadedSceneId !== scene.id ||
       this._selectedShotId !== shot.id
     )
+      return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
       return false;
     if (!this._claimCameraOwnership()) return false;
     this._cancelActiveSceneTravel();
     this._loadAbort?.abort();
     this._loadAbort = null;
-    this._loadGeneration += 1;
+    const generation = ++this._loadGeneration;
     this._clock.stopShot();
     const states = this._layerStatesForShot(scene, shot, {
       cameraSettled: seekState.cameraProgress >= 1,
       sceneSeek: seekState,
     });
+    // A manual toggle, or a superseded LOAD transition whose rollback is still
+    // settling, leaves declared layers off the shot's stack. Reconcile only
+    // those through the cancellable admission path.
+    const staleStates = Object.fromEntries(
+      Object.entries(states)
+        .filter(([id, state]) => {
+          const wantEnabled = !!state?.enabled;
+          const lifecycle = this.dataManager.getLayerLifecycleState(id);
+          return (
+            lifecycle &&
+            (lifecycle.enabled !== wantEnabled ||
+              lifecycle.lifecycleState === 'enabling' ||
+              lifecycle.lifecycleState === 'disabling' ||
+              lifecycle.uncertain ||
+              this.dataManager.isEffectivelyEnabled(id) !== wantEnabled)
+          );
+        })
+        .map(([id, state]) => [id, { enabled: !!state?.enabled }]),
+    );
+    if (Object.keys(staleStates).length) {
+      const previousEnabled = new Map(
+        Object.keys(staleStates).map((id) => [
+          id,
+          this.dataManager.isEffectivelyEnabled(id),
+        ]),
+      );
+      const controller = new AbortController();
+      this._loadAbort = controller;
+      this._seekAbort = controller;
+      const layerResult = await this._applyLayerStates(
+        staleStates,
+        this._loadToken(generation, controller.signal, seekGeneration),
+        { stopOnRefusal: true },
+      );
+      if (this._loadAbort === controller) this._loadAbort = null;
+      if (this._seekAbort === controller) this._seekAbort = null;
+      const superseded = () =>
+        this._destroyed ||
+        this._loadAbort ||
+        this._running ||
+        seekGeneration !== this._sceneSeekGeneration;
+      if (layerResult.cancelled || superseded()) return false;
+      if (layerResult.refused.length) {
+        // Only a refusal rolls back. A cancelled reconcile leaves layer state
+        // to whatever superseded it, as a cancelled LOAD does.
+        for (const id of [...layerResult.applied].reverse()) {
+          if (superseded()) break;
+          await this.dataManager.setEnabled(
+            id,
+            previousEnabled.get(id) ?? false,
+            { origin: 'scene' },
+          );
+        }
+        return false;
+      }
+    }
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     let applied = true;
     for (const [layerId, state] of Object.entries(states)) {
       if (!state?.enabled || !state.params) continue;
@@ -1550,7 +1856,9 @@ export class SceneDirector {
         applied = false;
       }
     }
-    if (!applied) return false;
+    if (!applied) return null;
+    if (this._destroyed || seekGeneration !== this._sceneSeekGeneration)
+      return false;
     this._setCameraView(
       seekState.camera || resolveCameraPose(scene, shot.camera),
     );
@@ -1559,7 +1867,7 @@ export class SceneDirector {
       running: false,
       seeking: true,
     });
-    this._updateStatus(
+    this._updateStatus(() =>
       t('Seeked: {scene} / {shot}', {
         scene: displaySceneTitle(scene),
         shot: displayShotTitle(shot.title, shot, scene),
@@ -1568,15 +1876,17 @@ export class SceneDirector {
     return true;
   }
 
-  /** Seek the complete authored scene state to an exact clock position. */
-  seekScene(sceneId, progress) {
+  /** Seek to an exact position. Reopening a scene can reload its authored look. */
+  seekScene(sceneId, progress, { reloadShot = false } = {}) {
     if (this._destroyed) return Promise.resolve(false);
     this.stopScene(msg('Seeking scene clock'));
-    const generation = ++this._sceneSeekGeneration;
-    return this._trackWork(this._seekScene(sceneId, progress, generation));
+    const generation = this._bumpSceneSeekGeneration();
+    return this._trackWork(
+      this._seekScene(sceneId, progress, generation, reloadShot),
+    );
   }
 
-  async _seekScene(sceneId, progress, generation) {
+  async _seekScene(sceneId, progress, generation, reloadShot) {
     const scene = this._project.scenes.find(({ id }) => id === sceneId);
     if (!scene?.shots?.length) return false;
     if (this._running) {
@@ -1586,7 +1896,12 @@ export class SceneDirector {
       return false;
     const seekState = this._sceneSeekState(scene, progress);
     if (!seekState) return false;
-    if (this._seekLoadedShot(scene, seekState)) return true;
+    if (!reloadShot) {
+      const seeked = await this._seekLoadedShot(scene, seekState, generation);
+      if (this._destroyed || generation !== this._sceneSeekGeneration)
+        return false;
+      if (seeked !== null) return seeked;
+    }
     const result = await this._loadShot(scene.id, seekState.shot.id, {
       sceneSeek: seekState,
     });
@@ -1606,15 +1921,17 @@ export class SceneDirector {
    * @param {AbortSignal} [signal] - Abort signal for this LOAD's manager calls
    * @returns {{ cancelled: boolean, signal: AbortSignal|undefined }}
    */
-  _loadToken(generation, signal = undefined) {
+  _loadToken(generation, signal = undefined, seekGeneration = null) {
     const director = this;
     return {
       signal,
       get cancelled() {
         return (
           director._destroyed ||
-          signal?.aborted ||
-          director._loadGeneration !== generation
+          Boolean(signal?.aborted) ||
+          director._loadGeneration !== generation ||
+          (seekGeneration !== null &&
+            director._sceneSeekGeneration !== seekGeneration)
         );
       },
     };
@@ -1641,7 +1958,7 @@ export class SceneDirector {
       this._claimingCamera = false;
     }
     if (claimed === false) {
-      this._updateStatus(t('Camera unavailable — exit cockpit first'));
+      this._updateStatus(() => t('Camera unavailable — exit cockpit first'));
       return false;
     }
     return true;
@@ -1649,20 +1966,20 @@ export class SceneDirector {
 
   /** Place the camera at an authored replay start pose without an intermediate flight. */
   _setCameraView(cameraState) {
-    if (!cameraState || typeof this.viewer?.camera?.setView !== 'function')
-      return false;
+    const camera = findCamera(this.viewer);
+    if (!cameraState || !camera) return false;
     this.styleManager?.clearSearchedLocation?.();
-    this.viewer.camera.cancelFlight?.();
-    this.viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(
-        cameraState.lon,
-        cameraState.lat,
-        cameraState.alt,
-      ),
+    camera.cancelFlight();
+    camera.setView({
+      destination: {
+        lon: cameraState.lon,
+        lat: cameraState.lat,
+        height: cameraState.alt,
+      },
       orientation: {
-        heading: Cesium.Math.toRadians(cameraState.heading || 0),
-        pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-        roll: Cesium.Math.toRadians(cameraState.roll || 0),
+        heading: toRadians(cameraState.heading || 0),
+        pitch: toRadians(cameraState.pitch ?? -35),
+        roll: toRadians(cameraState.roll || 0),
       },
     });
     return true;
@@ -1688,6 +2005,135 @@ export class SceneDirector {
       title: scene.title,
       shots: scene.shots.length,
     }));
+  }
+
+  /**
+   * One scene's shots in play order with their display titles and where each
+   * starts on the scene clock, for callers that show or resume a scene by
+   * shot (Stories).
+   * @param {string} sceneId
+   * @returns {Array<{id: string, title: string, startSec: number, durationSec: number}>}
+   */
+  listShots(sceneId) {
+    const scene = this._project.scenes.find(({ id }) => id === sceneId);
+    return (scene?.shots ?? []).map((shot) => {
+      const timing = this._sceneTimingForShot(scene, shot);
+      return {
+        id: shot.id,
+        title: displayShotTitle(shot.title, shot, scene),
+        startSec: timing.startElapsedSec,
+        durationSec: timing.durationSec,
+      };
+    });
+  }
+
+  /**
+   * Select a scene and one of its shots in the Scenes panel, as picking them
+   * there does (Stories' "Open in GEV" hands a story over for authoring).
+   * @param {string} sceneId
+   * @param {string|null} [shotId] Defaults to the scene's first shot.
+   * @returns {boolean} False when the scene is not installed.
+   */
+  selectShot(sceneId, shotId = null) {
+    const scene = this._project.scenes.find(({ id }) => id === sceneId);
+    if (!scene) return false;
+    this._selectedSceneId = scene.id;
+    this._selectedShotId = scene.shots.some(({ id }) => id === shotId)
+      ? shotId
+      : (scene.shots[0]?.id ?? null);
+    this._renderSceneSelect();
+    this._renderShotList();
+    return true;
+  }
+
+  /**
+   * Whether the project has this scene (a built-in can be deleted, or be
+   * missing from an imported project).
+   * @param {string} sceneId
+   * @returns {boolean}
+   */
+  hasScene(sceneId) {
+    return this._project.scenes.some(
+      ({ id, shots }) => id === sceneId && shots.length > 0,
+    );
+  }
+
+  /**
+   * The scene and shot AUTHORING has selected, for putting back after
+   * playback (Stories plays a scene by selecting it).
+   * @returns {{sceneId: string|null, shotId: string|null}}
+   */
+  selection() {
+    return {
+      sceneId: this._selectedSceneId ?? null,
+      shotId: this._selectedShotId ?? null,
+    };
+  }
+
+  /**
+   * Publish a scene to the Stories page, or take it off.
+   * @param {string} sceneId
+   * @param {boolean} on
+   * @returns {boolean} False when the scene does not exist, has no shots and
+   *   `on` is true, or the project could not be saved (the scene stays as it
+   *   was and the save error is shown).
+   */
+  setSceneInStories(sceneId, on) {
+    const scene = this._project.scenes.find(({ id }) => id === sceneId);
+    if (!scene || (on && !scene.shots.length)) return false;
+    const previous = scene.stories;
+    if (on) scene.stories = true;
+    else delete scene.stories;
+    if (!this._saveProject()) {
+      if (previous === undefined) delete scene.stories;
+      else scene.stories = previous;
+      return false;
+    }
+    this._publish({ type: 'stories-changed' });
+    return true;
+  }
+
+  /**
+   * The scenes published to Stories that have a shot, in project order.
+   * `camera` is the first shot's camera as captured; `thumb` is the card
+   * thumbnail's data URL ('' when none was captured) and `tags` its tags.
+   * @returns {Array<{id: string, title: string, camera: object, shotCount: number, thumb: string, tags: string[]}>}
+   */
+  storyScenes() {
+    return this._project.scenes
+      .filter((scene) => scene.stories === true && scene.shots.length > 0)
+      .map((scene) => ({
+        id: scene.id,
+        title: displaySceneTitle(scene),
+        camera: deepClone(scene.shots[0].camera),
+        shotCount: scene.shots.length,
+        thumb: scene.storyThumb ?? '',
+        tags: [...(scene.storyTags ?? [])],
+      }));
+  }
+
+  /**
+   * The person's own scenes that are not on the Stories page, with a shot:
+   * Stories lists them as drafts, visible only here, so a scene made in
+   * AUTHORING can always be opened again from Stories.
+   * @returns {Array<{id: string, title: string, camera: object, shotCount: number, thumb: string, tags: string[]}>}
+   */
+  draftScenes() {
+    return this._project.scenes
+      .filter(
+        (scene) =>
+          scene.stories !== true &&
+          scene.shots.length > 0 &&
+          !BUILT_IN_SCENE_IDS.has(scene.id),
+      )
+      .map((scene) => ({
+        id: scene.id,
+        title: displaySceneTitle(scene),
+        camera: deepClone(scene.shots[0].camera),
+        shotCount: scene.shots.length,
+        thumb: scene.storyThumb ?? '',
+        tags: [...(scene.storyTags ?? [])],
+      }));
   }
 
   /**
@@ -1733,6 +2179,11 @@ export class SceneDirector {
     return this._running;
   }
 
+  /** Whether an existing run, LOAD, seek or interaction still owns work. */
+  get busy() {
+    return this.running || Boolean(this._pendingWork?.size);
+  }
+
   /**
    * Start a full scene run beginning at the given scene.
    *
@@ -1747,19 +2198,27 @@ export class SceneDirector {
    * @param {boolean} [options.single=false] - Play only the named scene instead of
    *   round-robining through the whole project (voice playback uses this).
    * @param {string|null} [options.afterShotId=null] - Begin after this shot without wrapping
+   * @param {number|null} [options.fromProgress=null] - Begin at this point of the
+   *   start scene (0–1 of its clock), partway into a shot when it falls inside
+   *   one: camera, hold and clock carry on from there, as after a seek.
    * @param {boolean} [options.preview=true] - Enter recording preview and release the scene on exit
    * @returns {Promise<{started: boolean, reason?: string, shots?: number}>}
    */
   startScene(sceneId, options) {
     if (this._destroyed)
       return Promise.resolve({ started: false, reason: 'destroyed' });
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     return this._trackWork(this._startScene(sceneId, options));
   }
 
   async _startScene(
     sceneId,
-    { single = false, afterShotId = null, preview = true } = {},
+    {
+      single = false,
+      afterShotId = null,
+      fromProgress = null,
+      preview = true,
+    } = {},
   ) {
     if (this._running) return { started: false, reason: 'already-running' };
 
@@ -1774,9 +2233,21 @@ export class SceneDirector {
       if (index < 0) return { started: false, reason: 'shot-not-found' };
       queue = queue.slice(index + 1);
       if (!queue.length) return { started: false, reason: 'scene-complete' };
+    } else if (fromProgress !== null) {
+      const scene = this._project.scenes.find(({ id }) => id === startSceneId);
+      const resume = scene ? this._sceneSeekState(scene, fromProgress) : null;
+      const index = resume
+        ? queue.findIndex(
+            ({ scene, shot }) =>
+              scene.id === startSceneId && shot.id === resume.shot.id,
+          )
+        : -1;
+      if (index < 0) return { started: false, reason: 'shot-not-found' };
+      queue = queue.slice(index);
+      if (resume.shotElapsedSec > 0) queue[0] = { ...queue[0], resume };
     }
     if (!queue.length) {
-      this._updateStatus(t('No shots to run'));
+      this._updateStatus(() => t('No shots to run'));
       return { started: false, reason: 'no-shots' };
     }
 
@@ -1803,6 +2274,9 @@ export class SceneDirector {
 
     this._usesAuthoredCamera = queue.some(({ shot }) => !!shot.move);
 
+    // Every release this run reaches, however late, answers to the
+    // authority it starts under (revokeSceneRelease).
+    const releaseAuthority = this._releaseAuthority();
     // Transition to running state
     this._running = true;
     this._previewRun = preview;
@@ -1831,7 +2305,8 @@ export class SceneDirector {
       return (
         sum +
         (item.shot.durationSec || 0) +
-        this._effectiveShotHoldSec(item.scene, item.shot)
+        this._effectiveShotHoldSec(item.scene, item.shot) -
+        (item.resume?.shotElapsedSec || 0)
       );
     }, 0);
 
@@ -1854,14 +2329,16 @@ export class SceneDirector {
     try {
       await playSceneQueue(queue, {
         token,
-        adapter: createScenePlaybackAdapter(this, DEFAULT_SHOT_DURATION_SEC),
+        adapter: createScenePlaybackAdapter(this, DEFAULT_SHOT_DURATION_SEC, {
+          releaseAuthority,
+        }),
         previousScene: this._project.scenes.find(
           (scene) => scene.id === this._loadedSceneId,
         ),
         releaseOnFinish: preview,
       });
     } catch (error) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Error: {message}', {
           message: error.message || 'run failed',
         }),
@@ -1902,7 +2379,7 @@ export class SceneDirector {
 
   /**
    * Cancel the active scene run. Sets the cancellation token, aborts the
-   * run's in-flight layer transitions and Cesium camera flight, and logs a
+   * run's in-flight layer transitions and camera flight, and logs a
    * stop event.
    *
    * The abort is the part that stops work already under way: a layer
@@ -1919,18 +2396,19 @@ export class SceneDirector {
     this._setSceneMediaPlayback();
     this._interactions?.clear();
     this._dataPacks?.clear();
-    this._sceneSeekGeneration++;
+    this._bumpSceneSeekGeneration();
     this._loadAbort?.abort();
     this._loadAbort = null;
     this._loadGeneration++;
     this._clock.stopShot();
     this._cancelActiveSceneTravel();
-    this.viewer.camera.cancelFlight();
+    // Stop runs in teardown too, after the viewer may be gone.
+    findCamera(this.viewer)?.cancelFlight();
     this._clock.stop();
     if (!this._running || !this._runToken) return;
     this._runToken.cancelled = true;
     this._runAbort?.abort();
-    this._updateStatus(t(reason));
+    this._updateStatus(() => t(reason));
     this._logEvent('scene_stopped', { reason });
   }
 
@@ -1986,7 +2464,7 @@ export class SceneDirector {
     }
     if (action.type === 'shot') {
       if (this._interactionTransitions >= 64) {
-        this._updateStatus(
+        this._updateStatus(() =>
           t('Scene transition limit reached — load a shot to reset'),
         );
         return false;
@@ -2030,7 +2508,9 @@ export class SceneDirector {
     try {
       payload = stringifySceneDocument(this._project);
     } catch (error) {
-      this._updateStatus(t('Export failed: {error}', { error: error.message }));
+      this._updateStatus(() =>
+        t('Export failed: {error}', { error: error.message }),
+      );
       return;
     }
     // Trigger a browser download via a temporary anchor element
@@ -2043,7 +2523,7 @@ export class SceneDirector {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-    this._presentation.status = t('Project exported');
+    this._setStatus(() => t('Project exported'));
     this._publish({ type: 'project-exported', project: this._project });
   }
 
@@ -2096,14 +2576,25 @@ export class SceneDirector {
         ),
       );
       this._storageReadError = null;
-      this._selectedSceneId =
-        selection?.sceneId || project.scenes[0]?.id || null;
+      // Keep authoring on the named or current scene, else the first scene
+      // that is not a built-in one, else the first scene.
+      const selected =
+        project.scenes.find(({ id }) => id === selection?.sceneId) ||
+        project.scenes.find(({ id }) => id === this._selectedSceneId) ||
+        project.scenes.find(({ id }) => !BUILT_IN_SCENE_IDS.has(id)) ||
+        project.scenes[0] ||
+        null;
+      this._selectedSceneId = selected?.id ?? null;
       this._selectedShotId =
-        selection?.shotId || project.scenes[0]?.shots[0]?.id || null;
+        selected?.shots.find(({ id }) => id === selection?.shotId)?.id ||
+        selected?.shots[0]?.id ||
+        null;
       this._loadedSceneId = null;
       const saved = this._saveProject();
       this._publish({ type: 'project-imported', project });
-      if (saved) this._updateStatus(t('Imported {file}', { file: file.name }));
+      this._publish({ type: 'stories-changed' });
+      if (saved)
+        this._updateStatus(() => t('Imported {file}', { file: file.name }));
       return true;
     } catch (error) {
       if (
@@ -2112,7 +2603,7 @@ export class SceneDirector {
         generation !== this._importGeneration
       )
         return false;
-      this._updateStatus(
+      this._updateStatus(() =>
         error instanceof SceneDocumentError
           ? t('Import failed: {error}', { error: error.message })
           : t('Import failed (could not read JSON file)'),
@@ -2141,13 +2632,9 @@ export class SceneDirector {
    * Only layers the shot declares are touched — see src/scenes/scenePolicy.js
    * for why undeclared layers are left alone.
    *
-   * Two things this pass owes the operator:
-   *  - An isolating Context mode is left FIRST. Space Missions refuses every
-   *    unrelated enable, so a shot applied inside it composes a scene nobody
-   *    authored (see _exitIsolatingContextMode).
-   *  - A refused layer is reported. setEnabled() answers false when a guard
-   *    vetoes the transition; swallowing that answer is how playback came to
-   *    claim success over a scene it never assembled.
+   * A refused layer is reported. setEnabled() answers false when a guard
+   * vetoes the transition; swallowing that answer is how playback came to
+   * claim success over a scene it never assembled.
    *
    * The token's signal is handed to every transition, so a stop or a newer
    * request cancels the layer that is CURRENTLY moving rather than only the
@@ -2165,17 +2652,14 @@ export class SceneDirector {
    *   the transition in flight.
    * @returns {Promise<{ applied: string[], refused: string[], cancelled: boolean }>}
    */
-  async _applyLayerStates(targetStates, token = null) {
+  async _applyLayerStates(
+    targetStates,
+    token = null,
+    { stopOnRefusal = false } = {},
+  ) {
     const applied = [];
     const refused = [];
     const abort = () => ({ applied, refused, cancelled: true });
-    if (token?.cancelled) return abort();
-
-    // Deliberately NOT aborted: leaving an isolating mode IS the restore to
-    // the operator's pre-mode state, which is exactly where a stopped scene
-    // should come to rest. Tearing that transaction in half would strand
-    // Context, so it completes and cancellation is honoured immediately after.
-    await this._exitIsolatingContextMode();
     if (token?.cancelled) return abort();
 
     const signal = token?.signal;
@@ -2206,6 +2690,7 @@ export class SceneDirector {
         console.warn(
           `[Scenes] Layer refused: ${id} → ${enabled ? 'on' : 'off'}`,
         );
+        if (stopOnRefusal) break;
         continue;
       }
       if (params && typeof this.dataManager.restoreLayerState !== 'function') {
@@ -2215,7 +2700,7 @@ export class SceneDirector {
     }
 
     if (refused.length) {
-      this._updateStatus(
+      this._updateStatus(() =>
         t('Layers refused: {layers}', { layers: refused.join(', ') }),
       );
       this._logEvent('shot_layers_refused', { layerIds: [...refused] });
@@ -2233,19 +2718,28 @@ export class SceneDirector {
    * @param {{ cancelled?: boolean, signal?: AbortSignal }} [token] - Optional LOAD/run token
    * @returns {Promise<boolean>} True only when every owned layer is released
    */
-  async _releaseSceneLayers(scene, token = null) {
+  async _releaseSceneLayers(
+    scene,
+    token = null,
+    authority = this._releaseAuthority(),
+  ) {
     this._interactions?.clear();
     this._dataPacks?.clear();
     const layerIds = Array.isArray(scene?.releaseLayerIds)
       ? scene.releaseLayerIds
       : [];
+    // revokeSceneRelease() ends this release's authority over layers.
+    const revoked = authority;
+    const signal = token?.signal
+      ? AbortSignal.any([token.signal, revoked])
+      : revoked;
     let released = true;
     for (const layerId of layerIds) {
-      if (token?.cancelled) return false;
+      if (token?.cancelled || revoked.aborted) return false;
       try {
         const settled = await this.dataManager.setEnabled(layerId, false, {
           origin: 'scene',
-          signal: token?.signal,
+          signal,
         });
         if (settled === false) {
           released = false;
@@ -2270,59 +2764,47 @@ export class SceneDirector {
         });
       }
     }
-    return released && !token?.cancelled;
+    return released && !token?.cancelled && !revoked.aborted;
   }
 
   /**
-   * Leave a Context mode that isolates the globe, before a shot's layers land.
-   *
-   * Space Missions is the shipped case. It is a destructive-exclusive mode: a
-   * guard refuses every enable outside its own replay bundle, so a recipe that
-   * declares flights/satellites/earthquakes/traffic gets all four refused —
-   * and Orbital Watch, whose satellites the guard does permit, would still
-   * play over the mode's rocket-launches replay it never declared. Either way
-   * the shot is not the composition it describes.
-   *
-   * The old full-registry reconcile dismantled the mode by accident, as part
-   * of forcing every undeclared layer off. Declaring the exit is the honest
-   * version of that: the decision is read off the policy guard itself, so a
-   * future isolating mode is covered without being named here.
-   *
-   * @returns {Promise<boolean>} Whether a mode was exited.
+   * Stop every scene layer release still in flight from turning any further
+   * layer off: the one under way is aborted and the rest are skipped. For a
+   * caller that stopped waiting on a teardown (whenIdle) and is about to put
+   * layers back itself; a release started afterwards is unaffected.
    */
-  async _exitIsolatingContextMode() {
-    // Older/headless style managers may predate the Context facade.
-    if (typeof this.styleManager?.getContextModeState !== 'function')
-      return false;
-    if (typeof this.styleManager?.setContextMode !== 'function') return false;
-
-    const state = this.styleManager.getContextModeState() || {};
-    // A mode still being entered already owns the guard, so it counts.
-    const mode = state.entering || state.mode || null;
-    if (!sceneRequiresContextModeExit(mode)) return false;
-
-    const result = await this.styleManager.setContextMode('off');
-    if (result && result.ok === false) {
-      console.warn(
-        `[Scenes] Could not exit ${mode}:`,
-        result.error || 'unknown reason',
-      );
-      this._updateStatus(
-        t('Could not exit {mode} — scene layers may be refused', { mode }),
-      );
-      this._logEvent('context_mode_exit_failed', {
-        mode,
-        error: result.error || null,
-      });
-      return false;
-    }
-    this._logEvent('context_mode_exited', { mode });
-    return true;
+  revokeSceneRelease() {
+    this._releaseAbort?.abort();
+    this._releaseAbort = null;
   }
 
-  /** Use the authored sampler only for explicit moves; ordinary shots keep their existing flights. */
-  async _flyShotCamera(scene, shot, durationSec, token) {
+  /**
+   * The current authority to turn scene layers off, as an abort signal. A run
+   * or LOAD takes it when it starts, so a revocation also covers the cleanup
+   * it reaches later (a release at a scene change or at the run's end).
+   * @returns {AbortSignal}
+   */
+  _releaseAuthority() {
+    this._releaseAbort ??= new AbortController();
+    return this._releaseAbort.signal;
+  }
+
+  /**
+   * Use the authored sampler only for explicit moves; ordinary shots keep their
+   * existing flights. A resumed shot (`fromProgress` > 0) continues along the
+   * path a seek samples, so it goes on from exactly where the seek framed it.
+   */
+  async _flyShotCamera(scene, shot, durationSec, token, fromProgress = 0) {
     const move = resolveCameraMove(scene, shot);
+    if (fromProgress > 0)
+      return this._resumeShotCamera(
+        scene,
+        shot,
+        move,
+        durationSec,
+        token,
+        fromProgress,
+      );
     if (!move)
       return this._flyCamera(
         resolveCameraPose(scene, shot.camera),
@@ -2337,8 +2819,37 @@ export class SceneDirector {
       this.stopScene(msg('Camera move interrupted'));
   }
 
+  /** Play the rest of a shot's flight from `fromProgress` of the way along. */
+  async _resumeShotCamera(scene, shot, move, durationSec, token, fromProgress) {
+    const index = scene.shots.indexOf(shot);
+    const from = resolveCameraPose(
+      scene,
+      scene.shots[index - 1]?.camera || shot.camera,
+    );
+    const to = resolveCameraPose(scene, shot.camera);
+    // A resumed ordinary flight is driven frame by frame like an authored
+    // move, so a camera gesture during it stops the run the same way.
+    const authored = this._usesAuthoredCamera;
+    this._usesAuthoredCamera = true;
+    let completed;
+    try {
+      completed = await this._cameraMotion.play(
+        { ...move, durationSec },
+        token,
+        {
+          fromProgress,
+          ...(move ? {} : { sample: (_, p) => cameraAtProgress(from, to, p) }),
+        },
+      );
+    } finally {
+      if (!token.cancelled) this._usesAuthoredCamera = authored;
+    }
+    if (!completed && !token.cancelled && !this._destroyed)
+      this.stopScene(msg('Camera move interrupted'));
+  }
+
   /**
-   * Fly the Cesium camera to the given position over the specified duration
+   * Fly the camera to the given position over the specified duration
    * using cubic ease-in-out. Resolves when the flight completes, is cancelled,
    * or a safety timeout fires (duration + 0.6s).
    * @param {Object} cameraState - Target { lat, lon, alt, heading, pitch, roll }
@@ -2357,11 +2868,11 @@ export class SceneDirector {
       0.2,
       Number(durationSec) || DEFAULT_SHOT_DURATION_SEC,
     );
-    const destination = Cesium.Cartesian3.fromDegrees(
-      cameraState.lon,
-      cameraState.lat,
-      cameraState.alt,
-    );
+    const destination = {
+      lon: cameraState.lon,
+      lat: cameraState.lat,
+      height: cameraState.alt,
+    };
 
     await new Promise((resolve) => {
       // Guard against double-resolve from both callback and timeout
@@ -2374,26 +2885,25 @@ export class SceneDirector {
         resolve();
       };
 
-      this.viewer.camera.flyTo({
-        destination,
+      cameraOf(this.viewer).flyTo(destination, {
         orientation: {
-          heading: Cesium.Math.toRadians(cameraState.heading || 0),
-          pitch: Cesium.Math.toRadians(cameraState.pitch ?? -35),
-          roll: Cesium.Math.toRadians(cameraState.roll || 0),
+          heading: toRadians(cameraState.heading || 0),
+          pitch: toRadians(cameraState.pitch ?? -35),
+          roll: toRadians(cameraState.roll || 0),
         },
-        duration,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        complete: finish,
-        cancel: finish,
+        durationS: duration,
+        easing: 'cubicInOut',
+        onComplete: finish,
+        onCancel: finish,
       });
 
-      // Safety timeout in case Cesium callbacks fail to fire
+      // Safety timeout in case the flight's callbacks fail to fire
       if (!done) timer = setTimeout(finish, (duration + 0.6) * 1000);
     });
   }
 
   /** Let an opt-in media owner finish playback and its fade before the next flight. */
-  async _holdShot(scene, shot, token) {
+  async _holdShot(scene, shot, token, resume = null) {
     const readers = Object.entries(
       this._layerStatesForShot(scene, shot),
     ).flatMap(([id, state]) => {
@@ -2414,6 +2924,26 @@ export class SceneDirector {
           ]
         : [];
     });
+    // Resumed inside the hold, its layers play on from that moment. A clip
+    // they started again plays the hold out as from its start (its media
+    // gate, or the shot's whole hold for a clip without one); otherwise only
+    // the rest of the hold is left to wait.
+    const restartedClip =
+      resume?.holdElapsedSec > 0 &&
+      Object.entries(this._layerStatesForShot(scene, shot)).some(
+        ([id, state]) =>
+          state.enabled &&
+          this.dataManager?.layers
+            ?.get(id)
+            ?.module?.sceneShotRestartsMedia?.(state.params?.beatId) === true,
+      );
+    if (resume?.holdElapsedSec > 0 && !restartedClip) {
+      await this._sleep(
+        Math.max(0, resume.holdDurationSec - resume.holdElapsedSec) * 1000,
+        token,
+      );
+      return;
+    }
     if (!readers.length) {
       await this._sleep(this._effectiveShotHoldSec(scene, shot) * 1000, token);
       return;
@@ -2452,8 +2982,8 @@ export class SceneDirector {
   }
 
   /** Drive the public authored clock through one running shot. */
-  _startSceneClockTicker(scene, shot, token) {
-    return this._clock.startScene(scene, shot, token);
+  _startSceneClockTicker(scene, shot, token, offsetSec = 0) {
+    return this._clock.startScene(scene, shot, token, offsetSec);
   }
 
   /**
@@ -2540,8 +3070,18 @@ export class SceneDirector {
    * @param {string} text
    */
   _updateStatus(text) {
-    this._presentation.status = text;
+    this._setStatus(text);
     this._publish({ type: 'status-changed' });
+  }
+
+  /**
+   * Set the status line without publishing. A function is called again when
+   * the locale changes, so its text follows the language.
+   * @param {string|(() => string)} text
+   */
+  _setStatus(text) {
+    this._statusText = text;
+    this._presentation.status = typeof text === 'function' ? text() : text;
   }
 
   /**

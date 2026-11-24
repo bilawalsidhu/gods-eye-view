@@ -125,3 +125,114 @@ test('a rejected key and a rate limit are told apart from other tile errors', as
     'the Retry-After header wins over the body',
   );
 });
+
+test('nearestImages asks the graph API around a point, within 50 m, for at most 100 images', async () => {
+  const { calls, fetchImpl } = fakeFetch(() =>
+    jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),
+  );
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const images = await source.nearestImages({ lat: 38.5, lon: -121.5 });
+  assert.equal(images.length, 1);
+  const url = new URL(calls[0].url);
+  assert.equal(url.pathname, '/images');
+  assert.equal(url.searchParams.get('lat'), '38.5');
+  assert.equal(url.searchParams.get('lng'), '-121.5');
+  assert.equal(url.searchParams.get('radius'), '50');
+  // The API cuts at the limit before any order: a small one would sort and
+  // filter a handful of arbitrary photos (a 360° filter could find none).
+  assert.equal(url.searchParams.get('limit'), '100', "the API's most");
+  assert.match(url.searchParams.get('fields'), /computed_geometry/);
+  assert.match(url.searchParams.get('fields'), /is_pano/);
+});
+
+test('with a Graph endpoint, sequence lookups go there without a token', async () => {
+  const { calls, fetchImpl } = fakeFetch(() =>
+    jsonResponse({ data: [{ id: '1', geometry: { coordinates: [1, 2] } }] }),
+  );
+  const source = createMapillarySource({
+    graphEndpoint: '/api/mapillary/graph',
+    fetchImpl,
+  });
+  assert.equal(source.graphEndpoint, '/api/mapillary/graph/');
+  assert.equal(source.hasToken(), false);
+  const images = await source.getSequenceImages('seq-1');
+  assert.equal(images.length, 1);
+  const url = new URL(calls[0].url, 'http://localhost');
+  assert.equal(url.pathname, '/api/mapillary/graph/images');
+  assert.equal(url.searchParams.get('sequence_ids'), 'seq-1');
+  assert.equal(url.searchParams.has('access_token'), false);
+});
+
+test('Graph endpoint errors keep their status', async () => {
+  const { fetchImpl } = fakeFetch(() =>
+    jsonResponse({ error: 'no_key', keyRequired: true }, 503),
+  );
+  const source = createMapillarySource({
+    graphEndpoint: '/api/mapillary/graph/',
+    fetchImpl,
+  });
+  await assert.rejects(
+    () => source.getSequenceImages('1'),
+    (error) => error.status === 503 && error.keyRequired === true,
+  );
+});
+
+test('a nearest-image search that never answers is given up, body included', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { NEAREST_TIMEOUT_MS } = await import('./policy.js');
+  // Headers arrive; the body never ends, and the fetch ignores its signal.
+  const { fetchImpl } = fakeFetch(() => ({
+    ok: true,
+    status: 200,
+    json: () => new Promise(() => {}),
+  }));
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const pending = source.nearestImages({ lat: 1, lon: 2 });
+  const outcome = pending.then(
+    () => 'answered',
+    (error) => error,
+  );
+  await Promise.resolve();
+  t.mock.timers.tick(NEAREST_TIMEOUT_MS);
+  const error = await outcome;
+  assert.ok(error instanceof MapillarySourceError, String(error));
+  assert.equal(error.status, 504);
+  assert.equal(error.keyRequired, false, 'not a key problem');
+  // English data, shown in the interface language like the other sources'.
+  const { setLocale } = await import('../../../../i18n/index.js');
+  const { translateStreetLevelError } =
+    await import('../../../../ui/streetLevelPresentation.js');
+  assert.equal(
+    translateStreetLevelError(error.message),
+    'Mapillary did not answer in time — try again',
+  );
+  for (const [locale, expected] of [
+    ['de', /nicht rechtzeitig/],
+    ['ja', /時間内に応答/],
+  ]) {
+    setLocale(locale);
+    try {
+      assert.match(translateStreetLevelError(error.message), expected, locale);
+    } finally {
+      setLocale('en');
+    }
+  }
+});
+
+test('the caller’s abort still ends a nearest-image search before its deadline', async () => {
+  const { fetchImpl } = fakeFetch(
+    (_url, init) =>
+      new Promise((_, reject) =>
+        init.signal.addEventListener('abort', () => reject(init.signal.reason)),
+      ),
+  );
+  const source = createMapillarySource({ token: 'MLY|1|abc', fetchImpl });
+  const controller = new AbortController();
+  const pending = source.nearestImages(
+    { lat: 1, lon: 2 },
+    { signal: controller.signal },
+  );
+  const reason = new Error('the turn moved on');
+  controller.abort(reason);
+  await assert.rejects(pending, (error) => error === reason);
+});

@@ -9,6 +9,8 @@ coverage
 pinokio/ENVIRONMENT
 pinokio/.installed
 src/data/local_data/
+# Written by scripts/record-camera-goldens.mjs and compared byte for byte.
+src/render/conformance/goldens/
 *.geojson
 *.geojsonl
 
@@ -20,3 +22,8 @@ node_modules
 .vite
 .vite-*
 *.min.js
+
+# Application views, and panels lifted from them, hold the page markup
+# verbatim; reflowing it changes the DOM
+src/ui/views/*View.vue
+src/ui/views/panels/

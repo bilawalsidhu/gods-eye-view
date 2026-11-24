@@ -3,7 +3,7 @@ import { VectorTile } from '@mapbox/vector-tile';
 import { normalizeAlprNode } from './records.js';
 
 /** Map extract attributes without treating an OSM edit date as a field verification. */
-export function normalizeAlprTileFeature(feature) {
+function normalizeAlprTileFeature(feature) {
   const p = feature?.properties || {};
   if (feature?.geometry?.type !== 'Point' || p.osmType !== 'node') return null;
   const [lon, lat] = feature.geometry.coordinates;
@@ -16,6 +16,8 @@ export function normalizeAlprTileFeature(feature) {
       'surveillance:type': 'ALPR',
       operator: p.operator,
       manufacturer: p.brand,
+      // Not in the hourly extract yet; read when it ships the OSM tag.
+      model: p.model,
       'camera:type': p.cameraType,
       'camera:direction': p.direction,
       'surveillance:zone': p.surveillanceZone,

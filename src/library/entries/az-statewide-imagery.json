@@ -1,0 +1,48 @@
+{
+  "id": "az-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Arizona Statewide Imagery (2017)",
+  "provider": "AZGeo",
+  "description": "Aerial orthophotos: Statewide coverage of Arizona.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-115.1014, 31.2527, -108.8553, 37.1065]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://azgeo.az.gov/arcgis/rest/services/imagery/NAIP2017/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 m (NAIP)",
+    "resolutionM": 1,
+    "trueOrtho": false,
+    "vintage": "2017–present",
+    "updateCycle": "NAIP 2-year cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://azgeo.az.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "AZGEO",
+    "url": "https://azgeo.az.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

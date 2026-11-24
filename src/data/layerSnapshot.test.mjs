@@ -11,6 +11,7 @@ import {
   layerFeedState,
   layerSnapshot,
   layerSnapshots,
+  provenanceTag,
   snapshotAgeLabel,
   snapshotAgeSec,
   viewStateLayerRow,
@@ -90,7 +91,15 @@ test('layerFeedState matches the chip classifier for every honesty class', () =>
 test('chip labels and severity cover every feed-state the envelope can emit', () => {
   assert.deepEqual(
     [...LAYER_FEED_STATES],
-    ['nominal', 'loading', 'degraded', 'stale', 'fallback', 'unavailable'],
+    [
+      'nominal',
+      'loading',
+      'degraded',
+      'stale',
+      'partial',
+      'fallback',
+      'unavailable',
+    ],
   );
   assert.deepEqual([...SNAPSHOT_FEED_STATES], [...LAYER_FEED_STATES, 'off']);
   for (const state of LAYER_FEED_STATES) {
@@ -105,6 +114,33 @@ test('chip labels and severity cover every feed-state the envelope can emit', ()
   assert.equal(worstFeedState(['nominal', 'stale', 'fallback']), 'stale');
   assert.equal(worstFeedState(['degraded', 'unavailable']), 'unavailable');
   assert.equal(worstFeedState([]), null);
+});
+
+test('partial is a feed-state of its own: above nominal, below every fault', () => {
+  const layer = (id, stats) => ({ id, name: id, enabled: true, stats });
+  const partial = layer('flights', {
+    partial: true,
+    count: 4,
+    lastUpdate: NOW,
+  });
+  const nominal = layer('vessels', { count: 9, lastUpdate: NOW });
+  const stale = layer('cctv', { stale: true, count: 2, lastUpdate: NOW });
+  const overall = (layers) =>
+    feedProvenanceEnvelope(layers, { now: NOW }).overall;
+  assert.equal(overall([partial]), 'partial');
+  assert.equal(overall([partial, nominal]), 'partial');
+  assert.equal(overall([nominal, partial]), 'partial');
+  assert.equal(overall([partial, stale]), 'stale');
+  assert.equal(overall([stale, partial]), 'stale');
+  assert.equal(LAYER_FEED_STATE_LABELS.partial, 'PARTIAL');
+  const note = feedProvenanceEnvelope([partial], { now: NOW }).note;
+  assert.match(note, /coverage is incomplete/);
+  assert.doesNotMatch(note, /do not describe this as live/);
+  assert.equal(
+    FEED_STATE_SEVERITY.fallback < FEED_STATE_SEVERITY.partial &&
+      FEED_STATE_SEVERITY.partial < FEED_STATE_SEVERITY.nominal,
+    true,
+  );
 });
 
 test('a disabled layer is off even when leftover stats would read stale', () => {
@@ -257,4 +293,19 @@ test('age labels match the Data Layers meta clock', () => {
   assert.equal(snapshotAgeLabel(NOW - 12_000, NOW), '12s ago');
   assert.equal(snapshotAgeLabel(NOW - 240_000, NOW), '4m ago');
   assert.equal(snapshotAgeLabel(NOW - 7_200_000, NOW), '2h ago');
+});
+
+test('the warning tag names the layers in the reported state first', () => {
+  const tag = provenanceTag({
+    overall: 'unavailable',
+    layers: [
+      { name: 'Live Flights', feedState: 'partial' },
+      { name: 'Live AIS Vessels', feedState: 'partial' },
+      { name: 'CCTV', feedState: 'unavailable' },
+    ],
+  });
+  assert.deepEqual(tag, {
+    state: 'unavailable',
+    names: ['CCTV', 'Live Flights'],
+  });
 });

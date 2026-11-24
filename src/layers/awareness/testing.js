@@ -11,5 +11,12 @@ export function createTesting({ state: layerState, services, parts, source }) {
       pendingSelectionKey: layerState.pendingSelectionKey,
     };
   }
-  return { _getAwarenessNavigationStateForTest };
+  /** @returns {number} How many result renders ran, published or not. */
+  function _getAwarenessPanelRendersForTest() {
+    return layerState.panelRenders;
+  }
+  return {
+    _getAwarenessNavigationStateForTest,
+    _getAwarenessPanelRendersForTest,
+  };
 }

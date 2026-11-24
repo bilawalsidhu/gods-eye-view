@@ -9,9 +9,18 @@ const sourceSlot = createSourceSlot(
   {
     getFlowSessionStats: () => ({ tilesFetched: 0 }),
     resetFlowTileCache: () => {},
+    // The layer reads stale cached tiles through this; a source without it
+    // answers with fresh segments only.
+    fetchFlowDetail: async (...args) => ({
+      segments: await sourceSlot.source.fetchFlowForBounds(...args),
+      stale: false,
+      oldestTileAt: null,
+    }),
   },
 );
 export const configureTrafficSource = sourceSlot.configure;
+/** The source the traffic layer reads, as configured. */
+export const trafficSource = sourceSlot.source;
 const layer = createApplicationTraffic({
   source: sourceSlot.source,
 });

@@ -1,0 +1,48 @@
+{
+  "id": "il-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Illinois Statewide Imagery",
+  "provider": "ISGS / IDOT",
+  "description": "Aerial orthophotos: Statewide coverage of Illinois.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-91.3996, 36.97, -87.469, 41.0314]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://data.isgs.illinois.edu/arcgis/rest/services/Imagery/IDOT_2017/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 ft",
+    "resolutionM": 0.3048,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Multi-year cycles",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open state geodata — attribution requested",
+    "url": "https://clearinghouse.isgs.illinois.edu/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Illinois State Geological Survey / IDOT",
+    "url": "https://clearinghouse.isgs.illinois.edu/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

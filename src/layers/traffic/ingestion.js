@@ -1,8 +1,13 @@
-import * as Cesium from 'cesium';
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
-import { resolveRoadMode, ROAD_SOURCE_LABELS } from './roadModes.js';
+import {
+  normalizeRoadMode,
+  resolveRoadMode,
+  roadModesSimulate,
+  ROAD_SOURCE_LABELS,
+} from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
+import { viewerRoadSurface } from './surface.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -270,20 +275,13 @@ export function createIngestion({
     layerState._viewHeightEstimate = 0;
     const centerLat = (clamped.south + clamped.north) / 2;
     const centerLon = (clamped.west + clamped.east) / 2;
-    const scene = layerState._viewer?.scene;
-    const location = Cesium.Cartographic.fromDegrees(centerLon, centerLat);
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
-    if (!Number.isFinite(estimated)) {
-      try {
-        estimated = scene?.globe?.show
-          ? scene.globe.getHeight?.(location)
-          : scene?.sampleHeightSupported
-            ? scene.sampleHeight(location, [layerState._pointCollection])
-            : undefined;
-      } catch {
-        /* the local mesh can still be loading */
-      }
-    }
+    // A miss is the local mesh still loading.
+    if (!Number.isFinite(estimated))
+      estimated = viewerRoadSurface(layerState._viewer).loadedHeight({
+        lon: centerLon,
+        lat: centerLat,
+      });
     if (Number.isFinite(estimated) && Math.abs(estimated) <= 9000)
       layerState._viewHeightEstimate = estimated;
 
@@ -294,10 +292,14 @@ export function createIngestion({
     // settled; before that (a session's first load) the cache is skipped
     // rather than waiting on the probe. Writes are decided by the snapshot.
     const cacheMode =
-      layerState._roadMode === 'osm'
+      normalizeRoadMode(layerState._roadMode, layerState._roadModes) === 'osm'
         ? 'osm'
         : layerState._flowStatusKnown
-          ? resolveRoadMode(layerState._roadMode, layerState._liveMode)
+          ? resolveRoadMode(
+              layerState._roadMode,
+              layerState._liveMode,
+              layerState._roadModes,
+            )
           : null;
     // Cache key: fixed-precision bounding-box string for deterministic lookups
     const cacheKey =
@@ -378,6 +380,7 @@ export function createIngestion({
           (segments) => ({
             segments,
             hasKey: layerState._liveMode,
+            statusUnavailable: layerState._flowStatusUnavailable,
             partial: source.getFlowSessionStats?.().partial,
           }),
           (error) => {
@@ -388,6 +391,7 @@ export function createIngestion({
             return {
               segments: [],
               hasKey: layerState._liveMode,
+              statusUnavailable: layerState._flowStatusUnavailable,
               error: reason,
             };
           },
@@ -397,7 +401,9 @@ export function createIngestion({
       // This uses the same shared XYZ cache and cap, with no extra ring.
       if (
         altitude <= FAST_FETCH_ALTITUDE &&
-        layerState._roadMode !== 'tomtom'
+        resolveRoadMode(layerState._roadMode, true, layerState._roadModes) !==
+          'tomtom' &&
+        (roadModesSimulate(layerState._roadModes) || layerState._liveMode)
       ) {
         source
           .requestOsmRoads?.(clamped, {
@@ -411,8 +417,19 @@ export function createIngestion({
           .catch(() => {});
       }
       requestSignal.throwIfAborted();
-      // Until the probe settles only OpenStreetMap roads can be drawn.
-      layerState._roadSource = ROAD_SOURCE_LABELS[cacheMode || 'osm'];
+      // Until the probe settles only OpenStreetMap roads can be drawn (or,
+      // for a host without them, the TomTom roads still to come).
+      layerState._roadSource =
+        ROAD_SOURCE_LABELS[
+          cacheMode ||
+            (roadModesSimulate(layerState._roadModes)
+              ? 'osm'
+              : resolveRoadMode(
+                  layerState._roadMode,
+                  true,
+                  layerState._roadModes,
+                ))
+        ];
       let cache =
         cacheMode === 'osm' ? layerState._tileCache.get(cacheKey) : null;
       if (cache) {
@@ -581,7 +598,11 @@ export function createIngestion({
       if (generation === layerState._loadGeneration && !renderedSomething)
         layerState._roadSource =
           ROAD_SOURCE_LABELS[
-            resolveRoadMode(layerState._roadMode, layerState._liveMode)
+            resolveRoadMode(
+              layerState._roadMode,
+              layerState._liveMode,
+              layerState._roadModes,
+            )
           ];
       retryable = !isUnavailableCapability(e);
       layerState._roadRetryStopped = !retryable;
