@@ -284,6 +284,7 @@ test('a /share/<code> address opens its place view through the start-up restore'
   const result = await restore(page);
   assert.equal(result.status, 'settled');
   assert.equal(result.share.camera, 'applied');
+  assert.equal(result.thing, false, 'a view, not a thing');
   assert.equal(page.restores[0].style, 'noir');
   assert.deepEqual(page.restores[0].panelState.specs, [
     { id: 'data-panel', collapsed: false, pinned: null },
@@ -398,7 +399,7 @@ test('a thing view turns its layer on, follows by id and frames the shared offse
     parsed.layerState.options.flights.selectedFlightsTrackingId,
     'a1b2c3',
   );
-  await restore(page);
+  assert.equal((await restore(page)).thing, true, 'a share of a thing');
   // The opening flight goes where following the fix puts the camera.
   const camera = followCameraFor(FIX, OFFSET);
   const destination = Cesium.Cartographic.fromCartesian(

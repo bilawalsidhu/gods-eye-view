@@ -796,16 +796,20 @@ export function createCesiumDraw({
       setsVersion += 1;
     };
     record.rebuild = rebuild;
+    // A set whose owner asks for its frames is changed in place without
+    // asking for one: the owner writes it as a frame begins (asking then
+    // would draw that frame twice), or its next frame draws the change.
+    const ownerFrames = () => spec.motionClock?.frames === 'owner';
     // Changed in place: what height queries see through may have changed.
     const patched = () => {
       setsVersion += 1;
-      requestRender();
+      if (!ownerFrames()) requestRender();
     };
     // Icons changed in place: height queries see through the sets' pick
     // ids, which an icon keeps, so only icons added or gone change them.
     const iconsPatched = (synced) => {
       if (synced === ICONS_CHANGED) setsVersion += 1;
-      requestRender();
+      if (!ownerFrames()) requestRender();
     };
     // A shape's pulse the renderer cannot run is refused before anything
     // changes.
@@ -925,7 +929,9 @@ export function createCesiumDraw({
           spec.motionClock?.kind === 'live'
         ) {
           spec.motionClock = options.motionClock;
-          requestRender();
+          // A set whose owner asks for its frames reads the new delay in
+          // the owner's next one: the delay alone asks for none.
+          if (options.motionClock.frames !== 'owner') requestRender();
           return;
         }
         // Refused, changing nothing, where icons on the GPU cannot take it

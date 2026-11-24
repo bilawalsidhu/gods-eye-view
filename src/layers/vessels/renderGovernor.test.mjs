@@ -5,6 +5,8 @@ import { VISIBILITY_UPDATE_MS } from './policy.js';
 import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
 import { layerPlacement } from '../../data/placementProvider.js';
 import * as Cesium from 'cesium';
+import { PACE_MAX_HZ, PACE_MIN_HZ } from '../../renderPace.js';
+import { createVesselIconBook } from './iconBook.js';
 
 // The layer must let the scene idle: it asks for frames for forced passes,
 // for vessels that move, and one trailing frame after the camera stops, and
@@ -270,7 +272,7 @@ test('a placement that places nothing asks for no frames; one that places a draw
   assert.deepEqual(requests, ['ais-vessels-placement']);
 });
 
-test('a vessel moving visibly asks for its next frame as soon as it moves half a pixel; a slow one once a second', (t) => {
+test('a vessel moving visibly asks for its next frame as soon as it moves half a pixel, at most 30 a second; a slow one three times a second', (t) => {
   let mono = 0;
   t.mock.method(performance, 'now', () => mono);
   const originalDocument = globalThis.document;
@@ -295,23 +297,24 @@ test('a vessel moving visibly asks for its next frame as soon as it moves half a
   };
   drawnVisual({ camera, scene: {}, canvas: { clientHeight: 1000 } });
   // How long after a pass the next frame is asked for, once the vessel moved
-  // `dLat` in the 16 ms since the pass before.
+  // `dLat` in the 40 ms since the pass before (passes come at most 30 a
+  // second, so a frame 16 ms on would not move it).
   const waitAfterStep = (dLat) => {
     layer.testing._runPlacementPassForTest();
     advance(1_000); // whatever frame that asked for comes and goes
     assert.equal(timers.size, 0);
-    mono += 16;
+    mono += 40;
     spot = { lat: spot.lat + dLat, lon: spot.lon };
     layer.testing._runPlacementPassForTest();
     assert.equal(timers.size, 1);
     const [timer] = [...timers.values()];
     return timer.at - now();
   };
-  // About 11 m in a frame, 20 km away: over half a pixel, so the next frame
-  // is asked for within the frame.
-  assert.ok(waitAfterStep(0.0001) <= 16);
-  // About 1 cm in a frame: half a pixel takes seconds, so once a second.
-  assert.equal(waitAfterStep(0.0000001), 1000);
+  // About 11 m in a pass, 20 km away: over half a pixel, so the next frame
+  // is asked for within the pass's own span.
+  assert.ok(waitAfterStep(0.0001) <= 40);
+  // About 1 cm in a frame: half a pixel takes seconds, so at the floor.
+  assert.ok(Math.abs(waitAfterStep(0.0000001) - 1000 / PACE_MIN_HZ) < 1e-6);
   // A 2D view 40 km across in 1,000 px: 11 m is over a quarter pixel, so the
   // next frame comes within two frames.
   camera.frustum = new Cesium.OrthographicOffCenterFrustum({
@@ -324,7 +327,20 @@ test('a vessel moving visibly asks for its next frame as soon as it moves half a
   });
   camera.viewMatrix = Cesium.Matrix4.IDENTITY;
   drawnVisual({ camera, scene: {}, canvas: { clientWidth: 1000 } });
-  assert.ok(waitAfterStep(0.0001) <= 32);
+  assert.ok(waitAfterStep(0.0001) <= 80);
+  // A frame sooner than a thirtieth of a second after a pass moves nothing:
+  // the next pass is asked for when one may come.
+  mono += 100;
+  spot = { lat: spot.lat + 0.001, lon: spot.lon };
+  layer.testing._runPlacementPassForTest();
+  advance(1_000);
+  const drawn = layer.testing._vesselVisualForTest(record).drawnLat;
+  mono += 16;
+  spot = { lat: spot.lat + 0.001, lon: spot.lon };
+  layer.testing._runPlacementPassForTest();
+  assert.equal(layer.testing._vesselVisualForTest(record).drawnLat, drawn);
+  const [held] = [...timers.values()];
+  assert.ok(Math.abs(held.at - now() - (1000 / PACE_MAX_HZ - 16)) < 1e-6);
 });
 
 test('following the clock moves drawn vessels in place each world time, prepares missing ones and leaves hidden ones be', (t) => {
@@ -721,4 +737,50 @@ test('following the clock, a vessel the visibility pass shows before the clock p
     ),
   );
   assert.ok(Math.abs(Cesium.Math.toDegrees(latitude) - 52.43) < 1e-6);
+});
+
+test('a placement pass writes the vessels it moved to the set at once, not one a vessel', (t) => {
+  let mono = 0;
+  t.mock.method(performance, 'now', () => mono);
+  const originalDocument = globalThis.document;
+  globalThis.document = { getElementById: () => null };
+  t.after(() => {
+    if (originalDocument === undefined) delete globalThis.document;
+    else globalThis.document = originalDocument;
+  });
+  const spots = new Map([
+    ['111', { lat: 51.93, lon: 4.05 }],
+    ['222', { lat: 51.94, lon: 4.06 }],
+  ]);
+  const { layer, camera } = setup({
+    placement: { layer: () => ({ place: (id) => spots.get(id) }) },
+  });
+  camera.positionWC = Cesium.Cartesian3.fromDegrees(4.05, 51.93, 20_000);
+  camera.frustum = { fovy: 1 };
+  const writes = [];
+  const icons = createVesselIconBook({
+    id: 'vessels',
+    upsert: (list) => writes.push(list.map((item) => item.id)),
+    remove: noop,
+  });
+  const records = [
+    { mmsi: '111', lat: 51.93, lon: 4.05 },
+    { mmsi: '222', lat: 51.94, lon: 4.06 },
+  ];
+  const viewer = { camera, scene: {}, canvas: { clientHeight: 1000 } };
+  bindFakeCesiumScene(viewer);
+  layer.testing._setVesselStateForTest({ viewer, records, icons });
+  for (const record of records) {
+    const visual = layer.testing._prepareVesselVisualForTest(record);
+    visual.visible = true;
+    // Drawn already, as the layer draws a vessel it was sent.
+    icons.put({ id: visual.iconId }, { expiresAt: null });
+  }
+  layer.testing._runPlacementPassForTest();
+  mono += 100;
+  for (const [id, spot] of spots)
+    spots.set(id, { lat: spot.lat + 0.001, lon: spot.lon });
+  writes.length = 0;
+  layer.testing._runPlacementPassForTest();
+  assert.deepEqual(writes, [['111', '222']]);
 });

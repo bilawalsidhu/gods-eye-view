@@ -942,6 +942,15 @@ html:not([lang='en'])
   background: var(--accent-dim);
 }
 
+/* A keyed chip (RailChips.vue `swatch`): the colour of what it turns on before
+   its label and the count after it, while it is on, in the chip's own type.
+   Off, it is a plain chip. */
+.data-toggle-chip.chip-keyed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns
    on actually exists, so loading and failure are their own visible states. */
 .data-toggle-chip:disabled {
@@ -971,7 +980,8 @@ html:not([lang='en'])
   cursor: default;
 }
 
-.data-toggle-legend-swatch {
+.data-toggle-legend-swatch,
+.data-toggle-chip-swatch {
   width: 6px;
   height: 6px;
   border-radius: 50%;

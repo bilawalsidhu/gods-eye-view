@@ -774,11 +774,9 @@ test('markup, startup ordering and accessibility remain pinned', async () => {
   );
 
   assert.match(startup, /styleManager\.initialRestorePromise/);
-  assert.ok(
-    startup.indexOf("loadingScreen.classList.add('hidden')") <
-      startup.indexOf(
-        "loadingScreen.addEventListener('transitionend', revealFirstRun",
-      ),
+  assert.match(
+    startup,
+    /loadingScreen\.classList\.add\('hidden'\);\s*revealAfterCover\(\);/,
   );
   assert.match(
     startup,
@@ -920,7 +918,7 @@ test('the Stories announcement waits behind the welcome card', () => {
   // the card is dismissed.
   assert.match(
     css,
-    /body:has\(#first-run-launcher\) #gev-stories #hPop,\s*body\.first-run-opening-stories #gev-stories #hPop \{\s*visibility: hidden;\s*pointer-events: none;\s*\}/,
+    /body:is\(\.launcher-shown \*, #first-run-launcher\) #gev-stories #hPop,\s*body\.first-run-opening-stories #gev-stories #hPop \{\s*visibility: hidden;\s*pointer-events: none;\s*\}/,
   );
   // The selector only works while Stories still renders the popup as #hPop
   // inside #gev-stories.
@@ -1111,10 +1109,11 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // Pistes extend the generated layer enums and alias hint; voice geometry
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
-  assert.equal(block.length, 31404, 'serialized tool schema length drifted');
+  // Fire Perimeters queries add lastGrowthTime.
+  assert.equal(block.length, 31419, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    '3ed760d413150f435b03bc2bcb7d6a8c9662ff27614450e2b4874569935efec2',
+    '953cdf6997f8902eaf03cac5dd8427e95efd2b9b088a2ad5cfba630f05c0ec86',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

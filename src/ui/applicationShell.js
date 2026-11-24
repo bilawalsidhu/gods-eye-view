@@ -1,4 +1,3 @@
-import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
@@ -49,8 +48,6 @@ import {
   applyShareFollowOffset,
   readShareFollowSubject,
 } from './shareFollow.js';
-
-import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
 
 import {
   getLocale,
@@ -426,6 +423,9 @@ export class StyleManager extends ShellFacade {
       summaryService: requestServices?.summary,
       publish: (view) => hudStore.publish(view),
     });
+    // The view says whether it is on screen; off screen the HUD does no
+    // readout work.
+    hudStore.connect(this.hud);
     this._recording.hud = this.hud;
     this._cockpitCoordinator = new CockpitCoordinator({
       viewer,
@@ -1309,13 +1309,11 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Toggles the CCTV layer enabled state. When enabling and no camera is active,
-   * auto-focuses on the nearest camera.
+   * Toggles the CCTV layer without moving the globe.
    * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
-   * @returns {Promise<boolean>} True if the layer is now in the requested state.
+   * @returns {Promise<boolean>} False if the shell is disposed or the layer is unavailable.
    */
   async _toggleCctvEnabled(forceState) {
-    const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
       this._showToast(t('CCTV layer unavailable'));
@@ -1324,25 +1322,7 @@ export class StyleManager extends ShellFacade {
     const enabled = this._dataManager.isEnabled('cctv');
     const target = typeof forceState === 'boolean' ? forceState : !enabled;
     if (target === enabled) return true;
-    await runCctvLayerEnableTransition({
-      target,
-      setEnabled: (next) =>
-        this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
-      readOwnership: () => ({
-        followed: followedOf(this.viewer),
-        cockpitActive: !!this.cockpitView?.active,
-      }),
-      shouldFocus: () =>
-        !this._disposed &&
-        this._dataManager.isEnabled('cctv') &&
-        !this._cctvControls?.getState()?.activeCameraId,
-      activate: () => cctvLayer.focusNearest({ focus: false }),
-      fly: (cameraId) =>
-        this._runExplicitCctvFocus(
-          () => cameraId,
-          (selectedId) => cctvLayer.focusCamera(selectedId, 1.6),
-        ),
-    });
+    await this._dataManager.setEnabled('cctv', target, { origin: 'user' });
     return true;
   }
 

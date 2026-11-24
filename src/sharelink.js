@@ -126,6 +126,8 @@ export class ShareLinkManager {
     this._panelStateProvider = null;
     this._styleParamStateProvider = null;
     this._initialRestorePending = false;
+    // Who holds the hash writes (holdWrites).
+    this._writeHolds = new Set();
     // Each incoming share (start-up or a later hash navigation) gets a token;
     // only the newest one may release URL-write suppression.
     this._restoreToken = 0;
@@ -726,10 +728,12 @@ export class ShareLinkManager {
   /**
    * Hold the address's hash writes, for an owner that covers the view and
    * keeps the person's camera and layers out of the address while it does
-   * (Stories). Releasing writes the current view again.
+   * (Stories, the opening's flight). Each `owner` holds and releases its own
+   * hold; once none holds, the current view is written again.
    * @param {boolean} held
+   * @param {string} [owner]
    */
-  holdWrites(held) {
+  holdWrites(held, owner = 'stories') {
     if (held && !this._writesHeld && this._debounceTimer) {
       // A view change still waiting for its debounce is written first, so
       // the address the owner saves is the live view.
@@ -737,9 +741,14 @@ export class ShareLinkManager {
       this._debounceTimer = null;
       this._updateHash();
     }
-    this._writesHeld = !!held;
-    if (!held) this._scheduleUpdate();
+    if (held) this._writeHolds.add(owner);
+    else this._writeHolds.delete(owner);
+    if (!this._writesHeld) this._scheduleUpdate();
     else clearTimeout(this._debounceTimer);
+  }
+
+  get _writesHeld() {
+    return this._writeHolds.size > 0;
   }
 
   _scheduleUpdate() {

@@ -24,8 +24,21 @@ the feed has it again, its layer selects it again (an aircraft is followed).
 With no point at or before the time, the card says there is no reading then and
 the camera stays. A followed item is never counted as off screen.
 
-While anything moves (a layer in motion, the camera, a followed contact), the
-globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
+Moving layers (flights, military flights, satellites, vessels) draw as often
+as their fastest mark in view moves on screen, about half a pixel a draw:
+never fewer than 3 draws a second, never more than 30 (`src/renderPace.js`).
+Below 12 a second a layer asks for one frame at a time on a timer; from there
+it holds the loop at 15, 20 or 30. A hold may say the most frames a second it
+needs (`holdContinuousRender(owner, { maxFps })`); the loop draws at the
+highest rate its holders ask for, and at the display's own refresh rate as
+soon as one asks for none. Following a contact draws at 30. The person
+steering the camera (a pointer down, the wheel) gets the display's rate. Draw
+sets whose motion clock says `frames: 'owner'` ask for no frames for moving
+rows or rows written in place; their owner's pace does. Placed flights replan
+spread over time (near ones about every second, far or off-screen ones about
+every four), a new report that moves a placed flight eases it there from
+where it is drawn, and a tracked aircraft's trail head ends where it is drawn
+in that frame.
 The render governor (`src/renderGovernor.js`) caps a parked scene at
 `IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
 Cesium still runs the clock, data sources and update listeners on every
@@ -1123,17 +1136,18 @@ Catalog calls check their cancellation signal immediately before executing a
 tool. Already-cancelled queries do not start; cancellation after execution starts
 continues to follow the existing tool and caller behavior.
 
-Fire-perimeter queries test polygon interiors and holes on continuous unwrapped
-longitudes, matching the short-edge convention used for boundary intersections.
-An outline crossing ±180° contains nearby boxes and radius areas without also
-containing their counterparts near Greenwich. Returned perimeter coordinates
-use a circular mean for longitude, including multipart outlines. Incident cards
-also use a circular longitude mean over the largest outer ring (excluding its
-repeated closing vertex). Their relative-area comparison follows short longitude
-edges so a small dateline-crossing part cannot outweigh a larger ordinary part.
-Regression coverage lives in `src/tools/area.test.mjs`,
-`src/tools/queries/environment.test.mjs` and
-`src/layers/perimeters/cards.test.mjs`.
+Fire-perimeter queries test the polygon interiors and holes of each fire's
+pieces on continuous unwrapped longitudes, matching the short-edge convention
+used for boundary intersections: a fire is in the area when one of its pieces
+is. An outline crossing ±180° contains nearby boxes and radius areas without
+also containing their counterparts near Greenwich. A fire is returned at its
+card anchor, which the source gives; for WFIGS it is a circular longitude mean
+over the largest outer ring (excluding its repeated closing vertex), with the
+relative-area comparison following short longitude edges so a small
+dateline-crossing part cannot outweigh a larger ordinary part. Context's
+hazard list measures distance to the same anchor. Regression coverage lives in
+`src/tools/area.test.mjs`, `src/tools/queries/environment.test.mjs` and
+`src/layers/perimeters/records.test.mjs`.
 
 ## Scope display controls
 
@@ -1259,9 +1273,8 @@ coordinates, interpolated wind speed and meteorological direction, selected
 scalar, model, valid time and freshness. Clear reading removes the sample and
 map marker. Model/field changes or refresh also clear them. Unit chips reformat
 the captured sample without resampling or moving its marker. There is no separate
-floating reading surface. The card shows forecast issue and valid times; the
-observed-history timeline labels the oldest and newest available ticks. Animation
-moves through a fixed forecast; it does not advance forecast time.
+floating reading surface. The card shows forecast issue and valid times.
+Animation moves through a fixed forecast and leaves the forecast time unchanged.
 
 Temperature is air temperature at 2 m in °C; pressure is mean sea-level pressure
 in hPa. Optional companion fields come from the same model run/forecast as the
@@ -1356,8 +1369,8 @@ avoid restaging for every pointer event. Status refreshes retain the uncommitted
 drag preview; changed model values or disabled controls supersede it.
 Satellite share links carry the filter
 strength; legacy `f`/`a` values keep their Clouds only / Full meanings. Soft and
-Vivid remain layer-opacity presets (40%/70%); history remains transient and links
-open latest.
+Vivid remain layer-opacity presets (40%/70%). A link made away from Live opens
+at its world time, paused.
 Global infrared fetches one capped 4 MiB, 2048×1024 mosaic per frame and decodes
 and processes it before staging. Globe hosts crop that canvas into 256 px tiles
 to maximum level 3 on a geographic 2×1 root grid bounded to the manifest extent,
@@ -1398,15 +1411,16 @@ were reused, and the study found no application licence granting reuse. Native
 hardware GPU behavior remains unverified; software-rendered checks do not
 establish native GPU performance or compatibility.
 
-The right-rail WEATHER panel owns active-product readouts, coverage badges,
-legends and the single observed-history timeline. The timeline appears with an
-active observed layer and at least two union times; wind alone does not show it.
-Dragging previews UTC and age locally and coalesces clock commits at 150 ms;
-release commits immediately. Latest selects the newest frame per product, and
-history labels the actual displayed frame as synced or nearest. Missing-frame
-messages use each product's eligibility gap (30 minutes, or three hours for the
-global mosaic). Wind shows forecast valid and issue times and does not follow
-history. Satellite clouds uses Clouds only / Full controls, a continuous cloud
+The right-rail WEATHER panel shows active-product readouts, coverage badges
+and legends; its heading shows the newest selected frame and its age while
+live, or the timeline time in history, and each product card shows its
+displayed frame's UTC time and age, marked synced or nearest in history.
+With Rain radar, Satellite clouds or Lightning density on, the world timeline
+appears and moves observation history (drag back, Play, Live); wind alone does
+not show it. Frame selection, eligibility gaps and Play are described under
+Local Weather review candidate below. Wind shows forecast valid and issue times
+and does not follow history.
+Satellite clouds uses Clouds only / Full controls, a continuous cloud
 filter slider and Soft/Vivid opacity presets in its right-rail settings.
 
 Left weather rows retain only the toggle and one status line with a source
@@ -1414,8 +1428,8 @@ tooltip. Configuration and the cyclone Storms list live in the cards, as do the
 cyclone advisory, position time, wind, pressure, geometry status and the
 official advisory link. The panel hides when empty, auto-expands once per page
 session and then preserves the user's collapsed state. Status lines reserve their space and refreshes are coalesced
-per frame. Generic keyed rail cards and the native rail timeline preserve DOM
-nodes and avoid identical writes; the weather panel owns descriptor mapping.
+per frame. Generic keyed rail cards preserve DOM nodes and avoid identical
+writes; the weather panel owns descriptor mapping.
 Inspection emphasizes the chosen scalar and marks the exact sampled location;
 the passive marker follows that snapshot, respects globe occlusion and disappears
 on dismissal, field/model changes, disable or teardown. Clean view and
@@ -2091,7 +2105,8 @@ camera that is already active counts. The picker shows the automatic camera
 as its own option, and a native list sends no change for the option it
 already shows, so the list cannot pick that camera: FOCUS does, and so does
 NEAREST when that camera is the nearest. Closing the list without a choice
-keeps automatic selection.
+keeps automatic selection. Turning CCTV on leaves the globe in place, even if
+the active camera is cleared before enabling finishes.
 
 The active camera's pictures follow what can be seen. The monitor plane skips
 its 10 s still while the renderer reports it off screen or below the horizon,
@@ -5313,6 +5328,24 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   clock goes live and the camera flies to the view the app started from (the
 >   host's `homeView`, else its `startView`, else the whole planet), letting go
 >   of whatever it follows as Reset Globe does (`returnToStart()`).
+>   On a bare address, the standalone app starts 23,000 km above the country of
+>   the browser's time zone, looking straight down. It falls back to a preferred
+>   language's region, then to the default start view. The lookup runs in the
+>   browser (`src/homeCountry.js` and `src/data/homeCountries.js`).
+>   Once the startup restore settles and at least one second has passed, the
+>   loading text fades and the logo glides to the centre. The eye grows past the
+>   screen edges as the drawn planet in its pupil gives way to the globe. The
+>   globe grows to whole-planet size and turns once west to east, stopping over
+>   the destination. For a closer or angled view, the camera then approaches or
+>   turns to match it (`src/app/openingIntro.js`).
+>   A bare address or a link that restores only a view plays the opening.
+>   Links that follow or select something or open Street Level photos skip it,
+>   as do failed, refused or superseded restores, a newer navigation, Stories
+>   links, embedded views, reduced motion and `?intro=0`.
+>   A press, click, key, touch or wheel event lands the opening immediately.
+>   Another camera move stops the opening where the camera stands. During the
+>   flight the address keeps the destination and globe-in-view recovery waits.
+>   Welcome appears once the opening ends and the loading cover has faded.
 > - **Context, Cockpit, and Radio interaction contract:** explicit Contacts and
 >   Radio actions and successful Cockpit actions can reveal Context. Contacts
 >   uses the dedicated right-side chooser. Space Missions has its own rail
@@ -6328,7 +6361,12 @@ Historical planning documents may not match runtime behavior.
 ## Runtime Stack
 
 - Vite + CesiumJS app with Google Photorealistic 3D Tiles
-- Scene/HUD/style systems in `src/ui/` and `src/hud.js`
+- Scene/HUD/style systems in `src/ui/` and `src/hud.js`. While `#intel-hud` is
+  not displayed (it or a parent has `display: none`, or its view is
+  unmounted), the Intel HUD runs no timers, drops a summary it was working
+  out and publishes no readouts, only its own `active`, variant and colors,
+  which stylesheets and layout elsewhere read; it shows current readouts, and
+  a reply that was typing out in full, as soon as it is displayed again.
 - Layer management in `src/data/manager.js`
 - Map stack switching in `src/mapStackController.js`
 - Voice control in `src/voice/` (OpenAI Realtime over WebRTC)
@@ -6406,7 +6444,11 @@ MLAT-positioned GPS loss, derived-field exclusions and the NIC 0 exception.
 anchors, recovery, keyboard and mobile states; emergency repainting is covered
 by `scripts/qa-emergency-squawk.mjs`. Both accept `--timeout-ms` for slow boot.
 
-Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Unchanged snapshots retain geometry; link checks cancel on disable or selection change, and the row legend shows reported containment.
+Fire Perimeters uses capped, timed server reads with stale-on-error caching and a per-client limit. A stale snapshot is served for at most 24 hours; the layer row then reads STALE, dated by that snapshot's fetch, and `get_fire_perimeters` returns `stale` and `retrieved_at` with "(data may be stale)" in its summary. Link checks cancel on disable or selection change.
+
+Fire Perimeters draws the fires and burned-area pieces of its source's snapshot. The `getSnapshot` contract is documented in the JSDoc of `createFirePerimetersLayer` (`src/layers/perimeters/index.js`). Pieces are coloured by age at `at` (or now). Areas under 6 hours old are yellow, 6–24 hours orange, and 1–3 days red. Older areas, areas of unknown age and areas dated after `at` are dark red. The layer redraws when `revision` changes or a piece moves to another age band. A snapshot without a string `revision` is redrawn on every read. The legend counts fires by `lastGrowthTime` at the moment of the last successful read, matching the map, and shows the source's `note`. A failed read keeps the last picture and the row shows the error. For a snapshot with a past `at`, a card can link only to an InciWeb incident that began by that time. Of several same-name incidents in the fire's state, it links the one that began nearest the fire's discovery. If none of them began by then, or the ones that did failed to load, it links the fire's complex page by the same rule. A page that fails to load is skipped until the fire is selected again or a read finds its card without a link. `analyst_query` counts `ageHours` from `at` too and treats times after `at` as unknown.
+
+WFIGS keeps one current perimeter per fire, so each of its polygons is one piece. Colour shows the age of the perimeter based on `poly_PolygonDateTime`. When that field is empty (8 of 54 fires on 2026-11-20), the source falls back to `poly_DateCurrent`, which changes with any edit to the record. A time more than 10 minutes ahead of the browser clock counts as unknown, a nearer one as now. The `revision` follows fire ids and `poly_DateCurrent`. For a fire without `poly_DateCurrent`, it follows the mapping time and outline. WFIGS snapshots always have `at: null`.
 
 The incident card rounds the WFIGS size to whole acres, except under one acre,
 where it keeps the reported hundredths: a 0.25-acre fire reads `0.25 ac`, not
@@ -7809,13 +7851,13 @@ silently demoting every later lookup for the session.
 - **World-space headings at every angle** (`src/data/screenRotation.js`; the scene-reading helpers in `src/render/cesium/iconOrientation.js`): aircraft/vessel icon rotation uses the camera right/up basis per tick (alignedAxis always ZERO), which is exact at screen center and for orthographic/nadir views and remains stable through >180° tracked orbits. Perspective rays vary across the viewport, so off-center contacts at oblique pitch can diverge from an exact finite-difference window projection; a regression test pins that known regime, and field evidence decides whether to adopt exact projection with the basis method as fallback. Fleet rotations refresh on camera-pose change; tracked entities per frame. Billboards are horizon-culled via a shared EllipsoidalOccluder.
 - **Military/OpenSky reconciliation** (`src/data/militaryRegistry.js`): known-military ICAOs render amber in the flights layer (60s self-poll of the cached mil endpoint when the military layer is off) and are suppressed there while the military layer renders them.
 - **Satellites**: core catalog from CelesTrak's stations, visual, GPS, GLONASS, Galileo, GEO, resource, weather, planet, SAR and science groups, tracking lands ~726km out via `viewFrom` (tracked entity owns a point graphic so the tracking camera engages), rings realign via primitive modelMatrix (no per-second rebuild flicker), optional `setParams({catalog:'dense'})` Starlink mode.
-- **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour, legend swatch and toggle: STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the legend swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class. The tracked satellite's dot keeps that colour too: tracking draws it larger (14 px), white-outlined and over everything, never in another colour (`_addTrackedEntity`, `src/layers/satellites/rendering.js`).
+- **Satellite classes** (`src/layers/satellites/classes.js`): every satellite is filed under one of six classes, each with its own point colour and toggle chip (the chip shows the colour while the class is on): STATIONS (warm white), IMAGING (cyan), TELECOM (violet; communications and navigation, so GPS, GLONASS, Galileo and BeiDou read as one family), STARLINK (dim slate), PROBES (muted blue-gray) and DEBRIS (receding brown-gray). That module is the single source of truth for class, label and colour, so the dot, the card and the chip's swatch cannot disagree. Two deliberate palette rules: no class may sit in the 40–48° amber band, which is the app-wide known-military convention; and STARLINK stays far below PROBES in Rec.601 luminance so the dense shell stays separable when NVG/FLIR collapse the scene to one channel. The ISS keeps its long-standing red hero dot rather than the STATIONS colour — it carries a permanent name label and its card still reads `STATIONS · ISS`; it is a station whichever group ingested it, so a stations-feed outage cannot refile it. `src/data/satelliteClass.js` keeps the group-based labels beneath the classes: the constellation subtype and a group's own label for a satellite with no class. The tracked satellite's dot keeps that colour too: tracking draws it larger (14 px), white-outlined and over everything, never in another colour (`_addTrackedEntity`, `src/layers/satellites/rendering.js`).
 - Class is also a **text field**, not just a color: `TELECOM · GPS` / `STARLINK` / `STATIONS · ISS` leads the tracked card's detail block and replaces the raw CelesTrak tag on the detection-overlay label. Because that canvas composites above the post-FX chain, the class stays readable in NVG/FLIR after the in-scene dot colors are flattened.
-- The satellites row in DATA LAYERS carries per-layer sub-controls (`DataLayerManager._syncRowControls`, the first consumer of the optional `getRowControls()` layer hook): one chip per class (the STARLINK chip exposes the existing `catalog` param), a swatch legend with live per-class counts, and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
-- **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and the legend keys only the classes on screen. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
+- The satellites row in DATA LAYERS carries per-layer sub-controls (`DataLayerManager._syncRowControls`, the first consumer of the optional `getRowControls()` layer hook): one chip per class (the STARLINK chip exposes the existing `catalog` param); a class that is on shows its point colour, its name and its live count in its chip (`swatch` and `count`, drawn by `src/ui/rail/RailChips.vue`), and a class that is off shows only its name; and an info line while SATCAT is stale or unavailable (`Classes may lag: SATCAT is a cached copy` / `Classes may lag: SATCAT unavailable`). Default is the sparse core catalog. The chips are stateless — each declares the params to apply and the manager owns the write — so the Space Missions capture/restore path over the same param stays authoritative. Controls stay hidden while the layer is off. An explicit CORE or DENSE choice participates in versioned local and share-link state; temporary Space Missions overrides do not.
+- **Class toggles** (`src/layers/satellites/classes.js`): the layer row carries one chip per class — STATIONS, IMAGING, TELECOM (communications and navigation), PROBES (science, technology development and demonstration, unknown purpose) and DEBRIS (rocket bodies, fragments, unknown objects launched before last year and dead payloads) on by default, so the layer shows what it did before classes; STARLINK off, as DENSE was. Points of a hidden class stay built and are only hidden, so a toggle needs no reload; hidden classes are left out of the detection overlay, the voice/framing position lists and analyst answers (the tracked satellite still answers), and only the chips of classes on screen carry a colour and a count; an on class with nothing loaded shows its colour without a count. The class comes, strongest evidence first, from CelesTrak SATCAT (object type and operational status, fetched per group through `/api/celestrak-satcat/<group>`, cached a day by the proxy; the layer keeps a current read six hours rather than asking on every five-minute update), the bundled UCS Satellite Database pack (UCS-Satellite-Database 5-1-2023: operator, owner country and purpose; `src/data/local_data/ucs_satellites/`), name patterns for satellites launched after May 2023, and finally the CelesTrak groups the TLE came in (a mission group such as `weather` before the orbit group `geo`; a UCS purpose of "Unknown" counts as none). Only crewed stations and the craft that visit them, by name, are STATIONS: the CubeSats CelesTrak's stations group also carries after their deployment from the ISS are classed like any other satellite. A payload whose SATCAT record gives no status, with no UCS record and no recognisable name, that launched 20 or more years ago (SATCAT's launch date, else the TLE designator's year) is presumed dead and filed as debris; without a SATCAT record (a failed read) nothing is presumed. To cover imaging launched after the UCS snapshot the core catalog also reads CelesTrak's `resource`, `weather`, `planet`, `sar` and `science` groups. Debris can be tracked but is never ridden: the orbital entry gate (`orbitEntryAllowed`) refuses it, so no ORBIT entry is offered and double-click does nothing for it. Retired stations and the shuttles have re-entered and have no orbit to show. An explicit class choice is kept in local and share-link state as the `classes` option, one letter per class shown (`sitpd`: stations, imaging, telecom, probes, debris; `0`: none; `src/data/satelliteClassMask.js`), and the layer takes those letters back through `setParams({classes})`; STARLINK maps to the existing `catalog: 'dense'` param instead.
 - The satellite Cockpit subject (`getCockpitSubject()`) also carries `satelliteClass`, `cosparId` (from SATCAT, else TLE line 1), `tle` (`{line1, line2, epochMs}`), `owner` (`{countryCode, label}`: ISO 3166-1 alpha-2 for a single country, `null` code for organisations such as ESA, EUMETSAT or Intelsat and for joint owners) and `operator` (UCS; SpaceX for Starlink). UCS names the operator's country and wins over the SATCAT owner code; CelesTrak's CIS (former USSR) is filed under Russia.
-- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the count and legend would otherwise sit stale.
-- **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so the legend never describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
+- **The STARLINK chip (formerly DENSE) reports the dense LOAD, not the catalog param.** The param flips synchronously while the Starlink shell takes seconds to arrive over a chunked load, and CelesTrak 502s that feed regularly. So the chip reads `STARLINK ···` (busy, disabled) while loading, ACTIVE only once dense points are actually on screen, and `STARLINK ✕` with the reason on hover when the load fails — a failure also reverts `catalog` to `core`, drops any partial chunk, and leaves the chip clickable to retry. A load is judged by points added, not by HTTP status: a 200 carrying an empty body, a passed-through HTML error page, or only TLEs the core catalog already owns fails with the same revert semantics as a 502. Any explicit request for `core` clears a latched error even when the mode does not change, so a Space Missions restore of an already-core snapshot never leaves the user with a failure they did not cause. Because the load settles asynchronously, the layer pushes a re-render through the optional `setRowControlsListener()` hook; nothing else would repaint that row before the 5-minute catalog refresh, so the counts would otherwise sit stale.
+- **A dependency owner takes the row with it.** Space Missions borrows this layer for TLE lookup with `showPoints:false`; while points are hidden the layer returns empty row controls, so no count describes an empty sky and the chip cannot accept a write that the owner's restore would silently revert.
 - The detection-overlay record cache (`_detectionObjects`) is cleared with the catalog on every rebuild: it stamps id/class at creation only, and a rebuild can re-tag a satellite when a partial CelesTrak outage changes which group wins dedupe.
 - **Catalog numbers above 99999** can be written in a TLE as Alpha-5: a letter A–Z, skipping I and O, for the first two digits, so `A0000` is 100000 and `Z9999` is 339999. CelesTrak's TLE feed carries no satellite above 99999 (that needs the OMM feed, #1191), so this is compatibility with Alpha-5 TLEs. `src/sources/tle.js` decodes the field through one shared helper: `noradIdFromSatnum()` for the satellites layer, which keys and deduplicates its catalog by that number, and `tleCatalogNumber()` for the satellite tools. Plain digits read as before (`noradIdFromSatnum()` accepts any length, as an OMM satrec carries the number unpadded); a malformed field — a sign, decimal point, hex, exponent, embedded space, stray or lowercase letter, or blank — is rejected rather than partly read, as `NaN` in the layer and `null` in the tools.
 - **CCTV estimated bearings:** a camera whose pack marks `headingConfidence: 'low'` (the id-hash
@@ -10015,13 +10057,14 @@ The Weather panel's frame time shows the newest frame and its age while live
 alone at a past time.
 The catalog exposes `weatherClock` and destroys it with its lifetime signal. It
 has no time controls of its own: `weatherClock.world` is the world clock it
-follows, where time moves. A weather row's `play`, `latest` and `step` params
-move that world clock as the timeline does: `play` runs at the speed chosen on
-the timeline (the world clock keeps its rate while paused and live, and the
-timeline's speed selector shows the clock's rate, or the nearest offered speed
-for a rate a host set), from the start of the covered time when live or at its
-end, and does nothing while every product the row shows is suspended or while
-there is no covered time. A weather layer built without a
+follows, where time moves. The World Timeline's Play button leaves the clock
+live when it is already live. A weather layer also exposes `play`, `latest`
+and `step` parameters. The layer's `play` starts from the beginning of the
+covered time when invoked at Live or at the end. It runs at the world clock's
+rate and does nothing when every product the layer shows is suspended or when
+there is no covered time. The clock retains its rate while paused and live.
+The timeline's speed selector shows the clock's rate or the nearest offered
+speed for a rate a host set. A weather layer built without a
 shared clock builds one of its own on the page's world clock when first
 enabled (`createWeatherClock({ shared: false })`) and keeps it for its
 lifetime; destroying it leaves the world's time where it is, and enabling it
@@ -10032,8 +10075,9 @@ of its own.
 Source, opacity and coverage navigation live in the WEATHER panel's cards, not
 in the rows; the panel shows the frame time and has no time controls. The
 viewer clock is untouched.
-Observation layers are off by default; share/persist includes appearance and product, while history
-is transient and shared links open latest. Rendering retains the previous frame
+Observation layers are off by default; share/persist includes appearance and
+product; a share link made away from Live also carries the world time and opens
+there, paused. Rendering retains the previous frame
 when an incoming frame fails; no eligible historical frame instead hides imagery.
 
 Desktop wind now allows 7,200 baked native GPU paths (narrow viewports remain at

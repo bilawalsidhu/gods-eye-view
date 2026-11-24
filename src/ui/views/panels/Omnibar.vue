@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUpdated, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { getLocale, t, tn } from '../../../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../../../exclusiveSurfaces.js';
@@ -18,6 +18,7 @@ import { useOmnibarStore } from '../../stores/omnibar.js';
 import { useVoiceStore } from '../../stores/voice.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
+import { vRootClass } from '../../rail/rootClass.js';
 
 // One field for places, layers and questions. Places run through the location
 // controls, layers through the shell's omnibar actions, and anything else can
@@ -1012,6 +1013,21 @@ function onMic(supersede = false) {
 
 const shortcut = computed(() => (isMac ? '⌘K' : 'Ctrl K'));
 
+// The dock's stylesheet selects on the field being on the page, on its
+// results and on focus inside it through classes on the page root
+// (src/ui/rail/rootClass.js). Removing a focused row sends no focusout, so
+// every render checks the focus again.
+const root = ref(null);
+const focusWithin = ref(false);
+function followFocus(event) {
+  const el = root.value;
+  if (!el) return;
+  if (event?.type === 'focusin') focusWithin.value = true;
+  else if (event?.type === 'focusout') focusWithin.value = el.contains(event.relatedTarget);
+  else focusWithin.value = el.matches(':focus-within');
+}
+onUpdated(() => followFocus());
+
 
 // Chips come and go as the text changes; the arrow keys stay on one that is
 // there, and leave the strip when it empties.
@@ -1027,7 +1043,7 @@ watch(
 </script>
 
 <template>
-  <section id="gev-omnibar" :class="{ 'has-results': showResults }" :aria-label="t('Search')">
+  <section id="gev-omnibar" ref="root" :class="{ 'has-results': showResults }" v-root-class="{ 'has-omnibar': true, 'omnibar-has-results': showResults, 'omnibar-focus-within': focusWithin }" :aria-label="t('Search')" @focusin="followFocus" @focusout="followFocus">
     <div class="omnibar-field">
       <span class="omnibar-edge" aria-hidden="true"></span>
       <UiIcon class="omnibar-search-icon" name="search" :size="null" />
@@ -1351,13 +1367,14 @@ small {
   width: auto;
   transform: none;
 }
-/* The language picker sits at the right edge beside the field; the field leaves it room. */
-:global(body.mobile-shell:has(#locale-picker) #gev-omnibar) {
+/* The language picker sits at the right edge beside the field; the field leaves it room.
+   `.has-locale-picker`, `.has-world-timeline` and `.has-omnibar` are page-root classes (src/ui/rail/rootClass.js). */
+:global(body.mobile-shell:is(.has-locale-picker *, #locale-picker) #gev-omnibar) {
   inset-inline: 16px 60px;
 }
 /* A lifted timeline leaves less map above the credits on short phones. */
 @media (max-height: 480px) {
-  :global(body.mobile-shell:has(#world-timeline) #gev-omnibar) {
+  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline) #gev-omnibar) {
     --omnibar-top: calc(var(--mobile-top-inset, 0px) + 48px);
     --omnibar-field-room: 34px;
     --omnibar-field-height: 34px;
@@ -1368,7 +1385,7 @@ small {
     --omnibar-item-padding: 2px;
   }
   /* The field takes the HUD readout's row (48-82px): the readout sits under it. */
-  :global(body.mobile-shell:has(#world-timeline):has(#gev-omnibar) #intel-hud .hud-bottom-left) {
+  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline):is(.has-omnibar *, #gev-omnibar) #intel-hud .hud-bottom-left) {
     top: calc(var(--mobile-top-inset, 0px) + 88px);
   }
 }
