@@ -162,7 +162,9 @@ export function aisLiveProxy() {
       // Reading the store leaves the stream alone. Only worldwide coverage
       // matches the scope of the count Context shows.
       readLayerCount: () =>
-        aisSubscriptionIsWorldwide() ? aisStreamVesselCount() : null,
+        process.env.AISSTREAM_API_KEY && aisSubscriptionIsWorldwide()
+          ? aisStreamVesselCount()
+          : null,
     },
     configureServer(server) {
       install(server.middlewares);
@@ -260,6 +262,7 @@ function aisWatchdogPolicy() {
  */
 function aisAdapter() {
   if (_aisAdapter) return _aisAdapter;
+  let worldwide = false;
   _aisAdapter = createAisStreamAdapter({
     createSocket: (url) => {
       const WebSocketCtor = aisWebSocketImpl();
@@ -267,8 +270,13 @@ function aisAdapter() {
       return new WebSocketCtor(url);
     },
     resolveUrl: () => aisWatchdogPolicy().url,
-    buildSubscription: aisStreamSubscription,
-    ingestEnvelope: ingestAisStreamEnvelope,
+    buildSubscription: () => {
+      const subscription = aisStreamSubscription();
+      // A reload may change the box while earlier positions remain in the store.
+      worldwide = aisSubscriptionIsWorldwide(subscription.BoundingBoxes);
+      return subscription;
+    },
+    ingestEnvelope: (envelope) => ingestAisStreamEnvelope(envelope, worldwide),
     warn: (message) => console.warn(message),
   });
   _aisAdapter.setWatchdogOptions(aisWatchdogBudgets());
@@ -394,26 +402,21 @@ function aisStreamSubscription() {
  * Whether the stream subscribes to the default worldwide box. Unset or
  * unreadable AISSTREAM_BOUNDING_BOXES falls back to that box.
  */
-function aisSubscriptionIsWorldwide() {
-  const value = process.env.AISSTREAM_BOUNDING_BOXES;
-  if (!value) return true;
-  try {
-    return (
-      JSON.stringify(JSON.parse(value)) ===
-      JSON.stringify(AISSTREAM_DEFAULT_BBOXES)
-    );
-  } catch {
-    return true;
-  }
+function aisSubscriptionIsWorldwide(
+  boxes = parseJsonEnv('AISSTREAM_BOUNDING_BOXES', AISSTREAM_DEFAULT_BBOXES, {
+    warn: false,
+  }),
+) {
+  return JSON.stringify(boxes) === JSON.stringify(AISSTREAM_DEFAULT_BBOXES);
 }
 
-function parseJsonEnv(key, fallback) {
+function parseJsonEnv(key, fallback, { warn = true } = {}) {
   const value = process.env[key];
   if (!value) return fallback;
   try {
     return JSON.parse(value);
   } catch {
-    console.warn(`[AISStream] Invalid ${key}; using default.`);
+    if (warn) console.warn(`[AISStream] Invalid ${key}; using default.`);
     return fallback;
   }
 }

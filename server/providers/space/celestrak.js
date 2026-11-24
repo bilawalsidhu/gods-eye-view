@@ -9,17 +9,6 @@ import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import { readResponseTextCapped } from '../common/http.js';
 
-function catalogNumbers(body) {
-  return parseTleText(body || '').map(({ line1 }) => tleCatalogNumber(line1));
-}
-
-/** Count paired NORAD records across groups, including overlapping catalogues. */
-export function uniqueNoradCount(bodies) {
-  const ids = new Set();
-  for (const body of bodies) for (const id of catalogNumbers(body)) ids.add(id);
-  return ids.size;
-}
-
 /**
  * Vite plugin: CelesTrak TLE proxy.
  *
@@ -103,157 +92,45 @@ export function celestrakProxy() {
   /** The largest group (`active`) measures ~2.7 MB; this bounds a runaway body. */
   const CELESTRAK_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 
-  // A count needs only the catalogue numbers to deduplicate overlapping groups.
-  const countGroups = new Map();
-  const countFile = (group) => `celestrak-count-${group}.json`;
-  let combinedCount;
-  function rememberCount(group, summary) {
-    countGroups.set(group, summary);
-    combinedCount = undefined;
-  }
-
-  async function readSummary(group) {
-    try {
-      const summary = JSON.parse(
-        await fsp.readFile(path.join(CACHE_DIR, countFile(group)), 'utf8'),
-      );
-      if (
-        Number.isFinite(summary?.at) &&
-        Array.isArray(summary.ids) &&
-        summary.ids.every(Number.isSafeInteger)
-      )
-        return summary;
-    } catch {
-      /* No complete count index for this group. */
-    }
-    return null;
-  }
-
-  async function cachedCount() {
-    let files = [];
-    try {
-      files = await fsp.readdir(CACHE_DIR);
-    } catch {
-      /* In-memory counts remain available if the cache directory is absent. */
-    }
-    for (const group of coreGroups) {
-      if (countGroups.has(group) || !files.includes(countFile(group))) continue;
-      const saved = await readSummary(group);
-      if (saved && !countGroups.has(group)) rememberCount(group, saved);
-    }
-    if (combinedCount === undefined) {
-      const ids = new Set();
-      let at = Infinity;
-      for (const entry of countGroups.values()) {
-        for (const id of entry.ids) ids.add(id);
-        at = Math.min(at, entry.at);
-      }
-      combinedCount = ids.size ? { count: ids.size, at } : null;
-    }
-    return combinedCount;
-  }
-
   function createFeedHandler(feed) {
     let feedCooldownUntil = 0;
     const cooldownUntil = () => Math.max(hostCooldownUntil, feedCooldownUntil);
     const mem = new Map(); // group -> { at: epochMs, body: string }
     const inflight = new Map(); // group -> Promise<{at, body}|null>
-    const countWrites = new Map();
     const diskPath = (group) => path.join(CACHE_DIR, feed.diskName(group));
 
-    function indexFeed(group, entry) {
-      if (feed !== feeds[0] || !coreGroups.includes(group)) return;
-      const summary = { at: entry.at, ids: catalogNumbers(entry.body) };
-      rememberCount(group, summary);
-      return summary;
-    }
-
-    async function replaceJson(file, entry, group) {
-      const temporary = `${file}.${crypto.randomUUID()}.tmp`;
+    async function readDisk(group) {
       try {
-        await fsp.writeFile(temporary, JSON.stringify(entry), 'utf8');
-        // A refresh can supersede a repair while its temporary index is written.
-        if (group && countGroups.get(group) !== entry)
-          await fsp.unlink(temporary);
-        else await fsp.rename(temporary, file);
-      } catch (error) {
-        await fsp.unlink(temporary).catch(() => {});
-        throw error;
-      }
-    }
-
-    async function replaceCount(group, summary) {
-      const previous = countWrites.get(group) ?? Promise.resolve();
-      const writing = previous
-        .catch(() => {})
-        .then(() =>
-          replaceJson(path.join(CACHE_DIR, countFile(group)), summary, group),
-        );
-      countWrites.set(group, writing);
-      try {
-        await writing;
-      } finally {
-        if (countWrites.get(group) === writing) countWrites.delete(group);
-      }
-    }
-
-    async function restoreCount(group, entry) {
-      if (feed !== feeds[0] || !coreGroups.includes(group)) return;
-      const saved = await readSummary(group);
-      // A newer refresh owns its own index and must persist its feed first.
-      if (mem.get(group) !== entry) return;
-      const current = countGroups.get(group);
-      let summary;
-      if (
-        current &&
-        current.at >= entry.at &&
-        (!saved || current.at >= saved.at)
-      ) {
-        if (saved?.at === current.at) return;
-        summary = current;
-      } else if (saved && saved.at >= entry.at) {
-        rememberCount(group, saved);
-        return;
-      } else {
-        summary = indexFeed(group, entry);
-      }
-      try {
-        await replaceCount(group, summary);
+        const cached = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
+        if (typeof cached?.body === 'string' && Number.isFinite(cached?.at))
+          return cached;
       } catch {
-        /* The in-memory index can still serve this process. */
+        /* no usable disk cache */
       }
+      return null;
     }
 
     async function restoreFromDisk(group) {
-      let diskEntry = null;
-      try {
-        const parsed = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
-        if (typeof parsed?.body === 'string' && Number.isFinite(parsed?.at))
-          diskEntry = parsed;
-      } catch {
-        /* no disk cache yet */
-      }
+      const saved = await readDisk(group);
       // A feed refresh can finish while this disk read is pending.
       const current = mem.get(group);
       if (current) return current;
-      if (diskEntry) {
-        mem.set(group, diskEntry);
-        await restoreCount(group, diskEntry);
-      }
-      return mem.get(group) ?? diskEntry;
+      if (saved) mem.set(group, saved);
+      return saved;
     }
 
     async function writeDisk(group, entry) {
-      const summary = indexFeed(group, entry);
+      let temporary;
       try {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        if (summary) {
-          await replaceJson(diskPath(group), entry);
-          await replaceCount(group, summary);
-        } else {
-          await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
-        }
-      } catch (err) {
+        const file = diskPath(group);
+        // Keep the previous core TLE file readable during a cache replacement.
+        if (feed === feeds[0] && coreGroups.includes(group))
+          temporary = `${file}.${crypto.randomUUID()}.tmp`;
+        await fsp.writeFile(temporary ?? file, JSON.stringify(entry), 'utf8');
+        if (temporary) await fsp.rename(temporary, file);
+      } catch {
+        if (temporary) await fsp.unlink(temporary).catch(() => {});
         console.warn('[celestrak-proxy] cache write failed');
       }
     }
@@ -378,20 +255,48 @@ export function celestrakProxy() {
         send(500, 'celestrak proxy error', 'ERROR');
       }
     };
-    return handler;
+    return { route: feed.route, handler, mem, readDisk };
   }
 
-  const handlers = new Map(
-    feeds.map((feed) => [feed.route, createFeedHandler(feed)]),
-  );
+  const handlers = feeds.map(createFeedHandler);
+  const [tle] = handlers;
+  let countInFlight;
+
+  function readLayerCount() {
+    countInFlight ??= scanLayerCount().finally(() => {
+      countInFlight = null;
+    });
+    return countInFlight;
+  }
+
+  async function scanLayerCount() {
+    const saved = await Promise.all(
+      coreGroups.map((group) =>
+        tle.mem.has(group) ? null : tle.readDisk(group),
+      ),
+    );
+    const ids = new Set();
+    let at = Infinity;
+    for (const [index, group] of coreGroups.entries()) {
+      // Counts don't warm the route cache. Prefer any refresh that landed
+      // in memory while the count was reading the disk.
+      const entry = tle.mem.get(group) ?? saved[index];
+      if (!entry) continue;
+      const records = parseTleText(entry.body);
+      if (!records.length) continue;
+      at = Math.min(at, entry.at);
+      for (const { line1 } of records) ids.add(tleCatalogNumber(line1));
+    }
+    return ids.size ? { count: ids.size, at } : null;
+  }
+
   const installMiddleware = (server) => {
-    for (const [route, handler] of handlers)
+    for (const { route, handler } of handlers)
       server.middlewares.use(route, handler);
   };
   return {
     name: 'celestrak-proxy',
-    // The TLE feed's cache counts the satellites layer (generous, keyless).
-    api: { readLayerCount: cachedCount },
+    api: { readLayerCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

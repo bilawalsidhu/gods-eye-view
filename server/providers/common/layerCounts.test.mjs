@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { layerCountsEndpoint } from './layerCounts.js';
 import { openSkyProxy, openSkyStateCount } from '../aircraft/opensky.js';
-import { celestrakProxy, uniqueNoradCount } from '../space/celestrak.js';
+import { celestrakProxy } from '../space/celestrak.js';
 import { createCctvCatalog } from '../cctv/catalog.js';
 import {
   AISSTREAM_STALE_MS,
@@ -154,7 +154,10 @@ test('count requests have a per-peer window and recover without reading caches w
   const limited = await ask(handler);
   assert.equal(limited.status, 429);
   assert.equal(limited.headers['retry-after'], '60');
-  assert.equal((await ask(handler, { method: 'HEAD' })).body, '');
+  const limitedHead = await ask(handler, { method: 'HEAD' });
+  assert.equal(limitedHead.status, 429);
+  assert.equal(limitedHead.headers['retry-after'], '60');
+  assert.equal(limitedHead.body, '');
   assert.equal(reads, 0);
   now += 60_000;
   assert.equal((await countRows(handler))[0].count, 1);
@@ -222,20 +225,26 @@ test('OpenSky: the count endpoint reports when the aircraft were observed', asyn
 const tle = (norad) =>
   `SAT ${norad}\n1 ${norad}U 98067A   26001.00000000  .00000000  00000-0  00000-0 0  9990\n2 ${norad}  51.6400 000.0000 0000000   0.0000   0.0000 15.50000000    00\n`;
 
-test('each local composition reads counts from its own CelesTrak cache', async (t) => {
+test('each local composition reads counts from its own CelesTrak cache and deduplicates paired records', async (t) => {
   const now = 1_800_000_000_000;
-  const expected = { layerId: 'satellites', count: 2, at: now };
+  const stationsCount = { layerId: 'satellites', count: 3, at: now };
+  const combinedCount = { ...stationsCount, count: 4 };
   t.mock.method(Date, 'now', () => now);
   t.mock.method(fsp, 'readFile', async () => {
     throw new Error('fixture cache missing');
   });
   t.mock.method(fsp, 'mkdir', async () => {});
   t.mock.method(fsp, 'writeFile', async () => {});
-  const upstream = t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(tle('25544') + tle('20580')),
-  );
+  t.mock.method(fsp, 'rename', async () => {});
+  const upstream = t.mock.method(globalThis, 'fetch', async (url) => {
+    const group = new URL(url).searchParams.get('GROUP');
+    const orphan = 'ORPHAN\n1 12345U trailing\n';
+    const body =
+      group === 'stations'
+        ? tle('25544') + tle('A0000') + tle('   42')
+        : tle('25544') + tle('00042') + tle('20580') + orphan;
+    return new Response(body);
+  });
 
   function compose() {
     const routes = new Map();
@@ -257,118 +266,20 @@ test('each local composition reads counts from its own CelesTrak cache', async (
   const first = compose();
   const warmed = await ask(first.get('/api/celestrak'), { url: '/stations' });
   assert.equal(warmed.status, 200);
-  assert.deepEqual(await satelliteCount(first), expected);
+  assert.deepEqual(await satelliteCount(first), stationsCount);
+  assert.equal(
+    (await ask(first.get('/api/celestrak'), { url: '/visual' })).status,
+    200,
+  );
+  assert.deepEqual(await satelliteCount(first), combinedCount);
 
   const second = compose();
   assert.equal(await satelliteCount(second), undefined);
-  assert.deepEqual(await satelliteCount(first), expected);
-  assert.equal(upstream.mock.callCount(), 1);
+  assert.deepEqual(await satelliteCount(first), combinedCount);
+  assert.equal(upstream.mock.callCount(), 2);
 });
 
-test('CelesTrak: matching TLE pairs count once across cached groups', () => {
-  assert.equal(
-    uniqueNoradCount([
-      tle('25544') + tle('A0000') + tle('   42'),
-      tle('25544') + tle('00042') + 'ORPHAN\n1 12345U trailing\n',
-    ]),
-    3,
-  );
-  assert.equal(uniqueNoradCount([tle('A0000'), tle('   42')]), 2);
-  assert.equal(uniqueNoradCount(['ORPHAN\n1 12345U trailing\n', '', null]), 0);
-});
-
-test('CelesTrak: a count reading disk keeps a concurrent feed refresh', async (t) => {
-  const now = 1_800_000_000_000;
-  const stale = JSON.stringify({
-    at: now - 7 * 3600_000,
-    body: tle('25544'),
-  });
-  const fresh = tle('25544') + tle('20580');
-  const firstRead = Promise.withResolvers();
-  const readingCount = Promise.withResolvers();
-  let firstIndexRead = true;
-  t.mock.method(fsp, 'readdir', async () => ['celestrak-count-stations.json']);
-  t.mock.method(Date, 'now', () => now);
-  t.mock.method(fsp, 'readFile', async (filename) => {
-    if (path.basename(filename) === 'celestrak-count-stations.json') {
-      if (firstIndexRead) {
-        firstIndexRead = false;
-        readingCount.resolve();
-        return firstRead.promise;
-      }
-      return JSON.stringify({ at: now - 7 * 3600_000, ids: [25544] });
-    }
-    if (path.basename(filename) === 'celestrak-stations.json') return stale;
-    throw new Error('fixture cache missing');
-  });
-  t.mock.method(fsp, 'mkdir', async () => {});
-  t.mock.method(fsp, 'writeFile', async () => {});
-  const upstream = t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(fresh),
-  );
-  const routes = new Map();
-  const plugin = celestrakProxy();
-  plugin.configureServer({
-    middlewares: { use: (route, handler) => routes.set(route, handler) },
-  });
-  const feed = () => ask(routes.get('/api/celestrak'), { url: '/stations' });
-
-  const counts = endpointHandler({ satellites: plugin.api.readLayerCount });
-  const pendingCount = countRows(counts);
-  await readingCount.promise;
-  const refresh = await feed();
-  firstRead.resolve(JSON.stringify({ at: now - 7 * 3600_000, ids: [25544] }));
-  const count = await pendingCount;
-  const nextFeed = await feed();
-
-  assert.equal(refresh.body, fresh);
-  assert.deepEqual(count, [{ layerId: 'satellites', count: 2, at: now }]);
-  assert.equal(nextFeed.body, fresh);
-  assert.equal(nextFeed.headers['x-tle-cache'], 'HIT');
-  assert.equal(upstream.mock.callCount(), 1);
-});
-
-test('CelesTrak does not refresh twice when a delayed index restore overlaps a refresh', async (t) => {
-  const now = 1_800_000_000_000;
-  const staleAt = now - 7 * 3600_000;
-  const fresh = tle('25544') + tle('20580');
-  const readingIndex = Promise.withResolvers();
-  const releaseIndex = Promise.withResolvers();
-  t.after(() => releaseIndex.resolve());
-  t.mock.method(Date, 'now', () => now);
-  t.mock.method(fsp, 'readFile', async (filename) => {
-    if (path.basename(filename) === 'celestrak-stations.json')
-      return JSON.stringify({ at: staleAt, body: tle('25544') });
-    readingIndex.resolve();
-    await releaseIndex.promise;
-    return JSON.stringify({ at: staleAt, ids: [25544] });
-  });
-  for (const method of ['mkdir', 'writeFile', 'rename'])
-    t.mock.method(fsp, method, async () => {});
-  const upstream = t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(fresh),
-  );
-  const plugin = celestrakProxy();
-  const routes = new Map();
-  plugin.configureServer({
-    middlewares: { use: (route, handler) => routes.set(route, handler) },
-  });
-  const feed = () => ask(routes.get('/api/celestrak'), { url: '/stations' });
-  const restoring = feed();
-  await readingIndex.promise;
-  assert.equal((await feed()).headers['x-tle-cache'], 'MISS');
-  releaseIndex.resolve();
-  const restored = await restoring;
-  assert.equal(restored.body, fresh);
-  assert.equal(restored.headers['x-tle-cache'], 'HIT');
-  assert.equal(upstream.mock.callCount(), 1);
-});
-
-test('a normal feed read upgrades an older group cache and cold counts open only the compact index', async (t) => {
+test('CelesTrak cold counts read only existing core TLE caches', async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'gev-tle-count-'));
   const previous = process.cwd();
   t.after(async () => {
@@ -377,36 +288,132 @@ test('a normal feed read upgrades an older group cache and cold counts open only
   });
   process.chdir(dir);
   await mkdir('.gev-cache');
-  const at = Date.now();
-  const body = tle('25544') + tle('20580');
+  const now = 1_800_000_000_000;
+  for (const [file, age, body] of [
+    ['celestrak-stations', 1000, tle('25544') + tle('A0000')],
+    ['celestrak-visual', 2000, tle('25544') + tle('20580')],
+    [
+      'celestrak-geo',
+      3000,
+      'BROKEN PAIR\n1 99999U trailing\n2 99998 trailing\n',
+    ],
+    ['celestrak-active', 4000, tle('33333')],
+    ['celestrak-starlink', 5000, tle('44444')],
+    ['celestrak-satcat-stations', 6000, tle('55555')],
+  ]) {
+    await writeFile(
+      `.gev-cache/${file}.json`,
+      JSON.stringify({ at: now - age, body }),
+    );
+  }
+  await writeFile('.gev-cache/celestrak-science.json', '{');
+  const upstream = t.mock.method(globalThis, 'fetch', () => {
+    throw new Error('counts must not fetch');
+  });
+  const handler = endpointHandler({
+    satellites: celestrakProxy().api.readLayerCount,
+  });
+  const readCount = () => countRows(handler);
+  const expected = [{ layerId: 'satellites', count: 3, at: now - 2000 }];
+  assert.deepEqual(await readCount(), expected);
+
+  // A sidecar left by an older version must neither supply nor mask a count.
   await writeFile(
-    '.gev-cache/celestrak-stations.json',
-    JSON.stringify({ at, body }),
+    '.gev-cache/celestrak-count-stations.json',
+    JSON.stringify({ at: now, ids: [22222] }),
   );
-  const plugin = celestrakProxy();
+  const before = (await fsp.readdir('.gev-cache')).sort();
+  const read = t.mock.method(fsp, 'readFile');
+  const write = t.mock.method(fsp, 'writeFile');
+  const rename = t.mock.method(fsp, 'rename');
+  assert.deepEqual(await Promise.all([readCount(), readCount()]), [
+    expected,
+    expected,
+  ]);
+  const reads = read.mock.calls.map(({ arguments: [file] }) =>
+    path.basename(file),
+  );
+  assert.equal(
+    reads.length,
+    new Set(reads).size,
+    'overlap reads each file once',
+  );
+  assert.ok(reads.includes('celestrak-stations.json'));
+  assert.ok(reads.includes('celestrak-visual.json'));
+  assert.ok(
+    !reads.some((file) =>
+      /celestrak-(?:active|starlink|satcat-|count-)/.test(file),
+    ),
+    'the count only opens raw core-group caches',
+  );
+  assert.equal(upstream.mock.callCount(), 0);
+  assert.equal(write.mock.callCount(), 0);
+  assert.equal(rename.mock.callCount(), 0);
+  assert.deepEqual((await fsp.readdir('.gev-cache')).sort(), before);
+
+  await writeFile(
+    '.gev-cache/celestrak-visual.json',
+    JSON.stringify({
+      at: now,
+      body: tle('25544') + tle('20580') + tle('12345'),
+    }),
+  );
+  assert.deepEqual(await readCount(), [
+    { layerId: 'satellites', count: 4, at: now - 1000 },
+  ]);
+});
+
+test('CelesTrak counts prefer a fresh in-memory feed over an overlapping raw disk read', async (t) => {
+  const now = 1_800_000_000_000;
+  const stale = JSON.stringify({ at: now - 7 * 3600_000, body: tle('25544') });
+  const fresh = tle('25544') + tle('20580');
+  const staleRead = Promise.withResolvers();
+  const countReading = Promise.withResolvers();
+  let firstRead = true;
+  t.after(() => staleRead.resolve(stale));
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(fsp, 'readFile', async (file) => {
+    if (path.basename(file) !== 'celestrak-stations.json')
+      throw new Error('fixture cache missing');
+    if (!firstRead) return stale;
+    firstRead = false;
+    countReading.resolve();
+    return staleRead.promise;
+  });
+  for (const method of ['mkdir', 'writeFile', 'rename'])
+    t.mock.method(fsp, method, async () => {});
+  const upstream = t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(fresh),
+  );
   const routes = new Map();
+  const plugin = celestrakProxy();
   plugin.configureServer({
     middlewares: { use: (route, handler) => routes.set(route, handler) },
   });
-  assert.equal(await plugin.api.readLayerCount(), null);
-  assert.equal(
-    (await ask(routes.get('/api/celestrak'), { url: '/stations' })).body,
-    body,
-  );
-  await writeFile(
-    '.gev-cache/celestrak-count-visual.json',
-    JSON.stringify({ at: at - 10, ids: [25544, 42] }),
-  );
-  const read = t.mock.method(fsp, 'readFile');
-  const cold = celestrakProxy();
-  assert.deepEqual(await cold.api.readLayerCount(), { count: 3, at: at - 10 });
-  assert.deepEqual(
-    read.mock.calls.map(({ arguments: args }) => path.basename(args[0])).sort(),
-    ['celestrak-count-stations.json', 'celestrak-count-visual.json'],
-  );
+  const feed = () => ask(routes.get('/api/celestrak'), { url: '/stations' });
+  const counts = endpointHandler({ satellites: plugin.api.readLayerCount });
+  const pendingCount = countRows(counts);
+  await countReading.promise;
+  try {
+    const refresh = await feed();
+    assert.equal(refresh.body, fresh);
+    assert.equal(refresh.headers['x-tle-cache'], 'MISS');
+  } finally {
+    staleRead.resolve(stale);
+  }
+
+  assert.deepEqual(await pendingCount, [
+    { layerId: 'satellites', count: 2, at: now },
+  ]);
+  const next = await feed();
+  assert.equal(next.body, fresh);
+  assert.equal(next.headers['x-tle-cache'], 'HIT');
+  assert.equal(upstream.mock.callCount(), 1);
 });
 
-test('satellite counts survive interrupted writes and a later feed read repairs a damaged index', async (t) => {
+test('CelesTrak counts reflect the last usable cache when atomic TLE persistence fails', async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'gev-tle-write-'));
   const previous = process.cwd();
   t.after(async () => {
@@ -416,140 +423,52 @@ test('satellite counts survive interrupted writes and a later feed read repairs 
   process.chdir(dir);
   await mkdir('.gev-cache');
   const raw = path.resolve('.gev-cache/celestrak-stations.json');
-  const index = path.resolve('.gev-cache/celestrak-count-stations.json');
-  const at = Date.now();
-  let now = at + 7 * 3600_000;
-  t.mock.method(Date, 'now', () => now);
+  const at = 1_800_000_000_000;
+  const now = at + 7 * 3600_000;
   const old = { at, body: tle('25544') };
-  const fresh = tle('25544') + tle('20580');
+  const fresh = old.body + tle('20580');
   await writeFile(raw, JSON.stringify(old));
-  await writeFile(index, JSON.stringify({ at, ids: [25544] }));
-  t.mock.method(globalThis, 'fetch', async () => new Response(fresh));
+  t.mock.method(Date, 'now', () => now);
+  const upstream = t.mock.method(
+    globalThis,
+    'fetch',
+    async () => new Response(fresh),
+  );
   t.mock.method(console, 'warn', () => {});
-  function start() {
-    const plugin = celestrakProxy();
+  const rename = fsp.rename;
+  let interrupt = true;
+  t.mock.method(fsp, 'rename', async (from, to) => {
+    if (interrupt && to === raw) throw new Error('interrupted write');
+    await rename(from, to);
+  });
+
+  async function refresh(plugin) {
     const routes = new Map();
     plugin.configureServer({
       middlewares: { use: (route, handler) => routes.set(route, handler) },
     });
-    return {
-      feed: () => ask(routes.get('/api/celestrak'), { url: '/stations' }),
-      count: plugin.api.readLayerCount,
-    };
+    const response = await ask(routes.get('/api/celestrak'), {
+      url: '/stations',
+    });
+    assert.equal(response.body, fresh);
+    assert.equal(response.headers['x-tle-cache'], 'MISS');
   }
-  const readingIndex = Promise.withResolvers();
-  const releaseIndex = Promise.withResolvers();
-  t.after(() => releaseIndex.resolve());
-  const readFile = fsp.readFile;
-  let holdIndex = true;
-  t.mock.method(fsp, 'readFile', async (file, ...args) => {
-    if (file === index && holdIndex) {
-      holdIndex = false;
-      readingIndex.resolve();
-      await releaseIndex.promise;
-    }
-    return readFile(file, ...args);
-  });
-  const rename = fsp.rename;
-  let failed = raw;
-  t.mock.method(fsp, 'rename', async (from, to) => {
-    if (to === failed) throw new Error('interrupted cache write');
-    return rename(from, to);
-  });
-  const overlapping = start();
-  const restoring = overlapping.feed();
-  await readingIndex.promise;
-  try {
-    assert.equal((await overlapping.feed()).body, fresh);
-  } finally {
-    releaseIndex.resolve();
-  }
-  assert.equal((await restoring).body, fresh);
-  assert.deepEqual(JSON.parse(await fsp.readFile(raw)), old);
-  assert.deepEqual(await start().count(), { at, count: 1 });
-  failed = index;
-  assert.equal((await start().feed()).body, fresh);
-  assert.equal(JSON.parse(await fsp.readFile(raw)).body, fresh);
-  assert.deepEqual(await start().count(), { at, count: 1 });
-  failed = null;
-  await start().feed();
-  assert.deepEqual(await start().count(), { at: now, count: 2 });
-  const repairing = start();
-  assert.deepEqual(await repairing.count(), { at: now, count: 2 });
-  await writeFile(index, '{');
-  await repairing.feed();
-  assert.deepEqual(await start().count(), { at: now, count: 2 });
-  // An old raw cache restored after a newer index cannot roll back the count.
-  await writeFile(raw, JSON.stringify({ at: now - 1000, body: old.body }));
-  const restarted = start();
-  assert.deepEqual(await restarted.count(), { at: now, count: 2 });
-  assert.equal((await restarted.feed()).body, old.body);
-  assert.deepEqual(await restarted.count(), { at: now, count: 2 });
-  assert.deepEqual((await fsp.readdir('.gev-cache')).sort(), [
-    path.basename(index),
-    path.basename(raw),
-  ]);
-});
 
-test('a delayed CelesTrak repair cannot replace an index persisted by a concurrent refresh', async (t) => {
-  const releaseRepair = Promise.withResolvers();
-  const repairStarted = Promise.withResolvers();
-  const refreshStarted = Promise.withResolvers();
-  t.after(() => releaseRepair.resolve());
-  const raw = 'celestrak-stations.json';
-  const index = 'celestrak-count-stations.json';
-  const now = 1_800_000_000_000;
-  const freshBody = tle('25544') + tle('20580');
-  const files = new Map([
-    [raw, JSON.stringify({ at: now - 7 * 3600_000, body: tle('25544') })],
-  ]);
-  t.mock.method(Date, 'now', () => now);
-  t.mock.method(globalThis, 'fetch', async () => {
-    refreshStarted.resolve();
-    return new Response(freshBody);
-  });
-  t.mock.method(fsp, 'readFile', async (file) => {
-    const name = path.basename(file);
-    if (!files.has(name)) throw new Error('fixture cache missing');
-    return files.get(name);
-  });
-  t.mock.method(fsp, 'readdir', async () => [...files.keys()]);
-  t.mock.method(fsp, 'mkdir', async () => {});
-  t.mock.method(fsp, 'writeFile', async (file, data) => {
-    files.set(path.basename(file), data);
-  });
-  t.mock.method(fsp, 'unlink', async (file) => {
-    files.delete(path.basename(file));
-  });
-  let firstRename = true;
-  t.mock.method(fsp, 'rename', async (from, to) => {
-    const destination = path.basename(to);
-    if (destination === index && firstRename) {
-      firstRename = false;
-      repairStarted.resolve();
-      await releaseRepair.promise;
-    }
-    files.set(destination, files.get(path.basename(from)));
-    files.delete(path.basename(from));
-  });
-  const plugin = celestrakProxy();
-  const routes = new Map();
-  plugin.configureServer({
-    middlewares: { use: (route, handler) => routes.set(route, handler) },
-  });
-  const feed = () => ask(routes.get('/api/celestrak'), { url: '/stations' });
-  const warming = feed();
-  await repairStarted.promise;
-  const refreshing = feed();
-  await refreshStarted.promise;
-  await new Promise((resolve) => setImmediate(resolve));
-  releaseRepair.resolve();
-  assert.equal((await refreshing).body, freshBody);
-  assert.equal((await warming).body, freshBody);
+  const first = celestrakProxy();
+  await refresh(first);
+  assert.deepEqual(await first.api.readLayerCount(), { count: 2, at: now });
+  assert.deepEqual(JSON.parse(await fsp.readFile(raw, 'utf8')), old);
+  const cold = celestrakProxy();
+  assert.deepEqual(await cold.api.readLayerCount(), { count: 1, at });
+
+  interrupt = false;
+  await refresh(cold);
   assert.deepEqual(await celestrakProxy().api.readLayerCount(), {
-    at: now,
     count: 2,
+    at: now,
   });
+  assert.deepEqual(await fsp.readdir('.gev-cache'), [path.basename(raw)]);
+  assert.equal(upstream.mock.callCount(), 2);
 });
 
 test('CCTV: no count before the catalog is built, never building it to count', async (t) => {
@@ -559,6 +478,8 @@ test('CCTV: no count before the catalog is built, never building it to count', a
       if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved);
   });
+  process.env.CCTV_FORCE_AUSTIN = '0';
+  process.env.CCTV_SOURCES_FILE = 'missing-catalog.json';
   process.env.CCTV_SOURCES_JSON = JSON.stringify([
     {
       id: 'a',
@@ -595,6 +516,8 @@ test('CCTV: an empty refresh keeps serving the old catalog under its own build t
   t.mock.method(Date, 'now', () => now);
   const warned = [];
   t.mock.method(console, 'warn', (...args) => warned.push(args.join(' ')));
+  process.env.CCTV_FORCE_AUSTIN = '0';
+  process.env.CCTV_SOURCES_FILE = 'missing-catalog.json';
   process.env.CCTV_SOURCES_JSON = JSON.stringify([
     {
       id: 'a',
@@ -644,32 +567,39 @@ test('AIS: fresh vessels count, aids to navigation and stale rows do not', (t) =
   const start = Date.now() + 365 * 86_400_000;
   let now = start;
   t.mock.method(Date, 'now', () => now);
-  ingestAisStreamEnvelope(report('244060901'));
-  ingestAisStreamEnvelope(report('244060902'));
-  ingestAisStreamEnvelope(report('992446001'));
+  ingestAisStreamEnvelope(report('244060901'), true);
+  ingestAisStreamEnvelope(report('244060902'), true);
+  ingestAisStreamEnvelope(report('992446001'), true);
   assert.deepEqual(aisStreamVesselCount(), { count: 2, at: start });
   now = start + AISSTREAM_STALE_MS + 1;
   assert.equal(aisStreamVesselCount(), null, 'every row has gone stale');
 });
 
 test('AIS: a subscription narrower than the world gives no count', async (t) => {
+  const savedKey = process.env.AISSTREAM_API_KEY;
+  process.env.AISSTREAM_API_KEY = 'fixture';
   const saved = process.env.AISSTREAM_BOUNDING_BOXES;
   t.after(() => {
+    if (savedKey === undefined) delete process.env.AISSTREAM_API_KEY;
+    else process.env.AISSTREAM_API_KEY = savedKey;
     if (saved === undefined) delete process.env.AISSTREAM_BOUNDING_BOXES;
     else process.env.AISSTREAM_BOUNDING_BOXES = saved;
   });
   const start = Date.now() + 2 * 365 * 86_400_000;
   t.mock.method(Date, 'now', () => start);
-  ingestAisStreamEnvelope({
-    MessageType: 'PositionReport',
-    Message: { PositionReport: { UserID: 244060903, Sog: 5, Cog: 90 } },
-    MetaData: {
-      MMSI: '244060903',
-      latitude: 53.4,
-      longitude: 6.2,
-      time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+  ingestAisStreamEnvelope(
+    {
+      MessageType: 'PositionReport',
+      Message: { PositionReport: { UserID: 244060903, Sog: 5, Cog: 90 } },
+      MetaData: {
+        MMSI: '244060903',
+        latitude: 53.4,
+        longitude: 6.2,
+        time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+      },
     },
-  });
+    true,
+  );
   const handler = endpointHandler({
     'ais-live-vessels': aisLiveProxy().api.readLayerCount,
   });
@@ -682,6 +612,16 @@ test('AIS: a subscription narrower than the world gives no count', async (t) => 
     (await countRows(handler)).length,
     1,
     'the default box, spelt out',
+  );
+  const warn = t.mock.method(console, 'warn', () => {});
+  process.env.AISSTREAM_BOUNDING_BOXES = 'invalid JSON';
+  assert.deepEqual(await countRows(handler), [
+    { layerId: 'ais-live-vessels', count: 1, at: start },
+  ]);
+  assert.equal(
+    warn.mock.callCount(),
+    0,
+    'count reads do not warn about the environment',
   );
   process.env.AISSTREAM_BOUNDING_BOXES = '[[[50,0],[55,10]]]';
   assert.deepEqual(await countRows(handler), [], 'one region, no count');
@@ -705,18 +645,6 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
   const at = Date.UTC(2026, 0, 2, 12);
   let now = at;
   t.mock.method(Date, 'now', () => now);
-  await writeFile(summaryFile, JSON.stringify({ at, count: 4321 }));
-  const handler = endpointHandler({
-    'local-firms': firmsProxy().api.readLayerCount,
-  });
-  delete process.env.FIRMS_MAP_KEY;
-  assert.deepEqual(await countRows(handler), [], 'no key, no count');
-  process.env.FIRMS_MAP_KEY = 'fixture';
-  assert.deepEqual(
-    await countRows(handler),
-    [],
-    'a legacy total cannot establish a current window',
-  );
   await writeFile(
     summaryFile,
     JSON.stringify({
@@ -727,6 +655,14 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
       ],
     }),
   );
+  const handler = endpointHandler({
+    'local-firms': firmsProxy().api.readLayerCount,
+  });
+  const read = t.mock.method(fsp, 'readFile');
+  delete process.env.FIRMS_MAP_KEY;
+  assert.deepEqual(await countRows(handler), [], 'no key, no count');
+  assert.equal(read.mock.callCount(), 0);
+  process.env.FIRMS_MAP_KEY = 'fixture';
   assert.deepEqual(await countRows(handler), [
     { layerId: 'local-firms', count: 5, at },
   ]);
@@ -734,8 +670,15 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
   assert.deepEqual(await countRows(handler), [
     { layerId: 'local-firms', count: 2, at },
   ]);
-  await rm(path.join(dir, '.gev-cache', 'firms-count.json'));
+  await rm(summaryFile);
   assert.deepEqual(await countRows(handler), [], 'no saved count, no count');
+  assert.ok(
+    read.mock.calls.every(
+      ({ arguments: [file] }) =>
+        path.basename(file) === path.basename(summaryFile),
+    ),
+    'counts read only the compact summary',
+  );
 
   // Refresh through the feed to exercise the writer, then read the same minute boundary
   // from the feed, its warm count reader, and a newly started count reader.
@@ -766,17 +709,11 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
   assert.equal(fetch.mock.callCount(), 3);
 });
 
-test('FIRMS keeps the fresh count when a delayed disk read overlaps persistence', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-write-'));
+test('FIRMS restores raw data without a sidecar write and publishes one summary on refresh', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-refresh-'));
   const previous = process.cwd();
   const key = process.env.FIRMS_MAP_KEY;
-  const restoring = Promise.withResolvers();
-  const releaseRestore = Promise.withResolvers();
-  const writing = Promise.withResolvers();
-  const releaseWrite = Promise.withResolvers();
   t.after(async () => {
-    releaseRestore.resolve();
-    releaseWrite.resolve();
     process.chdir(previous);
     if (key === undefined) delete process.env.FIRMS_MAP_KEY;
     else process.env.FIRMS_MAP_KEY = key;
@@ -785,26 +722,14 @@ test('FIRMS keeps the fresh count when a delayed disk read overlaps persistence'
   process.chdir(dir);
   process.env.FIRMS_MAP_KEY = 'fixture';
   await mkdir('.gev-cache');
-  const now = Date.UTC(2026, 0, 2, 12);
+
+  const at = Date.UTC(2026, 0, 2, 12);
+  const fire = { acqDate: '2026-01-02', acqTime: '1159' };
+  const raw = JSON.stringify({ at, sources: [], fires: [fire, fire] });
+  await writeFile('.gev-cache/firms.json', raw);
+  let now = at + 1000;
   t.mock.method(Date, 'now', () => now);
-  const readFile = fsp.readFile;
-  t.mock.method(fsp, 'readFile', async (file, ...args) => {
-    if (path.basename(file) !== 'firms.json') return readFile(file, ...args);
-    restoring.resolve();
-    await releaseRestore.promise;
-    return JSON.stringify({
-      at: now - 1000,
-      sources: [],
-      fires: [{ acqDate: '2026-01-02', acqTime: '1100' }],
-    });
-  });
-  const makeDir = fsp.mkdir;
-  t.mock.method(fsp, 'mkdir', async (...args) => {
-    writing.resolve();
-    await releaseWrite.promise;
-    return makeDir(...args);
-  });
-  t.mock.method(
+  const fetch = t.mock.method(
     globalThis,
     'fetch',
     async () =>
@@ -812,6 +737,7 @@ test('FIRMS keeps the fresh count when a delayed disk read overlaps persistence'
         'latitude,longitude,acq_date,acq_time,confidence,frp\n1,2,2026-01-02,1159,n,4',
       ),
   );
+  const rename = t.mock.method(fsp, 'rename');
   const plugin = firmsProxy();
   let route;
   plugin.configureServer({
@@ -821,100 +747,37 @@ test('FIRMS keeps the fresh count when a delayed disk read overlaps persistence'
       },
     },
   });
-  const old = ask(route);
-  await restoring.promise;
-  const fresh = ask(route);
-  await writing.promise;
-  releaseRestore.resolve();
-  const overlapping = JSON.parse((await old).body);
-  releaseWrite.resolve();
-  const current = JSON.parse((await fresh).body);
-  assert.equal(overlapping.count, current.count);
-  assert.deepEqual(await firmsProxy().api.readLayerCount(), {
-    count: current.count,
-    at: now,
-  });
-});
-
-test('FIRMS warms a durable count from the raw cache and preserves current summaries', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-repair-'));
-  const previous = process.cwd();
-  const key = process.env.FIRMS_MAP_KEY;
-  t.after(async () => {
-    process.chdir(previous);
-    if (key === undefined) delete process.env.FIRMS_MAP_KEY;
-    else process.env.FIRMS_MAP_KEY = key;
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  process.env.FIRMS_MAP_KEY = 'fixture';
-  await mkdir('.gev-cache');
-  const at = Date.UTC(2026, 0, 2, 12);
-  const fire = { acqDate: '2026-01-02', acqTime: '1159' };
-  const raw = JSON.stringify({ at, sources: [], fires: [fire, fire] });
-  const rawPath = '.gev-cache/firms.json';
-  const countPath = '.gev-cache/firms-count.json';
-  await writeFile(rawPath, raw);
-  t.mock.method(Date, 'now', () => at + 2000);
-  const fetch = t.mock.method(globalThis, 'fetch', async () => {
-    throw new Error('warm repair should not fetch');
-  });
-  const rename = t.mock.method(fsp, 'rename');
-  const summary = (time, count) =>
-    JSON.stringify({ at: time, minutes: [{ ...fire, count }] });
-
-  for (const [label, disk, before, after, writes] of [
-    ['missing', null, null, { at, count: 2 }, 1],
-    ['broken JSON', '{', null, { at, count: 2 }, 1],
-    ['invalid bucket', summary(at + 1000, '3'), null, { at, count: 2 }, 1],
-    [
-      'legacy total',
-      JSON.stringify({ at, count: 2 }),
-      null,
-      { at, count: 2 },
-      1,
-    ],
-    [
-      'older',
-      summary(at - 1000, 1),
-      { at: at - 1000, count: 1 },
-      { at, count: 2 },
-      1,
-    ],
-    ['equal', summary(at, 2), { at, count: 2 }, { at, count: 2 }, 0],
-    [
-      'newer',
-      summary(at + 1000, 3),
-      { at: at + 1000, count: 3 },
-      { at: at + 1000, count: 3 },
-      0,
-    ],
-  ]) {
-    if (disk !== null) await writeFile(countPath, disk);
-    const plugin = firmsProxy();
-    assert.deepEqual(await plugin.api.readLayerCount(), before, label);
-    let route;
-    plugin.configureServer({
-      middlewares: {
-        use: (_, handler) => {
-          route = handler;
-        },
-      },
-    });
-    const previousWrites = rename.mock.callCount();
-    const response = JSON.parse((await ask(route)).body);
-    assert.equal(response.fetchedAt, at, label);
-    assert.equal(response.count, 2, label);
-    assert.deepEqual(
-      await plugin.api.readLayerCount(),
-      { at, count: 2 },
-      label,
-    );
-    assert.deepEqual(await firmsProxy().api.readLayerCount(), after, label);
-    assert.equal(rename.mock.callCount() - previousWrites, writes, label);
-  }
-  assert.equal(await fsp.readFile(rawPath, 'utf8'), raw);
+  assert.equal(JSON.parse((await ask(route)).body).count, 2);
+  assert.deepEqual(await plugin.api.readLayerCount(), { at, count: 2 });
+  assert.equal(await firmsProxy().api.readLayerCount(), null);
+  assert.deepEqual(await fsp.readdir('.gev-cache'), ['firms.json']);
+  assert.equal(rename.mock.callCount(), 0);
   assert.equal(fetch.mock.callCount(), 0);
+
+  now = at + 30 * 60_000;
+  const replies = await Promise.all([ask(route), ask(route)]);
+  for (const reply of replies) {
+    const body = JSON.parse(reply.body);
+    assert.equal(body.fetchedAt, now);
+    assert.equal(body.count, 3);
+  }
+  assert.equal(fetch.mock.callCount(), 3, 'one pass over the three sources');
+  assert.deepEqual(
+    rename.mock.calls.map(({ arguments: [, to] }) => path.basename(to)),
+    ['firms.json', 'firms-count.json'],
+  );
+  const persistedFeed = JSON.parse(
+    await fsp.readFile('.gev-cache/firms.json', 'utf8'),
+  );
+  assert.equal(
+    persistedFeed.minutes,
+    undefined,
+    'only the summary stores minute buckets',
+  );
+  assert.deepEqual(await firmsProxy().api.readLayerCount(), {
+    at: now,
+    count: 3,
+  });
 });
 
 test('FIRMS keeps the last durable count when a raw cache replacement fails', async (t) => {
@@ -967,81 +830,7 @@ test('FIRMS keeps the last durable count when a raw cache replacement fails', as
   const fresh = JSON.parse((await ask(route)).body);
   assert.equal(fresh.fetchedAt, now);
   assert.equal(fresh.count, 3);
+  assert.deepEqual(await plugin.api.readLayerCount(), { at: now, count: 3 });
   assert.equal(await fsp.readFile(rawPath, 'utf8'), raw);
   assert.deepEqual(await firmsProxy().api.readLayerCount(), { at, count: 2 });
-});
-
-test('FIRMS serializes a delayed repair rename with a newer count write', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-rename-'));
-  const previous = process.cwd();
-  const key = process.env.FIRMS_MAP_KEY;
-  const renamingRepair = Promise.withResolvers();
-  const releaseRepair = Promise.withResolvers();
-  const writingRefresh = Promise.withResolvers();
-  t.after(async () => {
-    releaseRepair.resolve();
-    process.chdir(previous);
-    if (key === undefined) delete process.env.FIRMS_MAP_KEY;
-    else process.env.FIRMS_MAP_KEY = key;
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  process.env.FIRMS_MAP_KEY = 'fixture';
-  await mkdir('.gev-cache');
-  let now = Date.UTC(2026, 0, 2, 12);
-  t.mock.method(Date, 'now', () => now);
-  await writeFile(
-    '.gev-cache/firms.json',
-    JSON.stringify({
-      at: now,
-      sources: [],
-      fires: [{ acqDate: '2026-01-02', acqTime: '1159' }],
-    }),
-  );
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () =>
-      new Response(
-        'latitude,longitude,acq_date,acq_time,confidence,frp\n1,2,2026-01-02,1159,n,4',
-      ),
-  );
-  const rename = fsp.rename;
-  let replacements = 0;
-  t.mock.method(fsp, 'rename', async (from, to) => {
-    if (path.basename(to) === 'firms-count.json' && ++replacements === 1) {
-      renamingRepair.resolve();
-      await releaseRepair.promise;
-    }
-    await rename(from, to);
-    if (path.basename(to) === 'firms.json') writingRefresh.resolve();
-  });
-  let route;
-  firmsProxy().configureServer({
-    middlewares: {
-      use: (_, handler) => {
-        route = handler;
-      },
-    },
-  });
-  const repair = ask(route);
-  await renamingRepair.promise;
-  now += 30 * 60_000;
-  const refresh = ask(route);
-  await writingRefresh.promise;
-  await new Promise(setImmediate);
-  const overlappingReplacements = replacements;
-  releaseRepair.resolve();
-  await repair;
-  const current = JSON.parse((await refresh).body);
-  assert.equal(overlappingReplacements, 1);
-  assert.equal(current.count, 3);
-  assert.deepEqual(await firmsProxy().api.readLayerCount(), {
-    count: 3,
-    at: now,
-  });
-  assert.deepEqual((await fsp.readdir('.gev-cache')).sort(), [
-    'firms-count.json',
-    'firms.json',
-  ]);
 });

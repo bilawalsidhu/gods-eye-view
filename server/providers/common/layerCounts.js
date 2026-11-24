@@ -2,15 +2,8 @@ import { clientNetworkKey, makeRateLimiter } from './rate-limit.js';
 import { admitSameSiteKeyless } from './same-site.js';
 
 /**
- * Last-known item counts per layer, for Context's nothing-on view:
- * how much each layer would show if it were turned on. Every count comes
- * from what a provider already holds in its own cache (memory or disk). The
- * registry never asks an upstream: a provider whose cache is empty has no
- * count, and its layer gets no tile.
- *
- * The local provider composition supplies the readers for feeds that do
- * not bill per request. Metered feeds (TomTom, Google) stay out even when cached.
- * Reading a count never spends quota, since nothing is fetched.
+ * Last-known counts from providers' own caches. The endpoint only reads
+ * existing data for eligible feeds, so requests use no upstream quota.
  */
 
 /**
@@ -30,12 +23,12 @@ async function readLayerCounts(readers) {
       try {
         const found = await read();
         const count = Number(found?.count);
-        const at = found?.at == null ? null : Number(found.at);
         if (!Number.isFinite(count) || count <= 0) return null;
         return {
           layerId,
           count: Math.round(count),
-          at: Number.isFinite(at) ? at : null,
+          // JSON encodes nonfinite reader timestamps as null.
+          at: found.at == null ? null : Number(found.at),
         };
       } catch {
         return null;
@@ -65,29 +58,19 @@ export function layerCountsEndpoint(readers) {
         res.end(JSON.stringify({ error: 'method not allowed' }));
         return;
       }
-      if (!allow(clientNetworkKey(req))) {
-        res.writeHead(429, {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-          'Retry-After': '60',
-        });
-        res.end(
-          req.method === 'HEAD'
-            ? ''
-            : JSON.stringify({ error: 'rate_limited' }),
-        );
-        return;
-      }
-      const counts =
-        req.method === 'HEAD' ? [] : await readLayerCounts(entries);
-      res.writeHead(200, {
+      const head = req.method === 'HEAD';
+      const limited = !allow(clientNetworkKey(req));
+      const counts = head || limited ? [] : await readLayerCounts(entries);
+      res.writeHead(limited ? 429 : 200, {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
+        ...(limited && { 'Retry-After': '60' }),
       });
+      if (head) return res.end('');
       res.end(
-        req.method === 'HEAD'
-          ? ''
-          : JSON.stringify({ now: Date.now(), counts }),
+        JSON.stringify(
+          limited ? { error: 'rate_limited' } : { now: Date.now(), counts },
+        ),
       );
     });
   };

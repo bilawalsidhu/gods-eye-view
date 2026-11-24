@@ -177,14 +177,9 @@ export function firmsProxy() {
   // The cache's fire count and time beside it, so the layer counts can be
   // read without parsing the whole cache into memory.
   const COUNT_PATH = path.join(CACHE_DIR, 'firms-count.json');
-  // A feed spans 26 hours of acquisition minutes, including clock skew.
-  const COUNT_MAX_BYTES = 1024 * 1024;
-
-  /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
+  /** @type {?{at: number, sources: Array<object>, fires: Array<object>, minutes: Array<object>}} */
   let mem = null;
-  let memMinutes = [];
   let diskChecked = false;
-  let countWrite = Promise.resolve();
   /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} single-flight refresh */
   let inflight = null;
   /** @type {?{at: number, transactions: ?{used: number, limit: number}}} mapkey_status cache */
@@ -205,12 +200,7 @@ export function firmsProxy() {
         Array.isArray(parsed?.fires) &&
         (!mem || parsed.at > mem.at)
       ) {
-        const minutes = minuteCounts(parsed.fires);
-        mem = parsed;
-        memMinutes = minutes;
-        const saved = await readCountDisk();
-        if (mem === parsed && (!saved || saved.at < parsed.at))
-          await writeCount(parsed, minutes);
+        mem = { ...parsed, minutes: minuteCounts(parsed.fires) };
       }
     } catch {
       /* no disk cache yet */
@@ -251,24 +241,15 @@ export function firmsProxy() {
     return null;
   }
 
-  function writeCount(entry, minutes) {
-    // Serialize replacements so a repair already renaming its temporary file
-    // cannot finish after a refresh replaces the count.
-    countWrite = countWrite.then(async () => {
-      if (mem !== entry) return;
-      const temp = `${COUNT_PATH}.${randomUUID()}.tmp`;
-      try {
-        const body = JSON.stringify({ at: entry.at, minutes });
-        if (Buffer.byteLength(body) > COUNT_MAX_BYTES) return;
-        await fsp.writeFile(temp, body, 'utf8');
-        if (mem === entry) await fsp.rename(temp, COUNT_PATH);
-        else await fsp.unlink(temp);
-      } catch (error) {
-        await fsp.unlink(temp).catch(() => {});
-        console.warn('[firms-proxy] count cache write failed:', error.message);
-      }
-    });
-    return countWrite;
+  async function writeCount(at, minutes) {
+    const temp = `${COUNT_PATH}.${randomUUID()}.tmp`;
+    try {
+      await fsp.writeFile(temp, JSON.stringify({ at, minutes }), 'utf8');
+      await fsp.rename(temp, COUNT_PATH);
+    } catch (error) {
+      await fsp.unlink(temp).catch(() => {});
+      console.warn('[firms-proxy] count cache write failed:', error.message);
+    }
   }
 
   async function writeDisk(entry, minutes) {
@@ -282,7 +263,7 @@ export function firmsProxy() {
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
       return;
     }
-    await writeCount(entry, minutes);
+    await writeCount(entry.at, minutes);
   }
 
   /**
@@ -394,20 +375,19 @@ export function firmsProxy() {
     return statusInflight;
   }
 
-  // Context's nothing-on count: the fires the memory cache holds, else the
-  // count saved beside the disk cache (FIRMS allows 5,000 transactions per
-  // 10 minutes per key). The disk cache itself is never parsed for it. Only
-  // with a key, since without one the layer cannot load them; never fetched.
+  // With a key, count the live cache's acquisition minutes or read the
+  // compact disk summary. This reader neither loads the raw cache nor fetches.
   async function readLayerCount() {
     if (!mapKey()) return null;
     const saved = mem ? null : await readCountDisk();
     // The feed may have warmed during the sidecar read.
-    const minutes = mem ? memMinutes : saved?.minutes;
-    const at = mem?.at ?? saved?.at;
-    if (!minutes) return null;
-    const current = filterTrailing24h(minutes, Date.now());
+    const summary = mem ?? saved;
+    if (!summary) return null;
+    const current = filterTrailing24h(summary.minutes, Date.now());
     const count = current.reduce((total, minute) => total + minute.count, 0);
-    return Number.isSafeInteger(count) && count > 0 ? { count, at } : null;
+    return Number.isSafeInteger(count) && count > 0
+      ? { count, at: summary.at }
+      : null;
   }
 
   const installMiddleware = (server) => {
@@ -466,8 +446,7 @@ export function firmsProxy() {
           inflight = refreshUpstream(key)
             .then(async (fresh) => {
               const minutes = minuteCounts(fresh.fires);
-              mem = fresh;
-              memMinutes = minutes;
+              mem = { ...fresh, minutes };
               await writeDisk(fresh, minutes);
               return fresh;
             })
