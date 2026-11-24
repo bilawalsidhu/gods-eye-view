@@ -943,17 +943,12 @@ html:not([lang='en'])
 }
 
 /* A keyed chip (RailChips.vue `swatch`): the colour of what it turns on before
-   its label and the count after it, while it is on. Off, it is a plain chip. */
+   its label and the count after it, while it is on, in the chip's own type.
+   Off, it is a plain chip. */
 .data-toggle-chip.chip-keyed {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.data-toggle-chip-count {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.5px;
-  opacity: 0.75;
 }
 
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns
