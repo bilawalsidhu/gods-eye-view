@@ -24,8 +24,21 @@ the feed has it again, its layer selects it again (an aircraft is followed).
 With no point at or before the time, the card says there is no reading then and
 the camera stays. A followed item is never counted as off screen.
 
-While anything moves (a layer in motion, the camera, a followed contact), the
-globe draws at the display's own refresh rate; there is no fixed 60 FPS cap.
+Moving layers (flights, military flights, satellites, vessels) draw as often
+as their fastest mark in view moves on screen, about half a pixel a draw:
+never fewer than 3 draws a second, never more than 30 (`src/renderPace.js`).
+Below 12 a second a layer asks for one frame at a time on a timer; from there
+it holds the loop at 15, 20 or 30. A hold may say the most frames a second it
+needs (`holdContinuousRender(owner, { maxFps })`); the loop draws at the
+highest rate its holders ask for, and at the display's own refresh rate as
+soon as one asks for none. Following a contact draws at 30. The person
+steering the camera (a pointer down, the wheel) gets the display's rate. Draw
+sets whose motion clock says `frames: 'owner'` ask for no frames for moving
+rows or rows written in place; their owner's pace does. Placed flights replan
+spread over time (near ones about every second, far or off-screen ones about
+every four), a new report that moves a placed flight eases it there from
+where it is drawn, and a tracked aircraft's trail head ends where it is drawn
+in that frame.
 The render governor (`src/renderGovernor.js`) caps a parked scene at
 `IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
 Cesium still runs the clock, data sources and update listeners on every
