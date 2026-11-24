@@ -4540,5 +4540,22 @@
   "1–3 days": "1–3 jours",
   "Older or unknown": "Plus ancien ou inconnu",
   "Colour shows the age of each area.": "La couleur indique l’âge de chaque zone.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Âge compté depuis la cartographie WFIGS, sinon depuis la dernière modification de la fiche. Périmètres simplifiés à ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Âge compté depuis la cartographie WFIGS, sinon depuis la dernière modification de la fiche. Périmètres simplifiés à ~100 m.",
+  "Rising": "En montée",
+  "Falling": "En descente",
+  "Not heard for 15+ min": "Non reçue depuis 15+ min",
+  "Altitude {km} km": "Altitude {km} km",
+  "Rising {rate} m/s": "Monte à {rate} m/s",
+  "Falling {rate} m/s": "Descend à {rate} m/s",
+  "Drifting {speed} km/h": "Dérive {speed} km/h",
+  "Temperature {temp} °C": "Température {temp} °C",
+  "Humidity {humidity}%": "Humidité {humidity} %",
+  "Pressure {hpa} hPa": "Pression {hpa} hPa",
+  "Last heard {time} UTC": "Dernière réception {time} UTC",
+  "Predicted landing {time} UTC": "Atterrissage prévu {time} UTC",
+  "Radiosonde {serial}": "Radiosonde {serial}",
+  "Reconnecting to the live feed": "Reconnexion au flux en direct",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "Radiosondes (ballons météo) reçues ces trois dernières heures par des stations bénévoles, issues de SondeHub, dessinées à leur altitude déclarée. Les services météo les lancent deux fois par jour, surtout vers 00:00 et 12:00 UTC. Sélectionnez-en une pour ses mesures ainsi que la trajectoire et l’atterrissage prévus par SondeHub. La couverture se limite aux zones écoutées par des bénévoles, et les mesures des capteurs ne sont pas étalonnées.",
+  "radiosonde": "radiosonde",
+  "Weather Balloons": "Ballons météo"
 }

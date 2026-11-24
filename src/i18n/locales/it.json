@@ -4540,5 +4540,22 @@
   "1–3 days": "1–3 giorni",
   "Older or unknown": "Più vecchio o sconosciuto",
   "Colour shows the age of each area.": "Il colore indica l’età di ciascuna area.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Età dalla mappatura WFIGS, altrimenti dall’ultima modifica del record. Perimetri semplificati a ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Età dalla mappatura WFIGS, altrimenti dall’ultima modifica del record. Perimetri semplificati a ~100 m.",
+  "Rising": "In salita",
+  "Falling": "In discesa",
+  "Not heard for 15+ min": "Non ricevuta da 15+ min",
+  "Altitude {km} km": "Quota {km} km",
+  "Rising {rate} m/s": "Sale a {rate} m/s",
+  "Falling {rate} m/s": "Scende a {rate} m/s",
+  "Drifting {speed} km/h": "Deriva {speed} km/h",
+  "Temperature {temp} °C": "Temperatura {temp} °C",
+  "Humidity {humidity}%": "Umidità {humidity}%",
+  "Pressure {hpa} hPa": "Pressione {hpa} hPa",
+  "Last heard {time} UTC": "Ultima ricezione {time} UTC",
+  "Predicted landing {time} UTC": "Atterraggio previsto {time} UTC",
+  "Radiosonde {serial}": "Radiosonda {serial}",
+  "Reconnecting to the live feed": "Riconnessione al feed in diretta",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "Radiosonde (palloni meteorologici) ricevute nelle ultime tre ore da stazioni volontarie, da SondeHub, disegnate alla quota riportata. I servizi meteorologici le lanciano due volte al giorno, per lo più verso le 00:00 e le 12:00 UTC. Selezionane una per le sue letture e la traiettoria e l’atterraggio previsti da SondeHub. La copertura è solo dove ascoltano i volontari e le letture dei sensori non sono calibrate.",
+  "radiosonde": "radiosonda",
+  "Weather Balloons": "Palloni meteorologici"
 }

@@ -4540,5 +4540,22 @@
   "1–3 days": "1–3 ימים",
   "Older or unknown": "ישן יותר או לא ידוע",
   "Colour shows the age of each area.": "הצבע מציין את הגיל של כל שטח.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "הגיל נספר ממועד המיפוי של WFIGS, או מהעריכה האחרונה של הרשומה. קווי המתאר מפושטים לכ־100 מ׳."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "הגיל נספר ממועד המיפוי של WFIGS, או מהעריכה האחרונה של הרשומה. קווי המתאר מפושטים לכ־100 מ׳.",
+  "Rising": "עולים",
+  "Falling": "יורדים",
+  "Not heard for 15+ min": "לא נקלט 15+ דק׳",
+  "Altitude {km} km": "גובה {km} ק״מ",
+  "Rising {rate} m/s": "עולה {rate} מ׳/ש׳",
+  "Falling {rate} m/s": "יורד {rate} מ׳/ש׳",
+  "Drifting {speed} km/h": "נסחף {speed} קמ״ש",
+  "Temperature {temp} °C": "טמפרטורה {temp} °C",
+  "Humidity {humidity}%": "לחות {humidity}%",
+  "Pressure {hpa} hPa": "לחץ {hpa} hPa",
+  "Last heard {time} UTC": "נקלט לאחרונה {time} UTC",
+  "Predicted landing {time} UTC": "נחיתה צפויה {time} UTC",
+  "Radiosonde {serial}": "רדיוסונדה {serial}",
+  "Reconnecting to the live feed": "מתחבר מחדש לשידור החי",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "רדיוסונדות (בלוני מזג אוויר) שנקלטו בשלוש השעות האחרונות בתחנות קליטה של מתנדבים, מ־SondeHub, מצוירות בגובה המדווח שלהן. שירותי מזג האוויר משגרים אותן פעמיים ביום, בעיקר סביב 00:00 ו־12:00 UTC. בחרו אחת כדי לראות את מדידותיה ואת המסלול ונקודת הנחיתה ש־SondeHub חוזה. יש כיסוי רק היכן שמתנדבים מאזינים, ומדידות החיישנים אינן מכוילות.",
+  "radiosonde": "רדיוסונדה",
+  "Weather Balloons": "בלוני מזג אוויר"
 }

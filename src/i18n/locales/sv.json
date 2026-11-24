@@ -4434,5 +4434,22 @@
   "1–3 days": "1–3 dagar",
   "Older or unknown": "Äldre eller okänt",
   "Colour shows the age of each area.": "Färgen visar åldern på varje område.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m.",
+  "Rising": "Stigande",
+  "Falling": "Sjunkande",
+  "Not heard for 15+ min": "Inte hörd på 15+ min",
+  "Altitude {km} km": "Höjd {km} km",
+  "Rising {rate} m/s": "Stiger {rate} m/s",
+  "Falling {rate} m/s": "Sjunker {rate} m/s",
+  "Drifting {speed} km/h": "Driver {speed} km/h",
+  "Temperature {temp} °C": "Temperatur {temp} °C",
+  "Humidity {humidity}%": "Luftfuktighet {humidity} %",
+  "Pressure {hpa} hPa": "Lufttryck {hpa} hPa",
+  "Last heard {time} UTC": "Senast hörd {time} UTC",
+  "Predicted landing {time} UTC": "Beräknad landning {time} UTC",
+  "Radiosonde {serial}": "Radiosond {serial}",
+  "Reconnecting to the live feed": "Återansluter till liveflödet",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "Radiosonder (väderballonger) som frivilliga mottagarstationer hört de senaste tre timmarna, från SondeHub, ritade på sin rapporterade höjd. Vädertjänster släpper upp dem två gånger om dagen, mest kring 00:00 och 12:00 UTC. Välj en för dess mätvärden och SondeHubs beräknade bana och landning. Täckningen finns bara där frivilliga lyssnar, och sensorvärdena är okalibrerade.",
+  "radiosonde": "radiosond",
+  "Weather Balloons": "Väderballonger"
 }

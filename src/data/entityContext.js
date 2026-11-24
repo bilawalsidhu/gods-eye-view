@@ -98,6 +98,12 @@ const KINDS = Object.freeze({
     headline: ['lowerAltitude', 'upperAltitude'],
   },
   'wildlife-sightings': { kind: msg('sighting'), icon: 'pets' },
+  radiosondes: {
+    kind: msg('radiosonde'),
+    icon: 'air',
+    moving: true,
+    headline: ['altitudeM', 'verticalRateMps'],
+  },
 });
 
 /** Fields a record may name itself by, best first. */

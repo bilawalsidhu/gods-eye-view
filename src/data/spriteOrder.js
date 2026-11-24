@@ -1,6 +1,7 @@
 /** Bottom-to-top order of the sprite layers' icon and dot sets. */
 export const SPRITE_LAYER_ORDER = Object.freeze([
   'shipwrecks',
+  'radiosondes',
   'cctv',
   'firms',
   'wildlife-sightings',
