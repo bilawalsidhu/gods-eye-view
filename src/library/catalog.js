@@ -78,6 +78,7 @@ import ndStatewideImagery from './entries/nd-statewide-imagery.json' with { type
 import newOrleansRpcLa from './entries/new-orleans-rpc-la.json' with { type: 'json' };
 import nhStatewideImagery from './entries/nh-statewide-imagery.json' with { type: 'json' };
 import njStatewideImagery from './entries/nj-statewide-imagery.json' with { type: 'json' };
+import noaaAwcMetars from './entries/noaa-awc-metars.json' with { type: 'json' };
 import noaaTideStations from './entries/noaa-tide-stations.json' with { type: 'json' };
 import nrwDop from './entries/nrw-dop.json' with { type: 'json' };
 import nswImagery from './entries/nsw-imagery.json' with { type: 'json' };
@@ -177,6 +178,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   newOrleansRpcLa,
   nhStatewideImagery,
   njStatewideImagery,
+  noaaAwcMetars,
   noaaTideStations,
   nrwDop,
   nswImagery,

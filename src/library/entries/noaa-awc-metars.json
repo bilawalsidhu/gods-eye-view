@@ -1,0 +1,50 @@
+{
+  "id": "noaa-awc-metars",
+  "kind": "dataset",
+  "family": "weather",
+  "title": "Global airport weather (NOAA METAR)",
+  "provider": "NOAA AWC",
+  "description": "Live airport surface weather observations (METAR/SPECI) worldwide from NOAA Aviation Weather Center, coloured by flight category.",
+  "icon": "✈",
+  "maintainer": "github:git-crackin",
+  "coverage": { "global": true },
+  "source": {
+    "format": "csv",
+    "url": "https://aviationweather.gov/data/cache/metars.cache.csv",
+    "fetch": "proxied",
+    "cacheSeconds": 300,
+    "maxBytes": 4194304,
+    "maxFeatures": 10000
+  },
+  "display": {
+    "color": "#a0aec0",
+    "label": "station_id",
+    "fields": ["temp_c", "wind_speed_kt", "flight_category", "raw_text"],
+    "rank": { "field": "observation_time", "order": "desc" },
+    "colorBy": {
+      "field": "flight_category",
+      "colors": {
+        "LIFR": "#d03b3b",
+        "IFR": "#ec835a",
+        "MVFR": "#fab219",
+        "VFR": "#0ca30c"
+      },
+      "labels": {
+        "LIFR": "LIFR · low instrument",
+        "IFR": "IFR · instrument",
+        "MVFR": "MVFR · marginal",
+        "VFR": "VFR · visual"
+      }
+    }
+  },
+  "licence": {
+    "name": "NOAA/NWS data: U.S. public domain; no endorsement implied",
+    "url": "https://www.weather.gov/disclaimer"
+  },
+  "attribution": {
+    "text": "NOAA/NWS Aviation Weather Center",
+    "url": "https://aviationweather.gov/data/api/"
+  },
+  "status": "community",
+  "reviewed": "2026-11-24"
+}
