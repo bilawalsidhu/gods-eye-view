@@ -1,4 +1,5 @@
 import { resolvePickedContext } from '../data/pickedContext.js';
+import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
@@ -136,6 +137,21 @@ export function installEntityContext({
     }
   }
 
+  // An item back in its feed after it left it is selected again in its layer,
+  // as the click that picked it: a vessel is highlighted with its trail, and
+  // an aircraft found again (`follow`) is followed.
+  function reselect(card, { follow: andFollow = false } = {}) {
+    const layer = getDataManager()?.layers?.get?.(card?.layerId)?.module;
+    const id = card?.identity?.id;
+    if (!layer || !id) return;
+    try {
+      if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
+      else if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+    } catch {
+      // A layer going away meanwhile has nothing to select.
+    }
+  }
+
   // Aircraft can be flown from, and a satellite ridden in the orbital view:
   // track the craft, then enter Cockpit on it. Only layers the tracking
   // action can follow are offered (local ADS-B cannot be tracked).
@@ -197,6 +213,14 @@ export function installEntityContext({
     flyTo,
     follow,
     letGo,
+    reselect,
+    // Whether the camera shows the card's item; null when it cannot tell.
+    onScreen: (card) => {
+      const pose = camera()?.pose();
+      if (!pose || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
+        return null;
+      return onScreen(pose, card.lat, card.lon, card.altitudeM ?? 0);
+    },
     isOpen,
     regionalBrief,
     // The renderer's card previews, when it has them.
@@ -343,7 +367,12 @@ export function installEntityContext({
     if (!record?.layerId || inCockpit()) return;
     store.select({
       layerId: record.layerId,
-      id: record.id,
+      // A vessel goes by its own id, as a click on it names it, not by the
+      // context store's (src/data/pickedContext.js).
+      id:
+        record.layerId === 'ais-live-vessels' && record.properties?.vesselId
+          ? String(record.properties.vesselId)
+          : record.id,
       label: record.label || record.properties?.name,
       lat: record.latitude,
       lon: record.longitude,

@@ -11,6 +11,7 @@ import PanelLayoutButtons from './PanelLayoutButtons.vue';
 import UiButton from '../../kit/UiButton.vue';
 import UiCheckbox from '../../kit/UiCheckbox.vue';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 import UiSelect from '../../kit/UiSelect.js';
 
 // The voice control in the command dock, as its presenter
@@ -79,7 +80,7 @@ const frameStyle = (panel) => ({
         <span class="gev-mic-orbit"><img src="/mic.svg" alt="" /></span>
         <span class="gev-mic-label">{{ view.mic.text }}</span>
       </UiButton>
-      <button v-if="view.panel" id="gev-chat-button" type="button" :aria-label="t('Open AI chat')" aria-controls="gev-chat-panel" :aria-expanded="String(view.chat.open && !view.chat.minimized)" @click="emit('chat-button')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"></path></svg><span class="gev-chat-label">{{ t('CHAT') }}</span></button>
+      <UiButton v-if="view.panel" id="gev-chat-button" :aria-label="t('Open AI chat')" aria-controls="gev-chat-panel" :aria-expanded="String(view.chat.open && !view.chat.minimized)" @click="emit('chat-button')"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-6 4V6a2 2 0 0 1 2-2Z"></path></svg><span class="gev-chat-label">{{ t('CHAT') }}</span></UiButton>
       <ChatPanel v-if="view.panel" :view="view" />
       <VoiceVisualizer />
       <div class="gev-chat-thinking" aria-hidden="true"><span></span><span></span><span></span></div>
@@ -94,12 +95,12 @@ const frameStyle = (panel) => ({
       </div>
       <section v-if="view.panel" id="gev-voice-panel" class="gev-voice-panel" :hidden="view.voicePanel.hidden" :data-view="optional(view.voicePanel.view)" :data-minimized="view.voicePanel.minimized ? 'true' : undefined" :data-context="optional(view.voicePanel.context)" :style="frameStyle(view.voicePanel)" :aria-label="t('Voice Settings')" @keydown="emit('panel-keydown', $event)">
         <div class="gev-voice-panel-header">
-          <button id="gev-chat-back" type="button" :hidden="!view.chat.backVisible" @click="emit('chat-back')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg><span>{{ t('Back to chat') }}</span></button>
-          <button id="gev-voice-back" type="button" @click="emit('voice-back')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg><span>{{ t('Back to voice') }}</span></button>
+          <UiButton id="gev-chat-back" :hidden="!view.chat.backVisible" @click="emit('chat-back')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg><span>{{ t('Back to chat') }}</span></UiButton>
+          <UiButton id="gev-voice-back" @click="emit('voice-back')"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg><span>{{ t('Back to voice') }}</span></UiButton>
           <span class="gev-voice-panel-title">{{ t('VOICE') }}</span>
           <div class="gev-voice-panel-tabs" role="tablist" :aria-label="t('Voice Settings')">
-            <button id="gev-voice-preview-tab" class="gev-voice-panel-tab" type="button" role="tab" :aria-label="t('Preview')" :title="t('Preview')" :aria-selected="String(view.voicePanel.selected === 'preview')" :tabindex="view.voicePanel.selected === 'preview' ? 0 : -1" aria-controls="gev-voice-preview-panel" @click="emit('tab', 0)" @keydown="emit('tab-keydown', 0, $event)"><span class="material-symbols-outlined gev-voice-panel-tab-icon" aria-hidden="true">visibility</span></button>
-            <button id="gev-voice-settings-tab" class="gev-voice-panel-tab" type="button" role="tab" :aria-label="t('Settings')" :title="t('Settings')" :aria-selected="String(view.voicePanel.selected === 'settings')" :tabindex="view.voicePanel.selected === 'settings' ? 0 : -1" aria-controls="gev-voice-settings-panel" @click="emit('tab', 1)" @keydown="emit('tab-keydown', 1, $event)"><span class="material-symbols-outlined gev-voice-panel-tab-icon" aria-hidden="true">settings</span></button>
+            <UiButton id="gev-voice-preview-tab" class="gev-voice-panel-tab" role="tab" :aria-label="t('Preview')" :title="t('Preview')" :aria-selected="String(view.voicePanel.selected === 'preview')" :tabindex="view.voicePanel.selected === 'preview' ? 0 : -1" aria-controls="gev-voice-preview-panel" @click="emit('tab', 0)" @keydown="emit('tab-keydown', 0, $event)"><UiIcon name="visibility" class="gev-voice-panel-tab-icon" :size="null" /></UiButton>
+            <UiButton id="gev-voice-settings-tab" class="gev-voice-panel-tab" role="tab" :aria-label="t('Settings')" :title="t('Settings')" :aria-selected="String(view.voicePanel.selected === 'settings')" :tabindex="view.voicePanel.selected === 'settings' ? 0 : -1" aria-controls="gev-voice-settings-panel" @click="emit('tab', 1)" @keydown="emit('tab-keydown', 1, $event)"><UiIcon name="settings" class="gev-voice-panel-tab-icon" :size="null" /></UiButton>
           </div>
           <PanelLayoutButtons :docked="view.layout.docked" :minimized="view.voicePanel.minimized" @dock="emit('layout-dock')" @minimize="emit('voice-minimize')" />
           <UiCloseButton id="gev-voice-settings-close" :label="t('Close voice panel')" @click="emit('settings-close')" />
@@ -158,7 +159,7 @@ const frameStyle = (panel) => ({
       <div class="gev-voice-error-tray" role="alert" aria-live="assertive">
         <div class="gev-voice-error-header">
           <span>{{ view.error.typed ? `${t('Chat')} · ${t('ERROR', { context: 'voice' })}` : t('VOICE SYSTEM ERROR') }}</span>
-          <button class="gev-voice-error-dismiss" type="button" @click="controls?.dismissError()">{{ t('DISMISS') }}</button>
+          <UiButton class="gev-voice-error-dismiss" @click="controls?.dismissError()">{{ t('DISMISS') }}</UiButton>
         </div>
         <div id="gev-voice-error-detail">{{ view.error.text }}</div>
         <div class="gev-voice-error-hint" :hidden="view.error.typed || view.error.hint === false">{{ t('Check microphone permission and network access, then try again.') }}</div>

@@ -2702,6 +2702,58 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.shapes.overlay',
+      'a shape clamped as an overlay is drawn and picked over the surface with the globe hidden, and the one past the horizon behind it is not',
+      async (h, r) => {
+        await overAustin(h, r, 3000);
+        r.globe.setGlobeVisible(false);
+        // Shown again however the check ends.
+        try {
+          const shapes = r.draw.shapes({
+            id: 'conf:overlay-shapes',
+            clampTo: 'overlay',
+          });
+          const box = (lon, lat, d = 0.01) => ({
+            kind: 'rectangle',
+            rect: {
+              west: lon - d,
+              south: lat - d,
+              east: lon + d,
+              north: lat + d,
+            },
+          });
+          shapes.set([
+            {
+              id: 'near',
+              geometry: box(AUSTIN.lon, AUSTIN.lat),
+              fill: [1, 0, 0, 0.5],
+              height: 'clampGround',
+            },
+            // Its antipode: straight behind it, past the horizon.
+            {
+              id: 'far',
+              geometry: box(AUSTIN.lon + 180, -AUSTIN.lat, 1),
+              fill: [0, 0, 1, 0.5],
+              height: 'clampGround',
+            },
+          ]);
+          await settled(r);
+          await drawn(h, r);
+          const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+          ok(s, 'the centre projects');
+          const hits = r.query
+            .drillPick(s.x, s.y)
+            .filter((hit) => hit.set === 'conf:overlay-shapes')
+            .map((hit) => hit.id);
+          ok(hits.includes('near'), 'drawn and picked with nothing under it');
+          ok(!hits.includes('far'), 'not drawn through the globe');
+          shapes.dispose();
+        } finally {
+          r.globe.setGlobeVisible(true);
+        }
+      },
+    ),
+    check(
       'draw.shapes.lit',
       'a lit extruded shape shades its walls by the light, as the renderer shades its own solids: the wall facing the eye brighter than half its colour, its top unlike its wall',
       async (h, r) => {
@@ -3454,6 +3506,379 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.lines.ageFade',
+      'a line, draped or not, fades with the age of its points as scene time moves on, without being sent again',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const t0 = Date.UTC(2026, 0, 1, 18);
+        r.frame.setTime(t0);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-age-fade' });
+        const line = (id, dLat, mode) => ({
+          id,
+          positions: [
+            at(-0.004, dLat, mode === 'draped' ? 0 : 20),
+            at(0.004, dLat, mode === 'draped' ? 0 : 20),
+          ],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          // Its west end a minute old at t0, its east end new.
+          ageFade: {
+            times: [t0 - 60_000, t0],
+            windowMs: 60_000,
+            alphaFloor: 0,
+          },
+        });
+        // Unfaded but narrowed to a quarter of its width where it is old.
+        const narrowed = {
+          ...line('narrowed', 0.0035, '3d'),
+          ageFade: {
+            times: [t0 - 60_000, t0],
+            windowMs: 60_000,
+            alphaFloor: 1,
+            widthFloor: 0.25,
+          },
+        };
+        lines.set([
+          line('air', 0.002, '3d'),
+          line('ground', -0.002, 'draped'),
+          narrowed,
+        ]);
+        // Whether the line at `dLon` is drawn green there, strongly, `dy`
+        // pixels off its middle.
+        const green = (dLon, dLat, dy = 0) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat, dLat > 0 ? 20 : 0));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y) + dy,
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, g, blue] = image.data;
+          return g > red + 80 && g > blue + 80;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(0.0035, dLat), `${what}: its new end drawn`);
+            ok(!green(-0.0035, dLat), `${what}: its old end faded`);
+          }
+          ok(green(-0.0035, 0.0035), 'narrowed: its old end drawn, unfaded');
+          ok(green(0.0035, 0.0035, 6), 'narrowed: its new end full width');
+          ok(
+            !green(-0.0035, 0.0035, 6),
+            'narrowed: its old end a quarter as wide',
+          );
+          // Two minutes on, all of it is old; back at t0 its new end is new.
+          r.frame.setTime(t0 + 120_000);
+          await drawn(h, r);
+          ok(!green(0.0035, 0.002), '3d: faded as time moved on');
+          ok(!green(0.0035, -0.002), 'draped: faded as time moved on');
+          r.frame.setTime(t0);
+          await drawn(h, r);
+          ok(green(0.0035, 0.002), '3d: new again back at t0');
+          ok(green(0.0035, -0.002), 'draped: new again back at t0');
+          equal(lines.size(), 3, 'never sent again');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineAgeFade' },
+    ),
+    check(
+      'draw.lines.timeWindow',
+      'a line, draped or not, draws only its part within a span of scene time, cut as the time moves on, without being sent again',
+      async (h, r) => {
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const t0 = Date.UTC(2026, 0, 1, 18);
+        r.frame.setTime(t0);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-time-window' });
+        // West to east over two minutes, t0 at its middle; shown over the
+        // last 30 s, unfaded.
+        const line = (id, dLat, mode) => ({
+          id,
+          positions: [
+            at(-0.004, dLat, mode === 'draped' ? 0 : 20),
+            at(0.004, dLat, mode === 'draped' ? 0 : 20),
+          ],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          ageFade: {
+            times: [t0 - 60_000, t0 + 60_000],
+            windowMs: 60_000,
+            alphaFloor: 1,
+            showMs: 30_000,
+          },
+        });
+        lines.set([line('air', 0.002, '3d'), line('ground', -0.002, 'draped')]);
+        // Whether the line at `dLon` is drawn green there, strongly.
+        const green = (dLon, dLat) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat, dLat > 0 ? 20 : 0));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, g, blue] = image.data;
+          return g > red + 80 && g > blue + 80;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            // At t0 it shows from 30 s ago (a quarter along) to now (half).
+            ok(green(-0.001, dLat), `${what}: drawn within the span`);
+            ok(!green(0.002, dLat), `${what}: not drawn after now`);
+            ok(!green(-0.0035, dLat), `${what}: not drawn before the span`);
+          }
+          // 40 s on, it shows from 10 s to 40 s after t0.
+          r.frame.setTime(t0 + 40_000);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(0.002, dLat), `${what}: drawn where now reached`);
+            ok(!green(-0.001, dLat), `${what}: cut as it grew old`);
+          }
+          r.frame.setTime(t0);
+          await drawn(h, r);
+          ok(green(-0.001, 0.002), '3d: drawn again back at t0');
+          ok(!green(0.002, -0.002), 'draped: cut again back at t0');
+          equal(lines.size(), 2, 'never sent again');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineTimeWindow' },
+    ),
+    check(
+      'draw.lines.breaks',
+      'a line in runs, draped or not, draws and picks each run, in its segment colours, and nothing between them',
+      async (h, r) => {
+        await overAustin(h, r);
+        // Off the row under the camera, where a ground line can leave a gap.
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-breaks' });
+        // Two runs, west and east, the second starting at position 2: the
+        // pair from position 1 to 2, across the break, is not drawn.
+        const lons = [-0.004, -0.002, 0.001, 0.004];
+        const line = (id, dLat, mode, segmentColors) => ({
+          id,
+          positions: lons.map((dLon) =>
+            at(dLon, dLat, mode === 'draped' ? 0 : 20),
+          ),
+          breaks: [2],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          ...(segmentColors
+            ? {
+                // The pair across the break has a colour, ignored.
+                segmentColors: [
+                  [1, 0, 0, 1],
+                  [0, 1, 0, 1],
+                  [0, 0, 1, 1],
+                ],
+              }
+            : {}),
+        });
+        const kinds = [
+          ['3d', 0.003, false],
+          ['draped', 0.001, false],
+          ['3d coloured', -0.001, true],
+          ['draped coloured', -0.003, true],
+        ];
+        const lat = new Map(kinds.map(([what, dLat]) => [what, dLat]));
+        lines.set(
+          kinds.map(([what, dLat, coloured]) =>
+            line(
+              what,
+              dLat,
+              what.startsWith('draped') ? 'draped' : '3d',
+              coloured,
+            ),
+          ),
+        );
+        const where = (what, dLon) =>
+          at(dLon, lat.get(what), what.startsWith('draped') ? 0 : 20);
+        // The colour drawn there, strongly: 'r', 'g', 'b', or null.
+        const colour = (what, dLon) => {
+          r.frame.renderNow();
+          const s = r.query.project(where(what, dLon));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, green, blue] = image.data;
+          if (red > green + 80 && red > blue + 80) return 'r';
+          if (green > red + 80 && green > blue + 80) return 'g';
+          if (blue > red + 80 && blue > green + 80) return 'b';
+          return null;
+        };
+        const picked = (what, dLon) => {
+          const s = r.query.project(where(what, dLon));
+          ok(s, `${what} projects`);
+          return r.query
+            .drillPick(s.x, s.y)
+            .filter((hit) => hit.set === 'conf:line-breaks')
+            .map((hit) => hit.id);
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, , coloured] of kinds) {
+            deepEqual(
+              picked(what, -0.003),
+              [what],
+              `${what}: its first run picks`,
+            );
+            deepEqual(
+              picked(what, -0.0005),
+              [],
+              `${what}: nothing between its runs`,
+            );
+            deepEqual(
+              picked(what, 0.0025),
+              [what],
+              `${what}: its second run picks`,
+            );
+            if (h.pixels === false) continue;
+            equal(
+              colour(what, -0.003),
+              coloured ? 'r' : 'g',
+              `${what}: its first run drawn`,
+            );
+            equal(
+              colour(what, -0.0005),
+              null,
+              `${what}: nothing drawn between its runs`,
+            );
+            equal(
+              colour(what, 0.0025),
+              coloured ? 'b' : 'g',
+              `${what}: its second run drawn`,
+            );
+          }
+          equal(lines.size(), kinds.length, 'one item a line');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineBreaks' },
+    ),
+    check(
+      'draw.lines.breaks.timeWindow',
+      'a line in runs, draped or not, whose first run is later than its second, cuts each run by its own times',
+      async (h, r) => {
+        if (!r.capabilities.has('lineBreaks'))
+          return { skip: 'the renderer draws no lines in runs' };
+        if (h.pixels === false)
+          return { skip: 'this harness reads no drawn pixels' };
+        await overAustin(h, r);
+        const t0 = Date.UTC(2026, 0, 1, 18);
+        r.frame.setTime(t0);
+        const at = (dLon, dLat, height) =>
+          h.toEcef({ lon: AUSTIN.lon + dLon, lat: AUSTIN.lat + dLat, height });
+        const lines = r.draw.lines({ id: 'conf:line-breaks-window' });
+        // Its first run, west, the last ten seconds to t0; its second, east,
+        // two minutes before.
+        const line = (id, dLat, mode) => ({
+          id,
+          positions: [-0.004, -0.001, 0.001, 0.004].map((dLon) =>
+            at(dLon, dLat, mode === 'draped' ? 0 : 20),
+          ),
+          breaks: [2],
+          widthPx: 16,
+          mode,
+          style: { kind: 'solid', color: [0, 1, 0, 1] },
+          ageFade: {
+            times: [t0 - 10_000, t0, t0 - 120_000, t0 - 110_000],
+            windowMs: 60_000,
+            alphaFloor: 1,
+            showMs: 30_000,
+          },
+        });
+        lines.set([line('air', 0.002, '3d'), line('ground', -0.002, 'draped')]);
+        const green = (dLon, dLat) => {
+          r.frame.renderNow();
+          const s = r.query.project(at(dLon, dLat, dLat > 0 ? 20 : 0));
+          const image = r.readPixels({
+            crop: {
+              x: Math.round(s.x),
+              y: Math.round(s.y),
+              width: 1,
+              height: 1,
+            },
+          });
+          const [red, g, blue] = image.data;
+          return g > red + 80 && g > blue + 80;
+        };
+        try {
+          await drawn(h, r);
+          await settled(r);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(-0.0025, dLat), `${what}: its later run drawn at t0`);
+            ok(!green(0.0025, dLat), `${what}: its earlier run too old at t0`);
+            ok(!green(0, dLat), `${what}: nothing between its runs`);
+          }
+          // 105 s before t0 the second run is within the span, the first
+          // not yet begun.
+          r.frame.setTime(t0 - 105_000);
+          await drawn(h, r);
+          for (const [what, dLat] of [
+            ['3d', 0.002],
+            ['draped', -0.002],
+          ]) {
+            ok(green(0.0025, dLat), `${what}: its earlier run drawn then`);
+            ok(!green(-0.0025, dLat), `${what}: its later run not yet drawn`);
+            ok(!green(0, dLat), `${what}: still nothing between its runs`);
+          }
+          equal(lines.size(), 2, 'never sent again');
+        } finally {
+          lines.dispose();
+        }
+      },
+      { capability: 'lineTimeWindow' },
+    ),
+    check(
       'draw.lines.segments',
       'a draped line takes segment colours and shows, changed every frame in place, without stopping the frame or picks',
       async (h, r) => {
@@ -3768,6 +4193,71 @@ export function portChecks() {
         set.dispose();
       },
       { capability: 'models' },
+    ),
+    check(
+      'draw.models.nodes',
+      "a model item's nodes pose its named glTF nodes, live, and a node that leaves the map goes back to its authored pose",
+      async (h, r) => {
+        if (!h.assets?.model || !h.assets?.modelNode)
+          return { skip: 'no model with a named node in this harness' };
+        const NODE = h.assets.modelNode;
+        await overAustin(h, r);
+        const set = r.draw.models({ id: 'conf:models.nodes' });
+        const ready = [];
+        set.on('ready', (id) => ready.push(id));
+        const pos = h.toEcef({ ...AUSTIN, height: 0 });
+        // Far off along the node's own x axis: off the screen's centre.
+        const away = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5000, 0, 0, 1];
+        const model = (nodes) => ({
+          id: 'm',
+          pos,
+          url: h.assets.model,
+          orientation: { heading: 0, pitch: 0, roll: 0 },
+          minPixelSize: 160,
+          environmentMap: false,
+          shading: 'unlit',
+          tint: '#ff0000',
+          colorBlend: { mode: 'replace' },
+          ...(nodes ? { nodes } : {}),
+        });
+        try {
+          set.set([model(null)]);
+          for (let i = 0; i < 600 && !ready.length; i++) await drawn(h, r, 1);
+          deepEqual(ready, ['m'], 'ready');
+          const s = r.query.project(pos);
+          // How many pixels of a patch at the model's centre are red.
+          const red = async () => {
+            await drawn(h, r, 3);
+            await settled(r);
+            r.frame.renderNow();
+            const image = r.readPixels({
+              crop: {
+                x: Math.round(s.x) - 4,
+                y: Math.round(s.y) - 4,
+                width: 9,
+                height: 9,
+              },
+            });
+            let n = 0;
+            for (let i = 0; i < image.data.length; i += 4) {
+              const [r0, g, b] = image.data.subarray(i, i + 3);
+              if (r0 > 180 && g < 70 && b < 70) n++;
+            }
+            return n;
+          };
+          ok((await red()) >= 40, 'authored pose: at the centre');
+          set.upsert([model({ [NODE]: away })]);
+          ok((await red()) < 10, 'the node moved away, live');
+          set.upsert([model({ [NODE]: away, NO_SUCH_NODE: away })]);
+          ok((await red()) < 10, 'a name the model lacks changes nothing');
+          set.upsert([model(null)]);
+          ok((await red()) >= 40, 'the node left the map: authored pose');
+          deepEqual(ready, ['m'], 'without loading again');
+        } finally {
+          set.dispose();
+        }
+      },
+      { capability: 'modelNodes', bareSky: true },
     ),
     check(
       'draw.models.loadFailed',
@@ -5356,10 +5846,14 @@ export function portChecks() {
         const chunks = [];
         recorder.ondataavailable = (e) => chunks.push(e.data);
         let colour = '#ff0000';
-        const paint = setInterval(() => {
+        const fill = () => {
           g.fillStyle = colour;
           g.fillRect(0, 0, 32, 32);
-        }, 20);
+        };
+        // Red from the first recorded frame: a blank canvas until the first
+        // tick read dark early in the segment on a loaded runner.
+        fill();
+        const paint = setInterval(fill, 20);
         const wait = (ms) => new Promise((done) => setTimeout(done, ms));
         recorder.start();
         await wait(1000);
@@ -6175,6 +6669,26 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
         r.frame.holdContinuous('conformance:after')();
         deepEqual(heard, [true, false], 'nothing once off');
       },
+    ),
+    check(
+      'frame.onHoldsChange',
+      'onHoldsChange is told every hold and release, whoever holds, and nothing once off',
+      (h, r) => {
+        let heard = 0;
+        const off = r.frame.onHoldsChange(() => (heard += 1));
+        try {
+          const one = r.frame.holdContinuous('conformance:one');
+          const two = r.frame.holdContinuous('conformance:two');
+          one();
+          two();
+          equal(heard, 4, 'two holds and two releases');
+        } finally {
+          off();
+        }
+        r.frame.holdContinuous('conformance:after')();
+        equal(heard, 4, 'nothing once off');
+      },
+      { capability: 'holdChanges' },
     ),
     check(
       'frame.setTargetFps',

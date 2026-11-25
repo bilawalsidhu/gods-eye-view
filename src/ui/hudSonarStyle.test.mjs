@@ -502,7 +502,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   const timeline = read('./styles/world-timeline.css');
   const timelineLift = value(
     timeline,
-    /body:has\(#world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
+    /body:is\(\.has-world-timeline \*, #world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
   );
 
   // From 1200px the dock and the World Timeline leave the bottom 74px; below
@@ -549,7 +549,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
       );
       assert.match(
         trays,
-        /:has\(#command-dock > #gev-voice-control\)\s*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
+        /:where\(\.has-omnibar\.dock-has-voice \*\)\s*#cesium-credits\s*\.cesium-widget-credits \{\s*width: max-content;\s*max-width: calc\(100vw - 1\.5rem - 26rem\);/,
       );
       return anchor && box && [null, anchor[1], box[1]];
     })(),
@@ -578,7 +578,7 @@ test('the desktop bottom row: credits on the Power Up baseline, the dock lifted,
   // right, with the Minimal HUD too (its placement names #intel-hud).
   assert.match(
     trayWide,
-    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):has\(\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
+    /html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\)\s*:is\(#cesium-credits, #gev-credits\),\s*html\[dir='rtl'\]\s*body:not\(\.context-docked\):not\(\.ui-clean-view\):not\(\.recording-mode\):is\(\s*\.hud-minimal-active \*,\s*#intel-hud\[data-variant='minimal'\]\.active\s*\)\s*:is\(#cesium-credits, #gev-credits\) \{\s*right: 1\.5rem;\s*left: auto;/,
   );
   // Its box hangs from the anchor's right edge there, and in the Omnibar
   // layout at every width; never in clean view or recording, where the
@@ -769,19 +769,38 @@ test('shared panel hooks affect only opted-in rail surfaces without overriding d
   );
 });
 
-test('narrow Omnibar corners clear the World Timeline over the dock', () => {
+test('the Omnibar dock sits above the World Timeline, and narrow corners clear the dock', () => {
   const css = read('./styles/omnibar-dock.css');
-  const timeline = css.match(
-    /#world-timeline \{\s*bottom: calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px\);/,
+  // The bar takes the dock's floor; the dock and the field inside it rise by
+  // the bar's lift (world-timeline.css), as the plain dock does.
+  assert.match(
+    css,
+    /#world-timeline \{\s*bottom: var\(--omnibar-dock-bottom\);/,
+  );
+  assert.match(
+    css,
+    /--omnibar-dock-raised: calc\(\s*var\(--omnibar-dock-bottom\) \+ var\(--world-timeline-lift, 0px\)\s*\);/,
+  );
+  assert.match(
+    css,
+    /#command-dock \{[^}]*bottom: var\(--omnibar-dock-raised\);/,
+  );
+  assert.match(
+    css,
+    /#gev-omnibar \{[^}]*bottom: calc\(var\(--omnibar-dock-raised\) \+ 11px\);/,
+  );
+  assert.doesNotMatch(css, /--world-timeline-lift\s*:/);
+  const lift = read('./styles/world-timeline.css').match(
+    /body:is\(\.has-world-timeline \*, #world-timeline\) \{\s*--world-timeline-lift: (\d+)px;/,
   );
   const height = read('./styles/world-timeline.css').match(
     /#world-timeline \{[^}]*\n {2}height: (\d+)px;/,
   );
+  assert.ok(lift && height && Number(lift[1]) > Number(height[1]));
   const corners = css.match(
-    /&:has\(#world-timeline\) \{\s*--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-bottom\) \+ (\d+)px \+ (\d+)px \+ (\d+)px\)/,
+    /--omnibar-coordinates-bottom: max\(\s*calc\(var\(--omnibar-dock-raised\) \+ (\d+)px \+ (\d+)px\)/,
   );
-  assert.ok(timeline && height && corners);
-  assert.equal(Number(corners[1]), Number(timeline[1]));
-  assert.equal(Number(corners[2]), Number(height[1]));
-  assert.ok(Number(corners[3]) >= 6);
+  assert.ok(corners);
+  assert.equal(Number(corners[1]), 56);
+  assert.ok(Number(corners[2]) >= 6);
 });

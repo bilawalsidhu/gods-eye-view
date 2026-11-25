@@ -14,6 +14,12 @@ import {
   showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
+import {
+  createRenderPace,
+  createScreenSpeed,
+  paceHzForSpeed,
+} from '../renderPace.js';
+import { ROTOR_FPS } from './rotorFrames.js';
 import { fleetModelSet, fleetPartTable } from './fleetModels.js';
 import { aircraftLayerPartState } from './modelPartDrivers.js';
 import { findCamera, findDraw, rendererOf } from '../render/rendererOf.js';
@@ -54,6 +60,25 @@ function inView(pose, point) {
     Math.abs(dot(v, pose.right)) <= Math.max(0, depth) * tanX + 1 &&
     Math.abs(dot(v, pose.up)) <= Math.max(0, depth) * tanY + 1
   );
+}
+
+/** Each icon's move is read over at most this much of its drawn path, in ms. */
+const PACE_SPAN_MS = 1000;
+/** A drawn path that ends sooner than this is not read: it is replanned. */
+const PACE_MIN_SPAN_MS = 20;
+
+/**
+ * How much of an icon's drawn path, from display time `t`, its on-screen
+ * speed is read over: PACE_SPAN_MS, or what is left of a path that ends
+ * sooner (past its end it stands still, which is no speed), or 0 when too
+ * little is left to read.
+ * @param {number} t Display ms.
+ * @param {number|null|undefined} endsAt When the icon's drawn path ends, if it does.
+ */
+export function paceSpanMs(t, endsAt) {
+  if (endsAt == null || !(endsAt - t < PACE_SPAN_MS)) return PACE_SPAN_MS;
+  const left = endsAt - t;
+  return left >= PACE_MIN_SPAN_MS ? left : 0;
 }
 
 /**
@@ -119,6 +144,71 @@ export function createAircraftModels({
   let instances = 0;
   /** The fleet items this tick wrote, sent together when it ends. */
   let pendingItems = [];
+
+  // The pace: how often the fleet is drawn while nothing else draws
+  // (renderPace.js). The icons move on the GPU, so a frame is all a move
+  // takes; an airliner crosses a hundredth of a pixel a second on the whole
+  // globe and hundreds from close by, so the rate follows the fastest icon
+  // in view.
+  const pace = createRenderPace({ owner: setPrefix, render: services.render });
+  const screenSpeed = createScreenSpeed();
+  /** How often the icons' on-screen speed is read, in ms. */
+  const PACE_READ_MS = 250;
+  /** While icons fade for a focus change, they are drawn this often. */
+  const PACE_FADE_HZ = 20;
+  /** A rotor drawn this recently is in view. */
+  const PACE_ROTOR_SEEN_MS = 600;
+  let paceReadMs = -Infinity;
+  let pacePxPerSec = 0;
+
+  /**
+   * The fastest icon in view's speed on screen, in pixels a second: each
+   * shown icon's drawn position now and PACE_SPAN_MS on, which takes in a
+   * new fix being blended in as well as its flight.
+   */
+  function _readIconSpeed(pose) {
+    const icons = state._icons;
+    if (!icons || !screenSpeed.begin(pose, _viewport().height)) return 0;
+    const t = parts.icons._displayMs();
+    for (const id of icons.ids()) {
+      if (!icons.shown(id)) continue;
+      const spanMs = paceSpanMs(t, icons.expires(id));
+      if (!spanMs) continue;
+      screenSpeed.add(
+        icons.position(id, t),
+        icons.position(id, t + spanMs),
+        PACE_SPAN_MS / spanMs,
+      );
+    }
+    return screenSpeed.pxPerSec(PACE_SPAN_MS / 1000);
+  }
+
+  /**
+   * Draws a second the fleet needs as the camera stands (the pace clamps
+   * it to its range). Infinity: as often as the pace allows.
+   */
+  function _paceHz(nowMs = Date.now()) {
+    const pose = _pose();
+    if (!pose?.position) return Infinity;
+    // Models, and the Cockpit's contacts, are moved on every frame.
+    if (
+      state._cockpitContactMode ||
+      state._models.size ||
+      _modelRegimeActive(pose)
+    )
+      return Infinity;
+    if (nowMs - paceReadMs >= PACE_READ_MS) {
+      paceReadMs = nowMs;
+      pacePxPerSec = _readIconSpeed(pose);
+    }
+    let hz = paceHzForSpeed(pacePxPerSec);
+    if (state._iconFocusFading > 0 && hz < PACE_FADE_HZ) hz = PACE_FADE_HZ;
+    // A helicopter in view turns its rotor ROTOR_FPS times a second.
+    const rotorAtMs = parts.icons._rotorDrawnAtMs?.() ?? -Infinity;
+    if (nowMs - rotorAtMs < PACE_ROTOR_SEEN_MS && hz < ROTOR_FPS)
+      hz = ROTOR_FPS;
+    return hz;
+  }
   /** The ground sample's exclusions, kept while the sets they name live. */
   let exclusions = null;
 
@@ -722,6 +812,18 @@ export function createAircraftModels({
     );
   }
 
+  /** Whether the tracked contact may draw as a model, set by the fleet pass
+   *  (preRender). The icon owns the visual from the moment it may not
+   *  (`_modelOwnsVisual`), so its models stop drawing in this frame too, not
+   *  at the next frame's `_updateTrackedModel`. */
+  function _setTrackedModelEligible(eligible) {
+    const was = state._trackedModelEligible;
+    state._trackedModelEligible = eligible;
+    if (!was || eligible) return;
+    _hideTrackedModel();
+    _hideTrackedFleetModel();
+  }
+
   /** The tracked contact's fleet model lets go once the contact is no
    *  longer drawn as a model at all (out of range, 3D off, cockpit). */
   function _releaseTrackedFleetModel() {
@@ -952,6 +1054,12 @@ export function createAircraftModels({
         }
       }
       state._icons?.flush();
+      // The pass's own error, if any, is the one that goes on.
+      try {
+        pace.set(_paceHz());
+      } catch (error) {
+        console.warn(`[${logLabel}] fleet pace failed`, error);
+      }
     }
   }
 
@@ -970,7 +1078,14 @@ export function createAircraftModels({
 
     if (state._cockpitContactMode) parts.tracking._refreshCockpitNearContacts();
     parts.icons._syncImageSwitch();
-    parts.icons._replanExpired(t);
+    // Far and out-of-view contacts are planned for longer (the camera says
+    // which are which).
+    parts.icons._replanExpired(
+      t,
+      pose?.position
+        ? { eye: pose.position, inView: (position) => inView(pose, position) }
+        : null,
+    );
     const renderTime = parts.motion._displayTimeAt(
       t,
       state._scratchFleetRenderTime,
@@ -991,7 +1106,7 @@ export function createAircraftModels({
     const useModels = _modelRegimeActive(pose);
     if (!useModels && state._models.size) _releaseModels();
     if (!useModels) {
-      state._trackedModelEligible = false;
+      _setTrackedModelEligible(false);
       return;
     }
 
@@ -1046,8 +1161,9 @@ export function createAircraftModels({
         state._models.has(icao) ||
         (icao === state._trackedIcao && state._trackedModelEligible),
     });
-    state._trackedModelEligible =
-      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao);
+    _setTrackedModelEligible(
+      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao),
+    );
     const toRelease = [];
     for (const icao of state._models.keys()) {
       if (icao !== state._trackedIcao && !modelEligible.has(icao))
@@ -1136,5 +1252,11 @@ export function createAircraftModels({
     _handBackDeselected,
     _updateTrackedModel,
     _fleetTick,
+    _paceHz,
+    _startPace: () => {
+      paceReadMs = -Infinity;
+      pace.start();
+    },
+    _stopPace: pace.stop,
   };
 }

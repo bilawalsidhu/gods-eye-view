@@ -1210,13 +1210,28 @@ export function createGevActionRunner({
           args.type ||
           args.filterType,
       );
-      let contextChangedForEntry = false;
-      let priorContextMode = null;
-      let rollbackTarget = null;
-      if (
-        action === 'enter' &&
-        typeof styleManager.setContextMode === 'function'
-      ) {
+      // Entry changes no Context mode, layer or detection setting, as the
+      // COCKPIT button does not. The one exception is a military entry while
+      // Military Flights is off: that layer is switched on as a plain layer
+      // the person can switch off, and switched off again if entry fails.
+      // Contacts stays as it is.
+      let rollbackTarget;
+      let switchedOn = null;
+      // A switch-off undoing this action's own switch-on; it runs even for a
+      // turn that went stale, so a failed entry leaves no layer behind.
+      const switchBackOff = async () => {
+        if (!switchedOn) return null;
+        return runGevAction(
+          'set_layer_visibility',
+          { layerId: switchedOn, enabled: false },
+          {},
+        );
+      };
+      const failed = async (result) => {
+        const layerRollback = await switchBackOff();
+        return layerRollback ? { ...result, layerRollback } : result;
+      };
+      if (action === 'enter') {
         if (!current()) {
           return {
             ok: false,
@@ -1227,51 +1242,37 @@ export function createGevActionRunner({
           };
         }
         rollbackTarget = styleManager.getAircraftTrackingTarget?.() || null;
-        const contextState =
-          typeof styleManager.getContextModeState === 'function'
-            ? styleManager.getContextModeState()
-            : {};
-        priorContextMode = contextState?.mode || null;
-        const contactsReady =
-          contextState?.mode === 'flights' &&
-          contextState?.active !== false &&
-          contextState?.changing !== true;
-        if (!contactsReady) {
-          const contextResult = await styleManager.setContextMode('flights', {
-            signal: runOptions.signal,
-            isCurrent: runOptions.isCurrent,
-            // Cockpit entry establishes Contacts as its own precondition. That
-            // is internal choreography, not an operator Context request, so it
-            // must stay inert: claiming here would cancel a pending shared
-            // style/detection restore the operator never overrode.
-            claimVisualAuthority: false,
-          });
-          contextChangedForEntry = contextResult?.ok === true;
-          if (contextResult?.ok !== true || !current()) {
-            const contextRollback = contextChangedForEntry
-              ? await styleManager.setContextMode(priorContextMode, {
-                  claimVisualAuthority: false,
-                })
-              : null;
-            return {
+        if (
+          targetLayer === 'military' &&
+          dataManager.layers?.has?.('military') &&
+          !dataManager.isEnabled?.('military')
+        ) {
+          const layer = await runGevAction(
+            'set_layer_visibility',
+            { layerId: 'military', enabled: true },
+            runOptions,
+          );
+          if (layer?.ok === true) switchedOn = 'military';
+          // The search needs the layer's aircraft, which arrive with its
+          // first data, not with the switch.
+          if (layer?.ok === true && current())
+            await waitForLayerFirstData(dataManager, 'military', runOptions);
+          if (layer?.ok !== true || !current()) {
+            return failed({
               ok: false,
               action: 'control_cockpit',
-              cancelled: !current() || Boolean(contextResult?.cancelled),
+              cancelled: !current() || Boolean(layer?.cancelled),
               error:
-                contextResult?.error ||
-                'Contacts context could not be established for Cockpit entry',
-              context: contextResult
-                ? withContextModeVocabulary(contextResult)
-                : null,
-              contextRollback: withContextModeVocabulary(contextRollback),
+                layer?.error ||
+                (layer?.ok === true
+                  ? 'Cockpit entry was cancelled before it could run'
+                  : 'Military Flights could not be switched on'),
+              layer,
               state: styleManager.getCockpitState?.() || null,
-            };
+            });
           }
         }
       }
-      // Contacts activation can adopt a newer explicit aircraft selection.
-      // Sample only after that transaction settles so an older voice snapshot
-      // cannot overwrite the operator's newer choice.
       const selectedTarget =
         action === 'enter' ? selectedCockpitTarget(dataManager) : null;
       let cockpitResult;
@@ -1291,30 +1292,7 @@ export function createGevActionRunner({
           state: styleManager.getCockpitState?.() || null,
         };
       }
-      if (
-        action === 'enter' &&
-        cockpitResult?.ok !== true &&
-        contextChangedForEntry
-      ) {
-        const contextRollback = await styleManager.setContextMode(
-          priorContextMode,
-          {
-            // Undoing this action's own precondition — still choreography.
-            claimVisualAuthority: false,
-            ...(current()
-              ? {
-                  signal: runOptions.signal,
-                  isCurrent: runOptions.isCurrent,
-                }
-              : {}),
-          },
-        );
-        return {
-          ...cockpitResult,
-          contextRollback: withContextModeVocabulary(contextRollback),
-        };
-      }
-      return cockpitResult;
+      return cockpitResult?.ok === true ? cockpitResult : failed(cockpitResult);
     }
 
     if (name === 'show_data_layers_menu') {
@@ -2903,6 +2881,62 @@ export function formatTrackedEntityLabel(found, query = '') {
   );
 }
 
+/**
+ * Wait for a layer just switched on to report its first data: its stats name
+ * an update, or its next update lands. Bounded by that update, the layer
+ * failing or going off, and the request's own cancellation.
+ * @returns {Promise<boolean>} Whether the layer has reported data.
+ */
+function waitForLayerFirstData(
+  dataManager,
+  layerId,
+  { signal = null, isCurrent = null } = {},
+) {
+  const reported = () => {
+    try {
+      const stats = dataManager.layers?.get?.(layerId)?.module?.getStats?.();
+      return stats?.lastUpdate != null;
+    } catch {
+      return false;
+    }
+  };
+  if (reported()) return Promise.resolve(true);
+  if (typeof dataManager.subscribeActivity !== 'function' || signal?.aborted)
+    return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const offs = [];
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      for (const off of offs) off?.();
+      resolve(value);
+    };
+    const onAbort = () => done(false);
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    offs.push(() => signal?.removeEventListener?.('abort', onAbort));
+    offs.push(
+      dataManager.subscribeActivity((change) => {
+        if (
+          !dataManager.isEnabled?.(layerId) ||
+          (typeof isCurrent === 'function' && !isCurrent())
+        )
+          return done(false);
+        if (reported()) return done(true);
+        if (change?.type === 'data-updated' && change.layerId === layerId)
+          done(reported());
+      }),
+    );
+    offs.push(
+      dataManager.subscribe?.((change) => {
+        if (change?.layerId !== layerId) return;
+        if (change.type === 'refresh-failed' || change.enabled === false)
+          done(false);
+      }),
+    );
+  });
+}
+
 /** Finds and tracks/selects an entity by spoken query across layer families. */
 async function trackEntity(
   viewer,
@@ -3017,8 +3051,15 @@ async function trackEntity(
       'track_entity',
       () => {
         let trackedOk = false;
+        // The id the layer selects by, which also names it in Context.
+        const id =
+          family.kind === 'vessel'
+            ? (found.id ?? found.mmsi)
+            : family.kind === 'satellite'
+              ? found.noradId
+              : found.icao24;
         if (family.kind === 'vessel') {
-          trackedOk = !!module.selectById?.(found.id ?? found.mmsi);
+          trackedOk = !!module.selectById?.(id);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
             pitch: -45,
@@ -3026,10 +3067,8 @@ async function trackEntity(
             buildingHeight: 0,
             duration: 2.0,
           });
-        } else if (family.kind === 'satellite') {
-          trackedOk = !!module.trackById?.(found.noradId, { origin: 'voice' });
         } else {
-          trackedOk = !!module.trackById?.(found.icao24, { origin: 'voice' });
+          trackedOk = !!module.trackById?.(id, { origin: 'voice' });
         }
 
         return {
@@ -3037,6 +3076,7 @@ async function trackEntity(
           action: 'track_entity',
           layerId: family.layerId,
           kind: family.kind,
+          id: id == null ? null : String(id),
           // Aircraft follow the flight layers' label convention (callsign →
           // registration → icao24) so the spoken name matches what the UI shows;
           // `registration` is absent on vessels/satellites and simply falls
@@ -5950,6 +5990,14 @@ function analystProviders(
         truncated: true,
       };
     },
+    /** The moment a layer's records show when it is not now (a past snapshot), else null. */
+    getRecordsAt(layerKey) {
+      if (!dataManager.isEnabled(layerKey)) return null;
+      const at = dataManager.layers
+        .get(layerKey)
+        ?.module?.getAnalystRecordsAt?.();
+      return Number.isFinite(at) ? at : null;
+    },
     isWarming,
     /** The layer's own status text for an empty result, e.g. "Fly below 400 km". */
     getEmptyNote(layerKey) {
@@ -6036,8 +6084,11 @@ const ANALYST_CANONICAL_FIELDS = new Set([
 
 /**
  * Compact one analyst record for the voice payload: identity, position (so a
- * follow-up can fly to it), distance, and that layer's manifest fields with
- * times as ISO text. The full record set stays engine-side for follow-ups.
+ * follow-up can fly to it), distance, and that layer's manifest fields. The layer's
+ * `timeField` (on a layer without one, any time field) comes back as ISO `time`.
+ * Other timestamps keep their own keys,
+ * as ISO text except for numeric `lastContactAtMs`. The full record set
+ * stays engine-side for follow-ups.
  *
  * `icao24`/`vesselId`/`mmsi` ride along because the tool instructions tell the model to
  * hand this result straight to track_entity, and `id` is a DISPLAY label
@@ -6057,7 +6108,8 @@ function compactAnalystItem(r) {
     compact.lon = Math.round(r.lon * 1e4) / 1e4;
   }
   if (present(r.distanceKm)) compact.distanceKm = r.distanceKm;
-  const fields = voiceLayer(r.layerKey)?.query?.fields || {};
+  const query = voiceLayer(r.layerKey)?.query;
+  const fields = query?.fields || {};
   for (const [key, spec] of Object.entries(fields)) {
     if (!present(r[key]) || key in compact) continue;
     if (spec.type === 'time') {
@@ -6066,7 +6118,9 @@ function compactAnalystItem(r) {
       const time = new Date(ms);
       if (Number.isFinite(time.getTime())) {
         if (key === 'lastContactAtMs') compact.lastContactAtMs = ms;
-        else compact.time = time.toISOString();
+        else if (key === (query.timeField ?? key))
+          compact.time = time.toISOString();
+        else compact[key] = time.toISOString();
       }
     } else compact[key] = r[key];
   }

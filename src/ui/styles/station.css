@@ -1,0 +1,147 @@
+/* The STATION section inside Context: a space station's moving parts. */
+
+#station-panel[hidden] {
+  display: none !important;
+}
+
+/* A section inside Context, laid out as the Radio section is: its +/-
+   hides and shows the body, and it goes with the Context panel. */
+#station-panel {
+  position: relative;
+  width: 100%;
+  min-height: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(65, 220, 231, 0.16);
+}
+.station-panel-inner {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(65, 220, 231, 0.18);
+  border-radius: 8px;
+  background: rgba(2, 15, 20, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+#station-panel .panel-header {
+  margin-bottom: 0;
+}
+#right-context-rail #global-context-panel:not(.collapsed) #station-panel {
+  flex: 0 0 auto;
+}
+#station-panel.collapsed .station-panel-inner > :not(.panel-header),
+#global-context-panel.collapsed #station-panel {
+  display: none !important;
+}
+
+.station-badge {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+.station-subject {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  opacity: 0.85;
+  margin: 2px 0 8px;
+}
+.station-modes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.station-mode,
+.station-button {
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  background: rgba(0, 7, 12, 0.6);
+  color: #f4fbff;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+.station-mode {
+  flex: 1;
+  font-weight: 700;
+}
+.station-mode.is-active,
+.station-button.is-active {
+  border-color: var(--cockpit-accent, #00dcff);
+  color: var(--cockpit-accent, #00dcff);
+}
+.station-mode:focus-visible,
+.station-button:focus-visible {
+  outline: 1px solid var(--cockpit-accent, #00dcff);
+  outline-offset: 1px;
+}
+
+.station-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.station-telemetry-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  flex: none;
+}
+.station-telemetry[data-tone='live'] .station-telemetry-dot {
+  background: #3bff7a;
+  box-shadow: 0 0 6px rgba(59, 255, 122, 0.8);
+}
+.station-telemetry[data-tone='waiting'] .station-telemetry-dot {
+  background: #ffb547;
+}
+.station-telemetry[data-tone='manual'] .station-telemetry-dot {
+  background: var(--cockpit-accent, #00dcff);
+}
+.station-note {
+  margin: 0 0 6px;
+  font-size: 10px;
+  opacity: 0.75;
+}
+
+.station-group {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.station-label {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.station-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.station-sliders {
+  display: grid;
+  gap: 4px;
+}
+.station-slider {
+  display: grid;
+  grid-template-columns: 7em 1fr 3.5em;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.station-slider output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.station-zoom {
+  margin-top: 8px;
+  width: 100%;
+}

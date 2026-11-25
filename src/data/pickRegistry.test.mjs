@@ -20,6 +20,8 @@ import {
   clickCard,
   isUnderOtherCard,
   setClickCardHitTest,
+  registerClickClaim,
+  unregisterClickClaim,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -234,6 +236,45 @@ test("the card on top is read once per click, and only another layer's card coun
   try {
     assert.equal(clickCard({ screenPosition: { x: 1, y: 1 } }), null);
   } finally {
+    setClickCardHitTest(null);
+  }
+});
+
+test('a click claim is the card on top only where no card or label is painted', () => {
+  const event = (x) => ({ screenPosition: { x, y: 5 } });
+  let calls = 0;
+  registerClickClaim('counts', (click) => {
+    calls++;
+    return click.screenPosition.x === 4
+      ? { sourceId: 'counts', entryId: 'k' }
+      : null;
+  });
+  try {
+    registerClickClaim('counts', null);
+    const click = event(4);
+    assert.equal(isUnderOtherCard(click), true);
+    assert.equal(isUnderOtherCard(click, ['counts']), false);
+    assert.equal(calls, 1);
+    assert.equal(clickCard(event(9)), null);
+    const quake = { sourceId: 'quake-card', entryId: 'q1' };
+    setClickCardHitTest(() => quake);
+    assert.deepEqual(clickCard(event(4)), quake);
+    assert.equal(calls, 2);
+    setClickCardHitTest(() => {
+      throw new Error('broken overlay hit test');
+    });
+    assert.equal(clickCard(event(4)), null);
+    assert.equal(calls, 2);
+    setClickCardHitTest(null);
+
+    unregisterClickClaim('counts');
+    assert.equal(clickCard(event(4)), null);
+    registerClickClaim('counts', () => {
+      throw new Error('broken claim');
+    });
+    assert.equal(clickCard(event(4)), null);
+  } finally {
+    unregisterClickClaim('counts');
     setClickCardHitTest(null);
   }
 });

@@ -83,3 +83,60 @@ test('Context names nothing under a card painted on top, and keeps its card', (t
   tap(null, null);
   assert.equal(clears, cleared, 'a card over open map is not open map');
 });
+
+// A vessel's layer announces its selection with the context store's id; the
+// card names it by the vessel's own id, as a click on it does.
+test('a vessel announced by its layer is named by its own id', (t) => {
+  // The page's events, which Node lacks.
+  const events = new EventTarget();
+  for (const name of [
+    'addEventListener',
+    'removeEventListener',
+    'dispatchEvent',
+  ])
+    globalThis[name] = events[name].bind(events);
+  t.after(() => {
+    for (const name of [
+      'addEventListener',
+      'removeEventListener',
+      'dispatchEvent',
+    ])
+      delete globalThis[name];
+  });
+  const pinia = createPinia();
+  const viewer = { scene: { pick: () => null, drillPick: () => [] } };
+  const input = fakeInput(viewer);
+  const disconnect = installEntityContext({
+    viewer,
+    getDataManager: () => ({
+      isEnabled: () => true,
+      layers: new Map(),
+      getAll: () => [],
+    }),
+    pinia,
+  });
+  t.after(() => {
+    disconnect();
+    input.destroy();
+  });
+  const store = useEntityCardStore(pinia);
+  const named = [];
+  store.select = (identity) => named.push(identity.id);
+  globalThis.dispatchEvent(
+    new CustomEvent('gev:entity-selected', {
+      detail: {
+        layerId: 'ais-live-vessels',
+        id: 'ais-5fdca702',
+        properties: { vesselId: '5fdca702' },
+        latitude: 1,
+        longitude: 2,
+      },
+    }),
+  );
+  globalThis.dispatchEvent(
+    new CustomEvent('gev:entity-selected', {
+      detail: { layerId: 'fires', id: 'fire:1', latitude: 1, longitude: 2 },
+    }),
+  );
+  assert.deepEqual(named, ['5fdca702', 'fire:1']);
+});

@@ -127,3 +127,95 @@ for (const status of [429, 500, 503]) {
     assert.doesNotMatch(lines[0], /secret-key-value/);
   });
 }
+
+for (const failure of ['transport', 'invalid-json']) {
+  test(`Ontario ${failure} failures cannot log reflected keys or request URLs`, async (t) => {
+    const lines = captureConsole(t);
+    const key = 'synthetic secret&/=%value';
+    t.mock.method(globalThis, 'fetch', async (url) => {
+      if (failure === 'transport')
+        throw new Error(`request failed: ${url} ${key}`);
+      return new Response(`not JSON: ${url} ${key}`);
+    });
+    assert.deepEqual(
+      await loadOntarioSourcesFromOpenData({}, { ONTARIO_511_API_KEY: key }),
+      [],
+    );
+    assert.equal(lines.length, 1);
+    assert.match(lines[0], /Ontario 511 camera download error/);
+    assert.equal(lines[0].includes(key), false);
+    assert.equal(lines[0].includes('synthetic'), false);
+    assert.equal(lines[0].includes('https://'), false);
+  });
+}
+
+test('Ontario encodes reserved key characters and refuses credential-bearing redirects', async (t) => {
+  const lines = captureConsole(t);
+  const key = 'synthetic &/=% value';
+  let request;
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    request = { url: new URL(url), init };
+    return Response.json([ROW]);
+  });
+  const cameras = await loadOntarioSourcesFromOpenData(
+    {},
+    { ONTARIO_511_API_KEY: key },
+  );
+  assert.equal(request.url.searchParams.get('key'), key);
+  assert.equal(request.init.redirect, 'error');
+  assert.equal(cameras.length, 1);
+  assert.equal(JSON.stringify(cameras).includes('synthetic'), false);
+  assert.equal(lines.join(' ').includes('synthetic'), false);
+});
+
+test('Ontario names a refused redirect and a system code without the request text', async (t) => {
+  const lines = captureConsole(t);
+  const key = 'synthetic-secret';
+  const failures = [
+    // The shape Node's fetch gives a refused redirect and a DNS failure.
+    new TypeError('fetch failed', {
+      cause: new Error('unexpected redirect'),
+    }),
+    new TypeError('fetch failed', {
+      cause: Object.assign(new Error(`getaddrinfo ENOTFOUND ${key}`), {
+        code: 'ENOTFOUND',
+      }),
+    }),
+  ];
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw failures.shift();
+  });
+  for (let i = 0; i < 2; i++) {
+    assert.deepEqual(
+      await loadOntarioSourcesFromOpenData({}, { ONTARIO_511_API_KEY: key }),
+      [],
+    );
+  }
+  assert.deepEqual(lines, [
+    '[CCTV] Ontario 511 camera download error (TypeError, redirect refused)',
+    '[CCTV] Ontario 511 camera download error (TypeError ENOTFOUND)',
+  ]);
+});
+
+test('Ontario releases the body of an error response', async (t) => {
+  captureConsole(t);
+  let cancelled = false;
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response(
+        new ReadableStream({
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        { status: 503 },
+      ),
+  );
+  assert.deepEqual(
+    await loadOntarioSourcesFromOpenData({}, { ONTARIO_511_API_KEY: 'k' }),
+    [],
+  );
+  assert.equal(cancelled, true);
+});

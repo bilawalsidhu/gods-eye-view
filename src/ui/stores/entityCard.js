@@ -94,6 +94,26 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /** Bumped on each refresh, so ages shown on the card tick. */
   const tick = ref(0);
   /**
+   * True while the item is not to be seen: out of its feed, off screen or
+   * behind the globe. The card then offers to find it.
+   */
+  const away = ref(false);
+  /**
+   * Finding the item again (see locate): `'idle'`, `'finding'` while its
+   * layer looks it up, or `'none'` when it has no reading at the time.
+   */
+  const finding = ref('idle');
+  /**
+   * Where an item out of its feed was found (see locate):
+   * `{lat, lon, altitudeM, observedAtMs, atMs}`, or null.
+   */
+  const located = shallowRef(null);
+  /** The track reference of the card's item, kept for when it leaves its feed. */
+  let reference = null;
+  let locating = null;
+  /** An aircraft found again is followed once it is back in its feed. */
+  let followWhenBack = false;
+  /**
    * What the camera shows, for the panel to describe when nothing is picked:
    * `{center: {lat, lon}, rect: {west, south, east, north}, heightM}`.
    */
@@ -217,24 +237,117 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     return dm.isEnabled(id) === false;
   }
 
-  function refresh() {
+  function refresh({ forAction = false } = {}) {
     const current = card.value;
     if (!current) return;
     // A card does not outlive its layer: turning the layer off (or clearing
     // all layers) closes it and lets go of the camera.
     if (layerOff(current.layerId)) return clear();
-    // A closed panel shows nothing, so it reads nothing until it opens.
-    if (shell.value?.isOpen && !shell.value.isOpen()) return;
+    // Stop polling a closed panel. Omnibar actions still need its current position.
+    if (!forAction && shell.value?.isOpen && !shell.value.isOpen()) return;
     const next = describeEntity(dataManager(), current.identity);
     // Keep showing the last reading when the item drops out of its feed.
     if (!next || next.key !== current.key || next.basis !== 'record') {
       lost.value = current.basis === 'record';
+      away.value = lost.value || !shown(current);
       tick.value++;
       return;
     }
+    const wasLost = lost.value;
     card.value = markRaw(next);
     lost.value = false;
+    // The camera follows it where it is drawn, which can be ahead of its last
+    // reading; one being followed is always in view.
+    away.value = !isFollowing() && !shown(next);
     tick.value++;
+    if (wasLost) back(next);
+  }
+
+  /** Whether the camera shows the item; true when the shell cannot tell. */
+  function shown(current) {
+    const test = shell.value?.onScreen;
+    return typeof test === 'function' ? test(current) !== false : true;
+  }
+
+  /**
+   * The item is back in its feed: its layer selects it again, as the click
+   * that picked it did, and an aircraft just found is followed.
+   */
+  function back(current) {
+    const follows = followWhenBack;
+    // A lookup still running is no longer needed: the feed has it.
+    stopLocating();
+    reference =
+      layerOf(current.layerId)?.referenceOf?.(current.identity?.id) ??
+      reference;
+    shell.value?.reselect?.(current, { follow: follows });
+  }
+
+  const layerOf = (layerId) =>
+    shell.value?.dataManager?.()?.layers?.get?.(layerId)?.module ?? null;
+
+  /**
+   * Take the camera back to the item. One the camera can see or one still in
+   * its feed is flown to (an aircraft followed); one out of its feed is
+   * looked up at the layer's time (the world clock's while it follows the
+   * clock) on its own track, shown there and flown to, and its layer picks
+   * it up again once its feed has it.
+   * @returns {Promise<void>}
+   */
+  async function locate() {
+    const current = card.value;
+    if (!current) return;
+    if (!lost.value) {
+      if (canFollow()) follow();
+      else flyTo();
+      return;
+    }
+    const layer = layerOf(current.layerId);
+    if (typeof layer?.locate !== 'function') {
+      flyTo();
+      return;
+    }
+    locating?.abort();
+    const controller = new AbortController();
+    locating = controller;
+    finding.value = 'finding';
+    let result;
+    try {
+      result = await layer.locate(current.identity?.id, {
+        reference,
+        signal: controller.signal,
+      });
+    } catch {
+      result = { status: 'none' };
+    }
+    if (locating !== controller) return;
+    locating = null;
+    const now = card.value;
+    if (!now || now.key !== current.key) return;
+    if (result?.status !== 'found') {
+      finding.value = 'none';
+      return;
+    }
+    finding.value = 'idle';
+    located.value = markRaw({ ...result });
+    card.value = markRaw({
+      ...now,
+      lat: result.lat,
+      lon: result.lon,
+      altitudeM: Number.isFinite(result.altitudeM)
+        ? result.altitudeM
+        : now.altitudeM,
+    });
+    followWhenBack = canFollow();
+    shell.value?.flyTo?.(card.value);
+  }
+
+  function stopLocating() {
+    locating?.abort();
+    locating = null;
+    finding.value = 'idle';
+    located.value = null;
+    followWhenBack = false;
   }
 
   /**
@@ -244,6 +357,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    * @param {boolean} [options.fly] Also fly the camera to it.
    * @returns {boolean} Whether a card could be made.
    */
+  /**
+   * Counts card selections and clears, so a selection that was asked for
+   * before a newer one can tell it came too late.
+   */
+  let generation = 0;
+  const selectionGeneration = () => generation;
+
   /** Things that move are followed as soon as they are picked. */
   const AUTO_FOLLOW = new Set(['flights', 'military', 'satellites']);
   /**
@@ -261,6 +381,12 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
    */
   function select(identity, { fly = false, follow: autoFollow = true } = {}) {
     if (!read(identity)) return false;
+    generation++;
+    stopLocating();
+    away.value = false;
+    reference =
+      layerOf(identity.layerId)?.referenceOf?.(card.value?.identity?.id) ??
+      null;
     clearInterval(timer);
     timer = setInterval(refresh, REFRESH_MS);
     shell.value?.openPanel?.();
@@ -285,6 +411,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   }
 
   function clear() {
+    generation++;
     if (following.value) shell.value?.letGo?.(card.value);
     following.value = null;
     asked = null;
@@ -292,9 +419,17 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     timer = null;
     card.value = null;
     lost.value = false;
+    away.value = false;
+    reference = null;
+    stopLocating();
   }
 
-  const flyTo = () => card.value && shell.value?.flyTo?.(card.value);
+  function currentActionCard() {
+    // A mount edit can land between the card's regular refreshes.
+    if (card.value?.layerId === 'cctv') refresh({ forAction: true });
+    return card.value;
+  }
+  const flyTo = () => currentActionCard() && shell.value?.flyTo?.(card.value);
   const follow = () => {
     if (!card.value) return;
     asked = card.value.key;
@@ -302,7 +437,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   };
   const isFollowing = () =>
     Boolean(card.value && following.value === card.value.key);
-  const ask = () => card.value && shell.value?.ask?.(card.value);
+  const ask = () => currentActionCard() && shell.value?.ask?.(card.value);
   /** The regional brief (weather, local news) for a spot, from the shell. */
   const readBrief = (lat, lon) =>
     shell.value?.regionalBrief
@@ -324,8 +459,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     card,
     lost,
     tick,
+    away,
+    finding,
+    located,
+    locate,
     connect,
     select,
+    selectionGeneration,
     clear,
     refresh,
     flyTo,
@@ -352,3 +492,33 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     askAboutView,
   };
 });
+
+/**
+ * Opens what a voice or chat action selected in the Context panel, as a click
+ * on it does (`src/ui/entityContextBridge.js` selects the same way): its card
+ * opens, and the panel with it. The app hands it to voice, which reads
+ * `generation()` when a selection is asked and passes it back as `since`.
+ * The action has already selected or followed the item in its own layer, so
+ * the card does not follow it again (a click on a flight does not either). A
+ * card picked or cleared since the action was asked stays, and nothing opens
+ * in Cockpit, where Context is hidden.
+ * @param {import('pinia').Pinia} pinia
+ * @returns {{generation: () => number, show: (identity: {layerId: string, id: string|number, label?: string, lat?: number, lon?: number}, options?: {since?: number|null, cockpitActive?: boolean}) => boolean}}
+ */
+export function createContextCardOpener(pinia) {
+  const store = () => useEntityCardStore(pinia);
+  return {
+    generation: () => store().selectionGeneration(),
+    show(identity, { since = null, cockpitActive = false } = {}) {
+      if (!identity?.layerId || identity.id == null || identity.id === '')
+        return false;
+      if (cockpitActive) return false;
+      if (since !== null && store().selectionGeneration() !== since)
+        return false;
+      return store().select(
+        { ...identity, id: String(identity.id) },
+        { follow: false },
+      );
+    },
+  };
+}

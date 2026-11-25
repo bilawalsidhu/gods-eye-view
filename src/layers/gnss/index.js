@@ -223,10 +223,13 @@ export function createGnssIntegrityLayer({
       if (_viewer)
         throw new Error('GNSS integrity layer is already initialized');
       // The cells never take part in picks: ground geometry under them
-      // (another layer's polygons) stays pickable.
+      // (another layer's polygons) stays pickable. They are an overlay:
+      // drawn flat over the 3D tiles and terrain, never draped onto the
+      // tiles (where a cell hundreds of kilometres wide streaks through
+      // them) nor hidden under them, and hidden past the horizon.
       _fills = drawOf(viewer).shapes({
         id: `${GNSS_SET_PREFIX}:${++instances}`,
-        clampTo: 'both',
+        clampTo: 'overlay',
         pickable: false,
         show: false,
       });

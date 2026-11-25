@@ -18,23 +18,20 @@ import {
   readPanelState,
 } from './rail/panelState.js';
 
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+} from './mobileSheets.js';
+
+export {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  MOBILE_SHEET_PANELS,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
-export const MOBILE_SHELL_CLASS = 'mobile-shell';
-export const MOBILE_SHEET_ATTR = 'data-mobile-sheet';
-
-/**
- * Panels each sheet expands. A sheet also shows its rail's other panels
- * collapsed (Scenes under Layers), per styles/mobile-shell.css.
- */
-export const MOBILE_SHEET_PANELS = Object.freeze({
-  layers: Object.freeze(['data-panel']),
-  cameras: Object.freeze(['cctv-panel', 'street-level-panel']),
-  context: Object.freeze(['global-context-panel']),
-  missions: Object.freeze(['space-missions-panel']),
-  search: Object.freeze(['location-bar']),
-  more: Object.freeze(['control-panel', 'pp-toggles']),
-});
-
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
@@ -63,17 +60,6 @@ const BORROWED_PANELS = Object.freeze([
 ]);
 
 const BORROW_OPTIONS = Object.freeze({ persist: false, syncShare: false });
-
-/**
- * @param {string} panelId
- * @returns {string|null} The sheet that presents `panelId`.
- */
-export function sheetForPanelId(panelId) {
-  for (const [sheet, ids] of Object.entries(MOBILE_SHEET_PANELS)) {
-    if (ids.includes(panelId)) return sheet;
-  }
-  return null;
-}
 
 /**
  * The sheet after a tab press: the same tab closes its sheet, another opens.
@@ -112,8 +98,6 @@ function currentSheetOf(body) {
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
- * @param {(sheet: string) => void} [input.onTabOpened] Runs only when the user
- *   opens a sheet from its tab, never on close or programmatic presentation.
  * @param {(view: ?{enabled: boolean, sheet: string|null, tabs: typeof MOBILE_TABS}) => void} [input.publish]
  *   Receives the tab bar: whether the shell is on, the open sheet and the
  *   tabs; null once the shell is destroyed.
@@ -131,7 +115,6 @@ export function initMobileShell({
   ResizeObserverImpl = globalThis.ResizeObserver,
   requestFrame = globalThis.requestAnimationFrame?.bind(globalThis),
   onSheetsClosed = () => {},
-  onTabOpened = () => {},
   publish = () => {},
   afterPublish = (callback) => callback(),
 } = {}) {
@@ -365,7 +348,6 @@ export function initMobileShell({
     // Closing from the tab bar returns focus to the tab that was pressed.
     if (!sheet) returnFocus = button;
     setSheet(sheet);
-    if (sheet && currentSheetOf(body) === sheet) onTabOpened(sheet);
   });
   // Touch events let native scrolling continue until a downward pull at the
   // top is intentional. Pointer capture/touch-action:none would also seize

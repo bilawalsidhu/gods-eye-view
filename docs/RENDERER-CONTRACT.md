@@ -81,6 +81,13 @@ optional:
   target's east-north-up frame, or the identity. `setView` keeps that frame
   while it places a world pose. A share link's follow offset is
   re-expressed in it, satellites included.
+- `camera.visiblePoints(points, horizonMarginM)` (capability `pointVisibility`)
+  is whether any of the points may be on screen: `false` only when their
+  bounding sphere is outside the view or all of them are below the horizon
+  of the WGS84 ellipsoid shrunk by `horizonMarginM` metres; `null` when it
+  cannot tell (not a 3D scene, an empty point set, or a non-finite point or
+  camera vector), and callers count that as visible. Supply a finite,
+  nonnegative margin smaller than the shortest WGS84 radius.
 - `globe.surfaceVersion()` (capability `surfaceIdentity`) is a number that
   changes whenever what surface heights answer against changes (base,
   terrain or photoreal route swapped, the globe shown or hidden) and never
@@ -115,6 +122,58 @@ optional:
 - A line item's `depthFail` style, solid or dashed, draws the parts behind
   the surface (the Draw tool's rubber band is dashed there too); without one
   they are hidden.
+- `LineItem.ageFade` (capability `lineAgeFade`, `LineAgeFade`) fades a
+  line with the age of its points on the scene clock (`frame.setTime`):
+  each position has a time, a point's recency is
+  `1 - clamp((now - time) / windowMs, 0, 1)`, running evenly between
+  positions, and the line's colour (its style's or a segment's) draws at its
+  alpha times `mix(alphaFloor, 1, smoothstep(0, 1, recency))`, times
+  `mix(squaredAlphaFloor, 1, recency²)` with `squaredAlphaFloor`, and
+  `widthPx` times `mix(widthFloor, 1, recency)` wide with `widthFloor`. Time
+  passing changes the drawing, not the line, so a trail whose points stay
+  put is never sent again; new times with new positions are an ordinary
+  update. A renderer without the capability draws the line unfaded. The
+  Cesium port lists it where its context has floating-point textures: an
+  aged line's material reads its points' times from a small texture and the
+  scene's time from a uniform set each frame, per fragment (draped lines
+  along their length, others per vertex), and an undraped one moves and
+  recolours in place in its polyline collection. The check
+  `draw.lines.ageFade` covers it, draped and not, narrowed too.
+- `LineAgeFade.showMs` (capability `lineTimeWindow`) draws only the part of
+  an aged line within `showMs` of the scene clock: where its time, running
+  evenly between positions as the fade's does, is after now or before
+  `now - showMs`, it is not drawn (nor picked), cut there along the line,
+  not at a position. The cut follows `frame.setTime` as the fade does, so a
+  moving object's trail can be its whole track, sent once and drawn from
+  `showMs` ago up to where the object is now; `Infinity` cuts at now alone.
+  A renderer without the capability draws the whole line. The Cesium port
+  lists it with `lineAgeFade` and discards by time in the same material;
+  the check `draw.lines.timeWindow` covers it, draped and not.
+- `LineItem.breaks` (capability `lineBreaks`, `LineBreaks`) draws one line
+  as several runs, so many lines that share one style can be sent as one
+  item: thousands of moving objects' trails as one line, say, which the
+  renderer then handles as one item instead of thousands. Each break is the
+  index `i` of a position that starts a new run, sorted, with
+  `0 < i < positions.length`; the segment from position `i - 1` to `i` is
+  not drawn nor picked, and the line does not join across it: each run has
+  two ends of its own, capped and joined as a line of its own would be.
+  `segmentColors` and `segmentShow` stay one a pair of neighbouring
+  positions (`j`, from position `j` to `j + 1`), so the entry of a pair
+  across a break is ignored; `ageFade.times` stays one a position; and
+  `revealFraction` runs along all the runs, in order, as one length (the
+  gaps have none). It is an optimisation: a renderer without it is never
+  sent `breaks`, and is sent the same lines as an item a run instead,
+  drawing the same picture. The Cesium port lists it and draws a line
+  in runs a piece a run (a polyline each in the set's collection, undraped;
+  a ground polyline each, draped; a primitive each with a depth-fail style
+  or in the sky's frame), each taking its own points' times, share of the
+  reveal and segment colours, and picked as the line. A draped solid line
+  with segment colours stays one ground instance a segment, none across a
+  break. Colours and shows change in place; new positions, times, reveal or
+  breaks draw the line anew. The check `draw.lines.breaks` covers it,
+  draped and not, with segment colours and without, and
+  `draw.lines.breaks.timeWindow` a line in runs cut by time whose first
+  run is later than its second, each run cut by its own times.
 - A solid line's `outline.widthPx` is the outline's whole width, half on
   each side, inside the line's own width: an 8 px line with a 4 px outline
   is 2 px of outline, 4 px of colour and 2 px of outline, as Cesium draws
@@ -269,6 +328,33 @@ each position and its heights above it, and an image fill where the scene
 cannot drape materials (no depth textures). The check `draw.shapes.clamped`
 draws each.
 
+A set clamped as an overlay (`clampTo: 'overlay'`) draws its clamped flat
+fills and outlines, and its draped lines, as a flat layer over everything:
+on the ellipsoid, after the 3D tiles and terrain and without their depth, so
+neither hides them, and never draped onto the tiles (a ground primitive's
+volume, hundreds of kilometres wide, streaks through photoreal tiles at globe
+scale). Only the ellipsoid hides them: nothing past its horizon from the eye
+is drawn, so the far side of the globe never shows through. The GNSS
+integrity cells draw this way. The Cesium port draws the fills as one
+primitive on the ellipsoid, cut every tenth of a degree so their edges follow
+the curve, in the translucent pass with no depth test (`overlayFillAppearance`
+in `src/render/cesium/draw.js`); their outlines, and draped lines, are drawn
+as it draws draped lines where it cannot drape (`overlayLine`: on the
+ellipsoid's curve, and in their colour where the surface hides them). Fills
+and lines alike drop each fragment past the ellipsoid's horizon in their
+fragment shaders (`OVERLAY_HORIZON`), tested at the surface point over the
+fragment, since flat triangles and straight pieces pass metres under the
+ellipsoid: a line crossing the limb shows only its near part. The test is
+written so float32 decides it a few metres from an eye a metre up and
+within metres of the true horizon from any height, counts an eye under the
+ellipsoid as a metre up so low ground keeps its overlays,
+and tests a line's fragments along the segment as drawn, cut at the near
+plane. Overlay fills are colours only
+(an image fill is refused); icons, points and models clamp to an overlay as
+to `both`, and extruded shapes and walls stand on the surface as with
+`both`. The check `draw.shapes.overlay` draws one with the globe hidden and
+one past the horizon behind it.
+
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
 raster shells): a URL, SVG, a blob (by an object URL made once per blob,
@@ -342,6 +428,17 @@ correction turns them to, paints the mask in a custom shader per colour
 (unlit under `unlit` shading, left out under `thermal`), and clips with a
 clipping plane through the model's origin. The checks `draw.models.bytes`
 and `draw.models.fleet` cover them.
+
+An articulated model's joints are its item's `nodes`: transforms of the
+model's named glTF nodes, each a column-major 4×4 matrix in the node's
+parent frame that replaces the node's own (the ISS's solar arrays,
+radiators, dishes and arms). They change live; a node whose name leaves the
+map goes back to its authored pose, and names the model lacks are ignored.
+A renderer that poses nodes lists `modelNodes`; one without it draws the
+model as authored. The Cesium port lists it, and writes each node's matrix
+once the model is ready, and again only when its numbers change. The check
+`draw.models.nodes` moves the harness model's node off the screen's centre
+and back.
 
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium

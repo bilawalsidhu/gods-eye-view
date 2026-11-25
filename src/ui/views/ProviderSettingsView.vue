@@ -8,7 +8,9 @@ import { vStatusText } from '../rail/statusText.js';
 import { useLocaleStore } from '../stores/locale.js';
 import { useProviderSettingsStore } from '../stores/providerSettings.js';
 import LocalePicker from './panels/LocalePicker.vue';
+import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
+import UiIcon from '../kit/UiIcon.vue';
 
 const { picker } = storeToRefs(useLocaleStore());
 // The key setup owner (src/keySetup.js) presents the chip, the dialog and its
@@ -39,10 +41,10 @@ const removeTitle = (title) =>
   <!-- Bottom-right HUD row: the POWER UP chip (while keys are missing) and
        the language picker, once the shell publishes it. -->
   <div id="corner-actions">
-    <button v-if="available" id="key-setup-chip" type="button" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
-      <span class="material-symbols-outlined" aria-hidden="true">bolt</span>
+    <UiButton v-if="available" id="key-setup-chip" :hidden="!chip || chip.hidden" aria-haspopup="dialog" aria-controls="key-setup" :title="chip?.title" :aria-label="chip?.title" @click="controls?.open()">
+      <UiIcon name="bolt" :size="null" />
       <span data-key-setup-chip-label>{{ chip ? chip.label : t('POWER UP') }}</span>
-    </button>
+    </UiButton>
     <LocalePicker v-if="picker" :key="picker.current" :current="picker.current" :on-select="picker.onSelect" :focus="picker.focus" />
   </div>
   <aside v-if="available" id="key-setup" role="dialog" aria-labelledby="key-setup-title" aria-describedby="key-setup-description" :hidden="dialog.hidden" v-class-toggle="{ visible: dialog.visible }" :data-ready="view?.ready ? 'true' : undefined" @transitionend="controls?.transitionEnd()">
@@ -66,16 +68,16 @@ const removeTitle = (title) =>
         <p class="key-setup-unlocks">{{ key.unlocks }}</p>
         <div v-if="!key.external" class="key-setup-fields">
           <input v-for="envVar in key.envVars" :key="envVar" type="password" autocomplete="off" spellcheck="false" :data-env-var="envVar" :aria-label="envVar" :placeholder="key.set ? t('{envVar} saved — paste to replace', { envVar }) : t('paste {envVar}', { envVar })" v-field-value="view.fields[envVar] ?? ''" @input="controls?.setField(envVar, $event.target.value)" />
-          <button v-if="key.managed === 'file'" type="button" class="key-setup-remove" :data-key-setup-remove="JSON.stringify(key.envVars)" :title="removeTitle(key.title)" @click="controls?.remove(key.envVars)">{{ t('REMOVE') }}</button>
+          <UiButton v-if="key.managed === 'file'" class="key-setup-remove" :data-key-setup-remove="JSON.stringify(key.envVars)" :title="removeTitle(key.title)" @click="controls?.remove(key.envVars)">{{ t('REMOVE') }}</UiButton>
         </div>
         <div v-if="key.id === 'openai'" class="key-setup-cloud-auth">
           <span class="key-setup-cloud-auth-state">{{ view.auth.mode === 'oauth' ? t('VOICE AUTH · CHATGPT OAUTH') : t('VOICE AUTH · API KEY') }}</span>
-          <button type="button" class="key-setup-cloud-auth-toggle" data-cloud-voice-auth-toggle="true" :title="view.auth.mode === 'oauth' ? t('Use OPENAI_API_KEY for the next cloud voice session') : t('Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session')" :aria-disabled="String(view.auth.busy)" @click="controls?.toggleAuth()">{{ view.auth.mode === 'oauth' ? t('USE API KEY') : t('USE CHATGPT OAUTH') }}</button>
+          <UiButton class="key-setup-cloud-auth-toggle" data-cloud-voice-auth-toggle="true" :title="view.auth.mode === 'oauth' ? t('Use OPENAI_API_KEY for the next cloud voice session') : t('Use the signed-in local ChatGPT/Codex OAuth session for the next cloud voice session')" :aria-disabled="String(view.auth.busy)" @click="controls?.toggleAuth()">{{ view.auth.mode === 'oauth' ? t('USE API KEY') : t('USE CHATGPT OAUTH') }}</UiButton>
         </div>
       </section>
     </div>
     <div class="key-setup-footer">
-      <button type="button" class="key-setup-apply" data-key-setup-apply :aria-disabled="view?.saving == null ? undefined : String(view.saving)" @click="controls?.apply()">{{ t('SAVE KEYS') }}</button>
+      <UiButton class="key-setup-apply" data-key-setup-apply :aria-disabled="view?.saving == null ? undefined : String(view.saving)" @click="controls?.apply()">{{ t('SAVE KEYS') }}</UiButton>
       <span class="key-setup-hint">{{ t('ESC to close') }}</span>
     </div>
     <p class="key-setup-note" data-key-setup-status role="status" aria-live="polite" v-status-text="statusText"></p>

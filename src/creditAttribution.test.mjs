@@ -243,7 +243,7 @@ const RECOGNIZED = new Set([
   // credit
   '#cesium-credits',
   'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
-  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits",
+  "body:not(.ui-clean-view):not(.recording-mode):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #cesium-credits",
   'body.ui-clean-view #cesium-credits',
   'body.recording-mode #cesium-credits',
   // dock
@@ -274,12 +274,12 @@ const DOCKED_RAIL = 'body.context-docked #right-context-rail';
 // the Omnibar and the voice control share the dock; outside it the legacy
 // layout below governs.
 const OMNIBAR_SCOPE =
-  'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(:has(#gev-omnibar):has(#command-dock > #gev-voice-control))';
+  'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(.has-omnibar.dock-has-voice *)';
 const OMNIBAR = Object.freeze({
   dock: `${OMNIBAR_SCOPE} #command-dock`,
   credit: `${OMNIBAR_SCOPE} :is(#cesium-credits, #gev-credits)`,
-  minimalCredit: `${OMNIBAR_SCOPE}:has(#intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
-  minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):has(#intel-hud[data-variant='minimal'].active) #right-context-rail`,
+  minimalCredit: `${OMNIBAR_SCOPE}:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
+  minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #right-context-rail`,
   trays: `${OMNIBAR_SCOPE} #command-dock > :is(#location-bar, #control-panel)`,
 });
 // What each Omnibar-scope rule may set on a modelled box; the Omnibar
@@ -518,7 +518,7 @@ const CREDIT_SELECTORS = [
   'body:not(.ui-clean-view):not(.recording-mode) #cesium-credits',
 ];
 const MINIMAL_HUD_CREDIT =
-  "body:not(.ui-clean-view):not(.recording-mode):has(#intel-hud[data-variant='minimal'].active) #cesium-credits";
+  "body:not(.ui-clean-view):not(.recording-mode):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #cesium-credits";
 const TRAY_ORDINARY = [
   '#command-dock .dock-popover-content',
   '#command-dock #location-bar .dock-popover-content',
@@ -912,10 +912,12 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
     '#command-dock:has(#location-bar:not(.collapsed))',
     '#command-dock:has(#control-panel:not(.collapsed))',
   ];
-  assert.equal(
-    omnibarVar('--world-timeline-lift'),
-    '0px',
-    'the Omnibar layout holds the timeline lift at 0',
+  // The dock rises over the World Timeline by world-timeline.css's lift, as
+  // the plain dock does; the Omnibar scope leaves the lift alone.
+  assert.doesNotMatch(
+    fs.readFileSync(path.join(ROOT, 'src/ui/styles/omnibar-dock.css'), 'utf8'),
+    /--world-timeline-lift\s*:/,
+    'the Omnibar layout leaves the timeline lift to world-timeline.css',
   );
   for (const width of WIDTHS.filter((w) => w >= OMNIBAR_MIN_WIDTH)) {
     for (const height of HEIGHTS) {
@@ -968,10 +970,21 @@ test('Omnibar reserves a non-overlapping desktop footer at native credit sizing'
           credit.part.startsWith(OMNIBAR_SCOPE),
           `the Omnibar owns the credit row at ${width}px`,
         );
-        const dockBottom = omnibarPx(
+        // The dock rises over the World Timeline from the dock's floor, and
+        // the bar takes that floor: the floor is what clears the credit.
+        assert.equal(
           dock.decl.value,
+          'var(--omnibar-dock-raised)',
+          `Omnibar dock bottom at ${width}px`,
+        );
+        assert.equal(
+          omnibarVar('--omnibar-dock-raised').replace(/\s+/g, ' '),
+          'calc( var(--omnibar-dock-bottom) + var(--world-timeline-lift, 0px) )',
+        );
+        const dockBottom = omnibarPx(
+          'var(--omnibar-dock-bottom)',
           height,
-          'Omnibar dock bottom',
+          'Omnibar dock floor',
         );
         const creditTop =
           omnibarPx(credit.decl.value, height, 'Omnibar credit bottom') +
@@ -1266,7 +1279,7 @@ test('expanded Context keeps the credits beside it right to left and with the mi
   // The minimal HUD puts the credits bottom right, where the column docks.
   assert.ok(
     rule(
-      "^.*body\\.context-docked:not\\(\\.ui-clean-view\\):not\\(\\.recording-mode\\):has\\( #intel-hud\\[data-variant='minimal'\\]\\.active \\)",
+      "^.*body\\.context-docked:not\\(\\.ui-clean-view\\):not\\(\\.recording-mode\\):is\\( \\.hud-minimal-active \\*, #intel-hud\\[data-variant='minimal'\\]\\.active \\)",
       'right: calc\\(36px \\+ var\\(--context-dock-width\\)\\)',
     ),
     'with the minimal HUD, the credits end before the expanded column',

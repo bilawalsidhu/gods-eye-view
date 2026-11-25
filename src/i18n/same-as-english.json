@@ -296,7 +296,11 @@
     "Route",
     "3D",
     "KT",
-    "SAT"
+    "SAT",
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode"
   ],
   "es": [
     "1 min/s",
@@ -491,7 +495,9 @@
     "{n} mm",
     "3D",
     "KT",
-    "{contact}: {status} (squawk {squawk})"
+    "{contact}: {status} (squawk {squawk})",
+    "Manual",
+    "{seconds} s"
   ],
   "fr": [
     "1 min/s",
@@ -752,7 +758,9 @@
     "AIR",
     "SAT",
     "{count} contacts",
-    "{count} points"
+    "{count} points",
+    "Cyclones · NHC / CPHC · JTWC",
+    "{seconds} s"
   ],
   "it": [
     "1 min/s",
@@ -987,7 +995,8 @@
     "3D",
     "KT",
     "SAT",
-    "{contact}: {status} (squawk {squawk})"
+    "{contact}: {status} (squawk {squawk})",
+    "{seconds} s"
   ],
   "ja": [
     "1090 MHz",
@@ -1268,7 +1277,9 @@
     "KT",
     "SAT",
     "{contact}: {status} (squawk {squawk})",
-    "Backups"
+    "Backups",
+    "Manual",
+    "{seconds} s"
   ],
   "ru": [
     "1900–1945",
@@ -1506,7 +1517,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "DISK"
+    "DISK",
+    "{seconds} s"
   ],
   "uk": [
     "1900–1945",

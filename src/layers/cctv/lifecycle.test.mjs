@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLifecycle } from './lifecycle.js';
 import { createSelection } from './selection.js';
+import { ownsCctvPick } from './pickIds.js';
+import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { fakeInput, fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import * as picking from '../../data/pickRegistry.js';
@@ -75,6 +77,40 @@ test('the view listeners follow the camera port and let go on teardown', () => {
   lifecycle.detachViewListeners();
   assert.deepEqual(counts(second.camera), [0, 0]);
   assert.equal(state._viewListenerCamera, null);
+});
+
+test('terrain loading and surface changes rerun the view pass', () => {
+  const viewer = {};
+  let version = 1,
+    progress,
+    removed = false;
+  bindRenderer(viewer, {
+    camera: fakeCameraPort().port,
+    globe: {
+      surfaceVersion: () => version,
+      on(event, cb) {
+        assert.equal(event, 'progress');
+        progress = cb;
+        return () => {
+          removed = true;
+        };
+      },
+    },
+  });
+  const { lifecycle, passes } = lifecycleFor({
+    _viewer: viewer,
+    _enabled: true,
+  });
+  lifecycle.attachViewListeners();
+  progress({ terrainPending: 2 });
+  assert.equal(passes.length, 0);
+  progress({ terrainPending: 0 });
+  assert.equal(passes.length, 1);
+  version++;
+  progress({ terrainPending: 0 });
+  assert.equal(passes.length, 2);
+  lifecycle.detachViewListeners();
+  assert.ok(removed);
 });
 
 /** A part whose members are `own`'s, and any other a function that does
@@ -207,7 +243,7 @@ test('the card painted on top takes world clicks, whatever is drawn under it', a
       refreshHorizonCulling: () => false,
       refreshCoverageStyles: noop,
       extractPickedCameraId: (hit) =>
-        hit?.set === 'cctv:fixture' ? hit.id : null,
+        hit?.set === 'cctv:fixture' ? (hit.meta?.cameraId ?? hit.id) : null,
     },
     hover: { handleHoverMove: noop },
     health: { syncHealthState: async () => {} },
@@ -303,6 +339,20 @@ test('the card painted on top takes world clicks, whatever is drawn under it', a
   click(null, [ownCard], ['cam-1']);
   // With no card, the bare tap near the aircraft still deselects.
   click(null, [], ['clear']);
+  // Context accepts a registered ray inside the touch radius.
+  picking.registerPickOwner('cctv', (id) =>
+    ownsCctvPick(id, state._recordById, GIZMO_ID_PREFIX),
+  );
+  t.after(() => picking.unregisterPickOwner('cctv'));
+  drilled = [
+    {
+      set: 'cctv:fixture',
+      id: 'cctv-cam-1-ray-tl',
+      meta: { cameraId: 'cam-1' },
+    },
+  ];
+  click(null, [], ['cam-1']);
+  click(null, [foreignCard], []);
   // A contact whose layer acts only on exact hits leaves the card its tap.
   picking.registerPickOwner('test-exact', (id) => id === 'exact:1');
   drilled = ['exact:1'];

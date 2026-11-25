@@ -19,6 +19,7 @@ export const CAPABILITIES = Object.freeze([
   'finestHeights',
   'terrain',
   'modelAtmosphere',
+  'modelNodes',
   'weather',
   'imageryOnTiles',
   'splitSwipe',
@@ -40,6 +41,9 @@ export const CAPABILITIES = Object.freeze([
   'meshes',
   'fields',
   'courseGlide',
+  'lineAgeFade',
+  'lineTimeWindow',
+  'lineBreaks',
   'cluster',
   'styles',
   'bloom',
@@ -49,7 +53,9 @@ export const CAPABILITIES = Object.freeze([
   'followFrame',
   'cameraChangeThreshold',
   'occlusionTest',
+  'pointVisibility',
   'keepEarthFramed',
+  'holdChanges',
 ]);
 
 /** @type {readonly import('./frame').FrameStep[]} */
@@ -115,8 +121,8 @@ export const PORTS = deepFreeze({
       'destroy',
     ),
   ),
-  frame: Object.fromEntries(
-    required(
+  frame: Object.fromEntries([
+    ...required(
       'on',
       'requestRender',
       'holdContinuous',
@@ -130,7 +136,8 @@ export const PORTS = deepFreeze({
       'setTime',
       'time',
     ),
-  ),
+    ['onHoldsChange', 'holdChanges'],
+  ]),
   globe: Object.fromEntries([
     ...required(
       'setBase',
@@ -208,6 +215,7 @@ export const PORTS = deepFreeze({
       'matrices',
     ),
     ['followFrame', 'followFrame'],
+    ['visiblePoints', 'pointVisibility'],
     ['controls.keepEarthFramed', 'keepEarthFramed'],
   ]),
   query: Object.fromEntries([

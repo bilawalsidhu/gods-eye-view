@@ -321,6 +321,98 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
   }
 });
 
+test('a dot handed to a station model draws only beyond its range; the tracked dot too', () => {
+  const viewer = {};
+  const { draw, unbind } = bindFakeDraw(viewer);
+  try {
+    const state = {
+      now: Date.now,
+      _points: new Map(),
+      _orbitPaths: new Map(),
+      _catalog: new Map(),
+      _viewer: viewer,
+      _trackedNorad: null,
+      _enabled: true,
+      _params: { showPoints: false, showOrbits: false },
+    };
+    const rendering = createRendering({
+      state,
+      services: {
+        focus: {
+          focusNowMs: (ms) => ms,
+          getFocusTarget: () => null,
+          focusPassIsNeeded: () => false,
+        },
+      },
+      parts: { tracking: { _getTrackedFramePosition: () => null } },
+    });
+    rendering._attach(viewer);
+    const points = draw.find('satellites:').spec.id;
+    const set = draw.set(points);
+    const range = [1.5e6, Number.MAX_VALUE];
+    let frame = 0;
+    const tick = () => rendering._preRenderTick({ frame: ++frame });
+    rendering._addPoint(25544, { x: 1, y: 2, z: 3 }, POINT_STYLES.iss);
+    tick();
+    assert.equal(set.items.get('25544').displayRange, undefined);
+    assert.equal(rendering._pointDisplayRange(25544), null);
+    // The range goes to the set with the frame, as the item's own copy.
+    assert.equal(rendering._setPointDisplayRange(25544, range), true);
+    assert.equal(rendering._setPointDisplayRange(1, range), false, 'no dot');
+    let writes = set.writes;
+    tick();
+    assert.equal(set.writes, writes + 1, 'sent with the frame');
+    assert.deepEqual(set.items.get('25544').displayRange, range);
+    assert.notEqual(set.items.get('25544').displayRange, range);
+    assert.deepEqual(rendering._pointDisplayRange(25544), range);
+    assert.equal(set.items.get('25544').show, true, 'shown, within its range');
+    // The same range again sends nothing (asked every frame).
+    writes = set.writes;
+    rendering._setPointDisplayRange(25544, [1.5e6, Number.MAX_VALUE]);
+    tick();
+    assert.equal(set.writes, writes);
+    // None again: every distance.
+    rendering._setPointDisplayRange(25544, null);
+    tick();
+    assert.equal(set.items.get('25544').displayRange, undefined);
+    assert.equal(rendering._pointDisplayRange(25544), null);
+    // A dot added again (a catalog rebuild) arrives with no range.
+    rendering._setPointDisplayRange(25544, range);
+    rendering._addPoint(25544, { x: 1, y: 2, z: 3 }, POINT_STYLES.iss);
+    tick();
+    assert.equal(set.items.get('25544').displayRange, undefined);
+
+    // The tracked dot: redrawn at once while drawn, fresh for each tracking.
+    const tracked = draw.set(points.replace(':points', ':tracked'));
+    state._trackedNorad = 25544;
+    assert.equal(rendering._trackedDotDisplayRange(), null, 'no tracked dot');
+    rendering._setTrackedDotDisplayRange(range); // nothing to put it on
+    rendering._addTrackedEntity({ position: () => ({ x: 1, y: 2, z: 3 }) });
+    assert.equal(rendering._trackedDotDisplayRange(), null);
+    tick();
+    assert.equal(tracked.items.get('25544').displayRange, undefined);
+    writes = tracked.writes;
+    rendering._setTrackedDotDisplayRange(range);
+    assert.equal(tracked.writes, writes + 1, 'redrawn at once');
+    assert.deepEqual(tracked.items.get('25544').displayRange, range);
+    assert.deepEqual(rendering._trackedDotDisplayRange(), range);
+    rendering._setTrackedDotDisplayRange([1.5e6, Number.MAX_VALUE]);
+    assert.equal(tracked.writes, writes + 1, 'the same range sends nothing');
+    rendering._setTrackedDotDisplayRange(null);
+    assert.equal(tracked.items.get('25544').displayRange, undefined);
+    assert.equal(rendering._trackedDotDisplayRange(), null);
+    rendering._setTrackedDotDisplayRange(range);
+    rendering._removeTrackedEntity();
+    assert.equal(rendering._trackedDotDisplayRange(), null);
+    rendering._addTrackedEntity({ position: () => ({ x: 1, y: 2, z: 3 }) });
+    tick();
+    assert.equal(tracked.items.get('25544').displayRange, undefined);
+    rendering._detach(viewer);
+  } finally {
+    unbind();
+  }
+});
+
 test('the orbit frame matrix turns ECEF about Z by minus the GMST elapsed', () => {
   const rendering = createRendering({
     state: {},
