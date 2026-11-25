@@ -1710,5 +1710,7 @@
   "src/ui/livePanel.test.mjs",
   "src/ui/stationPanel.test.mjs",
   "src/ui/styles/live.css",
-  "src/ui/styles/station.css"
+  "src/ui/styles/station.css",
+  "src/adsbdbCacheGovernor.test.mjs",
+  "src/layers/enrichmentRateLimitRetry.test.mjs"
 ]
