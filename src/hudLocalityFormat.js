@@ -1,8 +1,9 @@
 /**
  * @module hudLocalityFormat
- * @description The HUD summary's locality line in the active language — the
- * formatter `hud.js` hands to `composeLocalityTag`. Kept apart from `hud.js`
- * (which imports `mgrs`, not loadable under plain Node) so it is unit-testable.
+ * @description Formatters for the HUD summary line (locality, altitude) in the
+ * active language; `hud.js` hands the locality one to `composeLocalityTag`.
+ * Kept apart from `hud.js` (which imports `mgrs`, not loadable under plain
+ * Node) so they are unit-testable.
  */
 import { formatNumber, getLocale, t } from './i18n/index.js';
 import { unitLabel } from './ui/unitLabels.js';
@@ -26,6 +27,14 @@ export function hudQuantity(value, unit, digits = 0) {
   if (UNCASED_UNITS.test(getLocale()))
     return label ? `${number} ${label}` : number;
   return `${number}${label.toUpperCase()}`;
+}
+
+/** Rounds to the metre before the 1 km check, so 999.6 m reads `1.0KM`, not `1000M`. */
+export function hudAltitude(altM) {
+  const metres = Math.round(altM);
+  return metres >= 1000
+    ? hudQuantity(altM / 1000, 'km', 1)
+    : hudQuantity(metres, 'm');
 }
 
 /** One hemisphere-tagged coordinate, e.g. `21.33N` / `21,33С`. */

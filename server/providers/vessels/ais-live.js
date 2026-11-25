@@ -10,6 +10,7 @@ import {
   readAisTrack,
   aisStreamRows,
   newestAisPositionAt,
+  pruneAisStreamCache,
 } from './ais-store.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
@@ -27,6 +28,8 @@ const AISSTREAM_DEFAULT_MESSAGE_TYPES = [
   'ExtendedClassBPositionReport',
   'ShipStaticData',
   'StaticDataReport',
+  // Buoys, beacons and other aids to navigation (AIS message 21).
+  'AidsToNavigationReport',
 ];
 // Watchdog budgets (policy lives in src/data/aisWatchdog.js). Silence is
 // REPORTED quickly and ACTED ON slowly: a dead feed must read as dead within
@@ -338,6 +341,8 @@ function startAisStreamWatchdogTick() {
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }
+    // The store's expiry runs here, so a silent feed still frees its vessels.
+    pruneAisStreamCache();
   }, AISSTREAM_TICK_MS);
   _aisStreamTickTimer.unref?.();
 }

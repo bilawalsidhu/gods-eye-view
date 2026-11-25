@@ -310,7 +310,7 @@ and the development server's internal routes. See SECURITY.md.
 | `get_bhote_koshi_flood` | `events` | The 2026 Bhote Koshi flood: evidence trail in story order, flood path and imagery dates (CC BY-NC 4.0) |
 | `get_regional_brief` | `regional` | What and where a location is, its weather and recent headlines |
 | `get_cyclones` | `cyclones` | Active NHC/CPHC tropical cyclones, optionally in an area |
-| `get_fire_perimeters` | `perimeters` | Mapped WFIGS wildfire perimeters in an area, largest first |
+| `get_fire_perimeters` | `perimeters` | Mapped WFIGS wildfire perimeters in an area, largest first, with when each was last mapped (WFIGS mapping time, else the record's last edit) |
 | `get_terrain_height` | `terrain` | Ground, geoid and ellipsoid heights at up to 20 points |
 | `find_military_installations` | `installations` | OpenStreetMap military sites in an area of at most 10° per side |
 | `get_map_features` | `features` | Administrative areas, named places or monuments at a location (needs Overpass) |

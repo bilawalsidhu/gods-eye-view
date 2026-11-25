@@ -261,6 +261,8 @@ export function createCalibration({
     // §9.1: touching range takes manual control — clear the activation clamp.
     if ('rangeScale' in patch) {
       record.probeClampRangeM = null;
+      // A probe still to answer no longer lands.
+      record.probeToken = (record.probeToken || 0) + 1;
     }
     const anchorMoved = calibrationPatchMovesAnchor(patch);
     if (options.transient === true && anchorMoved) {

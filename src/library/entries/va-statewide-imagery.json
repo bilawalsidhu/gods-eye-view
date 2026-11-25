@@ -1,0 +1,48 @@
+{
+  "id": "va-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Virginia Statewide Imagery",
+  "provider": "VGIN / VDEM",
+  "description": "Aerial orthophotos: Statewide coverage of Virginia.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-83.68, 36.54, -75.24, 39.47]
+  },
+  "source": {
+    "format": "xyz",
+    "url": "https://vginmaps.vdem.virginia.gov/arcgis/rest/services/VBMP_Imagery/MostRecentImagery_WGS/MapServer/tile/{z}/{y}/{x}",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 22,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "1 ft (VBMP)",
+    "resolutionM": 0.3048,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "VBMP 3-year statewide cycle",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Open — VGIN VBMP terms",
+    "url": "https://vgin.vdem.virginia.gov/",
+    "operatorOptIn": true
+  },
+  "attribution": {
+    "text": "Virginia Geographic Information Network (VGIN)",
+    "url": "https://vgin.vdem.virginia.gov/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

@@ -178,10 +178,29 @@ test('Cancel and Escape close through the owner; dispose removes the dialog', as
   $('dialog').dispatchEvent(cancel);
   assert.equal(cancel.defaultPrevented, true);
   assert.equal(closes, 2);
+  const root = $('dialog');
+  assert.equal(root.open, true, 'Escape leaves closing to the owner');
   dialog.dispose();
   await nextTick();
   assert.equal($('dialog'), null);
+  assert.equal(root.open, false, 'the removed dialog is closed');
   assert.equal(store.controls, null);
+});
+
+test('a close the browser makes on its own also closes through the owner', async (t) => {
+  // A repeated Escape can close a modal without a cancel the page may stop.
+  const { store } = fixture(t);
+  let closes = 0;
+  const dialog = createSceneDialog(
+    'Share selected scene',
+    () => closes++,
+    store,
+  );
+  await nextTick();
+  $('dialog').close();
+  assert.equal(closes, 1);
+  dialog.dispose();
+  await nextTick();
 });
 
 test('a replaced dialog opens fresh and its late dispose leaves the new one', async (t) => {

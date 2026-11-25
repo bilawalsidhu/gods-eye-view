@@ -1,10 +1,8 @@
-import * as Cesium from 'cesium';
 import { formatNumber, msg, t, tn } from '../../i18n/index.js';
-import {
-  registerSpriteCollection,
-  restoreSpriteOrder,
-  unregisterSpriteCollection,
-} from '../../data/spriteOrder.js';
+import { spriteDrawOrder } from '../../data/spriteOrder.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf, findFrame } from '../../render/rendererOf.js';
+import { inputFor } from '../../input/dispatcher.js';
 import { createHorizonCull } from '../streetLevel/view.js';
 import { ERA_COLORS, ERA_LABELS, describeShipwreck } from './cards.js';
 import { SHIPWRECK_ERAS, eraOf } from './eras.js';
@@ -80,18 +78,12 @@ export function wreckMarkerImage(color) {
 export function createShipwrecksLayer({
   source,
   overlayHost = null,
-  screenSpaceEventHandlerFactory = null,
   picking = null,
   pointer = null,
   openExternal = null,
   now = () => Date.now(),
-  // One collection for every wreck marker (thousands of them): far cheaper to
-  // draw and rebuild than an entity each. Tests pass a fake.
-  createMarkers = (scene) =>
-    new Cesium.BillboardCollection({
-      scene,
-      blendOption: Cesium.BlendOption.TRANSLUCENT,
-    }),
+  // The clicks on the globe: the application's input dispatcher.
+  input = (viewer) => inputFor(viewer),
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Shipwrecks require a snapshot source');
@@ -116,10 +108,14 @@ export function createShipwrecksLayer({
     SHIPWRECK_ERAS.map((era) => [era, wreckMarkerImage(ERA_COLORS[era])]),
   );
 
-  const render = () => _viewer?.scene?.requestRender?.();
+  const render = () => {
+    flushPins();
+    if (_viewer) findFrame(_viewer)?.requestRender('shipwrecks');
+  };
   const notifyRow = () => _rowListener?.();
-  const canSelect = () =>
-    overlayHost && screenSpaceEventHandlerFactory && picking;
+  const canSelect = () => overlayHost && picking;
+  /** Pins whose marker changed since the set was last written. */
+  const changedPins = new Set();
   // Markers skip the depth test so terrain does not swallow them; the
   // horizon cull hides the far side of the planet instead.
   const _horizon = createHorizonCull({
@@ -135,7 +131,17 @@ export function createShipwrecksLayer({
 
   function applyPin(pin) {
     const show = pin.inFront && visible(pin.record);
-    if (pin.billboard.show !== show) pin.billboard.show = show;
+    if (pin.item.show === show) return;
+    pin.item = { ...pin.item, show };
+    changedPins.add(pin);
+  }
+
+  /** Send the markers that changed to the set. */
+  function flushPins() {
+    if (!changedPins.size) return;
+    const items = [...changedPins].map((pin) => pin.item);
+    changedPins.clear();
+    _markers?.upsert(items);
   }
 
   /** Re-apply the period to every marker and the open card. */
@@ -151,27 +157,27 @@ export function createShipwrecksLayer({
     _extent = yearExtent(records);
     _range = periodRange(_period, _extent);
     _pins = [];
+    changedPins.clear();
     if (!_markers) return;
-    _markers.removeAll();
-    // Within one collection later markers draw on top: add by rising death
-    // toll so a bigger toll covers smaller neighbours.
+    // Within one set later markers draw on top: add by rising death toll so
+    // a bigger toll covers smaller neighbours.
     const ordered = [...records].sort(
       (a, b) => (a.casualties || 0) - (b.casualties || 0),
     );
     for (const record of ordered) {
-      const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
+      const position = fromDegrees(record.lon, record.lat);
       const size = markerPixelSize(record.casualties);
-      const billboard = _markers.add({
-        id: `${PICK_PREFIX}${record.id}`,
-        position,
-        image: _images[eraOf(record)],
-        width: size,
-        height: size,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
       const pin = {
-        billboard,
+        // The marker as the set draws it.
+        item: {
+          id: `${PICK_PREFIX}${record.id}`,
+          pos: position,
+          image: _images[eraOf(record)],
+          size: [size, size],
+          height: 'clampGround',
+          disableDepthTest: Number.POSITIVE_INFINITY,
+          show: true,
+        },
         record,
         position,
         inFront: true,
@@ -186,6 +192,8 @@ export function createShipwrecksLayer({
       applyPin(pin);
       _pins.push(pin);
     }
+    changedPins.clear();
+    _markers.set(_pins.map((pin) => pin.item));
     _horizon.update();
     if (_selectedId && !_records.has(_selectedId)) clearSelection();
     else if (_selectedId) publishCard();
@@ -215,7 +223,7 @@ export function createShipwrecksLayer({
       placement: 'above',
       stateless: true,
       horizonCull: true,
-      position: Cesium.Cartesian3.fromDegrees(record.lon, record.lat),
+      position: fromDegrees(record.lon, record.lat),
     };
     if (card.interactive) {
       const target = _selectedLink;
@@ -245,8 +253,7 @@ export function createShipwrecksLayer({
     );
   }
 
-  function pickedRecordId(picked) {
-    const pickId = picking.resolvePickId(picked);
+  function pickedRecordId(pickId) {
     if (typeof pickId !== 'string' || !pickId.startsWith(PICK_PREFIX))
       return null;
     const id = pickId.slice(PICK_PREFIX.length);
@@ -260,40 +267,53 @@ export function createShipwrecksLayer({
       (pickedId) =>
         typeof pickedId === 'string' && pickedId.startsWith(PICK_PREFIX),
     );
-    _clickHandler = screenSpaceEventHandlerFactory(_viewer);
-    _clickHandler.setInputAction((click) => {
+    // A viewer with no renderer input bound takes no clicks.
+    let clicks = null;
+    try {
+      clicks = input(_viewer) ?? null;
+    } catch {
+      clicks = null;
+    }
+    if (!clicks) return;
+    _clickHandler = clicks.onClick((click) => {
       if (pointer && !pointer.isPointerFree()) return;
-      const cardHit = overlayHost.hitTest?.(
-        click.position?.x,
-        click.position?.y,
-        { sourceId: SHIPWRECKS_OVERLAY_SOURCE_ID },
-      );
-      if (cardHit && cardHit.entryId === _selectedCardId) {
-        if (_selectedLink) openExternal(_selectedLink);
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours opens its source whatever is drawn
+      // under it; another layer's is that layer's click, so the markers
+      // under it do not act and the selection stays.
+      const cardHit = picking.clickCard?.(click) ?? null;
+      if (cardHit) {
+        if (
+          cardHit.sourceId === SHIPWRECKS_OVERLAY_SOURCE_ID &&
+          cardHit.entryId === _selectedCardId &&
+          _selectedLink
+        )
+          openExternal(_selectedLink);
         return;
       }
-      const picked = _viewer.scene.pick(click.position);
-      const id = picked ? pickedRecordId(picked) : null;
+      // A marker's item id is its pick id, `shipwreck:<id>`. Read from what is
+      // exactly under the click: a touch's wider contact search would pick a
+      // wreck the tap missed, or a contact near one.
+      const picked = click.topHit;
+      const pickId = picked ? (picking.resolvePickId(picked) ?? null) : null;
+      const id = pickedRecordId(pickId);
       if (id) {
         _selectedId = id;
         publishCard();
         render();
         return;
       }
-      if (picked) {
-        const pickId = picking.resolvePickId(picked);
-        if (pickId && picking.isOwnedByOtherLayer(SHIPWRECKS_LAYER_ID, pickId))
-          return;
-      }
+      if (pickId && picking.isOwnedByOtherLayer(SHIPWRECKS_LAYER_ID, pickId))
+        return;
       if (_selectedId) {
         clearSelection();
         render();
       }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function removeClickHandler() {
-    _clickHandler?.destroy();
+    _clickHandler?.();
     _clickHandler = null;
     picking?.unregisterPickOwner?.(SHIPWRECKS_LAYER_ID);
   }
@@ -362,18 +382,23 @@ export function createShipwrecksLayer({
     init(viewer) {
       if (_viewer) throw new Error('Shipwrecks layer is already initialized');
       _viewer = viewer;
-      _markers = createMarkers(viewer.scene);
-      _markers.show = false;
-      viewer.scene.primitives.add(_markers);
-      registerSpriteCollection(SHIPWRECKS_LAYER_ID, _markers);
+      // One set for every wreck marker (thousands of them), under the other
+      // sprite layers (`SPRITE_LAYER_ORDER`).
+      _markers = drawOf(viewer).icons({
+        id: 'shipwrecks:markers',
+        // Translucent, as its billboards were.
+        blend: 'translucent',
+        drawOrder: spriteDrawOrder(SHIPWRECKS_LAYER_ID),
+        show: false,
+      });
     },
 
     enable() {
       _enabled = true;
       if (_markers) _markers.show = true;
-      restoreSpriteOrder(_viewer);
       installClickHandler();
       if (_pins.length) _horizon.update();
+      render();
     },
 
     disable() {
@@ -434,13 +459,10 @@ export function createShipwrecksLayer({
       }
     },
 
-    destroy(viewer = _viewer) {
+    destroy() {
       layer.disable();
       if (_markers) {
-        unregisterSpriteCollection(SHIPWRECKS_LAYER_ID, _markers);
-        const primitives = viewer?.scene?.primitives;
-        if (primitives && !primitives.isDestroyed?.())
-          primitives.remove(_markers);
+        _markers.dispose();
         _markers = null;
       }
       _records = new Map();

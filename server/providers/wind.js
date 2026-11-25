@@ -1,27 +1,34 @@
 import { fetchGfsWind } from './wind/gfs.js';
 import { fetchIfsWind } from './wind/ifs.js';
-import { decodeWindGribMessage } from './wind/decode.js';
+import { createWindDecoder } from './wind/decoder.js';
 import { weatherScalarMetadata, weatherScalarError } from './wind/grid.js';
 
 // Data, not UI copy: the client (src/layers/wind/index.js) marks this exact
 // English with msg() and translates it when shown, so keep the two in sync.
 const UPSTREAM_UNAVAILABLE = 'Wind upstream unavailable';
+// Leave time to serve ready wind when the optional field is still pending.
+const SCALAR_MARGIN_MS = 2_000;
 
 /** Serve bounded, single-flight, per-model/overlay forecast snapshots from fixed providers. */
 export function windProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
-  decodeImpl = decodeWindGribMessage,
+  decodeImpl,
   targetDx = 1,
   ttlMs = 3600_000,
   timeoutMs = 40_000,
   models = { gfs: fetchGfsWind, ifs: fetchIfsWind },
 } = {}) {
+  // Owned here so the server that mounts this proxy stops its worker.
+  const decoder = decodeImpl ? null : createWindDecoder();
+  decodeImpl ??= decoder.decode;
   // Request validation limits these maps to 2 models × 3 overlays.
   const caches = new Map();
   const loadings = new Map();
   const grids = new Map();
   const attempts = new Map();
+  // Sampled U/V of the last forecast object per model (see loadWeatherSnapshot).
+  const windCache = new Map();
   const unavailable = (model, overlay) => ({
     manifest: {
       model,
@@ -46,6 +53,11 @@ export function windProxy({
     attempts.set(key, now());
     operation.promise = (async () => {
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const scalarController = new AbortController();
+      const scalarTimer = setTimeout(
+        () => scalarController.abort(),
+        Math.max(0, timeoutMs - SCALAR_MARGIN_MS),
+      );
       try {
         const value = await models[model]({
           fetchImpl,
@@ -54,6 +66,8 @@ export function windProxy({
           targetDx,
           overlay,
           signal: controller.signal,
+          scalarSignal: scalarController.signal,
+          windCache,
         });
         controller.signal.throwIfAborted();
         const { grid, cycle } = value;
@@ -150,6 +164,7 @@ export function windProxy({
         return unavailable(model, overlay);
       } finally {
         clearTimeout(timer);
+        clearTimeout(scalarTimer);
         controller.abort(); // Cancel a sibling request if the other component failed.
         if (loadings.get(key) === operation) loadings.delete(key);
       }
@@ -219,13 +234,16 @@ export function windProxy({
     }
     return sendJson(res, manifest);
   };
+  const closeDecoder = () => decoder?.close();
+  const install = (server) => {
+    server.middlewares.use('/api/wind', handler);
+    server.httpServer?.once('close', closeDecoder);
+  };
   return {
     name: 'wind',
-    configureServer({ middlewares }) {
-      middlewares.use('/api/wind', handler);
-    },
-    configurePreviewServer({ middlewares }) {
-      middlewares.use('/api/wind', handler);
-    },
+    configureServer: install,
+    configurePreviewServer: install,
+    // Dev server close in middleware mode (no httpServer); a no-op in builds.
+    closeBundle: closeDecoder,
   };
 }

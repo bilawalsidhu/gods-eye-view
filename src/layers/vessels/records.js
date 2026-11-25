@@ -1,4 +1,8 @@
 import {
+  mergeTimelineRuns,
+  readTimelineFixes,
+} from '../../time/timelineFixes.js';
+import {
   PARTIAL_RETENTION_MS,
   SELECTED_PIN_REFRESHES,
 } from './recordPolicy.js';
@@ -25,11 +29,19 @@ export function normalizeVessel(row) {
     imo: String(row.imo || ''),
     type: String(row.type || ''),
     destination: String(row.destination || ''),
+    // Hull length and beam (metres), null when unreported.
+    length: positiveNumber(row.length),
+    beam: positiveNumber(row.beam),
     speed: finiteNumber(row.speed),
     course: finiteNumber(row.course),
     heading: finiteNumber(row.heading),
+    // A virtual aid to navigation: a mark with nothing physical there.
+    virtual: row.virtual === true,
     lastPositionUtc: String(row.last_position_UTC || ''),
     lastPositionEpoch: finiteNumber(row.last_position_epoch),
+    // Its own track around the time, from a snapshot at a time (see
+    // src/time/timelineFixes.js); null when the row carries none.
+    fixes: readTimelineFixes(row.fixes),
     missedRefreshes: 0,
   };
 }
@@ -44,6 +56,11 @@ export function normalizeVessel(row) {
 function stampFix(record, receivedAtMs, feedLatestEpoch) {
   record.fixReceivedAtMs = receivedAtMs;
   record.fixFeedEpoch = feedLatestEpoch;
+}
+
+function positiveNumber(value) {
+  const number = finiteNumber(value);
+  return number !== null && number > 0 ? number : null;
 }
 
 function finiteNumber(value) {
@@ -86,7 +103,12 @@ export class VesselRecords {
    * between the two (see motion.js). `replace`: the rows are the world at
    * another time (the clock jumped), so they stand in for every vessel: one
    * they lack is gone at once, selected or not, and none moves from where it
-   * was at the time the clock left.
+   * was at the time the clock left. `handover`: the first live rows after the
+   * clock came back to live: a vessel they have moves to its live fix, not
+   * from where it was at the time the clock left; one they lack is judged
+   * as any live refresh judges it (a partial refresh, the selected vessel),
+   * by how old its newest fix is rather than when it was loaded, and holds
+   * at its last position meanwhile.
    */
   reconcile(
     rows,
@@ -95,6 +117,7 @@ export class VesselRecords {
       selectedRecord = null,
       cap = Infinity,
       replace = false,
+      handover = false,
       follow = false,
     },
     effects,
@@ -129,15 +152,28 @@ export class VesselRecords {
       seen.add(next.id);
       const record = this.byId.get(next.id);
       if (record) {
-        const before = effects.beforeUpdate(record);
         // A feed re-serving a cached row repeats its fix: the fix keeps the
         // time it was first received, so it goes on ageing.
         if (next.lastPositionEpoch !== record.lastPositionEpoch) {
           record.fixReceivedAtMs = next.fixReceivedAtMs;
           record.fixFeedEpoch = next.fixFeedEpoch;
         }
-        if (replace) record.motion = null;
-        else if (follow) record.motion = motionBetween(record, next);
+        if (replace || handover) {
+          record.motion = null;
+          record.fixes = next.fixes;
+        } else if (follow) {
+          record.motion = motionBetween(record, next);
+          // Without fixes now, it is placed by its record, not by fixes
+          // that end before it.
+          record.fixes = next.fixes
+            ? mergeTimelineRuns(
+                record.fixes ?? [],
+                next.fixes,
+                (fix) => fix.atMs,
+                (next.lastPositionEpoch ?? 0) * 1000,
+              )
+            : null;
+        } else record.fixes = null;
         record.reference = next.reference;
         record.mmsi = next.mmsi;
         record.receivedAtMs = next.receivedAtMs;
@@ -147,14 +183,17 @@ export class VesselRecords {
         record.imo = next.imo;
         record.type = next.type;
         record.destination = next.destination;
+        record.length = next.length;
+        record.beam = next.beam;
         record.speed = next.speed;
         record.course = next.course;
         record.heading = next.heading;
+        record.virtual = next.virtual;
         record.lastPositionUtc = next.lastPositionUtc;
         record.lastPositionEpoch = next.lastPositionEpoch;
         record.missedRefreshes = 0;
 
-        effects.updated(record, before);
+        effects.updated(record);
       } else {
         effects.add(next);
         this.byId.set(next.id, next);
@@ -162,6 +201,13 @@ export class VesselRecords {
     }
     for (const [id, record] of this.byId) {
       if (seen.has(id)) continue;
+      if (handover) {
+        record.motion = null;
+        record.fixes = null;
+        // Loaded for another time: last seen at its newest fix.
+        const fixMs = finiteNumber(record.lastPositionEpoch);
+        if (fixMs !== null) record.receivedAtMs = fixMs * 1000;
+      }
       if (replace) {
         effects.remove(record, record === selectedRecord);
         this.byId.delete(id);

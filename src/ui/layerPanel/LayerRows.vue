@@ -5,6 +5,7 @@ import RowRange from './RowRange.vue';
 import RowSlider from './RowSlider.vue';
 import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
+import UiButton from '../kit/UiButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 
 // The data layer rows under their group headings. LayerPanel presents every
@@ -22,9 +23,11 @@ defineProps({
 
 <template>
   <template v-for="item in items" :key="item.key"
-    ><h3 v-if="item.heading" class="data-layer-group-heading">{{
-      item.heading
-    }}</h3
+    ><h3
+      v-if="item.heading"
+      class="data-layer-group-heading"
+      :data-group="item.key"
+      >{{ item.heading }}</h3
     ><div
       v-else
       class="data-toggle-row"
@@ -33,6 +36,7 @@ defineProps({
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
+      :data-library-entry="item.libraryEntry || undefined"
       ><div class="data-toggle-top"
         ><div class="data-toggle-left"
           ><span class="data-icon" aria-hidden="true">{{ item.icon }}</span
@@ -42,8 +46,7 @@ defineProps({
             v-if="item.count"
             :class="['data-count', { 'data-count-empty': item.count.empty }]"
             :text="item.count.text"
-          /><button
-            type="button"
+          /><UiButton
             :class="['data-toggle-btn', item.toggle.classes]"
             :data-feed-state="item.toggle.feedState"
             :aria-disabled="String(item.toggle.ariaDisabled)"
@@ -51,7 +54,7 @@ defineProps({
             :title="item.toggle.title"
             :aria-label="item.toggle.ariaLabel"
             @click="onToggle(item.id)"
-            >{{ item.toggle.text }}</button
+            >{{ item.toggle.text }}</UiButton
           ></div
         ></div
       ><RowText tag="div" class="data-toggle-meta" :text="item.meta" /><template

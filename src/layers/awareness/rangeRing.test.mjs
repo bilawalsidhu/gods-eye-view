@@ -1,12 +1,12 @@
 // src/layers/awareness/rangeRing.test.mjs — the 250 km Global Context range
-// ring is a haloed polyline that stays legible on light and dark ground,
-// sits where the old ellipse outline did, and follows the subject.
-// Dim sonar pulses grow slowly from the subject to the ring, each with an
-// inward-fading gradient behind it, drawn on one unpickable disc; the ring
-// dims and flashes as each one arrives and the overlay's echo field follows
-// the subject. The pulses run for a bounded time after a selection or camera
-// move, then rest with the ring steady. Under reduced motion the ring simply
-// stays on screen.
+// ring is a haloed line that stays legible on light and dark ground, sits
+// where the old ellipse outline did, and follows the subject. Dim sonar
+// pulses grow slowly from the subject to the ring, each a haloed line with
+// an inward-fading band behind it drawn on one flat canvas-filled ellipse;
+// the ring dims and flashes as each one arrives and the overlay's echo field
+// follows the subject. All of it goes through the draw port, unpickable. The
+// pulses run for a bounded time after a selection or camera move, then rest
+// with the ring steady. Under reduced motion the ring simply stays on screen.
 import '../../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -20,18 +20,21 @@ import {
 } from './policy.js';
 import { CYBER_SONAR_RENDER_INTERVAL_MS } from '../../cyberSonar.js';
 import {
-  AWARENESS_PULSE_GRADIENT_MAX,
+  AWARENESS_BAND_PIXELS,
   awarenessPulseLevel,
   awarenessPulseState,
   awarenessRangeRingPositions,
   awarenessRingFlash,
-  awarenessRingGeometryOptions,
   createRendering,
+  paintAwarenessBand,
   wakeAwarenessPulses,
 } from './rendering.js';
 import { getAwarenessEchoField } from '../../awarenessEcho.js';
 import { createLifecycle } from './lifecycle.js';
 import { createState } from './state.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeScenePorts } from '../../testSupport/fakeCesiumScene.mjs';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 /** WCAG relative luminance of a Cesium colour, ignoring alpha. */
 function luminance(color) {
@@ -44,11 +47,77 @@ function luminance(color) {
   );
 }
 
+/** A CSS colour as the ring's draw-port colour: channels 0 to 1. */
+function rgba(css) {
+  const c = Cesium.Color.fromCssColorString(css);
+  return [c.red, c.green, c.blue, c.alpha];
+}
+
+const close = (a, b, eps = 1e-9) =>
+  a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) < eps);
+
 /**
- * The rendering part over a bare entity collection, counting render asks and
- * by reason. `reducedMotion` stubs the media query for the length of the
- * test; `motion.set(on)` flips it later and tells its listeners, as the
- * browser does.
+ * A 2D canvas double: its context makes image data and keeps the last one
+ * put, so a test can read what the band painted.
+ */
+function fakeCanvas() {
+  const canvas = { width: 0, height: 0, painted: null };
+  const context = {
+    createImageData: (width, height) => ({
+      width,
+      height,
+      data: new Uint8ClampedArray(width * height * 4),
+    }),
+    putImageData(image) {
+      canvas.painted = image;
+    },
+  };
+  canvas.getContext = (kind) => (kind === '2d' ? context : null);
+  return canvas;
+}
+
+/**
+ * The first index where two byte arrays differ, -1 when they match: a
+ * bounded comparison for whole images.
+ */
+function firstMismatch(a, b) {
+  if (a.length !== b.length) return Math.min(a.length, b.length);
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return i;
+  return -1;
+}
+
+/** A Cesium scene double with the frame events the frame port listens to. */
+const sceneDouble = () => ({
+  preRender: new Cesium.Event(),
+  postRender: new Cesium.Event(),
+  screenSpaceCameraController: { enableInputs: true },
+  requestRender() {},
+});
+
+/** A viewer double bound to fake camera, frame, query and draw ports. */
+function viewerDouble(entities) {
+  const viewer = {
+    entities,
+    scene: sceneDouble(),
+    canvas: new EventTarget(),
+    camera: {
+      positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
+      positionCartographic: { height: 800_000 },
+      heading: 0,
+      pitch: -1,
+      roll: 0,
+    },
+  };
+  const ports = fakeScenePorts(viewer);
+  bindFakeCesiumCamera(viewer, ports);
+  return { viewer, draw: ports.draw };
+}
+
+/**
+ * The rendering part over a viewer double, counting render asks and by
+ * reason. `reducedMotion` stubs the media query for the length of the test;
+ * `motion.set(on)` flips it later and tells its listeners, as the browser
+ * does. Canvases are doubles that keep what is painted on them.
  */
 function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
   const previous = globalThis.matchMedia;
@@ -81,6 +150,10 @@ function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
   t.after(() => {
     globalThis.matchMedia = previous;
   });
+  const createElement = document.createElement.bind(document);
+  t.mock.method(document, 'createElement', (tag, ...rest) =>
+    tag === 'canvas' ? fakeCanvas() : createElement(tag, ...rest),
+  );
   const motion = {
     set(on) {
       reducedMotion = on;
@@ -94,12 +167,8 @@ function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
   };
   const state = createState({ services: {} });
   const entities = new Cesium.EntityCollection();
-  const scene = {
-    primitives: new Cesium.PrimitiveCollection(),
-    preRender: new Cesium.Event(),
-    postRender: new Cesium.Event(),
-  };
-  state.viewer = { entities, scene };
+  const { viewer, draw } = viewerDouble(entities);
+  state.viewer = viewer;
   const reasons = [];
   const rendering = createRendering({
     state,
@@ -118,7 +187,8 @@ function ringRendering(t, { reducedMotion = false, legacyQuery = false } = {}) {
   return {
     state,
     entities,
-    scene,
+    scene: viewer.scene,
+    draw,
     rendering,
     motion,
     reasons,
@@ -145,8 +215,8 @@ function frameLoop(t, ring, { date = false } = {}) {
   let drawn = 0;
   const draw = () => {
     drawn = ring.reasons.length;
-    ring.scene.preRender.raiseEvent(ring.scene);
-    ring.scene.postRender.raiseEvent(ring.scene);
+    ring.state.viewer.scene.preRender.raiseEvent(ring.state.viewer.scene);
+    ring.state.viewer.scene.postRender.raiseEvent(ring.state.viewer.scene);
   };
   return {
     now: () => clock,
@@ -161,31 +231,41 @@ function frameLoop(t, ring, { date = false } = {}) {
   };
 }
 
-/** The ring and the pulse disc among scene primitives. */
-function pulsePrimitives(scene) {
-  const all = Array.from({ length: scene.primitives.length }, (_, i) =>
-    scene.primitives.get(i),
+/** The ring's live draw sets on `draw`: its lines and its band. */
+function ringSets(draw) {
+  const live = [...draw.sets.values()].filter(
+    (record) => !record.disposed && record.spec.id.startsWith('awareness:'),
   );
-  const ring = all.find(
-    (p) => p.appearance instanceof Cesium.PolylineMaterialAppearance,
-  );
-  const discs = all.filter((p) => p instanceof Cesium.Primitive && p !== ring);
-  return { ring, disc: discs[0], count: discs.length };
+  return {
+    lines: live.find((record) => record.kind === 'lines'),
+    band: live.find((record) => record.kind === 'shapes'),
+    count: live.length,
+  };
 }
 
-/** Where a disc built around `built` sits after its model matrix. */
-function discCenter(disc, built) {
-  return Cesium.Matrix4.multiplyByPoint(
-    disc.modelMatrix,
-    built,
-    new Cesium.Cartesian3(),
+/** The ring's lines and band items as drawn now. */
+function drawn(ring) {
+  const { lines, band } = ringSets(ring.draw);
+  const item = (id) => lines?.items.get(id);
+  // A haloed line is one item; its halo is the style's outline.
+  const haloOf = (line) =>
+    line && {
+      ...line,
+      style: { kind: 'solid', color: line.style.outline.color },
+    };
+  const pulses = [...(lines?.items.keys() ?? [])].filter((id) =>
+    id.startsWith('pulse:'),
   );
-}
-
-/** The ring's material uniforms as the next drawn frame sets them. */
-function ringColors(scene) {
-  scene.preRender.raiseEvent(scene);
-  return pulsePrimitives(scene).ring.appearance.material.uniforms;
+  return {
+    core: item('ring'),
+    halo: haloOf(item('ring')),
+    pulse: (index, part = 'core') =>
+      part === 'halo' ? haloOf(item(`pulse:${index}`)) : item(`pulse:${index}`),
+    pulses,
+    band: band?.items.get('band'),
+    lines,
+    bandSet: band,
+  };
 }
 
 const flight = (lon) => ({
@@ -198,7 +278,9 @@ const flight = (lon) => ({
 function surfaceDistances(center, positions) {
   const from = Cesium.Cartographic.fromCartesian(center);
   return positions.map((position) => {
-    const to = Cesium.Cartographic.fromCartesian(position);
+    const to = Cesium.Cartographic.fromCartesian(
+      Cesium.Cartesian3.clone(position),
+    );
     return new Cesium.EllipsoidGeodesic(from, to).surfaceDistance;
   });
 }
@@ -281,94 +363,68 @@ test('the ring core and halo contrast on light and dark ground', () => {
   const ratio = (luminance(core) + 0.05) / (luminance(halo) + 0.05);
   assert.ok(ratio >= 4.5, `core:halo contrast ${ratio.toFixed(2)}`);
   assert.ok(core.alpha >= 0.9 && halo.alpha >= 0.7);
-  // A visible halo on each side of a core at least 2 px wide.
+  // A visible halo, half on each side, around a core at least 2 px wide.
   const { width, outlineWidth } = AWARENESS_RANGE_RING_STYLE;
   assert.ok(outlineWidth >= 1);
-  assert.ok(width - 2 * outlineWidth >= 2);
+  assert.ok(width - outlineWidth >= 2);
 });
 
-test('renderVisual draws one haloed polyline ring, not an ellipse outline', (t) => {
+test('renderVisual draws the ring as a haloed line in an unpickable set, never an entity', (t) => {
   const ring = ringRendering(t);
-  const { entities, scene, state, rendering } = ring;
+  const { entities, state, rendering } = ring;
   frameLoop(t, ring); // freeze the clock: the pulses have not faded in yet
   rendering.renderVisual(flight(3));
-  // A polyline primitive, never an entity or an ellipse outline.
   assert.equal(entities.values.length, 0);
-  const ringPrimitive = pulsePrimitives(scene).ring;
-  assert.ok(ringPrimitive);
-  const geometry = ringPrimitive.geometryInstances.geometry;
-  assert.ok(geometry instanceof Cesium.PolylineGeometry);
-  // 4 px wide, straight chords between surface-following positions, as the
-  // entity ring was drawn.
-  const options = awarenessRingGeometryOptions(state.visual.ringPositions);
-  assert.equal(options.width, 4);
-  assert.equal(options.width, AWARENESS_RANGE_RING_STYLE.width);
-  assert.equal(options.arcType, Cesium.ArcType.NONE);
-  assert.equal(options.positions, state.visual.ringPositions);
+  const { core, halo, lines } = drawn(ring);
+  assert.equal(lines.spec.pickable, false);
+  // 4 px wide in all, a 1 px halo on each side of a 2 px core, in one
+  // line, straight 3D chords between surface-following positions.
+  assert.equal(core.widthPx, AWARENESS_RANGE_RING_STYLE.width);
   assert.equal(
-    options.vertexFormat,
-    Cesium.PolylineMaterialAppearance.VERTEX_FORMAT,
+    core.style.outline.widthPx,
+    AWARENESS_RANGE_RING_STYLE.outlineWidth,
   );
-  const { material } = ringPrimitive.appearance;
-  assert.equal(material.type, 'PolylineOutline');
-  // The ring's hue is fixed; its opacity flashes with arriving pulses, and
-  // at the moment it appears, before the pulses fade in, it is at full.
-  const core = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.color,
+  assert.equal(core.mode, '3d');
+  assert.equal(core.positions, state.visual.ringPositions);
+  assert.equal(halo.positions, core.positions);
+  // At the moment it appears, before the pulses fade in, it is at full.
+  assert.equal(core.style.kind, 'solid');
+  assert.ok(close(core.style.color, rgba(AWARENESS_RANGE_RING_STYLE.color)));
+  assert.ok(
+    close(halo.style.color, rgba(AWARENESS_RANGE_RING_STYLE.outlineColor)),
   );
-  const { color, outlineWidth } = ringColors(scene);
-  assert.equal(color.red, core.red);
-  assert.equal(color.blue, core.blue);
-  assert.ok(Math.abs(color.alpha - core.alpha) < 1e-9, `${color.alpha}`);
-  assert.equal(outlineWidth, AWARENESS_RANGE_RING_STYLE.outlineWidth);
   const ground = Cesium.Cartesian3.fromDegrees(3, 27, 0);
   for (const distance of surfaceDistances(ground, state.visual.ringPositions))
     assert.ok(Math.abs(distance - AWARENESS_RADIUS_M) < 100);
 });
 
-test('the ring and pulses follow the subject past 250 m and ignore smaller drift', (t) => {
-  const { scene, state, rendering, renders } = ringRendering(t);
-  const subject = flight;
-  rendering.renderVisual(subject(3));
-  const ringBefore = pulsePrimitives(scene).ring;
+test('the ring follows the subject past 250 m and ignores smaller drift', (t) => {
+  const ring = ringRendering(t);
+  const { state, rendering, renders } = ring;
+  rendering.renderVisual(flight(3));
+  const sets = ringSets(ring.draw);
   const first = state.visual.ringPositions;
-  const discBefore = pulsePrimitives(scene).disc;
   const rendersAfterAdd = renders();
-
-  // ~100 m east: under the threshold, nothing is rebuilt or rendered.
-  rendering.renderVisual(subject(3.001));
-  assert.equal(pulsePrimitives(scene).ring, ringBefore);
+  // ~100 m east: under the threshold, nothing is redrawn or rendered.
+  rendering.renderVisual(flight(3.001));
   assert.equal(state.visual.ringPositions, first);
+  assert.equal(drawn(ring).core.positions, first);
   assert.equal(renders(), rendersAfterAdd);
-
-  // ~1 km east: the ring is rebuilt around the new centre, keeping its
-  // material, so a flash carries on.
-  rendering.renderVisual(subject(3.01));
-  const ringAfter = pulsePrimitives(scene).ring;
-  assert.notEqual(ringAfter, ringBefore);
-  assert.ok(ringBefore.isDestroyed());
-  assert.equal(ringAfter.appearance.material, ringBefore.appearance.material);
-  assert.equal(ringAfter.allowPicking, false);
+  // ~1 km east: the ring is drawn around the new centre, in the same sets.
+  rendering.renderVisual(flight(3.01));
   const moved = state.visual.ringPositions;
   assert.notEqual(moved, first);
+  assert.equal(drawn(ring).core.positions, moved);
+  assert.equal(ringSets(ring.draw).lines, sets.lines);
   for (const distance of surfaceDistances(
     Cesium.Cartesian3.fromDegrees(3.01, 27, 0),
     moved,
   ))
     assert.ok(Math.abs(distance - AWARENESS_RADIUS_M) < 100);
   assert.equal(renders(), rendersAfterAdd + 1);
-  // The pulses are drawn on a disc that follows to the NEW centre by its
-  // model matrix, so they stay concentric with the ring without a rebuild.
-  assert.equal(pulsePrimitives(scene).disc, discBefore);
-  assert.ok(
-    Cesium.Cartesian3.distance(
-      discCenter(discBefore, Cesium.Cartesian3.fromDegrees(3, 27, 0)),
-      Cesium.Cartesian3.fromDegrees(3.01, 27, 0),
-    ) < 1,
-  );
-
   rendering.clearVisual();
-  assert.equal(scene.primitives.length, 0);
+  assert.equal(sets.lines.items.size, 0);
+  assert.equal(sets.band.items.size, 0);
 });
 
 test('a pulse grows slowly from the subject and arrives dim at the ring', () => {
@@ -432,7 +488,7 @@ test('pulses ask for a frame 80 ms after each drawn frame instead of holding con
   const { rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  // A Contacts view repaints at the Cyber sonar cadence, ~12.5 fps, while
+  // A Contacts view repaints at the sonar cadence, ~12.5 fps, while
   // the pulses run, never every display frame.
   assert.equal(pulseFrames(), 0);
   loop.advance(1); // the frame the new ring asked for arms the first request
@@ -440,15 +496,68 @@ test('pulses ask for a frame 80 ms after each drawn frame instead of holding con
   assert.ok(Math.abs(pulseFrames() - 10) <= 1, `${pulseFrames()} frames`);
   const frames = pulseFrames();
   rendering.clearVisual();
-  assert.equal(ring.scene.primitives.length, 0);
+  assert.equal(ringSets(ring.draw).lines.items.size, 0);
   assert.equal(ring.scene.postRender.numberOfListeners, 0);
   loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS * 10);
   assert.equal(pulseFrames(), frames, 'no frames once the ring is gone');
 });
 
+test('a pulse frame draws the step made before it was asked for; a moving camera steps nothing sooner', (t) => {
+  const ring = ringRendering(t);
+  const { rendering, state } = ring;
+  const loop = frameLoop(t, ring);
+  rendering.renderVisual(flight(3));
+  loop.advance(1);
+  // Each pulse request comes with its step already made, so the frame it
+  // asks for steps nothing more and asks for no other.
+  const asked = [];
+  const push = ring.reasons.push;
+  ring.reasons.push = function (reason) {
+    asked.push([reason, state.visual.lastStepMs, performance.now()]);
+    return push.call(this, reason);
+  };
+  let steps = 0;
+  const step = state.visual.step;
+  state.visual.step = (nowMs) => {
+    steps += 1;
+    step(nowMs);
+  };
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS * 10);
+  const pulses = asked.filter(([reason]) => reason === 'awareness-pulse');
+  assert.ok(pulses.length >= 9, `${pulses.length} pulse frames`);
+  for (const [, stepMs, nowMs] of pulses) assert.equal(stepMs, nowMs);
+  assert.equal(steps, pulses.length, 'one step a pulse frame');
+  // The fronts and band are fixed in the world: frames the camera moves
+  // in within the interval step nothing, as a parked view's would not.
+  steps = 0;
+  const bandKey = drawn(ring).band.fill.image.key;
+  for (let i = 0; i < 5; i++) {
+    state.viewer.camera.positionWC = Cesium.Cartesian3.fromDegrees(
+      3,
+      20 + (i + 1) * 0.01,
+      800_000,
+    );
+    loop.draw();
+  }
+  assert.equal(steps, 0);
+  assert.equal(drawn(ring).band.fill.image.key, bandKey);
+  // Nor do frames a user's drag draws, each waking the running pulses.
+  for (let i = 0; i < 3; i++) {
+    rendering.wakePulses();
+    loop.draw();
+  }
+  assert.equal(steps, 0, 'a drag keeps the interval');
+  // Crossing below the rim height hides them at once, interval or not.
+  state.viewer.camera.positionCartographic = { height: 1_000 };
+  loop.draw();
+  assert.equal(steps, 1);
+  assert.equal(drawn(ring).pulse(0).show, false);
+  assert.equal(drawn(ring).band.show, false);
+});
+
 test('a parked view stops asking for frames once the pulses rest', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering, pulseFrames } = ring;
+  const { rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   const { activeMs, count, periodMs } = AWARENESS_RANGE_PULSE;
   // Long enough for three ring flashes, then quiet, and short: a burst is
@@ -468,11 +577,13 @@ test('a parked view stops asking for frames once the pulses rest', (t) => {
   assert.equal(pulseFrames(), frames, 'render requests stop after the bound');
   // At rest the ring stands on screen at full, as without pulses, and the
   // pulses, gradient and echoes are hidden.
-  const core = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.color,
+  const now = drawn(ring);
+  assert.ok(
+    close(now.core.style.color, rgba(AWARENESS_RANGE_RING_STYLE.color)),
   );
-  assert.ok(Math.abs(ringColors(scene).color.alpha - core.alpha) < 1e-9);
-  assert.equal(pulsePrimitives(scene).disc.show, false);
+  for (let index = 0; index < AWARENESS_RANGE_PULSE.count; index++)
+    assert.equal(now.pulse(index).show, false);
+  assert.equal(now.band.show, false);
   assert.equal(getAwarenessEchoField().level(loop.now()), 0);
 });
 
@@ -507,15 +618,8 @@ test('a camera move seen by the lifecycle wakes resting pulses; a parked camera 
   const loop = frameLoop(t, ring, { date: true });
   const { activeMs, inputWakeMs } = AWARENESS_RANGE_PULSE;
   state.enabled = true;
-  state.viewer.canvas = new EventTarget();
   const touch = () =>
     state.viewer.canvas.dispatchEvent(new Event('pointerdown'));
-  state.viewer.camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
-    heading: 0,
-    pitch: -1,
-    roll: 0,
-  };
   const lifecycle = createLifecycle({
     state,
     services: {
@@ -618,14 +722,6 @@ function inputLifecycle(t, ring) {
   const { state, rendering } = ring;
   const loop = frameLoop(t, ring, { date: true });
   state.enabled = true;
-  state.viewer.canvas = new EventTarget();
-  state.viewer.scene.screenSpaceCameraController = { enableInputs: true };
-  state.viewer.camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
-    heading: 0,
-    pitch: -1,
-    roll: 0,
-  };
   const lifecycle = createLifecycle({
     state,
     services: {
@@ -828,12 +924,6 @@ test('disabling the layer tears the pulses down completely', (t) => {
   const ring = ringRendering(t);
   const { state, scene, rendering, motion, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
-  state.viewer.camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(3, 20, 800_000),
-    heading: 0,
-    pitch: -1,
-    roll: 0,
-  };
   const lifecycle = createLifecycle({
     state,
     services: {
@@ -863,9 +953,11 @@ test('disabling the layer tears the pulses down completely', (t) => {
   rendering.renderVisual(state.subject);
   loop.advance(1000);
   assert.ok(pulseFrames() > 0);
-  assert.equal(scene.primitives.length, 2);
+  const sets = ringSets(ring.draw);
+  assert.ok(sets.lines.items.size > 0 && sets.band.items.size === 1);
   lifecycle.methods.disable();
-  assert.equal(scene.primitives.length, 0, 'ring and disc removed');
+  assert.equal(sets.lines.items.size, 0, 'ring and pulses removed');
+  assert.equal(sets.band.items.size, 0, 'band removed');
   assert.equal(scene.preRender.numberOfListeners, 0);
   assert.equal(scene.postRender.numberOfListeners, 0);
   assert.equal(motion.listeners(), 0, 'no media-query listener');
@@ -880,14 +972,14 @@ test('disabling the layer tears the pulses down completely', (t) => {
   );
 });
 
-test('pulse requests wait 80 ms after any frame, so they cannot beat the Cyber sonar', (t) => {
+test('pulse requests wait 80 ms after any frame, so they cannot beat the sonar', (t) => {
   const ring = ringRendering(t);
   const { rendering, pulseFrames } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
   loop.advance(1);
   const frames = pulseFrames();
-  // Another owner (the Cyber sonar, a data update) draws 67 ms after ours.
+  // Another owner (the sonar, a data update) draws 67 ms after ours.
   loop.advance(67);
   loop.draw();
   loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS - 1);
@@ -918,220 +1010,292 @@ test('the pulse level fades in, holds, fades out and keeps its level when woken'
   assert.equal(awarenessPulseLevel(at + activeMs, wake), 0);
 });
 
-test('a scene without primitives or preRender gets the static ring only', (t) => {
-  const { state, entities, rendering, pulseFrames } = ringRendering(t);
-  for (const scene of [
-    {},
-    { primitives: { add() {} } },
-    { primitives: { add() {} }, preRender: new Cesium.Event() },
-    undefined,
-  ]) {
+test('a renderer without frame hooks gets the static ring only', (t) => {
+  const ring = ringRendering(t);
+  const { state, entities, rendering, pulseFrames } = ring;
+  for (const scene of [{}, undefined]) {
     state.viewer = { entities, scene };
+    const { draw } = bindFakeDraw(state.viewer);
     rendering.clearVisual();
     rendering.renderVisual(flight(3));
-    // No usable primitive collection: the ring falls back to an entity.
-    assert.equal(entities.values.length, 1);
-    assert.equal(entities.values[0].polyline.positions.isConstant, true);
-    assert.equal(entities.values[0].polyline.material.color.isConstant, true);
+    // The ring is one line in an unpickable draw set, a bright core inside
+    // a dark halo, and nothing animates.
+    assert.equal(entities.values.length, 0);
+    const { lines, band } = ringSets(draw);
+    assert.equal(lines.spec.pickable, false);
+    assert.deepEqual([...lines.items.keys()], ['ring']);
+    assert.equal(band.items.size, 0, 'no band');
+    const core = lines.items.get('ring');
+    assert.ok(close(core.style.color, rgba(AWARENESS_RANGE_RING_STYLE.color)));
+    rendering.clearVisual();
+    assert.equal(lines.items.size, 0, 'clearing takes the ring away');
+    assert.equal(state.visual, null);
   }
-  rendering.clearVisual();
   assert.equal(pulseFrames(), 0);
 });
 
-test('a gradient disc behind the pulses fades inward and follows the subject', (t) => {
+test('the band fades inward from each front, in the ring blue, about the subject', () => {
+  const size = 64;
+  const image = { width: size, data: new Uint8ClampedArray(size * size * 4) };
+  const { gradientDepthFraction: depth, gradientOpacity } =
+    AWARENESS_RANGE_PULSE;
+  const rangeM = 100;
+  const spanM = 100;
+  const band = (offset = { east: 0, north: 0 }) =>
+    paintAwarenessBand(image, {
+      radii: [0.8, 0],
+      alphas: [0.5, 0],
+      rgb: [0.25, 0.5, 1],
+      spanM,
+      rangeM,
+      offset,
+    });
+  // Alpha at a pixel `fraction` of the range east of the canvas centre.
+  const alphaEast = (fraction) => {
+    const x = Math.floor(size / 2 + (fraction * size) / 2);
+    const k = ((size / 2) * size + x) * 4;
+    return image.data[k + 3] / 255;
+  };
+  band();
+  const k = ((size / 2) * size + size / 2) * 4;
+  assert.deepEqual([...image.data.slice(k, k + 3)], [64, 128, 255]);
+  // Strongest just inside the front, nothing beyond it or `depth` inside.
+  const peak = 0.5 * gradientOpacity;
+  assert.ok(Math.abs(alphaEast(0.79) - peak) < 0.02, `${alphaEast(0.79)}`);
+  assert.equal(alphaEast(0.85), 0);
+  assert.equal(alphaEast(0.8 - depth - 0.1), 0);
+  // Quadratic: half way in, a quarter as strong.
+  assert.ok(
+    Math.abs(alphaEast(0.8 - depth / 2) - peak / 4) < 0.02,
+    `${alphaEast(0.8 - depth / 2)}`,
+  );
+  // The subject 20 m east of the canvas centre: the band moves with it.
+  band({ east: 20, north: 0 });
+  assert.ok(Math.abs(alphaEast(0.79 + 0.2) - peak) < 0.02);
+  // 0.3 of the range from the subject: deeper than the band reaches.
+  assert.equal(alphaEast(0.5), 0);
+});
+
+test('a band painted with a kept memo is the band painted afresh, step after step', () => {
+  const size = 48;
+  const fresh = () => ({
+    width: size,
+    data: new Uint8ClampedArray(size * size * 4),
+  });
+  const kept = [fresh(), fresh()];
+  const memo = {};
+  const steps = [
+    { radii: [0.2, 0.5, 0.9], offset: { east: 0, north: 0 } },
+    { radii: [0.25, 0.55, 0.95], offset: { east: 0, north: 0 } },
+    { radii: [0.3, 0.6, 1], offset: { east: 7, north: -3 } },
+    { radii: [0.05, 0.65, 0.4], offset: { east: 7, north: -3 } },
+    { radii: [1.2, 0.1, 0], offset: { east: 7, north: -3 } },
+  ];
+  steps.forEach(({ radii, offset }, k) => {
+    const band = {
+      radii,
+      alphas: radii.map((r, i) => 0.2 + 0.1 * i),
+      rgb: k < 3 ? [0.25, 0.5, 1] : [1, 0.5, 0],
+      spanM: 120,
+      rangeM: 100,
+      offset,
+    };
+    const image = kept[k % 2];
+    paintAwarenessBand(image, band, memo);
+    const expected = fresh();
+    paintAwarenessBand(expected, band);
+    assert.equal(firstMismatch(image.data, expected.data), -1, `step ${k}`);
+  });
+  // An image painted over by someone else is painted whole again.
+  const image = kept[0];
+  const band = {
+    ...steps[0],
+    alphas: [0.3, 0.3, 0.3],
+    spanM: 120,
+    rangeM: 100,
+  };
+  paintAwarenessBand(image, { ...band, rgb: [1, 0, 0] }, memo);
+  paintAwarenessBand(image, { ...band, rgb: [0, 0, 1] });
+  paintAwarenessBand(image, { ...band, rgb: [1, 0, 0] }, memo);
+  const expected = fresh();
+  paintAwarenessBand(expected, { ...band, rgb: [1, 0, 0] });
+  assert.equal(firstMismatch(image.data, expected.data), -1, 'repainted');
+  // Bytes that do not line up with whole words are painted a byte at a
+  // time, the same.
+  const odd = {
+    width: size,
+    data: new Uint8ClampedArray(new ArrayBuffer(size * size * 4 + 1), 1),
+  };
+  paintAwarenessBand(odd, { ...band, rgb: [1, 0, 0] }, memo);
+  assert.equal(firstMismatch(odd.data, expected.data), -1, 'unaligned');
+});
+
+test('the band is one flat unpickable ellipse at the rim, drawn anew each step about the subject', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering } = ring;
+  const { state, rendering } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  assert.ok(AWARENESS_RANGE_PULSE.count <= AWARENESS_PULSE_GRADIENT_MAX);
-  assert.equal(scene.primitives.length, 2, 'the ring and the pulse disc');
-  const { disc, count } = pulsePrimitives(scene);
-  assert.equal(count, 1, 'the gradient disc');
-  assert.ok(disc);
-  // Never a click or tap target, and see-through.
-  assert.equal(disc.allowPicking, false);
-  assert.equal(disc.appearance.translucent, true);
-  const { material } = disc.appearance;
-  assert.ok(
-    Math.abs(
-      material.uniforms.depth - AWARENESS_RANGE_PULSE.gradientDepthFraction,
-    ) < 1e-9,
-  );
-  assert.ok(
-    Math.abs(
-      material.uniforms.color.alpha - AWARENESS_RANGE_PULSE.gradientOpacity,
-    ) < 1e-6,
-  );
-  // The pulse lines are drawn in the ring's colours and widths.
-  const core = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.color,
-  );
-  const halo = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.outlineColor,
-  );
-  assert.ok(material.uniforms.lineColor.equalsEpsilon(core, 1e-6));
-  assert.ok(material.uniforms.haloColor.equalsEpsilon(halo, 1e-6));
-  assert.equal(material.uniforms.lineWidth, AWARENESS_RANGE_PULSE.width);
-  assert.equal(material.uniforms.haloWidth, AWARENESS_RANGE_PULSE.outlineWidth);
-  // Each frame writes the pulses' radius (as a fraction of the range) and
-  // opacity into the shader, from the same curve the lines use, once the
-  // pulses have faded in.
-  assert.equal(scene.preRender.numberOfListeners, 1);
   loop.advance(AWARENESS_RANGE_PULSE.settleMs + 500);
-  scene.preRender.raiseEvent(scene);
-  assert.equal(disc.show, true);
-  const { radii, alphas } = material.uniforms;
+  const { band, bandSet } = drawn(ring);
+  assert.equal(bandSet.spec.pickable, false);
+  assert.equal(band.show, true);
+  assert.equal(band.height, 'absolute');
+  const { geometry } = band;
+  assert.equal(geometry.kind, 'ellipse');
+  assert.ok(Math.abs(geometry.center.lon - 3) < 1e-9);
+  assert.ok(Math.abs(geometry.center.lat - 27) < 1e-9);
+  assert.equal(geometry.center.height, CONTEXT_RIM_HEIGHT_M);
+  // Wide enough for the band to follow the subject `gradientRebuildM` off.
+  const spanM = AWARENESS_RADIUS_M + AWARENESS_RANGE_PULSE.gradientRebuildM;
+  assert.equal(geometry.semiMajor, spanM);
+  assert.equal(geometry.semiMinor, spanM);
+  const { canvas, key } = band.fill.image;
+  assert.equal(canvas.width, AWARENESS_BAND_PIXELS);
+  // Each step paints the other canvas under a new key.
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS + 2);
+  const next = drawn(ring).band.fill.image;
+  assert.notEqual(next.key, key);
+  assert.notEqual(next.canvas, canvas);
+  // What it painted is the band of the pulses as they were at that step.
+  const at = state.visual.lastStepMs;
+  const level = awarenessPulseLevel(at, state.visual.wake);
+  const expected = { width: AWARENESS_BAND_PIXELS };
+  expected.data = new Uint8ClampedArray(AWARENESS_BAND_PIXELS ** 2 * 4);
+  const radii = [];
+  const alphas = [];
   for (let index = 0; index < AWARENESS_RANGE_PULSE.count; index++) {
-    const radius = Cesium.Cartesian4.pack(radii, [])[index];
-    const alpha = Cesium.Cartesian4.pack(alphas, [])[index];
-    const expected = awarenessPulseState(loop.now(), index);
-    assert.ok(Math.abs(radius - expected.radiusM / AWARENESS_RADIUS_M) < 1e-6);
-    assert.ok(alpha >= 0 && alpha <= AWARENESS_RANGE_PULSE.peakOpacity);
-    assert.ok(Math.abs(alpha - expected.alpha) < 1e-6);
+    const pulse = awarenessPulseState(at, index);
+    radii.push(pulse.radiusM / AWARENESS_RADIUS_M);
+    alphas.push(pulse.alpha * level);
   }
-  // Unused shader slots stay empty.
-  assert.equal(
-    Cesium.Cartesian4.pack(alphas, [])[AWARENESS_PULSE_GRADIENT_MAX - 1],
-    0,
-  );
-
-  // The disc follows by its model matrix and is rebuilt only past
-  // `gradientRebuildM` (20 km), keeping its material.
-  const built = Cesium.Cartesian3.fromDegrees(3, 27, 0);
-  for (const lon of [3.001, 3.01, 3.1, 3.19]) {
-    rendering.renderVisual(flight(lon));
-    assert.equal(pulsePrimitives(scene).disc, disc, `${lon}`);
-    assert.ok(!disc.isDestroyed());
-    // Concentric with the ring wherever the subject went, within a metre
-    // across the ground; the ellipsoid curves away from the rotation's
-    // sphere by tens of metres in height at most.
-    const at = Cesium.Cartographic.fromCartesian(discCenter(disc, built));
-    const want = Cesium.Cartographic.fromCartesian(ring.state.visual.center);
-    const across = new Cesium.EllipsoidGeodesic(at, want).surfaceDistance;
-    assert.ok(across < 1, `${across} m off at ${lon}`);
-    assert.ok(Math.abs(at.height) < 50, `${at.height} m off the ground`);
+  paintAwarenessBand(expected, {
+    radii,
+    alphas,
+    rgb: rgba(AWARENESS_RANGE_RING_STYLE.color),
+    spanM,
+    rangeM: AWARENESS_RADIUS_M,
+    offset: { east: 0, north: 0 },
+  });
+  // Compared byte by byte: a failing deepEqual on a 256×256 image builds a
+  // diff of every byte, which ran a test process out of memory.
+  assert.equal(firstMismatch(next.canvas.painted.data, expected.data), -1);
+  // Each front is a haloed line at its radius, faded with its pulse.
+  for (let index = 0; index < AWARENESS_RANGE_PULSE.count; index++) {
+    const core = drawn(ring).pulse(index);
+    const halo = drawn(ring).pulse(index, 'halo');
+    assert.equal(core.show, true);
+    assert.equal(core.widthPx, AWARENESS_RANGE_PULSE.width);
+    assert.equal(halo.style.color.length, 4);
+    // The outline is the halo's width in all, half on each side.
+    assert.equal(
+      core.style.outline.widthPx,
+      AWARENESS_RANGE_PULSE.outlineWidth,
+    );
+    const pulse = awarenessPulseState(at, index);
+    const ground = Cesium.Cartesian3.fromDegrees(3, 27, 0);
+    for (const d of surfaceDistances(ground, core.positions))
+      assert.ok(Math.abs(d - pulse.radiusM) < 100, `${d} vs ${pulse.radiusM}`);
+    const want = rgba(AWARENESS_RANGE_RING_STYLE.color);
+    want[3] *= pulse.alpha * level;
+    assert.ok(close(core.style.color, want));
   }
-  rendering.renderVisual(flight(3.25)); // ~25 km from where it was built
-  assert.equal(pulsePrimitives(scene).count, 1);
-  const moved = pulsePrimitives(scene).disc;
-  assert.notEqual(moved, disc);
-  assert.ok(disc.isDestroyed());
-  assert.equal(moved.appearance.material, material);
-  assert.equal(moved.allowPicking, false);
-
-  rendering.clearVisual();
-  assert.equal(scene.primitives.length, 0);
-  assert.equal(scene.preRender.numberOfListeners, 0);
+  // The ellipse stands while the subject moves under `gradientRebuildM`,
+  // the canvas drawing the band about the subject; past it, it moves.
+  rendering.renderVisual(flight(3.15)); // ~15 km
+  assert.ok(Math.abs(drawn(ring).band.geometry.center.lon - 3) < 1e-9);
+  rendering.renderVisual(flight(3.25)); // ~25 km
+  assert.ok(Math.abs(drawn(ring).band.geometry.center.lon - 3.25) < 1e-6);
 });
 
-test("switching subjects keeps one pulse material in Cesium's global cache", (t) => {
+test('switching subjects draws into the same sets', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering } = ring;
+  const { rendering } = ring;
   frameLoop(t, ring);
-  // Cesium keeps every new material type for the page's lifetime, so an
-  // unnamed fabric (a fresh GUID type each time) would grow it per subject.
-  const cached = () =>
-    Object.keys(Cesium.Material._materialCache._materials).length;
   rendering.renderVisual({ ...flight(3), id: 'subject-0' });
-  const first = pulsePrimitives(scene).disc.appearance.material;
-  const size = cached();
-  let last = first;
-  for (let index = 1; index <= 6; index++) {
+  const sets = ringSets(ring.draw);
+  for (let index = 1; index <= 6; index++)
     rendering.renderVisual({ ...flight(3 + index), id: `subject-${index}` });
-    last = pulsePrimitives(scene).disc.appearance.material;
-  }
-  assert.equal(cached(), size, 'subject switches add no cache entries');
-  rendering.clearVisual();
-  rendering.renderVisual(flight(3));
-  assert.equal(cached(), size, 'nor does a reselect');
-  // A material built from the cached template still owns its uniform values.
-  const again = pulsePrimitives(scene).disc.appearance.material;
-  assert.notEqual(again, last);
-  assert.notEqual(again.uniforms.radii, last.uniforms.radii);
-  assert.notEqual(again.uniforms.alphas, first.uniforms.alphas);
-  assert.ok(again.uniforms.radii instanceof Cesium.Cartesian4);
-  assert.ok(again.uniforms.lineColor instanceof Cesium.Color);
-  assert.equal(again.uniforms.lineWidth, AWARENESS_RANGE_PULSE.width);
+  const after = ringSets(ring.draw);
+  assert.equal(after.lines, sets.lines);
+  assert.equal(after.band, sets.band);
+  assert.equal(ring.draw.sets.size, 2, 'no set per subject');
 });
 
-test('a resting pulse disc is not rebuilt as the subject moves, and catches up on wake', (t) => {
+test('a resting band is not moved as the subject moves, and catches up on wake', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering } = ring;
+  const { rendering } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
   loop.advance(AWARENESS_RANGE_PULSE.activeMs + 500);
-  const resting = pulsePrimitives(scene).disc;
-  const restingMatrix = Cesium.Matrix4.clone(resting.modelMatrix);
-  // A flying subject keeps moving while the pulses rest: the hidden disc is
-  // neither moved nor rebuilt, even well past the rebuild distance.
+  const resting = drawn(ring).band;
+  assert.equal(resting.show, false);
+  const writes = drawn(ring).bandSet.writes;
+  // A flying subject keeps moving while the pulses rest: the hidden band is
+  // neither moved nor redrawn, even well past the rebuild distance.
   for (let lon = 3.01; lon < 3.4; lon += 0.01)
     rendering.renderVisual(flight(lon));
-  assert.equal(pulsePrimitives(scene).disc, resting);
-  assert.ok(!resting.isDestroyed());
-  assert.ok(Cesium.Matrix4.equals(resting.modelMatrix, restingMatrix));
-  // Woken, the disc catches up at once: rebuilt around the subject.
+  assert.equal(drawn(ring).band, resting);
+  assert.equal(drawn(ring).bandSet.writes, writes);
+  // Woken, the band catches up at once, around the subject.
   rendering.wakePulses();
-  const woken = pulsePrimitives(scene).disc;
-  assert.notEqual(woken, resting);
-  assert.ok(resting.isDestroyed());
-  assert.equal(pulsePrimitives(scene).count, 1);
-  // Woken again without moving: the disc stays.
-  rendering.wakePulses();
-  assert.equal(pulsePrimitives(scene).disc, woken);
+  loop.advance(AWARENESS_RANGE_PULSE.settleMs);
+  const woken = drawn(ring).band;
+  assert.equal(woken.show, true);
+  assert.ok(Math.abs(woken.geometry.center.lon - 3.39) < 0.011);
 });
 
-test('the ring and pulses never catch a click: no entities, every primitive unpickable', (t) => {
+test('the ring and pulses never catch a click: no entities, every set unpickable', (t) => {
   for (const reducedMotion of [false, true]) {
-    const { entities, scene, rendering } = ringRendering(t, { reducedMotion });
-    rendering.renderVisual(flight(3));
+    const ring = ringRendering(t, { reducedMotion });
+    ring.rendering.renderVisual(flight(3));
     // Cesium always picks entities, so the awareness visual adds none.
-    assert.equal(entities.values.length, 0);
-    assert.ok(scene.primitives.length >= 1);
-    for (let i = 0; i < scene.primitives.length; i++)
-      assert.equal(scene.primitives.get(i).allowPicking, false);
-    rendering.clearVisual();
+    assert.equal(ring.entities.values.length, 0);
+    for (const record of ring.draw.sets.values())
+      assert.equal(record.spec.pickable, false, record.spec.id);
+    ring.rendering.clearVisual();
   }
 });
 
-test('a camera below the rim height hides the pulse disc instead of sweeping the sky', (t) => {
+test('a camera below the rim height hides the pulses instead of sweeping the sky', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering } = ring;
+  const { state, rendering } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
   loop.advance(AWARENESS_RANGE_PULSE.settleMs + 500);
   const cameraAt = (height) => {
-    scene.camera = {
-      positionCartographic: new Cesium.Cartographic(0, 0, height),
-    };
-    scene.preRender.raiseEvent(scene);
-    return pulsePrimitives(scene).disc.show;
+    state.viewer.camera.positionCartographic = { height };
+    loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS + 1);
+    loop.draw();
+    return drawn(ring).band.show && drawn(ring).pulse(0).show;
   };
   assert.equal(cameraAt(CONTEXT_RIM_HEIGHT_M + 500), true);
   assert.equal(cameraAt(CONTEXT_RIM_HEIGHT_M - 500), false, 'cockpit view');
-  // Below the disc the pulses rest with it: the ring is steady at full, no
+  // Below the band the pulses rest with it: the ring is steady at full, no
   // echo lights and no frame is asked for.
-  const core = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.color,
+  assert.ok(
+    close(drawn(ring).core.style.color, rgba(AWARENESS_RANGE_RING_STYLE.color)),
   );
-  assert.ok(Math.abs(ringColors(scene).color.alpha - core.alpha) < 1e-9);
   assert.equal(getAwarenessEchoField().level(loop.now()), 0);
   const frames = ring.pulseFrames();
   loop.draw();
   loop.advance(2000);
   assert.equal(ring.pulseFrames(), frames, 'no requests below the rim');
-  assert.equal(cameraAt(800_000), true);
+  state.viewer.camera.positionCartographic = { height: 800_000 };
+  loop.draw();
+  loop.advance(CYBER_SONAR_RENDER_INTERVAL_MS + 2);
+  assert.equal(drawn(ring).band.show, true);
 });
 
 test('reduced motion keeps the static ring and drops the pulses', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
-  const { scene, rendering, pulseFrames } = ringRendering(t, {
-    reducedMotion: true,
-  });
+  const ring = ringRendering(t, { reducedMotion: true });
+  const { scene, rendering, pulseFrames } = ring;
   rendering.renderVisual(flight(3));
-  assert.ok(pulsePrimitives(scene).ring);
+  assert.ok(drawn(ring).core);
   t.mock.timers.tick(1000);
   assert.equal(pulseFrames(), 0);
-  assert.equal(pulsePrimitives(scene).count, 0, 'no pulse disc');
+  assert.deepEqual(drawn(ring).pulses, [], 'no pulse fronts');
+  assert.equal(drawn(ring).band, undefined, 'no band');
   assert.equal(scene.preRender.numberOfListeners, 0);
   assert.equal(scene.postRender.numberOfListeners, 0);
 });
@@ -1142,12 +1306,13 @@ test('turning reduced motion on mid-session stops the pulses, and off restarts t
   const loop = frameLoop(t, ring);
   state.subject = flight(3);
   rendering.renderVisual(state.subject);
-  assert.equal(pulsePrimitives(scene).count, 1);
+  assert.equal(drawn(ring).pulses.length, AWARENESS_RANGE_PULSE.count);
   loop.advance(1000);
   // The OS setting changes while the same aircraft stays tracked.
   motion.set(true);
-  assert.ok(pulsePrimitives(scene).ring);
-  assert.equal(pulsePrimitives(scene).count, 0);
+  assert.ok(drawn(ring).core);
+  assert.deepEqual(drawn(ring).pulses, []);
+  assert.equal(drawn(ring).band, undefined);
   assert.equal(scene.preRender.numberOfListeners, 0);
   assert.equal(scene.postRender.numberOfListeners, 0);
   assert.equal(getAwarenessEchoField(), null);
@@ -1155,7 +1320,7 @@ test('turning reduced motion on mid-session stops the pulses, and off restarts t
   loop.advance(5000);
   assert.equal(ring.pulseFrames(), frames);
   motion.set(false);
-  assert.equal(pulsePrimitives(scene).count, 1);
+  assert.equal(drawn(ring).pulses.length, AWARENESS_RANGE_PULSE.count);
   assert.ok(getAwarenessEchoField());
   // One media-query listener per visual; none once the ring is gone.
   assert.equal(motion.listeners(), 1);
@@ -1164,43 +1329,39 @@ test('turning reduced motion on mid-session stops the pulses, and off restarts t
 });
 
 test('a reduced-motion change reaches older Safari through addListener', (t) => {
-  const { scene, rendering, motion, state } = ringRendering(t, {
-    legacyQuery: true,
-  });
+  const ring = ringRendering(t, { legacyQuery: true });
+  const { scene, rendering, motion, state } = ring;
   state.subject = flight(3);
   rendering.renderVisual(state.subject);
-  assert.equal(pulsePrimitives(scene).count, 1);
+  assert.equal(drawn(ring).pulses.length, AWARENESS_RANGE_PULSE.count);
   assert.equal(motion.listeners(), 1);
   motion.set(true);
-  assert.equal(pulsePrimitives(scene).count, 0);
+  assert.deepEqual(drawn(ring).pulses, []);
   assert.equal(scene.preRender.numberOfListeners, 0);
   rendering.clearVisual();
   assert.equal(motion.listeners(), 0);
 });
 
 test('a refresh after reduced motion changed rebuilds the visual too', (t) => {
-  const { scene, rendering, motion } = ringRendering(t);
+  const ring = ringRendering(t);
+  const { scene, rendering, motion } = ring;
   rendering.renderVisual(flight(3));
-  assert.equal(pulsePrimitives(scene).count, 1);
+  assert.equal(drawn(ring).pulses.length, AWARENESS_RANGE_PULSE.count);
   // No change event: the next same-subject refresh notices on its own.
   motion.setQuietly(true);
   rendering.renderVisual(flight(3));
-  assert.ok(pulsePrimitives(scene).ring);
-  assert.equal(pulsePrimitives(scene).count, 0);
+  assert.ok(drawn(ring).core);
+  assert.deepEqual(drawn(ring).pulses, []);
   assert.equal(scene.preRender.numberOfListeners, 0);
 });
 
 test('while pulses run the ring flashes as each one arrives, then rests', (t) => {
   const ring = ringRendering(t);
-  const { scene, rendering } = ring;
+  const { state, rendering } = ring;
   const loop = frameLoop(t, ring);
   rendering.renderVisual(flight(3));
-  const core = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.color,
-  );
-  const halo = Cesium.Color.fromCssColorString(
-    AWARENESS_RANGE_RING_STYLE.outlineColor,
-  );
+  const core = rgba(AWARENESS_RANGE_RING_STYLE.color);
+  const halo = rgba(AWARENESS_RANGE_RING_STYLE.outlineColor);
   const { periodMs, count } = AWARENESS_RANGE_PULSE;
   const { flashMs, restOpacity } = AWARENESS_RANGE_RING_STYLE;
   // Full the moment a front reaches 250 km, gone `flashMs` later.
@@ -1221,31 +1382,30 @@ test('while pulses run the ring flashes as each one arrives, then rests', (t) =>
     wasLit = lit;
   }
   assert.equal(flashes, count);
-  // Once the pulses have faded in, the live colour tracks the flash, and
-  // never drops below `restOpacity`.
+  // Once the pulses have faded in, the drawn colour tracks the flash as it
+  // was at each step, and never drops below `restOpacity`.
   loop.advance(AWARENESS_RANGE_PULSE.settleMs);
   for (let step = 0; step < 40; step++) {
     loop.advance(100);
-    const { color, outlineColor } = ringColors(scene);
-    const flash = Math.max(restOpacity, awarenessRingFlash(loop.now()));
-    const expected = core.alpha * flash;
-    assert.ok(
-      Math.abs(color.alpha - expected) < 1e-9,
-      `${color.alpha} vs ${expected}`,
+    const flash = Math.max(
+      restOpacity,
+      awarenessRingFlash(state.visual.lastStepMs),
     );
-    assert.ok(Math.abs(outlineColor.alpha - halo.alpha * flash) < 1e-9);
+    const { core: drawnCore, halo: drawnHalo } = drawn(ring);
+    assert.ok(
+      Math.abs(drawnCore.style.color[3] - core[3] * flash) < 1e-9,
+      `${drawnCore.style.color[3]} vs ${core[3] * flash}`,
+    );
+    assert.ok(Math.abs(drawnHalo.style.color[3] - halo[3] * flash) < 1e-9);
   }
 });
 
 test('without pulses the ring stays on screen at full strength', (t) => {
-  const { scene, rendering } = ringRendering(t, { reducedMotion: true });
-  rendering.renderVisual(flight(3));
-  assert.equal(scene.preRender.numberOfListeners, 0);
-  assert.equal(
-    ringColors(scene).color.toCssColorString(),
-    Cesium.Color.fromCssColorString(
-      AWARENESS_RANGE_RING_STYLE.color,
-    ).toCssColorString(),
+  const ring = ringRendering(t, { reducedMotion: true });
+  ring.rendering.renderVisual(flight(3));
+  assert.equal(ring.scene.preRender.numberOfListeners, 0);
+  assert.ok(
+    close(drawn(ring).core.style.color, rgba(AWARENESS_RANGE_RING_STYLE.color)),
   );
   assert.equal(getAwarenessEchoField(), null);
 });
@@ -1279,4 +1439,37 @@ test('the echo field follows the subject while pulses run and clears with the ri
   );
   rendering.clearVisual();
   assert.equal(getAwarenessEchoField(), null);
+});
+
+test('a ring drawn on one viewer leaves it when the layer moves to another', (t) => {
+  const ring = ringRendering(t);
+  const { state, scene, rendering } = ring;
+  const loop = frameLoop(t, ring);
+  rendering.renderVisual(flight(3));
+  loop.advance(AWARENESS_RANGE_PULSE.settleMs + 200);
+  const first = ringSets(ring.draw);
+  assert.ok(first.lines.items.size > 0 && first.band.items.size === 1);
+  // Re-initialized on a viewer without frame hooks.
+  const plain = { entities: ring.entities, scene: {} };
+  const { draw } = bindFakeDraw(plain);
+  state.viewer = plain;
+  rendering.renderVisual(flight(3));
+  assert.equal(first.lines.disposed, true, 'gone from the first viewer');
+  assert.equal(first.band.disposed, true);
+  assert.equal(scene.preRender.numberOfListeners, 0);
+  assert.equal(scene.postRender.numberOfListeners, 0);
+  assert.equal(getAwarenessEchoField(), null);
+  const second = ringSets(draw);
+  assert.equal(second.lines.items.size, 1, 'the static ring on the second');
+  // And onto a viewer with frame hooks: drawn there with its pulses.
+  const third = viewerDouble(ring.entities);
+  state.viewer = third.viewer;
+  rendering.renderVisual(flight(3));
+  loop.advance(AWARENESS_RANGE_PULSE.settleMs + 200);
+  assert.equal(second.lines.disposed, true);
+  const drawnThird = ringSets(third.draw);
+  assert.equal(drawnThird.band.items.size, 1);
+  rendering.disposeVisual();
+  assert.equal(drawnThird.lines.disposed, true);
+  assert.equal(drawnThird.band.disposed, true);
 });

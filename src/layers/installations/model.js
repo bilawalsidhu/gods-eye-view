@@ -1,5 +1,6 @@
 import { installationResponseSaturated } from './source.js';
-import * as Cesium from 'cesium';
+import { toRadians } from '../../geo/vector.js';
+import { hexColor } from '../../render/color.js';
 import {
   EARTH_MEAN_RADIUS_M,
   COLOR_BY_CLASS,
@@ -18,8 +19,8 @@ export function createModel({ state: layerState, services, parts, source }) {
     latitudeBDeg,
     longitudeBDeg,
   ) {
-    const latitudeBRad = Cesium.Math.toRadians(latitudeBDeg);
-    const longitudeBRad = Cesium.Math.toRadians(longitudeBDeg);
+    const latitudeBRad = toRadians(latitudeBDeg);
+    const longitudeBRad = toRadians(longitudeBDeg);
     const latitudeDelta = latitudeBRad - latitudeARad;
     const longitudeDelta = Math.atan2(
       Math.sin(longitudeBRad - longitudeARad),
@@ -38,10 +39,9 @@ export function createModel({ state: layerState, services, parts, source }) {
     );
   }
 
+  /** The record's class colour, as a renderer colour (`[r, g, b, a]`). */
   function colorFor(record) {
-    return Cesium.Color.fromCssColorString(
-      COLOR_BY_CLASS[record.class] || '#9ca6b0',
-    );
+    return hexColor(COLOR_BY_CLASS[record.class] || '#9ca6b0');
   }
 
   /**

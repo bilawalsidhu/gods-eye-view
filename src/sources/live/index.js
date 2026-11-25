@@ -16,4 +16,5 @@ export {
   createFlightSource,
   createMilitarySource,
   createVesselSource,
+  fetchOpenVesselPhoto,
 } from './standalone.js';

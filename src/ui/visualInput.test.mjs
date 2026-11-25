@@ -117,10 +117,23 @@ test('the supplied search target retains editing even without form markup', () =
   assert.deepEqual(f.calls, [['dismissSearch']]);
 });
 
-test('shortcut extraction does not change repeat or modifier policy', () => {
+test('a held key still repeats its shortcut, and Shift is not a chord', () => {
   const f = shortcuts();
-  f.press('h', new Element(), { repeat: true, ctrlKey: true });
-  assert.deepEqual(f.calls, [['toggleHud']]);
+  f.press('h', new Element(), { repeat: true });
+  f.press('C', new Element(), { shiftKey: true });
+  assert.deepEqual(f.calls, [['toggleHud'], ['toggleCctv']]);
+});
+
+test('browser and system chords on a shortcut key run no shortcut', () => {
+  const f = shortcuts();
+  for (const modifier of ['metaKey', 'ctrlKey', 'altKey'])
+    for (const key of ['1', '6', 'h', 'o', 'v', 'f', 'd', 'c', 'C'])
+      f.press(key, new Element(), { [modifier]: true });
+  // Copying (Cmd+C, Ctrl+C) used to turn CCTV on and open the nearest camera.
+  assert.deepEqual(f.calls, []);
+  f.press('c');
+  f.press('Escape', new Element(), { ctrlKey: true });
+  assert.deepEqual(f.calls, [['toggleCctv'], ['dismissSearch']]);
 });
 
 test('destroy synchronously removes shortcuts and a replacement binds once', () => {

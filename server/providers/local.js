@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
+import { issTelemetryProxy } from './space/issTelemetry.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
 import { terrainHeightsProxy } from './terrain.js';
@@ -36,6 +37,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { libraryProxy } from './library.js';
 
 /**
  * Construct the local provider plugins in their established order.
@@ -57,6 +59,7 @@ function localProviderPlugins({
   return [
     openSkyProxy(),
     celestrakProxy(),
+    issTelemetryProxy(),
     tomtomProxy(),
     firmsProxy(),
     rocketLaunchesProxy(),
@@ -85,6 +88,7 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),
     droneAirspaceProxy(),
