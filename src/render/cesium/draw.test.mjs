@@ -6207,6 +6207,66 @@ test('an overlay is shown from an eye under the ellipsoid, as from one a metre u
     );
 });
 
+test('an overlay is hidden at the true horizon from any height: within metres in float32, either side of the 100 km switch', () => {
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = ellipsoid.oneOverRadii;
+  const at = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  // The surface point P is in view while the eye is on its side of the plane
+  // tangent there: dot(P, eye) >= 1 in the ellipsoid's unit sphere.
+  const truly = (point, eye) =>
+    Cesium.Cartesian3.dot(
+      Cesium.Cartesian3.multiplyComponents(
+        point,
+        inverse,
+        new Cesium.Cartesian3(),
+      ),
+      Cesium.Cartesian3.multiplyComponents(
+        eye,
+        inverse,
+        new Cesium.Cartesian3(),
+      ),
+    ) >= 1;
+  // From geostationary height over 45°N, a point about 808 m past the
+  // horizon was kept when k came from the eye's height.
+  const geo = Cesium.Cartesian3.fromDegrees(0, 45, 35_786_000);
+  assert.equal(truly(at(134.1995, 45), geo), false);
+  for (const float32 of [false, true])
+    assert.equal(overlayInView(at(134.1995, 45), geo, { float32 }), false);
+  // Where the horizon falls along the eye's parallel, by halving.
+  const edge = (inView, eye) => {
+    let near = 0;
+    let far = 179.9;
+    for (let i = 0; i < 80; i++) {
+      const middle = (near + far) / 2;
+      if (inView(at(middle, eye.lat), eye.at)) near = middle;
+      else far = middle;
+    }
+    return near;
+  };
+  for (const lat of [0, 45, 70])
+    for (const height of [
+      1, 1000, 50_000, 99_000, 100_000, 101_000, 1e6, 35_786_000,
+    ]) {
+      const eye = { lat, at: Cesium.Cartesian3.fromDegrees(0, lat, height) };
+      const horizon = edge(truly, eye);
+      const metresPerDegree =
+        Cesium.Cartesian3.distance(at(horizon, lat), at(horizon + 1e-3, lat)) /
+        1e-3;
+      for (const [float32, within] of [
+        [false, 1],
+        [true, 10],
+      ]) {
+        const off =
+          (edge((p, e) => overlayInView(p, e, { float32 }), eye) - horizon) *
+          metresPerDegree;
+        assert.ok(
+          Math.abs(off) < within,
+          `${height} m over ${lat}°, float32 ${float32}: ${off.toFixed(2)} m off`,
+        );
+      }
+    }
+});
+
 test('an overlay shape refuses an image fill', () =>
   withImageClasses(() => {
     const { draw } = drawOver();

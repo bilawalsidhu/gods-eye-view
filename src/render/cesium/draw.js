@@ -106,6 +106,10 @@ export function heightReferenceOf(height, clampTo = 'both') {
   return H.NONE;
 }
 
+/** The eye's height (metres) up to which `OVERLAY_HORIZON` takes `k` from
+ *  it rather than from the eye's position. */
+const OVERLAY_HEIGHT_K = 100_000;
+
 /**
  * Whether a fragment of an overlay (shapes clamped `'overlay'`, and draped
  * lines drawn over the surface) is past the ellipsoid's horizon from the eye,
@@ -120,12 +124,15 @@ export function heightReferenceOf(height, clampTo = 'both') {
  * the plane tangent there: `dot(n, e) >= 1`. Squared, with `k = |e|^2 - 1`
  * and `a = dot(e, v)`, that is `1 + k + a >= 0` and `|v|^2 <= k + (k + a)^2`,
  * where no term is the difference of two numbers near 1, so it holds in
- * float32 for an eye a metre up (`|e + v| - 1` would be lost there). `k`
- * comes from the eye's height, which Cesium works out in doubles, as
- * `2h|g| + h^2|N/r|^2` with `N` the surface normal under the eye, `g` the
- * foot of the eye over the radii squared and `r` the radii. The eye counts as
- * at least a metre up: one under the ellipsoid (low ground where the geoid
- * is below it) would otherwise see no overlay at all.
+ * float32 for an eye a metre up (`|e + v| - 1` would be lost there). Up to
+ * `OVERLAY_HEIGHT_K` (100 km), where `|e|^2 - 1` is too small for float32,
+ * `k` comes from the eye's height, which Cesium works out in doubles, as
+ * `2h|g| + h^2|N/r|^2` with `N` the surface normal there, `g` the foot of
+ * the eye over the radii squared and `r` the radii; above it, from `e`
+ * itself, since that form takes the normal at the eye rather than at its
+ * foot and drifts by hundreds of metres at the horizon at geostationary
+ * height. The eye counts as at least a metre up: one under the ellipsoid
+ * (low ground where the geoid is below it) would otherwise see no overlay.
  */
 const OVERLAY_HORIZON = `
 bool overlayPastHorizon(vec3 rte)
@@ -133,13 +140,17 @@ bool overlayPastHorizon(vec3 rte)
     if (czm_sceneMode != czm_sceneMode3D) return false;
     vec3 inverse = czm_ellipsoidInverseRadii;
     vec3 eye = czm_viewerPositionWC;
+    vec3 e = eye * inverse;
     float h = max(czm_eyeHeight, 1.0);
-    vec3 normal = normalize(eye * inverse * inverse);
-    vec3 foot = (eye - h * normal) * inverse * inverse;
-    vec3 normalScaled = normal * inverse;
-    float k = 2.0 * h * length(foot) + h * h * dot(normalScaled, normalScaled);
+    float k = dot(e, e) - 1.0;
+    if (h <= ${OVERLAY_HEIGHT_K.toFixed(1)}) {
+        vec3 normal = normalize(eye * inverse * inverse);
+        vec3 foot = (eye - h * normal) * inverse * inverse;
+        vec3 normalScaled = normal * inverse;
+        k = 2.0 * h * length(foot) + h * h * dot(normalScaled, normalScaled);
+    }
     vec3 v = rte * inverse;
-    float ka = k + dot(eye * inverse, v);
+    float ka = k + dot(e, v);
     return 1.0 + ka < 0.0 || dot(v, v) > k + ka * ka;
 }
 `;
@@ -157,6 +168,23 @@ export function overlayInView(position, eye, { float32 = false } = {}) {
   const inverse = vec(ellipsoid.oneOverRadii);
   const e = vec(eye);
   const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
+  const scaled = mul(e, inverse);
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const k =
+    h <= OVERLAY_HEIGHT_K
+      ? heightK(e, h, inverse, f)
+      : f(dot(scaled, scaled) - 1);
+  const ka = f(k + dot(scaled, v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
+}
+
+/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
+function heightK(e, h, inverse, f) {
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
   const over = mul(mul(e, inverse), inverse);
   const length = f(Math.sqrt(dot(over, over)));
   const normal = over.map((c) => f(c / length));
@@ -168,16 +196,10 @@ export function overlayInView(position, eye, { float32 = false } = {}) {
     inverse,
   );
   const normalScaled = mul(normal, inverse);
-  const k = f(
+  return f(
     f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
       f(f(h * h) * dot(normalScaled, normalScaled)),
   );
-  const v = mul(
-    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
-    inverse,
-  );
-  const ka = f(k + dot(mul(e, inverse), v));
-  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
 }
 
 /**
