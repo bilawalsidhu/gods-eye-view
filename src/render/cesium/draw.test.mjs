@@ -6034,7 +6034,7 @@ test('an overlay shape draws its fill on the ellipsoid over everything, and its 
       );
     assert.match(
       outline.appearance.vertexShaderSource,
-      /v_overlayRte = p\.xyz/,
+      /v_overlayRte = mat3\(czm_inverseView\) \* clippedEC\.xyz/,
     );
     // On the ellipsoid, along the surface's curve.
     const [first] = outline.geometryInstances.geometry._positions;
@@ -6082,11 +6082,18 @@ test('an overlay line crossing the horizon keeps its near part and drops its far
     assert.equal(line.show, true);
     // ...and its colour where the surface hides it, which would draw it
     // through the Earth, drops the far part fragment by fragment.
-    for (const look of [line.appearance, line.depthFailAppearance])
+    for (const look of [line.appearance, line.depthFailAppearance]) {
       assert.match(
         look.fragmentShaderSource,
         /overlayPastHorizon\(v_overlayRte\)\) discard/,
       );
+      // Each corner hands on its segment's end as Cesium draws it: cut at
+      // the near plane, turned back from the eye's frame.
+      assert.match(
+        look.vertexShaderSource,
+        /getPolylineWindowCoordinates\(p, prev, next, expandDir, width, usePrev, angle\);\s*\{[^}]*clipLineSegmentToNearPlane\(fromEC\.xyz, toEC\.xyz, clippedWC, clipped, culled, clippedEC\);\s*v_overlayRte = mat3\(czm_inverseView\) \* clippedEC\.xyz;/,
+      );
+    }
     // The test the shader makes: from 5,000 km up over 0°, the horizon is
     // about 56° away.
     for (const [lon, seen] of [
@@ -6116,6 +6123,63 @@ test('an overlay is tested at the surface over it: a flat triangle sagging under
     overlayInView(Cesium.Cartesian3.fromDegrees(0.2, 0, 0), eye),
     false,
   );
+});
+
+test('an overlay is tested in float32 as the GPU tests it: a fragment a few kilometres from an eye a metre up stays', () => {
+  const R = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const eye = Cesium.Cartesian3.fromDegrees(0, 0, 1);
+  // A fill's fragment 2 m under the ellipsoid, 2.8 km away: in view, the
+  // horizon being about 3.57 km off. Rebuilding the point and taking
+  // |p| - 1 in float32 loses it.
+  const near = Cesium.Cartesian3.fromRadians(2800 / R, 0, -2);
+  assert.equal(overlayInView(near, eye), true);
+  assert.equal(overlayInView(near, eye, { float32: true }), true);
+  const f = Math.fround;
+  const inverse = Cesium.Ellipsoid.WGS84.oneOverRadii;
+  const v = ['x', 'y', 'z'].map((c) => f(f(near[c] - eye[c]) * f(inverse[c])));
+  const p = ['x', 'y', 'z'].map((c, i) =>
+    f(f(f(eye[c]) * f(inverse[c])) + v[i]),
+  );
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const r = f(Math.sqrt(dot(p, p)));
+  const along = dot(
+    p.map((c) => f(c / r)),
+    v,
+  );
+  assert.ok(along > f(r - 1), 'the old form drops it in float32');
+  // Past the horizon, it goes all the same.
+  const far = Cesium.Cartesian3.fromRadians(4000 / R, 0, -2);
+  assert.equal(overlayInView(far, eye, { float32: true }), false);
+  // From the ground to geostationary height, float32 agrees with doubles a
+  // tenth inside and outside the horizon.
+  for (const [lat, height] of [
+    [0, 1],
+    [45, 10],
+    [-60, 300],
+    [30, 10_000],
+    [70, 500_000],
+    [0, 36_000_000],
+  ]) {
+    const at = Cesium.Cartesian3.fromDegrees(10, lat, height);
+    const horizon = Math.acos(R / (R + height));
+    for (const [scale, seen] of [
+      [0.9, true],
+      [1.1, false],
+    ]) {
+      const point = Cesium.Cartesian3.fromRadians(
+        Cesium.Math.toRadians(10) +
+          (scale * horizon) / Math.cos(Cesium.Math.toRadians(lat)),
+        Cesium.Math.toRadians(lat),
+        0,
+      );
+      for (const float32 of [false, true])
+        assert.equal(
+          overlayInView(point, at, { float32 }),
+          seen,
+          `${height} m at ${lat}°, ${scale} of the horizon, float32 ${float32}`,
+        );
+    }
+  }
 });
 
 test('an overlay shape refuses an image fill', () =>

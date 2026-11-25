@@ -344,7 +344,10 @@ ellipsoid's curve, and in their colour where the surface hides them). Fills
 and lines alike drop each fragment past the ellipsoid's horizon in their
 fragment shaders (`OVERLAY_HORIZON`), tested at the surface point over the
 fragment, since flat triangles and straight pieces pass metres under the
-ellipsoid: a line crossing the limb shows only its near part. Overlay fills are colours only
+ellipsoid: a line crossing the limb shows only its near part. The test is
+written so float32 decides it a few metres from an eye a metre up, and a
+line's fragments are tested along the segment as drawn, cut at the near
+plane. Overlay fills are colours only
 (an image fill is refused); icons, points and models clamp to an overlay as
 to `both`, and extruded shapes and walls stand on the surface as with
 `both`. The check `draw.shapes.overlay` draws one with the globe hidden and

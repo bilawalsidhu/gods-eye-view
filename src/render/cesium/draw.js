@@ -115,38 +115,67 @@ export function heightReferenceOf(height, clampTo = 'both') {
  * flat triangles of a fill and the straight pieces of a line pass under the
  * ellipsoid (metres, for a shape tens of kilometres wide), and the point drawn
  * would be lost up close and near the horizon. In the ellipsoid's unit sphere,
- * with `p` the point drawn and `n` its direction, the surface point `n` is in
- * view while the eye is on its side of the plane tangent there:
- * `dot(n, eye) >= 1`, written `dot(n, p - eye) <= |p| - 1` so the eye's large
- * coordinates cancel before the test.
+ * with `e` the eye, `v` the fragment less the eye and `n` the direction of
+ * `e + v`, the surface point `n` is in view while the eye is on its side of
+ * the plane tangent there: `dot(n, e) >= 1`. Squared, with `k = |e|^2 - 1`
+ * and `a = dot(e, v)`, that is `1 + k + a >= 0` and `|v|^2 <= k + (k + a)^2`,
+ * where no term is the difference of two numbers near 1, so it holds in
+ * float32 for an eye a metre up (`|e + v| - 1` would be lost there). `k`
+ * comes from the eye's height, which Cesium works out in doubles, as
+ * `2h|g| + h^2|N/r|^2` with `N` the surface normal under the eye, `g` the
+ * foot of the eye over the radii squared and `r` the radii.
  */
 const OVERLAY_HORIZON = `
 bool overlayPastHorizon(vec3 rte)
 {
     if (czm_sceneMode != czm_sceneMode3D) return false;
-    vec3 vt = rte * czm_ellipsoidInverseRadii;
-    vec3 p = czm_viewerPositionWC * czm_ellipsoidInverseRadii + vt;
-    float r = length(p);
-    return dot(p / r, vt) > r - 1.0;
+    vec3 inverse = czm_ellipsoidInverseRadii;
+    vec3 eye = czm_viewerPositionWC;
+    float h = czm_eyeHeight;
+    vec3 normal = normalize(eye * inverse * inverse);
+    vec3 foot = (eye - h * normal) * inverse * inverse;
+    vec3 normalScaled = normal * inverse;
+    float k = 2.0 * h * length(foot) + h * h * dot(normalScaled, normalScaled);
+    vec3 v = rte * inverse;
+    float ka = k + dot(eye * inverse, v);
+    return 1.0 + ka < 0.0 || dot(v, v) > k + ka * ka;
 }
 `;
 
 /** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
- *  `position` (world metres) is drawn from `eye`. */
-export function overlayInView(position, eye) {
-  const inverse = Cesium.Ellipsoid.WGS84.oneOverRadii;
-  const vt = Cesium.Cartesian3.multiplyComponents(
-    Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3()),
+ *  `position` (world metres) is drawn from `eye`. With `float32`, each step
+ *  is rounded to float32 as in the shader, from what the shader is given:
+ *  the point less the eye, the eye, and the eye's height. */
+export function overlayInView(position, eye, { float32 = false } = {}) {
+  const f = float32 ? Math.fround : (x) => x;
+  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = vec(ellipsoid.oneOverRadii);
+  const e = vec(eye);
+  const h = f(ellipsoid.cartesianToCartographic(eye).height);
+  const over = mul(mul(e, inverse), inverse);
+  const length = f(Math.sqrt(dot(over, over)));
+  const normal = over.map((c) => f(c / length));
+  const foot = mul(
+    mul(
+      e.map((c, i) => f(c - f(h * normal[i]))),
+      inverse,
+    ),
     inverse,
-    new Cesium.Cartesian3(),
   );
-  const p = Cesium.Cartesian3.add(
-    Cesium.Cartesian3.multiplyComponents(eye, inverse, new Cesium.Cartesian3()),
-    vt,
-    new Cesium.Cartesian3(),
+  const normalScaled = mul(normal, inverse);
+  const k = f(
+    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
+      f(f(h * h) * dot(normalScaled, normalScaled)),
   );
-  const r = Cesium.Cartesian3.magnitude(p);
-  return Cesium.Cartesian3.dot(p, vt) / r <= r - 1;
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const ka = f(k + dot(mul(e, inverse), v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
 }
 
 /**
@@ -186,7 +215,10 @@ void main()
  * A line's appearance, drawn over the surface as an overlay: Cesium's
  * polyline material appearance, its fragments past the horizon dropped
  * (`OVERLAY_HORIZON`), for its colour and its colour where the surface hides
- * it alike, so the part of a line behind the Earth never shows.
+ * it alike, so the part of a line behind the Earth never shows. Each vertex
+ * hands on the point its corner is drawn from: where Cesium moves a segment's
+ * end onto the near plane, that point, cut as Cesium cuts it, so the
+ * fragments are tested along the segment drawn.
  */
 let overlayLineShaders;
 function overlayLineAppearance(material) {
@@ -202,14 +234,20 @@ function overlayLineAppearance(material) {
       return at;
     };
     const vsAt = lastMain(vs);
-    const vsBody = vs
-      .slice(vsAt)
-      .replace(
-        /vec4 p = czm_computePosition\(\);/,
-        'vec4 p = czm_computePosition();\n    v_overlayRte = p.xyz;',
-      );
+    const vsBody = vs.slice(vsAt).replace(
+      /(vec4 positionWC = getPolylineWindowCoordinates\(p, prev, next, expandDir, width, usePrev, angle\);)/,
+      `$1
+    {
+        vec4 fromEC = czm_modelViewRelativeToEye * p;
+        vec4 toEC = czm_modelViewRelativeToEye * (usePrev ? prev : next);
+        vec4 clippedWC, clippedEC;
+        bool clipped, culled;
+        clipLineSegmentToNearPlane(fromEC.xyz, toEC.xyz, clippedWC, clipped, culled, clippedEC);
+        v_overlayRte = mat3(czm_inverseView) * clippedEC.xyz;
+    }`,
+    );
     if (vsBody === vs.slice(vsAt))
-      throw new Error('Cesium polyline shader no longer computes its position');
+      throw new Error('Cesium polyline shader no longer places its corners');
     const fsAt = lastMain(fs);
     overlayLineShaders = {
       vertexShaderSource: `${vs.slice(0, vsAt)}out vec3 v_overlayRte;\n${vsBody}`,
