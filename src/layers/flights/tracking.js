@@ -149,7 +149,9 @@ export function createTracking({
   function _contextSubjectMetadata(icao24) {
     const described = parts.queries._describeFlight(icao24);
     if (!described) return null;
-    const altFt = Math.round((described.altitudeM || 0) * 3.28084);
+    const altFt = Number.isFinite(described.altitudeM)
+      ? Math.round(described.altitudeM * 3.28084)
+      : null;
     const route =
       described.route && _routeIsPlausible(icao24, described.route)
         ? `${described.route.origin.code} → ${described.route.destination.code}`
@@ -178,7 +180,9 @@ export function createTracking({
         type: described.typeName || described.typeCode || '',
         altitude: described.onGround
           ? 'on ground'
-          : `${altFt.toLocaleString('en-US')} ft`,
+          : altFt === null
+            ? ''
+            : `${altFt.toLocaleString('en-US')} ft`,
         speed: Number.isFinite(described.velocityMps)
           ? `${Math.round(described.velocityMps * 1.944)} kt`
           : '',
@@ -900,16 +904,18 @@ export function createTracking({
     // the ICAO hex, so a callsign-less enriched contact heads its readout with
     // the tail number rather than raw hex.
     const cs = parts.queries._contactLabel(icao24, info);
-    const altFt = info.onGround
-      ? null
-      : Math.round((info.altitude || 0) * 3.28084);
     // Flight levels are an aviation code; feet and knots read in the active
     // language ("0 фт · 1 уз").
     const quantity = (value, unit) =>
       `${formatNumber(value, { useGrouping: false })} ${unitLabel(unit)}`;
-    const fl =
-      altFt == null
-        ? t('On the ground')
+    const altFt =
+      !info.onGround && Number.isFinite(info.altitude)
+        ? Math.round(info.altitude * 3.28084)
+        : null;
+    const fl = info.onGround
+      ? t('On the ground')
+      : altFt === null
+        ? t('Alt unknown')
         : altFt >= 18000
           ? `FL${Math.round(altFt / 100)}`
           : quantity(altFt, 'ft');
@@ -1172,8 +1178,14 @@ export function createTracking({
     // renderer's default follow distance is far too tight. It gets a calibrated
     // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
+    // An unreported altitude frames by the height the plane is drawn at.
     const followRange = Math.min(
-      Math.max((info.onGround ? 0 : info.altitude || 1500) * 1.1 + 2500, 3000),
+      Math.max(
+        (info.onGround ? 0 : (info.altitude ?? info.renderAltitudeM) || 1500) *
+          1.1 +
+          2500,
+        3000,
+      ),
       30000,
     );
     const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);
