@@ -5,6 +5,7 @@ import { createApplicationScene } from './scene.js';
 import { createApplicationRequestServices } from '../services/requests.js';
 import { createStubRendererPlugin } from '../render/stub/index.js';
 import { rendererOf } from '../render/rendererOf.js';
+import { getResolutionDiagnostics } from './resolutionGovernor.js';
 
 /** Start the scene on a stub renderer with `capabilities`. */
 async function startOnStub(t, { capabilities = [], ...rest } = {}) {
@@ -90,6 +91,25 @@ test('the scene runs on a renderer with only the required members', async (t) =>
   assert.equal(rendererOf(scene.viewer), null, 'and lets go of the renderer');
   assert.equal(renderer.globe.imagery.list().length, 0, 'imagery released');
   assert.equal(document.getElementById('gev-credits'), null, 'credits gone');
+});
+
+test('the scene draws device pixels through the quality port on a 2x screen', async (t) => {
+  const dpr = Object.getOwnPropertyDescriptor(window, 'devicePixelRatio');
+  Object.defineProperty(window, 'devicePixelRatio', {
+    configurable: true,
+    value: 2,
+  });
+  t.after(() => {
+    if (dpr) Object.defineProperty(window, 'devicePixelRatio', dpr);
+    else delete window.devicePixelRatio;
+  });
+  const { renderer, deferred } = await startOnStub(t);
+  // Left at the browser's recommended ratio, a 2x screen shows a
+  // pixel-doubled 1x frame.
+  assert.equal(renderer.quality.get().pixelRatio, 2);
+  assert.equal(getResolutionDiagnostics().ratio, 2);
+  for (const fn of deferred.splice(0).reverse()) await fn();
+  assert.equal(getResolutionDiagnostics(), null, 'and stops with the scene');
 });
 
 test('the scene keeps the Earth framed where the renderer can', async (t) => {

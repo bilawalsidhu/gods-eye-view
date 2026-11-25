@@ -1,6 +1,7 @@
 import * as Cesium from 'cesium';
 import { applyModelAtmosphereWorkaround } from '../../app/atmosphereCompat.js';
 import { IDLE_FRAME_RATE } from '../../renderGovernor.js';
+import { fitDrawingBuffer } from './drawingBuffer.js';
 import { preloadImageryAhead } from './imageryLookAhead.js';
 import { StarrySky } from './starrySky.js';
 
@@ -127,6 +128,14 @@ export function createApplicationViewer({
     // atmosphere fails to LINK on Apple's Metal backend and kills the
     // render loop. See app/atmosphereCompat.js.
     applyModelAtmosphereWorkaround(viewer.scene);
+    // Framebuffer sides over the GPU limit throw and stop rendering (#905),
+    // at any pixel ratio the quality port sets.
+    fitDrawingBuffer(viewer.cesiumWidget, {
+      maxSide: Math.min(
+        Cesium.ContextLimits.maximumTextureSize,
+        Cesium.ContextLimits.maximumRenderbufferSize,
+      ),
+    });
     viewer.scene.globe.show = false;
     viewer.scene.skyAtmosphere.show = true;
     viewer.scene.skyAtmosphere.atmosphereLightIntensity = 18;

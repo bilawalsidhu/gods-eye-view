@@ -40,13 +40,10 @@ export function sensorPickPosition(host, position, canvas) {
       u = (x * d + 1) / 2;
       v = (y * d + 1) / 2;
     }
+    // The shaders snap in CSS pixels at any drawing ratio.
     const grid = 1 + (stage.uniforms.pixelation - 1) * intensity;
-    u +=
-      ((Math.floor((u * canvas.width) / grid) * grid) / canvas.width - u) *
-      intensity;
-    v +=
-      ((Math.floor((v * canvas.height) / grid) * grid) / canvas.height - v) *
-      intensity;
+    u += ((Math.floor((u * w) / grid) * grid) / w - u) * intensity;
+    v += ((Math.floor((v * h) / grid) * grid) / h - v) * intensity;
     out.x = u * w;
     out.y = (1 - v) * h;
     return out;

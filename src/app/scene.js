@@ -26,6 +26,10 @@ import { keepPanelRendering } from './panelRendering.js';
 import { useStatusStore } from '../ui/stores/status.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import { createSceneHost } from '../render/rendererOf.js';
+import {
+  installResolutionGovernor,
+  readMaxPixelRatio,
+} from './resolutionGovernor.js';
 
 let defaultLoad = null;
 
@@ -129,6 +133,17 @@ export async function createApplicationScene({
       rendererPlugin.applicationHooks(renderer),
     );
   const hooks = applicationHooksOf(renderer);
+  // Device pixels on high-DPI screens, given back while frames run over
+  // budget; `?maxPixelRatio=1` restores one drawing pixel per CSS pixel.
+  if (renderer.quality)
+    defer(
+      installResolutionGovernor({
+        quality: renderer.quality,
+        frame: renderer.frame,
+        container,
+        maxPixelRatio: readMaxPixelRatio(),
+      }),
+    );
   // The renderer follows its container's size (`Renderer.resize`).
   if (typeof ResizeObserver === 'function' && container) {
     const resizes = new ResizeObserver(() => renderer.resize());
