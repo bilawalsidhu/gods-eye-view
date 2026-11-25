@@ -12,10 +12,11 @@
  * and finally Brandenburg (Berlin is a hole) and Hawaii (eight islands).
  *
  * Asserts for every outline: it resolves from the bundled packs (no geocode,
- * boundary or Overpass request), is drawn as a draped outline within the
- * budget, and holds still — no rebuilt primitives and no new entities while
- * the camera is still. The whole journey must log zero console/page errors and
- * send zero requests to any Overpass host or nominatim.openstreetmap.org.
+ * boundary or Overpass request), shows its first frame within the budget,
+ * has its draped fill and outline built (their time is reported), and holds
+ * still — none of its primitives rebuilt while the camera is still. The whole
+ * journey must log zero console/page errors and send zero requests to any
+ * Overpass host or nominatim.openstreetmap.org.
  *
  * Evidence in qa-shots/ (gitignored): admin-outlines-<step>.png screenshots,
  * admin-outlines-journey.mp4 (CDP screencast at ~24 fps, frames re-timed from
@@ -210,55 +211,83 @@ try {
           requestAnimationFrame(step);
         });
       },
-      annotationSource() {
-        for (let i = 0; i < viewer.dataSources.length; i++) {
-          const source = viewer.dataSources.get(i);
-          if (source.name === 'gev-annotations') return source;
-        }
-        return null;
-      },
-      groundPrimitives() {
+      /**
+       * The annotations' primitives in the scene, each with the marks its
+       * instances draw (their pick ids carry `meta.annotation`); only those
+       * of `mark` when given.
+       */
+      annotationPrimitives(mark) {
+        const marksOf = (primitive) => {
+          let inner = primitive;
+          for (let depth = 0; inner && depth < 4; depth++) {
+            if (Array.isArray(inner._instanceIds))
+              return inner._instanceIds
+                .map((id) => id?.meta?.annotation)
+                .filter((id) => id !== undefined);
+            inner = inner._primitive;
+          }
+          return [];
+        };
         const list = [];
         const walk = (collection) => {
           for (let i = 0; i < collection.length; i++) {
             const item = collection.get(i);
             if (item?.length !== undefined && typeof item.get === 'function')
               walk(item);
-            else list.push(item);
+            else {
+              const marks = marksOf(item);
+              if (marks.length && (mark === undefined || marks.includes(mark)))
+                list.push(item);
+            }
           }
         };
-        walk(viewer.scene.groundPrimitives);
+        walk(viewer.scene.primitives);
         return list;
       },
-      snapshot() {
-        const source = this.annotationSource();
-        const entities = source ? source.entities.values : [];
-        const primitives = this.groundPrimitives();
+      /** What `mark` draws (every annotation's, without one). */
+      snapshot(mark) {
+        const primitives = this.annotationPrimitives(mark);
         window.__qaPrimitiveIds ??= new WeakMap();
         let next = window.__qaPrimitiveNext ?? 1;
-        const ids = primitives.map((primitive) => {
-          if (!window.__qaPrimitiveIds.has(primitive))
-            window.__qaPrimitiveIds.set(primitive, next++);
-          return window.__qaPrimitiveIds.get(primitive);
-        });
+        // By identity only: hosts may trade places without a rebuild.
+        const ids = primitives
+          .map((primitive) => {
+            if (!window.__qaPrimitiveIds.has(primitive))
+              window.__qaPrimitiveIds.set(primitive, next++);
+            return window.__qaPrimitiveIds.get(primitive);
+          })
+          .sort((a, b) => a - b);
         window.__qaPrimitiveNext = next;
         return {
-          entities: entities.length,
-          polygons: entities.filter((e) => e.polygon).length,
-          polylines: entities.filter((e) => e.polyline).length,
+          primitives: primitives.length,
+          fills: primitives.filter((p) => p instanceof Cesium.GroundPrimitive)
+            .length,
+          lines: primitives.filter(
+            (p) => p instanceof Cesium.GroundPolylinePrimitive,
+          ).length,
+          // Draped on terrain and tiles alike.
           draped:
-            entities.every(
-              (e) =>
-                !e.polygon ||
-                e.polygon.classificationType?.getValue() ===
-                  Cesium.ClassificationType.BOTH,
-            ) &&
-            entities.every(
-              (e) => !e.polyline || e.polyline.clampToGround?.getValue(),
+            primitives.length > 0 &&
+            primitives.every(
+              (p) => p.classificationType === Cesium.ClassificationType.BOTH,
             ),
           primitiveIds: ids,
-          ready: viewer.dataSourceDisplay.ready,
+          ready: primitives.every((p) => p.ready),
         };
+      },
+      /** The annotations drawn under the middle of the view. */
+      marksAtCentre() {
+        const { canvas } = viewer.scene;
+        const centre = new Cesium.Cartesian2(
+          canvas.clientWidth / 2,
+          canvas.clientHeight / 2,
+        );
+        const marks = new Set();
+        for (const hit of viewer.scene.drillPick(centre, 16)) {
+          const mark = hit?.id?.meta?.annotation;
+          if (mark !== undefined) marks.add(mark);
+        }
+        return [...marks];
       },
     };
   });
@@ -313,17 +342,31 @@ try {
           { flyTo },
         );
         const resolvedMs = performance.now() - started;
-        // "Drawn" = the first rendered frame after the entity visualizers have
-        // built the mark's primitives (each tick updates them before render).
+        // "Drawn" = the first rendered frame after the mark is drawn (as
+        // before, when it was the entities' first frame); "ready" = the first
+        // with its primitives all built, which may wait on Cesium's workers.
         const { viewer } = window.__godsEyeView;
+        const markId = response.ids?.[0];
+        let drawnMs = null;
+        let readyMs = null;
         await new Promise((resolve) => {
-          const off = viewer.scene.postRender.addEventListener(() => {
-            if (!viewer.dataSourceDisplay.ready) return;
+          const giveUp = setTimeout(done, 15_000);
+          function done() {
+            clearTimeout(giveUp);
             off();
             resolve();
+          }
+          const off = viewer.scene.postRender.addEventListener(() => {
+            const now = performance.now() - started;
+            drawnMs ??= now;
+            const drawn = window.__qaOutlines.annotationPrimitives(markId);
+            if (drawn.length && drawn.every((p) => p.ready)) {
+              readyMs = now;
+              done();
+            }
           });
+          viewer.scene.requestRender();
         });
-        const drawnMs = performance.now() - started;
         const mark = window.__godsEyeView.annotations
           .list()
           .find((m) => m.id === response.ids?.[0]);
@@ -331,6 +374,7 @@ try {
           response: response.results?.[0] ?? null,
           resolvedMs,
           drawnMs,
+          readyMs,
           parts: mark?.polygons?.length ?? (mark?.ring ? 1 : 0),
           holes: (mark?.polygons ?? []).reduce(
             (n, part) => n + part.length - 1,
@@ -338,6 +382,7 @@ try {
           ),
           ringVertices: mark?.ring?.length ?? 0,
           pending: Boolean(mark?.pendingOutline),
+          markId,
         };
       },
       target,
@@ -347,23 +392,29 @@ try {
     await settle();
     // Hold still: the drawn mark must not rebuild or grow.
     marker = `still:${name}`;
-    const before = await page.evaluate(() => window.__qaOutlines.snapshot());
+    const before = await page.evaluate(
+      (mark) => window.__qaOutlines.snapshot(mark),
+      timing.markId,
+    );
     const stillStart = frames.length;
     const times = await page.evaluate(
       (ms) => window.__qaOutlines.frameTimes(ms),
       STILL_MS,
     );
-    const after = await page.evaluate(() => window.__qaOutlines.snapshot());
+    const after = await page.evaluate(
+      (mark) => window.__qaOutlines.snapshot(mark),
+      timing.markId,
+    );
     const step = {
       step: `outline:${name}`,
       target,
       ...timing,
-      entities: after.entities,
-      polygons: after.polygons,
-      polylines: after.polylines,
+      primitives: after.primitives,
+      fills: after.fills,
+      lines: after.lines,
       draped: after.draped,
       stableWhileStill:
-        before.entities === after.entities &&
+        after.primitives > 0 &&
         JSON.stringify(before.primitiveIds) ===
           JSON.stringify(after.primitiveIds),
       stillFrameTimes: stats(times),
@@ -375,6 +426,7 @@ try {
     result.steps.push(step);
     console.log(
       `${name}: resolved ${timing.resolvedMs.toFixed(0)} ms, drawn ${timing.drawnMs.toFixed(0)} ms, ` +
+        `ready ${timing.readyMs?.toFixed(0)} ms, ` +
         `${timing.parts} part(s), ${timing.holes} hole(s), via ${timing.response?.resolvedVia}; ` +
         `still p50/p95 ${step.stillFrameTimes.p50}/${step.stillFrameTimes.p95} ms; ` +
         `stable=${step.stableWhileStill}`,
@@ -386,6 +438,11 @@ try {
     assert.ok(
       timing.drawnMs < OUTLINE_BUDGET_MS,
       `${name}: drawn in ${timing.drawnMs} ms`,
+    );
+    assert.notEqual(timing.readyMs, null, `${name}: its primitives built`);
+    assert.ok(
+      step.fills > 0 && step.lines > 0,
+      `${name}: drawn as a fill and an outline`,
     );
     assert.equal(step.draped, true, `${name}: draped on terrain/tiles`);
     assert.equal(step.stableWhileStill, true, `${name}: no redraw when still`);
@@ -512,8 +569,15 @@ try {
     await move(name, { lat, lon, height, pitch: -90 }, 1);
     await outline(name, target);
     await shot(name);
-    const rendered = await page.evaluate(() => window.__qaOutlines.snapshot());
-    assert.ok(rendered.polygons > 0, `${target} polygon renders`);
+    const rendered = await page.evaluate(() => ({
+      marks: window.__godsEyeView.annotations.list().map((m) => m.id),
+      atCentre: window.__qaOutlines.marksAtCentre(),
+    }));
+    assert.ok(
+      rendered.marks.length === 1 &&
+        rendered.atCentre.includes(rendered.marks[0]),
+      `${target} polygon renders`,
+    );
   }
 
   if (recordVideo) {
@@ -632,6 +696,7 @@ console.table(
     step: s.step,
     resolvedMs: s.resolvedMs?.toFixed(0),
     drawnMs: s.drawnMs?.toFixed(0),
+    readyMs: s.readyMs?.toFixed(0),
     parts: s.parts,
     stable: s.stableWhileStill,
     p50: (s.stillFrameTimes || s.frameTimes)?.p50,

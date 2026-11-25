@@ -27,6 +27,7 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#cockpit-context',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
+  '#gev-credits',
   '#location-bar',
   '#control-panel',
   '#gev-voice-control',
@@ -56,12 +57,39 @@ const RIGHT_STACK_OBSTACLE_SELECTOR = [
   '#intel-hud .hud-right-edge',
   '#cockpit-context',
   '#cockpit-signal-stream',
+  // The "NEW: GEV Stories" card under the Stories button: panels start below
+  // it while it is up, so its buttons never sit over a panel's controls.
+  '#hPop',
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
+  '#gev-credits',
   '#command-dock',
   '#gev-voice-control',
   '#world-timeline',
 ].join(', ');
+/** The body class the welcome sets while BROWSE STORIES loads. */
+const OPENING_STORIES = 'first-run-opening-stories';
+/**
+ * True when a mutation can show or hide the Stories card (`#hPop`): the card
+ * itself coming or going, or the welcome that hides it (`#first-run-launcher`,
+ * and the body class it sets while BROWSE STORIES loads) ending.
+ */
+export function movesStoriesCard(record) {
+  if (record.type === 'attributes')
+    return (
+      (record.oldValue || '').split(/\s+/).includes(OPENING_STORIES) !==
+      record.target.classList.contains(OPENING_STORIES)
+    );
+  for (const list of [record.addedNodes, record.removedNodes])
+    for (const node of list)
+      if (
+        ['hPop', 'first-run-launcher'].includes(node.id) ||
+        node.querySelector?.('#hPop, #first-run-launcher')
+      )
+        return true;
+  return false;
+}
+
 export class PanelLayoutController {
   constructor({
     readHud,
@@ -90,6 +118,9 @@ export class PanelLayoutController {
     this._rightStackPreferredPanelId = null;
     this._rightStackReconsiderAutoCollapse = false;
     this._rightStackResizeObserver = null;
+    this._storiesCardObserver = null;
+    this._storiesCardShownHandler = null;
+    this._storiesHost = null;
     this._cockpitLayoutFrame = null;
     this._cockpitLayoutTimer = null;
     this._leftPanelStack = document.getElementById('left-panel-stack');
@@ -189,7 +220,11 @@ export class PanelLayoutController {
     const stack = this._rightPanelStack;
     if (!stack || !this._ppToggles) return;
 
-    stack.prepend(this._ppToggles);
+    // Visual (presets and display settings) is the last panel of the left
+    // column, after the other tools, and opens from the left rail like them.
+    if (typeof this._leftPanelStack?.append === 'function')
+      this._leftPanelStack.append(this._ppToggles);
+    else stack.prepend(this._ppToggles);
     const globalContextPanel = document.getElementById('global-context-panel');
     for (const panel of [
       this._cctvPanel,
@@ -201,6 +236,9 @@ export class PanelLayoutController {
       if (!panel) continue;
       stack.insertBefore(panel, globalContextPanel);
     }
+    // Context leads the right column: it is the panel for whatever is picked,
+    // and the camera panels follow it.
+    if (globalContextPanel) stack.prepend(globalContextPanel);
     if (typeof ResizeObserver !== 'undefined') {
       this._rightStackResizeObserver = new ResizeObserver(() => {
         this._scheduleRightPanelLayout();
@@ -214,6 +252,7 @@ export class PanelLayoutController {
         this._recentImageryPanel,
         this._streetLevelPanel,
         globalContextPanel,
+        document.getElementById('space-missions-panel'),
         document.getElementById('radio-panel'),
       ]) {
         if (panel) this._rightStackResizeObserver.observe(panel);
@@ -237,6 +276,41 @@ export class PanelLayoutController {
         attributes: true,
         attributeFilter: ['class', 'hidden', 'data-variant'],
       });
+      // The Stories card comes and goes inside the Stories view; only its
+      // arrival or departure moves the rail, not the view's other changes.
+      // It fades in from transparent, which the layout skips, so the end of
+      // that fade (also replayed when the card is shown again after being
+      // hidden) lays the rail out once more.
+      const storiesHost = document.getElementById('gev-stories-host');
+      if (storiesHost) {
+        this._storiesHost = storiesHost;
+        this._storiesCardObserver = new MutationObserver((records) => {
+          if (records.some(movesStoriesCard)) this._scheduleRightPanelLayout();
+        });
+        this._storiesCardObserver.observe(storiesHost, {
+          subtree: true,
+          childList: true,
+        });
+        const welcomeHost = document.querySelector('[data-gev-view="welcome"]');
+        if (welcomeHost)
+          this._storiesCardObserver.observe(welcomeHost, {
+            subtree: true,
+            childList: true,
+          });
+        if (document.body)
+          this._storiesCardObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class'],
+            attributeOldValue: true,
+          });
+        this._storiesCardShownHandler = (event) => {
+          if (event.target?.id === 'hPop') this._scheduleRightPanelLayout();
+        };
+        storiesHost.addEventListener(
+          'animationend',
+          this._storiesCardShownHandler,
+        );
+      }
       const hud = document.getElementById('intel-hud');
       if (hud) {
         this._rightStackMutationObserver.observe(hud, {
@@ -345,12 +419,13 @@ export class PanelLayoutController {
           attributeFilter: ['class', 'data-variant'],
         });
       }
-      const credits = document.getElementById('cesium-credits');
-      if (credits) {
-        this._leftStackMutationObserver.observe(credits, {
-          subtree: true,
-          childList: true,
-        });
+      for (const id of ['cesium-credits', 'gev-credits']) {
+        const credits = document.getElementById(id);
+        if (credits)
+          this._leftStackMutationObserver.observe(credits, {
+            subtree: true,
+            childList: true,
+          });
       }
     }
 
@@ -454,10 +529,16 @@ export class PanelLayoutController {
       '_leftStackMutationObserver',
       '_rightStackResizeObserver',
       '_rightStackMutationObserver',
+      '_storiesCardObserver',
     ]) {
       this[field]?.disconnect();
       this[field] = null;
     }
+    this._storiesHost?.removeEventListener(
+      'animationend',
+      this._storiesCardShownHandler,
+    );
+    this._storiesHost = this._storiesCardShownHandler = null;
     for (const field of [
       '_leftStackHudTransitionHandler',
       '_rightStackHudTransitionHandler',

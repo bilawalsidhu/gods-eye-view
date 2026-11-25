@@ -242,9 +242,57 @@ const STATUS_PIECE_PATTERNS = [
   ],
 ];
 
+// Shapes of installationFeedback() (data/installationFeedback.js), which stays
+// English for the analyst. Keep them in step with its wording.
+const MAPPED_SITE_PATTERNS = [
+  [
+    /^(.+) — retrying in (\d+)s$/,
+    ([, reason, seconds]) =>
+      t('{reason} — retrying in {seconds}s', {
+        reason: translateKnown(reason),
+        seconds,
+      }),
+  ],
+  [
+    /^(.+) — retry pending$/,
+    ([, reason]) =>
+      t('{reason} — retry pending', { reason: translateKnown(reason) }),
+  ],
+  [/^No mapped sites in view$/, () => t('No mapped sites in view')],
+  [
+    /^(\d+) mapped sites? in view$/,
+    ([, count]) =>
+      tn(
+        Number(count),
+        '{count} mapped site in view',
+        '{count} mapped sites in view',
+      ),
+  ],
+  [
+    /^No mapped sites within (\d+) km of the contact$/,
+    ([, km]) =>
+      t('No mapped sites within {km} km of the contact', {
+        km: formatNumber(Number(km)),
+      }),
+  ],
+  [
+    /^(\d+) mapped sites? within (\d+) km of the contact$/,
+    ([, count, km]) =>
+      tn(
+        Number(count),
+        '{count} mapped site within {km} km of the contact',
+        '{count} mapped sites within {km} km of the contact',
+        { km: formatNumber(Number(km)) },
+      ),
+  ],
+];
+
+// First match wins.
+const STATUS_SHAPES = [...STATUS_PIECE_PATTERNS, ...MAPPED_SITE_PATTERNS];
+
 /** A status piece by its shape in the UI language, or null. */
 function statusPatternText(piece) {
-  for (const [pattern, format] of STATUS_PIECE_PATTERNS) {
+  for (const [pattern, format] of STATUS_SHAPES) {
     const match = pattern.exec(piece);
     if (match) return format(match);
   }

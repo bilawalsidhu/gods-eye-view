@@ -53,6 +53,7 @@ Keep the verb in agreement: «{count} Station meldet» / «{count} Stationen mel
 | aircraft / flight / military flights           | Luftfahrzeug (HUD and short labels: Flugzeug) / Flug / Militärflüge    |
 | vessel, ship                                   | Schiff                                                                 |
 | satellite / shell (Starlink) / DENSE           | Satellit / Schale / DICHT                                              |
+| CURRENTLY OVER (orbit, before a place name)    | ÜBERFLUG                                                               |
 | launch (rocket) / launch site / space mission  | Start / Startplatz / Raummission                                       |
 | ascent / replay / payload / stage / downrange  | Aufstieg / Replay, Wiedergabe / Nutzlast / Stufe / Downrange           |
 | contact / tracking                             | Kontakt / Verfolgung                                                   |

@@ -218,3 +218,115 @@ test('a row range renders start and end pickers and reports which end moved', ()
   assert.deepEqual(picks, [['shipwrecks', 'period', 'to', '2007']]);
   render(null, container);
 });
+
+const libraryRow = (chips) => ({
+  ...row(false),
+  key: 'lib-night-lights',
+  id: 'lib-night-lights',
+  libraryEntry: 'nasa-black-marble',
+  controls: { hidden: false, chips, legend: [], list: null },
+});
+
+test('a Data Library row names its entry and draws icon action chips', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const zoom = {
+    id: 'zoom',
+    icon: 'zoom_in_map',
+    action: true,
+    label: 'Zoom to layer',
+  };
+  render(h(LayerRows, { items: [libraryRow([zoom])] }), container);
+  const element = container.querySelector('[data-layer-id="lib-night-lights"]');
+  assert.equal(element.dataset.libraryEntry, 'nasa-black-marble');
+  const button = element.querySelector('[data-chip-id="zoom"]');
+  const glyph = button.children[0];
+  assert.ok(glyph.classList.contains('material-symbols-outlined'));
+  assert.equal(glyph.textContent, 'zoom_in_map');
+  assert.equal(glyph.getAttribute('aria-hidden'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'Zoom to layer');
+  assert.equal(button.title, 'Zoom to layer');
+  assert.equal(button.getAttribute('aria-pressed'), null);
+  assert.ok(button.classList.contains('chip-icon'));
+
+  // The same id as a text toggle drops the icon semantics.
+  render(
+    h(LayerRows, {
+      items: [libraryRow([{ id: 'zoom', label: 'ZOOM', active: true }])],
+    }),
+    container,
+  );
+  const toggle = element.querySelector('[data-chip-id="zoom"]');
+  assert.equal(toggle.textContent, 'ZOOM');
+  assert.equal(toggle.getAttribute('aria-label'), null);
+  assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(toggle.classList.contains('chip-icon'), false);
+  render(null, container);
+});
+
+test('a core row carries no library entry attribute', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  render(h(LayerRows, { items: [row(false)] }), container);
+  const element = container.querySelector('[data-layer-id="flights"]');
+  assert.equal(element.hasAttribute('data-library-entry'), false);
+  render(null, container);
+});
+
+const classRow = (chips) => ({
+  ...row(false),
+  key: 'satellites',
+  id: 'satellites',
+  controls: { hidden: false, chips, legend: [], list: null },
+});
+
+test('a keyed chip carries its swatch and count while on, only its name while off', () => {
+  document.body.replaceChildren();
+  const container = document.body.appendChild(document.createElement('div'));
+  const picks = [];
+  const on = {
+    id: 'class-imaging',
+    label: 'IMAGING',
+    active: true,
+    swatch: '#4fd8ff',
+    countText: '1.2K',
+  };
+  render(
+    h(LayerRows, {
+      items: [classRow([on])],
+      onChip: (id, chipId) => picks.push([id, chipId]),
+    }),
+    container,
+  );
+  const button = container.querySelector('[data-chip-id="class-imaging"]');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  const [swatch, name, count] = button.children;
+  assert.ok(swatch.classList.contains('data-toggle-chip-swatch'));
+  assert.equal(swatch.style.background, '#4fd8ff');
+  assert.equal(swatch.getAttribute('aria-hidden'), 'true');
+  assert.equal(name.textContent, 'IMAGING');
+  assert.ok(count.classList.contains('data-toggle-chip-count'));
+  assert.equal(count.textContent, '1.2K');
+  assert.ok(button.classList.contains('chip-keyed'));
+  assert.equal(button.textContent, 'IMAGING 1.2K', 'name and count read apart');
+  button.click();
+  assert.deepEqual(picks, [['satellites', 'class-imaging']]);
+
+  // Off: the same pill, its name alone.
+  render(
+    h(LayerRows, {
+      items: [
+        classRow([{ id: 'class-imaging', label: 'IMAGING', active: false }]),
+      ],
+    }),
+    container,
+  );
+  const off = container.querySelector('[data-chip-id="class-imaging"]');
+  assert.equal(off.getAttribute('aria-pressed'), 'false');
+  assert.equal(off.textContent, 'IMAGING');
+  assert.equal(off.querySelector('.data-toggle-chip-swatch'), null);
+  assert.equal(off.querySelector('.data-toggle-chip-count'), null);
+  assert.equal(off.classList.contains('chip-keyed'), false);
+  assert.equal(container.querySelector('.data-toggle-legend-item'), null);
+  render(null, container);
+});

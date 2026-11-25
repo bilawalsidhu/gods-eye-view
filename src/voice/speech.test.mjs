@@ -7,10 +7,11 @@ import {
   progressLine,
   progressStepLabel,
   spokenLabel,
+  VIEW_CENTRE_LABEL,
 } from './speech.js';
 import { presentResult } from './resultDisplay.js';
 import { countWords, findHedges } from './speechLint.js';
-import { setLocale } from '../i18n/index.js';
+import { setLocale, t } from '../i18n/index.js';
 
 function envelope(name, result, args) {
   return attachVoiceResult(name, result, args);
@@ -570,7 +571,7 @@ test('street-level failure cards are in the interface language; speech stays Eng
     ]);
     assert.deepEqual(
       lines('Google Street View needs the photoreal map, which is not available', { stage: 'map' }),
-      ['Google Street View braucht die Google 3D-Karte, die nicht verfügbar ist'],
+      ['Google Street View braucht die Karte „Google 3D“, die nicht verfügbar ist'],
     );
     assert.deepEqual(lines('Mapillary could not be switched on', { stage: 'provider' }), [
       'Mapillary konnte nicht eingeschaltet werden',
@@ -774,6 +775,54 @@ test('progress step labels join through the catalog colon', () => {
     assert.equal(
       progressStepLabel('resolve', 'Capitol'),
       'Recherche de lieux\u202f: Capitol',
+    );
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('the street-level card words "the view centre" and "this spot" as phrases, not names', () => {
+  setLocale('de');
+  try {
+    assert.equal(
+      planStepLabel('show_street_level', { provider: 'mapillary' }),
+      'Mapillary in der Bildmitte',
+    );
+    assert.equal(
+      planStepLabel('show_street_level', { latitude: 1, longitude: 2 }),
+      'Straßenebene an dieser Stelle',
+    );
+    assert.equal(
+      planStepLabel('show_street_level', { query: 'Alexanderplatz', provider: 'kartaview' }),
+      'KartaView: Alexanderplatz',
+    );
+    assert.equal(
+      progressStepLabel('imagery', VIEW_CENTRE_LABEL),
+      `${t('Opening imagery')}: die Bildmitte`,
+    );
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('the street-level plan step names the place as show_street_level finds it', () => {
+  // A pointed or numbered thing is located later, by deixis.
+  assert.equal(planStepLabel('show_street_level', { referent: 2 }), 'Street Level');
+  assert.equal(
+    planStepLabel('show_street_level', { referent: 2, provider: 'mapillary' }),
+    'Mapillary',
+  );
+  assert.equal(planStepLabel('show_street_level', { query: ' Pointer ' }), 'Street Level');
+  // One coordinate alone is no spot: the action looks at the view centre.
+  assert.equal(
+    planStepLabel('show_street_level', { latitude: 10 }),
+    'Street level at the view centre',
+  );
+  setLocale('de');
+  try {
+    assert.equal(
+      planStepLabel('show_street_level', { referent: 1 }),
+      'Straßenebene',
     );
   } finally {
     setLocale('en');
