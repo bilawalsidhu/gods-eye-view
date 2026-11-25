@@ -659,6 +659,23 @@ test('the stations switch hides and shows the station markers', async () => {
   assert.equal(drawn('points').show, true);
 });
 
+test('a scene shot keeps the stations switch; saved and shared params keep only the view', async () => {
+  const { layer, settle, drawn } = multiProvider({
+    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+  });
+  const pending = layer.update();
+  settle();
+  await pending;
+  layer.setParams({ stations: false });
+  const shot = layer.getSceneParams();
+  assert.deepEqual(shot, { view: 'aqi', stations: false });
+  assert.deepEqual(layer.getParams(), { view: 'aqi' });
+  // Played back, the shot hides the stations again.
+  layer.setParams({ stations: true });
+  layer.setParams(shot);
+  assert.equal(drawn('points').show, false);
+});
+
 // ── stations cluster at far zoom ───────────────────────────────────────────
 
 const pm25 = (id, lat, lon, concentration) =>

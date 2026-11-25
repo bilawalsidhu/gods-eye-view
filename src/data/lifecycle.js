@@ -2235,18 +2235,24 @@ export class LayerLifecycle {
   }
 
   /**
-   * Read runtime parameters from a layer if it exposes `getParams()`.
+   * Read runtime parameters from a layer if it exposes `getParams()`. With
+   * `scene`, its `getSceneParams()` when it has one: what a scene shot keeps
+   * beyond the saved and shared params.
    */
-  getLayerParams(layerId) {
+  getLayerParams(layerId, { scene = false } = {}) {
     const entry = this.layers.get(layerId);
-    if (!entry || !entry.module || typeof entry.module.getParams !== 'function')
+    const read =
+      scene && typeof entry?.module?.getSceneParams === 'function'
+        ? 'getSceneParams'
+        : 'getParams';
+    if (!entry || !entry.module || typeof entry.module[read] !== 'function')
       return null;
     try {
-      const params = entry.module.getParams();
+      const params = entry.module[read]();
       if (!params || typeof params !== 'object') return null;
       return cloneLayerParams(params);
     } catch (error) {
-      console.warn(`[Data] ${layerId} getParams error:`, error);
+      console.warn(`[Data] ${layerId} ${read} error:`, error);
       return null;
     }
   }

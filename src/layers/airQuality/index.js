@@ -2298,6 +2298,11 @@ export function createAirQualityLayer({
       return { view };
     },
 
+    /** A scene shot also keeps the stations switch, never the station selected. */
+    getSceneParams() {
+      return { view, stations: showStations };
+    },
+
     setParams(params = {}) {
       const nextView = params.view ?? view;
       if (!views.includes(nextView)) return false;
@@ -2928,6 +2933,26 @@ export function createAirQualityLayer({
         // unavailable. English data: the row translates it.
         keyRequired: keyRequired(),
         ...(keyRequired() ? { loadingLabel: msg('KEY REQUIRED') } : {}),
+        // A model step on the map is a feed, with or without stations.
+        fieldShown: modelShown(),
+        // Networks still discovering the stations in view, with the counts
+        // the card's line shows: until done, counts are a floor.
+        discovery: asked().flatMap((entry) => {
+          const covered = stateOf(entry).coverage;
+          return covered?.partial === true &&
+            Number.isFinite(covered.checked) &&
+            Number.isFinite(covered.eligible) &&
+            covered.eligible > 0 &&
+            covered.checked < covered.eligible
+            ? [
+                {
+                  network: entry.network,
+                  checked: covered.checked,
+                  eligible: covered.eligible,
+                },
+              ]
+            : [];
+        }),
         observedAt: newestObservation(_readings),
         // Only a completed refresh can be stale; before one there is no feed.
         stale:

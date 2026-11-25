@@ -303,6 +303,8 @@ const layers = [
         observedMs: ['ms'],
       },
       viewportLoaded: true,
+      // A region or area count outside the view holds only what is loaded.
+      viewportAreas: true,
       viewportNote:
         'air-quality loads OpenAQ stations by viewport; CPCB and SAAQIS stations are national',
       timeField: 'observedMs',
@@ -533,6 +535,7 @@ function normalizeEntry(entry) {
           window: entry.query.window || null,
           caveat: entry.query.caveat || null,
           viewportLoaded: entry.query.viewportLoaded === true,
+          viewportAreas: entry.query.viewportAreas === true,
           viewportNote: entry.query.viewportNote || null,
         })
       : null,

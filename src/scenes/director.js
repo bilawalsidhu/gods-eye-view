@@ -711,13 +711,14 @@ export class SceneDirector {
   }
 
   /**
-   * Snapshot the current enabled/params state of every registered data layer.
+   * Snapshot the current enabled/params state of every registered data layer,
+   * with the params a layer keeps for scene shots.
    * @returns {Object.<string, { enabled: boolean, params?: Object }>}
    */
   _captureLayerStates() {
     const layers = {};
     for (const layer of this.dataManager.getAll()) {
-      const params = this.dataManager.getLayerParams(layer.id);
+      const params = this.dataManager.getLayerParams(layer.id, { scene: true });
       layers[layer.id] = {
         enabled: !!layer.enabled,
         ...(params ? { params } : {}),

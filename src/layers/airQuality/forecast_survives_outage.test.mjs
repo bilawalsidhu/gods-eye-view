@@ -4,6 +4,7 @@ import { FIELD_IDS } from './field.js';
 import { createAirQualityLayer } from './index.js';
 import { createLocalAirQualityFieldSource } from './fieldSource.js';
 import { createWorldClock } from '../../time/worldClock.js';
+import { layerSnapshot } from '../../data/layerSnapshot.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
@@ -139,4 +140,31 @@ test('a usable forecast keeps the layer on when its station network fails', asyn
   });
   // The lifecycle manager disables a layer whose first update resolves false.
   assert.equal(await h.layer.update(), true);
+});
+
+test('a forecast on the map keeps the shared snapshot available while station keys are missing', async () => {
+  const host = hostField();
+  const h = harness({
+    fieldSource: host.source,
+    definitions: [
+      { ...SAAQIS, id: 'cpcb', network: 'CPCB', requiresKeyId: 'data-gov-in' },
+    ],
+    getSnapshot: async () => {
+      throw Object.assign(new Error('no key'), { code: 'no_key' });
+    },
+  });
+  await h.layer.update();
+  await settle();
+  await h.layer.update();
+  await settle();
+  const stats = h.layer.getStats();
+  assert.equal(stats.keyRequired, true);
+  const snapshot = layerSnapshot({
+    id: 'air-quality',
+    enabled: true,
+    stats,
+    requiresKeyId: h.layer.requiresKeyId,
+  });
+  assert.notEqual(snapshot.feedState, 'unavailable');
+  assert.match(snapshot.error, /DATA_GOV_IN_API_KEY/);
 });

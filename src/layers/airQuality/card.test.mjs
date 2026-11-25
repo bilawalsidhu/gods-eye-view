@@ -1340,6 +1340,32 @@ test('while OpenAQ is still discovering a view one muted line says how far along
   );
 });
 
+test("the layer's stats give the discovery counts the card line shows", async () => {
+  const { layer } = cardHarness(
+    { openaq: station('openaq', DURBAN, { 'PM2.5': 40 }) },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { partial: true, checked: 12, eligible: 40 } },
+    },
+  );
+  await layer.update();
+  await flush();
+  assert.deepEqual(layer.getStats().discovery, [
+    { network: 'OPENAQ', checked: 12, eligible: 40 },
+  ]);
+  assert.equal(layer.getStats().partial, undefined, 'the chip is unchanged');
+  const done = cardHarness(
+    { openaq: station('openaq', DURBAN, { 'PM2.5': 40 }) },
+    {
+      definitions: [OPENAQ],
+      coverage: { openaq: { partial: false, checked: 40, eligible: 40 } },
+    },
+  );
+  await done.layer.update();
+  await flush();
+  assert.deepEqual(done.layer.getStats().discovery, []);
+});
+
 test('a rejected key says so and points to Provider Settings', async () => {
   const { layer } = routedLayer({
     '/api/air-quality/south-africa': NOT_ENABLED,

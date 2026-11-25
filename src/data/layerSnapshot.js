@@ -155,8 +155,11 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
     ? Number(stats.lastUpdate)
     : null;
   // A layer whose every network waits on a key has no feed yet: voice and
-  // the HUD say so instead of narrating zero records as nominal.
-  const keyBlocked = stats.keyRequired === true && count === 0;
+  // the HUD say so instead of narrating zero records as nominal. A model
+  // field on the map (`fieldShown`) is a feed; the key guidance stays the
+  // error, for the stations.
+  const keyWaiting = stats.keyRequired === true && count === 0;
+  const keyBlocked = keyWaiting && stats.fieldShown !== true;
   const feedState = !enabled
     ? 'off'
     : keyBlocked
@@ -174,7 +177,7 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
     ageLabel: snapshotAgeLabel(lastUpdate, now),
     error:
       snapshotError(stats) ??
-      (keyBlocked ? keyBlockedText(layer.requiresKeyId) : null),
+      (keyWaiting ? keyBlockedText(layer.requiresKeyId) : null),
   };
 }
 

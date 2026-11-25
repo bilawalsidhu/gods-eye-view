@@ -240,6 +240,7 @@ function withinCeilings(values) {
   return { kept, excluded };
 }
 
+/** Leaves out a PM2.5 above its PM10's ceiling; true when it did. */
 function dropPm25AbovePm10(kept, excluded) {
   if (
     kept.pm25 !== undefined &&
@@ -248,7 +249,32 @@ function dropPm25AbovePm10(kept, excluded) {
   ) {
     delete kept.pm25;
     excluded.pm25 = 'above-pm10';
+    return true;
   }
+  return false;
+}
+
+/**
+ * The values of `kept` within AQI_MAX_SPREAD_MS of the newest of them, and
+ * the keys of those older.
+ */
+function withinSpread(kept, valueTimes) {
+  const times = Object.keys(kept)
+    .map((key) => valueTimes[key])
+    .filter(Number.isFinite);
+  const newest = times.length ? Math.max(...times) : null;
+  const fresh = { ...kept };
+  const old = [];
+  if (newest !== null)
+    for (const key of Object.keys(kept))
+      if (
+        Number.isFinite(valueTimes[key]) &&
+        valueTimes[key] < newest - AQI_MAX_SPREAD_MS
+      ) {
+        delete fresh[key];
+        old.push(key);
+      }
+  return { fresh, old, newest };
 }
 
 /** Values within the fault ceilings and consistent with the station’s PM10. */
@@ -261,7 +287,8 @@ export function plausibility(values) {
 /**
  * A station's index from the values it reports (`aqiStations`). The values
  * kept are within their ceilings and within AQI_MAX_SPREAD_MS of the newest.
- * PM2.5 is checked against the PM10 still kept.
+ * PM2.5 is checked against the PM10 still kept; one left out does not count
+ * as the newest.
  * @returns {{aqi: {index: number, leading: string} | null,
  *   used: object, excluded: Object<string, string>, observedMs: number|null}}
  *   `excluded` gives each value left out its reason: `'units'` or
@@ -271,25 +298,18 @@ export function plausibility(values) {
 export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
   const { kept, excluded: implausible } = withinCeilings(values);
   const reasons = { ...excluded, ...implausible };
-  const times = Object.keys(kept)
-    .map((key) => valueTimes[key])
-    .filter(Number.isFinite);
-  const newest = times.length ? Math.max(...times) : null;
-  if (newest !== null)
-    for (const key of Object.keys(kept))
-      if (
-        Number.isFinite(valueTimes[key]) &&
-        valueTimes[key] < newest - AQI_MAX_SPREAD_MS
-      ) {
-        delete kept[key];
-        reasons[key] = 'too-old';
-      }
-  dropPm25AbovePm10(kept, reasons);
-  const aqi = usAqi(kept);
+  let spread = withinSpread(kept, valueTimes);
+  if (dropPm25AbovePm10(spread.fresh, reasons)) {
+    delete kept.pm25;
+    spread = withinSpread(kept, valueTimes);
+  }
+  const { fresh, old, newest } = spread;
+  for (const key of old) reasons[key] = 'too-old';
+  const aqi = usAqi(fresh);
   const leadingTime = aqi ? valueTimes[aqi.leading] : undefined;
   return {
     aqi,
-    used: kept,
+    used: fresh,
     excluded: reasons,
     observedMs: Number.isFinite(leadingTime) ? leadingTime : newest,
   };
