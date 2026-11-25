@@ -319,3 +319,15 @@ and the development server's internal routes. See SECURITY.md.
 | `get_hud_caption` | `weather`, `summary` | The app's heads-up display caption for an area |
 | `show_in_gods_eye_view` | `app` | A view in God's Eye View: the live panel in clients with MCP Apps, and a link everywhere; takes another answer's view or an area or camera, layers, style, map, marks, something to follow, or street-level photos (Street View or Mapillary) at a place |
 | `panel_request` | `app` | Panel only: loads a path from the app's server for the God's Eye View panel |
+
+## Observation query tools (MCP first)
+
+`get_air_quality` reads the same ECCC AQHI station source as the Air quality layer,
+returns source times, AQHI bands and coverage, and never interprets absent
+observations as clean air. It accepts an `area` and optional `limit`.
+
+`get_gnss_integrity` samples the same ADS-B GNSS integrity source as the GNSS
+layer at a `location`, using the existing cell classifier. It reports
+aircraft-reported low navigation accuracy, not confirmed interference.
+Both tools are read-only and currently offered on MCP only; adding them to
+voice requires separately satisfying the Realtime prompt-size gate.
