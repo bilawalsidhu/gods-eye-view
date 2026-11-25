@@ -76,6 +76,14 @@ portable contract applies to the explicitly reviewed graphs above. Their layer
 controller remains the owner of rendering/cleanup until a focused extraction
 moves it. Do not label all ingestion modules platform-independent by filename.
 
+### Local package boundaries for forks
+
+Upstream ownership changes go only in `scripts/package-boundaries.json`. A fork
+can list extra `modules` and `external` entries for existing groups in the
+git-ignored `scripts/package-boundaries.local.json` and check them with
+`npm run check:boundaries -- --local`. Without `--local`, the check and CI read
+only the main file. Exports, runtimes and new groups belong in the main file.
+
 ## Compatibility entries and owners
 
 | Retained entry                                      | Owner and current reason                                                                                           |
