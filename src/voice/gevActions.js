@@ -4551,6 +4551,7 @@ function describeTargetEntity(dataManager, target) {
             operator: found.airline || '',
             type: found.typeName || found.typeCode || '',
             route,
+            routeVerification: route ? found.route?.verification || '' : '',
             altitude: Number.isFinite(found.altitudeM)
               ? `${Math.round(found.altitudeM * 3.28084)} ft`
               : '',

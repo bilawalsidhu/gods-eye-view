@@ -116,7 +116,7 @@ export function createTracking({
     const altFt = Math.round((described.altitudeM || 0) * 3.28084);
     const route =
       described.route && _routeIsPlausible(icao24, described.route)
-        ? `${described.route.origin.code} → ${described.route.destination.code} (unverified reference route)`
+        ? `${described.route.origin.code} → ${described.route.destination.code}`
         : null;
     return {
       id: icao24,
@@ -150,6 +150,7 @@ export function createTracking({
           ? `${roundHeadingDegrees(described.track)}°`
           : '',
         route: route || '',
+        routeVerification: route ? described.route.verification || '' : '',
         icao24,
         // Honesty cue: the contact is coasting on dead reckoning, so the
         // narrated position/velocity are last-known rather than live.
@@ -935,8 +936,9 @@ export function createTracking({
   }
 
   /** Multi-line tracked presentation text: "CS · FL · kts" + "Airline · Type" +
-   *  "ORIG → DEST". The route line is gated by
+   *  "ORIG → DEST · UNVERIFIED ROUTE". The route line is gated by
    *  routePlausible so a wrong-leg adsbdb route is hidden, not displayed.
+   *  adsbdb routes carry no date, so the route line is always marked as unverified.
    *  The first line carries the stale cue (`_trackedStaleCue`): STALE while
    *  the plane coasts on dead reckoning after a missed update, SIGNAL LOST
    *  once the coast has ended, so last-known velocity/altitude are never
@@ -973,7 +975,7 @@ export function createTracking({
     if (ident) lines.push(ident);
     if (info.route && _routeIsPlausible(icao24, info.route)) {
       lines.push(
-        `${info.route.origin.code} → ${info.route.destination.code} · REFERENCE (UNVERIFIED)`,
+        `${info.route.origin.code} → ${info.route.destination.code} · ${t('UNVERIFIED ROUTE')}`,
       );
     }
     return lines.join('\n');

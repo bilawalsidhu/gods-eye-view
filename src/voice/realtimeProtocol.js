@@ -161,7 +161,12 @@ export function responseInstructionForToolResult(result) {
       typeof result.identityLine === 'string' && result.identityLine
         ? 'If they asked what the aircraft is, speak its identityLine and add nothing; for any other question (altitude, speed, registration), answer from selected.properties.'
         : 'Be concise: useful names, place, layer and one or two notable properties.',
-    ].join(' ');
+      result.selected?.properties?.routeVerification === 'unverified-reference'
+        ? 'Whenever you mention selected.properties.route, say that the route is unverified.'
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
   }
   if (isGlobeViewRefusal(result)) {
     // A refusal is not a completed action. Keep tool text out of instructions.

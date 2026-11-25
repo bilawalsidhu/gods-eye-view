@@ -1,3 +1,4 @@
+import { routeProvenance } from '../../data/aircraftMeta.js';
 import { classifyAircraft } from '../../data/aircraftClass.js';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { parsePlanespottersPhoto } from '../../data/planespottersPhoto.js';
@@ -178,7 +179,7 @@ export function createEnrichment({
 
   function _requestRouteEnrichment(icao24) {
     const requested = flightState.records.data.get(icao24);
-    const association = requested?.routeAssociationVersion ?? null;
+    const association = requested?.routeAssociationVersion;
     const cs = String(requested?.callsign || '')
       .trim()
       .toUpperCase();
@@ -188,28 +189,15 @@ export function createEnrichment({
       { kind: 'route', id: cs },
       (data) => {
         const meta = flightState.records.data.get(icao24);
-        // Callsigns can cycle A -> B -> A before the original A request settles.
-        // A record re-admitted under the same ICAO must reject old results.
-        const currentCallsign = String(meta?.callsign || '')
-          .trim()
-          .toUpperCase();
-        if (
-          currentCallsign !== cs ||
-          (meta?.routeAssociationVersion ?? null) !== association
-        )
-          return;
+        // Only an answer for the current callsign association applies (records.js).
+        if (!meta || meta.routeAssociationVersion !== association) return;
         meta.routeCallsign = cs;
         meta.airline = data.airline || meta.airline;
         if (data.origin && data.destination) {
           meta.route = {
             origin: data.origin,
             destination: data.destination,
-            source: data.source || 'adsbdb',
-            retrievedAtMs: Number.isFinite(data.retrievedAtMs)
-              ? data.retrievedAtMs
-              : null,
-            operatingDate: null,
-            verification: 'unverified-reference',
+            ...routeProvenance(data),
           };
         }
         if (icao24 === flightState._trackedIcao && flightState._trackedEntity)

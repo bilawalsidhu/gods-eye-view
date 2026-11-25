@@ -1283,6 +1283,8 @@
   "occupancy|not accepting passengers": "посадки немає",
   "occupancy|not boardable": "посадка неможлива",
   "Route {route}": "Маршрут {route}",
+  "UNVERIFIED ROUTE": "МАРШРУТ НЕ ПІДТВЕРДЖЕНО",
+  "Route {route} (unverified)": "Маршрут {route} (не підтверджено)",
   "Vehicle {vehicle}": "Борт {vehicle}",
   "vehicle motion|Stopped": "Стоїть",
   "No recent fix": "Немає свіжих координат",

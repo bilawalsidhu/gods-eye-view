@@ -19,3 +19,18 @@ export function stickyNumber(next, prev, fallback) {
   if (Number.isFinite(prev)) return prev;
   return fallback;
 }
+
+/**
+ * Provenance of an adsbdb route: its source, when the server fetched it, and
+ * that it is undated and unverified for the flight now flying the callsign.
+ */
+export function routeProvenance(route) {
+  return {
+    source: route?.source || 'adsbdb',
+    retrievedAtMs: Number.isFinite(route?.retrievedAtMs)
+      ? route.retrievedAtMs
+      : null,
+    operatingDate: null,
+    verification: 'unverified-reference',
+  };
+}

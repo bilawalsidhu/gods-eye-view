@@ -1957,6 +1957,8 @@
   "occupancy|not accepting passengers": "لا تقبل ركابًا",
   "occupancy|not boardable": "الصعود غير ممكن",
   "Route {route}": "الخط {route}",
+  "UNVERIFIED ROUTE": "مسار غير موثَّق",
+  "Route {route} (unverified)": "المسار {route} (غير موثَّق)",
   "Vehicle {vehicle}": "المركبة {vehicle}",
   "vehicle motion|Stopped": "متوقفة",
   "No recent fix": "لا موضع حديث",

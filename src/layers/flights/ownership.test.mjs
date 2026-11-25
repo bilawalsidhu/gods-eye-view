@@ -328,6 +328,37 @@ function enrichmentClock(t, answer) {
   return { flightState, enrichment, queries, settle, advance };
 }
 
+/** One poll's row for `a0f1bb`, through the real record store. */
+function poll(flightState, callsign) {
+  return flightState.records.receive(
+    {
+      id: 'a0f1bb',
+      reference: 'a0f1bb',
+      longitude: -77,
+      latitude: 39,
+      callsign,
+      baroAltitudeM: 1000,
+      ellipsoidAltitudeM: null,
+      onGround: false,
+      speedMps: 120,
+      courseDeg: 90,
+    },
+    {
+      viewerLatDeg: null,
+      viewerLonDeg: null,
+      trackedId: null,
+      floorWarmPoints: [],
+    },
+  ).meta;
+}
+
+const routeAnswer = (code) => ({
+  found: true,
+  airline: `${code} Air`,
+  origin: { code: `${code}O` },
+  destination: { code: `${code}D` },
+});
+
 test('a failed lookup is asked again only after its cool-down', async (t) => {
   let fail = true;
   const { flightState, enrichment, queries, settle, advance } = enrichmentClock(
@@ -465,11 +496,10 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
     t,
     (query) => new Promise((resolve) => pending.push({ query, resolve })),
   );
-  const meta = { callsign: 'UAL9' };
-  flightState.records.data.set('a0f1bb', meta);
+  poll(flightState, 'UAL9');
   enrichment._requestRouteEnrichment('a0f1bb');
   await settle();
-  meta.callsign = 'UAL10'; // the next poll's callsign
+  poll(flightState, 'UAL10');
   advance(1_000);
   enrichment._requestRouteEnrichment('a0f1bb');
   await settle();
@@ -477,26 +507,76 @@ test('a route answer for a callsign the plane no longer flies is dropped', async
     pending.map(({ query }) => query.id),
     ['UAL9', 'UAL10'],
   );
-  const route = (code) => ({
-    found: true,
-    airline: `${code} Air`,
-    origin: { code: `${code}O` },
-    destination: { code: `${code}D` },
+  const current = () => flightState.records.data.get('a0f1bb');
+  pending[0].resolve(routeAnswer('OLD'));
+  await settle();
+  assert.equal(current().route, null, 'the late UAL9 answer is ignored');
+  assert.equal(current().airline, null);
+  pending[1].resolve({
+    ...routeAnswer('NEW'),
+    source: 'adsbdb',
+    retrievedAtMs: 1_700_000_000_000,
   });
-  pending[0].resolve(route('OLD'));
   await settle();
-  assert.equal(meta.route, undefined, 'the late UAL9 answer is ignored');
-  assert.equal(meta.airline, undefined);
-  pending[1].resolve(route('NEW'));
-  await settle();
-  assert.deepEqual(meta.route, {
+  assert.deepEqual(current().route, {
     origin: { code: 'NEWO' },
     destination: { code: 'NEWD' },
     source: 'adsbdb',
-    retrievedAtMs: null,
+    retrievedAtMs: 1_700_000_000_000,
     operatingDate: null,
     verification: 'unverified-reference',
   });
-  assert.equal(meta.routeCallsign, 'UAL10');
+  assert.equal(current().routeCallsign, 'UAL10');
+  flightState.lifetime.abort();
+});
+
+test('a callsign A-B-A cycle drops the old route and permits a fresh lookup', async (t) => {
+  const pending = [];
+  const { flightState, enrichment, settle, advance } = enrichmentClock(
+    t,
+    (query) => new Promise((resolve) => pending.push({ query, resolve })),
+  );
+  const first = poll(flightState, 'UAL123');
+  enrichment._requestRouteEnrichment('a0f1bb');
+  await settle();
+  poll(flightState, 'DAL456');
+  const returned = poll(flightState, 'UAL123');
+  assert.notEqual(
+    returned.routeAssociationVersion,
+    first.routeAssociationVersion,
+  );
+  advance(1_000);
+  enrichment._requestRouteEnrichment('a0f1bb');
+  await settle();
+  assert.deepEqual(
+    pending.map(({ query }) => query.id),
+    ['UAL123', 'UAL123'],
+  );
+  pending[1].resolve(routeAnswer('NEW'));
+  await settle();
+  pending[0].resolve(routeAnswer('OLD'));
+  await settle();
+  assert.equal(
+    flightState.records.data.get('a0f1bb').route.origin.code,
+    'NEWO',
+    'the old answer must not overwrite the new one',
+  );
+  flightState.lifetime.abort();
+});
+
+test('a route answer from before the aircraft left is not applied after it returns', async (t) => {
+  const pending = [];
+  const { flightState, enrichment, settle } = enrichmentClock(
+    t,
+    () => new Promise((resolve) => pending.push(resolve)),
+  );
+  poll(flightState, 'UAL123');
+  enrichment._requestRouteEnrichment('a0f1bb');
+  await settle();
+  flightState.records.forget('a0f1bb');
+  poll(flightState, 'UAL123');
+  pending[0](routeAnswer('OLD'));
+  await settle();
+  assert.equal(flightState.records.data.get('a0f1bb').route, null);
   flightState.lifetime.abort();
 });

@@ -135,7 +135,7 @@ export function localAdsbCardModel(
     ? Math.max(0, Math.round((nowMs - record.lastPositionAt) / 1000))
     : null;
   const messages = Math.max(0, Math.trunc(Number(record?.messageCount) || 0));
-  // Same identity and route lines the public flight card shows.
+  // Same identity and route lines as the public flight card, without its unverified-route mark.
   const identity = [meta?.airline, meta?.typeName || meta?.typeCode]
     .filter(Boolean)
     .join(' · ');

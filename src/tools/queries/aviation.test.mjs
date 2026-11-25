@@ -323,6 +323,8 @@ test('aircraft info combines type and route lookups', async () => {
       },
       'route:UAL123': {
         found: true,
+        source: 'adsbdb',
+        retrievedAtMs: 1_700_000_000_000,
         airline: 'United Airlines',
         origin: { code: 'SFO', name: 'San Francisco', lat: 37.6, lon: -122.4 },
         destination: { code: 'EWR', name: 'Newark', lat: 40.7, lon: -74.2 },
@@ -336,13 +338,14 @@ test('aircraft info combines type and route lookups', async () => {
   });
   assert.equal(
     both.summary,
-    'Aircraft aaa111 is Boeing 737-800 (N12345); undated adsbdb reference route for UAL123: SFO to EWR (United Airlines) (unverified for this flight).',
+    'Aircraft aaa111 is Boeing 737-800 (N12345); UAL123 is listed by adsbdb as SFO to EWR (United Airlines); the route is unverified for this flight.',
   );
   assert.equal(both.data.route.destination.name, 'Newark');
   assert.equal(both.data.route.source, 'adsbdb');
-  assert.equal(both.data.route.operatingDate, null);
-  assert.equal(both.data.route.retrievedAtMs, null);
+  assert.equal(both.data.route.retrieved_at, '2023-11-14T22:13:20.000Z');
+  assert.equal(both.data.route.operating_date, null);
   assert.equal(both.data.route.verification, 'unverified-reference');
+  assert.equal(Object.hasOwn(both.data.route, 'retrievedAtMs'), false);
   const unknown = await catalog.call('get_aircraft_info', { callsign: 'XYZ9' });
   assert.equal(unknown.summary, 'No route is known for XYZ9.');
   assert.deepEqual(unknown.data, { aircraft: null, route: null });

@@ -1941,6 +1941,8 @@
   "to {destination}": "куда: {destination}",
   "Registration {registration}": "Регистрационный номер: {registration}",
   "Route {route}": "Маршрут {route}",
+  "UNVERIFIED ROUTE": "МАРШРУТ НЕ ПОДТВЕРЖДЁН",
+  "Route {route} (unverified)": "Маршрут {route} (не подтверждён)",
   "View state": "Состояние вида",
   "Marked {count} places": {
     "one": "Отмечено {count} место",

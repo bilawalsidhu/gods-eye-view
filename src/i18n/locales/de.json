@@ -1859,6 +1859,8 @@
   "occupancy|not accepting passengers": "keine Fahrgastaufnahme",
   "occupancy|not boardable": "kein Einstieg möglich",
   "Route {route}": "Linie {route}",
+  "UNVERIFIED ROUTE": "ROUTE UNBESTÄTIGT",
+  "Route {route} (unverified)": "Route {route} (unbestätigt)",
   "Vehicle {vehicle}": "Fahrzeug {vehicle}",
   "vehicle motion|Stopped": "Steht",
   "No recent fix": "Keine aktuelle Position",

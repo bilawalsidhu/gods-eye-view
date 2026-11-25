@@ -1781,6 +1781,8 @@
   "occupancy|not accepting passengers": "tar inte emot resenärer",
   "occupancy|not boardable": "går inte att stiga på",
   "Route {route}": "Linje {route}",
+  "UNVERIFIED ROUTE": "RUTT OVERIFIERAD",
+  "Route {route} (unverified)": "Rutt {route} (overifierad)",
   "Vehicle {vehicle}": "Fordon {vehicle}",
   "vehicle motion|Stopped": "Står still",
   "No recent fix": "Ingen aktuell position",

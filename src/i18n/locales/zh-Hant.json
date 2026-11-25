@@ -1198,6 +1198,8 @@
   "occupancy|not accepting passengers": "不載客",
   "occupancy|not boardable": "無法上車",
   "Route {route}": "線路 {route}",
+  "UNVERIFIED ROUTE": "航線未核實",
+  "Route {route} (unverified)": "航線 {route}（未核實）",
   "Vehicle {vehicle}": "車輛 {vehicle}",
   "vehicle motion|Stopped": "已停車",
   "No recent fix": "無近期定位",

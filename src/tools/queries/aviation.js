@@ -19,6 +19,7 @@ import {
   numericSummary,
   thinEvenly,
 } from '../results.js';
+import { routeProvenance } from '../../data/aircraftMeta.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 const ICAO24_SCHEMA = Object.freeze({
@@ -389,7 +390,7 @@ export const getAircraftInfo = defineTool({
   title: 'Aircraft type and route',
   description:
     'Look up an aircraft type and registration by ICAO 24-bit address, and ' +
-    'an undated reference route by callsign, from adsbdb (not verified for today). Give either or both.',
+    'an unverified route by callsign, from adsbdb. Give either or both.',
   inputSchema: {
     type: 'object',
     properties: { icao24: ICAO24_SCHEMA, callsign: CALLSIGN_SCHEMA },
@@ -426,18 +427,17 @@ export const getAircraftInfo = defineTool({
             lon: value.lon ?? null,
           }
         : null;
-    const flight = route?.found
+    const provenance = route?.found ? routeProvenance(route) : null;
+    const flight = provenance
       ? {
           callsign,
           airline: route.airline ?? null,
           origin: airport(route.origin),
           destination: airport(route.destination),
-          source: route.source || 'adsbdb',
-          retrievedAtMs: Number.isFinite(route.retrievedAtMs)
-            ? route.retrievedAtMs
-            : null,
-          operatingDate: null,
-          verification: 'unverified-reference',
+          source: provenance.source,
+          retrieved_at: isoTime(provenance.retrievedAtMs),
+          operating_date: provenance.operatingDate,
+          verification: provenance.verification,
         }
       : null;
     const parts = [];
@@ -450,7 +450,7 @@ export const getAircraftInfo = defineTool({
     if (callsign)
       parts.push(
         flight
-          ? `undated adsbdb reference route for ${callsign}: ${flight.origin?.code || flight.origin?.name} to ${flight.destination?.code || flight.destination?.name}${flight.airline ? ` (${flight.airline})` : ''} (unverified for this flight)`
+          ? `${callsign} is listed by ${flight.source} as ${flight.origin?.code || flight.origin?.name} to ${flight.destination?.code || flight.destination?.name}${flight.airline ? ` (${flight.airline})` : ''}; the route is unverified for this flight`
           : `no route is known for ${callsign}`,
       );
     const summary = parts.join('; ');
