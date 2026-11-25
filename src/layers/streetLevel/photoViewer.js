@@ -4,7 +4,13 @@ import {
   wrapDegrees,
 } from './panorama.js';
 import { imageSize } from './imageSize.js';
+import { nextViewKey } from './photoViewers.js';
 import { msg, t } from '../../i18n/index.js';
+
+// Each mount's and each canvas's key comes from `nextViewKey()`, never
+// reused by any viewer: a view that sees one viewer unmount and another
+// mount in the same tick still draws them fresh elements (a destroyed
+// renderer leaves its canvas's context lost).
 
 /**
  * EXPAND puts the viewer's wrap full screen, or (iPhone) opens it as a
@@ -152,6 +158,16 @@ async function loadBitmap(url, timeoutMs, resize, failure, signal) {
 }
 
 /**
+ * Unmounted, superseded or left without a view before the view drew what
+ * was waiting on it (`undrawn`): a mount or an open that fails as closed.
+ */
+function undrawn() {
+  return Object.assign(new Error('Street-level viewer was closed'), {
+    undrawn: true,
+  });
+}
+
+/**
  * A picture refused for its size (`tooLarge`): the viewer will not load
  * that file another way, an <img> having no size limit at all.
  */
@@ -213,6 +229,28 @@ export function panoSizeFor(canvasPixels, fovDeg) {
  * or pinch to zoom), and ‹ › to step along the sequence (also ← →). Poses
  * follow the view direction.
  *
+ * The adapter draws nothing itself. It presents the viewer through
+ * `subscribeView()` (the street-level layer's `subscribePhotoViewer()`): a
+ * fresh `{host, mountKey, providerId, label, alt, kind, src, fit, canvasKey,
+ * dragging, prevLabel, prevDisabled, nextLabel, nextDisabled, actions}` on
+ * each change,
+ * or null while unmounted. A view draws it into `host` (the application's is
+ * `StreetLevelPhotoViewer`), forwards its events to `actions` and hands each
+ * element back through `actions.attach(name, element)` on every draw: the
+ * panorama canvas to draw on, the frame and picture to measure, the root
+ * and buttons to keep focus. A view may draw at once, inside its listener,
+ * or later (Vue draws on a microtask). Each mount has its own `mountKey`,
+ * and a new `canvasKey` asks for a fresh canvas (a lost WebGL context):
+ * neither is ever reused. `actions.supersede()` tells a viewer another one
+ * is drawn in its place: it unmounts, and a mount still waiting to be drawn
+ * fails as closed. Mounting with no view subscribed fails, and a mount or
+ * a panorama's open waiting on a draw when the last view leaves fails as
+ * closed (the mount unmounts; the open leaves no photo shown). A view
+ * handing back another canvas element than the renderer's (one subscribed
+ * since) gets the panorama drawn again on it, as after a lost context;
+ * while several views draw, a canvas the panorama moved off is not moved
+ * back to, and once one view is left its canvas is taken back.
+ *
  * Photos are normalized by the provider: `{id, sequenceId, lon, lat,
  * heading, isPano, capturedAt}` plus whatever its `sources` read.
  *
@@ -249,11 +287,29 @@ export function createPhotoViewer({
 }) {
   const LOAD_FAILED = `The ${name} photo could not be loaded`;
   const listeners = new Set();
+  /** The elements the view handed back. */
   let root = null;
   let picture = null;
   let canvas = null;
   let prevButton = null;
   let nextButton = null;
+  /** What the view draws; null while unmounted. */
+  let presented = null;
+  const viewListeners = new Set();
+  /** Waiting for the view's root (a mount), or its canvas: a fresh one, or the next draw. */
+  const rootWaiters = new Set();
+  const canvasWaiters = new Set();
+  /** How many times the view has handed the canvas back (once per draw). */
+  let canvasDraws = 0;
+  /**
+   * Canvases the panorama moved off while more than one view draws: one
+   * handed back again (a second view drawing its own) is not moved back to,
+   * so two views cannot take turns. Forgotten once a single view is left,
+   * so its canvas is taken back.
+   */
+  let retiredCanvases = new WeakSet();
+  /** The canvas moved while an open waited on its draw. */
+  let canvasMoved = false;
   let renderer = null;
   /** WebGL failed once: 360° photos show their front view instead. */
   let rendererFailed = false;
@@ -265,8 +321,6 @@ export function createPhotoViewer({
   let drag = null;
   let poseFrame = 0;
   let removeListeners = [];
-  /** The document the viewer was built in (new canvases come from it). */
-  let documentOf = null;
   /** A context loss's look direction, for the reopen of that photo. */
   let restoreView = null;
   /** The panel's viewer box, where Esc is listened for (null: the root). */
@@ -354,44 +408,77 @@ export function createPhotoViewer({
     });
   }
 
+  /** Present the viewer with `patch` applied (null: nothing to draw). */
+  function present(patch) {
+    if (patch === null) presented = null;
+    else if (presented) presented = { ...presented, ...patch };
+    else return;
+    for (const listener of [...viewListeners]) listener(presented);
+  }
+
+  /** Settle everything waiting on the view (it drew, or it went). */
+  function wake(waiters) {
+    for (const resolve of waiters) resolve();
+    waiters.clear();
+  }
+
+  /** A draw of the canvas, or none coming: unmounted, no view, or the open stopped. */
+  function canvasDrawn(drawn, signal) {
+    if (drawn() || !presented || !viewListeners.size || signal?.aborted)
+      return Promise.resolve();
+    return new Promise((resolve) => {
+      canvasWaiters.add(resolve);
+      signal?.addEventListener?.('abort', resolve, { once: true });
+    });
+  }
+
+  /** The panorama canvas once the view has drawn it, or the open stopped. */
+  function canvasReady(signal) {
+    return canvasDrawn(() => Boolean(canvas), signal);
+  }
+
+  /**
+   * A draw of the canvas after the `count`th (it hands the canvas back each
+   * time), or none coming. A view may draw synchronously, inside the
+   * presentation, before anything waits: counted, that draw is not missed.
+   */
+  function drawnAfter(count, signal) {
+    return canvasDrawn(() => canvasDraws > count, signal);
+  }
+
   function syncButtons() {
     const enabled = Boolean(photo?.sequenceId) && showing !== null;
-    if (prevButton) prevButton.disabled = !enabled;
-    if (nextButton) nextButton.disabled = !enabled;
+    present({ prevDisabled: !enabled, nextDisabled: !enabled });
     if (enabled) checkEnds(photo);
   }
 
   /** Disable ‹ or › at once where the sequence ends (it also warms the neighbours). */
   function checkEnds(target) {
-    for (const [delta, button] of [
-      [-1, prevButton],
-      [1, nextButton],
-    ])
+    for (const delta of [-1, 1])
       step(target, delta).then(
         (id) => {
-          if (photo === target && button && !id) disable(button);
+          if (photo === target && presented && !id) disable(delta);
         },
         () => {},
       );
   }
 
   /** Disable a step button, keeping keyboard focus in the viewer. */
-  function disable(button) {
-    if (button.ownerDocument?.activeElement === button) root?.focus?.();
-    button.disabled = true;
+  function disable(delta) {
+    const button = delta < 0 ? prevButton : nextButton;
+    if (button && button.ownerDocument?.activeElement === button)
+      root?.focus?.();
+    present(delta < 0 ? { prevDisabled: true } : { nextDisabled: true });
   }
 
   function show(kind) {
     showing = kind;
-    if (picture) picture.hidden = kind !== 'flat';
-    if (canvas) canvas.hidden = kind !== 'pano';
-    if (root) root.dataset.kind = kind || '';
+    present({ kind: kind || '' });
     syncButtons();
   }
 
   function applyRenderMode() {
-    if (picture)
-      picture.style.objectFit = renderMode === 'fill' ? 'cover' : 'contain';
+    present({ fit: renderMode === 'fill' ? 'cover' : 'contain' });
   }
 
   function ensureRenderer() {
@@ -410,7 +497,34 @@ export function createPhotoViewer({
    * with it: drop the renderer, and show the photo again on a new one.
    */
   function onContextLost(event) {
+    // Only the canvas on screen: a replaced one has nothing left to lose.
+    const from = event?.currentTarget ?? event?.target;
+    if (from && from !== canvas) return;
     event.preventDefault?.();
+    dropRenderer();
+    // A lost canvas hands back its lost context: the view draws a new
+    // element in its place and hands it back.
+    canvas = null;
+    present({ canvasKey: nextViewKey() });
+    reopen();
+  }
+
+  /**
+   * The view drew the panorama on another canvas element than the
+   * renderer's (a view that subscribed since): the renderer cannot follow
+   * it, so the photo is drawn again on a new one, as after a lost context.
+   */
+  function moveCanvas(element) {
+    dropRenderer();
+    retiredCanvases.add(canvas);
+    canvas = element;
+    // An open waiting on the draw goes on, on the new canvas.
+    if (openingId !== null) canvasMoved = true;
+    else reopen();
+  }
+
+  /** Let the renderer go, keeping the user's look for the photo's reopen. */
+  function dropRenderer() {
     const lost = renderer;
     renderer = null;
     // The new renderer starts facing the photo's heading: keep the user's look.
@@ -421,32 +535,16 @@ export function createPhotoViewer({
     } catch {
       /* already gone */
     }
-    // A lost canvas hands back its lost context: draw on a new element.
-    const fresh = makeCanvas(documentOf);
-    fresh.hidden = canvas.hidden;
-    canvas.replaceWith?.(fresh);
-    canvas = fresh;
-    // Show the photo again through the core, unless a newer one is opening.
+  }
+
+  /** Show the panorama again through the core, unless a newer photo is opening. */
+  function reopen() {
     if (showing === 'pano' && photo && openingId === null) {
       const again = photo.id;
       show(null);
       openingId = again;
       onReopen(again);
     }
-  }
-
-  /** The panorama canvas, wired for drag, pinch, wheel and context loss. */
-  function makeCanvas(doc) {
-    const element = doc.createElement('canvas');
-    element.className = 'sl-photo-pano';
-    element.hidden = true;
-    listen(element, 'pointerdown', onPointerDown);
-    listen(element, 'pointermove', onPointerMove);
-    listen(element, 'pointerup', onPointerUp);
-    listen(element, 'pointercancel', onPointerUp);
-    listen(element, 'wheel', onWheel, { passive: false });
-    listen(element, 'webglcontextlost', onContextLost);
-    return element;
   }
 
   /**
@@ -469,8 +567,7 @@ export function createPhotoViewer({
       // Closed, or another photo was opened meanwhile.
       if ((openingId ?? photo?.id) !== fromId) return;
       if (!nextId) {
-        const button = delta < 0 ? prevButton : nextButton;
-        if (button && photo?.id === fromId) disable(button);
+        if (presented && photo?.id === fromId) disable(delta);
         return;
       }
       openingId = nextId;
@@ -504,7 +601,7 @@ export function createPhotoViewer({
       y: event.clientY,
       view: renderer.getView(),
     };
-    canvas.classList.add('sl-photo-dragging');
+    present({ dragging: true });
   }
 
   function onPointerMove(event) {
@@ -532,7 +629,7 @@ export function createPhotoViewer({
     if (pointers.size < 2) pinch = null;
     if (!drag || event.pointerId !== drag.id) return;
     drag = null;
-    canvas.classList.remove('sl-photo-dragging');
+    present({ dragging: false });
   }
 
   function onWheel(event) {
@@ -603,51 +700,81 @@ export function createPhotoViewer({
     );
   }
 
+  /** The elements the view hands back, by name. */
+  const ELEMENTS = {
+    root: (element) => (root = element),
+    picture: (element) => (picture = element),
+    canvas: (element) => (canvas = element),
+    prev: (element) => (prevButton = element),
+    next: (element) => (nextButton = element),
+  };
+
+  /** Present the viewer in `host`; its view draws it and hands back its elements. */
   function build(host) {
-    const doc = host.ownerDocument;
-    documentOf = doc;
-    root = doc.createElement('div');
-    root.className = 'sl-photo-viewer';
-    root.dataset.provider = providerId;
-    root.tabIndex = 0;
-    root.setAttribute('role', 'group');
-    root.setAttribute(
-      'aria-label',
-      t(
+    // Events from a view drawn for an earlier mount are not this one's.
+    const current =
+      (handler) =>
+      (...args) => {
+        if (presented?.actions === actions) handler(...args);
+      };
+    const actions = {
+      attach(name, element) {
+        if (presented?.actions !== actions || !element) return;
+        const retired = name === 'canvas' && retiredCanvases.has(element);
+        if (retired) {
+          // Another view still draws the panorama: this draw is counted, so
+          // an open waiting on it goes on, but the panorama stays put.
+        } else if (
+          name === 'canvas' &&
+          renderer &&
+          canvas &&
+          element !== canvas
+        )
+          moveCanvas(element);
+        else ELEMENTS[name]?.(element);
+        if (name === 'root') wake(rootWaiters);
+        if (name === 'canvas') {
+          canvasDraws++;
+          wake(canvasWaiters);
+        }
+      },
+      keydown: current(onKeyDown),
+      pointerdown: current(onPointerDown),
+      pointermove: current(onPointerMove),
+      pointerup: current(onPointerUp),
+      wheel: current(onWheel),
+      contextLost: current(onContextLost),
+      supersede: current(() => adapter.unmount()),
+      step: current((delta, event) => {
+        event?.stopPropagation?.();
+        stepBy(delta);
+      }),
+    };
+    presented = {
+      host,
+      mountKey: nextViewKey(),
+      providerId,
+      label: t(
         '{name} photo. ← and → step along the sequence. On a 360° photo, drag or use Shift+← →, ↑ ↓ to look around, and + − to zoom',
         { name },
       ),
-    );
-    picture = doc.createElement('img');
-    picture.className = 'sl-photo-flat';
-    picture.alt = t('{name} street-level photo', { name });
-    picture.draggable = false;
-    picture.hidden = true;
-    canvas = makeCanvas(doc);
-    const nav = (label, glyph, delta) => {
-      const button = doc.createElement('button');
-      button.type = 'button';
-      button.className = `sl-photo-step sl-photo-step-${delta < 0 ? 'prev' : 'next'}`;
-      button.textContent = glyph;
-      button.title = label;
-      button.setAttribute('aria-label', label);
-      button.disabled = true;
-      listen(button, 'click', (event) => {
-        event.stopPropagation();
-        stepBy(delta);
-      });
-      return button;
+      alt: t('{name} street-level photo', { name }),
+      kind: undefined,
+      src: null,
+      fit: renderMode === 'fill' ? 'cover' : 'contain',
+      canvasKey: nextViewKey(),
+      dragging: false,
+      prevLabel: t('Previous photo in this sequence (←)'),
+      prevDisabled: true,
+      nextLabel: t('Next photo in this sequence (→)'),
+      nextDisabled: true,
+      actions,
     };
-    prevButton = nav(t('Previous photo in this sequence (←)'), '‹', -1);
-    nextButton = nav(t('Next photo in this sequence (→)'), '›', 1);
-    root.append(picture, canvas, prevButton, nextButton);
-    host.append(root);
-    listen(root, 'keydown', onKeyDown);
+    present({});
     // The viewer's box in the panel; without one, the root's own handler
     // takes Esc (one listener per element and type).
     escapeTarget = host.closest?.('.sl-viewer-wrap') ?? null;
     if (escapeTarget) listen(escapeTarget, 'keydown', onEscapeKey);
-    applyRenderMode();
   }
 
   function teardown() {
@@ -655,13 +782,17 @@ export function createPhotoViewer({
     pinch = null;
     for (const remove of removeListeners) remove();
     removeListeners = [];
+    escapeTarget = null;
     if (poseFrame) cancelAnimationFrame(poseFrame);
     poseFrame = 0;
     drag = null;
     renderer?.destroy();
     renderer = null;
-    root?.remove();
+    // The view takes its elements away.
+    present(null);
     root = picture = canvas = prevButton = nextButton = null;
+    wake(rootWaiters);
+    wake(canvasWaiters);
     showing = null;
     photo = null;
   }
@@ -738,7 +869,7 @@ export function createPhotoViewer({
     try {
       const image = await loadAs(url, { crossOrigin: false, signal });
       if (seq !== openSeq || photo !== target || showing !== 'flat') return;
-      picture.src = image.src;
+      present({ src: image.src });
       sharp.shown = url;
       requestRender();
     } catch {
@@ -770,7 +901,8 @@ export function createPhotoViewer({
   /** The sharp panorama this viewer needs now: 2,048 docked, 4,096 expanded. */
   function panoSizeNow() {
     const ratio = Math.min(globalThis.devicePixelRatio || 1, 2);
-    const width = (canvas?.clientWidth || 0) * ratio;
+    // The canvas fills the frame; until the view shows it, it measures 0.
+    const width = (canvas?.clientWidth || root?.clientWidth || 0) * ratio;
     return panoSizeFor(width, renderer?.getView().fov ?? PANO_FOV_DEFAULT_DEG);
   }
 
@@ -801,8 +933,33 @@ export function createPhotoViewer({
     else if (!keepView || showing !== 'pano')
       renderer.setView({ yaw: 0, pitch: 0, fov: PANO_FOV_DEFAULT_DEG });
     photo = target;
-    // Shown first: a hidden canvas measures 0 and would be sized 1×1.
+    // Shown first: a hidden canvas measures 0 and would be sized 1×1. The
+    // view draws it shown, at once or on a microtask, and hands the canvas
+    // back then.
+    const draws = canvasDraws;
+    canvasMoved = false;
     show('pano');
+    await drawnAfter(draws, signal);
+    // The view drew it on another canvas: the panorama goes there.
+    if (canvasMoved && seq === openSeq && !renderer && ensureRenderer()) {
+      const moved = restoreView?.id === target.id ? restoreView.view : null;
+      restoreView = null;
+      if (moved) renderer.setView(moved);
+    }
+    canvasMoved = false;
+    // The last view left before drawing it: the canvas was never shown, and
+    // nothing is drawn until a view is back.
+    if (seq === openSeq && canvasDraws === draws && !viewListeners.size) {
+      image.close?.();
+      photo = null;
+      show(null);
+      throw undrawn();
+    }
+    if (seq !== openSeq || !renderer) {
+      image.close?.();
+      if (seq !== openSeq) return false;
+      throw new Error(LOAD_FAILED);
+    }
     renderer.setImage(image);
     panoWidth = first.width || 0;
     // A sharper version of the photo before was dropped by `open`; one of
@@ -827,7 +984,7 @@ export function createPhotoViewer({
     }
     if (!image) throw failure || new Error(LOAD_FAILED);
     if (seq !== openSeq) return false;
-    picture.src = image.src;
+    present({ src: image.src });
     flatSharp = { shown: null, loading: null };
     photo = target;
     show('flat');
@@ -837,11 +994,17 @@ export function createPhotoViewer({
   async function openPhoto(id, seq, keepView, signal) {
     const target = await getPhoto(id, { signal });
     if (seq !== openSeq) return;
+    // A canvas lost moments ago: the view is drawing its replacement.
+    if (sources.hasPano(target) && !rendererFailed) {
+      await canvasReady(signal);
+      if (seq !== openSeq) return;
+    }
     let shown = false;
     if (sources.hasPano(target) && ensureRenderer()) {
       try {
         shown = await showPano(target, seq, keepView, signal);
-      } catch {
+      } catch (error) {
+        if (error?.undrawn) throw error;
         // The panorama failed: its front view is better than nothing.
         if (seq !== openSeq) return;
         shown = await showFlat(target, seq, signal);
@@ -857,10 +1020,36 @@ export function createPhotoViewer({
   const adapter = {
     async mount(host) {
       if (!host) throw new Error('Street Level viewer has no host element');
-      if (root && root.parentNode === host) return;
+      if (root && presented?.host === host) return;
       teardown();
       rendererFailed = false;
+      if (!viewListeners.size)
+        throw new Error('Street Level photo viewer has no view to draw it');
+      // Resolves once the view drew the viewer, or it was unmounted, or its
+      // last view left, meanwhile.
+      const waitRoot = () => new Promise((resolve) => rootWaiters.add(resolve));
+      let drawn = waitRoot();
       build(host);
+      // This mount's presentation: a later mount presents its own. A view
+      // may have unmounted it already, inside its first draw.
+      const mine = presented?.actions;
+      if (!mine) throw undrawn();
+      for (;;) {
+        if (!root) await drawn;
+        const current = presented?.actions === mine;
+        if (root && current) return;
+        // Unmounted, superseded or mounted again: that is not this mount.
+        if (!current) throw undrawn();
+        // Its last view left, and another subscribed since: it draws.
+        if (viewListeners.size) {
+          drawn = waitRoot();
+          continue;
+        }
+        // No view will draw it. Unmounted, as when superseded, so a view
+        // subscribing later draws nothing.
+        adapter.unmount();
+        throw undrawn();
+      }
     },
 
     /** Resolves once the photo is on screen and its pose was emitted. */
@@ -896,7 +1085,7 @@ export function createPhotoViewer({
       photo = null;
       flatSharp = { shown: null, loading: null };
       show(null);
-      if (picture) picture.removeAttribute('src');
+      present({ src: null });
       renderer?.clear?.();
     },
 
@@ -936,6 +1125,28 @@ export function createPhotoViewer({
     onPose(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+
+    /**
+     * Receive every presentation of the viewer, starting with the current
+     * one (null while unmounted).
+     * @param {(view: ?object) => void} listener
+     * @returns {() => void} Unsubscribe.
+     */
+    subscribeView(listener) {
+      viewListeners.add(listener);
+      listener(presented);
+      return () => {
+        // The last view went: a mount or an open waiting on its draw fails
+        // as closed.
+        if (!viewListeners.delete(listener)) return;
+        // One view left: the canvases moved off are its to hand back again.
+        if (viewListeners.size <= 1) retiredCanvases = new WeakSet();
+        if (!viewListeners.size) {
+          wake(rootWaiters);
+          wake(canvasWaiters);
+        }
+      };
     },
   };
   return adapter;

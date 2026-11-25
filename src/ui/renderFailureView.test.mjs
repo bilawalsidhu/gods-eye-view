@@ -72,7 +72,7 @@ test('a lost context offers Reload, and a panel that cannot reload offers nothin
     document.getElementById('render-failure-message').textContent,
     /3D graphics/,
   );
-  assert.equal(notice().querySelector('.render-failure-detail'), null);
+  assert.equal(notice().querySelector('.render-failure-detail') === null, true);
   assert.deepEqual(buttons(), ['Reload', 'Reset view']);
   store.publishRenderFailure({
     reason: 'context-lost',
@@ -82,7 +82,7 @@ test('a lost context offers Reload, and a panel that cannot reload offers nothin
   });
   await nextTick();
   assert.deepEqual(buttons(), []);
-  assert.equal(notice().querySelector('.render-failure-hint'), null);
+  assert.equal(notice().querySelector('.render-failure-hint') === null, true);
 });
 
 const failure = () => ({

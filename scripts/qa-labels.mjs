@@ -267,12 +267,6 @@ async function main() {
       { timeout: 60000, polling: 100 },
     );
 
-    // flyToAustin schedules its 600 m arrival 500 ms after initialization.
-    // Let that callback start, then cancel it before establishing the global
-    // measurement camera so startup motion cannot invalidate the sample.
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    await page.evaluate(() => window.__godsEyeView.viewer.camera.cancelFlight());
-
     const stateChecks = await page.evaluate((storageKey) => {
       const manager = window.__godsEyeView.styleManager;
       const restored = manager.getDetectionState();

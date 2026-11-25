@@ -1,4 +1,5 @@
-const KNOT_MPS = 1852 / 3600;
+import { KNOT_MPS } from '../../data/units.js';
+
 const finiteOrNaN = (value) =>
   typeof value === 'number' && Number.isFinite(value) ? value : NaN;
 
@@ -20,8 +21,10 @@ function placementFix(record) {
   };
 }
 
-/** Connect portable vessel reconciliation to scene and selection operations.
- * `placement`, a host-supplied placement, is told each live fix. */
+/**
+ * Connect portable vessel reconciliation to scene and selection operations.
+ * `placement`, a host-supplied placement, is told each live fix.
+ */
 export function createVesselSnapshotRenderer({
   state,
   placement = null,
@@ -32,11 +35,15 @@ export function createVesselSnapshotRenderer({
   cards,
   followsClock = () => false,
 }) {
-  /** `replace`: the rows are the world at another time (see VesselRecords). */
+  /**
+   * `replace`: the rows are the world at another time (see VesselRecords).
+   * `handover`: the first live rows after the clock came back to live (see
+   * VesselRecords); they are live fixes.
+   */
   function reconcileVessels(
     viewer,
     rows,
-    { complete = true, replace = false } = {},
+    { complete = true, replace = false, handover = false } = {},
   ) {
     rendering.ensureCollections(viewer);
     const occluder = rendering.makeOccluder();
@@ -55,6 +62,7 @@ export function createVesselSnapshotRenderer({
         selectedRecord: state.selectedRecord,
         cap: rendering.renderRowLimit(),
         ...(replace && { replace }),
+        ...(handover && { handover }),
         ...(follow && { follow }),
       },
       {
@@ -63,20 +71,11 @@ export function createVesselSnapshotRenderer({
           rendering.prepareRecordVisual(record);
           rendering.addRecordPrimitives(record, occluder);
         },
-        beforeUpdate(record) {
-          return rendering.shipIcon(record, record === state.selectedRecord);
-        },
-        updated(record, prevIcon) {
+        updated(record) {
           observe(record);
           const selected = record === state.selectedRecord;
-          const visual = rendering.prepareRecordVisual(record);
-          if (visual.billboard) {
-            visual.billboard.position = visual.position;
-            visual.billboard.scale =
-              rendering.shipScale(record) * (selected ? 1.2 : 1);
-            const nextIcon = rendering.shipIcon(record, selected);
-            if (nextIcon !== prevIcon) visual.billboard.image = nextIcon;
-          }
+          rendering.prepareRecordVisual(record);
+          rendering.syncRecordIcon(record);
           if (record.id === state.trailId)
             tracking.appendSelectedVesselTrailFix(record);
           if (selected) {
@@ -97,9 +96,9 @@ export function createVesselSnapshotRenderer({
         },
       },
     );
-    // The selected vessel at the new time: its trail starts there.
+    // The selected vessel at the new time: its trail is drawn to it.
     if (replace && state.selectedRecord && state.trailId)
-      tracking.startSelectedVesselTrail(state.selectedRecord);
+      tracking.retimeSelectedVesselTrail(state.selectedRecord);
     state.lastVisibilityUpdate = 0;
     rendering.updateVisibility(true);
   }

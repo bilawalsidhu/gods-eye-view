@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { getLocale, setLocale } from '../../i18n/index.js';
 import { createModel } from './model.js';
 import { createQueries } from './queries.js';
@@ -68,8 +67,7 @@ test('fire cards count ages from the end of the window shown, and from now when 
 
     // The cards the scene shows use the same time.
     const entries = [];
-    context.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', () => ({ x: 400, y: 300 }));
-    layerState._viewer = { scene: { canvas: { clientWidth: 800, clientHeight: 600 } } };
+    layerState._viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
     layerState._fireByCardId = new Map();
     layerState._selectedFire = null;
     layerState._labelCandidates = [{ cell, position: {} }];
@@ -77,7 +75,14 @@ test('fire cards count ages from the end of the window shown, and from now when 
     const { rebuildAmbientLabels } = createCards({
       layerState,
       services: {},
-      components: { model, rendering: { fireHorizonOccluder: () => null } },
+      components: {
+        model,
+        rendering: {
+          scenePorts: () => ({
+            query: { project: () => ({ x: 400, y: 300 }), isOccluded: () => false },
+          }),
+        },
+      },
       config: { overlayHost: { setEntries: (source, shown) => entries.push(...shown) } },
     });
     rebuildAmbientLabels();

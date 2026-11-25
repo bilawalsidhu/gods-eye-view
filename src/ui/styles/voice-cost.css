@@ -319,16 +319,7 @@ html:not([lang='en'])
   outline: 2px solid var(--voice-panel-accent, var(--accent));
   outline-offset: 2px;
 }
-:root[data-ui-theme='cyber']
-  #gev-voice-control:has(> .gev-voice-settings-button) {
-  --voice-panel-accent: var(--cyber-red-bright);
-}
-:root[data-ui-theme='cyber']
-  #gev-voice-control:has(> .gev-voice-settings-button)
-  .gev-voice-provider-field {
-  background: var(--cyber-panel-surface);
-  border-color: var(--glass-border);
-}
+
 @media (pointer: coarse) {
   #gev-voice-control .gev-voice-settings-button {
     width: 44px;

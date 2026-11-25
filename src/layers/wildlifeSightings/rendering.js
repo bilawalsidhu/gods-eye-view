@@ -6,6 +6,15 @@ import {
 } from './model.js';
 import { createWildlifeBillboardModel } from './billboardModel.js';
 import { createWildlifeDensity } from './density.js';
+import { createWildlifeIconCollection } from './iconCollection.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { cssColor } from '../../render/color.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findGlobe,
+} from '../../render/rendererOf.js';
 import { wildlifeSpriteCache } from './sprites.js';
 import { isRecentWildlifeSighting } from './records.js';
 import {
@@ -17,14 +26,24 @@ import {
 import {
   WILDLIFE_SCALE_BY_DISTANCE,
   WILDLIFE_BADGE_MAX_PX,
-  WILDLIFE_GROUND_READY_MAX_CHECKS,
   WILDLIFE_SPRITE_PX,
 } from './policy.js';
 
+/** Live layer instances, for set ids unique among a renderer's sets. */
+let instances = 0;
+
+/** A rebuilt anchor that lands where the old one was. */
+function sameAnchor(a, b) {
+  return !!a && !!b && a.x === b.x && a.y === b.y && a.z === b.z;
+}
+
 /** Own sighting billboards, density glow and batched privacy cells. */
 export function createRendering({ state, services, parts }) {
-  const C = services.cesium;
+  const spriteDrawOrder =
+    services.sprites?.spriteDrawOrder?.('wildlife-sightings') ?? 0;
   const badgeSprites = services.badgeSprites ?? wildlifeSpriteCache();
+  // How anchors are built from degrees (a test may count the builds).
+  const anchorAt = services.fromDegrees ?? fromDegrees;
   let batchDepth = 0;
   let pendingRenderReason = null;
   let billboards = null;
@@ -46,12 +65,16 @@ export function createRendering({ state, services, parts }) {
   function surfaceAnchor(row) {
     const old = surfaceAnchors.get(row);
     if (old && old.lat === row.lat && old.lon === row.lon) return old.anchor;
-    const anchor = C.Cartesian3.fromDegrees(row.lon, row.lat);
+    const anchor = anchorAt(row.lon, row.lat);
     surfaceAnchors.set(row, { lat: row.lat, lon: row.lon, anchor });
     if (operations) operations.positionBuilds++;
     return anchor;
   }
   const requestRender = (reason) => {
+    // Every write is followed by a render request: send the sets what was
+    // written before the frame is asked for.
+    state.points?.flush();
+    density?.flush();
     if (batchDepth) {
       pendingRenderReason = reason;
       return;
@@ -69,7 +92,6 @@ export function createRendering({ state, services, parts }) {
     requestRender(reason);
   }
   const surfaceRemovers = [];
-  const tilesetRemovers = new Map();
 
   // Reuse the shared ground cache. One bounded resolve lifts cold anchors
   // without per-sighting scene renders and pixel readback.
@@ -84,7 +106,7 @@ export function createRendering({ state, services, parts }) {
       queueMicrotask(warmColdFloors);
     }
     return Number.isFinite(floor) && floor !== 0
-      ? C.Cartesian3.fromDegrees(row.lon, row.lat, floor)
+      ? anchorAt(row.lon, row.lat, floor)
       : surfaceAnchor(row);
   }
 
@@ -106,8 +128,8 @@ export function createRendering({ state, services, parts }) {
   }
 
   function occluder() {
-    const camera = state.viewer?.camera;
-    return camera?.positionWC ? services.occluderFactory?.(camera) : null;
+    const eye = state.viewer ? findCamera(state.viewer)?.pose().position : null;
+    return eye ? services.occluderFactory?.(eye) : null;
   }
 
   function cull() {
@@ -203,8 +225,7 @@ export function createRendering({ state, services, parts }) {
       const point = state.pointById.get(row.stableId);
       if (!point) continue;
       const anchor = position(row);
-      if (C.Cartesian3.equals(anchor, state.positions.get(row.stableId)))
-        continue;
+      if (sameAnchor(anchor, state.positions.get(row.stableId))) continue;
       point.position = anchor;
       state.positions.set(row.stableId, anchor);
       changed = true;
@@ -223,31 +244,15 @@ export function createRendering({ state, services, parts }) {
     }
   }
 
-  function trackTileset(primitive) {
-    if (
-      tilesetRemovers.has(primitive) ||
-      typeof primitive?.allTilesLoaded?.addEventListener !== 'function'
-    )
-      return false;
-    tilesetRemovers.set(
-      primitive,
-      primitive.allTilesLoaded.addEventListener(resampleAnchors),
-    );
-    return true;
-  }
-
   function deactivate() {
     workQueue.cancel();
     operations = null;
     for (const remove of surfaceRemovers.splice(0)) remove?.();
-    for (const remove of tilesetRemovers.values()) remove?.();
-    tilesetRemovers.clear();
   }
 
   function activate() {
     deactivate();
     if (!state.enabled || !state.viewer) return;
-    const scene = state.viewer.scene;
     const refreshBadgeImages = () => {
       if (!state.enabled) return;
       appearances.clear();
@@ -256,31 +261,24 @@ export function createRendering({ state, services, parts }) {
     };
     surfaceRemovers.push(badgeSprites.subscribe(refreshBadgeImages));
     refreshBadgeImages();
-    const ownEvent = (event, listener) => {
-      const remove = event?.addEventListener?.(listener);
-      if (typeof remove === 'function') surfaceRemovers.push(remove);
-    };
-    ownEvent(scene.globe?.tileLoadProgressEvent, (pending) => {
-      if (pending === 0) resampleAnchors();
+    // Anchors follow the ground: resample once terrain or the base tiles in
+    // view finish loading, and when what heights answer against changes
+    // (terrain, the shown tilesets).
+    const globe = findGlobe(state.viewer);
+    let surface = globe?.surfaceVersion?.();
+    // Loaded until the port says otherwise.
+    let pending = { tilesPending: 0, terrainPending: 0 };
+    const off = globe?.on?.('progress', (progress) => {
+      const version = globe.surfaceVersion?.();
+      const surfaceChanged = version !== surface;
+      surface = version;
+      const loaded =
+        (progress.terrainPending === 0 && pending.terrainPending !== 0) ||
+        (progress.tilesPending === 0 && pending.tilesPending !== 0);
+      pending = progress;
+      if (surfaceChanged || loaded) resampleAnchors();
     });
-    // Scene forwards the globe event in Cesium; deduplicate that alias.
-    for (const event of new Set([
-      scene.terrainProviderChanged,
-      scene.globe?.terrainProviderChanged,
-    ]))
-      ownEvent(event, resampleAnchors);
-    const primitives = scene.primitives;
-    for (let i = 0; i < (primitives?.length || 0); i++)
-      trackTileset(primitives.get(i));
-    ownEvent(primitives?.primitiveAdded, (primitive) => {
-      if (trackTileset(primitive)) resampleAnchors();
-    });
-    ownEvent(primitives?.primitiveRemoved, (primitive) => {
-      if (!tilesetRemovers.has(primitive)) return;
-      tilesetRemovers.get(primitive)?.();
-      tilesetRemovers.delete(primitive);
-      resampleAnchors();
-    });
+    if (typeof off === 'function') surfaceRemovers.push(off);
     services.eventTarget?.addEventListener?.(
       'gev:map-stack-changed',
       resampleAnchors,
@@ -293,26 +291,12 @@ export function createRendering({ state, services, parts }) {
     );
   }
 
-  function removeCell(primitive) {
-    const owners =
-      state.viewer?.scene?.groundPrimitives || state.viewer?.scene?.primitives;
-    if (owners?.remove?.(primitive) !== true && !primitive.isDestroyed?.())
-      primitive.destroy?.();
-  }
-
-  function cancelStaging() {
-    const pending = state.staging;
-    if (!pending) return;
-    state.staging = null;
-    pending.remove?.();
-    for (const primitive of pending.primitives) removeCell(primitive);
-  }
-
   function clearCells() {
-    cancelStaging();
-    for (const primitive of state.cells) removeCell(primitive);
     state.cells = [];
     cellsSignature = null;
+    if (!state.cellSets) return;
+    state.cellSets.fills.clear();
+    state.cellSets.outlines.clear();
   }
 
   function stageCells(rows) {
@@ -328,7 +312,6 @@ export function createRendering({ state, services, parts }) {
     }
     const signature = JSON.stringify([...unique.keys()].sort());
     if (signature === cellsSignature) return false;
-    cancelStaging();
     if (!unique.size) {
       clearCells();
       cellsSignature = signature;
@@ -337,102 +320,44 @@ export function createRendering({ state, services, parts }) {
     cellsSignature = signature;
     const fills = [];
     const outlines = [];
+    let index = 0;
     for (const row of unique.values()) {
       const { south, west, north, east } = row.cell;
-      const tint = C.Color.fromCssColorString(wildlifeAccent(row.iconic));
-      fills.push(
-        new C.GeometryInstance({
-          geometry: new C.RectangleGeometry({
-            rectangle: C.Rectangle.fromDegrees(west, south, east, north),
-            vertexFormat: C.PerInstanceColorAppearance.VERTEX_FORMAT,
-          }),
-          attributes: {
-            color: C.ColorGeometryInstanceAttribute.fromColor(
-              tint.withAlpha(0.25),
-            ),
-          },
-        }),
-      );
-      outlines.push(
-        new C.GeometryInstance({
-          geometry: new C.GroundPolylineGeometry({
-            positions: C.Cartesian3.fromDegreesArray([
-              west,
-              south,
-              east,
-              south,
-              east,
-              north,
-              west,
-              north,
-              west,
-              south,
-            ]),
-            width: 2,
-          }),
-          attributes: {
-            color: C.ColorGeometryInstanceAttribute.fromColor(
-              tint.withAlpha(0.8),
-            ),
-          },
-        }),
-      );
+      const tint = cssColor(wildlifeAccent(row.iconic)) ?? [1, 1, 1, 1];
+      const id = `cell:${index++}`;
+      fills.push({
+        id,
+        geometry: { kind: 'rectangle', rect: { west, south, east, north } },
+        fill: [tint[0], tint[1], tint[2], 0.25],
+        height: 'clampGround',
+        pickable: false,
+      });
+      outlines.push({
+        id,
+        positions: [
+          [west, south],
+          [east, south],
+          [east, north],
+          [west, north],
+          [west, south],
+        ].map(([lon, lat]) => fromDegrees(lon, lat)),
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: [tint[0], tint[1], tint[2], 0.8] },
+        pickable: false,
+      });
     }
-    // Hidden primitives still compile their geometry. Poll only these two
-    // nonempty batches, then atomically retire the previous privacy cells.
-    const primitives = [
-      new C.GroundPrimitive({
-        geometryInstances: fills,
-        appearance: new C.PerInstanceColorAppearance({
-          flat: true,
-          translucent: true,
-        }),
-        classificationType: C.ClassificationType.BOTH,
-        allowPicking: false,
-        releaseGeometryInstances: false,
-        show: false,
-      }),
-      new C.GroundPolylinePrimitive({
-        geometryInstances: outlines,
-        appearance: new C.PolylineColorAppearance(),
-        classificationType: C.ClassificationType.BOTH,
-        allowPicking: false,
-        releaseGeometryInstances: false,
-        show: false,
-      }),
-    ];
-    const owners =
-      state.viewer.scene.groundPrimitives || state.viewer.scene.primitives;
-    for (const primitive of primitives) owners.add(primitive);
-    const pending = { primitives, remove: null, checks: 0 };
-    state.staging = pending;
-    const ready = () => {
-      if (state.staging !== pending || !state.enabled) return;
-      if (!primitives.every((primitive) => primitive.ready === true)) {
-        pending.checks += 1;
-        if (pending.checks >= WILDLIFE_GROUND_READY_MAX_CHECKS) {
-          cancelStaging();
-          cellsSignature = null;
-          return;
-        }
-        requestRender('staging');
-        return;
-      }
-      pending.remove?.();
-      state.staging = null;
-      for (const primitive of state.cells) removeCell(primitive);
-      state.cells = primitives;
-      for (const primitive of primitives) primitive.show = true;
-      requestRender('render');
-    };
-    pending.remove = state.viewer.scene.postRender?.addEventListener?.(ready);
-    ready();
+    // Each set swaps its whole contents at once, so the previous privacy
+    // cells go as the new ones arrive.
+    state.cellSets.fills.set(fills);
+    state.cellSets.outlines.set(outlines);
+    state.cells = fills;
+    requestRender('render');
     return true;
   }
 
   function init() {
     density = createWildlifeDensity({
-      cesium: C,
       viewer: state.viewer,
       positionForCell: surfaceAnchor,
       requestRender,
@@ -442,14 +367,18 @@ export function createRendering({ state, services, parts }) {
       cancelIdle: services.cancelIdleCallback,
       eventTarget: services.eventTarget,
     });
-    state.points = new C.BillboardCollection();
-    state.points.show = false;
-    state.viewer.scene.primitives.add(state.points);
-    services.sprites?.registerSpriteCollection?.(
-      'wildlife-sightings',
-      state.points,
+    const draw = drawOf(state.viewer);
+    const prefix = `wildlife-sightings:${++instances}`;
+    state.cellSets = {
+      fills: draw.shapes({ id: `${prefix}:cells`, clampTo: 'both' }),
+      outlines: draw.lines({ id: `${prefix}:cell-outlines`, clampTo: 'both' }),
+    };
+    state.points = createWildlifeIconCollection(
+      draw.icons({ id: `${prefix}:badges`, drawOrder: spriteDrawOrder }),
     );
-    const distanceScale = new C.NearFarScalar(...WILDLIFE_SCALE_BY_DISTANCE);
+    state.points.show = false;
+    const [near, nearValue, far, farValue] = WILDLIFE_SCALE_BY_DISTANCE;
+    const distanceScale = { near, nearValue, far, farValue };
     billboards = createWildlifeBillboardModel({
       collection: state.points,
       pointById: state.pointById,
@@ -459,14 +388,13 @@ export function createRendering({ state, services, parts }) {
         if (!appearances.has(group))
           appearances.set(group, {
             image: badgeSprites.get(group),
-            width: WILDLIFE_SPRITE_PX,
-            height: WILDLIFE_SPRITE_PX,
+            size: [WILDLIFE_SPRITE_PX, WILDLIFE_SPRITE_PX],
             // The sprite includes its tint and white glyph. Multiplication
             // by a taxon colour would tint the glyph as well.
-            color: C.Color.WHITE,
+            color: [1, 1, 1, 1],
             scale: 1,
             scaleByDistance: distanceScale,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTest: Number.POSITIVE_INFINITY,
           });
         return appearances.get(group);
       },
@@ -505,7 +433,7 @@ export function createRendering({ state, services, parts }) {
     };
     const nowMs = services.now();
     const taxa = state.drawnParams?.taxa ?? state.taxa;
-    const scene = state.viewer.scene;
+    const canvas = canvasOf(state.viewer);
     const horizon = occluder();
     const densityResult = yield* density.updateWork(
       state.gridAvailable ? state.gridCells || [] : [],
@@ -517,8 +445,6 @@ export function createRendering({ state, services, parts }) {
         onOperations: (counts) => Object.assign(operations, counts),
       },
     );
-    if (densityResult.changed)
-      services.sprites?.restoreSpriteOrder?.(state.viewer);
     const model = yield* wildlifeIconModelWork({
       rows: [...state.rows.values()].filter(
         (row) =>
@@ -538,13 +464,13 @@ export function createRendering({ state, services, parts }) {
               cached.screen = null;
               if (horizon && horizon.isPointVisible(anchor) !== true)
                 return null;
-              const screen = services.project(scene, anchor);
+              const screen = services.project(state.viewer, anchor);
               if (
                 !screen ||
                 screen.x < 0 ||
                 screen.y < 0 ||
-                screen.x >= (scene.canvas?.clientWidth ?? Infinity) ||
-                screen.y >= (scene.canvas?.clientHeight ?? Infinity)
+                screen.x >= (canvas?.clientWidth ?? Infinity) ||
+                screen.y >= (canvas?.clientHeight ?? Infinity)
               )
                 return null;
               cached.screen = screen;
@@ -654,12 +580,11 @@ export function createRendering({ state, services, parts }) {
   function destroy() {
     deactivate();
     clear();
-    services.sprites?.unregisterSpriteCollection?.(
-      'wildlife-sightings',
-      state.points,
-    );
-    if (state.points) state.viewer?.scene?.primitives?.remove?.(state.points);
+    state.points?.dispose();
     state.points = null;
+    state.cellSets?.fills.dispose();
+    state.cellSets?.outlines.dispose();
+    state.cellSets = null;
     billboards = null;
     density?.destroy();
     density = null;

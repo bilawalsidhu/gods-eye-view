@@ -24,16 +24,23 @@ function createState({ services }) {
       clearSource: clearOverlaySource,
     }),
     _historyBudget: createHistoryBudget(),
+    /** The viewer the layer draws on, or null. */
     _viewer: null,
-    _markers: null,
+    /** The train icons' draw set, or null. */
+    _icons: null,
     _enabled: false,
     _generation: 0,
     _cameraChangedAttached: false,
+    /** Removes the camera port listener; null when not listening. */
+    _cameraChangedOff: null,
+    /** Removes the one-shot look after the camera listener's first tick. */
+    _cameraFirstTickOff: null,
     _cameraDebounceTimer: null,
     _altitudeGateOpen: false,
     _preRenderRemove: null,
     _renderHeld: false,
-    _clickHandler: null,
+    /** Unsubscribes the train-selection click. */
+    _clickSubscription: null,
     /** Trains mid-glide; the frame pass walks only these. @type {Set<object>} */
     _moving: new Set(),
     /** feedId → registry entry currently polled. */

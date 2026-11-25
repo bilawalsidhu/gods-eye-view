@@ -4,6 +4,8 @@ import * as Cesium from 'cesium';
 import { createMotion } from './motion.js';
 import { arcOffsetEnu } from '../../data/motionModel.js';
 import { createMotion as createMilitaryMotion } from '../military/motion.js';
+import { createQueries } from './queries.js';
+import { createQueries as createMilitaryQueries } from '../military/queries.js';
 import { layerPlacement } from '../../data/placementProvider.js';
 import { observeLiveAircraft } from './placed.js';
 
@@ -13,8 +15,8 @@ function fixture(placement = null) {
     _positionHistory: new Map(),
     _focusEvidenceIds: new Set(),
     _scratchArc: {},
-    _scratchOffset: new Cesium.Cartesian3(),
-    _scratchRenderTime: new Cesium.JulianDate(),
+    _scratchOffset: { x: 0, y: 0, z: 0 },
+    _scratchRenderTime: { dayNumber: 0, secondsOfDay: 0 },
     now: Date.now,
   };
   const motion = createMotion({
@@ -39,64 +41,55 @@ function close(actual, expected) {
   assert.ok(Cesium.Cartesian3.distance(actual, expected) < 1e-8);
 }
 
-test('extrapolation reuses fixed frames and invalidates corrected coordinates', (t) => {
+test('extrapolation follows the fix frame, a corrected or replaced fix included', () => {
   const { motion } = fixture();
   const transform = Cesium.Transforms.eastNorthUpToFixedFrame;
-  const spy = t.mock.method(
-    Cesium.Transforms,
-    'eastNorthUpToFixedFrame',
-    transform,
-  );
   const fix = {
     position: Cesium.Cartesian3.fromDegrees(-97, 30, 200),
     velocity: 90,
     track: 70,
   };
-  const out = new Cesium.Cartesian3();
+  const out = { x: 0, y: 0, z: 0 };
   for (const dt of [-30, 5, 30, 60]) {
     motion._extrapolateFix(fix, {}, dt, out, 1.5);
     close(out, expectedPosition(fix, dt, 1.5, transform));
   }
-  assert.equal(spy.mock.callCount(), 1);
 
-  // Ground reflooring mutates an existing fix's Cartesian in place.
+  // Ground reflooring mutates an existing fix's position in place: the
+  // frame kept for the fix must not answer for the old coordinates.
   Cesium.Cartesian3.fromDegrees(-97, 30, 350, undefined, fix.position);
   motion._extrapolateFix(fix, {}, 30, out, 1.5);
   close(out, expectedPosition(fix, 30, 1.5, transform));
-  assert.equal(spy.mock.callCount(), 2);
 
   fix.position = Cesium.Cartesian3.fromDegrees(140, 80, 1000);
   motion._extrapolateFix(fix, {}, 30, out, -2);
   close(out, expectedPosition(fix, 30, -2, transform));
-  assert.equal(spy.mock.callCount(), 3);
 
   fix.velocity = 210;
   fix.track = 359;
   motion._extrapolateFix(fix, {}, 15, out, -1);
   close(out, expectedPosition(fix, 15, -1, transform));
-  assert.equal(spy.mock.callCount(), 3);
 
   const replacement = { ...fix };
   motion._extrapolateFix(replacement, {}, 15, out, -1);
   close(out, expectedPosition(replacement, 15, -1, transform));
-  assert.equal(spy.mock.callCount(), 4);
 });
 
-test('stationary fixes do not build a frame until motion needs it', (t) => {
+test('stationary fixes stay at the fix', () => {
   const { motion } = fixture();
-  const spy = t.mock.method(Cesium.Transforms, 'eastNorthUpToFixedFrame');
   const fix = {
     position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     velocity: 0,
     track: 90,
   };
-  const out = new Cesium.Cartesian3();
+  const out = { x: 0, y: 0, z: 0 };
   close(motion._extrapolateFix(fix, {}, 30, out), fix.position);
   fix.velocity = 10;
   close(motion._extrapolateFix(fix, {}, 0, out), fix.position);
-  assert.equal(spy.mock.callCount(), 0);
-  motion._extrapolateFix(fix, {}, 30, out);
-  assert.equal(spy.mock.callCount(), 1);
+  close(
+    motion._extrapolateFix(fix, {}, 30, out),
+    expectedPosition(fix, 30, 0, Cesium.Transforms.eastNorthUpToFixedFrame),
+  );
 });
 
 test('fleet render time is shared without resampling or mutating the supplied instant', (t) => {
@@ -125,7 +118,7 @@ test('fleet render time is shared without resampling or mutating the supplied in
     flightState.records.data.set(id, { velocity: 100, true_track: 90 });
     flightState._positionHistory.set(id, history);
   }
-  t.mock.method(Cesium.JulianDate, 'now', () => {
+  t.mock.method(Date, 'now', () => {
     throw new Error('unexpected per-contact clock read');
   });
   const expected = Cesium.Cartesian3.lerp(
@@ -186,6 +179,13 @@ test('tracked callers still sample a fresh delayed time without a fleet epoch', 
     ),
   );
   assert.equal(reads, 2);
+  // Sampled into the layer's scratch, not a new date.
+  assert.ok(
+    Cesium.JulianDate.equals(
+      flightState._scratchRenderTime,
+      Cesium.JulianDate.addSeconds(start, 45, new Cesium.JulianDate()),
+    ),
+  );
 });
 
 /** Two fixes a minute apart, read across the minute from a clock at `start`. */
@@ -250,18 +250,77 @@ const declining = (asked) =>
   );
 
 // Each kind's record carries only its own kinematics fields.
-for (const [name, create, record] of [
+for (const [name, create, record, queriesOf] of [
   [
     'civil',
     createMotion,
     { velocity: 100, true_track: 90, renderAltitudeM: 1234 },
+    createQueries,
   ],
   [
     'military',
     createMilitaryMotion,
     { speedMps: 100, track: 90, renderAltitudeM: 1234 },
+    createMilitaryQueries,
   ],
 ]) {
+  test(`${name} aircraft waiting where a placement holds them still show their reported speed`, () => {
+    // Drawn standing (speed 0) while its fixes catch up: the aircraft has
+    // not stopped, and the panels say what it reports.
+    const placement = layerPlacement(
+      {
+        layer: () => ({
+          place: () => ({
+            lat: 30.5,
+            lon: -96.5,
+            altitudeM: 2000,
+            courseDeg: 90,
+            speedMps: 0,
+            extrapolating: false,
+          }),
+        }),
+      },
+      'aircraft',
+    );
+    const { flightState, motion, start } = placedScenario(
+      create,
+      placement,
+      record,
+    );
+    flightState.now = () => start + 2000;
+    flightState.feed = {};
+    flightState.records.missingPolls = new Map();
+    const describe = (kinematics) => {
+      flightState.records.data.set('abc123', { ...record, ...kinematics });
+      return queriesOf({
+        flightState,
+        services: {
+          aircraftPresentation: {
+            tr3bTypeLabel: (_, label) => label,
+            tr3bAircraftClass: () => null,
+          },
+          labels: { formatFlightLevel: String },
+          militaryRegistry: {},
+          focus: {},
+          recession: {},
+        },
+        parts: {
+          motion,
+          icons: { _iconPosition: () => null },
+          tracking: { _routeIsPlausible: () => false },
+          testing: {},
+        },
+      })._describeFlight('abc123');
+    };
+    const waiting = describe({});
+    assert.equal(flightState._drSpeedMps, 0);
+    assert.equal(waiting.velocityMps, 100);
+    // Nothing reported: the speed it is drawn at.
+    const unreported =
+      name === 'civil' ? { velocity: undefined } : { speedMps: undefined };
+    assert.equal(describe(unreported).velocityMps, 0);
+  });
+
   test(`${name} aircraft move as before without a placement or with one that places nothing`, () => {
     const own = placedScenario(create, null, record).drawn;
     const asked = [];
@@ -340,14 +399,20 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
     'aircraft',
   );
   const state = { timeline: { active: () => false } };
-  const meta = { rawLat: 1, rawLon: 2, renderAltitudeM: 300, onGround: false };
+  const meta = {
+    rawLat: 1,
+    rawLon: 2,
+    renderAltitudeM: 300,
+    groundM: 1656,
+    onGround: false,
+  };
   observeLiveAircraft(state, placement, 'abc123', 5000, meta, 80, 270);
   observeLiveAircraft(
     state,
     placement,
     'abc123',
     6000,
-    { ...meta, renderAltitudeInvented: true, onGround: true },
+    { ...meta, renderAltitudeInvented: true, groundM: null, onGround: true },
     null,
     undefined,
   );
@@ -362,14 +427,45 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
       lat: 1,
       lon: 2,
       altitudeM: 300,
+      groundM: 1656,
       speedMps: 80,
       courseDeg: 270,
       headingDeg: NaN,
       onGround: false,
     },
   ]);
+  // Where the layer does not know the ground, it says so.
+  assert.ok(Number.isNaN(told[1][1].groundM));
   assert.ok(Number.isNaN(told[1][1].altitudeM));
   assert.ok(Number.isNaN(told[1][1].speedMps));
   assert.ok(Number.isNaN(told[1][1].courseDeg));
   assert.equal(told[1][1].onGround, true);
+});
+
+test('the trail head reads the tracked position only from the frame it is drawn in', () => {
+  for (const create of [createMotion, createMilitaryMotion]) {
+    const position = { x: 1, y: 2, z: 3 };
+    const flightState = {
+      records: { data: new Map() },
+      _positionHistory: new Map(),
+      _focusEvidenceIds: new Set(),
+      _trackedIcao: 'abc123',
+      // No viewer: the drawn-frame count reads -1.
+      _viewer: null,
+      _drReconcileValid: true,
+      _drReconcileIcao: 'abc123',
+      _cachedDRPosition: position,
+      _cachedDRFrame: -1,
+      now: Date.now,
+    };
+    const motion = create({
+      flightState,
+      services: { groundFloor: {}, camera: {}, focus: {}, placement: null },
+      parts: { rendering: { _modelOwnsVisual: () => false } },
+    });
+    assert.equal(motion._trackedTrailCached(), position, 'this frame');
+    // Kept from a frame before: the head works it out for its own frame.
+    flightState._cachedDRFrame = -2;
+    assert.equal(motion._trackedTrailCached(), null, 'a frame before');
+  }
 });

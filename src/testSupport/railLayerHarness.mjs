@@ -1,9 +1,14 @@
-// A Rail layer on a stub viewer, a scripted proxy and fake camera services
+// A Rail layer on a scene host bound to fake renderer ports (draw, camera,
+// frame, globe, query, input), a scripted proxy and fake camera services
 // that record what the layer asks of the camera. Shared by the Rail layer's
 // tests that run a whole layer (camera follow, live-only feeds, ground
 // height, layer stats, selected route lines).
-import * as Cesium from 'cesium';
 import { createRailLayer } from '../layers/rail/index.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { eastNorthUp } from '../geo/frames.js';
+import { scale } from '../geo/vector.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeDrawPort } from './fakeDrawPort.mjs';
 import { layerPlacement } from '../data/placementProvider.js';
 import { CAMERA_DEBOUNCE_MS } from '../layers/rail/policy.js';
 import { WORLD_FOCUS_FRAMING } from '../worldFocus.js';
@@ -12,24 +17,6 @@ import { publicRailCatalog } from '../data/railFeeds.js';
 /** The tests' wall clock at the start: 2026-09-10T00:26:40Z. */
 export const RAIL_HARNESS_T0 = 1_789_000_000_000;
 export const BOSTON = Object.freeze({ lat: 42.3601, lon: -71.0589 });
-
-/** A camera's frame looking straight down from `altitude` over `at`. */
-function lookingDown(at, altitude) {
-  const position = Cesium.Cartesian3.fromDegrees(at.lon, at.lat, altitude);
-  const up = Cesium.Ellipsoid.WGS84.geodeticSurfaceNormal(
-    position,
-    new Cesium.Cartesian3(),
-  );
-  return {
-    directionWC: Cesium.Cartesian3.negate(up, new Cesium.Cartesian3()),
-    upWC: Cesium.Cartesian3.UNIT_Z,
-    frustum: {
-      computeCullingVolume: () => ({
-        computeVisibility: () => Cesium.Intersect.INSIDE,
-      }),
-    },
-  };
-}
 
 /** A train as the rail proxy sends it. */
 export function railTrain(id, lat, lon, extra = {}) {
@@ -99,6 +86,12 @@ const headersOf = (values = {}) => ({
  *   down for them (none by default: trains stay icons); `placement`: a
  *   host-supplied placement provider (../data/placementProvider.js).
  */
+/** The frame of an eye over `view`'s place looking straight down. */
+function lookingDown(view) {
+  const enu = eastNorthUp(fromDegrees(view.lon, view.lat, 0));
+  return { direction: scale(enu.z, -1), up: enu.y, right: enu.x };
+}
+
 export function railLayerHarness(
   t,
   {
@@ -144,79 +137,145 @@ export function railLayerHarness(
   t.mock.method(console, 'info', () => {});
   t.mock.method(console, 'log', () => {});
 
-  const view = { lat: at.lat, lon: at.lon, altitude };
-  const cameraChanged = new Cesium.Event();
-  const trackedEntityChanged = new Cesium.Event();
-  const preRender = new Cesium.Event();
-  const primitives = [];
-  const primitiveCollection = {
-    add(primitive) {
-      primitives.push(primitive);
-      return primitive;
-    },
-    remove(primitive) {
-      const index = primitives.indexOf(primitive);
-      if (index >= 0) primitives.splice(index, 1);
-      return index >= 0;
-    },
-    contains: (primitive) => primitives.includes(primitive),
-    raiseToTop() {},
-    get length() {
-      return primitives.length;
-    },
-    get: (index) => primitives[index],
+  // `position` (ECEF), when set, is where the eye stands in place of the
+  // point `altitude` metres over `lat`, `lon`.
+  const view = { lat: at.lat, lon: at.lon, altitude, heading: 0 };
+  const listeners = (names) =>
+    Object.fromEntries(names.map((name) => [name, new Set()]));
+  const cameraEvents = listeners(['changed', 'followChanged']);
+  const frameEvents = listeners(['preUpdate', 'preRender', 'postRender']);
+  const raise = (set, arg) => {
+    for (const cb of [...set]) cb(arg);
   };
-  let trackedEntity;
+  let followed = null;
+  /** Every target the camera was told to follow, in order. */
+  const follows = [];
+  const camera = {
+    flightsCancelled: 0,
+    pose: () => ({
+      lon: view.lon,
+      lat: view.lat,
+      height: view.altitude,
+      heading: view.heading,
+      pitch: -Math.PI / 2,
+      roll: 0,
+      position: view.position
+        ? { ...view.position }
+        : fromDegrees(view.lon, view.lat, view.altitude),
+      ...(fleet
+        ? lookingDown(view)
+        : {
+            direction: { x: 0, y: 0, z: -1 },
+            up: { x: 0, y: 1, z: 0 },
+            right: { x: 1, y: 0, z: 0 },
+          }),
+      fovy: Math.PI / 3,
+      aspectRatio: 1,
+      near: 1,
+      far: 5e8,
+      frameIsIdentity: true,
+    }),
+    viewRectangle: () => ({
+      west: view.lon - 0.1,
+      south: view.lat - 0.1,
+      east: view.lon + 0.1,
+      north: view.lat + 0.1,
+    }),
+    on(event, cb) {
+      const set = cameraEvents[event];
+      if (!set) return () => {};
+      set.add(cb);
+      return () => set.delete(cb);
+    },
+    get followed() {
+      return followed;
+    },
+    // The port raises `followChanged` whenever `followed` changes, and only
+    // then, as the renderer's does.
+    follow(target) {
+      if (target === followed) return;
+      followed = target;
+      if (target) follows.push(target);
+      raise(cameraEvents.followChanged);
+    },
+    cancelFlight() {
+      this.flightsCancelled += 1;
+    },
+    flying: false,
+  };
+  /** The tiles drawn in place of the globe, once a test puts some there. */
+  const surface = { globeShown: false, tiles: null, mesh: null };
+  const globe = {
+    isGlobeVisible: () => surface.globeShown,
+    surfaceVersion: () => 0,
+    isSettled: (kind) =>
+      kind === 'surface' || kind === 'tiles'
+        ? surface.tiles?.tilesLoaded === true
+        : true,
+  };
+  /** What the next pick names (`click`), else nothing. */
+  let pickAnswer = null;
+  const query = {
+    pick: () => pickAnswer,
+    drillPick: () => [],
+    pickPosition: () => null,
+    pickEllipsoid: () => null,
+    project: () => null,
+    isOccluded: () => false,
+    // The tiles' mesh, as a test sets it; terrain is never loaded here.
+    sampleHeightNow(point, options = {}) {
+      if (options.against === 'terrain' || !surface.mesh) return null;
+      surface.mesh.probes.push({ lat: point.lat, lon: point.lon, options });
+      return surface.mesh.height;
+    },
+  };
+  const frame = {
+    on(phase, cb) {
+      const set = frameEvents[phase];
+      if (!set) return () => {};
+      set.add(cb);
+      return () => set.delete(cb);
+    },
+    requestRender() {},
+    time: () => Date.now(),
+  };
+  // Pointer input as the renderer reports it: a test clicks through `click`.
+  const inputEvents = listeners(['down', 'move', 'up', 'click', 'dblclick']);
+  const stock = () => ({ enabled: true, suppress: () => () => {} });
+  const input = {
+    on(type, cb) {
+      const set = inputEvents[type];
+      if (!set) return () => {};
+      set.add(cb);
+      return () => set.delete(cb);
+    },
+    isPointerFree: () => true,
+    suspendCameraControls: () => () => {},
+    behaviours: { select: stock(), dblclickFollow: stock() },
+  };
   const viewer = {
-    entities: new Cesium.EntityCollection(),
-    get trackedEntity() {
-      return trackedEntity;
-    },
-    // Cesium's own setter raises the event on every change, as here.
-    set trackedEntity(value) {
-      if (trackedEntity === value) return;
-      trackedEntity = value;
-      trackedEntityChanged.raiseEvent(value);
-    },
-    trackedEntityChanged,
     isDestroyed: () => false,
-    camera: {
-      changed: cameraChanged,
-      percentageChanged: 0.5,
-      heading: 0,
-      flightsCancelled: 0,
-      positionWC: Cesium.Cartesian3.fromDegrees(at.lon, at.lat, altitude),
-      get positionCartographic() {
-        return {
-          height: view.altitude,
-          latitude: Cesium.Math.toRadians(view.lat),
-          longitude: Cesium.Math.toRadians(view.lon),
-        };
-      },
-      computeViewRectangle() {
-        return Cesium.Rectangle.fromDegrees(
-          view.lon - 0.1,
-          view.lat - 0.1,
-          view.lon + 0.1,
-          view.lat + 0.1,
-        );
-      },
-      cancelFlight() {
-        this.flightsCancelled += 1;
-      },
-      // What the fleet models' eligibility reads: a camera looking down.
-      ...(fleet ? lookingDown(at, altitude) : {}),
-    },
-    scene: {
-      canvas: { addEventListener() {}, removeEventListener() {} },
-      globe: { ellipsoid: Cesium.Ellipsoid.WGS84 },
-      pick: () => undefined,
-      requestRender() {},
-      preRender,
-      primitives: primitiveCollection,
-      groundPrimitives: primitiveCollection,
+    canvas: {
+      clientWidth: 1000,
+      clientHeight: 1000,
+      width: 1000,
+      height: 1000,
+      addEventListener() {},
+      removeEventListener() {},
     },
   };
+  const draw = fakeDrawPort();
+  const unbind = bindRenderer(viewer, {
+    get canvas() {
+      return viewer.canvas;
+    },
+    draw,
+    camera,
+    frame,
+    globe,
+    query,
+    input,
+  });
 
   const feeds = new Map();
   const schedules = new Map();
@@ -299,7 +358,6 @@ export function railLayerHarness(
   };
 
   const focusRequests = [];
-  const frames = [];
   /** Overlay source id → the entries last published to it. */
   const overlayEntries = new Map();
   let cockpit = false;
@@ -313,11 +371,7 @@ export function railLayerHarness(
         holdContinuousRender() {},
         releaseContinuousRender() {},
       },
-      sprites: {
-        registerSpriteCollection() {},
-        unregisterSpriteCollection() {},
-        restoreSpriteOrder() {},
-      },
+      sprites: { spriteDrawOrder: () => -5 },
       picking: { registerPickOwner() {}, unregisterPickOwner() {} },
       overlays: {
         setOverlayEntries(sourceId, entries) {
@@ -343,13 +397,6 @@ export function railLayerHarness(
           focusRequests.push(detail);
           return true;
         },
-        applyTrackedCameraFrame(_viewer, entity, viewFrom) {
-          const frame = { entity, viewFrom, stopped: false };
-          frames.push(frame);
-          return () => {
-            frame.stopped = true;
-          };
-        },
         isCockpitActive: () => cockpit,
       },
     },
@@ -362,6 +409,7 @@ export function railLayerHarness(
     } catch {
       /* a test may already have destroyed it */
     }
+    unbind();
     if (originalDocument === undefined) delete globalThis.document;
     else globalThis.document = originalDocument;
     if (originalWindow === undefined) delete globalThis.window;
@@ -386,10 +434,11 @@ export function railLayerHarness(
     requestedSchedules,
     requestedPaths,
     catalogRequests,
-    primitives,
+    draw,
+    camera,
+    follows,
     overlayEntries,
     focusRequests,
-    frames,
     settle,
     setCockpit(value) {
       cockpit = value;
@@ -413,13 +462,18 @@ export function railLayerHarness(
       const until = Date.now() + ms;
       while (Date.now() < until) {
         t.mock.timers.tick(Math.min(step, until - Date.now()));
-        preRender.raiseEvent();
+        raise(frameEvents.preUpdate, { frame: 0 });
+        raise(frameEvents.preRender, { frame: 0 });
       }
+    },
+    /** Move the camera without the camera reporting the move. */
+    moveCameraQuietly(next) {
+      Object.assign(view, next);
     },
     /** Move the camera and let the debounced feed check run. */
     async moveCamera(next) {
       Object.assign(view, next);
-      cameraChanged.raiseEvent();
+      raise(cameraEvents.changed);
       t.mock.timers.tick(CAMERA_DEBOUNCE_MS);
       await settle();
     },
@@ -428,10 +482,42 @@ export function railLayerHarness(
       t.mock.timers.tick(0);
       await settle();
     },
+    /** A left click at `position` whose pick names `hit` (null: the map). */
+    click(hit, position = { x: 10, y: 10 }) {
+      pickAnswer = hit;
+      const modifiers = { shift: false, ctrl: false, alt: false, meta: false };
+      raise(inputEvents.click, {
+        type: 'click',
+        position,
+        button: 0,
+        modifiers,
+        timestamp: Date.now(),
+        pointerType: 'mouse',
+      });
+      pickAnswer = null;
+    },
+    /** Where the followed target is now, or undefined. */
     trackedPosition() {
-      return viewer.trackedEntity?.position?.getValue(
-        Cesium.JulianDate.now(),
-        new Cesium.Cartesian3(),
+      return followed?.position(Date.now()) ?? undefined;
+    },
+    /**
+     * Draw the photorealistic tiles in place of the globe: whether they have
+     * loaded what is in view, and the mesh height every probe reads (each
+     * probe recorded). Returns both, for the test to change.
+     */
+    photoreal({ loaded = true, height = 158 } = {}) {
+      surface.tiles = { tilesLoaded: loaded };
+      surface.mesh = { height, probes: [] };
+      return {
+        tileset: surface.tiles,
+        mesh: surface.mesh,
+      };
+    },
+    /** The live draw set of `kind` whose id ends with `suffix`. */
+    drawn(kind, suffix = '') {
+      return [...draw.sets.values()].find(
+        (set) =>
+          !set.disposed && set.kind === kind && set.spec.id.endsWith(suffix),
       );
     },
   };

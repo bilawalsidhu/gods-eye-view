@@ -24,6 +24,13 @@
  * freshness and staleness judged against `atMs`, and `atMs` echoed back. A
  * vessel snapshot at a time reports `transportStatus: 'live'`. getTrack then
  * receives `{ signal, atMs }` and returns only points at or before `atMs`.
+ *
+ * A timeline that declares `spanMs` lets each record of a snapshot at a time
+ * carry `fixes`: `{atMs, lat, lon, altitudeM?}` in time order, its own track
+ * from `spanMs` before the time to `spanMs` after it (see
+ * src/time/timelineFixes.js). The layer places the contact on them at any
+ * time they span, earlier ones too, so the clock can move within them,
+ * forwards or back, without a new snapshot.
  */
 // Messages are English data (AI tools read them too); the Layers panel shows
 // them translated by their shape (translateFeedError in src/ui/statusText.js),
@@ -164,10 +171,13 @@ export function httpError(response, source) {
  * null while it does not know yet; `stepMs` is the spacing of its snapshots;
  * the optional `subscribe(listener)` tells of a change in coverage, or of a
  * better answer for a time already answered (a paused layer then loads the
- * time shown again), and returns the unsubscribe.
+ * time shown again), and returns the unsubscribe. The optional `spanMs` is
+ * how far either side of its time a snapshot's records carry their `fixes`
+ * (0 when they carry none).
  * @param {object|null|undefined} source
  * @returns {{coverage: () => ({start: number, end: number}|null),
- *   stepMs: number, subscribe: ((listener: () => void) => () => void)|null}|null}
+ *   stepMs: number, spanMs: number,
+ *   subscribe: ((listener: () => void) => () => void)|null}|null}
  */
 export function readSnapshotTimeline(source) {
   const timeline = source?.timeline;
@@ -177,9 +187,14 @@ export function readSnapshotTimeline(source) {
   if (!Number.isFinite(stepMs) || stepMs <= 0) return null;
   if (timeline.subscribe != null && typeof timeline.subscribe !== 'function')
     return null;
+  const spanMs =
+    Number.isFinite(timeline.spanMs) && timeline.spanMs > 0
+      ? timeline.spanMs
+      : 0;
   return {
     coverage: () => timeline.coverage(),
     stepMs,
+    spanMs,
     subscribe: timeline.subscribe
       ? (listener) => timeline.subscribe(listener)
       : null,

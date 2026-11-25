@@ -69,8 +69,7 @@ test('every variant retains the specified final halo at both display sizes', asy
     for (const selected of [false, true]) {
       for (const style of ['normal', 'thermal', 'retro'])
         for (const heading of [true, false]) {
-          const display =
-            (selected ? 30 : 20) * presetSpriteScale(style, selected);
+          const display = 20 * presetSpriteScale(style, selected);
           const svg = decode(
             transitIcon(kind, selected ? 96 : 48, { style, heading }),
           );
@@ -158,10 +157,8 @@ test('every mono raster preserves the normal silhouette mask and aspect at CRT d
             Math.abs(mono.aspect / normal.aspect - 1) <= 0.05,
             `${kind}/${style}: aspect`,
           );
-          const display =
-            (selected ? 30 : 20) * presetSpriteScale(style, selected);
-          const crt =
-            (selected ? 30 : 20) * presetSpriteScale('retro', selected);
+          const display = 20 * presetSpriteScale(style, selected);
+          const crt = 20 * presetSpriteScale('retro', selected);
           assert.equal(display, crt);
           const frame = haloFrame(
             presetSpriteOutlinePx(style, selected),
@@ -208,8 +205,7 @@ test('sensor raster halo stays dark across its screen-space band on a white roof
   for (const selected of [false, true]) {
     const pixels = [];
     for (const kind of TRANSIT_ICON_KINDS) {
-      const display =
-        (selected ? 30 : 20) * presetSpriteScale('thermal', selected);
+      const display = 20 * presetSpriteScale('thermal', selected);
       const frame = haloFrame(
         presetSpriteOutlinePx('thermal', selected),
         display,

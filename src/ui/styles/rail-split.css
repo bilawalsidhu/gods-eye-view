@@ -104,8 +104,8 @@
 
 /* In clean view the screen-edge gutters stay empty: the HUD's vertical edge
    readouts (ONA / COLL on the left, BAND / BITS / LVL on the right) are not
-   shown. Cyber lays its HUD out differently and keeps them. */
-:root:not([data-ui-theme='cyber']) body.ui-clean-view #intel-hud .hud-edge {
+   shown. */
+:root body.ui-clean-view #intel-hud .hud-edge {
   display: none !important;
 }
 
@@ -116,9 +116,49 @@
   bottom: calc(2vh + 6.5rem - 26px);
 }
 
+/* From 1200px the dock sits 74px up (command-dock.css) and clears both
+   corners, which are at most ~340px wide beside a ~500px dock. The readout
+   sits 8px above the bottom-right corner row (Power Up and the language
+   picker: 32px tall, 14px up) and the coordinates start level with it. The
+   World Timeline sits on the dock's floor between the corners (44rem
+   narrower than the screen), so the corners stay put while it shows. */
 @media (min-width: 1200px) {
   #intel-hud[data-variant='tactical'] .hud-bottom-right {
-    bottom: calc(4.2rem - 26px);
+    bottom: 3.375rem;
+  }
+
+  /* Right to left the attribution row takes the bottom right
+     (command-dock-trays.css): the readout clears two lines of it. */
+  html[dir='rtl'] #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    bottom: calc(3.375rem + 1.5rem);
+  }
+
+  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
+    .hud-bottom-left,
+  :root[data-scope-mask='off']
+    #intel-hud[data-variant='minimal']
+    .hud-bottom-left {
+    bottom: calc(3.375rem + 26px);
+  }
+
+  #world-timeline {
+    width: min(820px, calc(100vw - 44rem));
+  }
+
+  /* The raised dock is 74px - 2vh higher than the bottom-edge dock these
+     height budgets were written for. Toasts keep 12px above the 62px dock. */
+  #gev-voice-control .gev-voice-panel {
+    max-height: min(
+      28rem,
+      max(
+        7.5rem,
+        calc(100dvh - 12rem - 74px + 2vh - var(--gev-provider-lift, 0px))
+      )
+    );
+  }
+
+  body:not(.ui-clean-view):not(.recording-mode):not(.cockpit-mode) #toast {
+    bottom: calc(148px + var(--world-timeline-lift, 0px));
   }
 }
 

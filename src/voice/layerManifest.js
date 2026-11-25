@@ -234,6 +234,7 @@ const layers = [
         behavior: ['t'],
         complexity: ['t'],
         discoveredTime: ['ms'],
+        lastGrowthTime: ['ms'],
       },
       timeField: 'discoveredTime',
     },

@@ -14,10 +14,84 @@
  * src/time/snapshotTimeline.js); otherwise they stay live.
  *
  * Playback is continuous (`cursor + elapsed × rate`) unless a driver takes
- * it: weather replay steps its observed frames itself and moves the clock as
- * it goes, so play and pause hand over to it. Several drivers may be attached;
- * play goes to the newest that can play, pause to the one playing.
+ * it: a driver steps the clock itself and moves it as it goes, so play and
+ * pause hand over to it. Several drivers may be attached; play goes to the
+ * newest that can play, pause to the one playing. Layers that load frames
+ * (weather) do not drive it: they gate continuous play at their next frame.
  */
+
+/**
+ * A timeline mark as a layer gives it: its time in epoch ms, and optionally
+ * a short label to show for it, the layer's own id for it and its kind.
+ * @typedef {{time: number, label?: string, id?: string, kind?: string}} WorldClockMarkInput
+ */
+
+/**
+ * A timeline mark as `coverage().markDetails` returns it: a finite time, and
+ * only those of `label`, `id` and `kind` that are non-empty strings.
+ * @typedef {Readonly<{time: number, label?: string, id?: string, kind?: string}>} WorldClockMark
+ */
+
+const MARK_TEXT = ['label', 'id', 'kind'];
+/**
+ * The longest label a mark carries, ellipsis and all, in characters as a
+ * reader sees them (graphemes where the runtime can tell them, otherwise code
+ * points), so an emoji or an accented letter is never split.
+ */
+export const WORLD_CLOCK_MARK_LABEL_LENGTH = 60;
+
+const graphemes =
+  typeof Intl?.Segmenter === 'function'
+    ? (() => {
+        const segmenter = new Intl.Segmenter(undefined, {
+          granularity: 'grapheme',
+        });
+        return (text) =>
+          Array.from(segmenter.segment(text), ({ segment }) => segment);
+      })()
+    : (text) => Array.from(text);
+
+/** `mark` with its label cut to WORLD_CLOCK_MARK_LABEL_LENGTH, ending in `…`. */
+function shownMark(mark) {
+  if (!mark.label || mark.label.length <= WORLD_CLOCK_MARK_LABEL_LENGTH)
+    return mark;
+  const parts = graphemes(mark.label);
+  if (parts.length <= WORLD_CLOCK_MARK_LABEL_LENGTH) return mark;
+  const label = `${parts
+    .slice(0, WORLD_CLOCK_MARK_LABEL_LENGTH - 1)
+    .join('')
+    .trimEnd()}…`;
+  return Object.freeze({ ...mark, label });
+}
+
+/**
+ * A mark (a number, or `{time, label?, id?, kind?}`) in its one shape, or
+ * null for one with no finite time.
+ * @param {unknown} input
+ * @returns {WorldClockMark | null}
+ */
+function readMark(input) {
+  if (typeof input === 'number')
+    return Number.isFinite(input) ? Object.freeze({ time: input }) : null;
+  if (!input || typeof input !== 'object') return null;
+  const { time } = input;
+  if (typeof time !== 'number' || !Number.isFinite(time)) return null;
+  const mark = { time };
+  for (const key of MARK_TEXT) {
+    const value = input[key];
+    if (typeof value === 'string' && value.trim()) mark[key] = value.trim();
+  }
+  return Object.freeze(mark);
+}
+
+// Marks in time order; at one time, by kind, label and id, so the order
+// never depends on which source registered first.
+const byText = (a = '', b = '') => (a < b ? -1 : a > b ? 1 : 0);
+const byMark = (a, b) =>
+  a.time - b.time ||
+  byText(a.kind, b.kind) ||
+  byText(a.label, b.label) ||
+  byText(a.id, b.id);
 
 /** The span a JS Date can hold, either side of 1970. */
 const MAX_DATE_MS = 8.64e15;
@@ -191,15 +265,17 @@ export function createWorldClock({
       jumps += 1;
       changed();
     },
-    /** Back to the wall clock; playback stops and its rate goes back to 1. */
+    /**
+     * Back to the wall clock; playback stops. The rate stays as chosen, so
+     * the next play, from wherever it starts, runs at it.
+     */
     goLive() {
-      if (live && !playing && rate === 1) return;
+      if (live && !playing) return;
       const stepping = active;
       live = true;
       cursorMs = null;
       playing = false;
       active = null;
-      rate = 1;
       jumps += 1;
       // Its driven(false) finds nothing left to stop.
       stepping?.driver.pause();
@@ -270,7 +346,10 @@ export function createWorldClock({
       if (ms === null || ms === undefined) gates.delete(id);
       else if (isWorldTime(ms)) gates.set(id, ms);
     },
-    /** Simulated ms per real ms for continuous playback. */
+    /**
+     * Simulated ms per real ms for continuous playback. It holds while paused
+     * and live, so any play (`play()` with no rate) runs at the one chosen.
+     */
     setRate(nextRate) {
       if (!Number.isFinite(nextRate) || nextRate <= 0)
         throw new RangeError('World clock rate must be positive');
@@ -371,7 +450,16 @@ export function createWorldClock({
     /**
      * A layer's span of time it can show, for a host's timeline; null while
      * it has none (off, or nothing loaded). Returns the unregister.
-     * @param {{id: string, coverage: () => ({start: number, end: number, marks?: number[]} | null)}} source
+     *
+     * `marks` are the moments in that span worth going to (a launch, a strong
+     * earthquake), drawn as ticks the timeline's arrow keys step to. Each is
+     * an epoch ms number, or `{time, label?, id?, kind?}`: `label` is short
+     * text the timeline shows for it (a name, `M6.4 · a place`; one longer
+     * than WORLD_CLOCK_MARK_LABEL_LENGTH is cut to it, ending in `…`), `id` the
+     * layer's own key for the event and `kind` what sort of event it is.
+     * Numbers and objects may be mixed; a mark with no finite time is
+     * ignored, as are a label, id or kind that is not a non-empty string.
+     * @param {{id: string, coverage: () => ({start: number, end: number, marks?: Array<number | WorldClockMarkInput>} | null)}} source
      */
     register(source) {
       // Each registration is its own, even under a shared id.
@@ -386,20 +474,48 @@ export function createWorldClock({
     coverageChanged: () => changed(),
     /** Whether a followed layer has time to show; see getState().supported. */
     isSupported,
-    /** The union of the registered sources' coverage, or null with none. */
+    /**
+     * The union of the registered sources' coverage, or null with none:
+     * `{start, end, marks, markDetails}`. `marks` is every mark's time, once
+     * each, in order, as numbers. `markDetails` is the marks themselves, in
+     * time order, each `{time, label?, id?, kind?}` (frozen): a mark several
+     * sources give alike is there once, and a bare time is dropped where a
+     * mark with more to say shares it.
+     * @returns {{start: number, end: number, marks: number[], markDetails: WorldClockMark[]} | null}
+     */
     coverage() {
       let start = Infinity;
       let end = -Infinity;
-      const marks = new Set();
+      const details = new Map();
       for (const { source } of sources) {
         const span = spanOf(source);
         if (!span) continue;
         start = Math.min(start, span.start);
         end = Math.max(end, span.end);
-        for (const mark of span.marks ?? []) marks.add(mark);
+        for (const input of span.marks ?? []) {
+          const mark = readMark(input);
+          if (!mark) continue;
+          const key = JSON.stringify([
+            mark.time,
+            mark.label,
+            mark.id,
+            mark.kind,
+          ]);
+          if (!details.has(key)) details.set(key, mark);
+        }
       }
       if (start > end) return null;
-      return { start, end, marks: [...marks].sort((a, b) => a - b) };
+      const told = new Set();
+      for (const mark of details.values())
+        if (Object.keys(mark).length > 1) told.add(mark.time);
+      // Marks merge on their whole label, and are cut for showing after, so
+      // two whose labels only differ past the cut stay two.
+      const markDetails = [...details.values()]
+        .filter((mark) => Object.keys(mark).length > 1 || !told.has(mark.time))
+        .sort(byMark)
+        .map(shownMark);
+      const marks = [...new Set(markDetails.map((mark) => mark.time))];
+      return { start, end, marks, markDetails };
     },
 
     getState,

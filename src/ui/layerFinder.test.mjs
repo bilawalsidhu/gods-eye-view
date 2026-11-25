@@ -146,7 +146,7 @@ test('Escape in the search field closes it without reaching the panel', async (t
     );
   await flush();
   assert.equal(reached, false);
-  assert.equal(document.getElementById('layer-finder-input'), null);
+  assert.equal(document.getElementById('layer-finder-input') === null, true);
   assert.equal(document.activeElement?.id, 'layer-finder-search-btn');
 });
 
@@ -167,7 +167,7 @@ test('the filter menu takes focus, moves with the arrows and closes on Escape', 
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
   );
   await flush();
-  assert.equal(document.getElementById('layer-finder-menu'), null);
+  assert.equal(document.getElementById('layer-finder-menu') === null, true);
   assert.equal(
     document.activeElement,
     document.querySelector('[aria-controls="layer-finder-menu"]'),

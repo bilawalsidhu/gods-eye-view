@@ -98,7 +98,7 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
  * Normalize an adsb.lol point response to an OpenSky-compatible response.
  * Invalid rows and positionless contacts are intentionally excluded.
  * @param {object} payload adsb.lol v2 response.
- * @returns {{time:number,states:Array[]}}
+ * @returns {{time:number,states:Array[],emergencyByIcao?:object,typeByIcao?:object}}
  */
 export function normalizeAdsbLolPointResponse(payload) {
   const responseNow = finiteNumber(payload?.now);
@@ -111,9 +111,10 @@ export function normalizeAdsbLolPointResponse(payload) {
   const aircraft = Array.isArray(payload?.ac) ? payload.ac : [];
   const states = [];
   // Keep the OpenSky vectors unchanged. The regional fallback's extra readsb
-  // status travels alongside them, keyed only to admitted aircraft.
+  // status and type travel alongside them, keyed only to admitted aircraft.
   const admitted = new Set();
   const statuses = [];
+  const types = [];
   for (const row of aircraft) {
     const state = normalizeAdsbLolAircraftState(row, nowSeconds);
     if (!state) continue;
@@ -125,11 +126,17 @@ export function normalizeAdsbLolPointResponse(payload) {
     admitted.add(id);
     if (typeof row.emergency === 'string')
       statuses.push([id, row.emergency.trim().toLowerCase()]);
+    const type = typeof row.t === 'string' ? row.t.trim().toUpperCase() : '';
+    if (type) types.push([id, type]);
   }
   const emergencyByIcao = Object.fromEntries(statuses);
+  const typeByIcao = Object.fromEntries(types);
   return {
     time: nowSeconds,
     states,
     ...(Object.keys(emergencyByIcao).length ? { emergencyByIcao } : {}),
+    // The ICAO type designator (readsb `t`), so the aircraft is classed from
+    // its first fix instead of after a lookup.
+    ...(types.length ? { typeByIcao } : {}),
   };
 }

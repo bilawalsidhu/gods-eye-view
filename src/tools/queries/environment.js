@@ -173,7 +173,8 @@ export const getCyclones = defineTool({
   title: 'Tropical cyclones',
   description:
     'Active tropical cyclones from the NOAA National Hurricane Center and ' +
-    'Central Pacific Hurricane Center, optionally limited to an area.',
+    'Central Pacific Hurricane Center, and from the Joint Typhoon Warning ' +
+    'Center elsewhere, optionally limited to an area.',
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA },
@@ -204,6 +205,7 @@ export const getCyclones = defineTool({
         name: storm.name,
         classification: storm.classification,
         basin: storm.basin,
+        agency: storm.agency ?? 'nhc',
         lat: storm.position.latitude,
         lon: storm.position.longitude,
         position_at: storm.positionAt,
@@ -248,7 +250,8 @@ export const getFirePerimeters = defineTool({
   title: 'Wildfire perimeters',
   description:
     'Mapped wildfire perimeters from the US WFIGS service in an area, ' +
-    'largest first, with size, containment, cause and personnel.',
+    'largest first, with size, containment, cause, personnel, and ' +
+    "`last_growth`: when each was last mapped (WFIGS mapping time, else the record's last edit).",
   inputSchema: {
     type: 'object',
     properties: { area: AREA_SCHEMA, limit: LIMIT_SCHEMA },
@@ -258,19 +261,33 @@ export const getFirePerimeters = defineTool({
   requires: ['perimeters'],
   async run(args, { services, signal }) {
     const area = await resolveArea(args.area, { services, signal });
-    const snapshot =
-      typeof services.perimeters.getSnapshotDetail === 'function'
-        ? await services.perimeters.getSnapshotDetail({ signal })
-        : { rows: await services.perimeters.getSnapshot({ signal }) };
+    const snapshot = await services.perimeters.getSnapshot({ signal });
+    if (!Array.isArray(snapshot?.fires) || !Array.isArray(snapshot.pieces))
+      throw new ToolError('malformed', 'The perimeter snapshot is malformed');
+    const at = isoTime(snapshot.at);
+    // A time after the moment shown is not known at it.
+    const timeAt = (ms) =>
+      at !== null && ms > snapshot.at ? null : isoTime(ms);
     // The proxy answers from its last snapshot, marked stale, while WFIGS is
     // unreachable.
     const stale = snapshot.stale === true;
-    const rows = snapshot.rows
-      .filter((fire) => polygonsTouchArea(fire.polygons, area))
-      .map((fire) => ({ fire, point: polygonCenter(fire.polygons) }))
-      .filter(({ point }) => point)
-      .map(({ fire, point }) => ({
-        id: fire.stableId,
+    // A fire is in the area when a piece of its burned area is.
+    const touching = new Set();
+    for (const piece of snapshot.pieces)
+      if (
+        !touching.has(piece.fireId) &&
+        polygonsTouchArea(piece.polygons, area)
+      )
+        touching.add(piece.fireId);
+    const rows = snapshot.fires
+      .filter(
+        (fire) =>
+          touching.has(fire.id) &&
+          Number.isFinite(fire.anchor?.lat) &&
+          Number.isFinite(fire.anchor?.lon),
+      )
+      .map((fire) => ({
+        id: fire.id,
         name: fire.name,
         acres: round(fire.acres, 0),
         contained_pct: fire.containedPct,
@@ -280,46 +297,28 @@ export const getFirePerimeters = defineTool({
         cause: fire.cause,
         behavior: fire.behavior,
         personnel: fire.personnel,
-        discovered: isoTime(fire.discoveredTime),
-        updated: isoTime(fire.updatedTime),
-        lat: round(point.lat, 5),
-        lon: round(point.lon, 5),
+        discovered: timeAt(fire.discoveredTime),
+        updated: timeAt(fire.updatedTime),
+        last_growth: timeAt(fire.lastGrowthTime),
+        lat: round(fire.anchor.lat, 5),
+        lon: round(fire.anchor.lon, 5),
       }))
       .sort((a, b) => (b.acres ?? 0) - (a.acres ?? 0));
     return {
       summary:
         `${countNoun(rows.length, 'mapped wildfire perimeter')} in ${area.label}` +
+        (at ? ` as of ${at}` : '') +
         (stale ? ' (data may be stale).' : '.'),
       data: {
         view: suggestView(services, { area, layers: ['fire-perimeters'] }),
         stale,
         retrieved_at: isoTime(snapshot.fetchedAt),
+        ...(at && { snapshot_at: at }),
         ...capRows(rows, args.limit),
       },
     };
   },
 });
-
-/** Average outer-ring vertices, using a circular longitude mean at the dateline. */
-function polygonCenter(polygons) {
-  let lat = 0;
-  let sinLon = 0;
-  let cosLon = 0;
-  let count = 0;
-  const toRad = Math.PI / 180;
-  for (const polygon of polygons || []) {
-    for (const [x, y] of polygon?.[0] || []) {
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      sinLon += Math.sin(x * toRad);
-      cosLon += Math.cos(x * toRad);
-      lat += y;
-      count += 1;
-    }
-  }
-  return count
-    ? { lat: lat / count, lon: Math.atan2(sinLon, cosLon) / toRad }
-    : null;
-}
 
 export const getTerrainHeight = defineTool({
   name: 'get_terrain_height',
