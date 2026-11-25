@@ -1,4 +1,4 @@
-/** Own rail measurement, layout scheduling and dock tray observation. */
+/** Own rail measurement and layout scheduling. */
 import { layoutLeftPanelRail, layoutRightPanelRail } from './panelRails.js';
 import { syncRadioPanelPlacement } from './radioPanelPlacement.js';
 import { isPanelRailMutation } from './panelRailCatalog.js';
@@ -28,8 +28,6 @@ const LEFT_STACK_OBSTACLE_SELECTOR = [
   '#cesium-credits .cesium-credit-logoContainer',
   '#cesium-credits .cesium-credit-textContainer',
   '#gev-credits',
-  '#location-bar',
-  '#control-panel',
   '#gev-voice-control',
   '#pp-toggles',
   '#param-slider-panel',
@@ -103,7 +101,6 @@ export class PanelLayoutController {
     this.readDisplayScrollTop = readDisplayScrollTop;
     this.destroyed = false;
     this._adaptivePanelSettleTimer = null;
-    this._commandDockTrayObserver = null;
     this._leftStackCockpitModeHandler = null;
     this._leftStackCollapsedHeights = new Map();
     this._leftStackHudTransitionHandler = null;
@@ -146,73 +143,6 @@ export class PanelLayoutController {
       this._scheduleRightPanelLayout({ reconsiderAutoCollapse: true });
       this.scheduleCockpitLayout();
     }, COCKPIT_LAYOUT_SETTLE_MS);
-  }
-
-  _initCommandDockTrayMetrics() {
-    if (this.destroyed) return;
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    this._commandDockTrayObserver?.disconnect?.();
-    if (typeof ResizeObserver === 'function') {
-      this._commandDockTrayObserver = new ResizeObserver(() =>
-        this._updateCommandDockTrayStack(),
-      );
-      dock.querySelectorAll('.dock-popover-content').forEach((tray) => {
-        this._commandDockTrayObserver.observe(tray);
-      });
-    }
-    this._updateCommandDockTrayStack();
-  }
-
-  _updateCommandDockTrayStack() {
-    if (this.destroyed) return;
-    const dock = document.getElementById('command-dock');
-    if (!dock) return;
-    const locationPanel = dock.querySelector(
-      '#location-bar.dock-pinned:not(.collapsed)',
-    );
-    const presetsPanel = dock.querySelector(
-      '#control-panel.dock-pinned:not(.collapsed)',
-    );
-    const locationHeight =
-      locationPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const presetsHeight =
-      presetsPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const pinnedCount = Number(locationHeight > 0) + Number(presetsHeight > 0);
-    const locationHeightPx = Math.ceil(locationHeight);
-    const presetsHeightPx = Math.ceil(presetsHeight);
-    const topPinnedPanel = dock.querySelector(
-      '.dock-pinned-top.dock-pinned:not(.collapsed)',
-    );
-    const lowerPinnedPanel =
-      topPinnedPanel?.id === 'location-bar' ? presetsPanel : locationPanel;
-    const lowerPinnedHeight =
-      lowerPinnedPanel
-        ?.querySelector('.dock-popover-content')
-        ?.getBoundingClientRect().height || 0;
-    const stackHeight =
-      pinnedCount > 1
-        ? `calc(${locationHeightPx}px + ${presetsHeightPx}px + 1.2rem)`
-        : `${locationHeightPx + presetsHeightPx}px`;
-    dock.style.setProperty(
-      '--dock-location-pinned-height',
-      `${locationHeightPx}px`,
-    );
-    dock.style.setProperty(
-      '--dock-presets-pinned-height',
-      `${presetsHeightPx}px`,
-    );
-    dock.style.setProperty(
-      '--dock-lower-pinned-height',
-      `${Math.ceil(lowerPinnedHeight)}px`,
-    );
-    dock.style.setProperty('--dock-pinned-stack-height', stackHeight);
-    dock.classList.toggle('dock-has-pinned-tray', pinnedCount > 0);
-    dock.classList.toggle('dock-has-two-pinned-trays', pinnedCount > 1);
   }
 
   _initRightPanelAdaptiveLayout() {
@@ -524,7 +454,6 @@ export class PanelLayoutController {
     clearTimeout(this._cockpitLayoutTimer);
     this._adaptivePanelSettleTimer = this._cockpitLayoutTimer = null;
     for (const field of [
-      '_commandDockTrayObserver',
       '_leftStackResizeObserver',
       '_leftStackMutationObserver',
       '_rightStackResizeObserver',

@@ -3,7 +3,6 @@ import { createStateChannel } from '../app/stateChannel.js';
 /** One cancellable place lookup at a time, under the caller's camera authority. */
 export class LocationSearch {
   constructor({
-    input,
     setSearching = () => {},
     begin,
     isCurrent,
@@ -16,7 +15,6 @@ export class LocationSearch {
     onSettled,
   }) {
     Object.assign(this, {
-      input,
       setSearching,
       begin,
       isCurrent,
@@ -54,7 +52,6 @@ export class LocationSearch {
     const authority = this.begin();
     if (authority === false) {
       this.setSearching(false);
-      this.input?.blur();
       return;
     }
     this.controller?.abort();

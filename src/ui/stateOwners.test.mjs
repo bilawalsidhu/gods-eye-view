@@ -19,7 +19,6 @@ function navigation() {
     tracking,
     interruptCameraMotion() {},
     isCockpitActive: () => false,
-    clearLocation() {},
     cancelShareSelection: () => false,
     getDataManager: () => null,
     stopOrbit() {},

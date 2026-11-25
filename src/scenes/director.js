@@ -1968,7 +1968,6 @@ export class SceneDirector {
   _setCameraView(cameraState) {
     const camera = findCamera(this.viewer);
     if (!cameraState || !camera) return false;
-    this.styleManager?.clearSearchedLocation?.();
     camera.cancelFlight();
     camera.setView({
       destination: {
@@ -2858,11 +2857,6 @@ export class SceneDirector {
    */
   async _flyCamera(cameraState, durationSec, token) {
     if (!cameraState || token.cancelled) return;
-
-    // Scene playback drives the camera itself rather than through the shared
-    // navigation seam, so the LOCATION readout would otherwise keep reporting
-    // a free-text search the shot has already flown away from.
-    this.styleManager?.clearSearchedLocation?.();
 
     const duration = Math.max(
       0.2,

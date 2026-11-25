@@ -1028,7 +1028,7 @@ test("keys on the shape list are the list's, not the drawing's", async () => {
     const listButton = new FakeElement('BUTTON');
     listButton.closest = (selector) =>
       selector === '#draw-mark-list' ? {} : null;
-    const elsewhere = new FakeElement('INPUT', 'location-search');
+    const elsewhere = new FakeElement('INPUT', 'gev-omnibar-input');
     h.act('toggleDraw');
     h.tool.addVertex(-97.75, 30.26);
     h.tool.addVertex(-97.74, 30.26);

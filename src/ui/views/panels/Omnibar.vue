@@ -36,8 +36,8 @@ const asPlace = (city) => {
 const placeKey = (place) => place.id || `${place.name}@${Number(place.latitude).toFixed(3)},${Number(place.longitude).toFixed(3)}`;
 const globeActions = useGlobeActionsStore();
 const locationStore = useLocationStore();
-// The preset cities and the current city's landmarks, as LocationControls
-// presents them: the omnibox offers them as the dock's location tray did.
+// The current city's landmarks, its lookup error and who ran the lookup, as
+// LocationControls presents them.
 const { view: locationView } = storeToRefs(locationStore);
 // "here", "this spot": the selected item, else the view.
 const HERE = /\b(here|there|this (spot|point|place|location|area)|around it|nearby)\b/i;

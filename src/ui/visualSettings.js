@@ -1573,7 +1573,7 @@ export class VisualSettings {
       this._applyStylePresetDefaults(styleName);
     }
 
-    // The style buttons, the dock's mini status and the ACTIVE STYLE corner.
+    // Visual's presets and the ACTIVE STYLE corner.
     this._publishActiveStyle(styleName);
 
     // Update parameter sliders

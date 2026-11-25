@@ -299,13 +299,11 @@ export function createVoiceCommands({
           ui,
           name: 'chatPanel',
           minimize: () => chat?.minimize({ focus: false }),
-          restore: () => chat?.restore({ focus: false }),
         }),
         bindAssistantPanelLayout({
           ui,
           name: 'voicePanel',
           minimize: minimizeVoicePanel,
-          restore: () => ui.update('voicePanel', { minimized: false }),
         }),
         ui.on('voice-minimize', () => {
           if (ui.state.voicePanel.minimized)

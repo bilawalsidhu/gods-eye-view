@@ -83,7 +83,7 @@ export function bindChatControl({ ui, session, onOpen, dataManager }) {
     ui.update('chat', { open: false, minimized: false });
     sync();
   }
-  // Layout moves (yielding to a dock tray, say) pass `focus: false`, so they
+  // Layout moves (stepping down for a rail panel, say) pass `focus: false`, so they
   // never take focus from what the user is typing in.
   // ChatGPT sign-in covers OpenAI voice only; typed chat still uses the key.
   const authNote = () =>

@@ -1,27 +1,3 @@
-/* ── Control Panel ────────────────────────────── */
-#control-panel {
-  position: fixed;
-  bottom: 36px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  width: auto;
-  max-width: 680px;
-}
-
-#control-panel .panel-glow {
-  position: absolute;
-  inset: -30px;
-  background: radial-gradient(
-    ellipse at center bottom,
-    var(--accent-dim) 0%,
-    transparent 60%
-  );
-  filter: blur(30px);
-  opacity: 0.4;
-  pointer-events: none;
-}
-
 .panel-inner {
   position: relative;
   background: var(--glass-bg);
@@ -42,34 +18,6 @@
   gap: 12px;
   margin-bottom: 14px;
   padding: 0 4px;
-}
-
-.panel-mini-status {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  padding: 0 6px 2px;
-}
-
-#control-panel.collapsed .panel-mini-status {
-  display: flex;
-}
-
-.panel-mini-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.4px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-}
-
-.panel-mini-value {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 1.8px;
-  color: var(--accent);
-  text-transform: uppercase;
-  text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
 }
 
 .panel-title {
@@ -264,94 +212,6 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   }
 }
 
-/* ── Button Grid ──────────────────────────────── */
-.button-grid {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.button-grid::-webkit-scrollbar {
-  display: none;
-}
-
-.style-btn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 16px 10px;
-  min-width: 78px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--btn-radius);
-  cursor: pointer;
-  /* Keep the keyboard focus outline immediate. */
-  transition:
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
-  overflow: hidden;
-  outline: none;
-}
-
-/* Keep keyboard focus visible inside the scrolling preset row. */
-.style-btn:focus-visible {
-  outline: 2px solid var(--text-primary);
-  outline-offset: -3px;
-}
-
-.style-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    transparent 100%
-  );
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.style-btn:hover {
-  border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
-  transform: translateY(-1px);
-}
-
-.style-btn:hover::before {
-  opacity: 1;
-}
-
-.style-btn:active {
-  transform: translateY(0);
-}
-
-.style-btn.active {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow:
-    0 0 20px rgba(0, 212, 255, 0.15),
-    0 0 0 1px rgba(0, 212, 255, 0.1) inset;
-}
-
-.style-btn.active .btn-icon {
-  color: var(--accent);
-  text-shadow: 0 0 12px var(--accent-glow);
-}
-
-.style-btn.active .btn-label {
-  color: var(--text-primary);
-}
-
 .btn-icon {
   font-size: 20px;
   line-height: 1;
@@ -359,31 +219,6 @@ html:not([lang='en']):not(:lang(zh)):not(:lang(ja))
   transition:
     color var(--transition-fast),
     text-shadow var(--transition-fast);
-}
-
-.btn-label {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  letter-spacing: 0.3px;
-  transition: color var(--transition-fast);
-}
-
-.btn-key {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--text-dim);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.style-btn:hover .btn-key,
-.style-btn.active .btn-key {
-  opacity: 1;
 }
 
 /* ── Loading Screen ───────────────────────────── */
@@ -792,130 +627,6 @@ html:not([lang='en']) .pp-slider-row > .pp-slider-mini-label {
   min-width: 48px;
 }
 
-/* Map Source tiles live with Visual Presets in the bottom command tray. */
-.map-source-section {
-  display: grid;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(123, 189, 211, 0.18);
-}
-
-.map-source-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: rgba(190, 221, 230, 0.62);
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 1.35px;
-}
-
-.map-stack-chip-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.map-stack-chip {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 4px;
-  padding: 4px 7px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  cursor: pointer;
-  /* Explicit property list, NOT `transition: all`: `all` animates
-     `outline-width` off the `outline: none` base, and Chrome leaves that
-     transition parked at 0px for chips on a wrapped line — the keyboard ring
-     silently never appeared on rows 2 and 3. A focus indicator should be
-     instant anyway. */
-  transition:
-    color var(--transition-fast),
-    background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
-  outline: none;
-}
-
-#command-dock #control-panel.collapsed .map-source-section {
-  display: none;
-}
-
-@media (max-width: 620px) {
-  .map-stack-chip-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-/* Order matters, and matches `.data-toggle-btn`: hover/focus, then active, then
-   disabled — all at the same specificity, so the later rule wins. Hovering the
-   active chip must not wash the cyan out, and a disabled chip must not light up
-   under the cursor. Do not add `:not(...)` here: it would raise specificity and
-   let hover beat `.active` again. */
-.map-stack-chip:hover,
-.map-stack-chip:focus-visible {
-  border-color: var(--glass-border-hover);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-primary);
-}
-
-/* The keyboard ring is an `outline`, a property NO other chip-state rule sets,
-   so it survives on the active chip — whose `.active` rule legitimately wins
-   the color/border/background/box-shadow it shares with the rule above. Without
-   this, tabbing onto the active chip produced no visible change at all. */
-.map-stack-chip:focus-visible {
-  outline: 1px solid color-mix(in srgb, var(--accent) 80%, transparent);
-  outline-offset: 2px;
-}
-
-.map-stack-chip.active {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  box-shadow: 0 0 10px rgba(0, 212, 255, 0.15);
-}
-
-.map-stack-chip.unavailable,
-.map-stack-chip[aria-disabled='true'] {
-  color: rgba(232, 234, 237, 0.28);
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  cursor: not-allowed;
-}
-
-.map-stack-chip-req {
-  font-size: 7px;
-  letter-spacing: 0.3px;
-  color: rgba(232, 234, 237, 0.28);
-}
-
-.pp-stack-status {
-  min-width: 42px;
-  max-width: 54px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.8px;
-  color: var(--accent);
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.pp-stack-status.warn {
-  color: #ffb84d;
-}
-
 .pp-select {
   flex: 1;
   min-width: 0;
@@ -1211,8 +922,6 @@ body.ui-clean-view #traffic-sync-chip,
 body.ui-clean-view #cctv-sync-chip,
 body.ui-clean-view #pp-toggles,
 body.ui-clean-view #param-slider-panel,
-body.ui-clean-view #control-panel,
-body.ui-clean-view #location-bar,
 body.ui-clean-view #data-panel,
 body.ui-clean-view #cctv-panel,
 body.ui-clean-view #radio-panel,

@@ -297,11 +297,6 @@ body:not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(
       animation: omnibar-listening 2.4s ease-in-out infinite;
     }
   }
-
-  /* Desktop uses Omnibar for search and the Visual rail for presets. */
-  #command-dock > :is(#location-bar, #control-panel) {
-    display: none;
-  }
 }
 
 /* Desktop places the corners, the HUD and the credits around the dock;

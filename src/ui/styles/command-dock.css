@@ -32,26 +32,12 @@
     visibility var(--transition-smooth);
 }
 
-#command-dock > #location-bar,
-#command-dock > #control-panel,
 #command-dock > #gev-voice-control {
   position: relative;
   inset: auto;
   width: auto;
   max-width: none;
   transform: none;
-}
-
-#command-dock > #location-bar {
-  grid-area: locations;
-  min-width: 0;
-  border-right: 1px solid rgba(123, 189, 211, 0.16);
-}
-
-#command-dock > #control-panel {
-  grid-area: presets;
-  min-width: 0;
-  border-left: 1px solid rgba(123, 189, 211, 0.16);
 }
 
 #command-dock > #gev-voice-control {
@@ -98,122 +84,6 @@
 
 #command-dock #gev-voice-detail {
   max-width: 110px;
-}
-
-#command-dock .panel-glow {
-  display: none;
-}
-
-#command-dock .panel-inner,
-#command-dock .location-inner,
-#command-dock #control-panel.collapsed .panel-inner,
-#command-dock #location-bar.collapsed .location-inner {
-  height: 100%;
-  padding: 8px 14px;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-#command-dock .panel-header,
-#command-dock .location-toolbar,
-#command-dock #control-panel.collapsed .panel-header {
-  min-height: 18px;
-  margin: 0 0 6px;
-  padding: 0;
-}
-
-#command-dock .panel-title,
-#command-dock .location-toolbar-label {
-  font-size: 8px;
-  letter-spacing: 1.6px;
-  color: rgba(190, 221, 230, 0.58);
-}
-
-#command-dock .panel-collapse-btn,
-#command-dock .panel-mini-status,
-#command-dock .location-mini-status {
-  display: none !important;
-}
-
-#command-dock #control-panel.collapsed .button-grid,
-#command-dock #location-bar.collapsed .location-city-row {
-  display: flex !important;
-}
-
-#command-dock .button-grid {
-  gap: 6px;
-}
-
-#command-dock .style-btn {
-  min-width: 52px;
-  gap: 4px;
-  padding: 9px 8px 7px;
-  border-radius: 7px;
-}
-
-#command-dock .btn-icon {
-  font-size: 16px;
-}
-
-#command-dock .btn-label {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-}
-
-#command-dock .btn-key {
-  top: 3px;
-  right: 4px;
-  font-size: 7px;
-}
-
-#command-dock .location-city-row {
-  min-width: 0;
-  gap: 8px;
-}
-
-#command-dock .location-search-wrap {
-  order: -1;
-  flex: 0 1 190px;
-  min-width: 132px;
-  padding-right: 8px;
-  border-right: 1px solid rgba(123, 189, 211, 0.14);
-}
-
-#command-dock .search-toggle-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
-}
-
-#command-dock #location-search,
-#command-dock #location-search.expanded {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  font-size: 11px;
-}
-
-#command-dock .location-pills {
-  flex: 1;
-  min-width: 0;
-}
-
-#command-dock .location-pill {
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  text-transform: uppercase;
-}
-
-#command-dock .poi-row-container.expanded {
-  margin-bottom: 4px;
 }
 
 /* Keep required map attribution clear of the full-width command surface. */
@@ -294,16 +164,6 @@ body.recording-mode #gev-credits {
     width: calc(100vw - 24px);
   }
 
-  #command-dock > #location-bar {
-    border-right: 1px solid rgba(123, 189, 211, 0.16);
-    border-bottom: 1px solid rgba(123, 189, 211, 0.16);
-  }
-
-  #command-dock > #control-panel {
-    border-top: 1px solid rgba(123, 189, 211, 0.16);
-    border-left: 0;
-  }
-
   #command-dock > #gev-voice-control {
     margin: -10px 0 0;
   }
@@ -328,17 +188,6 @@ body.recording-mode #gev-credits {
 @media (max-width: 720px) {
   #command-dock {
     bottom: calc(8px + var(--world-timeline-lift, 0px));
-  }
-
-  #command-dock .location-search-wrap {
-    flex-basis: 150px;
-  }
-
-  #command-dock .panel-inner,
-  #command-dock .location-inner,
-  #command-dock #control-panel.collapsed .panel-inner,
-  #command-dock #location-bar.collapsed .location-inner {
-    padding: 7px 9px;
   }
 
   #left-panel-stack {

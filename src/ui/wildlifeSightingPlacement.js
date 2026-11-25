@@ -11,8 +11,6 @@ export const WILDLIFE_CARD_CHROME_SELECTORS = Object.freeze([
   '.hud-right-edge',
   '#right-panel-stack',
   '.gev-panel-rail',
-  '#location-bar',
-  '#control-panel',
   '#param-slider-panel',
   '#cockpit-hud .cockpit-topline',
   '[data-mobile-sheet]',
