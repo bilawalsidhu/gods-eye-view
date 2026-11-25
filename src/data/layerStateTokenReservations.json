@@ -10,6 +10,7 @@
   ["drone-airspace", "8"],
   ["earthquakes", "e"],
   ["fire-perimeters", "2"],
+  ["fireballs", "03"],
   ["flights", "f"],
   ["gnss-integrity", "3"],
   ["local-dams", "q"],
