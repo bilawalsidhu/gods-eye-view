@@ -98,8 +98,6 @@ function currentSheetOf(body) {
  * @param {(callback: () => void) => number} [input.requestFrame]
  * @param {() => void} [input.onSheetsClosed] Runs after the last sheet closes
  *   and its panels are put back (e.g. to refresh the share link).
- * @param {(sheet: string) => void} [input.onTabOpened] Runs only when the user
- *   opens a sheet from its tab, never on close or programmatic presentation.
  * @param {(view: ?{enabled: boolean, sheet: string|null, tabs: typeof MOBILE_TABS}) => void} [input.publish]
  *   Receives the tab bar: whether the shell is on, the open sheet and the
  *   tabs; null once the shell is destroyed.
@@ -117,7 +115,6 @@ export function initMobileShell({
   ResizeObserverImpl = globalThis.ResizeObserver,
   requestFrame = globalThis.requestAnimationFrame?.bind(globalThis),
   onSheetsClosed = () => {},
-  onTabOpened = () => {},
   publish = () => {},
   afterPublish = (callback) => callback(),
 } = {}) {
@@ -351,7 +348,6 @@ export function initMobileShell({
     // Closing from the tab bar returns focus to the tab that was pressed.
     if (!sheet) returnFocus = button;
     setSheet(sheet);
-    if (sheet && currentSheetOf(body) === sheet) onTabOpened(sheet);
   });
   // Touch events let native scrolling continue until a downward pull at the
   // top is intentional. Pointer capture/touch-action:none would also seize

@@ -144,6 +144,9 @@ test('track_entity runner narrates a callsign-less aircraft by its registration'
       `${layerId} narration must speak the registration, not the ICAO hex`,
     );
     assert.equal(trackedId, 'ae1fa4', `${layerId} must still TRACK by icao24`);
+    // The result names what it tracked, so Context can show it.
+    assert.equal(result.id, 'ae1fa4');
+    assert.equal(result.layerId, layerId);
   }
 });
 
@@ -2974,7 +2977,7 @@ test('control_cockpit resolves spoken TR-3B spellings to the tr3b class id', asy
   }
 });
 
-test('control_cockpit delegates selected-flight adoption to the canonical cockpit owner', async () => {
+test('control_cockpit delegates selected-flight adoption to the canonical cockpit owner and leaves Context alone', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
@@ -2995,16 +2998,7 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
         changing: false,
       };
     },
-    async setContextMode(mode) {
-      calls.push({ action: 'context', mode });
-      contextActive = mode === 'flights';
-      return {
-        ok: contextActive,
-        mode,
-        active: contextActive,
-        changing: false,
-      };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(action, options) {
       calls.push({ action, selectedTarget: options.selectedTarget });
       return {
@@ -3040,52 +3034,11 @@ test('control_cockpit delegates selected-flight adoption to the canonical cockpi
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, true);
   assert.deepEqual(calls, [
-    { action: 'context', mode: 'flights' },
     {
       action: 'enter',
       selectedTarget: { layerId: 'flights', id: 'abc123' },
     },
   ]);
-});
-
-test('control_cockpit does not mutate selection when Contacts entry fails', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const styleManager = {
-    getContextModeState: () => ({ mode: null, active: false, changing: false }),
-    setContextMode: async () => ({
-      ok: false,
-      mode: null,
-      active: false,
-      changing: false,
-      error: 'Contacts activation failed',
-    }),
-    controlCockpit: () =>
-      assert.fail('Cockpit must not run after failed Contacts entry'),
-    getCockpitState: () => ({ active: false }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-
-  const result = await runner('control_cockpit', { action: 'enter' });
-  assert.equal(result.ok, false);
-  assert.equal(result.error, 'Contacts activation failed');
-  assert.deepEqual(result.state, { active: false });
 });
 
 test('control_cockpit cancellation is inert when Contacts is already active', async () => {
@@ -3134,77 +3087,7 @@ test('control_cockpit cancellation is inert when Contacts is already active', as
   assert.deepEqual(result.state, { active: false });
 });
 
-test('control_cockpit rolls Contacts back when the turn becomes stale at commit', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const calls = [];
-  let requestCurrent = true;
-  let contextMode = null;
-  const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode, options) {
-      calls.push({ mode, options: options || null });
-      contextMode = mode;
-      if (mode === 'flights') requestCurrent = false;
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
-    controlCockpit: () => assert.fail('stale turn must not enter Cockpit'),
-    getCockpitState: () => ({ active: false }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-
-  const result = await runner(
-    'control_cockpit',
-    { action: 'enter' },
-    {
-      isCurrent: () => requestCurrent,
-    },
-  );
-  assert.equal(result.ok, false);
-  assert.equal(result.cancelled, true);
-  assert.equal(contextMode, null);
-  assert.deepEqual(
-    calls.map(({ mode }) => mode),
-    ['flights', null],
-  );
-  assert.equal(
-    calls[1].options?.signal ?? null,
-    null,
-    'rollback must not inherit stale cancellation authority',
-  );
-  assert.equal(
-    calls[1].options?.isCurrent ?? null,
-    null,
-    'rollback must not inherit a stale currency probe',
-  );
-  assert.equal(
-    calls[1].options?.claimVisualAuthority,
-    false,
-    'rollback is cockpit choreography and must not claim the visual lane',
-  );
-});
-
-test('control_cockpit adopts the newest selection after Contacts settles', async () => {
+test('control_cockpit enters on the current selection and keeps the prior track for rollback', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
@@ -3229,16 +3112,15 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   );
   contextStore.selectedEntityId = first.id;
   contextStore.selectedAt = Date.now();
+  // A newer selection before the turn runs is the one entered.
+  contextStore.selectedEntityId = second.id;
+  contextStore.selectedAt = Date.now();
   let receivedTarget = null;
   let receivedRollbackTarget = null;
   const styleManager = {
     getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'prior' }),
     getContextModeState: () => ({ mode: null, active: false, changing: false }),
-    async setContextMode() {
-      contextStore.selectedEntityId = second.id;
-      contextStore.selectedAt = Date.now();
-      return { ok: true, mode: 'flights', active: true, changing: false };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(_action, options) {
       receivedTarget = options.selectedTarget;
       receivedRollbackTarget = options.rollbackTarget;
@@ -3277,25 +3159,16 @@ test('control_cockpit adopts the newest selection after Contacts settles', async
   });
 });
 
-test('control_cockpit restores the prior Context mode after Cockpit entry fails', async () => {
+test('a failed voice Cockpit entry leaves the Context mode as it was', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
     requestIdleCallback: null,
   };
   const calls = [];
-  let contextMode = null;
   const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode) {
-      contextMode = mode;
-      calls.push(`context:${mode || 'off'}`);
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
+    getContextModeState: () => ({ mode: null, active: false, changing: false }),
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit() {
       calls.push('cockpit:enter');
       return {
@@ -3322,31 +3195,21 @@ test('control_cockpit restores the prior Context mode after Cockpit entry fails'
 
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, false);
-  assert.deepEqual(calls, ['context:flights', 'cockpit:enter', 'context:off']);
-  assert.equal(contextMode, null);
-  assert.equal(result.contextRollback.ok, true);
+  assert.equal(result.error, 'Cockpit entry was unavailable');
+  assert.deepEqual(calls, ['cockpit:enter']);
+  assert.equal(result.contextRollback, undefined);
 });
-
-test('control_cockpit contains entry exceptions and still restores the prior Context mode', async () => {
+test('control_cockpit contains entry exceptions and passes the prior track for rollback', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
     setTimeout,
     requestIdleCallback: null,
   };
   const calls = [];
-  let contextMode = null;
   const styleManager = {
     getAircraftTrackingTarget: () => ({ layerId: 'military', id: 'prior' }),
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: Boolean(contextMode),
-      changing: false,
-    }),
-    async setContextMode(mode) {
-      contextMode = mode;
-      calls.push(`context:${mode || 'off'}`);
-      return { ok: true, mode, active: Boolean(mode), changing: false };
-    },
+    getContextModeState: () => ({ mode: null, active: false, changing: false }),
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(_action, options) {
       calls.push(['cockpit:enter', options.rollbackTarget]);
       throw new Error('entry exploded');
@@ -3371,15 +3234,11 @@ test('control_cockpit contains entry exceptions and still restores the prior Con
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, false);
   assert.equal(result.error, 'entry exploded');
-  assert.equal(result.contextRollback.ok, true);
-  assert.equal(contextMode, null);
+  assert.deepEqual(result.state, { active: false });
   assert.deepEqual(calls, [
-    'context:flights',
     ['cockpit:enter', { layerId: 'military', id: 'prior' }],
-    'context:off',
   ]);
 });
-
 test('set_context_mode forwards cancellation authority and reports a stale turn', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
@@ -3538,11 +3397,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
       active: contextActive,
       changing: false,
     }),
-    async setContextMode(mode) {
-      contextActive = mode === 'flights';
-      calls.push(`context:${mode}`);
-      return { ok: true, mode, active: true, changing: false };
-    },
+    setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
     controlCockpit(action) {
       calls.push(`cockpit:${action}`);
       return {
@@ -3577,7 +3432,7 @@ test('control_cockpit enter skips selected non-flight context', async () => {
 
   const result = await runner('control_cockpit', { action: 'enter' });
   assert.equal(result.ok, true);
-  assert.deepEqual(calls, ['context:flights', 'cockpit:enter']);
+  assert.deepEqual(calls, ['cockpit:enter']);
 });
 
 test('voice CCTV select, next, prev, and nearest report tracking-refused flights after selection', async () => {
@@ -4543,6 +4398,66 @@ test('voice Radio Pause while disabled is a truthful playback-only no-op', async
 // THE TWO APART, which a claim-count-only assertion cannot.
 // ---------------------------------------------------------------------------
 
+test('voice Cockpit entry, entered or failed, never changes the Context mode', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const entered of [true, false]) {
+    const calls = [];
+    const styleManager = {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setPanelCollapsed() {},
+      setContextMode: async (mode) => {
+        calls.push(mode);
+        return { ok: true, mode, active: true };
+      },
+      controlCockpit: async () =>
+        entered
+          ? { ok: true, action: 'control_cockpit', state: { active: true } }
+          : {
+              ok: false,
+              action: 'control_cockpit',
+              error: 'entry failed',
+              state: { active: false },
+            },
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => null,
+    };
+    const layerCalls = [];
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: {
+        layers: new Map([
+          ['flights', { module: {} }],
+          ['military', { module: {} }],
+        ]),
+        isEnabled: (layerId) => layerId === 'flights',
+        setEnabled: async (...args) => {
+          layerCalls.push(args);
+          return true;
+        },
+        getAll: () => [],
+      },
+    });
+    const result = await runner('control_cockpit', { action: 'enter' });
+    assert.equal(result.ok, entered);
+    assert.deepEqual(calls, [], 'no Context mode change');
+    assert.deepEqual(layerCalls, [], 'no layer change');
+  }
+});
+
 function contextClaimProbe({
   entrySucceeds = true,
   cockpitSucceeds = true,
@@ -4590,48 +4505,6 @@ function contextClaimProbe({
   });
   return { runner, calls };
 }
-
-test('Cockpit entry establishes Contacts WITHOUT claiming the visual lane', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const probe = contextClaimProbe();
-  await probe.runner('control_cockpit', { action: 'enter' });
-
-  assert.ok(probe.calls.length >= 1, 'Cockpit entry must establish Contacts');
-  for (const call of probe.calls) {
-    assert.equal(
-      call.claimVisualAuthority,
-      false,
-      `cockpit choreography must not claim (mode=${call.mode})`,
-    );
-  }
-});
-
-test('Cockpit entry rollback also stays inert on the visual lane', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const probe = contextClaimProbe({ cockpitSucceeds: false });
-  await probe.runner('control_cockpit', { action: 'enter' });
-
-  // Establish + roll back: BOTH are this action's own choreography.
-  assert.ok(
-    probe.calls.length >= 2,
-    `expected an entry and a rollback, saw ${probe.calls.length}`,
-  );
-  for (const call of probe.calls) {
-    assert.equal(
-      call.claimVisualAuthority,
-      false,
-      `rollback must not claim (mode=${call.mode})`,
-    );
-  }
-});
 
 test('a genuine set_context_mode request DOES claim the visual lane', async () => {
   globalThis.window = globalThis.window || {
@@ -5083,71 +4956,6 @@ test('an absent secondary mode stays absent instead of claiming to be off', asyn
   );
 });
 
-test('a nested Cockpit rollback result is translated too', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  // The prior mode is Contacts, whose INTERNAL id is 'flights' — the id that
-  // must not reach the model. `active: false` keeps Contacts from reading as
-  // ready, so entry runs and the failed Cockpit rolls back to it.
-  let contextMode = 'flights';
-  const styleManager = {
-    getContextModeState: () => ({
-      mode: contextMode,
-      active: false,
-      changing: false,
-    }),
-    getCockpitState: () => ({ active: false }),
-    getAircraftTrackingTarget: () => null,
-    async setContextMode(mode) {
-      // Entry to Contacts succeeds; Cockpit then fails and the prior mode is
-      // rolled back — the rollback result is what the model reads.
-      contextMode = mode;
-      return {
-        ok: true,
-        action: 'set_context_mode',
-        mode,
-        active: true,
-        changing: false,
-      };
-    },
-    controlCockpit: () => ({
-      ok: false,
-      error: 'Cockpit entry failed',
-      state: { active: false },
-    }),
-  };
-  const viewer = {
-    clock: { onTick: { addEventListener: () => () => {} } },
-    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-    camera: { moveEnd: { addEventListener() {} } },
-  };
-  const runner = createGevActionRunner({
-    viewer,
-    styleManager,
-    dataManager: {
-      layers: new Map(),
-      isEnabled: () => false,
-      getAll: () => [],
-    },
-  });
-  const result = await runner('control_cockpit', { action: 'enter' });
-  assert.equal(result.ok, false);
-  assert.equal(
-    result.contextRollback?.mode,
-    'contacts',
-    'the rollback names the mode the tools name',
-  );
-  assert.equal(result.contextRollback?.modeInternal, 'flights');
-  assert.doesNotMatch(
-    JSON.stringify(result.contextRollback || {}),
-    /"mode":"flights"/,
-    'a nested rollback result must not leak the internal id either',
-  );
-});
-
 /**
  * Front 5 (owner's live trial, 2026-08-22 01:42-01:44). Contacts was active
  * with contact N546PC as its subject, a DATACENTER sat in the recency slot,
@@ -5294,7 +5102,6 @@ function analystRunner(awareness, { getAll } = {}) {
     },
   });
 }
-
 test('front5: a nearby ask centres on the Contacts SUBJECT, not the selected datacenter', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,
@@ -6207,6 +6014,54 @@ test('analyst_query keeps its answer when one record has an out-of-range time', 
   const r = result.items.find((item) => item.id === 'r');
   assert.ok(r, 'the record is still listed');
   assert.equal(r.time, undefined, 'an unrepresentable time is omitted');
+});
+
+test("analyst_query keeps a fire's discovery time apart from its last growth", async (t) => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const T = Date.parse('2026-09-04T00:00:00Z');
+  t.mock.method(Date, 'now', () => T);
+  const records = [
+    {
+      id: 'fire-a',
+      name: 'Alpha Fire',
+      lat: 35.2,
+      lon: -108.1,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: Date.parse('2026-09-02T00:00:00Z'),
+    },
+    {
+      id: 'fire-b',
+      name: 'Bravo Fire',
+      lat: 35.3,
+      lon: -108.2,
+      discoveredTime: Date.parse('2026-09-01T00:00:00Z'),
+      lastGrowthTime: null,
+    },
+  ];
+  const module = {
+    getStats: () => ({ count: records.length, lastUpdate: T }),
+    getAnalystRecords: () => records,
+  };
+  const { runner } = manifestRunner(
+    { 'fire-perimeters': module },
+    { enabled: ['fire-perimeters'] },
+  );
+  const result = await runner('analyst_query', {
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+    limit: 5,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result));
+  const a = result.items.find((item) => item.id === 'fire-a');
+  const b = result.items.find((item) => item.id === 'fire-b');
+  assert.equal(a.time, '2026-09-01T00:00:00.000Z');
+  assert.equal(a.lastGrowthTime, '2026-09-02T00:00:00.000Z');
+  assert.equal(b.time, '2026-09-01T00:00:00.000Z');
+  assert.equal('lastGrowthTime' in b, false);
 });
 
 test('spoken layer names from the manifest reach the newer layers', async () => {
@@ -8953,4 +8808,192 @@ test('show_street_level shows every photo it opens, also over a panel the user h
     fly: false,
   });
   assert.deepEqual(missing.revealed, [], 'nothing opened, nothing revealed');
+});
+
+test('a military voice Cockpit entry switches Military Flights on as a plain layer, never Contacts', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const militaryOn of [false, true]) {
+    const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
+    const layerCalls = [];
+    const entries = [];
+    const styleManager = {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
+      setDetection: () => assert.fail('Cockpit entry must not touch detection'),
+      controlCockpit(action, options) {
+        entries.push([action, options.targetLayer, options.aircraftClass]);
+        return { ok: true, action: 'control_cockpit', state: { active: true } };
+      },
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
+    };
+    const viewer = {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    };
+    const runner = createGevActionRunner({
+      viewer,
+      styleManager,
+      dataManager: {
+        layers: new Map([
+          ['flights', { module: {} }],
+          ['military', { module: {} }],
+        ]),
+        isEnabled: (layerId) => enabled.has(layerId),
+        async setEnabled(layerId, on, options) {
+          layerCalls.push([layerId, on, options.origin]);
+          if (on) enabled.add(layerId);
+          return true;
+        },
+        getAll: () => [],
+      },
+    });
+    const result = await runner('control_cockpit', {
+      action: 'enter',
+      targetLayer: 'military',
+      aircraftClass: 'helicopter',
+    });
+    assert.equal(result.ok, true, result.error);
+    assert.deepEqual(
+      layerCalls,
+      militaryOn ? [] : [['military', true, 'voice']],
+      'only a Military Flights layer that is off is switched on',
+    );
+    assert.deepEqual(entries, [['enter', 'military', 'helicopter']]);
+  }
+});
+
+// A data manager whose Military Flights layer is off, switches on empty and
+// reports its first data only when the test lands it.
+function militaryOffManager({ militaryOn = false } = {}) {
+  const enabled = new Set(militaryOn ? ['flights', 'military'] : ['flights']);
+  const activity = new Set();
+  const layerCalls = [];
+  let lastUpdate = militaryOn ? 1 : null;
+  const manager = {
+    layers: new Map([
+      ['flights', { module: {} }],
+      ['military', { module: { getStats: () => ({ lastUpdate }) } }],
+    ]),
+    isEnabled: (layerId) => enabled.has(layerId),
+    async setEnabled(layerId, on, options) {
+      layerCalls.push([layerId, on, options.origin]);
+      if (on) enabled.add(layerId);
+      else enabled.delete(layerId);
+      return true;
+    },
+    subscribeActivity(callback) {
+      activity.add(callback);
+      return () => activity.delete(callback);
+    },
+    getAll: () => [],
+  };
+  return {
+    manager,
+    layerCalls,
+    enabled,
+    listening: () => activity.size,
+    landFirstData() {
+      lastUpdate = 2;
+      for (const callback of [...activity])
+        callback({ type: 'data-updated', layerId: 'military' });
+    },
+  };
+}
+
+function militaryEntryRunner(manager, controlCockpit) {
+  return createGevActionRunner({
+    viewer: {
+      clock: { onTick: { addEventListener: () => () => {} } },
+      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+      camera: { moveEnd: { addEventListener() {} } },
+    },
+    styleManager: {
+      getContextModeState: () => ({
+        mode: null,
+        active: false,
+        changing: false,
+      }),
+      setContextMode: () => assert.fail('Cockpit entry must not open Contacts'),
+      controlCockpit,
+      getCockpitState: () => ({ active: false }),
+      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'civil' }),
+    },
+    dataManager: manager,
+  });
+}
+
+test('a military voice entry waits for a just-switched-on layer to report its first data', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const fixture = militaryOffManager();
+  let searchedWithData = null;
+  const runner = militaryEntryRunner(fixture.manager, () => {
+    searchedWithData =
+      fixture.manager.layers.get('military').module.getStats().lastUpdate !==
+      null;
+    return { ok: true, action: 'control_cockpit', state: { active: true } };
+  });
+  const pending = runner('control_cockpit', {
+    action: 'enter',
+    targetLayer: 'military',
+    aircraftClass: 'helicopter',
+  });
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  assert.equal(searchedWithData, null, 'no search on an empty layer');
+  assert.equal(fixture.listening(), 1);
+  fixture.landFirstData();
+  const result = await pending;
+  assert.equal(result.ok, true, result.error);
+  assert.equal(searchedWithData, true);
+  assert.equal(fixture.listening(), 0, 'the wait lets go of the layer');
+});
+
+test('a failed military voice entry switches off only the layer it switched on', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  for (const militaryOn of [false, true]) {
+    const fixture = militaryOffManager({ militaryOn });
+    const runner = militaryEntryRunner(fixture.manager, () => ({
+      ok: false,
+      action: 'control_cockpit',
+      error: 'No helicopter military contact is available to enter',
+      state: { active: false },
+    }));
+    const pending = runner('control_cockpit', {
+      action: 'enter',
+      targetLayer: 'military',
+      aircraftClass: 'helicopter',
+    });
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    if (!militaryOn) fixture.landFirstData();
+    const result = await pending;
+    assert.equal(result.ok, false);
+    assert.match(result.error, /No helicopter military contact/);
+    assert.deepEqual(
+      fixture.layerCalls,
+      militaryOn
+        ? []
+        : [
+            ['military', true, 'voice'],
+            ['military', false, 'voice'],
+          ],
+    );
+    assert.equal(fixture.enabled.has('military'), militaryOn);
+  }
 });

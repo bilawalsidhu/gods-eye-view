@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeFirePerimeterSnapshot } from './records.js';
+import {
+  perimeterAnchorDegrees,
+  normalizeFirePerimeterSnapshot,
+  firePerimeterSnapshot,
+} from './records.js';
 
 const ring = [
   [-108.1, 35.2],
@@ -22,6 +26,7 @@ function feature(overrides = {}) {
       attr_IncidentTypeCategory: 'WF',
       attr_FireDiscoveryDateTime: 1757900000000,
       poly_DateCurrent: 1757950000000,
+      poly_PolygonDateTime: 1757940000000,
       attr_FireCause: 'Natural',
       attr_FireBehaviorGeneral: 'Active',
       attr_TotalIncidentPersonnel: 380,
@@ -59,6 +64,7 @@ test('a valid snapshot yields one row per incident with polygons preserved', () 
     category: 'WF',
     discoveredTime: 1757900000000,
     updatedTime: 1757950000000,
+    polygonTime: 1757940000000,
     cause: 'Natural',
     behavior: 'Active',
     personnel: 380,
@@ -90,6 +96,7 @@ test('optional attributes normalize to null rather than leaking undefined', () =
           attr_IncidentTypeCategory: null,
           attr_FireDiscoveryDateTime: null,
           poly_DateCurrent: null,
+          poly_PolygonDateTime: null,
           attr_FireCause: null,
           attr_FireBehaviorGeneral: null,
           attr_TotalIncidentPersonnel: null,
@@ -110,6 +117,7 @@ test('optional attributes normalize to null rather than leaking undefined', () =
       category: rows[0].category,
       discoveredTime: rows[0].discoveredTime,
       updatedTime: rows[0].updatedTime,
+      polygonTime: rows[0].polygonTime,
       cause: rows[0].cause,
       behavior: rows[0].behavior,
       personnel: rows[0].personnel,
@@ -126,6 +134,7 @@ test('optional attributes normalize to null rather than leaking undefined', () =
       category: null,
       discoveredTime: null,
       updatedTime: null,
+      polygonTime: null,
       cause: null,
       behavior: null,
       personnel: null,
@@ -198,4 +207,256 @@ test('a perimeter with no rings is skipped rather than rendered empty', () => {
   });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].stableId, 'other');
+});
+
+const NOW = 1758000000000;
+const rowsOf = (...features) => normalizeFirePerimeterSnapshot({ features });
+// feature() replaces all properties with the overrides' own: keep the rest.
+const fixture = (id, properties) =>
+  feature({ id, properties: { ...feature().properties, ...properties } });
+
+test('each WFIGS polygon becomes one piece of its fire, born when it was mapped', () => {
+  const hole = [
+    [-108.08, 35.22],
+    [-108.02, 35.22],
+    [-108.02, 35.25],
+    [-108.08, 35.22],
+  ];
+  const snapshot = firePerimeterSnapshot(
+    rowsOf(
+      feature({
+        geometry: { type: 'MultiPolygon', coordinates: [[ring, hole], [ring]] },
+      }),
+    ),
+    { fetchedAt: NOW - 1000, now: NOW },
+  );
+  assert.equal(snapshot.at, null);
+  assert.equal(snapshot.stale, false);
+  assert.equal(snapshot.fetchedAt, NOW - 1000);
+  assert.equal(
+    snapshot.note,
+    "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.",
+  );
+  assert.equal(snapshot.fires.length, 1);
+  const [fire] = snapshot.fires;
+  assert.equal(fire.id, '2026-NMGNF-000123');
+  assert.equal(fire.lastGrowthTime, 1757940000000);
+  assert.equal(fire.containedPct, 40);
+  assert.equal('stableId' in fire || 'polygons' in fire, false);
+  assert.ok(Math.abs(fire.anchor.lat - 35.2333) < 0.01);
+  assert.deepEqual(
+    snapshot.pieces.map(({ fireId, born, polygons, outline }) => [
+      fireId,
+      born,
+      polygons,
+      outline,
+    ]),
+    [
+      ['2026-NMGNF-000123', 1757940000000, [[ring, hole]], [ring, hole]],
+      ['2026-NMGNF-000123', 1757940000000, [[ring]], [ring]],
+    ],
+    'the outline is every ring, holes included',
+  );
+});
+
+test('a perimeter without its mapping time falls back to the last edit; a future time is unknown', () => {
+  const [fallback, future, futureEdit, none] = firePerimeterSnapshot(
+    rowsOf(
+      fixture(1, { poly_PolygonDateTime: null }),
+      fixture(2, {
+        attr_UniqueFireIdentifier: 'future',
+        poly_PolygonDateTime: NOW + 3600000,
+      }),
+      fixture(3, {
+        attr_UniqueFireIdentifier: 'future-edit',
+        poly_PolygonDateTime: null,
+        poly_DateCurrent: NOW + 3600000,
+      }),
+      fixture(4, {
+        attr_UniqueFireIdentifier: 'none',
+        poly_PolygonDateTime: null,
+        poly_DateCurrent: null,
+      }),
+    ),
+    { now: NOW },
+  ).fires;
+  assert.equal(fallback.lastGrowthTime, 1757950000000);
+  assert.equal(future.lastGrowthTime, null);
+  assert.equal(futureEdit.lastGrowthTime, null);
+  assert.equal(none.lastGrowthTime, null);
+  // A clock a few minutes ahead of ours is taken as now.
+  const skewed = firePerimeterSnapshot(
+    rowsOf(fixture(1, { poly_PolygonDateTime: NOW + 60000 })),
+    { now: NOW },
+  );
+  assert.equal(skewed.fires[0].lastGrowthTime, NOW);
+  assert.equal(skewed.pieces[0].born, NOW);
+});
+
+test('the revision follows fire ids and update times, not feed order', () => {
+  const a = feature();
+  const b = fixture(2, { attr_UniqueFireIdentifier: 'b' });
+  const revision = (...features) =>
+    firePerimeterSnapshot(rowsOf(...features), { now: NOW }).revision;
+  assert.equal(revision(a, b), revision(b, a));
+  assert.notEqual(
+    revision(a, b),
+    revision(
+      a,
+      fixture(2, { attr_UniqueFireIdentifier: 'b', poly_DateCurrent: 1 }),
+    ),
+  );
+  assert.notEqual(revision(a, b), revision(a));
+
+  const undated = fixture(1, { poly_DateCurrent: null });
+  const shifted = ring.map(([lon, lat]) => [lon + 1, lat]);
+  assert.notEqual(
+    revision(undated),
+    revision({
+      ...undated,
+      geometry: { type: 'Polygon', coordinates: [shifted] },
+    }),
+  );
+  assert.notEqual(
+    revision(undated),
+    revision(
+      fixture(1, {
+        poly_DateCurrent: null,
+        poly_PolygonDateTime: NOW,
+      }),
+    ),
+  );
+});
+
+test("a piece's id follows its fire's last edit, else its outline, and its place", () => {
+  const ids = (...features) =>
+    firePerimeterSnapshot(rowsOf(...features), { now: NOW }).pieces.map(
+      ({ fireId, id }) => `${fireId} ${id}`,
+    );
+  const two = {
+    geometry: { type: 'MultiPolygon', coordinates: [[ring], [ring]] },
+  };
+  assert.deepEqual(ids(feature(two)), [
+    '2026-NMGNF-000123 1757950000000/0',
+    '2026-NMGNF-000123 1757950000000/1',
+  ]);
+  assert.deepEqual(
+    ids(fixture(1, { poly_DateCurrent: 1757960000000 })),
+    ['2026-NMGNF-000123 1757960000000/0'],
+    'an edit draws the fire anew',
+  );
+  // Undated, a hash of the mapping time and outline stands in.
+  const undated = fixture(1, { poly_DateCurrent: null });
+  const shifted = {
+    ...undated,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [ring.map(([lon, lat]) => [lon + 1, lat])],
+    },
+  };
+  const [first] = ids(undated);
+  assert.match(first, /^2026-NMGNF-000123 h[0-9a-z]+\/0$/);
+  assert.equal(ids(undated)[0], first, 'the same each read');
+  assert.notEqual(ids(shifted)[0], first);
+});
+
+test('the snapshot carries staleness', () => {
+  const snapshot = firePerimeterSnapshot(rowsOf(feature()), {
+    stale: true,
+    fetchedAt: 'yesterday',
+    now: NOW,
+  });
+  assert.equal(snapshot.stale, true);
+  assert.equal(snapshot.fetchedAt, null);
+  assert.deepEqual(
+    snapshot.fires.map(({ id }) => id),
+    ['2026-NMGNF-000123'],
+  );
+});
+
+const square = [
+  [-108.2, 35.0],
+  [-108.0, 35.0],
+  [-108.0, 35.2],
+  [-108.2, 35.2],
+  [-108.2, 35.0],
+];
+const tiny = [
+  [-107.01, 34.0],
+  [-107.0, 34.0],
+  [-107.0, 34.01],
+  [-107.01, 34.0],
+];
+
+test('the card anchors at the vertex mean of the largest polygon', () => {
+  const anchor = perimeterAnchorDegrees([[tiny], [square]]);
+  assert.ok(Math.abs(anchor.lon - -108.1) < 1e-9);
+  assert.ok(Math.abs(anchor.lat - 35.1) < 1e-9);
+});
+
+test('incident cards stay at the dateline for closed, reversed and rotated outlines', () => {
+  const vertices = [
+    [179, 10],
+    [-179, 10],
+    [-179, 12],
+    [179, 12],
+  ];
+  for (let start = 0; start < vertices.length; start++) {
+    const rotated = [...vertices.slice(start), ...vertices.slice(0, start)];
+    for (const points of [rotated, [...rotated].reverse()]) {
+      const anchor = perimeterAnchorDegrees([[points.concat([points[0]])]]);
+      assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+      assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
+    }
+  }
+});
+
+test('incident card longitude treats vertices at either sign of 180 as the same meridian', () => {
+  for (const boundary of [-180, 180]) {
+    const ring = [
+      [179, 10],
+      [boundary, 10],
+      [-179, 10],
+      [-179, 12],
+      [179, 12],
+      [179, 10],
+    ];
+    const anchor = perimeterAnchorDegrees([[ring]]);
+    assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+    assert.ok(Math.abs(anchor.lat - 10.8) < 1e-9);
+  }
+});
+
+test('multipart cards compare polygon areas along short dateline edges', () => {
+  const ordinary = [
+    [10, 20],
+    [11, 20],
+    [11, 21],
+    [10, 21],
+    [10, 20],
+  ];
+  for (const width of [0.2, 2]) {
+    const crossing = [
+      [180 - width / 2, 10],
+      [-180 + width / 2, 10],
+      [-180 + width / 2, 10 + width],
+      [180 - width / 2, 10 + width],
+      [180 - width / 2, 10],
+    ];
+    for (const ring of [crossing, [...crossing].reverse()]) {
+      for (const polygons of [
+        [[ring], [ordinary]],
+        [[ordinary], [ring]],
+      ]) {
+        const anchor = perimeterAnchorDegrees(polygons);
+        if (width < 1) {
+          assert.ok(Math.abs(anchor.lon - 10.5) < 1e-9);
+          assert.ok(Math.abs(anchor.lat - 20.5) < 1e-9);
+        } else {
+          assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
+          assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
+        }
+      }
+    }
+  }
 });

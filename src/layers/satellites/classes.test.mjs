@@ -292,6 +292,8 @@ function recordingRendering(state) {
       if (point) point.show = show;
     },
     _setPointsShown() {},
+    _startPace() {},
+    _stopPace() {},
     _setOrbitPathShown(noradId, show) {
       if (state._orbitPaths.has(noradId)) rings.set(noradId, show);
     },

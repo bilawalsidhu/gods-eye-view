@@ -277,8 +277,8 @@ within the resulting scroll range. The left pass notifies its caller after
 alignment so the right pass can follow. Neither pass installs listeners, timers
 or observers; construction/import does no work. Scheduling, preference writes,
 share restoration and movement of controls between containers remain caller-owned.
-Existing helper imports from `cockpitMath.js` and `rightRailPolicy.js` remain
-compatible through re-exports.
+Existing imports of `resolveHudRailLayout` from `cockpitMath.js` remain
+compatible through a re-export.
 
 ### Adding a right-rail readout panel
 
@@ -350,10 +350,7 @@ reads the map center into a result after the action. The captured location stays
 fixed until another read; model changes resample that location, units reformat
 it, and × clears both reading and map marker.
 
-The timeline shows endpoint times and receives ticks, index, mode, playing,
-readout and disabled state. Its preview callback receives the tick and index and
-may return readout text; commits receive the same values after a 150 ms coalesced
-drag or final change. Feature adapters own data mapping and service subscriptions;
+Feature adapters own data mapping and service subscriptions;
 generic modules own DOM/listeners/timers and release them in `destroy()`.
 
 Keep persistence with panel chrome: collapse uses
@@ -361,7 +358,7 @@ Keep persistence with panel chrome: collapse uses
 not stored (`godsEyeView.v8.panelPos.<panelId>` stays reserved), and share state uses the registered panel id.
 Do not rename existing
 ids or reset persistence versions when adding a body. The WEATHER adapter is
-`src/ui/weatherPanel.js`; its observed-history selection remains transient.
+`src/ui/weatherPanel.js`; it keeps no time of its own and shows the world clock's.
 
 ## Visual input
 

@@ -6,7 +6,9 @@ import RailPanel from '../rail/RailPanel.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { STORY_TAG_LIMIT, STORY_TAGS } from '../../scenes/storyTags.js';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { vClassToggle } from '../rail/classToggle.js';
+import { followRootClass } from '../rail/rootClass.js';
 import SceneDialog from './panels/SceneDialog.vue';
 import SceneOptions from './SceneOptions.vue';
 import SceneShotList from './SceneShotList.vue';
@@ -47,10 +49,34 @@ async function importChosen(event) {
   await scenes.act('importFile', file);
   if (scenes.attached) input.value = '';
 }
+// The Cockpit's pitch ladder gives way while a panel in the stack is open
+// (cockpit.css), through a class on the page root (src/ui/rail/rootClass.js).
+// Panels move in and out of the stack at run time, so its children are
+// followed as they come and go.
+const stack = ref(null);
+let stopOpenClass = null;
+onMounted(() => {
+  const el = stack.value;
+  stopOpenClass = followRootClass(
+    el.ownerDocument,
+    'left-panel-open',
+    () =>
+      el.isConnected &&
+      [...el.children].some((child) =>
+        child.matches('.panel-collapsible:not(.collapsed)'),
+      ),
+    (observer) => {
+      observer.observe(el, { childList: true });
+      for (const child of el.children)
+        observer.observe(child, { attributes: true, attributeFilter: ['class'] });
+    },
+  );
+});
+onBeforeUnmount(() => stopOpenClass?.());
 </script>
 
 <template>
-  <div id="left-panel-stack" class="ui-scroll">
+  <div id="left-panel-stack" ref="stack" class="ui-scroll">
   <!-- Data Layer Toggle Panel -->
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <template #actions><LayerFinder part="buttons" /></template>

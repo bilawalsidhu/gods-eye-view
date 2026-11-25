@@ -91,18 +91,18 @@ export function createTracking({ state: layerState, services, parts, source }) {
       return;
     }
     const clearedNorad = layerState._trackedNorad;
-    clearFocusTarget('satellites', layerState._trackedNorad);
+    clearFocusTarget('satellites', clearedNorad);
 
     // Re-show the dot (hidden while the tracked dot drew it) and
     // restore the original group palette from the shared style table (WS-D3)
     parts.rendering._restorePoint(
-      layerState._trackedNorad,
+      clearedNorad,
       parts.controls._pointStyleFor(
-        layerState._trackedNorad,
-        layerState._catalog.get(layerState._trackedNorad)?.group,
+        clearedNorad,
+        layerState._catalog.get(clearedNorad)?.group,
       ),
       // Back to its class's visibility: a hidden class stays hidden.
-      parts.controls._classVisible(layerState._trackedNorad),
+      parts.controls._classVisible(clearedNorad),
     );
 
     // Invalidate the per-frame tracked-position cache (WS-D2)
@@ -110,9 +110,13 @@ export function createTracking({ state: layerState, services, parts, source }) {
     layerState._trackedFrameGeo = null;
 
     // Remove the tracked dot and orbit path (unless ISS — keep its path)
-    if (layerState._trackedNorad !== ISS_NORAD) {
-      parts.rendering._hideOrbitPath(layerState._trackedNorad);
+    if (clearedNorad !== ISS_NORAD) {
+      parts.rendering._hideOrbitPath(clearedNorad);
     }
+    // Released before the camera hears of it: a follow listener that reads
+    // the tracked position mid-release must find nothing, or it would publish
+    // the focus rectangle again after it was cleared above.
+    layerState._trackedNorad = null;
     if (layerState._viewer && !skipViewerUntrack)
       stopFollowing(layerState._viewer);
     layerState._followTarget = null;
@@ -120,7 +124,6 @@ export function createTracking({ state: layerState, services, parts, source }) {
       parts.rendering._removeTrackedEntity(layerState._trackedEntity);
       layerState._trackedEntity = null;
     }
-    layerState._trackedNorad = null;
     layerState._trackedDockedToStation = null;
     layerState._trackedDockedToIss = false;
     parts.controls._syncIssOrbit?.();

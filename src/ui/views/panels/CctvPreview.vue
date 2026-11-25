@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useCctvStore } from '../../stores/cctv.js';
@@ -17,12 +17,22 @@ const props = defineProps({
 });
 
 const cctv = useCctvStore();
-const { view, frame, sourceBadge } = storeToRefs(cctv);
+const { view, frame, live, sourceBadge } = storeToRefs(cctv);
 const chrome = usePanelChromeStore();
 const { panels } = storeToRefs(chrome);
 
-const same = computed(() => !props.cameraId || frame.value?.cameraId === props.cameraId);
-const src = computed(() => (same.value ? frame.value?.src || frame.value?.currentSrc || '' : ''));
+const matchesActive = computed(() => !props.cameraId || view.value?.activeCameraId === props.cameraId);
+const same = computed(() => matchesActive.value && (!props.cameraId || frame.value?.cameraId === props.cameraId));
+const src = computed(() => (same.value ? frame.value?.src || (!live.value && frame.value?.currentSrc) || '' : ''));
+const badge = computed(() => {
+  if (!matchesActive.value) return '';
+  return live.value ? (src.value ? t('SNAPSHOT') : '') : sourceBadge.value?.label;
+});
+const unavailable = computed(() => {
+  if (!view.value?.enabled) return false;
+  if (!matchesActive.value || view.value.stillSuppressed) return true;
+  return live.value && (!view.value.hasLiveSnapshot || (same.value && frame.value?.error));
+});
 const params = computed(() => {
   try {
     return new URL(src.value, location.origin).searchParams;
@@ -56,17 +66,19 @@ const onKey = (e) => {
 };
 // The cleanup also runs when the card unmounts, even if `big` turned false in
 // the same tick and the watcher never saw it.
-watch(big, (open, _, onCleanup) => {
+watch([big, () => props.cameraId], ([open, cameraId], _, onCleanup) => {
   if (!open) return;
-  cctv.showPreviewPopup(true);
+  cctv.showPreviewPopup(cameraId, true);
   document.addEventListener('keydown', onKey);
   onCleanup(() => {
-    cctv.showPreviewPopup(false);
+    cctv.showPreviewPopup(cameraId, false);
     document.removeEventListener('keydown', onKey);
   });
 });
-onMounted(() => cctv.showPreviewCard(true));
-onBeforeUnmount(() => cctv.showPreviewCard(false));
+watch(() => props.cameraId, (cameraId, _, onCleanup) => {
+  cctv.showPreviewCard(cameraId, true);
+  onCleanup(() => cctv.showPreviewCard(cameraId, false));
+}, { immediate: true });
 
 function openPanel() {
   if (panels.value['cctv-panel']?.collapsed !== false) chrome.act('toggle', 'cctv-panel');
@@ -77,8 +89,9 @@ function openPanel() {
   <section class="cctv-preview">
     <div class="cctv-preview__frame" :class="{ 'is-empty': !src }">
       <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
+      <span v-else-if="unavailable">{{ t('FRAME · UNAVAILABLE') }}</span>
       <span v-else>{{ t('Acquiring frame…') }}</span>
-      <span v-if="sourceBadge?.label" class="cctv-preview__badge">{{ sourceBadge.label }}</span>
+      <span v-if="badge" class="cctv-preview__badge">{{ badge }}</span>
       <UiButton v-if="src" class="cctv-preview__expand" :label="t('Show a bigger view')" @click="big = true">
         <UiIcon name="open_in_full" :size="null" />
       </UiButton>
@@ -89,11 +102,12 @@ function openPanel() {
           <header class="cctv-popup__head">
             <UiIcon name="videocam" :size="null" />
             <strong>{{ name || t('Camera view') }}</strong>
-            <span v-if="sourceBadge?.label" class="cctv-popup__badge">{{ sourceBadge.label }}</span>
+            <span v-if="badge" class="cctv-popup__badge">{{ badge }}</span>
             <UiCloseButton class="cctv-popup__close" glyph="icon" :label="t('Close')" @click="big = false" />
           </header>
-          <img :src="src" :alt="name || t('Camera frame')" />
-          <figcaption v-if="facts.length">
+          <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
+          <figcaption v-if="unavailable && !src">{{ t('FRAME · UNAVAILABLE') }}</figcaption>
+          <figcaption v-else-if="facts.length">
             <span v-for="fact in facts" :key="fact.label">{{ fact.label }} <b>{{ fact.value }}</b></span>
           </figcaption>
         </figure>

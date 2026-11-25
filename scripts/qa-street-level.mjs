@@ -225,9 +225,12 @@ function newFixture(overrides = {}) {
   };
 }
 
-/** Load the app and dismiss the first-run dialog. */
+/** Load without the opening so its flight cannot move the camera during
+ * the gate's own moves, then dismiss the first-run dialog. */
 async function boot(page, url) {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  const address = new URL(url);
+  address.searchParams.set('intro', '0');
+  await page.goto(address.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.dataManager), {
     timeout: 150_000,
   });

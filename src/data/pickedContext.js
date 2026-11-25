@@ -13,8 +13,9 @@ import { findPickOwner, resolvePickId } from './pickRegistry.js';
  *     `meta`; the store record already carries the label and position voice
  *     uses everywhere else.
  *  2. Pick owners. Layers (aircraft, satellites, vessels) register an
- *     ownership predicate in `pickRegistry`; the owning layer's
- *     `findByQuery` turns the pick id into a live descriptor.
+ *     ownership predicate in `pickRegistry`. The owning layer may map a
+ *     helper pick to its record id with `recordIdForPick`, then
+ *     `findByQuery` supplies a live descriptor.
  *
  * Trails claim their pick ids only to make clicks inert, so they never
  * resolve. Disabled layers never resolve: what the user cannot see is not
@@ -107,16 +108,27 @@ export function resolvePickedContext(picked, { dataManager = null } = {}) {
   if (!layerId || IGNORED_OWNERS.has(layerId)) return null;
   if (dataManager?.isEnabled && !dataManager.isEnabled(layerId)) return null;
   const layer = dataManager?.layers?.get?.(layerId);
+  let id = pickId;
+  try {
+    // A layer whose helper geometry picks under its own ids names the record.
+    if (layer?.module?.recordIdForPick) {
+      const mapped = layer.module.recordIdForPick(pickId, picked);
+      if (mapped == null && picked.set) return null;
+      id = mapped ?? pickId;
+    }
+  } catch {
+    // Keep the original pick ID for the normal lookup.
+  }
   let found = null;
   try {
-    found = layer?.module?.findByQuery?.(pickId) || null;
+    found = layer?.module?.findByQuery?.(id) || null;
   } catch {
     found = null;
   }
   return {
     layerId,
-    id: pickId,
-    label: descriptorLabel(found, text(layer?.name) || pickId),
+    id,
+    label: descriptorLabel(found, text(layer?.name) || id),
     kind: pickedKindForLayer(layerId),
     lat: finite(found?.latitude),
     lon: finite(found?.longitude),

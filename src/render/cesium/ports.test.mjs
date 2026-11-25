@@ -15,6 +15,7 @@ test('capabilities follow what the scene supports', () => {
     'pointVisibility',
     'followAutodetect',
     'cameraChangeThreshold',
+    'holdChanges',
     'columns',
     'motionSegments',
     'courseGlide',
@@ -43,6 +44,7 @@ test('capabilities follow what the scene supports', () => {
     'quads',
     'meshes',
     'fields',
+    'lineBreaks',
   ];
   assert.deepEqual(cesiumCapabilities({}), [...draw, ...effects]);
   // A scene with a globe reads its visibility back.

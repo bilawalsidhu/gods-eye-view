@@ -258,6 +258,11 @@ test('an enabled refresh bins the snapshot into coloured ground cells', async ()
     assert.equal(cell.height, 'clampGround');
   }
   assert.equal(fills().spec.pickable, false, 'cells never take part in picks');
+  assert.equal(
+    fills().spec.clampTo,
+    'overlay',
+    'cells draw over the 3D tiles, not draped through them',
+  );
   const stats = layer.getStats();
   assert.equal(stats.count, 2);
   assert.equal(stats.error, null);

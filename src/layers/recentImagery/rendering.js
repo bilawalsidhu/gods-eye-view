@@ -1,7 +1,7 @@
 /**
- * Draped-imagery renderer for the Recent Imagery layer: at most two GIBS
- * imagery layers (slot `a`, left of a swipe; slot `b`, right) through the
- * renderer's globe port, draped on whichever surface the map stack draws.
+ * Recent Imagery drapes two slots through the renderer's globe port, slot
+ * `a` left of a swipe and slot `b` right. Each slot drapes up to two GIBS
+ * layers, one per available part, on whichever surface the map stack draws.
  * Against the basemap slot `a` splits left and slot `b` stays empty. Tile
  * requests pass a small semaphore of our own, shared by both slots, through
  * each layer's admission hook; the renderer's own request limits stay
@@ -15,7 +15,13 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { markBaseTileset } from '../../render/baseTilesets.js';
 import { drawOf } from '../../render/rendererOf.js';
-import { PRODUCTS, gibsTemplate } from './model.js';
+import {
+  PRODUCTS,
+  boxKey,
+  gibsTemplate,
+  lonSpanDeg,
+  nonCrossingBoxes,
+} from './model.js';
 
 const SLOT_IDS = ['a', 'b'];
 const SPLITS = new Set(['left', 'right', 'none']);
@@ -29,8 +35,27 @@ function clampAlpha(value) {
   return Number.isFinite(alpha) ? Math.max(0, Math.min(1, alpha)) : 1;
 }
 
-const boxKey = (box) =>
-  [box.west, box.south, box.east, box.north].map(Number).join(',');
+/** One comparable key for a slot's draped parts. */
+const partsKey = (parts) => parts.map(boxKey).sort().join(';');
+
+/**
+ * The parts of a box a slot drapes. The VIIRS JPEG has no alpha and would
+ * draw an empty side black, so it drapes only parts Worldview confirmed
+ * present, and no part of a dateline box before the probe answers. A PNG
+ * drapes every part not confirmed empty.
+ */
+function drapedParts(candidate, box, { availableBoxes, emptyBoxes }) {
+  const parts = nonCrossingBoxes(box);
+  const keys = (list) => new Set(list.map(boxKey));
+  if (PRODUCTS[candidate.product]?.format !== 'jpg') {
+    if (!Array.isArray(emptyBoxes)) return parts;
+    const empty = keys(emptyBoxes);
+    return parts.filter((part) => !empty.has(boxKey(part)));
+  }
+  if (!Array.isArray(availableBoxes)) return parts.length > 1 ? [] : parts;
+  const proven = keys(availableBoxes);
+  return parts.filter((part) => proven.has(boxKey(part)));
+}
 
 /**
  * Admit a tile request while the semaphore has room. A request that finds
@@ -77,7 +102,7 @@ export function createRecentImageryRenderer({
   let host = NO_HOST;
   let destroyed = false;
   const admission = { limit: maxTileRequests, inFlight: 0 };
-  /** @type {Record<'a'|'b', null | { layer: object, globe: object, candidate: object, box: object, alpha: number, split: string }>} */
+  /** @type {Record<'a'|'b', null | { layers: Array<object>, globe: object, candidate: object, parts: Array<object>, alpha: number, split: string }>} */
   const owned = { a: null, b: null };
   const admit = admitTileRequests(admission, requestRender);
 
@@ -105,36 +130,53 @@ export function createRecentImageryRenderer({
     const record = owned[slotId];
     if (!record) return false;
     owned[slotId] = null;
-    record.layer.remove();
+    for (const layer of record.layers) layer.remove();
     return true;
   }
 
   function applyLook(record) {
-    record.layer.alpha = record.alpha;
-    record.layer.split = SPLITS.has(record.split) ? record.split : 'none';
+    for (const layer of record.layers) {
+      layer.alpha = record.alpha;
+      layer.split = SPLITS.has(record.split) ? record.split : 'none';
+    }
   }
 
-  function mount(slotId, { candidate, box, alpha, split }) {
-    const layer = host.globe.imagery.add(specFor(candidate, box));
-    owned[slotId] = { layer, globe: host.globe, candidate, box, alpha, split };
+  function mount(slotId, { candidate, parts, alpha, split }) {
+    if (!parts.length) return false;
+    owned[slotId] = {
+      layers: parts.map((part) =>
+        host.globe.imagery.add(specFor(candidate, part)),
+      ),
+      globe: host.globe,
+      candidate,
+      parts,
+      alpha,
+      split,
+    };
     applyLook(owned[slotId]);
+    return true;
   }
 
   return {
     /**
-     * Drape a candidate into a slot. The same candidate on the same host only
-     * updates its look; anything else replaces the slot's layer.
+     * Drape the parts of a candidate's box that the evidence allows (see drapedParts).
+     * The same candidate on the same port keeps the layer of each unchanged part.
      * @param {'a'|'b'} slotId
      * @param {object} candidate
      * @param {object} box Degrees box.
-     * @param {{ alpha?: number, splitDirection?: 'left'|'right'|'none' }} [look]
+     * @param {{ alpha?: number, splitDirection?: 'left'|'right'|'none', availableBoxes?: object[] | null, emptyBoxes?: object[] | null }} [look]
      * @returns {boolean} Whether a layer is now draped for the slot.
      */
     showSlot(
       slotId,
       candidate,
       box,
-      { alpha = 1, splitDirection = 'none' } = {},
+      {
+        alpha = 1,
+        splitDirection = 'none',
+        availableBoxes = null,
+        emptyBoxes = null,
+      } = {},
     ) {
       if (destroyed || !candidate?.key || !box) return false;
       if (!host.globe) {
@@ -143,21 +185,52 @@ export function createRecentImageryRenderer({
       }
       const current = owned[slotId];
       const look = { alpha: clampAlpha(alpha), split: splitDirection };
+      const parts = drapedParts(candidate, box, { availableBoxes, emptyBoxes });
       if (
         current &&
         current.globe === host.globe &&
         current.candidate.key === candidate.key &&
-        boxKey(current.box) === boxKey(box)
+        parts.length
       ) {
-        if (current.alpha !== look.alpha || current.split !== look.split) {
+        if (partsKey(current.parts) !== partsKey(parts)) {
+          const previous = new Map(
+            current.parts.map((part, i) => [boxKey(part), current.layers[i]]),
+          );
+          // A new half goes right above the slot's surviving half, so both
+          // halves keep the same place against the other slot.
+          const survivor = parts
+            .map((part) => previous.get(boxKey(part)))
+            .find(Boolean);
+          const at = survivor
+            ? host.globe.imagery.list().indexOf(survivor) + 1
+            : undefined;
+          const layers = parts.map((part) => {
+            const key = boxKey(part);
+            const layer = previous.get(key);
+            previous.delete(key);
+            return (
+              layer ?? host.globe.imagery.add(specFor(candidate, part), at)
+            );
+          });
+          for (const layer of previous.values()) layer.remove();
+          Object.assign(current, { layers, parts, ...look });
+          applyLook(current);
+          requestRender('recent-imagery-show');
+        } else if (
+          current.alpha !== look.alpha ||
+          current.split !== look.split
+        ) {
           Object.assign(current, look);
           applyLook(current);
           requestRender('recent-imagery-look');
         }
         return true;
       }
-      removeOwned(slotId);
-      mount(slotId, { candidate, box, ...look });
+      const removed = removeOwned(slotId);
+      if (!mount(slotId, { candidate, parts, ...look })) {
+        if (removed) requestRender('recent-imagery-hide');
+        return false;
+      }
       requestRender('recent-imagery-show');
       return true;
     },
@@ -221,7 +294,7 @@ export function createRecentImageryRenderer({
       return out;
     },
 
-    /** Number of layers this renderer owns (never above two). */
+    /** Number of slots this renderer owns (never above two). A dateline box uses up to two imagery layers in its slot. */
     ownedCount() {
       return SLOT_IDS.filter((slotId) => owned[slotId]).length;
     },
@@ -247,11 +320,11 @@ let previewSeq = 0;
 
 /** A box with no area has no fill: a press, or a drag along one axis. */
 const hasArea = (box) =>
-  Boolean(box) && box.east > box.west && box.north > box.south;
+  Boolean(box) && lonSpanDeg(box.west, box.east) > 0 && box.north > box.south;
 
 /** A box with no extent draws nothing: a press that has not moved yet. */
 const hasExtent = (box) =>
-  Boolean(box) && (box.east > box.west || box.north > box.south);
+  Boolean(box) && (lonSpanDeg(box.west, box.east) > 0 || box.north > box.south);
 
 /**
  * The box tool's preview: the box being dragged, a translucent fill and a

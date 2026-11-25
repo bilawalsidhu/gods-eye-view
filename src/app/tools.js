@@ -17,10 +17,12 @@ import {
 import { initGeoFileImport } from '../ui/geoFileImport.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { createContextCardOpener } from '../ui/stores/entityCard.js';
 import { initImageryBoxTool } from '../ui/imageryBoxTool.js';
 import { createRecentImageryPanel } from '../ui/recentImagery.js';
 import { createDataLibrary } from '../library/controller.js';
 import { flyToLibraryExtent } from '../library/camera.js';
+import { openingPlaying } from './openingIntro.js';
 import { createLibraryBrowser } from '../ui/libraryBrowser.js';
 import { useDataLibraryStore } from '../ui/stores/dataLibrary.js';
 import { localGeoJsonServices } from './localGeojsonServices.js';
@@ -38,6 +40,7 @@ import { installLayerReleaseTrim } from '../sceneCommandRelease.js';
 import {
   getRenderGovernorDiagnostics,
   governorRequestRender,
+  FOLLOW_FRAME_RATE,
   holdContinuousRender,
   releaseContinuousRender,
 } from '../renderGovernor.js';
@@ -87,8 +90,9 @@ export function createApplicationTools({
     installGlobeInViewRecovery(viewer, {
       // The scope mask hides everything outside its keyhole.
       keyholeRadius: () => (isScopeMaskEnabled() ? KEYHOLE_OUTER_RADIUS : 0),
-      // An authored scene frames its own shots, holds included.
-      paused: () => sceneDirector.running,
+      // An authored scene frames its own shots, holds included, and the
+      // opening starts with the globe as a speck.
+      paused: () => sceneDirector.running || openingPlaying(),
     }),
   );
   onSceneDirector?.(sceneDirector);
@@ -272,7 +276,8 @@ export function createApplicationTools({
   // The follow camera recomputes the tracked target's dead-reckon position
   // every frame — tracking anything is a per-frame animation. (perf wave 2)
   const removeTrackingListener = onFollowChanged(viewer, (followed) => {
-    if (followed) holdContinuousRender('tracked-entity');
+    if (followed)
+      holdContinuousRender('tracked-entity', { maxFps: FOLLOW_FRAME_RATE });
     else releaseContinuousRender('tracked-entity');
   });
 
@@ -349,6 +354,8 @@ export function createApplicationTools({
     dataManager,
     sceneDirector,
     annotations,
+    // A voice or chat selection opens its card in Context, as a click does.
+    contextCard: createContextCardOpener(applicationPinia()),
   });
   defer(() => {
     voiceCommands.stop({ removeUi: true });

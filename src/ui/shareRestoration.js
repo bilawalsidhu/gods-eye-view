@@ -324,7 +324,16 @@ export class ShareRestoration {
       if (vessel) void this._restoreSharedVessel(vessel, current);
       // The token tells listeners whether anyone navigated after the
       // restore's flight landed (while the layers were still loading).
-      settle({ status: 'settled', share, layers, tracking, navigationToken });
+      // `thing` says the share is of a thing (a followed or selected one),
+      // not only a view.
+      settle({
+        status: 'settled',
+        share,
+        layers,
+        tracking,
+        navigationToken,
+        thing: state?.shareView?.kind === 'thing',
+      });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);
