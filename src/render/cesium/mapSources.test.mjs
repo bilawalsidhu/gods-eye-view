@@ -329,7 +329,12 @@ test('both Google 3D routes keep tiles drawing while draped imagery loads', asyn
   assert.equal(await createGoogleIonTileset(sdk, 'token'), 'ion');
   assert.deepEqual(calls[0], [
     { key: 'key', onlyUsingWithGoogleGeocoder: true },
-    { asynchronouslyLoadImagery: true, enableCollision: true },
+    {
+      cacheBytes: 1536 * 1024 * 1024,
+      maximumCacheOverflowBytes: 1024 * 1024 * 1024,
+      asynchronouslyLoadImagery: true,
+      enableCollision: true,
+    },
   ]);
   assert.equal(calls[1][0].id, 2275207);
   assert.equal(calls[1][0].accessToken, 'token');

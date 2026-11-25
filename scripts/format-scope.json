@@ -746,6 +746,7 @@
   "src/maps/credits.js",
   "src/maps/defaultSources.js",
   "src/render/cesium/google3d.js",
+  "src/render/cesium/google3d.test.mjs",
   "src/render/cesium/mapImagery.js",
   "src/maps/registry.js",
   "src/render/cesium/mapTerrain.js",
