@@ -788,14 +788,19 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     timer = setInterval(refresh, REFRESH_MS);
     shell.value?.openPanel?.();
     const current = card.value;
-    if (fly) shell.value?.flyTo?.(current, { fromSelection: true });
+    // An explicit pick (a row, a search) is a click on the item: its layer
+    // selects and centres it when it can, else the camera flies to it.
+    if (fly && !shell.value?.pick?.(current))
+      shell.value?.flyTo?.(current, { fromSelection: true });
     requestRoute(current?.identity);
     return true;
   }
 
   function clear() {
     generation++;
-    if (following.value) shell.value?.letGo?.(card.value);
+    // Closing the card deselects its item in its layer (the shell checks
+    // the item is still the one selected or followed).
+    if (card.value) shell.value?.letGo?.(card.value);
     following.value = null;
     clearInterval(timer);
     timer = null;

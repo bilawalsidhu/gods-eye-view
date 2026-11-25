@@ -21,6 +21,11 @@ import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import {
+  _resetSelectionForTest,
+  claimSelection,
+  releaseSelection,
+} from '../data/clickSelect.js';
+import {
   registerPickOwner,
   setClickCardHitTest,
   unregisterPickOwner,
@@ -531,7 +536,7 @@ test('Nearby rows give the navigation owner the wildlife cell and locator pin fr
   }
 });
 
-test('an explicit moving row takes over a pending place flight and is flown to, never followed', async (t) => {
+test('an explicit moving row takes over a pending place flight and is picked in its layer, as a click picks it', async (t) => {
   const viewer = { scene: {} };
   const input = fakeInput(viewer);
   const flights = [];
@@ -543,10 +548,19 @@ test('an explicit moving row takes over a pending place flight and is flown to, 
     },
   });
   const aircraft = { id: 'abc123', icao24: 'abc123', lat: 30, lon: -97 };
+  const picks = [];
   const layer = {
     id: 'flights',
     enabled: true,
-    module: { getAnalystRecords: () => [aircraft] },
+    module: {
+      getAnalystRecords: () => [aircraft],
+      // The layer selects it and centres it once, as a click on it does.
+      pickById: (id, options) => {
+        picks.push([id, options.origin]);
+        flights.push('aircraft centred');
+        return true;
+      },
+    },
   };
   const dm = {
     layers: new Map([[layer.id, layer]]),
@@ -591,18 +605,81 @@ test('an explicit moving row takes over a pending place flight and is flown to, 
     [],
     'passive selection does not move the host camera',
   );
+  assert.deepEqual(picks, [], 'nor selects it in its layer');
   assert.equal(generation, 1, 'the place lookup still owns its flight');
   assert.ok(store.select(target, { fly: true }));
   pending.resolve();
   await done;
-  assert.deepEqual(flights, ['aircraft']);
+  assert.deepEqual(picks, [['abc123', 'user']], 'its layer selects it');
+  assert.deepEqual(flights, ['aircraft centred'], 'centred once, no framing');
   const tracked = [];
   useOmnibarStore(pinia).connectRunner((name, args) =>
     tracked.push([name, args.query]),
   );
   assert.ok(store.select(target, { fly: true }));
   assert.deepEqual(tracked, [], 'a pick never follows, runner or not');
-  assert.deepEqual(flights, ['aircraft', 'aircraft']);
+  assert.deepEqual(picks.length, 2);
+});
+
+test('closing the card deselects its item in its layer, followed or only selected', (t) => {
+  _resetSelectionForTest();
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  let followed = null;
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ heading: 0 }),
+      on: () => () => {},
+      get followed() {
+        return followed;
+      },
+      follow: (target) => (followed = target),
+    },
+  });
+  const aircraft = { id: 'abc123', icao24: 'abc123', lat: 30, lon: -97 };
+  const stops = [];
+  const layer = {
+    id: 'flights',
+    enabled: true,
+    module: {
+      getAnalystRecords: () => [aircraft],
+      stopTracking: (options) => {
+        stops.push(options.origin);
+        releaseSelection('flights', 'abc123');
+      },
+    },
+  };
+  const dm = {
+    layers: new Map([[layer.id, layer]]),
+    getAll: () => [layer],
+    isEnabled: () => true,
+  };
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => dm,
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    disconnect();
+    input.destroy();
+    unbind();
+    _resetSelectionForTest();
+  });
+  const target = store.nearbyLayers(30, -97, { radiusKm: 25 })[0].items[0]
+    .identity;
+  // A click selected it in its layer: the camera does not follow it.
+  claimSelection('flights', 'abc123');
+  assert.ok(store.select(target));
+  store.clear();
+  assert.deepEqual(stops, ['user'], 'the layer lets it go');
+  // A card whose item another layer's selection replaced lets nothing go.
+  claimSelection('flights', 'abc123');
+  assert.ok(store.select(target));
+  claimSelection('ais-live-vessels', 'v1');
+  store.clear();
+  assert.deepEqual(stops, ['user']);
 });
 
 test('a quiet spell between thresholded changes keeps an active camera move unsettled', (t) => {

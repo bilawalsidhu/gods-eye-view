@@ -453,6 +453,33 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Select a satellite by NORAD id as a click on its dot does: selected
+     * with its orbit and card, centred once, not followed
+     * (src/data/clickSelect.js).
+     * @param {string|number} noradId NORAD catalog number.
+     * @param {{origin?: string}} [options]
+     * @returns {boolean} True if the satellite was selected.
+     */
+    pickById(noradId, { origin = 'user' } = {}) {
+      const id = Number(noradId);
+      if (
+        !Number.isFinite(id) ||
+        !layerState._viewer ||
+        !layerState._catalog.has(id) ||
+        !layerState._points.has(id)
+      )
+        return false;
+      parts.tracking._cancelPendingTrackingRestore();
+      if (layerState._trackedNorad === id) {
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+        return true;
+      }
+      parts.tracking._trackSatellite(id, { origin, follow: false });
+      return layerState._trackedNorad === id;
+    },
+
+    /**
      * Track a satellite by NORAD id (camera follow + orbit path + highlight),
      * same path as clicking its point.
      * @param {string|number} noradId NORAD catalog number.

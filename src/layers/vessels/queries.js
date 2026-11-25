@@ -520,6 +520,19 @@ export function createQueries({
     },
 
     /**
+     * Select a vessel by id as a click on it does: selected with its trail
+     * and card, and centred once (src/data/clickSelect.js).
+     * @param {string|number} id Vessel id.
+     * @returns {boolean} True if a matching vessel was selected.
+     */
+    pickById(id) {
+      if (id === null || id === undefined) return false;
+      const record = recordFor(String(id).trim());
+      if (!record || !state.feed.enabled) return false;
+      return components.selection.selectAndFocusVessel(record);
+    },
+
+    /**
      * Select a vessel by id via the same path as a map click
      * (highlight + HUD update). An AIS feed's vessels are keyed by MMSI.
      * @param {string|number} id Vessel id.

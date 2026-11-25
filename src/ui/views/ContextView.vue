@@ -61,7 +61,7 @@ watch(
   ([layerId, id]) => {
     if (!['flights', 'military'].includes(layerId) || !id || contactsMatchCard.value) return;
     // Contacts has already picked whom to follow. Only update the Inspector.
-    entityCards.select({ layerId, id, label: awareness.value?.subjectLabel }, { follow: false });
+    entityCards.select({ layerId, id, label: awareness.value?.subjectLabel });
   },
 );
 

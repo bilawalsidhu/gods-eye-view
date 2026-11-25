@@ -7,6 +7,7 @@ import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
+import { currentSelection } from '../data/clickSelect.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -147,15 +148,45 @@ export function installEntityContext({
     ).catch(() => {});
   }
 
-  // Closing the card lets go of the camera, when the camera follows the
-  // card's own item and nothing else took it over since.
+  /** Whether `card`'s item is the one selection (src/data/clickSelect.js). */
+  const selectsCard = (card, selection = currentSelection()) =>
+    Boolean(
+      card &&
+      selection &&
+      selection.layerId === card.layerId &&
+      selection.id === String(card.identity?.id),
+    );
+
+  // A pick from a Context row or a search is a click on the item: its layer
+  // selects it (track, trail or orbit shown) and centres it once, without
+  // following it. True when its layer took the pick.
+  function pick(card) {
+    const module = getDataManager()?.layers?.get?.(card?.layerId)?.module;
+    const id = card?.identity?.id;
+    if (typeof module?.pickById !== 'function' || !id) return false;
+    navigateToSelection(() => {
+      try {
+        module.pickById(id, { origin: 'user' });
+      } catch {
+        // A layer going away meanwhile has nothing to select.
+      }
+    });
+    return true;
+  }
+
+  // Closing the card lets go of its item: the layer deselects it (and lets
+  // go of the camera, when the camera follows it), unless something else
+  // took over since.
   function letGo(card) {
-    if (!followsCard(card)) return;
+    if (!followsCard(card) && !selectsCard(card)) return;
     // Only the card's own layer lets go, as the person's own action; other
     // layers' selections stay as they are.
     const layer = getDataManager()?.layers?.get?.(card.layerId);
     try {
-      layer?.module?.stopTracking?.({ origin: 'user' });
+      const module = layer?.module;
+      if (typeof module?.stopTracking === 'function')
+        module.stopTracking({ origin: 'user' });
+      else if (card.layerId === 'ais-live-vessels') module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.
     }
@@ -279,6 +310,7 @@ export function installEntityContext({
     dataManager: getDataManager,
     openPanel,
     flyTo,
+    pick,
     follow,
     letGo,
     reselect,

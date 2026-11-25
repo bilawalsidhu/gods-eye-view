@@ -833,6 +833,30 @@ export function createQueries({
     },
 
     /**
+     * Select an aircraft by ICAO24 address as a click on it does: selected
+     * with its trail and card, centred once, not followed
+     * (src/data/clickSelect.js). A click on the selected one centres it
+     * again, unless the camera follows it.
+     * @param {string} icao24
+     * @param {{origin?: string}} [options]
+     * @returns {boolean} True if the aircraft exists and was selected.
+     */
+    pickById(icao24, { origin = 'user' } = {}) {
+      if (!icao24) return false;
+      let id = String(icao24).trim();
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) return false;
+      parts.tracking._cancelPendingTrackingRestore();
+      if (flightState._trackedIcao === id) {
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+        return true;
+      }
+      parts.tracking._trackFlight(id, { origin, follow: false });
+      return flightState._trackedIcao === id;
+    },
+
+    /**
      * Start camera-tracking an aircraft by ICAO24 address.
      * @param {string} icao24 - ICAO 24-bit transponder address.
      * @returns {boolean} True if the aircraft exists and tracking started.
