@@ -209,3 +209,27 @@ test('a renamed average field keeps the last good snapshot instead of a fresh em
   assert.equal(after.body.stale, true);
   assert.equal(after.body.readings.length, 1);
 });
+
+test('a page whose averages are all unreadable keeps the last good snapshot', async () => {
+  let clock = NOW,
+    unreadable = false;
+  const request = harness({
+    apiKey: () => 'secret',
+    now: () => clock,
+    fetchImpl: async () =>
+      Response.json({
+        total: 2,
+        records: [
+          ogdRow(unreadable ? { avg_value: 'NA' } : {}),
+          ogdRow({ pollutant_id: 'NO2', avg_value: unreadable ? 'NA' : '9' }),
+        ],
+      }),
+  });
+  assert.equal((await request()).body.readings.length, 2);
+  unreadable = true;
+  clock += 21 * 60_000;
+  const after = await request();
+  assert.equal(after.status, 200);
+  assert.equal(after.body.stale, true);
+  assert.equal(after.body.readings.length, 2);
+});

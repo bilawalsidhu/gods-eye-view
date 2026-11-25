@@ -410,11 +410,23 @@ export function createOpenAqAcquisition({
       throw Object.assign(error(503, 'OpenAQ request unavailable'), {
         retryAt: now() + 60_000,
       });
-    const catalogDone = state.pages.every((p) => p.done);
     const waiting = eligible.filter(needsCheck);
     // A station's own backoff stays out of the view's retry time: a later
     // refresh asks it again once that backoff ends.
     const ready = waiting.some((s) => !backoff(s));
+    // Nothing acquired and every station left only waits out its backoff
+    // after failing: still a failure, asked again when the first one ends.
+    if (!limited && !state.readings.size && !ready && waiting.some(backoff))
+      throw Object.assign(error(503, 'OpenAQ request unavailable'), {
+        retryAt: waiting.reduce(
+          (at, s) =>
+            backoff(s)
+              ? Math.min(at, state.failed.get(s.stationId) + STATION_RETRY_MS)
+              : at,
+          Infinity,
+        ),
+      });
+    const catalogDone = state.pages.every((p) => p.done);
     return {
       schemaVersion: 1,
       source: 'OpenAQ',

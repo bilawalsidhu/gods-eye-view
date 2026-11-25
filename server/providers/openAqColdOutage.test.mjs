@@ -154,3 +154,43 @@ test('OpenAQ cold station outage: listed stations whose first checks all fail ar
   // The answer says when to ask again.
   assert.equal(failure.retryAt, start + 60_000);
 });
+
+test('OpenAQ cold station outage: passes that only wait out the failed stations stay a failure until a check succeeds', async () => {
+  let clock = start,
+    down = true;
+  const { fetchImpl } = fake({
+    clock: () => clock,
+    stations: () => [loc(1, 20, 0, start), loc(2, 20.2, 0, start)],
+    fail: (url) => (down && /\/latest$/.test(url.pathname) ? 503 : 0),
+  });
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl,
+  });
+  const view = [10, -10, 30, 10, 20, 0];
+  await assert.rejects(source.getSnapshot({ view }), (e) => e.status === 503);
+  for (const after of [60_000, 120_000]) {
+    clock = start + after;
+    let result = null,
+      failure = null;
+    try {
+      result = await source.getSnapshot({ view });
+    } catch (e) {
+      failure = e;
+    }
+    assert.equal(
+      result,
+      null,
+      `t+${after / 1000}s resolved: stale=${result?.stale} readings=${result?.readings.length} partial=${result?.partial}`,
+    );
+    assert.equal(failure.status, 503);
+    // Asked again when the first station's backoff ends.
+    assert.equal(failure.retryAt, start + 5 * 60_000);
+  }
+  down = false;
+  clock = start + 5 * 60_000;
+  const recovered = await source.getSnapshot({ view });
+  assert.equal(recovered.readings.length, 2);
+  assert.equal(recovered.stale, false);
+});
