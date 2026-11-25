@@ -160,7 +160,8 @@ test('thermal controls wait for activation and use the real generated parameter 
   };
   // A swallowed click resolves normally; the helper must notice no activation.
   page.$eval = async (selector, fn, ...args) => {
-    if (selector.startsWith('.style-btn')) return fn(new Element(), ...args);
+    if (selector.startsWith('.visual-presets__style'))
+      return fn(new Element(), ...args);
     const label = selector.match(/aria-label="([^"]+)"/)[1];
     const slider = container.querySelector(`[aria-label="${label}"]`);
     assert.ok(slider);

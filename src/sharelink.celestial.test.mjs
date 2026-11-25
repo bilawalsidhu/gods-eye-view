@@ -320,8 +320,8 @@ test('camera-only, partial, and malformed panel shares remain valid incoming sta
 // Stack panel. Nothing is owed to a link that carried them — no build with
 // either one ever shipped publicly — so the parser no longer knows them, and
 // each takes the ordinary unknown path: an unrecognized panel token is skipped,
-// and an unrecognized stack id lands on the controller's photoreal fallback
-// (pinned live in `scripts/qa-map-source-tray.mjs`). The camera half of such a
+// and an unrecognized stack id lands on the controller's photoreal fallback.
+// The camera half of such a
 // link must still restore.
 test('a retired-vocabulary link degrades to the unknown paths instead of failing', () => {
   const parsed = makeManager('#v=2&lat=10&lon=20&map=bing-road&ui=k.c.0').parseInitialHash();

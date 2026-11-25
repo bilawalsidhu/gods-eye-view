@@ -36,8 +36,8 @@ const asPlace = (city) => {
 const placeKey = (place) => place.id || `${place.name}@${Number(place.latitude).toFixed(3)},${Number(place.longitude).toFixed(3)}`;
 const globeActions = useGlobeActionsStore();
 const locationStore = useLocationStore();
-// The preset cities and the current city's landmarks, as LocationControls
-// presents them: the omnibox offers them as the dock's location tray did.
+// The current city's landmarks, its lookup error and who ran the lookup, as
+// LocationControls presents them.
 const { view: locationView } = storeToRefs(locationStore);
 // "here", "this spot": the selected item, else the view.
 const HERE = /\b(here|there|this (spot|point|place|location|area)|around it|nearby)\b/i;
@@ -1355,39 +1355,6 @@ small {
 }
 @media (pointer: coarse) {
   .omnibar-kbd { display: none; }
-}
-:global(body.mobile-shell #gev-omnibar) {
-  --omnibar-top: calc(var(--mobile-top-inset, 0px) + 88px);
-  --omnibar-credit-bottom: max(
-    calc(var(--mobile-tab-space) + 106px + var(--world-timeline-lift, 0px)),
-    calc(var(--mobile-sheet-cover, 0px) + 6px)
-  );
-  left: auto;
-  inset-inline: 16px;
-  width: auto;
-  transform: none;
-}
-/* The language picker sits at the right edge beside the field; the field leaves it room.
-   `.has-locale-picker`, `.has-world-timeline` and `.has-omnibar` are page-root classes (src/ui/rail/rootClass.js). */
-:global(body.mobile-shell:is(.has-locale-picker *, #locale-picker) #gev-omnibar) {
-  inset-inline: 16px 60px;
-}
-/* A lifted timeline leaves less map above the credits on short phones. */
-@media (max-height: 480px) {
-  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline) #gev-omnibar) {
-    --omnibar-top: calc(var(--mobile-top-inset, 0px) + 48px);
-    --omnibar-field-room: 34px;
-    --omnibar-field-height: 34px;
-    --omnibar-credit-room: 36px;
-    --omnibar-mic-size: 26px;
-    --omnibar-result-padding: 1px;
-    --omnibar-message-padding: 1px;
-    --omnibar-item-padding: 2px;
-  }
-  /* The field takes the HUD readout's row (48-82px): the readout sits under it. */
-  :global(body.mobile-shell:is(.has-world-timeline *, #world-timeline):is(.has-omnibar *, #gev-omnibar) #intel-hud .hud-bottom-left) {
-    top: calc(var(--mobile-top-inset, 0px) + 88px);
-  }
 }
 :global(body.ui-clean-view #gev-omnibar),
 :global(body.recording-mode #gev-omnibar),

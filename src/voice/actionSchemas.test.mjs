@@ -64,7 +64,9 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
     // Fire Perimeters queries add lastGrowthTime.
-    '167fc1c4e7362f3b16e795be1a8b39b504cf82589d9425f2ef8fe0b2f3701a4d',
+    // The dock's Location and Visual Presets trays leave set_panel_open's
+    // targets; Visual (pp-toggles) takes the presets' and map sources' names.
+    '8df28dafaafde3e83e983528e2cc486dc68f282df99f6cde939325a2ee5461a0',
   );
 });
 
@@ -173,6 +175,14 @@ test('all legacy action arguments are byte-identical after removing the delibera
   delete property('set_layer_visibility').layerId.enum;
   delete property('show_data_layers_menu').layerId.enum;
   delete property('get_entity_context').layerId.enum;
+  // The dock's Location and Visual Presets trays are gone, and their panel
+  // ids with them.
+  property('set_panel_open').panelId.enum.splice(
+    1,
+    0,
+    'location-bar',
+    'control-panel',
+  );
   delete property('analyst_query').layers.items.enum;
   // Earth-centered rotation is additive; local camera yaw keeps its contract.
   const motion = property('move_camera').motion;

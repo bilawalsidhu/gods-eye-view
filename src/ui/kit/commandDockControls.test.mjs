@@ -1,9 +1,7 @@
 // The command dock's and the Context panel's buttons and Material glyphs are
 // the kit's: neither the dock, the Context view nor the view context it
 // shows while nothing is picked hand-writes a <button> or a Material Symbols
-// span. The dock's style buttons are pressed toggles with `active`, its
-// glyphs (◯ ▦ 🌙 🌡️ ✦ ◐, the search 🔎 and the collapse +) are text
-// characters, not Material symbols, and stay plain text. Context's tabs and
+// span (the dock's own buttons are the voice control's). Context's tabs and
 // its Contacts mode button are `role="tab"` controls: they say they are
 // chosen with `aria-selected` and keep their own `active` class, never
 // `aria-pressed`.
@@ -35,10 +33,8 @@ const inView = template('panels/ViewContext.vue');
 const suggested = template('panels/SuggestedLayers.vue');
 const nearby = template('panels/NearbyLists.vue');
 const views = {
-  // The six style buttons, the two tray toggles and their pins, the map
-  // source chips, Location's collapse, its landmark and city pills and the
-  // search toggle.
-  'CommandDockView.vue': { markup: dock, buttons: 15, icons: 0, closes: 0 },
+  // The voice control, the tab bar and the reticles are views of their own.
+  'CommandDockView.vue': { markup: dock, buttons: 0, icons: 0, closes: 0 },
   // Search and Expand in the header, the two tabs, Contacts, the cockpit
   // entry, SEARCH NEARBY SITES and the TR-3B chip.
   'ContextView.vue': { markup: context, buttons: 8, icons: 7, closes: 0 },
@@ -65,29 +61,6 @@ test('the dock and Context hand-write no button; each is a UiButton', () => {
   }
 });
 
-test('the style buttons are pressed toggles with active', () => {
-  assert.doesNotMatch(dock, /v-class-toggle="\{[^"]*\bactive\b/);
-  const styles = tags(dock, 'UiButton').filter((b) =>
-    /class="style-btn"/.test(b),
-  );
-  assert.deepEqual(
-    styles.map((b) => b.match(/data-style="(\w+)"/)[1]),
-    ['normal', 'retro', 'surveillance', 'thermal', 'anime', 'noir'],
-  );
-  for (const button of styles) {
-    const name = button.match(/data-style="(\w+)"/)[1];
-    assert.match(button, /\spressed-class="active"/, name);
-    // Normal stays the pressed one until a style is published.
-    assert.match(
-      button,
-      name === 'normal'
-        ? /\s:pressed="!style \|\| style\.name === 'normal'"/
-        : new RegExp(String.raw`\s:pressed="style\?\.name === '${name}'"`),
-      name,
-    );
-  }
-});
-
 test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () => {
   for (const [file, { markup }] of Object.entries(views))
     assert.doesNotMatch(
@@ -97,8 +70,7 @@ test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () =>
     );
   const pressed = (markup) =>
     tags(markup, 'UiButton').filter((b) => /\s:pressed=/.test(b)).length;
-  // The six styles, two pins, map sources, landmarks and cities.
-  assert.equal(pressed(dock), 11);
+  assert.equal(pressed(dock), 0);
   // Search, Expand and TR-3B.
   assert.equal(pressed(context), 3);
   assert.equal(pressed(inView), 0);

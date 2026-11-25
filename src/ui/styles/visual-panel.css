@@ -123,12 +123,6 @@
   cursor: default;
 }
 
-/* The phone's More sheet shows the dock's Visual Presets tray right above
-   Visual, so the panel leaves out its own copy there. */
-body.mobile-shell #pp-toggles .visual-presets {
-  display: none;
-}
-
 /* The body is display: contents, so its children are the panel's own flex
    items: keep them full width and unshrunk. */
 #pp-toggles .pp-panel-body > * {

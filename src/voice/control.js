@@ -154,9 +154,7 @@ function initialState(panel) {
     // The minimized voice bar's last sentence from each side.
     mini: { user: '', assistant: '' },
     // Above the dock, or docked into the right rail's lane.
-    // `yielded` names the panel minimized to make room for a dock tray;
-    // `trayDocked` marks a dock taken only while a tray was open.
-    layout: { docked: false, yielded: null, trayDocked: false },
+    layout: { docked: false },
     previewEmpty: {
       hidden: false,
       text: () => t('Voice replies appear here.'),

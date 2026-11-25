@@ -1109,10 +1109,12 @@ test('the voice TOOL SCHEMA matches the pinned contract — the mission mapping 
   // adds the analyst area scopes and the osm-places layer.
   // control_cockpit states the own-layer entry rule (Contacts not required).
   // Fire Perimeters queries add lastGrowthTime.
-  assert.equal(block.length, 31490, 'serialized tool schema length drifted');
+  // The dock's Location and Visual Presets trays leave set_panel_open's
+  // targets; Visual (pp-toggles) takes the presets' names.
+  assert.equal(block.length, 31475, 'serialized tool schema length drifted');
   assert.equal(
     crypto.createHash('sha256').update(block).digest('hex'),
-    'eec7110722dd4593091e993f27c577642f8e994b4efeb22d1e4bb1ef631bad36',
+    'e99762c8c757a2afcb9cf561438949152ca16b3fd5f9fe72cfc09032daacf3a5',
     'the first-run missions must ride EXISTING tools: no schema edit, no cache bust',
   );
   const instructions = fs.readFileSync(

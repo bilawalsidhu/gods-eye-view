@@ -130,6 +130,9 @@ const ENTITY_BY_CODE = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, e]));
  * frozen meaning of an omitted entry (the layout a fresh session shows today),
  * not a live default: if the app's default moves, this table does not.
  * `token` is the panel's letter in the long form's `ui` parameter.
+ * Numbers 0 and 1 (`c`, `l`) named the command dock's Visual Presets and
+ * Location trays, which no layout shows any more: links that carry them still
+ * decode, and the app has no panel to apply them to.
  */
 export const SHARE_VIEW_PANELS = freezeAll([
   {

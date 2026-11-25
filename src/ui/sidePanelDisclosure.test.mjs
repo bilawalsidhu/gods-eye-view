@@ -153,16 +153,15 @@ test('PanelChrome reads a panel’s state from its store, not classes written ou
   };
   // Before the first presentation the markup's classes stand.
   assert.deepEqual(PanelChrome.prototype._shownPanel.call(owner, panel), {
-    collapsed: true, pinned: false, pinnedTop: false, auto: null,
+    collapsed: true, auto: null,
   });
   // The accordion closed it; a class written outside the store doesn't count.
   store.publish(owner._chromeToken, 'data-panel', {
-    collapsed: true, pinned: false, pinnedTop: false, auto: 'accordion',
+    collapsed: true, auto: 'accordion',
   });
-  classes.add('dock-pinned');
+  classes.add('layout-auto-collapsed');
   const shown = PanelChrome.prototype._shownPanel.call(owner, panel);
   assert.equal(shown.auto, 'accordion');
-  assert.equal(shown.pinned, false);
   // A share link records the accordion's collapse as the person's open panel.
   const prior = globalThis.document;
   globalThis.document = { getElementById: (id) => (id === 'data-panel' ? panel : null) };

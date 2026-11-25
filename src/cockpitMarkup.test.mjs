@@ -1097,7 +1097,7 @@ test('Cockpit Display portals shared HUD, Detection, Parameters, and 3D controls
     ui,
     /_cycleCockpitHud|_cockpitModels3dToggle|_cockpitDetectionToggle/,
   );
-  assert.equal((html.match(/id="style-buttons"/g) || []).length, 1);
+  assert.equal((html.match(/class="visual-presets"/g) || []).length, 1);
   assert.equal((html.match(/id="param-slider-panel"/g) || []).length, 1);
   assert.match(
     html,
