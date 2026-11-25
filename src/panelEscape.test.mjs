@@ -42,7 +42,7 @@ function panelFixture({ id = 'data-panel', nested = false, nestedCollapsed = fal
     disclosure.closest = () => panel;
   }
   const document = { getElementById: (candidate) => candidate === id ? panel : null };
-  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}, ${method('_railFocusStand', '_setCommandDockPanelPinState')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
+  const manager = new Function('document', 'getComputedStyle', 'collapsePanelOnEscape', `return {${method('_collapsePanelOnEscape', '_togglePanel')}, ${method('_railFocusStand', '_maybeNotifyLayoutReset')}};`)(document, (el) => ({ visibility: el.visibility ?? 'visible' }), collapsePanelOnEscape);
   manager.setPanelCollapsed = (candidate, value, options) => {
     assert.equal(candidate, id);
     assert.equal(value, true);
@@ -149,22 +149,10 @@ test('a collapsed nested panel does not block the next Escape from closing its p
   assert.equal(outer.focused(), true);
 });
 
-test('Location Escape clears a hidden draft search before restoring disclosure focus', () => {
-  const fixture = panelFixture({ id: 'location-bar' });
-  // The location controls close the field and drop its draft
-  // (src/ui/locationControls.test.mjs).
-  let closed = 0;
-  fixture.manager._closeLocationSearch = () => { closed += 1; };
-  assert.equal(fixture.manager._collapsePanelOnEscape(fixture.event, 'location-bar'), true);
-  assert.equal(closed, 1);
-  assert.equal(fixture.focused(), true);
-});
-
 test('panel chrome wires Escape for every declared collapse target', () => {
   const init = method('_initPanelChrome', '_collapsePanelOnEscape');
   assert.match(init, /for \(const targetId of targets\)/);
   assert.match(init, /bindPanelDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, targetId\)/);
-  assert.match(source, /createHoverDisclosure\(\{[\s\S]*?onEscape: \(event\) => this\._collapsePanelOnEscape\(event, panelId\)/);
 });
 
 test('Cockpit Escape collapses Contact or Live Signals before exiting Cockpit', () => {

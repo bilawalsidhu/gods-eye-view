@@ -6,15 +6,8 @@ function fixture() {
   const calls = [];
   const requests = [];
   let authority = 0;
-  const input = {
-    classList: {
-      add: (name) => calls.push(['add', name]),
-      remove: (name) => calls.push(['remove', name]),
-    },
-    blur: () => calls.push(['blur']),
-  };
   const search = new LocationSearch({
-    input,
+    setSearching: (value) => calls.push(['searching', value]),
     begin: () => ++authority,
     isCurrent: (ticket) => ticket === authority,
     beforeFly: (ticket) => {
@@ -106,7 +99,10 @@ test('empty queries and refused navigation do not issue a lookup', async () => {
   f.search.begin = () => false;
   await f.search.run('Place');
   assert.equal(f.requests.length, 0);
-  assert.ok(f.calls.some((x) => x[0] === 'blur'));
+  assert.deepEqual(
+    f.calls.filter((x) => x[0] === 'searching'),
+    [['searching', false]],
+  );
 });
 
 test('search snapshots retain the current busy owner when an older request settles', async () => {

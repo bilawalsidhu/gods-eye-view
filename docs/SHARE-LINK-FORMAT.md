@@ -288,6 +288,10 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 10  | `param-slider-panel`   | `m`             | expanded            |
 | 11  | `space-missions-panel` | `n`             | collapsed           |
 
+Panels 0 and 1 were the command dock's Visual Presets and Location trays,
+which no layout shows any more. Their numbers and tokens stay reserved: links
+that carry them still decode, and the app has no panel to apply them to.
+
 ### Style parameters (field 27)
 
 Pairs of varints `(token index, value × 100)` for the parameters of the

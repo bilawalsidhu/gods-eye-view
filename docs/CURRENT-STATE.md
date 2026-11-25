@@ -892,11 +892,10 @@ detection, style parameters, 3D aircraft, Scope and Clean UI; Effects,
 Celestial, Bloom and Sharpen; and Reset to default at the foot. Each control
 is a card (`src/ui/styles/visual-panel.css`) whose header row ends in an
 on/off pill worded in the current language (Clean UI, an action, has none;
-the buttons carry their state as `aria-pressed`). The presets and chips call the
-same Display store actions as the dock's Visual Presets tray, which stays on
-desktop and phone as before, along with Location; voice `Visual Presets`
-still opens that tray. On a phone the More sheet shows that tray right above
-Visual, so Visual leaves out its own presets and chips there. In Cockpit,
+the buttons carry their state as `aria-pressed`). The presets and chips call
+the Display store's actions, and voice `Visual Presets` opens Visual
+(`pp-toggles`). On a phone the More sheet shows Visual, presets and chips
+included. In Cockpit,
 the groups that Cockpit's Display popover takes leave the panel as before and
 keep their own styling there.
 
@@ -922,7 +921,7 @@ lends detection for the session, the reset's detection becomes what leaving
 Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
 settings, other styles' parameters, the layers and the panels alone.
 
-With Scope off the side rails, open panels and the dock's trays carry a soft
+With Scope off the side rails, open panels and the dock carry a soft
 drop shadow and the rails' labels and icons a text shadow
 (`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
 imagery.
@@ -955,7 +954,7 @@ dropped if the pointer leaves the strip. Panels, controls, dialogs and the
 world timeline in the strip keep their own wheel. The strip is off on phones
 and touch screens, while the rails are hidden (clean view, recording), and it
 follows the rails' sides in a right-to-left language. On a phone, Visual is in
-the More sheet with the dock's Visual Presets, as before.
+the More sheet.
 
 ## Context panel — November 16, 2026
 
@@ -1705,7 +1704,7 @@ Newer manual choices, Stop and provider replacement prevent an older operation
 from revealing its UI. Ambiguous requests to open settings ask whether the user
 means Voice Settings or Provider Settings before opening either panel. Named
 Voice Settings applies directly; Provider Settings opens the existing local
-provider dialog when available. Visual Presets targets the visual controls tray,
+provider dialog when available. Visual Presets opens the Visual panel,
 while Scenes (the Authoring panel) targets saved scenes. Selecting Preview does not enable a disabled
 Preview preference. Unverified speech captions use the localized Recent
 speech label; ordinary user captions retain YOU. Caption attribution does not
@@ -1759,11 +1758,7 @@ Cockpit (as Cockpit's own state reports it) or when another card was picked
 while the action ran, which then stays, and steps a panel docked in the lane down to its bar so the rail
 shows it; a panel above the dock leaves the rail in view and stays as it is.
 Minimized panels always sit as a bar centred above the dock; restoring returns a
-docked panel to the lane. A centred panel steps down to its bar when the pointer
-reaches the Location or Visual Presets button and rests above an open tray,
-without moving keyboard focus. Expanded over an open tray, it docks into the
-lane until the trays close; a panel that stepped down expands in the centre
-again once the trays close and the pointer leaves the wings. Panel height animates when one panel replaces the
+docked panel to the lane. Panel height animates when one panel replaces the
 other or the voice view changes. Minimized voice shows the last sentence from
 each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
@@ -3554,7 +3549,7 @@ destruction releases listeners, pending searches and the orbit indicator.
 
 Contacts and mapped-site search feedback filter subject-window installation matches by surface distance from the current subject position, within the stated 100 km radius; the retained tile-fetch square is only a loading window.
 
-Search arrivals (location bar and voice) end above the rendered surface.
+Search arrivals (Omnibar and voice) end above the rendered surface.
 Precise places without a detailed outline used to frame a 250 m landmark shot
 from a sea-level target, which left Camp Mabry about 1 m above the 171 m mesh
 and a Denver coordinate underground. Search now resolves the application's
@@ -3835,16 +3830,23 @@ each side's panels from the DOM; `PanelChrome` remains the disclosure owner.
 At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
 shows a bottom tab bar: Layers (Data Layers, with Authoring collapsed below),
 Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
-Recent Imagery when shown), Search (Location) and More (Visual Presets and Map
-Source above Display). A tab opens one bottom sheet; the same tab, the backdrop
+Recent Imagery when shown) and More (Visual, with its presets and Map Source). A tab opens one bottom sheet; the same tab, the backdrop
 or Escape closes it, and focus moves into the sheet and back to its tab. A
 downward swipe of at least 64px on non-control sheet content also closes it,
 when every scroll container under the finger starts at the top. Ordinary
 vertical scrolling, horizontal gestures, controls and multitouch stay native;
 a cancelled gesture or a sheet/viewport change cannot dismiss another sheet. Panels
-are not moved in the DOM: `styles/mobile-shell.css` presents the rails and dock
-as the sheet, and the dock's Location and Presets trays render inline. The voice
-control floats above the tab bar while no sheet is open.
+are not moved in the DOM: `styles/mobile-shell.css` presents the rails as the
+sheet.
+
+Search is the desktop dock, `[mic] [Omnibar] [chat]`, at the bottom directly
+above the World Timeline and the tab bar (`styles/omnibar-dock.css` for both,
+`styles/mobile-shell.css` for phone sizing). It behaves as on desktop: results
+open upward and voice mode shows the waveform in the field. Every tap target
+is at least 44×44 px and the field's text is 16px, so focusing it does not
+zoom the page. While the on-screen keyboard is up, the shell writes its
+height to `--mobile-keyboard-inset` (from `visualViewport`) and the dock rises
+above it. An open sheet hides the dock.
 
 The phone logo is 58px wide (about 39px high), aligned with the top controls.
 The shared contact picker preserves exact picks. For a coarse primary pointer
@@ -3861,14 +3863,13 @@ Sheets borrow panels. Opening one expands its panels without persisting them or
 claiming a user choice, and share links keep reporting each borrowed panel's
 state from before the sheet; closing puts back what opening changed, while a
 panel the user changed inside the sheet stays as they left it. Escape closes the
-sheet before a panel's own Escape handling, and the dock's hover auto-close does
-not apply inside a sheet.
+sheet before a panel's own Escape handling.
 Cockpit, recording and clean view close the sheet and hide the tab bar; scene
 playback keeps both so its STOP control in the Authoring panel stays reachable. The
 side rails neither hide collapsed siblings nor apply the desktop one-panel
 accordion at these widths, and the panel rails are hidden, since the sheet
 chooses what shows. The Cesium and Google attribution stays visible above the
-voice control, and above an open sheet. The page draws under the notch and
+dock, and above an open sheet. The page draws under the notch and
 system bars (`viewport-fit=cover`) and the shell's chrome uses safe-area insets.
 Wider viewports are unchanged, and crossing to them closes any open sheet.
 
@@ -4338,12 +4339,8 @@ they do not reduce the materialized entity count or establish an FPS gain.
 
 ## Keyboard interaction and focus
 
-- Enter on the map-source disclosure opens immediately. A short Space press
-  opens it on key release. Either route focuses the selected source once visible;
-  a bounded retry handles delayed opening transitions, and closing the tray or
-  moving focus elsewhere cancels the handoff.
 - Keyboard focus rings are a global interface state and stay visible when a
-  button is active or selected. Visual Styles, Location suboptions, Context and
+  button is active or selected. Visual Styles, Context and
   mission actions, Cockpit utilities, native fields, and sliders use the same
   visible-ring contract.
 - A short Space press on a focused control keeps its native key-release action.
@@ -4351,12 +4348,6 @@ they do not reduce the materialized entity count or establish an FPS gain.
   and push-to-talk starts; releasing a claimed hold cannot activate the old
   control. The same hold works on the map and page background. Text-entry
   controls remain protected.
-- The Location disclosure is reachable with Tab or Shift+Tab and shows a
-  keyboard focus ring. Its city, point-of-interest, search-toggle, and search
-  field controls show inset rings, including selected items. Enter toggles its
-  tray immediately, while Space does so on release; either route makes the revealed controls immediately reachable by Tab;
-  Escape closes it and clears any unfinished search. Escape from a tray control
-  returns focus to the disclosure; Escape on the disclosure clears focus after closing.
 - Data Layers ON/OFF buttons show a visible keyboard focus ring without
   changing their enabled state or feed-status presentation.
 - Display controls and shader-parameter sliders show keyboard focus in both
@@ -4410,13 +4401,6 @@ HTTP failure status and no-store policy but does not forward the upstream body.
 Existing successful, in-flight, missing-data, and stale-cache behavior remains
 in place. Failure diagnostics identify the service and, for Launch Library,
 HTTP status without printing raw exception text or upstream bodies.
-
-## Map Source keyboard focus
-
-Keyboard opening focuses the selected map-source tile, falling back to the first
-only when no source is selected. A bounded retry handles delayed tray visibility.
-Moving focus away, pointer interaction, closing the tray, or disposing the UI
-cancels pending work; a later reopening cannot inherit an old focus request.
 
 ## September 8, 2026
 
@@ -5230,35 +5214,6 @@ isCurrent })` gates BOTH halves of the map-stack switch, which is its only
 >   or an unrecognized selector positioning one of these elements). Extend the
 >   model rather than working around it — a silent skip here ships a ToS
 >   violation.
-> - **Dock tray stacking is decided by ID count (2026-08-20):** the pinned-tray
->   selectors `#command-dock.dock-has-two-pinned-trays …` carry one ID against
->   five classes, so any narrow-width override written with two IDs outranks
->   them and the upper tray silently loses `var(--dock-lower-pinned-height)`,
->   landing on its pinned sibling. The ≤900px and ≤720px overrides therefore
->   name the panel (`#location-bar` / `#control-panel`) to reach (2,5,0). Adding
->   a new tray rule means checking it against the pinned variants, not just
->   against the base rule.
-> - **Dock wings are icon-only from 900px down to 721px (2026-10-28):** at
->   ≤900px `--dock-side-compact` shrinks the Location and Visual Presets wings
->   to 4.25rem, open or closed (an open tray pops out above the dock), which is
->   too narrow for their text labels. The labels used to spill over the voice
->   control, and the LOCATION label captured taps on the left half of the mic
->   button. `src/ui/styles/command-dock-trays.css` now sets the
->   labels to `font-size: 0` and drops their `›`/`‹` chevrons in that band, so
->   each wing shows only its icon. `CommandDockView.vue` still gives the toggles
->   their "Expand/Collapse …" `aria-label` and `title` (`trayWords`), so the
->   browser tooltip is the only visible name on hover.
->   The former ≤620px ellipsis clip is gone: the phone shell takes over at
->   720px, so it never applied to a visible dock.
-> - **LOCATION mini-status is data-only today (2026-08-20):** the collapsed
->   readout now follows a free-text geocode search as well as preset pills
->   (`src/locationStatus.js` owns the copy for both), and every other camera
->   destination invalidates the searched label — `_stampNavigation` covers
->   voice/reset/takeover/selection, and scene playback calls the public
->   `clearSearchedLocation()` per shot. `#command-dock` still hides
->   `.location-mini-status` with `display: none !important`, so none of this is
->   on screen; a `display:none` subtree is also out of the accessibility tree,
->   so nothing is announced. Unhiding it is a separate product decision.
 > - **The Street Traffic sync chip shows one percentage (2026-08-20):** the
 >   settled confirmation flash carries the layer's coverage figure and NO
 >   progress number. `reduceTrafficSyncFeedback` returns an empty
@@ -5396,10 +5351,8 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   does not force that disclosure. Presets remain in the map Display. The
 >   shared Parameters surface moves into Cockpit Display for the session and
 >   returns on exit, with slider values contained by the panel at its supported widths;
->   the bottom Visual Presets tray owns the MAP SOURCE label, centered status,
->   and five-tile source row. Its compact wing is a keyboard disclosure:
->   Enter/Space opens and focuses Map Source, Escape closes and returns focus,
->   and unavailable sources remain tabbable with their reason exposed. Expanded left-panel
+>   the Visual panel owns Map Source, and unavailable sources remain tabbable
+>   with their reason exposed. Expanded left-panel
 >   headers use the same container-owned background treatment without changing
 >   their collapsed launchers; a soft 28% cyan divider identifies expanded
 >   titles on both side rails.
@@ -8430,8 +8383,9 @@ and unreachable upstream (502/504) separately from road geometry.
 ### Omnibar
 
 The desktop Omnibar sits above the footer with the existing mic and chat
-buttons on either side. Suggestions open upward. On phones the Omnibar is
-a field near the top, beside the Search sheet, and opens downward. While voice is on, the desktop field shows
+buttons on either side. Suggestions open upward. On phones the same dock spans
+the width above the World Timeline and tab bar, with 44px targets, rises above
+the on-screen keyboard and steps aside while a sheet is open. While voice is on, the desktop field shows
 three audio traces in place of the search text and icon. The thinking dots
 sit on the field's top edge. World Time appears immediately above the dock
 and hides while suggestions, chat, or voice settings are visible. `/`
@@ -8442,12 +8396,9 @@ on, the suggestions give way to the waveform but an error stays shown. The map c
 Power Up row in the ordinary desktop layout, and the Tactical bottom-right
 readout sits 8px above that row.
 
-Pending owner decision: in the desktop Omnibar layout
-(`src/ui/styles/omnibar-dock.css`) the legacy Location and Visual trays of
-the command dock are hidden (`#command-dock > :is(#location-bar,
-#control-panel)`), as is the tactical and minimal HUD's mode readout
-(`.hud-readout:has(> #hud-mode)`). Search moves to the Omnibar and presets to
-the Visual rail; the phone shell and exclusive modes keep their layouts.
+In the Omnibar layout the tactical and minimal HUD's mode readout
+(`.hud-readout:has(> #hud-mode)`) is hidden. Search is the Omnibar's and the
+presets are in Visual; exclusive modes keep their layouts.
 
 The field offers places, latitude/longitude and grid coordinates, named map
 entities, and layer controls. The strip can show cities and landmarks,
@@ -8894,9 +8845,9 @@ request viewbox and continues searching without that geographic preference.
 
 ### Map Stack Switcher (June 2026)
 
-- `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, the default when a Google or ion key is present), keyless Esri World Imagery (the zero-key default landing, with keyless terrain), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit — pinned live in `scripts/qa-map-source-tray.mjs`.
-- The bottom Visual Presets tray presents a **five-tile MAP SOURCE row** (`#map-stack-chips`, `src/mapStackChips.js`): Google 3D, Esri Satellite, Bing Aerial, Bing Labels, and OSM. The duplicate left `#stack-panel` is retired. The five tiles share one row on desktop and two rows on narrow screens, carry `aria-pressed` on the active source, and remain keyboard-reachable with a visible focus outline.
-- The lit tile follows controller state, not the click: a rejected switch (no ion token) or a superseded one (rapid A→B) leaves the genuinely active source lit, and the tray heading keeps its short-label status readout (`...` while switching, amber on `lastError`).
+- `src/mapStackController.js` switches between Google Photorealistic 3D (`photoreal`, the default when a Google or ion key is present), keyless Esri World Imagery (the zero-key default landing, with keyless terrain), Bing Aerial / Aerial-with-Labels via Cesium ion world imagery (require `CESIUM_ION_TOKEN`), and OSM tile fallback. Bing Road is **retired**: it is gone from `MAP_STACKS`, from the `set_map_stack` enum, and from the voice aliases (road phrasings now resolve to OSM, the one shipped road basemap). An old `map=bing-road` link is simply an unknown id and takes `setStack()`'s existing photoreal fallback with the Google 3D tile lit.
+- The Visual panel presents a **five-tile Map source row** (`VisualPresets.vue`, `src/mapStackChips.js`): Google 3D, Esri Satellite, Bing Aerial, Bing Labels, and OSM. The duplicate left `#stack-panel` is retired. The five tiles share one row on desktop and two rows on narrow screens, carry `aria-pressed` on the active source, and remain keyboard-reachable with a visible focus outline.
+- The lit tile follows controller state, not the click: a rejected switch (no ion token) or a superseded one (rapid A→B) leaves the genuinely active source lit.
 - Ion stacks remain visible and keyboard-focusable when no ion token is configured, but expose `aria-disabled="true"` and do not switch. Their accessible label and tooltip quote `getStacks().unavailableReason` — the same string `setStack()` puts in the toast. OSM works keyless. The `ION` badge is gated on the stack's own `requiresIon`, so a `photoreal` chip unavailable because the Google tileset failed says so instead of falsely demanding an ion token.
 - Stack choice participates in share links (`src/sharelink.js`) and falls back to the best available stack when the requested one is unavailable (keyless boots land on Esri; OSM takes over automatically if Esri is unreachable; while that construction fallback is on screen Esri is retried in the background, 30 s doubling to a 10-minute cap with each attempt abandoned after 60 s, and replaces OSM once it loads. The switch to OSM after repeated Esri tile failures is not retried; selecting Esri again tries it). Share-link restore, the `set_map_stack` voice tool, and the chip row all land on the same `_setMapStack()` path.
 
@@ -9192,8 +9143,7 @@ apply to `public/` assets or built-preview serving.
   Other platforms are unchanged.
 - Z ladder: panels around 100, voice pill 150, toast 200, clean-view exit 300.
 - Panel POSITION keys are versioned `v8` (`godsEyeView.v8.panelPos.<id>`); collapsed-state keys remain `v6`. The one-time position reset clears stale DISPLAY placements that could overlap the Context rail.
-- Map Source lives in the bottom Visual Presets tray. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
-- A dock popover (Visual Presets, Location) auto-dismisses on mouse-away unless pinned. Focus inside the tray defers that dismissal only when the browser reports `:focus-visible` — keyboard focus and typed-into fields hold the tray open; a mouse-clicked tile does not, because Chromium focuses a `<button>` on press.
+- Map Source lives in the Visual panel. The left accordion contains no MAP STACK panel, and the `k` panel token that addressed it is gone from the share registry, so legacy `ui=k...` state takes the ordinary unknown-token skip.
 - The voice and chat panels share the left panels' glass surface (`--glass-bg`, `--glass-border`, blur(24px) saturate(1.4); `src/ui/styles/ai-chat.css`). The docked voice control draws its own blur on a layer behind it, so the panels inside it still blur the map.
 - The desktop right rail (`#right-context-rail`) owns `DISPLAY`, `CCTV`, its active parameter controls, and `GLOBAL CONTEXT` as one fixed responsive stack in that order. Its compact buttons use the same 176 px width as the left accordion and one consistent 50 px height, share the left stack's 52 px edge inset and measured top baseline across HUD variants, then constrain themselves against visible HUD/chrome rectangles and the remaining vertical corridor. `DISPLAY` is no longer draggable and legacy saved coordinates are ignored.
 - The right rail is labeled **DISPLAY** (formerly "MOVE") and groups, in order, HUD, DETECT, Bloom, Sharpen, 3D, Clean-UI (HUD + DETECT promoted to the top). Its expanded controls retain the same compact 176 px width as the right-side tabs instead of growing to the wider Context detail-card width. It starts expanded on first run and respects the user's later `v6` collapse choice. Collapses/expands with directional chevrons (`◀` collapsed, `▶` expanded).
@@ -9782,12 +9732,6 @@ Replay transport uses one Play/Pause toggle plus Cancel. During ascent only the 
 - `tools/pano-pinhole.mjs`: equirectangular-to-pinhole reprojection.
 - `tools/sat-ortho.mjs`: Map Tiles ortho stitch and centered crop with georef corners.
 - `scripts/track-regression.mjs`: headless real-app regression harness for aircraft tracking/model/detection invariants (`npm run test:track`).
-- `scripts/qa-map-source-tray.mjs`: browser proof for the four-source Map Source
-  tray — presentation, keyboard disclosure, responsive bounds, unpinned
-  auto-dismiss, ACQUIRING status, and retired/unknown stack-id restore
-  (`QA_BASE_URL=http://localhost:4173 npm run qa:map-source-tray`). Add
-  `-- --keyless` to force the no-ion-token expectations on a keyed server; both
-  invocations are gates.
 - `scripts/qa-l9-matrix.mjs`: the L9 release-candidate QA matrix in one command
   (`node scripts/qa-l9-matrix.mjs --url http://localhost:4173`). Orchestrates
   the `qa-*.mjs` fleet plus `track-regression` as subprocesses and adds

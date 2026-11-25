@@ -248,14 +248,11 @@ try {
       await page.mouse.move(640, 400);
       await page.mouse.wheel({ deltaY: -350 });
     } else if (gesture === 'keyboard') {
-      await page.evaluate(() =>
-        document.getElementById('search-toggle').click(),
-      );
-      await page.focus('#location-search');
+      await page.focus('#gev-omnibar-input');
       await page.evaluate(() => {
-        document.getElementById('location-search').value = '';
+        document.getElementById('gev-omnibar-input').value = '';
       });
-      await page.type('#location-search', '33.33, -117.40');
+      await page.type('#gev-omnibar-input', '33.33, -117.40');
       await page.keyboard.press('Enter');
       await sleep(4500);
     } else {

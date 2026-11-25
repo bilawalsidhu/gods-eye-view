@@ -53,12 +53,12 @@ fit when those contents should instead scroll.
 
 ## Placement and ownership
 
-| Mount                                 | Shared contract                                                                                     | Owner responsibilities                                                                                                                                                                                   |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Direct child of `#left-panel-stack`   | An owner with a direct `[data-panel-surface]` child receives relative positioning and allocated height; inner surface/body skin | Add the wrapper shown above, use the existing layout/disclosure owners, and retain left-rail focus/auto-collapse rules.                                                                                  |
-| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                 | Keep `data-rail-scroller` on the body so measurement preserves its scroll position.                                                                                                                      |
-| Surface inside `#command-dock`        | Surface, controls, popup decoration and inherited dock concealment                                  | Supply geometry, stacking, disclosure, pin behavior if wanted, safe viewport bounds and dismissal. This CSS does not extend the existing Location/Visual Presets tray stack manager to arbitrary panels. |
-| `dialog[data-panel-surface]`          | The same surface/body skin; a closed dialog remains hidden                                          | Set width/max-height, use `showModal()` or `show()` and `close()`, and own labels, initial/return focus and dismissal. Do not put `panel-collapsible` on a dialog.                                       |
+| Mount                                 | Shared contract                                                                                                                 | Owner responsibilities                                                                                                                                             |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Direct child of `#left-panel-stack`   | An owner with a direct `[data-panel-surface]` child receives relative positioning and allocated height; inner surface/body skin | Add the wrapper shown above, use the existing layout/disclosure owners, and retain left-rail focus/auto-collapse rules.                                            |
+| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                                             | Keep `data-rail-scroller` on the body so measurement preserves its scroll position.                                                                                |
+| Surface inside `#command-dock`        | Surface, controls, popup decoration and inherited dock concealment                                                              | Supply geometry, stacking, disclosure, safe viewport bounds and dismissal.                                                                                         |
+| `dialog[data-panel-surface]`          | The same surface/body skin; a closed dialog remains hidden                                                                      | Set width/max-height, use `showModal()` or `show()` and `close()`, and own labels, initial/return focus and dismissal. Do not put `panel-collapsible` on a dialog. |
 
 For rails, `--panel-expanded-width` and `--panel-collapsed-width` customize
 the desired widths within the rail. `--left-panel-allocated-height` and
@@ -83,9 +83,7 @@ does not provide automatic popup escape from these small-screen scroll regions.
 
 For dock disclosure, use a semantic button with `.panel-surface-control` and
 the feature's own accessible name, `aria-expanded` state and event binding.
-Do not copy the rail example's `.panel-collapse-btn` class into the dock:
-existing dock rules intentionally hide that class. The generic surface skin
-does not replace the dock's disclosure policy.
+The generic surface skin does not supply a disclosure policy.
 
 A panel with Core's standard header (glow, title, badges, divider, actions
 and collapse button) is a `RailPanel` (`src/ui/rail/`): the kit's `UiPanel`

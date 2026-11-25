@@ -169,14 +169,6 @@ export class ShellFacade {
     this._locationNavigation._currentPoi = value;
   }
 
-  get _searchedLocationLabel() {
-    return this._locationNavigation._searchedLocationLabel;
-  }
-
-  set _searchedLocationLabel(value) {
-    this._locationNavigation._searchedLocationLabel = value;
-  }
-
   get _trafficTransitionTimer() {
     return this._locationNavigation._trafficTransitionTimer;
   }
@@ -435,22 +427,6 @@ export class ShellFacade {
 
   set _panelDisclosureControls(value) {
     this._panelChrome._panelDisclosureControls = value;
-  }
-
-  get _hoverPanelControls() {
-    return this._panelChrome._hoverPanelControls;
-  }
-
-  set _hoverPanelControls(value) {
-    this._panelChrome._hoverPanelControls = value;
-  }
-
-  get _cancelMapSourceFocus() {
-    return this._panelChrome._cancelMapSourceFocus;
-  }
-
-  set _cancelMapSourceFocus(value) {
-    this._panelChrome._cancelMapSourceFocus = value;
   }
 
   get _cockpitContextCollapsedForDataPanel() {
@@ -803,7 +779,6 @@ export class ShellFacade {
 
   /**
    * Initializes panel collapse buttons and restores persisted collapsed state.
-   * Also sets up hover-expand behavior for the style presets and location bar panels.
    * @returns {void}
    */
   _initPanelChrome() {
@@ -1212,8 +1187,8 @@ export class ShellFacade {
     return this._locationNavigation._handleLocationSearchState(...args);
   }
 
-  _initLocationBar(...args) {
-    return this._locationNavigation._initLocationBar(...args);
+  _initLocationControls(...args) {
+    return this._locationNavigation._initLocationControls(...args);
   }
 
   _beginWorldJumpTransition(...args) {
@@ -1244,24 +1219,12 @@ export class ShellFacade {
     return this._locationNavigation._collapsePOIRow(...args);
   }
 
-  _updatePoiHighlight(...args) {
-    return this._locationNavigation._updatePoiHighlight(...args);
-  }
-
-  clearSearchedLocation(...args) {
-    return this._locationNavigation.clearSearchedLocation(...args);
-  }
-
   _setActiveLocation(...args) {
     return this._locationNavigation._setActiveLocation(...args);
   }
 
-  _updateLocationMiniStatus(...args) {
-    return this._locationNavigation._updateLocationMiniStatus(...args);
-  }
-
   /**
-   * Updates the collapsed mini-status readout with the active style label.
+   * Publishes the active style, which the scene chrome and Visual show.
    * @param {string} [styleName=this.activeStyle] - Style name to display.
    * @returns {void}
    */
