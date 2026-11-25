@@ -221,7 +221,8 @@ and package boundaries on Linux and Windows.
 Reusable package exports own their state and receive application operations
 through explicit callbacks. They must not import the standalone bootstrap or
 local Node services. Update `scripts/package-boundaries.json` and consumer tests
-when adding an export or expanding a component. See
+when adding an export or expanding a component; the fork-only
+`scripts/package-boundaries.local.json` is not used in this repository. See
 [formatting and component boundaries](docs/CODE-BOUNDARIES.md) for the current
 ownership and adoption process.
 
