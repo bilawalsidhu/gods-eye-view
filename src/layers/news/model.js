@@ -1,6 +1,6 @@
 // Pure presentation model for the news layer: severity, category glyphs,
 // attestation, marker looks and placement, the feed's filters and paging, and
-// the event cards the News panel and the globe show. No Cesium, no DOM.
+// the event cards the News panel and the globe show. No renderer, no DOM.
 
 import { getLocale, msg, t, tn } from '../../i18n/index.js';
 

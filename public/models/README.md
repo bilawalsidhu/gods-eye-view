@@ -1,11 +1,13 @@
 # Bundled 3D Models
 
-Every 3D model shipped in this directory is one of the project's procedural
+Every 3D model shipped in this directory but two is one of the project's procedural
 fleet models under [`fleet/`](fleet/): aircraft, helicopters, ships, buoys,
 transit and rail vehicles, and a few other airborne and ground objects. They
 are generated from code by the project maintainers, contain no third-party
 artwork, and are covered by the repository's [MIT license](../../LICENSE)
-like the source code.
+like the source code. The exceptions are the two space stations: NASA's model
+of the ISS, described in [its own section](#the-iss-model-issglb) below, and
+the project's own Tiangong model, [after it](#the-tiangong-model-tiangongglb).
 
 | Path | What it holds |
 |---|---|
@@ -33,7 +35,85 @@ How the layers use them:
   the route or category colour is painted.
 - The whole set loads once, up front, when a layer that draws it starts; no
   model is fetched while a session runs.
+- The aircraft and helicopter models are also rendered from every side into
+  the aircraft view sheet, the shaded sprites far-away aircraft are drawn
+  with ([`../sprites/`](../sprites/README.md)).
 
 `src/data/fleetModels.js` reads the set and chooses each vehicle's model;
 `src/data/fleetModels.test.mjs` checks that every model `types.json` names is
 in the catalog and on disk, and that no GLB exceeds 3 MB.
+
+## The ISS model (`iss.glb`)
+
+Two models sit outside the fleet set. The first is `iss.glb`, the International
+Space Station drawn by the satellites layer up close. It is not procedural and not
+covered by the MIT license. It is NASA's own model of the station, which is
+not subject to copyright in the United States
+([NASA Images and Media Usage Guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media));
+its use does not imply endorsement by NASA. It loads only when the camera
+nears the station.
+
+- **Original work:** “International Space Station (ISS) (D) (IGOAL)”, NASA
+  Johnson Space Center, Integrated Graphics, Operations and Analysis
+  Laboratory, on
+  [NASA 3D Resources](https://science.nasa.gov/3d-resources/international-space-station-iss-d-igoal/).
+- **Reduction:** from the 96 MB original (2.7 M triangles) to 3 MB (314 k
+  triangles): handrails left out; geometry simplified within 15 cm
+  (structure) or 40 cm (small details) of the original surface, normals
+  rebuilt; normal maps dropped; textures resized to 512 px WebP;
+  Draco-compressed.
+- **Frame:** every part is baked into one frame in meters (glTF +Y zenith,
+  +X port, +Z forward), and the scene root moves the bounding-box centre to
+  the origin.
+- **Corrections:** NASA's file is a mirror image of the station (port and
+  starboard swapped), which is undone; 15 materials NASA marks as blended
+  are made opaque, because blended they draw see-through.
+- **Marks on the textures:** the station's textures carry the marks it flies
+  with: the NASA insignia and the ESA, Columbus, JAXA and Nanoracks marks on
+  the partners' modules. They are kept as flown, to show the station as it
+  is; their presence implies no endorsement by NASA or by any partner.
+- **Moving parts:** parts that move stay separate nodes at the joints NASA
+  names (two alpha joints, eight array beta joints, two radiator joints,
+  Canadarm2's seven joints, two joints on each Dextre arm, three on the
+  Japanese arm). The two Ku-band dishes and three of the four power-module
+  radiators, welded into the truss in NASA's file, are cut out by position.
+
+## The Tiangong model (`tiangong.glb`)
+
+The second model outside the fleet set is `tiangong.glb`, China's Tiangong
+station in its T configuration (Tianhe, Wentian, Mengtian, a Shenzhou forward
+and nadir, a Tianzhou aft), drawn by the satellites layer up close. It is an
+original model made for God's Eye View and, unlike the ISS model, it is the
+project's own work under the repository's [MIT license](../../LICENSE): no
+third-party geometry, texture or image is in it. It loads only when the camera
+nears the station.
+
+- **Built:** in Blender 5.3 from primitives only (cylinders, cones, spheres,
+  tori, boxes), every texture generated procedurally by the build script,
+  [`scripts/build-tiangong-model.py`](../../scripts/build-tiangong-model.py)
+  (`blender -b --python scripts/build-tiangong-model.py -- <out_dir>`).
+  26,460 triangles, 12 materials, 15 WebP textures (`EXT_texture_webp`),
+  Draco-compressed, 382 KB.
+- **Dimensions, as published:** Wang, Zhang & Wang 2023, "Design and
+  Application Prospect of China's Tiangong Space Station", *Space: Science &
+  Technology*, [doi:10.34133/space.0035](https://doi.org/10.34133/space.0035)
+  (CC BY 4.0), and [eoPortal's Tiangong page](https://www.eoportal.org/satellite-missions/tiangong):
+  Tianhe 16.6 m × 4.2 m with its port layout; Wentian and Mengtian 17.9 m ×
+  4.2 m, one each side of the node; lab wings 27 × ~4 m, two per lab,
+  two-axis; Tianhe wings 12.6 m per wing (the paper's figure; eoPortal gives
+  a 60 m total span), one-axis; the Tianhe arm ~10 m and the Wentian arm
+  ~5 m, seven joints each; Shenzhou 9.25 × 2.8 m (17 m span), Tianzhou
+  10.6 × 3.35 m (14.9 m span) and their docking ports.
+- **Approximate (the author's estimates):** the node sphere, small-cylinder
+  and resource-section diameters, section lengths and cones, hatch and port
+  tubes; wing widths, root offsets, masts and drive housings; the airlocks,
+  radiators, high-gain antenna and node antennas; both arms entirely (bases,
+  booms, joint spacing, rest pose); the ships' module proportions and arrays.
+- **Frame:** meters, glTF +X port, +Y zenith, +Z forward (the ISS file's);
+  the scene root `tiangong` is translated so the station's bounding-box
+  centre (without the ships) is at the origin.
+- **Moving parts:** joints are nodes with identity rest transforms and the
+  pivot, axis, kind and range in their `extras` (also in
+  `src/layers/satellites/tiangongJoints.js`): two Tianhe wing drives, four
+  lab wing alpha + beta pairs, the antenna gimbal, seven joints per arm, two
+  drives per ship, six dock markers.

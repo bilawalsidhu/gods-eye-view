@@ -23,8 +23,8 @@ test('desktop side rails hide collapsed panels in every HUD layout, never on pho
   assert.match(css, /#left-panel-stack\.layout-exclusive > \[data-panel-id\]\.collapsed \{/);
 });
 
-test('explicit Contacts, Space Missions, and Cockpit actions expand Global Context after success', () => {
-  for (const action of ['contacts', 'space-missions', 'cockpit']) {
+test('explicit Contacts and Cockpit actions expand Global Context after success', () => {
+  for (const action of ['contacts', 'cockpit']) {
     assert.equal(shouldExpandGlobalContextPanel({
       action,
       explicitUserAction: true,
@@ -51,7 +51,7 @@ test('restoration and programmatic replay preserve the saved Global Context coll
     succeeded: true,
   }), false);
   assert.equal(shouldExpandGlobalContextPanel({
-    action: 'space-missions',
+    action: 'contacts',
     explicitUserAction: true,
     succeeded: true,
     restoring: true,
@@ -64,9 +64,11 @@ test('failed or unrelated actions never expand Global Context', () => {
     explicitUserAction: true,
     succeeded: false,
   }), false, 'a failed transition must preserve the prior panel state for rollback');
-  assert.equal(shouldExpandGlobalContextPanel({
-    action: 'search-nearby',
-    explicitUserAction: true,
-    succeeded: true,
-  }), false);
+  for (const action of ['search-nearby', 'space-missions']) {
+    assert.equal(shouldExpandGlobalContextPanel({
+      action,
+      explicitUserAction: true,
+      succeeded: true,
+    }), false);
+  }
 });

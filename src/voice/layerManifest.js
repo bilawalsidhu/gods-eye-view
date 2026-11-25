@@ -234,6 +234,7 @@ const layers = [
         behavior: ['t'],
         complexity: ['t'],
         discoveredTime: ['ms'],
+        lastGrowthTime: ['ms'],
       },
       timeField: 'discoveredTime',
     },
@@ -302,7 +303,23 @@ const layers = [
   },
   {
     id: 'transit',
-    aliases: ['buses', 'trains', 'public transit', 'trams', 'subway'],
+    aliases: [
+      'buses',
+      'trains',
+      'public transit',
+      'trams',
+      'subway',
+      'trolleybus',
+      'trolleybuses',
+      'gondola',
+      'gondolas',
+      'cable car',
+      'cable cars',
+      'funicular',
+      'funiculars',
+      'monorail',
+      'monorails',
+    ],
     context: false,
     query: {
       fields: {

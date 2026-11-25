@@ -134,7 +134,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 13  | thing                        | LEN   | none        | sub-message, see thing views                                          |
 | 14  | `style`                      | enum  | `normal`    | normal, retro, surveillance, thermal, anime, noir, snow (retired)     |
 | 15  | `mapStack`                   | enum  | `photoreal` | photoreal, bing-aerial, bing-labels, esri-imagery, osm                |
-| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber                          |
+| 16  | `hudVariant`                 | enum  | style       | tactical, operator (retired), minimal, cyber (Tactical + Sonar)       |
 | 17  | `bloomIntensity`             | uint  | style       |                                                                       |
 | 18  | `bloomVersion`               | uint  | 2           |                                                                       |
 | 19  | `sharpenIntensity`           | uint  | style       |                                                                       |
@@ -148,6 +148,7 @@ probability of about 255 in 256 (many of them already fail as base64url).
 | 27  | `styleParams`                | LEN   | style       | packed `(token, value × 100)` pairs                                   |
 | 28  | `worldTime`                  | epoch | none (live) | zigzag seconds since 2026-01-01T00:00:00Z                             |
 | 29  | `library`                    | LEN   | none        | Data Library ledger tokens, two base-36 characters each, concatenated |
+| 30  | `scopeOpacityPct`            | uint  | 100         | 0–100, how strongly the scope mask shows                              |
 
 Field 1 absent means `thing` when field 13 is present and `place` otherwise,
 so v1 never writes it; a later view kind writes its code.
@@ -170,8 +171,16 @@ tokens in `src/library/ledger.json` (the long form's `lib=ab.cd`). A share
 without it switches no library entry on; the recipient's added entries stay
 in their panel, off. Tokens this build does not know are skipped.
 
+Field 30 is how strongly the scope mask shows, from the Visual panel's
+Opacity slider (the long form's `sco`). It is written only below 100, so a
+link made before it, which opens at full opacity, keeps its code.
+
 Flag bits (field 9): 0 `bloom`, 1 `sharpen`, 2 `hudVisible`, 3
-`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on).
+`celestialRing` (each defaulting by style), 4 `scopeEnabled` (default on), 5
+`hudSonar` (default off). `hudSonar` is Sonar on beside a HUD layout whose code
+cannot say so, Minimal (the long form's `hs=1`); Tactical with Sonar stays the
+`cyber` layout code alone. A link made before the bit has it off, and opens
+with Sonar on only when it names `cyber`, as before.
 
 ### Style defaults
 
@@ -277,6 +286,7 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 8   | `global-context-panel` | `g`             | collapsed           |
 | 9   | `pp-toggles`           | `p`             | collapsed           |
 | 10  | `param-slider-panel`   | `m`             | expanded            |
+| 11  | `space-missions-panel` | `n`             | collapsed           |
 
 ### Style parameters (field 27)
 

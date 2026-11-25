@@ -114,6 +114,9 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
     'esri-imagery',
     'osm',
   ]),
+  // Removed layouts keep their index so old links decode: Operator opens in
+  // Tactical. Cyber means Tactical with the Sonar style on; the app still
+  // writes it for that state.
   hudVariant: Object.freeze(['tactical', 'operator', 'minimal', 'cyber']),
   detectionMode: Object.freeze(['OFF', 'SPARSE', 'BALANCED', 'DENSE']),
   detectionAllocation: Object.freeze(['ELASTIC', 'WEIGHTED']),
@@ -188,6 +191,13 @@ export const SHARE_VIEW_PANELS = freezeAll([
     pinnable: false,
     collapsed: false,
   },
+  {
+    number: 11,
+    id: 'space-missions-panel',
+    token: 'n',
+    pinnable: false,
+    collapsed: true,
+  },
 ]);
 const PANEL_BY_NUMBER = new Map(SHARE_VIEW_PANELS.map((p) => [p.number, p]));
 const PANEL_BY_ID = new Map(SHARE_VIEW_PANELS.map((p) => [p.id, p]));
@@ -245,6 +255,9 @@ export const SHARE_VIEW_FLAGS = freezeAll([
   { bit: 2, key: 'hudVisible', default: BY_STYLE },
   { bit: 3, key: 'celestialRing', default: BY_STYLE },
   { bit: 4, key: 'scopeEnabled', default: true },
+  // Sonar on beside a HUD layout whose code cannot say so (Minimal). Tactical
+  // with Sonar stays the `cyber` layout code alone.
+  { bit: 5, key: 'hudSonar', default: false },
 ]);
 
 /**
@@ -393,6 +406,7 @@ export const SHARE_VIEW_FIELDS = freezeAll([
   // Data Library entries switched on, as their two-character ledger tokens
   // concatenated (src/library/ledger.json). Absent means none.
   { number: 29, key: 'library', type: 'bytes', default: null },
+  { number: 30, key: 'scopeOpacityPct', type: 'uint', default: 100 },
 ]);
 const FIELD_BY_KEY = new Map(SHARE_VIEW_FIELDS.map((f) => [f.key, f]));
 const fieldNumber = (key) => FIELD_BY_KEY.get(key).number;
@@ -780,6 +794,12 @@ export function normalizeShareViewState(input = {}) {
   state.scopeFeatherPct = finite(source.scopeFeatherPct)
     ? clampScopeFeatherPct(Number(source.scopeFeatherPct))
     : d.scopeFeatherPct;
+  state.scopeOpacityPct = intOr(
+    source.scopeOpacityPct,
+    d.scopeOpacityPct,
+    0,
+    100,
+  );
   state.scopeTerminusPct = intOr(
     source.scopeTerminusPct,
     null,

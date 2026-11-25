@@ -896,6 +896,24 @@ test('time fields filter by ISO and derive ageHours; the feed window is exposed'
   assert.equal(age.coverage.layersQueried[0].window, 'last 24 h');
 });
 
+test('perimeter age follows the snapshot time of the remembered rows', async () => {
+  const discoveredTime = Date.UTC(2024, 6, 1);
+  let at = Date.UTC(2024, 6, 2);
+  const engine = createAnalystEngine({
+    now: () => Date.UTC(2026, 6, 2),
+    getRecords: () => [{ id: 'Pine', discoveredTime }],
+    getRecordsAt: () => at,
+  });
+  const first = await engine.query({
+    layers: ['fire-perimeters'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(first.items[0].ageHours, 24);
+  at = null;
+  const followUp = await engine.query({ followUp: true });
+  assert.equal(followUp.items[0].ageHours, 24);
+});
+
 test('follow-up provenance stays attached to old rows after a feed recovers', async () => {
   let state = 'stale';
   const engine = createAnalystEngine({

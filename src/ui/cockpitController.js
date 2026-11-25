@@ -1,4 +1,6 @@
 /** Coordinate Cockpit lifecycle through supplied aircraft, terrain, rendering and briefing operations. */
+import { onFollowChanged } from '../data/followed.js';
+import { canvasOf, frameOf } from '../render/rendererOf.js';
 import {
   readAircraftInfo,
   readSatelliteInfo,
@@ -24,10 +26,12 @@ import {
 import { update } from './cockpitCamera.js';
 import {
   beginOrbital,
+  orbitalViewSignal,
   endOrbital,
   resetOrbitalLook,
   jumpToSensorSwath,
   onOrbitalWheel,
+  stepOrbitalMount,
   stepOrbitalZoom,
   turnOrbitalLook,
   updateOrbital,
@@ -36,6 +40,7 @@ import {
 import {
   onOrbitalClick,
   onOrbitalDoubleClick,
+  orbitalSiteUnder,
   routeSceneClick,
   toggleOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
@@ -74,6 +79,7 @@ import {
   publishBriefView,
   showBriefPage,
   setBriefAutoRotate,
+  setBriefLiveOffered,
   startBriefRotation,
   stopBriefRotation,
   updateLocalPosition,
@@ -107,7 +113,6 @@ import { DEFAULT_RADAR_RANGE_NM, nextRadarRange } from '../cockpitRadar.js';
 import { VESSEL_BRIDGE_PITCH_DEG } from '../cockpitSubjects.js';
 import { stepLook } from '../cockpitLook.js';
 import { createCockpitSubjectCaller } from '../cockpitSubjectProviders.js';
-import * as Cesium from 'cesium';
 
 /** Whether the user asked for reduced motion: look turns then jump. */
 function prefersReducedMotion() {
@@ -137,11 +142,15 @@ export class CockpitViewController {
       publish = {},
     } = {},
   ) {
+    // Before anything subscribes: a viewer with no frame port throws here.
+    const frame = frameOf(viewer);
     this.viewer = viewer;
     this.services = services;
     this.destroyed = false;
     this.disposed = false;
     this.active = false;
+    /** Gives camera input back; held from enter to exit. */
+    this.releaseCameraInput = null;
     /**
      * 'aircraft', 'vessel', 'satellite' or a provider's kind while active;
      * which subject the camera rides.
@@ -175,6 +184,8 @@ export class CockpitViewController {
      */
     this.orbital = null;
     this.trackedEntity = null;
+    /** What the camera followed before Cockpit took it, to follow again. */
+    this.trackedFollow = null;
     this.trackedEntityWasShown = true;
     this.heading = null;
     this.lastFrameMs = 0;
@@ -186,8 +197,10 @@ export class CockpitViewController {
     this.surfaceWaitStartedMs = 0;
     this.surfaceAcquiring = false;
     this.surfaceFallback = false;
-    /** The height an application subject's frame last stood at (m). */
+    /** The height an application subject's eye last stood at (m). */
     this.subjectHeightM = null;
+    /** Whether `subjectHeightM` is still the one its entry frame gave. */
+    this.subjectHeightFromEntry = false;
     /** The ground clamp's eased lift under that subject's eye (m). */
     this.subjectLiftM = null;
     /**
@@ -263,6 +276,8 @@ export class CockpitViewController {
     this.signalSignatures = new Map();
     this.briefPageIndex = 0;
     this.briefAutoRotateEnabled = false;
+    /** Whether the briefing offers its LIVE page (the subject has a stream). */
+    this.briefLiveOffered = false;
     // Cockpit's views render what these receive.
     this.publishPresence = publish.presence ?? (() => {});
     this.publishBrief = publish.brief ?? (() => {});
@@ -311,28 +326,17 @@ export class CockpitViewController {
     this.regionalBriefSubjectId = null;
     this.contextLayoutFrame = null;
     this.contextLayoutStamp = null;
-    this.scratchTarget = new Cesium.Cartesian3();
-    this.cockpitAnchor = new Cesium.Cartesian3();
+    /** Where the Cockpit eye is carried from, as ECEF; see cockpitCamera.js. */
+    this.cockpitAnchor = null;
     this.cockpitAnchorValid = false;
-    this.scratchCamera = new Cesium.Cartesian3();
-    this.scratchAdvance = new Cesium.Cartesian3();
-    this.scratchCorrection = new Cesium.Cartesian3();
-    this.scratchForward = new Cesium.Cartesian3();
-    this.scratchHorizontal = new Cesium.Cartesian3();
-    this.scratchUp = new Cesium.Cartesian3();
-    this.scratchLocal = new Cesium.Cartesian3();
-    this.scratchEnu = new Cesium.Matrix4();
-    this.scratchAnchorCartographic = new Cesium.Cartographic();
-    this.scratchCameraCartographic = new Cesium.Cartographic();
-    this.scratchTargetCartographic = new Cesium.Cartographic();
     this._listenerRemovers = [onLocaleChange(() => this.relocalize())];
 
     // Camera mutations belong before scene update/culling. Changing the camera
     // from preRender makes 3D Tiles discover a new view after traversal and can
     // create a self-sustaining refinement loop under a moving cockpit camera.
     this._listenerRemovers.push(
-      viewer.scene.preUpdate.addEventListener(() => this.update()),
-      viewer.trackedEntityChanged.addEventListener(() => {
+      frame.on('preUpdate', () => this.update()),
+      onFollowChanged(viewer, () => {
         if (this.active) this._adoptTrackedEntity(performance.now());
         else this.syncEntry();
       }),
@@ -340,7 +344,7 @@ export class CockpitViewController {
     this._listen(this.entry, 'click', () => this.enter());
     // Double-clicking the followed track is a third way in.
     this._listen(
-      viewer.scene?.canvas,
+      canvasOf(viewer),
       'pointerdown',
       () => this.onScenePointerDown(),
       true,
@@ -351,7 +355,7 @@ export class CockpitViewController {
     // In orbit the wheel steps the optical zoom (Cesium's own wheel zoom is
     // off while the Cockpit holds the camera).
     this._listen(
-      viewer.scene?.canvas,
+      canvasOf(viewer),
       'wheel',
       (event) => this.onOrbitalWheel(event),
       { passive: false },
@@ -404,6 +408,10 @@ export class CockpitViewController {
       else if (target?.closest?.('#cockpit-orbital-zoom-out'))
         this.stepOrbitalZoom(-1);
       else if (target?.closest?.('#cockpit-orbital-nadir')) this.orbitalNadir();
+      else if (target?.closest?.('#cockpit-orbital-view-next'))
+        this.nextOrbitalView();
+      else if (target?.closest?.('#cockpit-orbital-view-previous'))
+        this.previousOrbitalView();
       else if (target?.closest?.('#cockpit-orbital-sensor'))
         this.jumpToSensorSwath();
     });
@@ -457,6 +465,26 @@ export class CockpitViewController {
   beginOrbital() {
     return beginOrbital.call(this);
   }
+
+  orbitalViewSignal(info) {
+    return orbitalViewSignal.call(this, info);
+  }
+
+  /**
+   * The station view's right arrow: step to the station's next view.
+   * @returns {boolean} True when the view changed.
+   */
+  nextOrbitalView() {
+    return stepOrbitalMount.call(this, 1);
+  }
+
+  /**
+   * The station view's left arrow: step back to the view before.
+   * @returns {boolean} True when the view changed.
+   */
+  previousOrbitalView() {
+    return stepOrbitalMount.call(this, -1);
+  }
   endOrbital() {
     return endOrbital.call(this);
   }
@@ -497,6 +525,9 @@ export class CockpitViewController {
    */
   onOrbitalDoubleClick(position) {
     return onOrbitalDoubleClick.call(this, position);
+  }
+  orbitalSiteUnder(position) {
+    return orbitalSiteUnder.call(this, position);
   }
   /**
    * A site's orbital Live Signals row: focus that site, switch to it, or end
@@ -711,6 +742,9 @@ export class CockpitViewController {
   setBriefAutoRotate(enabled) {
     return setBriefAutoRotate.call(this, enabled);
   }
+  setBriefLiveOffered(offered) {
+    return setBriefLiveOffered.call(this, offered);
+  }
   startBriefRotation(options) {
     return startBriefRotation.call(this, options);
   }
@@ -735,8 +769,16 @@ export class CockpitViewController {
   publishCockpitSignals() {
     return publishCockpitSignals.call(this);
   }
-  pushCockpitSignal(key, tone, title, detail, target) {
-    return pushCockpitSignal.call(this, key, tone, title, detail, target);
+  pushCockpitSignal(key, tone, title, detail, target, options) {
+    return pushCockpitSignal.call(
+      this,
+      key,
+      tone,
+      title,
+      detail,
+      target,
+      options,
+    );
   }
   dropCockpitSignal(key) {
     return dropCockpitSignal.call(this, key);

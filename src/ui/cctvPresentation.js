@@ -1,9 +1,22 @@
 import { getLocale, keepCodesWithValues, msg, t, tn } from '../i18n/index.js';
-import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
+import {
+  cctvSourceLabelText,
+  cctvSourceMessageText,
+  isCctvLiveFrameFallback,
+} from './cctvFrames.js';
 
 import { createCctvVideoSurface } from './cctvVideo.js';
 import { presentCctvCalibration } from './cctvCalibration.js';
 import { roundHeadingDegrees } from '../data/headingDegrees.js';
+import {
+  MOBILE_SHELL_CLASS,
+  MOBILE_SHEET_ATTR,
+  sheetForPanelId,
+} from './mobileSheets.js';
+
+const CAMERAS_SHEET = sheetForPanelId('cctv-panel');
+const CONTEXT_SHEET = sheetForPanelId('global-context-panel');
+
 export function _calBadgeLabel(badge) {
   switch (badge) {
     case 'calibrated':
@@ -58,6 +71,10 @@ export function presentCctvPanel(state, enabled) {
   const dirty = !!activeCamera?.calDirty;
   return {
     enabled,
+    activeCameraId: activeId,
+    hasLiveSnapshot: Boolean(activeCamera?.liveSnapshotUrl),
+    stillSuppressed:
+      enabled && Boolean(activeCamera?.sourceKind?.startsWith('quebec-')),
     navDisabled: !enabled || catalogCount === 0,
     focusDisabled: !enabled || catalogCount === 0 || !activeId,
     toggleDisabled: !enabled,
@@ -96,9 +113,10 @@ function metaText(state, enabled, activeCamera, catalogCount) {
     const provider = cctvSourceLabelText(
       activeCamera.sourceLabel || activeCamera.provider || 'Configured Source',
     );
-    const statusMsg = activeCamera.sourceMessage
-      ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
-      : '';
+    const statusMsg =
+      activeCamera.sourceMessage && !isCctvLiveFrameFallback(activeCamera)
+        ? ` · ${cctvSourceMessageText(activeCamera.sourceMessage)}`
+        : '';
     // A partner-supplied feed inside a pack names its owner here.
     const credit = activeCamera.credit ? ` · ${activeCamera.credit}` : '';
     const calBadge = activeCamera.calBadge
@@ -164,8 +182,8 @@ export function _renderCctvState(state) {
   this._lastQuebecSelectionRevision = Number.isFinite(selectionRevision)
     ? selectionRevision
     : null;
-  const isQuebecCamera =
-    enabled && activeCamera?.sourceKind?.startsWith('quebec-');
+  const view = presentCctvPanel(state, enabled);
+  const isQuebecCamera = view.stillSuppressed;
   this._quebecCctvOverlay?.setCamera(isQuebecCamera ? activeCamera : null, {
     reselected,
   });
@@ -269,16 +287,31 @@ export function _renderCctvState(state) {
     });
   }
 
-  this.store.publish(presentCctvPanel(state, enabled));
+  this.store.publish(view);
 
   const liveIntent =
     enabled && !!activeCamera?.isVideo && !activeCamera?.browserMediaUrl;
+  if (this.store.live !== liveIntent) this._clearCctvFrame();
   this.store.setLive(liveIntent);
+  // A background tab, a collapsed panel or a closed phone sheet shows no
+  // picture; the observers and visibilitychange render again on showing.
+  const body = globalThis.document?.body;
+  const phone = body?.classList.contains(MOBILE_SHELL_CLASS);
+  const sheet = body?.getAttribute(MOBILE_SHEET_ATTR);
+  const tabShown = !!body && !document.hidden;
+  const panelShown =
+    tabShown &&
+    !this._cctvPanel?.classList.contains('collapsed') &&
+    (!phone || sheet === CAMERAS_SHEET);
+  // A Context preview can outlive CCTV's selection when the feed changes.
+  const cardShown =
+    tabShown &&
+    this.store.previewCards.includes(activeId) &&
+    (!phone || sheet === CONTEXT_SHEET);
+  // Its bigger view is a popup over the map, shown on any phone sheet.
+  const popupShown = tabShown && this.store.previewPopups.includes(activeId);
   if (this._cctvVideo) {
-    const visible =
-      liveIntent &&
-      !document.hidden &&
-      !this._cctvPanel?.classList.contains('collapsed');
+    const visible = liveIntent && panelShown;
     if (!visible || this._cctvVideoCameraId !== activeId) {
       this._cctvVideoSurface?.stop();
       this._cctvVideoSurface = null;
@@ -291,8 +324,10 @@ export function _renderCctvState(state) {
     }
   }
 
-  if (this._cctvFrame && !liveIntent) {
-    const nextSrc = enabled && !isQuebecCamera ? activeCamera?.frameUrl : null;
+  if (this._cctvFrame) {
+    const nextSrc = liveIntent
+      ? (cardShown || popupShown) && activeCamera.liveSnapshotUrl
+      : enabled && !isQuebecCamera && activeCamera?.frameUrl;
     const nextCameraId =
       enabled && !isQuebecCamera ? activeCamera?.id || '' : '';
     const cameraChanged = this._frame.cameraId !== nextCameraId;
@@ -303,15 +338,13 @@ export function _renderCctvState(state) {
     // immediate so navigation never waits on the prior camera's request.
     if (
       nextSrc &&
+      (panelShown || cardShown || popupShown) &&
       (cameraChanged || (!frameLoading && this._frame.currentSrc !== nextSrc))
     ) {
       this._queueCctvFrame(nextSrc, nextCameraId, cameraChanged);
-    }
-    if (!nextSrc) {
+    } else if (!nextSrc || (cameraChanged && this._frame.cameraId)) {
       this._clearCctvFrame();
     }
-  } else if (liveIntent) {
-    this._clearCctvFrame();
   }
 
   this._syncCctvSourceBadge(activeCamera, enabled);

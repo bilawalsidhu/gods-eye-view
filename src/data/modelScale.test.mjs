@@ -15,6 +15,8 @@ import {
   modelVisualAnchor,
   trailHeadStart,
   modelAnchorWorld,
+  modelDrawnScale,
+  gltfToPlacedAxes,
 } from './modelVisualAnchor.js';
 import { aircraftModelSpec } from './fleetModels.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
@@ -25,6 +27,14 @@ const set = {
   catalog: JSON.parse(fs.readFileSync(path.join(FLEET, 'catalog.json'), 'utf8')),
   types: JSON.parse(fs.readFileSync(path.join(FLEET, 'types.json'), 'utf8')),
 };
+
+/** The JSON chunk of a GLB file. */
+function glbJson(file) {
+  const buf = fs.readFileSync(file);
+  assert.equal(buf.readUInt32LE(0), 0x46546c67, `${file}: not a GLB`);
+  assert.equal(buf.readUInt32LE(16), 0x4e4f534a, `${file}: first chunk not JSON`);
+  return JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8'));
+}
 
 /** Every aircraft drawn at its type's size: no rendered radius outside what aircraft span. */
 const WORLD_RADIUS_MIN_M = 2;
@@ -70,6 +80,15 @@ test('every typed aircraft renders at its published length, a real-world aircraf
   }
 });
 
+function normalBillboardScaleByDistance(sourceFile) {
+  const src = readLayerSource(path.join(ROOT, sourceFile));
+  const fn = src.match(/const NORMAL_SCALE_BY_DISTANCE = ([\s\S]*?\);)/);
+  assert.ok(fn, `${sourceFile}: NORMAL_SCALE_BY_DISTANCE not found`);
+  const scalar = fn[1].match(/near: (\d+),\s*nearValue: ([\d.]+),\s*far: (\d+),\s*farValue: ([\d.]+),?\s*\}/);
+  assert.ok(scalar, `${sourceFile}: icon scale-by-distance not found`);
+  return scalar.slice(1).map(Number);
+}
+
 const AIRCRAFT_LAYERS = [
   'src/layers/flights/rendering.js',
   'src/layers/military/rendering.js',
@@ -80,7 +99,7 @@ test('every aircraft layer takes its model and scale from the fleet set, no laye
   for (const file of AIRCRAFT_LAYERS) {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.match(source, /\baircraftLayerModelSpec\b/, `${file}: models come from aircraftLayerModelSpec`);
-    assert.match(source, /\bcreateFleetModel\(/, `${file}: models are built from the loaded fleet set`);
+    assert.match(source, /\bloadFleetModelSet\(|\bcreateAircraftModels\(/, `${file}: models are drawn from the loaded fleet set`);
     assert.doesNotMatch(source, /\bMODEL_SCALE\b|CLASS_SCALE_3D|\.glb['"]/, `${file}: no layer-owned model scale or asset`);
   }
 });
@@ -191,10 +210,10 @@ test('the trail head grows continuously across the envelope, never in one step',
 // after half of Cesium's axis correction once put the aft offset on the
 // rendered model's LATERAL axis — invisible at a single heading. So this sweeps
 // headings and every fleet anchor, and asserts the anchor lies in the model's
-// longitudinal/vertical plane, aft and at its own height. The mock carries a
-// NON-IDENTITY root transform so a dropped link in the chain fails too.
-const TRAIL_ROOT_SCALE = 2;
-const TRAIL_ROOT_OFFSET = Object.freeze({ lengthwise: 5, vertical: -1 });
+// longitudinal/vertical plane, aft and at its own height. The anchor is drawn
+// at a scale other than 1, because a scale of 1 leaves both numbers the pin
+// asserts at the raw table values, which is the answer a dropped scale gives.
+const TRAIL_DRAWN_SCALE = 2;
 function headingAxes(origin, headingDeg) {
   const enu = Cesium.Transforms.eastNorthUpToFixedFrame(origin, Cesium.Ellipsoid.WGS84, new Cesium.Matrix4());
   const axis = (i) => {
@@ -214,12 +233,6 @@ function headingAxes(origin, headingDeg) {
 
 test('the trail anchor rides the rendered longitudinal axis at every heading', () => {
   const position = Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 3000);
-  const rootTransform = Cesium.Matrix4.fromTranslationQuaternionRotationScale(
-    new Cesium.Cartesian3(0, TRAIL_ROOT_OFFSET.lengthwise, TRAIL_ROOT_OFFSET.vertical),
-    Cesium.Quaternion.IDENTITY,
-    new Cesium.Cartesian3(TRAIL_ROOT_SCALE, TRAIL_ROOT_SCALE, TRAIL_ROOT_SCALE),
-    new Cesium.Matrix4(),
-  );
   for (const headingDeg of [0, 45, 90, 180, 270, 315]) {
     const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(headingDeg), 0, 0);
     const modelMatrix = Cesium.Transforms.headingPitchRollToFixedFrame(
@@ -228,20 +241,15 @@ test('the trail anchor rides the rendered longitudinal axis at every heading', (
     const origin = Cesium.Matrix4.getTranslation(modelMatrix, new Cesium.Cartesian3());
     const { lengthwise, vertical, lateral } = headingAxes(origin, headingDeg);
     for (const [name, anchor] of Object.entries(FLEET_TRAIL_ANCHORS)) {
-      const model = {
-        modelMatrix,
-        computedScale: 1,
-        sceneGraph: { components: { transform: rootTransform } },
-      };
-      const world = modelAnchorWorld(model, anchor, new Cesium.Cartesian3());
+      const world = modelAnchorWorld(modelMatrix, anchor, TRAIL_DRAWN_SCALE, new Cesium.Cartesian3());
       const offset = Cesium.Cartesian3.subtract(world, origin, new Cesium.Cartesian3());
       const where = `${name} @ heading ${headingDeg}`;
       const side = Cesium.Cartesian3.dot(offset, lateral);
       assert.ok(Math.abs(side) < 1e-4, `${where}: the anchor must have NO lateral component (got ${side.toFixed(4)} m)`);
       const along = Cesium.Cartesian3.dot(offset, lengthwise);
       const up = Cesium.Cartesian3.dot(offset, vertical);
-      const expectedAlong = anchor[0] * TRAIL_ROOT_SCALE + TRAIL_ROOT_OFFSET.lengthwise;
-      const expectedUp = anchor[1] * TRAIL_ROOT_SCALE + TRAIL_ROOT_OFFSET.vertical;
+      const expectedAlong = anchor[0] * TRAIL_DRAWN_SCALE;
+      const expectedUp = anchor[1] * TRAIL_DRAWN_SCALE;
       assert.ok(Math.abs(along - expectedAlong) < 1e-4,
         `${where}: longitudinal offset ${along.toFixed(4)} vs ${expectedAlong.toFixed(4)}`);
       assert.ok(Math.abs(up - expectedUp) < 1e-4,
@@ -259,13 +267,10 @@ test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', 
   assert.ok(anchor[0] > 0, 'the rotorcraft anchor sits aft');
   for (const headingDeg of [0, 137.5, 271.9]) {
     const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(headingDeg), 0, 0);
-    const model = {
-      modelMatrix: Cesium.Transforms.headingPitchRollToFixedFrame(
-        position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4()),
-      computedScale: spec.scale,
-    };
-    const origin = Cesium.Matrix4.getTranslation(model.modelMatrix, new Cesium.Cartesian3());
-    const world = modelAnchorWorld(model, anchor, new Cesium.Cartesian3());
+    const matrix = Cesium.Transforms.headingPitchRollToFixedFrame(
+      position, hpr, Cesium.Ellipsoid.WGS84, undefined, new Cesium.Matrix4());
+    const origin = Cesium.Matrix4.getTranslation(matrix, new Cesium.Cartesian3());
+    const world = modelAnchorWorld(matrix, anchor, spec.scale, new Cesium.Cartesian3());
     const { lateral } = headingAxes(origin, headingDeg);
     const side = Cesium.Cartesian3.dot(
       Cesium.Cartesian3.subtract(world, origin, new Cesium.Cartesian3()), lateral);
@@ -274,14 +279,55 @@ test('a hovering rotorcraft anchors aft of its own hull, whatever its heading', 
   }
 });
 
-function normalBillboardScaleByDistance(sourceFile) {
-  const src = readLayerSource(path.join(ROOT, sourceFile));
-  const fn = src.match(/function (?:parts\.\w+\.)?_normalBillboardScaleByDistance\(\) \{([\s\S]*?)\n\}/);
-  assert.ok(fn, `${sourceFile}: _normalBillboardScaleByDistance not found`);
-  const scalar = fn[1].match(/NearFarScalar\((\d+), ([\d.]+), (\d+), ([\d.]+)\)/);
-  assert.ok(scalar, `${sourceFile}: billboard NearFarScalar not found`);
-  return scalar.slice(1).map(Number);
-}
+// The glTF axis turn the anchors ride is the one the Cesium renderer draws
+// models with (`Model.fromGltfAsync`'s defaults: Y up, Z forward), and no
+// fleet model carries a root transform of its own that the renderer would add
+// to the chain.
+test('anchors turn glTF axes as the Cesium renderer draws models', () => {
+  const correction = Cesium.Matrix4.multiplyTransformation(
+    Cesium.Axis.Y_UP_TO_Z_UP, Cesium.Axis.Z_UP_TO_X_UP, new Cesium.Matrix4());
+  for (const v of [[1, 0, 0], [0, 1, 0], [0, 0, 1], [3.5, -2, 7]]) {
+    const drawn = Cesium.Matrix4.multiplyByPoint(
+      correction, new Cesium.Cartesian3(...v), new Cesium.Cartesian3());
+    const turned = gltfToPlacedAxes(v);
+    assert.deepEqual([drawn.x, drawn.y, drawn.z].map((n) => +n.toFixed(12)), turned.map((n) => +n.toFixed(12)));
+  }
+  for (const [name, entry] of Object.entries(set.catalog)) {
+    const gltf = glbJson(path.join(FLEET, entry.file));
+    assert.ok(!gltf.extensionsUsed?.includes('CESIUM_RTC'), `${name}: no root transform of its own`);
+  }
+});
+
+// The drawn scale follows the draw contract's pixel rule, which the Cesium
+// renderer implements as Model.computedScale: the bounding sphere's pixel
+// size at its depth less its radius, raised to minPixelSize.
+test('a model is drawn at its scale until the pixel floor raises it', () => {
+  const pose = { position: { x: 0, y: 0, z: 0 }, direction: { x: 0, y: 0, z: 1 }, fovy: Math.PI / 3 };
+  const base = { scale: 1, minPixelSize: 24, radiusM: 30, pose, viewportHeightPx: 1000 };
+  // Near: 60 m across fills hundreds of pixels.
+  assert.equal(modelDrawnScale({ ...base, center: { x: 0, y: 0, z: 500 } }), 1);
+  // Far: 100 km away, 24 px of a 30 m-radius sphere.
+  const depth = 100_000;
+  const mpp = (2 * (depth - 30) * Math.tan(Math.PI / 6)) / 1000;
+  const raised = modelDrawnScale({ ...base, center: { x: 0, y: 0, z: depth } });
+  assert.ok(Math.abs(raised - (24 * mpp) / 60) < 1e-9, `raised to ${raised}`);
+  // Depth along the view direction, not straight-line distance: off to one
+  // side at the same depth, it is raised the same.
+  assert.equal(modelDrawnScale({ ...base, center: { x: 40_000, y: 0, z: depth } }), raised);
+  // The sphere's size is capped at the drawing buffer's larger side in its own
+  // pixels: at a pixel ratio of 2 a 500 CSS px viewport is 1000 px across, so
+  // a sphere 600 CSS px wide is not raised.
+  const close = { ...base, minPixelSize: 600, viewportHeightPx: 500, center: { x: 0, y: 0, z: 60 } };
+  assert.equal(modelDrawnScale({ ...close, pixelRatio: 2 }), 1);
+  assert.ok(modelDrawnScale(close) < 1, 'at a pixel ratio of 1 the cap is 500 px');
+  // maxScale caps it, and the sphere it is measured by is at the capped scale.
+  assert.equal(modelDrawnScale({ ...base, maxScale: 2, center: { x: 0, y: 0, z: depth } }), 2);
+  const fromCapped = modelDrawnScale({ ...base, scale: 5, maxScale: 3, minPixelSize: 400, center: { x: 0, y: 0, z: depth } });
+  assert.equal(fromCapped, 3, 'raised past maxScale, then capped');
+  const big = modelDrawnScale({ ...base, scale: 5, maxScale: 1e9, minPixelSize: 4000, viewportHeightPx: 1000, viewportWidthPx: 5000, center: { x: 0, y: 0, z: depth } });
+  assert.ok(Math.abs(big - (4000 * ((2 * (depth - 150) * Math.tan(Math.PI / 6)) / 1000)) / 60) < 1e-9, `raised from the sphere at scale 5: ${big}`);
+  assert.equal(modelDrawnScale({ ...base, pose: null, center: { x: 0, y: 0, z: depth } }), 1);
+});
 
 test('civilian and military globe-view aircraft retain the established 3.0 near scale and 0.5 floor', () => {
   for (const [name, source] of [

@@ -642,11 +642,15 @@ test('a provider whose getter throws is left out with one warning; the next is k
   ]);
 });
 
-test('a worded getter that starts throwing keeps the last good words', () => {
-  let failing = false;
-  const words = (value) => () => {
-    if (failing) throw new Error('translations unavailable');
-    return value;
+test('a worded getter that throws from its second read keeps the last good words', () => {
+  // Registration reads each once: the second read is the first use.
+  const once = (value) => {
+    let read = false;
+    return () => {
+      if (read) throw new Error('translations unavailable');
+      read = true;
+      return value;
+    };
   };
   const definition = provider();
   for (const [key, value] of Object.entries({
@@ -654,20 +658,50 @@ test('a worded getter that starts throwing keeps the last good words', () => {
     entryFace: { icon: 'commute', label: 'RIDE' },
     look: { restPitchDeg: 10, aheadLabel: 'Look ahead' },
   }))
-    Object.defineProperty(definition, key, { get: words(value) });
+    Object.defineProperty(definition, key, { get: once(value) });
   const { kept, warnings } = keep([definition]);
   assert.deepEqual(warnings, []);
   const [ride] = kept;
-  failing = true;
   assert.equal(ride.labels.view, 'Ride view');
   assert.equal(ride.entryFace.label, 'RIDE');
   assert.deepEqual(ride.look, { restPitchDeg: 10, aheadLabel: 'Look ahead' });
   // So does a worded object whose own member throws when read.
-  failing = false;
   Object.defineProperty(definition, 'labels', {
     get: () => throwingGetter({ view: 'v', exit: 'e', exitText: 'x' }, 'view'),
   });
   assert.equal(ride.labels.view, 'Ride view');
+});
+
+test('a worded member that returns a rejected promise keeps the last good words, the rejection caught', async () => {
+  const definition = provider();
+  const words = definition.labels;
+  let reads = 0;
+  definition.labels = () => {
+    reads += 1;
+    return reads === 1 ? words : Promise.reject(new Error('late words'));
+  };
+  const { kept, warnings } = keep([definition]);
+  assert.deepEqual(warnings, []);
+  assert.equal(kept[0].labels.view, words.view);
+  // An unhandled rejection would fail this test once it surfaces.
+  await new Promise((resolve) => setTimeout(resolve, 10));
+});
+
+test('a frame field read through a getter is read once', () => {
+  const frame = { id: 'a1', latitude: 1, longitude: 2, eye: { upM: 3 } };
+  const once = (value) => {
+    let read = false;
+    return () => {
+      const answer = read ? undefined : value;
+      read = true;
+      return answer;
+    };
+  };
+  Object.defineProperty(frame, 'heightM', { get: once(420) });
+  Object.defineProperty(frame, 'speedMps', { get: once(12) });
+  const normalized = cockpitSubjectFrame(frame, 'a1');
+  assert.equal(normalized.heightM, 420);
+  assert.equal(normalized.speedMps, 12);
 });
 
 test('a candidate, frame or HUD view whose getter throws reads as null', () => {

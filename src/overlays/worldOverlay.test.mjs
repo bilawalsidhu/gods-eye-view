@@ -1,4 +1,6 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { createNamedMarkers } from '../layers/installations/namedMarkers.js';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 import { renderApplicationHtml } from '../testSupport/applicationHtml.mjs';
 import { readStylesheet } from '../testSupport/readStylesheet.mjs';
 import test from 'node:test';
@@ -108,6 +110,7 @@ function installMockEnvironment({
 } = {}) {
   const byId = new Map();
   const paintTrace = [];
+  const contextRequests = [];
   const ctx = mockContext('shared', paintTrace);
   const detectionCtx = mockContext('detection', paintTrace);
   const layoutReads = { canvasWidth: 0, canvasHeight: 0, boundingClientRect: 0 };
@@ -182,8 +185,9 @@ function installMockEnvironment({
       return this._rect;
     }
 
-    getContext() {
+    getContext(type, options) {
       if (this.tagName !== 'CANVAS') return null;
+      contextRequests.push({ id: this.id, type, options });
       return this.id === 'world-overlay-detection-surface' ? detectionCtx : ctx;
     }
 
@@ -390,12 +394,15 @@ function installMockEnvironment({
       requestRender() { this.requestRenderCount++; },
     },
   };
+  const ports = bindOverlayPorts(viewer);
 
   return {
     viewer,
+    ports,
     ctx,
     detectionCtx,
     paintTrace,
+    contextRequests,
     document,
     window,
     postRender,
@@ -1187,7 +1194,10 @@ test('custom detection lane receives the shared host frame and paints below ordi
   assert.equal(capturedFrame.dpr, 2);
   assert.equal(capturedFrame.viewProjectionMatrix[0], 1);
   assert.equal(capturedFrame.viewProjection.m0, 1);
-  assert.equal(capturedFrame.cameraPosition, env.viewer.camera.positionWC);
+  assert.deepEqual(
+    { ...capturedFrame.cameraPosition },
+    { x: env.viewer.camera.positionWC.x, y: env.viewer.camera.positionWC.y, z: env.viewer.camera.positionWC.z },
+  );
   assert.ok(capturedFrame.occluder);
   assert.equal(capturedFrame.uiRects.length, capturedFrame.uiRectCount);
   assert.ok(capturedFrame.uiRectCount > 0);
@@ -1504,9 +1514,14 @@ test('a placement is only ever kept under chrome that composites ABOVE the host'
   const paintedUnder = (occluders) => {
     const env = installMockEnvironment({ width: 400, height: 300, dpr: 1, occluders });
     initWorldOverlay(env.viewer);
+    let hardUi;
+    registerWorldOverlayPaintLane('ambient-label', (frame) => {
+      hardUi = frame.overlapsHardUi({ x: 180, y: 130, w: 40, h: 40 });
+    }, { id: 'anchored-label', active: true });
     setOverlayEntries('ambient', [selectedEntry('CONTACT')]);
     env.postRender.raise();
     const { paintedCount } = getWorldOverlayDiagnostics();
+    assert.equal(hardUi, paintedCount === 0);
     env.cleanup();
     return paintedCount;
   };
@@ -1923,6 +1938,25 @@ test('paint rectangles publish from a pool and topmost interactive lookup wins',
   assert.equal(hit.entryId, 'over', 'hit test walks painted entries from last to first');
   assert.equal(hit.sourceId, 'hits');
   assert.equal(getWorldOverlayDiagnostics().hitRectCount, 2);
+  env.cleanup();
+});
+
+test('hit rectangles stay what is painted until the next paint, through a republish in the same click', () => {
+  const env = installMockEnvironment();
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('cards', [selectedEntry('card', { interactive: true })]);
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  // An earlier click subscriber publishes its own selection card: later
+  // subscribers in the same click still see what the user clicked on.
+  setOverlayEntries('other', [selectedEntry('elsewhere', { interactive: true })]);
+  clearOverlaySource('cards');
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'card');
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' })?.entryId, 'card');
+  // The next paint shows the change, and the hit test follows it.
+  env.postRender.raise();
+  assert.equal(hitTestWorldOverlay(200, 120, { sourceId: 'cards' }), null);
+  assert.equal(hitTestWorldOverlay(200, 120)?.entryId, 'elsewhere');
   env.cleanup();
 });
 
@@ -2502,14 +2536,21 @@ test('installation titles share persistent card arbitration and retain a bounded
   env.viewer.camera.changed = new Cesium.Event();
   t.mock.method(Cesium.Cartesian3, 'fromDegrees', (lon, lat) => new Cesium.Cartesian3(lon, lat, 0));
   t.mock.method(Cesium.EllipsoidalOccluder.prototype, 'isPointVisible', () => true);
-  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch) => {
+  t.mock.method(Cesium.SceneTransforms, 'worldToWindowCoordinates', (_scene, _point, scratch = new Cesium.Cartesian2()) => {
     scratch.x = scratch.y = 100; return scratch;
   });
   const state = { enabled: true, viewer: env.viewer, contextAnchor: {} };
+  env.ports.unbind();
+  bindFakeCesiumScene(env.viewer);
   const markers = createNamedMarkers({ state,
     services: { render: { governorRequestRender() {} } },
-    parts: { model: { colorFor: () => Cesium.Color.ORANGE }, rendering: { installationSurfaceHeightM: () => 0 } },
-    overlayHost: { setEntries: setOverlayEntries, clearSource: clearOverlaySource,
+    parts: { model: { colorFor: () => [1, 165 / 255, 0, 1] }, rendering: { installationSurfaceHeightM: () => 0 } },
+    // The markers place titles in ECEF; this camera looks at degrees, as the
+    // mocked fromDegrees above makes them.
+    overlayHost: { setEntries: (id, entries, policy) => setOverlayEntries(id, entries.map((entry) => {
+      const { longitude, latitude } = Cesium.Cartographic.fromCartesian(entry.position);
+      return { ...entry, position: new Cesium.Cartesian3(Cesium.Math.toDegrees(longitude), Cesium.Math.toDegrees(latitude), 0) };
+    }), policy), clearSource: clearOverlaySource,
       setVisible: setOverlaySourceVisible, getDiagnostics: getWorldOverlayDiagnostics },
   });
   initWorldOverlay(env.viewer);
@@ -2606,6 +2647,27 @@ test('the queued-card index stays bounded while card identities churn', () => {
     );
   } finally {
     Map.prototype.set = originalSet;
+    env.cleanup();
+  }
+});
+
+test('both overlay surfaces draw on synchronized 2D contexts', () => {
+  // A desynchronized context can show an earlier buffer after a frame that
+  // only clears: a card removed from its source stayed on screen until
+  // something painted over it.
+  const env = installMockEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    const ids = env.contextRequests.map((request) => request.id).sort();
+    assert.deepEqual(ids, [
+      'world-overlay-canvas',
+      'world-overlay-detection-surface',
+    ]);
+    for (const request of env.contextRequests) {
+      assert.equal(request.type, '2d');
+      assert.notEqual(request.options?.desynchronized, true, request.id);
+    }
+  } finally {
     env.cleanup();
   }
 });

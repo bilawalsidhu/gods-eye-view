@@ -25,6 +25,7 @@ import {
   vesselModelSpec,
 } from './fleetModels.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
+import { TRANSIT_MODES } from './transitFeeds.js';
 import {
   centrelineSegments,
   distanceToSurface,
@@ -442,6 +443,38 @@ test('aids to navigation are the buoy of the mark their type names', () => {
     assert.notEqual(spec.category, 'buoys', vessel.type);
     assert.equal(spec.fixed, undefined, vessel.type);
   }
+});
+
+test('every transit mode but unknown draws its own model, and a route type a finer one', () => {
+  for (const mode of TRANSIT_MODES.filter((m) => m !== 'unknown')) {
+    assert.ok(types.transit.modes[mode], `${mode} has a model`);
+    assert.equal(
+      resolveTransit(types, { mode }).model,
+      types.transit.modes[mode][0],
+    );
+  }
+  for (const [mode, model] of [
+    ['trolleybus', 'trolleybus'],
+    ['cable_tram', 'cable_tram'],
+    ['aerial_lift', 'gondola'],
+    ['funicular', 'funicular'],
+    ['monorail', 'monorail'],
+  ])
+    assert.equal(resolveTransit(types, { mode }).model, model, mode);
+  // A route type outranks the mode: a coach and a high-speed set are still
+  // the bus and rail modes.
+  for (const [routeType, mode, model] of [
+    [200, 'bus', 'coach'],
+    [101, 'rail', 'high_speed'],
+    [106, 'rail', 'regional_dmu'],
+    [710, 'bus', 'double_decker'],
+  ])
+    assert.equal(resolveTransit(types, { routeType, mode }).model, model);
+  // A type the table lacks falls back to the mode.
+  assert.equal(
+    resolveTransit(types, { routeType: 300, mode: 'rail' }).model,
+    'commuter_emu',
+  );
 });
 
 test('transit specs: rail category and mode, then route type, then mode, then the default', () => {

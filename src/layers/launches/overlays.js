@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { WGS84 } from '../../geo/ellipsoid.js';
+import { dot, magnitude, normalize, toDegrees } from '../../geo/vector.js';
+import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg } from '../../i18n/index.js';
 import {
   createCyberSonarSampler,
@@ -12,13 +14,16 @@ import {
   ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_OPTIONS,
 } from './policy.js';
 
+/** The ellipsoid's largest radius, metres. */
+const MAX_RADIUS = Math.max(WGS84.radii.x, WGS84.radii.y, WGS84.radii.z);
+
 export function createOverlays({ state: layerState, services, parts, source }) {
   /**
    * Resolve whether a surface mission anchor is safely on the camera-facing
    * side of Earth. The small positive limb margin prevents labels anchored just
-   * beyond the horizon from leaking through the hidden Cesium globe.
-   * @param {Cesium.Cartesian3} cameraPosition Camera world position.
-   * @param {Cesium.Cartesian3} markerPosition Mission anchor world position.
+   * beyond the horizon from leaking through the hidden globe.
+   * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
+   * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
    * @param {number} [limbMargin] Additional normalized horizon clearance.
    * @returns {boolean} Whether the marker belongs on the visible hemisphere.
    */
@@ -29,33 +34,21 @@ export function createOverlays({ state: layerState, services, parts, source }) {
     limbMargin = 0.012,
   ) {
     if (!cameraPosition || !markerPosition) return false;
-    const cameraMagnitude = Cesium.Cartesian3.magnitude(cameraPosition);
-    if (
-      !Number.isFinite(cameraMagnitude) ||
-      cameraMagnitude <= Cesium.Ellipsoid.WGS84.maximumRadius
-    ) {
+    const cameraMagnitude = magnitude(cameraPosition);
+    if (!Number.isFinite(cameraMagnitude) || cameraMagnitude <= MAX_RADIUS) {
       return false;
     }
-    const cameraDirection = Cesium.Cartesian3.normalize(
-      cameraPosition,
-      new Cesium.Cartesian3(),
-    );
-    const markerDirection = Cesium.Cartesian3.normalize(
-      markerPosition,
-      new Cesium.Cartesian3(),
-    );
-    const limbThreshold =
-      Cesium.Ellipsoid.WGS84.maximumRadius / cameraMagnitude;
+    const limbThreshold = MAX_RADIUS / cameraMagnitude;
     return (
-      Cesium.Cartesian3.dot(cameraDirection, markerDirection) >
+      dot(normalize(cameraPosition), normalize(markerPosition)) >
       limbThreshold + limbMargin
     );
   }
 
   /**
    * Resolve launch-anchor visibility for overview and selected-mission views.
-   * @param {Cesium.Cartesian3} cameraPosition Camera world position.
-   * @param {Cesium.Cartesian3} markerPosition Mission anchor world position.
+   * @param {{x: number, y: number, z: number}} cameraPosition Camera world position.
+   * @param {{x: number, y: number, z: number}} markerPosition Mission anchor world position.
    * @param {string} markerId Mission represented by this anchor.
    * @param {string|null} selectedLaunchId Explicitly selected mission.
    * @returns {boolean} Whether the launch anchor should render.
@@ -104,7 +97,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
    * compete in the bounded ambient-label domain; the selected mission moves to
    * the protected selected lane and gains the former launch-site detail line.
    * @param {object} launch Normalized Launch Library mission.
-   * @param {Cesium.Cartesian3|function():Cesium.Cartesian3} position Existing display position.
+   * @param {object|function():object} position Existing display position.
    * @param {boolean} [selected=false] Whether the mission owns the selected view.
    * @returns {object}
    */
@@ -142,7 +135,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       protected: selected,
       paintLane: selected ? 'selected' : 'ambient-label',
       collisionGroup: 'ambient-label',
-      interactive: false,
+      interactive: true,
       distanceScale: {
         near: 1000,
         nearValue: 1.08,
@@ -164,7 +157,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
    * caller; newline semantics become explicit host detail rows.
    * @param {object} input
    * @param {string} input.id Stable mission-element identity.
-   * @param {Cesium.Cartesian3|function():Cesium.Cartesian3} input.position Existing cached position.
+   * @param {object|function():object} input.position Existing cached position.
    * @param {string} input.text Former native-label text, including newlines.
    * @param {string} input.accent Source-owned label color.
    * @param {number} [input.priority=0] Protected placement order.
@@ -359,7 +352,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
   }
 
   function syncMissionOverlayEntries() {
-    if (!layerState._enabled || !layerState._dataSource?.show) {
+    if (!layerState._enabled || !parts.rendering.missionsShown()) {
       clearMissionOverlaySources();
       return;
     }
@@ -493,15 +486,13 @@ export function createOverlays({ state: layerState, services, parts, source }) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const windowPosition = Cesium.SceneTransforms.worldToWindowCoordinates(
-      layerState._viewer.scene,
-      position,
-    );
+    const query = findQuery(layerState._viewer);
+    const windowPosition = query?.project(position) ?? null;
     if (!windowPosition) {
       hideReplayVehicleOverlay();
       return null;
     }
-    const canvas = layerState._viewer.scene.canvas;
+    const canvas = canvasOf(layerState._viewer);
     if (
       windowPosition.x < -80 ||
       windowPosition.y < -100 ||
@@ -550,10 +541,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         useForward ? forwardProgress : backwardProgress,
       );
       const tangentWindowPosition = tangentPosition
-        ? Cesium.SceneTransforms.worldToWindowCoordinates(
-            layerState._viewer.scene,
-            tangentPosition,
-          )
+        ? query.project(tangentPosition)
         : null;
       if (tangentWindowPosition) {
         const screenDelta = Math.hypot(
@@ -580,7 +568,7 @@ export function createOverlays({ state: layerState, services, parts, source }) {
         }
       }
     }
-    frame.rotation = `${Cesium.Math.toDegrees(vehicleRotation)}deg`;
+    frame.rotation = `${toDegrees(vehicleRotation)}deg`;
 
     const mission = shortMissionLabel(launch.name, 22).toUpperCase();
     const siteName = compactLaunchSiteName(launch.launchSite);
