@@ -56,7 +56,8 @@
     "{n} hPa",
     "{kind} {name}",
     "{speed} {direction}",
-    "3D"
+    "3D",
+    "Kp {kp}"
   ],
   "de": [
     "1090 MHz",
@@ -299,7 +300,8 @@
     "ON AIR",
     "Stream",
     "{seconds} s",
-    "Mode"
+    "Mode",
+    "Kp {kp}"
   ],
   "es": [
     "1 min/s",
@@ -495,7 +497,8 @@
     "3D",
     "KT",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "Kp {kp}"
   ],
   "fr": [
     "1 min/s",
@@ -753,7 +756,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "Kp {kp}"
   ],
   "it": [
     "1 min/s",
@@ -987,7 +991,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "Kp {kp}"
   ],
   "ja": [
     "1090 MHz",
@@ -1071,7 +1076,8 @@
     "{n} hPa",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Kp {kp}"
   ],
   "pt": [
     "1 min/s",
@@ -1267,7 +1273,8 @@
     "3D",
     "KT",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "Kp {kp}"
   ],
   "ru": [
     "1900–1945",
@@ -1312,7 +1319,8 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "Kp {kp}"
   ],
   "sv": [
     "STATION",
@@ -1505,7 +1513,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "Kp {kp}"
   ],
   "uk": [
     "1900–1945",
@@ -1544,7 +1553,8 @@
     "M {n}",
     "{n}%",
     "{kind} {name}",
-    "3D"
+    "3D",
+    "Kp {kp}"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -1629,7 +1639,8 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "Kp {kp}"
   ],
   "zh-Hant": [
     "1090 MHz",
@@ -1714,7 +1725,8 @@
     "{n} MW",
     "{n}%",
     "{n} hPa",
-    "3D"
+    "3D",
+    "Kp {kp}"
   ],
   "he": [
     "{speed} kn",
@@ -1831,6 +1843,7 @@
     "{n} hPa",
     "{kind} {name}",
     "3D",
-    "KT"
+    "KT",
+    "Kp {kp}"
   ]
 }

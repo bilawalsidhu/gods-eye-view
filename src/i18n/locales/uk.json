@@ -4646,5 +4646,13 @@
   "1–3 days": "1–3 дні",
   "Older or unknown": "Старше або невідомо",
   "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м.",
+  "This renderer cannot draw the aurora": "Цей рендерер не може відобразити полярне сяйво",
+  "Solar wind {speed} km/s": "Сонячний вітер {speed} км/с",
+  "Overhead to {lat}°N": "У зеніті до {lat}° пн. ш.",
+  "Forecast for {time} UTC": "Прогноз на {time} UTC",
+  "NOAA OVATION forecast of the chance of seeing aurora overhead, about 30 to 90 minutes ahead, drawn 110 km up. Kp is the planetary geomagnetic index (0 to 9); G, R and S are NOAA’s storm, radio blackout and radiation scales (0 to 5). A southward (negative) Bz feeds stronger aurora. Aurora is only visible from the ground at night under clear skies.": "Прогноз NOAA OVATION імовірності побачити полярне сяйво в зеніті приблизно на 30–90 хвилин наперед, показаний на висоті 110 км. Kp — планетарний геомагнітний індекс (від 0 до 9); G, R і S — шкали NOAA для бур, радіоперешкод і радіації (від 0 до 5). Південне (від’ємне) Bz посилює сяйва. Із землі сяйво видно лише вночі за ясного неба.",
+  "Chance of aurora ≥ {percent}%": "Імовірність сяйва ≥ {percent}%",
+  "Aurora": "Полярне сяйво",
+  "Kp {kp}": "Kp {kp}"
 }
