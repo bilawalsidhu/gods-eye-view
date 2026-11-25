@@ -7,6 +7,7 @@ import { createIngestion } from './ingestion.js';
 import { createViewport } from './viewport.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
+import { createRailCockpitSubject } from './cockpitSubject.js';
 import { createRouteDisplay } from './routeDisplay.js';
 import { createRailSchedules } from './schedules.js';
 import { getRegisteredRailFeed } from '../../data/railFeeds.js';
@@ -23,16 +24,23 @@ function createState({ services }) {
       clearSource: clearOverlaySource,
     }),
     _historyBudget: createHistoryBudget(),
+    /** The viewer the layer draws on, or null. */
     _viewer: null,
-    _markers: null,
+    /** The train icons' draw set, or null. */
+    _icons: null,
     _enabled: false,
     _generation: 0,
     _cameraChangedAttached: false,
+    /** Removes the camera port listener; null when not listening. */
+    _cameraChangedOff: null,
+    /** Removes the one-shot look after the camera listener's first tick. */
+    _cameraFirstTickOff: null,
     _cameraDebounceTimer: null,
     _altitudeGateOpen: false,
     _preRenderRemove: null,
     _renderHeld: false,
-    _clickHandler: null,
+    /** Unsubscribes the train-selection click. */
+    _clickSubscription: null,
     /** Trains mid-glide; the frame pass walks only these. @type {Set<object>} */
     _moving: new Set(),
     /** feedId → registry entry currently polled. */
@@ -78,12 +86,24 @@ function createState({ services }) {
     _stopAnchors: new Map(),
     _categories: { ...DEFAULT_RAIL_CATEGORY_VISIBILITY },
     _selectedKey: null,
+    /** When the user last selected a train, even the selected one (ms). */
+    _selectedAtMs: null,
     _selectedCardAt: 0,
     _selectedCardText: null,
     /** The camera's follow of the selected train (follow.js), or null. */
     _follow: null,
     /** A feed polled only for the selected train (viewport.js), or null. */
     _heldFeedId: null,
+    /**
+     * The train a first-person view holds (cockpitSubject.js), or null: its
+     * marker, 3D model and card are hidden and the selection stays on it.
+     */
+    _cockpitSubjectKey: null,
+    /**
+     * The feed of a held train the feed dropped (ingestion.js), polled until
+     * the view takes a train again or lets go (cockpitSubject.js), or null.
+     */
+    _cockpitLostFeedId: null,
     _revision: 0,
     _controlsListener: null,
     _dataManager: null,
@@ -175,11 +195,13 @@ export function createRailLayer({
   parts.ingestion = createIngestion(context);
   parts.viewport = createViewport(context);
   parts.lifecycle = createLifecycle(context);
+  parts.cockpit = createRailCockpitSubject(context);
 
   return Object.assign(
     { updateInterval: RAIL_POLL_MS },
     parts.lifecycle.methods,
     parts.controls.methods,
+    parts.cockpit.methods,
     {
       /** Test seams: this instance's own state and parts. */
       _railStateForTest: () => state,

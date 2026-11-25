@@ -58,9 +58,8 @@ export function createWildlifeBillboardModel({
           writes += 1;
         }
         for (const key of Object.keys(appearance)) {
-          // Cesium clones Color and NearFarScalar values on assignment. Our
-          // last descriptor, rather than getter reference identity, records
-          // whether the appearance has actually changed.
+          // Our last descriptor, rather than what the point now holds,
+          // records whether the appearance has actually changed.
           if (old?.appearance?.[key] === appearance[key]) continue;
           point[key] = appearance[key];
           writes += 1;

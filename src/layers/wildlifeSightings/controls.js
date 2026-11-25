@@ -1,8 +1,9 @@
-import { t, formatNumber, translateKnown } from '../../i18n/index.js';
+import { t, tn, formatNumber, translateKnown } from '../../i18n/index.js';
 import { msg } from '../../i18n/marker.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { wildlifeIconicGroup } from './model.js';
 import { formatAge } from './photoText.js';
+import { wildlifeEyeHeight } from './view.js';
 import {
   ICONIC_TINTS,
   ICONIC_LEGEND_ORDER,
@@ -137,7 +138,8 @@ export function createControls({ state, services, parts }) {
       const chips = [
         chip({
           id: WILDLIFE_CONFIRMED_CHIP_ID,
-          label: t('CONFIRMED'),
+          // The sightings, plural; a launch landing is CONFIRMED alone.
+          label: t('CONFIRMED', { context: 'sightings filter' }),
           title: t('Show only community-confirmed (research-grade) sightings'),
           params: {
             confirmed: confirmedFailed ? state.confirmed : !state.confirmed,
@@ -214,9 +216,12 @@ export function createControls({ state, services, parts }) {
         stale: state.stale,
         loading,
         refreshing,
-        countLabel: t('{count} sightings in view', {
-          count: formatNumber(count),
-        }),
+        countLabel: tn(
+          count,
+          '{count} sighting in view',
+          '{count} sightings in view',
+          { count: formatNumber(count) },
+        ),
         loadingLabel: loading
           ? t('loading...')
           : refreshing
@@ -230,8 +235,7 @@ export function createControls({ state, services, parts }) {
       if (
         !state.error &&
         !state.query &&
-        state.viewer?.camera?.positionCartographic?.height >
-          WILDLIFE_GRID_HEIGHT_METERS
+        wildlifeEyeHeight(state.viewer) > WILDLIFE_GRID_HEIGHT_METERS
       ) {
         // i18n-ignore: feed-state protocol value
         stats.status = 'zoom-in';

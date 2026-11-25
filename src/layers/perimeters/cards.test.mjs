@@ -1,99 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { perimeterAnchorDegrees, buildIncidentCard } from './cards.js';
-
-const square = [
-  [-108.2, 35.0],
-  [-108.0, 35.0],
-  [-108.0, 35.2],
-  [-108.2, 35.2],
-  [-108.2, 35.0],
-];
-const tiny = [
-  [-107.01, 34.0],
-  [-107.0, 34.0],
-  [-107.0, 34.01],
-  [-107.01, 34.0],
-];
-
-test('the card anchors at the vertex mean of the largest polygon', () => {
-  const anchor = perimeterAnchorDegrees([[tiny], [square]]);
-  assert.ok(Math.abs(anchor.lon - -108.1) < 1e-9);
-  assert.ok(Math.abs(anchor.lat - 35.1) < 1e-9);
-});
-
-test('incident cards stay at the dateline for closed, reversed and rotated outlines', () => {
-  const vertices = [
-    [179, 10],
-    [-179, 10],
-    [-179, 12],
-    [179, 12],
-  ];
-  for (let start = 0; start < vertices.length; start++) {
-    const rotated = [...vertices.slice(start), ...vertices.slice(0, start)];
-    for (const points of [rotated, [...rotated].reverse()]) {
-      const anchor = perimeterAnchorDegrees([[points.concat([points[0]])]]);
-      assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
-      assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
-    }
-  }
-});
-
-test('incident card longitude treats vertices at either sign of 180 as the same meridian', () => {
-  for (const boundary of [-180, 180]) {
-    const ring = [
-      [179, 10],
-      [boundary, 10],
-      [-179, 10],
-      [-179, 12],
-      [179, 12],
-      [179, 10],
-    ];
-    const anchor = perimeterAnchorDegrees([[ring]]);
-    assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
-    assert.ok(Math.abs(anchor.lat - 10.8) < 1e-9);
-  }
-});
-
-test('multipart cards compare polygon areas along short dateline edges', () => {
-  const ordinary = [
-    [10, 20],
-    [11, 20],
-    [11, 21],
-    [10, 21],
-    [10, 20],
-  ];
-  for (const width of [0.2, 2]) {
-    const crossing = [
-      [180 - width / 2, 10],
-      [-180 + width / 2, 10],
-      [-180 + width / 2, 10 + width],
-      [180 - width / 2, 10 + width],
-      [180 - width / 2, 10],
-    ];
-    for (const ring of [crossing, [...crossing].reverse()]) {
-      for (const polygons of [
-        [[ring], [ordinary]],
-        [[ordinary], [ring]],
-      ]) {
-        const anchor = perimeterAnchorDegrees(polygons);
-        if (width < 1) {
-          assert.ok(Math.abs(anchor.lon - 10.5) < 1e-9);
-          assert.ok(Math.abs(anchor.lat - 20.5) < 1e-9);
-        } else {
-          assert.ok(Math.abs(Math.abs(anchor.lon) - 180) < 1e-9);
-          assert.ok(Math.abs(anchor.lat - 11) < 1e-9);
-        }
-      }
-    }
-  }
-});
+import { buildIncidentCard } from './cards.js';
 
 test('a full incident row renders name, size, containment, and ages', () => {
   const now = 1758000000000;
   const card = buildIncidentCard(
     {
-      stableId: '2026-NMGNF-000123',
+      id: '2026-NMGNF-000123',
       name: 'Frijoles',
       acres: 15956.4,
       containedPct: 74,
@@ -101,6 +14,7 @@ test('a full incident row renders name, size, containment, and ages', () => {
       category: 'WF',
       discoveredTime: now - 36 * 3600000,
       updatedTime: now - 2 * 3600000,
+      lastGrowthTime: now - 5 * 3600000,
       cause: 'Natural',
       behavior: 'Active',
       personnel: 380,
@@ -116,6 +30,7 @@ test('a full incident row renders name, size, containment, and ages', () => {
     '15,956 ac · 74% contained · US-NM',
     'Natural cause · Active · Type 3 Incident',
     '380 personnel · Sandoval County · $4.2M to date',
+    'last growth 5h ago',
     'discovered 1d ago · updated 2h ago',
   ]);
   assert.equal(card.selected, true);
@@ -125,7 +40,7 @@ test('a full incident row renders name, size, containment, and ages', () => {
 test('missing attributes degrade to available facts instead of placeholders', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: null,
       acres: null,
       containedPct: null,
@@ -149,7 +64,7 @@ test('missing attributes degrade to available facts instead of placeholders', ()
 test('a known InciWeb page adds a link line to the card', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: 'Timber',
       acres: 25426,
       containedPct: 44,
@@ -177,7 +92,7 @@ test('a known InciWeb page adds a link line to the card', () => {
 test('the selected card claims the selected paint lane, not the ambient lane', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: 'Any',
       acres: 1,
       containedPct: 1,
@@ -204,7 +119,7 @@ test('the selected card claims the selected paint lane, not the ambient lane', (
 
 test('costs near a unit boundary promote to the larger unit', () => {
   const base = {
-    stableId: 'x',
+    id: 'x',
     name: 'Any',
     acres: null,
     containedPct: null,
@@ -232,7 +147,7 @@ test('costs near a unit boundary promote to the larger unit', () => {
 test('a complex member names its complex on the card', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: 'Crosswhite',
       acres: 342923,
       containedPct: 99,
@@ -256,7 +171,7 @@ test('a complex member names its complex on the card', () => {
 test('a card without a link is not interactive', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: 'Crosswhite',
       acres: 1,
       containedPct: 1,
@@ -279,7 +194,7 @@ test('a card without a link is not interactive', () => {
 test('partial incident details render only the facts that exist', () => {
   const card = buildIncidentCard(
     {
-      stableId: 'x',
+      id: 'x',
       name: 'Whiskey',
       acres: 542,
       containedPct: 48,
@@ -305,7 +220,7 @@ test('partial incident details render only the facts that exist', () => {
 
 test('a fire under one acre keeps its WFIGS size instead of reading 0 ac', () => {
   const row = {
-    stableId: 'x',
+    id: 'x',
     name: 'Grey',
     acres: 0.25,
     containedPct: null,
@@ -332,4 +247,23 @@ test('a fire under one acre keeps its WFIGS size instead of reading 0 ac', () =>
     buildIncidentCard({ ...row, acres: 1.4 }, 1758000000000).details[0],
     '1 ac · containment unknown · US-WA',
   );
+});
+
+test('ages count from the moment shown, not from the clock', () => {
+  const at = Date.UTC(2025, 7, 1, 12);
+  const card = buildIncidentCard(
+    {
+      id: 'past',
+      name: 'Past',
+      containedPct: 10,
+      discoveredTime: at - 3 * 86400000,
+      updatedTime: at - 30 * 60000,
+      lastGrowthTime: at - 7 * 3600000,
+    },
+    at,
+  );
+  assert.deepEqual(card.details.slice(-2), [
+    'last growth 7h ago',
+    'discovered 3d ago · updated 30m ago',
+  ]);
 });

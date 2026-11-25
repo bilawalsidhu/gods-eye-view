@@ -5,6 +5,7 @@ import {
   fetchHlsBytes,
   parseHlsMedia,
   HLS_LIMITS,
+  HlsCapacityError,
 } from '../../server/providers/cctv/stream.js';
 const playlist =
   '#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:12\n#EXTINF:2,\na.ts\n#EXTINF:2,\nb.ts\n#EXTINF:2,\nc.ts\n';
@@ -144,7 +145,7 @@ test('one session is reserved before await; disk-free cache and capacity remain 
     manager.ensure('a', base),
   ]);
   assert.equal(a, b);
-  await assert.rejects(manager.ensure('b', base));
+  await assert.rejects(manager.ensure('b', base), HlsCapacityError);
   assert.equal(await manager.waitReady(a), true);
   assert.deepEqual(manager.stats(), { sessions: 1, bytes: 6 });
   const text = await manager.buildPlaylist(a, 'a');
@@ -261,7 +262,10 @@ test('two consumers share downloads but release and abandoned expiry are indepen
   await manager.waitReady(a);
   assert.equal(downloads, 4); // One manifest and three segments, not per consumer.
   assert.equal(a.leases.size, 2);
-  await assert.rejects(manager.ensure('camera', base, 'viewer-c'));
+  await assert.rejects(
+    manager.ensure('camera', base, 'viewer-c'),
+    HlsCapacityError,
+  );
   manager.release('camera', 'viewer-a');
   assert.equal(manager.stats().sessions, 1);
   assert.equal(manager.getSegment('camera', a.token, 0, 'viewer-a'), null);

@@ -14,8 +14,11 @@
  * lifts the eye if it sits below a usable clearance. Heading and pitch are
  * held, so the correction reads as the shot settling.
  */
-import * as Cesium from 'cesium';
+import { onFollowChanged } from './data/followed.js';
 import { ownCameraArrival } from './data/cameraArrival.js';
+import { distance, dot, fromDegrees, toLonLatH } from './geo/index.js';
+import { heightsOf } from './queries/heights.js';
+import { canvasOf, findCamera } from './render/rendererOf.js';
 
 /** Minimum eye height above the rendered surface for a usable view. */
 export const MIN_EYE_CLEARANCE_M = 120;
@@ -24,33 +27,77 @@ const GUARD_ATTEMPTS = 8;
 const GUARD_INTERVAL_MS = 600;
 /** Ignore sub-metre noise rather than nudging the camera forever. */
 const GUARD_EPSILON_M = 2;
-
-const probeScratch = new Cesium.Cartographic();
+/** Eye travel (m) and turn (cosine) that mean another owner moved the camera. */
+const MOVED_M = 0.01;
+const TURNED_COS = 1 - 1e-9;
 
 /**
  * Highest rendered surface across a few cells, with how many cells answered.
  * A cell whose tiles are not streamed yet contributes nothing.
- * @param {Cesium.Scene} scene Live scene.
+ * @param {import('./queries/heights.js').HeightService|null} heights The
+ *   scene's height service.
  * @param {Array<{lat: number, lon: number}>} cells Cells to probe.
  * @returns {{heightM: number, sampled: number}} Reading.
  */
-function sampleSurfaceM(scene, cells) {
+function sampleSurfaceM(heights, cells) {
   let heightM = Number.NaN;
   let sampled = 0;
-  if (typeof scene?.sampleHeight !== 'function') return { heightM, sampled };
+  if (!heights) return { heightM, sampled };
   for (const cell of cells) {
-    try {
-      const height = scene.sampleHeight(
-        Cesium.Cartographic.fromDegrees(cell.lon, cell.lat, 0, probeScratch),
-      );
-      if (!Number.isFinite(height)) continue;
-      sampled += 1;
-      heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
-    } catch {
-      /* tiles not ready for this cell */
-    }
+    // A miss is a cell whose tiles are not ready.
+    const height = heights.now(cell);
+    if (!Number.isFinite(height)) continue;
+    sampled += 1;
+    heightM = Number.isFinite(heightM) ? Math.max(heightM, height) : height;
   }
   return { heightM, sampled };
+}
+
+/**
+ * The eye as the camera port poses it: where it is (from its position) and
+ * which way it looks; null when the pose cannot be read.
+ */
+function eyeOf(camera) {
+  try {
+    const pose = camera?.pose();
+    const at = pose?.position && toLonLatH(pose.position);
+    if (!at || !pose.direction || !pose.up) return null;
+    return { ...pose, lon: at.lon, lat: at.lat, height: at.height };
+  } catch {
+    return null;
+  }
+}
+
+/** The eye's ground point (height 0), its height, and which way it looks. */
+function poseOf(eye) {
+  if (!eye) return null;
+  return {
+    ground: fromDegrees(eye.lon, eye.lat),
+    height: eye.height,
+    direction: { ...eye.direction },
+    up: { ...eye.up },
+  };
+}
+
+/**
+ * Whether another owner has moved the camera off `pose`: across the ground,
+ * down, or around. A pure rise is not one: the renderer's terrain collision
+ * lifts a buried eye straight up as tiles load, which is the case the guard
+ * exists for, so `pose` follows the highest eye seen and the guard keeps
+ * measuring.
+ */
+function moved(now, pose) {
+  if (!now) return true;
+  const ground = fromDegrees(now.lon, now.lat);
+  if (
+    distance(ground, pose.ground) > MOVED_M ||
+    now.height < pose.height - MOVED_M ||
+    dot(now.direction, pose.direction) < TURNED_COS ||
+    dot(now.up, pose.up) < TURNED_COS
+  )
+    return true;
+  pose.height = Math.max(pose.height, now.height);
+  return false;
 }
 
 /**
@@ -76,9 +123,11 @@ export function groundClearanceDeficitM(
  * Watch an arrival and lift the camera once the real surface can be measured.
  *
  * Stops quietly on a clear view, exhausted attempts, the user taking the
- * controls (pointer or wheel on the canvas), or `isStale()` reporting that a
- * newer arrival owns the camera.
- * @param {Cesium.Viewer} viewer Live viewer.
+ * controls (pointer or wheel on the canvas), `isStale()` reporting that a
+ * newer arrival owns the camera, or any other caller moving the camera or
+ * starting a flight in the meantime: the guard only ever corrects the pose it
+ * was started on.
+ * @param {object} viewer Live viewer.
  * @param {{lat: number, lon: number}} at Destination being framed.
  * @param {{clearanceM?: number, attempts?: number, intervalMs?: number,
  *   isStale?: () => boolean, onLift?: (liftM: number) => void}} [options]
@@ -92,12 +141,16 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     isStale = () => false,
     onLift = null,
   } = options;
-  if (!viewer?.scene || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
+  if (!viewer || !Number.isFinite(at?.lat) || !Number.isFinite(at?.lon))
     return () => {};
+
+  // Without a readable pose the guard could not tell a later owner's move.
+  const arrival = poseOf(eyeOf(findCamera(viewer)));
+  if (!arrival) return () => {};
 
   let timer = null;
   let done = false;
-  const canvas = viewer.scene.canvas;
+  const canvas = canvasOf(viewer);
   const documentRef = canvas?.ownerDocument;
   const removers = [];
   let release = () => {};
@@ -112,32 +165,7 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
     release();
   };
   release = ownCameraArrival(viewer, stop);
-  // Direct camera API callers (including duration-zero flights) must yield
-  // before moving the eye. Restore the exact method ownership on completion.
-  for (const name of [
-    'flyTo',
-    'flyToBoundingSphere',
-    'setView',
-    'lookAt',
-    'cancelFlight',
-  ]) {
-    const camera = viewer.camera;
-    const original = camera[name];
-    if (typeof original !== 'function') continue;
-    const descriptor = Object.getOwnPropertyDescriptor(camera, name);
-    const wrapped = function (...args) {
-      stop();
-      return original.apply(this, args);
-    };
-    camera[name] = wrapped;
-    removers.push(() => {
-      if (camera[name] !== wrapped) return;
-      if (descriptor) Object.defineProperty(camera, name, descriptor);
-      else delete camera[name];
-    });
-  }
-  const removeTracking = viewer.trackedEntityChanged?.addEventListener(stop);
-  if (removeTracking) removers.push(removeTracking);
+  removers.push(onFollowChanged(viewer, stop));
   documentRef?.addEventListener?.('keydown', stop, true);
   // A manual gesture ends the guard, as it interrupts camera motion elsewhere.
   for (const type of ['pointerdown', 'wheel'])
@@ -147,40 +175,33 @@ export function guardCameraAboveGround(viewer, at, options = {}) {
   const attempt = () => {
     if (done) return;
     if (isStale() || viewer.isDestroyed?.()) return stop();
+    const camera = findCamera(viewer);
+    const now = eyeOf(camera);
+    // Another caller owns the camera now; lifting would undo its move.
+    if (!camera || camera.flying || moved(now, arrival)) return stop();
     remaining -= 1;
-    const camera = viewer.camera;
-    const carto = camera.positionCartographic;
     // The eye must clear both the framed target and the ground beneath it.
-    const below = {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
-    };
-    const { heightM, sampled } = sampleSurfaceM(viewer.scene, [
-      { lat: at.lat, lon: at.lon },
-      below,
-    ]);
+    const below = { lat: now.lat, lon: now.lon };
+    const { heightM, sampled } = sampleSurfaceM(
+      viewer ? heightsOf(viewer) : null,
+      [{ lat: at.lat, lon: at.lon }, below],
+    );
     if (sampled > 0 && Number.isFinite(heightM)) {
-      const deficit = groundClearanceDeficitM(
-        carto.height,
-        heightM,
-        clearanceM,
-      );
+      const deficit = groundClearanceDeficitM(now.height, heightM, clearanceM);
       if (deficit > 0) {
         stop();
-        camera.flyTo({
-          destination: Cesium.Cartesian3.fromRadians(
-            carto.longitude,
-            carto.latitude,
-            carto.height + deficit,
-          ),
-          orientation: {
-            heading: camera.heading,
-            pitch: camera.pitch,
-            roll: camera.roll,
+        camera.flyTo(
+          { lon: now.lon, lat: now.lat, height: now.height + deficit },
+          {
+            orientation: {
+              heading: now.heading,
+              pitch: now.pitch,
+              roll: now.roll,
+            },
+            durationS: 0.9,
+            easing: 'cubicInOut',
           },
-          duration: 0.9,
-          easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-        });
+        );
         try {
           onLift?.(deficit);
         } catch {

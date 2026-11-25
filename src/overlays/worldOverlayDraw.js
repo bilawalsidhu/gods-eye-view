@@ -709,29 +709,31 @@ function leaderDrawRatio(entry) {
   return Number.isFinite(ratio) ? Math.max(0.1, Math.min(0.9, ratio)) : 0.68;
 }
 
-export function leaderRevealProgress(
-  entry,
-  timestamp = globalThis.performance?.now?.() ?? Date.now(),
-) {
+/** Now, for a reveal given no time. Not a parameter default: an optional
+ * method call in a default parameter is compiled for older browsers into code
+ * that throws (esbuild). */
+function revealNow() {
+  return globalThis.performance?.now?.() ?? Date.now();
+}
+
+export function leaderRevealProgress(entry, timestamp) {
+  const at = timestamp === undefined ? revealNow() : timestamp;
   const linear = Math.min(
     1,
-    animationLinearProgress(entry, timestamp) / leaderDrawRatio(entry),
+    animationLinearProgress(entry, at) / leaderDrawRatio(entry),
   );
   return 1 - Math.pow(1 - linear, 3);
 }
 
-export function tacticalCardRevealAlpha(
-  entry,
-  timestamp = globalThis.performance?.now?.() ?? Date.now(),
-) {
+export function tacticalCardRevealAlpha(entry, timestamp) {
   if (!(Math.max(0, Number(entry?.leaderAnimationMs) || 0) > 0)) return 1;
+  const at = timestamp === undefined ? revealNow() : timestamp;
   const start = leaderDrawRatio(entry);
   const linear = Math.max(
     0,
     Math.min(
       1,
-      (animationLinearProgress(entry, timestamp) - start) /
-        Math.max(0.1, 1 - start),
+      (animationLinearProgress(entry, at) - start) / Math.max(0.1, 1 - start),
     ),
   );
   return linear * linear * (3 - 2 * linear);
