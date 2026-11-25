@@ -38,8 +38,10 @@ body.context-docked #right-context-rail > .gev-panel-rail {
   display: none;
 }
 
+/* The Bhote Koshi panel stays beside the expanded column while open so its
+   evidence controls remain accessible. */
 body.context-docked
-  #right-context-rail
+  #right-context-rail:not(.bhote-event-active)
   > :not(#global-context-panel):not(.gev-panel-rail) {
   display: none !important;
 }
@@ -175,19 +177,20 @@ body.mobile-shell .context-dock-btn {
   box-shadow: none;
 }
 
-/* While a search is typed, what cannot match steps aside so the matches lead:
-   the weather, the view's own figures, the route and altitude graph, and the
-   layer switches. The radius stays: it sets how far the search looks. */
+/* During a search, keep the radius and matching rows in view. A matching
+   globe group keeps its layer name and loaded total. The Data Layers pointer stays. */
 .context-searching
   :is(
     .spot-conditions__weather,
     .spot-conditions__loading,
     .spot-conditions__source,
-    .view-context__facts,
-    .view-context__live,
-    .view-context__total,
-    .view-context__actions,
-    .view-context__towns:has(.view-context__chip--layer),
+    .view-context__tiles,
+    .view-context__label,
+    .view-context__hint,
+    .view-context__problem,
+    .view-context__suggest,
+    .view-context__bar,
+    .view-context__bar-key,
     .altitude-graph,
     .entity-card__route,
     .entity-card__route-stats,

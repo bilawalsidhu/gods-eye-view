@@ -846,6 +846,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   };
   return {
     name: 'cctv-proxy',
+    // The catalog's size once it has been built (open data, no key).
+    api: { readLayerCount: getCctvSources.cachedCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

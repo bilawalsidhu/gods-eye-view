@@ -30,9 +30,10 @@ const _aisStreamTrackPending = new Map();
  * object without an MMSI proves nothing about the feed.
  *
  * @param {Object} envelope Parsed, non-error AIS envelope.
+ * @param {boolean} worldwide Whether the active socket subscribed to the worldwide box.
  * @returns {boolean} True when an AIS record was recognised.
  */
-export function ingestAisStreamEnvelope(envelope) {
+export function ingestAisStreamEnvelope(envelope, worldwide = false) {
   // Single shared recognition rule (also used by the adapter's tests), so the
   // liveness predicate that ships is the one under test. An envelope carrying
   // only an MMSI is not proof the feed works.
@@ -153,6 +154,7 @@ export function ingestAisStreamEnvelope(envelope) {
     // row carries the field, so ship rows stay their size.
     ...(aidReport && message.VirtualAtoN === true && { virtual: true }),
     _updatedAt: Date.now(),
+    _worldwide: worldwide,
   });
 
   appendAisTrackSample(
@@ -340,6 +342,24 @@ function vesselTypeFromAis(message, staticData = {}) {
 }
 
 /**
+ * Fresh vessels received under the worldwide subscription and the latest
+ * receive time. Excludes aids to navigation. Null when there are none.
+ * @returns {?{count: number, at: number}}
+ */
+export function aisStreamVesselCount() {
+  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+  let count = 0;
+  let at = 0;
+  for (const row of _aisStreamVessels.values()) {
+    if (!row._worldwide || row._updatedAt < cutoff || isAidToNavigation(row))
+      continue;
+    count++;
+    if (row._updatedAt > at) at = row._updatedAt;
+  }
+  return count ? { count, at } : null;
+}
+
+/**
  * The current rows, newest first, with every vessel ahead of every aid to
  * navigation: a capped request never gives up a ship for a buoy.
  */
@@ -357,7 +377,7 @@ export function aisStreamRows(maxRows) {
   return vessels
     .concat(aids)
     .slice(0, maxRows)
-    .map(({ _updatedAt, ...row }) => row);
+    .map(({ _updatedAt, _worldwide, ...row }) => row);
 }
 
 /**

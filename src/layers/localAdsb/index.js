@@ -956,6 +956,7 @@ export function createLocalAdsbLayer({
           id: record.callsign || record.icao,
           icao24: record.icao || null,
           callsign: record.callsign || null,
+          aircraftClass: marker.evidence ? marker.klass : null,
           lat,
           lon,
           altitudeM: Number.isFinite(record.altitudeFt)

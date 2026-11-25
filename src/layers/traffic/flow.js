@@ -128,16 +128,22 @@ export function createFlow({ state: layerState, services, parts, source }) {
     layerState._flowRoads = roads;
     // Geometry survives in the session cache; congestion does not. Never paint
     // an old match as current while a refresh is pending or has failed.
+    let clearedMatch = false;
     for (const road of roads) {
       road.key ||= roadIdentity(road);
-      if (!road.directFlow) road.flow = null;
+      if (!road.directFlow) {
+        if (road.flow) clearedMatch = true;
+        road.flow = null;
+      }
     }
+    if (clearedMatch) layerState._flowRevision++;
     try {
       if (!layerState._flowStatusPromise) return; // status check not started — sim mode
       await layerState._flowStatusPromise;
       if (!layerState._liveMode || !layerState._enabled) return;
       if (generation !== layerState._loadGeneration || signal?.aborted) return;
       if (!Array.isArray(roads) || roads.length === 0) return;
+      let flowError = null;
       try {
         // Cached paths reach here without a live controller; the fetch paths
         // reuse theirs so one cancel covers both roads and flow.
@@ -165,7 +171,6 @@ export function createFlow({ state: layerState, services, parts, source }) {
         for (const road of roads)
           if (!road.directFlow && !road.simulatedOnly)
             road.flow = memo.get(road.key) || null;
-        if (layerState._flowRoads === roads) layerState._flowError = null;
       } catch (e) {
         if (e?.name === 'AbortError') return;
         // Same guard the success path gets: a superseded request rejecting late
@@ -179,12 +184,16 @@ export function createFlow({ state: layerState, services, parts, source }) {
           return;
         // Every covering tile failed: there is no live flow on screen. Drop the
         // now-false coverage number and surface the reason through getStats().
-        if (layerState._flowRoads === roads)
-          layerState._flowError = deriveTrafficFlowError(e);
+        flowError = deriveTrafficFlowError(e);
         console.warn(
           '[Data:Traffic] Flow fetch failed (sim colors remain):',
           e?.message || e,
         );
+      }
+      if (layerState._flowRoads === roads) {
+        layerState._flowError = flowError;
+        // Road geometry and dot count can stay the same when a flow reply lands.
+        layerState._flowRevision++;
       }
     } finally {
       if (generation === layerState._loadGeneration)

@@ -3,6 +3,7 @@ import {
   cableClassificationTypeForScene,
   cableClassificationTypeForStack,
 } from './surface.js';
+import { cableAnalystRecords } from './records.js';
 
 export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
   return {
@@ -138,6 +139,11 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._publishScratch.length = 0;
       parts.rendering.resetPublishSignature();
       state._referenceSweepGate.reset();
+    },
+
+    /** The cables and landing points drawn, as plain records (records.js). */
+    getAnalystRecords(maxCount = Infinity) {
+      return cableAnalystRecords(state, maxCount);
     },
 
     getStats() {

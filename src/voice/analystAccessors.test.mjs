@@ -119,7 +119,7 @@ test('mapped installations flatten latitude/longitude', () => {
   const { methods } = installationControls({ state, parts: {} });
   const [row] = methods.getAnalystRecords();
   assert.deepEqual(row, {
-    id: 'Fort Example',
+    id: 'node/1',
     name: 'Fort Example',
     class: 'military_land',
     kind: 'installation',

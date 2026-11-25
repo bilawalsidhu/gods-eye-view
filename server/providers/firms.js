@@ -9,7 +9,7 @@ import {
   trailing24hWindow,
 } from '../../src/data/firmsCsv.js';
 import { acceptsGzip, encodedBody, gzipBody } from './common/compress.js';
-import { readResponseTextCapped } from './common/http.js';
+import { readResponseTextCapped, writeJsonAtomic } from './common/http.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -174,8 +174,10 @@ export function firmsProxy() {
   const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
-
-  /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
+  // Per-minute detection counts ({at, minutes}) beside the cache, so the
+  // layer count can be read without parsing the whole cache.
+  const COUNT_PATH = path.join(CACHE_DIR, 'firms-count.json');
+  /** @type {?{at: number, sources: Array<object>, fires: Array<object>, minutes: Array<object>}} */
   let mem = null;
   let diskChecked = false;
   /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} single-flight refresh */
@@ -197,22 +199,68 @@ export function firmsProxy() {
       if (
         Number.isFinite(parsed?.at) &&
         Array.isArray(parsed?.sources) &&
-        Array.isArray(parsed?.fires)
+        Array.isArray(parsed?.fires) &&
+        (!mem || parsed.at > mem.at)
       ) {
-        mem = parsed;
+        mem = { ...parsed, minutes: minuteCounts(parsed.fires) };
       }
     } catch {
       /* no disk cache yet */
     }
   }
 
-  async function writeDisk(entry) {
+  // A stale feed can cross the 24-hour cutoff between successive reads.
+  // Aggregate by acquisition minute so the count and the layer use the same window.
+  function minuteCounts(fires) {
+    const minutes = new Map();
+    for (const { acqDate, acqTime } of fires) {
+      const key = `${acqDate}:${acqTime}`;
+      const bucket = minutes.get(key);
+      if (bucket) bucket.count++;
+      else minutes.set(key, { acqDate, acqTime, count: 1 });
+    }
+    return [...minutes.values()];
+  }
+
+  async function readCountDisk() {
+    try {
+      const summary = JSON.parse(await fsp.readFile(COUNT_PATH, 'utf8'));
+      if (
+        Number.isFinite(summary?.at) &&
+        Array.isArray(summary.minutes) &&
+        summary.minutes.every(
+          (minute) => Number.isSafeInteger(minute?.count) && minute.count > 0,
+        )
+      )
+        return summary;
+    } catch {
+      /* No complete count summary. */
+    }
+    return null;
+  }
+
+  async function replaceJson(file, value) {
+    try {
+      await writeJsonAtomic(file, value);
+      return true;
+    } catch (err) {
+      console.warn(
+        `[firms-proxy] ${path.basename(file)} write failed:`,
+        err?.message || err,
+      );
+      return false;
+    }
+  }
+
+  async function writeDisk(entry, minutes) {
     try {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(CACHE_PATH, JSON.stringify(entry), 'utf8');
     } catch (err) {
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
+      return;
     }
+    if (await replaceJson(CACHE_PATH, entry))
+      await replaceJson(COUNT_PATH, { at: entry.at, minutes });
   }
 
   /**
@@ -339,6 +387,21 @@ export function firmsProxy() {
     return statusInflight;
   }
 
+  // With a key, count the live cache's acquisition minutes or read the
+  // compact disk summary. This reader neither loads the raw cache nor fetches.
+  async function readLayerCount() {
+    if (!mapKey()) return null;
+    const saved = mem ? null : await readCountDisk();
+    // The feed may have warmed during the sidecar read.
+    const summary = mem ?? saved;
+    if (!summary) return null;
+    const current = filterTrailing24h(summary.minutes, Date.now());
+    const count = current.reduce((total, minute) => total + minute.count, 0);
+    return Number.isSafeInteger(count) && count > 0
+      ? { count, at: summary.at }
+      : null;
+  }
+
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
       const send = (status, body, headers = {}) => {
@@ -405,9 +468,11 @@ export function firmsProxy() {
         if (!inflight) {
           inflight = refreshUpstream(key)
             .then(async (fresh) => {
-              mem = fresh;
-              await writeDisk(fresh);
-              return fresh;
+              // Serve the kept entry, so later requests reuse its body.
+              const kept = { ...fresh, minutes: minuteCounts(fresh.fires) };
+              mem = kept;
+              await writeDisk(fresh, kept.minutes);
+              return kept;
             })
             .catch((err) => {
               console.warn(
@@ -438,6 +503,7 @@ export function firmsProxy() {
   };
   return {
     name: 'firms-proxy',
+    api: { readLayerCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

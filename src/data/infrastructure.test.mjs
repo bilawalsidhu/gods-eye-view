@@ -275,9 +275,11 @@ test('consumer build includes only infrastructure code and resolves assets under
   // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
     'color.js',
+    'contextGeometry.js',
     'dispatcher.js',
     'ellipsoid.js',
     'frustum.js',
+    'geoDistance.js',
     'geojsonPins.js',
     'heights.js',
     'horizon.js',

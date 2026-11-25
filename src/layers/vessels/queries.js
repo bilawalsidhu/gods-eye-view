@@ -510,6 +510,15 @@ export function createQueries({
       return result;
     },
 
+    // A Context card refresh names a specific source vessel. A bare legacy
+    // lookup can still try the MMSI when the key does not identify a row.
+    getContextRecord(key, { exact = false } = {}) {
+      if (!state.feed.enabled) return null;
+      const record = state.records.byId.get(key);
+      if (record) return mapAnalystRecord(record);
+      return exact ? null : undefined;
+    },
+
     /**
      * Select a vessel by id via the same path as a map click
      * (highlight + HUD update). An AIS feed's vessels are keyed by MMSI.

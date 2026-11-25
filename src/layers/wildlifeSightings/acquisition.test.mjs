@@ -51,6 +51,7 @@ function harness(source = { getSnapshot: async () => [] }) {
     rowById: new Map(),
     selectedId: null,
     selectedRow: null,
+    heldRows: new WeakSet(),
     confirmed: false,
     taxa: 'all',
     drawnParams: null,
@@ -508,6 +509,7 @@ test('a selected observation survives omitted samples, zoom, changed filters and
   rows = [refreshed];
   await h.layer.update();
   assert.equal(h.state.selectedRow, refreshed);
+  assert.equal(h.state.heldRows.has(refreshed), false);
   h.parts.selection.clear();
   rows = [];
   await h.layer.update();

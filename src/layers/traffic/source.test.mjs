@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { getEventListeners } from 'node:events';
+import { createPinia } from 'pinia';
+import { useEntityCardStore } from '../../ui/stores/entityCard.js';
 import { createFlowTileSource } from './flowSource.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 import { decodeFlowTile } from './flowDecode.js';
@@ -492,6 +494,47 @@ test('Austin TomTom fixture matches congestion onto OFM detail roads without cha
   );
 });
 
+test('Nearby updates the same roads when late TomTom flow arrives at a stationary camera', async () => {
+  const flowReply = Promise.withResolvers();
+  const { state, model, flow, controls } = await matchingContext(
+    () => flowReply.promise,
+  );
+  const roads = model.parseRoads({ roads: ofmDetail.roads });
+  const oldFlow = { level: 0.2 };
+  for (const road of roads) road.flow = oldFlow;
+  state._roads = roads.map((source) => ({ ...source, source }));
+  const traffic = { id: 'traffic', enabled: true, module: controls };
+  const manager = {
+    layers: new Map([[traffic.id, traffic]]),
+    getAll: () => [{ ...traffic, stats: controls.getStats() }],
+  };
+  const cards = useEntityCardStore(createPinia());
+  cards.connect({ dataManager: () => manager });
+  const [lon, lat] = roads[0].coords[0];
+  const nearby = () =>
+    cards.nearbyLayers(lat, lon, { limit: roads.length })[0].items;
+  assert.ok(
+    nearby().some((row) => row.identity.record.source === 'tomtom-live'),
+  );
+  const pending = flow.applyFlowToRoads(roads, tileToBBox(14, 3743, 6745), 0);
+  assert.ok(controls.getAnalystRecords().every((record) => record.simulated));
+  state._uncoveredMode = 'hide';
+  assert.equal(controls.getAnalystRecords().length, 0);
+  state._uncoveredMode = 'sim';
+  const before = nearby();
+  assert.ok(
+    before.length > 0 && before.every((row) => row.identity.record.simulated),
+  );
+  flowReply.resolve(decodeFlowTile(fixture, 12, 935, 1686));
+  await pending;
+  const after = nearby();
+  assert.deepEqual(
+    after.map((row) => row.key),
+    before.map((row) => row.key),
+  );
+  assert.ok(after.some((row) => row.identity.record.source === 'tomtom-live'));
+});
+
 test('late closures hide and stop dots; coverage counts shown matched dots, and reopening restores them', async () => {
   const C = await import('cesium');
   const { state, model, controls } = await matchingContext(async () => []);
@@ -549,9 +592,11 @@ test('refresh failure removes cached matches and reports simulated flow', async 
     throw new Error('HTTP 429');
   });
   const roads = model.parseRoads({ roads: ofmDetail.roads });
+  state._roads = roads;
   roads[0].flow = { level: 0.1, closure: true };
   await flow.applyFlowToRoads(roads, bounds, 0);
   assert.ok(roads.every((r) => r.flow === null));
+  assert.equal(controls.getAnalystRecords(1)[0].source, 'simulated-flow-error');
   assert.equal(controls.getStats().flowCoveragePct, 0);
   assert.match(
     controls.getStats().loadingLabel,

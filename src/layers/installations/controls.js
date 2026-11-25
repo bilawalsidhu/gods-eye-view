@@ -243,7 +243,7 @@ export function createControls({
         )
           continue;
         result.push({
-          id: record.name || record.id,
+          id: record.id || record.name,
           name: record.name || null,
           class: record.class || null,
           kind: record.kind || null,

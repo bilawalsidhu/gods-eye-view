@@ -951,12 +951,35 @@ test('an unchanged cohort never republishes, so a parked camera stays governor-i
 
 test('a toggle-off clears every set and a toggle-on redraws them without refetching', async () => {
   let reads = 0;
+  const [cable] = CABLE_FIXTURE.features;
+  const secondPiece = {
+    ...cable,
+    geometry: {
+      type: 'GeometryCollection',
+      geometries: [
+        {
+          type: 'LineString',
+          coordinates: [
+            [-30, 40],
+            [-12, 39],
+          ],
+        },
+      ],
+    },
+  };
+  const collected = {
+    ...secondPiece,
+    properties: { id: 'reference-less', name: 'Reference-less cable' },
+  };
   const source = {
     label: 'Test cable directory',
     async fetch(signal) {
       signal.throwIfAborted();
       reads += 1;
-      return { cables: CABLE_FIXTURE, landingPoints: LANDING_FIXTURE };
+      return {
+        cables: { ...CABLE_FIXTURE, features: [cable, secondPiece, collected] },
+        landingPoints: LANDING_FIXTURE,
+      };
     },
   };
   const env = createCableHarness({ source });
@@ -964,14 +987,23 @@ test('a toggle-off clears every set and a toggle-on redraws them without refetch
   assert.equal(env.layer.source, source.label);
   assert.equal(reads, 1);
   const before = env.layer.getStats().count;
-  assert.equal(before, 2);
+  assert.equal(before, 3);
+  const records = new Map(
+    env.layer.getAnalystRecords().map((record) => [record.id, record]),
+  );
+  assert.ok(
+    records
+      .get('cable:ac1')
+      .parts.some(({ lon, lat }) => lon === -12 && lat === 39),
+  );
+  assert.ok(records.has('cable:reference-less'));
   env.layer.disable();
   assert.equal(env.set('lines').items.size, 0);
   env.layer.enable(env.viewer);
   await settle();
   assert.equal(reads, 1, 'the redraw must not touch the network');
   assert.equal(env.layer.getStats().count, before);
-  assert.equal(env.set('lines').items.size, 1);
+  assert.equal(env.set('lines').items.size, 3, 'all pieces are redrawn');
   assert.equal(env.set('references').items.size, 2, 'references are redrawn');
   env.layer.destroy();
 });
