@@ -20,6 +20,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import { viewLayout } from '../src/data/viewSheet.js';
 
 const argv = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -45,11 +46,21 @@ const TINTS = [
   { name: 'military', rgb: [1, 0.72, 0] },
 ];
 const GAP = 8;
+/** Limits that keep a stray manifest or sheet from exhausting memory. */
+const MAX_SHEET_BYTES = 64 * 2 ** 20;
+const MAX_SHEET_PIXELS = 8192 * 8192;
+const MAX_FRAMES = 8192;
+const MAX_CONTACT_PIXELS = 2 ** 27;
 
 const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
 for (const name of Object.keys(manifest.subjects))
   if (!/^[\w-]+$/.test(name))
     throw new Error(`Invalid subject name: ${JSON.stringify(name)}`);
+const unknown = ONLY.filter((name) => !Object.hasOwn(manifest.subjects, name));
+if (unknown.length)
+  throw new Error(
+    `Unknown --only subjects: ${unknown.join(', ')}. The manifest has ${Object.keys(manifest.subjects).join(', ')}.`,
+  );
 const override = opt('--sheet', null);
 if (
   !override &&
@@ -69,9 +80,29 @@ const sheetPath =
       : path.dirname(MANIFEST),
     manifest.image,
   );
-const { cellPx: cell, columns, rows, rings } = manifest;
-const firsts = [];
-rings.reduce((at, count) => (firsts.push(at), at + count), 0);
+if (
+  !override &&
+  path.dirname(fs.realpathSync(sheetPath)) !==
+    fs.realpathSync(path.dirname(sheetPath))
+)
+  throw new Error(
+    "The manifest's image must be a file in its own directory. Pass --sheet for another.",
+  );
+const layout = viewLayout({ ...manifest, image: sheetPath });
+const { cellPx: cell, columns, rows, rings, firsts, frames } = layout;
+let end = 0;
+for (const [name, entry] of Object.entries(manifest.subjects).sort(
+  ([, a], [, b]) => a?.first - b?.first,
+)) {
+  const first = entry?.first;
+  if (!Number.isInteger(first) || first < end || first + frames > columns * rows)
+    throw new Error(
+      `Subject ${name}: its frames must fit in the grid without overlapping another subject.`,
+    );
+  end = first + frames;
+}
+if (Object.keys(manifest.subjects).length * frames > MAX_FRAMES)
+  throw new Error(`The manifest has over ${MAX_FRAMES} frames.`);
 const widest = Math.max(...rings);
 /** The ring nearest `offDeg` from straight above. */
 const ringAt = (offDeg) =>
@@ -85,7 +116,14 @@ const PICKS = [
   [rings.length - 1, Math.round((rings[rings.length - 1] - 1) / 2)],
 ];
 
-const sheet = sharp(sheetPath);
+const stat = fs.statSync(sheetPath);
+if (!stat.isFile() || stat.size > MAX_SHEET_BYTES)
+  throw new Error(
+    `The sheet must be a file of at most ${MAX_SHEET_BYTES / 2 ** 20} MiB.`,
+  );
+const sheet = sharp(fs.readFileSync(sheetPath), {
+  limitInputPixels: MAX_SHEET_PIXELS,
+});
 const meta = await sheet.metadata();
 if (meta.width !== columns * cell || meta.height !== rows * cell)
   throw new Error('The sheet dimensions must match the manifest grid.');
@@ -128,6 +166,8 @@ async function subjectSheet(name, first) {
   const blockH = panelH + GAP + TINTS.length * stripH;
   const width = GROUNDS.length * (panelW + GAP) + GAP;
   const height = blockH + 2 * GAP;
+  if (width * height > MAX_CONTACT_PIXELS)
+    throw new Error(`Subject ${name}: the contact sheet would be too large.`);
   const layers = [];
   for (const [g, ground] of GROUNDS.entries()) {
     const x0 = GAP + g * (panelW + GAP);
@@ -169,12 +209,15 @@ async function subjectSheet(name, first) {
   const file = path.join(OUT, `${name}.png`);
   if (path.dirname(file) !== OUT)
     throw new Error('Invalid subject output path');
-  await sharp({
+  const png = await sharp({
     create: { width, height, channels: 4, background: '#111111' },
   })
     .composite(layers)
     .png()
-    .toFile(file);
+    .toBuffer();
+  const temp = path.join(OUT, `.${name}.${process.pid}.png`);
+  fs.writeFileSync(temp, png, { flag: 'wx' });
+  fs.renameSync(temp, file);
   return file;
 }
 

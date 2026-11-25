@@ -89,10 +89,7 @@ test('only live subscribers are notified when a shared view sheet settles', asyn
 
 test('a view sheet uses bitmap decoding and rejects an image of the wrong size', async (t) => {
   t.mock.method(console, 'warn', () => {});
-  t.mock.method(globalThis, 'fetch', async () => ({
-    ok: true,
-    blob: async () => 'blob',
-  }));
+  t.mock.method(globalThis, 'fetch', async () => new Response('blob'));
   const saved = globalThis.createImageBitmap;
   const close = t.mock.fn();
   const decode = t.mock.fn(async () => ({ width: 8, height: 8, close }));
@@ -103,10 +100,13 @@ test('a view sheet uses bitmap decoding and rejects an image of the wrong size',
     host._syncViews(context);
     await tick();
     assert.equal(decode.mock.callCount(), 1);
-    assert.deepEqual(decode.mock.calls[0].arguments, [
-      'blob',
-      { premultiplyAlpha: 'none', colorSpaceConversion: 'none' },
-    ]);
+    const [blob, options] = decode.mock.calls[0].arguments;
+    assert.ok(blob instanceof Blob);
+    assert.equal(await blob.text(), 'blob');
+    assert.deepEqual(options, {
+      premultiplyAlpha: 'none',
+      colorSpaceConversion: 'none',
+    });
     assert.equal(host.viewsState(), 'failed');
     assert.equal(close.mock.callCount(), 1);
 
@@ -141,6 +141,79 @@ test('a failed sheet request skips bitmap decoding', async (t) => {
     await tick();
     assert.equal(host.viewsState(), 'failed');
     assert.equal(decode.mock.callCount(), 0);
+    host.destroy();
+  } finally {
+    if (saved === undefined) delete globalThis.createImageBitmap;
+    else globalThis.createImageBitmap = saved;
+  }
+});
+
+const settle = async () => {
+  for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+};
+
+// A sheet whose body the test feeds; aborting the request errors it.
+function slowSheet(t) {
+  let feed;
+  t.mock.method(globalThis, 'fetch', async (url, { signal }) => {
+    const body = new ReadableStream({ start: (c) => (feed = c) });
+    signal.addEventListener('abort', () =>
+      feed.error(new DOMException('aborted', 'AbortError')),
+    );
+    return new Response(body);
+  });
+  return () => feed;
+}
+
+test('a view sheet still arriving after a minute is decoded', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  const feed = slowSheet(t);
+  const saved = globalThis.createImageBitmap;
+  const decode = t.mock.fn(async () => ({ width: 8, height: 8, close() {} }));
+  globalThis.createImageBitmap = decode;
+  try {
+    const { host } = hostOn('gpu:slow');
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    host._syncViews({});
+    await settle();
+    for (let i = 0; i < 5; i++) {
+      feed().enqueue(new Uint8Array(1));
+      await settle();
+      t.mock.timers.tick(20000);
+      await settle();
+    }
+    feed().close();
+    await settle();
+    assert.equal(decode.mock.callCount(), 1);
+    assert.equal(decode.mock.calls[0].arguments[0].size, 5);
+    host.destroy();
+  } finally {
+    if (saved === undefined) delete globalThis.createImageBitmap;
+    else globalThis.createImageBitmap = saved;
+  }
+});
+
+test('a view sheet that stops arriving fails after a minute without data', async (t) => {
+  const warn = t.mock.method(console, 'warn', () => {});
+  const feed = slowSheet(t);
+  const saved = globalThis.createImageBitmap;
+  const decode = t.mock.fn();
+  globalThis.createImageBitmap = decode;
+  try {
+    const { host } = hostOn('gpu:stall');
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    host._syncViews({});
+    await settle();
+    feed().enqueue(new Uint8Array(1));
+    await settle();
+    t.mock.timers.tick(59000);
+    await settle();
+    assert.equal(host.viewsState(), 'loading');
+    t.mock.timers.tick(1000);
+    await settle();
+    assert.equal(host.viewsState(), 'failed');
+    assert.equal(decode.mock.callCount(), 0);
+    assert.match(warn.mock.calls.at(-1).arguments[0], /no data for 60 s/);
     host.destroy();
   } finally {
     if (saved === undefined) delete globalThis.createImageBitmap;

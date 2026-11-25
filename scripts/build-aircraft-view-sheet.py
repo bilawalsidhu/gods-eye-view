@@ -20,7 +20,7 @@ import bpy
 import numpy as np
 from mathutils import Matrix, Vector
 
-# Layout mirrored in src/data/aircraftViews.js.
+# The sheet's layout. Only here: the manifest written below carries it to the app.
 RING_STEP_DEG = 7.5
 # Frames in each ring, from dead ahead round starboard to dead astern.
 RINGS = [1, 4, 7, 10, 13, 16, 18, 20, 22, 23, 24, 25, 25, 25, 24, 23, 22]
@@ -440,6 +440,13 @@ def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     models = os.path.join(root, "public", "models", "fleet")
     only = set(opts["only"].split(",")) if opts["only"] else None
+    if only:
+        known = [name for name, _, _ in SUBJECTS]
+        unknown = sorted(only - set(known))
+        if unknown:
+            raise SystemExit(
+                f"unknown --only subjects: {', '.join(unknown)} (known: {', '.join(known)})"
+            )
     scene, camera, fill = setup_scene(CELL_PX * SUPERSAMPLE, SAMPLES)
     material = paint_material()
     helicopter_material = paint_material(HELICOPTER_PAINT_RAMP)

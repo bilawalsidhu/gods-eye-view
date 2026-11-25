@@ -99,7 +99,7 @@ export function gpuIconCapabilities(scene) {
 }
 
 /** Whether a subject's block of frames, from its first cell, is in `layout`. */
-const blockFits = (first, layout) =>
+export const blockFits = (first, layout) =>
   first + layout.frames <= layout.columns * layout.rows;
 
 const nonZero = (v) =>

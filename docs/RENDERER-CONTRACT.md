@@ -264,7 +264,9 @@ optional:
   at their limits. The live layers drive it from each vehicle's record
   (`src/data/modelPartDrivers.js`).
 - `DrawPort.views(id, sheet)` (capability `viewSheets`, type `ViewSheet`)
-  registers a grey sheet of views. Registering the same id again replaces it.
+  registers a grey sheet of views. Registering the same id again replaces it
+  unless a live view icon's frames would run past the new layout. In that case
+  it throws a `RangeError` and keeps the previous sheet.
   Register the sheet before drawing an icon with a `ViewRef` image
   (`{views, first, fallback?}`). The icon draws the frame that shows its subject
   from the eye. It requires `rotationMode: 'course'`, takes no `imageLod`, and

@@ -55,8 +55,9 @@ headless, which renders every frame with Cycles and refuses a frame whose
 pixels reach within 2 px of its cell's edge, then
 `scripts/build-aircraft-views.mjs` writes the PNG as lossless WebP here and
 the manifest to `src/data/aircraftViews.json`. With `--out`, both go into that
-directory. With `--only`, the other subjects' cells are left empty, so
-the build refuses to write into `public/sprites` or `src/data`. Give `--out` a separate directory.
+directory. With `--only`, the other subjects' cells are left empty, so the build
+refuses an `--out` inside `public/sprites` and a manifest at
+`src/data/aircraftViews.json`. Give `--out` a separate directory.
 
 To review a bake, write a contact sheet per subject (its rings as rows over a
 dark sea, pale land and a mid satellite tone, plus a few frames at 40, 30 and

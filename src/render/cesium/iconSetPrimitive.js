@@ -469,6 +469,10 @@ void main() {
 
 /** The coarsest mip level a view sheet is sampled at (half-size cells). */
 const VIEW_SHEET_MAX_LOD = 1;
+/** How long a view sheet's download may go without a byte before it fails. */
+const VIEW_SHEET_IDLE_MS = 60000;
+/** Maximum download size for a view sheet (the shipped one is 3.3 MB). */
+const VIEW_SHEET_MAX_BYTES = 64 * 2 ** 20;
 
 /** Each context's view sheet textures, by URL. */
 const sheetTextures = new WeakMap();
@@ -509,9 +513,42 @@ function viewSheetTexture(context, sheet) {
     return entry;
   }
   async function load() {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const bitmap = await createImageBitmap(await response.blob(), {
+    const controller = new AbortController();
+    let idle;
+    const wait = () => {
+      clearTimeout(idle);
+      idle = setTimeout(() => controller.abort(), VIEW_SHEET_IDLE_MS);
+    };
+    let blob;
+    try {
+      wait();
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const reader = response.body.getReader();
+      const chunks = [];
+      let bytes = 0;
+      for (;;) {
+        wait();
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > VIEW_SHEET_MAX_BYTES)
+          throw new Error(`over ${VIEW_SHEET_MAX_BYTES / 2 ** 20} MiB`);
+        chunks.push(value);
+      }
+      blob = new Blob(chunks, {
+        type: response.headers.get('Content-Type') ?? '',
+      });
+    } catch (error) {
+      const stalled = controller.signal.aborted;
+      controller.abort(); // stops a body still arriving
+      throw stalled
+        ? new Error(`no data for ${VIEW_SHEET_IDLE_MS / 1000} s`)
+        : error;
+    } finally {
+      clearTimeout(idle);
+    }
+    const bitmap = await createImageBitmap(blob, {
       premultiplyAlpha: 'none',
       colorSpaceConversion: 'none',
     });
@@ -561,8 +598,9 @@ function viewSheetTexture(context, sheet) {
     settle('ready');
   }
   load().catch((error) => {
+    const shown = String(url).split(/[?#]/, 1)[0];
     console.warn(
-      `[iconSetPrimitive] View sheet failed to load: ${url} (${error.message})`,
+      `[iconSetPrimitive] View sheet failed to load: ${shown} (${error.message})`,
     );
     settle('failed');
   });

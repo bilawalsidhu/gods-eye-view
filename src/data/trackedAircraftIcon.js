@@ -112,6 +112,7 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
     if (!shown || !set) return;
     const pos = shown.position();
     const alongCourse = isViewRef(shown.image);
+    const color = shown.color();
     const item = {
       id: shown.id,
       pos: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: 0, y: 0, z: 0 },
@@ -121,12 +122,18 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
       size: [shown.sprite.width, shown.sprite.height],
       scale: shown.sprite.scale,
       scaleByDistance: shown.sprite.scaleByDistance,
-      color: shown.color(),
+      color,
       ...(alongCourse
         ? {
             rotationMode: 'course',
             course: pos ? shown.course() : 0,
-            pickProxy: { size: [shown.sprite.width, shown.sprite.height] },
+            ...(color[3] !== 0
+              ? {
+                  pickProxy: {
+                    size: [shown.sprite.width, shown.sprite.height],
+                  },
+                }
+              : {}),
           }
         : { rotationMode: 'screen', rotation: pos ? shown.rotation() : 0 }),
       disableDepthTest: Number.POSITIVE_INFINITY,

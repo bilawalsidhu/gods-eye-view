@@ -54,7 +54,7 @@ if (
     MANIFEST === path.join(root, 'src', 'data', 'aircraftViews.json'))
 ) {
   console.error(
-    '--only leaves other subjects empty. Give --out a directory outside public/sprites, and no --manifest into src/data.',
+    '--only leaves other subjects empty. Give --out a directory outside public/sprites, and a --manifest other than src/data/aircraftViews.json.',
   );
   process.exit(1);
 }

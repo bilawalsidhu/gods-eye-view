@@ -37,8 +37,8 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
-import { createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
-import { viewLayout } from '../../data/viewSheet.js';
+import { blockFits, createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -6049,13 +6049,22 @@ export function createCesiumDraw({
     ...(capabilities.has('viewSheets')
       ? {
           views(id, sheet) {
-            viewSheets.set(
-              id,
-              Object.freeze({
-                image: sheet.image,
-                layout: viewLayout(sheet),
-              }),
-            );
+            const layout = viewLayout(sheet);
+            if (viewSheets.has(id)) {
+              for (const record of sets.values()) {
+                if (record.kind !== 'icons') continue;
+                for (const item of record.items.values())
+                  if (
+                    isViewRef(item.image) &&
+                    item.image.views === id &&
+                    !blockFits(item.image.first, layout)
+                  )
+                    throw new RangeError(
+                      `a live view's frames run past the new layout of sheet '${id}'`,
+                    );
+              }
+            }
+            viewSheets.set(id, Object.freeze({ image: sheet.image, layout }));
             scene.requestRender();
           },
         }

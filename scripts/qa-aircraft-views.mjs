@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import puppeteer from 'puppeteer';
+import { ICON_VIEWS } from '../src/data/iconSet.js';
 import { stubPlanespotters } from './qa-photo-stub.mjs';
 
 const argv = process.argv.slice(2);
@@ -117,6 +118,19 @@ async function main() {
     ],
   });
   const errors = [];
+  let errorCount = 0;
+  const noteError = (text) => {
+    errorCount += 1;
+    if (errors.length < 20)
+      errors.push(
+        String(text)
+          .slice(0, 500)
+          .replace(
+            /\p{Cc}/gu,
+            (c) => `\\u${c.codePointAt(0).toString(16).padStart(4, '0')}`,
+          ),
+      );
+  };
   try {
     const page = await browser.newPage();
     await stubPlanespotters(page);
@@ -126,9 +140,9 @@ async function main() {
         msg.type() === 'error' &&
         !/Failed to load resource/i.test(msg.text())
       )
-        errors.push(msg.text());
+        noteError(msg.text());
     });
-    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+    page.on('pageerror', (error) => noteError(`pageerror: ${error.message}`));
 
     if (BLOCK_SHEET) {
       await page.setRequestInterception(true);
@@ -231,7 +245,15 @@ async function main() {
     );
 
     console.log(`Loading ${new URL(APP_URL).origin} ...`);
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    try {
+      await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    } catch (error) {
+      const reason =
+        /net::ERR_[A-Z_]+/.exec(String(error?.message))?.[0] ??
+        error?.name ??
+        'error';
+      throw new Error(`could not load ${new URL(APP_URL).origin} (${reason})`);
+    }
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 60000, polling: 200 },
@@ -251,23 +273,54 @@ async function main() {
       );
     // Past the layer's render delay, so every contact is drawn.
     await sleep(20000);
-    const states = await page.evaluate(() => {
-      const result = [];
-      function visit(p) {
-        if (typeof p.viewsState === 'function' && p._views?.())
-          result.push(p.viewsState());
-        if (typeof p.get === 'function')
-          for (let i = 0; i < p.length; i++) visit(p.get(i));
-      }
-      visit(window.__godsEyeView.viewer.scene.primitives);
-      return result;
-    });
-    const expected = BLOCK_SHEET ? 'failed' : 'ready';
-    console.log(`  view sheet: ${states.join(', ')}`);
-    if (!states.length || states.some((state) => state !== expected))
+    // Wait for every set's sheet to settle.
+    const settleBy = Date.now() + 120000;
+    let views;
+    for (;;) {
+      views = await page.evaluate((viewsFlag) => {
+        const count = { ready: 0, failed: 0, other: 0, rows: 0, fallbacks: 0 };
+        function visit(p) {
+          if (typeof p.viewsState === 'function' && p._views?.()) {
+            const state = p.viewsState();
+            if (state === 'ready') count.ready += 1;
+            else if (state === 'failed') count.failed += 1;
+            else count.other += 1;
+            const set = p.set;
+            for (let row = 0; row < set.count; row++) {
+              if (!set.shown(row) || !(set.flags(row) & viewsFlag)) continue;
+              count.rows += 1;
+              const slot = set.imageNear(row);
+              if (slot >= 0 && p._slots?.[slot]?.z > 0) count.fallbacks += 1;
+            }
+          }
+          if (typeof p.get === 'function')
+            for (let i = 0; i < p.length; i++) visit(p.get(i));
+        }
+        visit(window.__godsEyeView.viewer.scene.primitives);
+        return count;
+      }, ICON_VIEWS);
+      if (
+        (views.ready + views.failed > 0 && !views.other) ||
+        Date.now() > settleBy
+      )
+        break;
+      await sleep(1000);
+    }
+    const sets = views.ready + views.failed + views.other;
+    console.log(
+      `  view sheet: ${views.ready} ready, ${views.failed} failed, ${views.other} other`,
+    );
+    const expected = BLOCK_SHEET ? views.failed : views.ready;
+    if (!sets || expected !== sets)
       throw new Error(
-        `View sheet states [${states.join(', ')}], expected ${expected}`,
+        `View sheet not ${BLOCK_SHEET ? 'failed' : 'ready'} in every set`,
       );
+    if (!views.rows) throw new Error('No contact is drawn from the view sheet');
+    if (BLOCK_SHEET) {
+      console.log(`  fallback glyphs: ${views.fallbacks}/${views.rows} view rows`);
+      if (views.fallbacks !== views.rows)
+        throw new Error('Not every view row draws its loaded fallback glyph');
+    }
 
     for (const shot of argv.includes('--orbit') ? ORBIT_SHOTS : SHOTS) {
       await page.evaluate(
@@ -312,9 +365,9 @@ async function main() {
   } finally {
     await browser.close();
   }
-  if (errors.length) {
-    console.log(`\nConsole errors (${errors.length}):`);
-    for (const error of errors.slice(0, 20)) console.log(`  ${error}`);
+  if (errorCount) {
+    console.log(`\nConsole errors (${errorCount}):`);
+    for (const error of errors) console.log(`  ${error}`);
     process.exitCode = 1;
   }
 }
