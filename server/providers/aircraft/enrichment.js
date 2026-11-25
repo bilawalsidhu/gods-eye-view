@@ -17,28 +17,33 @@ export function adsbdbProxy() {
   const CACHE_PATH = path.join(process.cwd(), '.gev-cache', 'adsbdb.json');
   let cache = { routes: {}, aircraft: {} };
   let dirty = false;
-  let loaded = false;
+  let loading = null;
   const inflight = new Map();
 
-  async function loadOnce() {
-    if (loaded) return;
-    loaded = true;
-    try {
-      const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
-      cache = { routes: parsed.routes ?? {}, aircraft: parsed.aircraft ?? {} };
-    } catch {
-      /* first run */
-    }
-    setInterval(async () => {
-      if (!dirty) return;
-      dirty = false;
+  function loadOnce() {
+    // Concurrent requests wait so they never write into a cache the read will replace.
+    loading ??= (async () => {
       try {
-        await fsp.mkdir(path.dirname(CACHE_PATH), { recursive: true });
-        await fsp.writeFile(CACHE_PATH, JSON.stringify(cache), 'utf8');
+        const parsed = JSON.parse(await fsp.readFile(CACHE_PATH, 'utf8'));
+        cache = {
+          routes: parsed.routes ?? {},
+          aircraft: parsed.aircraft ?? {},
+        };
       } catch {
-        dirty = true;
-      } // retry next tick
-    }, 15_000).unref?.();
+        /* first run */
+      }
+      setInterval(async () => {
+        if (!dirty) return;
+        dirty = false;
+        try {
+          await fsp.mkdir(path.dirname(CACHE_PATH), { recursive: true });
+          await fsp.writeFile(CACHE_PATH, JSON.stringify(cache), 'utf8');
+        } catch {
+          dirty = true;
+        } // retry next tick
+      }, 15_000).unref?.();
+    })();
+    return loading;
   }
 
   const fresh = (e) => e && Date.now() - e.at < TTL_MS;
@@ -72,9 +77,10 @@ export function adsbdbProxy() {
     };
   }
 
+  /** Resolve to the cache entry that answered the lookup, or null. */
   function lookup(kind, key) {
     const store = kind === 'route' ? cache.routes : cache.aircraft;
-    if (fresh(store[key])) return Promise.resolve(store[key].data);
+    if (fresh(store[key])) return Promise.resolve(store[key]);
     const ik = `${kind}:${key}`;
     if (!inflight.has(ik)) {
       inflight.set(
@@ -95,18 +101,19 @@ export function adsbdbProxy() {
               );
               const data =
                 kind === 'route' ? parseRoute(payload) : parseAircraft(payload);
-              store[key] = { at: Date.now(), data }; // data may be null — negative cache
+              const entry = { at: Date.now(), data }; // data may be null — negative cache
+              store[key] = entry;
               dirty = true;
-              return data;
+              return entry;
             }
             if (res.status === 404) {
               store[key] = { at: Date.now(), data: null }; // known-missing — cache the miss
               dirty = true;
             }
             // other statuses: leave uncached so we retry later
-            return fresh(store[key]) ? store[key].data : null;
+            return fresh(store[key]) ? store[key] : null;
           } catch {
-            return fresh(store[key]) ? store[key].data : null; // network error → stale if any
+            return fresh(store[key]) ? store[key] : null; // network error → stale if any
           } finally {
             inflight.delete(ik);
           }
@@ -131,7 +138,8 @@ export function adsbdbProxy() {
           const cs = String(rawKey || '').toUpperCase();
           if (!/^[A-Z0-9]{2,8}$/.test(cs))
             return send(400, { error: 'invalid callsign' });
-          const data = await lookup('route', cs);
+          const entry = await lookup('route', cs);
+          const data = entry?.data;
           return send(
             200,
             data
@@ -139,7 +147,7 @@ export function adsbdbProxy() {
                   found: true,
                   ...data,
                   source: 'adsbdb',
-                  retrievedAtMs: cache.routes[cs]?.at ?? null,
+                  retrievedAtMs: entry.at,
                   operatingDate: null,
                   verification: 'unverified-reference',
                 }
@@ -150,7 +158,7 @@ export function adsbdbProxy() {
           const hex = String(rawKey || '').toLowerCase();
           if (!/^[0-9a-f]{6}$/.test(hex))
             return send(400, { error: 'invalid hex' });
-          const data = await lookup('aircraft', hex);
+          const data = (await lookup('aircraft', hex))?.data;
           return send(200, data ? { found: true, ...data } : { found: false });
         }
         return send(404, { error: 'unknown endpoint' });
