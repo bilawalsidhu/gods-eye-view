@@ -218,7 +218,7 @@ test('a tap near a satellite on a touch screen selects and centres it', (t) => {
   assert.equal(app.camera.followed, null);
 });
 
-test('a geostationary satellite seen from near the ground is turned to, never slid under the ground to', (t) => {
+test('a geostationary satellite seen from near the ground is framed from above, never slid under the ground to', (t) => {
   // A camera 1 km up over Austin looking south, 70° above the horizon; the
   // satellite 55° up in the south, below the middle of the view.
   const eye = fromDegrees(-97.74, 30.27, 1_000);
@@ -244,16 +244,18 @@ test('a geostationary satellite seen from near the ground is turned to, never sl
   const { destination, options } = app.camera.flights[0];
   const p = geoAt(GEO, NOW);
   const sat = fromDegrees(p.longitude, p.latitude, p.altitude);
-  assert.ok(
-    toLonLatH(destination).height > 500,
-    'the eye stays above the ground',
-  );
-  assert.ok(distance(destination, eye) < 1, 'the eye stays where it is');
-  const towards = normalize(sub(sat, eye));
+  const eyeAt = toLonLatH(destination);
+  assert.ok(eyeAt.height > p.altitude, 'the eye is above the satellite');
+  const towards = normalize(sub(sat, destination));
   assert.ok(
     distance(normalize(options.orientation.direction), towards) < 1e-9,
-    'and turns to the satellite',
+    'looking at it',
   );
+  assert.ok(
+    dot(towards, normalize(sat)) < -Math.sin(Math.PI / 4) + 1e-9,
+    'down, with the planet behind it',
+  );
+  assert.ok(distance(destination, sat) >= 0.1 * p.altitude - 1);
   assert.ok(
     Math.abs(dot(options.orientation.up, options.orientation.direction)) < 1e-9,
   );
@@ -272,9 +274,8 @@ test('a view a click centred on a satellite far out is not swung back to the pla
     'the planet is out of the frame',
   );
   assert.deepEqual(app.camera.views, [], 'the view stays on the satellite');
-  // Let go, the same view is one to correct.
+  // Let go, the view is corrected at once, with no move to end.
   app.click(null);
-  app.camera.land();
   assert.equal(app.camera.views.length, 1, 'turned back to the planet');
 });
 

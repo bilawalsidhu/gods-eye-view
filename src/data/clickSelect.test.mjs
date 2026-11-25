@@ -10,12 +10,19 @@ import {
   claimSelection,
   clockRateFor,
   currentSelection,
+  isCentredOnSelection,
   onSelectionChanged,
   releaseSelection,
   yieldSelectionToOthers,
 } from './clickSelect.js';
 import { flyToWorldTarget } from '../worldFocus.js';
-import { distance, fromDegrees, normalize, sub } from '../geo/index.js';
+import {
+  distance,
+  fromDegrees,
+  normalize,
+  sub,
+  toLonLatH,
+} from '../geo/index.js';
 import { bindClickCamera } from '../testSupport/clickCamera.mjs';
 import { worldClock } from '../time/worldClock.js';
 
@@ -249,4 +256,60 @@ test('a landed centring is not cancelled by a later deselect', async (t) => {
   await new Promise((resolve) => setImmediate(resolve));
   releaseSelection('flights', 'abc123');
   assert.equal(cancels, 0, 'a later flight of anyone else is left alone');
+});
+
+test('a thing beyond the horizon is framed by a flight, never looked at through the planet', (t) => {
+  _resetSelectionForTest();
+  const viewer = { isDestroyed: () => false };
+  const camera = bindClickCamera(viewer, { lon: 0, lat: 0, height: 20_000 });
+  t.after(() => {
+    camera.unbind();
+    _resetSelectionForTest();
+  });
+  // An aircraft on the far side of the planet.
+  const at = fromDegrees(180, 0, 10_000);
+  assert.equal(
+    centerOnClick(viewer, () => at),
+    true,
+  );
+  const { destination, options } = camera.flights[0];
+  const eye = toLonLatH(destination);
+  assert.ok(eye.height > 1_000, 'the eye is above the ground');
+  const towards = normalize(sub(at, destination));
+  assert.ok(distance(normalize(options.orientation.direction), towards) < 1e-9);
+  // Nothing of the planet between the eye and the aircraft.
+  for (let i = 1; i < 32; i++) {
+    const k = i / 32;
+    const p = {
+      x: destination.x + (at.x - destination.x) * k,
+      y: destination.y + (at.y - destination.y) * k,
+      z: destination.z + (at.z - destination.z) * k,
+    };
+    assert.ok(toLonLatH(p).height > 0, 'a clear line of sight');
+  }
+  assert.ok(distance(destination, at) < 100_000, 'framed close');
+  assert.equal(options.maxHeight, undefined, 'a long flight arcs');
+});
+
+test('the view a centring left counts as centred through a renderer’s small clamp', async (t) => {
+  const { viewer, camera } = setup(t);
+  claimSelection('satellites', '25544');
+  const at = fromDegrees(-80, 30.3, 400_000);
+  centerOnClick(viewer, () => at);
+  const { destination, options } = camera.flights[0];
+  const range = distance(destination, at);
+  const nudged = { ...destination, z: destination.z + range * 1e-4 };
+  assert.ok(
+    isCentredOnSelection({
+      position: nudged,
+      direction: options.orientation.direction,
+    }),
+  );
+  const moved = { ...destination, z: destination.z + range * 0.05 };
+  assert.ok(
+    !isCentredOnSelection({
+      position: moved,
+      direction: options.orientation.direction,
+    }),
+  );
 });

@@ -49,17 +49,8 @@ const isPoint = (p) =>
 /** Points along a slide of the eye checked for clearing the ground. */
 const PATH_SAMPLES = 32;
 
-/**
- * Whether the eye, sliding on a straight line from `from` to `to`, stays
- * well above the ground: never lower than half the lower end's height.
- * Short slides always do; a slide of thousands of kilometres can cut
- * under the planet's curve, or end under the ground.
- */
-function slideClearsGround(from, to) {
-  const ends = [toLonLatH(from), toLonLatH(to)];
-  if (!ends[0] || !ends[1]) return false;
-  const floor = 0.5 * Math.min(ends[0].height, ends[1].height);
-  if (!(floor > 0)) return false;
+/** Whether every point between `from` and `to` is at least `floor` m up. */
+function lineAbove(from, to, floor) {
   for (let i = 1; i < PATH_SAMPLES; i++) {
     const t = i / PATH_SAMPLES;
     const at = toLonLatH({
@@ -70,6 +61,60 @@ function slideClearsGround(from, to) {
     if (!at || at.height < floor) return false;
   }
   return true;
+}
+
+/**
+ * Whether the eye can slide on a straight line from `from` to `to` and see
+ * `at` from there: the slide never drops below half the lower end's height,
+ * and nothing of the planet stands between the end and `at`. Short slides
+ * always can; a slide of thousands of kilometres can cut under the
+ * planet's curve, end under the ground, or end with the planet in the way.
+ */
+function slideSees(from, to, at) {
+  const ends = [toLonLatH(from), toLonLatH(to)];
+  if (!ends[0] || !ends[1]) return false;
+  const floor = 0.5 * Math.min(ends[0].height, ends[1].height);
+  if (!(floor > 0)) return false;
+  // The target itself may stand on the ground: the sight line may come
+  // down to it, never through the planet.
+  return lineAbove(from, to, floor) && lineAbove(to, at, -50);
+}
+
+/** Least distance a framing flight stands back from its target, metres. */
+const FRAME_MIN_RANGE_M = 2_000;
+/** The tilt a framing flight looks down at its target with, at least. */
+const FRAME_PITCH = (-45 * Math.PI) / 180;
+
+/**
+ * Where a framing flight puts the eye on `at`: on the camera's heading,
+ * looking down at it at least 45°, from about the camera's own height (a
+ * tenth of a satellite's at least), so the planet is behind it.
+ */
+function framingOf(pose, at) {
+  const enu = eastNorthUp(at);
+  const heading = Number.isFinite(pose.heading) ? pose.heading : 0;
+  const pitch = Math.min(
+    Number.isFinite(pose.pitch) ? pose.pitch : FRAME_PITCH,
+    FRAME_PITCH,
+  );
+  const target = toLonLatH(at);
+  const range = Math.max(
+    FRAME_MIN_RANGE_M,
+    Number.isFinite(pose.height) ? pose.height : 0,
+    0.1 * Math.max(0, target?.height ?? 0),
+  );
+  const look = {
+    x: Math.cos(pitch) * Math.sin(heading),
+    y: Math.cos(pitch) * Math.cos(heading),
+    z: Math.sin(pitch),
+  };
+  const destination = framePoint(enu, scale(look, -range));
+  const direction = normalize(sub(at, destination));
+  return {
+    destination,
+    direction,
+    up: squareUp(direction, normalize(at), pose.up),
+  };
 }
 
 /** `up` made square to `direction`, or the eye's own up (`fallback`). */
@@ -94,9 +139,10 @@ let centring = null;
 /**
  * Fly the camera, keeping its distance and angle, to where it sees `at` in
  * the middle: the eye moves on a straight path and the view turns not at all.
- * When that slide would take the eye under the ground (a satellite far
- * across the sky, seen from close to the surface), the eye stays where it is
- * and turns to the target instead.
+ * When that slide would take the eye under the ground, or leave the planet
+ * between the eye and the target (a satellite far across the sky seen from
+ * close to the surface, an aircraft beyond the horizon), the camera flies
+ * to frame the target instead, looking down at it on its own heading.
  * @param {object} camera The camera port.
  * @param {{x: number, y: number, z: number}} at ECEF.
  * @param {number} [durationS]
@@ -110,24 +156,23 @@ export function flyKeepingView(camera, at, durationS = CLICK_CENTER_S) {
   let destination = framePoint(eastNorthUp(at), kept);
   let direction = pose.direction;
   let up = pose.up;
-  if (!slideClearsGround(pose.position, destination)) {
-    destination = { ...pose.position };
-    direction = normalize(sub(at, pose.position));
-    up = squareUp(direction, pose.up, normalize(pose.position));
-  }
+  const slides = slideSees(pose.position, destination, at);
+  if (!slides) ({ destination, direction, up } = framingOf(pose, at));
   camera.cancelFlight();
   const flight = camera.flyTo(destination, {
     orientation: { direction, up },
     durationS: durationS > 0 ? durationS : CLICK_CENTER_S,
     easing: 'cubicInOut',
-    // Below both ends: no arc, so the camera does not climb on the way.
-    maxHeight: 0,
+    // A slide keeps below both ends: no arc, so the camera does not climb
+    // on the way. A framing flight arcs as any long flight does.
+    ...(slides ? { maxHeight: 0 } : {}),
   });
   const mine = {
     flight,
     selection: current,
     position: { ...destination },
     direction: { ...direction },
+    range: distance(destination, at),
     landed: false,
   };
   centring = mine;
@@ -155,9 +200,13 @@ function cancelCentring(selection) {
 export function isCentredOnSelection(pose) {
   if (!centring || !current || centring.selection !== current) return false;
   if (!pose?.position || !pose?.direction) return false;
+  // Within what a renderer's own clamps may move a landed camera: a
+  // thousandth of the range, a hundredth of a degree.
   return (
-    distance(pose.position, centring.position) < 1 &&
-    dot(normalize(pose.direction), normalize(centring.direction)) > 1 - 1e-9
+    distance(pose.position, centring.position) <
+      Math.max(1, 1e-3 * centring.range) &&
+    dot(normalize(pose.direction), normalize(centring.direction)) >
+      Math.cos(1e-2 * (Math.PI / 180))
   );
 }
 

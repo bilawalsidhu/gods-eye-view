@@ -10,7 +10,10 @@ import {
   isFreeGlobeCamera,
 } from '../globeInView.js';
 import { canvasOf, findCamera, findFrame } from '../render/rendererOf.js';
-import { isCentredOnSelection } from '../data/clickSelect.js';
+import {
+  isCentredOnSelection,
+  onSelectionChanged,
+} from '../data/clickSelect.js';
 
 /** Whether two vectors agree to `tolerance` in every component. */
 const within = (a, b, tolerance) =>
@@ -170,6 +173,12 @@ export function installGlobeInViewRecovery(
     else if (settleTimer === null) startSettling();
   });
   const removeMoveStart = camera.on('moveStart', startSettling);
+  // A view held for a selection is checked once it is let go: the camera
+  // has no move to end then, and may be looking at nothing but space.
+  const removeSelectionChanged = onSelectionChanged((selection) => {
+    if (selection) return;
+    if (!recover() && settleTimer === null) startSettling();
+  });
 
   let active = true;
   return () => {
@@ -178,6 +187,7 @@ export function installGlobeInViewRecovery(
     stopSettling();
     removeMoveEnd();
     removeMoveStart();
+    removeSelectionChanged();
     for (const [target, type, listener] of listeners)
       target?.removeEventListener?.(type, listener);
     heldPointers.clear();
