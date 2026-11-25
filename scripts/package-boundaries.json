@@ -69,7 +69,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -1309,7 +1310,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/layers/satellites/issMounts.js",
-      "src/layers/satellites/tiangongMounts.js"
+      "src/layers/satellites/tiangongMounts.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -1722,7 +1724,8 @@
       "src/data/liveStreams.js",
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
-      "src/ui/liveControls.js"
+      "src/ui/liveControls.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -1927,7 +1930,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/scenes/storyTags.js",
-      "src/scenes/storyThumb.js"
+      "src/scenes/storyThumb.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n", "kdbush"]
   },
@@ -2096,6 +2100,9 @@
       "src/data/detectionOcclusion.js",
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2244,6 +2251,9 @@
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
       "src/data/approxDistance.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2404,6 +2414,7 @@
       "src/data/detectionOcclusion.js",
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2537,7 +2548,8 @@
       "src/layers/wind/streamlines.js",
       "src/layers/wind/model.js",
       "src/sky/assets.js",
-      "src/render/cesium/cardPreviews.js"
+      "src/render/cesium/cardPreviews.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -2637,7 +2649,8 @@
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js",
-      "src/time/frameWait.js"
+      "src/time/frameWait.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -2790,7 +2803,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -2915,6 +2929,7 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "satellite.js", "kdbush"]
@@ -3020,7 +3035,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3133,7 +3149,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
@@ -3215,7 +3232,8 @@
       "src/data/installationFeedback.js",
       "src/ui/layerNames.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3342,7 +3360,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -3539,7 +3558,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["hls.js", "cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -3670,7 +3690,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -3764,7 +3785,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
@@ -3877,7 +3899,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3953,7 +3976,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -4095,7 +4119,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -5633,7 +5658,10 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongModel.js",
       "src/layers/satellites/tiangongJoints.js",
-      "src/layers/satellites/tiangongArticulation.js"
+      "src/layers/satellites/tiangongArticulation.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "hls.js",
@@ -6492,7 +6520,10 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
-      "src/layers/satellites/tiangongModel.js"
+      "src/layers/satellites/tiangongModel.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "hls.js",
@@ -6642,7 +6673,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -6757,7 +6789,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -7595,7 +7628,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf", "kdbush"]
   },
@@ -7726,7 +7760,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "kdbush"]
   },
@@ -8040,7 +8075,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -8495,7 +8531,8 @@
       "src/layers/wind/streamlines.js",
       "src/layers/wind/model.js",
       "src/render/recession.js",
-      "src/render/modelParts.js"
+      "src/render/modelParts.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile", "kdbush"]
   },

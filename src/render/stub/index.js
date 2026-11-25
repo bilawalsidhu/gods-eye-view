@@ -23,6 +23,7 @@ import {
 } from '../recession.js';
 import { CLEAR_WEATHER, mergeWeather } from '../weather.js';
 import { CAPABILITIES, CONTRACT_VERSION } from '../contract/index.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
 import { computeViewRectangle } from './viewRectangle.js';
@@ -725,6 +726,26 @@ export function createStubRenderer(options = {}) {
       };
     },
   };
+  const viewSheets = new Set();
+  if (capabilities.has('viewSheets'))
+    draw.views = (id, sheet) => {
+      const layout = viewLayout(sheet); // refused as a renderer refuses it
+      if (viewSheets.has(id))
+        for (const record of sets.values())
+          for (const item of record.kind === 'icons'
+            ? record.items.values()
+            : [])
+            if (
+              isViewRef(item.image) &&
+              item.image.views === id &&
+              item.image.first + layout.frames > layout.columns * layout.rows
+            )
+              throw new RangeError(
+                `a live view's frames run past the new layout of sheet '${id}'`,
+              );
+      viewSheets.add(id);
+      log('draw', 'views', [id]);
+    };
   if (capabilities.has('models'))
     draw.models = (spec) => makeSet('models', spec);
   if (capabilities.has('quads')) draw.quads = (spec) => makeSet('quads', spec);

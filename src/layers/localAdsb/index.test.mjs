@@ -223,6 +223,7 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     feeds,
     services: { ...services, ...options.services },
     now: () => clock.now,
+    ...(options.resolveAsset ? { resolveAsset: options.resolveAsset } : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -317,6 +318,63 @@ test('local aircraft use their class silhouette at one size in magenta', async (
   const [detectable] = layer.getDetectableObjects();
   assert.equal(detectable.sourceId, 'a0b702');
   assert.equal(detectable.type, 'AIR');
+});
+
+test('on a renderer that draws view sheets, local aircraft draw their view along their track; vehicles and masts stay flat', async (t) => {
+  const { aircraftViewRef } = await import('../../data/aircraftViews.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
+  const viewer = { scene: {} };
+  const camera = fakeCameraPort({
+    pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+  });
+  const { draw } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    query: { drillPick: () => [] },
+    capabilities: new Set(['viewSheets']),
+  });
+  fakeInput(viewer);
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer } = await enabledLayer(receiver, clock, null, {
+    viewer: { draw, viewer },
+    resolveAsset: (url) => `/gev${url}`,
+  });
+  t.after(() => layer.destroy());
+  // Registered once, at the layer's own asset URL.
+  assert.deepEqual(draw.viewSheets, [
+    [
+      AIRCRAFT_VIEWS.id,
+      { ...AIRCRAFT_VIEWS.sheet, image: '/gev/sprites/aircraft-views.webp' },
+    ],
+  ]);
+  receiver.set({
+    aircraft: [
+      record({ trackDeg: 0 }),
+      record({ icao: 'a0b702', category: 'A7' }),
+      record({ icao: 'a0c001', category: 'C1', trackDeg: 90 }),
+      record({ icao: 'a0c003', category: 'C3', trackDeg: 90 }),
+    ],
+  });
+  await layer.update();
+  const icon = iconOf(draw, 'local-adsb:abc123');
+  assert.equal(icon.image, aircraftViewRef('airliner'));
+  assert.equal(icon.rotationMode, 'course');
+  assert.equal(icon.course, 0);
+  assert.equal('rotation' in icon, false);
+  assert.deepEqual(icon.size, [20, 20]);
+  assert.deepEqual(icon.color, MAGENTA);
+  assert.equal(
+    iconOf(draw, 'local-adsb:a0b702').image,
+    aircraftViewRef('helicopter', rotorFrame('local-adsb:a0b702', clock.now)),
+    'the rotor turns through the sheet',
+  );
+  const vehicle = iconOf(draw, 'local-adsb:a0c001');
+  assert.equal(vehicle.image, aircraftIcon('vehicle'));
+  assert.equal(vehicle.rotationMode, 'screen');
+  const mast = iconOf(draw, 'local-adsb:a0c003');
+  assert.equal(mast.image, aircraftIcon('station'));
+  assert.equal(mast.rotationMode, 'screen');
+  assert.equal(mast.rotation, 0);
 });
 
 test('local airport vehicles draw the amber vehicle sprite, ground stations the upright mast', async (t) => {

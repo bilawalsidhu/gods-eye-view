@@ -809,3 +809,172 @@ test('a hidden placed contact, or one the placement has no end for, is drawn whe
     'held where it is placed',
   );
 });
+
+/**
+ * An icon layer on a renderer that does (or does not) draw view sheets,
+ * over contacts `records` (by id), all held at one place.
+ */
+function viewsFixture(
+  records,
+  { viewSheets = true, kinds = {}, resolveAsset } = {},
+) {
+  const viewer = {};
+  const { draw, unbind } = bindFakeDraw(viewer, {
+    capabilities: new Set(viewSheets ? ['viewSheets'] : []),
+  });
+  const state = {
+    _viewer: viewer,
+    now: () => Date.now(),
+    _positionHistory: new Map(),
+    _cockpitNearContacts: new Set(),
+    records: { data: records, missingPolls: new Map() },
+  };
+  const icons = createAircraftIcons({
+    state,
+    services: { focus: { focusPassIsNeeded: () => false } },
+    parts: {
+      rendering: {
+        _iconKind: (id, klass) => kinds[id] ?? klass,
+        _fleetBillboardColor: () => [1, 1, 1, 1],
+        _fleetBillboardScale: () => 1.25,
+        _cockpitContactColor: () => [1, 0, 0, 1],
+      },
+    },
+    layerId: 'flights',
+    courseMaxDps: 3,
+    cockpitContactSizePx: 8,
+    resolveAsset,
+  });
+  icons._createIcons(viewer);
+  const here = fromDegrees(0, 30, 300);
+  for (const id of records.keys()) {
+    state._icons.put(
+      { id, pos: here, motion: { kind: 'hold', courseDeg: 0 }, size: [20, 20] },
+      { expiresAt: Infinity },
+    );
+    icons._applyIconPresentation(id);
+  }
+  return { state, icons, registered: draw.viewSheets, here, unbind };
+}
+
+test('with view sheets, every aircraft class draws from the sheet along its course, with no near image', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const { aircraftViewRef, AIRCRAFT_VIEWS } =
+    await import('./aircraftViews.js');
+  const records = new Map([
+    ['p1', { klass: 'airliner' }],
+    ['p2', { klass: 'glider' }],
+    ['h1', { klass: 'helicopter', onGround: true }],
+  ]);
+  const { state, icons, registered, unbind } = viewsFixture(records);
+  t.after(unbind);
+  assert.deepEqual(registered, [[AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet]]);
+  const p1 = state._icons.item('p1');
+  assert.equal(p1.image, aircraftViewRef('airliner'));
+  assert.equal(p1.imageLod, undefined);
+  assert.equal(p1.rotationMode, 'course');
+  // Everything else is as the flat glyph draws it.
+  assert.deepEqual(p1.size, [20, 20]);
+  assert.equal(p1.scale, 1.25);
+  assert.deepEqual(p1.color, [1, 1, 1, 1]);
+  assert.equal(p1.scaleByDistance.nearValue, 3);
+  assert.equal(state._icons.item('p2').image, aircraftViewRef('glider'));
+  assert.equal(
+    state._icons.item('h1').image,
+    aircraftViewRef('helicopter', ROTOR_STILL_FRAME),
+  );
+  assert.equal(icons._fleetLook('p1').image, aircraftViewRef('airliner'));
+  assert.deepEqual(p1.pickProxy.size, p1.size);
+  icons._disposeIcons();
+});
+
+test('without view sheets the icons are the flat glyphs with their near image, as before', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const records = new Map([['p1', { klass: 'airliner' }]]);
+  const { state, registered, unbind } = viewsFixture(records, {
+    viewSheets: false,
+  });
+  t.after(unbind);
+  assert.deepEqual(registered, [], 'no sheet is registered');
+  const p1 = state._icons.item('p1');
+  assert.equal(p1.image, aircraftIcon('airliner', FLEET_ICON_PX));
+  assert.equal(p1.imageLod.near, aircraftIcon('airliner', 192));
+  assert.equal(p1.rotationMode, 'course');
+});
+
+test('with view sheets, the TR-3B, airport vehicles and ground stations stay flat', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const records = new Map([
+    ['x1', { klass: 'airliner' }],
+    ['v1', { klass: 'vehicle' }],
+    ['s1', { klass: 'station' }],
+  ]);
+  const { state, unbind } = viewsFixture(records, {
+    kinds: { x1: 'tr3b' },
+  });
+  t.after(unbind);
+  assert.equal(
+    state._icons.item('x1').image,
+    aircraftIcon('tr3b', FLEET_ICON_PX),
+  );
+  assert.ok(state._icons.item('x1').imageLod);
+  assert.equal(
+    state._icons.item('v1').image,
+    aircraftIcon('vehicle', FLEET_ICON_PX),
+  );
+  const mast = state._icons.item('s1');
+  assert.equal(mast.image, aircraftIcon('station', FLEET_ICON_PX));
+  assert.equal(mast.rotationMode, 'screen');
+  assert.equal(mast.rotation, 0);
+});
+
+test('with view sheets, an airborne helicopter turns its rotor through the sheet’s three blocks', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const { aircraftViewRef } = await import('./aircraftViews.js');
+  const records = new Map([['h1', { klass: 'helicopter', onGround: false }]]);
+  const { state, icons, unbind } = viewsFixture(records);
+  t.after(unbind);
+  const seen = new Set();
+  for (let step = 0; step <= 12; step++) {
+    if (step) t.mock.timers.tick(80);
+    icons._turnRotors(Date.now(), Date.now());
+    const item = state._icons.item('h1');
+    assert.equal(item.imageLod, undefined);
+    seen.add(item.image);
+  }
+  assert.deepEqual(
+    new Set(seen),
+    new Set([0, 1, 2].map((frame) => aircraftViewRef('helicopter', frame))),
+  );
+});
+
+test('the layer registers the view sheet at its own asset URL', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const { AIRCRAFT_VIEWS } = await import('./aircraftViews.js');
+  const { registered, unbind } = viewsFixture(
+    new Map([['p1', { klass: 'airliner' }]]),
+    { resolveAsset: (url) => `/gev/${url.replace(/^\//, '')}` },
+  );
+  t.after(unbind);
+  assert.equal(registered.length, 1);
+  assert.equal(registered[0][0], AIRCRAFT_VIEWS.id);
+  assert.equal(registered[0][1].image, '/gev/sprites/aircraft-views.webp');
+});
+
+test('a view carries the contact’s flat glyph as its fallback', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: WORLD_MS });
+  const records = new Map([
+    ['p1', { klass: 'turboprop' }],
+    ['h1', { klass: 'helicopter', onGround: true }],
+  ]);
+  const { state, unbind } = viewsFixture(records);
+  t.after(unbind);
+  assert.equal(
+    state._icons.item('p1').image.fallback,
+    aircraftIcon('turboprop', FLEET_ICON_PX),
+  );
+  assert.equal(
+    state._icons.item('h1').image.fallback,
+    aircraftIcon('helicopter', FLEET_ICON_PX, ROTOR_STILL_FRAME),
+  );
+});
