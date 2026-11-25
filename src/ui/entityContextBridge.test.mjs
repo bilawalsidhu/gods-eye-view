@@ -536,7 +536,7 @@ test('Nearby rows give the navigation owner the wildlife cell and locator pin fr
   }
 });
 
-test('an explicit moving row takes over a pending place flight and is picked in its layer, as a click picks it', async (t) => {
+test('an explicit moving row takes over a pending place flight, is selected in its layer and framed at its range', async (t) => {
   const viewer = { scene: {} };
   const input = fakeInput(viewer);
   const flights = [];
@@ -554,10 +554,9 @@ test('an explicit moving row takes over a pending place flight and is picked in 
     enabled: true,
     module: {
       getAnalystRecords: () => [aircraft],
-      // The layer selects it and centres it once, as a click on it does.
+      // The layer selects it, as a click on it does; the pick frames it.
       pickById: (id, options) => {
-        picks.push([id, options.origin]);
-        flights.push('aircraft centred');
+        picks.push([id, options.origin, options.center]);
         return true;
       },
     },
@@ -610,8 +609,12 @@ test('an explicit moving row takes over a pending place flight and is picked in 
   assert.ok(store.select(target, { fly: true }));
   pending.resolve();
   await done;
-  assert.deepEqual(picks, [['abc123', 'user']], 'its layer selects it');
-  assert.deepEqual(flights, ['aircraft centred'], 'centred once, no framing');
+  assert.deepEqual(
+    picks,
+    [['abc123', 'user', false]],
+    'its layer selects it and leaves the camera to the pick',
+  );
+  assert.deepEqual(flights, ['aircraft'], 'framed at its range');
   const tracked = [];
   useOmnibarStore(pinia).connectRunner((name, args) =>
     tracked.push([name, args.query]),
@@ -619,6 +622,58 @@ test('an explicit moving row takes over a pending place flight and is picked in 
   assert.ok(store.select(target, { fly: true }));
   assert.deepEqual(tracked, [], 'a pick never follows, runner or not');
   assert.deepEqual(picks.length, 2);
+  assert.deepEqual(flights, ['aircraft', 'aircraft']);
+});
+
+test('a row its layer cannot select now is still framed', (t) => {
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  const flights = [];
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ heading: 0 }),
+      on: () => () => {},
+      flyToBounds: (sphere, options) => flights.push(options.offset.range),
+    },
+  });
+  const aircraft = { id: 'abc123', icao24: 'abc123', lat: 30, lon: -97 };
+  let answer = () => false;
+  const layer = {
+    id: 'flights',
+    enabled: true,
+    module: {
+      getAnalystRecords: () => [aircraft],
+      pickById: () => answer(),
+    },
+  };
+  const dm = {
+    layers: new Map([[layer.id, layer]]),
+    getAll: () => [layer],
+    isEnabled: () => true,
+  };
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => dm,
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    store.clear();
+    disconnect();
+    input.destroy();
+    unbind();
+  });
+  const target = store.nearbyLayers(30, -97, { radiusKm: 25 })[0].items[0]
+    .identity;
+  // Gone from the layer's own feed though Context still has its card.
+  assert.ok(store.select(target, { fly: true }));
+  assert.equal(flights.length, 1, 'refused: framed all the same');
+  answer = () => {
+    throw new Error('layer going away');
+  };
+  assert.ok(store.select(target, { fly: true }));
+  assert.equal(flights.length, 2, 'thrown: framed all the same');
 });
 
 test('closing the card deselects its item in its layer, followed or only selected', (t) => {
@@ -681,6 +736,56 @@ test('closing the card deselects its item in its layer, followed or only selecte
   store.clear();
   assert.deepEqual(stops, ['user']);
 });
+
+for (const layerId of ['transit', 'rail', 'local-adsb']) {
+  test(`closing a ${layerId} card deselects its item, which its layer names its own way`, (t) => {
+    _resetSelectionForTest();
+    const viewer = { scene: {} };
+    const input = fakeInput(viewer);
+    const unbind = bindRenderer(viewer, {
+      camera: { pose: () => ({ heading: 0 }), on: () => () => {} },
+    });
+    const item = { id: 'LABEL 7', lat: 30, lon: -97 };
+    const cleared = [];
+    const layer = {
+      id: layerId,
+      enabled: true,
+      module: {
+        getAnalystRecords: () => [item],
+        clearSelection: () => {
+          cleared.push(layerId);
+          releaseSelection(layerId);
+        },
+      },
+    };
+    const dm = {
+      layers: new Map([[layer.id, layer]]),
+      getAll: () => [layer],
+      isEnabled: () => true,
+    };
+    const pinia = createPinia();
+    const disconnect = installEntityContext({
+      viewer,
+      pinia,
+      getDataManager: () => dm,
+    });
+    const store = useEntityCardStore(pinia);
+    t.after(() => {
+      disconnect();
+      input.destroy();
+      unbind();
+      _resetSelectionForTest();
+    });
+    const target = store.nearbyLayers(30, -97, { radiusKm: 25 })[0]?.items[0]
+      ?.identity;
+    assert.ok(target, 'the item has a card');
+    // The layer's selection names it by its own key.
+    claimSelection(layerId, 'feed:vehicle-7');
+    assert.ok(store.select(target));
+    store.clear();
+    assert.deepEqual(cleared, [layerId]);
+  });
+}
 
 test('a quiet spell between thresholded changes keeps an active camera move unsettled', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

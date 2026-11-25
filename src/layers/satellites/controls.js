@@ -457,10 +457,12 @@ export function createControls({ state: layerState, services, parts, source }) {
      * with its orbit and card, centred once, not followed
      * (src/data/clickSelect.js).
      * @param {string|number} noradId NORAD catalog number.
-     * @param {{origin?: string}} [options]
+     * @param {{origin?: string, center?: boolean}} [options] `center: false`
+     *   selects it and leaves the camera to the caller (a pick from a list
+     *   frames it).
      * @returns {boolean} True if the satellite was selected.
      */
-    pickById(noradId, { origin = 'user' } = {}) {
+    pickById(noradId, { origin = 'user', center = true } = {}) {
       const id = Number(noradId);
       if (
         !Number.isFinite(id) ||
@@ -471,11 +473,11 @@ export function createControls({ state: layerState, services, parts, source }) {
         return false;
       parts.tracking._cancelPendingTrackingRestore();
       if (layerState._trackedNorad === id) {
-        if (!parts.tracking._trackedIsFollowed())
+        if (center && !parts.tracking._trackedIsFollowed())
           parts.tracking._centerTracked();
         return true;
       }
-      parts.tracking._trackSatellite(id, { origin, follow: false });
+      parts.tracking._trackSatellite(id, { origin, follow: false, center });
       return layerState._trackedNorad === id;
     },
 

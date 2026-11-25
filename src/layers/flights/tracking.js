@@ -1096,16 +1096,18 @@ export function createTracking({
    * the selected-aircraft card and, when followed, the camera.
    *
    * @param {string} icao24 - ICAO 24-bit transponder address to track.
-   * @param {{origin?: string, follow?: boolean}} [options] `follow: false`
+   * @param {{origin?: string, follow?: boolean, center?: boolean}} [options] `follow: false`
    *   (a click on the plane) selects it and centres it once, keeping the
    *   camera's distance and angle, and follows nothing
    *   (src/data/clickSelect.js); anything else (Follow, voice, a share link)
    *   follows it from a calibrated framing.
+   *   `center: false` (a pick from a list, which the caller frames)
+   *   selects it without moving the camera.
    */
 
   function _trackFlight(
     icao24,
-    { origin = 'programmatic', follow = true } = {},
+    { origin = 'programmatic', follow = true, center = true } = {},
   ) {
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
@@ -1254,7 +1256,7 @@ export function createTracking({
     });
     refreshTrackedReadout(flightState._trackedEntity);
     if (follow) _followTracked();
-    else _centerTracked();
+    else if (center) _centerTracked();
 
     // Track-history trail (PRD F1): seed from local history + async backfill.
     // Ground traffic draws NO trail (a taxi path is noise, not a track) — if the

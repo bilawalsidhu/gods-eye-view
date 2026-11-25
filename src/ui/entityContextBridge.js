@@ -43,6 +43,12 @@ const DEFAULT_RANGE = 8_000;
  * with a key naming the item (src/data/followed.js). A vessel is flown to.
  */
 const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
+/**
+ * Layers whose card names its item otherwise than the layer's selection does
+ * (a vehicle's label, a callsign): one selection each, so their card is the
+ * selected item's while that layer holds the selection.
+ */
+const SELECTED_BY_LAYER = new Set(['transit', 'rail', 'local-adsb']);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -105,10 +111,14 @@ export function installEntityContext({
       button.click();
   }
 
-  function flyTo(card, { fromSelection = false } = {}) {
+  /**
+   * The flight that frames `card`'s item at its kind's range, or null when
+   * there is no camera or the card has no place.
+   */
+  function framingFlight(card) {
     const port = camera();
     if (!port || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
-      return;
+      return null;
     const height = card.pinHeightM ?? card.altitudeM ?? 0;
     const framing = card.obscured ? WORLD_FOCUS_FRAMING['sighting-area'] : null;
     const pitchDeg =
@@ -133,6 +143,12 @@ export function installEntityContext({
           durationS: 2,
         },
       );
+    return fly;
+  }
+
+  function flyTo(card, { fromSelection = false } = {}) {
+    const fly = framingFlight(card);
+    if (!fly) return;
     if (fromSelection) return navigateToSelection(fly);
     return fly();
   }
@@ -154,22 +170,28 @@ export function installEntityContext({
       card &&
       selection &&
       selection.layerId === card.layerId &&
-      selection.id === String(card.identity?.id),
+      (selection.id === String(card.identity?.id) ||
+        SELECTED_BY_LAYER.has(card.layerId)),
     );
 
-  // A pick from a Context row or a search is a click on the item: its layer
-  // selects it (track, trail or orbit shown) and centres it once, without
-  // following it. True when its layer took the pick.
+  // A pick from a Context row or a search selects the item in its layer, as
+  // a click does (track, trail or orbit shown, the one selection), without
+  // following it; the camera frames it at its kind's range, as it always
+  // has for a pick, wherever it is. An item its layer cannot select now
+  // (gone from its feed, its layer off) is framed all the same. True when
+  // its layer can take picks.
   function pick(card) {
     const module = getDataManager()?.layers?.get?.(card?.layerId)?.module;
     const id = card?.identity?.id;
     if (typeof module?.pickById !== 'function' || !id) return false;
+    const fly = framingFlight(card);
     navigateToSelection(() => {
       try {
-        module.pickById(id, { origin: 'user' });
+        module.pickById(id, { origin: 'user', center: false });
       } catch {
         // A layer going away meanwhile has nothing to select.
       }
+      return fly?.();
     });
     return true;
   }
@@ -186,7 +208,7 @@ export function installEntityContext({
       const module = layer?.module;
       if (typeof module?.stopTracking === 'function')
         module.stopTracking({ origin: 'user' });
-      else if (card.layerId === 'ais-live-vessels') module?.clearSelection?.();
+      else module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.
     }

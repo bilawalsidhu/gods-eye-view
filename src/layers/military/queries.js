@@ -701,21 +701,23 @@ export function createQueries({
      * (src/data/clickSelect.js). A click on the selected one centres it
      * again, unless the camera follows it.
      * @param {string} icao24
-     * @param {{origin?: string}} [options]
+     * @param {{origin?: string, center?: boolean}} [options] `center: false`
+     *   selects it and leaves the camera to the caller (a pick from a list
+     *   frames it).
      * @returns {boolean} True if the aircraft exists and was selected.
      */
-    pickById(icao24, { origin = 'user' } = {}) {
+    pickById(icao24, { origin = 'user', center = true } = {}) {
       if (!icao24) return false;
       let id = String(icao24).trim();
       if (!flightState._icons?.has(id)) id = id.toLowerCase();
       if (!flightState._icons?.has(id)) return false;
       parts.tracking._cancelPendingTrackingRestore();
       if (flightState._trackedIcao === id) {
-        if (!parts.tracking._trackedIsFollowed())
+        if (center && !parts.tracking._trackedIsFollowed())
           parts.tracking._centerTracked();
         return true;
       }
-      parts.tracking._trackFlight(id, { origin, follow: false });
+      parts.tracking._trackFlight(id, { origin, follow: false, center });
       return flightState._trackedIcao === id;
     },
 

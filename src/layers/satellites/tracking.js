@@ -507,14 +507,16 @@ export function createTracking({ state: layerState, services, parts, source }) {
   /**
    * Select a satellite: its tracked dot, orbit ring and card.
    * @param {number} noradId
-   * @param {{origin?: string, follow?: boolean}} [options] `follow: false`
+   * @param {{origin?: string, follow?: boolean, center?: boolean}} [options] `follow: false`
    *   (a click on it) centres it once, keeping the camera's distance and
    *   angle, and follows nothing (src/data/clickSelect.js); anything else
    *   (Follow, voice, a share link) follows it.
+   *   `center: false` (a pick from a list, which the caller frames)
+   *   selects it without moving the camera.
    */
   function _trackSatellite(
     noradId,
-    { origin = 'programmatic', follow = true } = {},
+    { origin = 'programmatic', follow = true, center = true } = {},
   ) {
     _clearTracking(false, { origin });
 
@@ -610,7 +612,7 @@ export function createTracking({ state: layerState, services, parts, source }) {
       origin,
     });
     if (follow) _followTracked();
-    else _centerTracked();
+    else if (center) _centerTracked();
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {

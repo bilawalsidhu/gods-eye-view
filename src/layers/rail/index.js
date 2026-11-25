@@ -201,6 +201,12 @@ export function createRailLayer({
     parts.controls.methods,
     parts.cockpit.methods,
     {
+      /** Deselect the selected train, as a click on the map does. */
+      clearSelection() {
+        parts.selection.clearSelection();
+        services.render.governorRequestRender?.('rail-selection');
+        return true;
+      },
       /** Test seams: this instance's own state and parts. */
       _railStateForTest: () => state,
       _railPartsForTest: () => parts,

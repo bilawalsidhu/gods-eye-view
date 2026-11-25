@@ -523,13 +523,18 @@ export function createQueries({
      * Select a vessel by id as a click on it does: selected with its trail
      * and card, and centred once (src/data/clickSelect.js).
      * @param {string|number} id Vessel id.
+     * @param {{center?: boolean}} [options] `center: false` selects it and
+     *   leaves the camera to the caller (a pick from a list frames it).
      * @returns {boolean} True if a matching vessel was selected.
      */
-    pickById(id) {
+    pickById(id, { center = true } = {}) {
       if (id === null || id === undefined) return false;
       const record = recordFor(String(id).trim());
       if (!record || !state.feed.enabled) return false;
-      return components.selection.selectAndFocusVessel(record);
+      if (center) return components.selection.selectAndFocusVessel(record);
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return true;
     },
 
     /**

@@ -968,6 +968,13 @@ export function createLocalAdsbLayer({
       return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
     },
 
+    /** Deselect the selected aircraft, as a click on the map does. */
+    clearSelection() {
+      clearSelection();
+      governorRequestRender('local-adsb-selection');
+      return true;
+    },
+
     /**
      * Snapshot loaded locally received aircraft as plain JSON-safe records for the analyst
      * query engine. On demand only (once per spoken query); [] while the

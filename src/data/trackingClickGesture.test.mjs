@@ -119,7 +119,7 @@ test('a click on an aircraft selects and centres it without following it', () =>
       source,
       /_trackFlight\(pickedIcao, \{ origin: 'user', follow: false \}\)/,
     );
-    assert.match(source, /if \(follow\) _followTracked\(\);\s*else _centerTracked\(\);/);
+    assert.match(source, /if \(follow\) _followTracked\(\);\s*else if \(center\) _centerTracked\(\);/);
     assert.doesNotMatch(source, /keepView/);
   }
 });
