@@ -280,6 +280,7 @@
     "./layers/air-quality/source": "./src/layers/airQuality/source.js",
     "./layers/earthquakes/source": "./src/layers/earthquakes/source.js",
     "./layers/perimeters/source": "./src/layers/perimeters/source.js",
+    "./layers/perimeters/records": "./src/layers/perimeters/records.js",
     "./layers/gnss/source": "./src/layers/gnss/source.js",
     "./layers/ghostmaps/source": "./src/layers/ghostMaps/source.js",
     "./layers/drone-airspace/source": "./src/layers/droneAirspace/source.js",
