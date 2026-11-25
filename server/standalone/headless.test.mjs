@@ -393,3 +393,30 @@ test('close() tears down cleanly even when the server was never started', async 
   const app = createHeadlessApiApp({ plugins: [] });
   await assert.doesNotReject(() => app.close());
 });
+
+test('GEV_HEADLESS_PORT=0 asks the OS for a port and the startup line reports the one bound', async () => {
+  const lines = [];
+  const realLog = console.log;
+  console.log = (...args) => lines.push(args.join(' '));
+  let app;
+  try {
+    app = await startHeadlessApi({
+      env: { GEV_HEADLESS_PORT: '0' },
+      plugins: [healthzPlugin()],
+    });
+  } finally {
+    console.log = realLog;
+  }
+  try {
+    const { port } = app.httpServer.address();
+    assert.notEqual(port, 0, 'the OS must have assigned a real port');
+    assert.notEqual(port, 4174, '0 must not fall back to the default port');
+    assert.ok(
+      lines.some((line) => line.endsWith(`http://127.0.0.1:${port}`)),
+      `startup line must name port ${port}, got ${JSON.stringify(lines)}`,
+    );
+    assert.equal((await requestWithHost(port, '/healthz', `127.0.0.1:${port}`)).status, 200);
+  } finally {
+    await app.close();
+  }
+});

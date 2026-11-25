@@ -327,6 +327,16 @@ export function assertSafeBindHost(host, env = process.env) {
 }
 
 /**
+ * Parse an integer environment value, using `fallback` only when it is unset
+ * or not a number. Zero is a real setting (port 0 asks the OS for a free
+ * port; a grace of 0 closes connections at once), so `|| fallback` is wrong.
+ */
+function parseIntegerEnv(value, fallback) {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+/**
  * Start the headless API, bound to `127.0.0.1` by default. This process has
  * no auth of its own (matching the app's existing same-origin-only design).
  * Override the address with `GEV_HEADLESS_PORT` / `GEV_HEADLESS_HOST`; a
@@ -341,7 +351,7 @@ export function assertSafeBindHost(host, env = process.env) {
  */
 export async function startHeadlessApi({
   env = process.env,
-  port = Number.parseInt(env.GEV_HEADLESS_PORT || '', 10) || DEFAULT_PORT,
+  port = parseIntegerEnv(env.GEV_HEADLESS_PORT, DEFAULT_PORT),
   host = env.GEV_HEADLESS_HOST || DEFAULT_HOST,
   plugins,
 } = {}) {
@@ -359,9 +369,10 @@ export async function startHeadlessApi({
     ...(plugins ? { plugins } : {}),
     allowedHosts: resolveAllowedHosts(env.GEV_ALLOWED_HOSTS),
     bindHost: host,
-    shutdownGraceMs:
-      Number.parseInt(env.GEV_HEADLESS_SHUTDOWN_GRACE_MS || '', 10) ||
+    shutdownGraceMs: parseIntegerEnv(
+      env.GEV_HEADLESS_SHUTDOWN_GRACE_MS,
       DEFAULT_SHUTDOWN_GRACE_MS,
+    ),
   });
   // listen() reports failure (port in use, an address that cannot be bound)
   // by emitting 'error', never by calling its callback. Without a listener
@@ -386,7 +397,9 @@ export async function startHeadlessApi({
     await app.close().catch(() => {});
     throw err;
   }
-  console.log(`[headless-api] listening on http://${host}:${port}`);
+  // With port 0 the OS picks the port, so report the one actually bound.
+  const { port: boundPort } = app.httpServer.address();
+  console.log(`[headless-api] listening on http://${host}:${boundPort}`);
   return app;
 }
 
