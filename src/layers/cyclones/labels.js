@@ -3,6 +3,7 @@ import {
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../../overlays/worldOverlay.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * @module cyclones/labels
@@ -19,6 +20,8 @@ export const CYCLONE_LEAD_LABEL_MAX_DISTANCE_M = 4_000_000;
 export const CYCLONE_OVERLAY_COHORT_LIMIT = 64;
 /** Advisory centre and forecast track; single source for points and cards. */
 export const CYCLONE_ACCENT = '#7fe6ed';
+/** JTWC's 34-knot wind danger area: its fill, dashed edge and label. */
+export const CYCLONE_DANGER_ACCENT = '#ffb15c';
 /** Selected advisory centre. */
 export const CYCLONE_SELECTED_ACCENT = '#ffe19a';
 /** Point sizes the cards keep clear of. */
@@ -112,7 +115,32 @@ function cycloneLeadEntry(stormId, point) {
 }
 
 /**
- * Storm cards for every storm and lead-hour labels for the selected one.
+ * The name of the selected storm's 34-knot wind danger area, on its edge.
+ * @param {string} stormId
+ * @param {object} position
+ * @returns {object}
+ */
+function cycloneDangerAreaEntry(stormId, position) {
+  return {
+    ...SHARED_CARD,
+    ...markerClearance(0),
+    id: `area:${stormId}`,
+    position,
+    variant: 'card',
+    title: t('34-knot wind danger area'),
+    details: [],
+    accent: CYCLONE_DANGER_ACCENT,
+    selected: false,
+    protected: false,
+    // Below every lead-hour label.
+    priority: LEAD_PRIORITY - 200,
+    maxDistance: Number.POSITIVE_INFINITY,
+  };
+}
+
+/**
+ * Storm cards for every storm, and lead-hour labels and the danger area's
+ * name for the selected one.
  * @param {Array<object>} storms Renderer anchors with `forecasts`.
  * @param {?string} selectedId
  * @returns {Array<object>}
@@ -125,13 +153,17 @@ export function cycloneOverlayEntries(storms, selectedId) {
     if (!selected) continue;
     for (const point of storm.forecasts || [])
       entries.push(cycloneLeadEntry(storm.id, point));
+    if (storm.dangerArea)
+      entries.push(cycloneDangerAreaEntry(storm.id, storm.dangerArea));
   }
   return entries;
 }
 
-/** Storm id behind a published card or lead-hour label id, else null. */
+/** Storm id behind a published card, lead-hour or area label id, else null. */
 export function cycloneStormIdFromEntryId(entryId) {
-  const match = /^(?:storm|lead):([^:]+)(?::|$)/.exec(String(entryId ?? ''));
+  const match = /^(?:storm|lead|area):([^:]+)(?::|$)/.exec(
+    String(entryId ?? ''),
+  );
   return match ? match[1] : null;
 }
 

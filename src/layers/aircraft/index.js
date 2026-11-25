@@ -14,5 +14,4 @@ export * from '../../data/modelVisualAnchor.js';
 export * from '../../data/motionModel.js';
 export * from '../../data/renderAltitude.js';
 export * from '../../data/routePlausible.js';
-export * from '../../data/trackedModelRegime.js';
 export * from '../../data/trackingClickGesture.js';

@@ -45,9 +45,18 @@ export function readLayerSource(file) {
                         ? '../layers/cctv'
                         : '../layers/vessels',
   );
+  // The aircraft layers draw through shared icon and model layers; they are
+  // their code too.
+  const shared = ['flights.js', 'militaryFlights.js'].includes(basename(path))
+    ? ['aircraftIconLayer.js', 'aircraftModelLayer.js'].map((name) =>
+        join(dirname(path), name),
+      )
+    : [];
   return readdirSync(directory)
     .filter((name) => name.endsWith('.js'))
     .sort()
-    .map((name) => readFileSync(join(directory, name), 'utf8'))
+    .map((name) => join(directory, name))
+    .concat(shared)
+    .map((file) => readFileSync(file, 'utf8'))
     .join('\n');
 }

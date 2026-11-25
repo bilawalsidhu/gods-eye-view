@@ -2,19 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from 'cesium';
 import { showOsmCredit, hideOsmCredit } from './dataCredits.js';
+import { bindFakeCesiumCredits, fakeCesiumCredits } from '../testSupport/fakeCreditsPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import { createInfrastructureLayers } from './infrastructure.js';
 import { createBhoteKoshiLocatorLayer } from './bhoteKoshiLocator.js';
 import { createWorldAnnotationRenderer } from '../annotations/worldAnnotationRenderer.js';
-import * as annotations from '../annotations/worldAnnotationRenderer.js';
 import { createDirectionsLayer } from '../layers/directions/index.js';
 import { createDirectionsSource } from '../layers/directions/source.js';
 import { createLifecycle as createCctvLifecycle } from '../layers/cctv/lifecycle.js';
 import * as input from './inputOwnership.js';
 import { createOverpassAlprSource } from '../layers/alpr/source.js';
+// The infrastructure layers take clicks through the input port, which their
+// fake renderer leaves to the Cesium adapter's factories.
+import '../render/cesium/camera.js';
 
 const noop = () => {};
 const overlayHost = { setEntries: noop, setVisible: noop, clearSource: noop };
-function viewer(t) {
+function viewer(t, ports = null) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   for (const name of ['HTMLCanvasElement', 'HTMLImageElement', 'ImageBitmap', 'OffscreenCanvas']) {
     const original = globalThis[name];
@@ -31,13 +37,18 @@ function viewer(t) {
     scene: { requestRender: noop, canvas: { addEventListener: noop, removeEventListener: noop }, preRender: new C.Event(),
       primitives: { add: (p) => p, remove: noop }, screenSpaceCameraController: { enableInputs: true } },
   };
-  return v;
+  if (ports) bindRenderer(v, { credits: fakeCesiumCredits(v), ...ports });
+  return bindFakeCesiumCredits(v);
 }
 function assertCredit(v) {
   assert.ok(v.credits.some((credit) => credit.showOnScreen && credit.html.includes('>© OpenStreetMap<')));
 }
 for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce the shared OSM credit when data displays`, async (t) => {
-  const v = viewer(t);
+  // They draw through the renderer's ports: a fake one, with the credits.
+  const ground = bindFakeGroundRenderer({});
+  t.after(ground.unbind);
+  const { capabilities, canvas, draw, frame, camera, query, globe } = ground.renderer;
+  const v = viewer(t, { capabilities, canvas, draw, frame, camera, query, globe });
   t.mock.method(globalThis, 'fetch', async () => ({ ok: true, text: async () => JSON.stringify({ type: 'Feature', id: 'test', properties: { name: 'Site' }, geometry: { type: 'Polygon', coordinates: [[[0, 0], [0.01, 0], [0, 0.01], [0, 0]]] } }) }));
   const layer = createInfrastructureLayers({ overlayHost, registerEntityContext: noop, selectEntityContext: noop, clearSelectedEntityContextForLayer: noop, removeEntityContextsForLayer: noop, governorRequestRender: noop, showOsmCredit, hideOsmCredit })[index];
   await layer.enable(v);
@@ -48,7 +59,7 @@ for (const index of [0, 1]) test(`${index ? 'dams' : 'datacenters'} introduce th
 });
 
 test('Nepal locator introduces the shared OSM credit', async (t) => {
-  const v = viewer(t);
+  const v = viewer(t, { draw: fakeDrawPort() });
   const layer = createBhoteKoshiLocatorLayer({ boundaryResolver: async () => ({ name: 'Nepal', ring: [[80, 26], [88, 26], [88, 30], [80, 30]] }), overlayHost, requestRender: noop, scheduleFrame: () => 1, cancelFrame: noop });
   await layer.init(v); await layer.enable(v, { origin: 'scene' });
   assertCredit(v); await layer.destroy(v);
@@ -56,22 +67,22 @@ test('Nepal locator introduces the shared OSM credit', async (t) => {
 });
 
 test('voice route geometry introduces the shared OSM credit', (t) => {
-  const v = viewer(t), renderer = createWorldAnnotationRenderer(v);
+  const v = viewer(t, { draw: fakeDrawPort() }), renderer = createWorldAnnotationRenderer(v);
   renderer.add({ id: 'route', type: 'route', color: 'primary', anchor: { lat: 0, lon: 0 }, path: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0.01 }] });
   assertCredit(v); renderer.destroy();
   assert.equal(v.credits.filter(c => c.showOnScreen).length, 0);
 });
 
 test('Directions introduces the shared OSM credit when the requested route draws', async (t) => {
-  const v = viewer(t);
+  const v = viewer(t, { draw: fakeDrawPort() });
   t.mock.method(globalThis, 'fetch', async () => Response.json({ ok: true, geometry: [[0, 0], [0.01, 0.01]], steps: [] }));
   const layer = createDirectionsLayer({ source: createDirectionsSource(), services: {
-    credits: { showOsmCredit, hideOsmCredit }, annotations, input, scenePick: {}, camera: {},
+    credits: { showOsmCredit, hideOsmCredit }, input, camera: {},
     overlays: { setOverlayEntries: noop, setOverlaySourceVisible: noop, clearOverlaySource: noop },
     render: { governorRequestRender: noop, holdContinuousRender: noop, releaseContinuousRender: noop },
-    sprites: { registerSpriteCollection: noop, unregisterSpriteCollection: noop, restoreSpriteOrder: noop },
+    sprites: {},
     picking: { registerPickOwner: noop, unregisterPickOwner: noop },
-    ground: { warmGroundFloor: noop },
+    ground: { warmGroundFloor: noop, resolveGroundFloorCells: async () => {} },
   } });
   layer.init(v); layer.enable(v);
   layer.placeEndpoint('a', { lat: 0, lon: 0 }); layer.placeEndpoint('b', { lat: 0.01, lon: 0.01 });

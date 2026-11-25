@@ -1,20 +1,17 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { t, tn } from '../../../i18n/index.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiDialog from '../../kit/UiDialog.vue';
 import { vStatusText } from '../../rail/statusText.js';
 import { useSceneSharingStore } from '../../stores/sceneSharing.js';
 
 // One open scene sharing dialog, as src/ui/sceneSharing.js presents it. The
-// parent keys this by dialog, so each one opens as a fresh modal.
+// parent keys this by dialog, so each one opens as a fresh modal: UiDialog
+// opens it on mount and closes it on unmount.
 const props = defineProps({ view: { type: Object, required: true } });
 const { controls } = storeToRefs(useSceneSharingStore());
-
-const root = useTemplateRef('root');
-onMounted(() => root.value?.showModal?.());
-onBeforeUnmount(() => {
-  if (root.value?.open) root.value.close();
-});
 
 const bodyItems = computed(() => props.view.items.filter((item) => item.place === 'body'));
 const footerItems = computed(() => props.view.items.filter((item) => item.place === 'footer'));
@@ -46,19 +43,19 @@ const chooserStyle = (focused) => ({ padding: '3px 9px', border: '1px solid #397
 </script>
 
 <template>
-  <dialog ref="root" data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @cancel.prevent="controls?.cancel()">
+  <UiDialog open data-director-dialog class="director-sharing-dialog" :aria-label="view.title" :style="dialogStyle" @dismiss="controls?.cancel()" @browser-close="controls?.cancel()">
     <h2 style="margin-bottom: 12px">{{ view.title }}</h2>
     <div>
       <template v-for="item in bodyItems" :key="item.id">
         <p v-if="item.kind === 'text'" style="margin: 8px 0">{{ item.value }}</p>
-        <button v-else-if="item.kind === 'button'" type="button" :style="buttonStyle" :disabled="item.disabled" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</button>
+        <UiButton v-else-if="item.kind === 'button'" :style="buttonStyle" :disabled="item.disabled" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</UiButton>
         <label v-else-if="item.type === 'file'" :style="{ display: 'block', position: 'relative' }">{{ item.label }}<input type="file" :aria-label="item.label" :multiple="item.multiple" :webkitdirectory="item.directory || undefined" :style="fileInputStyle" @change="onFiles(item, $event)" @focus="focusedFile = item.id" @blur="focusedFile = null" /><span aria-hidden="true" :style="fileRowStyle"><span :style="chooserStyle(focusedFile === item.id)">{{ t('Choose files') }}</span><span>{{ chosenText(item) }}</span></span></label>
         <label v-else style="display: block">{{ item.label }}<textarea v-if="item.multiline" rows="9" dir="ltr" spellcheck="false" :aria-label="item.label" :style="fieldStyle(true)" :value="item.value" @input="controls?.setValue(item.id, $event.target.value)"></textarea><input v-else :type="item.type" :aria-label="item.label" :style="fieldStyle(false)" :value="item.value" @input="controls?.setValue(item.id, $event.target.value)" /></label>
       </template>
     </div>
     <p role="status" v-status-text="statusText"></p>
     <div>
-      <button v-for="item in footerItems" :key="item.id" type="button" :style="buttonStyle" :disabled="item.disabled" :autofocus="item.autofocus || undefined" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</button>
+      <UiButton v-for="item in footerItems" :key="item.id" :style="buttonStyle" :disabled="item.disabled" :autofocus="item.autofocus || undefined" v-bind="item.hook ? { [item.hook]: '' } : {}" @click="controls?.click(item.id)">{{ item.label }}</UiButton>
     </div>
-  </dialog>
+  </UiDialog>
 </template>

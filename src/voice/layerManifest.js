@@ -234,6 +234,7 @@ const layers = [
         behavior: ['t'],
         complexity: ['t'],
         discoveredTime: ['ms'],
+        lastGrowthTime: ['ms'],
       },
       timeField: 'discoveredTime',
     },
@@ -302,7 +303,23 @@ const layers = [
   },
   {
     id: 'transit',
-    aliases: ['buses', 'trains', 'public transit', 'trams', 'subway'],
+    aliases: [
+      'buses',
+      'trains',
+      'public transit',
+      'trams',
+      'subway',
+      'trolleybus',
+      'trolleybuses',
+      'gondola',
+      'gondolas',
+      'cable car',
+      'cable cars',
+      'funicular',
+      'funiculars',
+      'monorail',
+      'monorails',
+    ],
     context: false,
     query: {
       fields: {
@@ -467,6 +484,7 @@ export const VOICE_OFF_LAYERS = Object.freeze({
   news: 'browsed in the News panel; voice tools are a later step',
   'wildlife-sightings':
     'community observation layer; no room in the prompt budget',
+  rail: 'train layer; no room in the prompt budget, and "trains" still names transit',
 });
 
 const TYPE_NAMES = Object.freeze({

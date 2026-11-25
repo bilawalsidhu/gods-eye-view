@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
-import { createGhostMapsLayer } from './index.js';
+import { setLocale } from '../../i18n/index.js';
+import { createGhostMapsLayer, GHOSTMAPS_OVERLAY_SOURCE_ID } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL } from '../../input/testDoubles.mjs';
+import { clickCard, setClickCardHitTest } from '../../data/pickRegistry.js';
 import { GHOSTMAPS_PRODUCTS, GHOSTMAPS_LATEST_DROP } from './catalog.js';
 
 function element(localName, children = [], value = '', attributes = {}) {
@@ -118,17 +122,47 @@ function fixture(
   });
   t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
   t.mock.method(console, 'warn', () => {});
-  const mounted = new Set();
-  const viewer = {
-    scene: { requestRender() {} },
-    dataSources: {
-      async add(dataSource) {
-        mounted.add(dataSource);
-        return dataSource;
+  const viewer = {};
+  // An input port and a query port: a click picks what `click(id)` names.
+  const listeners = new Set();
+  let picked = null;
+  const { draw, unbind } = bindFakeDraw(viewer, {
+    input: {
+      on(type, cb) {
+        if (type !== 'click') return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
       },
-      remove(dataSource) {
-        return mounted.delete(dataSource);
-      },
+    },
+    query: { pick: () => picked },
+  });
+  t.after(unbind);
+  // Every live item, by id, with the id of the set drawing it.
+  const items = () =>
+    new Map(
+      [...draw.sets.values()]
+        .filter((set) => !set.disposed)
+        .flatMap((set) => [...set.items.keys()].map((id) => [id, set.spec.id])),
+    );
+  const liveSets = () => [...draw.sets.values()].filter((set) => !set.disposed);
+  const click = (id) => {
+    const set = items().get(id);
+    picked = set ? { set, id } : null;
+    for (const cb of [...listeners])
+      cb({
+        position: { x: 0, y: 0 },
+        button: 0,
+        modifiers: { shift: false, ctrl: false, alt: false },
+      });
+  };
+  // The editions drawn: each draws in sets of its own.
+  const mounted = {
+    get size() {
+      return new Set(
+        [...draw.sets.values()]
+          .filter((set) => !set.disposed)
+          .map((set) => set.spec.id.split(':').slice(0, 3).join(':')),
+      ).size;
     },
   };
   const layer = createGhostMapsLayer({
@@ -150,7 +184,18 @@ function fixture(
   layer.init(viewer);
   layer.enable();
   t.after(() => layer.destroy());
-  return { layer, viewer, mounted, created, revoked };
+  return {
+    layer,
+    viewer,
+    draw,
+    unbind,
+    mounted,
+    created,
+    revoked,
+    items,
+    liveSets,
+    click,
+  };
 }
 
 test('cancelling a file read does not allocate packed-image URLs', async (t) => {
@@ -173,9 +218,9 @@ test('cancellation during parsing releases every packed-image URL', async (t) =>
   assert.equal(mounted.size, 0);
 });
 
-test('entity construction failure releases parsed image URLs', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t);
-  t.mock.method(Cesium.EntityCollection.prototype, 'add', () => {
+test('a draw failure releases parsed image URLs', async (t) => {
+  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
+  t.mock.method(draw, 'icons', () => {
     throw new Error('fixture entity failure');
   });
   await layer.update(viewer);
@@ -185,13 +230,34 @@ test('entity construction failure releases parsed image URLs', async (t) => {
   assert.equal(layer.getStats().error, 'fixture entity failure');
 });
 
+test('a viewer with no renderer bound releases parsed image URLs', async (t) => {
+  const { layer, viewer, unbind, mounted, created, revoked } = fixture(t);
+  unbind();
+  await layer.update(viewer);
+  assert.equal(created.length, 1);
+  assert.deepEqual(revoked, created);
+  assert.equal(mounted.size, 0);
+  assert.ok(layer.getStats().error);
+});
+
 test('successful load keeps icons until the product is disabled', async (t) => {
-  const { layer, viewer, mounted, created, revoked } = fixture(t);
+  const { layer, viewer, draw, mounted, created, revoked } = fixture(t);
   await layer.update(viewer);
   assert.equal(created.length, 1);
   assert.equal(revoked.length, 0);
   assert.equal(mounted.size, 1);
   assert.equal(layer.getStats().count, 1);
+  const pins = [...draw.sets.values()].find(
+    (set) => !set.disposed && set.kind === 'icons',
+  );
+  const [pin] = pins.items.values();
+  assert.equal(pin.id, 'ghostmaps:cip:0:0');
+  assert.equal(pin.image, 'blob:local-0');
+  assert.equal(pin.height, 'clampGround');
+  assert.equal(pins.spec.clampTo, 'both');
+  assert.equal(pin.disableDepthTest, Infinity);
+  assert.equal(pin.scale, 0.7);
+  assert.deepEqual(pin.size, [20, 20], 'unread in Node: the marker size');
   layer.disable();
   assert.deepEqual(revoked, created);
   assert.equal(mounted.size, 0);
@@ -246,6 +312,35 @@ test('age controls default to seven days and widening restores filtered and expi
     'age options are one switch, not product chips',
   );
   assert.equal(ageChip(layer, null).active, true);
+});
+
+test('the event age agrees with its number of days', async (t) => {
+  t.after(() => setLocale('en'));
+  const { layer, viewer } = fixture(t, { reports: [{ name: 'Undated' }] });
+  await layer.update(viewer);
+  const info = () =>
+    layer.getRowControls().info.split(' · ').slice(0, 2).join(' · ');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximum event age: 1d; undated markers are kept',
+  );
+  setLocale('de');
+  assert.equal(
+    ageChip(layer, 1).title,
+    'Maximales Ereignisalter: 1 Tag; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(
+    ageChip(layer, 7).title,
+    'Maximales Ereignisalter: 7 Tage; undatierte Markierungen bleiben erhalten',
+  );
+  assert.equal(info(), 'Ereignisalter: 7 Tage · undatierte bleiben');
+  await ageChip(layer, 1).onClick();
+  assert.equal(info(), 'Ereignisalter: 1 Tag · undatierte bleiben');
+  setLocale('es');
+  assert.equal(
+    info(),
+    'Antigüedad: 1 día · se conservan los marcadores sin fecha',
+  );
 });
 
 test('age preferences persist independently of product choices and reject invalid storage', async (t) => {
@@ -363,7 +458,7 @@ test('age filtering and All markers apply to every conflict-map product, includi
 });
 
 test('default products filter old event dates while keeping recent, future and undated markers', async (t) => {
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, items } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [
       dated('Old event', '10/20/2026'),
@@ -397,21 +492,17 @@ test('default products filter old event dates while keeping recent, future and u
     ],
   );
   assert.equal(layer.getStats().count, 7);
-  assert.equal([...mounted][0].entities.values.length, 7);
+  assert.equal(items().size, 7);
   // Filtering cannot shift pick ids onto a different report.
-  assert.ok([...mounted][0].entities.getById('ghostmaps:cip:1:0'));
-  assert.equal(
-    [...mounted][0].entities.getById('ghostmaps:cip:0:0'),
-    undefined,
-  );
+  assert.ok(items().has('ghostmaps:cip:1:0'));
+  assert.equal(items().has('ghostmaps:cip:0:0'), false);
 });
 
 test('unchanged cached products age out on the timer, clear selected cards and keep surviving picks', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   let at = Date.UTC(2026, 10, 3, 12);
-  let click;
   const cards = [];
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, mounted, items, liveSets, click } = fixture(t, {
     now: () => at,
     reports: [
       dated('Expiring', '10/27/2026 12:00:00 PM'),
@@ -419,31 +510,23 @@ test('unchanged cached products age out on the timer, clear selected cards and k
     ],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  const sets = liveSets();
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   at += 60_000;
   t.mock.timers.tick(60_000);
   assert.equal(layer.getStats().count, 1);
-  assert.equal(ds.entities.values.length, 1);
-  assert.equal(ds.entities.getById('ghostmaps:cip:0:0'), undefined);
-  assert.ok(ds.entities.getById('ghostmaps:cip:1:0'));
+  assert.equal(items().size, 1);
+  assert.equal(items().has('ghostmaps:cip:0:0'), false);
+  assert.ok(items().has('ghostmaps:cip:1:0'));
   assert.deepEqual(cards.at(-1), []);
   await layer.update(viewer);
-  assert.equal([...mounted][0], ds, 'same-version KMZ is not reloaded');
-  viewer.scene.pick = () => 'ghostmaps:cip:1:0';
-  click({ position: { x: 0, y: 0 } });
+  assert.deepEqual(liveSets(), sets, 'same-version KMZ is not reloaded');
+  click('ghostmaps:cip:1:0');
   assert.match(cards.at(-1)[0].title, /Surviving/);
   layer.disable();
   at += 14 * 86400_000;
@@ -465,7 +548,7 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
       ]),
     ]),
   ]);
-  const { layer, viewer, mounted } = fixture(t, {
+  const { layer, viewer, items } = fixture(t, {
     now: () => at,
     reports: [
       {
@@ -479,11 +562,10 @@ test('expiry removes every geometry and polygon outline belonging to an old repo
     ],
   });
   await layer.update(viewer);
-  const ds = [...mounted][0];
-  assert.equal(ds.entities.values.length, 4);
+  assert.equal(items().size, 4);
   at += 60_000;
   t.mock.timers.tick(60_000);
-  assert.equal(ds.entities.values.length, 0);
+  assert.equal(items().size, 0);
   assert.equal(layer.getStats().count, 0);
 });
 
@@ -518,27 +600,19 @@ test('two quick clicks, 1d then 7d, restore the report', async (t) => {
 });
 
 test('narrowing the window keeps the open card of a surviving marker', async (t) => {
-  let click;
   const cards = [];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports: [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')],
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
   await ageChip(layer, 30).onClick();
   assert.equal(layer.getStats().count, 2);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().count, 1);
@@ -560,26 +634,18 @@ test('a report dated yesterday is shown by 1d one hour into today (UTC)', async 
 });
 
 test('a widened reload that returns a different report at the selected index closes its card', async (t) => {
-  let click;
   const cards = [];
   const reports = [dated('Recent', '11/2/2026'), dated('Older', '10/20/2026')];
-  const { layer, viewer } = fixture(t, {
+  const { layer, viewer, click } = fixture(t, {
     now: () => Date.UTC(2026, 10, 3, 12),
     reports,
     controls: {
       overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
-      screenSpaceEventHandlerFactory: () => ({
-        setInputAction: (fn) => {
-          click = fn;
-        },
-        destroy() {},
-      }),
       picking: { resolvePickId: (picked) => picked },
     },
   });
   await layer.update(viewer);
-  viewer.scene.pick = () => 'ghostmaps:cip:0:0';
-  click({ position: { x: 0, y: 0 } });
+  click('ghostmaps:cip:0:0');
   assert.equal(cards.at(-1).length, 1);
   // The server answers the pinned version with a newer edition's bytes.
   reports[0] = dated('Replacement', '11/2/2026');
@@ -608,4 +674,110 @@ test('narrowing to a window the loaded data covers clears a failed wider reload'
   await ageChip(layer, 3).onClick();
   assert.equal(layer.getStats().error, null);
   assert.equal(layer.getStats().count, 1);
+});
+
+test("a click on a mission label over the open card never opens the card's link, and keeps the card open", async (t) => {
+  const cards = [];
+  const opened = [];
+  let cardUnder = null;
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top; under it may lie our open card.
+  let labelOver = false;
+  setClickCardHitTest(() =>
+    labelOver
+      ? MISSION_LABEL
+      : cardUnder
+        ? { sourceId: GHOSTMAPS_OVERLAY_SOURCE_ID, entryId: cardUnder }
+        : null,
+  );
+  t.after(() => setClickCardHitTest(null));
+  const { layer, viewer, click } = fixture(t, {
+    now: () => Date.UTC(2026, 10, 3, 12),
+    reports: [
+      {
+        name: 'Linked',
+        description:
+          '<table><tr><td>Date</td><td>11/2/2026</td></tr>' +
+          '<tr><td>Source</td><td><a href="https://example.com/report">report</a></td></tr></table>',
+      },
+    ],
+    controls: {
+      overlayHost: { setEntries: (_id, entries) => cards.push(entries) },
+      picking: { resolvePickId: (picked) => picked?.id ?? null, clickCard },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  inputFor(viewer).onOverlayClick(() => labelOver);
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const [card] = cards.at(-1);
+  assert.equal(card.interactive, true);
+
+  // The open card lies under the label: the click opens nothing, and the
+  // label on top is its own click, so the card stays open.
+  cardUnder = card.id;
+  labelOver = true;
+  click(null);
+  assert.deepEqual(opened, [], 'the link beneath the label is not opened');
+  assert.equal(cards.at(-1)[0]?.id, card.id, 'the card stays open');
+
+  // Off the label, a click on the open card opens its link.
+  labelOver = false;
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/report']);
+});
+
+test('a covered selected card yields while genuine GhostMaps markers still select', async (t) => {
+  const cards = [];
+  const opened = [];
+  let painted = [];
+  const { layer, viewer, click } = fixture(t, {
+    reports: [
+      {
+        name: 'First',
+        description: '<a href="https://example.com/first">Source</a>',
+      },
+      {
+        name: 'Second',
+        description: '<a href="https://example.com/second">Source</a>',
+      },
+    ],
+    controls: {
+      overlayHost: {
+        setEntries: (_id, entries) => cards.push(entries),
+        hitTest: (_x, _y, { sourceId } = {}) =>
+          painted.find((hit) => !sourceId || hit.sourceId === sourceId) ?? null,
+      },
+      picking: {
+        resolvePickId: (picked) => picked,
+        // The card on top at a click, as the registry answers from the host.
+        clickCard: () => painted[0] ?? null,
+      },
+      openExternal: (url) => opened.push(url),
+    },
+  });
+  await layer.update(viewer);
+  click('ghostmaps:cip:0:0');
+  const first = cards.at(-1)[0];
+  const foreign = {
+    sourceId: 'earthquake-card',
+    entryId: 'earthquake-card:ak1',
+  };
+  painted = [foreign, { sourceId: 's2-ghostmaps', entryId: first.id }];
+  click(null);
+  assert.deepEqual(opened, []);
+  assert.equal(cards.at(-1)[0].id, first.id);
+  // A marker under another layer's card is that card's click too.
+  click('ghostmaps:cip:1:0');
+  assert.equal(cards.at(-1)[0].id, first.id, 'a covered marker yields');
+  painted = [];
+  click('ghostmaps:cip:1:0');
+  const second = cards.at(-1)[0];
+  assert.notEqual(second.id, first.id, 'a bare marker selects');
+  painted = [{ sourceId: 's2-ghostmaps', entryId: second.id }];
+  click(null);
+  assert.deepEqual(opened, ['https://example.com/second']);
+  painted = [];
+  click(null);
+  assert.deepEqual(cards.at(-1), [], 'bare map still clears the selection');
 });

@@ -25,6 +25,8 @@ import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { ensureGeoidReady, geoidHeight } from './data/geoid.js';
+import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
+import { toDegrees as deg } from './geo/index.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -65,39 +67,29 @@ const SFO_ELLIPSOIDAL_M = -15;
 function installHudEnvironment() {
   const { elements, publish, view } = hudReadouts();
   const previousDocument = globalThis.document;
-  const cameraListeners = {};
+  const camera = fakeCameraPort({
+    pose: {
+      pitch: -Math.PI / 2,
+      lat: deg((SFO.latDeg * Math.PI) / 180),
+      lon: deg((SFO.lonDeg * Math.PI) / 180),
+      height: SFO_ELLIPSOIDAL_M,
+    },
+  });
   globalThis.document = {
     getElementById: (id) => elements.get(id) ?? null,
     querySelectorAll: () => [],
     addEventListener() {},
     removeEventListener() {},
   };
-  const viewer = {
-    camera: {
-      pitch: -Math.PI / 2,
-      positionCartographic: {
-        latitude: (SFO.latDeg * Math.PI) / 180,
-        longitude: (SFO.lonDeg * Math.PI) / 180,
-        height: SFO_ELLIPSOIDAL_M,
-      },
-      computeViewRectangle: () => undefined,
-      moveStart: {
-        addEventListener(listener) {
-          cameraListeners.moveStart = listener;
-        },
-        removeEventListener() {},
-      },
-      moveEnd: {
-        addEventListener(listener) {
-          cameraListeners.moveEnd = listener;
-        },
-        removeEventListener() {},
-      },
-    },
+  const viewer = {};
+  const cameraListeners = {
+    moveStart: () => camera.emit('moveStart'),
+    moveEnd: () => camera.emit('moveEnd'),
   };
   return {
     elements,
     viewer,
+    camera,
     publish,
     view,
     cameraListeners,
@@ -204,7 +196,7 @@ test('a cold tick paints both readouts uncorrected, and resolving flips both in 
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     const alt = () => env.elements.get('hud-alt').textContent;
     const summary = () => env.elements.get('hud-summary').textContent;
 
@@ -253,12 +245,14 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   const env = installHudEnvironment();
   // London: N is +46 m, so the correction moves the readout DOWN. A sign flip
   // that happens to look right at SFO fails here.
-  env.viewer.camera.positionCartographic.latitude = (51.5072 * Math.PI) / 180;
-  env.viewer.camera.positionCartographic.longitude = (-0.1275 * Math.PI) / 180;
-  env.viewer.camera.positionCartographic.height = 100;
+  env.camera.setPose({
+    lat: deg((51.5072 * Math.PI) / 180),
+    lon: deg((-0.1275 * Math.PI) / 180),
+    height: 100,
+  });
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     hud._updateCameraData(); // cold: requests the grid, paints uncorrected
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 100m/);
     await ensureGeoidReady();
@@ -282,21 +276,51 @@ test('the summary ALT tag reads a 999.6 m MSL height as 1.0KM, not 1000M', async
   const geoidN = geoidHeight(SFO.latDeg, SFO.lonDeg);
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     hud._updateCameraData(); // cold: requests the grid
     await ensureGeoidReady();
     await Promise.resolve();
-    env.viewer.camera.positionCartographic.height = 999.6 + geoidN;
+    env.camera.setPose({ height: 999.6 + geoidN });
     hud._updateCameraData();
     assert.match(env.elements.get('hud-alt').textContent, /^ALT: 1000m/);
     assert.match(hud._composeSummary(), /\| ALT 1\.0KM \|/);
-    env.viewer.camera.positionCartographic.height = 999.4 + geoidN;
+    env.camera.setPose({ height: 999.4 + geoidN });
     hud._updateCameraData();
     assert.match(hud._composeSummary(), /\| ALT 999M \|/);
   } finally {
     hud?.destroy();
     env.restore();
   }
+});
+
+function readoutsWithSun(sunEl) {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera?.port, publish: env.publish });
+    hud._estimateSunElevation = () => sunEl;
+    hud._updateCameraData();
+    return {
+      alt: env.elements.get('hud-alt').textContent,
+      summary: env.elements.get('hud-summary').textContent,
+    };
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+}
+
+test('the summary reads a sun 0.3° below the horizon as SUN 0°, not -0°', () => {
+  // Math.round(-0.3) is -0, which Intl.NumberFormat prints as "-0".
+  assert.match(readoutsWithSun(-0.3).summary, /\| SUN 0° \|/);
+  assert.match(readoutsWithSun(-0.6).summary, /\| SUN -1° \|/);
+});
+
+test('the corner readout reads a sun 0.04° below the horizon as 0.0, not -0.0', () => {
+  // (-0.04).toFixed(1) is "-0.0".
+  assert.match(readoutsWithSun(-0.04).alt, /SUN: 0\.0° EL$/);
+  // Values that are not -0 keep toFixed's rounding.
+  assert.match(readoutsWithSun(-0.25).alt, /SUN: -0\.3° EL$/);
 });
 
 test('a summary asked for one view is dropped once the camera moves', async () => {
@@ -316,7 +340,7 @@ test('a summary asked for one view is dropped once the camera moves', async () =
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     let place = 'Yellowstone';
     hud._summaryContext = async () => ({ placeLabels: [place] });
     const summary = () => env.elements.get('hud-summary').textContent;
@@ -376,7 +400,7 @@ test('a request the camera leaves paints nothing: aborted, failed, or its contex
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['Yellowstone'] });
     const element = env.elements.get('hud-summary');
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -438,7 +462,7 @@ test('a cancelled summary retries the same context but completed answers stay re
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -495,7 +519,7 @@ test('after a dropped or timed-out request the next tick asks again, and a move 
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     // The same place before and after: a slow follow camera, a small pan.
     hud._summaryContext = async () => ({ placeLabels: ['Lisboa'] });
     const element = env.elements.get('hud-summary');
@@ -560,7 +584,7 @@ test('a summary interrupted while typing can retry unchanged context', async (t)
   };
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { summaryService, publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, summaryService, publish: env.publish });
     hud._summaryContext = async () => ({ placeLabels: ['San Francisco'] });
     hud._updateCameraData();
     await hud._updateSummary(true);
@@ -601,12 +625,48 @@ test('a retired Operator layout falls back to Tactical in the live HUD', () => {
   const env = installHudEnvironment();
   let hud;
   try {
-    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
     hud.setVariant('minimal');
     assert.equal(hud.getVariant(), 'minimal');
     hud.setVariant('operator');
     assert.equal(hud.getVariant(), 'tactical');
     assert.equal(env.view().variant, 'tactical');
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('a camera with no position leaves the readouts as they were', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    hud._updateCameraData();
+    const alt = env.elements.get('hud-alt').textContent;
+    const metrics = hud._latestMetrics;
+    env.camera.setPose({ lon: NaN, lat: NaN, height: NaN });
+    hud._updateCameraData();
+    assert.equal(env.elements.get('hud-alt').textContent, alt);
+    assert.equal(hud._latestMetrics, metrics);
+    assert.doesNotMatch(alt, /NaN/);
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('the view window is measured from the camera’s rectangle in degrees', () => {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    assert.equal(hud._viewWindowKm(0), null, 'no rectangle, no window');
+    env.camera.setViewRectangle({ west: -1, south: -0.5, east: 1, north: 0.5 });
+    assert.deepEqual(hud._viewWindowKm(0), { widthKm: 222, heightKm: 111 });
+    // Across the antimeridian: the short way round.
+    env.camera.setViewRectangle({ west: 179, south: 0, east: -179, north: 1 });
+    assert.equal(Math.round(hud._viewWindowKm(60).widthKm), 111);
   } finally {
     hud?.destroy();
     env.restore();

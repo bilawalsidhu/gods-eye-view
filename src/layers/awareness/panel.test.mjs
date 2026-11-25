@@ -113,7 +113,52 @@ test('the Contacts view has no photo without one, or with another subject’s', 
   );
 });
 
-test('only the tracked flight has a photo: not a vessel, an installation, a military aircraft or another flight', () => {
+test('the selected vessel shows its own photo, by its id', () => {
+  const asked = [];
+  const { resolveSubjectPhoto, subjectFromContext } = createSubject({
+    state: {},
+    services: {
+      flights: {},
+      military: {},
+      vessels: {
+        getVesselPhoto: (id) => {
+          asked.push(id);
+          return id === 'uuid-1' ? PHOTO : null;
+        },
+      },
+      installations: {},
+    },
+    parts: { navigation: { isFlightLayer: () => false } },
+  });
+  assert.deepEqual(
+    resolveSubjectPhoto({ layerId: 'ais-live-vessels', id: 'uuid-1' }),
+    PHOTO,
+  );
+  assert.equal(
+    resolveSubjectPhoto({ layerId: 'ais-live-vessels', id: 'uuid-2' }),
+    null,
+  );
+  assert.deepEqual(asked, ['uuid-1', 'uuid-2']);
+  const vessel = (label, mmsi) =>
+    subjectFromContext({
+      layerId: 'ais-live-vessels',
+      id: 'ais-uuid-1',
+      label,
+      latitude: 38.3,
+      longitude: -123.05,
+      properties: { vesselId: 'uuid-1', mmsi },
+    });
+  assert.equal(
+    vessel('USCGC SOCKEYE', '366999709').label,
+    'USCGC SOCKEYE · MMSI 366999709',
+  );
+  assert.equal(vessel('USCGC SOCKEYE', '366999709').id, 'uuid-1');
+  // A vessel named by its MMSI, or without one, is not given it twice.
+  assert.equal(vessel('MMSI 366999709', '366999709').label, 'MMSI 366999709');
+  assert.equal(vessel('USCGC SOCKEYE', null).label, 'USCGC SOCKEYE');
+});
+
+test('only the tracked flight has a flight photo: not an installation, a military aircraft or another flight', () => {
   const tracked = {
     layerId: 'flights',
     id: 'abc123',

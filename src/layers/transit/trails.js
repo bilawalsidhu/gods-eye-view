@@ -1,5 +1,5 @@
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import * as Cesium from 'cesium';
+import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import {
   readFix,
   correctHeight,
@@ -8,16 +8,9 @@ import {
 } from '../../data/contactPlayback.js';
 import { createContactTrailRenderer } from '../../data/contactTrailRenderer.js';
 import { fixDistanceM } from './movement.js';
+import { TRANSIT_MODE_COLORS } from './policy.js';
 import { transitStyleProfile } from '../../data/transitPresetStyle.js';
 
-const MODE_COLOR = {
-  bus: '#5EF08A',
-  tram: '#FFC24A',
-  subway: '#FF4538',
-  rail: '#D9A6FF',
-  ferry: '#5FD6FF',
-  unknown: '#D8DDE5',
-};
 // Final Cesium batching uses 3,152 bytes per two-lane edge.
 // The 1,278-instance body plus 64 bytes/instance reserve stays below 2 MiB.
 export const TRAIL_VERTEX_LIMIT = 640;
@@ -34,14 +27,14 @@ export function createTrails({ state, services, parts, source }) {
     revision = 0;
   function ensureRenderer() {
     if (!renderer && state._viewer)
-      renderer = createContactTrailRenderer(state._viewer.scene);
+      renderer = createContactTrailRenderer(state._viewer);
     return renderer;
   }
   function style() {
     renderer?.setStyle(
       transitStyleProfile(state._stylePreset) === 'mono'
         ? '#FFFFFF'
-        : MODE_COLOR[selected?.mode] || MODE_COLOR.unknown,
+        : TRANSIT_MODE_COLORS[selected?.mode] || TRANSIT_MODE_COLORS.unknown,
     );
   }
   function releaseSelectionGeometry(entry) {
@@ -153,13 +146,8 @@ export function createTrails({ state, services, parts, source }) {
           valid = false;
           // Ground polylines consume longitude/latitude and drape themselves.
           // Unknown floors still disqualify the marker corridor.
-          positions.push(
-            draped ? Cesium.Cartesian3.fromDegrees(point.lon, point.lat) : null,
-          );
-        } else
-          positions.push(
-            Cesium.Cartesian3.fromDegrees(point.lon, point.lat, h),
-          );
+          positions.push(draped ? fromDegrees(point.lon, point.lat) : null);
+        } else positions.push(fromDegrees(point.lon, point.lat, h));
       }
       signature += `${a.seq}/${b.seq}:${heights.join(',')};`;
       if (retainBody) vertices += n + 1;
@@ -205,6 +193,18 @@ export function createTrails({ state, services, parts, source }) {
     nearGround = parts.height.nearGround(),
   ) {
     pruneMarkerPaths(entry, sample);
+    // Placed by a host-supplied placement, it is drawn at the placed point,
+    // at the height its own playback has reached; far above the ground, where
+    // no floor is asked for, on the ellipsoid as an unplaced vehicle is.
+    if (entry.placed === true) {
+      const heightM = Number.isFinite(sample.heightM)
+        ? sample.heightM
+        : nearGround
+          ? NaN
+          : 0;
+      if (!Number.isFinite(heightM)) return null;
+      return fromDegreesInto(sample.lon, sample.lat, heightM, out);
+    }
     if (!nearGround) {
       const a = entry.fromCart,
         b = entry.toCart,
@@ -216,7 +216,12 @@ export function createTrails({ state, services, parts, source }) {
     }
     if (sample.fromSeq === sample.toSeq) {
       if (!Number.isFinite(entry.segment.from.h)) return null;
-      Cesium.Cartesian3.clone(entry.fromCart, out);
+      const from = entry.fromCart;
+      if (from) {
+        out.x = from.x;
+        out.y = from.y;
+        out.z = from.z;
+      }
       return out;
     }
     const path = entry.displayPaths?.get(sample.fromSeq);
@@ -235,8 +240,11 @@ export function createTrails({ state, services, parts, source }) {
   }
   function update() {
     if (!selected || !renderer) return;
+    // A first-person view on the vehicle rides where its trail would start.
     renderer.setVisible(
-      state._enabled && state._vehicles.get(selected.key) === selected,
+      state._enabled &&
+        state._vehicles.get(selected.key) === selected &&
+        selected.key !== state._cockpitSubjectKey,
     );
     renderer.setDisplaySample(selected.sample, selected.marker?.position);
   }

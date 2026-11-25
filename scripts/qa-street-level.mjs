@@ -225,15 +225,15 @@ function newFixture(overrides = {}) {
   };
 }
 
-/** Load the app and dismiss the first-run dialog. */
+/** Load without the opening so its flight cannot move the camera during
+ * the gate's own moves, then dismiss the first-run dialog. */
 async function boot(page, url) {
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  const address = new URL(url);
+  address.searchParams.set('intro', '0');
+  await page.goto(address.href, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => Boolean(window.__godsEyeView?.dataManager), {
     timeout: 150_000,
   });
-  await page.evaluate(() =>
-    document.querySelector('.first-run-explore')?.click(),
-  );
   await page.keyboard.press('Escape');
   await page.evaluate(() => {
     for (const el of document.querySelectorAll(
@@ -378,7 +378,9 @@ const findPick = (page, prefix, { box = null, step = 3 } = {}) =>
       };
       for (let py = y; py < y + h; py += stride)
         for (let px = x; px < x + w; px += stride) {
-          const id = scene.pick({ x: px, y: py })?.id;
+          // A drawn item's pick id names its draw set and its own id.
+          const picked = scene.pick({ x: px, y: py })?.id;
+          const id = typeof picked === 'string' ? picked : picked?.id;
           if (typeof id === 'string' && id.startsWith(want))
             return {
               x: rect.left + px,

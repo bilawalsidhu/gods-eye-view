@@ -12,7 +12,7 @@ Translation source: meirm (#312).
 - The apostrophe is always ʼ (U+02BC): обʼєкт, звʼязок, памʼять. Not ' or ’.
 - Quotes inside Ukrainian text are «ялинки»; a button or layer name inside a sentence goes in them: Увімкніть «Вуличні знімки».
 - In short labels, a standard abbreviation with a period beats a wrapped line: ПОПЕР., ДАЛЬН., КАЛІБР.
-- Units: км, м, км/год, м/с, вуз (knots), фт (feet), год, хв, с, МГц, дБ, гПа; in UPPERCASE text КМ, М, КМ/С, ВУЗ, ФТ. MW is МВт in any case. `°` and `%` stay. Decimal comma in coordinates written as text: 28,2710° пн. ш.
+- Units: км, м, км/год, м/с, вуз (knots), фт (feet), год, хв, с, МГц, дБ, гПа; in UPPERCASE text КМ, М, КМ/С, ВУЗ, ФТ. Nautical miles on the bridge radar are «мор. миля», a noun that follows the count: «3 МОР. МИЛІ», «12 МОР. МИЛЬ», «0,75 МОР. МИЛІ». MW is МВт in any case. `°` and `%` stay. Decimal comma in coordinates written as text: 28,2710° пн. ш.
 - Coordinates: пн. ш. / пд. ш. / сх. д. / зх. д.; the HUD hemisphere letters are Пн, Пд, Сх, Зх.
 
 ## Plurals
@@ -45,6 +45,7 @@ A `tn()` entry needs four forms. `Intl.PluralRules('uk')` picks:
 | aircraft / flight / military flights            | літак (short HUD: борт) / рейс / військові рейси                 |
 | vessel, ship / vessels                          | судно / судна (gen. pl. суден)                                   |
 | satellite                                       | супутник                                                         |
+| CURRENTLY OVER (orbit, before a place name)     | ПРОЛІТ                                                           |
 | launch (rocket) / space mission                 | запуск / космічна місія                                          |
 | ascent (rocket) / booster FLIGHT {n}            | виведення / ПОЛІТ {n} (not рейс)                                 |
 | contact / tracking                              | контакт / стеження                                               |

@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia';
 import { computed, shallowRef, watch } from 'vue';
 import { t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
 import UiSegmented from '../../kit/UiSegmented.vue';
 import RailPanel from '../../rail/RailPanel.vue';
 import RailChips from '../../rail/RailChips.vue';
@@ -139,7 +140,7 @@ const vThumb = {
             <UiSegmented class="sl-seg" item-class="sl-seg-btn" active-class="is-active" keyboard="radio" :hidden="!viewer.renderModes" :label="t('Image fit')" :options="renderModeOptions" :model-value="viewer.renderMode" @update:model-value="store.act('setRenderMode', $event)" />
           </div>
           <div class="sl-viewer-tools sl-viewer-tools-right">
-            <button id="sl-viewer-close" class="sl-viewer-x" type="button" :title="t('Close the image and deselect it on the map')" :aria-label="t('Close the street-level image')">×</button>
+            <UiCloseButton id="sl-viewer-close" class="sl-viewer-x" bare :title="t('Close the image and deselect it on the map')" :label="t('Close the street-level image')" />
           </div>
         </div>
         <div id="sl-viewer-error" class="sl-error" role="alert" :hidden="!(embedOverlay || expanded) || !view?.error"><span aria-hidden="true">⚠</span> {{ view?.error || '' }}</div>

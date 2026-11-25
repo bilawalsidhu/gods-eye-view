@@ -203,8 +203,8 @@ function encode(state) {
 
 test('production registry is exact, canonical, and rejects incomplete contracts', async () => {
   assert.equal(validateLayerStateRegistry(), true);
-  assert.equal(REGISTERED_LAYER_IDS.length, 38);
-  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 38);
+  assert.equal(REGISTERED_LAYER_IDS.length, 39);
+  assert.equal(new Set(REGISTERED_LAYER_IDS).size, 39);
   assert.ok(REGISTERED_LAYER_IDS.includes('transit'));
   assert.deepEqual(REGISTERED_LAYER_IDS, [...REGISTERED_LAYER_IDS].sort());
   assert.deepEqual(LEGACY_LAYER_STATE_TOKENS, {
@@ -243,12 +243,14 @@ test('production registry is exact, canonical, and rejects incomplete contracts'
   for (const [id, token] of Object.entries(LEGACY_LAYER_STATE_TOKENS)) {
     assert.equal(LAYER_STATE_TOKEN_RESERVATIONS[id], token);
   }
-  // News holds 00 and Shipwrecks 01, the first pairs: the next token is 02.
-  assert.equal(nextLayerStateToken(), '02');
-  // The allocation rules below read the ledger before either took a pair.
+  // News holds 00, Shipwrecks 01 and Rail 02, the first pairs: the next token
+  // is 03.
+  assert.equal(nextLayerStateToken(), '03');
+  // The allocation rules below read the ledger before any of them took a pair.
   const beforeNews = { ...LAYER_STATE_TOKEN_RESERVATIONS };
   delete beforeNews.news;
   delete beforeNews.shipwrecks;
+  delete beforeNews.rail;
   assert.equal(nextLayerStateToken(beforeNews), '00');
   assert.equal(
     nextLayerStateToken({
@@ -3227,5 +3229,48 @@ test('an application with every layer registered keeps every requested layer', a
     'earthquakes',
     'traffic',
   ]);
+  coordinator.destroy();
+});
+
+test('start layers turn on when nothing names any, and are never written as the user choice', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  const results = await coordinator.start({
+    allowLocalState: false,
+    startLayerIds: ['earthquakes', 'traffic', 'not-a-layer'],
+  });
+  assert.equal(coordinator.source, 'start');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'traffic',
+  ]);
+  assert.equal(manager.isEnabled('earthquakes'), true);
+  assert.equal(manager.isEnabled('traffic'), true);
+  assert.equal(
+    results.every((result) => result.persistenceWrite === false),
+    true,
+  );
+  assert.deepEqual(storage.writes, []);
+  coordinator.destroy();
+});
+
+test('a shared layer payload wins over start layers', async () => {
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+  });
+  const shared = createDefaultLayerState();
+  shared.enabledLayerIds = ['radio'];
+  await coordinator.start({
+    shareLayerState: shared,
+    allowLocalState: false,
+    startLayerIds: ['earthquakes'],
+  });
+  assert.equal(coordinator.source, 'share');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['radio']);
+  assert.equal(manager.isEnabled('earthquakes'), false);
   coordinator.destroy();
 });

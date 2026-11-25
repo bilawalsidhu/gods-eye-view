@@ -2,7 +2,6 @@ import { UiLifetime } from './uiLifetime.js';
 import { prefersCollapsed, readPanelState } from './rail/panelState.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { applicationPinia } from './vueRuntime.js';
-import { displayPanelScroller } from './displayPanelScroll.js';
 import { PanelPositionControls } from './panelPositionControls.js';
 import { PanelLayoutController } from './panelLayoutController.js';
 import {
@@ -23,6 +22,7 @@ const SHARE_PANEL_STATE_SPECS = Object.freeze([
   { id: 'radio-panel' },
   { id: 'scene-panel' },
   { id: 'global-context-panel' },
+  { id: 'space-missions-panel' },
   { id: 'pp-toggles' },
   { id: 'param-slider-panel' },
 ]);
@@ -49,6 +49,7 @@ const COCKPIT_ENTRY_COLLAPSE_PANEL_IDS = Object.freeze([
   'utilities-panel',
   'pp-toggles',
   'global-context-panel',
+  'space-missions-panel',
   'radio-panel',
 ]);
 
@@ -121,7 +122,7 @@ export class PanelChrome {
       readDisplayScrollTop: () =>
         this._displayPortalScrollRestoreOwner === 'standard'
           ? this._standardDisplayScrollTop
-          : displayPanelScroller(this._ppToggles)?.scrollTop || 0,
+          : this._ppToggles?.scrollTop || 0,
     });
   }
   get hud() {
@@ -204,22 +205,7 @@ export class PanelChrome {
       beforeCollapse: () => {
         if (panelId === 'location-bar') this._closeLocationSearch?.();
       },
-      // A desktop side panel hides entirely once collapsed; its rail item
-      // takes the focus its own disclosure can no longer hold.
-      returnFocusTo: () => {
-        const panel = document.getElementById(panelId);
-        if (!panel?.getClientRects || panel.getClientRects().length > 0)
-          return null;
-        const item = document.querySelector?.(
-          `.ui-rail [data-rail-item="${panelId}"]`,
-        );
-        return item &&
-          !item.disabled &&
-          item.getClientRects().length > 0 &&
-          getComputedStyle(item).visibility === 'visible'
-          ? item
-          : null;
-      },
+      returnFocusTo: () => this._railFocusStand(panelId),
     });
   }
 
@@ -228,9 +214,49 @@ export class PanelChrome {
     if (this._disposed || !this._disclosurePanelIds?.has(panelId)) return;
     const panel = document.getElementById(panelId);
     if (!panel) return;
+    // Opening a panel folds others too (the side accordion, Cockpit's
+    // Contact card): note which open ones hold the focus.
+    const focused = document.activeElement;
+    const holders = [...this._disclosurePanelIds]
+      .map((id) => document.getElementById(id))
+      .filter((el) => el?.contains(focused) && !this._shownPanel(el).collapsed);
+    const cockpit = this.cockpitView;
+    const contactHeld =
+      cockpit?.active &&
+      !cockpit.contextCollapsed &&
+      document.getElementById('cockpit-context')?.contains(focused);
     this.setPanelCollapsed(panelId, !this._shownPanel(panel).collapsed, {
       explicit: true,
     });
+    const stand =
+      contactHeld && cockpit.contextCollapsed
+        ? document.getElementById('cockpit-context-toggle')
+        : holders
+            .filter((el) => this._shownPanel(el).collapsed)
+            .map((el) => this._railFocusStand(el.id))
+            .find(Boolean);
+    stand?.focus({ preventScroll: true });
+  }
+
+  /**
+   * A desktop side panel hides entirely once collapsed; its rail item takes
+   * the focus its own disclosure can no longer hold. Null while the panel or
+   * the item is not shown.
+   * @param {string} panelId Panel element id.
+   */
+  _railFocusStand(panelId) {
+    const panel = document.getElementById(panelId);
+    if (!panel?.getClientRects || panel.getClientRects().length > 0)
+      return null;
+    const item = document.querySelector?.(
+      `.ui-rail [data-rail-item="${panelId}"]`,
+    );
+    return item &&
+      !item.disabled &&
+      item.getClientRects().length > 0 &&
+      getComputedStyle(item).visibility === 'visible'
+      ? item
+      : null;
   }
 
   _setCommandDockPanelPinState(
