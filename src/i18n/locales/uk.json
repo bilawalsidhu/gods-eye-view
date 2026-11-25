@@ -4646,5 +4646,22 @@
   "1–3 days": "1–3 дні",
   "Older or unknown": "Старше або невідомо",
   "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м.",
+  "Rising": "Набирають висоту",
+  "Falling": "Знижуються",
+  "Not heard for 15+ min": "Немає сигналу 15+ хв",
+  "Altitude {km} km": "Висота {km} км",
+  "Rising {rate} m/s": "Підйом {rate} м/с",
+  "Falling {rate} m/s": "Зниження {rate} м/с",
+  "Drifting {speed} km/h": "Дрейф {speed} км/год",
+  "Temperature {temp} °C": "Температура {temp} °C",
+  "Humidity {humidity}%": "Вологість {humidity}%",
+  "Pressure {hpa} hPa": "Тиск {hpa} гПа",
+  "Last heard {time} UTC": "Останній прийом {time} UTC",
+  "Predicted landing {time} UTC": "Прогноз приземлення {time} UTC",
+  "Radiosonde {serial}": "Радіозонд {serial}",
+  "Reconnecting to the live feed": "Повторне підключення до живого потоку",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "Радіозонди (метеозонди), прийняті за останні три години станціями волонтерів, за даними SondeHub, показані на повідомленій висоті. Метеослужби запускають їх двічі на добу, переважно близько 00:00 і 12:00 UTC. Виберіть зонд, щоб побачити його показання й прогноз траєкторії та приземлення від SondeHub. Покриття є лише там, де слухають волонтери, а показання датчиків не відкалібровані.",
+  "radiosonde": "радіозонд",
+  "Weather Balloons": "Метеозонди"
 }

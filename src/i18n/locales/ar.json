@@ -4858,5 +4858,22 @@
   "1–3 days": "1–3 أيام",
   "Older or unknown": "أقدم أو غير معروف",
   "Colour shows the age of each area.": "يبيّن اللون عمر كل منطقة.",
-  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م."
+  "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م.",
+  "Rising": "في صعود",
+  "Falling": "في هبوط",
+  "Not heard for 15+ min": "لم يُستقبل منذ 15+ دقيقة",
+  "Altitude {km} km": "الارتفاع {km} كم",
+  "Rising {rate} m/s": "يصعد {rate} م/ث",
+  "Falling {rate} m/s": "يهبط {rate} م/ث",
+  "Drifting {speed} km/h": "ينجرف {speed} كم/س",
+  "Temperature {temp} °C": "درجة الحرارة {temp} °م",
+  "Humidity {humidity}%": "الرطوبة {humidity}%",
+  "Pressure {hpa} hPa": "الضغط {hpa} هكتوباسكال",
+  "Last heard {time} UTC": "آخر استقبال {time} UTC",
+  "Predicted landing {time} UTC": "الهبوط المتوقع {time} UTC",
+  "Radiosonde {serial}": "مسبار لاسلكي {serial}",
+  "Reconnecting to the live feed": "جارٍ إعادة الاتصال بالبث المباشر",
+  "Radiosondes (weather balloons) heard in the last three hours by volunteer receiving stations, from SondeHub, drawn at their reported altitude. National weather services launch them twice a day, mostly near 00:00 and 12:00 UTC. Select one for its readings and SondeHub’s predicted path and landing. Coverage is only where volunteers listen, and sensor readings are uncalibrated.": "مسابير لاسلكية (بالونات طقس) استقبلتها محطات متطوعين خلال الساعات الثلاث الأخيرة، من SondeHub، مرسومة على ارتفاعها المُبلَّغ. تطلقها هيئات الأرصاد مرتين يوميًا، غالبًا قرب 00:00 و12:00 UTC. اختر أحدها لقراءاته ولمسار SondeHub المتوقع وموضع هبوطه. التغطية متاحة فقط حيث يستمع المتطوعون، وقراءات المستشعرات غير معايرة.",
+  "radiosonde": "مسبار لاسلكي",
+  "Weather Balloons": "بالونات الطقس"
 }

@@ -4,6 +4,7 @@ import { worldClock } from '../time/worldClock.js';
 import { NEWS_LAYER_ID } from '../layers/news/model.js';
 import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
+import { createApplicationRadiosondes } from './layers/radiosondes.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
 import { layerPlacement } from '../data/placementProvider.js';
@@ -218,6 +219,7 @@ export function createApplicationCatalog({
           clock: weatherClock,
         }),
         createApplicationCyclones({ feed: sources.cyclones }),
+        createApplicationRadiosondes({ source: sources.radiosondes }),
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),

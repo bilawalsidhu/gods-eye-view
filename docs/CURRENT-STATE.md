@@ -1506,6 +1506,30 @@ Clear or disable reports `deliberate`; a storm leaving the feed reports
 `evicted`, with no fallback.
 Consult the linked official advisory for safety decisions.
 
+Weather Balloons (`radiosondes`, default off, Weather group, share token `03`)
+shows radiosondes that volunteer stations hear, from SondeHub. SondeHub asks
+clients not to poll its API, so the browser reads only the local mirror,
+`/api/sondehub/latest`, every 15 seconds. On its first request in a session the
+mirror reads `api.v2.sondehub.org/sondes?last=10800` once, then follows the
+live MQTT-over-WebSocket `batch` topic (`server/providers/sondehubMqtt.js`, a
+subscribe-only MQTT 3.1.1 client on Node's WebSocket; no dependency), keeping
+the newest frame per serial and dropping frames over three hours old. Ten
+minutes after the last browser request it disconnects, and the next session
+lists again; a dropped feed reconnects with backoff from 5 seconds to 5
+minutes. Receiver callsigns, station positions and antennas are dropped on
+arrival. A sonde is drawn at its reported altitude (on the ground without one),
+over depth and culled past the horizon, coloured rising (vertical speed ≥ 1
+m/s), falling (≤ −1 m/s) or not heard for 15 minutes; the legend counts each.
+Selecting one shows its card (altitude, climb or descent rate, drift speed,
+temperature, humidity, pressure, model and frequency, last-heard time) and
+asks `/api/sondehub/prediction?serial=…`, which the mirror fetches from
+SondeHub's predictor and caches for two minutes; the forecast is drawn as a
+3D path from the balloon to a landing cross with the predicted landing time.
+Activating the card opens the sonde on the SondeHub tracker. Context lists the
+sondes by serial with altitude and vertical rate. Coverage is only where
+volunteers listen, and SondeHub calls the sensor readings uncalibrated. Voice
+control does not name the layer yet.
+
 Voice and HUD snapshots reuse the existing feedState classifier. Analyst follow-ups retain their original data provenance; current-view results append provenance without replacing legacy fields. HUD context and deterministic telemetry include non-nominal feed state.
 
 Analyst records come on demand from each layer's `getAnalystRecords`: flights, military, local ADS-B, vessels, satellites, launches, earthquakes, FIRMS (VIIRS and MODIS, with a `sensor` field), fire perimeters, cyclones, transit, bikeshare, ALPR cameras, mapped installations, datacenters and dams. `analyst_query` counts the whole loaded set (up to 250,000 records per layer; past that `coverage.records` reports `returned`, `total` and `truncated: true` and the result carries `complete: false`). Ranking keeps a top-k and scans in 20,000-row slices that yield to the page and stop when superseded. It refuses unknown fields, operators, units that do not convert (`altitudeM(ft)` converts), wrong-typed values, invalid centres, unknown scope kinds and sort fields with `code` and `allowed`, refuses a follow-up with no previous answer (`NO_RESULT_CONTEXT`) or naming other layers than that answer (`FOLLOW_UP_MISMATCH`), and tells `LAYER_OFF`, `NOT_READY` and `FEED_UNAVAILABLE` apart from a real zero; when only some layers can answer the result is `partial` with `unanswered` ids. The Contacts-window path applies the same filters, ranking and item shape to one immutable panel snapshot. Each aircraft layer retains at most 20,000 rows; reaching that bound sets `complete: false` and the spoken/card count becomes “At least”, never an exact claim. A superseded query never replaces follow-up memory, while sibling analyst calls from one assistant response do not cancel one another. Items carry `lat`/`lon`; the feed window (earthquakes and FIRMS: last 24 h, or for FIRMS the 24 hours to a snapshot's `at`), the precise scope and any caveat sit in `display`, which is on-screen detail rather than something the model recites. "In view" is still a radius around the view centre, not the visible footprint. Satellite distance is ground distance.

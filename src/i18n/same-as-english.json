@@ -299,7 +299,8 @@
     "ON AIR",
     "Stream",
     "{seconds} s",
-    "Mode"
+    "Mode",
+    "Radiosonde {serial}"
   ],
   "es": [
     "1 min/s",
@@ -753,7 +754,10 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s"
+    "{seconds} s",
+    "Altitude {km} km",
+    "Radiosonde {serial}",
+    "radiosonde"
   ],
   "it": [
     "1 min/s",
@@ -1267,7 +1271,8 @@
     "3D",
     "KT",
     "Manual",
-    "{seconds} s"
+    "{seconds} s",
+    "Altitude {km} km"
   ],
   "ru": [
     "1900–1945",
