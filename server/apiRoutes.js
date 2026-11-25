@@ -14,8 +14,8 @@
  * installed last. Move it earlier and it swallows every route below it while
  * every individual handler still looks correct in isolation.
  *
- * The surface is not the same in both servers: 38 mounts under `npm run dev`
- * against 36 under `npm run preview`. `gev-key-setup` keeps its two
+ * The surface is not the same in both servers: 55 mounts under `npm run dev`
+ * against 53 under `npm run preview`. `gev-key-setup` keeps its two
  * `/api/setup` mounts out of preview twice over, and deliberately — it declares
  * `apply: command === 'serve' && !isPreview`, and it also defines only
  * `configureServer`, never `configurePreviewServer`, because (as its own note
@@ -26,7 +26,7 @@
  * The standalone server (`server/standalone/headless.mjs`, #860) is a third
  * surface. It calls every plugin's `configureServer` itself and ignores
  * `apply`, keeping key setup out by plugin name instead, so it reaches the
- * same 36 mounts as preview by a different route. The test checks it
+ * same 53 mounts as preview by a different route. The test checks it
  * separately for that reason. Headless also serves `/healthz`, which sits
  * outside `/api` and therefore outside this table.
  */
@@ -39,6 +39,8 @@ export const API_ROUTES = Object.freeze(
     // is still reached despite first-match-wins.
     { mount: '/api/flights', plugin: 'opensky-proxy', exactOnly: true },
     { mount: '/api/celestrak', plugin: 'celestrak-proxy' },
+    { mount: '/api/celestrak-satcat', plugin: 'celestrak-proxy' },
+    { mount: '/api/iss-telemetry', plugin: 'iss-telemetry-proxy' },
     { mount: '/api/tomtom', plugin: 'tomtom-proxy' },
     { mount: '/api/firms', plugin: 'firms-proxy' },
     { mount: '/api/launches', plugin: 'rocket-launches-proxy' },
@@ -47,6 +49,7 @@ export const API_ROUTES = Object.freeze(
     { mount: '/api/overpass', plugin: 'overpass-proxy' },
     // Mounted by the Overpass plugin, though the handler lives in places/routes.js.
     { mount: '/api/route', plugin: 'overpass-proxy' },
+    { mount: '/api/osm/features', plugin: 'overpass-proxy' },
     {
       mount: '/api/military-installations',
       plugin: 'military-installations-proxy',
@@ -59,10 +62,12 @@ export const API_ROUTES = Object.freeze(
     { mount: '/api/gbfs', plugin: 'gbfs-proxy' },
     { mount: '/api/local-receivers/aircraft', plugin: 'local-receivers-proxy' },
     { mount: '/api/transit', plugin: 'transit-proxy' },
+    { mount: '/api/rail', plugin: 'rail-proxy' },
     { mount: '/api/military', plugin: 'adsblol-proxy', exactOnly: true },
     { mount: '/api/vessels', plugin: 'ais-live-proxy' },
     { mount: '/api/flights/track', plugin: 'track-backfill-proxies' },
     { mount: '/api/military/track', plugin: 'track-backfill-proxies' },
+    { mount: '/api/openai/chat', plugin: 'openai-realtime-proxy' },
     { mount: '/api/openai/hud-summary', plugin: 'openai-realtime-proxy' },
     { mount: '/api/realtime/debug-log', plugin: 'openai-realtime-proxy' },
     { mount: '/api/realtime/token', plugin: 'openai-realtime-proxy' },
@@ -70,17 +75,30 @@ export const API_ROUTES = Object.freeze(
     // server's own host, so it is same-site gated like the rest of this plugin.
     { mount: '/api/realtime/oauth-status', plugin: 'openai-realtime-proxy' },
     { mount: '/api/realtime/oauth-login', plugin: 'openai-realtime-proxy' },
+    // Opt-in provider: the standalone server enables it, bare `localProviderPlugins()` does not.
+    { mount: '/api/gemini/chat', plugin: 'gemini-live-proxy' },
+    { mount: '/api/gemini/token', plugin: 'gemini-live-proxy' },
     {
       mount: '/api/google/nearby-places',
       plugin: 'google-places-context-proxy',
     },
     { mount: '/api/google/text-search', plugin: 'google-places-context-proxy' },
+    { mount: '/api/google/geocode', plugin: 'google-places-context-proxy' },
+    { mount: '/api/google/reverse-geocode', plugin: 'google-places-context-proxy' },
     { mount: '/api/wind', plugin: 'wind' },
     { mount: '/api/weather', plugin: 'weather' },
     { mount: '/api/cyclones', plugin: 'cyclones' },
     { mount: '/api/mapillary/status', plugin: 'mapillary-proxy' },
     { mount: '/api/mapillary/tiles', plugin: 'mapillary-proxy' },
     { mount: '/api/fire-perimeters', plugin: 'fire-perimeters' },
+    { mount: '/api/gnss-integrity', plugin: 'gnss-integrity' },
+    { mount: '/api/library', plugin: 'data-library' },
+    { mount: '/api/ghostmaps', plugin: 'ghostmaps' },
+    { mount: '/api/shipwrecks', plugin: 'shipwrecks' },
+    { mount: '/api/drone-airspace', plugin: 'drone-airspace' },
+    { mount: '/api/news', plugin: 'news' },
+    { mount: '/api/inaturalist', plugin: 'inaturalist' },
+    { mount: '/api/acartia', plugin: 'acartia' },
     // Dev server only: the plugin's `apply` excludes the preview server.
     { mount: '/api/setup/status', plugin: 'gev-key-setup', serveOnly: true },
     { mount: '/api/setup/keys', plugin: 'gev-key-setup', serveOnly: true },

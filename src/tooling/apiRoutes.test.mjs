@@ -11,8 +11,15 @@ import {
 import { localProviderPlugins } from '../../server/providers/local.js';
 import { apiNotFoundPlugin } from '../../server/standalone/api-not-found.js';
 import { headlessProviderPlugins } from '../../server/standalone/headless.mjs';
+import { standaloneVoiceTools } from '../../server/standalone/voiceTools.js';
 
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
+
+/** The providers `server/standalone/vite.config.js` builds, Gemini included (it is opt-in). */
+function standalonePlugins() {
+  const tools = standaloneVoiceTools();
+  return localProviderPlugins({ realtime: { tools }, gemini: { tools } });
+}
 
 /**
  * Install the real plugin chain against a stub that records what it mounts.
@@ -22,7 +29,7 @@ const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url));
  */
 function installedMounts(hook, context) {
   const mounts = [];
-  const plugins = [localProviderPlugins(), apiNotFoundPlugin()].flat(Infinity);
+  const plugins = [standalonePlugins(), apiNotFoundPlugin()].flat(Infinity);
   for (const plugin of plugins) {
     const { apply } = plugin;
     if (typeof apply === 'function' && !apply({}, context)) continue;
@@ -124,7 +131,7 @@ test('both guards that keep key setup out of preview are still in place', () => 
   // defines the preview hook. Because either guard alone produces the same 32
   // mounts, the chain comparison above cannot notice one of them going
   // missing; assert them separately so a later edit cannot drop one silently.
-  const keySetup = [localProviderPlugins(), apiNotFoundPlugin()]
+  const keySetup = [standalonePlugins(), apiNotFoundPlugin()]
     .flat(Infinity)
     .find((plugin) => plugin.name === 'gev-key-setup');
   assert.ok(keySetup, 'the key setup plugin is part of the chain');

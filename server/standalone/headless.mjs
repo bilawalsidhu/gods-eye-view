@@ -66,8 +66,10 @@ const DEV_ONLY_PLUGIN_NAMES = new Set(['gev-key-setup']);
  * surface only.
  */
 export function headlessProviderPlugins() {
+  const tools = standaloneVoiceTools();
   return localProviderPlugins({
-    realtime: { tools: standaloneVoiceTools() },
+    realtime: { tools },
+    gemini: { tools },
   }).filter((plugin) => !DEV_ONLY_PLUGIN_NAMES.has(plugin.name));
 }
 

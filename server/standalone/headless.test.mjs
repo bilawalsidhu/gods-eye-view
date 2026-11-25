@@ -12,6 +12,7 @@ import {
 } from './headless.mjs';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { localProviderPlugins } from '../providers/local.js';
+import { standaloneVoiceTools } from './voiceTools.js';
 import { resolveAllowedHosts } from '../../build/allowedHosts.js';
 
 function mockReqRes(url, method = 'GET') {
@@ -46,7 +47,8 @@ function stubProvider(name, path, body) {
 }
 
 test('headlessProviderPlugins excludes only the dev-only key-setup panel', () => {
-  const all = localProviderPlugins();
+  const tools = standaloneVoiceTools();
+  const all = localProviderPlugins({ realtime: { tools }, gemini: { tools } });
   const headless = headlessProviderPlugins();
   assert.equal(headless.length, all.length - 1);
   assert.ok(!headless.some((plugin) => plugin.name === 'gev-key-setup'));
