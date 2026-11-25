@@ -181,9 +181,6 @@ const pageVisible = ref(globalThis.document?.visibilityState !== 'hidden');
 function updatePageVisibility() {
   pageVisible.value = globalThis.document?.visibilityState !== 'hidden';
 }
-// A reply can arrive before the observer or visibility event updates Vue.
-const readInspectorVisibility = () =>
-  !isRailCovered() && globalThis.document?.visibilityState !== 'hidden';
 // Only an open panel reads what is picked and in view; closed, it does no work.
 const contextOpen = computed(() => chromePanels.value['global-context-panel']?.collapsed === false);
 const inspectorMount = ref(null);
@@ -201,6 +198,9 @@ const inspectorShown = computed(() =>
 );
 const inspectorTab = ref(null);
 let keyboardOrigin = null;
+// A keyboard selection puts focus on the card's close button. Closing the
+// card returns focus to its row or the Inspector unless another card opened
+// or focus moved outside Context.
 async function focusKeyboardSelection(rowKey) {
   const cardKey = entityCard.value?.key;
   await nextTick();
@@ -223,7 +223,7 @@ watch(() => entityCard.value?.key, async (key, previous) => {
 });
 watch(
   [inspectorShown, inspectorMount],
-  ([shown, mountId]) => entityCards.setViewContextShown(shown, mountId, readInspectorVisibility),
+  ([shown, mountId]) => entityCards.setViewContextShown(shown, mountId),
   { immediate: true, flush: 'sync' },
 );
 watch(
@@ -309,7 +309,7 @@ watch(
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>
-          <ViewContext v-if="viewContextPresent" @mounted="inspectorMount = Symbol()" @unmounting="inspectorMount = null" @keyboard-selection="focusKeyboardSelection" />
+          <ViewContext v-if="viewContextPresent" @vue:mounted="inspectorMount = Symbol()" @vue:before-unmount="inspectorMount = null" @keyboard-selection="focusKeyboardSelection" />
         </div>
         </div>
     </RailPanel>

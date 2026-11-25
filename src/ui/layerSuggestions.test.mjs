@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_SUGGESTIONS, suggestLayers } from './layerSuggestions.js';
+import { suggestLayers } from './layerSuggestions.js';
 
 const row = (id, extra = {}) => ({ id, enabled: false, ...extra });
 const ALL = [
@@ -94,11 +94,11 @@ test('never more than three, never a layer whose key is missing or that has no r
   assert.deepEqual(suggestLayers([], { globe: true }), []);
   const many = suggestLayers(
     ALL.map((layer) =>
-      ['flights', 'local-firms'].includes(layer.id)
+      ['local-firms', 'earthquakes'].includes(layer.id)
         ? { ...layer, enabled: true }
         : layer,
     ),
     { globe: true },
   );
-  assert.ok(many.length <= MAX_SUGGESTIONS);
+  assert.deepEqual(many, ['wind', 'satellites', 'flights']);
 });

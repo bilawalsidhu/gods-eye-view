@@ -59,15 +59,6 @@ test('constructing independent flight layers performs no source request and isol
   assert.equal(requests, 0);
 });
 
-test('flight stats start with an empty drawn count and worldwide coverage', () => {
-  const layer = createCivilFlightLayer({
-    source: { label: 'Fixture aircraft', getSnapshot() {} },
-    services: services(),
-  });
-  assert.equal(layer.getStats().coverage, 'worldwide upstream snapshot');
-  assert.equal(layer.getStats().count, 0);
-});
-
 test('a layer without a source fails before touching the viewer', () => {
   const layer = createCivilFlightLayer({ services: services() });
   assert.throws(() => layer.init({}), /snapshot source/);

@@ -9,9 +9,7 @@ const WEATHER_EFFECTS_STALE_MS = 30 * 60_000;
 
 const WEATHER_EFFECTS_MAX_CACHE = 180;
 
-// Exact camera points have much higher cardinality than the shared 0.1° cells.
 const _weatherEffectsCellCache = new Map();
-const _weatherEffectsPointCache = new Map();
 
 const _weatherEffectsInFlight = new Map();
 
@@ -39,8 +37,10 @@ function weatherEffectsProxy() {
       coordinates: point,
       weather,
     };
-    cache.set(key, { payload, cachedAt: Date.now() });
-    trimWeatherEffectsCache(cache);
+    if (cache) {
+      cache.set(key, { payload, cachedAt: Date.now() });
+      trimWeatherEffectsCache(cache);
+    }
     return payload;
   }
 
@@ -73,14 +73,12 @@ function weatherEffectsProxy() {
       // Inspector local time needs the requested point even at a zone border.
       // Other weather consumers can continue to share a 0.1° observation.
       const exactPoint = url.searchParams.get('exactPoint') === '1';
-      const cache = exactPoint
-        ? _weatherEffectsPointCache
-        : _weatherEffectsCellCache;
+      const cache = exactPoint ? null : _weatherEffectsCellCache;
       const key = exactPoint
         ? `point:${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`
         : `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
       const now = Date.now();
-      const cached = cache.get(key);
+      const cached = cache?.get(key);
       if (cached && now - cached.cachedAt <= WEATHER_EFFECTS_CACHE_MS) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
@@ -97,8 +95,12 @@ function weatherEffectsProxy() {
         const payload = await request.promise;
         res.writeHead(200, {
           'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=60',
-          'X-Weather-Effects': request.shared ? 'INFLIGHT' : 'MISS',
+          'Cache-Control': exactPoint
+            ? 'private, no-store'
+            : 'public, max-age=60',
+          ...(!exactPoint && {
+            'X-Weather-Effects': request.shared ? 'INFLIGHT' : 'MISS',
+          }),
         });
         res.end(JSON.stringify(payload));
       } catch {
@@ -113,7 +115,7 @@ function weatherEffectsProxy() {
         }
         res.writeHead(503, {
           'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
+          'Cache-Control': exactPoint ? 'private, no-store' : 'no-store',
         });
         res.end(
           JSON.stringify({

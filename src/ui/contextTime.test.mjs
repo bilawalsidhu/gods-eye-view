@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   clockLine,
   dayLengthMinutes,
-  daylightShare,
   localClock,
   utcClock,
 } from './contextTime.js';
@@ -40,14 +39,6 @@ test('Tromsø keeps one daylight duration for its civil date', () => {
   assert.equal(duration('2026-11-27T22:59:00Z'), morning);
   assert.ok(morning > 0 && morning < 35);
   assert.equal(duration('2026-11-27T23:00:00Z'), 0);
-});
-
-test('the globe has the same daylit share as the Sun moves', (t) => {
-  t.mock.timers.enable({ apis: ['Date'], now: NOON_UTC });
-  const share = daylightShare();
-  assert.ok(Math.abs(share - 0.50727) < 0.00001);
-  t.mock.timers.setTime(Date.UTC(2026, 11, 21, 21));
-  assert.equal(daylightShare(), share);
 });
 
 test('the time line reads local and UTC, or UTC alone until the zone is known', () => {

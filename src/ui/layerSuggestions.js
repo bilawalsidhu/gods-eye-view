@@ -16,7 +16,7 @@ const COMPANIONS = Object.freeze({
 export const MAX_SUGGESTIONS = 3;
 
 /**
- * Up to three layer ids to suggest.
+ * Up to `MAX_SUGGESTIONS` layer ids to suggest.
  * @param {Array<{id: string, enabled?: boolean, showInTogglePanel?: boolean, stats?: {keyRequired?: boolean, sourceUnavailable?: boolean, lastUpdate?: number|null}}>} rows
  *   The data manager's layer rows.
  * @param {{globe?: boolean}} [view] Whether the view shows the whole globe.

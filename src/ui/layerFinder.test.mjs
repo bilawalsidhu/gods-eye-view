@@ -12,7 +12,6 @@ import { createApp, nextTick } from 'vue';
 import { LayerPanel } from 'gods-eye-view/ui/layers';
 import { createGevActionRunner } from '../voice/gevActions.js';
 import { bindRenderer } from '../render/rendererOf.js';
-import { createLayerFinder } from './layerFinderFilter.js';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import { mountApplicationViews } from './views/index.js';
 import { useLayerFinderStore } from './stores/layerFinder.js';
@@ -23,7 +22,7 @@ const flush = async () => {
   await nextTick();
 };
 
-function fixture(t, { rowFinder } = {}) {
+function fixture(t) {
   document.body.replaceChildren();
   // Frames run at once, so the observers' batching does not hold a test up.
   globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
@@ -48,7 +47,7 @@ function fixture(t, { rowFinder } = {}) {
     stats: {},
   }));
   const rows = new LayerPanel({
-    finder: rowFinder ?? finder,
+    finder,
     getLayers: () => layers,
     getRowControls: () => null,
     hasRowControls: () => false,
@@ -334,11 +333,8 @@ test('clearing the Finder shows every row again immediately', async (t) => {
   assert.deepEqual(shown(), ['flights', 'ais-live-vessels', 'weather-radar']);
 });
 
-test('stock search and voice use the explicit Finder that owns the rows', async (t) => {
-  const rowFinder = createLayerFinder();
-  const { finder, layers, list, shown, search, rows } = fixture(t, {
-    rowFinder,
-  });
+test('stock search and voice use the mounted list Finder', async (t) => {
+  const { finder, layers, list, shown, search, rows } = fixture(t);
   finder.select({ query: 'flights' });
   await search('vessels');
   assert.deepEqual(shown(), ['ais-live-vessels']);
@@ -367,8 +363,7 @@ test('stock search and voice use the explicit Finder that owns the rows', async 
   const result = await runner('show_data_layers_menu', { layerId: 'flights' });
   assert.equal(result.focusedLayer?.id, 'flights');
   assert.equal(scroll.mock.callCount(), 1);
-  assert.equal(rowFinder.narrowed.value, false);
-  assert.equal(finder.inputs().query, 'flights');
+  assert.equal(finder.narrowed, false);
   await flush();
   assert.equal(document.getElementById('layer-finder-input'), null);
 
@@ -376,12 +371,11 @@ test('stock search and voice use the explicit Finder that owns the rows', async 
   rows.mount(detached);
   await search('weather');
   assert.equal(finder.inputs().query, 'weather');
-  assert.equal(rowFinder.inputs().query, '');
   rows.mount(list);
   await flush();
   await search('flights');
   assert.deepEqual(shown(), ['flights']);
-  assert.equal(finder.inputs().query, 'weather');
+  assert.equal(finder.inputs().query, 'flights');
 });
 
 test('the section index has a tick per group and drops filtered groups', async (t) => {

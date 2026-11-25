@@ -59,7 +59,13 @@ function* cablePaths(feature) {
     for (const coordinate of line ?? []) {
       const lon = Number(coordinate?.[0]);
       const lat = Number(coordinate?.[1]);
-      if (Number.isFinite(lon) && Number.isFinite(lat)) path.push({ lat, lon });
+      if (
+        Number.isFinite(lon) &&
+        Number.isFinite(lat) &&
+        Math.abs(lat) <= 90 &&
+        Math.abs(lon) <= 180
+      )
+        path.push({ lat, lon });
     }
     if (path.length) yield path;
   }
@@ -79,13 +85,8 @@ function drawnPath(path, spacingM) {
 export function cableRecordReference(feature) {
   const reference = featureReference(feature);
   if (reference) return reference;
-  for (const line of geometryParts(feature?.geometry).lines) {
-    for (const coordinate of line ?? []) {
-      const lon = Number(coordinate?.[0]);
-      const lat = Number(coordinate?.[1]);
-      if (Number.isFinite(lon) && Number.isFinite(lat)) return { lon, lat };
-    }
-  }
+  for (const path of cablePaths(feature))
+    return { lon: path[0].lon, lat: path[0].lat };
   return null;
 }
 

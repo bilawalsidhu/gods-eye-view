@@ -6,7 +6,7 @@ export function createSourceSlot(
   optional = {},
 ) {
   let active = initial;
-  let binding = Symbol(label);
+  let binding = null;
   const source = Object.fromEntries(
     [...methods, ...Object.keys(optional)].map((method) => [
       method,
@@ -18,22 +18,12 @@ export function createSourceSlot(
         const owner = binding;
         const provider = active;
         const value = provider[method](...args);
-        if (value && typeof value.then === 'function') {
-          const requireCurrentOwner = () => {
+        if (value && typeof value.then === 'function')
+          return value.then((result) => {
             if (binding !== owner || active !== provider)
               throw new DOMException(`${label} was replaced`, 'AbortError');
-          };
-          return value.then(
-            (result) => {
-              requireCurrentOwner();
-              return result;
-            },
-            (error) => {
-              requireCurrentOwner();
-              throw error;
-            },
-          );
-        }
+            return result;
+          });
         return value;
       },
     ]),
@@ -46,9 +36,6 @@ export function createSourceSlot(
   }
   return {
     source,
-    get binding() {
-      return binding;
-    },
     configure(next) {
       if (methods.some((method) => typeof next?.[method] !== 'function'))
         throw new TypeError(`Invalid ${label.toLowerCase()}`);

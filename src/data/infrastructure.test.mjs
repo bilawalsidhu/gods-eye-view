@@ -279,6 +279,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'dispatcher.js',
     'ellipsoid.js',
     'frustum.js',
+    'geoDistance.js',
     'geojsonPins.js',
     'heights.js',
     'horizon.js',

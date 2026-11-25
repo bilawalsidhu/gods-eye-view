@@ -50,11 +50,6 @@ export function configureApplicationServices(services) {
   };
 }
 
-/** The owner of snapshots read through the configured count service. */
-export function getLayerCountsServiceBinding() {
-  return slots.layerCounts.binding;
-}
-
 /** Bound the configured source even when its adapter ignores abort. */
 export function getConfiguredLayerCounts({ signal, onTimeout } = {}) {
   return requestWithDeadline(

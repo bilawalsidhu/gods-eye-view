@@ -1,6 +1,7 @@
 import { t } from '../../i18n/index.js';
 import { msg } from '../../i18n/marker.js';
 import { flowBucket } from '../../data/trafficFlowStyle.js';
+import { CONTEXT_LINES, contextLine } from '../../data/contextGeometry.js';
 import { roadIdentity } from './retention.js';
 
 /** A road's kind in words, by the layer's road type. */
@@ -18,8 +19,7 @@ const segments = new WeakMap();
 
 /**
  * The renderer's undirected road identity and middle vertex in its
- * canonical direction.
- * @returns {{id: string, at: number[]}}
+ * canonical direction, with its path for viewport clipping.
  */
 function segmentOf(road) {
   let segment = segments.get(road);
@@ -31,6 +31,9 @@ function segmentOf(road) {
   const line = forward <= reverse ? road.coords : reversed;
   segment = {
     id: forward <= reverse ? forward : reverse,
+    lines: Object.freeze([
+      contextLine(line.map(([lon, lat]) => ({ lat, lon }))),
+    ]),
     at: line[Math.floor((line.length - 1) / 2)] || [],
   };
   segments.set(road, segment);
@@ -60,18 +63,16 @@ function flowFields(flow, state) {
       ? 'simulated-unavailable'
       : 'simulated-keyless';
   return {
-    flow: flow
-      ? flow.closure
-        ? 'closed'
-        : level === null
-          ? null
-          : flowBucket(level)
-      : null,
+    flow: flow?.closure ? 'closed' : level === null ? null : flowBucket(level),
     // Current speed as a share of free-flow speed, 0-100.
     flowPct: level === null ? null : Math.round(level * 100),
     simulated: !flow,
     // A code; the card says it in words (entityContext.js CODE_WORDS).
-    source: flow ? 'tomtom-live' : simulatedSource,
+    source: flow
+      ? state._flowStale
+        ? 'tomtom-cached'
+        : 'tomtom-live'
+      : simulatedSource,
     // Flow read from cached proxy tiles, not this minute's feed.
     stale: Boolean(flow && state._flowStale),
   };
@@ -83,9 +84,9 @@ function flowFields(flow, state) {
  * two-way road are one record, with the worse of their flows).
  *
  * Simulated segments have `simulated` true and `flow` null. Their `source`
- * distinguishes unmatched roads, an unreachable traffic service, and a
- * missing TomTom key. A segment hidden by the uncovered roads setting is
- * not listed.
+ * distinguishes unmatched roads, a failed TomTom flow read, an unreachable
+ * traffic service and a missing TomTom key. Saved tiles use `tomtom-cached`.
+ * Segments hidden by the uncovered roads setting are omitted.
  * @param {object} state The Traffic layer's state.
  * @param {number} [maxCount]
  * @returns {Array<object>}
@@ -100,7 +101,7 @@ export function trafficAnalystRecords(state, maxCount = Infinity) {
     const live = state._liveMode === true;
     const flow = live ? ((road.source ?? road).flow ?? null) : null;
     if (live && !flow && state._uncoveredMode === 'hide') continue;
-    const { id, at } = segmentOf(road);
+    const { id, at, lines } = segmentOf(road);
     const known = listed.get(id);
     if (known) {
       // The other direction: the record keeps the worse flow.
@@ -122,6 +123,7 @@ export function trafficAnalystRecords(state, maxCount = Infinity) {
       ...flowFields(flow, state),
       roads: state._roadSource || null,
     };
+    Object.defineProperty(record, CONTEXT_LINES, { value: lines });
     listed.set(id, { record, flow });
     result.push(record);
   }

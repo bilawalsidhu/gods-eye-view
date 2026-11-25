@@ -6,7 +6,7 @@ import UiIcon from '../../kit/UiIcon.vue';
 // Suggested layers: their names, then one Open that shows
 // them in Data Layers picked out. Display only: a name switches nothing on.
 defineProps({
-  /** `[{id, name, icon}]`, at most three. */
+  /** `[{id, name, icon}]`, from suggestLayers. */
   layers: { type: Array, required: true },
 });
 defineEmits(['open']);

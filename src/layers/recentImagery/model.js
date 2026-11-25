@@ -470,27 +470,9 @@ export function mergeCandidates(lists) {
   );
 }
 
-function pointOnEdge(lon, lat, [x, y], [endX, endY]) {
-  if (
-    lon < Math.min(x, endX) ||
-    lon > Math.max(x, endX) ||
-    lat < Math.min(y, endY) ||
-    lat > Math.max(y, endY)
-  )
-    return false;
-  const dx = endX - x;
-  const dy = endY - y;
-  // Allow roundoff when looking up a coordinate on a diagonal edge.
-  return (
-    Math.abs((lon - x) * dy - (lat - y) * dx) <=
-    1e-10 * (Math.abs(dx) + Math.abs(dy))
-  );
-}
-
-function pointInPolygon(lon, lat, ring, includeBoundary = false) {
+function pointInPolygon(lon, lat, ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    if (includeBoundary && pointOnEdge(lon, lat, ring[i], ring[j])) return true;
     const [xi, yi] = ring[i];
     const [xj, yj] = ring[j];
     const crosses =
@@ -530,17 +512,11 @@ export function candidateAtPoint(candidate, lon, lat) {
     const crossesDateline = ring.some(
       ([x], i) => Math.abs(x - ring[(i + 1) % ring.length][0]) > 180,
     );
-    if (!crossesDateline) {
-      // The matched box and footprint can use opposite signs on the seam.
-      return (
-        pointInPolygon(lon, lat, ring, true) ||
-        (Math.abs(lon) === 180 && pointInPolygon(-lon, lat, ring, true))
-      );
-    }
+    if (!crossesDateline) return pointInPolygon(lon, lat, ring);
     // Shift the cut to Greenwich so a granule around ±180° stays together.
     const shift = (value) => (value < 0 ? value + 360 : value);
     const unwrapped = ring.map(([x, y]) => [shift(x), y]);
-    return pointInPolygon(shift(lon), lat, unwrapped, true);
+    return pointInPolygon(shift(lon), lat, unwrapped);
   });
   return granules.length
     ? buildCandidate(candidate.product, candidate.day, granules)

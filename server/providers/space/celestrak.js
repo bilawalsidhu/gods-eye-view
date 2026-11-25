@@ -7,7 +7,10 @@ import {
 import { parseTleText, tleCatalogNumber } from '../../../src/sources/tle.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
-import { readResponseTextCapped } from '../common/http.js';
+import {
+  coalesceProxyRequest,
+  readResponseTextCapped,
+} from '../common/http.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -101,11 +104,11 @@ export function celestrakProxy() {
 
     async function readDisk(group) {
       try {
-        const cached = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
-        if (typeof cached?.body === 'string' && Number.isFinite(cached?.at))
-          return cached;
+        const parsed = JSON.parse(await fsp.readFile(diskPath(group), 'utf8'));
+        if (typeof parsed?.body === 'string' && Number.isFinite(parsed?.at))
+          return parsed;
       } catch {
-        /* no usable disk cache */
+        /* no disk cache yet */
       }
       return null;
     }
@@ -120,17 +123,14 @@ export function celestrakProxy() {
     }
 
     async function writeDisk(group, entry) {
-      let temporary;
+      const file = diskPath(group);
+      const temporary = `${file}.${crypto.randomUUID()}.tmp`;
       try {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        const file = diskPath(group);
-        // Keep the previous core TLE file readable during a cache replacement.
-        if (feed === feeds[0] && coreGroups.includes(group))
-          temporary = `${file}.${crypto.randomUUID()}.tmp`;
-        await fsp.writeFile(temporary ?? file, JSON.stringify(entry), 'utf8');
-        if (temporary) await fsp.rename(temporary, file);
+        await fsp.writeFile(temporary, JSON.stringify(entry), 'utf8');
+        await fsp.rename(temporary, file);
       } catch {
-        if (temporary) await fsp.unlink(temporary).catch(() => {});
+        await fsp.unlink(temporary).catch(() => {});
         console.warn('[celestrak-proxy] cache write failed');
       }
     }
@@ -260,14 +260,9 @@ export function celestrakProxy() {
 
   const handlers = feeds.map(createFeedHandler);
   const [tle] = handlers;
-  let countInFlight;
-
-  function readLayerCount() {
-    countInFlight ??= scanLayerCount().finally(() => {
-      countInFlight = null;
-    });
-    return countInFlight;
-  }
+  const countRequests = new Map();
+  const readLayerCount = () =>
+    coalesceProxyRequest(countRequests, 'count', scanLayerCount).promise;
 
   async function scanLayerCount() {
     const saved = await Promise.all(

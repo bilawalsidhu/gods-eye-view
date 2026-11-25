@@ -1,7 +1,6 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useLayerFinderStore } from '../stores/layerFinder.js';
-import { bindLayerFinder } from '../layerFinderFilter.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -28,13 +27,7 @@ const finder = useLayerFinderStore();
 const toggleList = ref(null);
 let detachFinderControls;
 onMounted(() => {
-  const list = toggleList.value;
-  const unbind = bindLayerFinder(list, finder);
-  const detachControls = finder.attachControls(list);
-  detachFinderControls = () => {
-    unbind();
-    detachControls();
-  };
+  detachFinderControls = finder.attachControls(toggleList.value);
 });
 onBeforeUnmount(() => detachFinderControls?.());
 

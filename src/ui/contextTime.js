@@ -1,3 +1,4 @@
+import { zonedParts } from '../data/railTimeZones.js';
 import { formatDate, formatNumber, t } from '../i18n/index.js';
 
 /** Localized age of an elapsed observation. */
@@ -45,7 +46,7 @@ export function localClock(zone, now = Date.now()) {
   return null;
 }
 
-/** Show local time only when the view point has its own zone. */
+/** Local and UTC time when the zone is known, otherwise UTC with a loading status while reading. */
 export function clockLine(zone, now = Date.now(), loading = false) {
   const utc = utcClock(now);
   const local = localClock(zone, now);
@@ -85,16 +86,8 @@ export function dayLengthMinutes(
   let day = Math.floor((now + offsetMs) / DAY_MS);
   if (zone?.timeZone) {
     try {
-      const parts = new Intl.DateTimeFormat('en-US', {
-        timeZone: zone.timeZone,
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-      }).formatToParts(now);
-      const number = (type) =>
-        Number(parts.find((part) => part.type === type)?.value);
-      day =
-        Date.UTC(number('year'), number('month') - 1, number('day')) / DAY_MS;
+      const { year, month, day: date } = zonedParts(now, zone.timeZone);
+      day = Date.UTC(year, month - 1, date) / DAY_MS;
     } catch {
       // The runtime does not know the zone. Use its offset or solar time.
     }
@@ -106,9 +99,4 @@ export function dayLengthMinutes(
   if (cosH >= 1) return 0;
   if (cosH <= -1) return 1440;
   return Math.round(((2 * Math.acos(cosH)) / RAD / 15) * 60);
-}
-
-/** The sunlit spherical cap rotates without changing its share of Earth. */
-export function daylightShare() {
-  return (1 - SUNRISE_ALTITUDE_SINE) / 2;
 }

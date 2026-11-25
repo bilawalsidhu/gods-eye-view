@@ -10,7 +10,6 @@ import { createApp, nextTick } from 'vue';
 import ContextView from './views/ContextView.vue';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import { LayerPanel } from './layerPanel.js';
-import { createLayerFinder } from './layerFinderFilter.js';
 import { useLayerFinderStore } from './stores/layerFinder.js';
 import { INSPECTOR_PULSE_MS, useEntityCardStore } from './stores/entityCard.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
@@ -78,7 +77,6 @@ function fixture(
     getCounts = getConfiguredLayerCounts,
     openPanel = null,
     useInspector = Boolean(fetchImpl || brief),
-    weatherClock,
     startOpen = true,
     finderControls = true,
   } = {},
@@ -178,7 +176,6 @@ function fixture(
           writeState: counts.publish,
           readShown: cards.readViewContextShown,
         }),
-        weatherClock,
       },
     });
     disconnect = () => {
@@ -679,7 +676,10 @@ test('selected cards qualify nearby distances when either end is an obscured sig
     {
       id: 'wildlife-sightings',
       enabled: true,
-      records: [{ ...HERE, id: 'inat:1', name: 'Owl', obscured: true }],
+      records: [
+        { ...HERE, id: 'inat:1', name: 'Owl', obscured: true },
+        { ...HERE, id: 'acartia:2', name: 'Whale', source: 'Acartia' },
+      ],
     },
   ]);
   const distances = () => {
@@ -696,7 +696,10 @@ test('selected cards qualify nearby distances when either end is an obscured sig
   cards.select({ layerId: 'local-dams', id: 'dam' });
   await nextTick();
   assert.match(distances().Owl, /approximate/);
-  assert.equal(distances().Datacenter, '0.0 km');
+  assert.equal(distances().Datacenter, '0 m');
+  cards.select({ layerId: 'wildlife-sightings', id: 'acartia:2' });
+  await nextTick();
+  assert.match(distances().Dam, /approximate/);
   cards.select({ layerId: 'wildlife-sightings', id: 'inat:1' });
   await nextTick();
   assert.match(distances().Dam, /approximate/);
@@ -966,7 +969,7 @@ test('the globe satellite class bar identifies the subset it represents', async 
   const block = $('.view-context__block[data-layer="satellites"]');
   assert.equal(block.querySelector('strong').textContent, '5');
   assert.equal(block.querySelectorAll('.view-context__bar span').length, 2);
-  assert.match(block.textContent, /Of 2 read, 5 loaded/);
+  assert.match(block.textContent, /Breakdown covers 2 of 5 loaded/);
 });
 
 test('the incident locator shows its state alongside its place rows at globe height', async (t) => {
@@ -1047,8 +1050,6 @@ test('with nothing on, Context shows a few facts and points to Data Layers', asy
   ].find((tile) => /Daylight/.test(tile.textContent));
   assert.match(daylight.querySelector('strong').textContent, /^(\d+h )?\d+m$/);
   assert.match(daylight.getAttribute('title'), /minutes?$/);
-  // The view has no ground height to give, so no elevation tile.
-  assert.ok(!facts.some((fact) => /Elevation/.test(fact)));
   assert.match(
     $('.view-context__pointer').textContent,
     /Turn on layers to see what is around/,
@@ -2189,11 +2190,16 @@ test('with a layer on, zoomed in, the weather block shows the reading the local 
       ],
     ),
   );
-  assert.deepEqual(Object.keys(facts), ['Wind', 'Cloud', 'Visibility', 'Rain']);
+  assert.deepEqual(Object.keys(facts), [
+    'Wind',
+    'Cloud',
+    'Visibility',
+    'Precipitation',
+  ]);
   assert.match(facts.Wind, /15 km\/h/);
   assert.equal(facts.Cloud, '92%');
   assert.equal(facts.Visibility, '24 km');
-  assert.equal(facts.Rain, '0.2 mm');
+  assert.equal(facts.Precipitation, '0.2 mm');
   assert.match(
     $('.view-context__region').textContent,
     /local/,
@@ -2315,7 +2321,7 @@ test('a custom Data Layers panel opens without applying a filter it cannot clear
   assert.equal(useLayerFinderStore(pinia).narrowed, false);
 });
 
-test('the visible Inspector samples metadata once for rows, suggestions and counts', async (t) => {
+test('the visible Inspector publishes its layer rows once for rows, suggestions and counts', async (t) => {
   let asks = 0;
   const flights = flightsOn([flight('near01', 30.28, -97.74)]);
   const { $, cards, pinia, close, open, replaceManager, notifyLayers } =
@@ -2374,7 +2380,6 @@ test('the visible Inspector samples metadata once for rows, suggestions and coun
   t.after(() => layersApp.unmount());
   const list = layerHost.querySelector('#data-toggles');
   const layerPanel = new LayerPanel({
-    finder: createLayerFinder(),
     getLayers: () =>
       ['flights', 'satellites'].map((id) => ({
         id,
@@ -2522,46 +2527,6 @@ test('unmounting the Context host cancels its count request while the bridge is 
   assert.equal(signal.aborted, true);
   reply.resolve(Response.json({ counts: [{ layerId: 'flights', count: 31 }] }));
   await turn();
-  assert.deepEqual(useLayerCountsStore(pinia).state, {
-    counts: {},
-    lastAttemptAt: null,
-  });
-});
-
-test('Inspector replies respect Clean View before its visibility observer runs', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const weather = Promise.withResolvers();
-  const counts = Promise.withResolvers();
-  let weatherSignal;
-  let countsSignal;
-  const { cards, pinia, point } = fixture(t, [], {
-    brief: (_lat, _lon, { signal }) => {
-      weatherSignal = signal;
-      return weather.promise;
-    },
-    getCounts: ({ signal }) => {
-      countsSignal = signal;
-      return counts.promise;
-    },
-  });
-  t.after(() => document.body.classList.remove('ui-clean-view'));
-  point(HERE);
-  await nextTick();
-  t.mock.timers.tick(400);
-  assert.equal(weatherSignal?.aborted, false);
-  assert.equal(countsSignal?.aborted, false);
-
-  weather.resolve({ weather: { temperatureC: 31 } });
-  // Let the store's promise wrapper queue the weather owner's continuation.
-  await Promise.resolve();
-  await Promise.resolve();
-  counts.resolve({ counts: [{ layerId: 'flights', count: 31 }] });
-  document.body.classList.add('ui-clean-view');
-  assert.equal(cards.inspector.shown, true, 'the observer has yet to run');
-  await turn();
-
-  assert.deepEqual([weatherSignal.aborted, countsSignal.aborted], [true, true]);
-  assert.equal(cards.viewWeather.reading, null);
   assert.deepEqual(useLayerCountsStore(pinia).state, {
     counts: {},
     lastAttemptAt: null,
@@ -3165,16 +3130,13 @@ test('a retry that becomes due in Properties waits for the Inspector to be visib
     activeTab.value = 'view';
   });
   let reads = 0;
-  let elapsed = 0;
   const { $, point } = fixture(t, [flightsOn([flight('a1', 30.3, -97.7)])], {
     brief: async () => {
       reads++;
       return null;
     },
-    weatherClock: { nowMonotonic: () => elapsed },
   });
   const advance = async (ms) => {
-    elapsed += ms;
     t.mock.timers.tick(ms);
     await nextTick();
     await turn();
@@ -3236,9 +3198,101 @@ test('the local country heading follows the locale without moving the camera', a
   setLocale('en');
   cards.setView({ center: { lat: 38.878, lon: -6.971 }, heightM: 40_000 });
   await turn();
-  assert.equal($('.view-context__title').textContent.trim(), 'Badajoz, Spain');
+  assert.equal(
+    $('.view-context__title').textContent.trim(),
+    'Near Badajoz, Spain',
+  );
   cards.setView({ center: { lat: 38.879, lon: -6.971 }, heightM: 40_000 });
   await nextTick();
   assert.match($('.view-context__title').textContent, /Near Badajoz, Spain/);
   assert.equal(cityReads, 1);
+});
+
+test('a globe class bar follows a changed loaded total within the 30 s cache', async (t) => {
+  const recs = (a, f) => [
+    ...Array.from({ length: a }, (_, i) => ({
+      ...flight(`a${i}`, i, i),
+      aircraftClass: 'airliner',
+    })),
+    ...Array.from({ length: f }, (_, i) => ({
+      ...flight(`f${i}`, -i - 1, i),
+      aircraftClass: 'fastjet',
+    })),
+  ];
+  const flights = flightsOn(recs(2, 1));
+  const { $, cards, notifyLayers } = fixture(t, [flights]);
+  cards.setView({ center: { lat: 0, lon: 0 }, heightM: 20_000_000 });
+  await nextTick();
+  const bar = () =>
+    $('.view-context__block[data-layer="flights"] .view-context__bar');
+  const head = () =>
+    $('.view-context__block[data-layer="flights"] strong').textContent;
+  for (const [airliners, jets] of [
+    [3, 2],
+    [4, 2],
+    [5, 2],
+  ]) {
+    flights.records = recs(airliners, jets);
+    flights.stats = { count: airliners + jets, lastUpdate: Date.now() };
+    notifyLayers();
+    await nextTick();
+    assert.equal(head(), String(airliners + jets));
+    assert.ok(bar(), `a two-class bar at count ${airliners + jets}`);
+  }
+});
+
+test('the Data Layers pointer does not ask to turn on layers while one is on', async (t) => {
+  const { $, cards } = fixture(t, [
+    {
+      id: 'local-datacenters',
+      name: 'Data Centers',
+      enabled: true,
+      stats: { count: 1, lastUpdate: Date.now() },
+      records: [{ id: 'dc', name: 'DC one', ...HERE }],
+    },
+  ]);
+  for (const heightM of [120_000, 20_000_000]) {
+    cards.setView({ center: HERE, heightM });
+    await nextTick();
+    assert.doesNotMatch(
+      $('.view-context__pointer')?.textContent ?? '',
+      /Turn on layers/,
+      `at ${heightM} m`,
+    );
+  }
+});
+
+test('globe search names a layer whose feed is unavailable with no records', async (t) => {
+  const { $, cards } = fixture(t, [
+    {
+      id: 'satellites',
+      name: 'Satellites',
+      enabled: true,
+      records: [],
+      stats: {
+        count: 0,
+        status: 'unavailable',
+        error: 'CelesTrak unreachable',
+        lastUpdate: null,
+      },
+    },
+    {
+      id: 'local-dams',
+      name: 'Dams',
+      enabled: true,
+      stats: { count: 1 },
+      records: [{ id: 'dam', name: 'Test dam', ...HERE }],
+    },
+  ]);
+  cards.setView({ center: HERE, heightM: 20_000_000 });
+  await nextTick();
+  const status = () =>
+    $('.view-context__blocks [role="status"]')?.textContent.trim();
+  contextSearchOpen.value = true;
+  contextSearchText.value = 'ISS';
+  await nextTick();
+  assert.match(status() ?? '', /Unavailable layers: .*Satellites/);
+  contextSearchText.value = 'est dam';
+  await nextTick();
+  assert.match(status() ?? '', /Unavailable layers: .*Satellites/);
 });

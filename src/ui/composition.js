@@ -73,6 +73,8 @@ import {
 export class StyleManager extends ApplicationShell {
   constructor(viewer, options = {}) {
     const weather = options.requestServices?.weather;
+    // When a host replaces the brief, its view centre should only reach a
+    // weather service that the host explicitly supplied.
     const hasRegionalOverride =
       typeof options.services?.fetchRegionalBrief === 'function';
     super(viewer, {

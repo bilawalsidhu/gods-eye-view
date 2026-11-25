@@ -1,4 +1,5 @@
 <script setup>
+import { storeToRefs } from 'pinia';
 import { nextTick, onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
 import { useLayerFinderStore } from '../../stores/layerFinder.js';
 import { msg, t } from '../../../i18n/index.js';
@@ -12,13 +13,7 @@ const props = defineProps({
 });
 
 const store = useLayerFinderStore();
-const finder = computed(() => store.activeFinder);
-const selection = computed(() => finder.value.selection);
-const searching = computed(() => finder.value.searching);
-const filtering = computed(() => finder.value.filtering);
-const categories = computed(() => finder.value.categories);
-const shown = computed(() => finder.value.shown);
-const narrowed = computed(() => finder.value.narrowed);
+const { selection, searching, filtering, categories, shown, narrowed } = storeToRefs(store);
 const suggestionChip = ref(null);
 const SHOWS = [
   { id: 'all', label: msg('All layers') },
@@ -31,8 +26,8 @@ const categoryLabel = computed(
 );
 async function toggleSearch(event) {
   const doc = event.currentTarget.ownerDocument;
-  finder.value.searching = !searching.value;
-  if (!searching.value) finder.value.select({ query: '' });
+  store.searching = !searching.value;
+  if (!searching.value) store.select({ query: '' });
   await nextTick();
   if (searching.value) doc.getElementById('layer-finder-input')?.focus();
 }
@@ -41,8 +36,8 @@ async function toggleSearch(event) {
 async function closeSearch(event) {
   event.preventDefault();
   const doc = event.currentTarget.ownerDocument;
-  finder.value.searching = false;
-  finder.value.select({ query: '' });
+  store.searching = false;
+  store.select({ query: '' });
   await nextTick();
   doc.getElementById('layer-finder-search-btn')?.focus();
 }
@@ -54,7 +49,7 @@ const filterEl = ref(null);
 const menuEl = ref(null);
 const options = () => [...(menuEl.value?.querySelectorAll('button') || [])];
 async function toggleFilter() {
-  finder.value.filtering = !filtering.value;
+  store.filtering = !filtering.value;
   if (!filtering.value) return;
   await nextTick();
   const menu = menuEl.value;
@@ -68,7 +63,7 @@ async function toggleFilter() {
   (menu.querySelector('[aria-pressed="true"]') || options()[0])?.focus();
 }
 function closeFilter({ refocus = false } = {}) {
-  finder.value.filtering = false;
+  store.filtering = false;
   if (refocus) filterEl.value?.ownerDocument.getElementById('layer-finder-filter-btn')?.focus();
 }
 function onMenuKey(event) {
@@ -95,11 +90,11 @@ function onOutside(e) {
     closeFilter();
 }
 function pickCategory(key) {
-  finder.value.select({ category: selection.value.category === key ? '' : key });
+  store.select({ category: selection.value.category === key ? '' : key });
 }
 async function showAllLayers(event) {
   const doc = event.currentTarget.ownerDocument;
-  finder.value.clearAll();
+  store.clearAll();
   await nextTick();
   doc.getElementById('layer-finder-filter-btn')?.focus();
 }
@@ -133,7 +128,7 @@ if (props.part === 'buttons') {
       <span v-if="filtering" id="layer-finder-menu" ref="menuEl" class="layer-finder__menu" role="group" :aria-label="t('Filter layers')" @keydown="onMenuKey">
         <span role="group" :aria-label="t('Status')">
           <span class="layer-finder__menu-head" aria-hidden="true">{{ t('Status') }}</span>
-          <UiButton v-for="s in SHOWS" :key="s.id" :pressed="selection.show === s.id" pressed-class="active" @click="finder.select({ show: s.id })">
+          <UiButton v-for="s in SHOWS" :key="s.id" :pressed="selection.show === s.id" pressed-class="active" @click="store.select({ show: s.id })">
             <UiIcon :name="selection.show === s.id ? 'radio_button_checked' : 'radio_button_unchecked'" :size="null" />{{ t(s.label) }}
           </UiButton>
         </span>
@@ -147,14 +142,14 @@ if (props.part === 'buttons') {
     </span>
   </template>
   <div v-else-if="searching || narrowed" class="layer-finder__bar">
-    <UiSearchField v-if="searching" :model-value="selection.query" @update:model-value="finder.select({ query: $event })" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="closeSearch" />
-    <UiButton v-if="selection.show !== 'all'" class="layer-finder__chip" @click="finder.select({ show: 'all' })">
+    <UiSearchField v-if="searching" :model-value="selection.query" @update:model-value="store.select({ query: $event })" tag="label" class="layer-finder__field" input-id="layer-finder-input" :label="t('Search layers')" :placeholder="t('Search layers…')" @escape="closeSearch" />
+    <UiButton v-if="selection.show !== 'all'" class="layer-finder__chip" @click="store.select({ show: 'all' })">
       {{ selection.show === 'on' ? t('On') : t('Off') }}<UiIcon name="close" :size="null" />
     </UiButton>
     <UiButton v-if="selection.picked.length" ref="suggestionChip" class="layer-finder__chip" :label="`${t('Suggested')} · ${t('Show all layers')}`" :title="t('Show all layers')" @click="showAllLayers">
       {{ t('Suggested') }}<UiIcon name="close" :size="null" />
     </UiButton>
-    <UiButton v-if="selection.category" class="layer-finder__chip" @click="finder.select({ category: '' })">
+    <UiButton v-if="selection.category" class="layer-finder__chip" @click="store.select({ category: '' })">
       {{ categoryLabel }}<UiIcon name="close" :size="null" />
     </UiButton>
     <p v-if="narrowed && shown === 0" class="layer-finder__empty" role="status">{{ t('No layers match') }}</p>

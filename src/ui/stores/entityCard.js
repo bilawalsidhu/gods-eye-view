@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { markRaw, ref, shallowRef, triggerRef } from 'vue';
-import { shownLayerName, sourceLabel } from '../layerNames.js';
+import { shownLayerName, layerSourceText } from '../layerNames.js';
 import {
   alertsNear,
   describeEntity,
@@ -149,21 +149,19 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /** Whether the last view came from a camera still moving (see setView). */
   const viewMoving = ref(false);
   const inspector = shallowRef({ shown: false, mountId: null });
-  let readInspectorVisibility;
   const inspectorRows = shallowRef([]);
   const inspectorPulse = ref(0);
   const viewWeather = shallowRef(null);
   let timer = null;
 
-  function setViewContextShown(shown, mountId, readVisibility) {
-    readInspectorVisibility = mountId === null ? undefined : readVisibility;
+  function setViewContextShown(shown, mountId) {
     if (inspector.value.shown === shown && inspector.value.mountId === mountId)
       return;
     inspector.value = { shown, mountId };
   }
 
   function readViewContextShown() {
-    return inspector.value.shown && (readInspectorVisibility?.() ?? true);
+    return inspector.value.shown;
   }
 
   function publishInspectorRows(rows) {
@@ -266,12 +264,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     }
     const dm = shell.value?.dataManager?.();
     const layer = dm?.getAll?.().find((row) => row.id === current.layerId);
-    const stats = layer?.stats || {};
-    const raw =
-      stats.sourceVerbatim === true && stats.source
-        ? stats.source
-        : sourceLabel(stats.source || layer?.source);
-    return raw || '';
+    return layerSourceText(layer) || '';
   }
   const canCockpit = () => Boolean(shell.value?.canCockpit?.(card.value));
   function cockpit() {
@@ -306,19 +299,17 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     return layerMatches(dm, layerId, area);
   }
 
-  const roundTo = (n, step) =>
-    Number.isFinite(n) ? Math.round(n / step) : 'x';
   const exactNumber = (n) => (Number.isFinite(n) ? n : 'x');
-  function viewKey(where, numberKey) {
+  function viewKey(where) {
     const rect = where.rect
       ? [where.rect.west, where.rect.south, where.rect.east, where.rect.north]
-          .map((n) => numberKey(n, 0.001))
+          .map(exactNumber)
           .join(',')
       : '';
     const eye = where.eye
-      ? `${numberKey(where.eye.lat, 0.0001)},${numberKey(where.eye.lon, 0.0001)}`
+      ? `${exactNumber(where.eye.lat)},${exactNumber(where.eye.lon)}`
       : '';
-    return `${numberKey(where.center.lat, 0.0001)},${numberKey(where.center.lon, 0.0001)},${numberKey(where.heightM, 10)}|${rect}|${eye}`;
+    return `${exactNumber(where.center.lat)},${exactNumber(where.center.lon)},${exactNumber(where.heightM)}|${rect}|${eye}`;
   }
   /** How long a moving layer's rows are kept, from what its last read cost. */
   const movingWait = (costMs) =>
@@ -330,7 +321,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /**
    * Reads each layer that is on on its own, keeping each one's answer in
    * `cache` (per layer: `{place, options, revision, value, at, costMs}`)
-   * while its key holds: the exact place (rounded while moving), the options
+   * while its key holds: the exact place, the options
    * and the layer's update time, count and optional records revision. A refresh
    * from another layer never rereads it. Moving items (satellites, aircraft)
    * are also read again once their answer expires, since satellites stamp a
@@ -371,10 +362,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           );
       const same =
         kept && kept.options === options && kept.revision === revision;
-      const samePlace =
-        kept &&
-        (kept.place.exact === place.exact ||
-          (moving && kept.place.rounded === place.rounded));
+      const samePlace = kept && kept.place === place;
       if (same && (kept.failed || kept.usedFallback)) {
         if (samePlace && now - kept.at < INSPECTOR_PULSE_MS) continue;
       } else if (same) {
@@ -445,7 +433,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     const changed = readLayers(
       cache,
       rows,
-      { exact: viewKey(where, exactNumber), rounded: viewKey(where, roundTo) },
+      viewKey(where),
       JSON.stringify([hemisphere, query, limit, getLocale()]),
       (row, onSnapshotFallback) =>
         viewSummaryForLayer(dm, row, where.rect, where.center, {
@@ -456,10 +444,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
           heightM: where.heightM,
           eye: where.eye,
           throwOnReadError: true,
-          // The Omnibar can stay open without Inspector pulses. Keep its
-          // ordinary viewport records if the optional snapshot is unavailable.
-          fallbackOnSnapshotError: !hemisphere,
-          onSnapshotFallback: hemisphere ? onSnapshotFallback : undefined,
+          onSnapshotFallback,
         }),
     );
     // Layers with the most in view first; ties keep the layer order.
@@ -596,10 +581,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       (row) => !excludeLayers.includes(row.id),
     );
     const layers = rows.map((row) => row.id).join('|');
-    const place = {
-      exact: `${lat},${lon}`,
-      rounded: `${roundTo(lat, 0.0001)},${roundTo(lon, 0.0001)}`,
-    };
+    const place = `${lat},${lon}`;
     const changed = readLayers(
       nearbyMemo,
       rows,

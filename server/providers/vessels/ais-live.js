@@ -159,12 +159,10 @@ export function aisLiveProxy() {
   return {
     name: 'ais-live-proxy',
     api: {
-      // Reading the store leaves the stream alone. Only worldwide coverage
-      // matches the scope of the count Context shows.
+      // Reading the store leaves the stream alone. Only rows received
+      // under the worldwide subscription count.
       readLayerCount: () =>
-        process.env.AISSTREAM_API_KEY && aisSubscriptionIsWorldwide()
-          ? aisStreamVesselCount()
-          : null,
+        process.env.AISSTREAM_API_KEY ? aisStreamVesselCount() : null,
     },
     configureServer(server) {
       install(server.middlewares);
@@ -402,11 +400,7 @@ function aisStreamSubscription() {
  * Whether the stream subscribes to the default worldwide box. Unset or
  * unreadable AISSTREAM_BOUNDING_BOXES falls back to that box.
  */
-function aisSubscriptionIsWorldwide(
-  boxes = parseJsonEnv('AISSTREAM_BOUNDING_BOXES', AISSTREAM_DEFAULT_BBOXES, {
-    warn: false,
-  }),
-) {
+function aisSubscriptionIsWorldwide(boxes) {
   return JSON.stringify(boxes) === JSON.stringify(AISSTREAM_DEFAULT_BBOXES);
 }
 

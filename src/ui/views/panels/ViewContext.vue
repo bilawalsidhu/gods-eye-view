@@ -1,4 +1,5 @@
 <script setup>
+import { coordinateText } from '../../coordinateText.js';
 import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, onUpdated, ref, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText } from '../../contextSearch.js';
@@ -7,13 +8,13 @@ import { countryName, nearestCity } from '../../../data/wikidataCities.js';
 import { weatherPoint } from '../../viewWeather.js';
 import { INSPECTOR_PULSE_MS, isGlobeView, useEntityCardStore } from '../../stores/entityCard.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
-import { PANEL_LABEL_KEYS, shownLayerName, sourceLabel } from '../../layerNames.js';
+import { PANEL_LABEL_KEYS, shownLayerName, layerSourceText } from '../../layerNames.js';
 import { translateFeedError, translateStatusMessage } from '../../statusText.js';
 import { entityKind } from '../../../data/entityContext.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
-import { compassName, weatherLook } from '../../spotConditions.js';
-import { clockLine, contextAgeText, dayLengthMinutes, daylightShare, utcClock } from '../../contextTime.js';
-import { distanceText } from '../../distanceText.js';
+import { weatherFacts, weatherLook } from '../../spotConditions.js';
+import { clockLine, contextAgeText, dayLengthMinutes, utcClock } from '../../contextTime.js';
+import { approximatePosition, distanceText } from '../../distanceText.js';
 import { suggestLayers } from '../../layerSuggestions.js';
 import { useLayerFinderStore } from '../../stores/layerFinder.js';
 import UiButton from '../../kit/UiButton.vue';
@@ -37,7 +38,7 @@ const { panels } = storeToRefs(chrome);
 const hasDataLayers = computed(() => Boolean(panels.value['data-panel']));
 const { view, viewWeather } = storeToRefs(store);
 const counts = useLayerCountsStore();
-const emit = defineEmits(['mounted', 'unmounting', 'keyboardSelection']);
+const emit = defineEmits(['keyboardSelection']);
 const tick = ref(0);
 // Resample when Context becomes visible, before the next periodic tick.
 const inspectorNow = computed(() => {
@@ -55,10 +56,8 @@ onMounted(() => {
     tick.value++;
     store.pulseInspector();
   }, INSPECTOR_PULSE_MS);
-  emit('mounted');
 });
 onBeforeUnmount(() => {
-  emit('unmounting');
   clearInterval(timer);
 });
 
@@ -90,12 +89,12 @@ const placeName = computed(() => {
   if (!at || !city || lookup.key !== placeKey(at)) return t('This view');
   const country = countryName(city.country, getLocale());
   const label = country && country !== city.name ? `${city.name}, ${country}` : city.name;
-  return city.latitude === at.lat && city.longitude === at.lon ? label : t('Near {place}', { place: label });
+  return t('Near {place}', { place: label });
 });
 const centerCoordinates = computed(() => {
   const at = view.value?.center;
   if (!at) return '';
-  return `${Math.abs(at.lat).toFixed(3)}°${at.lat >= 0 ? 'N' : 'S'}  ${Math.abs(at.lon).toFixed(3)}°${at.lon >= 0 ? 'E' : 'W'}`;
+  return coordinateText(at.lat, at.lon);
 });
 const weather = computed(() => viewWeather.value?.reading ?? null);
 const weatherFailed = computed(() => Boolean(viewWeather.value?.failed && !viewWeather.value.pending));
@@ -117,9 +116,7 @@ const cameraText = computed(() => {
   return m >= 10_000 ? t('{n} km', { n: formatNumber(Math.round(m / 1000)) }) : t('{n} m', { n: formatNumber(Math.round(m)) });
 });
 
-// The layers that are on, with their feed state: a dot on each count tile,
-// and a line under the tiles for a feed in trouble.
-// These scenes show state on their tiles. Evidence and places appear in Nearby.
+// At globe view these scenes show their state on their tile, not a count.
 const INCIDENT_SCENES = new Set(['bhote-koshi-2026', 'bhote-koshi-locator']);
 // Space Missions keeps its own list (the roster), not the layer manager's:
 // while it is on, its one tile counts that list, and the Space Missions
@@ -144,7 +141,7 @@ const layerRows = computed(() =>
     const presentation = presentLayerRow(row);
     const { tone } = presentation;
     const stats = row.stats || {};
-    const source = stats.sourceVerbatim ? stats.source : sourceLabel(stats.source || row.source);
+    const source = layerSourceText(row);
     const status = translateStatusMessage(stats.statusMessage || stats.loadingLabel || stats.coverage);
     const error = translateFeedError(stats.error || stats.lastError || stats.managerRefreshError);
     const words = inspectorFeedLabel(tone);
@@ -194,7 +191,7 @@ const valueTiles = computed(() => {
     // "No value" only for a real empty reading.
     const observed = layer.id === 'air-quality' || layer.id === 'gnss-integrity';
     const age = observed && Number.isFinite(found?.at)
-      ? t('Updated {age}', { age: contextAgeText(Math.max(0, Date.now() - found.at)) })
+      ? t('Updated {age}', { age: contextAgeText(Date.now() - found.at) })
       : '';
     return [{ ...layer, value: found?.value || '—', detail: found?.reason || found?.detail || (found?.value ? '' : t('No value at the centre of the view')), age }];
   });
@@ -292,7 +289,7 @@ const tiles = computed(() => {
         if (layer.id === 'cctv' && layer.total !== null) return { ...layer, count: layer.total };
         // Fields, overlays and incident scenes use their state here.
         if (INCIDENT_SCENES.has(layer.id) || layerKind(layer.id) !== 'items') return { ...layer, count: null, state: stateText(layer) };
-        // The wildlife density grid loads independently of selectable observations.
+        // The density grid loads separately, so the tile counts only selectable observations.
         if (layer.id === 'wildlife-sightings') {
           const count = store.layerModule(layer.id)?.getInspectableCount?.() ?? null;
           return { ...layer, count };
@@ -332,15 +329,14 @@ const countStatus = (tile) => {
 };
 const countText = (tile) => countStatus(tile) || (tile.count === null ? '…' : formatNumber(tile.count));
 // At globe view each layer's block splits its count by kind (airliners,
-// military, cargo; container ships, tankers), as a bar with its leading kinds
-// named under it.
+// military, cargo; container ships, tankers), with a label for each segment.
 const BAR_SPLITS = ['Type', 'Class', 'Magnitude', 'Mode'];
 // Splitting a layer reads every record it holds (a satellite catalogue is
-// propagated to do it), so each layer's bar is worked out at most every 30 s.
+// propagated to do it), so reuse the bar for 30 s while its count holds.
 const BAR_KEEP_MS = 30_000;
 function kindBar(layerId, count) {
   const kept = bars.get(layerId);
-  if (kept && Date.now() - kept.at < BAR_KEEP_MS) return kept.count === count ? kept.bar : null;
+  if (kept && kept.count === count && Date.now() - kept.at < BAR_KEEP_MS) return kept.bar;
   const found = store.breakdown(layerId);
   const bar = found && (found.total === count || (layerId === 'satellites' && found.total < count))
     ? splitBar(found)
@@ -350,8 +346,9 @@ function kindBar(layerId, count) {
 }
 function splitBar(found) {
   if (!found?.total) return null;
-  const split = BAR_SPLITS.map((title) => found.splits.find((one) => one.title === title)).find(Boolean) || found.splits[0];
-  if (!split?.parts?.length || split.parts.length < 2) return null;
+  const usable = found.splits.filter((one) => one.parts?.length >= 2);
+  const split = BAR_SPLITS.map((title) => usable.find((one) => one.title === title)).find(Boolean) || usable[0];
+  if (!split) return null;
   const total = split.parts.reduce((sum, part) => sum + part.count, 0);
   return {
     total,
@@ -371,10 +368,9 @@ function listOf(parts) {
     return parts.join(', ');
   }
 }
-// At globe view, under each layer's block: the three of its items nearest
-// the centre of the view on the visible hemisphere, to pick from when the
-// globe's icons are too small to click. At this height the Inspector uses
-// the visible hemisphere, while the omnibar uses the viewport bounds.
+// At globe view, each layer lists its nearest visible items (three, or up to
+// 12 while searching) for selection when the icons are small. The omnibar
+// uses the viewport instead.
 const globeGroups = computed(() => {
   if (!store.inspector.shown) return {};
   void tick.value;
@@ -415,16 +411,15 @@ onUpdated(() => {
   (sameRow || group[Math.min(was.index, group.length - 1)] || block || fallback)?.focus?.();
 });
 
-const nearbyLists = computed(() => lists.value.filter((list) => !list.readFailed));
 const searchStatus = computed(() => {
   if (!contextNeedle.value) return '';
   const globe = globeView.value;
-  const unavailable = tiles.value.filter((tile) => globe ? globeGroups.value[tile.id]?.readFailed : tile.readFailed);
+  const unavailable = tiles.value.filter((tile) => tile.tone === 'unavailable' || (globe ? globeGroups.value[tile.id]?.readFailed : tile.readFailed));
   if (unavailable.length)
     return t('Unavailable layers: {layers}', { layers: listOf(unavailable.map((tile) => tile.name)) });
   if (globe)
     return globeTiles.value.length ? '' : tn(0, '{n} results', '{n} results', { n: formatNumber(0) });
-  return nearbyLists.value.some((list) => list.items.length)
+  return lists.value.some((list) => list.items.length)
     ? ''
     : t('Nothing nearby matches “{text}”.', { text: contextSearchText.value.trim() });
 });
@@ -432,7 +427,7 @@ const searchStatus = computed(() => {
 const look = computed(() => weatherLook(weather.value?.weatherCode));
 // The weather block with layers on, zoomed in, from the same reading (no
 // read of its own): the temperature and conditions, then wind, cloud,
-// visibility and rain, as a selected item's card shows them. A reading older
+// visibility and precipitation, as a selected item's card shows them. A reading older
 // than half an hour (the server keeps one through an outage) says its age.
 const WEATHER_STALE_MS = 30 * 60_000;
 const weatherAge = computed(() => {
@@ -445,26 +440,10 @@ const roundOf = (n) => (Number.isFinite(n) ? Math.round(n) : null);
 const weatherNow = computed(() => {
   const now = weather.value;
   if (!Number.isFinite(now?.temperatureC)) return null;
-  const facts = [];
-  if (Number.isFinite(now.windKph)) {
-    const speed = t('{n} km/h', { n: formatNumber(roundOf(now.windKph)) });
-    facts.push({
-      label: t('Wind'),
-      value: Number.isFinite(now.windDirectionDeg) ? t('{speed} {direction}', { speed, direction: t(compassName(now.windDirectionDeg)) }) : speed,
-    });
-  }
-  if (Number.isFinite(now.cloudCoverPct)) facts.push({ label: t('Cloud'), value: t('{n}%', { n: formatNumber(roundOf(now.cloudCoverPct)) }) });
-  if (Number.isFinite(now.visibilityM))
-    facts.push({
-      label: t('Visibility'),
-      value: t('{n} km', { n: formatNumber(now.visibilityM >= 10_000 ? roundOf(now.visibilityM / 1000) : Number((now.visibilityM / 1000).toFixed(1))) }),
-    });
-  if (Number.isFinite(now.precipitationMm))
-    facts.push({ label: t('Rain'), value: t('{n} mm', { n: formatNumber(now.precipitationMm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }) });
   return {
     temperature: t('{n} °C', { n: formatNumber(roundOf(now.temperatureC)) }),
     conditions: [t(look.value.label), Number.isFinite(now.apparentTemperatureC) ? t('feels {n}°', { n: formatNumber(roundOf(now.apparentTemperatureC)) }) : null].filter(Boolean).join(' · '),
-    facts,
+    facts: weatherFacts(now),
     stale: weatherAge.value,
   };
 });
@@ -480,6 +459,7 @@ const countTiles = computed(() => {
         id: layer.id,
         icon: layer.icon,
         name: t(layer.label),
+        hint: layer.hint ? t(layer.hint) : '',
         count: formatNumber(known.count),
         age: age === null ? '' : contextAgeText(age),
       };
@@ -498,10 +478,7 @@ function dayLength(minutes, display) {
 const emptyFacts = computed(() => {
   const time = inspectorNow.value;
   if (globeView.value)
-    return [
-      { label: t('UTC'), value: utcClock(time) },
-      { label: t('Daylight'), value: t('{n}%', { n: formatNumber(Math.round(daylightShare() * 100)) }) },
-    ];
+    return [{ label: t('UTC'), value: utcClock(time) }];
   const facts = [];
   const now = weather.value;
   const failure = weatherFailed.value ? t('No weather reading here.') : '';
@@ -528,7 +505,7 @@ function revealDataLayers() {
   if (panels.value['data-panel']?.collapsed !== false) chrome.act('toggle', 'data-panel');
 }
 function openDataLayers() {
-  finder.activeFinder.clearAll();
+  finder.clearAll();
   revealDataLayers();
 }
 
@@ -544,7 +521,7 @@ const suggestions = computed(() => {
 });
 function openSuggested() {
   revealDataLayers();
-  finder.activeFinder.pick(suggestions.value.map((layer) => layer.id));
+  finder.pick(suggestions.value.map((layer) => layer.id));
 }
 
 </script>
@@ -569,7 +546,7 @@ function openSuggested() {
       <template v-if="countTiles.length">
         <h4 class="view-context__label">{{ t('Worldwide, last known') }}</h4>
         <div class="view-context__tiles view-context__tiles--counts">
-          <div v-for="tile in countTiles" :key="tile.id" class="view-context__tile" :data-layer="tile.id" :title="tile.age ? t('Last known {age}', { age: tile.age }) : undefined">
+          <div v-for="tile in countTiles" :key="tile.id" class="view-context__tile" :data-layer="tile.id" :title="[tile.hint, tile.age && t('Last known {age}', { age: tile.age })].filter(Boolean).join(' · ') || undefined">
             <span class="view-context__tile-name">
               <UiIcon :name="tile.icon" :size="null" />
               <span>{{ tile.name }}</span>
@@ -622,7 +599,7 @@ function openSuggested() {
         </div>
       </div>
 
-      <h4 v-if="tiles.length || sideTiles.length" class="view-context__label">{{ globeView ? t('Layers on') : t('Within {radius}', { radius: radiusText }) }}</h4>
+      <h4 v-if="tiles.length || (globeView && sideTiles.length)" class="view-context__label">{{ globeView ? t('Layers on') : t('Within {radius}', { radius: radiusText }) }}</h4>
       <!-- Search status stays visible when search hides the local tiles.
            In globe view this also contains the layer results and focus target. -->
       <div v-if="globeView || searchStatus" :class="{ 'view-context__blocks': globeView }" :tabindex="globeView ? -1 : undefined">
@@ -640,10 +617,10 @@ function openSuggested() {
               <span v-for="part in tile.bar.parts" :key="part.label" :data-tone="part.tone" :style="{ flexGrow: part.share }"></span>
             </div>
             <p class="view-context__bar-key">
-              <span v-for="part in tile.bar.parts.slice(0, 3)" :key="part.label" :data-tone="part.tone">{{ t(part.label) }} {{ formatNumber(part.count) }}</span>
+              <span v-for="part in tile.bar.parts" :key="part.label" :data-tone="part.tone">{{ t(part.label) }} {{ formatNumber(part.count) }}</span>
             </p>
             <p v-if="tile.id === 'satellites' && tile.bar.total !== tile.count" class="view-context__bar-key">
-              {{ t('Of {n} read, {total} loaded', { n: formatNumber(tile.bar.total), total: formatNumber(tile.count) }) }}
+              {{ t('Breakdown covers {n} of {total} loaded', { n: formatNumber(tile.bar.total), total: formatNumber(tile.count) }) }}
             </p>
           </template>
           <div v-if="globeGroups[tile.id]?.items.length" class="nearby-lists view-context__block-rows">
@@ -651,14 +628,14 @@ function openSuggested() {
               <li v-for="(item, index) in globeGroups[tile.id].items" :key="item.key">
                 <UiButton :data-row-key="item.key" :data-row-layer="tile.id" :data-row-index="index" @click="selectRow(item, $event)">
                   <span class="nearby-lists__name">{{ item.title }}</span>
-                  <span class="nearby-lists__meta">{{ distanceText(item.distanceKm, item.identity.record?.obscured === true) }}</span>
+                  <span class="nearby-lists__meta">{{ distanceText(item.distanceKm, approximatePosition(item.identity.record)) }}</span>
                 </UiButton>
               </li>
             </ul>
           </div>
         </div>
       </div>
-      <div v-if="!globeView" class="view-context__tiles">
+      <div v-if="!globeView && tiles.length" class="view-context__tiles">
         <div v-for="tile in tiles" :key="tile.id" class="view-context__tile" :data-layer="tile.id">
           <span class="view-context__tile-name">
             <i class="view-context__dot" :class="`view-context__dot--${tile.tone}`" role="img" :aria-label="tile.toneText" :title="tile.toneText"></i>
@@ -669,6 +646,9 @@ function openSuggested() {
           <small v-if="tile.worldwide" class="view-context__tile-age">{{ t('Worldwide') }}</small>
           <small v-else-if="tile.id === 'traffic' && Number.isFinite(tile.count) && !countStatus(tile)" class="view-context__tile-age">{{ t('Road segments') }}</small>
         </div>
+      </div>
+      <h4 v-if="!globeView && sideTiles.length" class="view-context__label">{{ t('At the centre of the view') }}</h4>
+      <div v-if="!globeView && sideTiles.length" class="view-context__tiles">
         <!-- Field and overlay layers show a local reading or feed state. -->
         <div v-for="tile in sideTiles" :key="tile.id" class="view-context__tile view-context__tile--value" :data-layer="tile.id" :title="tile.detail || undefined">
           <span class="view-context__tile-name">
@@ -684,13 +664,13 @@ function openSuggested() {
       <p v-for="layer in problems" :key="layer.id" class="view-context__problem">{{ layer.name }} · {{ layer.problem }}</p>
 
       <p v-if="globeView" class="view-context__hint">{{ t('Click anything on the globe to see its card.') }}</p>
-      <NearbyLists v-else :lists="nearbyLists" :title="t('Nearby · {radius}', { radius: radiusText })" @select="selectRow" />
+      <NearbyLists v-else :lists="lists" :title="t('Nearby · {radius}', { radius: radiusText })" @select="selectRow" />
     </template>
     <SuggestedLayers v-if="hasDataLayers" :layers="suggestions" @open="openSuggested" />
     <UiButton v-if="hasDataLayers && (contextNeedle || !suggestions.length)" class="view-context__pointer" @click="openDataLayers">
       <UiIcon name="layers" :size="null" />
-      <span class="view-context__pointer-text">{{ globeView ? t('Turn on layers to see the world now') : t('Turn on layers to see what is around') }}</span>
-      <span class="view-context__pointer-go">{{ t('Open') }} ›</span>
+      <span class="view-context__pointer-text">{{ anyOn ? t('Open Data Layers') : globeView ? t('Turn on layers to see the world now') : t('Turn on layers to see what is around') }}</span>
+      <span v-if="!anyOn" class="view-context__pointer-go">{{ t('Open') }} ›</span>
     </UiButton>
   </section>
 </template>

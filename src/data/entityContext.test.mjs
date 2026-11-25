@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { twoline2satrec } from 'satellite.js';
+import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { CONTEXT_LINES, contextLine } from './contextGeometry.js';
 import { createControls } from '../layers/awareness/controls.js';
@@ -591,7 +592,7 @@ test('the globe view counts only the cap a camera at its height can see', () => 
 });
 
 test('GeoJSON lines and points share the same Nearby radius threshold', () => {
-  const degreesAt = (km) => (km / 6371) * (180 / Math.PI);
+  const degreesAt = (km) => (km / EARTH_RADIUS_KM) * (180 / Math.PI);
   const near = { lat: degreesAt(24.99998), lon: 0 };
   const far = { lat: degreesAt(26), lon: 0 };
   const layerId = 'local-dams';

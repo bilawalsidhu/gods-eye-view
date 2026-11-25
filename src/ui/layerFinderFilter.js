@@ -1,30 +1,19 @@
-import { computed, ref, shallowReactive, shallowRef, watch } from 'vue';
+import { computed, ref, shallowRef, watch } from 'vue';
 
 const findersByContainer = new WeakMap();
-const presentedFinders = shallowReactive(new WeakMap());
 
-/** Pair the standard row container with the Finder owned by its view. */
+/** Pair the Data Layers row container with its view's Finder for LayerPanel.mount. */
 export function bindLayerFinder(container, finder) {
-  findersByContainer.set(container, finder);
-  return () => findersByContainer.delete(container);
-}
-
-export function layerFinderFor(container) {
-  return findersByContainer.get(container);
-}
-
-/** Keep the Finder that actually renders this list, including an injected one. */
-export function bindPresentedLayerFinder(container, finder) {
   const binding = { finder };
-  presentedFinders.set(container, binding);
+  findersByContainer.set(container, binding);
   return () => {
-    if (presentedFinders.get(container) === binding)
-      presentedFinders.delete(container);
+    if (findersByContainer.get(container) === binding)
+      findersByContainer.delete(container);
   };
 }
 
-export function finderForLayerRows(container) {
-  return presentedFinders.get(container)?.finder ?? layerFinderFor(container);
+export function layerFinderFor(container) {
+  return findersByContainer.get(container)?.finder;
 }
 
 const allLayers = () => ({ query: '', show: 'all', category: '', picked: [] });

@@ -17,7 +17,7 @@ export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
-import { finderForLayerRows } from '../ui/layerFinderFilter.js';
+import { layerFinderFor } from '../ui/layerFinderFilter.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import {
   distance as chordM,
@@ -3965,7 +3965,7 @@ function findDataLayerRow(layerId) {
 
 function focusDataLayerRow(row, layerId) {
   if (row.classList.contains('is-filtered'))
-    finderForLayerRows(row.parentElement)?.clearAll?.();
+    layerFinderFor(row.parentElement)?.clearAll?.();
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;

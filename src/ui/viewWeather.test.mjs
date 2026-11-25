@@ -43,7 +43,6 @@ function mountInspector(t, { regionalBrief, spotWeather, layers = [] } = {}) {
       : new Response('', { status: 503 }),
   );
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
-  let elapsed = 0;
   let wall = Date.parse('2026-11-21T12:00:00Z');
   t.mock.method(Date, 'now', () => wall);
   let visible = true;
@@ -93,7 +92,6 @@ function mountInspector(t, { regionalBrief, spotWeather, layers = [] } = {}) {
         writeState: layerCounts.publish,
         readShown: () => cards.inspector.shown,
       }),
-      weatherClock: { nowMonotonic: () => elapsed },
     },
   });
   const app = createApp(ContextView).use(pinia);
@@ -124,7 +122,6 @@ function mountInspector(t, { regionalBrief, spotWeather, layers = [] } = {}) {
       await nextTick();
     },
     async advance(ms = 1000) {
-      elapsed += ms;
       wall += ms;
       t.mock.timers.tick(ms);
       await nextTick();
@@ -453,17 +450,10 @@ function fixture(t) {
   const { reads, spotWeather } = weatherRequests();
   const publications = [];
   let input = { center: A, moving: false, shown: true, mountId: 1 };
-  let elapsed = 0;
   let visible = true;
-  let visibilityListener = null;
   const owner = createViewWeather({
     read: spotWeather,
-    nowMonotonic: () => elapsed,
     isPageVisible: () => visible,
-    onPageVisibility(listener) {
-      visibilityListener = listener;
-      return () => (visibilityListener = null);
-    },
     readCurrentInput: () => input,
     publish: (state) => publications.push(state),
   });
@@ -475,24 +465,19 @@ function fixture(t) {
     get state() {
       return publications.at(-1);
     },
-    get listening() {
-      return visibilityListener !== null;
-    },
     setInput(changes, { deliver = true } = {}) {
       input = { ...input, ...changes };
       if (deliver) owner.update(input);
     },
     setVisible(next) {
       visible = next;
-      visibilityListener?.();
     },
     advance(ms) {
-      elapsed += ms;
       t.mock.timers.tick(ms);
     },
     async finish(value) {
       reads.at(-1).resolve(value);
-      await Promise.resolve();
+      await new Promise((resolve) => setImmediate(resolve));
     },
   };
 }
@@ -551,6 +536,7 @@ test('a hung weather read times out, retries, and cannot overwrite the retry', a
   assert.equal(f.state.pending, true);
   assert.equal(f.reads[0].signal.aborted, false);
   f.advance(1);
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.reads[0].signal.reason?.name, 'TimeoutError');
   assert.equal(f.state.failed, true);
   assert.equal(f.state.pending, false);
@@ -568,10 +554,10 @@ test('a hung weather read times out, retries, and cannot overwrite the retry', a
   await f.finish({ weather: TOKYO });
   assert.equal(f.state.reading, TOKYO);
   assert.equal(f.state.failed, false);
-  assert.equal(f.reads[1].signal.aborted, false);
+  assert.equal(f.reads[1].signal.reason?.name, 'AbortError');
 
   f.reads[0].resolve({ weather: { ...TOKYO, temperatureC: 99 } });
-  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.state.reading, TOKYO);
 });
 
@@ -622,7 +608,7 @@ test('settle samples live eligibility and a late reply releases its attempt befo
 
   f.reads[0].resolve({ weather: TOKYO });
   f.setInput({ center: B }, { deliver: false });
-  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(f.reads[0].signal.aborted, true);
   assert.deepEqual(f.state, {
     reading: null,
@@ -642,7 +628,6 @@ test('settle samples live eligibility and a late reply releases its attempt befo
   f.owner.stop();
   await f.finish({ weather: TOKYO });
   assert.equal(f.reads[1].signal.aborted, true);
-  assert.equal(f.listening, false);
   assert.equal(f.state, lastPublication);
 });
 
@@ -656,8 +641,9 @@ test('a refresh retains weather through a hide and a failed refresh clears the l
   assert.equal(f.state.freshnessAt, Date.parse(retrievedAt));
 
   f.setInput({ shown: false, mountId: null });
-  f.setInput({ shown: true, mountId: 2 });
   f.advance(659_600);
+  f.owner.pulse();
+  f.setInput({ shown: true, mountId: 2 });
   f.owner.pulse();
   f.advance(400);
   assert.equal(f.reads.length, 1);

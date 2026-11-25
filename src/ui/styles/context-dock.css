@@ -38,6 +38,8 @@ body.context-docked #right-context-rail > .gev-panel-rail {
   display: none;
 }
 
+/* The Bhote Koshi panel stays beside the expanded column while open so its
+   evidence controls remain accessible. */
 body.context-docked
   #right-context-rail:not(.bhote-event-active)
   > :not(#global-context-panel):not(.gev-panel-rail) {
@@ -176,7 +178,7 @@ body.mobile-shell .context-dock-btn {
 }
 
 /* During a search, keep the radius and matching rows in view. A matching
-   globe group keeps its layer name and loaded total. */
+   globe group keeps its layer name and loaded total. The Data Layers pointer stays. */
 .context-searching
   :is(
     .spot-conditions__weather,

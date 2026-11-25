@@ -312,9 +312,8 @@ function vesselTypeFromAis(message, staticData = {}) {
 }
 
 /**
- * Context's nothing-on count: the vessels (not aids to navigation) the live
- * store holds that are still fresh, and the latest receive time. Null
- * when the stream has given none, as before it ever connected.
+ * Fresh vessels received under the worldwide subscription and the latest
+ * receive time. Excludes aids to navigation. Null when there are none.
  * @returns {?{count: number, at: number}}
  */
 export function aisStreamVesselCount() {

@@ -376,8 +376,7 @@ Inspector worldwide counts use the page-scoped
 `configureApplicationServices({ layerCounts })` adapter. To use another host
 with the same count protocol, build that adapter with
 `createApplicationRequestServices({ endpoints: { layerCounts: url } }).layerCounts`
-and configure it before mounting the app. Scene request services supply scene
-operations such as weather, while the page-scoped adapter owns these counts.
+and configure it before mounting the app.
 
 `ui/composition` supplies the default engines to the shell. Applications can
 supply a HUD implementation or request policy through control services. The
@@ -390,23 +389,23 @@ anything reads the page; `omitViews` names views the application leaves out,
 such as `provider-settings`, and their hosts are removed. Leaving out
 `layer-panels` also leaves out the scene sharing dialogs it draws. If the host
 supplies its own Data Layers markup, Context opens it without applying the
-stock Suggestions filter. Omitting `scene-chrome` removes the before/after imagery dividers (the imagery still splits,
-with no line or handle to move it), the status chips, the toast, the ORBIT
-indicator, the FPS readout, the Scene actions panel, the data-pack attribution
-cards, the wind inspection marker, the Space Missions replay vehicle, the
-full-globe celestial ring, the screen-space map annotations, the visible
-map target list and the Global Context compass. Omitting `command-dock`
-removes the voice control and its pointer reticle. Omitting `context` removes
-the right-side Context rail and the Space Missions and Bhote Koshi
-reconstruction panels.
-Omitting `intel-hud` removes the Intel HUD overlay (`#intel-hud`), whose readouts
-the HUD implementation publishes to the `gev-hud` store. An unknown
-view name is an error. An application that offers its own language choice
-starts and switches the language with the `./i18n` entry (`startPageLocale`,
-`followPageLocale`, `switchLocale`; see [I18N.md](./I18N.md)) and passes
-`localePicker: false` to `createApplicationControls` instead of editing the
-markup. Node tests that import application modules register the component
-loader with `node --import=<core package>/build/register-vue`.
+stock Suggestions filter. Omitting `scene-chrome` removes the before/after
+imagery dividers (the imagery still splits, with no line or handle to move
+it), the status chips, the toast, the ORBIT indicator, the FPS readout, the
+Scene actions panel, the data-pack attribution cards, the wind inspection
+marker, the Space Missions replay vehicle, the full-globe celestial ring,
+the screen-space map annotations, the visible map target list and the Global
+Context compass. Omitting `command-dock` removes the voice control and its
+pointer reticle. Omitting `context` removes the right-side Context rail and
+the Space Missions and Bhote Koshi reconstruction panels. Omitting `intel-hud`
+removes the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
+implementation publishes to the `gev-hud` store. An unknown view name is an
+error. An application that offers its own language choice starts and switches
+the language with the `./i18n` entry (`startPageLocale`, `followPageLocale`,
+`switchLocale`; see [I18N.md](./I18N.md)) and passes `localePicker: false` to
+`createApplicationControls` instead of editing the markup. Node tests that
+import application modules register the component loader with
+`node --import=<core package>/build/register-vue`.
 
 ### Cockpit subjects
 

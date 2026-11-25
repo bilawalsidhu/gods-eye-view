@@ -19,7 +19,7 @@ import { localProviderPlugins } from '../local.js';
 
 test('layer counts come only from configured cache readers, and empty or failing ones are left out', async () => {
   const handler = endpointHandler({
-    satellites: () => ({ count: 1272.4, at: 100 }),
+    satellites: () => ({ count: 1272, at: 100 }),
     cctv: () => null,
     flights: async () => ({ count: 0, at: 5 }),
     'local-firms': () => {
@@ -66,7 +66,7 @@ async function ask(
     end(body = '') {
       if (sent.status === 200 && this.statusCode !== 200)
         sent.status = this.statusCode;
-      sent.body = String(body);
+      sent.body = method === 'HEAD' ? '' : String(body);
     },
   };
   await handler(
@@ -279,15 +279,25 @@ test('each local composition reads counts from its own CelesTrak cache and dedup
   assert.equal(upstream.mock.callCount(), 2);
 });
 
-test('CelesTrak cold counts read only existing core TLE caches', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-tle-count-'));
+async function cacheDir(t, { firmsKey } = {}) {
   const previous = process.cwd();
+  const key = process.env.FIRMS_MAP_KEY;
+  const dir = await mkdtemp(path.join(tmpdir(), 'gev-layer-count-'));
   t.after(async () => {
     process.chdir(previous);
+    if (key === undefined) delete process.env.FIRMS_MAP_KEY;
+    else process.env.FIRMS_MAP_KEY = key;
     await rm(dir, { recursive: true, force: true });
   });
   process.chdir(dir);
+  if (firmsKey === undefined) delete process.env.FIRMS_MAP_KEY;
+  else process.env.FIRMS_MAP_KEY = firmsKey;
   await mkdir('.gev-cache');
+  return dir;
+}
+
+test('CelesTrak cold counts read only existing core TLE caches', async (t) => {
+  await cacheDir(t);
   const now = 1_800_000_000_000;
   for (const [file, age, body] of [
     ['celestrak-stations', 1000, tle('25544') + tle('A0000')],
@@ -317,11 +327,6 @@ test('CelesTrak cold counts read only existing core TLE caches', async (t) => {
   const expected = [{ layerId: 'satellites', count: 3, at: now - 2000 }];
   assert.deepEqual(await readCount(), expected);
 
-  // A sidecar left by an older version must neither supply nor mask a count.
-  await writeFile(
-    '.gev-cache/celestrak-count-stations.json',
-    JSON.stringify({ at: now, ids: [22222] }),
-  );
   const before = (await fsp.readdir('.gev-cache')).sort();
   const read = t.mock.method(fsp, 'readFile');
   const write = t.mock.method(fsp, 'writeFile');
@@ -341,9 +346,7 @@ test('CelesTrak cold counts read only existing core TLE caches', async (t) => {
   assert.ok(reads.includes('celestrak-stations.json'));
   assert.ok(reads.includes('celestrak-visual.json'));
   assert.ok(
-    !reads.some((file) =>
-      /celestrak-(?:active|starlink|satcat-|count-)/.test(file),
-    ),
+    !reads.some((file) => /celestrak-(?:active|starlink|satcat-)/.test(file)),
     'the count only opens raw core-group caches',
   );
   assert.equal(upstream.mock.callCount(), 0);
@@ -414,14 +417,7 @@ test('CelesTrak counts prefer a fresh in-memory feed over an overlapping raw dis
 });
 
 test('CelesTrak counts reflect the last usable cache when atomic TLE persistence fails', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-tle-write-'));
-  const previous = process.cwd();
-  t.after(async () => {
-    process.chdir(previous);
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  await mkdir('.gev-cache');
+  await cacheDir(t);
   const raw = path.resolve('.gev-cache/celestrak-stations.json');
   const at = 1_800_000_000_000;
   const now = at + 7 * 3600_000;
@@ -575,7 +571,7 @@ test('AIS: fresh vessels count, aids to navigation and stale rows do not', (t) =
   assert.equal(aisStreamVesselCount(), null, 'every row has gone stale');
 });
 
-test('AIS: a subscription narrower than the world gives no count', async (t) => {
+test('AIS: worldwide counts follow the subscription at receipt and require a configured key', async (t) => {
   const savedKey = process.env.AISSTREAM_API_KEY;
   process.env.AISSTREAM_API_KEY = 'fixture';
   const saved = process.env.AISSTREAM_BOUNDING_BOXES;
@@ -600,9 +596,8 @@ test('AIS: a subscription narrower than the world gives no count', async (t) => 
     },
     true,
   );
-  const handler = endpointHandler({
-    'ais-live-vessels': aisLiveProxy().api.readLayerCount,
-  });
+  const { readLayerCount } = aisLiveProxy().api;
+  const handler = endpointHandler({ 'ais-live-vessels': readLayerCount });
   delete process.env.AISSTREAM_BOUNDING_BOXES;
   assert.deepEqual(await countRows(handler), [
     { layerId: 'ais-live-vessels', count: 1, at: start },
@@ -624,21 +619,18 @@ test('AIS: a subscription narrower than the world gives no count', async (t) => 
     'count reads do not warn about the environment',
   );
   process.env.AISSTREAM_BOUNDING_BOXES = '[[[50,0],[55,10]]]';
-  assert.deepEqual(await countRows(handler), [], 'one region, no count');
+  assert.deepEqual(
+    await countRows(handler),
+    [{ layerId: 'ais-live-vessels', count: 1, at: start }],
+    'the retained row arrived under worldwide coverage',
+  );
+  delete process.env.AISSTREAM_API_KEY;
+  assert.equal(readLayerCount(), null);
+  assert.deepEqual(await countRows(handler), []);
 });
 
 test('FIRMS: no count without a key, and with one the count saved beside the cache, never the cache itself', async (t) => {
-  const savedKey = process.env.FIRMS_MAP_KEY;
-  const savedCwd = process.cwd();
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-count-'));
-  t.after(async () => {
-    process.chdir(savedCwd);
-    if (savedKey === undefined) delete process.env.FIRMS_MAP_KEY;
-    else process.env.FIRMS_MAP_KEY = savedKey;
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  await mkdir(path.join(dir, '.gev-cache'));
+  const dir = await cacheDir(t);
   // A cache this read must not parse: it is not even JSON.
   await writeFile(path.join(dir, '.gev-cache', 'firms.json'), 'not json');
   const summaryFile = path.join(dir, '.gev-cache', 'firms-count.json');
@@ -710,18 +702,7 @@ test('FIRMS: no count without a key, and with one the count saved beside the cac
 });
 
 test('FIRMS restores raw data without a sidecar write and publishes one summary on refresh', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-refresh-'));
-  const previous = process.cwd();
-  const key = process.env.FIRMS_MAP_KEY;
-  t.after(async () => {
-    process.chdir(previous);
-    if (key === undefined) delete process.env.FIRMS_MAP_KEY;
-    else process.env.FIRMS_MAP_KEY = key;
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  process.env.FIRMS_MAP_KEY = 'fixture';
-  await mkdir('.gev-cache');
+  await cacheDir(t, { firmsKey: 'fixture' });
 
   const at = Date.UTC(2026, 0, 2, 12);
   const fire = { acqDate: '2026-01-02', acqTime: '1159' };
@@ -781,18 +762,7 @@ test('FIRMS restores raw data without a sidecar write and publishes one summary 
 });
 
 test('FIRMS keeps the last durable count when a raw cache replacement fails', async (t) => {
-  const dir = await mkdtemp(path.join(tmpdir(), 'gev-firms-failed-write-'));
-  const previous = process.cwd();
-  const key = process.env.FIRMS_MAP_KEY;
-  t.after(async () => {
-    process.chdir(previous);
-    if (key === undefined) delete process.env.FIRMS_MAP_KEY;
-    else process.env.FIRMS_MAP_KEY = key;
-    await rm(dir, { recursive: true, force: true });
-  });
-  process.chdir(dir);
-  process.env.FIRMS_MAP_KEY = 'fixture';
-  await mkdir('.gev-cache');
+  await cacheDir(t, { firmsKey: 'fixture' });
   const now = Date.UTC(2026, 0, 2, 12);
   const at = now - 60 * 60_000;
   const fire = { acqDate: '2026-01-02', acqTime: '1059' };

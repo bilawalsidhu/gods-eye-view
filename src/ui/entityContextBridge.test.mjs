@@ -747,7 +747,7 @@ function inspectorFixture(
   t,
   { controlWeatherCompletion = false, onWeatherAbort } = {},
 ) {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
   const pinia = createPinia();
   const store = useEntityCardStore(pinia);
   const countStore = useLayerCountsStore(pinia);
@@ -772,8 +772,6 @@ function inspectorFixture(
   const weatherRequests = [];
   const countRequests = [];
   const countUpdates = [];
-  const visibilityListeners = new Set();
-  const weatherTimers = new Set();
   let elapsed = 0;
   let samples = 0;
   function port(requests, fields) {
@@ -786,8 +784,6 @@ function inspectorFixture(
       signal.addEventListener('abort', onWeatherAbort, { once: true });
     return port(weatherRequests, { lat, lon, signal });
   };
-  // This fixture can resolve the exact promise awaited by the owner, before
-  // the bridge's queued update. Other tests use the real store action.
   if (controlWeatherCompletion) store.readWeather = readWeather;
   function managerFor(rows) {
     const listeners = new Set();
@@ -830,25 +826,6 @@ function inspectorFixture(
             return counts.update(snapshot);
           },
         },
-        weatherClock: {
-          nowMonotonic: () => elapsed,
-          onPageVisibility(listener) {
-            visibilityListeners.add(listener);
-            return () => visibilityListeners.delete(listener);
-          },
-          setTimeout(callback, ms) {
-            const timer = setTimeout(() => {
-              weatherTimers.delete(timer);
-              callback();
-            }, ms);
-            weatherTimers.add(timer);
-            return timer;
-          },
-          clearTimeout(timer) {
-            weatherTimers.delete(timer);
-            clearTimeout(timer);
-          },
-        },
       },
     });
     return disconnect;
@@ -875,8 +852,6 @@ function inspectorFixture(
     weatherRequests,
     countRequests,
     countUpdates,
-    visibilityListeners,
-    weatherTimers,
     connect,
     get disconnect() {
       return disconnect;
@@ -1279,18 +1254,18 @@ test('a weather completion that sees cell B releases its slot even when delivery
   );
   const [, retry] = f.weatherRequests;
   retry.resolve({ weather: reading });
-  await Promise.resolve();
+  await setImmediate();
   assert.deepEqual(f.store.viewWeather.reading, reading);
 });
 
 test('an abort listener that disposes the bridge cannot restore its previous weather', async (t) => {
   let dispose;
-  const f = inspectorFixture(t, { onWeatherAbort: () => dispose() });
-  dispose = f.disconnect;
+  const f = inspectorFixture(t, { onWeatherAbort: () => dispose?.() });
   await f.openAndRead();
   f.weatherRequests[0].resolve({ weather: reading });
   await setImmediate();
   assert.deepEqual(f.store.viewWeather.reading, reading);
+  dispose = f.disconnect;
   await f.advance(11 * 60_000);
   f.store.pulseInspector();
   await nextTick();
@@ -1318,7 +1293,6 @@ test('bridge replacement keeps saved counts, cancels both old requests, and wait
   f.disconnect();
   assert.ok(oldWeather.signal.aborted);
   assert.ok(oldCount.signal.aborted);
-  assert.equal(f.visibilityListeners.size, 0);
   assert.equal(f.cameraEvents.size, 0);
   assert.equal(f.store.viewWeather, null);
   assert.deepEqual(f.store.inspectorRows, []);
@@ -1359,10 +1333,7 @@ test('bridge replacement keeps saved counts, cancels both old requests, and wait
   f.pose.lat = 49;
   f.cameraEvents.get('moveEnd')();
   await nextTick();
-  assert.equal(f.weatherTimers.size, 1, 'new cell has a queued settle timer');
   f.disconnect();
-  assert.equal(f.weatherTimers.size, 0);
-  assert.equal(f.visibilityListeners.size, 0);
   const completedAttempt = f.countStore.state.lastAttemptAt;
   assert.notEqual(completedAttempt, null);
   f.connect();

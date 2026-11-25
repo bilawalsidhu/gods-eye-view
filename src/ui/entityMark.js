@@ -13,11 +13,7 @@ import {
 } from '../data/aircraftClass.js';
 import { aircraftIcon } from '../data/aircraftIcons.js';
 import { aidSprite, vesselSprite } from '../data/vesselSprites.js';
-import {
-  VESSEL_KINDS,
-  isAidToNavigation,
-  vesselKind,
-} from '../data/vesselTypes.js';
+import { isAidToNavigation, vesselKind } from '../data/vesselTypes.js';
 
 const VESSEL_LAYERS = new Set(['ais-live-vessels']);
 const AIRCRAFT_KINDS = new Set(Object.keys(AIRCRAFT_CLASS_LABELS));
@@ -64,14 +60,10 @@ export function markKind(layerId, source) {
 /**
  * The map sprite as an SVG data URI. Unknown kinds use the map's airliner
  * or default hull. Layers without sprites return an empty string.
- * @param {string} layerId
- * @param {string} [kind] From {@link markKind}.
- * @returns {string}
  */
 export function markSprite(layerId, kind = '') {
   if (isAircraftLayer(layerId))
     return aircraftIcon(AIRCRAFT_KINDS.has(kind) ? kind : 'airliner');
   if (!VESSEL_LAYERS.has(layerId)) return '';
-  if (kind === AID_MARK) return aidSprite();
-  return vesselSprite(VESSEL_KINDS.includes(kind) ? kind : 'other');
+  return kind === AID_MARK ? aidSprite() : vesselSprite(kind);
 }

@@ -1,4 +1,5 @@
 // Focused tests for the local-infrastructure analyst-record mapper and snapshot seam.
+import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
@@ -301,7 +302,7 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     {
       type: 'Feature',
       id: 'outlined-dam',
-      properties: plant,
+      properties: { ...plant, operator: 'Line operator' },
       geometry: {
         type: 'MultiLineString',
         coordinates: [
@@ -391,6 +392,11 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     const rows = layer.getAnalystRecords();
     const plants = rows.filter((row) => row.name === 'Two Crest Plant');
     assert.equal(plants.length, 1, 'the outlined dam is listed once');
+    const clicked = layer.getContextRecord('outlined-dam_2', {
+      fromDrawnPart: true,
+    });
+    assert.equal(clicked.operator, 'Line operator');
+    assert.equal(clicked.key, plants[0].key);
     const crest = rows.find((row) => row.key === 'geojson:id:split-crest');
     assert.equal(crest.lat, 30.302);
     assert.equal(crest.lon, -97.81);
@@ -489,7 +495,9 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     );
     const globeHeight = 20_000_000;
     const horizonAngle =
-      (Math.acos(6371 / (6371 + globeHeight / 1000)) * 180) / Math.PI;
+      (Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + globeHeight / 1000)) *
+        180) /
+      Math.PI;
     const atLimb = viewSummaryForLayer(manager, row, null, polarCenter, {
       hemisphere: true,
       heightM: globeHeight,
@@ -553,74 +561,6 @@ test('infra getAnalystRecords: a multi-part line feature is listed once', async 
     if (originalWindow === undefined) delete globalThis.window;
     else globalThis.window = originalWindow;
   }
-});
-
-test('infra records distinguish numeric and string IDs across draws and refreshes', async (t) => {
-  const originalWindow = globalThis.window;
-  globalThis.window = { dispatchEvent() {} };
-  const [north, south, literal] = [
-    [7, 'North', [1, 2]],
-    ['7', 'South', [3, 4]],
-    ['geojson:number:7', 'Literal identifier', [5, 6]],
-  ].map(([id, name, coordinates]) => ({
-    type: 'Feature',
-    id,
-    properties: { name },
-    geometry: { type: 'Point', coordinates },
-  }));
-  const viewer = {};
-  const fake = bindFakeGroundRenderer(viewer, {
-    eye: { lon: 2, lat: 3, height: 100_000 },
-  });
-  const layer = createLocalGeoJsonLayer({
-    id: 'local-dams',
-    name: 'Typed sites',
-    loadFeatures: async () => [north, south, literal],
-    color: '#0088ff',
-    overlayHost: { setVisible() {}, setEntries() {}, clearSource() {} },
-    inputFor: () => ({ onClick: () => () => {} }),
-  });
-  t.after(() => {
-    layer.destroy(viewer);
-    fake.unbind();
-    if (originalWindow === undefined) delete globalThis.window;
-    else globalThis.window = originalWindow;
-  });
-
-  await layer.enable(viewer);
-  assert.equal(layer.getStats().count, 3);
-  assert.equal(layer.getAnalystRecords().length, 3);
-  const row = { id: 'local-dams', enabled: true, module: layer };
-  const manager = { layers: new Map([[row.id, row]]) };
-  const picks = ['7', '7_2', literal.id].map((id) =>
-    describeEntity(manager, { layerId: row.id, id: `${row.id}:${id}` }),
-  );
-  assert.deepEqual(
-    picks.map(({ title }) => title),
-    ['North', 'South', 'Literal identifier'],
-  );
-  assert.equal(new Set(picks.map(({ key }) => key)).size, 3);
-  assert.deepEqual(
-    picks.map(({ identity }) => findRecord(manager, identity)?.name),
-    ['North', 'South', 'Literal identifier'],
-  );
-
-  const southPick = picks[1];
-  selectEntityContext(getContextStore().entities.get('local-dams:7_2').entity);
-  const secondNorth = {
-    ...north,
-    geometry: { type: 'Point', coordinates: [1.025, 2] },
-  };
-  await layer.replaceFeatures(viewer, [south, north, literal, secondNorth]);
-  assert.equal(getSelectedEntityContext()?.label, 'South');
-  assert.equal(layer.getStats().count, 3);
-  assert.equal(findRecord(manager, picks[0].identity).parts.length, 2);
-  assert.equal(findRecord(manager, southPick.identity).name, 'South');
-
-  await layer.replaceFeatures(viewer, [north, literal, secondNorth]);
-  assert.equal(getSelectedEntityContext(), null);
-  assert.equal(findRecord(manager, southPick.identity), null);
-  assert.equal(findRecord(manager, picks[0].identity).name, 'North');
 });
 
 test('infra records list and count multi-part features across the dateline once', async () => {

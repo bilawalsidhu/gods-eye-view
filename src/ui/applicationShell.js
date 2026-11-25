@@ -1,9 +1,6 @@
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
-import {
-  getConfiguredLayerCounts,
-  getLayerCountsServiceBinding,
-} from '../services/application.js';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -241,8 +238,6 @@ export class StyleManager extends ShellFacade {
           getCounts: getConfiguredLayerCounts,
           readState: () => layerCounts.state,
           writeState: layerCounts.publish,
-          readSourceBinding: getLayerCountsServiceBinding,
-          bindSource: layerCounts.bindSource,
           readShown: cards.readViewContextShown,
         }),
       },

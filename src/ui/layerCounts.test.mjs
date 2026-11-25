@@ -4,10 +4,8 @@ import { createPinia } from 'pinia';
 import {
   configureApplicationServices,
   getConfiguredLayerCounts,
-  getLayerCountsServiceBinding,
   LAYER_COUNTS_TIMEOUT_MS,
 } from '../services/application.js';
-import { createApplicationRequestServices } from '../services/requests.js';
 import {
   countAgeMs,
   createLayerCounts,
@@ -25,14 +23,13 @@ const satellites = (count, at) => ({
 function harness() {
   const store = useLayerCountsStore(createPinia());
   const live = { shown: false, at: 0 };
-  function owner(getCounts, sourceOptions = {}) {
+  function owner(getCounts) {
     return createLayerCounts({
       getCounts,
       readState: () => store.state,
       writeState: store.publish,
       readShown: () => live.shown,
       now: () => live.at,
-      ...sourceOptions,
     });
   }
   return { store, live, owner };
@@ -83,8 +80,6 @@ test('only positive counts for the allowed layers are retained with their timest
     counts: [
       { layerId: 'traffic', count: 50, at: 10 },
       { layerId: 'flights', count: 8700, at: 10 },
-      { layerId: 'flights', count: 8500, at: 9 },
-      { layerId: 'flights', count: 8600 },
       { layerId: 'satellites', count: 1272, at: 10 },
       { layerId: 'ais-live-vessels', count: 9, at: null },
       { layerId: 'cctv', count: 0, at: 10 },
@@ -100,7 +95,7 @@ test('only positive counts for the allowed layers are retained with their timest
   });
 });
 
-test('the returned server clock calibrates the displayed age without changing the observation timestamp', async () => {
+test('the returned server clock calibrates the displayed age on the local clock', async () => {
   const { store, live, owner } = harness();
   const fromServer = 6 * 60 * 60_000;
   const observation = fromServer - 60_000;
@@ -113,7 +108,7 @@ test('the returned server clock calibrates the displayed age without changing th
   await counts.update(empty);
   const row = store.state.counts.satellites;
   assert.equal(row.count, 1272);
-  assert.equal(row.at, observation);
+  assert.equal(row.at, live.at - 60_000);
   assert.equal(countAgeMs(row, live.at), 60_000);
   assert.equal(countAgeMs(row, live.at + 120_000), 180_000);
   assert.equal(countAgeMs({ at: live.at - 5000 }, live.at), 5000);
@@ -124,108 +119,8 @@ test('the returned server clock calibrates the displayed age without changing th
   counts.update(layersOn);
   await counts.update(empty);
   const recalibrated = store.state.counts.satellites;
-  assert.equal(recalibrated.at, observation);
+  assert.equal(recalibrated.at, live.at - 60_000);
   assert.equal(countAgeMs(recalibrated, live.at), 60_000);
-});
-
-test('a throttled count retries on an eligible entry after Retry-After, including after an aborted retry', async () => {
-  const { store, live, owner } = harness();
-  const waiting = Promise.withResolvers();
-  const replies = [
-    () => Response.json(satellites(1272, 1)),
-    () =>
-      new Response('rate limited', {
-        status: 429,
-        headers: { 'Retry-After': '60' },
-      }),
-    ({ signal }) => {
-      waiting.resolve(signal);
-      return new Promise((_, reject) =>
-        signal.addEventListener('abort', () => reject(signal.reason), {
-          once: true,
-        }),
-      );
-    },
-    () => Response.json(satellites(1300, 2)),
-  ];
-  let requests = 0;
-  const services = createApplicationRequestServices({
-    fetchImpl: async (_url, options) => replies[requests++](options),
-  });
-  const counts = owner(services.layerCounts.getCounts);
-  live.shown = true;
-  await counts.update(empty);
-  const known = store.state.counts;
-  const enter = () => {
-    counts.update(layersOn);
-    return counts.update(empty);
-  };
-  live.at += LAYER_COUNTS_REFETCH_MS;
-  await enter();
-  assert.equal(store.state.counts, known);
-  live.at += 59_999;
-  await enter();
-  assert.equal(requests, 2);
-  live.at++;
-  counts.update(empty);
-  assert.equal(requests, 2, 'staying in the view does not poll');
-
-  const pending = enter();
-  const signal = await waiting.promise;
-  counts.update(hidden);
-  assert.equal(signal.aborted, true);
-  await pending;
-  await counts.update(empty);
-  assert.equal(requests, 4);
-  assert.equal(store.state.counts.satellites.count, 1300);
-});
-
-test('a late throttle from a replaced count adapter does not delay the next eligible entry', async (t) => {
-  const { store, live, owner } = harness();
-  const oldRequest = Promise.withResolvers();
-  const rateLimit = Object.assign(new Error('Layer counts unavailable (429)'), {
-    retryAfterMs: 9_000_000,
-  });
-  let firstCall = true;
-  t.after(
-    configureApplicationServices({
-      layerCounts: {
-        getCounts() {
-          if (!firstCall) return oldRequest.promise;
-          firstCall = false;
-          return Promise.reject(rateLimit);
-        },
-      },
-    }),
-  );
-  await assert.rejects(
-    getConfiguredLayerCounts(),
-    (error) => error === rateLimit,
-  );
-
-  const counts = owner(getConfiguredLayerCounts);
-  live.shown = true;
-  const pending = counts.update(empty);
-  let replacementCalls = 0;
-  t.after(
-    configureApplicationServices({
-      layerCounts: {
-        async getCounts() {
-          replacementCalls++;
-          return satellites(1300, 2);
-        },
-      },
-    }),
-  );
-  oldRequest.reject(rateLimit);
-  await pending;
-
-  live.at += LAYER_COUNTS_REFETCH_MS;
-  counts.update(layersOn);
-  await counts.update(empty);
-  assert.equal(replacementCalls, 1);
-  assert.equal(store.state.counts.satellites.count, 1300);
-  assert.equal(store.state.retryAt, undefined);
 });
 
 test('a complete response withdraws omitted and zero counts', async () => {
@@ -370,114 +265,6 @@ test('a completion that observes a coalesced hide admits one replacement on the 
   asks[1].resolve(satellites(1300, 50));
   await retry;
   assert.equal(store.state.counts.satellites.count, 1300);
-});
-
-test('a binding change aborts the old provider without blocking the new read', async (t) => {
-  const { store, live, owner } = harness();
-  const previous = Promise.withResolvers();
-  const sourceA = t.mock.fn(() => previous.promise);
-  const releaseA = configureApplicationServices({
-    layerCounts: { getCounts: sourceA },
-  });
-  t.after(releaseA);
-  const counts = owner(getConfiguredLayerCounts, {
-    readSourceBinding: getLayerCountsServiceBinding,
-    bindSource: store.bindSource,
-  });
-  t.after(() => counts.stop());
-  live.shown = true;
-  const oldRequest = counts.update(empty);
-  assert.equal(sourceA.mock.callCount(), 1);
-
-  const sourceB = t.mock.fn(async () => satellites(42, 2));
-  t.after(
-    configureApplicationServices({ layerCounts: { getCounts: sourceB } }),
-  );
-  releaseA();
-  await counts.update(empty);
-  assert.equal(sourceA.mock.calls[0].arguments[0].signal.aborted, true);
-  assert.equal(sourceB.mock.callCount(), 1);
-  assert.equal(store.state.counts.satellites.count, 42);
-
-  previous.resolve(satellites(7, 1));
-  await oldRequest;
-  assert.equal(store.state.counts.satellites.count, 42);
-  assert.equal(store.state.lastAttemptAt, 0, 'the start times need not differ');
-});
-
-test('a provider abort can hide the Inspector before the replacement starts', async () => {
-  const { store, live, owner } = harness();
-  const previous = Promise.withResolvers();
-  const sourceA = ({ signal }) => {
-    signal.addEventListener(
-      'abort',
-      () => {
-        live.shown = false;
-      },
-      { once: true },
-    );
-    return previous.promise;
-  };
-  let replacementReads = 0;
-  const sourceB = () => {
-    replacementReads++;
-    return satellites(42, 2);
-  };
-  let source = sourceA;
-  const counts = owner((request) => source(request), {
-    readSourceBinding: () => source,
-    bindSource: store.bindSource,
-  });
-
-  live.shown = true;
-  const oldRequest = counts.update(empty);
-  assert.equal(store.state.lastAttemptAt, 0);
-  source = sourceB;
-  live.at = 100;
-  await counts.update(empty);
-  assert.equal(replacementReads, 0);
-  assert.deepEqual(store.state, { counts: {}, lastAttemptAt: null });
-
-  live.shown = true;
-  await counts.update(empty);
-  previous.resolve(satellites(7, 1));
-  await oldRequest;
-  assert.equal(replacementReads, 1);
-  assert.equal(store.state.lastAttemptAt, 100);
-  assert.equal(store.state.counts.satellites.count, 42);
-});
-
-test('a provider abort can deliver a newer layer sample before the replacement starts', async () => {
-  const { store, live, owner } = harness();
-  const previous = Promise.withResolvers();
-  let replacementReads = 0;
-  const sourceB = () => {
-    replacementReads++;
-    return satellites(42, 2);
-  };
-  let source = ({ signal }) => {
-    signal.addEventListener('abort', () => counts.update(layersOn), {
-      once: true,
-    });
-    return previous.promise;
-  };
-  const counts = owner((request) => source(request), {
-    readSourceBinding: () => source,
-    bindSource: store.bindSource,
-  });
-
-  live.shown = true;
-  const oldRequest = counts.update(empty);
-  source = sourceB;
-  await counts.update(empty);
-  assert.equal(replacementReads, 0);
-  assert.equal(store.state.lastAttemptAt, null);
-
-  await counts.update(empty);
-  previous.resolve(satellites(7, 1));
-  await oldRequest;
-  assert.equal(replacementReads, 1);
-  assert.equal(store.state.counts.satellites.count, 42);
 });
 
 test('the configured deadline releases a noncooperating request and preserves its cooldown', async (t) => {

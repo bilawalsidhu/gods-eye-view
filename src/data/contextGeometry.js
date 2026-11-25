@@ -1,4 +1,4 @@
-import { greatCircleKm } from '../geoDistance.js';
+import { greatCircleKm, isGeoPoint } from '../geoDistance.js';
 
 // Non-enumerable feature data keeps the analyst record's public shape.
 export const CONTEXT_LINES = Symbol('Context lines');
@@ -15,7 +15,9 @@ export function contextLine(vertices, draw = () => vertices) {
   let east = -Infinity;
   let wraps = false;
   let previousLon;
-  for (const { lat, lon } of vertices) {
+  for (const vertex of vertices) {
+    if (!isGeoPoint(vertex)) continue;
+    const { lat, lon } = vertex;
     south = Math.min(south, lat);
     north = Math.max(north, lat);
     west = Math.min(west, lon);
@@ -32,7 +34,8 @@ export function contextLine(vertices, draw = () => vertices) {
       north,
     },
     points() {
-      if (!points) points = Object.freeze(draw().map(Object.freeze));
+      if (!points)
+        points = Object.freeze(draw().filter(isGeoPoint).map(Object.freeze));
       return points;
     },
   });
@@ -105,7 +108,7 @@ function segmentLengthBound(aLat, bLat, dx) {
 }
 
 /** Find a nearby GeoJSON line anchor using spherical distances to its drawn path. */
-export function linePointWithinRadius(paths, center, radiusKm, distanceKm) {
+export function linePointWithinRadius(paths, center, radiusKm) {
   // One degree of latitude exceeds 110 km, even at the poles.
   const latitudeSpan = radiusKm / 110;
   const south = center.lat - latitudeSpan;
@@ -129,8 +132,8 @@ export function linePointWithinRadius(paths, center, radiusKm, distanceKm) {
       if (high < south || low > north) continue;
       const dx = longitudeDelta(b.lon - a.lon);
       const dy = b.lat - a.lat;
-      const aKm = distanceKm(center, a);
-      const bKm = distanceKm(center, b);
+      const aKm = greatCircleKm(center, a);
+      const bKm = greatCircleKm(center, b);
       consider(a, aKm);
       consider(b, bKm);
       // The sum of the distances from a point on the segment to its ends
@@ -142,9 +145,11 @@ export function linePointWithinRadius(paths, center, radiusKm, distanceKm) {
         lon: longitudeDelta(a.lon + t * dx),
       });
       const nearest = at(
-        closestParameter(a, dx, dy, center, (t) => distanceKm(center, at(t))),
+        closestParameter(a, dx, dy, center, (t) =>
+          greatCircleKm(center, at(t)),
+        ),
       );
-      consider(nearest, distanceKm(center, nearest));
+      consider(nearest, greatCircleKm(center, nearest));
     }
   }
   return best;
@@ -181,7 +186,11 @@ export function linePointInRect(paths, rect, center, spherical = false) {
       const firstShift = 360 * Math.ceil((left - east) / 360);
       const alongLat = dy ? (south - a.lat) / dy : 0;
       const toLat = dy ? (north - a.lat) / dy : 1;
-      for (let shift = firstShift; west + shift <= right; shift += 360) {
+      for (
+        let shift = firstShift, copies = 0;
+        copies < 3 && west + shift <= right;
+        shift += 360, copies++
+      ) {
         const alongLon = dx ? (west + shift - a.lon) / dx : 0;
         const toLon = dx ? (east + shift - a.lon) / dx : 1;
         const start = Math.max(
@@ -245,14 +254,7 @@ export function linePointInRect(paths, rect, center, spherical = false) {
 }
 
 /** Find the nearest rendered line point on the camera's visible ground cap. */
-export function linePointInCap(
-  paths,
-  center,
-  eye,
-  radiusKm,
-  scoreInView,
-  distanceKm,
-) {
+export function linePointInCap(paths, center, eye, radiusKm, scoreInView) {
   const latitudeSpan = radiusKm / 110;
   const south = eye.lat - latitudeSpan;
   const north = eye.lat + latitudeSpan;
@@ -264,7 +266,7 @@ export function linePointInCap(
     if (score > bestScore) {
       best = at;
       bestScore = score;
-      bestKm = distanceKm(center, at);
+      bestKm = greatCircleKm(center, at);
     }
     return score;
   };
@@ -291,14 +293,16 @@ export function linePointInCap(
         const maxSegmentKm = segmentLengthBound(from.lat, to.lat, dx / pieces);
         if (
           !maxSegmentKm ||
-          distanceKm(center, from) + distanceKm(center, to) - maxSegmentKm >
+          greatCircleKm(center, from) +
+            greatCircleKm(center, to) -
+            maxSegmentKm >
             2 * bestKm
         )
           continue;
         if (
           !fromVisible &&
           !toVisible &&
-          distanceKm(eye, from) > radiusKm + maxSegmentKm
+          greatCircleKm(eye, from) > radiusKm + maxSegmentKm
         )
           continue;
 
@@ -307,7 +311,7 @@ export function linePointInCap(
           dx,
           dy,
           center,
-          (t) => distanceKm(center, at(t)),
+          (t) => greatCircleKm(center, at(t)),
           start,
           end,
         );
@@ -332,7 +336,7 @@ export function linePointInCap(
             dx,
             dy,
             eye,
-            (t) => distanceKm(eye, at(t)),
+            (t) => greatCircleKm(eye, at(t)),
             start,
             end,
           );

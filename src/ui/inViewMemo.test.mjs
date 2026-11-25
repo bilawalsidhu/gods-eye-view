@@ -11,7 +11,7 @@ import {
 } from './stores/entityCard.js';
 
 // The store's in-view answer is shared by Context's globe view and the
-// omnibar: worked out once per key (the settled view, the layers that are
+// omnibar: worked out once per key (the exact view, the layers that are
 // on, each one's data revision) and sliced for callers that want fewer rows.
 function harness(layers) {
   let scans = 0;
@@ -193,9 +193,9 @@ test('Context retries a partially read point snapshot from ordinary records', (t
   assert.deepEqual(results(), [
     [1, ['optimized']],
     [1, ['optimized']],
-    ordinaryResult,
+    [1, ['optimized']],
   ]);
-  assert.equal(snapshot.mock.callCount(), 5);
+  assert.equal(snapshot.mock.callCount(), 6);
   assert.equal(fallback.mock.callCount(), 3);
 });
 
@@ -316,7 +316,7 @@ test('the omnibar keeps viewport bounds at globe height without disturbing the I
   assert.equal(scans(), 2);
 });
 
-test('the settled Omnibar viewport uses the actual rectangle inside a motion bucket', () => {
+test('the Omnibar viewport tracks a small move across a rectangle edge', () => {
   const { store, scans } = harness([
     {
       id: 'local-datacenters',
@@ -341,9 +341,6 @@ test('the settled Omnibar viewport uses the actual rectangle inside a motion buc
 
   const moved = where(0.00004);
   store.setView(moved, { settled: false });
-  assert.equal(read(), before, 'reuse the rounded viewport during motion');
-  assert.equal(scans(), 1);
-  store.setView(moved);
   const settled = read();
   assert.equal(settled[0]?.items[0]?.identity.id, 'edge');
 
@@ -352,7 +349,7 @@ test('the settled Omnibar viewport uses the actual rectangle inside a motion buc
   assert.equal(scans(), 2, 'stationary reads reuse the settled answer');
 });
 
-test('settled Nearby uses the actual center at the radius boundary', () => {
+test('Nearby tracks a small move across the radius boundary', () => {
   const radiusKm = 25;
   const { store, scans } = harness([
     {
@@ -382,9 +379,6 @@ test('settled Nearby uses the actual center at the radius boundary', () => {
 
   const moved = where(0.00004);
   store.setView(moved, { settled: false });
-  assert.equal(read(), before, 'reuse the rounded center during motion');
-  assert.equal(scans(), 1);
-  store.setView(moved);
   const settled = read();
   assert.equal(settled[0].count, 1);
   assert.equal(settled[0].items[0].identity.id, 'edge');

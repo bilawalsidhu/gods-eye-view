@@ -164,7 +164,7 @@ test('weather-only requests share upstream work and retain fresh and stale respo
   );
 });
 
-test('the Inspector weather service separates exact points across a zone border and reuses a repeated point', async (t) => {
+test('the Inspector weather service separates exact points across a zone border and rereads a repeated point', async (t) => {
   const handler = install(weatherEffectsProxy()).get('/api/weather-effects');
   const { weather } = createApplicationRequestServices({
     fetchImpl: async (url) => {
@@ -192,12 +192,10 @@ test('the Inspector weather service separates exact points across a zone border 
     assert.equal(response.weather.timeZone, expected);
     assert.equal(response.coordinates.longitude, lon);
   }
-  assert.deepEqual(longitudes, [-114.735, -114.746]);
+  assert.deepEqual(longitudes, [-114.735, -114.746, -114.746]);
 });
 
-test('exact weather reads keep their own bounded cache without evicting fresh coarse weather', async (t) => {
-  let now = Date.now();
-  t.mock.method(Date, 'now', () => now);
+test('exact weather reads are not cached and do not evict coarse weather', async (t) => {
   t.mock.method(globalThis, 'fetch', async () =>
     Response.json({ current: { temperature_2m: 20 } }),
   );
@@ -212,18 +210,15 @@ test('exact weather reads keep their own bounded cache without evicting fresh co
       remoteAddress: '127.0.0.2',
     });
     assert.equal(response.status, 200);
-    return response.headers['x-weather-effects'];
+    return response.headers;
   };
-  assert.equal(await cacheStatus(coarse), 'MISS');
-  for (let index = 0; index <= 180; index++) {
-    // Allow 44 exact reads per minute, all in the same coarse cell and
-    // before the original coarse response's five-minute TTL expires.
-    if (index > 0 && index % 44 === 0) now += 60_000;
-    assert.equal(await cacheStatus(exact(index)), 'MISS');
+  assert.equal((await cacheStatus(coarse))['x-weather-effects'], 'MISS');
+  for (const index of [0, 1, 0]) {
+    const headers = await cacheStatus(exact(index));
+    assert.equal(headers['x-weather-effects'], undefined);
+    assert.equal(headers['cache-control'], 'private, no-store');
   }
-  assert.equal(await cacheStatus(coarse), 'HIT');
-  assert.equal(await cacheStatus(exact(180)), 'HIT');
-  assert.equal(await cacheStatus(exact(0)), 'MISS');
+  assert.equal((await cacheStatus(coarse))['x-weather-effects'], 'HIT');
 });
 
 test('Realtime handler preserves tools and default instructions, isolates supplied annotation guidance, and keeps the upstream key server-side', async (t) => {

@@ -2,10 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayerCatalog, catalogControlServices } from './catalog.js';
 import { createApplicationData } from './data.js';
-import { createLayerFinder } from '../ui/layerFinderFilter.js';
-import { useLayerFinderStore } from '../ui/stores/layerFinder.js';
-import { applicationPinia } from '../ui/vueRuntime.js';
-
 const metadata = (layers) =>
   layers.map(({ id }) => ({ id, disposition: 'enabled-only' }));
 
@@ -57,13 +53,10 @@ test('data setup seals the caller catalog before controls can restore and drains
     { id: 'two' },
   ];
   const releases = [];
-  const finder = createLayerFinder();
-  finder.select({ query: 'two' });
   let observed;
-  const { dataManager, presentation } = createApplicationData({
+  const { dataManager } = createApplicationData({
     scene: { viewer: {} },
     controls: {
-      finder,
       styleManager: {
         attachDataManager(manager) {
           assert.equal(manager.registrationsFinalized, true);
@@ -87,7 +80,6 @@ test('data setup seals the caller catalog before controls can restore and drains
     },
   });
   assert.equal(observed, dataManager);
-  assert.equal(presentation.panel.finder.inputs().query, 'two');
   assert.equal(await dataManager.setEnabled('one', true), false);
   assert.equal(dataManager.layers.get('one').initialized, false);
   assert.equal(
@@ -116,16 +108,12 @@ test('data setup keeps layers polling in an inline panel its host reports hidden
     else globalThis.document = previous;
   });
   const releases = [];
-  const { dataManager, presentation } = createApplicationData({
+  const { dataManager } = createApplicationData({
     scene: { viewer: {} },
     controls: { styleManager: { attachDataManager() {} } },
     catalog: createLayerCatalog([], []),
     defer: (release) => releases.push(release),
   });
-  assert.equal(
-    presentation.panel.finder,
-    useLayerFinderStore(applicationPinia()),
-  );
   const visibility = dataManager._visibilityTarget;
   assert.equal(visibility.hidden, true, 'a hidden page pauses outside a panel');
   globalThis.GEV_EMBED_INLINE = true;

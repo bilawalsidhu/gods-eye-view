@@ -234,3 +234,47 @@ export function weatherLook(code) {
   if (value >= 95) return { label: msg('Thunderstorm'), icon: 'thunderstorm' };
   return { label: msg('Mixed conditions'), icon: 'partly_cloudy_day' };
 }
+
+export function weatherFacts(now) {
+  if (!now) return [];
+  const facts = [];
+  if (Number.isFinite(now.windKph)) {
+    const speed = t('{n} km/h', { n: formatNumber(Math.round(now.windKph)) });
+    facts.push({
+      label: t('Wind'),
+      value: Number.isFinite(now.windDirectionDeg)
+        ? t('{speed} {direction}', {
+            speed,
+            direction: t(compassName(now.windDirectionDeg)),
+          })
+        : speed,
+    });
+  }
+  if (Number.isFinite(now.cloudCoverPct))
+    facts.push({
+      label: t('Cloud'),
+      value: t('{n}%', { n: formatNumber(Math.round(now.cloudCoverPct)) }),
+    });
+  if (Number.isFinite(now.visibilityM))
+    facts.push({
+      label: t('Visibility'),
+      value: t('{n} km', {
+        n: formatNumber(
+          now.visibilityM >= 10_000
+            ? Math.round(now.visibilityM / 1000)
+            : Number((now.visibilityM / 1000).toFixed(1)),
+        ),
+      }),
+    });
+  if (Number.isFinite(now.precipitationMm))
+    facts.push({
+      label: t('Precipitation'),
+      value: t('{n} mm', {
+        n: formatNumber(now.precipitationMm, {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }),
+      }),
+    });
+  return facts;
+}

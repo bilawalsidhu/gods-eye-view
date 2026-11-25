@@ -1,7 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { formatNumber, onLocaleChange, t } from '../../../i18n/index.js';
-import { compassName, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
+import { weatherFacts, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
+import { approximatePosition, distanceText } from '../../distanceText.js';
+import { contextAgeText } from '../../contextTime.js';
 import { distanceKm } from '../../../data/entityContext.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
 import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
@@ -12,21 +14,13 @@ import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
 
-// Conditions around one spot. For the view when nothing is picked: the
-// weather there now, natural hazards near it (earthquakes, tropical storms,
-// wildfires), warnings broadcast by things the loaded layers have nearby, and
-// the local headlines. For a selected item (`entity`) it is the standard set
-// every card shows, in one order: weather and local time, then the flights,
-// vessels and hazards nearby, then alerts and whatever else is loaded there.
-// Every nearby block looks out to the same distance, set by the radius
-// control here. It reads again when the spot moves; the feeds behind it are
-// cached.
+// A selected item's weather and solar time, followed by traffic, hazards and
+// alerts within the chosen radius. Moving the item refreshes its conditions.
 const props = defineProps({
   lat: { type: Number, required: true },
   lon: { type: Number, required: true },
-  /** Show the standard blocks for a selected item. */
-  entity: { type: Boolean, default: false },
   withContacts: Boolean,
+  /** Distances from a selected privacy cell or rounded observation are approximate. */
   obscured: Boolean,
   /** The selected item's own key, left out of the nearby lists. */
   excludeKey: { type: String, default: '' },
@@ -128,7 +122,6 @@ const shownHazards = computed(() =>
 const CONTACT_LAYERS = ['flights', 'military', 'ais-live-vessels', 'military-installations'];
 const groups = computed(() => {
   void tick.value;
-  if (!props.entity) return null;
   return store.nearbyGroups(props.lat, props.lon, {
     radiusKm: radiusKm.value,
     limit: searching.value ? 12 : 4,
@@ -159,50 +152,11 @@ const localTime = computed(() => {
 const weather = computed(() => brief.value?.weather || null);
 const look = computed(() => weatherLook(weather.value?.weatherCode));
 const round = (n) => (Number.isFinite(n) ? Math.round(n) : null);
-const weatherFacts = computed(() => {
-  const now = weather.value;
-  if (!now) return [];
-  const facts = [];
-  if (Number.isFinite(now.windKph)) {
-    const speed = t('{n} km/h', { n: formatNumber(round(now.windKph)) });
-    facts.push({
-      label: t('Wind'),
-      value: Number.isFinite(now.windDirectionDeg) ? t('{speed} {direction}', { speed, direction: t(compassName(now.windDirectionDeg)) }) : speed,
-    });
-  }
-  if (Number.isFinite(now.cloudCoverPct)) facts.push({ label: t('Cloud'), value: t('{n}%', { n: formatNumber(round(now.cloudCoverPct)) }) });
-  if (Number.isFinite(now.visibilityM))
-    facts.push({
-      label: t('Visibility'),
-      value: t('{n} km', {
-        n: formatNumber(now.visibilityM >= 10_000 ? round(now.visibilityM / 1000) : Number((now.visibilityM / 1000).toFixed(1))),
-      }),
-    });
-  if (Number.isFinite(now.precipitationMm))
-    facts.push({
-      label: t('Rain'),
-      value: t('{n} mm', { n: formatNumber(now.precipitationMm, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }),
-    });
-  return facts;
-});
-
-const articles = computed(() =>
-  props.entity ? [] : (brief.value?.articles || []).filter((article) => matchesContextSearch(article.title, article.domain)).slice(0, 3),
-);
+const facts = computed(() => weatherFacts(weather.value));
 
 function distance({ distanceKm: km, identity }) {
-  const value = t('{n} km', { n: km < 10 ? formatNumber(km, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : formatNumber(Math.round(km)) });
-  return props.obscured || identity?.record?.obscured === true ? `${value} (${t('approximate')})` : value;
+  return distanceText(km, props.obscured || approximatePosition(identity?.record));
 }
-function ago(ms) {
-  if (!Number.isFinite(ms)) return '';
-  const minutes = Math.max(0, Math.round((Date.now() - ms) / 60_000));
-  if (minutes < 60) return t('{n} min ago', { n: minutes });
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return t('{n} h ago', { n: hours });
-  return t('{n} d ago', { n: Math.round(hours / 24) });
-}
-const host = (article) => article.domain || '';
 
 // The layer each kind of hazard comes from. Picking a hazard turns its layer
 // on (when it is off) so the marker and its label are there to select.
@@ -259,7 +213,6 @@ const sources = computed(() => {
   if (hazards.value.some((h) => h.kind === 'storm')) list.push('NOAA NHC');
   if (hazards.value.some((h) => h.kind === 'wildfire')) list.push('NIFC WFIGS');
   if (hazards.value.some((h) => h.kind === 'hotspots')) list.push('NASA FIRMS');
-  if (articles.value.length && brief.value?.newsSource) list.push(brief.value.newsSource);
   return list.join(' · ');
 });
 </script>
@@ -267,32 +220,26 @@ const sources = computed(() => {
 <template>
   <section class="spot-conditions" :aria-label="t('Conditions here')" :aria-busy="String(loading)">
     <!-- A selected item leads with the weather and the time there. -->
-    <template v-if="entity">
-      <div v-if="weather || entity" class="spot-conditions__weather" :class="{ 'spot-conditions__weather--timed': entity }">
-        <template v-if="weather">
-          <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
-          <div class="spot-conditions__weather-now">
-            <strong>{{ round(weather.temperatureC) }}°C</strong>
-            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
-          </div>
-        </template>
-        <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>
-        <div v-if="entity" class="spot-conditions__time">
-          <strong>{{ localTime }}</strong>
-          <span>{{ t('Local solar time') }}</span>
+    <div class="spot-conditions__weather spot-conditions__weather--timed">
+      <template v-if="weather">
+        <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
+        <div class="spot-conditions__weather-now">
+          <strong>{{ round(weather.temperatureC) }}°C</strong>
+          <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
         </div>
-        <dl v-if="weather" class="spot-conditions__weather-facts">
-          <div v-for="fact in weatherFacts" :key="fact.label">
-            <dt>{{ fact.label }}</dt>
-            <dd>{{ fact.value }}</dd>
-          </div>
-        </dl>
+      </template>
+      <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>
+      <div class="spot-conditions__time">
+        <strong>{{ localTime }}</strong>
+        <span>{{ t('Local solar time') }}</span>
       </div>
-      <p v-else-if="loading" class="spot-conditions__loading">{{ t('Reading conditions here…') }}</p>
-    </template>
-
-    <!-- What the view's enabled layers have here. -->
-    <slot name="after-weather" />
+      <dl v-if="weather" class="spot-conditions__weather-facts">
+        <div v-for="fact in facts" :key="fact.label">
+          <dt>{{ fact.label }}</dt>
+          <dd>{{ fact.value }}</dd>
+        </div>
+      </dl>
+    </div>
 
     <!-- One distance for every nearby block below. -->
     <div class="spot-conditions__radius">
@@ -332,7 +279,7 @@ const sources = computed(() => {
             <UiIcon :name="hazard.icon" :size="null" />
             <span class="spot-conditions__row-main">
               <span class="spot-conditions__row-title">{{ hazard.title }}</span>
-              <span v-if="hazard.detail || hazard.time" class="spot-conditions__row-detail">{{ [hazard.detail, ago(hazard.time)].filter(Boolean).join(' · ') }}</span>
+              <span v-if="hazard.detail || hazard.time" class="spot-conditions__row-detail">{{ [hazard.detail, Number.isFinite(hazard.time) ? contextAgeText(Date.now() - hazard.time) : ''].filter(Boolean).join(' · ') }}</span>
               <span v-if="hazardLayers[hazard.kind]" class="spot-conditions__row-layer" :class="{ 'is-on': hazardLayers[hazard.kind].on }" :title="hazardLayers[hazard.kind].on ? t('Layer on') : t('Turns the layer on')">
                 <span class="spot-conditions__row-dot" aria-hidden="true"></span>{{ hazardLayers[hazard.kind].name }}
               </span>
@@ -380,50 +327,6 @@ const sources = computed(() => {
             </span>
             <span class="spot-conditions__row-meta">{{ distance(item) }}</span>
           </UiButton>
-        </li>
-      </ul>
-    </div>
-
-    <!-- For the view, the time and weather there come last, above the news. -->
-    <template v-if="!entity">
-      <slot name="before-weather" />
-      <div v-if="weather || entity" class="spot-conditions__weather" :class="{ 'spot-conditions__weather--timed': entity }">
-        <template v-if="weather">
-          <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
-          <div class="spot-conditions__weather-now">
-            <strong>{{ round(weather.temperatureC) }}°C</strong>
-            <span>{{ t(look.label) }}<template v-if="Number.isFinite(weather.apparentTemperatureC)"> · {{ t('feels {n}°', { n: round(weather.apparentTemperatureC) }) }}</template></span>
-          </div>
-        </template>
-        <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ loading ? t('Reading conditions here…') : t('No weather reading here.') }}</p>
-        <div v-if="entity" class="spot-conditions__time">
-          <strong>{{ localTime }}</strong>
-          <span>{{ t('Local solar time') }}</span>
-        </div>
-        <dl v-if="weather" class="spot-conditions__weather-facts">
-          <div v-for="fact in weatherFacts" :key="fact.label">
-            <dt>{{ fact.label }}</dt>
-            <dd>{{ fact.value }}</dd>
-          </div>
-        </dl>
-      </div>
-      <p v-else-if="loading" class="spot-conditions__loading">{{ t('Reading conditions here…') }}</p>
-    </template>
-
-    <div v-if="articles.length" class="spot-conditions__block">
-      <h4>
-        <UiIcon name="newspaper" :size="null" />
-        <span>{{ t('Local news') }}</span>
-        <span v-if="brief?.newsQuery" class="spot-conditions__query">{{ brief.newsQuery }}</span>
-      </h4>
-      <ul>
-        <li v-for="article in articles" :key="article.url">
-          <a :href="article.url" target="_blank" rel="noopener noreferrer">
-            <span class="spot-conditions__row-main">
-              <span class="spot-conditions__row-title spot-conditions__row-title--wrap">{{ article.title }}</span>
-              <span class="spot-conditions__row-detail">{{ [host(article), ago(Date.parse(article.publishedAt))].filter(Boolean).join(' · ') }}</span>
-            </span>
-          </a>
         </li>
       </ul>
     </div>

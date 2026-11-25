@@ -96,7 +96,6 @@ export function createEvidence({
       });
     }
     flightState.feed._count = icons.count;
-    // Evidence aircraft are not a snapshot of the world.
     flightState._lastFleetTickMs = 0;
     findFrame(flightState._viewer)?.requestRender('flights: focus evidence');
     return { ok: true, count: flightState.feed._count };

@@ -8,9 +8,9 @@ export async function fetchRegionalBrief(latitude, longitude, { signal } = {}) {
 }
 
 /**
- * Fetch a spot's current weather alone, `{weather}`, as the regional brief
- * has it (the same normalized observation, with the spot's time zone),
- * without the brief's reverse geocode and news search.
+ * Fetch the weather service's {status, retrievedAt, coordinates, weather}
+ * response for a spot. It contains the regional brief's normalized weather
+ * and time zone without the reverse geocode and news search.
  */
 export async function fetchSpotWeather(latitude, longitude, options) {
   if (![latitude, longitude].every(Number.isFinite))

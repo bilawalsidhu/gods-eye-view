@@ -187,10 +187,6 @@ function ringRank(ring) {
   return (Math.abs(sum) / 2) * Math.cos((meanLat * Math.PI) / 180);
 }
 
-function wrapLongitude(lon) {
-  return ((((lon + 180) % 360) + 360) % 360) - 180;
-}
-
 async function readPlaces() {
   const [countries, marine] = await Promise.all([
     loadBundledJson(PACKS.countries),
@@ -301,7 +297,7 @@ export async function nearPlace(lat, lon, radiusKm) {
   let best = null;
   for (const [name, pLat, pLon, scalerank, rankMax] of places) {
     if (Math.abs(pLat - lat) > latSpan) continue;
-    const dLon = Math.abs(wrapLongitude(pLon - lon));
+    const dLon = Math.abs(((((pLon - lon + 180) % 360) + 360) % 360) - 180);
     if (dLon > lonSpan) continue;
     const km = greatCircleKm({ lat, lon }, { lat: pLat, lon: pLon });
     if (km > radiusKm) continue;
@@ -369,7 +365,7 @@ async function findPlaceBelow(
     Math.abs(latitude) > 90
   )
     return null;
-  const lon = wrapLongitude(longitude);
+  const lon = ((((longitude + 180) % 360) + 360) % 360) - 180;
   const { land, water } = await loadPlaces();
   for (const entry of land) {
     if (

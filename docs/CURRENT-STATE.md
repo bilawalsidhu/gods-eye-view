@@ -980,49 +980,50 @@ screen, or coordinates when there is no nearby bundled city. A new point
 shows UTC and “local time loading…” while its own time zone is pending. A
 confirmed zone shows local time and UTC. Globe view and failed zone reads
 show UTC. Local weather uses the same reading. It shows conditions,
-temperature, feels-like, wind, cloud, visibility and rain, with an
+temperature, feels-like, wind, cloud, visibility and precipitation, with an
 Open-Meteo credit and the age of older readings. A stalled read times out
-after 15 seconds. A failed reading can retry after one minute when the
-Inspector is visible again.
+after 15 seconds. A failed reading is retried after one minute.
 
-The Inspector and selected cards share a radius of 25 to 1,000 km (default
-250 km). The browser saves the choice and uses it to filter loaded items.
-A saved 2,500 km choice reads as 1,000 km. Nearby groups results by enabled
-layer and sorts each group by distance. An empty group disappears while
-its count remains. Unavailable counts show the feed state. Field readings
-appear beside the counts, including observation age for Air Quality and
-GNSS. Air Quality also lists nearby stations. Overlay tiles show their map
-and feed state. News reports stay in the News panel. For GeoJSON lines such
-as dam crests, distance uses the nearest mapped part of the line. Cable distance
-uses samples along each line, so a cable can fall just outside the radius near
-a boundary even when its line passes inside.
+The Inspector and selected cards share a radius of 25 to 1,000 km (default 250
+km). The browser saves the choice and uses it to filter loaded items. A saved
+2,500 km choice reads as 1,000 km. Nearby groups results by enabled layer and
+sorts each group by distance. An empty group disappears while its count
+remains. Unavailable counts show the feed state. Field readings appear under
+“At the centre of the view” and include observation age for Air Quality and
+GNSS. Air Quality also lists nearby stations. Overlay tiles show their map and
+feed state. News reports stay in the News panel. For GeoJSON lines such as dam
+crests, distance uses the nearest mapped part of the line. Cable distance uses
+samples along each line, so a cable can fall just outside the radius near a
+boundary even when its line passes inside.
 
-At globe height, a layer's block shows what it has loaded at the feed's
-scope, with feed state and a breakdown where available. A satellite class
-bar identifies how many satellites it represents when that differs from
-the loaded count. Each block can show the three items nearest the center of
-the visible hemisphere. Context search returns up to 12 matches per layer
-and keeps the loaded total. The Omnibar's in-view results use the viewport.
-The Bhote Koshi reconstruction panel owns its evidence controls while open.
-The independent locator lists places from its active presentation.
+At globe height, a layer's block shows what it has loaded at the feed's scope,
+with feed state and a breakdown where available. A satellite class bar
+identifies how many satellites it represents when that differs from the loaded
+count. Each block can show the three visible items nearest the view center.
+Context search returns up to 12 matches per layer and keeps the loaded total.
+The Omnibar's in-view results use the viewport. The Bhote Koshi reconstruction
+panel owns its evidence controls while open. The independent locator lists
+places from its active presentation.
 
 With all layers off, the open Inspector shows [last-known worldwide
 counts](#nothing-on-count-tiles), then local weather and daylight or globe
-UTC and daylight, followed by camera height. It offers up to three Suggested
-layers, or a Data Layers action. On a phone either action opens Layers.
-Suggested focuses its chip. With layers on, suggestions appear below
-Nearby. Expanded Context uses the full-height side column.
+UTC, followed by camera height. It offers up to three Suggested layers, or a
+Data Layers action. On a phone either action opens Layers. Opening Suggested
+Layers focuses the Suggested chip in the Data Layers finder. With layers on,
+suggestions appear below Nearby and the action reads “Open Data Layers”.
+Expanded Context uses the full-height side column.
 
 Weather and count work pauses when the Inspector is covered or hidden,
 including when the page is hidden. Returning to the same point retains
 its successful reading. A due retry waits until the Inspector can read
 again.
 
-The Contacts mode and the Radio strip stay in the panel's main tab, below
-the card. When Contacts follows the aircraft the card shows, its list sits
-inside the card. Turning Radio on opens Context. Context summarizes the Space Missions roster in one tile. Turning it on
-opens the separate Space Missions panel. The Properties tab holds the Labels and 3D aircraft
-settings from Visual while a layer they act on is on.
+The Contacts mode and the Radio strip stay in the panel's main tab, below the
+card. When Contacts follows the aircraft the card shows, its list sits inside
+the card. Turning Radio on opens Context. Context summarizes the Space
+Missions roster in one tile. Turning it on opens the separate Space Missions
+panel. The Properties tab holds the Labels and 3D aircraft settings from
+Visual while a layer they act on is on.
 
 Context does its reading while its panel is open. Selected cards use the
 regional brief for weather; earthquakes, tropical storms and
@@ -1042,21 +1043,19 @@ application hook (`src/render/cesium/cardPreviews.js`), each in a small scene
 of its own that frees its graphics context as it closes; the model comes from
 the fleet set loaded at startup, so opening a card fetches no model.
 
-The sundial has been removed from Context.
-
 ### Nothing-on count tiles
 
 With no layer on, Context's "Worldwide, last known" tiles count eligible
 records in this server's provider caches. The client can load fewer records
 when a layer is enabled. The tiles count positioned aircraft in the OpenSky
-response cache (Live Flights), records in the CelesTrak core-group TLE caches (unique satellite IDs, dated by the oldest
-contributing group), the CCTV catalog
-once it has been built, the live AIS store (ships seen recently, not aids to
-navigation, and only with the default worldwide subscription) and FIRMS detections
-in the layer’s trailing 24-hour window. FIRMS needs a key and counts from
-acquisition-minute totals in memory or on disk. A successful feed refresh
-writes the disk summary. Restoring the raw cache can supply an in-memory
-count without writing the summary.
+response cache (Live Flights), records in the CelesTrak core-group TLE caches
+(unique satellite IDs, dated by the oldest contributing group), the CCTV
+catalog once it has been built, the live AIS store (ships seen recently, not
+aids to navigation, received under the worldwide subscription) and FIRMS
+detections in the layer’s trailing 24-hour window (Fire detections). FIRMS
+needs a key and counts from acquisition-minute totals in memory or on disk. A
+successful feed refresh writes the disk summary. Restoring the raw cache can
+supply an in-memory count without writing the summary.
 
 `GET /api/layer-counts` is keyless, same-site, and `no-store`. It reads provider
 caches and accepts GET and HEAD, with 60 requests per network peer per minute
@@ -1065,9 +1064,9 @@ layers are excluded. The browser caps the response at 16 KiB and waits up to
 10 seconds.
 
 The browser requests counts when entering the nothing-on view. Another entry
-can refresh them after a 30-minute cooldown, or after the wait named by a
-valid `Retry-After` on a 429 response. Closing the Inspector cancels a pending
-request and restores its previous cooldown. A timeout keeps the cooldown.
+can refresh them after a 30-minute cooldown. Closing the Inspector cancels a
+pending request and restores its previous cooldown. A timeout keeps the
+cooldown.
 
 A complete cache response updates the worldwide counts. If a layer reports a
 count without an observation time, the Inspector keeps its previous dated count

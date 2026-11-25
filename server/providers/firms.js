@@ -4,11 +4,7 @@ import https from 'node:https';
 import { promises as fsp } from 'node:fs';
 import { Readable } from 'node:stream';
 
-import {
-  acquisitionMsUtc,
-  filterTrailing24h,
-  parseFirmsCsv,
-} from '../../src/data/firmsCsv.js';
+import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
@@ -174,8 +170,8 @@ export function firmsProxy() {
   const FIRMS_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
   const CACHE_DIR = path.join(process.cwd(), '.gev-cache');
   const CACHE_PATH = path.join(CACHE_DIR, 'firms.json');
-  // The cache's fire count and time beside it, so the layer counts can be
-  // read without parsing the whole cache into memory.
+  // Per-minute detection counts ({at, minutes}) beside the cache, so the
+  // layer count can be read without parsing the whole cache.
   const COUNT_PATH = path.join(CACHE_DIR, 'firms-count.json');
   /** @type {?{at: number, sources: Array<object>, fires: Array<object>, minutes: Array<object>}} */
   let mem = null;
@@ -215,8 +211,7 @@ export function firmsProxy() {
       const key = `${acqDate}:${acqTime}`;
       const bucket = minutes.get(key);
       if (bucket) bucket.count++;
-      else if (Number.isFinite(acquisitionMsUtc(acqDate, acqTime)))
-        minutes.set(key, { acqDate, acqTime, count: 1 });
+      else minutes.set(key, { acqDate, acqTime, count: 1 });
     }
     return [...minutes.values()];
   }
@@ -228,10 +223,7 @@ export function firmsProxy() {
         Number.isFinite(summary?.at) &&
         Array.isArray(summary.minutes) &&
         summary.minutes.every(
-          (minute) =>
-            Number.isSafeInteger(minute?.count) &&
-            minute.count > 0 &&
-            Number.isFinite(acquisitionMsUtc(minute.acqDate, minute.acqTime)),
+          (minute) => Number.isSafeInteger(minute?.count) && minute.count > 0,
         )
       )
         return summary;
@@ -241,29 +233,28 @@ export function firmsProxy() {
     return null;
   }
 
-  async function writeCount(at, minutes) {
-    const temp = `${COUNT_PATH}.${randomUUID()}.tmp`;
+  async function replaceJson(file, value) {
+    const temp = `${file}.${randomUUID()}.tmp`;
     try {
-      await fsp.writeFile(temp, JSON.stringify({ at, minutes }), 'utf8');
-      await fsp.rename(temp, COUNT_PATH);
-    } catch (error) {
+      await fsp.writeFile(temp, JSON.stringify(value), 'utf8');
+      await fsp.rename(temp, file);
+      return true;
+    } catch (err) {
       await fsp.unlink(temp).catch(() => {});
-      console.warn('[firms-proxy] count cache write failed:', error.message);
+      console.warn('[firms-proxy] cache write failed:', err?.message || err);
+      return false;
     }
   }
 
   async function writeDisk(entry, minutes) {
-    const temp = `${CACHE_PATH}.${randomUUID()}.tmp`;
     try {
       await fsp.mkdir(CACHE_DIR, { recursive: true });
-      await fsp.writeFile(temp, JSON.stringify(entry), 'utf8');
-      await fsp.rename(temp, CACHE_PATH);
     } catch (err) {
-      await fsp.unlink(temp).catch(() => {});
       console.warn('[firms-proxy] cache write failed:', err?.message || err);
       return;
     }
-    await writeCount(entry.at, minutes);
+    if (await replaceJson(CACHE_PATH, entry))
+      await replaceJson(COUNT_PATH, { at: entry.at, minutes });
   }
 
   /**

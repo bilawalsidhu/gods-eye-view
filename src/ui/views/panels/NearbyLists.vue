@@ -1,14 +1,13 @@
 <script setup>
 import { formatNumber, t } from '../../../i18n/index.js';
 import { shownLayerName } from '../../layerNames.js';
-import { distanceText as distance } from '../../distanceText.js';
+import { approximatePosition, distanceText as distance } from '../../distanceText.js';
 import EntityMark from './EntityMark.vue';
 import { markKind } from '../../entityMark.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 
-// The parent owns selection and camera movement. This view renders the
-// ordered groups and emits the selected row.
+// Selecting a row belongs to the parent: it moves the camera.
 defineProps({
   /** From the store's `nearbyLayers`. */
   lists: { type: Array, required: true },
@@ -62,7 +61,7 @@ const motionOf = (item) => MOTION_STATES[item.identity?.record?.motion] || null;
               <EntityMark class="nearby-lists__mark" :layer="item.layerId" :kind="markKind(item.layerId, item.identity?.record)" :icon="list.icon" :size="16" />
               <span class="nearby-lists__name" :title="item.title">{{ item.title }}</span>
               <span v-if="index === 0" class="nearby-lists__badge">{{ t('Nearest') }}</span>
-              <span class="nearby-lists__meta">{{ distance(item.distanceKm, item.identity.record?.obscured === true) }}</span>
+              <span class="nearby-lists__meta">{{ distance(item.distanceKm, approximatePosition(item.identity.record)) }}</span>
             </UiButton>
           </li>
         </ul>

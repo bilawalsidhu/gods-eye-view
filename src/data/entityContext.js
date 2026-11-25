@@ -1,3 +1,8 @@
+import {
+  EARTH_RADIUS_KM,
+  greatCircleKm as distanceKm,
+} from '../geoDistance.js';
+import { isAircraftLayer } from './aircraftLayerIds.js';
 import { getContextStore } from './contextStore.js';
 import {
   CONTEXT_FEATURE,
@@ -266,6 +271,11 @@ const FACT_ORDER = [
 
 /** Plain labels for record fields. Unlisted fields are spelled out. */
 const FACT_LABELS = Object.freeze({
+  flightsCount: msg('Flights'),
+  militaryAircraftCount: msg('Military aircraft'),
+  vesselsCount: msg('AIS vessels'),
+  installationsCount: msg('Mapped installations'),
+  installationsCoverage: msg('Installations searched'),
   callsign: msg('Callsign'),
   registration: msg('Registration'),
   operator: msg('Operator'),
@@ -354,7 +364,6 @@ const NOISE_TAG =
   /^(name:|alt_name|old_name|official_name|short_name|osm_|source|note|fixme|check_date|ref:|wikimedia|wikipedia|wikidata|website|url|image|layer$|area$|type$|id$|@)|:wikidata$|:wikipedia$/;
 
 const MAX_FACTS = 8;
-const EARTH_RADIUS_KM = 6371;
 
 const text = (value) => {
   if (value === null || value === undefined) return '';
@@ -452,16 +461,7 @@ function isExcludedNearRecord(layerId, record, excludeKey) {
   );
 }
 
-/** Great-circle distance in kilometres. */
-export function distanceKm(a, b) {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad;
-  const dLon = (b.lon - a.lon) * rad;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
-}
+export { distanceKm };
 
 /** Spell out a field name: `originCountry` → `Origin country`. */
 function spellOut(field) {
@@ -531,6 +531,7 @@ const CODE_WORDS = Object.freeze({
   },
   // Where a traffic segment's flow comes from (traffic/records.js).
   source: {
+    'tomtom-cached': msg('TomTom flow from saved tiles'),
     'tomtom-live': msg('TomTom live flow'),
     'simulated-flow-error': msg('TomTom flow unavailable'),
     'simulated-unmatched': msg('Simulated (no live flow on this road)'),
@@ -843,8 +844,7 @@ function readLayerPoints(dataManager, layerId, module, options, summarize) {
       // A lazy snapshot can fail during iteration or retained-row conversion.
       if (points != null) return summarize({ source, points });
     } catch (error) {
-      if (!options.fallbackOnSnapshotError && !options.onSnapshotFallback)
-        throw error;
+      if (!options.onSnapshotFallback) throw error;
       options.onSnapshotFallback?.();
     }
     return summarize({
@@ -909,12 +909,6 @@ export function findRecord(dataManager, identity) {
   }
   const records = layerRecords(dataManager, layerId);
   if (!records.length) return null;
-  if (layerId === 'ais-live-vessels' && (vesselId || bare)) {
-    const vessel = records.find(
-      (record) => vesselIdOf(layerId, record) === (vesselId || bare),
-    );
-    if (vessel || vesselId) return vessel ?? null;
-  }
   const exactKey = isGeoJsonKey(rawBare) ? rawBare : bare;
   if (layerId === 'transit' && bare.includes(':')) {
     return records.find((record) => record.key === exactKey) ?? null;
@@ -1234,16 +1228,13 @@ export function describeEntity(
   const onPart =
     pickedPart &&
     Array.isArray(record?.parts) &&
-    (record.parts.find(
-      (part) => part.lat === pickedPart.lat && part.lon === pickedPart.lon,
-    ) ||
-      record.parts.find((part) => {
-        const longitudeDelta = Math.abs(part.lon - pickedPart.lon);
-        return (
-          Math.abs(part.lat - pickedPart.lat) <= 1e-6 &&
-          Math.min(longitudeDelta, Math.abs(360 - longitudeDelta)) <= 1e-6
-        );
-      }));
+    record.parts.find((part) => {
+      const longitudeDelta = Math.abs(part.lon - pickedPart.lon);
+      return (
+        Math.abs(part.lat - pickedPart.lat) <= 1e-6 &&
+        Math.min(longitudeDelta, Math.abs(360 - longitudeDelta)) <= 1e-6
+      );
+    });
   const onLine =
     identity.lineAnchor &&
     pickedPart &&
@@ -1436,7 +1427,7 @@ function nearestPart(here, record, { rect, radiusKm } = {}) {
   const point = rect
     ? linePointInRect(paths, rect, here, isGeoJsonKey(record.key))
     : isGeoJsonKey(record.key) && Number.isFinite(radiusKm)
-      ? linePointWithinRadius(paths, here, Math.min(radiusKm, km), distanceKm)
+      ? linePointWithinRadius(paths, here, Math.min(radiusKm, km))
       : null;
   if (point) {
     const lineKm = distanceKm(here, point);
@@ -1971,7 +1962,6 @@ function unitVector(lat, lon, out = { x: 0, y: 0, z: 0 }) {
  * @param {number} [options.heightM] Camera height, for the globe view's cap.
  * @param {{lat: number, lon: number}} [options.eye] The ground under the camera.
  * @param {boolean} [options.throwOnReadError] Let a caller with a retry policy handle a reader error.
- * @param {boolean} [options.fallbackOnSnapshotError] Use ordinary records if the optional point reader fails.
  * @param {() => void} [options.onSnapshotFallback] Use ordinary records and report an optional reader failure.
  * @returns {?{layerId: string, layerName: string, icon: string, count: number, items: Array<object>}}
  */
@@ -1988,7 +1978,6 @@ export function viewSummaryForLayer(
     eye,
     shownLayerName,
     throwOnReadError = false,
-    fallbackOnSnapshotError = false,
     onSnapshotFallback,
   } = {},
 ) {
@@ -1999,7 +1988,7 @@ export function viewSummaryForLayer(
   const name = layerName(dataManager, layerId);
   const kind = entityKind(layerId);
   const isSatelliteLayer = layerId === 'satellites';
-  const isAircraftLayer = kind.kind === 'aircraft';
+  const aircraft = isAircraftLayer(layerId);
   const needle = text(query).toLowerCase();
   const matchRecord =
     needle && !layerNameMatches(layer, name, needle, shownLayerName);
@@ -2042,13 +2031,12 @@ export function viewSummaryForLayer(
   };
   const keep = Math.max(0, Math.floor(perLayer));
   function summarize({ source, points }) {
-    const hasPointReader = typeof source?.recordForPoint === 'function';
     const best = [];
     let count = 0;
     for (const point of points) {
       let at = recordPosition(point);
       const elevated =
-        isSatelliteLayer || (isAircraftLayer && point?.onGround === false);
+        isSatelliteLayer || (aircraft && point?.onGround === false);
       let score = scoreInView(at, elevated ? point?.altitudeM : null);
       if (Array.isArray(point?.parts)) {
         for (const part of point.parts) {
@@ -2071,7 +2059,6 @@ export function viewSummaryForLayer(
               seenFrom,
               groundHorizonKm,
               scoreInView,
-              distanceKm,
             )
           : null;
       if (line) {
@@ -2084,9 +2071,7 @@ export function viewSummaryForLayer(
       }
       if (score === -Infinity) continue;
       if (matchRecord) {
-        const record = hasPointReader
-          ? source.recordForPoint(point, false)
-          : point;
+        const record = source ? source.recordForPoint(point, false) : point;
         if (!recordMatches(record, needle)) continue;
       }
       count++;
@@ -2102,7 +2087,7 @@ export function viewSummaryForLayer(
         spatialRow(
           layerId,
           name,
-          hasPointReader ? source.recordForPoint(point) : point,
+          source ? source.recordForPoint(point) : point,
           at,
           Math.acos(Math.min(1, Math.max(-1, score))) * EARTH_RADIUS_KM,
         ),
@@ -2114,10 +2099,9 @@ export function viewSummaryForLayer(
     layerId,
     module,
     {
-      // Globe can find a visible part even if the record has no main point.
+      // A visible part or line can count on the globe or in a rectangle even without a main point.
       requirePosition: false,
       throwOnReadError,
-      fallbackOnSnapshotError,
       onSnapshotFallback,
     },
     summarize,
@@ -2179,20 +2163,16 @@ export function alertsNear(
       const km = distanceKm(here, recordPosition(record));
       if (!(km <= radiusKm)) continue;
       found.push({
-        key: recordKey(layer.id, record),
-        icon: entityKind(layer.id).icon,
-        title: recordTitle(record) || layerName(dataManager, layer.id),
-        text: warnings[0].value,
-        // What the UI shows for it: words, or null to show `text` as given.
-        words: warnings[0].words,
-        distanceKm: km,
-        identity: {
-          layerId: layer.id,
-          id: recordKey(layer.id, record).slice(layer.id.length + 1),
-          label: recordTitle(record),
-          ...recordPosition(record),
+        ...spatialRow(
+          layer.id,
+          layerName(dataManager, layer.id),
           record,
-        },
+          recordPosition(record),
+          km,
+        ),
+        icon: entityKind(layer.id).icon,
+        text: warnings[0].value,
+        words: warnings[0].words,
       });
     }
   }

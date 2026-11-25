@@ -96,6 +96,14 @@ export function createControls({ state, services, parts }) {
     };
   }
 
+  function* inspectableSightings() {
+    const nowMs = services.now();
+    const taxa = state.drawnParams?.taxa ?? state.taxa;
+    for (const row of loadedSightings(state)) {
+      if (isInspectableSighting(row, nowMs, taxa, state.selectedId)) yield row;
+    }
+  }
+
   const methods = {
     id: 'wildlife-sightings',
     name: 'Wildlife Sightings',
@@ -222,12 +230,8 @@ export function createControls({ state, services, parts }) {
       if (!state.enabled) return [];
       const limit = analystRecordLimit(maxCount);
       const result = [];
-      const nowMs = services.now();
-      const taxa = state.drawnParams?.taxa ?? state.taxa;
-      for (const row of loadedSightings(state)) {
+      for (const row of inspectableSightings()) {
         if (result.length >= limit) break;
-        if (!isInspectableSighting(row, nowMs, taxa, state.selectedId))
-          continue;
         result.push({
           id: row.stableId,
           name: row.commonName || row.scientificName || null,
@@ -252,12 +256,8 @@ export function createControls({ state, services, parts }) {
     /** Count the observations Context can inspect without mapping each record. */
     getInspectableCount() {
       if (!state.enabled) return 0;
-      const nowMs = services.now();
-      const taxa = state.drawnParams?.taxa ?? state.taxa;
       let count = 0;
-      for (const row of loadedSightings(state)) {
-        if (isInspectableSighting(row, nowMs, taxa, state.selectedId)) count++;
-      }
+      for (const _ of inspectableSightings()) count++;
       return count;
     },
     /** Report the visible count, feed state and retry guidance. */

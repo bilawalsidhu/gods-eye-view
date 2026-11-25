@@ -299,8 +299,7 @@ const layers = [
     id: 'traffic',
     aliases: ['street traffic', 'road traffic', 'congestion'],
     context: false,
-    noQuery:
-      'Road-speed overlay. Segments appear in Context and are excluded from voice count queries.',
+    noQuery: 'road-speed overlay; segments listed in Context, not counted',
   },
   {
     id: 'transit',
@@ -439,8 +438,7 @@ const layers = [
     id: 'telegeography-submarine-cables',
     aliases: ['submarine cables', 'undersea cables', 'cables', 'telegeography'],
     context: false,
-    noQuery:
-      'Cables appear in Context and are excluded from voice count queries.',
+    noQuery: 'cable routes; listed in Context, not counted',
   },
   {
     // Results of the last osm_query ("hospitals in Kathmandu").

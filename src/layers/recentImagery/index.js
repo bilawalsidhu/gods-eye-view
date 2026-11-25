@@ -1527,6 +1527,8 @@ export function createRecentImageryLayer({
      * The latest Sentinel-2 or Landsat day whose footprints cover the point,
      * using the loaded catalog. A daily overview is an area result: its
      * thumbnail can show pixels without verifying coverage at the point.
+     * Before an area is chosen or outside it, {value: null, reason} explains
+     * the missing reading. Returns null while off or with no day at the point.
      */
     getValueAt(lat, lon) {
       if (!_enabled) return null;

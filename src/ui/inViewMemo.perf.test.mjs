@@ -31,7 +31,7 @@ test(
     store.connect({ dataManager: () => manager });
     store.setView({ ...GLOBE });
     store.inView(); // warm the code path
-    // The floor: the same three trigonometric calls per record, nothing else,
+    // The floor: the same four trigonometric calls per record, nothing else,
     // timed on this machine now (a loaded machine slows both alike).
     let sink = 0;
     let started = performance.now();

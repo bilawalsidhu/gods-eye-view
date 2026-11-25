@@ -112,6 +112,8 @@ function coarsen(value, precision = 2) {
   return Math.round(value * scale) / scale;
 }
 
+export const OBSCURED_CELL_DEG = 0.2;
+
 /** Public iNaturalist obscuration is a 0.2-degree cell aligned to zero. The
  * rounding removes floating-point noise, including at negative longitudes. */
 export function obscuredCell(lat, lon) {
@@ -120,9 +122,9 @@ export function obscuredCell(lat, lon) {
   const west = Math.min(179.8, Math.floor(lon * 5) / 5);
   return {
     south: coarsen(south, 1),
-    north: coarsen(south + 0.2, 1),
+    north: coarsen(south + OBSCURED_CELL_DEG, 1),
     west: coarsen(west, 1),
-    east: coarsen(west + 0.2, 1),
+    east: coarsen(west + OBSCURED_CELL_DEG, 1),
   };
 }
 

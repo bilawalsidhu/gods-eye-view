@@ -196,11 +196,13 @@ test('live flow names its congestion and source; unmatched roads stay simulated'
   assert.equal(trafficAnalystRecords(state).length, 2);
   state._flowStale = true;
   assert.equal(trafficAnalystRecords(state)[0].stale, true);
+  assert.equal(trafficAnalystRecords(state)[0].source, 'tomtom-cached');
 });
 
 test('a segment card says where its flow comes from in words it can translate', () => {
   for (const [code, english] of [
     ['tomtom-live', 'TomTom live flow'],
+    ['tomtom-cached', 'TomTom flow from saved tiles'],
     ['simulated-unmatched', 'Simulated (no live flow on this road)'],
     ['simulated-keyless', 'Simulated (no TomTom key)'],
   ]) {

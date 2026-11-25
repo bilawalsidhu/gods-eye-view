@@ -1,3 +1,4 @@
+import { OBSCURED_CELL_DEG } from '../layers/wildlifeSightings/records.js';
 import { ref, shallowRef, watch } from 'vue';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
@@ -218,19 +219,46 @@ export function installEntityContext({
     voice.controls?.emit('chat-submit');
   }
 
-  function ask(card) {
+  function mapItemReference(card) {
+    const hidden = store.lost && card.layerId === 'wildlife-sightings';
     const coordinates = {
-      lat: Number.isFinite(card.lat) ? Number(card.lat.toFixed(3)) : null,
-      lon: Number.isFinite(card.lon) ? Number(card.lon.toFixed(3)) : null,
+      lat:
+        !hidden && Number.isFinite(card.lat)
+          ? Number(card.lat.toFixed(3))
+          : null,
+      lon:
+        !hidden && Number.isFinite(card.lon)
+          ? Number(card.lon.toFixed(3))
+          : null,
     };
-    askText('Tell me about this map item and what is around it.', {
+    return {
       name: card.title,
       kind: card.kind,
       layer: card.layerName,
-      ...(card.obscured
-        ? { approximateCellCenter: { ...coordinates, cellSizeDegrees: 0.2 } }
+      ...(!hidden && card.obscured
+        ? {
+            approximateCellCenter: {
+              ...coordinates,
+              cellSizeDegrees: OBSCURED_CELL_DEG,
+            },
+          }
         : coordinates),
+    };
+  }
+
+  function ask(card) {
+    const reference = mapItemReference(card);
+    Object.defineProperty(reference, 'current', {
+      value: () =>
+        store.card?.key === card.key
+          ? mapItemReference(store.card)
+          : {
+              name: reference.name,
+              kind: reference.kind,
+              layer: reference.layer,
+            },
     });
+    askText('Tell me about this map item and what is around it.', reference);
   }
 
   store.connect({
@@ -415,7 +443,6 @@ export function installEntityContext({
     store.publishInspectorRows([]);
     store.publishViewWeather(null);
     weather = createViewWeather({
-      ...inspector.weatherClock,
       read: store.readWeather,
       readCurrentInput,
       publish: store.publishViewWeather,
@@ -443,8 +470,9 @@ export function installEntityContext({
         },
         { flush: 'post' },
       ),
-      // Render and focus recovery use one pre-flush sample. A globe-only
-      // refresh updates suggestions without admitting counts.
+      // Rows are published pre-flush for rendering and focus recovery. Only
+      // shown, layers, Space Missions and pulse changes take a new count
+      // sample. Manager and globe changes only republish rows.
       watch(
         [metadataReady, ...metadataInputs],
         ([, ...inputs], [initialized, ...previous]) => {

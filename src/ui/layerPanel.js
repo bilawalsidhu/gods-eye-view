@@ -1,6 +1,5 @@
 import { h, render as renderVue } from 'vue';
 import {
-  bindPresentedLayerFinder,
   createLayerFinder,
   filterLayerRows,
   layerFinderFor,
@@ -14,7 +13,7 @@ import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS as PANEL_LABELS,
-  sourceLabel,
+  layerSourceText,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
@@ -317,13 +316,11 @@ export class LayerPanel {
       renderVue(null, element);
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
-    this._unbindFinder?.();
     this._toggleContainer = container;
     this.finder =
-      this._providedFinder ?? layerFinderFor(container) ?? this._localFinder;
-    this._unbindFinder = container
-      ? bindPresentedLayerFinder(container, this.finder)
-      : null;
+      this._providedFinder ??
+      layerFinderFor(container) ??
+      (this._localFinder ??= createLayerFinder());
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();
@@ -378,8 +375,6 @@ export class LayerPanel {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
-    this._unbindFinder?.();
-    this._unbindFinder = null;
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
@@ -748,10 +743,7 @@ export class LayerPanel {
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
     // A layer marks source text that is data rather than a catalog name.
-    const source =
-      stats.sourceVerbatim === true && stats.source
-        ? stats.source
-        : sourceLabel(stats.source || layer.source);
+    const source = layerSourceText(layer);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {

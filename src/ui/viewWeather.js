@@ -18,12 +18,6 @@ function freshnessOf(reading, brief) {
   return Number.isFinite(retrieved) ? retrieved : Date.now();
 }
 
-function listenForPageVisibility(callback) {
-  const document = globalThis.document;
-  document?.addEventListener('visibilitychange', callback);
-  return () => document?.removeEventListener('visibilitychange', callback);
-}
-
 /** Own the Inspector observation and its scheduler for one Context bridge. */
 export function createViewWeather({
   read,
@@ -31,9 +25,7 @@ export function createViewWeather({
   readCurrentInput,
   setTimeout: scheduleTimeout = (...args) => globalThis.setTimeout(...args),
   clearTimeout: cancelTimeout = (...args) => globalThis.clearTimeout(...args),
-  nowMonotonic = () => performance.now(),
   isPageVisible = () => globalThis.document?.visibilityState !== 'hidden',
-  onPageVisibility = listenForPageVisibility,
 }) {
   let point = '';
   let mountId = null;
@@ -42,8 +34,6 @@ export function createViewWeather({
   let shown = false;
   let active = null;
   let stopped = false;
-  let elapsed = 0;
-  let visibleSince = null;
   let state = {
     reading: null,
     failed: false,
@@ -60,12 +50,6 @@ export function createViewWeather({
       return;
     state = { ...state, ...changes };
     publish(state);
-  }
-
-  function syncClock(eligible) {
-    const moment = nowMonotonic();
-    if (visibleSince !== null) elapsed += moment - visibleSince;
-    visibleSince = eligible && isPageVisible() ? moment : null;
   }
 
   function retire() {
@@ -91,7 +75,6 @@ export function createViewWeather({
     // Live inputs can change before the bridge's batched update.
     const input = readCurrentInput();
     if (matches(input, request)) return input;
-    if (!input.shown) syncClock(false);
     retire();
     setState({ pending: false });
     return null;
@@ -106,42 +89,32 @@ export function createViewWeather({
     const { signal } = request.controller;
     setState({ pending: true });
     if (active !== request) return;
+    let brief = null;
     try {
-      await requestWithDeadline(
+      brief = await requestWithDeadline(
         async (bounded) => {
-          // Publish inside the operation: live camera eligibility can change before
-          // the bridge delivers its next batched update.
-          const timeout = () => {
-            if (active !== request) return;
-            request.controller.abort(bounded.reason);
-            completeRead(request, null);
-          };
-          bounded.addEventListener('abort', timeout, { once: true });
-          let brief = null;
           try {
-            brief = await read(center.lat, center.lon, {
-              signal,
+            return await read(center.lat, center.lon, {
+              signal: bounded,
               exactPoint: true,
             });
-          } catch {
-            // Failed reads use the same retry as missing observations.
           } finally {
-            bounded.removeEventListener('abort', timeout);
+            // Sample the live camera before a queued update can move it back.
+            currentInputFor(request);
           }
-          completeRead(request, brief);
         },
         { signal, timeoutMs: READ_TIMEOUT_MS },
       );
-    } catch (error) {
-      if (!signal.aborted) throw error;
+    } catch {
+      // Failed and timed-out reads use the same retry as missing observations.
     }
+    completeRead(request, brief);
   }
 
   function completeRead(request, brief) {
     if (!currentInputFor(request)) return;
 
     active = null;
-    syncClock(shown);
     const reading = Number.isFinite(brief?.weather?.temperatureC)
       ? brief.weather
       : null;
@@ -161,7 +134,7 @@ export function createViewWeather({
             utcOffsetSeconds: reading.utcOffsetSeconds,
           }
         : null;
-    deadline = reading ? elapsed + REFRESH_MS : Date.now() + RETRY_MS;
+    deadline = Date.now() + (reading ? REFRESH_MS : RETRY_MS);
     setState({
       reading,
       failed: reading === null,
@@ -195,7 +168,6 @@ export function createViewWeather({
   function update(input) {
     if (stopped) return;
     shown = input.shown;
-    syncClock(shown);
     mountId = input.mountId;
     const nextPoint = weatherPoint(input.center);
     if (active && !matches(input, active)) retire();
@@ -218,23 +190,16 @@ export function createViewWeather({
   function pulse() {
     if (stopped) return;
     const input = readCurrentInput();
-    syncClock(input.shown);
     if (!input.shown || !isPageVisible()) return;
     // Only a visible pulse makes a completed reading eligible for renewal.
     // Once due, work stays eligible if a move or hide cancels the request.
-    if (deadline !== null && (state.reading ? elapsed : Date.now()) >= deadline)
-      deadline = null;
+    if (deadline !== null && Date.now() >= deadline) deadline = null;
     schedule(input);
   }
-
-  const offPageVisibility = onPageVisibility(() => {
-    if (!stopped) syncClock(readCurrentInput().shown);
-  });
 
   function stop() {
     if (stopped) return;
     stopped = true;
-    offPageVisibility?.();
     retire();
   }
 

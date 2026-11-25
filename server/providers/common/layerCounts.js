@@ -22,14 +22,8 @@ async function readLayerCounts(readers) {
     readers.map(async ([layerId, read]) => {
       try {
         const found = await read();
-        const count = Number(found?.count);
-        if (!Number.isFinite(count) || count <= 0) return null;
-        return {
-          layerId,
-          count: Math.round(count),
-          // JSON encodes nonfinite reader timestamps as null.
-          at: found.at == null ? null : Number(found.at),
-        };
+        if (!Number.isFinite(found?.count) || found.count <= 0) return null;
+        return { layerId, count: found.count, at: found.at ?? null };
       } catch {
         return null;
       }
@@ -66,7 +60,6 @@ export function layerCountsEndpoint(readers) {
         'Cache-Control': 'no-store',
         ...(limited && { 'Retry-After': '60' }),
       });
-      if (head) return res.end('');
       res.end(
         JSON.stringify(
           limited ? { error: 'rate_limited' } : { now: Date.now(), counts },

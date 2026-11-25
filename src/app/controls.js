@@ -91,9 +91,5 @@ export function createApplicationControls({
     ? t('Restoring shared view...')
     : t('Loading');
 
-  return {
-    styleManager,
-    weatherEffects,
-    cockpitCloudEffects,
-  };
+  return { styleManager, weatherEffects, cockpitCloudEffects };
 }

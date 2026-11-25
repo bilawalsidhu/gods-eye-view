@@ -119,7 +119,7 @@ test('an unsuccessful count response preserves its HTTP status', async () => {
   );
 });
 
-test('count throttling exposes Retry-After without parsing the refusal body', async () => {
+test('count throttling rejects without parsing the refusal body', async () => {
   let cancelled = 0;
   const serverDate = 'Wed, 21 Oct 2026 10:00:00 GMT';
   for (const retry of ['60', 'Wed, 21 Oct 2026 10:01:00 GMT']) {
@@ -139,7 +139,6 @@ test('count throttling exposes Retry-After without parsing the refusal body', as
     });
     await assert.rejects(services.layerCounts.getCounts(), {
       message: 'Layer counts unavailable (429)',
-      retryAfterMs: 60_000,
     });
   }
   assert.equal(cancelled, 2);

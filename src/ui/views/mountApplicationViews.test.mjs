@@ -16,6 +16,7 @@ import { createApplicationRequestServices } from '../../services/requests.js';
 import { ShareLinkManager } from '../../sharelink.js';
 import { LocationSearch } from '../location.js';
 import { useEntityCardStore } from '../stores/entityCard.js';
+import { LAYER_COUNTS_REFETCH_MS } from '../layerCounts.js';
 import { applicationPinia } from '../vueRuntime.js';
 import { mountApplicationViews } from './index.js';
 
@@ -342,41 +343,9 @@ test('stock Context uses the configured layer counts through either public shell
   );
   await direct.hide();
 
-  const pending = Promise.withResolvers();
-  const replacement = t.mock.fn(() => pending.promise);
-  const releaseReplacement = configureApplicationServices({
-    layerCounts: { getCounts: replacement },
-  });
-  t.after(releaseReplacement);
-  releaseFirst();
-  assert.equal(
-    replacement.mock.callCount(),
-    0,
-    'the closed Inspector makes no request',
-  );
-  await direct.show();
-  assert.deepEqual(
-    { count: direct.count(), requests: replacement.mock.callCount() },
-    { count: undefined, requests: 1 },
-    'reopening starts a fresh read without showing the old provider count or waiting out its cooldown',
-  );
-  pending.resolve(countResponse(1300));
-  await new Promise((resolve) => setImmediate(resolve));
-  await nextTick();
-  assert.equal(direct.count(), '1,300');
-  assert.equal(first.mock.callCount(), 1);
-
-  await direct.hide();
-  releaseReplacement();
-  await direct.show();
-  assert.equal(
-    direct.count(),
-    undefined,
-    'a released source leaves no saved count',
-  );
-  assert.equal(replacement.mock.callCount(), 1);
-  await direct.hide();
   await direct.stop();
+  releaseFirst();
+  t.mock.timers.tick(LAYER_COUNTS_REFETCH_MS);
 
   const ordinary = t.mock.fn(async () => countResponse(9999));
   const configured = t.mock.fn(async () => Response.json(countResponse(1400)));
@@ -399,56 +368,6 @@ test('stock Context uses the configured layer counts through either public shell
       ({ arguments: [url] }) => url === '/api/layer-counts',
     ),
   );
-});
-
-test('remounting Context keeps counts only for the same configured source', async (t) => {
-  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response(null, { status: 503 }),
-  );
-  const countResponse = (count) => ({
-    counts: [{ layerId: 'satellites', count, at: Date.now() }],
-  });
-  const mount = async () => {
-    const inspector = await countInspector(t);
-    attachSatellites(inspector.styleManager);
-    await inspector.show();
-    return inspector;
-  };
-  const sourceA = t.mock.fn(async () => countResponse(7));
-  const releaseA = configureApplicationServices({
-    layerCounts: { getCounts: sourceA },
-  });
-  t.after(releaseA);
-  const first = await mount();
-  assert.equal(first.count(), '7');
-  await first.stop();
-
-  const sameSource = await mount();
-  assert.equal(sameSource.count(), '7');
-  assert.equal(sourceA.mock.callCount(), 1);
-  await sameSource.stop();
-  releaseA();
-
-  t.mock.timers.tick(60_000);
-  const pending = Promise.withResolvers();
-  const sourceB = t.mock.fn(() => pending.promise);
-  t.after(
-    configureApplicationServices({ layerCounts: { getCounts: sourceB } }),
-  );
-  const replacement = await mount();
-  assert.deepEqual(
-    { count: replacement.count(), requests: sourceB.mock.callCount() },
-    { count: undefined, requests: 1 },
-    'the replacement starts its own read with no previous count',
-  );
-
-  pending.resolve(countResponse(42));
-  await new Promise((resolve) => setImmediate(resolve));
-  await nextTick();
-  assert.equal(replacement.count(), '42');
 });
 
 test('stock controls use host weather in the Inspector and host regional conditions on the card', async (t) => {
@@ -559,14 +478,13 @@ test('the composed Inspector respects the host weather and regional readers', as
   );
   const { StyleManager: ComposedStyleManager } =
     await import('../composition.js');
-  const weather = {
-    getConditions: t.mock.fn(async () => ({
-      weather: { temperatureC: 17, weatherCode: 0 },
-    })),
-  };
-  const regional = t.mock.fn(async () => ({
-    weather: { temperatureC: 21, weatherCode: 0 },
-  }));
+  const conditions = (temperatureC) =>
+    t.mock.fn(async (_lat, _lon, { signal }) => {
+      assert.equal(signal.aborted, false);
+      return { weather: { temperatureC, weatherCode: 0 } };
+    });
+  const weather = { getConditions: conditions(17) };
+  const regional = conditions(21);
   for (const [requests, overrides, reader, temperature] of [
     [{ weather }, {}, weather.getConditions, '17 °C'],
     [{ weather }, { fetchSpotWeather: null }, regional, '21 °C'],
@@ -591,9 +509,8 @@ test('the composed Inspector respects the host weather and regional readers', as
     await nextTick();
 
     assert.equal(reader.mock.callCount(), 1);
-    const [lat, lon, { signal }] = reader.mock.calls[0].arguments;
+    const [lat, lon] = reader.mock.calls[0].arguments;
     assert.deepEqual([lat, lon], [47.6, -122.3]);
-    assert.equal(signal.aborted, false);
     assert.ok(
       inspector.host
         .querySelector('.view-context__tiles--facts')

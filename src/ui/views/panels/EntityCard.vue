@@ -1,4 +1,6 @@
 <script setup>
+import { approximatePosition } from '../../distanceText.js';
+import { coordinateText } from '../../coordinateText.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
@@ -74,9 +76,7 @@ const position = computed(() => {
   const current = card.value;
   if (!Number.isFinite(current?.lat) || !Number.isFinite(current?.lon)) return '';
   if (current.obscured) return t('Location obscured to a 0.2° cell');
-  const lat = `${Math.abs(current.lat).toFixed(3)}°${current.lat >= 0 ? 'N' : 'S'}`;
-  const lon = `${Math.abs(current.lon).toFixed(3)}°${current.lon >= 0 ? 'E' : 'W'}`;
-  return `${lat}  ${lon}`;
+  return coordinateText(current.lat, current.lon);
 });
 
 const source = computed(() => {
@@ -490,7 +490,7 @@ watch(
       </div>
 
       <slot />
-      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" entity :lat="card.lat" :lon="card.lon" :obscured="card.obscured" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
+      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" :lat="card.lat" :lon="card.lon" :obscured="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
 
       <p v-if="source" class="entity-card__source">
         <span>{{ t('Source') }}</span> {{ source }}<template v-if="ageText"> · {{ ageText }}</template>

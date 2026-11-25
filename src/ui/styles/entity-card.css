@@ -2665,6 +2665,7 @@
   background: #c89bff;
 }
 
+.view-context__bar-key [data-tone='4']::before,
 .view-context__bar [data-tone='4'] {
   background: rgba(199, 214, 222, 0.35);
 }

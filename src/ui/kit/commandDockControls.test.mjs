@@ -42,7 +42,8 @@ const views = {
   // Search and Expand in the header, the two tabs, Contacts, the cockpit
   // entry, SEARCH NEARBY SITES and the TR-3B chip.
   'ContextView.vue': { markup: context, buttons: 8, icons: 7, closes: 0 },
-  // Two buttons and five icons across the Inspector. Globe rows use EntityMark.
+  // Buttons select a globe row or open Data Layers. Icons mark the pointer,
+  // weather, worldwide counts, layer counts and readings. Globe rows use EntityMark.
   'panels/ViewContext.vue': { markup: inView, buttons: 2, icons: 5, closes: 0 },
   // Open in Data Layers; a layer's glyph and the pointer's layers.
   'panels/SuggestedLayers.vue': {

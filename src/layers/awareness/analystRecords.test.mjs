@@ -25,7 +25,7 @@ test('Contacts lists its chosen contact at its position with cohort counts', () 
       radiusM: 185_200,
       cohorts: [
         { id: 'flights', summary: { count: 12 } },
-        { id: 'vessels', summary: { count: null } },
+        { id: 'ais-live-vessels', summary: { count: null } },
       ],
     },
   });
@@ -35,8 +35,8 @@ test('Contacts lists its chosen contact at its position with cohort counts', () 
   assert.equal(record.name, 'UAL1');
   assert.ok(Math.abs(record.lat - 30.3) < 1e-6);
   assert.ok(Math.abs(record.lon + 97.7) < 1e-6);
-  assert.equal(record.flights, 12);
-  assert.equal('vessels' in record, false);
+  assert.equal(record.flightsCount, 12);
+  assert.equal('vesselsCount' in record, false);
   assert.equal(record.radiusKm, 185.2);
 });
 

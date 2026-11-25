@@ -427,12 +427,11 @@ const RADIANS = Math.PI / 180;
  * none. A feature drawn in several parts (a MultiPolygon, or a dam mapped as
  * its outline and again as its crest lines under one id) is one feature.
  * @param {object} feature
- * @returns {string|number|object}
+ * @returns {string|object}
  */
 function localFeatureKey(feature) {
   const { id } = feature;
-  if (id == null) return feature;
-  return Number.isFinite(id) ? id : String(id);
+  return id == null ? feature : String(id);
 }
 
 /**
@@ -522,6 +521,7 @@ function anonymousContent(feature) {
 function anonymousContextKeys(parts, layerId, previous, nextKey) {
   const keys = new Map();
   const byLocation = new Map();
+  const placeNames = new Map();
   for (const { feature, kind, coordinates } of parts) {
     if (feature.id != null || kind === 'empty' || keys.has(feature)) continue;
     const point =
@@ -533,19 +533,34 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
     const properties = unwrapProperties(feature.properties ?? {});
     const { name } = mapAnalystRecord({ properties }, layerId);
     const place = JSON.stringify([point[1], point[0], name]);
+    placeNames.set(place, name);
     keys.set(feature, null);
     if (!byLocation.has(place)) byLocation.set(place, []);
     byLocation.get(place).push(feature);
   }
 
+  const currentNames = new Map();
+  for (const name of placeNames.values()) {
+    if (name) currentNames.set(name, (currentNames.get(name) ?? 0) + 1);
+  }
+  const movedKeys = new Map();
+  for (const [place, group] of previous ?? []) {
+    if (!group.name) continue;
+    const unique = !movedKeys.has(group.name) && !byLocation.has(place);
+    movedKeys.set(group.name, unique ? group.key : null);
+  }
+
   const groups = new Map();
   for (const [place, features] of byLocation) {
     const before = previous?.get(place);
+    const name = placeNames.get(place);
     if (features.length === 1 && !before?.byContent) {
       const feature = features[0];
-      const key = before?.key ?? nextKey();
+      const moved =
+        !before && currentNames.get(name) === 1 ? movedKeys.get(name) : null;
+      const key = before?.key ?? moved ?? nextKey();
       keys.set(feature, key);
-      groups.set(place, { feature, key });
+      groups.set(place, { feature, key, name });
       continue;
     }
 
@@ -561,7 +576,7 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
       featuresByContent.get(content).push(feature);
     }
     const byContent = new Map();
-    groups.set(place, { byContent });
+    groups.set(place, { byContent, name });
     for (const [content, matches] of featuresByContent) {
       const prior = oldKeys?.get(content);
       // A different number of exact duplicates leaves no way to tell
@@ -1060,6 +1075,24 @@ export function createLocalGeoJsonLayer(
     );
   }
 
+  const recordFeature = new WeakMap();
+  const siteRecord = (feature, idForAnalyst, lat, lon, properties) => {
+    const record = mapAnalystRecord(
+      { id: idForAnalyst, lat, lon, properties },
+      id,
+    );
+    const key = localFeatureKey(feature);
+    record.key =
+      typeof key === 'object'
+        ? _drawn.anonymous.keys.get(feature)
+        : `geojson:id:${key}`;
+    Object.defineProperty(record, CONTEXT_FEATURE, {
+      value: { layerName: name, source, properties },
+    });
+    recordFeature.set(record, feature);
+    return record;
+  };
+
   const layer = {
     id,
     name,
@@ -1116,21 +1149,6 @@ export function createLocalGeoJsonLayer(
         ? Math.max(1, Math.floor(maxCount))
         : 2000;
       const result = [];
-      const siteRecord = (feature, idForAnalyst, lat, lon, properties) => {
-        const record = mapAnalystRecord(
-          { id: idForAnalyst, lat, lon, properties },
-          id,
-        );
-        const key = localFeatureKey(feature);
-        record.key =
-          typeof key === 'object'
-            ? _drawn.anonymous.keys.get(feature)
-            : `geojson:${typeof key === 'number' ? 'number' : 'id'}:${key}`;
-        Object.defineProperty(record, CONTEXT_FEATURE, {
-          value: { layerName: name, source, properties },
-        });
-        return record;
-      };
       // One record per feature (localFeatureKey), as the layer counts them.
       // A multi-part polygon or point feature is listed at its first part,
       // with every part's point in `parts`, so Nearby measures it to the
@@ -1225,9 +1243,27 @@ export function createLocalGeoJsonLayer(
         return drawnPartId !== key && !drawnPartId.startsWith('geojson:')
           ? null
           : undefined;
-      return (
-        layer.getAnalystRecords(1, localFeatureKey(part.feature))[0] ?? null
-      );
+      const record =
+        layer.getAnalystRecords(1, localFeatureKey(part.feature))[0] ?? null;
+      if (
+        record &&
+        part.kind === 'line' &&
+        recordFeature.get(record) !== part.feature
+      ) {
+        const selected = siteRecord(
+          part.feature,
+          record.id,
+          record.lat,
+          record.lon,
+          unwrapProperties(part.feature.properties ?? {}),
+        );
+        if (record.parts) selected.parts = record.parts;
+        Object.defineProperty(selected, CONTEXT_LINES, {
+          value: record[CONTEXT_LINES],
+        });
+        return selected;
+      }
+      return record;
     },
 
     enable: async (viewer) => {

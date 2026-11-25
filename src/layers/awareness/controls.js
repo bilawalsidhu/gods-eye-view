@@ -1,6 +1,13 @@
 import { AWARENESS_RADIUS_M } from '../../data/militaryAwarenessEngine.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 
+const COHORT_FIELDS = Object.freeze({
+  flights: 'flightsCount',
+  military: 'militaryAircraftCount',
+  'ais-live-vessels': 'vesselsCount',
+  'military-installations': 'installationsCount',
+});
+
 export function createControls({ state: layerState, services, parts, source }) {
   const flightsLayer = services.flights;
   const militaryFlightsLayer = services.military;
@@ -42,7 +49,19 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     getStats() {
+      const subject = layerState.subject;
       return {
+        recordsRevision: subject
+          ? [
+              subject.layerId,
+              subject.id,
+              subject.label,
+              layerState.subjectMissing === true,
+              subject.position?.x,
+              subject.position?.y,
+              subject.position?.z,
+            ].join('|')
+          : '',
         count: layerState.results ? 1 : 0,
         lastUpdate: layerState.results?.evaluatedAt || null,
         stale: false,
@@ -75,8 +94,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       const results = layerState.results;
       const contacts = {};
       for (const cohort of results?.cohorts || []) {
-        if (cohort?.id && Number.isFinite(cohort.summary?.count))
-          contacts[cohort.id] = cohort.summary.count;
+        if (
+          Object.hasOwn(COHORT_FIELDS, cohort?.id) &&
+          Number.isFinite(cohort.summary?.count)
+        )
+          contacts[COHORT_FIELDS[cohort.id]] = cohort.summary.count;
       }
       return [
         {
@@ -87,6 +109,10 @@ export function createControls({ state: layerState, services, parts, source }) {
           lon: at.lon,
           radiusKm: (results?.radiusM ?? AWARENESS_RADIUS_M) / 1000,
           ...contacts,
+          installationsCoverage:
+            results?.cohorts?.find(
+              (cohort) => cohort?.id === 'military-installations',
+            )?.coverage ?? null,
           lost: layerState.subjectMissing === true,
           evaluatedAtMs: results?.evaluatedAt ?? null,
         },

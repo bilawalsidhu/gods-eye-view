@@ -2,12 +2,10 @@ import { LayerLifecycle } from '../data/lifecycle.js';
 import { LayerPresentation } from './layerPresentation.js';
 import { createCyberSonarScene } from '../cyberSonarScene.js';
 import { panelAwareVisibility } from './embed.js';
-import { useLayerFinderStore } from '../ui/stores/layerFinder.js';
-import { applicationPinia } from '../ui/vueRuntime.js';
 /** Register the application layer catalog before allowing state restoration. */
 export function createApplicationData({
   scene: { viewer, mapStackController },
-  controls: { styleManager, finder = useLayerFinderStore(applicationPinia()) },
+  controls: { styleManager },
   catalog,
   allowQaRegistration,
   onData,
@@ -29,7 +27,6 @@ export function createApplicationData({
       );
   });
   const presentation = new LayerPresentation(dataManager, {
-    finder,
     weatherClock: catalog?.weatherClock,
   });
   defer(() => presentation.destroy());
