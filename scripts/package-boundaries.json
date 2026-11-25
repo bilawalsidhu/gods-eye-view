@@ -8,6 +8,8 @@
     "modules": [
       "src/data/infrastructure.js",
       "src/data/localGeojsonCore.js",
+      "src/data/contextGeometry.js",
+      "src/geoDistance.js",
       "src/data/geojsonPins.js",
       "src/render/cesium/heights.js",
       "src/render/cesium/camera.js",
@@ -69,7 +71,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -187,6 +190,8 @@
       "src/ui/views/panels/DataLibraryDialog.vue",
       "src/ui/views/panels/DataLibraryBrowse.vue",
       "src/ui/views/panels/LayerFinder.vue",
+      "src/ui/stores/layerFinder.js",
+      "src/ui/layerFinderFilter.js",
       "src/ui/views/panels/LayerSectionIndex.vue",
       "src/ui/libraryBrowser.js",
       "src/ui/localSdrPresentation.js",
@@ -268,15 +273,31 @@
       "src/ui/layerNames.js",
       "src/ui/views/panels/AltitudeGraph.vue",
       "src/ui/stores/omnibar.js",
-      "src/ui/views/panels/SunDial.vue",
       "src/ui/views/panels/CctvPreview.vue",
       "src/data/contextStore.js",
       "src/data/entityContext.js",
+      "src/data/contextGeometry.js",
+      "src/data/firmsLabels.js",
+      "src/data/firmsIntensity.js",
+      "src/geo/horizon.js",
+      "src/geo/ellipsoid.js",
+      "src/geo/vector.js",
       "src/ui/stores/entityCard.js",
+      "src/ui/stores/layerCounts.js",
+      "src/ui/layerRowState.js",
       "src/ui/contextRadius.js",
       "src/layers/firms/source.js",
       "src/layers/earthquakes/records.js",
       "src/ui/views/panels/ViewContext.vue",
+      "src/data/placeBelow.js",
+      "src/data/adminBoundaries.js",
+      "src/data/bundledJson.js",
+      "src/ui/distanceText.js",
+      "src/ui/views/panels/SuggestedLayers.vue",
+      "src/ui/contextTime.js",
+      "src/data/railTimeZones.js",
+      "src/ui/viewWeather.js",
+      "src/ui/layerSuggestions.js",
       "src/layers/earthquakes/source.js",
       "src/layers/cyclones/source.js",
       "src/i18n/marker.js",
@@ -287,6 +308,7 @@
       "src/ui/views/panels/SpotConditions.vue",
       "src/data/wikidataCities.js",
       "src/ui/views/panels/EntityCard.vue",
+      "src/layers/wildlifeSightings/photoText.js",
       "src/data/aircraftEmergency.js",
       "src/data/aircraftClass.js",
       "src/data/entityRecords.js",
@@ -306,6 +328,7 @@
       "src/exclusiveSurfaces.js",
       "src/geoDistance.js",
       "src/ui/omnibarGuide.js",
+      "src/data/aircraftLayerIds.js",
       "src/ui/views/panels/OmnibarGuide.vue",
       "src/cityPois.js",
       "src/search/photonSetting.js",
@@ -325,7 +348,25 @@
       "src/ui/stores/live.js",
       "src/ui/views/panels/LivePanel.vue",
       "src/ui/views/panels/CockpitLivePage.vue",
-      "src/ui/liveScreen.js"
+      "src/ui/liveScreen.js",
+      "src/ui/layerCounts.js",
+      "src/sources/featureSource.js",
+      "src/sources/sourceSlot.js",
+      "src/sources/capability.js",
+      "src/services/requests.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/overpassFeatures.js",
+      "src/services/application.js",
+      "src/data/feedState.js",
+      "src/loadingFeedback.js",
+      "src/data/installationFeedback.js",
+      "src/ui/statusText.js",
+      "src/ui/views/panels/EntityMark.vue",
+      "src/ui/entityMark.js",
+      "src/data/aircraftIcons.js",
+      "src/data/vesselSprites.js",
+      "src/ui/views/panels/NearbyLists.vue"
     ],
     "external": ["vue", "pinia", "vue-i18n"]
   },
@@ -475,6 +516,7 @@
     "modules": [
       "server/providers/space.js",
       "server/providers/space/celestrak.js",
+      "src/sources/tle.js",
       "server/providers/common/same-site.js",
       "src/localRequestGate.mjs",
       "server/providers/space/cooldown.js",
@@ -540,6 +582,7 @@
     "modules": [
       "server/providers/firms.js",
       "server/providers/common/http.js",
+      "server/providers/common/compress.js",
       "src/sources/httpBody.js",
       "src/i18n/marker.js",
       "src/data/firmsCsv.js"
@@ -983,6 +1026,8 @@
       "src/i18n/marker.js",
       "src/ui/layers.js",
       "src/ui/layerPanel.js",
+      "src/ui/layerRowState.js",
+      "src/ui/layerFinderFilter.js",
       "src/ui/layerNames.js",
       "src/ui/weatherPanel.js",
       "src/ui/railCards.js",
@@ -1310,7 +1355,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/layers/satellites/issMounts.js",
-      "src/layers/satellites/tiangongMounts.js"
+      "src/layers/satellites/tiangongMounts.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -1390,6 +1436,16 @@
       "src/styles/surveillance.js",
       "src/styles/thermal.js",
       "src/ui/applicationShell.js",
+      "src/services/application.js",
+      "src/services/requests.js",
+      "src/sources/httpBody.js",
+      "src/sources/capability.js",
+      "src/sources/featureGeometry.js",
+      "src/sources/featureSource.js",
+      "src/sources/overpassFeatures.js",
+      "src/sources/overpassFeaturesRecords.js",
+      "src/sources/sourceSlot.js",
+      "src/sources/requestDeadline.js",
       "src/render/cesium/effects.js",
       "src/render/cesium/screenModulation.js",
       "src/render/cesium/globe.js",
@@ -1491,6 +1547,7 @@
       "src/ui/effects.js",
       "src/ui/frameRateMonitor.js",
       "src/ui/layerPanel.js",
+      "src/ui/layerFinderFilter.js",
       "src/ui/weatherPanel.js",
       "src/ui/railCards.js",
       "src/ui/railCardBlocks.js",
@@ -1706,11 +1763,19 @@
       "src/ui/stores/omnibar.js",
       "src/data/contextStore.js",
       "src/data/pickedContext.js",
+      "src/data/aircraftLayerIds.js",
       "src/data/entityContext.js",
+      "src/data/contextGeometry.js",
+      "src/data/firmsLabels.js",
       "src/data/aircraftClass.js",
       "src/data/aircraftEmergency.js",
       "src/ui/stores/entityCard.js",
+      "src/ui/layerCounts.js",
+      "src/ui/stores/layerCounts.js",
+      "src/ui/layerRowState.js",
+      "src/ui/distanceText.js",
       "src/ui/entityContextBridge.js",
+      "src/ui/viewWeather.js",
       "src/data/locate.js",
       "src/data/trackingClickGesture.js",
       "src/ui/stores/sceneSharing.js",
@@ -1723,7 +1788,8 @@
       "src/data/liveStreams.js",
       "src/data/youtubeApi.js",
       "src/data/youtubeLivePlayer.js",
-      "src/ui/liveControls.js"
+      "src/ui/liveControls.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -1928,7 +1994,8 @@
       "src/render/occlusion/depthProbe.js",
       "src/data/detectionOcclusion.js",
       "src/scenes/storyTags.js",
-      "src/scenes/storyThumb.js"
+      "src/scenes/storyThumb.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "vue", "pinia", "vue-i18n", "kdbush"]
   },
@@ -2097,6 +2164,9 @@
       "src/data/detectionOcclusion.js",
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2245,6 +2315,9 @@
       "src/layers/flights/placed.js",
       "src/data/courseFromFixes.js",
       "src/data/approxDistance.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2405,6 +2478,7 @@
       "src/data/detectionOcclusion.js",
       "src/layers/vessels/photos.js",
       "src/data/openVesselPhoto.js",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "kdbush"]
@@ -2538,7 +2612,8 @@
       "src/layers/wind/streamlines.js",
       "src/layers/wind/model.js",
       "src/sky/assets.js",
-      "src/render/cesium/cardPreviews.js"
+      "src/render/cesium/cardPreviews.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -2638,7 +2713,8 @@
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
       "src/render/vectorBase/expressions.js",
-      "src/time/frameWait.js"
+      "src/time/frameWait.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -2791,7 +2867,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -2916,6 +2993,7 @@
       "src/layers/satellites/tiangongStation.js",
       "src/layers/satellites/tiangongJoints.js",
       "src/layers/satellites/tiangongArticulation.js",
+      "src/data/viewSheet.js",
       "src/renderPace.js"
     ],
     "external": ["cesium", "satellite.js", "kdbush"]
@@ -3021,7 +3099,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3134,7 +3213,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
@@ -3216,7 +3296,8 @@
       "src/data/installationFeedback.js",
       "src/ui/layerNames.js",
       "src/render/cesium/zoomOutGuard.js",
-      "src/ui/statusText.js"
+      "src/ui/statusText.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3254,6 +3335,8 @@
       "src/geo/ellipsoid.js",
       "src/geo/vector.js",
       "src/layers/traffic/policy.js",
+      "src/data/contextGeometry.js",
+      "src/layers/traffic/records.js",
       "src/render/color.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
@@ -3343,7 +3426,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -3540,7 +3624,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["hls.js", "cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -3671,7 +3756,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -3765,7 +3851,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "@mapbox/vector-tile", "pbf", "kdbush"]
   },
@@ -3878,7 +3965,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -3917,6 +4005,9 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
+      "src/data/contextGeometry.js",
+      "src/data/analystRecordLimit.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/render/color.js",
@@ -3954,7 +4045,9 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/geoDistance.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -4096,7 +4189,8 @@
       "src/render/vectorBase/index.js",
       "src/render/vectorBase/style.js",
       "src/render/vectorBase/paint.js",
-      "src/render/vectorBase/expressions.js"
+      "src/render/vectorBase/expressions.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -4154,6 +4248,7 @@
       "src/voice/referents.js",
       "src/voice/layerManifest.js",
       "src/voice/speech.js",
+      "src/data/aircraftLayerIds.js",
       "src/cityPois.js",
       "src/ui/layerNames.js",
       "src/ui/unitLabels.js",
@@ -4259,6 +4354,7 @@
       "src/scenes/nepalEvidencePack.js",
       "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
+      "src/data/analystRecordLimit.js",
       "src/render/cesium/heights.js",
       "src/ui/imagerySplit.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
@@ -4280,6 +4376,8 @@
       "src/app/sourceComposition.js",
       "src/app/controls.js",
       "src/app/data.js",
+      "src/ui/stores/layerFinder.js",
+      "src/ui/layerFinderFilter.js",
       "src/app/errors.js",
       "src/app/layerPresentation.js",
       "src/app/layers/aisLiveVessels.js",
@@ -4451,6 +4549,7 @@
       "src/data/layerStateTokenReservations.json",
       "src/data/lifecycle.js",
       "src/data/localGeojsonCore.js",
+      "src/data/contextGeometry.js",
       "src/data/geojsonPins.js",
       "src/data/localGeojsonLod.js",
       "src/data/local_data/natural_earth/marine.json",
@@ -4721,6 +4820,7 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/geo/horizon.js",
@@ -4738,6 +4838,7 @@
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
+      "src/layers/traffic/records.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
@@ -4954,6 +5055,7 @@
       "src/voice/gevActions.js",
       "src/agent/worldPacket.js",
       "src/voice/speech.js",
+      "src/data/aircraftLayerIds.js",
       "src/ui/layerNames.js",
       "src/voice/earcon.js",
       "src/voice/narration.js",
@@ -5618,7 +5720,12 @@
       "src/ui/stores/omnibar.js",
       "src/data/entityContext.js",
       "src/ui/stores/entityCard.js",
+      "src/ui/layerCounts.js",
+      "src/ui/stores/layerCounts.js",
+      "src/ui/layerRowState.js",
+      "src/ui/distanceText.js",
       "src/ui/entityContextBridge.js",
+      "src/ui/viewWeather.js",
       "src/data/locate.js",
       "src/render/cesium/cardPreviews.js",
       "src/layers/satellites/issModel.js",
@@ -5647,7 +5754,10 @@
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
       "src/layers/airQuality/units.js",
-      "src/layers/airQuality/cpcb.js"
+      "src/layers/airQuality/cpcb.js",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "hls.js",
@@ -5706,6 +5816,7 @@
       "src/awarenessEcho.js",
       "src/data/approxDistance.js",
       "src/data/bhoteKoshiEvent.js",
+      "src/data/analystRecordLimit.js",
       "src/ui/imagerySplit.js",
       "src/maps/imageryComparison.js",
       "src/data/bhoteKoshiEmbeddedMedia.js",
@@ -5809,6 +5920,7 @@
       "src/data/layerState.js",
       "src/data/layerStateTokenReservations.json",
       "src/data/localGeojsonCore.js",
+      "src/data/contextGeometry.js",
       "src/data/geojsonPins.js",
       "src/data/localGeojsonLod.js",
       "src/data/local_data/natural_earth/marine.json",
@@ -6055,6 +6167,7 @@
       "src/layers/submarineCables/lifecycle.js",
       "src/layers/submarineCables/overlay.js",
       "src/layers/submarineCables/policy.js",
+      "src/layers/submarineCables/records.js",
       "src/layers/submarineCables/rendering.js",
       "src/geo/rhumb.js",
       "src/geo/horizon.js",
@@ -6072,6 +6185,7 @@
       "src/layers/traffic/lifecycle.js",
       "src/layers/traffic/model.js",
       "src/layers/traffic/policy.js",
+      "src/layers/traffic/records.js",
       "src/layers/traffic/rendering.js",
       "src/layers/traffic/retention.js",
       "src/layers/traffic/source.js",
@@ -6521,7 +6635,10 @@
       "src/layers/airQuality/cpcb.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
-      "src/localRequestGate.mjs"
+      "src/localRequestGate.mjs",
+      "src/data/aircraftViews.js",
+      "src/data/aircraftViews.json",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "hls.js",
@@ -6622,6 +6739,7 @@
       "src/services/groundSnap.js",
       "src/services/meshFloorSampler.js",
       "src/services/requests.js",
+      "src/sources/requestDeadline.js",
       "src/services/terrainHeights.js",
       "src/search/coordinateGeocoder.js",
       "src/search/coordinateParser.js",
@@ -6671,7 +6789,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": [
       "cesium",
@@ -6786,7 +6905,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -7119,6 +7239,7 @@
       "src/voice/referents.js",
       "src/voice/layerManifest.js",
       "src/voice/speech.js",
+      "src/data/aircraftLayerIds.js",
       "src/cityPois.js",
       "src/ui/layerNames.js",
       "src/ui/unitLabels.js",
@@ -7587,6 +7708,8 @@
       "src/services/groundFloor.js",
       "src/services/meshFloorSampler.js",
       "src/services/requests.js",
+      "src/sources/httpBody.js",
+      "src/sources/requestDeadline.js",
       "src/services/terrainHeights.js",
       "src/sources/sourceSlot.js",
       "src/layers/transit/source.js",
@@ -7632,7 +7755,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "egm96-universal", "pbf", "kdbush"]
   },
@@ -7763,7 +7887,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "pbf", "kdbush"]
   },
@@ -8077,7 +8202,8 @@
       "src/render/cesium/zoomOutGuard.js",
       "src/render/cesium/sceneOcclusionProbe.js",
       "src/render/occlusion/depthProbe.js",
-      "src/data/detectionOcclusion.js"
+      "src/data/detectionOcclusion.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["cesium", "kdbush"]
   },
@@ -8294,6 +8420,7 @@
       "src/layers/transit/source.js",
       "src/sources/transitHistory.js",
       "src/services/requests.js",
+      "src/sources/sourceSlot.js",
       "src/sources/overpassFeatures.js",
       "src/sources/featureSource.js",
       "src/sources/overpassFeaturesRecords.js",
@@ -8358,6 +8485,7 @@
       "src/layers/airQuality/merge.js",
       "src/layers/airQuality/groups.js",
       "src/data/trackingClickGesture.js",
+      "src/geoDistance.js",
       "src/geo/ellipsoid.js",
       "src/render/rendererOf.js",
       "src/geo/vector.js",
@@ -8392,7 +8520,8 @@
       "src/layers/airQuality/cpcb.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
-      "src/localRequestGate.mjs"
+      "src/localRequestGate.mjs",
+      "src/ui/unitLabels.js"
     ],
     "external": ["cesium"]
   },
@@ -8565,7 +8694,8 @@
       "src/layers/wind/streamlines.js",
       "src/layers/wind/model.js",
       "src/render/recession.js",
-      "src/render/modelParts.js"
+      "src/render/modelParts.js",
+      "src/data/viewSheet.js"
     ],
     "external": ["pbf", "@mapbox/vector-tile", "kdbush"]
   },
@@ -8592,6 +8722,7 @@
       "src/i18n/marker.js",
       "src/layers/wildlifeSightings/cards.js",
       "src/layers/wildlifeSightings/controls.js",
+      "src/data/analystRecordLimit.js",
       "src/layers/wildlifeSightings/index.js",
       "src/layers/wildlifeSightings/lifecycle.js",
       "src/layers/wildlifeSightings/model.js",

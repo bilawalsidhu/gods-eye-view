@@ -1,5 +1,6 @@
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -75,7 +76,10 @@ import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
+import { useEntityCardStore } from './stores/entityCard.js';
+import { useLayerCountsStore } from './stores/layerCounts.js';
 import { installEntityContext } from './entityContextBridge.js';
+import { createLayerCounts } from './layerCounts.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
@@ -177,6 +181,7 @@ export class StyleManager extends ShellFacade {
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
         _showToast: (...args) => this._showToast(...args),
+        _revealPanel: (panelId) => this.revealPanel(panelId),
       },
       readHud: () => this.hud,
       readCockpit: () => this.cockpitView,
@@ -217,12 +222,25 @@ export class StyleManager extends ShellFacade {
     );
     this.viewer = viewer;
     // A click on anything a layer can identify opens its card in Context.
+    const pinia = applicationPinia();
+    const cards = useEntityCardStore(pinia);
+    const layerCounts = useLayerCountsStore(pinia);
     this._removeEntityContext = installEntityContext({
       viewer,
+      navigateToSelection: (fly) => this.runImmediateNavigation('target', fly),
       getDataManager: () => this._dataManager,
-      pinia: applicationPinia(),
+      pinia,
       pickWorld: services.pickWorldFromScreen,
       regionalBrief: services.fetchRegionalBrief,
+      spotWeather: services.fetchSpotWeather,
+      inspector: {
+        counts: createLayerCounts({
+          getCounts: getConfiguredLayerCounts,
+          readState: () => layerCounts.state,
+          writeState: layerCounts.publish,
+          readShown: () => cards.inspector.shown,
+        }),
+      },
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -338,6 +356,7 @@ export class StyleManager extends ShellFacade {
         _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
+        _syncContextDataManager: cards.syncDataManager,
         _updateTrafficSyncChip: (...args) =>
           this._updateTrafficSyncChip(...args),
         _updateGlobalLoadingFeedback: (...args) =>

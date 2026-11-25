@@ -276,6 +276,13 @@ export const ROTOR_FRAMES = ROTOR_ANGLES_DEG.length;
 /** The frame a helicopter holds when its rotor does not turn. */
 export const ROTOR_STILL_FRAME = 1;
 
+/** A supported helicopter rotor frame, or the still frame. */
+export function rotorFrameIndex(frame) {
+  return Number.isInteger(frame) && frame >= 0 && frame < ROTOR_FRAMES
+    ? frame
+    : ROTOR_STILL_FRAME;
+}
+
 /** One rotor frame: the disc, two crossed blades at `angle`, the body over them. */
 function helicopterBody(frame) {
   const angle = ROTOR_ANGLES_DEG[frame] ?? ROTOR_ANGLES_DEG[ROTOR_STILL_FRAME];
@@ -345,11 +352,7 @@ export const TRACKED_ICON_PX = TRACKED_RASTER_PX;
 export function aircraftIcon(kind, px = FLEET_RASTER_PX, frame) {
   const heli = kind === 'helicopter';
   const k = heli || BODIES[kind] ? kind : 'airliner';
-  const f = heli
-    ? Number.isInteger(frame) && frame >= 0 && frame < ROTOR_FRAMES
-      ? frame
-      : ROTOR_STILL_FRAME
-    : 0;
+  const f = heli ? rotorFrameIndex(frame) : 0;
   const key = `${k}@${px}#${f}`;
   let uri = _iconCache.get(key);
   if (!uri) {

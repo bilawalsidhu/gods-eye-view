@@ -1,40 +1,9 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { windProxy } from '../../server/providers/wind.js';
-
-/** Boot a mounted provider middleware without a real server. */
-function install(plugin) {
-  const routes = new Map();
-  plugin.configureServer({
-    middlewares: {
-      use(route, handler) {
-        routes.set(route, handler);
-      },
-    },
-  });
-  assert.equal(routes.size, 1);
-  const handler = [...routes.values()][0];
-  return async (url = '/', method = 'GET') => {
-    const res = {
-      statusCode: 200,
-      headers: {},
-      headersSent: false,
-      writeHead(status, headers) {
-        this.statusCode = status;
-        for (const [name, value] of Object.entries(headers || {}))
-          this.headers[name.toLowerCase()] = value;
-        this.headersSent = true;
-      },
-      end(body) {
-        this.body = body;
-        this.headersSent = true;
-      },
-    };
-    await handler({ url, method }, res);
-    return res;
-  };
-}
+import { waitForSignal } from '../sources/requestDeadline.js';
+import { installWindProxy as install } from '../testSupport/windProxyHarness.mjs';
 
 const IDX = [
   '1:0:d=2026091400:UGRD:10 m above ground:anl:',
@@ -654,4 +623,100 @@ test('optional scalar failure serves wind and recovery has a distinct immutable 
     (await request(partial.gridUrl.replace('/api/wind', ''))).body.length,
     12 * 8,
   );
+});
+
+const SCALAR_IDX = [
+  '1:0:d=2026091400:UGRD:10 m above ground:anl:',
+  '2:5:d=2026091400:VGRD:10 m above ground:anl:',
+  '3:10:d=2026091400:TMP:2 m above ground:anl:',
+  '4:15:d=2026091400:HGT:surface:anl:',
+].join('\n');
+
+const rawField = (fill, units) => ({
+  ni: 4,
+  nj: 3,
+  lo1: 0,
+  la1: 90,
+  di: 90,
+  dj: 90,
+  values: new Float64Array(12).fill(fill),
+  units,
+});
+
+const drainMicrotasks = async () => {
+  for (let i = 0; i < 20; i += 1) await new Promise((r) => setImmediate(r));
+};
+
+async function hungScalarRefresh(scalarDownloadMs) {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let scalarPhase = false;
+    let uvReads = 0;
+    const fetchImpl = async (url, { signal, headers } = {}) => {
+      if (url.endsWith('.idx')) return new Response(SCALAR_IDX);
+      const start = Number(/bytes=(\d+)/.exec(headers.Range)[1]);
+      const tag = { 0: 1, 5: 2, 10: 3 }[start];
+      if (tag !== 3) uvReads += 1;
+      const body = () =>
+        new Response(new Uint8Array(5).fill(tag), { status: 206 });
+      if (tag === 3 && scalarPhase)
+        return waitForSignal(
+          new Promise((resolve) =>
+            setTimeout(() => resolve(body()), scalarDownloadMs),
+          ),
+          signal,
+        );
+      return body();
+    };
+    const decodeImpl = async (bytes, { signal }) => {
+      if (bytes[0] === 1) return rawField(3, 'm/s');
+      if (bytes[0] === 2) return rawField(4, 'm/s');
+      // Hung scalar decode: the worker's own 30 s job deadline retires it.
+      return waitForSignal(
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Wind decode timed out')), 30_000),
+        ),
+        signal,
+      );
+    };
+    const request = install(
+      windProxy({
+        now: () => Date.UTC(2026, 8, 14, 12),
+        fetchImpl,
+        decodeImpl,
+        targetDx: 90,
+      }),
+    );
+    const wind = JSON.parse((await request('/manifest')).body);
+    assert.equal(wind.unavailable, false);
+    scalarPhase = true;
+    let done = false;
+    const pending = request('/manifest?overlay=temperature').then((res) => {
+      done = true;
+      return res;
+    });
+    for (let t = 0; t < 45 && !done; t += 1) {
+      await drainMicrotasks();
+      mock.timers.tick(1000);
+    }
+    await drainMicrotasks();
+    const manifest = JSON.parse((await pending).body);
+    return { manifest, uvReads };
+  } finally {
+    mock.timers.reset();
+  }
+}
+
+test('a hung scalar decode after a 1 s download serves wind without the field', async () => {
+  const { manifest } = await hungScalarRefresh(1000);
+  assert.equal(manifest.unavailable, false);
+  assert.equal(manifest.scalarError, 'Temperature field unavailable');
+});
+
+test('a hung scalar decode after an 11 s download still serves wind within the 40 s refresh deadline', async () => {
+  const { manifest, uvReads } = await hungScalarRefresh(11_000);
+  assert.equal(uvReads, 2, 'U/V reused from the cache');
+  assert.equal(manifest.unavailable, false);
+  assert.equal(manifest.scalarError, 'Temperature field unavailable');
+  assert.ok(manifest.gridUrl);
 });

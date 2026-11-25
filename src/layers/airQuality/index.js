@@ -1,4 +1,5 @@
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { greatCircleKm } from '../../geoDistance.js';
 import {
   canvasOf,
   drawOf,
@@ -26,6 +27,7 @@ import {
   isTrackingSelectionGesture,
 } from '../../data/trackingClickGesture.js';
 import { keyRequirementText } from '../../ui/keyGuidance.js';
+import { formatQuantity } from '../../ui/unitLabels.js';
 import { isRatedReading, mergeObservations } from './merge.js';
 import {
   EEA_HOURLY_BANDS,
@@ -70,6 +72,7 @@ import {
   readingsAreStale,
   isInRectangle,
   selectAirQualityOverlayCohort,
+  STALE_AFTER_MS,
 } from './model.js';
 export * from './model.js';
 export { createAirQualitySource } from './providers.js';
@@ -125,6 +128,8 @@ const FIELD_RETRY_MS = 60_000;
 const FIELD_ASK_BUCKET_MS = 3 * 3600_000;
 /** Playing, the clock waits at most this long for the next step. */
 const FIELD_WAIT_MS = 20_000;
+/** Farthest a station's reading stands for a point, in kilometres. */
+export const AIR_QUALITY_VALUE_RADIUS_KM = 50;
 
 export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
@@ -2776,6 +2781,57 @@ export function createAirQualityLayer({
       return _readings
         .slice(0, limit)
         .map((reading, index) => mapAnalystRecord(reading, index));
+    },
+
+    /**
+     * The nearest station's reading to a point, from the readings the layer
+     * draws, as the card shows it in the current view: `{value: "US AQI 85 ·
+     * Moderate", detail: "Paris · 4 km", at}`, with `stale: true` when the
+     * observation is older than `STALE_AFTER_MS`. Returns null while off, with
+     * no readings, or for invalid coordinates. Returns `{value: null, reason}`
+     * when no station is within AIR_QUALITY_VALUE_RADIUS_KM.
+     */
+    getValueAt(lat, lon) {
+      if (!_enabled || !_readings.length) return null;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      let nearest = null;
+      let nearestKm = Infinity;
+      for (const reading of _readings) {
+        if (!Number.isFinite(reading?.lat) || !Number.isFinite(reading?.lon))
+          continue;
+        const km = greatCircleKm({ lat, lon }, reading);
+        if (km < nearestKm) {
+          nearest = reading;
+          nearestKm = km;
+        }
+      }
+      if (!nearest || nearestKm > AIR_QUALITY_VALUE_RADIUS_KM)
+        return {
+          value: null,
+          reason: t('No station within {n} km', {
+            n: formatNumber(AIR_QUALITY_VALUE_RADIUS_KM),
+          }),
+        };
+      const number = scaleText(nearest);
+      const shown =
+        view === 'aqi'
+          ? `${AQI_NAME} ${number}`
+          : number === NO_VALUE
+            ? `${view} ${number}`
+            : `${view} ${number} ${layerUnits(view)}`;
+      const category = categoryText(nearest);
+      return {
+        value: category ? `${shown} · ${category}` : shown,
+        detail: `${nearest.name} · ${formatQuantity(Math.round(nearestKm), 'km')}`,
+        ...(Number.isFinite(nearest.observedMs)
+          ? {
+              at: nearest.observedMs,
+              ...(Date.now() - nearest.observedMs > STALE_AFTER_MS && {
+                stale: true,
+              }),
+            }
+          : {}),
+      };
     },
 
     getStats() {

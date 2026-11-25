@@ -38,7 +38,7 @@ const MAX_HULL_LENGTH_M = 460;
 const MAX_HULL_BEAM_M = 75;
 
 /** The model a known aircraft class draws when its type has no entry. */
-const CLASS_MODELS = Object.freeze({
+export const CLASS_MODELS = Object.freeze({
   light: 'c172',
   glider: 'glider',
   turboprop: 'at72',

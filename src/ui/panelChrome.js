@@ -100,6 +100,7 @@ export class PanelChrome {
     this._chromeStore = store;
     this._chromeToken = store.connect({
       toggle: (panelId) => this._togglePanel(panelId),
+      reveal: (panelId) => this._revealPanel?.(panelId),
       pin: (panelId) => {
         if (this._disclosurePanelIds)
           this._setCommandDockPanelPinState(panelId);

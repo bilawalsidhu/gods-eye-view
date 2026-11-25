@@ -65,8 +65,8 @@ test('the entity card hand-writes no Material glyph; each is a UiIcon', () => {
     [card, 12],
     // Bigger view, the popup's camera and More info.
     [camera, 3],
-    // The two weather glyphs, five headings and three row glyphs.
-    [nearby, 10],
+    // The weather glyph, four headings and three row glyphs.
+    [nearby, 8],
   ];
   for (const [markup, count] of counts) {
     const icons = markup.match(/<UiIcon\b[^>]*>/g) ?? [];

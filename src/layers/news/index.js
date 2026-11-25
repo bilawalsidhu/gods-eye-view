@@ -1737,9 +1737,6 @@ export function createNewsLayer({
     setRowControlsListener(value) {
       listener = typeof value === 'function' ? value : null;
     },
-    getAnalystRecords() {
-      return [];
-    },
     getStats() {
       return {
         count: (localMode() ? localReports(NEWS_MAP_LIMIT) : mapReports).filter(

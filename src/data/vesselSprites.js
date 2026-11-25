@@ -154,7 +154,7 @@ function sprite(key, body) {
  * @returns {string} SVG data URI.
  */
 export function vesselSprite(kind) {
-  const k = HULLS[kind] ? kind : 'other';
+  const k = Object.hasOwn(HULLS, kind) ? kind : 'other';
   return sprite(k, HULLS[k]);
 }
 

@@ -27,42 +27,40 @@ export function createCategories({
       .filter(Boolean);
   }
 
-  function hasTag(station, needles) {
-    const tags = stationTags(station);
-    return needles.some((needle) =>
+  const tagsInclude = (tags, needles) =>
+    needles.some((needle) =>
       tags.some((tag) => tag === needle || tag.includes(needle)),
     );
-  }
 
-  function detectedGenres(station) {
-    return MUSIC_GENRES.filter(([genre]) => hasTag(station, [genre])).map(
-      ([genre]) => genre,
-    );
+  // Station records and their tags are frozen (catalogModel.freezeRadioStation),
+  // so a station's categories are worked out once. Only the tags reference is
+  // checked: an array edited in place keeps its old categories.
+  const membershipByStation = new WeakMap();
+
+  function stationMembership(station) {
+    const keyed = station !== null && typeof station === 'object';
+    const known = keyed ? membershipByStation.get(station) : null;
+    if (known && known.source === station.tags) return known;
+    const tags = stationTags(station);
+    const genres = MUSIC_GENRES.filter(([genre]) =>
+      tagsInclude(tags, [genre]),
+    ).map(([genre]) => genre);
+    const categories = new Set(genres.map((genre) => `genre:${genre}`));
+    for (const [id, needles] of Object.entries(CATEGORY_MATCHERS))
+      if (tagsInclude(tags, needles)) categories.add(id);
+    if (genres.length > 0 || tagsInclude(tags, ['music', 'hits', 'songs']))
+      categories.add('music');
+    if (categories.size === 0) categories.add('other');
+    const membership = { source: station?.tags, categories };
+    if (keyed) membershipByStation.set(station, membership);
+    return membership;
   }
 
   /** Return whether a station belongs in a station-tag category. */
 
   function stationMatchesRadioCategory(station, categoryId) {
     if (categoryId === 'all') return true;
-    if (categoryId.startsWith('genre:')) {
-      return detectedGenres(station).includes(
-        categoryId.slice('genre:'.length),
-      );
-    }
-    if (categoryId === 'music') {
-      return (
-        detectedGenres(station).length > 0 ||
-        hasTag(station, ['music', 'hits', 'songs'])
-      );
-    }
-    if (categoryId === 'other') {
-      return (
-        !Object.entries(CATEGORY_MATCHERS).some(([id]) =>
-          stationMatchesRadioCategory(station, id),
-        ) && !stationMatchesRadioCategory(station, 'music')
-      );
-    }
-    return hasTag(station, CATEGORY_MATCHERS[categoryId] || []);
+    return stationMembership(station).categories.has(categoryId);
   }
 
   /** Build canonical and detected-genre categories from station-level tags. */
@@ -128,8 +126,6 @@ export function createCategories({
   return {
     normalizeRadioTag,
     stationTags,
-    hasTag,
-    detectedGenres,
     stationMatchesRadioCategory,
     buildRadioCategories,
     filterRadioStations,

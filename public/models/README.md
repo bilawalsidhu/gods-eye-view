@@ -35,6 +35,9 @@ How the layers use them:
   the route or category colour is painted.
 - The whole set loads once, up front, when a layer that draws it starts; no
   model is fetched while a session runs.
+- The aircraft and helicopter models are also rendered from every side into
+  the aircraft view sheet, the shaded sprites far-away aircraft are drawn
+  with ([`../sprites/`](../sprites/README.md)).
 
 `src/data/fleetModels.js` reads the set and chooses each vehicle's model;
 `src/data/fleetModels.test.mjs` checks that every model `types.json` names is

@@ -37,7 +37,8 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
-import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { blockFits, createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -913,7 +914,7 @@ const animating = (record) => record.gpu?.animating();
 export function createCesiumDraw({
   scene,
   report,
-  capabilities = new Set(GPU_ICON_CAPABILITIES),
+  capabilities = new Set(gpuIconCapabilities(scene)),
   requestRender: requestFrame = null,
   date = null,
   now = () => performance.now(),
@@ -1044,14 +1045,14 @@ export function createCesiumDraw({
       },
       upsert(list) {
         checkPulses(list);
+        // Icons drawn already, with the images they are drawn with, each
+        // changed where it is.
+        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         if (onGpu(record, list)) {
           for (const item of list) items.set(item.id, item);
           record.gpu.write(list);
           return patched();
         }
-        // Icons drawn already, with the images they are drawn with, each
-        // changed where it is.
-        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         // Points restyled, moved or added keep the pick ids they had, so
         // only points added change what height queries see through.
         const points = patchPoints(record, list);
@@ -1334,6 +1335,7 @@ export function createCesiumDraw({
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
+    viewsOf: (id) => viewSheets.get(id),
     requestRender: (reason) => {
       if (!live()) return;
       if (requestFrame) requestFrame(reason);
@@ -1350,10 +1352,16 @@ export function createCesiumDraw({
    */
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
-    if (!record.gpu && !force && !gpu.wants(list, record.spec)) return false;
-    gpu.check(list, record.spec);
+    if (
+      !record.gpu &&
+      !force &&
+      !record.spec.recede &&
+      !list.some((item) => gpu.wants(item, item.image))
+    )
+      return false;
+    gpu.check(list, record.spec, record);
     if (record.gpu) return true;
-    if (!replacing) gpu.check(record.items.values(), record.spec);
+    if (!replacing) gpu.check(record.items.values(), record.spec, record);
     record.gpu = gpu.attach(record);
     record.billboards = null;
     record.billboardHost = null;
@@ -1877,6 +1885,9 @@ export function createCesiumDraw({
   // when its icon is drawn, and registering an atlas again swaps the images
   // of the icons that drew from it.
   const atlases = new Map();
+  // Registered view sheets by id: image and checked layout. A new object on
+  // each registration lets sets notice the change.
+  const viewSheets = new Map();
   /** The blob each material or quad draws, held while it lives (`holdImage`). */
   const heldBlobs = new WeakMap();
 
@@ -2233,7 +2244,12 @@ export function createCesiumDraw({
         ok = false;
         break;
       }
-      const image = iconImage(record, list[i].image);
+      const ref = list[i].image;
+      if (gpu.wants(list[i], ref)) {
+        ok = false;
+        break;
+      }
+      const image = iconImage(record, ref);
       if (
         image === undefined ||
         imageKeyOf(image) !== entry.image ||
@@ -6353,6 +6369,29 @@ export function createCesiumDraw({
         }
       if (changed) scene.requestRender();
     },
+    ...(capabilities.has('viewSheets')
+      ? {
+          views(id, sheet) {
+            const layout = viewLayout(sheet);
+            if (viewSheets.has(id)) {
+              for (const record of sets.values()) {
+                if (record.kind !== 'icons') continue;
+                for (const item of record.items.values())
+                  if (
+                    isViewRef(item.image) &&
+                    item.image.views === id &&
+                    !blockFits(item.image.first, layout)
+                  )
+                    throw new RangeError(
+                      `a live view's frames run past the new layout of sheet '${id}'`,
+                    );
+              }
+            }
+            viewSheets.set(id, Object.freeze({ image: sheet.image, layout }));
+            scene.requestRender();
+          },
+        }
+      : {}),
   };
 
   return {
@@ -6477,7 +6516,11 @@ provideUnboundDraw((viewer) => {
   const part = createCesiumDraw({
     scene,
     report: uncaught,
-    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields', 'modelParts']),
+    capabilities: new Set([
+      ...gpuIconCapabilities(scene),
+      'fields',
+      'modelParts',
+    ]),
   });
   unboundParts.set(part.port, part);
   const offs = [
