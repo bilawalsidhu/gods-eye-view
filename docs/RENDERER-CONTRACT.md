@@ -263,6 +263,17 @@ optional:
   nothing, a move stretches with `axisScale`, and a slide and a hinge stop
   at their limits. The live layers drive it from each vehicle's record
   (`src/data/modelPartDrivers.js`).
+- `DrawPort.views(id, sheet)` (capability `viewSheets`, type `ViewSheet`)
+  registers a grey sheet of views. Registering the same id again replaces it
+  unless a live view icon's frames would run past the new layout. In that case
+  it throws a `RangeError` and keeps the previous sheet.
+  Register the sheet before drawing an icon with a `ViewRef` image
+  (`{views, first, fallback?}`). The icon draws the frame that shows its subject
+  from the eye. It requires `rotationMode: 'course'`, takes no `imageLod`, and
+  shares one sheet with the set's other view icons. Until the sheet loads, and
+  for good if it fails, the icon draws its fallback or nothing if omitted.
+  Cesium offers this on WebGL 2 and keeps the texture for the context's life.
+  Layers send flat images to renderers without the capability.
 
 The Cesium port lists `gpuTiming` where its context has
 `EXT_disjoint_timer_query_webgl2`: while anyone listens to frame signals,
@@ -327,6 +338,33 @@ under it up to its `extrudeHeight`, a wall with its foot on the surface under
 each position and its heights above it, and an image fill where the scene
 cannot drape materials (no depth textures). The check `draw.shapes.clamped`
 draws each.
+
+A set clamped as an overlay (`clampTo: 'overlay'`) draws its clamped flat
+fills and outlines, and its draped lines, as a flat layer over everything:
+on the ellipsoid, after the 3D tiles and terrain and without their depth, so
+neither hides them, and never draped onto the tiles (a ground primitive's
+volume, hundreds of kilometres wide, streaks through photoreal tiles at globe
+scale). Only the ellipsoid hides them: nothing past its horizon from the eye
+is drawn, so the far side of the globe never shows through. The GNSS
+integrity cells draw this way. The Cesium port draws the fills as one
+primitive on the ellipsoid, cut every tenth of a degree so their edges follow
+the curve, in the translucent pass with no depth test (`overlayFillAppearance`
+in `src/render/cesium/draw.js`); their outlines, and draped lines, are drawn
+as it draws draped lines where it cannot drape (`overlayLine`: on the
+ellipsoid's curve, and in their colour where the surface hides them). Fills
+and lines alike drop each fragment past the ellipsoid's horizon in their
+fragment shaders (`OVERLAY_HORIZON`), tested at the surface point over the
+fragment, since flat triangles and straight pieces pass metres under the
+ellipsoid: a line crossing the limb shows only its near part. The test is
+written so float32 decides it a few metres from an eye a metre up and
+within metres of the true horizon from any height, counts an eye under the
+ellipsoid as a metre up so low ground keeps its overlays,
+and tests a line's fragments along the segment as drawn, cut at the near
+plane. Overlay fills are colours only
+(an image fill is refused); icons, points and models clamp to an overlay as
+to `both`, and extruded shapes and walls stand on the surface as with
+`both`. The check `draw.shapes.overlay` draws one with the globe hidden and
+one past the horizon behind it.
 
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
@@ -867,9 +905,9 @@ software rasterizer such as SwiftShader draws the glow line differently.
 It has only the members the scenes need.
 
 Some behaviour is only drawn, so the logic checks cannot see it: course
-easing (`courseGlide`), and a hidden row keeping its eased
-course. The stub keeps no drawn course. These wait for scenes that capture
-an icon mid-turn. Height queries that count a set
-(`includeInHeightQueries`) are not checked either: the stub's heights are
-scripted, so it does not model them. Nor are video frames (a check needs a
-video) or `fetchTile` (the stub fetches nothing).
+easing (`courseGlide`), view sheets (`viewSheets`), and a hidden row keeping
+its eased course. The stub keeps no drawn course. These checks still need
+scenes that capture an icon mid-turn or from an oblique angle. Height
+queries that count a set (`includeInHeightQueries`) are not checked either:
+the stub's heights are scripted, so it does not model them. Nor are video
+frames (a check needs a video) or `fetchTile` (the stub fetches nothing).

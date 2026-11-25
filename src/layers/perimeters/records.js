@@ -2,9 +2,12 @@
  * WFIGS perimeters: the proxy's rows (normalizeFirePerimeterSnapshot) and
  * the snapshot the layer draws (firePerimeterSnapshot).
  *
- * The server and the package's `./layers/perimeters/source` export import
- * this module, so it marks text with msg() only. The layer translates `note`
- * when it shows it.
+ * The server and the package's `./layers/perimeters/source` and
+ * `./layers/perimeters/records` exports import this module, so it marks text
+ * with msg() only and imports no rendering code. The layer translates `note`
+ * when it shows it. A host that places incident cards itself (a server, a
+ * worker) takes `perimeterAnchorDegrees` from `./layers/perimeters/records`
+ * and stands them where the map does.
  */
 
 import { msg } from '../../i18n/marker.js';
@@ -154,6 +157,22 @@ export function perimeterAnchorDegrees(polygons) {
   return { lon: Math.atan2(sinLon, cosLon) / toRad, lat: lat / count };
 }
 
+/** A short hash of a string (cyrb53), base 36. */
+function hashText(text) {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
 /** WFIGS times up to this far ahead of our clock (clock skew) are taken as now; later ones are unknown. */
 const CLOCK_SKEW_MS = 10 * 60 * 1000;
 
@@ -163,7 +182,9 @@ const CLOCK_SKEW_MS = 10 * 60 * 1000;
  *
  * WFIGS keeps one perimeter per fire, so each of its polygons is one piece,
  * born when the perimeter was mapped (`poly_PolygonDateTime`, else the
- * record's last edit `poly_DateCurrent`).
+ * record's last edit `poly_DateCurrent`). A piece's id is the record's
+ * version (its last edit, else a hash of its mapping time and outline) and
+ * its place in the perimeter, so an edit draws the fire's pieces anew.
  * @param {object[]} rows - normalizeFirePerimeterSnapshot rows.
  * @param {{fetchedAt?: number|null, stale?: boolean, now?: number}} [options]
  * @returns {{at: null, fetchedAt: number|null, stale: boolean,
@@ -189,19 +210,23 @@ export function firePerimeterSnapshot(
       lastGrowthTime: grown,
       anchor: perimeterAnchorDegrees(polygons),
     });
-    for (const rings of polygons)
+    // Without poly_DateCurrent, a hash of the mapping time and outline
+    // stands in for it. Both the revision and piece ids assume WFIGS changes
+    // poly_DateCurrent with every polygon edit. An edit that leaves this
+    // date unchanged keeps the old outline drawn.
+    const version = Number.isFinite(facts.updatedTime)
+      ? String(facts.updatedTime)
+      : `h${hashText(`${polygonTime ?? ''}:${JSON.stringify(polygons)}`)}`;
+    polygons.forEach((rings, index) =>
       pieces.push({
+        id: `${version}/${index}`,
         fireId: stableId,
         born: grown,
         polygons: [rings],
         outline: rings,
-      });
-    // Without poly_DateCurrent, the mapping time and outline stand in for it.
-    versions.push(
-      Number.isFinite(facts.updatedTime)
-        ? `${stableId}@${facts.updatedTime}`
-        : `${stableId}@${polygonTime ?? ''}:${JSON.stringify(polygons)}`,
+      }),
     );
+    versions.push(`${stableId}@${version}`);
   }
   return {
     at: null,
