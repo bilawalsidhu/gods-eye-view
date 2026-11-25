@@ -142,7 +142,8 @@ const layerRows = computed(() =>
     const { tone } = presentation;
     const stats = row.stats || {};
     const source = layerSourceText(row);
-    const status = translateStatusMessage(stats.statusMessage || stats.loadingLabel || stats.coverage);
+    const coverage = typeof stats.coverage === 'string' ? stats.coverage.trim() : '';
+    const status = translateStatusMessage(stats.statusMessage || stats.loadingLabel || coverage);
     const error = translateFeedError(stats.error || stats.lastError || stats.managerRefreshError);
     const words = inspectorFeedLabel(tone);
     return {
