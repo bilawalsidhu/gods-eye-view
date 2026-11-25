@@ -229,6 +229,18 @@ export const DATA_CREDITS = [
       'Data © OpenStreetMap contributors (ODbL)',
   },
   {
+    key: 'waymarkedtrails',
+    html:
+      'Hiking routes: <a href="https://hiking.waymarkedtrails.org" target="_blank" rel="noopener">© waymarkedtrails.org</a> · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
+    key: 'waymarkedtrails-cycling',
+    html:
+      'Cycling routes: <a href="https://cycling.waymarkedtrails.org" target="_blank" rel="noopener">© waymarkedtrails.org</a> · ' +
+      'Data © OpenStreetMap contributors (ODbL)',
+  },
+  {
     key: 'nasa-gibs',
     html:
       'Recent imagery: We acknowledge the use of imagery provided by services from ' +

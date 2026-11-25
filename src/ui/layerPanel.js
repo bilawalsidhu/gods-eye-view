@@ -72,6 +72,8 @@ const PANEL_GROUPS = [
       'local-dams',
       'sea-marks',
       'ski-pistes',
+      'hiking',
+      'cycling',
     ],
   },
   {

@@ -84,6 +84,32 @@ const layers = [
     noQuery: 'raster tile overlay; no countable records',
   },
   {
+    id: 'hiking',
+    aliases: [
+      'hiking',
+      'hiking trails',
+      'hiking routes',
+      'walking routes',
+      'matkarajad',
+      'waymarked trails',
+    ],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
+    id: 'cycling',
+    aliases: [
+      'cycling',
+      'cycling routes',
+      'bike routes',
+      'cycle routes',
+      'eurovelo',
+      'rattateed',
+    ],
+    context: false,
+    noQuery: 'raster tile overlay; no countable records',
+  },
+  {
     id: 'flights',
     track: true,
     aliases: ['planes', 'aircraft', 'air traffic'],
@@ -586,6 +612,8 @@ const SELF_EVIDENT_IDS = new Set([
   'radio',
   'wind',
   'directions',
+  'hiking',
+  'cycling',
 ]);
 
 /** Lower case with spaces and hyphens removed: "Data centers" → "datacenters". */

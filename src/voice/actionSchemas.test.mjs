@@ -64,7 +64,8 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
     // Fire Perimeters queries add lastGrowthTime.
-    '2be49b7634a7b74b756a68cf80835ee36411e087edb549eb39f1ce7310afe60f',
+    // Hiking Trails and Cycling Routes extend the generated layer enums.
+    '2f8f6ee34d6359279173c2fa25c4df2a816b8355482825335060b5936c356f0b',
   );
 });
 

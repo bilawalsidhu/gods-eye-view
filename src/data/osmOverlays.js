@@ -50,6 +50,31 @@ export const OSM_OVERLAYS = Object.freeze([
       'Ski pistes © www.opensnowmap.org (CC BY-SA) · Data © OpenStreetMap contributors (ODbL)',
     maximumLevel: 18,
   }),
+  Object.freeze({
+    id: 'hiking',
+    name: 'Hiking Trails',
+    icon: '🥾',
+    source: 'Waymarked Trails',
+    // Every waymarked hiking route mapped in OpenStreetMap, worldwide —
+    // national and European long-distance paths (E1–E12), RMK trails in
+    // Estonia, local loops. Rendered by waymarkedtrails.org from OSM data.
+    urlTemplate: 'https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png',
+    credit:
+      'Hiking routes © waymarkedtrails.org (Sarah Hoffmann) · Data © OpenStreetMap contributors (ODbL)',
+    maximumLevel: 17,
+  }),
+  Object.freeze({
+    id: 'cycling',
+    name: 'Cycling Routes',
+    icon: '🚲',
+    source: 'Waymarked Trails',
+    // Signed cycle routes in OpenStreetMap, worldwide: EuroVelo, national
+    // and regional networks (Estonia's national routes among them), local.
+    urlTemplate: 'https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png',
+    credit:
+      'Cycling routes © waymarkedtrails.org (Sarah Hoffmann) · Data © OpenStreetMap contributors (ODbL)',
+    maximumLevel: 17,
+  }),
 ]);
 
 /** Why an enabled overlay is showing nothing, or null. */

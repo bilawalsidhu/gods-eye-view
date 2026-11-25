@@ -25,6 +25,16 @@ import { vRootClass } from '../../rail/rootClass.js';
 // go to GEV's typed chat. The mic starts voice, as the dock's button does.
 const { controls, runner } = storeToRefs(useOmnibarStore());
 
+/** On-screen zoom buttons: the same camera zoom the omnibar and voice use. */
+async function zoomStep(direction) {
+  if (!runner.value) return;
+  try {
+    await runner.value('adjust_camera_zoom', { direction, amount: 'medium' });
+  } catch (error) {
+    console.warn('[Zoom] step failed', error);
+  }
+}
+
 // A bundled city in the shape the place chips use, keyed by its Wikidata id
 // (namesakes are common). Showing one credits the Wikidata packs (once; the
 // shell makes it idempotent).
@@ -1077,6 +1087,12 @@ watch(
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></svg>
       </UiButton>
     </div>
+    <Teleport to="body">
+      <div class="gev-zoom" role="group">
+        <UiButton class="gev-zoom__btn" :disabled="!runner" :label="t('Zoom in')" @click="zoomStep('in')">+</UiButton>
+        <UiButton class="gev-zoom__btn" :disabled="!runner" :label="t('Zoom out')" @click="zoomStep('out')">−</UiButton>
+      </div>
+    </Teleport>
     <div v-show="showResults" ref="results" class="omnibar-results" :class="{ 'has-feedback': showFeedback }">
       <p id="omnibar-error" v-show="showFeedback" role="alert">{{ feedback }}</p>
     <ul v-if="open" id="gev-omnibar-list" class="omnibar-list" role="listbox" :aria-label="t('Suggestions')">
@@ -1393,4 +1409,41 @@ small {
 :global(body.recording-mode #gev-omnibar),
 :global(body.scene-playback-mode #gev-omnibar),
 :global(body.cockpit-mode #gev-omnibar) { display: none; }
+</style>
+
+<style>
+.gev-zoom {
+  position: fixed;
+  right: 92px;
+  bottom: 52px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gev-zoom .gev-zoom__btn.ui-button {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: 600 22px/1 ui-monospace, monospace;
+  color: #bfefff;
+  background: rgba(10, 16, 24, 0.82);
+  border: 1px solid rgba(79, 227, 255, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.gev-zoom .gev-zoom__btn.ui-button:hover:not(:disabled) {
+  border-color: rgba(79, 227, 255, 0.8);
+  color: #ffffff;
+}
+.gev-zoom .gev-zoom__btn.ui-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.gev-zoom .gev-zoom__btn.ui-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 </style>
