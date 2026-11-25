@@ -6,79 +6,43 @@ import { VUE_PLUGIN_OPTIONS } from '../build/vueOptions.js';
 import { build, normalizePath } from 'vite';
 
 /** Build each browser or Node export group and reject imports outside its declared ownership. */
-export async function checkPackageBoundaries(root) {
+export async function checkPackageBoundaries(root, { local = false } = {}) {
   root = await realpath(root);
   const readJson = async (name) =>
     JSON.parse(await readFile(path.join(root, name), 'utf8'));
   const pkg = await readJson('package.json');
-  let groups = await readJson('scripts/package-boundaries.json');
-  const localFile = 'scripts/package-boundaries.local.json';
-  let localText;
-  try {
-    localText = await readFile(path.join(root, localFile), 'utf8');
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
-  if (localText !== undefined) {
-    const invalid = (name = '') =>
-      new Error(`Invalid local package boundaries in ${localFile}: ${name}`);
-    let localGroups;
-    try {
-      localGroups = JSON.parse(localText);
-    } catch {
-      throw invalid();
-    }
+  const groups = await readJson('scripts/package-boundaries.json');
+  if (local) {
+    // A fork's additions: modules and external dependencies of existing groups.
+    const localFile = 'scripts/package-boundaries.local.json';
+    const invalid = (detail) =>
+      new Error(`Invalid local package boundaries in ${localFile}: ${detail}`);
+    const additions = await readJson(localFile).catch((error) => {
+      throw error instanceof SyntaxError ? invalid(error.message) : error;
+    });
     if (
-      !localGroups ||
-      typeof localGroups !== 'object' ||
-      Array.isArray(localGroups)
+      !additions ||
+      typeof additions !== 'object' ||
+      Array.isArray(additions)
     ) {
-      throw invalid();
+      throw invalid('expected an object of group names');
     }
-    const arrays = ['exports', 'modules', 'external'];
-    for (const [name, group] of Object.entries(localGroups)) {
-      const base = Object.hasOwn(groups, name) ? groups[name] : undefined;
+    for (const [name, group] of Object.entries(additions)) {
+      if (!Object.hasOwn(groups, name)) throw invalid(`unknown group ${name}`);
       if (
         !group ||
         typeof group !== 'object' ||
         Array.isArray(group) ||
-        Object.keys(group).some(
-          (key) => ![...arrays, 'runtime'].includes(key),
-        ) ||
-        arrays.some(
-          (key) =>
-            (!base || Object.hasOwn(group, key)) &&
-            (!Array.isArray(group[key]) ||
-              group[key].some((value) => typeof value !== 'string')),
-        ) ||
-        (Object.hasOwn(group, 'runtime') &&
-          !['browser', 'node'].includes(group.runtime))
+        Object.entries(group).some(
+          ([key, values]) =>
+            !['modules', 'external'].includes(key) || !Array.isArray(values),
+        )
       ) {
         throw invalid(name);
       }
-      if (
-        base &&
-        group.runtime &&
-        group.runtime !== (base.runtime || 'browser')
-      ) {
-        throw new Error(
-          `Local boundary runtime conflicts with main group: ${name}`,
-        );
+      for (const [key, values] of Object.entries(group)) {
+        groups[name][key] = [...groups[name][key], ...values];
       }
-      groups = {
-        ...groups,
-        [name]: base
-          ? {
-              ...base,
-              ...Object.fromEntries(
-                arrays.map((key) => [
-                  key,
-                  [...base[key], ...(group[key] || [])],
-                ]),
-              ),
-            }
-          : group,
-      };
     }
   }
   const declaredExports = Object.keys(pkg.exports || {}).sort();
@@ -116,7 +80,13 @@ export async function checkPackageBoundaries(root) {
       ) {
         throw new Error(`Boundary modules must be repository paths: ${name}`);
       }
-      const resolved = await realpath(path.join(root, module));
+      const resolved = await realpath(path.join(root, module)).catch(
+        (error) => {
+          throw error.code === 'ENOENT'
+            ? new Error(`Boundary module does not exist: ${name}: ${module}`)
+            : error;
+        },
+      );
       const relative = path.relative(root, resolved);
       if (
         relative === '..' ||
@@ -128,6 +98,9 @@ export async function checkPackageBoundaries(root) {
       allowed.add(normalizePath(resolved));
     }
     for (const external of group.external) {
+      if (typeof external !== 'string') {
+        throw new Error(`Boundary external must be a dependency name: ${name}`);
+      }
       if (
         !Object.hasOwn(pkg.dependencies || {}, external) &&
         !Object.hasOwn(pkg.peerDependencies || {}, external) &&
@@ -219,6 +192,7 @@ if (import.meta.url === invoked) {
   try {
     const reports = await checkPackageBoundaries(
       fileURLToPath(new URL('../', import.meta.url)),
+      { local: process.argv.includes('--local') },
     );
     for (const report of reports)
       console.log(

@@ -3685,6 +3685,7 @@ list. `npm run check:boundaries` checks the dependency graph of all
 current package exports in their declared browser or Node runtime; infrastructure owns its three implementation modules
 and takes Cesium from the consumer. CI runs both checks on Linux and Windows.
 The standalone app, layer behavior and public export paths remain unchanged.
+CI reads only `scripts/package-boundaries.json`; `--local` adds a fork's git-ignored `scripts/package-boundaries.local.json` entries for existing groups.
 See [component ownership and adoption](CODE-BOUNDARIES.md).
 
 ## Google browser and server keys

@@ -9,6 +9,12 @@ async function fixture(
   t,
   entry = 'export const value = 1;',
   extraExports = {},
+  {
+    dependencies,
+    groups = {
+      feature: { exports: ['./feature'], modules: ['entry.js'], external: [] },
+    },
+  } = {},
 ) {
   const root = await mkdtemp(path.join(tmpdir(), 'gev-boundaries-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -19,13 +25,12 @@ async function fixture(
       name: 'boundary-fixture',
       type: 'module',
       exports: { './feature': './entry.js', ...extraExports },
+      dependencies,
     }),
   );
   await writeFile(
     path.join(root, 'scripts/package-boundaries.json'),
-    JSON.stringify({
-      feature: { exports: ['./feature'], modules: ['entry.js'], external: [] },
-    }),
+    JSON.stringify(groups),
   );
   await writeFile(path.join(root, 'entry.js'), entry);
   return root;
@@ -134,147 +139,136 @@ async function localBoundaries(root, groups) {
   );
 }
 
-test('an absent local boundary file leaves the main ownership rules unchanged', async (t) => {
-  const root = await fixture(t);
-  assert.deepEqual(await checkPackageBoundaries(root), [
-    { name: 'feature', exports: 1, modules: 1 },
-  ]);
+test('only the local option reads the local boundary file', async (t) => {
+  const root = await fixture(t, "export { value } from './helper.js';");
   await writeFile(path.join(root, 'helper.js'), 'export const value = 2;');
-  await writeFile(
-    path.join(root, 'entry.js'),
-    "export { value } from './helper.js';",
-  );
+  await localBoundaries(root, { feature: { modules: ['helper.js'] } });
   await assert.rejects(checkPackageBoundaries(root), /unowned module.*helper/);
-});
-
-test('local boundaries append modules and exports to an existing group', async (t) => {
-  const root = await fixture(t, "export { value } from './helper.js';", {
-    './extra': './extra.js',
-  });
-  await writeFile(path.join(root, 'helper.js'), 'export const value = 2;');
-  await writeFile(path.join(root, 'extra.js'), 'export const extra = 3;');
-  await localBoundaries(root, {
-    feature: { modules: ['helper.js', 'extra.js'], exports: ['./extra'] },
-  });
-  assert.deepEqual(await checkPackageBoundaries(root), [
-    { name: 'feature', exports: 2, modules: 3 },
+  assert.deepEqual(await checkPackageBoundaries(root, { local: true }), [
+    { name: 'feature', exports: 1, modules: 2 },
   ]);
 });
 
-test('local boundaries can add a new Node group', async (t) => {
-  const root = await fixture(t, undefined, {
-    './extra': { node: './extra.js' },
-  });
+test('local modules extend an existing Node group without changing its runtime', async (t) => {
+  const root = await fixture(
+    t,
+    "export { basename } from './helper.js';",
+    { './feature': { node: './entry.js' } },
+    {
+      groups: {
+        feature: {
+          runtime: 'node',
+          exports: ['./feature'],
+          modules: ['entry.js'],
+          external: [],
+        },
+      },
+    },
+  );
   await writeFile(
-    path.join(root, 'extra.js'),
+    path.join(root, 'helper.js'),
     "export { basename } from 'node:path';",
   );
-  await localBoundaries(root, {
-    extra: {
-      runtime: 'node',
-      exports: ['./extra'],
-      modules: ['extra.js'],
-      external: [],
-    },
-  });
-  assert.deepEqual(await checkPackageBoundaries(root), [
-    { name: 'feature', exports: 1, modules: 1 },
-    { name: 'extra', exports: 1, modules: 1 },
+  await localBoundaries(root, { feature: { modules: ['helper.js'] } });
+  assert.deepEqual(await checkPackageBoundaries(root, { local: true }), [
+    { name: 'feature', exports: 1, modules: 2 },
   ]);
+});
+
+test('a module added locally to one group stays unowned by another', async (t) => {
+  const root = await fixture(
+    t,
+    "export { value } from './helper.js';",
+    { './other': './other.js' },
+    {
+      groups: {
+        feature: {
+          exports: ['./feature'],
+          modules: ['entry.js'],
+          external: [],
+        },
+        other: { exports: ['./other'], modules: ['other.js'], external: [] },
+      },
+    },
+  );
+  await writeFile(path.join(root, 'helper.js'), 'export const value = 2;');
+  await writeFile(
+    path.join(root, 'other.js'),
+    "export { value } from './helper.js';",
+  );
+  await localBoundaries(root, { feature: { modules: ['helper.js'] } });
+  await assert.rejects(
+    checkPackageBoundaries(root, { local: true }),
+    /Package boundary other imports an unowned module: helper\.js/,
+  );
 });
 
 test('local boundaries append external dependencies without replacing the main ones', async (t) => {
   const root = await fixture(
     t,
     "import 'first'; import 'second'; export const value = 1;",
-  );
-  await writeFile(
-    path.join(root, 'package.json'),
-    JSON.stringify({
-      type: 'module',
-      exports: { './feature': './entry.js' },
+    {},
+    {
       dependencies: { first: '*', second: '*' },
-    }),
-  );
-  await writeFile(
-    path.join(root, 'scripts/package-boundaries.json'),
-    JSON.stringify({
-      feature: {
-        exports: ['./feature'],
-        modules: ['entry.js'],
-        external: ['first'],
+      groups: {
+        feature: {
+          exports: ['./feature'],
+          modules: ['entry.js'],
+          external: ['first'],
+        },
       },
-    }),
+    },
   );
   await localBoundaries(root, { feature: { external: ['second'] } });
-  assert.deepEqual(await checkPackageBoundaries(root), [
+  assert.deepEqual(await checkPackageBoundaries(root, { local: true }), [
     { name: 'feature', exports: 1, modules: 1 },
   ]);
 });
 
-test('invalid local boundary data identifies the file and group', async (t) => {
-  const root = await fixture(t);
-  for (const groups of [
-    null,
-    [],
-    { feature: null },
-    { feature: [] },
-    { feature: { modules: 'helper.js' } },
-    { feature: { exports: [1] } },
-    { feature: { unknown: [] } },
-    { feature: { runtime: 'worker' } },
+test('invalid local boundary data names the file and the group', async (t) => {
+  const root = await fixture(
+    t,
+    undefined,
+    {},
+    {
+      dependencies: { first: '*' },
+    },
+  );
+  const prefix =
+    'Invalid local package boundaries in scripts/package-boundaries.local.json: ';
+  for (const [groups, detail] of [
+    [null, 'expected an object of group names'],
+    [[], 'expected an object of group names'],
+    [{ extra: { modules: [] } }, 'unknown group extra'],
+    [{ feature: null }, 'feature'],
+    [{ feature: [] }, 'feature'],
+    [{ feature: { modules: 'helper.js' } }, 'feature'],
+    [{ feature: { exports: ['./feature'] } }, 'feature'],
+    [{ feature: { runtime: 'browser' } }, 'feature'],
   ]) {
     await localBoundaries(root, groups);
-    await assert.rejects(
-      checkPackageBoundaries(root),
-      /Invalid local package boundaries.*package-boundaries.local.json/,
-    );
+    await assert.rejects(checkPackageBoundaries(root, { local: true }), {
+      message: prefix + detail,
+    });
   }
+  await localBoundaries(root, { feature: { external: [['first']] } });
+  await assert.rejects(checkPackageBoundaries(root, { local: true }), {
+    message: 'Boundary external must be a dependency name: feature',
+  });
   await writeFile(
     path.join(root, 'scripts/package-boundaries.local.json'),
     '{',
   );
   await assert.rejects(
-    checkPackageBoundaries(root),
-    /Invalid local package boundaries.*package-boundaries.local.json/,
+    checkPackageBoundaries(root, { local: true }),
+    /package-boundaries\.local\.json: Expected property name/,
   );
 });
 
-test('local boundaries cannot change an existing runtime', async (t) => {
+test('the local option fails when the local boundary file is missing', async (t) => {
   const root = await fixture(t);
-  await localBoundaries(root, { feature: { runtime: 'node' } });
   await assert.rejects(
-    checkPackageBoundaries(root),
-    /Local boundary runtime conflicts.*feature/,
+    checkPackageBoundaries(root, { local: true }),
+    /ENOENT.*package-boundaries\.local\.json/,
   );
-  await localBoundaries(root, { feature: { runtime: 'browser' } });
-  assert.deepEqual(await checkPackageBoundaries(root), [
-    { name: 'feature', exports: 1, modules: 1 },
-  ]);
-});
-
-test('combined local boundaries retain the main validation rules', async (t) => {
-  const root = await fixture(t);
-  for (const [groups, message] of [
-    [{ feature: { modules: ['../outside.js'] } }, /repository paths.*feature/],
-    [
-      { feature: { external: ['undeclared'] } },
-      /declared dependency.*undeclared/,
-    ],
-    [{ feature: { exports: ['./feature'] } }, /exactly one boundary group/],
-    [{ extra: {} }, /Invalid local package boundaries/],
-    [
-      { extra: { exports: [], modules: [], external: [] } },
-      /Invalid package boundary.*extra/,
-    ],
-  ]) {
-    await localBoundaries(root, groups);
-    await assert.rejects(checkPackageBoundaries(root), message);
-  }
-});
-
-test('local boundary read errors are not treated as an absent file', async (t) => {
-  const root = await fixture(t);
-  await mkdir(path.join(root, 'scripts/package-boundaries.local.json'));
-  await assert.rejects(checkPackageBoundaries(root), /EISDIR/);
 });

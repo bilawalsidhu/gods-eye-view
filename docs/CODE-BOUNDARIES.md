@@ -57,35 +57,6 @@ See [application construction](APPLICATION.md) and the
    dependencies. Unused imports still count. Node exports have only a `node`
    condition; browser groups cannot use build-only dependency exceptions.
 
-### Optional local package boundaries
-
-Downstream forks and local extensions can add ownership in
-`scripts/package-boundaries.local.json` without changing the main boundary file.
-The checker reads this optional JSON file relative to the repository root.
-When the file is absent, the check is unchanged. Other read errors and invalid
-JSON fail the check.
-
-Use the same group names and fields as `scripts/package-boundaries.json`.
-For an existing group, `exports`, `modules` and `external` are optional arrays
-that append to the main arrays. The local file cannot replace entries or change
-an existing group's runtime. A new group must supply all three arrays and can
-set `runtime` to `browser` (the default) or `node`. The combined groups use the
-same export, module-path, dependency and build checks as the main file. An export
-must still belong to exactly one group; repeated export entries fail the check.
-
-For example, if an existing group named `feature` imports a local helper:
-
-```json
-{
-  "feature": {
-    "modules": ["src/extensions/helper.js"]
-  }
-}
-```
-
-Keep this local configuration in your checkout or downstream repository. There
-is no local boundary file in the upstream repository.
-
 Portable source graphs cannot reach application/rendering, Node, Cesium or
 browser globals. This includes `sources/*`, dedicated `layers/*/source` exports,
 flight/military/vessel record and ingestion exports, action schemas, the session
@@ -104,6 +75,14 @@ Other layer `ingestion.js` files may still coordinate Cesium resources; the
 portable contract applies to the explicitly reviewed graphs above. Their layer
 controller remains the owner of rendering/cleanup until a focused extraction
 moves it. Do not label all ingestion modules platform-independent by filename.
+
+### Local package boundaries for forks
+
+Upstream ownership changes go only in `scripts/package-boundaries.json`. A fork
+can list extra `modules` and `external` entries for existing groups in the
+git-ignored `scripts/package-boundaries.local.json` and check them with
+`npm run check:boundaries -- --local`. Without `--local`, the check and CI read
+only the main file. Exports, runtimes and new groups belong in the main file.
 
 ## Compatibility entries and owners
 
