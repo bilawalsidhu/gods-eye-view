@@ -238,7 +238,7 @@ export class StyleManager extends ShellFacade {
           getCounts: getConfiguredLayerCounts,
           readState: () => layerCounts.state,
           writeState: layerCounts.publish,
-          readShown: cards.readViewContextShown,
+          readShown: () => cards.inspector.shown,
         }),
       },
     });

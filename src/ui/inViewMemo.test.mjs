@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { getLocale, setLocale } from '../i18n/index.js';
+import { createControls } from '../layers/awareness/controls.js';
+import { trafficAnalystRecords } from '../layers/traffic/records.js';
 import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import {
   INSPECTOR_PULSE_MS,
@@ -877,5 +879,100 @@ test("Nearby reuses a fresh layer's rows when another layer refreshes or the sam
     ask({ excludeLayers: ['satellites'], radiusKm: 500 }).length,
     1,
     'a layer left out is not listed',
+  );
+});
+
+test('Nearby shows a renamed stationary Contacts subject without a pan', (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+  // Real Contacts controls: a stationary subject whose label is enriched after selection
+  // (awareness/subject.js replaces subject.label without re-evaluating results).
+  const layerState = {
+    enabled: true,
+    passive: false,
+    subject: {
+      layerId: 'flights',
+      id: 'abc123',
+      label: 'ABC123',
+      position: { x: 6378137, y: 0, z: 0 },
+    },
+    results: {
+      evaluatedAt: 1,
+      radiusM: 250_000,
+      cohorts: [{ id: 'flights', summary: { count: 1 } }],
+    },
+  };
+  const { methods } = createControls({
+    state: layerState,
+    services: {},
+    parts: { dependencies: {} },
+    source: {},
+  });
+  const row = {
+    id: 'military-awareness',
+    name: 'Contacts',
+    enabled: true,
+    module: methods,
+  };
+  Object.defineProperty(row, 'stats', { get: () => methods.getStats() });
+  const { store } = harness([row]);
+  const titles = () =>
+    store
+      .nearbyLayers(0, 0, { radiusKm: 25 })
+      .flatMap((g) => g.items.map((i) => i.title));
+  assert.deepEqual(titles(), ['ABC123']);
+  layerState.subject = { ...layerState.subject, label: 'N123AB' };
+  layerState.results.subject = layerState.subject;
+  t.mock.timers.tick(10_000);
+  assert.deepEqual(titles(), ['N123AB']);
+});
+
+test('Omnibar In view counts a road that crosses the viewport with its middle vertex outside', () => {
+  const state = {
+    _enabled: true,
+    _liveMode: false,
+    _roads: [
+      // Crosses the view centre; its middle vertex (0.002° E) is just outside the viewport.
+      {
+        type: 'primary',
+        directFlow: 0,
+        coords: [
+          [-0.02, 0],
+          [0.002, 0],
+          [0.03, 0],
+        ],
+      },
+      // Wholly outside the viewport.
+      {
+        type: 'primary',
+        directFlow: 0,
+        coords: [
+          [1, 1],
+          [1.01, 1],
+          [1.02, 1],
+        ],
+      },
+    ],
+  };
+  const row = {
+    id: 'traffic',
+    name: 'Traffic',
+    enabled: true,
+    stats: { count: 2, lastUpdate: 1 },
+    module: { getAnalystRecords: (n) => trafficAnalystRecords(state, n) },
+  };
+  const { store } = harness([row]);
+  store.setView({
+    center: { lat: 0, lon: 0 },
+    rect: { west: -0.001, south: -0.001, east: 0.001, north: 0.001 },
+    heightM: 300,
+    eye: { lat: 0, lon: 0 },
+  });
+  const traffic = store
+    .inView({ viewport: true })
+    .find((g) => g.layerId === 'traffic');
+  assert.equal(
+    traffic?.count,
+    1,
+    'the crossing road is in view; the outside road is not',
   );
 });

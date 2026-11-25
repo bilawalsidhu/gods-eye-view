@@ -370,7 +370,7 @@ test('stock Context uses the configured layer counts through either public shell
   );
 });
 
-test('stock controls use host weather in the Inspector and host regional conditions on the card', async (t) => {
+test('stock controls use host weather in both the Inspector and the card', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const fetchStub = t.mock.method(
     globalThis,
@@ -383,6 +383,7 @@ test('stock controls use host weather in the Inspector and host regional conditi
   const pending = Promise.withResolvers();
   const weather = {
     getConditions: t.mock.fn(async (lat) => {
+      if (lat === 47.5) return conditions(15);
       if (lat === 47.6) return pending.promise;
       return lat === 47.7 ? conditions(24) : null;
     }),
@@ -428,7 +429,7 @@ test('stock controls use host weather in the Inspector and host regional conditi
     /15°C/,
   );
   assert.deepEqual(
-    regional.getBrief.mock.calls[0].arguments.slice(0, 2),
+    weather.getConditions.mock.calls[1].arguments.slice(0, 2),
     [47.5, -122.4],
   );
 
@@ -446,7 +447,7 @@ test('stock controls use host weather in the Inspector and host regional conditi
   await advance(400);
   assert.match(facts(inspector), /No weather reading here/);
   assert.equal(scoped.mock.callCount(), 0);
-  assert.equal(regional.getBrief.mock.callCount(), 1);
+  assert.equal(regional.getBrief.mock.callCount(), 0);
   await inspector.stop();
 
   const { createStandaloneControls } =
@@ -461,7 +462,7 @@ test('stock controls use host weather in the Inspector and host regional conditi
   await advance(400);
   assert.match(facts(standalone), /9 °C/);
   assert.equal(scoped.mock.callCount(), 1);
-  assert.equal(weather.getConditions.mock.callCount(), 3);
+  assert.equal(weather.getConditions.mock.callCount(), 4);
   assert.ok(
     !fetchStub.mock.calls.some(({ arguments: [url] }) =>
       String(url).startsWith('/api/weather-effects'),

@@ -187,7 +187,6 @@ test('live flow names its congestion and source; unmatched roads stay simulated'
   assert.equal(jam.source, 'tomtom-live');
   assert.equal(jam.flowPct, 30);
   assert.ok(['slow', 'jam'].includes(jam.flow));
-  assert.equal(jam.stale, false);
   assert.equal(closed.flow, 'closed');
   assert.equal(unmatched.simulated, true);
   assert.equal(unmatched.source, 'simulated-unmatched');
@@ -195,7 +194,6 @@ test('live flow names its congestion and source; unmatched roads stay simulated'
   state._uncoveredMode = 'hide';
   assert.equal(trafficAnalystRecords(state).length, 2);
   state._flowStale = true;
-  assert.equal(trafficAnalystRecords(state)[0].stale, true);
   assert.equal(trafficAnalystRecords(state)[0].source, 'tomtom-cached');
 });
 

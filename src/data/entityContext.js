@@ -208,6 +208,8 @@ const HIDDEN_FACTS = new Set([
   'military',
   // Repeats of what another fact already says, and feed bookkeeping.
   'parts',
+  // Controls whether a sighting's position can be shared.
+  'positionUnconfirmed',
   'roads',
   'link',
   'vesselId',
@@ -460,8 +462,6 @@ function isExcludedNearRecord(layerId, record, excludeKey) {
       nearbySubjectKey(excludeKey)
   );
 }
-
-export { distanceKm };
 
 /** Spell out a field name: `originCountry` → `Origin country`. */
 function spellOut(field) {
@@ -846,7 +846,7 @@ function readLayerPoints(dataManager, layerId, module, options, summarize) {
       if (points != null) return summarize({ source, points });
     } catch (error) {
       if (!options.onSnapshotFallback) throw error;
-      options.onSnapshotFallback?.();
+      options.onSnapshotFallback();
     }
     return summarize({
       points: layerRecords(dataManager, layerId, ALL_RECORDS, options),
@@ -1306,6 +1306,7 @@ export function describeEntity(
     obscured:
       layerId === 'wildlife-sightings' &&
       (record?.obscured ?? stored?.properties?.obscured) === true,
+    positionUnconfirmed: record?.positionUnconfirmed === true,
     facts: facts.filter((fact) => fact.value !== title),
     warnings: warnings.map((entry) => entry.value),
     // The same warnings for the UI to show: words, or null to show as given.
@@ -1409,9 +1410,14 @@ function insideRect(at, rect) {
  * @param {object} [options]
  * @param {object|null} [options.rect] Limit the choice to parts inside this rectangle.
  * @param {number} [options.radiusKm] Bound the path search for a radius query.
+ * @param {number} [options.refineKm] Within the radius, refine only paths close enough to enter the result.
  * @returns {{at: ?{lat: number, lon: number}, km: number}}
  */
-function nearestPart(here, record, { rect, radiusKm } = {}) {
+function nearestPart(
+  here,
+  record,
+  { rect, radiusKm, refineKm = Infinity } = {},
+) {
   let at = recordPosition(record);
   if (at && rect && !insideRect(at, rect)) at = null;
   let km = at ? distanceKm(here, at) : Infinity;
@@ -1430,13 +1436,23 @@ function nearestPart(here, record, { rect, radiusKm } = {}) {
     ? linePointInRect(paths, rect, here, isGeoJsonKey(record.key))
     : (isGeoJsonKey(record.key) || !Array.isArray(record.parts)) &&
         Number.isFinite(radiusKm)
-      ? linePointWithinRadius(paths, here, Math.min(radiusKm, km))
+      ? linePointWithinRadius(
+          paths,
+          here,
+          km <= radiusKm ? Math.min(km, refineKm) : radiusKm,
+        )
       : null;
   if (point) {
     const lineKm = distanceKm(here, point);
     if (lineKm < km) return { at: { ...point, lineAnchor: true }, km: lineKm };
   }
   return { at, km };
+}
+
+/** The distance a new row must beat to enter the retained results. */
+function cutoffKm(best, limit) {
+  if (best.length < limit) return Infinity;
+  return best.length ? -best[best.length - 1].score : 0;
 }
 
 /** Keep the highest scores first and keep source order when scores tie. */
@@ -1490,27 +1506,28 @@ export function nearbyEntities(
   if (!card || card.lat === null || card.lon === null) return empty;
   const here = { lat: card.lat, lon: card.lon };
   const nearest = (layerId, count) => {
-    const found = [];
+    const best = [];
     for (const record of layerRecords(dataManager, layerId)) {
       if (isExcludedNearRecord(layerId, record, card.key)) continue;
-      const { at, km } = nearestPart(here, record, { radiusKm });
+      const { at, km } = nearestPart(here, record, {
+        radiusKm,
+        refineKm: cutoffKm(best, count),
+      });
       if (km > radiusKm) continue;
-      found.push({ record, km, at });
+      keepBest(best, count, -km, record, at);
     }
     const name = layerName(dataManager, layerId);
-    return found
-      .sort((a, b) => a.km - b.km)
-      .slice(0, count)
-      .map(({ record, km, at }) => {
-        const { icon, kind } = entityKind(layerId, record);
-        return {
-          ...spatialRow(layerId, name, record, at, km),
-          layerId,
-          layerName: name,
-          icon,
-          kind,
-        };
-      });
+    return best.map(({ point: record, score, at }) => {
+      const km = -score;
+      const { icon, kind } = entityKind(layerId, record);
+      return {
+        ...spatialRow(layerId, name, record, at, km),
+        layerId,
+        layerName: name,
+        icon,
+        kind,
+      };
+    });
   };
   const same = nearest(card.layerId, limit);
   const other = enabledLayers(dataManager)
@@ -1569,19 +1586,22 @@ export function nearbyByKind(
     );
     const kind = entityKind(layer.id).kind;
     const group = found[kind];
-    let closest = null;
+    // A search can list several matches from each layer.
+    const keep = needle ? limit : 1;
+    const best = [];
     for (const record of layerRecords(dataManager, layer.id)) {
       if (isExcludedNearRecord(layer.id, record, excludeKey)) continue;
-      const { at, km } = nearestPart(here, record, { radiusKm });
+      const { at, km } = nearestPart(here, record, {
+        radiusKm,
+        refineKm: group ? Infinity : cutoffKm(best, keep),
+      });
       if (!(km <= radiusKm)) continue;
       if (needle && !matchesName && !recordMatches(record, needle)) continue;
-      if (group) group.push({ layerId: layer.id, record, km, at });
-      // A search lists every match, not only each layer's closest item.
-      else if (needle) other.push({ layerId: layer.id, record, km, at });
-      else if (!closest || km < closest.km)
-        closest = { layerId: layer.id, record, km, at };
+      const hit = { layerId: layer.id, record, km, at };
+      if (group) group.push(hit);
+      else keepBest(best, keep, -km, hit, at);
     }
-    if (closest) other.push(closest);
+    for (const { point } of best) other.push(point);
   }
   const row = ({ layerId, record, km, at }) => {
     const name = layerName(dataManager, layerId);
@@ -1662,7 +1682,10 @@ export function nearbyForLayer(
       if (source && Math.abs(point.lat - here.lat) > latitudeSpan) continue;
       const { at, km } = source
         ? { at: point, km: distanceKm(here, point) }
-        : nearestPart(here, point, { radiusKm });
+        : nearestPart(here, point, {
+            radiusKm,
+            refineKm: cutoffKm(best, keep),
+          });
       if (!(km <= radiusKm)) continue;
       if (excludeKey || matchRecord) {
         const record = source

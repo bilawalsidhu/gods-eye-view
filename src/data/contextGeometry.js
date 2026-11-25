@@ -109,7 +109,7 @@ function segmentLengthBound(aLat, bLat, dx) {
 
 /** Find a nearby line anchor using spherical distances to its drawn path. */
 export function linePointWithinRadius(paths, center, radiusKm) {
-  // One degree of latitude exceeds 110 km, even at the poles.
+  // A degree of latitude is at least 110.5 km (at the equator), so this span is never too small.
   const latitudeSpan = radiusKm / 110;
   const south = center.lat - latitudeSpan;
   const north = center.lat + latitudeSpan;

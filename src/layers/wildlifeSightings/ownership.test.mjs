@@ -1488,6 +1488,9 @@ test('a successful empty page keeps the selected observation until explicit dese
   await h.update();
   assert.equal(h.clicks.collection.values.length, 1);
   assert.equal(h.store.selectedEntityId, base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
+  h.layer.selectSighting(base.stableId);
+  assert.equal(h.layer.getAnalystRecords()[0].positionUnconfirmed, true);
   const { lastUpdate, recordsRevision } = h.layer.getStats();
   assert.equal(recordsRevision, base.stableId);
   h.layer.clearSightingSelection();

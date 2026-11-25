@@ -290,7 +290,6 @@
       "src/data/placeBelow.js",
       "src/data/adminBoundaries.js",
       "src/data/bundledJson.js",
-      "src/ui/coordinateText.js",
       "src/ui/distanceText.js",
       "src/ui/views/panels/SuggestedLayers.vue",
       "src/ui/contextTime.js",

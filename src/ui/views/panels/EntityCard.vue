@@ -1,6 +1,6 @@
 <script setup>
 import { approximatePosition } from '../../distanceText.js';
-import { coordinateText } from '../../coordinateText.js';
+import { formatCockpitCoordinatePair } from '../../cockpitPresentation.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
@@ -31,7 +31,7 @@ const props = defineProps({
   withContacts: Boolean,
 });
 const store = useEntityCardStore();
-const { card, lost, tick, away, finding, located } = storeToRefs(store);
+const { card, lost, locationWithheld, tick, away, finding, located } = storeToRefs(store);
 // A matching frame can supply a label for the camera card.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -76,7 +76,7 @@ const position = computed(() => {
   const current = card.value;
   if (!Number.isFinite(current?.lat) || !Number.isFinite(current?.lon)) return '';
   if (current.obscured) return t('Location obscured to a 0.2° cell');
-  const text = coordinateText(current.lat, current.lon);
+  const text = formatCockpitCoordinatePair(current.lat, current.lon);
   return approximatePosition(current) ? `${text} (${t('approximate')})` : text;
 });
 
@@ -491,7 +491,7 @@ watch(
       </div>
 
       <slot />
-      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon) && !(lost && card.layerId === 'wildlife-sightings')" :key="card.key" :lat="card.lat" :lon="card.lon" :obscured="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
+      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon) && !locationWithheld" :key="card.key" :lat="card.lat" :lon="card.lon" :approximate="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
 
       <p v-if="source" class="entity-card__source">
         <span>{{ t('Source') }}</span> {{ source }}<template v-if="ageText"> · {{ ageText }}</template>

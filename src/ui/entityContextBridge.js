@@ -1,4 +1,7 @@
-import { OBSCURED_CELL_DEG } from '../layers/wildlifeSightings/records.js';
+import {
+  ACARTIA_PRECISION_DEG,
+  OBSCURED_CELL_DEG,
+} from '../layers/wildlifeSightings/records.js';
 import { ref, shallowRef, watch } from 'vue';
 import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
@@ -19,7 +22,6 @@ import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useVoiceStore } from './stores/voice.js';
-import { approximatePosition } from './distanceText.js';
 import { inspectorHasLayers } from './layerRowState.js';
 import { createViewWeather } from './viewWeather.js';
 
@@ -58,7 +60,7 @@ const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
  * @param {(lat: number, lon: number, options?: {signal?: AbortSignal}) => Promise<object>} [options.spotWeather]
  *   The weather-only service for the unselected view.
  * @param {(fly: () => void) => unknown} [options.navigateToSelection] Hand an explicit row flight to the navigation owner.
- * @param {object} [options.inspector] The Inspector count owner and optional weather clock.
+ * @param {{counts: object}} [options.inspector] The Inspector count owner (createLayerCounts).
  * @returns {() => void} disconnects
  */
 export function installEntityContext({
@@ -211,22 +213,23 @@ export function installEntityContext({
     }
   }
 
-  function askText(prompt, reference) {
+  function askText(prompt, reference, resolveReference) {
     voice.controls?.emit('chat-restore');
     voice.controls?.emit(
       'chat-prompt',
-      reference ? { text: prompt, reference } : prompt,
+      reference ? { text: prompt, reference, resolveReference } : prompt,
     );
     voice.controls?.emit('chat-submit');
   }
 
   function mapItemReference(card) {
-    const hidden = store.lost && card.layerId === 'wildlife-sightings';
-    // Acartia rounds observation coordinates to 0.01°.
-    const rounded = !hidden && !card.obscured && approximatePosition(card);
+    // A sighting gone from the feed, or no longer confirmed, may have been hidden.
+    const hidden = store.locationWithheld;
+    // Acartia rounds observation coordinates to ACARTIA_PRECISION_DEG.
+    const rounded = !hidden && card.source === 'Acartia';
     const digits = rounded ? 2 : 3;
     const coordinates = {
-      ...(rounded && { roundedToDegrees: 0.01 }),
+      ...(rounded && { roundedToDegrees: ACARTIA_PRECISION_DEG }),
       lat:
         !hidden && Number.isFinite(card.lat)
           ? Number(card.lat.toFixed(digits))
@@ -253,19 +256,22 @@ export function installEntityContext({
 
   function ask(card) {
     const reference = mapItemReference(card);
-    Object.defineProperty(reference, 'current', {
-      value: () => {
-        store.refresh({ forAction: true });
-        return store.card?.key === card.key
-          ? mapItemReference(store.card)
-          : {
-              name: reference.name,
-              kind: reference.kind,
-              layer: reference.layer,
-            };
-      },
-    });
-    askText('Tell me about this map item and what is around it.', reference);
+    // Read the card again at send time. Once another card is open, omit the position.
+    const resolveReference = () => {
+      store.refresh({ forAction: true });
+      return store.card?.key === card.key
+        ? mapItemReference(store.card)
+        : {
+            name: reference.name,
+            kind: reference.kind,
+            layer: reference.layer,
+          };
+    };
+    askText(
+      'Tell me about this map item and what is around it.',
+      reference,
+      resolveReference,
+    );
   }
 
   store.connect({
@@ -444,7 +450,7 @@ export function installEntityContext({
     const readCurrentInput = () => ({
       center: hasCameraSnapshot && !globe() ? store.view?.center : null,
       moving: motionPending.value,
-      shown: store.readViewContextShown(),
+      shown: store.inspector.shown,
       mountId: mountId(),
     });
     store.publishInspectorRows([]);
@@ -466,7 +472,7 @@ export function installEntityContext({
           if (inputs.some((value, index) => value !== live[index])) return;
           const [visible, , missionsEnabled] = inputs;
           appliedSample = sample;
-          if (!visible || !store.readViewContextShown()) {
+          if (!visible || !store.inspector.shown) {
             inspector.counts.update({ shown: false, nothingOn: false });
             return;
           }

@@ -174,7 +174,7 @@ function fixture(
           getCounts,
           readState: () => counts.state,
           writeState: counts.publish,
-          readShown: cards.readViewContextShown,
+          readShown: () => cards.inspector.shown,
         }),
       },
     });
@@ -3286,9 +3286,11 @@ test('the Data Layers pointer does not ask to turn on layers while one is on', a
   for (const heightM of [120_000, 20_000_000]) {
     cards.setView({ center: HERE, heightM });
     await nextTick();
-    assert.doesNotMatch(
-      $('.view-context__pointer')?.textContent ?? '',
-      /Turn on layers/,
+    const pointer = $('.view-context__pointer-text');
+    assert.ok(pointer, `the Data Layers pointer at ${heightM} m`);
+    assert.equal(
+      pointer.textContent.trim(),
+      'Open Data Layers',
       `at ${heightM} m`,
     );
   }

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLayerCatalog, catalogControlServices } from './catalog.js';
 import { createApplicationData } from './data.js';
+
 const metadata = (layers) =>
   layers.map(({ id }) => ({ id, disposition: 'enabled-only' }));
 

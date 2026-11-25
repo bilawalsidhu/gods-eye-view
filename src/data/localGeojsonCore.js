@@ -520,7 +520,7 @@ function anonymousContent(feature) {
 /** Keep anonymous Context keys independent of renderer part order. */
 function anonymousContextKeys(parts, layerId, previous, nextKey) {
   const keys = new Map();
-  const byLocation = new Map();
+  const placeOf = new Map();
   const sourceIds = new Map();
   const sourceIdCounts = new Map();
   for (const { feature, kind, coordinates } of parts) {
@@ -533,35 +533,43 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
           : coordinates[0][0];
     const properties = unwrapProperties(feature.properties ?? {});
     const { name } = mapAnalystRecord({ properties }, layerId);
-    const place = JSON.stringify([point[1], point[0], name]);
-    const sourceId = properties.__gevSourceId;
+    placeOf.set(feature, JSON.stringify([point[1], point[0], name]));
+    const sourceId = Object.hasOwn(properties, '__gevSourceId')
+      ? properties.__gevSourceId
+      : null;
     if (typeof sourceId === 'string' && sourceId) {
       sourceIds.set(feature, sourceId);
       sourceIdCounts.set(sourceId, (sourceIdCounts.get(sourceId) ?? 0) + 1);
     }
     keys.set(feature, null);
+  }
+  const uniqueId = (feature) => {
+    const id = sourceIds.get(feature);
+    return id && sourceIdCounts.get(id) === 1 ? id : null;
+  };
+
+  // Match the feed's own id first, wherever the feature moved.
+  const byLocation = new Map();
+  for (const feature of keys.keys()) {
+    const key = previous?.sourceKeys.get(uniqueId(feature));
+    if (key) {
+      keys.set(feature, key);
+      continue;
+    }
+    const place = placeOf.get(feature);
     if (!byLocation.has(place)) byLocation.set(place, []);
     byLocation.get(place).push(feature);
   }
 
-  // Moving between places requires the feed's own id, unique in both snapshots.
-  const movedKeys = new Map();
-  for (const [place, group] of previous ?? []) {
-    if (group.sourceId && !byLocation.has(place))
-      movedKeys.set(group.sourceId, group.key);
-  }
-
   const groups = new Map();
   for (const [place, features] of byLocation) {
-    const before = previous?.get(place);
+    const before = previous?.places.get(place);
     if (features.length === 1 && !before?.byContent) {
       const feature = features[0];
-      const id = sourceIds.get(feature);
-      const sourceId = sourceIdCounts.get(id) === 1 ? id : null;
-      const moved = !before && sourceId ? movedKeys.get(sourceId) : null;
-      const key = before?.key ?? moved ?? nextKey();
+      const owner = sourceIds.get(feature) ?? null;
+      const key = before?.owner === owner ? before.key : nextKey();
       keys.set(feature, key);
-      groups.set(place, { feature, key, sourceId });
+      groups.set(place, { feature, key, owner });
       continue;
     }
 
@@ -589,7 +597,12 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
         keys.set(feature, ids[index]);
     }
   }
-  return { keys, groups };
+  const sourceKeys = new Map();
+  for (const [feature, key] of keys) {
+    const id = uniqueId(feature);
+    if (id) sourceKeys.set(id, key);
+  }
+  return { keys, groups: { places: groups, sourceKeys } };
 }
 
 const lonLatOf = (coordinates) => ({
@@ -2048,14 +2061,15 @@ function labelPriorityFromProperties(props, layerId) {
 function unwrapProperties(value) {
   if (!value || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map(unwrapProperties);
-  const out = {};
-  for (const [key, entry] of Object.entries(value)) {
-    out[key] =
+  // Keep feed keys, including "__proto__", as own data properties.
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
       entry && typeof entry.getValue === 'function'
         ? unwrapProperties(entry.getValue())
-        : unwrapProperties(entry);
-  }
-  return out;
+        : unwrapProperties(entry),
+    ]),
+  );
 }
 
 function cleanLabel(value) {

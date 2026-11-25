@@ -6,11 +6,7 @@ import {
   getConfiguredLayerCounts,
   LAYER_COUNTS_TIMEOUT_MS,
 } from '../services/application.js';
-import {
-  countAgeMs,
-  createLayerCounts,
-  LAYER_COUNTS_REFETCH_MS,
-} from './layerCounts.js';
+import { createLayerCounts, LAYER_COUNTS_REFETCH_MS } from './layerCounts.js';
 import { useLayerCountsStore } from './stores/layerCounts.js';
 
 const hidden = { shown: false, nothingOn: true };
@@ -109,10 +105,6 @@ test('the returned server clock calibrates the displayed age on the local clock'
   const row = store.state.counts.satellites;
   assert.equal(row.count, 1272);
   assert.equal(row.at, live.at - 60_000);
-  assert.equal(countAgeMs(row, live.at), 60_000);
-  assert.equal(countAgeMs(row, live.at + 120_000), 180_000);
-  assert.equal(countAgeMs({ at: live.at - 5000 }, live.at), 5000);
-  assert.equal(countAgeMs({ at: null }, live.at), null);
 
   // A later response with the same row can carry a different clock offset.
   live.at = fromServer + 2 * 60 * 60_000;
@@ -120,7 +112,6 @@ test('the returned server clock calibrates the displayed age on the local clock'
   await counts.update(empty);
   const recalibrated = store.state.counts.satellites;
   assert.equal(recalibrated.at, live.at - 60_000);
-  assert.equal(countAgeMs(recalibrated, live.at), 60_000);
 });
 
 test('a complete response withdraws omitted and zero counts', async () => {

@@ -1,25 +1,20 @@
-import { codeWord, distanceKm } from '../data/entityContext.js';
+import { codeWord } from '../data/entityContext.js';
+import { greatCircleKm } from '../geoDistance.js';
 import { formatNumber, msg, t, tn } from '../i18n/index.js';
 import { createUsgsEarthquakeSource } from '../layers/earthquakes/source.js';
 import { createCycloneSource } from '../layers/cyclones/source.js';
 import { createWfigsPerimeterSource } from '../layers/perimeters/source.js';
 import { createFirmsSource } from '../layers/firms/source.js';
 
-// What is going on around one spot on the map: the weather there now and the
-// local headlines (the app's regional brief, the same one Cockpit shows), and
-// the natural hazards near it from the feeds the hazard layers read
-// (earthquakes, tropical storms, wildfire perimeters, satellite fire hits).
-// The feeds are global snapshots, so each is fetched once and kept for a few
-// minutes whichever spot asks; the brief is kept per spot.
+// Weather is kept per spot. Hazard feeds are global snapshots shared by
+// all spots for a few minutes.
 
 const BRIEF_TTL_MS = 10 * 60_000;
 const FEED_TTL_MS = 5 * 60_000;
 
 const briefs = new Map();
 /**
- * The regional brief for a spot: `{weather, articles, place, newsSource}`,
- * read with `load`, the app's regional service. A failed read is not kept,
- * so the next ask tries again.
+ * Read weather for a spot. A failed read is forgotten so the next call retries.
  * @param {number} lat
  * @param {number} lon
  * @param {(lat: number, lon: number) => Promise<object>} load
@@ -124,14 +119,14 @@ export async function hazardsNear(
   ]);
   const found = [];
   const add = (row) => {
-    row.distanceKm = distanceKm(here, row.at);
+    row.distanceKm = greatCircleKm(here, row.at);
     row.direction = compassPoint(here, row.at);
     found.push(row);
   };
 
   for (const quake of Array.isArray(quakeRows) ? quakeRows : []) {
     const at = { lat: quake.lat, lon: quake.lon };
-    if (!(distanceKm(here, at) <= radiusKm)) continue;
+    if (!(greatCircleKm(here, at) <= radiusKm)) continue;
     add({
       kind: 'quake',
       icon: 'earthquake',
@@ -148,7 +143,7 @@ export async function hazardsNear(
       lat: storm.position?.latitude,
       lon: storm.position?.longitude,
     };
-    if (!(distanceKm(here, at) <= radiusKm)) continue;
+    if (!(greatCircleKm(here, at) <= radiusKm)) continue;
     add({
       kind: 'storm',
       icon: 'cyclone',
@@ -161,7 +156,7 @@ export async function hazardsNear(
   for (const fire of perimeterSnap?.fires || []) {
     // The point the fire's card stands on, close enough for "how far".
     const at = fire.anchor;
-    if (!at || !(distanceKm(here, at) <= radiusKm)) continue;
+    if (!at || !(greatCircleKm(here, at) <= radiusKm)) continue;
     const acres = Number(fire.acres);
     add({
       kind: 'wildfire',
@@ -188,10 +183,10 @@ export async function hazardsNear(
       lat: Number(fire.lat ?? fire.latitude),
       lon: Number(fire.lon ?? fire.longitude),
     }))
-    .filter((at) => distanceKm(here, at) <= radiusKm);
+    .filter((at) => greatCircleKm(here, at) <= radiusKm);
   if (hits.length) {
     const nearest = hits.reduce((a, b) =>
-      distanceKm(here, a) <= distanceKm(here, b) ? a : b,
+      greatCircleKm(here, a) <= greatCircleKm(here, b) ? a : b,
     );
     add({
       kind: 'hotspots',

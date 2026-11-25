@@ -1,5 +1,5 @@
 <script setup>
-import { coordinateText } from '../../coordinateText.js';
+import { formatCockpitCoordinatePair } from '../../cockpitPresentation.js';
 import { computed, onBeforeUnmount, onBeforeUpdate, onMounted, onUpdated, ref, shallowRef, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { contextNeedle, contextSearchText } from '../../contextSearch.js';
@@ -26,7 +26,7 @@ import AltitudeGraph from './AltitudeGraph.vue';
 import SuggestedLayers from './SuggestedLayers.vue';
 import { layerFeedState } from '../../../data/feedState.js';
 import { FEED_STATE_LABEL_KEYS, inspectorHasLayers } from '../../layerRowState.js';
-import { COUNT_TILE_LAYERS, countAgeMs } from '../../layerCounts.js';
+import { COUNT_TILE_LAYERS } from '../../layerCounts.js';
 import { useLayerCountsStore } from '../../stores/layerCounts.js';
 import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
 
@@ -95,7 +95,7 @@ const placeName = computed(() => {
 const centerCoordinates = computed(() => {
   const at = view.value?.center;
   if (!at) return '';
-  return coordinateText(at.lat, at.lon);
+  return formatCockpitCoordinatePair(at.lat, at.lon);
 });
 const weather = computed(() => viewWeather.value?.reading ?? null);
 const weatherFailed = computed(() => Boolean(viewWeather.value?.failed && !viewWeather.value.pending));
@@ -152,10 +152,6 @@ function inspectorLayerRows(rows) {
   return rows.filter((row) => row.enabled && !CONTEXT_EXEMPT.includes(row.id));
 }
 
-function shownApart(id, missionsEnabled) {
-  return missionsEnabled && id === MISSIONS_LAYER;
-}
-
 function presentLayerRow(row) {
   const stats = row.stats || {};
   // A refresh of a layer holding items keeps its feed state and total.
@@ -197,7 +193,7 @@ const layerRows = computed(() =>
   }),
 );
 // The layers that get a tile or block of their own.
-const liveLayers = computed(() => layerRows.value.filter((layer) => !shownApart(layer.id, missions.enabled)));
+const liveLayers = computed(() => layerRows.value.filter((layer) => !(missions.enabled && layer.id === MISSIONS_LAYER)));
 const layerById = computed(() => Object.fromEntries(liveLayers.value.map((layer) => [layer.id, layer])));
 // A feed in trouble keeps its line, Space Missions' index included.
 const problems = computed(() => layerRows.value.filter((layer) => layer.problem));
@@ -247,7 +243,10 @@ const overlayTiles = computed(() => {
     .filter((layer) => layerKind(layer.id) === 'overlay')
     .map((layer) => ({ ...layer, value: stateText(layer), detail: t('On the map') }));
 });
-const sideTiles = computed(() => [...valueTiles.value, ...overlayTiles.value]);
+const sideGroups = computed(() => [
+  { key: 'values', heading: true, tiles: valueTiles.value },
+  { key: 'overlays', tiles: overlayTiles.value },
+].filter((group) => group.tiles.length));
 // Layers with records get counts even if they also have a point reading.
 // Without records, a layer is a field or an overlay.
 function layerKind(layerId) {
@@ -448,7 +447,9 @@ onUpdated(() => {
 const searchStatus = computed(() => {
   if (!contextNeedle.value) return '';
   const globe = globeView.value;
-  const unavailable = tiles.value.filter((tile) => tile.tone === 'unavailable' || (globe ? globeGroups.value[tile.id]?.readFailed : tile.readFailed));
+  const unavailable = tiles.value.filter((tile) =>
+    (!globe || layerKind(tile.id) === 'items') &&
+    (tile.tone === 'unavailable' || (globe ? globeGroups.value[tile.id]?.readFailed : tile.readFailed)));
   if (unavailable.length)
     return t('Unavailable layers: {layers}', { layers: listOf(unavailable.map((tile) => tile.name)) });
   if (globe)
@@ -459,10 +460,8 @@ const searchStatus = computed(() => {
 });
 
 const look = computed(() => weatherLook(weather.value?.weatherCode));
-// The weather block with layers on, zoomed in, from the same reading (no
-// read of its own): the temperature and conditions, then wind, cloud,
-// visibility and precipitation, as a selected item's card shows them. A reading older
-// than half an hour (the server keeps one through an outage) says its age.
+// The Inspector's reading, laid out as a card's weather. An observation older
+// than 30 minutes shows its age.
 const WEATHER_STALE_MS = 30 * 60_000;
 const weatherAge = computed(() => {
   const at = viewWeather.value?.freshnessAt;
@@ -488,14 +487,13 @@ const countTiles = computed(() => {
   return COUNT_TILE_LAYERS.map((layer) => ({ layer, known: counts.state.counts[layer.id] }))
     .filter(({ layer, known }) => available.has(layer.id) && known?.count > 0)
     .map(({ layer, known }) => {
-      const age = countAgeMs(known, now);
       return {
         id: layer.id,
         icon: layer.icon,
         name: t(layer.label),
         hint: layer.hint ? t(layer.hint) : '',
         count: formatNumber(known.count),
-        age: age === null ? '' : contextAgeText(age),
+        age: Number.isFinite(known.at) ? contextAgeText(now - known.at) : '',
       };
     });
 });
@@ -586,7 +584,7 @@ function openSuggested() {
               <span>{{ tile.name }}</span>
             </span>
             <strong>{{ tile.count }}</strong>
-            <small v-if="tile.age" class="view-context__tile-age">{{ tile.age }}</small>
+            <small v-if="tile.hint || tile.age" class="view-context__tile-age">{{ [tile.hint, tile.age].filter(Boolean).join(' · ') }}</small>
           </div>
         </div>
         <p class="view-context__hint view-context__hint--counts">{{ t('No live requests') }}</p>
@@ -624,7 +622,7 @@ function openSuggested() {
       </div>
 
       <!-- The radius sits above the counts it filters from data already loaded. -->
-      <div v-if="!globeView" class="view-context__radius">
+      <div v-if="!globeView && (tiles.length || lists.length)" class="view-context__radius">
         <span class="view-context__radius-label">{{ t('Radius') }}</span>
         <UiSlider class="view-context__radius-slider" min="0" :max="CONTEXT_RADIUS_STEPS.length - 1" step="1" :model-value="radiusIndex" :aria-label="t('Nearby radius')" :aria-valuetext="radiusText" :title="t('How far out the counts and nearby lists look')" @update:model-value="pickRadius" />
         <output class="view-context__radius-value">{{ radiusText }}</output>
@@ -633,7 +631,7 @@ function openSuggested() {
         </div>
       </div>
 
-      <h4 v-if="tiles.length || (globeView && sideTiles.length)" class="view-context__label">{{ globeView ? t('Layers on') : t('Within {radius}', { radius: radiusText }) }}</h4>
+      <h4 v-if="tiles.length" class="view-context__label">{{ globeView ? t('Layers on') : t('Within {radius}', { radius: radiusText }) }}</h4>
       <!-- Search status stays visible when search hides the local tiles.
            In globe view this also contains the layer results and focus target. -->
       <div v-if="globeView || searchStatus" :class="{ 'view-context__blocks': globeView }" :tabindex="globeView ? -1 : undefined">
@@ -681,20 +679,24 @@ function openSuggested() {
           <small v-else-if="tile.id === 'traffic' && Number.isFinite(tile.count) && !countStatus(tile)" class="view-context__tile-age">{{ t('Road segments') }}</small>
         </div>
       </div>
-      <h4 v-if="!globeView && sideTiles.length" class="view-context__label">{{ t('At the centre of the view') }}</h4>
-      <div v-if="!globeView && sideTiles.length" class="view-context__tiles">
-        <!-- Field and overlay layers show a local reading or feed state. -->
-        <div v-for="tile in sideTiles" :key="tile.id" class="view-context__tile view-context__tile--value" :data-layer="tile.id" :title="tile.detail || undefined">
-          <span class="view-context__tile-name">
-            <i class="view-context__dot" :class="`view-context__dot--${tile.tone}`" role="img" :aria-label="tile.toneText" :title="tile.toneText"></i>
-            <UiIcon :name="tile.icon" :size="null" />
-            <span>{{ tile.name }}</span>
-          </span>
-          <strong>{{ tile.value }}</strong>
-          <small v-if="tile.detail" class="view-context__tile-age">{{ tile.detail }}</small>
-          <small v-if="tile.age" class="view-context__tile-age">{{ tile.age }}</small>
-        </div>
-      </div>
+      <template v-if="!globeView">
+        <template v-for="group in sideGroups" :key="group.key">
+          <h4 v-if="group.heading" class="view-context__label">{{ t('At the centre of the view') }}</h4>
+          <div class="view-context__tiles">
+            <!-- Field and overlay layers show a local reading or feed state. -->
+            <div v-for="tile in group.tiles" :key="tile.id" class="view-context__tile view-context__tile--value" :data-layer="tile.id" :title="tile.detail || undefined">
+              <span class="view-context__tile-name">
+                <i class="view-context__dot" :class="`view-context__dot--${tile.tone}`" role="img" :aria-label="tile.toneText" :title="tile.toneText"></i>
+                <UiIcon :name="tile.icon" :size="null" />
+                <span>{{ tile.name }}</span>
+              </span>
+              <strong>{{ tile.value }}</strong>
+              <small v-if="tile.detail" class="view-context__tile-age">{{ tile.detail }}</small>
+              <small v-if="tile.age" class="view-context__tile-age">{{ tile.age }}</small>
+            </div>
+          </div>
+        </template>
+      </template>
       <p v-for="layer in problems" :key="layer.id" class="view-context__problem">{{ layer.name }} · {{ layer.problem }}</p>
 
       <p v-if="globeView" class="view-context__hint">{{ t('Click anything on the globe to see its card.') }}</p>

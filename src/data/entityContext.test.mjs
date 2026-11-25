@@ -5,6 +5,7 @@ import { EARTH_RADIUS_KM } from '../geoDistance.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { CONTEXT_LINES, contextLine } from './contextGeometry.js';
 import { createControls } from '../layers/awareness/controls.js';
+import { createControls as createInstallationControls } from '../layers/installations/controls.js';
 import { createOrbits } from '../layers/satellites/orbits.js';
 import { createRecords } from '../layers/satellites/records.js';
 import {
@@ -18,6 +19,7 @@ import {
   nearbyByKind,
   nearbyForLayer,
   nearbyEntities,
+  recordKey,
   recordTitle,
   recordWarnings,
   searchEntities,
@@ -1199,4 +1201,52 @@ test('Nearby keeps counts and stable nearest rows when only a few of many matche
       expected.slice(0, limit),
     );
   }
+});
+
+test('installation and its Contacts record exclude each other', () => {
+  // A source record; installations/controls.js turns it into the analyst record (inst).
+  const src = {
+    id: 'osm:way/42',
+    name: 'Fort Example',
+    class: 'base',
+    latitude: 10,
+    longitude: 20,
+  };
+  const [inst] = createInstallationControls({
+    state: { enabled: true, records: [src] },
+    services: {},
+    parts: {},
+    source: {},
+  }).methods.getAnalystRecords();
+  // Contacts record as awareness/controls.js builds it from subjectFromContext({id: record.id}).
+  const contact = {
+    id: `military-installations:${src.id}`,
+    name: src.name,
+    subjectLayer: 'military-installations',
+    lat: 10,
+    lon: 20,
+  };
+  const dm = manager({
+    'military-installations': { name: 'Installations', records: [inst] },
+    'military-awareness': { name: 'Contacts', records: [contact] },
+  });
+  const cardKey = recordKey('military-installations', inst);
+  const groups = nearbyByKind(
+    dm,
+    { lat: 10, lon: 20 },
+    { radiusKm: 25, excludeKey: cardKey },
+  );
+  assert.equal(
+    groups.other.length,
+    0,
+    'the selected installation reappears through Contacts',
+  );
+  const contactKey = recordKey('military-awareness', contact);
+  const list = nearbyForLayer(
+    dm,
+    { id: 'military-installations', enabled: true },
+    { lat: 10, lon: 20 },
+    { radiusKm: 25, excludeKey: contactKey },
+  );
+  assert.equal(list.count, 0, 'the Contacts card lists its own subject');
 });

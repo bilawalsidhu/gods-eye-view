@@ -121,27 +121,24 @@ test('an unsuccessful count response preserves its HTTP status', async () => {
 
 test('count throttling rejects without parsing the refusal body', async () => {
   let cancelled = 0;
-  const serverDate = 'Wed, 21 Oct 2026 10:00:00 GMT';
-  for (const retry of ['60', 'Wed, 21 Oct 2026 10:01:00 GMT']) {
-    const services = createApplicationRequestServices({
-      fetchImpl: async () =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              controller.enqueue(new TextEncoder().encode('not JSON'));
-            },
-            cancel() {
-              cancelled++;
-            },
-          }),
-          { status: 429, headers: { 'Retry-After': retry, Date: serverDate } },
-        ),
-    });
-    await assert.rejects(services.layerCounts.getCounts(), {
-      message: 'Layer counts unavailable (429)',
-    });
-  }
-  assert.equal(cancelled, 2);
+  const services = createApplicationRequestServices({
+    fetchImpl: async () =>
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('not JSON'));
+          },
+          cancel() {
+            cancelled++;
+          },
+        }),
+        { status: 429 },
+      ),
+  });
+  await assert.rejects(services.layerCounts.getCounts(), {
+    message: 'Layer counts unavailable (429)',
+  });
+  assert.equal(cancelled, 1);
 });
 
 test('layer counts reject oversized declared and streamed response bodies', async () => {

@@ -73,8 +73,6 @@ function flowFields(flow, state) {
         ? 'tomtom-cached'
         : 'tomtom-live'
       : simulatedSource,
-    // Flow read from cached proxy tiles, not this minute's feed.
-    stale: Boolean(flow && state._flowStale),
   };
 }
 

@@ -629,6 +629,25 @@ test('AIS: worldwide counts follow the subscription at receipt and require a con
   assert.deepEqual(await countRows(handler), []);
 });
 
+test('AIS: a vessel received under a regional subscription does not count', (t) => {
+  const now = Date.now() + 3 * 365 * 86_400_000;
+  t.mock.method(Date, 'now', () => now);
+  ingestAisStreamEnvelope(
+    {
+      MessageType: 'PositionReport',
+      Message: { PositionReport: { UserID: 244060904, Sog: 5, Cog: 90 } },
+      MetaData: {
+        MMSI: '244060904',
+        latitude: 53.4,
+        longitude: 6.2,
+        time_utc: '2026-09-17 20:00:00.000000000 +0000 UTC',
+      },
+    },
+    false,
+  );
+  assert.equal(aisStreamVesselCount(), null);
+});
+
 test('FIRMS: no count without a key, and with one the count saved beside the cache, never the cache itself', async (t) => {
   const dir = await cacheDir(t);
   // A cache this read must not parse: it is not even JSON.

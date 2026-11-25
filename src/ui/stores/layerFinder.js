@@ -1,22 +1,20 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { bindLayerFinder, createLayerFinder } from '../layerFinderFilter.js';
 
 export const useLayerFinderStore = defineStore('gev-layer-finder', () => {
   const finder = createLayerFinder();
-  const controlsMounted = ref(false);
-  let owner = null;
+  const owner = shallowRef(null);
+  const controlsMounted = computed(() => owner.value !== null);
 
   function attachControls(list = null) {
     const mount = Symbol();
-    owner = mount;
+    owner.value = mount;
     const unbind = list && bindLayerFinder(list, finder);
-    controlsMounted.value = true;
     return () => {
       unbind?.();
-      if (owner !== mount) return;
-      owner = null;
-      controlsMounted.value = false;
+      if (owner.value !== mount) return;
+      owner.value = null;
       finder.clearAll();
     };
   }

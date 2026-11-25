@@ -4,12 +4,6 @@ import { readResponseJsonCapped } from '../sources/httpBody.js';
 
 const LAYER_COUNTS_MAX_BYTES = 16 * 1024;
 
-function requireOk(response, label) {
-  if (!response.ok)
-    throw new Error(`${label} unavailable (${response.status})`);
-  return response.data;
-}
-
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -76,6 +70,11 @@ export function createApplicationRequestServices({
     )
       throw new TypeError('Valid coordinates are required');
     return `${endpoint}?${new URLSearchParams({ latitude: latitude.toFixed(5), longitude: longitude.toFixed(5) })}`;
+  }
+  function requireOk(response, label) {
+    if (!response.ok)
+      throw new Error(`${label} unavailable (${response.status})`);
+    return response.data;
   }
   // Remember valid capability decisions for the page, so an
   // unconfigured server is never asked (and never answers with an error).

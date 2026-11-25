@@ -249,6 +249,9 @@ export function createControls({ state, services, parts }) {
           link: row.link || null,
           acartiaProvider:
             row.origin === 'acartia' ? (row.provider ?? null) : null,
+          ...((state.heldRows?.has(row) || !state.rows.has(row.stableId)) && {
+            positionUnconfirmed: true,
+          }),
         });
       }
       return result;

@@ -159,8 +159,7 @@ export function aisLiveProxy() {
   return {
     name: 'ais-live-proxy',
     api: {
-      // Reading the store leaves the stream alone. Only rows received
-      // under the worldwide subscription count.
+      // Counts only what the store already holds, without opening or resubscribing the stream.
       readLayerCount: () =>
         process.env.AISSTREAM_API_KEY ? aisStreamVesselCount() : null,
     },

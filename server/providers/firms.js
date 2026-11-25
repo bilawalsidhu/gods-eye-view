@@ -1,11 +1,10 @@
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
 import https from 'node:https';
 import { promises as fsp } from 'node:fs';
 import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
-import { readResponseTextCapped } from './common/http.js';
+import { readResponseTextCapped, writeJsonAtomic } from './common/http.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -234,14 +233,14 @@ export function firmsProxy() {
   }
 
   async function replaceJson(file, value) {
-    const temp = `${file}.${randomUUID()}.tmp`;
     try {
-      await fsp.writeFile(temp, JSON.stringify(value), 'utf8');
-      await fsp.rename(temp, file);
+      await writeJsonAtomic(file, value);
       return true;
     } catch (err) {
-      await fsp.unlink(temp).catch(() => {});
-      console.warn('[firms-proxy] cache write failed:', err?.message || err);
+      console.warn(
+        `[firms-proxy] ${path.basename(file)} write failed:`,
+        err?.message || err,
+      );
       return false;
     }
   }

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, ref, shallowRef, triggerRef } from 'vue';
+import { computed, markRaw, ref, shallowRef, triggerRef } from 'vue';
 import { shownLayerName, layerSourceText } from '../layerNames.js';
 import {
   alertsNear,
@@ -119,6 +119,13 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const card = shallowRef(null);
   /** True once a moving item has dropped out of its feed. */
   const lost = ref(false);
+  /** Withhold a sighting's position if the feed lost it or no longer confirms it. */
+  const locationWithheld = computed(
+    () =>
+      Boolean(card.value) &&
+      ((lost.value && card.value.layerId === 'wildlife-sightings') ||
+        card.value.positionUnconfirmed === true),
+  );
   /** Bumped on each refresh, so ages shown on the card tick. */
   const tick = ref(0);
   /**
@@ -158,10 +165,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     if (inspector.value.shown === shown && inspector.value.mountId === mountId)
       return;
     inspector.value = { shown, mountId };
-  }
-
-  function readViewContextShown() {
-    return inspector.value.shown;
   }
 
   function publishInspectorRows(rows) {
@@ -321,9 +324,9 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   /**
    * Reads each layer that is on on its own, keeping each one's answer in
    * `cache` (per layer: `{place, options, revision, value, at, costMs}`)
-   * while its key holds: the exact place, the options
-   * and the layer's update time, count and optional records revision. A refresh
-   * from another layer never rereads it. Moving items (satellites, aircraft)
+   * while its key holds: the exact place, the options and the layer's
+   * update time, count and optional records revision. A refresh from another
+   * layer never rereads it. Moving items (satellites, aircraft)
    * are also read again once their answer expires, since satellites stamp a
    * revision only when new orbits arrive. Wildlife also ages out without a
    * feed revision. Nearby limits the adaptive wait for both cases.
@@ -841,8 +844,8 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
       ? shell.value.regionalBrief(lat, lon, options)
       : Promise.resolve(null);
   /**
-   * A spot's weather alone, `{weather}`, without the brief's place lookup
-   * and news search; the brief stands in where the shell has no weather.
+   * The spot-weather payload ({status, retrievedAt, coordinates, weather}).
+   * The regional brief stands in when the shell has no weather service.
    */
   const readWeather = (lat, lon, options) =>
     shell.value?.spotWeather
@@ -863,6 +866,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   return {
     card,
     lost,
+    locationWithheld,
     tick,
     away,
     finding,
@@ -903,7 +907,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     inspectorPulse,
     viewWeather,
     setViewContextShown,
-    readViewContextShown,
     publishInspectorRows,
     pulseInspector,
     publishViewWeather,

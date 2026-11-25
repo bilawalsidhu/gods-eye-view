@@ -113,6 +113,8 @@ function coarsen(value, precision = 2) {
 }
 
 export const OBSCURED_CELL_DEG = 0.2;
+/** Acartia rounds observation positions to two decimals. */
+export const ACARTIA_PRECISION_DEG = 0.01;
 
 /** Public iNaturalist obscuration is a 0.2-degree cell aligned to zero. The
  * rounding removes floating-point noise, including at negative longitudes. */

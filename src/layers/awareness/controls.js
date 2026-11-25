@@ -93,12 +93,16 @@ export function createControls({ state: layerState, services, parts, source }) {
         return [];
       const results = layerState.results;
       const contacts = {};
+      let installationsCoverage;
       for (const cohort of results?.cohorts || []) {
         if (
-          Object.hasOwn(COHORT_FIELDS, cohort?.id) &&
-          Number.isFinite(cohort.summary?.count)
+          !Object.hasOwn(COHORT_FIELDS, cohort?.id) ||
+          !Number.isFinite(cohort.summary?.count)
         )
-          contacts[COHORT_FIELDS[cohort.id]] = cohort.summary.count;
+          continue;
+        contacts[COHORT_FIELDS[cohort.id]] = cohort.summary.count;
+        if (cohort.id === 'military-installations')
+          installationsCoverage = cohort.coverage ?? null;
       }
       return [
         {
@@ -109,10 +113,7 @@ export function createControls({ state: layerState, services, parts, source }) {
           lon: at.lon,
           radiusKm: (results?.radiusM ?? AWARENESS_RADIUS_M) / 1000,
           ...contacts,
-          installationsCoverage:
-            results?.cohorts?.find(
-              (cohort) => cohort?.id === 'military-installations',
-            )?.coverage ?? null,
+          ...(installationsCoverage !== undefined && { installationsCoverage }),
           lost: layerState.subjectMissing === true,
           evaluatedAtMs: results?.evaluatedAt ?? null,
         },

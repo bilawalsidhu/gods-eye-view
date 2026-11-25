@@ -21,7 +21,8 @@ const RADIANS = Math.PI / 180;
  * Points along each line of a cable feature, spaced by route distance.
  * Long rhumb legs are split and close vertices are thinned, keeping each
  * line's ends and significant detours. Nearby measures a cable to the nearest
- * of these.
+ * of these. Exported for records.test.mjs. cableAnalystRecords samples the
+ * same paths it keeps for CONTEXT_LINES.
  * @returns {Array<{lat: number, lon: number}>}
  */
 export function cableLinePoints(feature) {

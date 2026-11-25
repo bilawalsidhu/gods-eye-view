@@ -48,7 +48,7 @@ async function openThenRefresh(t, before, after) {
   const fake = bindFakeGroundRenderer(viewer, {
     eye: { lon: 0.6, lat: 0, height: 50_000 },
   });
-  const loads = [normalized([before]), normalized([after])];
+  const loads = [normalized(before), normalized(after)];
   let calls = 0;
   const layer = createLibraryDatasetLayer(entry, {
     services: {
@@ -73,41 +73,80 @@ async function openThenRefresh(t, before, after) {
     isEnabled: () => true,
     layers: new Map([[layer.id, { module: layer }]]),
   };
-  const [record] = layerRecords(manager, layer.id);
-  const card = describeEntity(manager, {
-    layerId: layer.id,
-    id: record.key,
-    label: record.name,
-    lat: record.lat,
-    lon: record.lon,
-    record,
-  });
+  const areaOf = (card) =>
+    card.facts.find((fact) => fact.field === 'areaDesc')?.value;
+  const cards = new Map();
+  for (const record of layerRecords(manager, layer.id)) {
+    const card = describeEntity(manager, {
+      layerId: layer.id,
+      id: record.key,
+      label: record.name,
+      lat: record.lat,
+      lon: record.lon,
+      record,
+    });
+    cards.set(areaOf(card), card);
+  }
   t.mock.timers.tick(60_000);
   await layer.update(viewer);
-  return { card, found: findRecord(manager, card.identity) };
+  const found = new Map();
+  for (const [area, card] of cards) {
+    const record = findRecord(manager, card.identity);
+    found.set(
+      area,
+      record
+        ? {
+            lon: record.lon,
+            area: areaOf(describeEntity(manager, { ...card.identity, record })),
+          }
+        : null,
+    );
+  }
+  return { cards, found };
 }
 
 test('a different alert with the same event name does not take over the open card', async (t) => {
   const { found } = await openThenRefresh(
     t,
-    alert('urn:alert:A', 0.6, 'County A'),
-    alert('urn:alert:B', 12.5, 'County B'),
+    [alert('urn:alert:A', 0.6, 'County A')],
+    [alert('urn:alert:B', 12.5, 'County B')],
   );
-  assert.equal(found, null, `resolved to ${JSON.stringify(found)}`);
+  assert.equal(found.get('County A'), null);
 });
 
-test('control: the same alert id that moved still follows the open card', async (t) => {
+test('a moved alert keeps its card while another with the same event name takes its old place', async (t) => {
   const { found } = await openThenRefresh(
     t,
-    alert('urn:alert:A', 0.6, 'County A'),
-    alert('urn:alert:A', 0.7, 'County A'),
+    [alert('urn:A', 0.6, 'County A')],
+    [alert('urn:A', 0.7, 'County A moved'), alert('urn:B', 0.6, 'County B')],
   );
-  assert.equal(found?.lon, 0.7);
+  assert.deepEqual(found.get('County A'), { lon: 0.7, area: 'County A moved' });
+});
+
+test('an alert that moves onto a departed one keeps its own card', async (t) => {
+  const { found } = await openThenRefresh(
+    t,
+    [alert('urn:A', 0.6, 'County A'), alert('urn:B', 0.7, 'County B')],
+    [alert('urn:A', 0.7, 'County A moved')],
+  );
+  assert.equal(found.get('County B'), null);
+  assert.deepEqual(found.get('County A'), { lon: 0.7, area: 'County A moved' });
+});
+
+test('colocated alerts keep their cards when one is revised', async (t) => {
+  const { found } = await openThenRefresh(
+    t,
+    [alert('urn:A', 0.6, 'County A'), alert('urn:B', 0.6, 'County B')],
+    [alert('urn:B', 0.6, 'County B'), alert('urn:A', 0.6, 'County A revised')],
+  );
+  assert.equal(found.get('County A')?.area, 'County A revised');
+  assert.equal(found.get('County B')?.area, 'County B');
 });
 
 test('a Library card shows alert facts without internal presentation fields', async (t) => {
   const warning = alert('urn:alert:A', 0.6, 'County A');
-  const { card } = await openThenRefresh(t, warning, warning);
+  const { cards } = await openThenRefresh(t, [warning], [warning]);
+  const card = cards.get('County A');
   assert.equal(
     card.facts.find(({ field }) => field === 'areaDesc')?.value,
     'County A',

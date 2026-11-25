@@ -9,6 +9,7 @@ import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
 import {
   coalesceProxyRequest,
+  writeJsonAtomic,
   readResponseTextCapped,
 } from '../common/http.js';
 
@@ -123,14 +124,10 @@ export function celestrakProxy() {
     }
 
     async function writeDisk(group, entry) {
-      const file = diskPath(group);
-      const temporary = `${file}.${crypto.randomUUID()}.tmp`;
       try {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        await fsp.writeFile(temporary, JSON.stringify(entry), 'utf8');
-        await fsp.rename(temporary, file);
+        await writeJsonAtomic(diskPath(group), entry);
       } catch {
-        await fsp.unlink(temporary).catch(() => {});
         console.warn('[celestrak-proxy] cache write failed');
       }
     }

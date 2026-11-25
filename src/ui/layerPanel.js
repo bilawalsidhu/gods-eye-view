@@ -282,9 +282,8 @@ export class LayerPanel {
     weatherClock,
     finder,
   }) {
-    this._providedFinder = finder;
-    this._localFinder = finder == null ? createLayerFinder() : null;
-    this.finder = finder ?? this._localFinder;
+    this._ownFinder = finder ?? createLayerFinder();
+    this.finder = this._ownFinder;
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -317,10 +316,7 @@ export class LayerPanel {
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
-    this.finder =
-      layerFinderFor(container) ??
-      this._providedFinder ??
-      (this._localFinder ??= createLayerFinder());
+    this.finder = layerFinderFor(container) ?? this._ownFinder;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();

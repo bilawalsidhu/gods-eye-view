@@ -9,7 +9,7 @@ const WEATHER_EFFECTS_STALE_MS = 30 * 60_000;
 
 const WEATHER_EFFECTS_MAX_CACHE = 180;
 
-const _weatherEffectsCellCache = new Map();
+const _weatherEffectsCache = new Map();
 
 const _weatherEffectsInFlight = new Map();
 
@@ -19,16 +19,15 @@ const _weatherEffectsRateLimiter = makeRateLimiter({
   globalMax: 120,
 });
 
-function trimWeatherEffectsCache(cache) {
-  while (cache.size > WEATHER_EFFECTS_MAX_CACHE) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
-    cache.delete(oldest);
+function trimWeatherEffectsCache() {
+  while (_weatherEffectsCache.size > WEATHER_EFFECTS_MAX_CACHE) {
+    const oldest = _weatherEffectsCache.keys().next().value;
+    _weatherEffectsCache.delete(oldest);
   }
 }
 
 function weatherEffectsProxy() {
-  async function refresh(point, key, cache) {
+  async function refresh(point, key, store) {
     const weather = await fetchRegionalWeather(point);
     if (!weather) throw new Error('Weather observation unavailable');
     const payload = {
@@ -37,9 +36,9 @@ function weatherEffectsProxy() {
       coordinates: point,
       weather,
     };
-    if (cache) {
-      cache.set(key, { payload, cachedAt: Date.now() });
-      trimWeatherEffectsCache(cache);
+    if (store) {
+      _weatherEffectsCache.set(key, { payload, cachedAt: Date.now() });
+      trimWeatherEffectsCache();
     }
     return payload;
   }
@@ -73,12 +72,12 @@ function weatherEffectsProxy() {
       // Inspector local time needs the requested point even at a zone border.
       // Other weather consumers can continue to share a 0.1° observation.
       const exactPoint = url.searchParams.get('exactPoint') === '1';
-      const cache = exactPoint ? null : _weatherEffectsCellCache;
       const key = exactPoint
         ? `point:${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`
         : `${(Math.round(point.latitude * 10) / 10).toFixed(1)},${(Math.round(point.longitude * 10) / 10).toFixed(1)}`;
       const now = Date.now();
-      const cached = cache?.get(key);
+      // Caching exact points would reveal which points other clients requested.
+      const cached = exactPoint ? null : _weatherEffectsCache.get(key);
       if (cached && now - cached.cachedAt <= WEATHER_EFFECTS_CACHE_MS) {
         res.writeHead(200, {
           'Content-Type': 'application/json',
@@ -89,7 +88,7 @@ function weatherEffectsProxy() {
         return;
       }
       const request = coalesceProxyRequest(_weatherEffectsInFlight, key, () =>
-        refresh(point, key, cache),
+        refresh(point, key, !exactPoint),
       );
       try {
         const payload = await request.promise;
@@ -115,7 +114,7 @@ function weatherEffectsProxy() {
         }
         res.writeHead(503, {
           'Content-Type': 'application/json',
-          'Cache-Control': exactPoint ? 'private, no-store' : 'no-store',
+          'Cache-Control': 'no-store',
         });
         res.end(
           JSON.stringify({

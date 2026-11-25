@@ -4,7 +4,7 @@ import { onLocaleChange, t } from '../../../i18n/index.js';
 import { weatherFacts, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
 import { approximatePosition, distanceText } from '../../distanceText.js';
 import { contextAgeText } from '../../contextTime.js';
-import { distanceKm } from '../../../data/entityContext.js';
+import { greatCircleKm } from '../../../geoDistance.js';
 import { CONTEXT_RADIUS_STEPS, contextRadiusKm, contextRadiusText as radiusText, contextRadiusIndex as radiusIndex, pickContextRadius as pickRadius } from '../../contextRadius.js';
 import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
 import UiButton from '../../kit/UiButton.vue';
@@ -14,14 +14,14 @@ import { sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { shownLayerName } from '../../layerNames.js';
 
-// A selected item's weather and solar time, followed by traffic, hazards and
-// alerts within the chosen radius. Moving the item refreshes its conditions.
+// A selected item's weather and solar time, then flights, vessels, hazards,
+// alerts and other loaded items within the radius. Moving the item refreshes them.
 const props = defineProps({
   lat: { type: Number, required: true },
   lon: { type: Number, required: true },
   withContacts: Boolean,
   /** Distances from a selected privacy cell or rounded observation are approximate. */
-  obscured: Boolean,
+  approximate: Boolean,
   /** The selected item's own key, left out of the nearby lists. */
   excludeKey: { type: String, default: '' },
   /** How far the spot moves before the weather and hazards are read again. */
@@ -48,14 +48,14 @@ const firesOn = () =>
   Boolean((omnibar.controls?.layers() || []).find((layer) => layer.id === HAZARD_LAYER.hotspots)?.enabled);
 
 async function read(lat, lon, { force = false } = {}) {
-  if (!force && readAt && distanceKm(readAt, { lat, lon }) <= props.settleKm) return;
+  if (!force && readAt && greatCircleKm(readAt, { lat, lon }) <= props.settleKm) return;
   readAt = { lat, lon };
   const mine = ++reading;
   const mineHazards = ++readingHazards;
   // A forced re-read keeps what is shown until the new reading lands.
   if (!force) loading.value = true;
   const [nextBrief, nextHazards] = await Promise.all([
-    regionalBrief(lat, lon, store.readBrief, { force }),
+    regionalBrief(lat, lon, store.readWeather, { force }),
     hazardsNear(lat, lon, radiusKm.value, { fires: firesOn(), force }).catch(() => []),
   ]);
   if (reading !== mine) return;
@@ -81,8 +81,8 @@ async function rereadHazards(km) {
   hazards.value = next;
 }
 watch(radiusKm, (km) => void rereadHazards(km));
-// A spot that stays put (a parked selection, a still view) reads its weather,
-// news and hazards again once the kept copies are old.
+// A spot that stays put (a parked selection, a still view) reads its weather
+// and hazards again once the kept copies are old.
 const REREAD_MS = 5 * 60_000;
 let rereadTimer = 0;
 onMounted(() => {
@@ -128,7 +128,6 @@ const groups = computed(() => {
   });
 });
 const trafficBlocks = computed(() => {
-  if (!groups.value) return [];
   if (props.withContacts)
     return groups.value.flights.count
       ? [{ id: 'local-adsb', icon: 'flight', title: t('Local ADS-B'), ...groups.value.flights }]
@@ -152,7 +151,7 @@ const round = (n) => (Number.isFinite(n) ? Math.round(n) : null);
 const facts = computed(() => weatherFacts(weather.value));
 
 function distance({ distanceKm: km, identity }) {
-  return distanceText(km, props.obscured || approximatePosition(identity?.record));
+  return distanceText(km, props.approximate || approximatePosition(identity?.record));
 }
 
 // The layer each kind of hazard comes from. Picking a hazard turns its layer
@@ -308,7 +307,7 @@ const sources = computed(() => {
       </ul>
     </div>
 
-    <div v-if="groups?.other.length" class="spot-conditions__block">
+    <div v-if="groups.other.length" class="spot-conditions__block">
       <h4>
         <UiIcon name="layers" :size="null" />
         <span>{{ t('Also within {radius}', { radius: radiusText }) }}</span>

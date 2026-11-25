@@ -18,12 +18,6 @@ const TILE_IDS = new Set(COUNT_TILE_LAYERS.map((layer) => layer.id));
 /** Minimum time between attempts on entry to the nothing-on view. */
 export const LAYER_COUNTS_REFETCH_MS = 30 * 60_000;
 
-/** Age a count using its timestamp on the local clock. */
-export function countAgeMs(known, now) {
-  if (!Number.isFinite(known.at)) return null;
-  return Math.max(0, now - known.at);
-}
-
 function setCount(counts, layerId, row) {
   const known = counts[layerId];
   if (known === row || (known?.at === row?.at && known?.count === row?.count))

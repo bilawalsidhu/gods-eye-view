@@ -6,5 +6,5 @@
   (manjunath22466, #1908).
 - Keep the UI shell compatible with custom Intel HUDs that omit
   `setDisplayed()` (manjunath22466, #1908).
-- Remove the sundial from Context while keeping UTC and daylight in globe
-  view (manjunath22466, #1908).
+- Remove the sundial from Context. Globe view keeps the UTC clock, and the
+  zoomed-in view shows daylight (manjunath22466, #1908).
