@@ -69,7 +69,9 @@ export function createInteraction({
       // under it does not act, and the click is not empty space either.
       if (isUnderOtherCard?.(event)) return;
       const picked = event.topHit;
-      const hit = event.drawHit;
+      // `hit`, as the aircraft layers read it: on a touch screen the dot
+      // under the finger's reach, where the exact pick found only the map.
+      const hit = event.hit?.set ? event.hit : null;
 
       // A click on the selected satellite (its tracked dot, or its
       // station's model) centres it again, unless the camera follows it.

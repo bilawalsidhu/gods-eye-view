@@ -128,6 +128,12 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
       input.tap({ x: 10, y: 10 });
       picked = null;
     },
+    /** A tap whose exact pick finds only the map, with `hit` in reach. */
+    touch(hit) {
+      drilled = [{ id: hit }];
+      input.tap({ x: 10, y: 10 });
+      drilled = [];
+    },
   };
 }
 
@@ -194,6 +200,22 @@ test('another satellite selects that one; the map or another layer lets go', (t)
   app.click(DOT(25544));
   claimSelection('flights', 'abc123');
   assert.equal(app.state._trackedNorad, null);
+});
+
+test('a tap near a satellite on a touch screen selects and centres it', (t) => {
+  const previous = globalThis.matchMedia;
+  globalThis.matchMedia = (query) => ({ matches: query.includes('coarse') });
+  picking.registerPickOwner('satellites', (id) => /^\d+$/.test(id));
+  t.after(() => {
+    picking.unregisterPickOwner('satellites');
+    if (previous) globalThis.matchMedia = previous;
+    else delete globalThis.matchMedia;
+  });
+  const app = satellitesLayer(t);
+  app.touch(DOT(25544));
+  assert.equal(app.state._trackedNorad, 25544);
+  assert.equal(app.camera.flights.length, 1);
+  assert.equal(app.camera.followed, null);
 });
 
 test('a geostationary satellite seen from near the ground is turned to, never slid under the ground to', (t) => {
