@@ -4171,7 +4171,9 @@ example, the `/api` fallback installed before a provider). It binds to
 loopback by default, refuses a non-loopback bind unless
 `GEV_HEADLESS_UNSAFE_PUBLIC=1` is set, rejects unexpected `Host` headers
 (by the same rule and `GEV_ALLOWED_HOSTS` allowlist as the Vite servers,
-from `build/allowedHosts.js`), and bounds shutdown.
+from `build/allowedHosts.js`), and bounds shutdown. `GEV_HEADLESS_PORT=0`
+asks the OS for a free port, and the startup line reports the port the socket
+actually bound rather than the one requested.
 `server/apiRoutes.js` is the complete `/api` mount table, as data, for all
 three surfaces; `docs/API_REFERENCE.md` documents a selected subset of those
 routes in detail.
