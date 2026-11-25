@@ -38,6 +38,7 @@ import { createApplicationDroneAirspace } from './layers/droneAirspace.js';
 import { createApplicationNews } from './layers/news.js';
 import { createApplicationWildlifeSightings } from './layers/wildlifeSightings.js';
 import { createApplicationCables } from './layers/submarineCables.js';
+import { createApplicationAbyss } from './layers/abyss.js';
 import { createOsmOverlayLayers } from '../data/osmOverlays.js';
 import { createApplicationStreetLevel } from './layers/streetLevel.js';
 import { createInfrastructureLayers } from '../data/infrastructure.js';
@@ -221,6 +222,7 @@ export function createApplicationCatalog({
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
+        createApplicationAbyss({ source: sources.abyss }),
         createApplicationRail({
           surface,
           source: sources.rail,

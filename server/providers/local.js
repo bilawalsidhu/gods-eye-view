@@ -37,6 +37,7 @@ import { inaturalistProxy } from './inaturalist/observations.js';
 import { acartiaProxy } from './acartia.js';
 import { cycloneProxy } from './cyclones.js';
 import { windProxy } from './wind.js';
+import { abyssProxy } from './abyss.js';
 import { libraryProxy } from './library.js';
 
 /**
@@ -88,6 +89,7 @@ function localProviderPlugins({
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),
+    abyssProxy(),
     libraryProxy(),
     ghostMapsProxy(),
     shipwrecksProxy(),
