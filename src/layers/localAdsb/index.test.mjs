@@ -15,9 +15,14 @@ import {
 } from './index.js';
 import { createLocalAdsbModels } from './models.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
-import { resolvePickId } from '../../data/pickRegistry.js';
+import {
+  isUnderOtherCard,
+  resolvePickId,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL, fakeInput } from '../../input/testDoubles.mjs';
 import { hexColor } from '../../render/color.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
@@ -1174,7 +1179,8 @@ function iconPick(draw, id) {
   return { primitive: {}, id: { set: layerSet(draw, ':markers').spec.id, id } };
 }
 
-/** A viewer with a canvas and scripted picks, plus the layer's click action. */
+/** A viewer with a canvas and scripted picks, plus the layer's click action.
+ *  A click drills through the viewer's `drillHits`. */
 function clickHarness() {
   const scene = {
     canvas: {},
@@ -1182,6 +1188,8 @@ function clickHarness() {
     pick() {
       return scene.pickResult;
     },
+    drillPick: () =>
+      (base.viewer.drillHits ?? []).map((hit) => ({ primitive: {}, id: hit })),
   };
   const base = fakeViewer({ scene });
   return {
@@ -1211,6 +1219,41 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
   assert.deepEqual(calls.cleared, []);
+});
+
+// The card or label painted on top takes the click: a local aircraft under
+// another layer's card is neither selected nor released.
+test("another layer's card over a local aircraft keeps the click", async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    services: {
+      picking: {
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+        resolvePickId,
+        isUnderOtherCard,
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.click();
+  assert.deepEqual(calls.selected, [], 'covered: not selected');
+  top = null;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  harness.scene.pickResult = null;
+  harness.click();
+  assert.deepEqual(calls.cleared, [], 'covered: the selection stays');
 });
 
 test('a click on a local aircraft under an unowned or trail pick still selects it', async (t) => {
@@ -1263,6 +1306,52 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   harness.viewer.viewer.drillHits = [hit(':markers', 'local-adsb:abc123')];
   harness.click();
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
+});
+
+test('a click on a mission label over a local aircraft never selects the aircraft, and keeps the selection', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top.
+  const label = { over: true };
+  setClickCardHitTest(() => (label.over ? MISSION_LABEL : null));
+  t.after(() => setClickCardHitTest(null));
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    services: {
+      picking: {
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+        resolvePickId,
+        isUnderOtherCard,
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  inputFor(harness.viewer.viewer).onOverlayClick(() => label.over);
+  const model = {
+    set: layerSet(draw, ':models').spec.id,
+    id: 'local-adsb:abc123',
+    surface: false,
+  };
+  // The aircraft is under the label, both exactly and in the drill.
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.viewer.viewer.drillHits = [model];
+  harness.click();
+  assert.deepEqual(calls.selected, [], 'the aircraft beneath is not taken');
+
+  // Off the label the same click selects it; the label on top is its own
+  // click, so the selection stays.
+  label.over = false;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  label.over = true;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  assert.equal(calls.cleared.length, 0, 'the selection stays');
 });
 
 test('a grounded aircraft changing type keeps its drawn model on its own belly offset until the new one is ready', () => {

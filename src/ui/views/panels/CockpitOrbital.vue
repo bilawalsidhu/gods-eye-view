@@ -14,6 +14,8 @@ import {
   shownOwnerMark,
 } from '../../ownerFlag.js';
 import { useCockpitStore } from '../../stores/cockpit.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // The orbital view's HUD: a nadir reticle over the picture, the satellite's
 // identity and orbit, and the optical zoom. The Cockpit controller presents
@@ -118,14 +120,15 @@ const sensorStepShown = computed(
 // A focused control that turns off (a zoom button at the end of its range,
 // SENSOR as the view tilts away) hands focus on instead of dropping it to the
 // page. The watchers run before the re-render, while it still has focus.
+// Each ref holds a UiButton, whose element is its `$el`.
 const zoomInButton = ref(null);
 const zoomOutButton = ref(null);
 const sensorButton = ref(null);
 const nadirButton = ref(null);
 const handFocus = (from, to) => {
-  if (!from || document.activeElement !== from) return;
+  if (!from?.$el || document.activeElement !== from.$el) return;
   nextTick(() =>
-    (to() ?? document.getElementById('map-view-switch'))?.focus({
+    (to()?.$el ?? document.getElementById('map-view-switch'))?.focus({
       preventScroll: true,
     }),
   );
@@ -220,6 +223,8 @@ const shownMark = computed(() =>
 const identParts = computed(() => {
   const o = orbital.value;
   if (!o) return [];
+  // A module with no catalog entry (the Cupola) shows its facts instead.
+  if (Array.isArray(o.facts) && o.facts.length) return [...o.facts];
   const parts = [];
   if (o.noradId !== null && o.noradId !== undefined && o.noradId !== '')
     parts.push(t('NORAD {id}', { id: String(o.noradId) }));
@@ -250,6 +255,11 @@ watch(
 
 // The off-nadir tilt; an untilted view shows no readout or reset.
 const look = computed(() => orbital.value?.look || { offset: false });
+// Riding the station from a mount on its 3D model: the view's name, or null
+// for the straight-down picture every other satellite has.
+const mount = computed(() => orbital.value?.mount ?? null);
+// The station offers several views; with two or more, the arrows step through them.
+const mountViews = computed(() => orbital.value?.mountViews ?? 0);
 // A ground focus names its target in a polite live region; the angle,
 // which changes every update, is left out of it.
 const focusText = computed(() => {
@@ -270,7 +280,8 @@ const lensStyle = computed(() => {
   <section id="cockpit-orbital" class="cockpit-orbital" :class="{ 'cockpit-orbital-focusing': transition.active }" :style="lensStyle" :aria-label="t('Orbital view')" :hidden="!orbital">
     <template v-if="orbital">
       <div class="cockpit-orbital-lens" aria-hidden="true"></div>
-      <div class="cockpit-orbital-reticle" :class="{ 'cockpit-orbital-reticle-lock': transition.lockTick }" aria-hidden="true">
+      <!-- The nadir reticle and its north pointer; a view from the station has no ground point at its centre. -->
+      <div v-if="mount === null" class="cockpit-orbital-reticle" :class="{ 'cockpit-orbital-reticle-lock': transition.lockTick }" aria-hidden="true">
         <span class="cockpit-orbital-bracket cockpit-orbital-bracket-tl"></span>
         <span class="cockpit-orbital-bracket cockpit-orbital-bracket-tr"></span>
         <span class="cockpit-orbital-bracket cockpit-orbital-bracket-bl"></span>
@@ -287,7 +298,7 @@ const lensStyle = computed(() => {
       <!-- Under the vision selector: where the ground track is. -->
       <p v-if="placeText" id="cockpit-orbital-over" class="cockpit-orbital-over"><span>{{ t('CURRENTLY OVER') }}</span> <strong>{{ placeText }}</strong></p>
       <div class="cockpit-orbital-readout">
-        <p class="cockpit-orbital-kicker">{{ look.offset ? t('ORBITAL VIEW · OFF-NADIR') : t('ORBITAL VIEW · NADIR') }}</p>
+        <p class="cockpit-orbital-kicker">{{ mount !== null ? t('STATION VIEW · {name}', { name: mount }) : look.offset ? t('ORBITAL VIEW · OFF-NADIR') : t('ORBITAL VIEW · NADIR') }}</p>
         <div class="cockpit-orbital-title">
           <span v-if="shownMark?.kind === 'flag'" class="cockpit-orbital-flag" role="img" :aria-label="shownMark.label" :title="shownMark.label" :style="shownMark.style"></span>
           <span v-else-if="shownMark?.kind === 'badge'" class="cockpit-orbital-owner-badge" :title="shownMark.title">{{ shownMark.label }}</span>
@@ -298,7 +309,7 @@ const lensStyle = computed(() => {
         <div v-if="identText" class="cockpit-orbital-ident">
           <!-- Wraps between parts, never inside a date. -->
           <span class="cockpit-orbital-ident-text"><template v-for="(part, index) in identParts" :key="index"><template v-if="index"> · </template><span class="cockpit-orbital-ident-part">{{ part }}</span></template></span>
-          <button v-if="tleText" id="cockpit-orbital-tle-toggle" type="button" class="cockpit-orbital-tle-toggle" :aria-expanded="String(tleOpen)" aria-controls="cockpit-orbital-tle" :aria-label="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" :title="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" @click="tleOpen = !tleOpen">{{ t('TLE') }}</button>
+          <UiButton v-if="tleText" id="cockpit-orbital-tle-toggle" class="cockpit-orbital-tle-toggle" :aria-expanded="String(tleOpen)" aria-controls="cockpit-orbital-tle" :aria-label="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" :title="tleOpen ? t('Hide the two-line element set') : t('Show the two-line element set')" @click="tleOpen = !tleOpen">{{ t('TLE') }}</UiButton>
         </div>
         <pre v-if="tleText" v-show="tleOpen" id="cockpit-orbital-tle" class="cockpit-orbital-tle" :aria-label="t('Two-line element set')">{{ tleText }}</pre>
         <dl class="cockpit-orbital-data">
@@ -315,21 +326,27 @@ const lensStyle = computed(() => {
             <dd class="cockpit-orbital-subpoint">{{ subPointText }}</dd>
           </div>
         </dl>
-        <p class="cockpit-orbital-north">{{ trackUp ? t('TRACK UP') : t('NORTH UP') }}</p>
+        <p v-if="mount === null" class="cockpit-orbital-north">{{ trackUp ? t('TRACK UP') : t('NORTH UP') }}</p>
+        <!-- A station view: which one it is, and the step to the next. -->
+        <div v-if="mount !== null && mountViews > 1" class="cockpit-orbital-look cockpit-orbital-views">
+          <UiButton id="cockpit-orbital-view-previous" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Previous station view')" :title="t('Previous station view')"><UiIcon name="chevron_left" :size="null" /></UiButton>
+          <span id="cockpit-orbital-view-name" class="cockpit-orbital-look-readout" aria-live="polite">{{ mount }}</span>
+          <UiButton id="cockpit-orbital-view-next" class="cockpit-orbital-nadir cockpit-orbital-view-step" :aria-label="t('Next station view')" :title="t('Next station view')"><UiIcon name="chevron_right" :size="null" /></UiButton>
+        </div>
         <!-- Shown only while the view is tilted off nadir: where it looks and the way back. -->
         <div v-if="look.offset" class="cockpit-orbital-look">
           <span id="cockpit-orbital-look-readout" class="cockpit-orbital-look-readout" :aria-live="look.focus ? 'off' : 'polite'">{{ look.readout }}</span>
-          <button id="cockpit-orbital-nadir" ref="nadirButton" type="button" class="cockpit-orbital-nadir" :aria-label="t('Return the view to nadir')" :title="t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ t('NADIR') }}</button>
+          <UiButton id="cockpit-orbital-nadir" ref="nadirButton" class="cockpit-orbital-nadir" :aria-label="mount !== null ? t('Return to the default view') : t('Return the view to nadir')" :title="mount !== null ? t('Return to the default view') : t('Return to nadir (Home or 0)')" aria-keyshortcuts="Home 0">{{ mount !== null ? t('RESET') : t('NADIR') }}</UiButton>
         </div>
         <p id="cockpit-orbital-focus" class="cockpit-orbital-focus" aria-live="polite">{{ focusText }}</p>
       </div>
       <div class="cockpit-orbital-optics">
-        <button id="cockpit-orbital-zoom-out" ref="zoomOutButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</button>
+        <UiButton id="cockpit-orbital-zoom-out" ref="zoomOutButton" class="cockpit-orbital-zoom-button" :disabled="atWidest" :aria-label="t('Zoom out')" :title="t('Zoom out (−)')" aria-keyshortcuts="- _">−</UiButton>
         <span class="cockpit-orbital-zoom" aria-live="polite">{{ zoomText }}</span>
-        <button id="cockpit-orbital-zoom-in" ref="zoomInButton" type="button" class="cockpit-orbital-zoom-button" :disabled="atTightest" :aria-label="t('Zoom in')" :title="t('Zoom in (+)')" aria-keyshortcuts="+ =">+</button>
+        <UiButton id="cockpit-orbital-zoom-in" ref="zoomInButton" class="cockpit-orbital-zoom-button" :disabled="atTightest" :aria-label="t('Zoom in')" :title="t('Zoom in (+)')" aria-keyshortcuts="+ =">+</UiButton>
         <span v-if="swathText" class="cockpit-orbital-swath">{{ swathText }}</span>
         <span v-if="sensorText" class="cockpit-orbital-swath cockpit-orbital-sensor-swath">{{ sensorText }}</span>
-        <button v-if="sensorStepShown" id="cockpit-orbital-sensor" ref="sensorButton" type="button" class="cockpit-orbital-sensor-step" :aria-label="t('Zoom to the imaging sensor swath')" :title="t('Zoom to the imaging sensor swath')">{{ t('SENSOR') }}</button>
+        <UiButton v-if="sensorStepShown" id="cockpit-orbital-sensor" ref="sensorButton" class="cockpit-orbital-sensor-step" :aria-label="t('Zoom to the imaging sensor swath')" :title="t('Zoom to the imaging sensor swath')">{{ t('SENSOR') }}</UiButton>
       </div>
     </template>
   </section>

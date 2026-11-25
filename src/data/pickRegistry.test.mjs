@@ -17,6 +17,11 @@ import {
   isOwnedByOtherLayer,
   resolvePickId,
   pickContact,
+  clickCard,
+  isUnderOtherCard,
+  setClickCardHitTest,
+  registerClickClaim,
+  unregisterClickClaim,
 } from './pickRegistry.js';
 
 // ---------------------------------------------------------------------------
@@ -196,4 +201,80 @@ test('touch picking tolerates a failing drill and preserves empty sky', (t) => {
     () => [],
   ])
     assert.equal(pickContact(query(null, drillPick), { x: 1, y: 1 }), null);
+});
+
+test("the card on top is read once per click, and only another layer's card counts", () => {
+  let top = { sourceId: 'quake-card', entryId: 'q1' };
+  let reads = 0;
+  setClickCardHitTest((x, y) => {
+    reads++;
+    assert.deepEqual([x, y], [4, 5]);
+    return top;
+  });
+  try {
+    const click = { screenPosition: { x: 4, y: 5 } };
+    assert.equal(isUnderOtherCard(click, ['vessel-card']), true);
+    assert.equal(isUnderOtherCard(click, ['quake-card']), false, 'own card');
+    // A card published later in the same click does not change it.
+    top = { sourceId: 'vessel-card', entryId: 'v1' };
+    assert.equal(clickCard(click).sourceId, 'quake-card');
+    assert.equal(reads, 1);
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), true);
+    top = null;
+    assert.equal(isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }), false);
+  } finally {
+    setClickCardHitTest(null);
+  }
+  assert.equal(
+    isUnderOtherCard({ screenPosition: { x: 4, y: 5 } }),
+    false,
+    'no host',
+  );
+  setClickCardHitTest(() => {
+    throw new Error('broken');
+  });
+  try {
+    assert.equal(clickCard({ screenPosition: { x: 1, y: 1 } }), null);
+  } finally {
+    setClickCardHitTest(null);
+  }
+});
+
+test('a click claim is the card on top only where no card or label is painted', () => {
+  const event = (x) => ({ screenPosition: { x, y: 5 } });
+  let calls = 0;
+  registerClickClaim('counts', (click) => {
+    calls++;
+    return click.screenPosition.x === 4
+      ? { sourceId: 'counts', entryId: 'k' }
+      : null;
+  });
+  try {
+    registerClickClaim('counts', null);
+    const click = event(4);
+    assert.equal(isUnderOtherCard(click), true);
+    assert.equal(isUnderOtherCard(click, ['counts']), false);
+    assert.equal(calls, 1);
+    assert.equal(clickCard(event(9)), null);
+    const quake = { sourceId: 'quake-card', entryId: 'q1' };
+    setClickCardHitTest(() => quake);
+    assert.deepEqual(clickCard(event(4)), quake);
+    assert.equal(calls, 2);
+    setClickCardHitTest(() => {
+      throw new Error('broken overlay hit test');
+    });
+    assert.equal(clickCard(event(4)), null);
+    assert.equal(calls, 2);
+    setClickCardHitTest(null);
+
+    unregisterClickClaim('counts');
+    assert.equal(clickCard(event(4)), null);
+    registerClickClaim('counts', () => {
+      throw new Error('broken claim');
+    });
+    assert.equal(clickCard(event(4)), null);
+  } finally {
+    unregisterClickClaim('counts');
+    setClickCardHitTest(null);
+  }
 });

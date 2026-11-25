@@ -65,7 +65,10 @@ const START_SIZE_PX = 1024;
 const MAX_SIZE_PX = 4096;
 
 function createAtlas() {
-  const slotOfKey = new Map();
+  // By URL, then by size: a URL is hashed once as it is, where a key built
+  // from it would be a new string to hash on every look-up (an SVG data URL
+  // runs to kilobytes, and a fleet's write looks up two a row).
+  const slotsOfUrl = new Map();
   const entries = [];
   const listeners = new Set();
   const atlas = {
@@ -90,8 +93,8 @@ function createAtlas() {
      * @returns {number}
      */
     slot(url, sizePx, source) {
-      const key = `${sizePx}|${url}`;
-      const known = slotOfKey.get(key);
+      let bySize = slotsOfUrl.get(url);
+      const known = bySize?.get(sizePx);
       if (known !== undefined) return known;
       if (entries.length >= MAX_ICON_SLOTS)
         throw new RangeError(
@@ -100,7 +103,8 @@ function createAtlas() {
       const slot = entries.length;
       const entry = { url, sizePx, image: null, x: 0, y: 0 };
       entries.push(entry);
-      slotOfKey.set(key, slot);
+      if (!bySize) slotsOfUrl.set(url, (bySize = new Map()));
+      bySize.set(sizePx, slot);
       if (source) placeLoaded(entry, source);
       else load(entry);
       return slot;
@@ -108,7 +112,7 @@ function createAtlas() {
 
     /** Whether `url` at `sizePx` already has a slot. */
     has(url, sizePx) {
-      return slotOfKey.has(`${sizePx}|${url}`);
+      return slotsOfUrl.get(url)?.has(sizePx) === true;
     },
 
     /** Whether a slot's image is packed and drawable. */

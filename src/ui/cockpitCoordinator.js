@@ -9,7 +9,13 @@ import {
   subjectEntryAllowed,
 } from '../contextModePolicy.js';
 import { cockpitSubjectProviders } from '../cockpitSubjectProviders.js';
-import { formatAwarenessLabel } from '../data/militaryAwarenessEngine.js';
+import {
+  AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
+  aircraftClassMatches,
+  formatAwarenessLabel,
+} from '../data/militaryAwarenessEngine.js';
+import { fromDegreesInto } from '../geo/ellipsoid.js';
+import { findCamera } from '../render/rendererOf.js';
 import { enterCockpitWithTracking } from '../cockpitTracking.js';
 import { cockpitVisionModeForStyle } from '../cockpitVisionPolicy.js';
 import { readEntityRecord } from '../data/entityRecords.js';
@@ -352,13 +358,41 @@ export class CockpitCoordinator {
     };
   }
 
+  /**
+   * Where a requested-layer entry searches from: the aircraft the camera
+   * follows, else the ground under the camera.
+   * @param {{layerId: string}|null} currentTarget The tracked aircraft.
+   * @returns {{x: number, y: number, z: number}|null}
+   */
+  _cockpitEntrySearchOrigin(currentTarget) {
+    const { flightsLayer, militaryFlightsLayer } = this.services;
+    const layer =
+      currentTarget?.layerId === 'military'
+        ? militaryFlightsLayer
+        : currentTarget?.layerId === 'flights'
+          ? flightsLayer
+          : null;
+    const subject = layer?.getTrackedSubject?.();
+    if (subject?.position) return subject.position;
+    const pose = findCamera(this.viewer)?.pose?.();
+    if (!Number.isFinite(pose?.lat) || !Number.isFinite(pose?.lon)) return null;
+    return fromDegreesInto(pose.lon, pose.lat, 0, { x: 0, y: 0, z: 0 });
+  }
+
+  /**
+   * Retarget a voice entry to the requested layer and class before entering.
+   * It searches the aircraft that layer shows, under the person's own
+   * filters, nearest first, from the followed aircraft or the camera, and
+   * follows the nearest match; the aircraft already followed counts when it
+   * matches. It needs nothing from Contacts.
+   */
   _retargetCockpitEntryLayer({
     targetLayer,
     aircraftClass,
     currentTarget,
     selectedTarget,
   }) {
-    const { militaryAwarenessLayer } = this.services;
+    const { flightsLayer, militaryFlightsLayer } = this.services;
     if (!['flights', 'military'].includes(targetLayer)) {
       return {
         ok: false,
@@ -370,12 +404,27 @@ export class CockpitCoordinator {
     const alreadyOnLayer = activeLayer === targetLayer;
     if (alreadyOnLayer && !aircraftClass)
       return { ok: true, retargeted: false };
-    const moved = militaryAwarenessLayer?.navigateNext
-      ? !!militaryAwarenessLayer.navigateNext({
-          targetLayer,
-          aircraftClass,
-          origin: 'voice',
-        })
+    const layer =
+      targetLayer === 'military' ? militaryFlightsLayer : flightsLayer;
+    const origin = this._cockpitEntrySearchOrigin(currentTarget);
+    const nearby =
+      origin && typeof layer?.getNearby === 'function'
+        ? layer.getNearby(
+            origin,
+            AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
+            targetLayer === 'military' ? 5000 : 25000,
+          )
+        : [];
+    const match = nearby.find(
+      (item) => item?.icao24 && aircraftClassMatches(item, aircraftClass),
+    );
+    const followed =
+      match &&
+      currentTarget?.layerId === targetLayer &&
+      String(currentTarget.id) === String(match.icao24);
+    if (followed) return { ok: true, retargeted: false };
+    const moved = match
+      ? !!layer.trackById?.(match.icao24, { origin: 'voice' })
       : false;
     if (moved) return { ok: true, retargeted: true };
     // A filter that matched nothing still enters, as long as the layer is

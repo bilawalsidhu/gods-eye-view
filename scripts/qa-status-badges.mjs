@@ -194,7 +194,7 @@ try {
         result,
       );
     }
-    for (const theme of ['tactical', 'cyber']) {
+    for (const theme of ['tactical', 'minimal']) {
       await page.evaluate(
         (theme) => window.__godsEyeView.styleManager._setHudVariant(theme),
         theme,

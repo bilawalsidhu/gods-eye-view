@@ -86,7 +86,6 @@
     "Chat",
     "Country",
     "Cyan",
-    "Cyber",
     "DEST ---°",
     "DEST {bearing}",
     "Dance",
@@ -296,7 +295,11 @@
     "{n} mm",
     "Route",
     "3D",
-    "KT"
+    "KT",
+    "ON AIR",
+    "Stream",
+    "{seconds} s",
+    "Mode"
   ],
   "es": [
     "1 min/s",
@@ -490,7 +493,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "fr": [
     "1 min/s",
@@ -536,8 +541,7 @@
     "Conversation",
     "Country",
     "Cyan",
-    "Cyber",
-    "Cyclones · NHC / CPHC",
+    "Cyclones · NHC / CPHC · JTWC",
     "DENSE",
     "DEST ---°",
     "DEST {bearing}",
@@ -748,7 +752,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "it": [
     "1 min/s",
@@ -788,7 +793,6 @@
     "CRT",
     "Chat",
     "Country",
-    "Cyber",
     "DEST ---°",
     "DEST {bearing}",
     "DISPLAY",
@@ -982,7 +986,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "ja": [
     "1090 MHz",
@@ -1260,7 +1265,9 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "Manual",
+    "{seconds} s"
   ],
   "ru": [
     "1900–1945",
@@ -1431,7 +1438,6 @@
     "SIG",
     "AUTO",
     "FM MHZ",
-    "Cyber",
     "Sonar",
     "Cyan",
     "≥ {value} MW",
@@ -1498,7 +1504,8 @@
     "{n} min",
     "{n} mm",
     "3D",
-    "KT"
+    "KT",
+    "{seconds} s"
   ],
   "uk": [
     "1900–1945",

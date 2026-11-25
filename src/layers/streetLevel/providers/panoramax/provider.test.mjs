@@ -14,7 +14,12 @@ import {
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  drawn,
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
 import {
   bindStreetViewer,
   coverageViewer,
@@ -26,6 +31,9 @@ import {
   encodePanoramaxTile,
   stacItem,
 } from '../../../../testSupport/panoramaxFixtures.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const ORIGIN = { lon: 2.3495, lat: 48.8874 };
 /** A point `metres` east of ORIGIN. */
@@ -284,7 +292,7 @@ async function mounted(sourceOptions, contextOptions) {
   const env = setup(sourceOptions, contextOptions);
   const poses = [];
   env.instance.viewer.onPose((pose) => poses.push(pose.imageId));
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const [, , prev, next] = host.children[0].children;
   return { ...env, poses, prev, next };
@@ -320,7 +328,7 @@ test('one lookup for a picture asked twice at once', async () => {
     await gate;
     return getItem(id);
   };
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const first = instance.viewer.open('s-0');
   const second = instance.viewer.open('s-0');
@@ -985,7 +993,7 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const { context, actions } = fakeContext();
   const instance = definition.create(context);
   actions.instance = instance;
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const poses = [];
   instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -994,6 +1002,8 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const kind = () => host.children[0].dataset.kind;
   assert.equal(kind(), 'pano');
   canvas().fire('webglcontextlost');
+  await drawn();
+  assert.equal(kind(), '', 'cleared while it is drawn again');
   assert.ok(await until(() => kind() === 'pano'), 'drawn again');
   assert.deepEqual(poses, ['p-0', 'p-0']);
   assert.deepEqual(actions.opened, [], 'not through the core');

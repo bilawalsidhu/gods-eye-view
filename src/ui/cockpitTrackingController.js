@@ -516,7 +516,10 @@ function enterSubject(provider) {
   this.surfaceAcquiring = false;
   this.surfaceFallback = false;
   this.cockpitAnchorValid = false;
-  this.subjectHeightM = null;
+  // The entry frame's height, if any, stands in for a cold floor
+  // (updateSubject).
+  this.subjectHeightM = frame.heightM;
+  this.subjectHeightFromEntry = true;
   this.lookRestPitchDeg = provider.look?.restPitchDeg ?? null;
   this.resetLook({ immediate: true });
   this.active = true;
@@ -675,7 +678,7 @@ export function enter({ kind = null } = {}) {
       'track',
       'track',
       t('TRACK ACQUIRED'),
-      t('{label} · NADIR VIEW', { label: info.name }),
+      this.orbitalViewSignal(info),
     );
   } else if (vessel) {
     this.pushCockpitSignal(
@@ -736,6 +739,14 @@ export function exit({ restoreTracking = true } = {}) {
   const vesselSubject = this.subjectKind === 'vessel' ? this.subjectId : null;
   const satelliteSubject =
     this.subjectKind === 'satellite' ? this.subjectId : null;
+  // Leaving a view from a station selects the station's home entry (the
+  // ISS's Nauka, Tiangong's Tianhe), whichever view or entry it ended on:
+  // the station's first view, and the one it opens on.
+  const station = this.orbital;
+  const stationHome =
+    satelliteSubject !== null && station && station.mount != null
+      ? (station.mountViews?.[0]?.noradId ?? null)
+      : null;
   this.active = false;
   this.subjectKind = null;
   this.subjectProvider = null;
@@ -807,8 +818,20 @@ export function exit({ restoreTracking = true } = {}) {
     // Back to the selected vessel's map view, through the layer's own focus.
     this.services.aisLiveVesselsLayer?.focusSelectedVessel?.();
   } else if (restoreTracking && satelliteSubject !== null) {
-    // Back to the satellite's follow camera, through the layer's own refocus.
-    this.services.satellitesLayer?.refocusTrackedById?.(satelliteSubject);
+    // Back to the satellite's follow camera, through the layer's own refocus;
+    // from a station, on its home entry.
+    const layer = this.services.satellitesLayer;
+    let subject = satelliteSubject;
+    if (stationHome !== null && String(stationHome) !== String(subject)) {
+      let tracked = false;
+      try {
+        tracked = Boolean(layer?.trackById?.(stationHome, { origin: 'user' }));
+      } catch {
+        tracked = false;
+      }
+      if (tracked) subject = stationHome;
+    }
+    layer?.refocusTrackedById?.(subject);
   }
   this.syncEntry();
   // Return to the card or readout control that opened Cockpit.

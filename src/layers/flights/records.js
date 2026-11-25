@@ -232,7 +232,13 @@ export class FlightRecords {
         surfaceM = geoidSurfaceLastResortM({
           geoAltM: geo_alt,
           baroAltM: baro_alt,
-          priorRenderM: prevMeta?.renderAltitudeM,
+          // Only a height held ON THE GROUND counts as prior: straight after a
+          // landing the previous render height is the approach height, and
+          // holding it left the plane hanging there until a cell warmed —
+          // forever for a contact far from the viewer, whose cell is never
+          // queued (HAL-1032).
+          priorRenderM:
+            prevMeta?.onGround === true ? prevMeta.renderAltitudeM : null,
           geoidN,
         });
       }
@@ -266,10 +272,15 @@ export class FlightRecords {
     let renderAltitudeM;
     if (pickedAltM != null) {
       renderAltitudeM = pickedAltM;
-    } else if (Number.isFinite(prevMeta?.renderAltitudeM)) {
+    } else if (
+      Number.isFinite(prevMeta?.renderAltitudeM) &&
+      (!onGround || prevMeta.onGround === true)
+    ) {
       renderAltitudeM = prevMeta.renderAltitudeM;
     } else {
-      renderAltitudeM = alt;
+      // A grounded contact with nothing better sits at 0 m: `alt` is sticky,
+      // so after a landing it still holds the approach altitude.
+      renderAltitudeM = onGround ? 0 : alt;
     }
     // Field-test fix (WAKE01/RS46 class, 2026-07-06; widened round 3):
     // floor a low airborne contact's render height at the local coarse
@@ -336,6 +347,9 @@ export class FlightRecords {
       geoAltitudeM,
       renderAltitudeM,
       renderAltitudeInvented,
+      // The feed estimated this position: it places the aircraft, and stands
+      // in on the tracked trail only until the next received report.
+      estimated: observation.estimated === true,
       groundM: Number.isFinite(groundM) ? groundM : null,
       onGround,
       // Round 7: sticky airborne history — the landed fast-cull only

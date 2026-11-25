@@ -1,9 +1,12 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { useCctvStore } from '../../stores/cctv.js';
 import { usePanelChromeStore } from '../../stores/panelChrome.js';
+import UiButton from '../../kit/UiButton.vue';
+import UiCloseButton from '../../kit/UiCloseButton.vue';
+import UiIcon from '../../kit/UiIcon.vue';
 
 // A selected camera's card: a thumbnail of its latest frame, a few facts,
 // and a button that opens the full CCTV panel. The frame and facts come from
@@ -13,12 +16,23 @@ const props = defineProps({
   cameraId: { type: String, default: '' },
 });
 
-const { view, frame, sourceBadge } = storeToRefs(useCctvStore());
+const cctv = useCctvStore();
+const { view, frame, live, sourceBadge } = storeToRefs(cctv);
 const chrome = usePanelChromeStore();
 const { panels } = storeToRefs(chrome);
 
-const same = computed(() => !props.cameraId || frame.value?.cameraId === props.cameraId);
-const src = computed(() => (same.value ? frame.value?.src || frame.value?.currentSrc || '' : ''));
+const matchesActive = computed(() => !props.cameraId || view.value?.activeCameraId === props.cameraId);
+const same = computed(() => matchesActive.value && (!props.cameraId || frame.value?.cameraId === props.cameraId));
+const src = computed(() => (same.value ? frame.value?.src || (!live.value && frame.value?.currentSrc) || '' : ''));
+const badge = computed(() => {
+  if (!matchesActive.value) return '';
+  return live.value ? (src.value ? t('SNAPSHOT') : '') : sourceBadge.value?.label;
+});
+const unavailable = computed(() => {
+  if (!view.value?.enabled) return false;
+  if (!matchesActive.value || view.value.stillSuppressed) return true;
+  return live.value && (!view.value.hasLiveSnapshot || (same.value && frame.value?.error));
+});
 const params = computed(() => {
   try {
     return new URL(src.value, location.origin).searchParams;
@@ -50,11 +64,21 @@ const big = ref(false);
 const onKey = (e) => {
   if (e.key === 'Escape') big.value = false;
 };
-watch(big, (open) => {
-  if (open) document.addEventListener('keydown', onKey);
-  else document.removeEventListener('keydown', onKey);
+// The cleanup also runs when the card unmounts, even if `big` turned false in
+// the same tick and the watcher never saw it.
+watch([big, () => props.cameraId], ([open, cameraId], _, onCleanup) => {
+  if (!open) return;
+  cctv.showPreviewPopup(cameraId, true);
+  document.addEventListener('keydown', onKey);
+  onCleanup(() => {
+    cctv.showPreviewPopup(cameraId, false);
+    document.removeEventListener('keydown', onKey);
+  });
 });
-onBeforeUnmount(() => document.removeEventListener('keydown', onKey));
+watch(() => props.cameraId, (cameraId, _, onCleanup) => {
+  cctv.showPreviewCard(cameraId, true);
+  onCleanup(() => cctv.showPreviewCard(cameraId, false));
+}, { immediate: true });
 
 function openPanel() {
   if (panels.value['cctv-panel']?.collapsed !== false) chrome.act('toggle', 'cctv-panel');
@@ -65,25 +89,25 @@ function openPanel() {
   <section class="cctv-preview">
     <div class="cctv-preview__frame" :class="{ 'is-empty': !src }">
       <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
+      <span v-else-if="unavailable">{{ t('FRAME · UNAVAILABLE') }}</span>
       <span v-else>{{ t('Acquiring frame…') }}</span>
-      <span v-if="sourceBadge?.label" class="cctv-preview__badge">{{ sourceBadge.label }}</span>
-      <button v-if="src" type="button" class="cctv-preview__expand" :aria-label="t('Show a bigger view')" :title="t('Show a bigger view')" @click="big = true">
-        <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
-      </button>
+      <span v-if="badge" class="cctv-preview__badge">{{ badge }}</span>
+      <UiButton v-if="src" class="cctv-preview__expand" :label="t('Show a bigger view')" @click="big = true">
+        <UiIcon name="open_in_full" :size="null" />
+      </UiButton>
     </div>
     <Teleport to="body">
       <div v-if="big" class="cctv-popup" role="dialog" :aria-label="name || t('Camera view')" @click.self="big = false">
         <figure class="cctv-popup__card">
           <header class="cctv-popup__head">
-            <span class="material-symbols-outlined" aria-hidden="true">videocam</span>
+            <UiIcon name="videocam" :size="null" />
             <strong>{{ name || t('Camera view') }}</strong>
-            <span v-if="sourceBadge?.label" class="cctv-popup__badge">{{ sourceBadge.label }}</span>
-            <button type="button" class="cctv-popup__close" :aria-label="t('Close')" @click="big = false">
-              <span class="material-symbols-outlined" aria-hidden="true">close</span>
-            </button>
+            <span v-if="badge" class="cctv-popup__badge">{{ badge }}</span>
+            <UiCloseButton class="cctv-popup__close" glyph="icon" :label="t('Close')" @click="big = false" />
           </header>
-          <img :src="src" :alt="name || t('Camera frame')" />
-          <figcaption v-if="facts.length">
+          <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
+          <figcaption v-if="unavailable && !src">{{ t('FRAME · UNAVAILABLE') }}</figcaption>
+          <figcaption v-else-if="facts.length">
             <span v-for="fact in facts" :key="fact.label">{{ fact.label }} <b>{{ fact.value }}</b></span>
           </figcaption>
         </figure>
@@ -95,8 +119,8 @@ function openPanel() {
         <dd>{{ fact.value }}</dd>
       </div>
     </dl>
-    <button type="button" class="entity-card__action cctv-preview__more" @click="openPanel">
-      <span class="material-symbols-outlined" aria-hidden="true">videocam</span>{{ t('More info') }}
-    </button>
+    <UiButton class="entity-card__action cctv-preview__more" @click="openPanel">
+      <UiIcon name="videocam" :size="null" />{{ t('More info') }}
+    </UiButton>
   </section>
 </template>

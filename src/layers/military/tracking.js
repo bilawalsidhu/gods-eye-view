@@ -86,7 +86,8 @@ export function createTracking({
   const { clearFocusTarget } = services.focus;
   const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
     services.camera;
-  const { resolvePickId, isOwnedByOtherLayer } = services.picking;
+  const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
+    services.picking;
   /** The tracked contact's billboard (an icon set on the draw port). */
   const trackedIcon = createTrackedAircraftIcon({
     viewer: () => flightState._viewer,
@@ -364,7 +365,9 @@ export function createTracking({
       parts.queries._toCleanText(info?.registration) || t('Reg unknown');
     const operator =
       parts.queries._toCleanText(info?.operator) || t('Operator unknown');
-    const altitude = parts.queries._formatAltitude(info?.altitudeFt);
+    const altitude = info?.onGround
+      ? t('On the ground')
+      : parts.queries._formatAltitude(info?.altitudeFt);
     const speedKt = info?.speedMps ? Math.round(info.speedMps * 1.944) : null;
     const tail = speedKt ? `${altitude} · ${speedKt} kt` : altitude;
     return [
@@ -1123,7 +1126,11 @@ export function createTracking({
     // renderer's default follow distance is far too tight. It gets a calibrated
     // viewFrom — behind + above, distance scaled to altitude — for a readable
     // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
-    const altM = info?.altitudeFt ? info.altitudeFt * 0.3048 : 1500;
+    const altM = info?.onGround
+      ? 0
+      : info?.altitudeFt
+        ? info.altitudeFt * 0.3048
+        : 1500;
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
     const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);
 
@@ -1229,6 +1236,9 @@ export function createTracking({
       // first-person reference. Empty globe clicks are inert until the user
       // exits with C, Escape, or the dedicated button.
       if (document.body.classList.contains('cockpit-mode')) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard?.(event)) return;
       const picked = event.hit;
 
       if (picked) {

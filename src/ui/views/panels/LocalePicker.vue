@@ -17,6 +17,8 @@ import {
   localeOptionCode,
 } from '../../localePicker.js';
 import { vClassToggle } from '../../rail/classToggle.js';
+import { vRootClass } from '../../rail/rootClass.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // The interface language picker. The model in localePicker.js holds the
 // list, search, active option and keyboard rules; this renders it and wires
@@ -90,7 +92,7 @@ function close({ restoreFocus = false } = {}) {
   render();
   globalThis.removeEventListener('keydown', onWindowKeyDown, true);
   document.removeEventListener('pointerdown', onDocumentPointerDown, true);
-  if (restoreFocus) button.value?.focus({ preventScroll: true });
+  if (restoreFocus) button.value?.$el.focus({ preventScroll: true });
 }
 
 // The list is closed on screen before the shell switches.
@@ -179,7 +181,7 @@ function onFocusOut(event) {
 }
 
 onMounted(() => {
-  if (props.focus) button.value?.focus({ preventScroll: true });
+  if (props.focus) button.value?.$el.focus({ preventScroll: true });
 });
 onBeforeUnmount(() => close());
 
@@ -187,12 +189,12 @@ defineExpose({ open, close, isOpen: () => model.open });
 </script>
 
 <template>
-  <div id="locale-picker" ref="root" class="locale-picker" v-class-toggle="{ 'is-open': view.open }" @focusout="onFocusOut">
-    <button ref="button" class="locale-picker-button" type="button" aria-haspopup="listbox" :aria-expanded="String(view.open)" :aria-controls="ids.popup" :aria-label="buttonLabel" :title="t('Change the interface language')" @click="onButtonClick" @keydown="onButtonKeyDown" @keyup="onButtonKeyUp">
+  <div id="locale-picker" ref="root" class="locale-picker" v-root-class="{ 'has-locale-picker': true }" v-class-toggle="{ 'is-open': view.open }" @focusout="onFocusOut">
+    <UiButton ref="button" class="locale-picker-button" aria-haspopup="listbox" :aria-expanded="String(view.open)" :aria-controls="ids.popup" :aria-label="buttonLabel" :title="t('Change the interface language')" @click="onButtonClick" @keydown="onButtonKeyDown" @keyup="onButtonKeyUp">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="locale-picker-globe"><path v-for="d in LOCALE_PICKER_ICONS.globe.stroke" :key="d" :d="d" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <span class="locale-picker-code" translate="no" aria-hidden="true">{{ current.toUpperCase() }}</span>
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" class="locale-picker-caret"><path v-for="d in LOCALE_PICKER_ICONS.caret.fill" :key="d" :d="d" fill="currentColor" /></svg>
-    </button>
+    </UiButton>
     <div :id="ids.popup" class="locale-picker-popup" :hidden="!view.open">
       <div :id="ids.heading" class="locale-picker-heading">{{ t('Interface language') }}</div>
       <input v-if="model.searchable" ref="search" class="locale-picker-search" type="search" autocomplete="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="true" :aria-controls="ids.listbox" :aria-label="t('Search languages')" :placeholder="t('Search languages')" :aria-activedescendant="activeDescendant" @input="onSearchInput" />

@@ -17,19 +17,8 @@ function normalizeName(name) {
     .replace(/ fire$/, '');
 }
 
-/**
- * Resolve one WFIGS incident against the publication catalog.
- * Only rows whose normalized title equals the incident's normalized name
- * count. Ambiguity resolves by the tau dispatch unit's state prefix, then
- * by newest incident id (same-state duplicates are usually reburns of the
- * same name). The `/node/{id}` link 301s to the canonical page, so no slug
- * construction is needed.
- * @param {?Array} publications - Publication catalog rows.
- * @param {{name: ?string, state: ?string}} incident - WFIGS row facts.
- * @returns {?string} InciWeb node URL.
- */
-export function resolveInciwebNodeLink(publications, { name, state }) {
-  if (!Array.isArray(publications) || !name) return null;
+function nodeCandidates(publications, { name, state }) {
+  if (!Array.isArray(publications) || !name) return [];
   const wanted = normalizeName(name);
   let candidates = publications.filter(
     (row) =>
@@ -51,20 +40,26 @@ export function resolveInciwebNodeLink(publications, { name, state }) {
         row.tau.slice(0, 2).toLowerCase() === statePrefix,
     );
   } else if (candidates.length > 1) {
-    return null;
+    return [];
   }
-  if (candidates.length > 1) {
-    // Same-state duplicates are usually reburns of the same name — newest
-    // wins here, and the publication-currency check guards the final link.
-    candidates = [
-      candidates.reduce((a, b) =>
-        Number(a.incident_id) >= Number(b.incident_id) ? a : b,
-      ),
-    ];
-  }
-  return candidates.length === 1
-    ? `https://inciweb.wildfire.gov/node/${candidates[0].incident_id}`
-    : null;
+  // Same-state duplicates are usually reburns of the same name. Newest wins live.
+  return candidates
+    .sort((a, b) => Number(b.incident_id) - Number(a.incident_id))
+    .map((row) => `https://inciweb.wildfire.gov/node/${row.incident_id}`);
+}
+
+/**
+ * Resolve one WFIGS incident against the publication catalog.
+ * Only rows whose normalized title equals the incident's normalized name
+ * count. Matches are filtered by the tau dispatch unit's state prefix.
+ * The `/node/{id}` link 301s to the canonical page, so no slug construction
+ * is needed.
+ * @param {?Array} publications - Publication catalog rows.
+ * @param {{name: ?string, state: ?string}} incident - WFIGS row facts.
+ * @returns {?string} InciWeb node URL.
+ */
+export function resolveInciwebNodeLink(publications, incident) {
+  return nodeCandidates(publications, incident)[0] ?? null;
 }
 
 /** The publication id inside a node link produced above, or null. */
@@ -79,7 +74,8 @@ export function inciwebNodeId(link) {
 // whose page predates discovery by more than this is an archived
 // same-name incident from a earlier season.
 const CREATED_BEFORE_DISCOVERY_MS = 60 * 24 * 3600000;
-// Without a discovery date, require recent editorial activity on the page.
+// Without a discovery date, require editorial activity on the page in the
+// 180 days up to the moment shown.
 const CHANGED_WITHIN_MS = 180 * 24 * 3600000;
 
 /**
@@ -97,7 +93,8 @@ export function isCurrentPublication(
     return createdMs >= discoveredTime - CREATED_BEFORE_DISCOVERY_MS;
   }
   if (Number.isFinite(changedMs)) {
-    return nowMs - changedMs <= CHANGED_WITHIN_MS;
+    const age = nowMs - changedMs;
+    return age >= 0 && age <= CHANGED_WITHIN_MS;
   }
   return false;
 }
@@ -132,6 +129,14 @@ export function createInciwebPublicationSource({
   };
 }
 
+/** Every same-name page that could be this incident's, newest first: the own name's, else its complex's. */
+export function findInciwebLinks(publications, { name, state, complexName }) {
+  const links = nodeCandidates(publications, { name, state });
+  return links.length
+    ? links
+    : nodeCandidates(publications, { name: complexName, state });
+}
+
 /**
  * Resolve one WFIGS incident to its InciWeb page, or null.
  * The incident's own name is tried first; a member of a complex whose own
@@ -143,11 +148,8 @@ export function createInciwebPublicationSource({
  *   - WFIGS row facts.
  * @returns {?string} InciWeb URL.
  */
-export function findInciwebLink(publications, { name, state, complexName }) {
-  return (
-    resolveInciwebNodeLink(publications, { name, state }) ??
-    resolveInciwebNodeLink(publications, { name: complexName, state })
-  );
+export function findInciwebLink(publications, incident) {
+  return findInciwebLinks(publications, incident)[0] ?? null;
 }
 
 /** Fetch the full InciWeb incident catalog. */

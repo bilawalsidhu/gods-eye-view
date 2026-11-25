@@ -9,6 +9,7 @@ import {
   mergeClassVisibility,
 } from './classes.js';
 import { ISS_NORAD, POINT_STYLES, classPointStyle } from './policy.js';
+import { modelFor, trackedStation } from './stationModels.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { isExplicitLayerStateOrigin } = services.layerState;
@@ -64,7 +65,8 @@ export function createControls({ state: layerState, services, parts, source }) {
 
   /**
    * Whether the ISS's ring shows: orbits on, the layer drawing, and its
-   * class on or the ISS tracked (a tracked satellite keeps its ring).
+   * class on or the ISS tracked (a tracked satellite keeps its ring), also
+   * as an object docked to it, which draws no ring of its own.
    */
   function _issOrbitVisible() {
     return (
@@ -72,7 +74,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         layerState._enabled,
         layerState._params.showOrbits,
       ) &&
-      (_classVisible(ISS_NORAD) || layerState._trackedNorad === ISS_NORAD)
+      (_classVisible(ISS_NORAD) ||
+        layerState._trackedNorad === ISS_NORAD ||
+        Boolean(layerState._trackedDockedToIss))
     );
   }
 
@@ -101,7 +105,7 @@ export function createControls({ state: layerState, services, parts, source }) {
     };
   }
 
-  /** Tell the manager to re-render this layer's row (chip state / legend counts). */
+  /** Tell the manager to re-render this layer's row (chip state and counts). */
 
   function _notifyRowControls() {
     try {
@@ -112,7 +116,7 @@ export function createControls({ state: layerState, services, parts, source }) {
   }
 
   /**
-   * Per-class tally for the row legend, cached against the catalog revision.
+   * Per-class tally for the row's class chips, cached against the catalog revision.
    * Without the cache this scans ~10.7k entries in dense mode on every panel
    * refresh, and any layer polling on the 1s stats timer refreshes the panel.
    * @returns {Record<string, number>} Class key → count.
@@ -253,6 +257,9 @@ export function createControls({ state: layerState, services, parts, source }) {
         // that card instead. Only members of the tracked cluster are affected —
         // unrelated nearby satellites are never suppressed.
         if (!isTracked && layerState._dockedCompanions.has(noradId)) continue;
+        // Up close a station is its 3D model: no mark on it, nor on what is
+        // docked to it.
+        if (modelFor(parts, noradId)?._visualPosition?.()) continue;
         // The Cockpit camera rides a held subject; a bracket on it would sit
         // on the lens.
         if (isTracked && parts.cockpit?._cockpitHeld()) continue;
@@ -431,6 +438,18 @@ export function createControls({ state: layerState, services, parts, source }) {
         });
       }
       return result;
+    },
+
+    /**
+     * The keys the LIVE section matches streams by for the tracked
+     * satellite: a station is `station:<key>` (`station:iss`,
+     * `station:tiangong`) whichever of its entries is tracked (the station,
+     * a module, a docked vehicle).
+     * @returns {string[]}
+     */
+    getLiveSubjectKeys() {
+      const station = trackedStation(layerState, parts);
+      return station ? [`station:${station.key}`] : [];
     },
 
     /**
@@ -693,8 +712,10 @@ export function createControls({ state: layerState, services, parts, source }) {
 
     /**
      * Layer-row sub-controls (DataLayerManager row-controls contract): one
-     * toggle chip per satellite class (src/layers/satellites/classes.js), and a legend
-     * of the classes on screen so the point colours are learnable.
+     * toggle chip per satellite class (src/layers/satellites/classes.js). A
+     * class that is on carries its point colour (`swatch`) and, once any of
+     * it is loaded, its count, so the point colours are learnable; a class
+     * that is off carries only its name.
      *
      * Chips are stateless — each declares the params to apply and the manager
      * owns the write, so the Space Missions snapshot/restore path (which drives
@@ -704,49 +725,41 @@ export function createControls({ state: layerState, services, parts, source }) {
      * STARLINK is the dense catalog (chip id `catalog`) and reports the dense
      * LOAD state, not the param: the param flips synchronously while the shell
      * takes seconds to arrive and frequently 502s, so ACTIVE means "Starlink
-     * points are on screen" and nothing less. The legend tally is cached
+     * points are on screen" and nothing less. The class tally is cached
      * against the catalog revision. While SATCAT is stale or unavailable the
      * info line says the classes may lag (see `classEvidenceNotice`).
-     * @returns {{ chips: Array<object>, legend: Array<object>, info: string,
-     *   infoTitle: string }} Row controls.
+     * @returns {{ chips: Array<object>, info: string, infoTitle: string }}
+     *   Row controls.
      */
     getRowControls() {
       // A dependency owner (Space Missions) borrows this layer for TLE lookup
-      // with showPoints:false. Nothing is rendered, so a legend would describe an
+      // with showPoints:false. Nothing is rendered, so a count would describe an
       // empty sky and a chip write would be silently reverted by that owner's
       // restore. Surrender the row rather than lie about it.
-      if (!layerState._params.showPoints) return { chips: [], legend: [] };
+      if (!layerState._params.showPoints) return { chips: [] };
 
       const classes = _classes();
-      const chips = SATELLITE_CLASS_IDS.map((id) =>
-        id === 'starlink'
-          ? _starlinkChip()
-          : {
-              id: `class-${id}`,
-              label: t(SATELLITE_CLASS_DISPLAY[id].label),
-              active: classes[id] === true,
-              state: classes[id] === true ? 'active' : 'idle',
-              title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-              params: { classes: { [id]: classes[id] !== true } },
-            },
-      );
       const counts = _classTally();
-      const legend = [];
-      for (const id of SATELLITE_CLASS_IDS) {
-        const shown =
+      const chips = SATELLITE_CLASS_IDS.map((id) => {
+        const chip =
           id === 'starlink'
-            ? layerState._params.catalog === 'dense'
-            : classes[id] === true;
-        if (!shown || !(counts[id] > 0)) continue;
-        legend.push({
-          klass: id,
-          label: t(SATELLITE_CLASS_DISPLAY[id].label),
-          color: SATELLITE_CLASS_DISPLAY[id].color,
-          blurb: t(SATELLITE_CLASS_DISPLAY[id].blurb),
-          count: counts[id],
-        });
-      }
-      return { chips, legend, ...classEvidenceNotice() };
+            ? _starlinkChip()
+            : {
+                id: `class-${id}`,
+                label: t(SATELLITE_CLASS_DISPLAY[id].label),
+                active: classes[id] === true,
+                state: classes[id] === true ? 'active' : 'idle',
+                title: t(SATELLITE_CLASS_DISPLAY[id].blurb),
+                params: { classes: { [id]: classes[id] !== true } },
+              };
+        // The colour key and count ride on a class that is on; an off
+        // class is its name alone.
+        if (!chip.active) return chip;
+        chip.swatch = SATELLITE_CLASS_DISPLAY[id].color;
+        if (counts[id] > 0) chip.count = counts[id];
+        return chip;
+      });
+      return { chips, ...classEvidenceNotice() };
     },
 
     /**

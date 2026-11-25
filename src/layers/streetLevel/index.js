@@ -5,6 +5,7 @@ import { createCredits } from './credits.js';
 import { createPickRouter } from './pickRouter.js';
 import { createSelection } from './selection.js';
 import { createViewerHost } from './viewerHost.js';
+import { subscribePhotoViewers } from './photoViewers.js';
 import { filtersOf, requiresKeyIdFor, validateProviders } from './registry.js';
 import { normalizeFilter, resolveFilter, sameFilter } from './filter.js';
 import { worldTimeFor } from '../../time/worldClock.js';
@@ -702,6 +703,22 @@ export function createStreetLevelLayer({
     /** The DOM element provider viewers render into. */
     attachViewerHost(element) {
       parts.viewerHost.attach(element);
+    },
+    /**
+     * Receive every presentation of the photo viewer the providers whose
+     * photos are plain files (KartaView, Panoramax) mount in the viewer
+     * host, the one mounted last (see photoViewers.js), starting with the
+     * current one; null while none is mounted. A view draws it (see
+     * photoViewer.js); with nobody subscribed, those providers' photos
+     * cannot open.
+     * @param {(view: ?object) => void} listener
+     * @returns {() => void} Unsubscribe.
+     */
+    subscribePhotoViewer(listener) {
+      return subscribePhotoViewers(
+        [...state.providers.values()].map((entry) => entry.instance.viewer),
+        listener,
+      );
     },
     setProviderEnabled,
     openImage,

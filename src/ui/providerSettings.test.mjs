@@ -329,16 +329,12 @@ test('while the OAuth check runs, the toggle is busy and repeat presses are igno
   localStorage.removeItem(CLOUD_VOICE_AUTH_STORAGE_KEY);
 });
 
-test('Cyber moves the chip into the top toolbar and other themes return it to the corner', async (t) => {
+test('the chip stays first in the corner row whatever the HUD layout', async (t) => {
   const { $, toolbar } = await fixture(t);
   const corner = $('#corner-actions');
   assert.equal(corner.firstElementChild?.id, 'key-setup-chip');
+  // The removed Cyber skin no longer moves it into the top toolbar.
   document.documentElement.dataset.uiTheme = 'cyber';
-  await wait();
-  await nextTick();
-  assert.equal(toolbar.lastElementChild?.id, 'key-setup-chip');
-  assert.equal(corner.querySelector('#key-setup-chip') === null, true);
-  document.documentElement.dataset.uiTheme = 'tactical';
   await wait();
   await nextTick();
   assert.equal(corner.firstElementChild?.id, 'key-setup-chip');

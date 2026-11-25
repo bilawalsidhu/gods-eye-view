@@ -45,6 +45,8 @@ export function createStubHarness(name = 'stub') {
     // its failing scheme.
     assets: {
       model: 'stub:model.glb',
+      // A stub model is one node, named after its file.
+      modelNode: 'model',
       missingModel: `${STUB_FAILING_MODEL_SCHEME}model.glb`,
       // Any bytes: the stub parses none.
       modelBytes: async () => new Uint8Array([0x67, 0x6c, 0x54, 0x46]),
