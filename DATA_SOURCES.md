@@ -634,6 +634,9 @@ from Pa to hPa before delivery. A missing, malformed or timed-out companion fiel
 does not discard valid wind: the manifest marks that field unavailable, and the
 UI retains wind without inventing scalar values. The proxy caches by model and
 requested field, with bounded current/previous grids and shared in-flight loads.
+Decoding and resampling run on a worker thread. The sampled U/V of the current
+forecast file is kept per model, so a color-field change or a refresh within
+that file fetches only the inventory and the color field.
 Wind speed shading is computed locally from U/V and needs no companion download.
 The legend and map-center reading explain units and forecast validity; the
 animation is a visual flow through one forecast, not advancing forecast time.
