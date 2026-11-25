@@ -1,5 +1,9 @@
 import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import {
+  aircraftViewRef,
+  registerAircraftViews,
+} from '../../data/aircraftViews.js';
 import { rotorFrame } from '../../data/rotorFrames.js';
 import { KNOT_MPS } from '../../data/units.js';
 import {
@@ -13,6 +17,7 @@ import {
   findCamera,
   findFrame,
   findQuery,
+  rendererOf,
 } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
@@ -148,6 +153,9 @@ export function createLocalAdsbLayer({
    * @type {{markers: object, rings: object}|null}
    */
   let sets = null;
+  /** Whether the renderer draws markers from the aircraft view sheet
+   *  (`aircraftViews.js`), set at `init`. */
+  let views = false;
   let enabled = false;
   let unsubscribe = null;
   let unsubscribeFeeds = null;
@@ -355,31 +363,40 @@ export function createLocalAdsbLayer({
   /**
    * A marker's icon, where and how it now draws: a helicopter's rotor frame
    * at `at` (still on the ground), an airport vehicle in its own tint, a
-   * ground station's mast upright.
+   * ground station's mast upright. On a renderer that draws view sheets, a
+   * kind with rendered views is drawn from the sheet along its course;
+   * every other marker is its flat glyph turned on screen.
    */
   function markerItem(marker, basis, at) {
     const kind = marker.iconKind ?? 'airliner';
+    const frame =
+      kind === 'helicopter'
+        ? rotorFrame(marker.id, at, {
+            onGround: marker.onGround,
+            speedMps: Number.isFinite(marker.record?.groundSpeedKt)
+              ? marker.record.groundSpeedKt * KNOT_MPS
+              : null,
+          })
+        : undefined;
+    const view = views ? aircraftViewRef(kind, frame) : null;
     return {
       id: marker.id,
       pos: marker.position,
-      image: aircraftIcon(
-        kind,
-        undefined,
-        kind === 'helicopter'
-          ? rotorFrame(marker.id, at, {
-              onGround: marker.onGround,
-              speedMps: Number.isFinite(marker.record?.groundSpeedKt)
-                ? marker.record.groundSpeedKt * KNOT_MPS
-                : null,
-            })
-          : undefined,
-      ),
+      image: view ?? aircraftIcon(kind, undefined, frame),
       size: [MARKER_SPRITE.width, MARKER_SPRITE.height],
       scale: marker.iconScale ?? 1,
       color: kind === 'vehicle' ? vehicleColor : color,
       scaleByDistance: MARKER_SPRITE.scaleByDistance,
-      rotationMode: 'screen',
-      rotation: kind === 'station' ? 0 : markerRotation(marker, basis),
+      ...(view
+        ? {
+            rotationMode: 'course',
+            course: marker.courseDeg ?? 0,
+            pickProxy: { size: [MARKER_SPRITE.width, MARKER_SPRITE.height] },
+          }
+        : {
+            rotationMode: 'screen',
+            rotation: kind === 'station' ? 0 : markerRotation(marker, basis),
+          }),
       // The 3D model, once loaded and placed, is the visual instead.
       show: !marker.modelOwnsVisual,
       disableDepthTest: Number.POSITIVE_INFINITY,
@@ -773,6 +790,11 @@ export function createLocalAdsbLayer({
     init(nextViewer) {
       viewer = nextViewer;
       const draw = drawOf(viewer);
+      views = registerAircraftViews(
+        draw,
+        rendererOf(viewer)?.capabilities ?? null,
+        resolveAsset,
+      );
       const prefix = `${LAYER_ID}:${++instances}`;
       sets = {
         markers: draw.icons({
@@ -872,6 +894,7 @@ export function createLocalAdsbLayer({
       models = null;
       if (sets) for (const set of Object.values(sets)) set.dispose();
       sets = null;
+      views = false;
       viewer = null;
       void receiver.destroy?.();
     },

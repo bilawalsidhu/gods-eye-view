@@ -15,8 +15,14 @@
  * pick names the set and the contact's id, as the fleet icons' do.
  * `visible` hides the icon while it stays shown (Cockpit flies the
  * aircraft from its own seat).
+ *
+ * Given a view-sheet image (`aircraftViews.js`) and a course reader, it is
+ * drawn along that course instead (`rotationMode: 'course'`), as the fleet
+ * icons are, so the renderer draws the view of the aircraft that matches
+ * the eye and tracking a contact does not flatten it.
  */
 import { findDraw, findFrame } from '../render/rendererOf.js';
+import { isViewRef } from './viewSheet.js';
 
 /** Uniquifier for the sets' ids. */
 let instances = 0;
@@ -105,6 +111,8 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
   function draw() {
     if (!shown || !set) return;
     const pos = shown.position();
+    const alongCourse = isViewRef(shown.image);
+    const color = shown.color();
     const item = {
       id: shown.id,
       pos: pos ? { x: pos.x, y: pos.y, z: pos.z } : { x: 0, y: 0, z: 0 },
@@ -114,9 +122,20 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
       size: [shown.sprite.width, shown.sprite.height],
       scale: shown.sprite.scale,
       scaleByDistance: shown.sprite.scaleByDistance,
-      color: shown.color(),
-      rotationMode: 'screen',
-      rotation: pos ? shown.rotation() : 0,
+      color,
+      ...(alongCourse
+        ? {
+            rotationMode: 'course',
+            course: pos ? shown.course() : 0,
+            ...(color[3] !== 0
+              ? {
+                  pickProxy: {
+                    size: [shown.sprite.width, shown.sprite.height],
+                  },
+                }
+              : {}),
+          }
+        : { rotationMode: 'screen', rotation: pos ? shown.rotation() : 0 }),
       disableDepthTest: Number.POSITIVE_INFINITY,
     };
     if (
@@ -132,7 +151,9 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
       written.size[0] === item.size[0] &&
       written.size[1] === item.size[1] &&
       written.scale === item.scale &&
+      written.rotationMode === item.rotationMode &&
       written.rotation === item.rotation &&
+      written.course === item.course &&
       sameColor(written.color, item.color)
     )
       return;
@@ -146,13 +167,17 @@ export function createTrackedAircraftIcon({ viewer, setPrefix }) {
      * next one on.
      * @param {object} target
      * @param {string} target.id The contact's id.
-     * @param {string} target.image
+     * @param {string|{views: string, first: number, fallback: string}} target.image A flat
+     *   glyph, or a view-sheet image (drawn along `course`).
      * @param {{near: string, switchPx: number}} [target.imageLod] The
-     *   sharper image it switches to once drawn larger than `switchPx`.
+     *   sharper image a flat glyph switches to once drawn larger than
+     *   `switchPx`.
      * @param {{width: number, height: number, scale: number,
      *   scaleByDistance: object}} target.sprite Read each frame.
      * @param {() => object|null} target.position ECEF this frame; none hides it.
      * @param {() => number} target.rotation Screen radians, counter-clockwise.
+     * @param {() => number} [target.course] Degrees clockwise from north;
+     *   required with a view-sheet image, which only draws along a course.
      * @param {() => object} target.color The tint this frame.
      */
     show(target) {

@@ -2702,6 +2702,58 @@ export function portChecks() {
       },
     ),
     check(
+      'draw.shapes.overlay',
+      'a shape clamped as an overlay is drawn and picked over the surface with the globe hidden, and the one past the horizon behind it is not',
+      async (h, r) => {
+        await overAustin(h, r, 3000);
+        r.globe.setGlobeVisible(false);
+        // Shown again however the check ends.
+        try {
+          const shapes = r.draw.shapes({
+            id: 'conf:overlay-shapes',
+            clampTo: 'overlay',
+          });
+          const box = (lon, lat, d = 0.01) => ({
+            kind: 'rectangle',
+            rect: {
+              west: lon - d,
+              south: lat - d,
+              east: lon + d,
+              north: lat + d,
+            },
+          });
+          shapes.set([
+            {
+              id: 'near',
+              geometry: box(AUSTIN.lon, AUSTIN.lat),
+              fill: [1, 0, 0, 0.5],
+              height: 'clampGround',
+            },
+            // Its antipode: straight behind it, past the horizon.
+            {
+              id: 'far',
+              geometry: box(AUSTIN.lon + 180, -AUSTIN.lat, 1),
+              fill: [0, 0, 1, 0.5],
+              height: 'clampGround',
+            },
+          ]);
+          await settled(r);
+          await drawn(h, r);
+          const s = r.query.project(h.toEcef({ ...AUSTIN, height: 0 }));
+          ok(s, 'the centre projects');
+          const hits = r.query
+            .drillPick(s.x, s.y)
+            .filter((hit) => hit.set === 'conf:overlay-shapes')
+            .map((hit) => hit.id);
+          ok(hits.includes('near'), 'drawn and picked with nothing under it');
+          ok(!hits.includes('far'), 'not drawn through the globe');
+          shapes.dispose();
+        } finally {
+          r.globe.setGlobeVisible(true);
+        }
+      },
+    ),
+    check(
       'draw.shapes.lit',
       'a lit extruded shape shades its walls by the light, as the renderer shades its own solids: the wall facing the eye brighter than half its colour, its top unlike its wall',
       async (h, r) => {

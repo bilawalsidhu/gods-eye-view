@@ -172,7 +172,9 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
       configFile: false,
       appType: 'custom',
       logLevel: 'silent',
-      server: { middlewareMode: true },
+      // No watcher: it opens an inotify watch per file and directory of the repo
+      // and fails with ENOSPC on a host whose limit is spent.
+      server: { middlewareMode: true, watch: null },
       plugins: [{
         name: 'traffic-timing-test-hooks',
         transform(code, id) {

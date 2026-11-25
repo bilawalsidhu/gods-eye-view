@@ -76,6 +76,14 @@ portable contract applies to the explicitly reviewed graphs above. Their layer
 controller remains the owner of rendering/cleanup until a focused extraction
 moves it. Do not label all ingestion modules platform-independent by filename.
 
+### Local package boundaries for forks
+
+Upstream ownership changes go only in `scripts/package-boundaries.json`. A fork
+can list extra `modules` and `external` entries for existing groups in the
+git-ignored `scripts/package-boundaries.local.json` and check them with
+`npm run check:boundaries -- --local`. Without `--local`, the check and CI read
+only the main file. Exports, runtimes and new groups belong in the main file.
+
 ## Compatibility entries and owners
 
 | Retained entry                                      | Owner and current reason                                                                                           |
@@ -191,7 +199,9 @@ Callers retain their request admission and transport policy.
 
 `gods-eye-view/sources/firms-csv` exports the existing CSV parser, header
 recognition, acquisition-time conversion and trailing-day filter independently
-of the Node middleware. It imports no Node, DOM, rendering or network code.
+of the Node middleware, and `trailing24hWindow`, which returns that filter's
+records with the span of clock values over which they stay the same. It imports
+no Node, DOM, rendering or network code.
 The Node provider continues using the same implementation; contract fixtures
 cover malformed rows, acquisition times, empty feeds and the inclusive time
 window. The boundary gate checks each entry independently.

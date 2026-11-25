@@ -41,6 +41,7 @@ export const CAPABILITIES = Object.freeze([
   'meshes',
   'fields',
   'courseGlide',
+  'viewSheets',
   'lineAgeFade',
   'lineTimeWindow',
   'lineBreaks',
@@ -176,6 +177,7 @@ export const PORTS = deepFreeze({
     ['quads', 'quads'],
     ['meshes', 'meshes'],
     ['field', 'fields'],
+    ['views', 'viewSheets'],
   ]),
   camera: Object.fromEntries([
     ...required(

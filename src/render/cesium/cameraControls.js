@@ -30,9 +30,13 @@
  *   the widget, which reads the controller's own input; a camera command
  *   (`onCommand`) ends its easing. Without a widget whose scene has a
  *   controller, it only reads back.
+ * - On macOS, Command+drag on the widget's canvas runs the controller's
+ *   Ctrl+drag bindings (`commandDrag.js`), as Ctrl+click is a right click
+ *   there; wheels keep Ctrl, the trackpad pinch.
  */
 import * as Cesium from 'cesium';
 import { acquireCameraInput } from './cameraInput.js';
+import { installCommandDrag } from './commandDrag.js';
 import { installTrackpadPinchRelay } from './ctrlWheelZoom.js';
 import { followZoomBase, setFollowZoomBase } from './follow.js';
 import { installZoomOutGuard } from './zoomOutGuard.js';
@@ -95,9 +99,10 @@ export const controllerDefaults = () => ({
  * @param {{scene: {screenSpaceCameraController?: object}, widget?: object,
  *   pinchRelay?: typeof installTrackpadPinchRelay,
  *   onCommand?: (cb: () => void) => () => void,
- *   zoomOutGuard?: typeof installZoomOutGuard}} options `widget`, the
- *   Viewer or CesiumWidget, takes the trackpad pinch relay and the zoom-out
- *   guard; without one `ctrlWheel` binds Ctrl+wheel alone. `onCommand`
+ *   zoomOutGuard?: typeof installZoomOutGuard,
+ *   commandDrag?: typeof installCommandDrag}} options `widget`, the
+ *   Viewer or CesiumWidget, takes the trackpad pinch relay, the zoom-out
+ *   guard and the macOS Command+drag; without one `ctrlWheel` binds Ctrl+wheel alone. `onCommand`
  *   subscribes to the camera port's commands.
  * @returns {{controls: import('../contract/camera').CameraControls,
  *   dispose: () => void}}
@@ -108,6 +113,7 @@ export function createCesiumControls({
   pinchRelay = installTrackpadPinchRelay,
   onCommand,
   zoomOutGuard = installZoomOutGuard,
+  commandDrag = installCommandDrag,
 }) {
   const ownController = scene.screenSpaceCameraController;
   const controller = ownController ?? controllerDefaults();
@@ -290,11 +296,15 @@ export function createCesiumControls({
   };
   // A controller that already binds Ctrl+wheel relays pinches from the start.
   relayPinches(controls.zoomInputs.includes('ctrlWheel'));
+  // On macOS, Command+drag on the canvas counts as Ctrl+drag.
+  let releaseCommandDrag = widget?.canvas ? commandDrag(widget) : null;
 
   return {
     controls,
     dispose() {
       relayPinches(false);
+      releaseCommandDrag?.();
+      releaseCommandDrag = null;
       releaseGuard?.();
       releaseGuard = null;
       disposed = true;
