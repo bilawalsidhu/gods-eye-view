@@ -1,6 +1,7 @@
 import { inputFor } from '../../input/dispatcher.js';
 import { modelHitNorad } from './stationModels.js';
 import { onFollowChanged } from '../../data/followed.js';
+import { yieldSelectionToOthers } from '../../data/clickSelect.js';
 
 export function createInteraction({
   state: layerState,
@@ -29,22 +30,34 @@ export function createInteraction({
     // new owner controls it). Guarded so our OWN switch (viewer.trackedEntity
     // briefly undefined mid-_trackSatellite) doesn't self-clear.
     if (!layerState._trackedEntityChangedRemove) {
-      layerState._trackedEntityChangedRemove = onFollowChanged(
-        viewer,
-        (followed) => {
-          if (!layerState._enabled) return;
-          if (
-            layerState._trackedNorad &&
-            layerState._viewer &&
-            followed &&
-            followed !== layerState._followTarget
-          ) {
-            parts.tracking._clearTracking(true, {
-              origin: followed.selectionOrigin || 'programmatic',
-            });
-          }
-        },
+      const offFollow = onFollowChanged(viewer, (followed) => {
+        if (!layerState._enabled) return;
+        if (
+          layerState._trackedNorad &&
+          layerState._viewer &&
+          followed &&
+          followed !== layerState._followTarget
+        ) {
+          parts.tracking._clearTracking(true, {
+            origin: followed.selectionOrigin || 'programmatic',
+          });
+        }
+      });
+      // Another layer selected something (a click selects without
+      // following): let our satellite go, and the camera with it only if it
+      // follows our satellite.
+      const offSelection = yieldSelectionToOthers(
+        'satellites',
+        () => Boolean(layerState._trackedNorad),
+        (selection) =>
+          parts.tracking._clearTracking(!parts.tracking._trackedIsFollowed(), {
+            origin: selection.origin,
+          }),
       );
+      layerState._trackedEntityChangedRemove = () => {
+        offFollow();
+        offSelection();
+      };
     }
 
     layerState._clickSubscription = inputFor(viewer).onClick((event) => {
@@ -58,25 +71,38 @@ export function createInteraction({
       const picked = event.topHit;
       const hit = event.drawHit;
 
-      // Clicking the tracked satellite's own dot — ignore
-      if (parts.rendering._hitIsTracked(hit)) return;
+      // A click on the selected satellite (its tracked dot, or its
+      // station's model) centres it again, unless the camera follows it.
+      const recenter = () => {
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+      };
+      if (parts.rendering._hitIsTracked(hit)) return recenter();
 
-      // A satellite dot (its item id is the NORAD catalog number)
+      // A satellite dot (its item id is the NORAD catalog number). A click
+      // selects and centres it once; it does not follow it
+      // (src/data/clickSelect.js).
       const noradId = parts.rendering._hitPointId(hit);
       if (noradId !== null && layerState._catalog.has(noradId)) {
         parts.tracking._cancelPendingTrackingRestore();
-        parts.tracking._trackSatellite(noradId, { origin: 'user' });
+        parts.tracking._trackSatellite(noradId, {
+          origin: 'user',
+          follow: false,
+        });
         return;
       }
-      // A station's 3D model (stationModel.js) names its station. A click
-      // on the tracked station's own model is already tracked; on another
-      // station's model it tracks that one.
+      // A station's 3D model (stationModel.js) names its station: the
+      // tracked station's own model is the selected satellite; another
+      // station's model selects that one.
       const modelNorad = modelHitNorad(parts, hit);
       if (modelNorad !== null) {
-        if (modelNorad === layerState._trackedNorad) return;
+        if (modelNorad === layerState._trackedNorad) return recenter();
         if (layerState._catalog.has(modelNorad)) {
           parts.tracking._cancelPendingTrackingRestore();
-          parts.tracking._trackSatellite(modelNorad, { origin: 'user' });
+          parts.tracking._trackSatellite(modelNorad, {
+            origin: 'user',
+            follow: false,
+          });
           return;
         }
       }

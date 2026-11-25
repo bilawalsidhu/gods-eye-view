@@ -1,12 +1,9 @@
 /**
  * One-click camera transfer for layer-owned world targets.
  */
-import { WGS84, eastNorthUp, framePoint, toRadians } from './geo/index.js';
+import { WGS84, toRadians } from './geo/index.js';
 import { findCamera } from './render/rendererOf.js';
-import {
-  keptViewFrom,
-  SELECTION_FOLLOW_TRANSITION_S,
-} from './data/trackedCamera.js';
+import { flyKeepingView } from './data/clickSelect.js';
 
 export const WORLD_FOCUS_REQUEST_EVENT = 'gev:world-request-focus';
 export const WORLD_CLICK_FOCUS_DURATION_SEC = 1.9;
@@ -15,8 +12,8 @@ export const WORLD_FOCUS_FRAMING = Object.freeze({
   vessel: Object.freeze({ radiusM: 150, rangeM: 1200, pitchDeg: -30 }),
   fire: Object.freeze({ radiusM: 400, rangeM: 3000, pitchDeg: -35 }),
   sighting: Object.freeze({ radiusM: 250, rangeM: 2500, pitchDeg: -40 }),
-  // A stopped train's one fly-to, and the frame a moving train is followed
-  // in (src/layers/rail/follow.js): the train and the track either side.
+  // A train's focus (src/layers/rail/focus.js): the train and the track
+  // either side, for a request that does not keep the view.
   train: Object.freeze({ radiusM: 200, rangeM: 2500, pitchDeg: -35 }),
   // A clicked quake's magnitude label: its disc (2^M km in radius, so about
   // 6 km at M2.5 and 64 km at M6) and the ground around it. A larger quake
@@ -96,22 +93,19 @@ export function flyToWorldTarget(viewer, target = {}) {
   const camera = findCamera(viewer);
   const framing = WORLD_FOCUS_FRAMING[target.kind];
   if (!camera || !framing || !isValidWorldFocusTarget(target)) return false;
-  const pose = camera.pose();
-  const kept = target.keepView ? keptViewFrom(pose, target.position) : null;
-  camera.cancelFlight();
-  if (kept) {
-    camera.flyTo(framePoint(eastNorthUp(target.position), kept), {
-      orientation: { direction: pose.direction, up: pose.up },
-      durationS:
-        target.durationSec > 0
-          ? target.durationSec
-          : SELECTION_FOLLOW_TRANSITION_S,
-      easing: 'cubicInOut',
-      // Below both ends: no arc, so the camera does not climb on the way.
-      maxHeight: 0,
-    });
+  // A click's centring: the same flight every clicked thing gets
+  // (src/data/clickSelect.js).
+  if (
+    target.keepView &&
+    flyKeepingView(
+      camera,
+      target.position,
+      target.durationSec > 0 ? target.durationSec : undefined,
+    )
+  )
     return true;
-  }
+  const pose = camera.pose();
+  camera.cancelFlight();
   const heading = Number.isFinite(pose.heading) ? pose.heading : 0;
   const duration =
     target.durationSec > 0

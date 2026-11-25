@@ -8,15 +8,25 @@ import {
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { isUnderOtherCard } from '../../data/pickRegistry.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { t } from '../../i18n/index.js';
 
 /**
- * Click-to-select one vehicle and a card that follows it.
+ * Click-to-select one vehicle and a card that follows it. A click selects
+ * and centres the vehicle once; the camera does not follow it
+ * (src/data/clickSelect.js).
  * @param {object} context
  * @returns {object}
  */
 export function createSelection({ state, services, parts }) {
   const { governorRequestRender } = services.render;
+  /** Off for the one-selection rule's listener, while clicks are heard. */
+  let offSelectionYield = null;
 
   /**
    * The card's anchor: the selected marker's CURRENT position, read by the
@@ -98,6 +108,7 @@ export function createSelection({ state, services, parts }) {
       ? state._vehicles.get(state._selectedKey)
       : null;
     parts.trails.clear();
+    if (state._selectedKey) releaseSelection('transit', state._selectedKey);
     state._selectedKey = null;
     state._selectedAtMs = null;
     state._selectedCardText = null;
@@ -118,6 +129,8 @@ export function createSelection({ state, services, parts }) {
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
     state._selectedKey = key;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('transit', key);
     if (byUser) state._selectedAtMs = Date.now();
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);
@@ -157,14 +170,27 @@ export function createSelection({ state, services, parts }) {
       if (isUnderOtherCard(event)) return;
       if (key) {
         selectVehicle(key, { byUser: true });
+        const entry = state._vehicles.get(key);
+        // Its marker is where the vehicle is drawn; a bus or a tram barely
+        // moves in the second the camera takes.
+        centerOnClick(viewer, () => anchorFor(entry)());
         return;
       }
       if (state._selectedKey) clearSelection();
     });
     document.addEventListener('keydown', onKeyDown);
+    // Another layer selected something: let our vehicle go, unless a
+    // first-person view holds it.
+    offSelectionYield ??= yieldSelectionToOthers(
+      'transit',
+      () => Boolean(state._selectedKey) && !state._cockpitSubjectKey,
+      () => clearSelection(),
+    );
   }
 
   function removeClickHandler() {
+    offSelectionYield?.();
+    offSelectionYield = null;
     state._clickSubscription?.();
     state._clickSubscription = null;
     document.removeEventListener('keydown', onKeyDown);

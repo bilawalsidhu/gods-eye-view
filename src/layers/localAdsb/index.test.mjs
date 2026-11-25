@@ -25,6 +25,11 @@ import { inputFor } from '../../input/dispatcher.js';
 import { MISSION_LABEL, fakeInput } from '../../input/testDoubles.mjs';
 import { hexColor } from '../../render/color.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
+import {
+  _resetSelectionForTest,
+  claimSelection,
+  currentSelection,
+} from '../../data/clickSelect.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const MAGENTA = hexColor('#ff4fd8');
@@ -140,6 +145,21 @@ function fakeServices() {
 function fakeViewer(viewer = { scene: {} }, pose = {}) {
   const camera = fakeCameraPort({
     pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 }, ...pose },
+  });
+  // What a click asks of the camera: its centring flights, and any follow.
+  camera.flights = [];
+  camera.follows = [];
+  Object.assign(camera.port, {
+    flyTo(destination, options) {
+      camera.flights.push({ destination, options });
+      return { done: Promise.resolve('complete'), cancel() {} };
+    },
+    cancelFlight() {},
+    followed: null,
+    follow(target) {
+      camera.follows.push(target);
+      camera.port.followed = target;
+    },
   });
   const query = {
     drillPick: (x, y, { limit } = {}) =>
@@ -1282,6 +1302,40 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
   assert.deepEqual(calls.cleared, []);
+});
+
+test('a click on a local aircraft selects it and centres it once; a drag keeps it', async (t) => {
+  _resetSelectionForTest();
+  t.after(() => _resetSelectionForTest());
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.click();
+  const camera = harness.viewer.camera;
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  assert.equal(camera.flights.length, 1, 'one centring flight');
+  assert.equal(camera.follows.length, 0, 'never followed');
+  assert.equal(camera.flights[0].options.maxHeight, 0);
+  assert.equal(currentSelection()?.layerId, 'local-adsb');
+  // A drag on the map is no click: the aircraft stays selected.
+  harness.scene.pickResult = null;
+  harness.viewer.input.down({ x: 10, y: 10 });
+  harness.viewer.input.move({ x: 240, y: 180 }, { x: 10, y: 10 });
+  harness.viewer.input.up({ x: 240, y: 180 });
+  assert.deepEqual(calls.cleared, []);
+  assert.equal(currentSelection()?.layerId, 'local-adsb');
+  assert.equal(camera.flights.length, 1);
+  assert.equal(camera.port.followed, null);
+  // Another layer's selection lets it go.
+  claimSelection('flights', 'def456');
+  assert.equal(calls.cleared.length, 1);
 });
 
 // The card or label painted on top takes the click: a local aircraft under

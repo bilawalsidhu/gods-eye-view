@@ -359,7 +359,7 @@ Choose a first-run mission, or try these in order. Your starting basemap depends
 
 4. **Look through a public camera.** Turn on **Cameras** over Austin, London, California, Finland, or Delaware (live video). The feeds aren't webcam embeds — they project _into_ the 3D city. Cycle coverage to **VIEWSHED** and every camera draws its estimated coverage volume — where it reaches, and where it goes blind.
 
-5. **Track something in orbit.** Turn on **Satellites** and click the ISS — you ride along at orbital distance, orbit ring and all.
+5. **Track something in orbit.** Turn on **Satellites** and click the ISS to select it — the camera centres it and shows its orbit ring — then press **Follow** on its card to ride along at orbital distance.
 
 6. **Switch the optics.** Tap `1`–`6` — CRT, NVG, FLIR — and the whole live planet re-renders through a different sensor.
 

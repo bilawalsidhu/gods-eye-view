@@ -1391,6 +1391,7 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/data/clickSelect.js",
       "src/data/headingDegrees.js",
       "src/data/distanceFormat.js",
       "src/i18n/marker.js",
@@ -2014,6 +2015,10 @@
   "civil-flights": {
     "exports": ["./layers/flights"],
     "modules": [
+      "src/geo/geodesic.js",
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/data/rotorFrames.js",
       "src/data/fleetModels.js",
       "src/render/modelParts.js",
@@ -2170,6 +2175,10 @@
   "military-flights": {
     "exports": ["./layers/military"],
     "modules": [
+      "src/geo/geodesic.js",
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/data/rotorFrames.js",
       "src/layers/flights/modelSpec.js",
       "src/layers/flights/policy.js",
@@ -2360,6 +2369,11 @@
   "vessel-layer": {
     "exports": ["./layers/vessels"],
     "modules": [
+      "src/geo/geodesic.js",
+      "src/geo/julian.js",
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/data/units.js",
       "src/render/color.js",
       "src/data/vesselSprites.js",
@@ -2871,6 +2885,9 @@
   "satellites-layer": {
     "exports": ["./layers/satellites"],
     "modules": [
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/data/satelliteClass.js",
       "src/geo/index.js",
       "src/geo/geodesic.js",
@@ -4306,6 +4323,7 @@
       "./standalone/catalog"
     ],
     "modules": [
+      "src/data/clickSelect.js",
       "src/data/units.js",
       "src/data/vesselSprites.js",
       "src/data/rotorFrames.js",
@@ -5160,7 +5178,7 @@
       "src/layers/rail/dedupe.js",
       "src/layers/rail/rendering.js",
       "src/layers/rail/selection.js",
-      "src/layers/rail/follow.js",
+      "src/layers/rail/focus.js",
       "src/layers/rail/viewport.js",
       "src/layers/rail/controls.js",
       "src/layers/rail/lifecycle.js",
@@ -5768,6 +5786,7 @@
   "application-layer-construction": {
     "exports": ["./application/layers"],
     "modules": [
+      "src/data/clickSelect.js",
       "src/data/units.js",
       "src/data/vesselSprites.js",
       "src/data/rotorFrames.js",
@@ -6312,7 +6331,7 @@
       "src/layers/rail/dedupe.js",
       "src/layers/rail/rendering.js",
       "src/layers/rail/selection.js",
-      "src/layers/rail/follow.js",
+      "src/layers/rail/focus.js",
       "src/layers/rail/viewport.js",
       "src/layers/rail/controls.js",
       "src/layers/rail/lifecycle.js",
@@ -7562,6 +7581,11 @@
   "transit-standalone": {
     "exports": ["./layers/transit/standalone"],
     "modules": [
+      "src/data/followed.js",
+      "src/data/entityRecords.js",
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/data/fleetModels.js",
       "src/render/modelParts.js",
       "src/data/vesselTypes.js",
@@ -7722,6 +7746,11 @@
   "transit-layer": {
     "exports": ["./layers/transit"],
     "modules": [
+      "src/data/followed.js",
+      "src/data/entityRecords.js",
+      "src/navigationPolicy.js",
+      "src/data/trackedCamera.js",
+      "src/data/clickSelect.js",
       "src/i18n/marker.js",
       "src/data/fleetModels.js",
       "src/render/modelParts.js",

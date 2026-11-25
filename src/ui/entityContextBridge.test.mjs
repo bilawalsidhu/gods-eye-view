@@ -531,7 +531,7 @@ test('Nearby rows give the navigation owner the wildlife cell and locator pin fr
   }
 });
 
-test('without a tracking runner an explicit moving row takes over a pending place flight', async (t) => {
+test('an explicit moving row takes over a pending place flight and is flown to, never followed', async (t) => {
   const viewer = { scene: {} };
   const input = fakeInput(viewer);
   const flights = [];
@@ -601,12 +601,8 @@ test('without a tracking runner an explicit moving row takes over a pending plac
     tracked.push([name, args.query]),
   );
   assert.ok(store.select(target, { fly: true }));
-  assert.deepEqual(tracked, [['track_entity', aircraft.id]]);
-  assert.deepEqual(
-    flights,
-    ['aircraft'],
-    'a runner handles the selection without a fallback flight',
-  );
+  assert.deepEqual(tracked, [], 'a pick never follows, runner or not');
+  assert.deepEqual(flights, ['aircraft', 'aircraft']);
 });
 
 test('a quiet spell between thresholded changes keeps an active camera move unsettled', (t) => {

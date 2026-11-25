@@ -304,8 +304,7 @@ export function installEntityContext({
     cockpit,
     canCockpit: (card) =>
       Boolean(omnibar.runner) && COCKPIT_LAYERS.has(card?.layerId),
-    canFollow: (card, { auto = false } = {}) =>
-      FOLLOWABLE.has(card?.layerId) && (!auto || Boolean(omnibar.runner)),
+    canFollow: (card) => FOLLOWABLE.has(card?.layerId),
     // Where the camera is, so a search prefers what is close by.
     here: () => {
       const pose = camera()?.pose();
@@ -529,9 +528,6 @@ export function installEntityContext({
     metadataReady.value = true;
   }
 
-  /** Layers whose own map click already follows what was clicked. */
-  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites']);
-
   // Keep the card's "following" in step with the camera: it says Following
   // while the camera follows the card's own item (the follow's key names
   // it) and not otherwise, whoever started or ended the follow. A layer
@@ -568,14 +564,13 @@ export function installEntityContext({
       dataManager: getDataManager(),
     });
     if (identity) {
-      // These layers start following on their own click; following again
-      // from here would fight them (the flights layer reads a second track
-      // of the same plane as a click on empty map and lets go).
+      // The layer's own click selects and centres it; the card only opens
+      // (src/data/clickSelect.js).
       const picked =
         identity.layerId === 'ais-live-vessels'
           ? { ...identity, vesselId: identity.id }
           : identity;
-      store.select(picked, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
+      store.select(picked);
       return;
     }
     // A click on open ground, sea or sky lets go of what was selected. A

@@ -393,8 +393,8 @@ test('with Context closed, the collapsible sections are already in the page for 
 
 const NEAREST = '.nearby-lists__row--nearest button';
 
-test('nothing picked: one list per layer that is on, nearest first; its first row selects and follows', async (t) => {
-  const { $, cards, followed } = fixture(t, [
+test('nothing picked: one list per layer that is on, nearest first; its first row selects and centres, never follows', async (t) => {
+  const { $, cards, followed, flown } = fixture(t, [
     flightsOn([flight('far01', 30.9, -97.74), flight('near01', 30.31, -97.74)]),
     // A closer vessel on a layer that is off never counts.
     {
@@ -435,7 +435,8 @@ test('nothing picked: one list per layer that is on, nearest first; its first ro
   nearest.click();
   await nextTick();
   assert.equal(cards.card?.identity.id, 'near01');
-  assert.deepEqual(followed, [cards.card.key], 'one tap selects and follows');
+  assert.deepEqual(followed, [], 'a tap does not follow');
+  assert.deepEqual(flown, [cards.card.key], 'one tap flies there once');
 });
 
 test('selected flight route rounds a 999.6 metre leg to one kilometre', async (t) => {

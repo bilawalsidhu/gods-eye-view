@@ -137,12 +137,11 @@ export function createControls({ state, parts, timetable }) {
       }));
       return { chips, legend };
     },
-    /** Route-line, stop, schedule and camera-follow state, for QA probes. */
+    /** Route-line, stop and schedule state, for QA probes. */
     getRouteDisplayStats() {
       return {
         ...parts.routes.stats(),
         timetable: timetable.stats(),
-        follow: parts.follow.stats(),
         heldFeed: state._heldFeedId,
       };
     },

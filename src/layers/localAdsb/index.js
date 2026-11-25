@@ -20,6 +20,12 @@ import {
   rendererOf,
 } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -162,6 +168,8 @@ export function createLocalAdsbLayer({
   let tickTimer = null;
   let syncTimer = null;
   let clickSubscription = null;
+  /** Off for the one-selection rule's listener, while clicks are heard. */
+  let offSelectionYield = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -542,6 +550,7 @@ export function createLocalAdsbLayer({
 
   function clearSelection({ evicted = false } = {}) {
     if (!selectedId) return;
+    releaseSelection(LAYER_ID, selectedId);
     selectedId = null;
     releaseTrail();
     clearSelectedEntityContextForLayer(LAYER_ID, { evicted });
@@ -647,6 +656,8 @@ export function createLocalAdsbLayer({
     if (!marker) return false;
     const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection(LAYER_ID, id);
     enrichment.request(marker.record, { selected: true });
     entityRecord(marker.carrier).labelModel = cardModel(marker, now());
     selectEntityContext(marker.carrier);
@@ -718,6 +729,16 @@ export function createLocalAdsbLayer({
 
   function installInteraction() {
     if (clickSubscription || !viewer) return;
+    // One thing is selected at a time: another layer's selection lets go of
+    // this one's.
+    offSelectionYield = yieldSelectionToOthers(
+      LAYER_ID,
+      () => Boolean(selectedId),
+      () => {
+        clearSelection();
+        governorRequestRender('local-adsb-selection');
+      },
+    );
     clickSubscription = inputFor(viewer).onClick((event) => {
       if (!enabled) return;
       // Another layer's card or label painted on top takes the click: the item
@@ -729,6 +750,10 @@ export function createLocalAdsbLayer({
       // displaced, and a click on a marker must never read as "deselect".
       if (target && markers.has(target)) {
         selectMarker(target);
+        // A click centres it once; the camera does not follow it
+        // (src/data/clickSelect.js).
+        const marker = markers.get(target);
+        centerOnClick(viewer, () => marker?.position ?? null);
         return;
       }
       // A click on a trail line is not empty map.
@@ -743,6 +768,8 @@ export function createLocalAdsbLayer({
   function releaseInteraction() {
     clickSubscription?.();
     clickSubscription = null;
+    offSelectionYield?.();
+    offSelectionYield = null;
   }
 
   function installFrame() {

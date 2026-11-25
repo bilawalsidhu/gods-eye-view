@@ -1,4 +1,9 @@
 import { onFollowChanged } from '../../data/followed.js';
+import {
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { inputFor } from '../../input/dispatcher.js';
 import { VESSEL_OVERLAY_SOURCE_ID } from '../../data/vesselLabels.js';
 
@@ -89,13 +94,27 @@ export function createSelection({
     state.keydownHandler = onVesselKeyDown;
     keyTarget.addEventListener('keydown', state.keydownHandler);
     // Vessels never follow, so anything newly followed belongs to another
-    // layer and takes interaction ownership of the scene.
-    state.trackedEntityRemover = onFollowChanged(viewer, (followed) => {
+    // layer and takes interaction ownership of the scene; so does anything
+    // another layer selects (a click selects without following).
+    const offFollow = onFollowChanged(viewer, (followed) => {
       if (followed && state.selectedRecord) clearVesselInspection();
     });
+    const offSelection = yieldSelectionToOthers(
+      'ais-live-vessels',
+      () => Boolean(state.selectedRecord),
+      () => clearVesselInspection(),
+    );
+    state.trackedEntityRemover = () => {
+      offFollow();
+      offSelection();
+    };
   }
 
-  /** Select one live vessel and request one UI-owned camera transfer. */
+  /**
+   * Select one live vessel and request one UI-owned camera transfer: the
+   * click's centring (src/data/clickSelect.js), keeping the camera's
+   * distance and angle. The camera does not follow the vessel.
+   */
 
   function selectAndFocusVessel(record) {
     if (!record?.id) return false;
@@ -146,6 +165,8 @@ export function createSelection({
     const reuseTrail = state.trailId === record.id;
     clearSelection({ preserveTrail: reuseTrail });
     state.selectedRecord = record;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('ais-live-vessels', record.id);
     record.missedRefreshes = 0;
     components.rendering.syncRecordIcon(record);
     // Rebuild the card set immediately so the full-detail card appears on the
@@ -201,6 +222,7 @@ export function createSelection({
   function clearSelection({ preserveTrail = false, evicted = false } = {}) {
     const record = state.selectedRecord;
     state.selectedRecord = null;
+    if (record) releaseSelection('ais-live-vessels', record.id);
     if (record) components.rendering.syncRecordIcon(record);
     // Drop the full-detail card right away (no-op when the layer is disabled —
     // disable() clears the entry set itself).

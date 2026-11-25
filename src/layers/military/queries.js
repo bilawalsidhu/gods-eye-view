@@ -1,5 +1,3 @@
-import { cameraOf } from '../../render/rendererOf.js';
-import { followedOf } from '../../data/followed.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import { t } from '../../i18n/index.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
@@ -709,8 +707,13 @@ export function createQueries({
       if (!flightState._icons?.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._trackedIcao === id)
+      if (flightState._trackedIcao === id) {
+        // Selected by a click, which does not follow: following is asked
+        // for now.
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._followTracked();
         return parts.tracking._publishTrackedSelection(id, origin);
+      }
       parts.tracking._trackFlight(id, { origin });
       return true;
     },
@@ -776,15 +779,11 @@ export function createQueries({
         return false;
       let id = String(icao24).trim();
       if (!flightState._icons?.has(id)) id = id.toLowerCase();
-      if (
-        id !== flightState._trackedIcao ||
-        followedOf(flightState._viewer) !== flightState._followTarget
-      )
+      if (id !== flightState._trackedIcao || !flightState._followTarget)
         return false;
-      // Following the same target again frames it afresh.
-      const camera = cameraOf(flightState._viewer);
-      camera.cancelFlight();
-      camera.follow(flightState._followTarget);
+      // Following the same target again frames it afresh; one a click
+      // selected (not followed) is followed from here.
+      parts.tracking._followTracked();
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },

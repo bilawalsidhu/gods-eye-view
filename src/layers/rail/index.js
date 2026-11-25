@@ -2,7 +2,7 @@ import { createHistoryBudget } from '../../data/contactPlayback.js';
 import { createRailSource } from './source.js';
 import { createRendering } from './rendering.js';
 import { createSelection } from './selection.js';
-import { createFollow } from './follow.js';
+import { createFocus } from './focus.js';
 import { createIngestion } from './ingestion.js';
 import { createViewport } from './viewport.js';
 import { createControls } from './controls.js';
@@ -90,8 +90,6 @@ function createState({ services }) {
     _selectedAtMs: null,
     _selectedCardAt: 0,
     _selectedCardText: null,
-    /** The camera's follow of the selected train (follow.js), or null. */
-    _follow: null,
     /** A feed polled only for the selected train (viewport.js), or null. */
     _heldFeedId: null,
     /**
@@ -137,8 +135,8 @@ function createState({ services }) {
  * needs on its own. RailTripStop is described in stopLabels.js. Pass
  * `stops: null` to draw the selected line without stops.
  *
- * A selected train takes the camera through the optional `services.camera`
- * (follow.js): a moving train is followed, any other flown to once.
+ * A train the user selects is centred once through the optional
+ * `services.camera` (focus.js); the camera does not follow it.
  *
  * @param {{services: object, source?: object,
  *   stops?: {stopsFor: Function, onSelect?: Function}|null}} options
@@ -190,7 +188,7 @@ export function createRailLayer({
   parts.rendering = createRendering(context);
   parts.routes = createRouteDisplay(context);
   parts.selection = createSelection(context);
-  parts.follow = createFollow(context);
+  parts.focus = createFocus(context);
   parts.controls = createControls(context);
   parts.ingestion = createIngestion(context);
   parts.viewport = createViewport(context);
