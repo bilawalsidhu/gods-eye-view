@@ -141,6 +141,14 @@ Use the same controls before attributing a difference to the application:
    Do not compare embedded-view and external-browser measurements directly;
    compare the reported GPU renderer and matched scene settings first.
 
+## Google 3D tile memory
+
+The baseline above uses the desktop Google 3D tile cache (1536 MiB, with up
+to 1024 MiB over it). Phones, tablets without a fine pointer and devices
+reporting 4 GB of memory or less use 384 MiB and 128 MiB instead, so a
+capture on one of them measures a smaller cache; see
+[Google 3D tile memory on phones](CURRENT-STATE.md#google-3d-tile-memory-on-phones).
+
 ## What is not established yet
 
 - This report does not establish Windows performance.
