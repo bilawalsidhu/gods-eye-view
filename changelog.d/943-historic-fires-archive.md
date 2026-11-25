@@ -1,0 +1,1 @@
+- Continue @lleon-at-navteca's Historic Fires work (#609) with a registered FIRMS archive provider: stable event definitions, event-hashed disk cache, bounded download windows and failed-window cooldowns. Historical perimeters stay under shared provider ownership (continuation PR #943).

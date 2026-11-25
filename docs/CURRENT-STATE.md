@@ -1,5 +1,22 @@
 # God's Eye View Current State
 
+## Historic Fires backend — October 5, 2026
+
+The continuation of @lleon-at-navteca's Historic Fires work (#609) now has a
+current-main archive foundation. `/api/fire-history` exposes a reviewed event
+registry from `src/data/local_data/fire_events/` and fetches only those
+registered NASA FIRMS standard-processing windows. Disk cache names include a
+hash of the normalized event definition, so editing dates, bounds, sources, or
+metadata cannot silently reuse an old archive. Failed windows use a bounded
+cooldown/backoff before another keyed request can spend FIRMS quota.
+A complete upstream outage retains failed-window retry deadlines on disk and
+returns HTTP 502 until a window successfully responds; an empty but valid FIRMS
+CSV is a successful zero-record result rather than an upstream failure.
+
+This slice intentionally does not own perimeter acquisition. Event definitions
+carry structured matching metadata only; rendering will consume the shared fire
+perimeters ownership seam when a historical perimeter source has one owner.
+
 An aircraft (civil or military) faces its reported ground track, else its
 true heading (readsb `true_heading`). With neither, it faces the way its own
 fixes went (`courseFromFixes`, `src/data/courseFromFixes.js`): the course runs

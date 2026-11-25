@@ -4,6 +4,7 @@ import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { issTelemetryProxy } from './space/issTelemetry.js';
 import { tomtomProxy } from './traffic.js';
 import { firmsProxy } from './firms.js';
+import { fireHistoryProxy } from './fireHistory.js';
 import { terrainHeightsProxy } from './terrain.js';
 import { adsbdbProxy } from './aircraft/enrichment.js';
 import { overpassProxy } from './overpass.js';
@@ -62,6 +63,7 @@ function localProviderPlugins({
     issTelemetryProxy(),
     tomtomProxy(),
     firmsProxy(),
+    fireHistoryProxy(),
     rocketLaunchesProxy(),
     terrainHeightsProxy(),
     adsbdbProxy(),
