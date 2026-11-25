@@ -1029,6 +1029,34 @@ test('a layer refreshing items it holds keeps its state; a feed in trouble adds 
   assert.equal($('.view-context__block' + vessels).textContent, 'Unavailable');
 });
 
+test('stale GNSS shows its source and state without printing regional coverage metadata', async (t) => {
+  const { $, cards } = fixture(t, [
+    {
+      id: 'gnss-integrity',
+      name: 'GNSS Integrity',
+      enabled: true,
+      records: [],
+      stats: {
+        stale: true,
+        fallback: false,
+        source: 'adsb.lol',
+        coverage: {
+          kind: 'regional',
+          latitude: 43.65,
+          longitude: -79.38,
+          radiusNm: 250,
+        },
+      },
+    },
+  ]);
+  cards.setView({ center: HERE, heightM: 40_000 });
+  await nextTick();
+  const problem = $('.view-context__problem').textContent;
+  assert.match(problem, /adsb\.lol/);
+  assert.match(problem, /Stale/);
+  assert.doesNotMatch(problem, /\[object Object\]/);
+});
+
 test('with nothing on, Context shows a few facts and points to Data Layers', async (t) => {
   const { $, cards } = fixture(t, [
     { id: 'flights', name: 'Live Flights', enabled: false, records: [] },
