@@ -513,6 +513,17 @@ test('a pole-to-pole grid whose step was stored in float32 is accepted', () => {
   );
 });
 
+test('a pole-to-pole grid whose float32 step came out a little long is accepted', () => {
+  const pole = { width: 900, height: 451, lon0: 0, lat0: 90, wrap: true };
+  // The first two float32 latitudes of a CAMS grid: 450 steps end 0.0007° past the pole.
+  const step = 90 - Math.fround(89.6);
+  assert.equal(manifestOf({ ...pole, step }).global.height, 451);
+  assert.throws(
+    () => manifestOf({ ...pole, height: 452, step }),
+    /Malformed air-quality field/,
+  );
+});
+
 test('a wrapping grid with a float32-derived step is one whole row of the globe', () => {
   // Two float32 longitudes 0.4° apart: 900 columns span 359.9945°.
   const step = Math.fround(359.6) - Math.fround(359.2);

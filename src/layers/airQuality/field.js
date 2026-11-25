@@ -101,8 +101,9 @@ function readRegion(raw, { inset = false } = {}) {
     ![lon0, lat0, step].every(Number.isFinite) ||
     step <= 0 ||
     Math.abs(lat0) > 90 ||
-    // A float32 step may carry the last row a hair past the pole.
-    lat0 - (height - 1) * step < -90 - step * 1e-3 ||
+    // A float32 step may carry the last row past the pole, by less than the
+    // whole-turn slack below.
+    lat0 - (height - 1) * step < -90 - Math.min(step / 2, 0.36) ||
     !Array.isArray(steps) ||
     !steps.length ||
     !steps.every(
