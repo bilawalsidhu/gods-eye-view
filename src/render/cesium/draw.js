@@ -123,7 +123,9 @@ export function heightReferenceOf(height, clampTo = 'both') {
  * float32 for an eye a metre up (`|e + v| - 1` would be lost there). `k`
  * comes from the eye's height, which Cesium works out in doubles, as
  * `2h|g| + h^2|N/r|^2` with `N` the surface normal under the eye, `g` the
- * foot of the eye over the radii squared and `r` the radii.
+ * foot of the eye over the radii squared and `r` the radii. The eye counts as
+ * at least a metre up: one under the ellipsoid (low ground where the geoid
+ * is below it) would otherwise see no overlay at all.
  */
 const OVERLAY_HORIZON = `
 bool overlayPastHorizon(vec3 rte)
@@ -131,7 +133,7 @@ bool overlayPastHorizon(vec3 rte)
     if (czm_sceneMode != czm_sceneMode3D) return false;
     vec3 inverse = czm_ellipsoidInverseRadii;
     vec3 eye = czm_viewerPositionWC;
-    float h = czm_eyeHeight;
+    float h = max(czm_eyeHeight, 1.0);
     vec3 normal = normalize(eye * inverse * inverse);
     vec3 foot = (eye - h * normal) * inverse * inverse;
     vec3 normalScaled = normal * inverse;
@@ -145,7 +147,7 @@ bool overlayPastHorizon(vec3 rte)
 /** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
  *  `position` (world metres) is drawn from `eye`. With `float32`, each step
  *  is rounded to float32 as in the shader, from what the shader is given:
- *  the point less the eye, the eye, and the eye's height. */
+ *  the point less the eye, the eye, and the eye's height (at least 1 m). */
 export function overlayInView(position, eye, { float32 = false } = {}) {
   const f = float32 ? Math.fround : (x) => x;
   const vec = (c) => [f(c.x), f(c.y), f(c.z)];
@@ -154,7 +156,7 @@ export function overlayInView(position, eye, { float32 = false } = {}) {
   const ellipsoid = Cesium.Ellipsoid.WGS84;
   const inverse = vec(ellipsoid.oneOverRadii);
   const e = vec(eye);
-  const h = f(ellipsoid.cartesianToCartographic(eye).height);
+  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
   const over = mul(mul(e, inverse), inverse);
   const length = f(Math.sqrt(dot(over, over)));
   const normal = over.map((c) => f(c / length));

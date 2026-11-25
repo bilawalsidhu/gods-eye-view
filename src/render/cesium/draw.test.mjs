@@ -6182,6 +6182,31 @@ test('an overlay is tested in float32 as the GPU tests it: a fragment a few kilo
   }
 });
 
+test('an overlay is shown from an eye under the ellipsoid, as from one a metre up', () => {
+  // Low ground where the geoid is under the ellipsoid: an eye 50 m below it.
+  const eye = Cesium.Cartesian3.fromDegrees(80, 8, -50);
+  const R = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const cell = Cesium.Cartesian3.fromRadians(
+    Cesium.Math.toRadians(80) + 500 / (R * Math.cos(Cesium.Math.toRadians(8))),
+    Cesium.Math.toRadians(8),
+    0,
+  );
+  for (const float32 of [false, true])
+    assert.equal(
+      overlayInView(cell, eye, { float32 }),
+      true,
+      `float32 ${float32}`,
+    );
+  // Past a metre-high eye's horizon, it still goes.
+  const far = Cesium.Cartesian3.fromDegrees(80, 8 + 0.5, 0);
+  for (const float32 of [false, true])
+    assert.equal(
+      overlayInView(far, eye, { float32 }),
+      false,
+      `float32 ${float32}`,
+    );
+});
+
 test('an overlay shape refuses an image fill', () =>
   withImageClasses(() => {
     const { draw } = drawOver();
