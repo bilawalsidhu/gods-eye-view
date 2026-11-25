@@ -296,6 +296,7 @@
     "Route",
     "3D",
     "KT",
+    "SAT",
     "ON AIR",
     "Stream",
     "{seconds} s",
@@ -494,6 +495,7 @@
     "{n} mm",
     "3D",
     "KT",
+    "{contact}: {status} (squawk {squawk})",
     "Manual",
     "{seconds} s"
   ],
@@ -541,7 +543,7 @@
     "Conversation",
     "Country",
     "Cyan",
-    "Cyclones · NHC / CPHC · JTWC",
+    "Cyclones · NHC / CPHC",
     "DENSE",
     "DEST ---°",
     "DEST {bearing}",
@@ -753,6 +755,11 @@
     "{n} mm",
     "3D",
     "KT",
+    "AIR",
+    "SAT",
+    "{count} contacts",
+    "{count} points",
+    "Cyclones · NHC / CPHC · JTWC",
     "{seconds} s"
   ],
   "it": [
@@ -987,6 +994,8 @@
     "{n} mm",
     "3D",
     "KT",
+    "SAT",
+    "{contact}: {status} (squawk {squawk})",
     "{seconds} s"
   ],
   "ja": [
@@ -1266,6 +1275,9 @@
     "{n} mm",
     "3D",
     "KT",
+    "SAT",
+    "{contact}: {status} (squawk {squawk})",
+    "Backups",
     "Manual",
     "{seconds} s"
   ],
@@ -1505,6 +1517,7 @@
     "{n} mm",
     "3D",
     "KT",
+    "DISK",
     "{seconds} s"
   ],
   "uk": [
