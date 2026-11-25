@@ -118,21 +118,18 @@ test('every Google 3D route caches within the budget it is given', async () => {
   await createGoogleDirectTileset(Cesium, 'key', { budget: PHONE });
   await createGoogleTokenTileset(Cesium, tokens, { budget: PHONE });
   await createGoogleIonTileset(Cesium, 'ion', { budget: PHONE });
-  await loadPhotorealisticTileset(
-    Cesium,
+  const routes = [];
+  for (const source of [
     { googleApiKey: 'key' },
-    { budget: PHONE },
-  );
-  await loadPhotorealisticTileset(
-    Cesium,
     { googleTokens: tokens },
-    { budget: PHONE },
-  );
-  await loadPhotorealisticTileset(
-    Cesium,
     { cesiumToken: 'ion' },
-    { budget: PHONE },
-  );
+  ]) {
+    const result = await loadPhotorealisticTileset(Cesium, source, {
+      budget: PHONE,
+    });
+    routes.push(result.route);
+  }
+  assert.deepEqual(routes, ['google-direct', 'google-token', 'google-ion']);
   assert.equal(Cesium.options.length, 6);
   for (const options of Cesium.options) {
     assert.equal(options.cacheBytes, PHONE.cacheBytes);
@@ -152,11 +149,12 @@ test('every Google 3D route reads the budget from the browser by default', async
     [{ coarse: false, fine: true, deviceMemory: 8 }, DESKTOP],
   ]) {
     const Cesium = fakeCesium();
-    await inBrowser(browser, async () => {
-      await loadPhotorealisticTileset(Cesium, { googleApiKey: 'key' });
-      await loadPhotorealisticTileset(Cesium, { googleTokens: tokens });
-      await loadPhotorealisticTileset(Cesium, { cesiumToken: 'ion' });
-    });
+    const routes = await inBrowser(browser, async () => [
+      (await loadPhotorealisticTileset(Cesium, { googleApiKey: 'key' })).route,
+      (await loadPhotorealisticTileset(Cesium, { googleTokens: tokens })).route,
+      (await loadPhotorealisticTileset(Cesium, { cesiumToken: 'ion' })).route,
+    ]);
+    assert.deepEqual(routes, ['google-direct', 'google-token', 'google-ion']);
     assert.equal(Cesium.options.length, 3);
     for (const options of Cesium.options) {
       assert.equal(options.cacheBytes, budget.cacheBytes);

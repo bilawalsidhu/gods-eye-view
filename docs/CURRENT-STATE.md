@@ -4216,7 +4216,8 @@ closes a tab at around 0.5 to 1.5 GB of memory; in Chrome emulating an iPhone
 (390 x 844 at device pixel ratio 3), the desktop cache grew about 150 MB per
 city across twelve city views at 500 m to 1,536 MB, while a 256 MiB cache held
 about 255 MB across eight cities and still drew a street-level San Francisco
-view at full detail. A tablet with a trackpad or mouse attached, which reports
+view at full detail; phones get 384 MiB, half as much again, for headroom
+when moving between nearby views. A tablet with a trackpad or mouse attached, which reports
 a fine pointer, keeps the desktop cache unless it reports 4 GB or less.
 
 ## Infrastructure marker visibility
