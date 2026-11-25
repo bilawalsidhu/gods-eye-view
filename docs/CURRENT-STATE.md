@@ -8391,7 +8391,8 @@ sit on the field's top edge. World Time appears immediately above the dock
 and hides while suggestions, chat, or voice settings are visible. `/`
 focuses search from outside a text field, as do Cmd+K on macOS and Ctrl+K
 elsewhere (Ctrl+K on macOS is left alone); none of them takes focus from an
-open modal dialog or from inside a dialog such as the guide. While voice is
+open modal dialog or from inside a dialog such as the guide; a modal dialog
+kept on the page inside a hidden container is closed and does not count. While voice is
 on, the suggestions give way to the waveform but an error stays shown. The map credits stay on the
 Power Up row in the ordinary desktop layout, and the Tactical bottom-right
 readout sits 8px above that row.

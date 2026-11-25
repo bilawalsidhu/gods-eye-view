@@ -976,13 +976,22 @@ function onKeydown(event) {
 // `/` from anywhere outside a text input, or ⌘K on a Mac (Ctrl+K elsewhere),
 // focuses the field. Ctrl+K on a Mac is left to the text field it is in.
 const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
+
+/** Whether an element is on screen: neither it nor a container is hidden. */
+function isShown(element) {
+  if (element.closest('[hidden]')) return false;
+  return element.checkVisibility ? element.checkVisibility({ visibilityProperty: true }) : element.getClientRects().length > 0;
+}
+
 function onGlobalKeydown(event) {
   // With voice on the field is hidden: the shortcut does not focus it.
   if (event.defaultPrevented || event.isComposing || voiceOn.value || screenIsOwned() || !input.value?.getClientRects().length) return;
   // An open modal dialog, or focus inside any dialog (the guide), keeps its
-  // keys: the shortcut does not pull focus out of it.
+  // keys: the shortcut does not pull focus out of it. A modal counts only
+  // while it is shown: one kept in a hidden container is closed.
   const doc = globalThis.document;
-  if (doc.querySelector('[aria-modal="true"]:not([hidden]), dialog[open]') || doc.activeElement?.closest?.('[role="dialog"], dialog')) return;
+  const modals = doc.querySelectorAll('[aria-modal="true"], dialog[open]');
+  if ([...modals].some(isShown) || doc.activeElement?.closest?.('[role="dialog"], dialog')) return;
   const typing = event.target?.closest?.('input, textarea, select, [contenteditable]');
   const commandK =
     (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
