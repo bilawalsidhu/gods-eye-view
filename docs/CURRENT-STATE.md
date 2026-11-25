@@ -3297,14 +3297,13 @@ The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times
 remain `null`, including impossible calendar dates from a custom source.
 
-`/api/firms` keeps its last response body as bytes and reuses it for requests
-that would get the same payload: the same cache entry and `stale` flag, while
-the clock stays inside the span over which the trailing-24-hour filter keeps
-the same detections. That span ends when the oldest kept acquisition minute
-turns 24 hours old, so requests minutes apart are still serialised afresh. A
-client that sends `Accept-Encoding: gzip` gets the body gzipped (compressed
-once per kept body, `Content-Encoding: gzip`); every response carries
-`Vary: Accept-Encoding`. The JSON is unchanged.
+`/api/firms` keeps the serialised body and reuses it for the same cache entry
+and `stale` flag while the trailing-24-hour filter keeps the same detections.
+With a live feed that is about a minute: the span ends when the oldest kept
+acquisition minute turns 24 hours old, and a clock set back rebuilds the body.
+Payload responses carry `Vary: Accept-Encoding` and are gzipped once per kept
+body for clients that accept gzip; bodies under 1 KiB or ones gzip cannot
+shrink stay identity.
 
 The FIRMS proxy records source success after appending its rows. If aggregation
 throws, that source reports failure without a contradictory success entry.

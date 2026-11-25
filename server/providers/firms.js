@@ -184,10 +184,7 @@ export function firmsProxy() {
   let statusCache = null;
   /** @type {?Promise<?{used: number, limit: number}>} */
   let statusInflight = null;
-  /**
-   * The last /api/firms payload as bytes, with its gzip. One slot.
-   * @type {?{entry: object, stale: boolean, from: number, until: number, body: Buffer, gzip: ?Promise<?Buffer>}}
-   */
+  /** @type {?{entry: object, stale: boolean, from: number, until: number, body: Buffer, gzip: ?Promise<?Buffer>}} */
   let served = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
@@ -269,27 +266,11 @@ export function firmsProxy() {
     return { at: now, sources, fires };
   }
 
-  /** Cache entry and the fires to serve from it → response payload. */
-  function buildPayload(entry, stale, fires) {
-    return {
-      fetchedAt: entry.at,
-      stale,
-      ttlMs: TTL_MS,
-      sources: entry.sources,
-      count: fires.length,
-      fires,
-    };
-  }
-
   /**
-   * The payload as the bytes to send. Serialising the whole fire set is tens
-   * of MB in a heavy season, so it is done once and kept, not once per request.
-   *
-   * Fires are RE-filtered to the trailing 24 h at serve time so a stale cache
-   * never serves >24h-old detections. The kept bytes are therefore reused only
-   * for the same entry and stale flag while the clock is inside the span over
-   * which that filter keeps the same records: a request never gets a body that
-   * serialising for it would not have produced.
+   * The payload as bytes, kept because serialising tens of MB per request is
+   * slow. Fires are re-filtered to the trailing 24 h so a stale cache never
+   * serves older detections; the bytes are reused only while the same entry,
+   * stale flag and filter span would produce them again.
    */
   function payloadBody(entry, stale) {
     const now = Date.now();
@@ -302,7 +283,16 @@ export function firmsProxy() {
       return served;
     }
     const { kept, from, until } = trailing24hWindow(entry.fires, now);
-    const body = Buffer.from(JSON.stringify(buildPayload(entry, stale, kept)));
+    const body = Buffer.from(
+      JSON.stringify({
+        fetchedAt: entry.at,
+        stale,
+        ttlMs: TTL_MS,
+        sources: entry.sources,
+        count: kept.length,
+        fires: kept,
+      }),
+    );
     served = { entry, stale, from, until, body, gzip: null };
     return served;
   }
@@ -351,29 +341,24 @@ export function firmsProxy() {
 
   const installMiddleware = (server) => {
     server.middlewares.use('/api/firms', async (req, res) => {
-      const sendJson = (status, obj) => {
+      const send = (status, body, headers = {}) => {
         if (res.headersSent) return;
         res.writeHead(status, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
+          ...headers,
         });
-        res.end(JSON.stringify(obj));
+        res.end(body);
       };
+      const sendJson = (status, obj) => send(status, JSON.stringify(obj));
       const sendPayload = async (entry, stale) => {
         const kept = payloadBody(entry, stale);
-        // Compressed once per kept body, on the first request that accepts
-        // gzip, so an identity response never pays or waits for it.
+        // Lazy, so an identity response never waits for gzip.
         const gzip = acceptsGzip(req)
           ? await (kept.gzip ??= gzipBody(kept.body).catch(() => null))
           : null;
         const encoded = encodedBody(req, kept.body, gzip);
-        if (res.headersSent) return;
-        res.writeHead(200, {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store',
-          ...encoded.headers,
-        });
-        res.end(encoded.body);
+        send(200, encoded.body, encoded.headers);
       };
       try {
         const subPath = String(req.url || '').split('?')[0];
