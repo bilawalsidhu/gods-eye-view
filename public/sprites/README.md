@@ -12,9 +12,9 @@ The sprites are rendered from the project's own procedural fleet models
 third-party artwork and are covered by the repository's
 [MIT license](../../LICENSE).
 
-| Path | What it holds |
-|---|---|
-| `aircraft-views.webp` | 4096 × 3648 px, lossless WebP: 64 px cells, 64 a row, 57 rows. Grey: every pixel's red, green and blue are equal. |
+| Path                          | What it holds                                                                                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aircraft-views.webp`         | 4096 × 3648 px, lossless WebP: 64 px cells, 64 a row, 57 rows. Grey: every pixel's red, green and blue are equal.                                  |
 | `src/data/aircraftViews.json` | The layout (`cellPx`, `columns`, `rows`, `ringStepDeg`, `rings`, `fill`) and each subject's first cell, fleet model and bounding radius in metres. |
 
 ## Layout
@@ -58,6 +58,9 @@ the manifest to `src/data/aircraftViews.json`. With `--out`, both go into that
 directory. With `--only`, the other subjects' cells are left empty, so the build
 refuses an `--out` inside `public/sprites` and a manifest at
 `src/data/aircraftViews.json`. Give `--out` a separate directory.
+
+`npm test` never starts Blender. The bake's tests that need the real Blender
+run with `npm run test:blender`.
 
 To review a bake, write a contact sheet per subject (its rings as rows over a
 dark sea, pale land and a mid satellite tone, plus a few frames at 40, 30 and

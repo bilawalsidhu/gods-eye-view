@@ -52,6 +52,7 @@
     "build:aircraft-views": "node scripts/build-aircraft-views.mjs",
     "preview": "vite preview",
     "test": "node scripts/run-unit-tests.mjs",
+    "test:blender": "node scripts/test-blender.mjs",
     "test:perf": "node scripts/run-perf-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:stub-boot": "node scripts/qa-stub-boot.mjs",
