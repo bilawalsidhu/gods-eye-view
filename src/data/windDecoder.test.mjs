@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import { setTimeout as delay } from 'node:timers/promises';
 import { createRequire } from 'node:module';
 
 import { windProxy } from '../../server/providers/wind.js';
+import { createWindDecoder } from '../../server/providers/wind/decoder.js';
 import { decodeWindGribMessage } from '../../server/providers/wind/decode.js';
+import { installWindProxy as install } from '../testSupport/windProxyHarness.mjs';
 
-// Imported per test so a missing worker decoder fails those tests, not the file.
-const createWindDecoder = async (options) =>
-  (await import('../../server/providers/wind/decoder.js')).createWindDecoder(
-    options,
-  );
 const require = createRequire(import.meta.url);
 /** Whether this thread has loaded ecCodes (a CommonJS package). */
 const ecCodesLoadedHere = () =>
@@ -62,29 +62,11 @@ async function longestStall(work) {
   try {
     const started = performance.now();
     const value = await work();
+    gap = Math.max(gap, performance.now() - last);
     return { value, gap, elapsed: performance.now() - started };
   } finally {
     clearInterval(beat);
   }
-}
-
-function install(plugin) {
-  let handler;
-  plugin.configureServer({
-    middlewares: { use: (_route, fn) => (handler = fn) },
-  });
-  return async (url = '/') => {
-    const res = {
-      writeHead(status) {
-        this.statusCode = status;
-      },
-      end(body) {
-        this.body = body;
-      },
-    };
-    await handler({ url, method: 'GET' }, res);
-    return res;
-  };
 }
 
 /** Manifest (minus fetchedAt) and grid bytes exactly as a client receives them. */
@@ -244,7 +226,7 @@ const NOON = Date.UTC(2026, 8, 14, 12);
 const KEYS = ['/', '/?overlay=temperature', '/?overlay=pressure'];
 
 test('a blocking decode runs off the server thread', async (t) => {
-  const decoder = await createWindDecoder({ workerUrl: FAKE_WORKER });
+  const decoder = createWindDecoder({ workerUrl: FAKE_WORKER });
   t.after(() => decoder.close());
   // Warm the worker so its start-up is not counted, then block it for 300 ms.
   await decoder.decode(Uint8Array.of(5, 0));
@@ -261,8 +243,30 @@ test('a blocking decode runs off the server thread', async (t) => {
   assert.equal(value.samples[0], 7);
 });
 
+test("a caller's Buffer view reaches the worker intact and stays usable", async (t) => {
+  const decoder = createWindDecoder({ workerUrl: FAKE_WORKER });
+  t.after(() => decoder.close());
+  const backing = Buffer.alloc(16);
+  backing[4] = 9;
+  const view = backing.subarray(4, 6);
+  const value = await decoder.decode(view, { targetDx: 90 });
+  assert.equal(value.samples[0], 9);
+  assert.equal(backing.buffer.byteLength, 16);
+  assert.equal(view.byteLength, 2);
+  assert.equal(view[0], 9);
+});
+
+// sha256 of the grid bytes the provider served for KEYS before decoding
+// moved to a worker (same synthetic upstream, targetDx 30).
+const PRE_WORKER_GRID_SHA256 = [
+  '644ee6921d593c9c29da2d26479008bd37307e813b354ae152c68177a9258a20',
+  '0f82d58af9332ce6760c80e9a7a2b6182686650ea41389ec5a0aae09a4113e55',
+  '5d1a12d1bee11740c0a552527c47bb9838e893ddf222c18bada7c5436c5c81dc',
+];
+
 test('the default wind provider decodes in the worker and matches the synchronous path byte for byte', async () => {
   const outputs = [];
+  const loadedBefore = ecCodesLoadedHere();
   for (const options of [
     {}, // default: ecCodes in the worker
     { decodeImpl: (bytes) => decodeWindGribMessage(bytes) }, // on this thread
@@ -277,14 +281,19 @@ test('the default wind provider decodes in the worker and matches the synchronou
     );
     const out = [];
     for (const key of KEYS) out.push(await served(request, key));
-    // The default path never brings ecCodes into this thread; the injected
+    // The default path brings no ecCodes into this thread; the injected
     // synchronous decoder does, which also proves the probe can see it.
-    assert.equal(ecCodesLoadedHere(), outputs.length === 1);
+    assert.equal(ecCodesLoadedHere(), outputs.length === 1 || loadedBefore);
     outputs.push(out);
   }
   const [worker, sync] = outputs;
   for (let i = 0; i < KEYS.length; i += 1) {
     assert.equal(worker[i].manifest.unavailable, false, KEYS[i]);
+    assert.equal(
+      createHash('sha256').update(worker[i].grid).digest('hex'),
+      PRE_WORKER_GRID_SHA256[i],
+      `${KEYS[i]} matches the pre-worker bytes`,
+    );
     assert.deepEqual(worker[i].manifest, sync[i].manifest, KEYS[i]);
     assert.ok(worker[i].grid.equals(sync[i].grid), `${KEYS[i]} grid bytes`);
   }
@@ -354,18 +363,18 @@ test('an overlay change within the same forecast object fetches and decodes only
   assert.equal(decodes, 4);
 
   // Reused wind gives exactly what a server that fetched everything gives.
-  const fresh = install(
-    windProxy({
-      now: () => NOON,
-      targetDx: 30,
-      fetchImpl: syntheticUpstream().fetchImpl,
-      decodeImpl: (bytes) => decodeWindGribMessage(bytes),
-    }),
-  );
   for (const [url, reused] of [
     ['/?overlay=temperature', temperature],
     ['/?overlay=pressure', pressure],
   ]) {
+    const fresh = install(
+      windProxy({
+        now: () => NOON,
+        targetDx: 30,
+        fetchImpl: syntheticUpstream().fetchImpl,
+        decodeImpl: (bytes) => decodeWindGribMessage(bytes),
+      }),
+    );
     const full = await served(fresh, url);
     assert.deepEqual(reused.manifest, full.manifest);
     assert.ok(reused.grid.equals(full.grid));
@@ -387,14 +396,66 @@ test('an overlay change within the same forecast object fetches and decodes only
   ]);
 });
 
+test('an hourly IFS refresh within one forecast step fetches only the index', async () => {
+  let clock = Date.UTC(2026, 8, 15, 14);
+  const log = [];
+  const entries = ['10u', '10v', '2t', 'msl'].map((param, i) => ({
+    param,
+    _offset: i * 2,
+    _length: 2,
+  }));
+  const request = install(
+    windProxy({
+      now: () => clock,
+      targetDx: 90,
+      fetchImpl: async (url, options = {}) => {
+        const range = options.headers?.Range;
+        log.push(range ?? 'index');
+        if (!range)
+          return new Response(entries.map((e) => JSON.stringify(e)).join('\n'));
+        const start = Number(/bytes=(\d+)-/.exec(range)[1]);
+        return new Response(Uint8Array.of(start, 0), { status: 206 });
+      },
+      decodeImpl: async (bytes) => ({
+        ni: 4,
+        nj: 3,
+        lo1: 0,
+        la1: 90,
+        di: 90,
+        dj: 90,
+        values: new Float64Array(12).fill(bytes[0] + 1),
+        units: 'm/s',
+      }),
+    }),
+  );
+  const first = await served(request, '/?model=ifs');
+  assert.equal(first.manifest.unavailable, false);
+  assert.deepEqual(log, ['index', 'bytes=0-1', 'bytes=2-3']);
+  log.length = 0;
+  clock += 3600_000; // past the TTL, same 9 h step
+  const second = await served(request, '/?model=ifs');
+  assert.deepEqual(log, ['index']);
+  assert.ok(second.grid.equals(first.grid));
+  log.length = 0;
+  clock += 2 * 3600_000; // the 12 h step is a different object
+  await served(request, '/?model=ifs');
+  assert.deepEqual(log, ['index', 'bytes=0-1', 'bytes=2-3']);
+});
+
 test('wind that failed its checks is never retained for a later overlay', async () => {
-  const upstream = syntheticUpstream({ corrupt: (name) => name === 'v' });
+  const upstream = syntheticUpstream();
   const request = install(
     windProxy({
       now: () => NOON,
       targetDx: 30,
       fetchImpl: upstream.fetchImpl,
-      decodeImpl: (bytes) => decodeWindGribMessage(bytes),
+      decodeImpl: async (bytes) => {
+        const decoded = await decodeWindGribMessage(bytes);
+        // Decodes cleanly, but does not share U's grid.
+        return bytes.equals(MESSAGES.v)
+          ? { ...decoded, la1: decoded.la1 - 45 }
+          : decoded;
+      },
     }),
   );
   assert.equal((await served(request, '/')).manifest.unavailable, true);
@@ -404,11 +465,8 @@ test('wind that failed its checks is never retained for a later overlay', async 
   assert.ok(upstream.log.includes(upstream.ranges.u), 'U is fetched again');
 });
 
-test('a throwing, crashing, exiting or hung decode rejects its job and the next decode recovers', async (t) => {
-  const decoder = await createWindDecoder({
-    workerUrl: FAKE_WORKER,
-    jobTimeoutMs: 400,
-  });
+test('a throwing, crashing or exiting decode rejects its job and the next decode recovers', async (t) => {
+  const decoder = createWindDecoder({ workerUrl: FAKE_WORKER });
   t.after(() => decoder.close());
   const ok = async () => {
     const value = await decoder.decode(Uint8Array.of(9, 0), { targetDx: 90 });
@@ -437,25 +495,50 @@ test('a throwing, crashing, exiting or hung decode rejects its job and the next 
     if (mode === 3) assert.equal(results[1].status, 'rejected');
     await ok();
   }
-  // A decode that never returns is cut off instead of hanging its request.
-  await assert.rejects(decoder.decode(Uint8Array.of(4, 0)), /timed out/);
-  await ok();
-  // Cancelling stops the wait at once; the budget is checked before any copy.
+  // Cancelling stops the wait at once.
   const controller = new AbortController();
   const slow = decoder.decode(Uint8Array.of(9, 20), {
     signal: controller.signal,
   });
   controller.abort(new Error('cancelled'));
   await assert.rejects(slow, /cancelled/);
-  await assert.rejects(
-    decoder.decode(new Uint8Array(8 * 1024 * 1024 + 1)),
-    /byte budget/,
-  );
   await ok();
 });
 
+test('a decode that never returns is cut off at its deadline', async (t) => {
+  // The hung job is the decoder's first, so a slow worker start only counts
+  // against a job that would never answer anyway.
+  const decoder = createWindDecoder({
+    workerUrl: FAKE_WORKER,
+    jobTimeoutMs: 400,
+  });
+  t.after(() => decoder.close());
+  await assert.rejects(decoder.decode(Uint8Array.of(4, 0)), /timed out/);
+});
+
+test('a cancelled hung decode is still retired at its own deadline', async (t) => {
+  const jobTimeoutMs = 300;
+  const decoder = createWindDecoder({ workerUrl: FAKE_WORKER, jobTimeoutMs });
+  t.after(() => decoder.close());
+  const created = new Promise((resolve) => process.once('worker', resolve));
+  const controller = new AbortController();
+  const hung = decoder.decode(Uint8Array.of(4, 0), { signal: controller.signal });
+  const worker = await created;
+  const exited = new Promise((resolve) =>
+    worker.once('exit', () => resolve('exited')),
+  );
+  controller.abort(new Error('refresh cancelled'));
+  await assert.rejects(hung, /refresh cancelled/);
+  // Nothing else is queued: only the job's own deadline can stop the worker.
+  const outcome = await Promise.race([
+    exited,
+    delay(jobTimeoutMs * 10, 'still running', { ref: false }),
+  ]);
+  assert.equal(outcome, 'exited');
+});
+
 test('a worker crash during a refresh answers the request and the next refresh recovers', async (t) => {
-  const decoder = await createWindDecoder({ workerUrl: FAKE_WORKER });
+  const decoder = createWindDecoder({ workerUrl: FAKE_WORKER });
   t.after(() => decoder.close());
   let clock = NOON;
   let crash = true;
@@ -487,13 +570,56 @@ test('a worker crash during a refresh answers the request and the next refresh r
 });
 
 test('closing one decoder rejects its jobs and leaves another working', async (t) => {
-  const a = await createWindDecoder({ workerUrl: FAKE_WORKER });
-  const b = await createWindDecoder({ workerUrl: FAKE_WORKER });
+  const a = createWindDecoder({ workerUrl: FAKE_WORKER });
+  const b = createWindDecoder({ workerUrl: FAKE_WORKER });
   t.after(() => b.close());
   const pending = a.decode(Uint8Array.of(9, 10));
   a.close();
   await assert.rejects(pending, /closed/);
   assert.equal((await b.decode(Uint8Array.of(9, 0))).samples[0], 9);
+});
+
+test('closing the server that mounts the wind proxy, or its bundle, stops its decode worker', async () => {
+  for (const closer of ['httpServer', 'closeBundle']) {
+    const httpServer = new EventEmitter();
+    let handler;
+    const plugin = windProxy({
+      now: () => NOON,
+      targetDx: 30,
+      fetchImpl: syntheticUpstream().fetchImpl,
+    });
+    plugin.configureServer({
+      middlewares: { use: (_route, fn) => (handler = fn) },
+      ...(closer === 'httpServer' ? { httpServer } : {}),
+    });
+    const created = new Promise((resolve) => process.once('worker', resolve));
+    const res = {
+      writeHead() {},
+      end(body) {
+        this.body = body;
+      },
+    };
+    await handler({ url: '/', method: 'GET' }, res);
+    assert.equal(JSON.parse(res.body).unavailable, false);
+    const timeout = new AbortController();
+    const within = (promise) =>
+      Promise.race([
+        promise,
+        delay(5000, 'timed out', { signal: timeout.signal }).catch(() => {}),
+      ]);
+    try {
+      const worker = await within(created);
+      assert.notEqual(worker, 'timed out', 'the proxy started its own worker');
+      const exited = new Promise((resolve) =>
+        worker.once('exit', () => resolve('exited')),
+      );
+      if (closer === 'httpServer') httpServer.emit('close');
+      else plugin.closeBundle();
+      assert.equal(await within(exited), 'exited', closer);
+    } finally {
+      timeout.abort();
+    }
+  }
 });
 
 test('an idle decode worker does not keep the process alive', () => {
@@ -503,7 +629,7 @@ test('an idle decode worker does not keep the process alive', () => {
   ).href;
   const script = `
     import(${JSON.stringify(decoderUrl)}).then(async ({ createWindDecoder }) => {
-      const decoder = await createWindDecoder({ workerUrl: new URL(${JSON.stringify(FAKE_WORKER.href)}) });
+      const decoder = createWindDecoder({ workerUrl: new URL(${JSON.stringify(FAKE_WORKER.href)}) });
       const field = await decoder.decode(Uint8Array.of(9, 0));
       console.log('decoded', field.samples.length);
     });

@@ -1,70 +1,3 @@
-/**
- * Resample a GRIB wind grid into a compact equirectangular grid.
- *
- * Source grids are north-to-south (`la1` at the top, `dj` increasing toward the
- * south) and start at `lo1`. Longitude wraps across the seam; latitude clamps.
- *
- * @param {{u: ArrayLike<number>, v: ArrayLike<number>, ni: number, nj: number,
- *   lo1: number, la1: number, di: number, dj: number, dx?: number, dy?: number}} input
- * @returns {{nx: number, ny: number, lo1: number, la1: number, dx: number,
- *   dy: number, u: Float32Array, v: Float32Array}}
- */
-export function resampleWindGrid({
-  u,
-  v,
-  scalar,
-  scalarScale = 1,
-  scalarOffset = 0,
-  ni,
-  nj,
-  lo1,
-  la1,
-  di,
-  dj,
-  dx = 1,
-  dy = 1,
-}) {
-  if (
-    !Number.isInteger(ni) ||
-    !Number.isInteger(nj) ||
-    ni < 1 ||
-    nj < 1 ||
-    ni * nj > 2_000_000 ||
-    u?.length !== ni * nj ||
-    v?.length !== ni * nj ||
-    (scalar !== undefined && scalar?.length !== ni * nj) ||
-    ![lo1, la1, di, dj, dx, dy, scalarScale, scalarOffset].every(
-      Number.isFinite,
-    ) ||
-    di <= 0 ||
-    dj <= 0 ||
-    dx < 0.25 ||
-    dy < 0.25 ||
-    dx > 180 ||
-    dy > 180
-  )
-    throw new Error('Invalid wind grid geometry');
-  for (const values of [u, v, ...(scalar === undefined ? [] : [scalar])]) {
-    if (!Array.prototype.every.call(values, Number.isFinite))
-      throw new Error('Invalid wind grid values');
-  }
-  const geometry = { ni, nj, lo1, la1, di, dj };
-  const sampled = (values) => ({
-    ...geometry,
-    dx,
-    dy,
-    samples: sampleValues(values, geometry, dx, dy),
-  });
-  return composeWindGrid({
-    u: sampled(u),
-    v: sampled(v),
-    ...(scalar === undefined ? {} : { scalar: sampled(scalar) }),
-    scalarScale,
-    scalarOffset,
-  });
-}
-
-/** Display-grid shape for a target spacing, under the point budget. */
 function displayShape(dx, dy) {
   const nx = Math.round(360 / dx);
   const ny = Math.round(180 / dy) + 1;
@@ -74,9 +7,8 @@ function displayShape(dx, dy) {
 }
 
 /**
- * Bilinearly sample one validated source field onto the display grid. The
- * result stays in doubles so a caller can scale it before narrowing to
- * Float32, exactly as if it had sampled, scaled and stored in one step.
+ * Returns doubles: scaling before narrowing to Float32 keeps output identical
+ * to sampling, scaling and storing in one step.
  */
 function sampleValues(source, { ni, nj, lo1, la1, di, dj }, dx, dy) {
   const { nx, ny } = displayShape(dx, dy);
@@ -103,19 +35,9 @@ function sampleValues(source, { ni, nj, lo1, la1, di, dj }, dx, dy) {
 }
 
 /**
- * Validate one decoded GRIB field and reduce it to display-grid samples.
- *
- * This is the expensive per-message step after the decode (a 0.25° message is
- * ~1.04 M doubles to check), so the decode worker runs it and transfers only
- * the result. A field that already carries samples for `targetDx` passes
- * through, which lets the same call normalise worker output, injected decoders
- * and the retained wind of the current cycle.
- *
- * @param {object} field - `decodeWindGribMessage` output, or a sampled field.
- * @param {number} [targetDx] - Display-grid spacing in degrees.
- * @returns {{ni: number, nj: number, lo1: number, la1: number, di: number,
- *   dj: number, units: (string|undefined), dx: number, dy: number,
- *   samples: Float64Array}}
+ * Validate a decoded GRIB field and sample it to the display grid. A field
+ * already sampled for `targetDx` passes through unchecked (worker output,
+ * retained wind).
  */
 export function sampleWindField(field, targetDx = 1) {
   if (!field) throw new Error('Mismatched weather grid geometry');
@@ -152,7 +74,6 @@ export function sampleWindField(field, targetDx = 1) {
   };
 }
 
-/** Narrow sampled components that share one display grid to Float32. */
 function composeWindGrid({ u, v, scalar, scalarScale = 1, scalarOffset = 0 }) {
   const { dx, dy } = u;
   const { nx, ny } = displayShape(dx, dy);
@@ -225,8 +146,7 @@ export function resampleWeatherFields({
     throw new Error('Mismatched weather grid geometry');
   if (metadata && scalar.units !== (overlay === 'temperature' ? 'K' : 'Pa'))
     throw new Error('Unexpected weather scalar units');
-  // Raw fields are validated and sampled here; worker output and the retained
-  // wind of this cycle already are, so only the cheap narrowing is left.
+  // Worker output and retained wind are already sampled.
   const [sampledU, sampledV, sampledScalar] = fields.map((field) =>
     sampleWindField(field, targetDx),
   );

@@ -1,5 +1,5 @@
 import { fetchText, loadWeatherSnapshot } from './gfs.js';
-import { decodeWindGribInWorker } from './decoder.js';
+import { decodeWindGribMessage } from './decode.js';
 import { weatherScalarMetadata } from './grid.js';
 
 /** Keyless ECMWF Open Data root for real-time IFS forecasts. */
@@ -102,17 +102,17 @@ export function nearestIfsStep(hours, cycleHour) {
 
 /**
  * Fetch and decode the IFS 10 m wind field valid closest to now.
- * @param {{fetchImpl?: Function, now?: Function, targetDx?: number,
- *   decodeImpl?: Function}} [options]
+ * @param {object} [options] - As for fetchGfsWind (./gfs.js).
  * @returns {Promise<{cycle: object, level: string, units: string, grid: object}>}
  */
 export async function fetchIfsWind({
   fetchImpl = fetch,
   now = () => Date.now(),
   targetDx = 1,
-  decodeImpl = decodeWindGribInWorker,
+  decodeImpl = decodeWindGribMessage,
   signal,
   overlay = 'none',
+  scalarSignal,
   windCache,
 } = {}) {
   weatherScalarMetadata(overlay);
@@ -148,6 +148,7 @@ export async function fetchIfsWind({
     fetchImpl,
     decodeImpl,
     signal,
+    scalarSignal,
     windCache,
   });
   const runIso = new Date(runMs).toISOString();

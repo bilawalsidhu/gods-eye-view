@@ -118,36 +118,44 @@ export async function fetchRange({
   return buffer;
 }
 
-/** A bounded optional request may fail without cancelling valid wind siblings. */
+/**
+ * A bounded optional request may fail without cancelling valid wind siblings.
+ * `scalarSignal` gives up on this field alone (returning undefined), while
+ * `signal` cancels the whole refresh.
+ */
 export async function loadOptionalScalar({
   range,
   url,
   fetchImpl,
   decodeImpl,
   signal,
+  scalarSignal,
   targetDx = 1,
   timeoutMs = 12_000,
 }) {
   if (!range) return undefined;
   const controller = new AbortController();
   const abort = () => controller.abort(signal.reason);
+  const giveUp = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
+  scalarSignal?.addEventListener('abort', giveUp, { once: true });
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     signal?.throwIfAborted();
+    scalarSignal?.throwIfAborted();
     const bytes = await fetchRange({
       url,
       ...range,
       fetchImpl,
       signal: controller.signal,
     });
-    // Sampling here keeps an unusable companion on the same wind-only path as
-    // an undecodable one. The decoder gets the signal so a timeout or a
-    // cancelled refresh stops waiting for a decode that runs off this thread.
-    const value = sampleWindField(
-      await decodeImpl(bytes, { targetDx, signal: controller.signal }),
+    // The 12 s deadline bounds the download only. The worker bounds the decode,
+    // and scalarSignal ends the wait in time to serve ready wind.
+    clearTimeout(timer);
+    const value = await decodeImpl(bytes, {
       targetDx,
-    );
+      signal: controller.signal,
+    });
     controller.signal.throwIfAborted();
     return value;
   } catch {
@@ -156,6 +164,7 @@ export async function loadOptionalScalar({
     clearTimeout(timer);
     controller.abort();
     signal?.removeEventListener('abort', abort);
+    scalarSignal?.removeEventListener('abort', giveUp);
   }
 }
 
@@ -165,23 +174,18 @@ import {
   selectLatestGfsCycle,
   nearestGfsStep,
 } from './catalog.js';
-import { decodeWindGribInWorker } from './decoder.js';
-import {
-  resampleWeatherSnapshot,
-  sampleWindField,
-  weatherScalarMetadata,
-} from './grid.js';
+import { decodeWindGribMessage } from './decode.js';
+import { resampleWeatherSnapshot, weatherScalarMetadata } from './grid.js';
 
 /**
  * Load U, V and the optional companion from one forecast object and resample
  * them to the display grid.
  *
- * `windCache` (a Map owned by one `windProxy`) retains the sampled U/V of the
- * last object loaded per model. A later request for the same object and byte
- * ranges, such as an overlay change or a refresh within the same forecast
- * step, then fetches and decodes only the companion. It holds two Float64
- * display grids per model (2 x 65,160 x 8 B = 1.04 MB at 1 degree) and is
- * written only after the pair has passed every wind check.
+ * `windCache` (one per windProxy) keeps the U/V of the last forecast file per
+ * model as the decoder returned them (display-grid samples from the worker,
+ * ~1 MB at 1°). The same URL and U/V ranges reuse them without fetching U/V
+ * again, even if upstream would now fail. Written only after the wind passes
+ * every check.
  */
 export async function loadWeatherSnapshot({
   model,
@@ -193,25 +197,22 @@ export async function loadWeatherSnapshot({
   fetchImpl,
   decodeImpl,
   signal,
+  scalarSignal,
   windCache,
 }) {
   const key = [
     url,
     `${ranges.u.start}-${ranges.u.end}`,
     `${ranges.v.start}-${ranges.v.end}`,
-    targetDx,
   ].join('|');
   const kept = windCache?.get(model);
   const wind = kept?.key === key ? kept : null;
   // All selected messages come from this one issue/valid-time object.
   const load = async (range) =>
-    sampleWindField(
-      await decodeImpl(await fetchRange({ url, ...range, fetchImpl, signal }), {
-        targetDx,
-        signal,
-      }),
+    decodeImpl(await fetchRange({ url, ...range, fetchImpl, signal }), {
       targetDx,
-    );
+      signal,
+    });
   const [u, v, scalar] = await Promise.all([
     wind ? wind.u : load(ranges.u),
     wind ? wind.v : load(ranges.v),
@@ -221,6 +222,7 @@ export async function loadWeatherSnapshot({
       fetchImpl,
       decodeImpl,
       signal,
+      scalarSignal,
       targetDx,
     }),
   ]);
@@ -230,14 +232,22 @@ export async function loadWeatherSnapshot({
   return fields;
 }
 
-/** Fetch and decode the GFS 10 m wind field valid closest to now. */
+/**
+ * Fetch and decode the GFS 10 m wind field valid closest to now.
+ * @param {{fetchImpl?: Function, now?: Function, targetDx?: number,
+ *   decodeImpl?: Function, signal?: AbortSignal, overlay?: string,
+ *   scalarSignal?: AbortSignal, windCache?: Map}} [options] - `decodeImpl(bytes, {targetDx, signal})`
+ *   returns a decoded field or a `sampleWindField` result; for `windCache` see
+ *   loadWeatherSnapshot. For `scalarSignal` see loadOptionalScalar.
+ */
 export async function fetchGfsWind({
   fetchImpl = fetch,
   now = () => Date.now(),
   targetDx = 1,
-  decodeImpl = decodeWindGribInWorker,
+  decodeImpl = decodeWindGribMessage,
   signal,
   overlay = 'none',
+  scalarSignal,
   windCache,
 } = {}) {
   weatherScalarMetadata(overlay);
@@ -274,6 +284,7 @@ export async function fetchGfsWind({
     fetchImpl,
     decodeImpl,
     signal,
+    scalarSignal,
     windCache,
   });
   const runIso = new Date(runMs).toISOString();

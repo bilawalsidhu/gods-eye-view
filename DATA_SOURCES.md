@@ -564,11 +564,8 @@ Global Forecast System (GFS). The `/api/wind` server-side proxy selects the
 latest available 0.25° cycle, reads its `.idx` inventory, byte-range fetches only
 the `UGRD`/`VGRD` 10 m GRIB2 messages, optionally adding `TMP` at 2 m or
 `PRMSL` at mean sea level from the same run and forecast time. It decodes the
-selected messages with ecCodes (WASM) and resamples them to a compact grid (1° by
-default) on a worker thread, so a refresh does not stall other API routes, and
-serves a manifest plus Float32 U/V and optional scalar values. The sampled wind
-of the current forecast file is kept, so choosing a color field fetches only
-that field. It is keyless, cached
+selected messages with ecCodes (WASM), resamples to a compact grid (1° by
+default), and serves a manifest plus Float32 U/V and optional scalar values. It is keyless, cached
 per cycle for an hour, and is a **forecast, not an observation**: the particles
 show model flow, not measured wind. The renderer bakes bounded curves through
 the sampled field and animates their phase on the GPU, with a canvas fallback.
@@ -581,6 +578,9 @@ from Pa to hPa before delivery. A missing, malformed or timed-out companion fiel
 does not discard valid wind: the manifest marks that field unavailable, and the
 UI retains wind without inventing scalar values. The proxy caches by model and
 requested field, with bounded current/previous grids and shared in-flight loads.
+Decoding and resampling run on a worker thread. The sampled U/V of the current
+forecast file is kept per model, so a color-field change or a refresh within
+that file fetches only the inventory and the color field.
 Wind speed shading is computed locally from U/V and needs no companion download.
 The legend and map-center reading explain units and forecast validity; the
 animation is a visual flow through one forecast, not advancing forecast time.

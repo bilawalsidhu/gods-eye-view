@@ -52,10 +52,7 @@ export async function decodeWindGribMessage(buffer, { eccodesModule } = {}) {
   }
 }
 
-/**
- * Worker side of ./decoder.js: decode each posted message, validate and sample
- * it to the display grid, and transfer back only the samples.
- */
+/** Worker side of ./decoder.js. */
 export function serveWindDecodes(port, decodeImpl = decodeWindGribMessage) {
   port.on('message', async ({ id, bytes, targetDx }) => {
     try {

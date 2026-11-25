@@ -1,23 +1,16 @@
 import { Worker } from 'node:worker_threads';
+import { waitForSignal } from '../../../src/sources/requestDeadline.js';
 
 const WORKER_URL = new URL('./decode-worker.js', import.meta.url);
-const MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
 
 /**
- * Decode GRIB messages on one lazily started worker thread.
+ * One lazily started worker thread for GRIB decode, validation and sampling,
+ * which are synchronous and too slow for the server thread (a 0.25° message is
+ * ~1.04 M doubles); only the display-grid samples come back.
  *
- * ecCodes decodes a 0.25° message synchronously (~1.04 M doubles), and
- * validating and resampling those values is synchronous too, so on the server
- * thread each refresh stalled every other API route. The worker does all three
- * and transfers back only the display-grid samples.
- *
- * The worker is referenced only while a job is pending, so it never keeps the
- * process alive. A crash, an exit or a job that outlives `jobTimeoutMs`
- * rejects every pending job and retires the worker; the next decode starts a
- * new one.
- *
- * @param {{workerUrl?: URL, jobTimeoutMs?: number}} [options]
- * @returns {{decode: Function, close: Function}}
+ * The worker is ref'd only while a job is pending. A crash, an exit or a job
+ * over `jobTimeoutMs` rejects every pending job and retires the worker; the
+ * next decode starts a new one.
  */
 export function createWindDecoder({
   workerUrl = WORKER_URL,
@@ -40,7 +33,7 @@ export function createWindDecoder({
     state.worker.unref();
     state.worker.on('message', ({ id, field, error }) => {
       const job = state.pending.get(id);
-      if (!job) return; // Already rejected by an abort.
+      if (!job) return; // Its worker was already retired.
       if (error === undefined) job.resolve(field);
       else job.reject(new Error(error));
     });
@@ -54,39 +47,34 @@ export function createWindDecoder({
   };
   /**
    * Decode one message and sample it to `targetDx` (see `sampleWindField`).
-   * An aborted `signal` rejects at once; the worker finishes the bounded job
-   * and its result is dropped.
+   * An aborted `signal` ends this caller's wait at once; the job keeps its
+   * deadline and its result is dropped.
    */
-  const decode = (buffer, { targetDx = 1, signal } = {}) =>
-    new Promise((resolve, reject) => {
-      if (buffer.byteLength > MAX_MESSAGE_BYTES)
-        throw new Error('Wind GRIB exceeds byte budget');
-      signal?.throwIfAborted();
-      // A private copy: transferring the caller's (possibly pooled) Buffer
-      // would detach memory it still owns.
-      const bytes = new Uint8Array(buffer.byteLength);
-      bytes.set(buffer);
+  const decode = async (buffer, { targetDx = 1, signal } = {}) => {
+    signal?.throwIfAborted();
+    const job = new Promise((resolve, reject) => {
       const state = (active ??= start());
       const id = nextId++;
       const settle = (finish) => (value) => {
-        if (state.pending.get(id) === job) state.pending.delete(id);
+        state.pending.delete(id);
         clearTimeout(timer);
-        signal?.removeEventListener('abort', abort);
         if (state.pending.size === 0) state.worker.unref();
         finish(value);
       };
-      const job = { resolve: settle(resolve), reject: settle(reject) };
-      const abort = () => job.reject(signal.reason);
       const timer = setTimeout(
         () => retire(state, new Error('Wind decode timed out')),
         jobTimeoutMs,
       );
       timer.unref();
-      state.pending.set(id, job);
+      state.pending.set(id, {
+        resolve: settle(resolve),
+        reject: settle(reject),
+      });
       state.worker.ref();
-      signal?.addEventListener('abort', abort, { once: true });
-      state.worker.postMessage({ id, bytes, targetDx }, [bytes.buffer]);
+      state.worker.postMessage({ id, bytes: buffer, targetDx });
     });
+    return waitForSignal(job, signal);
+  };
   return {
     decode,
     /** Stop the worker; pending jobs reject and a later decode restarts it. */
@@ -94,15 +82,4 @@ export function createWindDecoder({
       if (active) retire(active, new Error('Wind decode worker closed'));
     },
   };
-}
-
-let shared = null;
-
-/**
- * Default decoder for the wind provider: one worker for the whole process,
- * started by the first wind request, however many `windProxy` instances exist.
- */
-export function decodeWindGribInWorker(buffer, options) {
-  shared ??= createWindDecoder();
-  return shared.decode(buffer, options);
 }
