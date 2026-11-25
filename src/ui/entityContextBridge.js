@@ -34,6 +34,7 @@ const FRAME_RANGE = Object.freeze({
   storm: 1_500_000,
   fire: 20_000,
   'fire perimeter': 40_000,
+  'road segment': 3_000,
 });
 const DEFAULT_RANGE = 8_000;
 /**

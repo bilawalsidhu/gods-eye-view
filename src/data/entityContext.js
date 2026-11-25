@@ -1591,12 +1591,12 @@ export function nearbyByKind(
     const best = [];
     for (const record of layerRecords(dataManager, layer.id)) {
       if (isExcludedNearRecord(layer.id, record, excludeKey)) continue;
+      if (needle && !matchesName && !recordMatches(record, needle)) continue;
       const { at, km } = nearestPart(here, record, {
         radiusKm,
         refineKm: group ? Infinity : cutoffKm(best, keep),
       });
       if (!(km <= radiusKm)) continue;
-      if (needle && !matchesName && !recordMatches(record, needle)) continue;
       const hit = { layerId: layer.id, record, km, at };
       if (group) group.push(hit);
       else keepBest(best, keep, -km, hit, at);
@@ -1680,6 +1680,7 @@ export function nearbyForLayer(
     let count = 0;
     for (const point of points) {
       if (source && Math.abs(point.lat - here.lat) > latitudeSpan) continue;
+      if (!source && matchRecord && !recordMatches(point, needle)) continue;
       const { at, km } = source
         ? { at: point, km: distanceKm(here, point) }
         : nearestPart(here, point, {

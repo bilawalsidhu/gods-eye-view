@@ -548,14 +548,11 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
     return id && sourceIdCounts.get(id) === 1 ? id : null;
   };
 
-  // Match the feed's own id first, wherever the feature moved.
+  // Match the feed's own id first, wherever the feature moved. Every feature
+  // still claims its place for the next snapshot.
   const byLocation = new Map();
   for (const feature of keys.keys()) {
-    const key = previous?.sourceKeys.get(uniqueId(feature));
-    if (key) {
-      keys.set(feature, key);
-      continue;
-    }
+    keys.set(feature, previous?.sourceKeys.get(uniqueId(feature)) ?? null);
     const place = placeOf.get(feature);
     if (!byLocation.has(place)) byLocation.set(place, []);
     byLocation.get(place).push(feature);
@@ -567,7 +564,8 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
     if (features.length === 1 && !before?.byContent) {
       const feature = features[0];
       const owner = sourceIds.get(feature) ?? null;
-      const key = before?.owner === owner ? before.key : nextKey();
+      const key =
+        keys.get(feature) ?? (before?.owner === owner ? before.key : nextKey());
       keys.set(feature, key);
       groups.set(place, { feature, key, owner });
       continue;
@@ -588,10 +586,14 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
     groups.set(place, { byContent });
     for (const [content, matches] of featuresByContent) {
       const prior = oldKeys?.get(content);
+      const own = matches.length === 1 ? keys.get(matches[0]) : null;
       // A different number of exact duplicates leaves no way to tell
       // which of those identical features survived.
-      const ids =
-        prior?.length === matches.length ? prior : matches.map(() => nextKey());
+      const ids = own
+        ? [own]
+        : prior?.length === matches.length
+          ? prior
+          : matches.map(() => nextKey());
       byContent.set(content, ids);
       for (const [index, feature] of matches.entries())
         keys.set(feature, ids[index]);

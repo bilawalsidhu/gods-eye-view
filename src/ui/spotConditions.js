@@ -17,7 +17,7 @@ const briefs = new Map();
  * Read weather for a spot. A failed read is forgotten so the next call retries.
  * @param {number} lat
  * @param {number} lon
- * @param {(lat: number, lon: number) => Promise<object>} load
+ * @param {(lat: number, lon: number, options: {signal: AbortSignal}) => Promise<object>} load
  * @param {{force?: boolean}} [options] `force` reads again whatever is kept.
  */
 export function regionalBrief(lat, lon, load, { force = false } = {}) {
@@ -29,8 +29,9 @@ export function regionalBrief(lat, lon, load, { force = false } = {}) {
     if (briefs.get(key)?.promise === promise) briefs.delete(key);
     return null;
   };
+  // The kept read is shared by every card at this spot, so no card aborts it.
   const promise = Promise.resolve()
-    .then(() => load(lat, lon))
+    .then(() => load(lat, lon, { signal: new AbortController().signal }))
     .then((brief) => brief ?? forget(), forget);
   briefs.set(key, { at: Date.now(), promise });
   if (briefs.size > 40) briefs.delete(briefs.keys().next().value);
