@@ -555,10 +555,8 @@ export class IntelHUD {
     const geoidN = this._geoidUndulationM(latDeg, lonDeg);
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
-    // + 0 turns a -0 into 0, so a sun just below the horizon never reads "-0.0".
-    const sunTenths = Number(sunEl.toFixed(1)) + 0;
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunTenths.toFixed(1)}° EL`;
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${(Number(sunEl.toFixed(1)) + 0).toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date(hudTime());
