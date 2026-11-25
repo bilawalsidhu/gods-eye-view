@@ -11,7 +11,7 @@ import { usePanelChromeStore } from '../../stores/panelChrome.js';
 import { PANEL_LABEL_KEYS, shownLayerName, layerSourceText } from '../../layerNames.js';
 import { translateFeedError, translateStatusMessage } from '../../statusText.js';
 import { entityKind } from '../../../data/entityContext.js';
-import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
+import { CONTEXT_RADIUS_STEPS, contextRadiusKm, contextRadiusText as radiusText, contextRadiusIndex as radiusIndex, pickContextRadius as pickRadius } from '../../contextRadius.js';
 import { weatherFacts, weatherLook } from '../../spotConditions.js';
 import { clockLine, contextAgeText, dayLengthMinutes, utcClock } from '../../contextTime.js';
 import { approximatePosition, distanceText } from '../../distanceText.js';
@@ -24,7 +24,8 @@ import UiSlider from '../../kit/UiSlider.js';
 import NearbyLists from './NearbyLists.vue';
 import AltitudeGraph from './AltitudeGraph.vue';
 import SuggestedLayers from './SuggestedLayers.vue';
-import { CONTEXT_EXEMPT, MISSIONS_LAYER, inspectorFeedLabel, inspectorHasLayers, inspectorLayerRows, presentLayerRow, shownApart } from '../../layerRowState.js';
+import { layerFeedState } from '../../../data/feedState.js';
+import { FEED_STATE_LABEL_KEYS, inspectorHasLayers } from '../../layerRowState.js';
 import { COUNT_TILE_LAYERS, countAgeMs } from '../../layerCounts.js';
 import { useLayerCountsStore } from '../../stores/layerCounts.js';
 import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
@@ -135,6 +136,43 @@ const TILE_ICONS = {
   'weather-satellite': 'cloud',
 };
 const tileIcon = (id) => TILE_ICONS[id] || entityKind(id).icon;
+function inspectorFeedLabel(tone) {
+  if (tone === 'nominal') return t('Live');
+  if (tone === 'loading') return t('Loading');
+  if (tone === 'stale') return t('Stale');
+  const locale = getLocale();
+  const label = t(FEED_STATE_LABEL_KEYS[tone]).toLocaleLowerCase(locale);
+  return label.charAt(0).toLocaleUpperCase(locale) + label.slice(1);
+}
+
+const CONTEXT_EXEMPT = Object.freeze(['radio', 'directions']);
+const MISSIONS_LAYER = 'rocket-launches';
+
+function inspectorLayerRows(rows) {
+  return rows.filter((row) => row.enabled && !CONTEXT_EXEMPT.includes(row.id));
+}
+
+function shownApart(id, missionsEnabled) {
+  return missionsEnabled && id === MISSIONS_LAYER;
+}
+
+function presentLayerRow(row) {
+  const stats = row.stats || {};
+  // A refresh of a layer holding items keeps its feed state and total.
+  const tone = layerFeedState(
+    stats.loading && stats.count ? { ...stats, loading: false } : stats,
+  );
+  return {
+    id: row.id,
+    tone,
+    total:
+      Number.isFinite(stats.count) && !(stats.loading && !stats.count)
+        ? stats.count
+        : null,
+    updatedAt: Number.isFinite(stats.lastUpdate) ? stats.lastUpdate : null,
+  };
+}
+
 // Every layer that is on, with its feed state, Space Missions' row included.
 const layerRows = computed(() =>
   inspectorLayerRows(store.inspectorRows).map((row) => {
@@ -165,12 +203,6 @@ const layerById = computed(() => Object.fromEntries(liveLayers.value.map((layer)
 const problems = computed(() => layerRows.value.filter((layer) => layer.problem));
 const anyOn = computed(() => inspectorHasLayers(store.inspectorRows, missions.enabled));
 
-// The radius sits just above the counts, because it sets them. It only
-// filters what the layers have loaded: no feed is asked for more.
-const radiusText = computed(() => t('{n} km', { n: formatNumber(contextRadiusKm.value) }));
-const radiusIndex = computed(() => Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(contextRadiusKm.value)));
-const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
-
 // Layers with a point reading show its value at the centre of the view.
 // Air Quality also has station records that belong in Nearby.
 const valueTiles = computed(() => {
@@ -194,7 +226,8 @@ const valueTiles = computed(() => {
     const age = observed && Number.isFinite(found?.at)
       ? t('Updated {age}', { age: contextAgeText(Date.now() - found.at) })
       : '';
-    return [{ ...layer, value: found?.value || '—', detail: found?.reason || found?.detail || (found?.value ? '' : t('No value at the centre of the view')), age }];
+    const tone = found?.stale && layer.tone === 'nominal' ? 'stale' : layer.tone;
+    return [{ ...layer, tone, toneText: inspectorFeedLabel(tone), value: found?.value || '—', detail: found?.reason || found?.detail || (found?.value ? '' : t('No value at the centre of the view')), age }];
   });
 });
 // Keep the enabled and non-item layer sets stable through ordinary refreshes.
@@ -590,7 +623,7 @@ function openSuggested() {
         <p v-else class="spot-conditions__loading spot-conditions__weather-wait">{{ weatherFailed ? t('No weather reading here.') : t('Reading conditions here…') }}</p>
       </div>
 
-      <!-- The radius, just above the counts it sets. -->
+      <!-- The radius sits above the counts it filters from data already loaded. -->
       <div v-if="!globeView" class="view-context__radius">
         <span class="view-context__radius-label">{{ t('Radius') }}</span>
         <UiSlider class="view-context__radius-slider" min="0" :max="CONTEXT_RADIUS_STEPS.length - 1" step="1" :model-value="radiusIndex" :aria-label="t('Nearby radius')" :aria-valuetext="radiusText" :title="t('How far out the counts and nearby lists look')" @update:model-value="pickRadius" />

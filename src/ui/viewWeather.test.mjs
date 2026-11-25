@@ -451,9 +451,13 @@ function fixture(t) {
   const publications = [];
   let input = { center: A, moving: false, shown: true, mountId: 1 };
   let visible = true;
+  Object.defineProperty(document, 'visibilityState', {
+    configurable: true,
+    get: () => (visible ? 'visible' : 'hidden'),
+  });
+  t.after(() => delete document.visibilityState);
   const owner = createViewWeather({
     read: spotWeather,
-    isPageVisible: () => visible,
     readCurrentInput: () => input,
     publish: (state) => publications.push(state),
   });

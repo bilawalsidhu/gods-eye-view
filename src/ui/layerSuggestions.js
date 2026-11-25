@@ -1,5 +1,3 @@
-// Suggested rows open in Data Layers and leave the layer switches alone.
-
 /** With no local coverage information, only the globe has default suggestions. */
 const GLOBE_DEFAULTS = ['satellites', 'flights', 'ais-live-vessels'];
 
@@ -12,13 +10,11 @@ const COMPANIONS = Object.freeze({
   earthquakes: ['local-firms'],
 });
 
-/** At most this many suggestions. */
 export const MAX_SUGGESTIONS = 3;
 
 /**
  * Up to `MAX_SUGGESTIONS` layer ids to suggest.
- * @param {Array<{id: string, enabled?: boolean, showInTogglePanel?: boolean, stats?: {keyRequired?: boolean, sourceUnavailable?: boolean, lastUpdate?: number|null}}>} rows
- *   The data manager's layer rows.
+ * @param {object[]} rows The data manager's layer rows.
  * @param {{globe?: boolean}} [view] Whether the view shows the whole globe.
  * @returns {string[]}
  */

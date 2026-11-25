@@ -28,9 +28,6 @@ const text = (value) =>
  * it: an aircraft's class (its own `aircraftClass`, else worked out from its
  * type), a vessel's kind, or {@link AID_MARK}. Empty for a layer that draws
  * no sprite per kind.
- * @param {string} layerId
- * @param {?object} source A layer record.
- * @returns {string}
  */
 export function markKind(layerId, source) {
   if (!source) return '';

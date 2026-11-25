@@ -521,7 +521,8 @@ function anonymousContent(feature) {
 function anonymousContextKeys(parts, layerId, previous, nextKey) {
   const keys = new Map();
   const byLocation = new Map();
-  const placeNames = new Map();
+  const sourceIds = new Map();
+  const sourceIdCounts = new Map();
   for (const { feature, kind, coordinates } of parts) {
     if (feature.id != null || kind === 'empty' || keys.has(feature)) continue;
     const point =
@@ -533,34 +534,34 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
     const properties = unwrapProperties(feature.properties ?? {});
     const { name } = mapAnalystRecord({ properties }, layerId);
     const place = JSON.stringify([point[1], point[0], name]);
-    placeNames.set(place, name);
+    const sourceId = properties.__gevSourceId;
+    if (typeof sourceId === 'string' && sourceId) {
+      sourceIds.set(feature, sourceId);
+      sourceIdCounts.set(sourceId, (sourceIdCounts.get(sourceId) ?? 0) + 1);
+    }
     keys.set(feature, null);
     if (!byLocation.has(place)) byLocation.set(place, []);
     byLocation.get(place).push(feature);
   }
 
-  const currentNames = new Map();
-  for (const name of placeNames.values()) {
-    if (name) currentNames.set(name, (currentNames.get(name) ?? 0) + 1);
-  }
+  // Moving between places requires the feed's own id, unique in both snapshots.
   const movedKeys = new Map();
   for (const [place, group] of previous ?? []) {
-    if (!group.name) continue;
-    const unique = !movedKeys.has(group.name) && !byLocation.has(place);
-    movedKeys.set(group.name, unique ? group.key : null);
+    if (group.sourceId && !byLocation.has(place))
+      movedKeys.set(group.sourceId, group.key);
   }
 
   const groups = new Map();
   for (const [place, features] of byLocation) {
     const before = previous?.get(place);
-    const name = placeNames.get(place);
     if (features.length === 1 && !before?.byContent) {
       const feature = features[0];
-      const moved =
-        !before && currentNames.get(name) === 1 ? movedKeys.get(name) : null;
+      const id = sourceIds.get(feature);
+      const sourceId = sourceIdCounts.get(id) === 1 ? id : null;
+      const moved = !before && sourceId ? movedKeys.get(sourceId) : null;
       const key = before?.key ?? moved ?? nextKey();
       keys.set(feature, key);
-      groups.set(place, { feature, key, name });
+      groups.set(place, { feature, key, sourceId });
       continue;
     }
 
@@ -576,7 +577,7 @@ function anonymousContextKeys(parts, layerId, previous, nextKey) {
       featuresByContent.get(content).push(feature);
     }
     const byContent = new Map();
-    groups.set(place, { byContent, name });
+    groups.set(place, { byContent });
     for (const [content, matches] of featuresByContent) {
       const prior = oldKeys?.get(content);
       // A different number of exact duplicates leaves no way to tell

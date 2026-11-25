@@ -2377,7 +2377,7 @@ test('the visible Inspector publishes its layer rows once for rows, suggestions 
   assert.equal(
     published(),
     1,
-    'local camera movement does not resample metadata',
+    'local camera movement does not republish the layer rows',
   );
   cards.pulseInspector();
   await nextTick();
@@ -2389,7 +2389,11 @@ test('the visible Inspector publishes its layer rows once for rows, suggestions 
   notifyLayers();
   cards.pulseInspector();
   await nextTick();
-  assert.equal(published(), 2, 'hidden refresh does not resample metadata');
+  assert.equal(
+    published(),
+    2,
+    'a hidden refresh does not republish the layer rows',
+  );
   open();
   await nextTick();
   assert.equal(published(), 3);

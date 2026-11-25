@@ -107,7 +107,7 @@ function segmentLengthBound(aLat, bLat, dx) {
   );
 }
 
-/** Find a nearby GeoJSON line anchor using spherical distances to its drawn path. */
+/** Find a nearby line anchor using spherical distances to its drawn path. */
 export function linePointWithinRadius(paths, center, radiusKm) {
   // One degree of latitude exceeds 110 km, even at the poles.
   const latitudeSpan = radiusKm / 110;

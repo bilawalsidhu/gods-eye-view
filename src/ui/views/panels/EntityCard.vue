@@ -57,7 +57,7 @@ const status = computed(() => {
     return {
       tone: 'aged',
       text: t('Last reading · {age}', {
-        age: contextAgeText(Math.max(0, located.value.atMs - located.value.observedAtMs)),
+        age: contextAgeText(located.value.atMs - located.value.observedAtMs),
       }),
     };
   if (lost.value) return { tone: 'lost', text: t('Out of feed · last reading') };
@@ -76,7 +76,8 @@ const position = computed(() => {
   const current = card.value;
   if (!Number.isFinite(current?.lat) || !Number.isFinite(current?.lon)) return '';
   if (current.obscured) return t('Location obscured to a 0.2° cell');
-  return coordinateText(current.lat, current.lon);
+  const text = coordinateText(current.lat, current.lon);
+  return approximatePosition(current) ? `${text} (${t('approximate')})` : text;
 });
 
 const source = computed(() => {
@@ -490,7 +491,7 @@ watch(
       </div>
 
       <slot />
-      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" :lat="card.lat" :lon="card.lon" :obscured="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
+      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon) && !(lost && card.layerId === 'wildlife-sightings')" :key="card.key" :lat="card.lat" :lon="card.lon" :obscured="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
 
       <p v-if="source" class="entity-card__source">
         <span>{{ t('Source') }}</span> {{ source }}<template v-if="ageText"> · {{ ageText }}</template>

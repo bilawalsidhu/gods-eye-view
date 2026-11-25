@@ -19,6 +19,7 @@ import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import { useVoiceStore } from './stores/voice.js';
+import { approximatePosition } from './distanceText.js';
 import { inspectorHasLayers } from './layerRowState.js';
 import { createViewWeather } from './viewWeather.js';
 
@@ -221,14 +222,18 @@ export function installEntityContext({
 
   function mapItemReference(card) {
     const hidden = store.lost && card.layerId === 'wildlife-sightings';
+    // Acartia rounds observation coordinates to 0.01°.
+    const rounded = !hidden && !card.obscured && approximatePosition(card);
+    const digits = rounded ? 2 : 3;
     const coordinates = {
+      ...(rounded && { roundedToDegrees: 0.01 }),
       lat:
         !hidden && Number.isFinite(card.lat)
-          ? Number(card.lat.toFixed(3))
+          ? Number(card.lat.toFixed(digits))
           : null,
       lon:
         !hidden && Number.isFinite(card.lon)
-          ? Number(card.lon.toFixed(3))
+          ? Number(card.lon.toFixed(digits))
           : null,
     };
     return {
@@ -249,14 +254,16 @@ export function installEntityContext({
   function ask(card) {
     const reference = mapItemReference(card);
     Object.defineProperty(reference, 'current', {
-      value: () =>
-        store.card?.key === card.key
+      value: () => {
+        store.refresh({ forAction: true });
+        return store.card?.key === card.key
           ? mapItemReference(store.card)
           : {
               name: reference.name,
               kind: reference.kind,
               layer: reference.layer,
-            },
+            };
+      },
     });
     askText('Tell me about this map item and what is around it.', reference);
   }
@@ -303,8 +310,8 @@ export function installEntityContext({
 
   // What the camera shows, for the Context panel to describe when nothing is
   // picked: the ground under the middle of the screen, the view's bounds and
-  // the height. Read when the camera settles, not every frame. `settled` is
-  // false for a read taken while the camera is still moving.
+  // the height. Read when the camera settles and at most once a second while it
+  // moves. A read taken during movement has `settled` false.
   let hasCameraSnapshot = false;
   const motionPending = ref(false);
   const readView = ({ settled = !moving && quiet === null } = {}) => {

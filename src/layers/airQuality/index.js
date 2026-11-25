@@ -18,6 +18,7 @@ import {
   readingsAreStale,
   readingsInView,
   selectAirQualityOverlayCohort,
+  STALE_AFTER_MS,
 } from './model.js';
 export * from './model.js';
 export { createEcccAirQualitySource } from './source.js';
@@ -311,7 +312,12 @@ export function createAirQualityLayer({ source, overlayHost } = {}) {
         value: band ? `${shown} · ${t(band.label)}` : shown,
         detail: `${nearest.name} · ${formatQuantity(Math.round(nearestKm), 'km')}`,
         ...(Number.isFinite(nearest.observedMs)
-          ? { at: nearest.observedMs }
+          ? {
+              at: nearest.observedMs,
+              ...(Date.now() - nearest.observedMs > STALE_AFTER_MS && {
+                stale: true,
+              }),
+            }
           : {}),
       };
     },

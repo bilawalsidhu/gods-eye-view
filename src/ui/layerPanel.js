@@ -266,8 +266,8 @@ export function presentLayerToggle(layer) {
 }
 
 /**
- * Layer rows over supplied state and actions. An explicit Finder takes
- * precedence over the standard row container's Finder or the private default.
+ * Layer rows over supplied state and actions. The standard row container's Finder
+ * takes precedence over an explicit Finder or the private default.
  */
 export class LayerPanel {
   constructor({
@@ -318,8 +318,8 @@ export class LayerPanel {
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
     this.finder =
-      this._providedFinder ??
       layerFinderFor(container) ??
+      this._providedFinder ??
       (this._localFinder ??= createLayerFinder());
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.

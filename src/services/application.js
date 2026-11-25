@@ -51,26 +51,10 @@ export function configureApplicationServices(services) {
 }
 
 /** Bound the configured source even when its adapter ignores abort. */
-export function getConfiguredLayerCounts({ signal, onTimeout } = {}) {
+export function getConfiguredLayerCounts({ signal } = {}) {
   return requestWithDeadline(
-    (boundedSignal) => {
-      if (onTimeout) {
-        boundedSignal.addEventListener(
-          'abort',
-          () => {
-            if (
-              !signal?.aborted &&
-              boundedSignal.reason?.name === 'TimeoutError'
-            )
-              onTimeout();
-          },
-          { once: true },
-        );
-      }
-      return applicationServices.layerCounts.getCounts({
-        signal: boundedSignal,
-      });
-    },
+    (boundedSignal) =>
+      applicationServices.layerCounts.getCounts({ signal: boundedSignal }),
     { signal, timeoutMs: LAYER_COUNTS_TIMEOUT_MS },
   );
 }

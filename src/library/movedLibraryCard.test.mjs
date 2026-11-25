@@ -7,11 +7,11 @@ import {
   layerRecords,
 } from '../data/entityContext.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
+import { boundLibraryFeatures } from './formats.js';
 import { createLibraryDatasetLayer } from './layers.js';
 
-// A live Data Library dataset (cacheSeconds 60) whose features have no
-// Feature.id, as boundLibraryFeatures emits them. One feature moves between
-// refreshes; its open Context card should keep following it.
+// The feed supplies a Feature.id that boundLibraryFeatures keeps separate
+// from the drawn identity. The open card follows it between refreshes.
 const entry = {
   id: 'test-alerts',
   kind: 'dataset',
@@ -26,6 +26,7 @@ const entry = {
 const START = 1_000_000;
 const site = (lon, operator) => ({
   type: 'Feature',
+  id: 'cyclone-alpha',
   properties: { name: 'Cyclone Alpha', operator },
   geometry: { type: 'Point', coordinates: [lon, 0] },
 });
@@ -38,10 +39,9 @@ test('an open Library card follows a feature that moved between refreshes', asyn
   const fake = bindFakeGroundRenderer(viewer, {
     eye: { lon: 0.6, lat: 0, height: 50_000 },
   });
-  const loads = [
-    { features: [site(0.6, 'Before')] },
-    { features: [site(0.7, 'After')] },
-  ];
+  const loads = [[site(0.6, 'Before')], [site(0.7, 'After')]].map((features) =>
+    boundLibraryFeatures(features, { maxFeatures: 100, display: entry.display }),
+  );
   let calls = 0;
   const layer = createLibraryDatasetLayer(entry, {
     services: {

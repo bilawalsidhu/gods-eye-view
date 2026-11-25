@@ -304,39 +304,6 @@ test('the configured deadline releases a noncooperating request and preserves it
   assert.equal(store.state.counts.satellites.count, 1300);
 });
 
-test('hiding after the count deadline fires keeps the completed attempt cooldown', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const { store, live, owner } = harness();
-  let asks = 0;
-  const counts = owner(getConfiguredLayerCounts);
-  t.after(
-    configureApplicationServices({
-      layerCounts: {
-        getCounts({ signal }) {
-          asks++;
-          signal.addEventListener(
-            'abort',
-            () => {
-              live.shown = false;
-              counts.update(hidden);
-            },
-            { once: true },
-          );
-          return new Promise(() => {});
-        },
-      },
-    }),
-  );
-  live.shown = true;
-  const pending = counts.update(empty);
-  t.mock.timers.tick(LAYER_COUNTS_TIMEOUT_MS);
-  await pending;
-  assert.deepEqual(store.state, { counts: {}, lastAttemptAt: 0 });
-  live.shown = true;
-  counts.update(empty);
-  assert.equal(asks, 1);
-});
-
 test('stopping during count reservation prevents the adapter from starting', () => {
   let snapshot = { counts: {}, lastAttemptAt: null };
   let asks = 0;

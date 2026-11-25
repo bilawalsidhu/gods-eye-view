@@ -1,11 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { formatNumber, onLocaleChange, t } from '../../../i18n/index.js';
+import { onLocaleChange, t } from '../../../i18n/index.js';
 import { weatherFacts, hazardsNear, regionalBrief, weatherLook } from '../../spotConditions.js';
 import { approximatePosition, distanceText } from '../../distanceText.js';
 import { contextAgeText } from '../../contextTime.js';
 import { distanceKm } from '../../../data/entityContext.js';
-import { CONTEXT_RADIUS_STEPS, contextRadiusKm, setContextRadiusKm } from '../../contextRadius.js';
+import { CONTEXT_RADIUS_STEPS, contextRadiusKm, contextRadiusText as radiusText, contextRadiusIndex as radiusIndex, pickContextRadius as pickRadius } from '../../contextRadius.js';
 import { contextNeedle, matchesContextSearch } from '../../contextSearch.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
@@ -42,9 +42,6 @@ let readingHazards = 0;
 let settle = null;
 
 const radiusKm = contextRadiusKm;
-const radiusText = computed(() => t('{n} km', { n: formatNumber(radiusKm.value) }));
-const radiusIndex = computed(() => Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(radiusKm.value)));
-const pickRadius = (index) => setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);
 
 // Satellite fire hits come only while the FIRMS layer is on (spotConditions.js).
 const firesOn = () =>

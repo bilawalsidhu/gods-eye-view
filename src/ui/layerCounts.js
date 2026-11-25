@@ -67,13 +67,7 @@ export function createLayerCounts({
     if (!ownsVisibleAttempt(attempt)) return;
     let body;
     try {
-      body = await getCounts({
-        signal: attempt.controller.signal,
-        onTimeout() {
-          // A later hide cannot roll back the cooldown of a timed-out attempt.
-          if (active === attempt) active = null;
-        },
-      });
+      body = await getCounts({ signal: attempt.controller.signal });
     } catch {
       // Keep the last successful counts on a failed read.
     }

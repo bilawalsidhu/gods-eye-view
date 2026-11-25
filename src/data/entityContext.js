@@ -717,7 +717,8 @@ export function recordFacts(
     ...Object.keys(record || {}).filter((field) => !FACT_ORDER.includes(field)),
   ];
   for (const field of fields) {
-    if (HIDDEN_FACTS.has(field) || seen.has(field)) continue;
+    if (field.startsWith('__gev') || HIDDEN_FACTS.has(field) || seen.has(field))
+      continue;
     seen.add(field);
     const formatted = formatFact(field, record[field], { nowMs, kind });
     if (!formatted) continue;
@@ -1407,7 +1408,7 @@ function insideRect(at, rect) {
  * @param {object} record
  * @param {object} [options]
  * @param {object|null} [options.rect] Limit the choice to parts inside this rectangle.
- * @param {number} [options.radiusKm] Bound the GeoJSON path search for a radius query.
+ * @param {number} [options.radiusKm] Bound the path search for a radius query.
  * @returns {{at: ?{lat: number, lon: number}, km: number}}
  */
 function nearestPart(here, record, { rect, radiusKm } = {}) {
@@ -1424,9 +1425,11 @@ function nearestPart(here, record, { rect, radiusKm } = {}) {
   }
   const paths = record?.[CONTEXT_LINES];
   if (!paths) return { at, km };
+  // Radius queries measure cables to their samples and other drawn lines to the line itself.
   const point = rect
     ? linePointInRect(paths, rect, here, isGeoJsonKey(record.key))
-    : isGeoJsonKey(record.key) && Number.isFinite(radiusKm)
+    : (isGeoJsonKey(record.key) || !Array.isArray(record.parts)) &&
+        Number.isFinite(radiusKm)
       ? linePointWithinRadius(paths, here, Math.min(radiusKm, km))
       : null;
   if (point) {

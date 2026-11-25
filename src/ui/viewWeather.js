@@ -1,5 +1,6 @@
 import { requestWithDeadline } from '../sources/requestDeadline.js';
 
+const pageVisible = () => globalThis.document?.visibilityState !== 'hidden';
 const SETTLE_MS = 400;
 const READ_TIMEOUT_MS = 15_000;
 const RETRY_MS = 60_000;
@@ -19,14 +20,7 @@ function freshnessOf(reading, brief) {
 }
 
 /** Own the Inspector observation and its scheduler for one Context bridge. */
-export function createViewWeather({
-  read,
-  publish,
-  readCurrentInput,
-  setTimeout: scheduleTimeout = (...args) => globalThis.setTimeout(...args),
-  clearTimeout: cancelTimeout = (...args) => globalThis.clearTimeout(...args),
-  isPageVisible = () => globalThis.document?.visibilityState !== 'hidden',
-}) {
+export function createViewWeather({ read, publish, readCurrentInput }) {
   let point = '';
   let mountId = null;
   let deadline = null;
@@ -56,14 +50,14 @@ export function createViewWeather({
     if (!active) return;
     const request = active;
     active = null;
-    if (request.timer !== null) cancelTimeout(request.timer);
+    if (request.timer !== null) clearTimeout(request.timer);
     request.controller.abort();
   }
 
   function matches(input, target) {
     return (
       input.shown &&
-      isPageVisible() &&
+      pageVisible() &&
       !input.moving &&
       input.mountId === target.mountId &&
       weatherPoint(input.center) === target.point
@@ -162,7 +156,7 @@ export function createViewWeather({
       timer: null,
     };
     active = request;
-    request.timer = scheduleTimeout(() => void settle(request), SETTLE_MS);
+    request.timer = setTimeout(() => void settle(request), SETTLE_MS);
   }
 
   function update(input) {
@@ -190,7 +184,7 @@ export function createViewWeather({
   function pulse() {
     if (stopped) return;
     const input = readCurrentInput();
-    if (!input.shown || !isPageVisible()) return;
+    if (!input.shown || !pageVisible()) return;
     // Only a visible pulse makes a completed reading eligible for renewal.
     // Once due, work stays eligible if a move or hide cancels the request.
     if (deadline !== null && Date.now() >= deadline) deadline = null;
