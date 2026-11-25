@@ -122,6 +122,7 @@
   "server/providers/aircraft/tracks.js",
   "server/providers/vessels/ais-store.js",
   "server/providers/vessels/ais-live.js",
+  "server/providers/vessels/ais-store.test.mjs",
   "server/providers/live.js",
   "src/tooling/liveProviders.test.mjs",
   "src/data/adsbLolFallback.js",
