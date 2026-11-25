@@ -146,6 +146,7 @@ function initialState(panel) {
       sendDisabled: true,
       // The input's text; bumped revision means the owner wrote it.
       draft: '',
+      draftReferenceName: '',
       draftRevision: 0,
       rows: 2,
       backVisible: false,

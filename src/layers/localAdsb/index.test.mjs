@@ -294,6 +294,11 @@ test('local aircraft use their class silhouette at one size in magenta', async (
       .details[1],
     'Helicopter · A7',
   );
+  assert.equal(
+    layer.getAnalystRecords().find((row) => row.icao24 === 'a0b702')
+      ?.aircraftClass,
+    'helicopter',
+  );
 
   // On the ground the silhouette shrinks like a grounded public flight.
   receiver.set({

@@ -1675,12 +1675,49 @@ test('a VIIRS dateline day with data on one side drapes only that side through t
     [nonCrossingBoxes(FIJI_BOX)[1]],
   );
   assert.equal(loader.get(day.key).status, 'present');
+  assert.match(layer.getValueAt(-17.5, -179)?.detail ?? '', /Daily overview/);
+  assert.equal(layer.getValueAt(-17.5, 179.5), null);
+  assert.deepEqual(layer.getValueAt(-17.5, 180), layer.getValueAt(-17.5, -179));
+  assert.deepEqual(
+    layer.getValueAt(-17.5, -180),
+    layer.getValueAt(-17.5, -179),
+  );
   const snapshot = layer.getSnapshot();
   assert.equal(snapshot.candidates[0].thumbnail.status, 'present');
   assert.equal(snapshot.candidates[0].drapable, true);
   assert.equal(snapshot.auto?.key, day.key);
   layer.destroy();
   assert.equal(globe.layers.length, 0);
+});
+
+test('a crossing HLS footprint cannot report imagery on a half confirmed empty', async () => {
+  const day = candidate('S30', '2026-11-10');
+  day.granules[0].footprint = [
+    [179, -18],
+    [-177, -18],
+    [-177, -17],
+    [179, -17],
+  ];
+  const { layer, loader } = realLayer({
+    candidates: [day],
+    fetchImpl: async (url) => snapshotAnswer(sideOf(url) === 'west'),
+  });
+  layer.enable();
+  layer.setBox(FIJI_BOX);
+  assert.equal(
+    await until(() => loader.get(day.key).status === 'present', {
+      ticks: 2000,
+    }),
+    true,
+  );
+  assert.equal(
+    layer.getValueAt(-17.5, 179.5)?.at,
+    Date.parse(day.timeRange.end),
+  );
+  assert.equal(layer.getValueAt(-17.5, -179), null);
+  assert.equal(layer.getValueAt(-17.5, 180)?.at, Date.parse(day.timeRange.end));
+  assert.deepEqual(layer.getValueAt(-17.5, -180), layer.getValueAt(-17.5, 180));
+  layer.destroy();
 });
 
 test('a dateline day both halves confirm empty never drapes and leaves the strip', async () => {

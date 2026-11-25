@@ -22,6 +22,7 @@
  * the model; the card shows them through the shown* helpers.
  */
 
+import { isAircraftLayer } from '../data/aircraftLayerIds.js';
 import { voiceLayer } from './layerManifest.js';
 import {
   formatDate,
@@ -53,13 +54,11 @@ const LAYER_NOUNS = Object.freeze({
   'osm-places': 'places',
 });
 
-const AIRCRAFT_LAYERS = new Set(['flights', 'military', 'local-adsb']);
 const MAX_ANALYST_HEADLINE = 64;
 
 export function analystNounFor(layerKeys) {
   const keys = [...new Set((layerKeys || []).filter(Boolean))];
-  if (keys.length > 1 && keys.every((key) => AIRCRAFT_LAYERS.has(key)))
-    return 'aircraft';
+  if (keys.length > 1 && keys.every(isAircraftLayer)) return 'aircraft';
   if (keys.length !== 1) return 'results';
   const key = keys[0];
   return LAYER_NOUNS[key] || voiceLayer(key)?.aliases?.[0] || 'results';
@@ -862,10 +861,11 @@ function getEntityContext(result) {
 function getCurrentViewState(result) {
   if (!result?.ok) return null;
   const heightM = Number(result.camera?.heightM);
+  const metres = Math.round(heightM);
   const height = Number.isFinite(heightM)
-    ? heightM >= 1000
+    ? metres >= 1000
       ? `${Math.round(heightM / 1000).toLocaleString('en-US')} km up`
-      : `${Math.round(heightM)} m up`
+      : `${metres} m up`
     : null;
   const layers = Array.isArray(result.layers) ? result.layers : [];
   const enabled = layers.filter((layer) => layer.enabled !== false);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import { normalizeAdsbLolPointResponse } from '../../../src/data/adsbLolFallback.js';
+import { positionedOpenSkyAircraftId } from '../../../src/sources/adsbFields.js';
 import { encodedBody, gzipBody } from '../common/compress.js';
 import {
   coalesceProxyRequest,
@@ -473,6 +474,42 @@ function openSkySourceIsStale(sourceEpochMs, now = Date.now()) {
 }
 
 /**
+ * How many unique positioned aircraft the Flights layer can read from a
+ * cached OpenSky snapshot. An unusable snapshot counts none.
+ * @param {string} body
+ * @returns {number}
+ */
+export function openSkyStateCount(body) {
+  try {
+    const { states } = JSON.parse(body) ?? {};
+    if (!Array.isArray(states)) return 0;
+    return new Set(states.map(positionedOpenSkyAircraftId).filter(Boolean))
+      .size;
+  } catch {
+    return 0;
+  }
+}
+
+/** The cached snapshot's aircraft count, remembered per snapshot. */
+let _openskyCounted = null;
+/**
+ * Context's nothing-on count: aircraft in the last snapshot the proxy cached,
+ * and when OpenSky observed them. Reading the count never asks OpenSky.
+ * @returns {?{count: number, at: ?number}}
+ */
+function cachedOpenSkyCount() {
+  if (!_openskyCacheBody || !_openskyCacheTime) return null;
+  if (_openskyCounted?.cacheTime !== _openskyCacheTime)
+    _openskyCounted = {
+      cacheTime: _openskyCacheTime,
+      count: openSkyStateCount(_openskyCacheBody),
+    };
+  return _openskyCounted.count
+    ? { count: _openskyCounted.count, at: _openskyCacheSourceEpochMs }
+    : null;
+}
+
+/**
  * Vite plugin: OpenSky Network proxy with multi-mode auth and response caching.
  *
  * Supports four auth modes controlled by OPENSKY_AUTH_MODE env:
@@ -841,6 +878,7 @@ export function openSkyProxy() {
   };
   return {
     name: 'opensky-proxy',
+    api: { readLayerCount: cachedOpenSkyCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

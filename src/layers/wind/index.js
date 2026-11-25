@@ -4,8 +4,13 @@ import {
   formatWindReading,
   windReadingResult,
   windUnitChips,
+  windValueText,
 } from './presentation.js';
-import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import {
+  inspectWindAtCenter,
+  sampleWindReading,
+  WIND_UNITS,
+} from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
 import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
@@ -100,6 +105,11 @@ export function createWindLayer({
     sampledPosition = reading.position || position || null;
     inspectionMarker?.show(sampledPosition);
   };
+  const forecastDetail = (valid) =>
+    t('{model} forecast · {time}', {
+      model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
+      time: valid || t('Unavailable'),
+    });
   const requestedScalar = () =>
     ['temperature', 'pressure'].includes(overlay) ? overlay : 'none';
   let generation = 0;
@@ -257,6 +267,23 @@ export function createWindLayer({
     getParams() {
       return { model, overlay, paused, units };
     },
+    /**
+     * The forecast surface wind at a point, from the field already loaded:
+     * `{value: "12,0 km/h from NW", detail, at}` in the active language,
+     * or null while the layer is off or has no field.
+     */
+    getValueAt(lat, lon) {
+      if (!enabled || !Number.isFinite(lat) || !Number.isFinite(lon))
+        return null;
+      const sample = sampleWindReading(manifest, lon, lat);
+      if (!sample) return null;
+      const valid = Date.parse(manifest.cycle?.validIso);
+      return {
+        value: windValueText(sample.speed, sample.from, units),
+        detail: forecastDetail(formatWindValidTime(manifest.cycle?.validIso)),
+        ...(Number.isFinite(valid) ? { at: valid } : {}),
+      };
+    },
     getRowControls() {
       // A source that follows the timeline shows the wind at its time.
       const historyStatus =
@@ -315,10 +342,7 @@ export function createWindLayer({
           coverage: t('Global · 1° grid'),
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: t('{model} forecast · {time}', {
-            model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
-            time: valid || t('Unavailable'),
-          }),
+          detail: forecastDetail(valid),
           status: loading
             ? t('Loading forecast')
             : preparing

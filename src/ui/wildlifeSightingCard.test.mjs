@@ -711,7 +711,7 @@ test('WHALES cards retain compact whale guidance outside the observation action'
   const guidance = f
     .cardElement()
     .querySelector('a[href="https://www.bewhalewise.org"]');
-  assert.equal(guidance.textContent, 'Be Whale Wise');
+  assert.equal(guidance.textContent, 'Be Whale Wise ↗');
   assert.equal(
     guidance.parentElement.closest('a'),
     null,

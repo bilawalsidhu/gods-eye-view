@@ -496,6 +496,7 @@ export function createLibrarySource({
       // The server already bounded the set; bound again so a page never
       // trusts more than its manifest allows.
       const bounded = boundLibraryFeatures(body?.features || [], {
+        fromProxy: true,
         maxFeatures: entry.source.maxFeatures,
         display: entry.display,
       });

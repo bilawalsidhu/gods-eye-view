@@ -73,7 +73,7 @@ export function normalizeFeatures(json, kind) {
     const id = feature?.properties?.id || feature?.id || `${kind}-${index}`;
     return {
       ...feature,
-      id: String(id),
+      id: String(id) || featureLabel(feature) || `${kind}-${index}`,
     };
   });
 }

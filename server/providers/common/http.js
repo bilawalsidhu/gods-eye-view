@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+import { promises as fsp } from 'node:fs';
+
 export {
   readResponseTextCapped,
   readResponseJsonCapped,
@@ -50,4 +53,16 @@ export async function readCappedResponseText(upstream, maxBytes) {
   }
   text += decoder.decode();
   return { tooLarge: false, text };
+}
+
+/** Replace a JSON file by renaming a temporary sibling. Remove it on failure. */
+export async function writeJsonAtomic(file, value) {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try {
+    await fsp.writeFile(temporary, JSON.stringify(value), 'utf8');
+    await fsp.rename(temporary, file);
+  } catch (error) {
+    await fsp.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
 }
