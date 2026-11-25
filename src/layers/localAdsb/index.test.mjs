@@ -1368,6 +1368,40 @@ test('a click on a moving local aircraft meets it where it will be when the came
   assert.ok(northM > 80 && northM < 110, `led by ${northM} m`);
 });
 
+test('a pick selects the aircraft its card names, by marker id, ICAO hex or callsign', async (t) => {
+  _resetSelectionForTest();
+  t.after(() => _resetSelectionForTest());
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness({
+    height: 20_000,
+    position: { x: 6_378_137 + 20_000, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
+  const { layer, calls } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+  });
+  t.after(() => layer.destroy());
+  receiver.set({
+    aircraft: [
+      record(),
+      record({ icao: 'def456', callsign: 'LOCAL2', lat: 0.01 }),
+    ],
+  });
+  await layer.update();
+  assert.equal(layer.pickById('LOCAL2', { center: false }), true);
+  assert.deepEqual(calls.selected, ['local-adsb:def456']);
+  assert.equal(harness.viewer.camera.flights.length, 0);
+  assert.equal(currentSelection()?.id, 'local-adsb:def456');
+  assert.equal(layer.isSelected('LOCAL2'), true);
+  assert.equal(layer.isSelected('def456'), true);
+  assert.equal(layer.isSelected('LOCAL1'), false, 'never another aircraft');
+  assert.equal(layer.pickById('abc123'), true);
+  assert.equal(harness.viewer.camera.flights.length, 1, 'centred as a click');
+  assert.equal(layer.isSelected('local-adsb:abc123'), true);
+  assert.equal(layer.pickById('NOBODY'), false);
+});
+
 // The card or label painted on top takes the click: a local aircraft under
 // another layer's card is neither selected nor released.
 test("another layer's card over a local aircraft keeps the click", async (t) => {

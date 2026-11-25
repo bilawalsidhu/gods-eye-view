@@ -23,6 +23,7 @@ import { fakeInput } from '../input/testDoubles.mjs';
 import {
   _resetSelectionForTest,
   claimSelection,
+  currentSelection,
   releaseSelection,
 } from '../data/clickSelect.js';
 import {
@@ -738,22 +739,38 @@ test('closing the card deselects its item in its layer, followed or only selecte
 });
 
 for (const layerId of ['transit', 'rail', 'local-adsb']) {
-  test(`closing a ${layerId} card deselects its item, which its layer names its own way`, (t) => {
+  test(`closing a ${layerId} card deselects its item, never another of the layer's`, (t) => {
     _resetSelectionForTest();
     const viewer = { scene: {} };
     const input = fakeInput(viewer);
     const unbind = bindRenderer(viewer, {
-      camera: { pose: () => ({ heading: 0 }), on: () => () => {} },
+      camera: {
+        pose: () => ({ heading: 0 }),
+        on: () => () => {},
+        flyToBounds() {},
+      },
     });
-    const item = { id: 'LABEL 7', lat: 30, lon: -97 };
+    // Two items; the layer's selection names them by its own keys.
+    const items = [
+      { id: 'LABEL 7', lat: 30, lon: -97 },
+      { id: 'LABEL 9', lat: 30.001, lon: -97 },
+    ];
+    const keys = { 'LABEL 7': 'feed:vehicle-7', 'LABEL 9': 'feed:vehicle-9' };
     const cleared = [];
+    const picked = [];
     const layer = {
       id: layerId,
       enabled: true,
       module: {
-        getAnalystRecords: () => [item],
+        getAnalystRecords: () => items,
+        pickById: (id, options) => {
+          picked.push([id, options.center]);
+          claimSelection(layerId, keys[id]);
+          return true;
+        },
+        isSelected: (id) => currentSelection()?.id === keys[id],
         clearSelection: () => {
-          cleared.push(layerId);
+          cleared.push(currentSelection()?.id);
           releaseSelection(layerId);
         },
       },
@@ -776,14 +793,20 @@ for (const layerId of ['transit', 'rail', 'local-adsb']) {
       unbind();
       _resetSelectionForTest();
     });
-    const target = store.nearbyLayers(30, -97, { radiusKm: 25 })[0]?.items[0]
-      ?.identity;
-    assert.ok(target, 'the item has a card');
-    // The layer's selection names it by its own key.
+    const cardOf = (id) =>
+      store
+        .nearbyLayers(30, -97, { radiusKm: 25 })[0]
+        ?.items.find((item) => item.identity.id === id)?.identity;
+    // A clicked on the map; B's card opened without selecting it.
     claimSelection(layerId, 'feed:vehicle-7');
-    assert.ok(store.select(target));
+    assert.ok(store.select(cardOf('LABEL 9')));
     store.clear();
-    assert.deepEqual(cleared, [layerId]);
+    assert.deepEqual(cleared, [], 'A stays selected');
+    // B picked from a row: its layer selects it; its card's close lets it go.
+    assert.ok(store.select(cardOf('LABEL 9'), { fly: true }));
+    assert.deepEqual(picked, [['LABEL 9', false]]);
+    store.clear();
+    assert.deepEqual(cleared, ['feed:vehicle-9']);
   });
 }
 

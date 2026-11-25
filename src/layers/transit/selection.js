@@ -196,10 +196,50 @@ export function createSelection({ state, services, parts }) {
     document.removeEventListener('keydown', onKeyDown);
   }
 
+  /**
+   * The key of the vehicle a card names: its key, or its label or feed id
+   * when exactly one vehicle has it (a route's buses can share a label).
+   * @param {string|number} id
+   * @returns {string|null}
+   */
+  function vehicleKeyFor(id) {
+    if (id === null || id === undefined) return null;
+    const name = String(id);
+    if (state._vehicles.has(name)) return name;
+    let found = null;
+    for (const entry of state._vehicles.values()) {
+      const record = entry.record || {};
+      if (record.label !== name && String(record.id ?? '') !== name) continue;
+      if (found !== null) return null;
+      found = entry.key;
+    }
+    return found;
+  }
+
+  /**
+   * Select the vehicle a card names, as a click on it does; `center: false`
+   * leaves the camera to the caller (a pick from a list frames it).
+   * @returns {boolean} Whether it was selected.
+   */
+  function pickVehicle(id, { center = true } = {}) {
+    const key = vehicleKeyFor(id);
+    const entry = key ? state._vehicles.get(key) : null;
+    if (!entry?.marker) return false;
+    selectVehicle(key, { byUser: true });
+    if (center && state._viewer)
+      centerOnClick(state._viewer, () => anchorFor(entry)(), {
+        clockId: 'transit',
+      });
+    governorRequestRender('transit-selection');
+    return true;
+  }
+
   return {
     refreshSelectedCard,
     clearSelection,
     selectVehicle,
+    vehicleKeyFor,
+    pickVehicle,
     onKeyDown,
     installClickHandler,
     removeClickHandler,

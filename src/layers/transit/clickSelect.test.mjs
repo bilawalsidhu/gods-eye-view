@@ -65,6 +65,8 @@ function transitLayer(t) {
   return {
     state,
     bus,
+    selection,
+    viewer,
     camera,
     input,
     click(key) {
@@ -109,4 +111,28 @@ test('another layer’s selection lets the vehicle go, unless a view rides it', 
   app.state._cockpitSubjectKey = app.bus.key;
   claimSelection('flights', 'abc123');
   assert.equal(app.state._selectedKey, app.bus.key, 'held by its view');
+});
+
+test('a pick selects the vehicle its card names; a label two vehicles share names neither', (t) => {
+  const app = transitLayer(t);
+  app.state._viewer = app.viewer;
+  app.bus.record = { label: '7', id: 'trip-1' };
+  const twin = {
+    key: 'feed:bus8',
+    feedId: 'feed',
+    record: { label: '8', id: 'trip-2' },
+    marker: { show: true, position: fromDegrees(-97.7, 30.29, 150) },
+  };
+  app.state._vehicles.set(twin.key, twin);
+  assert.equal(app.selection.pickVehicle('7', { center: false }), true);
+  assert.equal(app.state._selectedKey, app.bus.key);
+  assert.equal(app.camera.flights.length, 0, 'the caller frames it');
+  assert.equal(currentSelection()?.id, app.bus.key);
+  assert.equal(app.selection.vehicleKeyFor('trip-2'), twin.key);
+  assert.equal(app.selection.pickVehicle(twin.key), true);
+  assert.equal(app.camera.flights.length, 1, 'a pick that centres, as a click');
+  // A second "7": the label no longer names one vehicle.
+  twin.record.label = '7';
+  assert.equal(app.selection.vehicleKeyFor('7'), null);
+  assert.equal(app.selection.pickVehicle('7'), false);
 });

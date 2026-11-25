@@ -727,6 +727,40 @@ export function createLocalAdsbLayer({
     return trail ? 'trail' : null;
   }
 
+  /**
+   * Centre a clicked aircraft once, meeting it where it will be when the
+   * camera arrives; the camera does not follow it (src/data/clickSelect.js).
+   * Local reception is always live.
+   */
+  function centerMarker(marker) {
+    if (!marker || !viewer) return false;
+    return centerOnClick(viewer, (aheadMs) => {
+      const display = marker.motion?.displayAt(now() + aheadMs, {
+        slew: false,
+      });
+      return display ? fixPosition(marker, display) : marker.position;
+    });
+  }
+
+  /**
+   * The marker a card names: its marker id, or the ICAO hex or callsign of
+   * exactly one heard aircraft.
+   */
+  function markerIdFor(id) {
+    if (id === null || id === undefined) return null;
+    const name = String(id);
+    if (markers.has(name)) return name;
+    if (markers.has(`${ENTITY_PREFIX}${name.toLowerCase()}`))
+      return `${ENTITY_PREFIX}${name.toLowerCase()}`;
+    let found = null;
+    for (const [markerId, marker] of markers) {
+      if (marker.record?.callsign !== name) continue;
+      if (found !== null) return null;
+      found = markerId;
+    }
+    return found;
+  }
+
   function installInteraction() {
     if (clickSubscription || !viewer) return;
     // One thing is selected at a time: another layer's selection lets go of
@@ -750,16 +784,7 @@ export function createLocalAdsbLayer({
       // displaced, and a click on a marker must never read as "deselect".
       if (target && markers.has(target)) {
         selectMarker(target);
-        // A click centres it once, meeting it where it will be when the
-        // camera arrives; the camera does not follow it
-        // (src/data/clickSelect.js). Local reception is always live.
-        const marker = markers.get(target);
-        centerOnClick(viewer, (aheadMs) => {
-          const display = marker?.motion?.displayAt(now() + aheadMs, {
-            slew: false,
-          });
-          return display ? fixPosition(marker, display) : marker?.position;
-        });
+        centerMarker(markers.get(target));
         return;
       }
       // A click on a trail line is not empty map.
@@ -966,6 +991,26 @@ export function createLocalAdsbLayer({
      */
     selectAircraft(icao) {
       return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
+    },
+
+    /**
+     * Select an aircraft by the id its card has (its marker id, ICAO hex
+     * or callsign), as a click on it does; `center: false` leaves the
+     * camera to the caller (a pick from a list frames it).
+     * @param {string} id
+     * @param {{center?: boolean}} [options]
+     */
+    pickById(id, { center = true } = {}) {
+      const markerId = markerIdFor(id);
+      if (!enabled || !markerId || !selectMarker(markerId)) return false;
+      if (center) centerMarker(markers.get(markerId));
+      return true;
+    },
+
+    /** Whether the aircraft a card names is the one selected. */
+    isSelected(id) {
+      const markerId = markerIdFor(id);
+      return markerId !== null && markerId === selectedId;
     },
 
     /** Deselect the selected aircraft, as a click on the map does. */

@@ -201,6 +201,27 @@ export function createRailLayer({
     parts.controls.methods,
     parts.cockpit.methods,
     {
+      /**
+       * Select a train by the id its card has (its key), as a click on it
+       * does; `center: false` leaves the camera to the caller.
+       * @param {string} id
+       * @param {{center?: boolean}} [options]
+       */
+      pickById(id, { center = true } = {}) {
+        const key = String(id ?? '');
+        if (!state._trains.has(key)) return false;
+        if (center) parts.selection.selectAndFocusTrain(key);
+        else {
+          state._selectedAtMs = Date.now();
+          parts.selection.selectTrain(key);
+        }
+        services.render.governorRequestRender?.('rail-selection');
+        return state._selectedKey === key;
+      },
+      /** Whether the train a card names is the one selected. */
+      isSelected(id) {
+        return state._selectedKey !== null && state._selectedKey === String(id);
+      },
       /** Deselect the selected train, as a click on the map does. */
       clearSelection() {
         parts.selection.clearSelection();

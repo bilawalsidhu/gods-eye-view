@@ -43,12 +43,6 @@ const DEFAULT_RANGE = 8_000;
  * with a key naming the item (src/data/followed.js). A vessel is flown to.
  */
 const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
-/**
- * Layers whose card names its item otherwise than the layer's selection does
- * (a vehicle's label, a callsign): one selection each, so their card is the
- * selected item's while that layer holds the selection.
- */
-const SELECTED_BY_LAYER = new Set(['transit', 'rail', 'local-adsb']);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -165,14 +159,22 @@ export function installEntityContext({
   }
 
   /** Whether `card`'s item is the one selection (src/data/clickSelect.js). */
-  const selectsCard = (card, selection = currentSelection()) =>
-    Boolean(
-      card &&
-      selection &&
-      selection.layerId === card.layerId &&
-      (selection.id === String(card.identity?.id) ||
-        SELECTED_BY_LAYER.has(card.layerId)),
-    );
+  // A layer whose cards name an item otherwise than its selection does (a
+  // vehicle's label, a callsign) answers for it (`isSelected`); never a
+  // different item of the same layer.
+  const selectsCard = (card, selection = currentSelection()) => {
+    if (!card || !selection || selection.layerId !== card.layerId) return false;
+    const id = card.identity?.id;
+    const module = getDataManager()?.layers?.get?.(card.layerId)?.module;
+    if (typeof module?.isSelected === 'function') {
+      try {
+        return module.isSelected(id) === true;
+      } catch {
+        return false;
+      }
+    }
+    return selection.id === String(id);
+  };
 
   // A pick from a Context row or a search selects the item in its layer, as
   // a click does (track, trail or orbit shown, the one selection), without

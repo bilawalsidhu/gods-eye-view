@@ -339,3 +339,20 @@ test('the selection moves to the copy another feed now draws, with no camera mov
   assert.equal(app.camera.followed, null);
   assert.equal(app.focusRequests.length, 1, 'no new flight');
 });
+
+test('a pick selects the train its card names; its card answers for that train only', async (t) => {
+  const app = harness(t);
+  const key = await bringToMotion(app, 'mbta-rail', 'T1', BOSTON);
+  assert.equal(app.layer.pickById(key, { center: false }), true);
+  assert.equal(app.state()._selectedKey, key);
+  assert.equal(app.focusRequests.length, 0, 'the caller frames it');
+  assert.equal(currentSelection()?.id, key);
+  assert.equal(app.layer.isSelected(key), true);
+  assert.equal(app.layer.isSelected('mbta-rail:T2'), false);
+  assert.equal(app.layer.pickById('nowhere:T9'), false);
+  app.layer.clearSelection();
+  assert.equal(app.state()._selectedKey, null);
+  assert.equal(currentSelection(), null);
+  assert.equal(app.layer.pickById(key), true);
+  assert.equal(app.focusRequests.length, 1, 'centred, as a click');
+});
