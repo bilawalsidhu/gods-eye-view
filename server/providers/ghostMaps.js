@@ -1,5 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
+import { dataDir } from './common/data-dir.js';
 import {
   GHOSTMAPS_MAX_FILE_BYTES,
   GHOSTMAPS_REPO,
@@ -50,7 +51,7 @@ export function createGhostMapsWatcher({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
   pollMs = ghostMapsPollMs(),
-  cacheDir = path.join(process.cwd(), '.gev-cache', 'ghostmaps'),
+  cacheDir = path.join(dataDir(), '.gev-cache', 'ghostmaps'),
   token = () => String(process.env.GITHUB_TOKEN || '').trim(),
   log = (...args) => console.log(...args),
   warn = (...args) => console.warn(...args),

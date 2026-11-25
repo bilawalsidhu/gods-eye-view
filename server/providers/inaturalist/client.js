@@ -7,6 +7,7 @@ import { clampInt } from '../common/query.js';
 import { providerUserAgent } from '../common/userAgent.js';
 import { projectInatGrid, validInatGridTile } from './grid.js';
 import { createInatQueue } from './queue.js';
+import { dataDir } from '../common/data-dir.js';
 
 const DAILY_BUDGET = 8000;
 const DAY_MS = 24 * 60 * 60_000;
@@ -73,7 +74,7 @@ function observationFilters(params) {
 export function createInatClient({
   fetchImpl = (...args) => globalThis.fetch(...args),
   now = () => Date.now(),
-  cacheDir = path.join(process.cwd(), '.gev-cache', 'inaturalist'),
+  cacheDir = path.join(dataDir(), '.gev-cache', 'inaturalist'),
   warn = (...args) => console.warn(...args),
   queueOptions,
 } = {}) {
