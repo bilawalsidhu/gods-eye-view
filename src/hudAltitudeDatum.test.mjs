@@ -270,6 +270,36 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
   }
 });
 
+function readoutsWithSun(sunEl) {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera?.port, publish: env.publish });
+    hud._estimateSunElevation = () => sunEl;
+    hud._updateCameraData();
+    return {
+      alt: env.elements.get('hud-alt').textContent,
+      summary: env.elements.get('hud-summary').textContent,
+    };
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+}
+
+test('the summary reads a sun 0.3° below the horizon as SUN 0°, not -0°', () => {
+  // Math.round(-0.3) is -0, which Intl.NumberFormat prints as "-0".
+  assert.match(readoutsWithSun(-0.3).summary, /\| SUN 0° \|/);
+  assert.match(readoutsWithSun(-0.6).summary, /\| SUN -1° \|/);
+});
+
+test('the corner readout reads a sun 0.04° below the horizon as 0.0, not -0.0', () => {
+  // (-0.04).toFixed(1) is "-0.0".
+  assert.match(readoutsWithSun(-0.04).alt, /SUN: 0\.0° EL$/);
+  // Values that are not -0 keep toFixed's rounding.
+  assert.match(readoutsWithSun(-0.25).alt, /SUN: -0\.3° EL$/);
+});
+
 test('a summary asked for one view is dropped once the camera moves', async () => {
   const env = installHudEnvironment();
   const previousWindow = globalThis.window;

@@ -620,7 +620,7 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${(Number(sunEl.toFixed(1)) + 0).toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date(hudTime());
@@ -893,7 +893,7 @@ export class IntelHUD {
         region: REGION_LABELS[region] ? t(REGION_LABELS[region]) : region,
         alt: altTag,
         window: winTag,
-        sun: formatNumber(Math.round(m.sunEl)),
+        sun: formatNumber(Math.round(m.sunEl) + 0), // + 0: never "-0"
         ona: formatNumber(Math.round(m.ona)),
         zone: localTag,
       },

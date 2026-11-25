@@ -81,7 +81,7 @@ if (typeof globalThis.window === 'undefined') {
  *  a query port whose height samples are `sampleHeight`'s. */
 function viewerAtHeight(
   height,
-  { tilesLoaded = true, sampleHeight = () => undefined, eye } = {},
+  { tilesLoaded = true, sampleHeight = () => undefined, eye, capabilities } = {},
 ) {
   const tileset = { show: true, tilesLoaded };
   const draw = fakeDrawPort();
@@ -102,6 +102,7 @@ function viewerAtHeight(
     entities: { remove() {} },
   };
   return bindFakeCesiumCamera(viewer, {
+    capabilities,
     draw,
     globe: { isSettled: (kind) => kind !== 'tiles' || tileset.tilesLoaded },
     query: { sampleHeightNow: () => sampleHeight() },
@@ -1362,6 +1363,21 @@ for (const fixture of LAYERS) {
       const grounded = fixture.trackedIconLook(ICAO);
       assert.notEqual(grounded.fleet.scale, fleet.scale);
       assert.equal(grounded.tracked.sprite.scale, grounded.fleet.scale);
+    } finally {
+      fixture.layer.stopTracking();
+    }
+  });
+
+  test(`${fixture.name}: with view sheets, the tracked icon draws its fleet view`, () => {
+    clearTr3bRegistry();
+    try {
+      const viewer = viewerAtHeight(30_000, { capabilities: new Set(['viewSheets']) });
+      fixture.seed({ viewer });
+      const { tracked, fleet } = fixture.trackedIconLook(ICAO);
+      assert.equal(tracked.image, fleet.image);
+      assert.equal(typeof tracked.image.views, 'string');
+      assert.equal(tracked.imageLod, undefined);
+      assert.equal(fleet.imageLod, undefined);
     } finally {
       fixture.layer.stopTracking();
     }
