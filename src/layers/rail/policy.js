@@ -16,6 +16,7 @@ import {
 import { displayMotion } from '../transit/movement.js';
 import { FIX_FLAGS, readFix } from '../../data/contactPlayback.js';
 import { roundHeadingDegrees } from '../../data/headingDegrees.js';
+import { DIRECTION_MIN_M } from './pathBinding.js';
 import {
   stopClock,
   stopLateMinutes,
@@ -294,9 +295,6 @@ export function playbackModeFor(railMode) {
       : 'rail';
 }
 
-/** Two reports closer than this are one place: a parked train's jitter (m). */
-export const FOLLOW_MIN_MOVE_M = 15;
-
 const lastFix = {};
 const priorFix = {};
 
@@ -333,7 +331,7 @@ export function railTrainFollowable(entry) {
     sample.nextMotionT > sample.displayT
   )
     return true;
-  return lastReportsApartM(entry.track) >= FOLLOW_MIN_MOVE_M;
+  return lastReportsApartM(entry.track) >= DIRECTION_MIN_M;
 }
 
 /**

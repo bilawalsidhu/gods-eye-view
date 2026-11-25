@@ -1,5 +1,5 @@
 /** Instrument values, routes and vision controls for the Cockpit controller. */
-import { formatNumber, t } from '../i18n/index.js';
+import { formatNumber, t, tn } from '../i18n/index.js';
 import {
   COCKPIT_VISION_MODES,
   normalizeCockpitVisionMode,
@@ -256,20 +256,21 @@ function updateSubjectHud(info, nowMs, forceContext) {
     this.updateLocalPosition(info);
     this.maybeRefreshRegionalBrief(info);
     this.showContextCard(false);
-    const keys = new Set();
-    for (const signal of hud.signals) {
-      const key = `subject:${signal.id}`;
-      keys.add(key);
-      this.pushCockpitSignal(
-        key,
-        SUBJECT_SIGNAL_TONES[signal.tone] ?? 'info',
-        signal.title,
-        signal.detail || signal.title,
-      );
-    }
+    const keys = new Set(hud.signals.map(({ id }) => `subject:${id}`));
+    // Rows the view no longer lists leave first, so new ones take their
+    // places rather than push a listed one (or TRACK ACQUIRED) off.
     for (const key of this.subjectSignalKeys ?? [])
       if (!keys.has(key)) this.dropCockpitSignal(key);
     this.subjectSignalKeys = keys;
+    for (const signal of hud.signals)
+      this.pushCockpitSignal(
+        `subject:${signal.id}`,
+        SUBJECT_SIGNAL_TONES[signal.tone] ?? 'info',
+        signal.title,
+        signal.detail || signal.title,
+        null,
+        { inPlace: true },
+      );
   }
 }
 
@@ -525,7 +526,10 @@ export function updateRadar(info) {
   );
   this.publishRadar({
     ...picture,
-    rangeLabel: t('{range} NM', { range: formatNumber(rangeNm) }),
+    // A plural, as the ring spacing is: ru «3 МОР. МИЛИ», «12 МОР. МИЛЬ».
+    rangeLabel: tn(rangeNm, '{range} NM', '{range} NM', {
+      range: formatNumber(rangeNm),
+    }),
   });
 }
 

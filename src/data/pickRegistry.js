@@ -145,3 +145,91 @@ export function pickContact(query, position, options = {}) {
   }
   return picked;
 }
+
+/**
+ * The world overlay's hit test: the topmost interactive card or label painted
+ * at CSS-pixel coordinates, or null. Set by the overlay host while it runs.
+ * @type {((x: number, y: number) => {sourceId: string, entryId: string}|null)|null}
+ */
+let _overlayHitTest = null;
+/** @type {WeakMap<object, {sourceId: string, entryId: string}|null>} */
+const clickCards = new WeakMap();
+const _clickClaims = new Map();
+
+/**
+ * Register a target drawn outside the world overlay's entries, such as a CCTV
+ * count. A claim runs once per click where no card or label is painted above
+ * it and must not call `clickCard`.
+ * @param {string} layerId
+ * @param {(click: object) => ({sourceId: string, entryId: string}|null)} claim
+ */
+export function registerClickClaim(layerId, claim) {
+  if (!layerId || typeof claim !== 'function') return;
+  _clickClaims.set(layerId, claim);
+}
+
+/** Remove a layer's claim when it is disabled or destroyed. */
+export function unregisterClickClaim(layerId) {
+  _clickClaims.delete(layerId);
+}
+
+/**
+ * Sets (or with null, clears) the hit test that names the card or label
+ * painted at a click. The world-overlay host sets it while it runs.
+ * @param {((x: number, y: number) => object|null)|null} hitTest
+ * @returns {void}
+ */
+export function setClickCardHitTest(hitTest) {
+  _overlayHitTest = typeof hitTest === 'function' ? hitTest : null;
+}
+
+/**
+ * The topmost interactive card or label painted at a click, or a target a
+ * layer claims (`registerClickClaim`). All handlers share one result per click.
+ * @param {{screenPosition?: {x: number, y: number}}|null|undefined} click
+ * @returns {{sourceId: string, entryId: string}|null}
+ */
+export function clickCard(click) {
+  if (!click || typeof click !== 'object') return null;
+  if (clickCards.has(click)) return clickCards.get(click);
+  const at = click.screenPosition;
+  let card = null;
+  try {
+    card = _overlayHitTest?.(at?.x, at?.y) ?? null;
+  } catch {
+    clickCards.set(click, null);
+    return null;
+  }
+  if (!card) {
+    // A claim that reads this click again cannot re-enter the claims loop.
+    clickCards.set(click, null);
+    for (const claim of _clickClaims.values()) {
+      try {
+        card = claim(click) ?? null;
+      } catch {
+        card = null;
+      }
+      if (card) break;
+    }
+  }
+  clickCards.set(click, card);
+  return card;
+}
+
+/**
+ * True when another layer has the top card, label, or claimed target
+ * (`registerClickClaim`) at a click. The
+ * card on top takes the click: a scene item under it does not act, and is
+ * not empty space either, so the layer leaves its selection alone.
+ * @param {object} click The shared dispatcher event.
+ * @param {Iterable<string>} [ownSourceIds] The asking layer's overlay
+ *   sources: its own card on top is its click.
+ * @returns {boolean}
+ */
+export function isUnderOtherCard(click, ownSourceIds = []) {
+  const card = clickCard(click);
+  if (!card) return false;
+  for (const sourceId of ownSourceIds)
+    if (card.sourceId === sourceId) return false;
+  return true;
+}

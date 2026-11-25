@@ -69,3 +69,38 @@ test('the mission panel translates only the fallback status', (t) => {
   assert.equal(shownStatus(UNKNOWN_LAUNCH_STATUS), 'Desconocido');
   assert.equal(shownStatus('Launch Successful'), 'Launch Successful');
 });
+
+test('a confirmed landing position is worded apart from the CONFIRMED sightings chip', (t) => {
+  t.after(() => setLocale('en'));
+  const position = () =>
+    createPanel({
+      state: {
+        _selectedLaunchId: 'mission-1',
+        _launches: [
+          {
+            id: 'mission-1',
+            name: 'Example',
+            status: 'Launch Successful',
+            payloads: [],
+            recoveryStages: [
+              {
+                name: 'B1080',
+                endpoint: { lat: 28.41, lon: -80.6, accuracy: 'CONFIRMED' },
+              },
+            ],
+          },
+        ],
+        _replayTracks: new Map(),
+      },
+      parts: {
+        overlays: { shortMissionLabel: (name) => name },
+        policyHelpers: { missionPathPresentation: () => ({}) },
+        replay: { presentReplay: () => ({}) },
+      },
+    }).presentMission().stages[0].position;
+  assert.match(position(), / · CONFIRMED$/);
+  // One landing, singular: sv BEKRÄFTAD, where the sightings chip says
+  // BEKRÄFTADE.
+  setLocale('sv');
+  assert.match(position(), / · BEKRÄFTAD$/);
+});

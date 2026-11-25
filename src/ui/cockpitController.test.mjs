@@ -444,10 +444,10 @@ test('Cockpit places the eye at its aircraft as the Cesium maths did', async () 
       latitude: 30.19,
       longitude: -97.67,
       onGround: false,
-      stale: true,
+      stale: false,
     };
     const { owner, views } = cockpitOver({ info, target });
-    // Held on the target while the feed is stale.
+    // The first update stands the anchor on the target.
     owner.update();
     let expected = cesiumCockpitEye(Cesium, {
       target,
@@ -456,13 +456,12 @@ test('Cockpit places the eye at its aircraft as the Cesium maths did', async () 
       dtSec: 0,
       liftM: 0,
     });
-    near(views[0].destination, expected.eye, 1e-6, 'stale eye');
+    near(views[0].destination, expected.eye, 1e-6, 'first eye');
     near(views[0].orientation.direction, expected.forward, 1e-12, 'direction');
     near(views[0].orientation.up, expected.up, 1e-12, 'up');
 
     // Live: the anchor coasts 80 ms along the heading and is pulled toward
     // where the layer now shows the aircraft.
-    info.stale = false;
     const anchor = Cesium.Cartesian3.clone(expected.anchor);
     const moved = Cesium.Cartesian3.fromDegrees(-97.6698, 30.1901, 1210);
     owner.trackedFollow.position = () => moved;

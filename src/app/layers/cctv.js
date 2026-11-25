@@ -2,6 +2,7 @@ import { createCctvLayer } from '../../layers/cctv/index.js';
 import * as credits from '../../data/dataCredits.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as activation from '../../cctvFocusRequest.js';
+import { keyholeLabelAlphaFromGeometry } from '../../celestialRing.js';
 import * as overlays from '../../overlays/worldOverlay.js';
 import { CITY_POIS } from '../../cityPois.js';
 import * as picking from '../../data/pickRegistry.js';
@@ -17,7 +18,7 @@ export function createApplicationCctv({ surface, source }) {
       credits,
       sprites,
       activation,
-      overlays,
+      overlays: { ...overlays, keyholeAlpha: keyholeLabelAlphaFromGeometry },
       locations: { CITY_POIS },
       picking,
       terrain,

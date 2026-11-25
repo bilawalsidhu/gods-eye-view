@@ -1,3 +1,7 @@
+import {
+  CCTV_COUNT_CARD_SOURCE_ID,
+  CCTV_OVERLAY_SOURCE_ID,
+} from '../../data/cctvCards.js';
 import { isTrackingClickGesture } from '../../data/trackingClickGesture.js';
 
 export function createSelection({
@@ -7,7 +11,13 @@ export function createSelection({
   source,
 }) {
   const { CCTV_ACTIVATION_RESULT } = services.activation;
-  const { resolvePickId } = services.picking;
+  const {
+    resolvePickId,
+    findPickOwner,
+    isOwnedByOtherLayer,
+    isUnderOtherCard,
+  } = services.picking;
+  const OWN_CARD_SOURCES = [CCTV_OVERLAY_SOURCE_ID, CCTV_COUNT_CARD_SOURCE_ID];
 
   /**
    * Returns the camera record for the currently active camera. A stale ID falls
@@ -29,6 +39,49 @@ export function createSelection({
     return fallback;
   }
 
+  /** Whether another layer's scene object owns the click at this count. */
+  function sceneTakesCountClick(event) {
+    const top = event.topHit;
+    if (!top) return false;
+    const drawHit = event.drawHit;
+    if (drawHit) {
+      // Unowned fills, such as earthquake discs, let the count take the click.
+      if (parts.rendering.extractPickedCameraId(drawHit)) return false;
+      const id = resolvePickId(drawHit);
+      return id !== null && Boolean(isOwnedByOtherLayer?.('cctv', id));
+    }
+    const id = resolvePickId(top);
+    return id !== null && findPickOwner?.(id) !== 'cctv';
+  }
+
+  /** Leave other layers' cards to the caller since clickCard also calls this. */
+  function clickedCount(event) {
+    if (
+      !isTrackingClickGesture(event.gesture) ||
+      !layerState._enabled ||
+      event.overlay
+    )
+      return null;
+    const cell = layerState._counts?.pickedCell(event.screenPosition);
+    if (!cell) return null;
+    const { x, y } = event.screenPosition;
+    if (
+      layerState._cctvOverlayHost?.hitTest(x, y, {
+        sourceId: CCTV_OVERLAY_SOURCE_ID,
+      })?.entryId
+    )
+      return null;
+    return sceneTakesCountClick(event) ? null : cell;
+  }
+
+  /** The count marker as the card on top of a click it takes, for every layer's clickCard. */
+  function countClickCard(event) {
+    const cell = clickedCount(event);
+    return cell
+      ? { sourceId: CCTV_COUNT_CARD_SOURCE_ID, entryId: String(cell.key ?? '') }
+      : null;
+  }
+
   /**
    * Bind CCTV activation to clean taps. Drag-like and long-press gestures do
    * not reach camera activation or focus dispatch.
@@ -41,6 +94,12 @@ export function createSelection({
   function bindCctvWorldClickGesture(input, onClick) {
     return input.onClick((event) => {
       if (!isTrackingClickGesture(event.gesture)) return;
+      const cell = clickedCount(event);
+      // Another layer's card or label painted above the count takes the click.
+      if (cell && !isUnderOtherCard?.(event, OWN_CARD_SOURCES)) {
+        parts.navigation.zoomToCell(cell);
+        return;
+      }
       onClick(event);
     });
   }
@@ -49,10 +108,13 @@ export function createSelection({
    * Sets the active camera by ID, initializes its projection runtime, refreshes
    * its frame, and updates styles.
    * @param {string} cameraId - ID of the camera to activate.
+   * @param {Object} [options]
+   * @param {boolean} [options.opening=false] - The opening camera following
+   *   the view, not someone's pick: settled moves may still replace it.
    * @returns {'activated'|'unchanged'|'not-found'} Discriminated activation result.
    */
 
-  function setActiveCamera(cameraId) {
+  function setActiveCamera(cameraId, { opening = false } = {}) {
     if (!cameraId || !layerState._recordById.has(cameraId))
       return CCTV_ACTIVATION_RESULT.NOT_FOUND;
     const record = layerState._recordById.get(cameraId);
@@ -70,6 +132,9 @@ export function createSelection({
         record,
       )
     ) {
+      // Picking the camera a settled move re-opened is still a pick: later
+      // settled moves must leave it alone.
+      if (!opening) layerState._openingCameraProvisional = false;
       // Browser-only feeds have a separate player; a reselect retries it
       // without re-running activation or touching the projection geometry.
       if (parts.model.isBrowserOverlayCamera(record.camera)) {
@@ -80,7 +145,7 @@ export function createSelection({
     }
     layerState._activeCameraId = cameraId;
     layerState._autoHopSuspended = false;
-    layerState._openingCameraProvisional = false;
+    layerState._openingCameraProvisional = opening;
     // A real activation creates projection work — wake the self-stopping loop.
     parts.projection.startProjectionLoop();
     if (previousActiveRecord && previousActiveRecord !== record) {
@@ -139,11 +204,11 @@ export function createSelection({
     // is looking at ever asks.
     void parts.ground.resolveFootprintGround(record);
     record.activationDone = true;
-    parts.rendering.refreshCoverageStyles();
-    // The active camera's icon always shows; the previously active one
-    // competes for its cell again. Its coverage neighbours join the working
-    // set and are queued for grounding.
+    // The active icon always shows and the previous one rejoins its cell.
+    // Restyle coverage after the view pass sets grouping. Its coverage
+    // neighbours join the working set and are queued for grounding.
     parts.rendering.refreshHorizonCulling();
+    parts.rendering.refreshCoverageStyles();
     parts.geometryQueue.enqueueViewGeometry();
     // The newly active camera leaves the ambient ring (its monitor plane takes
     // over); the freed slot re-fills on this same pass.
@@ -218,6 +283,7 @@ export function createSelection({
   return {
     getActiveRecord,
     bindCctvWorldClickGesture,
+    countClickCard,
     setActiveCamera,
     deactivateActiveCamera,
     cctvEmptyClickDeselects,

@@ -48,13 +48,20 @@ export function initImageryBoxTool({
   let lease = null;
   let releaseCamera = null;
 
-  const dragBox = () =>
-    anchor && {
-      west: Math.min(anchor.lon, corner.lon),
+  const dragBox = () => {
+    if (!anchor) return null;
+    const lo = Math.min(anchor.lon, corner.lon);
+    const hi = Math.max(anchor.lon, corner.lon);
+    // Corners more than half the globe apart are the short way round, over
+    // the dateline: west gets the larger longitude, east the smaller.
+    const crosses = hi - lo > 180;
+    return {
+      west: crosses ? hi : lo,
       south: Math.min(anchor.lat, corner.lat),
-      east: Math.max(anchor.lon, corner.lon),
+      east: crosses ? lo : hi,
       north: Math.max(anchor.lat, corner.lat),
     };
+  };
 
   const preview = createPreview(viewer, dragBox);
   const setPreview = (visible) => preview.setVisible(visible);

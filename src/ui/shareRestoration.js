@@ -167,7 +167,10 @@ export class ShareRestoration {
     feedback,
     updateFeedback,
     applyFollowOffset = null,
+    startLayers = [],
   }) {
+    // The layers a bare address starts with; a link names its own.
+    this._startLayers = startLayers;
     Object.assign(this, {
       viewer,
       navigation,
@@ -321,7 +324,16 @@ export class ShareRestoration {
       if (vessel) void this._restoreSharedVessel(vessel, current);
       // The token tells listeners whether anyone navigated after the
       // restore's flight landed (while the layers were still loading).
-      settle({ status: 'settled', share, layers, tracking, navigationToken });
+      // `thing` says the share is of a thing (a followed or selected one),
+      // not only a view.
+      settle({
+        status: 'settled',
+        share,
+        layers,
+        tracking,
+        navigationToken,
+        thing: state?.shareView?.kind === 'thing',
+      });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);
@@ -417,9 +429,11 @@ export class ShareRestoration {
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
-        // Any valid camera/style share isolates recipient-local preferences,
-        // including legacy and malformed-v2 layer payloads.
-        allowLocalState: !this._initialShareState,
+        // A link restores what it carries; a bare address is a clean start
+        // with the default layers. Saved layer choices never come back on
+        // their own, so clearing the address always resets the view.
+        allowLocalState: false,
+        startLayerIds: this._initialShareState ? [] : this._startLayers,
       });
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(

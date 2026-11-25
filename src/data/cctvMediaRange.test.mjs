@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
 import { Readable, Writable } from 'node:stream';
-import { cctvProxy } from '../../server/providers/cctv.js';
+import { mountCctvProvider } from '../testSupport/cctvProviderHarness.mjs';
 import { proxyMediaResponse } from '../../server/providers/cctv/media.js';
 import { sanitizeCctvRangeHeader } from '../../server/providers/cctv/range.js';
 import { CCTV_MEDIA_MAX_BODY_BYTES as CAP } from '../../server/providers/cctv/constants.js';
@@ -131,99 +131,21 @@ function upstreamResponse({ status = 206, headers = {}, body = 'payload' }) {
   };
 }
 
-/** Collects what a handler wrote, the way a Node ServerResponse would. */
-function recordingResponse() {
-  const chunks = [];
-  let finished;
-  const done = new Promise((resolve) => {
-    finished = resolve;
-  });
-  const res = {
-    statusCode: 0,
-    headers: {},
-    writableEnded: false,
-    body: '',
-    writeHead(status, headers) {
-      res.statusCode = status;
-      res.headers = headers || {};
-    },
-    write(chunk) {
-      chunks.push(Buffer.from(chunk));
-      return true;
-    },
-    end(chunk) {
-      if (chunk) chunks.push(Buffer.from(chunk));
-      res.writableEnded = true;
-      res.body = Buffer.concat(chunks).toString('utf8');
-      finished();
-    },
-    on() {},
-    once() {},
-    emit() {},
-    destroy() {},
-  };
-  return { res, done };
-}
-
-/**
- * Mount the real provider, serve one camera, and answer its upstream from the
- * supplied function.
- */
+/** Mount the real provider over the fixture cameras, recording upstream requests. */
 function mount(t, respond) {
-  const before = {
-    json: process.env.CCTV_SOURCES_JSON,
-    file: process.env.CCTV_SOURCES_FILE,
-    austin: process.env.CCTV_FORCE_AUSTIN,
-  };
-  process.env.CCTV_SOURCES_JSON = JSON.stringify([CAMERA]);
-  process.env.CCTV_SOURCES_FILE = 'absent-source-file.json';
-  process.env.CCTV_FORCE_AUSTIN = '0';
-  const nativeFetch = globalThis.fetch;
   const requests = [];
-  globalThis.fetch = async (url, init = {}) => {
-    requests.push({
-      url: String(url),
-      headers: init.headers || {},
-      signal: init.signal || null,
-    });
-    return respond({ url: String(url), init });
-  };
-  t.after(() => {
-    globalThis.fetch = nativeFetch;
-    for (const [name, value] of [
-      ['CCTV_SOURCES_JSON', before.json],
-      ['CCTV_SOURCES_FILE', before.file],
-      ['CCTV_FORCE_AUSTIN', before.austin],
-    ]) {
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  });
-
-  let handler = null;
-  const plugin = cctvProxy();
-  plugin.configureServer({
-    middlewares: {
-      use: (_route, fn) => {
-        handler = fn;
-      },
+  const app = mountCctvProvider(t, {
+    cameras: [CAMERA],
+    fetch: async (url, init = {}) => {
+      requests.push({
+        url: String(url),
+        headers: init.headers || {},
+        signal: init.signal || null,
+      });
+      return respond({ url: String(url), init });
     },
   });
-  assert.ok(handler, 'the CCTV provider must mount a middleware');
-
-  /** Drive one request through the mounted handler. */
-  const call = async (path, headers = {}) => {
-    const { res, done } = recordingResponse();
-    await handler({ url: path, headers, method: 'GET', on() {} }, res);
-    await done;
-    return res;
-  };
-  /** Read the camera's current health entry. */
-  const health = async () => {
-    const res = await call('/health');
-    return JSON.parse(res.body).cameras.find(({ id }) => id === CAMERA.id);
-  };
-  return { call, health, requests, handler: (req, res) => handler(req, res) };
+  return { ...app, requests, health: () => app.health(CAMERA.id) };
 }
 
 test('a canonical range reaches the upstream and its 206 is passed through', async (t) => {

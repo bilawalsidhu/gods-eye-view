@@ -3,13 +3,17 @@ import * as Cesium from 'cesium';
 import test from 'node:test';
 import { createCesiumDraw } from './draw.js';
 import { drawHitOf } from './drawHit.js';
+import { gpuIconCapabilities } from './gpuIcons.js';
 import { IconSetPrimitive } from './iconSetPrimitive.js';
 import { MAX_ICON_SLOTS } from '../../data/iconAtlas.js';
 import {
   ICON_CULL_LIFT,
   ICON_RECEDES,
   ICON_ROTATES,
+  ICON_VIEWS,
 } from '../../data/iconSet.js';
+import { AIRCRAFT_VIEWS } from '../../data/aircraftViews.js';
+import { viewLayout } from '../../data/viewSheet.js';
 import {
   iconCourse,
   iconPosition,
@@ -219,6 +223,40 @@ test('rows moving on a live clock keep frames coming until their segments end', 
   const onScene = scene.renders;
   part.afterRender();
   assert.equal(scene.renders, onScene);
+});
+
+test('a live set whose owner asks for its frames asks for none itself', () => {
+  const { scene, part, draw } = drawOver();
+  const set = draw.icons({
+    id: 'gpu:owned',
+    motionClock: { kind: 'live', delayMs: 2000, frames: 'owner' },
+  });
+  const now = Date.now();
+  const to = ecef(Cesium.Cartesian3.fromDegrees(4.2, 51.95, 2));
+  set.set([
+    icon('a', {
+      motion: { kind: 'lerp', from: ecef(AT), to, t0: now, t1: now + 60000 },
+    }),
+  ]);
+  const moving = scene.renders;
+  part.afterRender();
+  assert.equal(scene.renders, moving, 'moving rows ask for no frame');
+  set.setOptions({
+    motionClock: { kind: 'live', delayMs: 3000, frames: 'owner' },
+  });
+  assert.equal(scene.renders, moving, 'a new delay asks for no frame');
+  // A row restyled in place, as the owner does when a frame begins (a
+  // helicopter's rotor), asks for none either: that frame draws it.
+  set.upsert([
+    icon('a', {
+      scale: 2,
+      motion: { kind: 'lerp', from: ecef(AT), to, t0: now, t1: now + 60000 },
+    }),
+  ]);
+  assert.equal(scene.renders, moving, 'a write in place asks for no frame');
+  set.setOptions({ motionClock: { kind: 'live', delayMs: 4000 } });
+  part.afterRender();
+  assert.ok(scene.renders > moving, 'back to the set: frames again');
 });
 
 test('a set that recedes draws on the GPU, every row receding by the set’s parameters, and changes live', () => {
@@ -1186,4 +1224,241 @@ test('a live motion clock reads the date the draw port is given', () => {
     distance(part.drawnPosition({ set: 'gpu:dated', id: 'a' }), at(t0 + 7000)) <
       0.1,
   );
+});
+
+/** An item drawn from the aircraft view sheet's subject at `first`. */
+const viewIcon = (id, first = AIRCRAFT_VIEWS.subjects.widebody, extra = {}) =>
+  icon(id, {
+    image: { views: AIRCRAFT_VIEWS.id, first },
+    rotationMode: 'course',
+    course: 30,
+    ...extra,
+  });
+
+test('a view takes its set onto the GPU, its row flagged and drawing its subject’s first cell once the sheet is registered', () => {
+  const { scene, part, draw } = drawOver();
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  const set = draw.icons({ id: 'gpu:views' });
+  set.set([viewIcon('a')]);
+  assert.ok(scene.added[0] instanceof IconSetPrimitive, 'a GPU icon set');
+  const { set: s } = rows(part, 'gpu:views');
+  const a = s.row('a');
+  assert.equal(s.flags(a) & ICON_VIEWS, ICON_VIEWS);
+  assert.equal(s.flags(a) & ICON_ROTATES, ICON_ROTATES, 'along its course');
+  const host = part.sets.get('gpu:views').host;
+  assert.equal(s.imageFar(a), AIRCRAFT_VIEWS.subjects.widebody);
+  assert.equal(s.imageNear(a), -1, 'no fallback given');
+  assert.equal(s.imageSwitch(a), 0, 'one image at any size');
+  const sheet = host._views();
+  assert.equal(sheet.image, AIRCRAFT_VIEWS.sheet.image);
+  assert.deepEqual(
+    sheet.layout.firsts,
+    viewLayout(AIRCRAFT_VIEWS.sheet).firsts,
+  );
+  assert.equal(sheet.layout.frames, AIRCRAFT_VIEWS.frames);
+  // Registered again: a new sheet the host reads afresh.
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  assert.notEqual(host._views(), sheet);
+  // A row added once it is registered draws at once.
+  set.upsert([viewIcon('b', AIRCRAFT_VIEWS.subjects.helicopter2)]);
+  assert.equal(s.imageFar(s.row('b')), AIRCRAFT_VIEWS.subjects.helicopter2);
+  set.dispose();
+});
+
+test('a row switching between a view and a flat image changes its flag and its image', () => {
+  const { part, draw } = drawOver();
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  const set = draw.icons({ id: 'gpu:view-flat' });
+  set.set([viewIcon('a')]);
+  const { set: s } = rows(part, 'gpu:view-flat');
+  const a = s.row('a');
+  assert.equal(s.flags(a) & ICON_VIEWS, ICON_VIEWS);
+  set.upsert([
+    icon('a', {
+      rotationMode: 'course',
+      course: 30,
+      imageLod: { near: 'ship-large.png', switchPx: 60 },
+    }),
+  ]);
+  assert.equal(s.row('a'), a, 'the same row');
+  assert.equal(s.flags(a) & ICON_VIEWS, 0, 'flat');
+  assert.ok(s.imageFar(a) >= 0, 'an atlas slot');
+  assert.notEqual(s.imageNear(a), s.imageFar(a));
+  assert.equal(s.imageSwitch(a), 60);
+  set.upsert([viewIcon('a', AIRCRAFT_VIEWS.subjects.glider)]);
+  assert.equal(s.flags(a) & ICON_VIEWS, ICON_VIEWS, 'a view again');
+  assert.equal(s.imageFar(a), AIRCRAFT_VIEWS.subjects.glider);
+  assert.equal(s.imageNear(a), -1, 'no fallback given');
+  assert.equal(s.imageSwitch(a), 0);
+  set.dispose();
+});
+
+test('a view’s fallback is the atlas image its row draws until the sheet is', () => {
+  const { part, draw } = drawOver();
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  const set = draw.icons({ id: 'gpu:view-fallback' });
+  const view = (first) => ({
+    views: AIRCRAFT_VIEWS.id,
+    first,
+    fallback: 'glyph.png',
+  });
+  set.set([{ ...viewIcon('a'), image: view(AIRCRAFT_VIEWS.subjects.light) }]);
+  const { set: s } = rows(part, 'gpu:view-fallback');
+  const a = s.row('a');
+  assert.equal(s.flags(a) & ICON_VIEWS, ICON_VIEWS);
+  const slot = s.imageNear(a);
+  assert.ok(slot >= 0, 'the fallback has an atlas slot');
+  assert.equal(s.imageSwitch(a), 0);
+  assert.equal(s.imageFar(a), AIRCRAFT_VIEWS.subjects.light);
+  assert.equal(s.imageNear(a), slot, 'kept for a sheet that fails to load');
+  // A view cannot be what a view falls back to.
+  assert.throws(
+    () =>
+      set.upsert([
+        {
+          ...viewIcon('b'),
+          image: {
+            views: AIRCRAFT_VIEWS.id,
+            first: 0,
+            fallback: {
+              views: AIRCRAFT_VIEWS.id,
+              first: AIRCRAFT_VIEWS.subjects.widebody,
+            },
+          },
+        },
+      ]),
+    /views as fallbacks/,
+  );
+  assert.equal(s.row('b'), -1, 'refused, changing nothing');
+  set.dispose();
+});
+
+test('a GPU icon set refuses, changing nothing, views it cannot draw', () => {
+  const { part, draw } = drawOver();
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  draw.views('other-views', AIRCRAFT_VIEWS.sheet);
+  const set = draw.icons({ id: 'gpu:view-refuse' });
+  set.set([viewIcon('a')]);
+  const refused = [
+    [viewIcon('b', 1.5), /first cell is a whole number/],
+    [viewIcon('b', -1), /first cell is a whole number/],
+    [
+      viewIcon('b', String(AIRCRAFT_VIEWS.frames)),
+      /first cell is a whole number/,
+    ],
+    // The last block that fits ends at the sheet's last cell; one cell on
+    // runs past.
+    [
+      viewIcon(
+        'b',
+        AIRCRAFT_VIEWS.sheet.columns * AIRCRAFT_VIEWS.sheet.rows -
+          AIRCRAFT_VIEWS.frames +
+          1,
+      ),
+      /run past its sheet/,
+    ],
+    [viewIcon('b', 0, { rotationMode: 'screen' }), /views but along a course/],
+    [viewIcon('b', 0, { rotationMode: undefined }), /views but along a course/],
+    [
+      viewIcon('b', 0, { imageLod: { near: 'ship.png', switchPx: 30 } }),
+      /imageLod for a view/,
+    ],
+    [
+      icon('b', {
+        motion: { kind: 'hold' },
+        imageLod: {
+          near: { views: AIRCRAFT_VIEWS.id, first: 0 },
+          switchPx: 30,
+        },
+      }),
+      /views as near images/,
+    ],
+    [
+      icon('b', {
+        image: { views: 'other-views', first: 0 },
+        rotationMode: 'course',
+      }),
+      /views from two sheets/,
+    ],
+  ];
+  for (const [item, pattern] of refused)
+    assert.throws(() => set.upsert([item]), pattern, JSON.stringify(item));
+  assert.equal(set.size(), 1);
+  assert.equal(rows(part, 'gpu:view-refuse').set.count, 1);
+
+  // Two sheets in one write to a fresh set.
+  const fresh = draw.icons({ id: 'gpu:view-two' });
+  assert.throws(() => fresh.set([viewIcon('a', 0, { image: { views: 'missing', first: 0 } })]), /call views\(\) first/);
+  assert.throws(() => fresh.set([viewIcon('a', 0, { rotationMode: 'screen' })]), /views but along a course/);
+  assert.equal(fresh.size(), 0);
+  assert.throws(
+    () =>
+      fresh.set([
+        viewIcon('a'),
+        icon('b', {
+          image: { views: 'other-views', first: 0 },
+          rotationMode: 'course',
+        }),
+      ]),
+    /views from two sheets/,
+  );
+  assert.equal(fresh.size(), 0);
+});
+
+test('without viewSheets the draw port has no views(), and refuses a view', () => {
+  const { part, draw } = drawOver({
+    capabilities: new Set(['motionSegments', 'columns']),
+  });
+  assert.equal('views' in draw, false);
+  const set = draw.icons({ id: 'gpu:no-views' });
+  set.set([icon('a', { motion: { kind: 'hold' } })]);
+  assert.throws(() => set.upsert([viewIcon('b')]), /no view sheets/);
+  assert.equal(set.size(), 1);
+  assert.equal(rows(part, 'gpu:no-views').set.count, 1);
+  // A set of billboards refuses one too: it cannot take it onto the GPU.
+  const billboards = draw.icons({ id: 'gpu:no-views-billboards' });
+  assert.throws(() => billboards.set([viewIcon('a')]), /no view sheets/);
+  assert.equal(billboards.size(), 0);
+});
+
+test('a view sheet is checked when it is registered', () => {
+  const { draw } = drawOver();
+  assert.throws(
+    () => draw.views('bad', { ...AIRCRAFT_VIEWS.sheet, rings: [2, 3] }),
+    TypeError,
+  );
+  assert.throws(
+    () => draw.views('bad', { ...AIRCRAFT_VIEWS.sheet, image: '' }),
+    TypeError,
+  );
+});
+
+test('view rows load with their sheet: loading until it is ready, failed when it cannot load', () => {
+  const { part, draw } = drawOver();
+  draw.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  const set = draw.icons({ id: 'gpu:view-load' });
+  set.set([viewIcon('a')]);
+  const record = part.sets.get('gpu:view-load');
+  assert.equal(record.host.viewsState(), 'loading', 'registered, not drawn');
+  assert.equal(record.gpu.imageState(), 'loading');
+  // Node has no createImageBitmap: the sheet's texture cannot load on this context.
+  record.host._syncViews({});
+  assert.equal(record.host.viewsState(), 'failed');
+  assert.equal(record.gpu.imageState(), 'failed');
+  // A hidden view row waits on nothing.
+  set.upsert([viewIcon('a', undefined, { show: false })]);
+  assert.equal(record.gpu.imageState(), 'settled');
+  set.dispose();
+});
+
+test('view sheets are offered on WebGL 2, not on WebGL 1', () => {
+  // A row that draws views is on the GPU, where WebGL 1 has no extras: a
+  // layer whose icons carry a display range would lose them to the sheet.
+  assert.ok(
+    gpuIconCapabilities({ context: { webgl2: true } }).includes('viewSheets'),
+  );
+  assert.ok(gpuIconCapabilities().includes('viewSheets'), 'no scene: a test');
+  const webgl1 = gpuIconCapabilities({ context: { webgl2: false } });
+  assert.equal(webgl1.includes('viewSheets'), false);
+  assert.deepEqual(webgl1, ['columns', 'motionSegments', 'courseGlide']);
 });

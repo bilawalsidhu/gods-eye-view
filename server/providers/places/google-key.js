@@ -1,6 +1,14 @@
 import { resolveGoogleServerKey } from '../../../scripts/google-server-key.mjs';
 
 /**
+ * Default GEV_RATELIMIT_GOOGLE_PER_MIN for the Places and Geocoding window
+ * and the separate CCTV Street View window, in requests per minute per IP.
+ * The Pinokio build sets the same default in pinokio/_ENVIRONMENT.
+ * `.env.example` suggests 60 for hosts other than localhost.
+ */
+export const GOOGLE_DEFAULT_PER_MIN = 120;
+
+/**
  * Optional Google place context is an empty capability when no key is present,
  * not a server outage. Returning 200 keeps a deliberately keyless session out
  * of the browser error console while preserving an explicit configured flag.

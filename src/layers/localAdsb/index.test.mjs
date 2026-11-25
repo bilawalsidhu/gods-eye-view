@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as Cesium from 'cesium';
 
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
+import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import { ROTOR_STILL_FRAME, rotorFrame } from '../../data/rotorFrames.js';
 import {
   createLocalAdsbLayer,
   HEARD_BY_RECEIVER,
@@ -14,9 +15,14 @@ import {
 } from './index.js';
 import { createLocalAdsbModels } from './models.js';
 import { entityRecord, readEntityRecord } from '../../data/entityRecords.js';
-import { resolvePickId } from '../../data/pickRegistry.js';
+import {
+  isUnderOtherCard,
+  resolvePickId,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
-import { fakeInput } from '../../input/testDoubles.mjs';
+import { inputFor } from '../../input/dispatcher.js';
+import { MISSION_LABEL, fakeInput } from '../../input/testDoubles.mjs';
 import { hexColor } from '../../render/color.js';
 import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
@@ -196,13 +202,14 @@ function fakeFeeds(initial = {}) {
   };
 }
 
-/** A viewer whose camera looks down on (0°, 0°) from 50 km. */
+/** A viewer whose camera looks down on (0°, 0°) from 2 km: within the 3 km
+ *  model radius of an aircraft there on the ground or at 10,000 ft. */
 function modelViewer() {
   return fakeViewer(
     { scene: {} },
     {
-      height: 50_000,
-      position: { x: 6_378_137 + 50_000, y: 0, z: 0 },
+      height: 2_000,
+      position: { x: 6_378_137 + 2_000, y: 0, z: 0 },
       direction: { x: -1, y: 0, z: 0 },
     },
   );
@@ -216,6 +223,7 @@ async function enabledLayer(receiver, clock, feeds = null, options = {}) {
     feeds,
     services: { ...services, ...options.services },
     now: () => clock.now,
+    ...(options.resolveAsset ? { resolveAsset: options.resolveAsset } : {}),
   });
   layer.init(viewer);
   await layer.enable();
@@ -238,7 +246,7 @@ test('enabling Local ADS-B asks the shared tuner for 1090 MHz; disabling leaves 
   );
 });
 
-test('local aircraft use their class silhouette and scale in magenta', async (t) => {
+test('local aircraft use their class silhouette at one size in magenta', async (t) => {
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
   const { layer, draw, calls } = await enabledLayer(receiver, clock);
@@ -265,8 +273,17 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
   assert.equal(typeof readEntityRecord(carrier)?.displayPosition, 'function');
 
   const heli = () => iconOf(draw, 'local-adsb:a0b702');
-  assert.equal(heli().image, aircraftIcon('helicopter'));
-  assert.equal(heli().scale, CLASS_SCALE_2D.helicopter);
+  // Airborne, its rotor turns: the frame of its own phase at the layer's time.
+  assert.equal(
+    heli().image,
+    aircraftIcon(
+      'helicopter',
+      undefined,
+      rotorFrame('local-adsb:a0b702', clock.now),
+    ),
+  );
+  assert.equal(heli().scale, 1, 'every class draws at one size');
+  assert.equal(icon.scale, heli().scale);
   assert.deepEqual(
     heli().color,
     MAGENTA,
@@ -285,16 +302,103 @@ test('local aircraft use their class silhouette and scale in magenta', async (t)
         icao: 'a0b702',
         category: 'A7',
         onGround: true,
+        groundSpeedKt: 0,
         lastPositionAt: 100_500,
       }),
     ],
   });
   await layer.update();
-  assert.equal(heli().scale, CLASS_SCALE_2D.helicopter * 0.8);
+  assert.equal(heli().scale, 0.8);
+  // Parked on the ground its rotor holds still.
+  assert.equal(
+    heli().image,
+    aircraftIcon('helicopter', undefined, ROTOR_STILL_FRAME),
+  );
 
   const [detectable] = layer.getDetectableObjects();
   assert.equal(detectable.sourceId, 'a0b702');
   assert.equal(detectable.type, 'AIR');
+});
+
+test('on a renderer that draws view sheets, local aircraft draw their view along their track; vehicles and masts stay flat', async (t) => {
+  const { aircraftViewRef } = await import('../../data/aircraftViews.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
+  const viewer = { scene: {} };
+  const camera = fakeCameraPort({
+    pose: { right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+  });
+  const { draw } = bindFakeDraw(viewer, {
+    camera: camera.port,
+    query: { drillPick: () => [] },
+    capabilities: new Set(['viewSheets']),
+  });
+  fakeInput(viewer);
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer } = await enabledLayer(receiver, clock, null, {
+    viewer: { draw, viewer },
+    resolveAsset: (url) => `/gev${url}`,
+  });
+  t.after(() => layer.destroy());
+  // Registered once, at the layer's own asset URL.
+  assert.deepEqual(draw.viewSheets, [
+    [
+      AIRCRAFT_VIEWS.id,
+      { ...AIRCRAFT_VIEWS.sheet, image: '/gev/sprites/aircraft-views.webp' },
+    ],
+  ]);
+  receiver.set({
+    aircraft: [
+      record({ trackDeg: 0 }),
+      record({ icao: 'a0b702', category: 'A7' }),
+      record({ icao: 'a0c001', category: 'C1', trackDeg: 90 }),
+      record({ icao: 'a0c003', category: 'C3', trackDeg: 90 }),
+    ],
+  });
+  await layer.update();
+  const icon = iconOf(draw, 'local-adsb:abc123');
+  assert.equal(icon.image, aircraftViewRef('airliner'));
+  assert.equal(icon.rotationMode, 'course');
+  assert.equal(icon.course, 0);
+  assert.equal('rotation' in icon, false);
+  assert.deepEqual(icon.size, [20, 20]);
+  assert.deepEqual(icon.color, MAGENTA);
+  assert.equal(
+    iconOf(draw, 'local-adsb:a0b702').image,
+    aircraftViewRef('helicopter', rotorFrame('local-adsb:a0b702', clock.now)),
+    'the rotor turns through the sheet',
+  );
+  const vehicle = iconOf(draw, 'local-adsb:a0c001');
+  assert.equal(vehicle.image, aircraftIcon('vehicle'));
+  assert.equal(vehicle.rotationMode, 'screen');
+  const mast = iconOf(draw, 'local-adsb:a0c003');
+  assert.equal(mast.image, aircraftIcon('station'));
+  assert.equal(mast.rotationMode, 'screen');
+  assert.equal(mast.rotation, 0);
+});
+
+test('local airport vehicles draw the amber vehicle sprite, ground stations the upright mast', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const { layer, draw } = await enabledLayer(receiver, clock);
+  t.after(() => layer.destroy());
+  receiver.set({
+    aircraft: [
+      record({ icao: 'a0c001', category: 'C1', trackDeg: 90 }),
+      record({ icao: 'a0c002', category: 'C2', trackDeg: 90 }),
+      record({ icao: 'a0c003', category: 'C3', trackDeg: 90 }),
+    ],
+  });
+  await layer.update();
+  for (const id of ['a0c001', 'a0c002']) {
+    const icon = iconOf(draw, `local-adsb:${id}`);
+    assert.equal(icon.image, aircraftIcon('vehicle'), id);
+    assert.deepEqual(icon.color, hexColor(VEHICLE_TINT_CSS), id);
+  }
+  const mast = iconOf(draw, 'local-adsb:a0c003');
+  assert.equal(mast.image, aircraftIcon('station'));
+  assert.deepEqual(mast.color, MAGENTA);
+  assert.equal(mast.rotation, 0, 'upright whatever its track');
 });
 
 test('the heading slews toward a new track instead of snapping', async (t) => {
@@ -1133,7 +1237,8 @@ function iconPick(draw, id) {
   return { primitive: {}, id: { set: layerSet(draw, ':markers').spec.id, id } };
 }
 
-/** A viewer with a canvas and scripted picks, plus the layer's click action. */
+/** A viewer with a canvas and scripted picks, plus the layer's click action.
+ *  A click drills through the viewer's `drillHits`. */
 function clickHarness() {
   const scene = {
     canvas: {},
@@ -1141,6 +1246,8 @@ function clickHarness() {
     pick() {
       return scene.pickResult;
     },
+    drillPick: () =>
+      (base.viewer.drillHits ?? []).map((hit) => ({ primitive: {}, id: hit })),
   };
   const base = fakeViewer({ scene });
   return {
@@ -1170,6 +1277,41 @@ test('clicking the selected aircraft keeps it selected and republishes its card'
   harness.click();
   assert.deepEqual(calls.selected, ['local-adsb:abc123', 'local-adsb:abc123']);
   assert.deepEqual(calls.cleared, []);
+});
+
+// The card or label painted on top takes the click: a local aircraft under
+// another layer's card is neither selected nor released.
+test("another layer's card over a local aircraft keeps the click", async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  setClickCardHitTest(() => top);
+  t.after(() => setClickCardHitTest(null));
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    services: {
+      picking: {
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+        resolvePickId,
+        isUnderOtherCard,
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.click();
+  assert.deepEqual(calls.selected, [], 'covered: not selected');
+  top = null;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  harness.scene.pickResult = null;
+  harness.click();
+  assert.deepEqual(calls.cleared, [], 'covered: the selection stays');
 });
 
 test('a click on a local aircraft under an unowned or trail pick still selects it', async (t) => {
@@ -1222,6 +1364,52 @@ test('a click on a local aircraft under an unowned or trail pick still selects i
   harness.viewer.viewer.drillHits = [hit(':markers', 'local-adsb:abc123')];
   harness.click();
   assert.equal(calls.selected.length, 2, 'the Flights contact is not taken');
+});
+
+test('a click on a mission label over a local aircraft never selects the aircraft, and keeps the selection', async (t) => {
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  const harness = clickHarness();
+  // A Space Missions label painted over the map: while it is over, it takes
+  // each click and is the card on top.
+  const label = { over: true };
+  setClickCardHitTest(() => (label.over ? MISSION_LABEL : null));
+  t.after(() => setClickCardHitTest(null));
+  const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+    services: {
+      picking: {
+        registerPickOwner() {},
+        unregisterPickOwner() {},
+        resolvePickId,
+        isUnderOtherCard,
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  receiver.set({ aircraft: [record()] });
+  await layer.update();
+  inputFor(harness.viewer.viewer).onOverlayClick(() => label.over);
+  const model = {
+    set: layerSet(draw, ':models').spec.id,
+    id: 'local-adsb:abc123',
+    surface: false,
+  };
+  // The aircraft is under the label, both exactly and in the drill.
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.viewer.viewer.drillHits = [model];
+  harness.click();
+  assert.deepEqual(calls.selected, [], 'the aircraft beneath is not taken');
+
+  // Off the label the same click selects it; the label on top is its own
+  // click, so the selection stays.
+  label.over = false;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  label.over = true;
+  harness.click();
+  assert.deepEqual(calls.selected, ['local-adsb:abc123']);
+  assert.equal(calls.cleared.length, 0, 'the selection stays');
 });
 
 test('a grounded aircraft changing type keeps its drawn model on its own belly offset until the new one is ready', () => {

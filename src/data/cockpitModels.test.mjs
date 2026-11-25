@@ -70,19 +70,24 @@ for (const layer of LAYERS) {
       'the tracked-model driver uses the cockpit-aware predicate');
   });
 
-  test(`${layer.name}: Cockpit uses standard Proximity and All radii with a lower cap`, () => {
-    assert.equal(numericConstant(source, 'MODEL_PROX_ADD_M'), 150_000);
-    assert.equal(numericConstant(source, 'MODEL_PROX_KEEP_M'), 185_000);
-    assert.equal(numericConstant(source, 'MODEL_ALL_ADD_M'), 400_000);
-    assert.equal(numericConstant(source, 'MODEL_ALL_KEEP_M'), 450_000);
+  test(`${layer.name}: models draw within 3 km in both modes; Cockpit's AIR band keeps its own radii`, () => {
+    assert.equal(numericConstant(source, 'MODEL_ADD_M'), 3000);
+    assert.equal(numericConstant(source, 'MODEL_KEEP_M'), 3600);
     assert.equal(numericConstant(source, 'COCKPIT_MODEL_MAX'), 60);
 
     const add = /^([ \t]*)function _modelAddDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     const keep = /^([ \t]*)function _modelKeepDistM\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
-    assert.match(add, /(?:(?:flightState|state)\.)?_models3dMode\s*===\s*'all'\s*\?\s*(?:policy\.)?MODEL_ALL_ADD_M\s*:\s*(?:policy\.)?MODEL_PROX_ADD_M/);
-    assert.match(keep, /(?:(?:flightState|state)\.)?_models3dMode\s*===\s*'all'\s*\?\s*(?:policy\.)?MODEL_ALL_KEEP_M\s*:\s*(?:policy\.)?MODEL_PROX_KEEP_M/);
-    assert.doesNotMatch(add, /COCKPIT_MODEL_ADD_M/);
-    assert.doesNotMatch(keep, /COCKPIT_MODEL_KEEP_M/);
+    assert.match(add, /return\s+(?:policy\.)?MODEL_ADD_M;/, 'Proximity and All share the add radius');
+    assert.match(keep, /return\s+(?:policy\.)?MODEL_KEEP_M;/, 'Proximity and All share the keep radius');
+
+    // The AIR silhouettes are icons, not models: their band stays mode-aware.
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_PROX_ADD_M'), 150_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_PROX_KEEP_M'), 185_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_ALL_ADD_M'), 400_000);
+    assert.equal(numericConstant(source, 'COCKPIT_AIR_ALL_KEEP_M'), 450_000);
+    const near = /^([ \t]*)function _refreshCockpitNearContacts\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
+    assert.match(near, /all\s*\?\s*COCKPIT_AIR_ALL_ADD_M\s*:\s*COCKPIT_AIR_PROX_ADD_M/);
+    assert.match(near, /all\s*\?\s*COCKPIT_AIR_ALL_KEEP_M\s*:\s*COCKPIT_AIR_PROX_KEEP_M/);
 
     const cap = /^([ \t]*)function _modelCap\b[\s\S]*?\n\1\}/m.exec(source)?.[0];
     assert.match(cap, /Math\.min\(\s*(?:policy\.)?COCKPIT_MODEL_MAX/,
@@ -97,7 +102,8 @@ for (const layer of LAYERS) {
     // `_iconKind` is identity for every unconverted contact (see
     // tr3bRegistry.test.mjs) — it only swaps the glyph for a contact the
     // operator explicitly converted into a TR-3B.
-    assert.match(source, /aircraftIcon\(\s*(?:parts\.)?rendering\._iconKind\(icao24, info\?\.klass\),?\s*(?:FLEET_ICON_PX,?\s*)?\)/,
+    assert.match(source, /const kind = rendering\._iconKind\(icao24, info\?\.klass\);/);
+    assert.match(source, /image: view \?\? aircraftIcon\(kind, FLEET_ICON_PX, frame\)/,
       'near contacts and model fallbacks retain the class-derived aircraft silhouette');
     assert.match(source, /color: rgba\(rendering\._cockpitContactColor\(icao24, info\)\),\s*rotationMode: 'screen',/,
       'far dots are reset to a rotation-free presentation');

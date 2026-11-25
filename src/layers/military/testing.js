@@ -1,4 +1,4 @@
-import { AMBER_TRANSPARENT, TRACKED_ICON_COLOR } from './policy.js';
+import { trackedIconColor } from '../../data/trackedAircraftIcon.js';
 import { createModelRecord } from '../../data/modelRecord.js';
 import {
   aircraftIconTestSeams,
@@ -76,7 +76,9 @@ export function createTesting({
     flightState._viewer = viewer;
     parts.rendering._disposeModelSets();
     if (draw) parts.rendering._createModelSets(viewer, { draw });
-    flightState._icons = createContactIcons();
+    parts.icons._disposeIcons();
+    if (draw) parts.icons._createIcons(viewer);
+    else flightState._icons = createContactIcons();
     flightState._icons.show = iconLayer?.show ?? true;
     _seedIconForTest(icao24, icon, tracked);
     flightState._models.clear();
@@ -170,9 +172,11 @@ export function createTesting({
   /** Evaluate the production tracked-billboard handoff colour for focused tests. */
 
   function _trackedBillboardColorForTest() {
-    return parts.rendering._modelOwnsVisual(flightState._trackedIcao)
-      ? AMBER_TRANSPARENT
-      : TRACKED_ICON_COLOR;
+    const icao24 = flightState._trackedIcao;
+    const color = parts.rendering._fleetBillboardColor(icao24);
+    return parts.rendering._modelOwnsVisual(icao24)
+      ? trackedIconColor(color, 0)
+      : color;
   }
 
   /** Drive the exact fleet icon-to-model handoff used by `_fleetTick`. */
@@ -194,15 +198,20 @@ export function createTesting({
   }
 
   /** How the tracked billboard is drawn (`_trackedBillboardLook`,
-   *  `_trackedSprite`) next to how the contact's fleet icon is (`_fleetLook`). */
+   *  `_trackedSprite`, `_trackedIconColor`) next to how the contact's fleet
+   *  icon is (`_fleetLook`, `_fleetBillboardColor`). */
 
   function _trackedIconLookForTest(icao24) {
     return {
       tracked: {
         ...parts.tracking._trackedBillboardLook(),
         sprite: parts.tracking._trackedSprite(icao24),
+        color: parts.tracking._trackedIconColor(),
       },
-      fleet: parts.icons._fleetLook(icao24),
+      fleet: {
+        ...parts.icons._fleetLook(icao24),
+        color: parts.rendering._fleetBillboardColor(icao24),
+      },
     };
   }
 

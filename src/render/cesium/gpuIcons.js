@@ -31,6 +31,14 @@
  * root's larger `width`/`height`, as a billboard rasterises it), any other
  * image at the item's larger side.
  *
+ * A view (`{views, first}`, `viewSheets`) is not in that atlas: its sheet is
+ * a texture of its own, and its row draws the frame that shows its subject
+ * from the eye (`data/viewSheet.js`), lying flat on the ground along its
+ * course. Until the sheet is registered and loaded, and if it cannot load,
+ * the row draws the view's `fallback` image along its course (nothing
+ * without one). A set draws views from one sheet; a view of another is
+ * refused.
+ *
  * Choices the contract leaves open, taken conservatively:
  * - `horizonCull` judges each row no lower than `ICON_CULL_HEIGHT_M` above
  *   the ellipsoid, as the layers drawing their own icon sets do for sea
@@ -53,6 +61,7 @@ import {
   ICON_GROUND_RELATIVE,
   ICON_RECEDES,
   ICON_ROTATES,
+  ICON_VIEWS,
 } from '../../data/iconSet.js';
 import {
   writeArcSegment,
@@ -68,14 +77,30 @@ import {
   motionEndsAt,
 } from '../motion/iconMotion.js';
 import { blobUrl, toCartesian } from './common.js';
+import { isViewRef } from '../../data/viewSheet.js';
 import { heightsFor } from './heights.js';
 
 /** The capabilities GPU icon sets bring. */
-export const GPU_ICON_CAPABILITIES = Object.freeze([
+const GPU_ICON_CAPABILITIES = Object.freeze([
   'columns',
   'motionSegments',
   'courseGlide',
 ]);
+
+/**
+ * GPU icon sets also offer `viewSheets` except on WebGL 1, where a set
+ * drawing views could not read its rows' display range, fade and offset.
+ * @param {object} [scene] A Cesium scene; none (a test's) is taken as WebGL 2.
+ */
+export function gpuIconCapabilities(scene) {
+  return scene?.context?.webgl2 === false
+    ? [...GPU_ICON_CAPABILITIES]
+    : [...GPU_ICON_CAPABILITIES, 'viewSheets'];
+}
+
+/** Whether a subject's block of frames, from its first cell, is in `layout`. */
+export const blockFits = (first, layout) =>
+  first + layout.frames <= layout.columns * layout.rows;
 
 const nonZero = (v) =>
   Boolean(v) && (v.x !== 0 || v.y !== 0 || (v.z ?? 0) !== 0);
@@ -204,10 +229,12 @@ function rasterPxOf(url, item) {
  *   toColor: (color: unknown) => Cesium.Color,
  *   imageOf: (record: object, image: unknown) => unknown,
  *   peekImage: (ref: {atlas: string, slot: string}) => unknown,
+ *   viewsOf?: (id: string) => ({image: string, layout: object}|undefined),
  *   requestRender: (reason: string) => void}} options `date` is the epoch
  *   ms a `live` motion clock reads (null: the system clock's); `imageOf` reads an atlas slot
  *   through the draw port's atlases (undefined while it is not registered),
- *   noting that the set draws from it; `peekImage` only reads it.
+ *   noting that the set draws from it; `peekImage` only reads it;
+ *   `viewsOf` reads a registered view sheet (undefined while it is not).
  */
 export function createGpuIcons({
   scene,
@@ -216,33 +243,54 @@ export function createGpuIcons({
   toColor,
   imageOf,
   peekImage,
+  viewsOf = () => undefined,
   requestRender,
 }) {
   const can = (capability) => capabilities.has(capability);
-
-  /** Whether drawing these items (in a set of `spec`) needs a GPU icon set. */
-  function wants(items, spec = {}) {
-    if (spec.recede) return true;
-    for (const item of items) {
-      if (
-        (item.motion && can('motionSegments')) ||
-        (item.courseGlide && can('courseGlide')) ||
-        item.pickProxy ||
-        item.imageLod
-      )
-        return true;
-    }
-    return false;
+  /** Whether this item needs a GPU icon set. */
+  function wants(item, image) {
+    return (
+      (item.motion && can('motionSegments')) ||
+      (item.courseGlide && can('courseGlide')) ||
+      item.pickProxy ||
+      item.imageLod ||
+      isViewRef(image)
+    );
   }
 
   /** Refuse what a GPU icon set cannot draw, before anything changes. */
-  function check(items, spec = {}) {
+  function check(items, spec = {}, record = null) {
     // Atlas slots these items would take anew: they must all fit.
     const fresh = new Set();
+    // The one sheet the set draws views from: its record's, else the first
+    // of these items'.
+    let sheet = record?.views ?? null;
     for (const item of items) {
       const refuse = (what) => {
         throw new Error(`the Cesium renderer's GPU icons have no ${what}`);
       };
+      if (isViewRef(item.imageLod?.near)) refuse('views as near images');
+      if (isViewRef(item.image?.fallback)) refuse('views as fallbacks');
+      if (isViewRef(item.image)) {
+        if (!can('viewSheets')) refuse('view sheets');
+        if (!Number.isInteger(item.image.first) || item.image.first < 0)
+          throw new TypeError("a view's first cell is a whole number from 0");
+        const registered = viewsOf(item.image.views);
+        if (!registered)
+          throw new Error(
+            `no view sheet '${item.image.views}' is registered: call views() first`,
+          );
+        if (!blockFits(item.image.first, registered.layout))
+          throw new RangeError("a view's frames run past its sheet");
+        if (item.rotationMode !== 'course')
+          refuse("views but along a course (rotationMode: 'course')");
+        if (item.imageLod) refuse('imageLod for a view');
+        sheet ??= item.image.views;
+        if (item.image.views !== sheet)
+          refuse(
+            `views from two sheets in a set (${sheet}, ${item.image.views})`,
+          );
+      }
       if (item.offsetScalesByDistance && nonZero(item.pixelOffset))
         refuse('pixel offsets scaled by distance');
       // What a row reads from its extras texture, which WebGL 1 has not.
@@ -258,7 +306,12 @@ export function createGpuIcons({
         if (item.rotationMode === 'screen' && (item.rotation ?? 0) !== 0)
           refuse('screen rotation on WebGL 1');
       }
-      for (const given of [item.image, item.imageLod?.near]) {
+      for (const given of [
+        // A view is not in the atlas; the image it falls back to is.
+        isViewRef(item.image) ? item.image.fallback : item.image,
+        item.imageLod?.near,
+      ]) {
+        if (given === undefined) continue;
         // An atlas slot as what it holds now (none yet draws once it does).
         const image =
           typeof given?.atlas === 'string' ? peekImage(given) : given;
@@ -316,6 +369,7 @@ export function createGpuIcons({
       cull: () => spec.horizonCull === true,
       recede: () => spec.recede,
       translucent: () => spec.blend === 'translucent',
+      views: () => (record.views ? (viewsOf(record.views) ?? null) : null),
       // Picked as the draw port's other items are: `{set, id, meta}` as
       // the item now is, hidden row by row for drill picks.
       pickObject: (id, _set, primitive) => ({
@@ -411,14 +465,27 @@ export function createGpuIcons({
       const added = row < 0;
       if (added) row = set.add(item.id);
       const [width = 0, height = 0] = item.size ?? [];
-      const far = slotOf(item.image, item);
-      const near = item.imageLod ? slotOf(item.imageLod.near, item) : far;
-      set.setImage(row, far, near);
-      // A switch at 0 px or less is near at any size.
-      set.setImageSwitch(
-        row,
-        item.imageLod ? Math.max(item.imageLod.switchPx, 1e-3) : 0,
-      );
+      const view = isViewRef(item.image);
+      if (view) {
+        // First sheet cell and the atlas slot used until the sheet is ready.
+        record.views ??= item.image.views;
+        const fallback =
+          item.image.fallback === undefined
+            ? -1
+            : slotOf(item.image.fallback, item);
+        set.setImage(row, item.image.first, fallback);
+        set.setImageSwitch(row, 0);
+      } else {
+        const far = slotOf(item.image, item);
+        const near = item.imageLod ? slotOf(item.imageLod.near, item) : far;
+        set.setImage(row, far, near);
+        // A switch at 0 px or less is near at any size.
+        set.setImageSwitch(
+          row,
+          item.imageLod ? Math.max(item.imageLod.switchPx, 1e-3) : 0,
+        );
+      }
+      set.setFlag(row, ICON_VIEWS, view);
       set.setSize(row, width, height);
       set.setScale(row, item.scale ?? 1);
       set.setAlpha(row, item.alpha ?? 1);
@@ -747,7 +814,11 @@ export function createGpuIcons({
       reatlas(id) {
         const drawing = [];
         for (const item of record.items.values())
-          if (item.image?.atlas === id || item.imageLod?.near?.atlas === id)
+          if (
+            item.image?.atlas === id ||
+            item.image?.fallback?.atlas === id ||
+            item.imageLod?.near?.atlas === id
+          )
             drawing.push(item);
         if (fresh) return sync();
         for (const item of drawing) writeRow(item);
@@ -870,15 +941,34 @@ export function createGpuIcons({
       },
       /** Whether a live-clock row is still moving: frames should keep coming. */
       animating() {
-        if (spec.motionClock?.kind === 'scene' || spec.show === false)
+        // A set whose owner asks for its frames (`frames: 'owner'`) is not
+        // kept drawing by its moving rows.
+        if (
+          spec.motionClock?.kind === 'scene' ||
+          spec.motionClock?.frames === 'owner' ||
+          spec.show === false
+        )
           return false;
         return set.count > 0 && clockMs() < movingUntil;
       },
       /** The images shown rows draw: `failed`, `loading` or `settled`. */
       imageState() {
+        const views = host.viewsState();
         let loading = false;
         for (let row = 0; row < set.count; row++) {
           if (!set.shown(row)) continue;
+          if (set.flags(row) & ICON_VIEWS) {
+            // A view row waits on its sheet. Once it fails, the fallback decides.
+            if (views === 'ready') continue;
+            if (views === 'loading') {
+              loading = true;
+              continue;
+            }
+            const fallback = set.imageNear(row);
+            if (fallback < 0 || iconAtlas.failed(fallback)) return 'failed';
+            if (!iconAtlas.ready(fallback)) loading = true;
+            continue;
+          }
           for (const slot of [set.imageFar(row), set.imageNear(row)]) {
             if (slot < 0) continue;
             if (iconAtlas.failed(slot)) return 'failed';

@@ -3,6 +3,7 @@ import { sphereFromPoints } from '../../geo/sphere.js';
 import { drawOf } from '../../render/rendererOf.js';
 import {
   CYCLONE_ACCENT,
+  CYCLONE_DANGER_ACCENT,
   CYCLONE_MARKER_PX,
   CYCLONE_SELECTED_ACCENT,
   createCycloneLabels,
@@ -22,6 +23,29 @@ export function coherentCycloneGeometry(storm) {
     storm.geometryStatus === 'current' &&
     storm.geometryAdvisoryNumber === storm.advisoryNumber
   );
+}
+
+/**
+ * Where a danger area's label sits: the vertex of its outer ring nearest the
+ * forecast point halfway along the track (ECEF).
+ */
+function dangerAreaAnchor(ring, forecastPoints, ecef, lonLat) {
+  const middle = forecastPoints[Math.floor(forecastPoints.length / 2)];
+  if (!middle) return ring[0];
+  const target = ecef(lonLat(middle.position));
+  let best = ring[0],
+    bestDistance = Infinity;
+  for (const vertex of ring) {
+    const d =
+      (vertex.x - target.x) ** 2 +
+      (vertex.y - target.y) ** 2 +
+      (vertex.z - target.z) ** 2;
+    if (d < bestDistance) {
+      best = vertex;
+      bestDistance = d;
+    }
+  }
+  return best;
 }
 
 /** A `#rrggbb` colour at `alpha`, as CSS. */
@@ -64,7 +88,14 @@ export function createCycloneRendering({ viewer, overlayHost }) {
     forecasts = [],
     spheres = new Map(),
     itemStorms = new Map();
-  let counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+  const emptyCounts = () => ({
+    storms: 0,
+    tracks: 0,
+    cones: 0,
+    dangerAreas: 0,
+    forecastPoints: 0,
+  });
+  let counts = emptyCounts();
   let itemCount = 0;
 
   function centerItem(storm) {
@@ -104,7 +135,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
         nextLines = [],
         nextCones = [],
         nextLabels = [];
-      const nextCounts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+      const nextCounts = emptyCounts();
       const lonLat = ({ longitude, latitude }) => ({
         lon: longitude,
         lat: latitude,
@@ -130,6 +161,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
           windKt: storm.windKt,
           position: center,
           forecasts: [],
+          dangerArea: null,
         };
         nextLabels.push(label);
         nextCounts.storms++;
@@ -151,38 +183,66 @@ export function createCycloneRendering({ viewer, overlayHost }) {
             });
             nextCounts.tracks++;
           });
-          const polygons =
-            storm.cone?.type === 'Polygon'
-              ? [storm.cone.coordinates]
-              : storm.cone?.coordinates || [];
-          polygons.forEach((rings, index) => {
-            // Each exterior retains its own interior holes. Native geographic
-            // tessellation handles the antimeridian; never flatten rings.
-            const all = rings.map((ring) => ring.map(pair));
-            const ecefRings = all.map((ring) => ring.map(ecef));
-            extent.push(...ecefRings[0]);
-            nextCones.push({
-              id: own(`cyclone:${storm.id}:cone:${index}`),
-              geometry: { kind: 'polygon', rings: all },
-              fill: withAlpha(CYCLONE_ACCENT, 0.16),
-              height: 'clampGround',
-            });
-            ecefRings.forEach((ring, ringIndex) => {
-              nextLines.push({
-                id: own(
-                  `cyclone:${storm.id}:cone:${index}:outline:${ringIndex}`,
-                ),
-                positions: ring,
-                widthPx: 1,
-                mode: 'draped',
-                style: {
-                  kind: 'solid',
-                  color: withAlpha(CYCLONE_ACCENT, 0.55),
-                },
+          // NHC's cone of centre-track uncertainty, or JTWC's 34-knot wind
+          // danger area: drawn apart, never one as the other.
+          const areas = [
+            { kind: 'cone', shape: storm.cone, color: CYCLONE_ACCENT },
+            {
+              kind: 'danger',
+              shape: storm.dangerArea,
+              color: CYCLONE_DANGER_ACCENT,
+            },
+          ];
+          for (const { kind, shape, color } of areas) {
+            const polygons =
+              shape?.type === 'Polygon'
+                ? [shape.coordinates]
+                : shape?.coordinates || [];
+            polygons.forEach((rings, index) => {
+              // Each exterior retains its own interior holes. Native
+              // geographic tessellation handles the antimeridian; never
+              // flatten rings.
+              const all = rings.map((ring) => ring.map(pair));
+              const ecefRings = all.map((ring) => ring.map(ecef));
+              extent.push(...ecefRings[0]);
+              nextCones.push({
+                id: own(`cyclone:${storm.id}:${kind}:${index}`),
+                geometry: { kind: 'polygon', rings: all },
+                fill: withAlpha(color, kind === 'cone' ? 0.16 : 0.12),
+                height: 'clampGround',
               });
+              ecefRings.forEach((ring, ringIndex) => {
+                nextLines.push({
+                  id: own(
+                    `cyclone:${storm.id}:${kind}:${index}:outline:${ringIndex}`,
+                  ),
+                  positions: ring,
+                  widthPx: kind === 'cone' ? 1 : 1.5,
+                  mode: 'draped',
+                  style:
+                    kind === 'cone'
+                      ? { kind: 'solid', color: withAlpha(color, 0.55) }
+                      : {
+                          kind: 'dash',
+                          color: withAlpha(color, 0.8),
+                          length: 16,
+                        },
+                });
+              });
+              if (kind === 'cone') nextCounts.cones++;
+              else {
+                nextCounts.dangerAreas++;
+                // The area's name sits on its edge nearest the middle of
+                // the forecast track.
+                label.dangerArea ??= dangerAreaAnchor(
+                  ecefRings[0],
+                  storm.forecastPoints,
+                  ecef,
+                  lonLat,
+                );
+              }
             });
-            nextCounts.cones++;
-          });
+          }
           for (const [index, point] of storm.forecastPoints.entries()) {
             if (point.tauHours === 0) continue;
             const pos = lonLat(point.position);
@@ -252,7 +312,7 @@ export function createCycloneRendering({ viewer, overlayHost }) {
       itemStorms = new Map();
       itemCount = 0;
       selected = null;
-      counts = { storms: 0, tracks: 0, cones: 0, forecastPoints: 0 };
+      counts = emptyCounts();
     },
     destroy() {
       if (destroyed) return;

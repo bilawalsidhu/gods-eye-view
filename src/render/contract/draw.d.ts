@@ -27,8 +27,18 @@ import type {
 /** How an item's height is read. */
 export type HeightMode = 'absolute' | 'clampGround' | 'relativeGround';
 
-/** What `clampGround` / `relativeGround` clamp to. */
-export type ClampTarget = 'terrain' | 'tiles' | 'both';
+/**
+ * What `clampGround` / `relativeGround` clamp to. `overlay`: clamped
+ * shapes' flat fills and outlines, and draped lines, are drawn on the
+ * ellipsoid (height 0) over everything else, 3D tiles and terrain included,
+ * which never hide them: neither draped onto the tiles nor hidden under
+ * them. Only the ellipsoid hides them: what lies past its horizon from the
+ * eye is not drawn (the far side of the globe never shows through it).
+ * Their edges follow the surface's curve between their positions, as a
+ * draped item's do. Icons, points and models clamp to an `overlay` as to
+ * `both`; extruded shapes and walls stand on the surface as with `both`.
+ */
+export type ClampTarget = 'terrain' | 'tiles' | 'both' | 'overlay';
 
 /**
  * `cluster`: screen-space clustering of a set's icons. Which icons cluster
@@ -133,7 +143,20 @@ export interface SetSpec {
    * `live` (the default) is wall time minus `delayMs`, as a live feed is
    * drawn a little behind real time; `scene` is the frame port's scene time.
    */
-  motionClock?: { kind: 'live'; delayMs?: number } | { kind: 'scene' };
+  motionClock?:
+    | {
+        kind: 'live';
+        delayMs?: number;
+        /**
+         * Who asks for the frames moving rows need: the set itself, one after
+         * another while a row moves (the default), or its `owner`, at the
+         * rate the rows move on screen. An owner's set may also draw a
+         * change written in place on the owner's next frame without asking
+         * for one (the owner writes as a frame begins).
+         */
+        frames?: 'set' | 'owner';
+      }
+    | { kind: 'scene' };
   show?: boolean;
 }
 
@@ -154,6 +177,34 @@ export interface Placed {
   disableDepthTest?: number;
 }
 
+/**
+ * `viewSheets`: one image of small sprites that show subjects from a sphere
+ * of directions, registered with `DrawPort.views`. An icon whose image is a
+ * view (`{views, first}`) lies flat on the ground, forward along its course,
+ * and is drawn as the sprite that shows it from where the eye is.
+ *
+ * The image is a grid of square cells, `cellPx` a side, `columns` across and
+ * `rows` down. A subject is a block of consecutive cells, row-major from its
+ * `first`: rings of frames `ringStepDeg` apart, from straight above (ring 0,
+ * one frame) downward, short of straight below; ring `k` holds `rings[k]`
+ * frames, from the eye dead ahead of the subject, round its right side, to
+ * dead astern. The eye on its left side draws the right side's frame
+ * mirrored. A frame's up is the subject's forward, turned by the smallest
+ * rotation that takes its up onto the frame's direction.
+ * The sheet is grey (equal red, green and blue). A renderer reads its red
+ * channel as grey. Keep each cell's outer 2 px transparent for half-size mips.
+ */
+export interface ViewSheet {
+  /** The sheet's URL. */
+  image: string;
+  cellPx: number;
+  columns: number;
+  rows: number;
+  ringStepDeg: number;
+  /** Frames in each ring; the first is 1. At most 18 rings. */
+  rings: readonly number[];
+}
+
 /** An image an icon draws: a URL, a slot in a shared atlas, or generated. */
 export type ImageRef =
   | string
@@ -161,6 +212,13 @@ export type ImageRef =
   | { svg: string }
   | { blob: Blob }
   | { canvas: HTMLCanvasElement | OffscreenCanvas; key: string };
+
+/** `viewSheets`: a subject of a registered sheet, by its first cell (icons only). */
+export interface ViewRef {
+  views: string;
+  first: number;
+  fallback?: ImageRef;
+}
 
 /**
  * How an icon moves between updates, on its set's `motionClock`. Times are
@@ -211,7 +269,13 @@ export interface CourseGlide {
 }
 
 export interface IconItem extends Placed {
-  image: ImageRef;
+  /**
+   * A view (`{views, first}`) needs `rotationMode: 'course'` and takes no
+   * `imageLod`. Register the sheet before drawing its icons. A set draws
+   * from one sheet. Until it loads, and if it fails, the icon draws its `fallback`
+   * (any image but a view) along its course, or nothing without one.
+   */
+  image: ImageRef | ViewRef;
   /** Drawn size in CSS pixels. */
   size: [width: number, height: number];
   color?: Color;
@@ -295,10 +359,74 @@ export type LineStyle =
       rim?: { shade: number; widthFraction: number };
     };
 
+/**
+ * `lineAgeFade`: a line that fades with the age of its points, drawn by the
+ * renderer on the scene clock (`frame.setTime`), so a line whose points stay
+ * where they are is not sent again as time passes. A point's recency is
+ * `1 - clamp((now - time) / windowMs, 0, 1)`, its time running evenly
+ * between neighbouring positions, so the fade is smooth along the line, not
+ * stepped at its points. The line's colour (its style's, or a segment's from
+ * `segmentColors`) draws at its alpha times
+ * `mix(alphaFloor, 1, smoothstep(0, 1, recency))`, and with
+ * `squaredAlphaFloor` times `mix(squaredAlphaFloor, 1, recency²)` as well;
+ * with `widthFloor` it draws `widthPx` times `mix(widthFloor, 1, recency)`
+ * wide, about its path. A point at or past the window draws at the floors, a
+ * point at or after now at full strength. New `times` with new positions are
+ * an ordinary update.
+ *
+ * `lineTimeWindow`: with `showMs`, only the part of the line within `showMs`
+ * of now is drawn, cut along it where its interpolated time crosses: parts
+ * whose time is after now, or before `now - showMs`, are not drawn (nor
+ * picked). The cut follows the scene clock as the fade does, so a moving
+ * object's trail can be its whole track, sent once: drawn from `showMs` ago
+ * up to where the object is now. A renderer without the capability ignores
+ * `showMs` and draws the whole line.
+ */
+export interface LineAgeFade {
+  /** Each position's time, epoch ms on the scene clock: one per position. */
+  times: number[] | Float64Array;
+  /** The age a point fades over, ms; positive. */
+  windowMs: number;
+  /** A fully aged point's alpha multiplier, 0..1. */
+  alphaFloor: number;
+  /** A second alpha multiplier's floor, eased by recency squared, 0..1. */
+  squaredAlphaFloor?: number;
+  /** A fully aged point's width multiplier, 0..1 [1, no narrowing]. */
+  widthFloor?: number;
+  /**
+   * `lineTimeWindow`: draw only the part of the line from `showMs` before
+   * now up to now, ms; positive (`Infinity`: up to now, however old).
+   * [absent: the whole line]
+   */
+  showMs?: number;
+}
+
+/**
+ * `lineBreaks`: a line drawn as several runs, so many lines in one style can
+ * be one item (thousands of moving objects' trails sent as one line, say),
+ * and the renderer handles one item instead of thousands. Each break is the
+ * index `i` of a position that starts a new run (`0 < i < positions.length`,
+ * strictly increasing): the segment from position `i - 1` to `i` is not
+ * drawn (nor picked), and the line does not join across it, each run having
+ * two ends of its own, capped and joined as a line of its own would be.
+ * `segmentColors` and `segmentShow` stay one a pair of neighbouring
+ * positions (`j`: from position `j` to `j + 1`), so a pair across a break
+ * has an entry that is ignored; `ageFade.times` stays one a position; and
+ * `revealFraction` runs along the runs, in order, as one length (the gaps
+ * between them have none). A renderer without the capability is never sent
+ * `breaks`: its lines are sent one item a run instead.
+ */
+export type LineBreaks = number[] | Uint32Array;
+
 export interface LineItem {
   id: string;
   /** ECEF positions, or packed `x, y, z` triples. */
   positions: Ecef[] | Float64Array;
+  /**
+   * `lineBreaks`: the positions that start a new run of the line
+   * (`LineBreaks`). [absent or empty: one run]
+   */
+  breaks?: LineBreaks;
   widthPx: number;
   /**
    * `3d`: straight in space; `geodesic`: along the ellipsoid; `draped`: on
@@ -321,6 +449,8 @@ export interface LineItem {
   segmentShow?: boolean[];
   /** Draw only the first fraction of the line, 0..1. */
   revealFraction?: number;
+  /** `lineAgeFade`: fade the line with the age of its points (`LineAgeFade`). */
+  ageFade?: LineAgeFade;
   /** Positions are in a frame rotating with the sky (orbits). */
   frame?: 'fixed' | 'inertial';
   meta?: Meta;
@@ -445,11 +575,79 @@ export interface ModelItem extends Placed {
    */
   clip?: 'belowOrigin';
   /**
+   * Transforms of the model's named glTF nodes (an articulated model's
+   * joints): each a column-major 4×4 matrix in the node's parent frame that
+   * replaces the node's own transform. A node whose name leaves the map goes
+   * back to its authored pose; names the model lacks are ignored. Applied
+   * once the model is ready, on a renderer with the `modelNodes`
+   * capability; elsewhere the model draws as authored. Can change live.
+   */
+  nodes?: Readonly<Record<string, ArrayLike<number>>>;
+  /**
    * Emphasis for a focused model, 0..1, 1 = none: the tint's alpha is
    * multiplied by it (in a set that recedes, as `RecedeSpec` says). Can
    * change live.
    */
   focus?: number;
+  /**
+   * `modelParts`: how the model's moving parts are posed. Applies to a
+   * model whose mesh carries a `_PART` vertex attribute (each vertex's part
+   * index) and whose root node's glTF `extras.parts` is its part table;
+   * ignored for any other. Omitted, or without the capability, the model is
+   * drawn whole, at rest, as its file draws it. Can change live, without
+   * loading the model again.
+   */
+  parts?: ModelPartState;
+}
+
+/**
+ * A model's part state (`ModelItem.parts`), each member by part name; a
+ * part not named is at rest, and a name the model's part table lacks is
+ * ignored. The maths is `render/modelParts`'s `partMatrices`: about each
+ * part's pivot, its deploy fraction first, then its spin, then its pose,
+ * then its parent part's whole motion.
+ */
+export interface ModelPartState {
+  /**
+   * Degrees a second about the part's axis, which the renderer advances
+   * itself on its own clock each frame: a turning rotor costs the
+   * application no write per frame. A change of rate goes on from the angle
+   * reached, without a jump; a part that stops spinning stays where it is.
+   */
+  spin?: Record<string, number>;
+  /**
+   * 0 (stowed, the table's first limit) to 1 (deployed, its second): a
+   * hinge or deploy part turned, a slide or separable part moved along its
+   * axis, that far between its limits. Clamped to 0..1.
+   */
+  deploy?: Record<string, number>;
+  /** Each part's pose, on top of its spin and deploy fraction. */
+  poses?: Record<string, PartPose>;
+}
+
+/**
+ * One part's pose about its pivot, in the model's own frame (in its glTF:
+ * forward −X, up +Y, right −Z). A hinge or deploy part's turn about its
+ * axis stays within its limits, as does a slide part's travel; the rest of
+ * every part's motion is free. A number that is not finite counts as 0.
+ */
+export interface PartPose {
+  /** Metres along the model's right, forward and up. */
+  offsetM?: [right: number, forward: number, up: number];
+  /** Degrees clockwise seen from above, as a heading. Applied first. */
+  yawDeg?: number;
+  /** Degrees nose up. Applied after the yaw. */
+  pitchDeg?: number;
+  /** Degrees clockwise looking forward. Applied last. */
+  rollDeg?: number;
+  /** Not drawn, nor any part riding it. */
+  hidden?: boolean;
+  /**
+   * Drawn in a highlight colour: `true` for the renderer's own, or a
+   * colour. Anything else, or a colour the renderer cannot read, draws no
+   * highlight. Not inherited by the parts riding it.
+   */
+  highlight?: boolean | Color;
 }
 
 /** A plane showing an image, a video or a canvas. */
@@ -525,6 +723,8 @@ export type FieldSpec =
        */
       detail?: { image: ImageRef; rectangle: GeoRect } | null;
       alpha?: number;
+      /** What the raster shows, as imagery's `shows`. */
+      shows?: string;
     };
 
 export interface FieldHandle extends Handle {
@@ -605,7 +805,8 @@ export interface DrawPort {
   field?(spec: FieldSpec): FieldHandle;
   /**
    * Whether clamped items (`clampTo: 'tiles' | 'both'`, draped lines and
-   * shapes) are draped onto the 3D tiles now (`draped`), or drawn over them
+   * shapes; never `overlay` ones, always drawn over the tiles) are draped
+   * onto the 3D tiles now (`draped`), or drawn over them
    * and hidden past the ellipsoid's horizon (`overlay`), the fallback a
    * renderer uses where it cannot drape. Without tiles in the base it is
    * `draped`: clamping to terrain or the ellipsoid always drapes, on a
@@ -616,4 +817,6 @@ export interface DrawPort {
   on(event: 'clampState', cb: (state: 'draped' | 'overlay') => void): Off;
   /** Register an atlas of images icons refer to by slot. */
   atlas(id: string, images: Record<string, ImageRef>): void;
+  /** `viewSheets`: register the sheet before an icon draws from it. */
+  views?(id: string, sheet: ViewSheet): void;
 }

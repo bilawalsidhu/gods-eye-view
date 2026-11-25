@@ -9,6 +9,7 @@ import {
 } from 'vue';
 import { t } from '../../../i18n/index.js';
 import { useStoriesStore } from '../../stores/stories.js';
+import UiButton from '../../kit/UiButton.vue';
 
 /**
  * The Stories top bar (prototype `.h-top.s-head`): back, GEV logo and
@@ -39,6 +40,7 @@ async function share() {
 }
 // Long titles scroll gently so the whole name can be read.
 const mtitle = ref(null);
+// Back is a UiButton; its root is the button.
 const back = ref(null);
 const trail = ref(null);
 let observer = null;
@@ -52,8 +54,9 @@ function fitTitle() {
   el.style.setProperty('--mq-dur', `${Math.max(5, (over + 22) / 22)}s`);
 }
 onMounted(() => {
-  const target = back.value?.getClientRects().length
-    ? back.value
+  const backEl = back.value?.$el;
+  const target = backEl?.getClientRects().length
+    ? backEl
     : trail.value?.querySelector('button');
   target?.focus({ preventScroll: true });
   if (globalThis.ResizeObserver && mtitle.value) {
@@ -71,10 +74,9 @@ onBeforeUnmount(() => observer?.disconnect());
 
 <template>
   <header class="h-top s-head">
-    <button
+    <UiButton
       ref="back"
       class="s-back glass"
-      type="button"
       :aria-label="
         screen === 'story' ? t('Back to stories') : t('Back to the globe')
       "
@@ -90,31 +92,28 @@ onBeforeUnmount(() => observer?.disconnect());
       >
         <path d="M15 6l-6 6 6 6" />
       </svg>
-    </button>
+    </UiButton>
     <div class="h-brand">
       <div class="h-brand-row">
-        <button
+        <UiButton
           class="s-home"
-          type="button"
           :aria-label="t('Back to the globe')"
           @click="emit('home')"
         >
           <svg class="eye" viewBox="0 0 775 520" aria-hidden="true">
             <use href="#gevLogo" />
           </svg>
-        </button>
+        </UiButton>
         <span class="h-word" translate="no">GOD'S EYE <b>VIEW</b></span>
       </div>
       <nav ref="trail" class="h-tag s-trail" :aria-label="t('Breadcrumb')">
         <template v-if="screen === 'explore'">
-          <button type="button" @click="emit('home')">{{ t('Globe') }}</button>
+          <UiButton @click="emit('home')">{{ t('Globe') }}</UiButton>
           <span aria-hidden="true">/</span>
           <b>{{ t('Stories') }}</b>
         </template>
         <template v-else>
-          <button type="button" @click="emit('crumb')">{{
-            t('Stories')
-          }}</button>
+          <UiButton @click="emit('crumb')">{{ t('Stories') }}</UiButton>
           <span aria-hidden="true">/</span>
           <b>{{ title }}</b>
         </template>
@@ -124,10 +123,9 @@ onBeforeUnmount(() => observer?.disconnect());
       ><span>{{ screen === 'explore' ? t('Stories') : title }}</span></span
     >
     <div class="h-right">
-      <button
+      <UiButton
         v-if="screen === 'explore'"
         class="s-msearch ibtn"
-        type="button"
         :aria-label="t('Search')"
         @click="emit('search')"
       >
@@ -140,21 +138,19 @@ onBeforeUnmount(() => observer?.disconnect());
           <circle cx="11" cy="11" r="6.5" />
           <path d="m16 16 4.5 4.5" />
         </svg>
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="!localOnly"
         class="tbtn hide-m"
-        type="button"
         :aria-label="t('Share')"
         @click="share"
       >
         <span class="share-icon" aria-hidden="true">&#x1F517;</span>
         <span>{{ t('Share') }}</span>
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-if="screen === 'explore'"
         class="tbtn accent hide-m"
-        type="button"
         @click="emit('home')"
       >
         <svg
@@ -168,11 +164,10 @@ onBeforeUnmount(() => observer?.disconnect());
           <path d="M19 12H5M11 6l-6 6 6 6" />
         </svg>
         <span>{{ t('Back to GEV') }}</span>
-      </button>
-      <button
+      </UiButton>
+      <UiButton
         v-else
         class="tbtn accent hide-m gs-back-stories"
-        type="button"
         @click="emit('crumb')"
       >
         <svg
@@ -186,7 +181,7 @@ onBeforeUnmount(() => observer?.disconnect());
           <path d="M19 12H5M11 6l-6 6 6 6" />
         </svg>
         <span>{{ t('GEV Stories') }}</span>
-      </button>
+      </UiButton>
     </div>
   </header>
 </template>

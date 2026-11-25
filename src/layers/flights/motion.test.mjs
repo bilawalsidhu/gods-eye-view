@@ -4,6 +4,8 @@ import * as Cesium from 'cesium';
 import { createMotion } from './motion.js';
 import { arcOffsetEnu } from '../../data/motionModel.js';
 import { createMotion as createMilitaryMotion } from '../military/motion.js';
+import { createQueries } from './queries.js';
+import { createQueries as createMilitaryQueries } from '../military/queries.js';
 import { layerPlacement } from '../../data/placementProvider.js';
 import { observeLiveAircraft } from './placed.js';
 
@@ -248,18 +250,77 @@ const declining = (asked) =>
   );
 
 // Each kind's record carries only its own kinematics fields.
-for (const [name, create, record] of [
+for (const [name, create, record, queriesOf] of [
   [
     'civil',
     createMotion,
     { velocity: 100, true_track: 90, renderAltitudeM: 1234 },
+    createQueries,
   ],
   [
     'military',
     createMilitaryMotion,
     { speedMps: 100, track: 90, renderAltitudeM: 1234 },
+    createMilitaryQueries,
   ],
 ]) {
+  test(`${name} aircraft waiting where a placement holds them still show their reported speed`, () => {
+    // Drawn standing (speed 0) while its fixes catch up: the aircraft has
+    // not stopped, and the panels say what it reports.
+    const placement = layerPlacement(
+      {
+        layer: () => ({
+          place: () => ({
+            lat: 30.5,
+            lon: -96.5,
+            altitudeM: 2000,
+            courseDeg: 90,
+            speedMps: 0,
+            extrapolating: false,
+          }),
+        }),
+      },
+      'aircraft',
+    );
+    const { flightState, motion, start } = placedScenario(
+      create,
+      placement,
+      record,
+    );
+    flightState.now = () => start + 2000;
+    flightState.feed = {};
+    flightState.records.missingPolls = new Map();
+    const describe = (kinematics) => {
+      flightState.records.data.set('abc123', { ...record, ...kinematics });
+      return queriesOf({
+        flightState,
+        services: {
+          aircraftPresentation: {
+            tr3bTypeLabel: (_, label) => label,
+            tr3bAircraftClass: () => null,
+          },
+          labels: { formatFlightLevel: String },
+          militaryRegistry: {},
+          focus: {},
+          recession: {},
+        },
+        parts: {
+          motion,
+          icons: { _iconPosition: () => null },
+          tracking: { _routeIsPlausible: () => false },
+          testing: {},
+        },
+      })._describeFlight('abc123');
+    };
+    const waiting = describe({});
+    assert.equal(flightState._drSpeedMps, 0);
+    assert.equal(waiting.velocityMps, 100);
+    // Nothing reported: the speed it is drawn at.
+    const unreported =
+      name === 'civil' ? { velocity: undefined } : { speedMps: undefined };
+    assert.equal(describe(unreported).velocityMps, 0);
+  });
+
   test(`${name} aircraft move as before without a placement or with one that places nothing`, () => {
     const own = placedScenario(create, null, record).drawn;
     const asked = [];
@@ -338,14 +399,20 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
     'aircraft',
   );
   const state = { timeline: { active: () => false } };
-  const meta = { rawLat: 1, rawLon: 2, renderAltitudeM: 300, onGround: false };
+  const meta = {
+    rawLat: 1,
+    rawLon: 2,
+    renderAltitudeM: 300,
+    groundM: 1656,
+    onGround: false,
+  };
   observeLiveAircraft(state, placement, 'abc123', 5000, meta, 80, 270);
   observeLiveAircraft(
     state,
     placement,
     'abc123',
     6000,
-    { ...meta, renderAltitudeInvented: true, onGround: true },
+    { ...meta, renderAltitudeInvented: true, groundM: null, onGround: true },
     null,
     undefined,
   );
@@ -360,14 +427,45 @@ test('an aircraft fix is told to the placement live, with its drawn height', () 
       lat: 1,
       lon: 2,
       altitudeM: 300,
+      groundM: 1656,
       speedMps: 80,
       courseDeg: 270,
       headingDeg: NaN,
       onGround: false,
     },
   ]);
+  // Where the layer does not know the ground, it says so.
+  assert.ok(Number.isNaN(told[1][1].groundM));
   assert.ok(Number.isNaN(told[1][1].altitudeM));
   assert.ok(Number.isNaN(told[1][1].speedMps));
   assert.ok(Number.isNaN(told[1][1].courseDeg));
   assert.equal(told[1][1].onGround, true);
+});
+
+test('the trail head reads the tracked position only from the frame it is drawn in', () => {
+  for (const create of [createMotion, createMilitaryMotion]) {
+    const position = { x: 1, y: 2, z: 3 };
+    const flightState = {
+      records: { data: new Map() },
+      _positionHistory: new Map(),
+      _focusEvidenceIds: new Set(),
+      _trackedIcao: 'abc123',
+      // No viewer: the drawn-frame count reads -1.
+      _viewer: null,
+      _drReconcileValid: true,
+      _drReconcileIcao: 'abc123',
+      _cachedDRPosition: position,
+      _cachedDRFrame: -1,
+      now: Date.now,
+    };
+    const motion = create({
+      flightState,
+      services: { groundFloor: {}, camera: {}, focus: {}, placement: null },
+      parts: { rendering: { _modelOwnsVisual: () => false } },
+    });
+    assert.equal(motion._trackedTrailCached(), position, 'this frame');
+    // Kept from a frame before: the head works it out for its own frame.
+    flightState._cachedDRFrame = -2;
+    assert.equal(motion._trackedTrailCached(), null, 'a frame before');
+  }
 });

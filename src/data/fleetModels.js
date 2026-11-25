@@ -20,6 +20,7 @@
  */
 
 import { classifyAircraft } from './aircraftClass.js';
+import { readPartTable } from '../render/modelParts.js';
 import { FLEET_TRAIL_ANCHORS } from './fleetTrailAnchors.js';
 import { isAidToNavigation } from './vesselTypes.js';
 
@@ -37,7 +38,7 @@ const MAX_HULL_LENGTH_M = 460;
 const MAX_HULL_BEAM_M = 75;
 
 /** The model a known aircraft class draws when its type has no entry. */
-const CLASS_MODELS = Object.freeze({
+export const CLASS_MODELS = Object.freeze({
   light: 'c172',
   glider: 'glider',
   turboprop: 'at72',
@@ -525,6 +526,34 @@ export function namedFleetModels(types) {
     ...AID_MODELS.map(([, model]) => model),
     DEFAULT_AID_MODEL,
   ]);
+}
+
+/** Each loaded set's part tables by model name (null for a model without one). */
+const partTables = new WeakMap();
+
+/**
+ * The part table of model `name` in a loaded set, read once from its GLB:
+ * which moving parts it has (`render/modelParts.js`); null for a model
+ * without one, or whose GLB did not load.
+ * @param {{bytes?: Map<string, Uint8Array>}|null|undefined} set
+ * @param {string|null|undefined} name
+ * @returns {import('../render/modelParts').PartTable|null}
+ */
+export function fleetPartTable(set, name) {
+  const bytes = name ? set?.bytes?.get(name) : undefined;
+  if (!bytes) return null;
+  let tables = partTables.get(set);
+  if (!tables) partTables.set(set, (tables = new Map()));
+  if (!tables.has(name)) {
+    let table = null;
+    try {
+      table = readPartTable(bytes);
+    } catch {
+      // A malformed table: the model draws whole.
+    }
+    tables.set(name, table);
+  }
+  return tables.get(name);
 }
 
 let loading = null;

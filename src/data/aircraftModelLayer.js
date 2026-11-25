@@ -14,7 +14,14 @@ import {
   showModel,
 } from './modelRecord.js';
 import { modelDrawnScale } from './modelVisualAnchor.js';
-import { fleetModelSet } from './fleetModels.js';
+import {
+  createRenderPace,
+  createScreenSpeed,
+  paceHzForSpeed,
+} from '../renderPace.js';
+import { ROTOR_FPS } from './rotorFrames.js';
+import { fleetModelSet, fleetPartTable } from './fleetModels.js';
+import { aircraftLayerPartState } from './modelPartDrivers.js';
 import { findCamera, findDraw, rendererOf } from '../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import {
@@ -53,6 +60,25 @@ function inView(pose, point) {
     Math.abs(dot(v, pose.right)) <= Math.max(0, depth) * tanX + 1 &&
     Math.abs(dot(v, pose.up)) <= Math.max(0, depth) * tanY + 1
   );
+}
+
+/** Each icon's move is read over at most this much of its drawn path, in ms. */
+const PACE_SPAN_MS = 1000;
+/** A drawn path that ends sooner than this is not read: it is replanned. */
+const PACE_MIN_SPAN_MS = 20;
+
+/**
+ * How much of an icon's drawn path, from display time `t`, its on-screen
+ * speed is read over: PACE_SPAN_MS, or what is left of a path that ends
+ * sooner (past its end it stands still, which is no speed), or 0 when too
+ * little is left to read.
+ * @param {number} t Display ms.
+ * @param {number|null|undefined} endsAt When the icon's drawn path ends, if it does.
+ */
+export function paceSpanMs(t, endsAt) {
+  if (endsAt == null || !(endsAt - t < PACE_SPAN_MS)) return PACE_SPAN_MS;
+  const left = endsAt - t;
+  return left >= PACE_MIN_SPAN_MS ? left : 0;
 }
 
 /**
@@ -118,6 +144,71 @@ export function createAircraftModels({
   let instances = 0;
   /** The fleet items this tick wrote, sent together when it ends. */
   let pendingItems = [];
+
+  // The pace: how often the fleet is drawn while nothing else draws
+  // (renderPace.js). The icons move on the GPU, so a frame is all a move
+  // takes; an airliner crosses a hundredth of a pixel a second on the whole
+  // globe and hundreds from close by, so the rate follows the fastest icon
+  // in view.
+  const pace = createRenderPace({ owner: setPrefix, render: services.render });
+  const screenSpeed = createScreenSpeed();
+  /** How often the icons' on-screen speed is read, in ms. */
+  const PACE_READ_MS = 250;
+  /** While icons fade for a focus change, they are drawn this often. */
+  const PACE_FADE_HZ = 20;
+  /** A rotor drawn this recently is in view. */
+  const PACE_ROTOR_SEEN_MS = 600;
+  let paceReadMs = -Infinity;
+  let pacePxPerSec = 0;
+
+  /**
+   * The fastest icon in view's speed on screen, in pixels a second: each
+   * shown icon's drawn position now and PACE_SPAN_MS on, which takes in a
+   * new fix being blended in as well as its flight.
+   */
+  function _readIconSpeed(pose) {
+    const icons = state._icons;
+    if (!icons || !screenSpeed.begin(pose, _viewport().height)) return 0;
+    const t = parts.icons._displayMs();
+    for (const id of icons.ids()) {
+      if (!icons.shown(id)) continue;
+      const spanMs = paceSpanMs(t, icons.expires(id));
+      if (!spanMs) continue;
+      screenSpeed.add(
+        icons.position(id, t),
+        icons.position(id, t + spanMs),
+        PACE_SPAN_MS / spanMs,
+      );
+    }
+    return screenSpeed.pxPerSec(PACE_SPAN_MS / 1000);
+  }
+
+  /**
+   * Draws a second the fleet needs as the camera stands (the pace clamps
+   * it to its range). Infinity: as often as the pace allows.
+   */
+  function _paceHz(nowMs = Date.now()) {
+    const pose = _pose();
+    if (!pose?.position) return Infinity;
+    // Models, and the Cockpit's contacts, are moved on every frame.
+    if (
+      state._cockpitContactMode ||
+      state._models.size ||
+      _modelRegimeActive(pose)
+    )
+      return Infinity;
+    if (nowMs - paceReadMs >= PACE_READ_MS) {
+      paceReadMs = nowMs;
+      pacePxPerSec = _readIconSpeed(pose);
+    }
+    let hz = paceHzForSpeed(pacePxPerSec);
+    if (state._iconFocusFading > 0 && hz < PACE_FADE_HZ) hz = PACE_FADE_HZ;
+    // A helicopter in view turns its rotor ROTOR_FPS times a second.
+    const rotorAtMs = parts.icons._rotorDrawnAtMs?.() ?? -Infinity;
+    if (nowMs - rotorAtMs < PACE_ROTOR_SEEN_MS && hz < ROTOR_FPS)
+      hz = ROTOR_FPS;
+    return hz;
+  }
   /** The ground sample's exclusions, kept while the sets they name live. */
   let exclusions = null;
 
@@ -225,10 +316,10 @@ export function createAircraftModels({
     return sets ? [sets.fleet.id, sets.tracked.id] : [];
   }
 
-  /** The FLEET's 3D-model regime: models3d enabled AND the camera zoomed in past the altitude
-   *  ceiling. Since 2026-08-22 the toggle DEFAULTS ON in `proximity`, which is itself the
-   *  budget: models only appear below MODEL_ALT_CEIL_M and only for the nearest MODEL_MAX in
-   *  view. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
+  /** The FLEET's 3D-model regime: models3d enabled AND the camera below the altitude ceiling,
+   *  above which no contact can be within the model radius. Since 2026-08-22 the toggle DEFAULTS
+   *  ON in `proximity`, which is itself the budget: models only appear within MODEL_ADD_M of the
+   *  camera and only for the nearest MODEL_MAX. The toggle still OWNS the fleet — an operator who wants every in-view plane arms
    *  `all`, and one who wants none turns 3D off — this predicate is unchanged. The TRACKED
    *  contact routes through here too (`_trackedModelRegimeActive`), with its place in the
    *  fleet's cap, so selecting a contact never changes its form. */
@@ -254,20 +345,17 @@ export function createAircraftModels({
       : mapCap;
   }
 
-  /** Active ADD radius (m) — new planes inside this range get a model. Mode-aware: 'all' reaches far. */
+  /** ADD radius (m) — new planes inside this range get a model. Both modes
+   *  share it; they differ by their caps. */
 
   function _modelAddDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_ADD_M
-      : policy.MODEL_PROX_ADD_M;
+    return policy.MODEL_ADD_M;
   }
 
-  /** Active KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
+  /** KEEP radius (m) — a modeled plane keeps its model out to here (hysteresis vs ADD). */
 
   function _modelKeepDistM() {
-    return state._models3dMode === 'all'
-      ? policy.MODEL_ALL_KEEP_M
-      : policy.MODEL_PROX_KEEP_M;
+    return policy.MODEL_KEEP_M;
   }
 
   /** What a grounded model's ground sample sees through: the vertical sample
@@ -341,6 +429,54 @@ export function createAircraftModels({
     record.tint = [base[0], base[1], base[2], alpha];
   }
 
+  /** A finite number of the first of `values` that is one, else null. */
+  const _finite = (...values) =>
+    values.find((v) => typeof v === 'number' && Number.isFinite(v)) ?? null;
+
+  /**
+   * How high an aircraft flies above the ground under it: its render
+   * altitude over the cached ground floor there; null where that floor is
+   * not known (the gear then follows the approach rule instead).
+   */
+  function _heightAboveGround(meta) {
+    const altitude = _finite(meta.renderAltitudeM);
+    const floor =
+      Number.isFinite(meta.rawLat) && Number.isFinite(meta.rawLon)
+        ? services.groundFloor?.cachedGroundFloor?.(meta.rawLat, meta.rawLon)
+        : null;
+    return altitude !== null && Number.isFinite(floor)
+      ? altitude - floor
+      : null;
+  }
+
+  /**
+   * The moving parts a contact's model is posed with, from its record
+   * (`aircraftLayerPartState`): gear, doors and flaps by its height and climb,
+   * fans, propellers and rotors while it flies or taxis. An airport vehicle
+   * is a road vehicle (`groundVehiclePartState`): its wheels roll with its
+   * speed. Undefined for a model without parts.
+   */
+  function _partsOf(meta, spec) {
+    if (!meta) return undefined;
+    const table = fleetPartTable(fleetModelSet(), spec?.model);
+    if (!table) return undefined;
+    return aircraftLayerPartState(table, {
+      klass: meta.klass,
+      onGround: meta.onGround === true,
+      heightAboveGroundM: _heightAboveGround(meta),
+      altitudeM: _finite(meta.altitude, meta.altitudeM),
+      verticalRateMps: _finite(meta.verticalRate, meta.verticalRateMps),
+      speedMps: _finite(meta.velocity, meta.speedMps),
+    });
+  }
+
+  /** Pose a record's parts as its contact's record says, and key them for `_send`. */
+  function _poseParts(record, meta, spec) {
+    const pose = _partsOf(meta, spec);
+    record.parts = pose;
+    record.partsKey = pose ? JSON.stringify(pose) : '';
+  }
+
   /** The record's item, as its set draws it. */
   function _itemOf(id, record) {
     return {
@@ -354,10 +490,11 @@ export function createAircraftModels({
       minPixelSize: record.minPixelSize,
       shading: _shadingOf(),
       tint: record.tint ?? WHITE,
-      // The mesh's own colours, tinted while tracked or in an emergency;
+      // The mesh's own colours, tinted red in an emergency;
       // the IR boost draws it flat white.
-      colorBlend: aircraftModelBlend(state._irBoost === true),
+      colorBlend: aircraftModelBlend(state._irBoost === true, record.tint),
       environmentMap: AIRCRAFT_ENVIRONMENT_MAP_OPTIONS.enabled,
+      ...(record.parts ? { parts: record.parts } : {}),
       show: record.show,
     };
   }
@@ -367,7 +504,7 @@ export function createAircraftModels({
     if (!set) return;
     const p = record.position;
     const t = record.tint ?? WHITE;
-    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${record.show}`;
+    const key = `${record.url}|${p.x},${p.y},${p.z}|${record.heading}|${record.scale}|${record.minPixelSize}|${t[0]},${t[1]},${t[2]},${t[3]}|${state._irBoost === true}|${record.show}|${record.partsKey ?? ''}`;
     if (key === record.sent) return;
     record.sent = key;
     const item = _itemOf(id, record);
@@ -426,6 +563,7 @@ export function createAircraftModels({
     // Placed BEFORE the readiness test on purpose: a model can turn ready
     // between ticks, and its first drawn frame must be at this placement.
     placeModel(record, displayPos, _modelHeading(course, meta));
+    _poseParts(record, meta, spec);
     if (!record.ready) {
       showModel(record, false); // not loaded yet → keep the 2D icon, no half-model flash
       _send(set, icao24, record, spec, out);
@@ -565,12 +703,11 @@ export function createAircraftModels({
     state._lastFleetTickMs = 0;
   }
 
-  /** Admit a fleet model for an aircraft; the icon shows until it is ready. */
+  /** Admit a fleet model for an aircraft; the icon shows until it is ready.
+   *  The selected aircraft's is admitted too, and kept loaded but hidden
+   *  while its tracked model draws it (`_keepTrackedFleetModel`). */
 
   function _ensureModel(icao24) {
-    // Never model the TRACKED aircraft — it owns a separate entity billboard, and the fleet
-    // tick skips it, so a model here would be orphaned + double-rendered.
-    if (icao24 === state._trackedIcao) return;
     onModelEligible(icao24);
     if (state._models.has(icao24)) return;
     // Without model sets (the renderer draws none) the icon stays.
@@ -585,7 +722,6 @@ export function createAircraftModels({
       specKey: _specKeyFor(meta), // type-change sync compares against this
       bellyM: spec.bellyM,
       scale: spec.scale,
-      minPixelSize: policy.MODEL_MIN_PX,
     });
     record.url = resolveAsset(spec.url);
     record.gltf = _gltfOf(spec);
@@ -676,12 +812,116 @@ export function createAircraftModels({
     );
   }
 
-  /** A fleet model still drawing the tracked contact (it was a model when
-   *  it was selected) lets go once the tracked model draws, or once the
-   *  contact is no longer drawn as a model at all. */
+  /** Whether the tracked contact may draw as a model, set by the fleet pass
+   *  (preRender). The icon owns the visual from the moment it may not
+   *  (`_modelOwnsVisual`), so its models stop drawing in this frame too, not
+   *  at the next frame's `_updateTrackedModel`. */
+  function _setTrackedModelEligible(eligible) {
+    const was = state._trackedModelEligible;
+    state._trackedModelEligible = eligible;
+    if (!was || eligible) return;
+    _hideTrackedModel();
+    _hideTrackedFleetModel();
+  }
+
+  /** The tracked contact's fleet model lets go once the contact is no
+   *  longer drawn as a model at all (out of range, 3D off, cockpit). */
   function _releaseTrackedFleetModel() {
     if (state._trackedIcao && state._models.has(state._trackedIcao))
       _releaseModel(state._trackedIcao);
+  }
+
+  /** The tracked contact's fleet model (it was a model when it was
+   *  selected, or was admitted since) stops drawing once the tracked model
+   *  draws, or while the tracked icon carries the contact, but stays loaded:
+   *  deselecting hands the contact straight back to it
+   *  (`_handBackDeselected`), with no load and no icon in between. */
+  function _hideTrackedFleetModel() {
+    const icao24 = state._trackedIcao;
+    const record = icao24 ? state._models.get(icao24) : null;
+    if (!record?.show) return;
+    showModel(record, false);
+    _send(state._modelSets?.fleet, icao24, record, _modelSpec(_metaOf(icao24)));
+  }
+
+  /** Keep the tracked contact's fleet model loaded and placed where its icon
+   *  is, one fleet tick at a time, so it is ready to take the contact back
+   *  the moment it is deselected. It never shows here: it draws the contact
+   *  only while the tracked model loads, as it did before the selection. */
+  function _keepTrackedFleetModel(icao24, position, course, out) {
+    _ensureModel(icao24);
+    const record = state._models.get(icao24);
+    if (!record) return;
+    const meta = _metaOf(icao24);
+    const set = state._modelSets?.fleet ?? null;
+    _retryFailedFleetModel(set, icao24, record);
+    const displayPos = _modelDisplayPosition(icao24, position);
+    if (displayPos) placeModel(record, displayPos, _modelHeading(course, meta));
+    else showModel(record, false); // nowhere safe to draw it
+    _send(set, icao24, record, _modelSpec(meta), out);
+  }
+
+  /**
+   * Hand a contact just deselected back to the fleet in the same frame: to
+   * its fleet model when one is loaded (kept while it was selected), placed
+   * where its icon is and shown, else to its icon. Runs once the contact no
+   * longer reads as tracked.
+   * @param {string} icao24
+   */
+  function _handBackDeselected(icao24) {
+    const icons = state._icons;
+    const record = state._models.get(icao24);
+    if (!icons?.has(icao24)) {
+      if (record) _releaseModel(icao24);
+      return;
+    }
+    if (!record) {
+      icons.setShown(icao24, true);
+      return;
+    }
+    const pose = _pose();
+    if (!pose || !_modelRegimeActive(pose) || isTr3b(icao24)) {
+      _releaseModel(icao24); // the icon takes it back
+      return;
+    }
+    const t = parts.icons._displayMs();
+    const position = icons.position(icao24, t);
+    _driveFleetModelHandoff(
+      icao24,
+      record,
+      position,
+      icons.course(icao24, t),
+      () =>
+        _treatFleetModel(
+          icao24,
+          record,
+          distance(pose.position, position),
+          pose,
+        ),
+    );
+  }
+
+  /** A fleet model's tint and alpha this tick: the contact's colour, faded
+   *  as its icon is (focus, recession), or the IR boost's full-strength
+   *  white. */
+  function _treatFleetModel(icao24, record, cameraDistanceM, pose) {
+    const icons = state._icons;
+    _treat(record, {
+      // IR boost must survive the per-tick treatment write — otherwise
+      // any alpha change would repaint the ordinary tint over the hot
+      // white. Boosted models also skip the recession fade: hot targets
+      // stay full-strength at any range (icons keep their normal
+      // fade — full-opacity glyph walls read as overwhelming).
+      base: state._irBoost ? WHITE : rgba(_modelColor(icao24)),
+      alpha: state._irBoost
+        ? 1
+        : aircraftTreatmentAlpha({
+            baseAlpha: icons.alpha(icao24),
+            focusFactor: icons.focus(icao24),
+            cameraDistanceM,
+            cameraHeightM: pose.height,
+          }),
+    });
   }
 
   /** Per-frame driver for the standalone tracked model. Runs every preUpdate (not the 80 ms fleet
@@ -690,10 +930,9 @@ export function createAircraftModels({
    *  in, can never stall or freeze the centering (the old model-graphic-on-entity failure mode).
    *
    *  The model draws exactly as the fleet would draw this contact: the same
-   *  asset at the same scale and `minPixelSize` (`MODEL_MIN_PX`), only its
-   *  tint the tracked colour; whether it draws at all is the fleet's rule too
-   *  (`_trackedModelRegimeActive`). Selecting a contact changes its colour,
-   *  never its size or form. */
+   *  asset at the same scale (its true size) in the same colours; whether it
+   *  draws at all is the fleet's rule too (`_trackedModelRegimeActive`).
+   *  Selecting a contact changes neither its colour nor its size or form. */
 
   function _updateTrackedModel() {
     // A failed load is let go (the icon carries the contact); the budget
@@ -717,7 +956,7 @@ export function createAircraftModels({
       parts.icons._iconPosition(state._trackedIcao);
     if (!pos) {
       _hideTrackedModel();
-      _releaseTrackedFleetModel();
+      _hideTrackedFleetModel();
       return;
     }
     const icao24 = state._trackedIcao;
@@ -729,14 +968,13 @@ export function createAircraftModels({
       // The icon carries it: after the load budget is spent, or until the
       // fleet model set has loaded.
       if (!_trackedModelLoadAllowed() || !spec.url) {
-        _releaseTrackedFleetModel();
+        _hideTrackedFleetModel();
         return;
       }
       const record = createModelRecord({
         specKey: _specKeyFor(meta), // type-change sync compares against this
         bellyM: spec.bellyM,
         scale: spec.scale,
-        minPixelSize: policy.MODEL_MIN_PX,
       });
       record.id = icao24;
       record.url = resolveAsset(spec.url);
@@ -758,7 +996,7 @@ export function createAircraftModels({
     const displayPos = _modelDisplayPosition(icao24, pos);
     if (!displayPos) {
       _hideTrackedModel(); // no ground evidence → the icon carries it
-      _releaseTrackedFleetModel();
+      _hideTrackedFleetModel();
       return;
     }
     placeModel(
@@ -766,9 +1004,10 @@ export function createAircraftModels({
       displayPos,
       _modelHeading(parts.motion._trackedDisplayCourse(), meta),
     );
+    _poseParts(record, meta, spec);
     showModel(record, record.ready);
     _send(state._modelSets.tracked, icao24, record, spec);
-    if (record.ready) _releaseTrackedFleetModel();
+    if (record.ready) _hideTrackedFleetModel();
   }
 
   /**
@@ -815,6 +1054,12 @@ export function createAircraftModels({
         }
       }
       state._icons?.flush();
+      // The pass's own error, if any, is the one that goes on.
+      try {
+        pace.set(_paceHz());
+      } catch (error) {
+        console.warn(`[${logLabel}] fleet pace failed`, error);
+      }
     }
   }
 
@@ -833,7 +1078,14 @@ export function createAircraftModels({
 
     if (state._cockpitContactMode) parts.tracking._refreshCockpitNearContacts();
     parts.icons._syncImageSwitch();
-    parts.icons._replanExpired(t);
+    // Far and out-of-view contacts are planned for longer (the camera says
+    // which are which).
+    parts.icons._replanExpired(
+      t,
+      pose?.position
+        ? { eye: pose.position, inView: (position) => inView(pose, position) }
+        : null,
+    );
     const renderTime = parts.motion._displayTimeAt(
       t,
       state._scratchFleetRenderTime,
@@ -841,13 +1093,20 @@ export function createAircraftModels({
     afterReplan(renderTime, t, nowMs, pose?.position ?? null);
     const focusTarget = getFocusTarget();
     parts.icons._focusIcons(t, nowMs, focusTarget);
+    // Airborne helicopters in view step their rotor frame (none: no work).
+    if (parts.icons._rotorsTurning?.())
+      parts.icons._turnRotors(
+        Date.now(),
+        t,
+        pose ? (position) => inView(pose, position) : null,
+      );
 
     // 3D model regime: only when enabled AND the camera is zoomed in past the altitude ceiling.
     // Drop all models the moment we leave it (toggled off / zoomed out) so icons resume.
     const useModels = _modelRegimeActive(pose);
     if (!useModels && state._models.size) _releaseModels();
     if (!useModels) {
-      state._trackedModelEligible = false;
+      _setTrackedModelEligible(false);
       return;
     }
 
@@ -902,8 +1161,9 @@ export function createAircraftModels({
         state._models.has(icao) ||
         (icao === state._trackedIcao && state._trackedModelEligible),
     });
-    state._trackedModelEligible =
-      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao);
+    _setTrackedModelEligible(
+      Boolean(state._trackedIcao) && modelEligible.has(state._trackedIcao),
+    );
     const toRelease = [];
     for (const icao of state._models.keys()) {
       if (icao !== state._trackedIcao && !modelEligible.has(icao))
@@ -920,8 +1180,6 @@ export function createAircraftModels({
     const items = pendingItems;
     for (const icao24 of modelEligible) {
       if (isTr3b(icao24)) continue;
-      // The tracked contact's model is `_updateTrackedModel`'s.
-      if (icao24 === state._trackedIcao) continue;
       if (!icons.has(icao24)) continue;
       const position = icons.position(icao24, t);
       if (
@@ -944,6 +1202,17 @@ export function createAircraftModels({
         }
         continue;
       }
+      // The tracked contact draws as `_updateTrackedModel` says; its fleet
+      // model is only kept ready for when it is deselected.
+      if (icao24 === state._trackedIcao) {
+        _keepTrackedFleetModel(
+          icao24,
+          position,
+          icons.course(icao24, t),
+          items,
+        );
+        continue;
+      }
       _ensureModel(icao24);
       const record = state._models.get(icao24);
       const cameraDistanceM = distance(camPos, position);
@@ -952,24 +1221,7 @@ export function createAircraftModels({
         record,
         position,
         icons.course(icao24, t),
-        () => {
-          _treat(record, {
-            // IR boost must survive the per-tick treatment write — otherwise
-            // any alpha change would repaint the ordinary tint over the hot
-            // white. Boosted models also skip the recession fade: hot targets
-            // stay full-strength at any range (icons keep their normal
-            // fade — full-opacity glyph walls read as overwhelming).
-            base: state._irBoost ? WHITE : rgba(_modelColor(icao24)),
-            alpha: state._irBoost
-              ? 1
-              : aircraftTreatmentAlpha({
-                  baseAlpha: icons.alpha(icao24),
-                  focusFactor: icons.focus(icao24),
-                  cameraDistanceM,
-                  cameraHeightM: pose.height,
-                }),
-          });
-        },
+        () => _treatFleetModel(icao24, record, cameraDistanceM, pose),
         items,
       );
     }
@@ -997,7 +1249,14 @@ export function createAircraftModels({
     _releaseModels,
     _showReleasedIcon,
     _releaseTrackedModel,
+    _handBackDeselected,
     _updateTrackedModel,
     _fleetTick,
+    _paceHz,
+    _startPace: () => {
+      paceReadMs = -Infinity;
+      pace.start();
+    },
+    _stopPace: pace.stop,
   };
 }

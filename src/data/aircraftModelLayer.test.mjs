@@ -1,27 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAircraftModels } from './aircraftModelLayer.js';
+import { createAircraftModels, paceSpanMs } from './aircraftModelLayer.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import { bindRenderer } from '../render/rendererOf.js';
 import { fromDegrees } from '../geo/ellipsoid.js';
+import * as flightsPolicy from '../layers/flights/policy.js';
 
+// The flights layer's own model policy: its radii, ceiling and caps.
 const POLICY = {
-  MODEL_ALT_CEIL_M: 800_000,
+  ...flightsPolicy,
   MODEL_MAX: 40,
-  MODEL_MAX_ALL: 350,
-  COCKPIT_MODEL_MAX: 60,
-  MODEL_PROX_ADD_M: 150_000,
-  MODEL_PROX_KEEP_M: 185_000,
-  MODEL_ALL_ADD_M: 400_000,
-  MODEL_ALL_KEEP_M: 450_000,
-  MODEL_MIN_PX: 24,
-  TRACKED_MODEL_MIN_PX: 48,
-  TRACKED_MODEL_MAX_PX: 600,
   MODEL_HEADING_OFFSET_DEG: 0,
-  FLEET_DR_INTERVAL_MS: 80,
-  TRACKED_MODEL_MAX_LOAD_FAILS: 3,
-  TRACKED_MODEL_RETRY_BACKOFF_MS: 1500,
 };
+
+/** The eye's height (m): 1 km above the contacts. */
+const EYE_M = 11_000;
 
 const SPEC = {
   url: 'plane.glb',
@@ -34,9 +27,9 @@ const SPEC = {
 /**
  * A fleet of airborne contacts at `positions` (icao → ECEF), drawn by a
  * models layer over a fake draw port whose fleet set can be told to fail a
- * write. The eye sits above them at 30 km.
+ * write. The eye sits at `eyeM`, by default 1 km above them (`EYE_M`).
  */
-function fleetFixture(positions) {
+function fleetFixture(positions, { eyeM = EYE_M, trackedRegime = false } = {}) {
   const base = fakeDrawPort();
   const removes = [];
   let failNextUpsert = false;
@@ -67,7 +60,7 @@ function fleetFixture(positions) {
       };
     },
   };
-  const eye = fromDegrees(-97.71, 30.21, 30_000);
+  let eye = fromDegrees(-97.71, 30.21, eyeM);
   const viewer = {};
   bindRenderer(viewer, {
     draw,
@@ -79,7 +72,7 @@ function fleetFixture(positions) {
         right: { x: 1, y: 0, z: 0 },
         fovy: Math.PI / 3,
         aspectRatio: 1,
-        height: 30_000,
+        height: eyeM,
       }),
     },
   });
@@ -121,11 +114,14 @@ function fleetFixture(positions) {
   };
   let now = 1_000_000;
   let iconRecedeSyncs = 0;
+  const replanViews = [];
   const parts = {
     icons: {
       _displayMs: () => now,
       _syncImageSwitch() {},
-      _replanExpired() {},
+      _replanExpired(_t, view) {
+        replanViews.push(view);
+      },
       _focusIcons() {},
       _occluder: () => null,
       _aboveHorizon: () => true,
@@ -133,10 +129,20 @@ function fleetFixture(positions) {
         iconRecedeSyncs += 1;
       },
     },
-    motion: { _displayTimeAt: () => null },
+    motion: {
+      _displayTimeAt: () => null,
+      _trackedDisplayPosition: (id) => positions.get(id) ?? null,
+      _trackedDisplayCourse: () => 90,
+    },
     tracking: {
       _refreshCockpitNearContacts() {},
-      _trackedModelRegimeActive: () => false,
+      // Opted in: the layer's own rule (tracking.js), the fleet pass's
+      // eligibility under the fleet's regime.
+      _trackedModelRegimeActive: () =>
+        trackedRegime &&
+        Boolean(state._trackedIcao) &&
+        state._trackedModelEligible === true &&
+        models._modelRegimeActive(),
     },
   };
   const models = createAircraftModels({
@@ -167,6 +173,18 @@ function fleetFixture(positions) {
     failNextUpsert: () => (failNextUpsert = true),
     /** How often the icons were told to recede by the tuning as it is now. */
     iconRecedeSyncs: () => iconRecedeSyncs,
+    /** The camera each fleet tick re-planned the icons with. */
+    replanViews,
+    get eye() {
+      return eye;
+    },
+    /** Move the camera's eye, keeping where it looks. */
+    moveEye(position) {
+      eye = position;
+    },
+    /** The set the tracked model draws in. */
+    tracked: () => base.set(models._modelSetIds()[1]),
+    trackedId: () => models._modelSetIds()[1],
     /** Mark a contact as not there yet at the time drawn, or there again. */
     setUnseen(id, value) {
       if (value) unseenIds.add(id);
@@ -185,7 +203,10 @@ function fleetFixture(positions) {
   };
 }
 
-const near = (k) => fromDegrees(-97.71 + k * 0.01, 30.21, 10_000);
+// About 0.5 km apart, within 2 km of the eye.
+const near = (k) => fromDegrees(-97.71 + k * 0.005, 30.21, 10_000);
+/** A contact at the eye's height, `m` metres north of it. */
+const north = (m) => fromDegrees(-97.71, 30.21 + m / 110_850, EYE_M);
 const far = (k) => fromDegrees(-90 + k * 0.01, 30.21, 10_000);
 
 test('the fleet tick hands contacts to ready models and back without a gap', () => {
@@ -326,7 +347,7 @@ test('fleet model alpha is worked out once a fleet tick from the camera then, as
   const position = near(1);
   const f = fleetFixture(new Map([['a1', position]]));
   assert.equal(f.fleet().spec.recede ?? null, null, 'the set does not recede');
-  const eye = fromDegrees(-97.71, 30.21, 30_000);
+  const eye = fromDegrees(-97.71, 30.21, EYE_M);
   const expected = (focusFactor) =>
     aircraftTreatmentAlpha({
       baseAlpha: 0.8,
@@ -336,7 +357,7 @@ test('fleet model alpha is worked out once a fleet tick from the camera then, as
         eye.y - position.y,
         eye.z - position.z,
       ),
-      cameraHeightM: 30_000,
+      cameraHeightM: EYE_M,
     });
   try {
     // Recede from the eye on, so the haze is not 1 here.
@@ -388,4 +409,145 @@ test('a contact not there yet at the time drawn has its fleet model hidden, as o
   f.tick();
   f.tick();
   assert.equal(f.fleet().items.get('a1').show, true, 'drawn again');
+});
+
+test('aircraft draw as models only within 3 km of the camera, in either mode', () => {
+  for (const mode of ['proximity', 'all']) {
+    const positions = new Map([
+      ['inside', north(2_900)],
+      ['outside', north(3_100)],
+    ]);
+    const f = fleetFixture(positions);
+    f.state._models3dMode = mode;
+    f.tick();
+    for (const id of positions.keys())
+      if (f.fleet().items.has(id)) f.draw.ready(f.fleetId, id);
+    f.tick();
+    assert.equal(f.shown.get('inside'), false, `${mode}: a model at 2.9 km`);
+    assert.equal(f.fleet().items.get('inside').show, true);
+    assert.equal(f.shown.get('outside'), true, `${mode}: an icon at 3.1 km`);
+    assert.equal(f.fleet().items.has('outside'), false);
+  }
+});
+
+test('a model is kept out to about 3.6 km, then its icon takes over', () => {
+  const positions = new Map([['a1', north(2_000)]]);
+  const f = fleetFixture(positions);
+  f.tick();
+  f.draw.ready(f.fleetId, 'a1');
+  f.tick();
+  assert.equal(f.shown.get('a1'), false, 'a model at 2 km');
+  positions.set('a1', north(3_500));
+  f.tick();
+  assert.equal(f.shown.get('a1'), false, 'kept at 3.5 km');
+  assert.equal(f.fleet().items.get('a1').show, true);
+  positions.set('a1', north(3_700));
+  f.tick();
+  assert.equal(f.shown.get('a1'), true, 'released at 3.7 km');
+  assert.equal(f.fleet().items.has('a1'), false);
+  positions.set('a1', north(3_300));
+  f.tick();
+  assert.equal(
+    f.fleet().items.has('a1'),
+    false,
+    'not taken again until it is back within 3 km',
+  );
+});
+
+test('a camera high above the ground still models an aircraft within 3 km of it', () => {
+  // A plane at 30 km with the camera 2 km above it: the altitude ceiling
+  // sits above every contact's height plus the keep radius.
+  const plane = fromDegrees(-97.71, 30.21, 30_000);
+  const f = fleetFixture(new Map([['high', plane]]), { eyeM: 32_000 });
+  f.tick();
+  f.draw.ready(f.fleetId, 'high');
+  f.tick();
+  assert.equal(f.shown.get('high'), false, 'its model draws it');
+  assert.equal(
+    POLICY.MODEL_ALT_CEIL_M,
+    POLICY.MODEL_HIGHEST_CONTACT_M + POLICY.MODEL_KEEP_M,
+  );
+});
+
+test('models are drawn at their true size, with no minimum pixel size', () => {
+  const f = fleetFixture(new Map([['a1', near(1)]]));
+  f.tick();
+  assert.equal(f.fleet().items.get('a1').minPixelSize ?? 0, 0);
+});
+
+test('the selected contact keeps a loaded, hidden fleet model that takes it back on deselect', () => {
+  const positions = new Map([['a1', near(1)]]);
+  const f = fleetFixture(positions);
+  // Selected while an icon: the fleet pass admits its model all the same.
+  f.state._trackedIcao = 'a1';
+  f.shown.set('a1', false); // selecting it hides its icon
+  f.tick();
+  assert.ok(f.fleet().items.has('a1'), 'admitted and loading while selected');
+  f.draw.ready(f.fleetId, 'a1');
+  positions.set('a1', near(2));
+  f.tick();
+  const item = f.fleet().items.get('a1');
+  assert.equal(item.show, false, 'never drawn while selected');
+  assert.deepEqual(
+    item.pos,
+    { x: near(2).x, y: near(2).y, z: near(2).z },
+    'placed where its icon is',
+  );
+  assert.equal(f.shown.get('a1'), false, 'the icon stays hidden');
+
+  // Deselected: its model draws it in the same frame, its icon never shows.
+  f.state._trackedIcao = null;
+  f.models._handBackDeselected('a1');
+  assert.equal(f.fleet().items.get('a1').show, true);
+  assert.equal(f.shown.get('a1'), false);
+});
+
+test('a selected contact the camera leaves behind has its model hidden in the same frame, before it draws', () => {
+  const positions = new Map([['a1', north(2_000)]]);
+  const f = fleetFixture(positions, { trackedRegime: true });
+  f.state._trackedIcao = 'a1';
+  f.shown.set('a1', false);
+  // The fleet pass admits it; the tracked model loads and draws it.
+  f.tick();
+  assert.equal(f.state._trackedModelEligible, true);
+  f.models._updateTrackedModel();
+  f.draw.ready(f.trackedId(), 'a1');
+  f.models._updateTrackedModel();
+  assert.equal(f.tracked().items.get('a1').show, true, 'its model draws it');
+  assert.equal(f.models._modelOwnsVisual('a1'), true);
+
+  // The camera pulls out past the keep radius between two frames. The
+  // frame's fleet pass (preRender) takes the contact out of the model band:
+  // from then on its icon owns the visual (and is lifted onto the ground
+  // floor), so its model must not draw in this frame too.
+  f.moveEye(north(-4_000));
+  f.tick();
+  assert.equal(f.state._trackedModelEligible, false);
+  assert.equal(f.models._modelOwnsVisual('a1'), false, 'the icon owns it');
+  assert.equal(
+    f.tracked().items.get('a1').show,
+    false,
+    'its model is not drawn beside the icon that owns it',
+  );
+});
+
+test('the fleet tick re-plans the icons with the camera: its eye, and what it sees', () => {
+  const f = fleetFixture(new Map([['a1', far(1)]]));
+  f.tick();
+  const [view] = f.replanViews;
+  assert.equal(view.eye, f.eye);
+  // The camera looks along -z: ahead of the eye is in view, behind it not.
+  const ahead = { x: f.eye.x, y: f.eye.y, z: f.eye.z - 10_000 };
+  const behind = { x: f.eye.x, y: f.eye.y, z: f.eye.z + 10_000 };
+  assert.equal(view.inView(ahead), true);
+  assert.equal(view.inView(behind), false);
+});
+
+test("an icon's speed is read over what is left of its drawn path", () => {
+  assert.equal(paceSpanMs(1_000, null), 1_000);
+  assert.equal(paceSpanMs(1_000, Infinity), 1_000);
+  assert.equal(paceSpanMs(1_000, 5_000), 1_000);
+  assert.equal(paceSpanMs(1_000, 1_050), 50);
+  assert.equal(paceSpanMs(1_000, 1_010), 0);
+  assert.equal(paceSpanMs(1_000, 900), 0);
 });

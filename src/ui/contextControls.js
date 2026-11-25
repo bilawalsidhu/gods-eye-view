@@ -44,9 +44,6 @@ export class ContextControls {
     this._contextModeChanging = false;
     this._contextModeGeneration = 0;
     this._contextModeEntering = null;
-    this._contextModeEntryIntent = null;
-    this._contextModeReplacementIntent = null;
-    this._contextModeDeferredEntryIntent = null;
     this._contextSessionSnapshot = null;
     this._contextRestoreState = null;
     this._contextLayerReactionPromises = new Set();

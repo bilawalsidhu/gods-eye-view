@@ -1,6 +1,9 @@
 import { AIS_FIRST_CONNECT_LABEL } from './recordPolicy.js';
 import { viewAreaMovedEnough } from './viewArea.js';
 
+/** Longest a vessel request may take before it is given up. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
 // A portable export (package.json): no i18n here. The text stays English data
 // and the layer panel shows it translated.
 const msg = (text) => text;
@@ -23,14 +26,62 @@ export function createIngestion({
   setSourceLabel,
   followsClock = () => false,
   reloadAtClock = () => {},
+  timedAnswer = () => true,
 }) {
+  // The live load in flight: its result, and its request, whose `handover`
+  // may still be set while it loads (see resumeLive).
+  let liveLoad = null;
+
+  /**
+   * Poll the live vessels (or take the live poll already out). Resolves
+   * when it is done, with nothing: a feed that fails is shown on the layer,
+   * and turning the layer on still succeeds.
+   * @param {object} viewer
+   * @returns {Promise<void>}
+   */
   async function loadLivePositions(viewer) {
+    await pollLive(viewer);
+  }
+
+  /**
+   * The live poll: resolves what loadPositions answers (false when it could
+   * not be had), or that of the live poll already out.
+   */
+  async function pollLive(viewer, { handover = false } = {}) {
     // Following the world clock, the layer shows the snapshots loadAt applies.
-    if (followsClock()) return;
+    if (followsClock()) return false;
     // Back at live, a snapshot at a time still loading no longer applies:
     // it would hold the live poll back until the next refresh.
     if (feed.loading && feed.loadingAtTime) dropLoad();
-    await loadPositions(viewer);
+    // A live load already out answers this one too.
+    if (feed.loading && liveLoad) {
+      if (handover) liveLoad.request.handover = true;
+      return liveLoad.promise;
+    }
+    const request = { handover };
+    const promise = loadPositions(viewer, { request });
+    const load = { request, promise };
+    liveLoad = load;
+    try {
+      return await promise;
+    } finally {
+      if (liveLoad === load) liveLoad = null;
+    }
+  }
+
+  /**
+   * Back at live from another time: poll at once (or take the live poll
+   * already out), and let its snapshot stand in for every vessel. Those it has keep their
+   * icon and model and move on from where they are; those it lacks go.
+   * Resolves true once it is applied, else false (it could not be had).
+   * @param {object} [viewer]
+   * @returns {Promise<boolean>}
+   */
+  async function resumeLive(viewer) {
+    const applied = await pollLive(viewer || readViewer(), {
+      handover: true,
+    });
+    return applied === true;
   }
 
   /** Let go of the load in flight, so another can start now. */
@@ -44,10 +95,11 @@ export function createIngestion({
   /**
    * Apply the source's snapshot at world time `atMs` (its timeline says it
    * can answer one), in place of every vessel when `replace`. Resolves
-   * whether it was applied.
+   * whether it was applied: `{ reachMs }`, the newest fix its records carry,
+   * when they carry fixes; else true, or false when it was not.
    * @param {number} atMs
    * @param {{signal?: AbortSignal|null, replace?: boolean}} [options]
-   * @returns {Promise<boolean>}
+   * @returns {Promise<boolean|{reachMs: number}>}
    */
   async function loadAt(atMs, { signal = null, replace = false } = {}) {
     // Whatever polls or loads for another time no longer applies: the
@@ -56,7 +108,10 @@ export function createIngestion({
     return loadPositions(readViewer(), { atMs, replace, signal });
   }
 
-  async function loadPositions(viewer, { atMs, replace = false, signal } = {}) {
+  async function loadPositions(
+    viewer,
+    { atMs, replace = false, signal, request = null } = {},
+  ) {
     const timed = atMs !== undefined;
     if (!viewer || feed.loading) return false;
     feed.loading = true;
@@ -65,18 +120,35 @@ export function createIngestion({
     const requestController = new AbortController();
     const requestSessionId = feed.sessionId;
     feed.abort = requestController;
+    let timeout = null;
 
     try {
       // Combine the layer's teardown-abort with a hard timeout so a hung upstream
       // can't wedge the poll indefinitely (parity with the track fetch + flights).
-      const requestSignal =
-        typeof AbortSignal.any === 'function'
-          ? AbortSignal.any([
-              requestController.signal,
-              AbortSignal.timeout(10000),
-              ...(signal ? [signal] : []),
-            ])
-          : requestController.signal;
+      let requestSignal;
+      if (typeof AbortSignal.any === 'function')
+        requestSignal = AbortSignal.any([
+          requestController.signal,
+          AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          ...(signal ? [signal] : []),
+        ]);
+      else {
+        // Without it, the request's own controller takes the timeout and
+        // the caller's abort.
+        timeout = setTimeout(
+          () =>
+            requestController.abort(
+              new DOMException('Vessel request timed out', 'TimeoutError'),
+            ),
+          REQUEST_TIMEOUT_MS,
+        );
+        signal?.addEventListener(
+          'abort',
+          () => requestController.abort(signal.reason),
+          { once: true },
+        );
+        requestSignal = requestController.signal;
+      }
       // Ask for the vessels in view; a wide view asks for every vessel.
       const area = readArea(viewer);
       feed.lastArea = area;
@@ -92,9 +164,10 @@ export function createIngestion({
       if (signal?.aborted) return false;
       // The clock left the live edge while this poll was out.
       if (!timed && followsClock()) return false;
+      const takesOver = !timed && request?.handover === true;
       setSourceLabel(snapshot.source);
       // Map observations into the existing display store; source fields stop here.
-      applyAisFeedSnapshot(viewer, {
+      const applied = applyAisFeedSnapshot(viewer, {
         rows: snapshot.records.map(vesselDisplayRow),
         observedAtMs: snapshot.observedAtMs,
         freshness: snapshot.freshness,
@@ -112,8 +185,12 @@ export function createIngestion({
         silentForMs: snapshot.silentForMs,
         reconnectAttempt: snapshot.reconnectAttempt,
         ...(replace && { replace }),
+        ...(takesOver && { handover: true }),
       });
-      return true;
+      // Back at live, a snapshot that placed no vessel could not take over.
+      if (takesOver) return applied.reconciled;
+      // At a time, what the clock's follower is told of it.
+      return timed ? timedAnswer(snapshot) : true;
     } catch (error) {
       // A snapshot at a time the source dropped for a newer one is no failure.
       if (timed && error?.name === 'AbortError') throw error;
@@ -130,6 +207,7 @@ export function createIngestion({
       }
       return false;
     } finally {
+      if (timeout !== null) clearTimeout(timeout);
       if (
         feed.abort === requestController &&
         feed.sessionId === requestSessionId
@@ -197,6 +275,7 @@ export function createIngestion({
     applyRows(viewer, snapshot.acceptedRows, {
       complete: payload?.complete !== false,
       ...(payload?.replace && { replace: true }),
+      ...(payload?.handover && { handover: true }),
     });
     feed.count = readCount();
     feed.stale =
@@ -266,6 +345,7 @@ export function createIngestion({
 
   return {
     loadLivePositions,
+    resumeLive,
     loadAt,
     refreshIfMoved,
     ownsAisRequest,

@@ -989,9 +989,10 @@ function createPanelRecords(event) {
       textContent: t('▶ PLAY SCENE'),
       hidden: true,
     }),
+    // `pressed` is the button's pressed state; the view renders it as one.
     cinematicButton: panelRecord({
       textContent: t('◉ CINEMATIC'),
-      attributes: { 'aria-pressed': 'false' },
+      pressed: false,
     }),
     storyReplayButton: panelRecord({ textContent: t('↺ FULL STORY') }),
     corridorButton: panelRecord(),
@@ -2860,7 +2861,7 @@ export function createBhoteKoshiEventLayer({
       'textContent',
       _cinematicActive ? t('■ RELEASE CAMERA') : t('◉ CINEMATIC'),
     );
-    setElementAttribute(button, 'aria-pressed', String(_cinematicActive));
+    setElementProperty(button, 'pressed', _cinematicActive);
     return true;
   }
 
@@ -2959,11 +2960,12 @@ export function createBhoteKoshiEventLayer({
       : Number.isFinite(clientY) && bounds
         ? clientY - bounds.top
         : Number.NaN;
-    const hit = overlayHost.hitTest?.(x, y, {
-      sourceId: BHOTE_KOSHI_OVERLAY_SOURCE_ID,
-      filter: (entry) => String(entry?.id || '').startsWith('evidence-card-'),
-    });
-    if (typeof hit?.entry?.activate !== 'function') return;
+    // Only the card painted on top acts: an evidence card covered by
+    // another layer's card or label leaves the click to that card.
+    const hit = overlayHost.hitTest?.(x, y);
+    if (hit?.sourceId !== BHOTE_KOSHI_OVERLAY_SOURCE_ID) return;
+    if (!String(hit.entry?.id || '').startsWith('evidence-card-')) return;
+    if (typeof hit.entry.activate !== 'function') return;
     hit.entry.activate();
   }
 

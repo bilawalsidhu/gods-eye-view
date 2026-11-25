@@ -1,9 +1,10 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance, dot } from '../../geo/vector.js';
-import { canvasOf, findCamera } from '../../render/rendererOf.js';
+import { canvasOf, findCamera, findGlobe } from '../../render/rendererOf.js';
 import { viewshedColors, cameraHue } from '../../data/cctvViewshed.js';
 import { CCTV_OVERLAY_SOURCE_ID } from '../../data/cctvCards.js';
 import { GIZMO_ID_PREFIX } from '../../data/cctvGizmo.js';
+import { ownsCctvPick } from './pickIds.js';
 import { inputFor } from '../../input/dispatcher.js';
 import {
   GROUND_PRIOR_INIT_WAIT_MS,
@@ -23,8 +24,14 @@ export function createLifecycle({
   source,
 }) {
   const { activateCctvCameraFromWorldClick } = services.activation;
-  const { resolvePickId, registerPickOwner, unregisterPickOwner } =
-    services.picking;
+  const {
+    resolvePickId,
+    registerPickOwner,
+    unregisterPickOwner,
+    clickCard,
+    registerClickClaim,
+    unregisterClickClaim,
+  } = services.picking;
   const { onFocusTargetAppear } = services.focus;
   const { releaseContinuousRender } = services.render;
 
@@ -103,6 +110,30 @@ export function createLifecycle({
    * listeners to its camera; one against the same viewer keeps them.
    */
   function attachViewListeners() {
+    const globe = findGlobe(layerState._viewer);
+    if (layerState._surfaceListenerGlobe !== globe) {
+      layerState._surfaceListener?.();
+      layerState._surfaceListener = null;
+      layerState._surfaceListenerGlobe = globe;
+    }
+    if (!layerState._surfaceListener && globe?.on) {
+      // Refresh drawn heights when terrain finishes loading or the surface changes.
+      let version = globe.surfaceVersion?.();
+      let terrainPending = globe.isSettled?.('terrain') === false ? 1 : 0;
+      layerState._surfaceListener = globe.on('progress', (progress) => {
+        const next = globe.surfaceVersion?.();
+        const loaded = progress?.terrainPending === 0 && terrainPending !== 0;
+        const swapped = next !== version;
+        version = next;
+        terrainPending = progress?.terrainPending ?? terrainPending;
+        if (
+          (loaded || swapped) &&
+          layerState._enabled &&
+          !layerState._cameraMoving
+        )
+          settleView();
+      });
+    }
     const viewCamera = findCamera(layerState._viewer);
     if (
       layerState._viewListenerCamera &&
@@ -140,6 +171,9 @@ export function createLifecycle({
 
   /** Drop the move listeners; nothing reports the end of a move after it. */
   function detachViewListeners() {
+    layerState._surfaceListener?.();
+    layerState._surfaceListener = null;
+    layerState._surfaceListenerGlobe = null;
     layerState._horizonCullListener?.();
     layerState._horizonCullListener = null;
     layerState._moveStartListener?.();
@@ -163,9 +197,11 @@ export function createLifecycle({
     layerState._records = [];
     layerState._recordById = new Map();
     layerState._viewRecords = [];
+    layerState._pickerRecords = [];
     layerState._cameraIndexCache = null;
     layerState._coverageVisibleIds = new Set();
     layerState._neighborCountCache = null;
+    layerState._coverageCohort = null;
     layerState._viewUnpublished = false;
     layerState._viewPose = null;
     layerState._viewMotionPass = null;
@@ -285,9 +321,8 @@ export function createLifecycle({
           coverageEntities: [],
           projection: null,
           // Task 5 (height-datum fix): regime-aware ground resolution state.
-          //   groundPrior     — { ellipsoid, source } from the Re:Earth batch
-          //     (null until a late batch lands). The prior applies in EVERY
-          //     regime and is the terrain-globe resolution outright.
+          //   groundPrior — { ellipsoid, source } from the Re:Earth batch, or
+          //     drawn-terrain with its read conditions for an unanswered camera.
           //   groundResolved  — PER-REGIME one-shot latch (regime key →
           //     boolean): true once this record's resolution completed for that
           //     regime; such records are excluded from the completion pass so
@@ -386,14 +421,27 @@ export function createLifecycle({
       parts.rendering.refreshHorizonCulling();
 
       const input = inputFor(layerState._viewer);
+      layerState._clickSubscription?.();
       const unsubscribeClick = parts.selection.bindCctvWorldClickGesture(
         input,
         (event) => {
           if (!layerState._enabled) return;
           const picked = event.topHit;
-          const cameraId = parts.selection.extractPickedCameraId(
-            event.drawHit ?? null,
-          );
+          // The card or label painted on top takes the click, read once per
+          // click so every layer agrees: a live card of ours acts whatever
+          // is drawn under it; another layer's is that layer's click.
+          const top = clickCard?.(event) ?? null;
+          if (top && top.sourceId !== CCTV_OVERLAY_SOURCE_ID) return;
+          if (top) {
+            // A card of ours that is going away is still not the scene.
+            if (layerState._recordById.has(top.entryId))
+              activateCctvCameraFromWorldClick(
+                top.entryId,
+                parts.selection.setActiveCamera,
+              );
+            return;
+          }
+          const cameraId = parts.selection.extractPickedCameraId(event.hit);
           if (cameraId) {
             activateCctvCameraFromWorldClick(
               cameraId,
@@ -401,29 +449,11 @@ export function createLifecycle({
             );
             return;
           }
-          // Any identified scene object owns this click even if its layer does not
-          // register a shared pick predicate. This keeps selectable siblings ahead
-          // of an overlapping CCTV card while ID-less globe/terrain/tile surfaces
-          // remain eligible for true empty-space deselection.
-          const pickedId = resolvePickId(picked);
-          if (pickedId !== null) return;
-          // Item A (owner round 2): the scene pick found no camera — try the
-          // painted ambient cards. The cards canvas is pointer-events:none (this
-          // handler owns the events), so a click landing on a card's rect selects
-          // its camera exactly like a click on the icon. Click positions
-          // and the recorded rects are both CSS px — direct comparison.
-          const cardId = layerState._cctvOverlayHost.hitTest(
-            event.screenPosition.x,
-            event.screenPosition.y,
-            { sourceId: CCTV_OVERLAY_SOURCE_ID },
-          )?.entryId;
-          if (cardId && layerState._recordById.has(cardId)) {
-            activateCctvCameraFromWorldClick(
-              cardId,
-              parts.selection.setActiveCamera,
-            );
-            return;
-          }
+          // Any identified scene object owns this click even if its layer
+          // does not register a shared pick predicate. This keeps selectable
+          // siblings ahead of the CCTV selection while ID-less globe, terrain
+          // and tile surfaces remain eligible for empty-space deselection.
+          if (resolvePickId(picked) !== null) return;
           if (
             parts.selection.cctvEmptyClickDeselects(picked, {
               activeCameraId: layerState._activeCameraId,
@@ -472,19 +502,10 @@ export function createLifecycle({
       layerState._lastUpdate = Date.now();
       // Pick-ownership (H2): camera icons use the camera id directly;
       // coverage polyline entities use `cctv-<cameraId>-<role>` entity ids.
-      registerPickOwner('cctv', (pickedId) => {
-        if (layerState._recordById.has(pickedId)) return true;
-        if (
-          typeof pickedId === 'string' &&
-          pickedId.startsWith(GIZMO_ID_PREFIX)
-        )
-          return true;
-        const coverage =
-          /^cctv-(.+)-(?:ray-tl|ray-tr|ray-br|ray-bl|cap|plane|plane-label)$/.exec(
-            pickedId,
-          );
-        return Boolean(coverage && layerState._recordById.has(coverage[1]));
-      });
+      registerPickOwner('cctv', (pickedId) =>
+        ownsCctvPick(pickedId, layerState._recordById, GIZMO_ID_PREFIX),
+      );
+      registerClickClaim?.('cctv', parts.selection.countClickCard);
       if (!layerState._activeCameraId && layerState._records.length) {
         layerState._activeCameraId = parts.navigation.openingCameraId();
         layerState._autoHopSuspended = false;
@@ -521,6 +542,7 @@ export function createLifecycle({
       services.credits?.hideOsmCredit?.(layerState._viewer, 'cctv');
       layerState._enabled = false;
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       // ADJUST mode does not survive a layer toggle — predictable re-entry.
       layerState._calibrationMode = false;
       releaseContinuousRender('cctv-adjust');
@@ -536,6 +558,7 @@ export function createLifecycle({
       parts.rendering.hideCctvVisuals();
       // Nothing is in view while the layer is off.
       layerState._viewRecords = [];
+      layerState._pickerRecords = [];
       layerState._cameraIndexCache = null;
       parts.presentation.notifyListeners();
     },
@@ -554,6 +577,7 @@ export function createLifecycle({
           parts.cards.handleVisibilityChange,
         );
       unregisterPickOwner('cctv');
+      unregisterClickClaim?.('cctv');
       if (layerState._mapStackListener && typeof window !== 'undefined') {
         window.removeEventListener(
           'gev:map-stack-changed',

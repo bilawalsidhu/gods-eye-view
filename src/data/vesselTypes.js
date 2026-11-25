@@ -47,6 +47,76 @@ export function normalizeVesselType(type) {
 }
 
 /**
+ * The vessel kinds a ship is drawn as, each with its own hull sprite and
+ * colour (`vesselSprites.js`), by the type family its AIS type resolves to
+ * ({@link normalizeVesselType}), in order: the first that matches.
+ */
+const VESSEL_KIND_RULES = [
+  ['tanker', /tanker|\blng\b|\blpg\b|gas carrier/i],
+  ['highspeed', /high[- ]?speed|\bhsc\b/i],
+  ['passenger', /passenger|ferry|cruise/i],
+  ['cargo', /cargo|container|bulk|carrier|freighter|ro-?ro/i],
+  ['fishing', /fishing|trawler/i],
+  [
+    'military',
+    /military|naval|navy|warship|law enforce|police|patrol|coast ?guard|\bsar\b|search and rescue/i,
+  ],
+  ['tug', /tug|tow|pilot|tender|supply|service|anti-pollution/i],
+  ['sailing', /sail/i],
+  ['pleasure', /pleasure|yacht/i],
+];
+
+/** Every vessel kind {@link vesselKind} names, `other` last. */
+export const VESSEL_KINDS = Object.freeze([
+  ...VESSEL_KIND_RULES.map(([kind]) => kind),
+  'other',
+]);
+
+/**
+ * Each vessel kind's colour on the map and on its card, as CSS and as the
+ * card's "r, g, b" accent. Every one reads on dark water and differs from
+ * the rest; cargo and other share the default cyan.
+ */
+export const VESSEL_KIND_STYLES = Object.freeze({
+  cargo: Object.freeze({ css: '#39d5ff', accent: '57, 213, 255' }),
+  tanker: Object.freeze({ css: '#ffb347', accent: '255, 179, 71' }),
+  passenger: Object.freeze({ css: '#ff7adf', accent: '255, 122, 223' }),
+  highspeed: Object.freeze({ css: '#c6ff3d', accent: '198, 255, 61' }),
+  fishing: Object.freeze({ css: '#7cff9b', accent: '124, 255, 155' }),
+  tug: Object.freeze({ css: '#f7f0a3', accent: '247, 240, 163' }),
+  sailing: Object.freeze({ css: '#b49cff', accent: '180, 156, 255' }),
+  pleasure: Object.freeze({ css: '#ff6f61', accent: '255, 111, 97' }),
+  military: Object.freeze({ css: '#a9bccb', accent: '169, 188, 203' }),
+  other: Object.freeze({ css: '#39d5ff', accent: '57, 213, 255' }),
+});
+
+/** Kind by type text: a feed uses few distinct type texts. */
+const KIND_MEMO = new Map();
+const KIND_MEMO_MAX = 1024;
+
+/**
+ * The kind of vessel an AIS type names, a numeric ship-type code (ITU-R
+ * M.1371) or a text type: `cargo` (70 to 79), `tanker` (80 to 89),
+ * `passenger` (60 to 69), `highspeed` (40 to 49), `fishing` (30), `tug`
+ * (tugs, towing, pilots, tenders, anti-pollution: 31, 32, 50, 52 to 54),
+ * `sailing` (36), `pleasure` (37), `military` (military, law enforcement,
+ * search and rescue: 35, 55, 51) or `other` (anything else, unknown types
+ * included).
+ * @param {string|number|null|undefined} type
+ * @returns {string} One of {@link VESSEL_KINDS}.
+ */
+export function vesselKind(type) {
+  const text = normalizeVesselType(type);
+  let kind = KIND_MEMO.get(text);
+  if (kind !== undefined) return kind;
+  kind = VESSEL_KIND_RULES.find(([, pattern]) => pattern.test(text))?.[0];
+  kind ??= 'other';
+  if (KIND_MEMO.size >= KIND_MEMO_MAX) KIND_MEMO.clear();
+  KIND_MEMO.set(text, kind);
+  return kind;
+}
+
+/**
  * The kind of aid to navigation an AIS aid-to-navigation report (message 21)
  * names by its type code, 0 to 31 (ITU-R M.1371, IALA marks): beacons and
  * floating marks by their cardinal quadrant, lateral side, safe water,

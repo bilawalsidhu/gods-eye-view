@@ -234,7 +234,7 @@ export function bindFakeCesiumScene(
         direction: c?.directionWC
           ? plain(c.directionWC)
           : { x: 0, y: 0, z: -1 },
-        up: { x: 0, y: 1, z: 0 },
+        up: c?.upWC ? plain(c.upWC) : { x: 0, y: 1, z: 0 },
         right: { x: 1, y: 0, z: 0 },
         // An orthographic frustum has none, as the Cesium port reports it.
         fovy:

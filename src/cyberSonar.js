@@ -527,10 +527,15 @@ export function cyberSonarLabelIntensity(
   return labelDimFactor + (1 - labelDimFactor) * normalized;
 }
 
+/**
+ * Sonar is an opt-in visual style over any HUD layout: it is on only after
+ * the Display panel's Sonar toggle, a voice request or a legacy Cyber link
+ * turns it on.
+ */
 export function isCyberSonarEnabled(
   root = globalThis.document?.documentElement,
 ) {
-  return root?.dataset?.cyberSonar !== 'off';
+  return root?.dataset?.cyberSonar === 'on';
 }
 
 export function setCyberSonarEnabled(
@@ -539,9 +544,7 @@ export function setCyberSonarEnabled(
 ) {
   if (!root?.dataset) return false;
   root.dataset.cyberSonar = enabled ? 'on' : 'off';
-  if (root.dataset.uiTheme === 'cyber') {
-    applyCyberSonarThemePhase(root, enabled);
-  }
+  applyCyberSonarThemePhase(root, enabled);
   return enabled;
 }
 
@@ -566,7 +569,6 @@ export function isCyberSonarActive({
       globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ??
       false;
   return !!(
-    root?.dataset?.uiTheme === 'cyber' &&
     isCyberSonarEnabled(root) &&
     (hudActive ?? hud?.classList?.contains?.('active')) &&
     !body?.classList?.contains?.('cockpit-mode') &&
@@ -583,7 +585,7 @@ export function isCyberMapThemeActive({
   if (hud === undefined)
     hud = globalThis.document?.getElementById?.('intel-hud');
   return !!(
-    root?.dataset?.uiTheme === 'cyber' &&
+    isCyberSonarEnabled(root) &&
     (hudActive ?? hud?.classList?.contains?.('active')) &&
     !body?.classList?.contains?.('cockpit-mode')
   );

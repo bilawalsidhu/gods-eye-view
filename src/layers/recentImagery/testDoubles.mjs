@@ -16,6 +16,13 @@ export const BOX = Object.freeze({
   north: 30.3,
 });
 
+export const FIJI_BOX = Object.freeze({
+  west: 179,
+  south: -18,
+  east: -177,
+  north: -17,
+});
+
 export const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** Timers that fire only when the test says so. */
@@ -258,6 +265,7 @@ export function fakeThumbnails() {
   const requested = [];
   /** Direct `request` calls: `[key, priority]`. */
   const requests = [];
+  const retained = [];
   const ask = (key) => {
     if (!requested.includes(key)) requested.push(key);
   };
@@ -265,20 +273,27 @@ export function fakeThumbnails() {
     calls,
     requested,
     requests,
+    retained,
     requestOrdered(candidates, box, window) {
       calls.push(['ordered', candidates.map((c) => c.key), window]);
       const { focusIndex, firstVisible, lastVisible, extra } = window;
-      thumbnailOrder(
+      const order = thumbnailOrder(
         focusIndex,
         firstVisible,
         lastVisible,
         candidates.length,
         extra,
-      ).forEach((index) => ask(candidates[index].key));
+      );
+      const keys = order.map((index) => candidates[index].key);
+      keys.forEach(ask);
+      return keys;
     },
     request(candidate, box, priority) {
       ask(candidate.key);
       requests.push([candidate.key, priority]);
+    },
+    retain(keys) {
+      retained.push([...keys]);
     },
     /** Settle every requested key still unknown, as the loader would. */
     probeRequested(status = 'present') {

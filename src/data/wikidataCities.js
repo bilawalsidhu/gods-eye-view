@@ -1,11 +1,13 @@
 /**
  * The bundled world cities pack (Wikidata, CC0), read from
  * `local_data/wikidata_cities/cities.json` (built by
- * scripts/build-wikidata-cities.mjs). The file loads once, on first use, and
- * every answer comes from it: no place service is called.
+ * scripts/build-wikidata-cities.mjs). The cities pack and optional detail
+ * tiles load on first use. All answers are offline.
  *
  * Rows are `[name, lat, lon, population, country, wikidata]`, largest first.
  */
+
+import { createRetryableLoader } from './retryableLoad.js';
 
 const CELL_DEG = 1;
 
@@ -209,16 +211,166 @@ export function countryName(
   }
 }
 
+const TILE_DEG = 5;
 /**
- * The city with this name, or null. A qualifier after a comma that names a
- * country ("Paris, France", "Paris, US") keeps only cities there, and finds
+ * Detail tiles kept in memory, least recently used first out: 64 tiles is
+ * far more than one lookup touches, and bounds what a long session keeps.
+ */
+const MAX_TILES = 64;
+/**
+ * How far out small places are looked for, in km. 500 km is under the 556 km
+ * that 5 degrees of latitude span, so a lookup's tile box reaches at most one
+ * tile past the point's own on each side: 3 rows, and 3 columns at the
+ * equator (more toward the poles, where tiles narrow). A lookup asked for a
+ * wider radius, up to the whole globe, still reads only those tiles; cities
+ * count to its full radius.
+ */
+export const PLACE_TILE_KM = 500;
+const NAMED = /\p{L}/u;
+const tiles = new Map();
+let loadTileIndex;
+
+/** The detail tiles touched by the circle's enclosing latitude/longitude box. */
+function tileKeysAround(latitude, longitude, radiusKm) {
+  const latSpan = latHalfSpan(radiusKm);
+  const lonSpan = lonHalfSpan(latitude, radiusKm);
+  const latOrigin = (lat) =>
+    Math.min(85, Math.floor(lat / TILE_DEG) * TILE_DEG);
+  const south = latOrigin(Math.max(-90, latitude - latSpan));
+  const north = latOrigin(Math.min(90, latitude + latSpan));
+  const lon = (((longitude % 360) + 540) % 360) - 180;
+  const west = Math.floor((lon - lonSpan) / TILE_DEG) * TILE_DEG;
+  const east = Math.floor((lon + lonSpan) / TILE_DEG) * TILE_DEG;
+  const keys = [];
+  for (let lat = south; lat <= north; lat += TILE_DEG) {
+    for (let lon = west; lon <= east && lon < west + 360; lon += TILE_DEG) {
+      keys.push(`${lat}_${((lon + 540) % 360) - 180}`);
+    }
+  }
+  return keys;
+}
+
+async function readPlaceTiles(latitude, longitude, radiusKm, fetchImpl) {
+  const { INDEX_URL, TILE_URLS } =
+    await import('./local_data/wikidata_places/files.js');
+  loadTileIndex ??= createRetryableLoader(() =>
+    readPlacePack(INDEX_URL(), fetchImpl),
+  );
+  const index = await loadTileIndex();
+  const keys = tileKeysAround(
+    latitude,
+    longitude,
+    Math.min(radiusKm, PLACE_TILE_KM),
+  ).filter((key) => index.tiles[key]);
+  // A tile that cannot be read is left out: the places of the others,
+  // and the cities, are still the answer.
+  const settled = await Promise.allSettled(
+    keys.map((key) => {
+      let load = tiles.get(key);
+      if (load) tiles.delete(key);
+      else
+        load = createRetryableLoader(async () => {
+          const pack = await readPlacePack(TILE_URLS[key](), fetchImpl);
+          // A name without a letter ("380") is no name to show.
+          return indexCities(pack.rows.filter((row) => NAMED.test(row[0])));
+        });
+      // Most recently used last; the least recently used goes past the cap.
+      tiles.set(key, load);
+      while (tiles.size > MAX_TILES) tiles.delete(tiles.keys().next().value);
+      return load();
+    }),
+  );
+  return settled
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value);
+}
+
+async function readPlacePack(url, fetchImpl) {
+  const response = await fetchImpl(url);
+  if (!response.ok)
+    throw new Error(`places pack: HTTP ${response.status} for ${url.pathname}`);
+  return response.json();
+}
+
+/**
+ * Named cities and smaller places around one point, nearest first. Smaller
+ * places are looked for within PLACE_TILE_KM only.
+ */
+export async function placesNear(
+  { latitude, longitude, radiusKm = 10, limit = 6 },
+  fetchImpl = (...args) => globalThis.fetch(...args),
+) {
+  if (
+    !Number.isFinite(latitude) ||
+    Math.abs(latitude) > 90 ||
+    !Number.isFinite(longitude) ||
+    !Number.isFinite(radiusKm) ||
+    radiusKm < 0
+  )
+    return [];
+  const radius = Math.min(radiusKm, Math.PI * EARTH_KM);
+  const [{ cells }, detail] = await Promise.all([
+    loadCities(fetchImpl),
+    // Without the pack's index there are still the cities.
+    readPlaceTiles(latitude, longitude, radius, fetchImpl).catch(() => []),
+  ]);
+  // A smaller place that has the name of a city within TWIN_KM in the same
+  // country is the same place listed twice (a town and its municipality):
+  // the city's row wins. Cities just past the radius count, so a twin
+  // inside it is still caught; namesakes across a border both stay.
+  const cities = citiesWithin(cells, latitude, longitude, radius + TWIN_KM);
+  const byName = new Map();
+  for (const city of cities) {
+    const key = foldName(city.name);
+    if (!byName.has(key)) byName.set(key, []);
+    byName.get(key).push(city);
+  }
+  const twinOfCity = (place) =>
+    (byName.get(foldName(place.name)) || []).some(
+      (city) =>
+        (city.country || '') === (place.country || '') &&
+        distanceKm(
+          city.latitude,
+          city.longitude,
+          place.latitude,
+          place.longitude,
+        ) <= TWIN_KM,
+    );
+  const found = [
+    ...cities.filter((city) => city.distanceKm <= radius),
+    ...detail
+      .flatMap((source) =>
+        citiesWithin(
+          source,
+          latitude,
+          longitude,
+          Math.min(radius, PLACE_TILE_KM),
+        ),
+      )
+      .filter((place) => !twinOfCity(place)),
+  ];
+  const seen = new Set();
+  return found
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .filter((place) => !seen.has(place.wikidata) && seen.add(place.wikidata))
+    .slice(0, limit);
+}
+
+/** How near two places of one name in one country are taken as one, in km. */
+const TWIN_KM = 3;
+
+/**
+ * The place with this name, or null. A qualifier after a comma that names a
+ * country ("Paris, France", "Paris, US") keeps only places there, and finds
  * nothing when none is; one that names no country ("Paris, Texas") is
- * ignored. A city of that name within `radiusKm` of `near` (the view) wins,
- * the nearest first, else the largest city of that name anywhere.
+ * ignored. A place of that name within `radiusKm` of `near` (the view) wins,
+ * the nearest first, else the largest city of that name anywhere. With
+ * `includeSmallPlaces`, the smaller places of the detail tiles near the view
+ * count too: a village in view comes before a far bigger city of its name.
  */
 export async function findPlace(
   name,
-  { near = null, radiusKm = 150 } = {},
+  { near = null, radiusKm = 150, includeSmallPlaces = false } = {},
   fetchImpl = (...args) => globalThis.fetch(...args),
 ) {
   const [head, ...rest] = String(name || '').split(',');
@@ -230,7 +382,6 @@ export async function findPlace(
   const cities = (names.get(wanted) || []).filter(
     (row) => !country || row[4] === country,
   );
-  if (!cities.length) return null;
   if (Number.isFinite(near?.latitude) && Number.isFinite(near?.longitude)) {
     let best = null;
     for (const row of cities) {
@@ -238,7 +389,24 @@ export async function findPlace(
       if (km <= radiusKm && (!best || km < best.distanceKm))
         best = toCity(row, km);
     }
+    if (includeSmallPlaces) {
+      const nearby = await placesNear(
+        {
+          latitude: near.latitude,
+          longitude: near.longitude,
+          radiusKm,
+          limit: Infinity,
+        },
+        fetchImpl,
+      );
+      const small = nearby.find(
+        (place) =>
+          foldName(place.name) === wanted &&
+          (!country || place.country === country),
+      );
+      if (small && (!best || small.distanceKm < best.distanceKm)) best = small;
+    }
     if (best) return best;
   }
-  return toCity(cities[0], 0);
+  return cities.length ? toCity(cities[0], 0) : null;
 }

@@ -37,7 +37,8 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
-import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { blockFits, createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -105,6 +106,205 @@ export function heightReferenceOf(height, clampTo = 'both') {
     );
   return H.NONE;
 }
+
+/** The eye's height (metres) up to which `OVERLAY_HORIZON` takes `k` from
+ *  it rather than from the eye's position. */
+const OVERLAY_HEIGHT_K = 100_000;
+
+/**
+ * Whether a fragment of an overlay (shapes clamped `'overlay'`, and draped
+ * lines drawn over the surface) is past the ellipsoid's horizon from the eye,
+ * given its position less the eye's (`rte`, world metres): then it is dropped,
+ * so nothing beyond the Earth's limb shows through it. The test is the
+ * ellipsoid's alone, made at the surface point over the fragment, since the
+ * flat triangles of a fill and the straight pieces of a line pass under the
+ * ellipsoid (metres, for a shape tens of kilometres wide), and the point drawn
+ * would be lost up close and near the horizon. In the ellipsoid's unit sphere,
+ * with `e` the eye, `v` the fragment less the eye and `n` the direction of
+ * `e + v`, the surface point `n` is in view while the eye is on its side of
+ * the plane tangent there: `dot(n, e) >= 1`. Squared, with `k = |e|^2 - 1`
+ * and `a = dot(e, v)`, that is `1 + k + a >= 0` and `|v|^2 <= k + (k + a)^2`,
+ * where no term is the difference of two numbers near 1, so it holds in
+ * float32 for an eye a metre up (`|e + v| - 1` would be lost there). Up to
+ * `OVERLAY_HEIGHT_K` (100 km), where `|e|^2 - 1` is too small for float32,
+ * `k` comes from the eye's height, which Cesium works out in doubles, as
+ * `2h|g| + h^2|N/r|^2` with `N` the surface normal there, `g` the foot of
+ * the eye over the radii squared and `r` the radii; above it, from `e`
+ * itself, since that form takes the normal at the eye rather than at its
+ * foot and drifts by hundreds of metres at the horizon at geostationary
+ * height. The eye counts as at least a metre up: one under the ellipsoid
+ * (low ground where the geoid is below it) would otherwise see no overlay.
+ */
+const OVERLAY_HORIZON = `
+bool overlayPastHorizon(vec3 rte)
+{
+    if (czm_sceneMode != czm_sceneMode3D) return false;
+    vec3 inverse = czm_ellipsoidInverseRadii;
+    vec3 eye = czm_viewerPositionWC;
+    vec3 e = eye * inverse;
+    float h = max(czm_eyeHeight, 1.0);
+    float k = dot(e, e) - 1.0;
+    if (h <= ${OVERLAY_HEIGHT_K.toFixed(1)}) {
+        vec3 normal = normalize(eye * inverse * inverse);
+        vec3 foot = (eye - h * normal) * inverse * inverse;
+        vec3 normalScaled = normal * inverse;
+        k = 2.0 * h * length(foot) + h * h * dot(normalScaled, normalScaled);
+    }
+    vec3 v = rte * inverse;
+    float ka = k + dot(e, v);
+    return 1.0 + ka < 0.0 || dot(v, v) > k + ka * ka;
+}
+`;
+
+/** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
+ *  `position` (world metres) is drawn from `eye`. With `float32`, each step
+ *  is rounded to float32 as in the shader, from what the shader is given:
+ *  the point less the eye, the eye, and the eye's height (at least 1 m). */
+export function overlayInView(position, eye, { float32 = false } = {}) {
+  const f = float32 ? Math.fround : (x) => x;
+  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = vec(ellipsoid.oneOverRadii);
+  const e = vec(eye);
+  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
+  const scaled = mul(e, inverse);
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const k =
+    h <= OVERLAY_HEIGHT_K
+      ? heightK(e, h, inverse, f)
+      : f(dot(scaled, scaled) - 1);
+  const ka = f(k + dot(scaled, v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
+}
+
+/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
+function heightK(e, h, inverse, f) {
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const over = mul(mul(e, inverse), inverse);
+  const length = f(Math.sqrt(dot(over, over)));
+  const normal = over.map((c) => f(c / length));
+  const foot = mul(
+    mul(
+      e.map((c, i) => f(c - f(h * normal[i]))),
+      inverse,
+    ),
+    inverse,
+  );
+  const normalScaled = mul(normal, inverse);
+  return f(
+    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
+      f(f(h * h) * dot(normalScaled, normalScaled)),
+  );
+}
+
+/**
+ * Fills clamped as an overlay (`clampTo: 'overlay'`): on the ellipsoid, drawn
+ * over the tiles and terrain with no depth test, so neither hides them, and
+ * hidden past the ellipsoid's horizon fragment by fragment
+ * (`OVERLAY_HORIZON`).
+ */
+const OVERLAY_FILL_VS = `in vec3 position3DHigh;
+in vec3 position3DLow;
+in vec4 color;
+in float batchId;
+
+out vec4 v_color;
+out vec3 v_overlayRte;
+
+void main()
+{
+    vec4 p = czm_computePosition();
+    v_color = color;
+    v_overlayRte = p.xyz;
+    gl_Position = czm_modelViewProjectionRelativeToEye * p;
+}
+`;
+const OVERLAY_FILL_FS = `in vec4 v_color;
+in vec3 v_overlayRte;
+${OVERLAY_HORIZON}
+void main()
+{
+    if (overlayPastHorizon(v_overlayRte))
+        discard;
+    out_FragColor = czm_gammaCorrect(v_color);
+}
+`;
+
+/**
+ * A line's appearance, drawn over the surface as an overlay: Cesium's
+ * polyline material appearance, its fragments past the horizon dropped
+ * (`OVERLAY_HORIZON`), for its colour and its colour where the surface hides
+ * it alike, so the part of a line behind the Earth never shows. Each vertex
+ * hands on the point its corner is drawn from: where Cesium moves a segment's
+ * end onto the near plane, that point, cut as Cesium cuts it, so the
+ * fragments are tested along the segment drawn.
+ */
+let overlayLineShaders;
+function overlayLineAppearance(material) {
+  if (!overlayLineShaders) {
+    const plain = new Cesium.PolylineMaterialAppearance();
+    const vs = plain.vertexShaderSource;
+    const fs = plain.fragmentShaderSource;
+    const main = /void main\(\)\s*\{/g;
+    const lastMain = (source) => {
+      let at = -1;
+      for (const m of source.matchAll(main)) at = m.index;
+      if (at < 0) throw new Error('Cesium polyline shader has no main');
+      return at;
+    };
+    const vsAt = lastMain(vs);
+    const vsBody = vs.slice(vsAt).replace(
+      /(vec4 positionWC = getPolylineWindowCoordinates\(p, prev, next, expandDir, width, usePrev, angle\);)/,
+      `$1
+    {
+        vec4 fromEC = czm_modelViewRelativeToEye * p;
+        vec4 toEC = czm_modelViewRelativeToEye * (usePrev ? prev : next);
+        vec4 clippedWC, clippedEC;
+        bool clipped, culled;
+        clipLineSegmentToNearPlane(fromEC.xyz, toEC.xyz, clippedWC, clipped, culled, clippedEC);
+        v_overlayRte = mat3(czm_inverseView) * clippedEC.xyz;
+    }`,
+    );
+    if (vsBody === vs.slice(vsAt))
+      throw new Error('Cesium polyline shader no longer places its corners');
+    const fsAt = lastMain(fs);
+    overlayLineShaders = {
+      vertexShaderSource: `${vs.slice(0, vsAt)}out vec3 v_overlayRte;\n${vsBody}`,
+      fragmentShaderSource: `${fs.slice(0, fsAt)}in vec3 v_overlayRte;\n${OVERLAY_HORIZON}\n${fs
+        .slice(fsAt)
+        .replace(
+          main,
+          'void main()\n{\n    if (overlayPastHorizon(v_overlayRte)) discard;',
+        )}`,
+    };
+  }
+  return new Cesium.PolylineMaterialAppearance({
+    material,
+    ...overlayLineShaders,
+  });
+}
+
+/** The longest straight step of an overlay fill's edges and triangles, in
+ *  radians: a tenth of a degree, so a cell's edges follow the curve and
+ *  its triangles sag at most a few metres under the ellipsoid. */
+export const OVERLAY_GRANULARITY = Cesium.Math.RADIANS_PER_DEGREE / 10;
+
+/** The appearance overlay fills draw with: their colour, unlit, alpha
+ *  blended, no depth test or depth writes, culled at the horizon. */
+export const overlayFillAppearance = () =>
+  new Cesium.PerInstanceColorAppearance({
+    flat: true,
+    translucent: true,
+    vertexShaderSource: OVERLAY_FILL_VS,
+    fragmentShaderSource: OVERLAY_FILL_FS,
+    renderState: { depthTest: { enabled: false }, depthMask: false },
+  });
 
 /** Cesium's classification for what clamped lines and fills drape onto. */
 const classificationOf = (clampTo = 'both') =>
@@ -402,6 +602,249 @@ export function revealUniform(fraction, positions) {
 }
 
 /**
+ * The material a line's style draws with, inside the age and reveal
+ * materials wrapped round it.
+ */
+function styleMaterial(material) {
+  let drawn = material;
+  while (drawn.materials?.aged || drawn.materials?.revealed)
+    drawn = drawn.materials.aged ?? drawn.materials.revealed;
+  return drawn;
+}
+
+/** A line's material inside its age material: the one a reveal is set on. */
+const unaged = (material) => material.materials?.aged ?? material;
+
+/** The prefix of an age-faded line's material types (`LineItem.ageFade`). */
+const AGE_MATERIAL = 'DrawAgedLine';
+
+/** Points an age texture's row holds; a longer line takes more rows. */
+const AGE_TEXTURE_WIDTH = 1024;
+
+/**
+ * A line faded with the age of its points (`LineItem.ageFade`), in its own
+ * style otherwise. `ages` holds a texel a drawn point: where along the
+ * line's texture it lies (`st.s`) and its time, seconds after `ageNow`'s
+ * zero. A polyline's texture runs evenly per vertex, so its point is found
+ * at once; a ground polyline's runs along its length (`ageByLength`), so
+ * its point is searched for. Its time runs evenly to the next point's, and
+ * its recency eases the alpha (smoothstep to `ageAlphaFloor`, recency
+ * squared to `ageSquaredFloor` where that is not negative) and the width
+ * (to `ageWidthFloor` of it, about its middle: outside it is discarded, so
+ * it neither draws nor picks). With a window (`ageShow`, `LineAgeFade.showMs`,
+ * seconds; negative, no older bound; 0, none) a fragment whose time is after
+ * now, or older than the window, is discarded too.
+ */
+const AGE_SOURCE = `
+vec4 drawAgeTexel(float i) {
+  float row = floor(i / ageWidth);
+  return texture(ages, vec2((i - row * ageWidth + 0.5) / ageWidth, (row + 0.5) / ageRows));
+}
+
+czm_material czm_getMaterial(czm_materialInput materialInput) {
+  float s = clamp(materialInput.st.s, 0.0, 1.0);
+  float last = max(ageCount - 1.0, 0.0);
+  float lo = 0.0;
+  float hi = last;
+  float u = 0.0;
+  if (ageByLength > 0.5) {
+    for (int k = 0; k < 24; k++) {
+      if (hi - lo <= 1.0) break;
+      float mid = floor((lo + hi) * 0.5);
+      if (drawAgeTexel(mid).r <= s) lo = mid;
+      else hi = mid;
+    }
+    vec2 a = drawAgeTexel(lo).rg;
+    vec2 b = drawAgeTexel(hi).rg;
+    u = b.r > a.r ? clamp((s - a.r) / (b.r - a.r), 0.0, 1.0) : 0.0;
+  } else {
+    float f = s * last;
+    lo = min(floor(f), max(last - 1.0, 0.0));
+    hi = min(lo + 1.0, last);
+    u = clamp(f - lo, 0.0, 1.0);
+  }
+  float when = mix(drawAgeTexel(lo).g, drawAgeTexel(hi).g, u);
+  if (ageShow != 0.0 && (when > ageNow || (ageShow > 0.0 && ageNow - when > ageShow)))
+    discard;
+  float recency = 1.0 - clamp((ageNow - when) / ageWindow, 0.0, 1.0);
+  float fade = mix(ageAlphaFloor, 1.0, smoothstep(0.0, 1.0, recency));
+  if (ageSquaredFloor >= 0.0)
+    fade *= mix(ageSquaredFloor, 1.0, recency * recency);
+  float width = max(mix(ageWidthFloor, 1.0, recency), 0.001);
+  float across = (materialInput.st.t - 0.5) / width;
+  if (abs(across) > 0.5) discard;
+  materialInput.st.t = across + 0.5;
+  czm_material m = aged;
+  m.alpha *= fade;
+
+  return m;
+}`;
+
+/**
+ * What an age-faded line's material draws from: a texel a drawn point (see
+ * `AGE_SOURCE`), packed four floats each (where along the line, its time in
+ * seconds after `base`, and two unused), `width` to a row; and the fade's
+ * uniforms. `points` are the line as drawn and `times` theirs; a polyline
+ * drops a point at the place of the one before it, as Cesium does, and
+ * takes the rest evenly along its texture; `byLength`, the points lie along
+ * it by their distance over the ellipsoid, as a ground polyline's texture
+ * runs. `base` is the newest time, so the times a texel holds are small.
+ * `windowed`, the line draws only within its `showMs` of now (`ageShow`).
+ * @param {Array<{x: number, y: number, z: number}>} points
+ * @param {ArrayLike<number>} times Epoch ms, one a point.
+ * @param {import('../contract/draw').LineAgeFade} fade
+ * @param {boolean} [byLength]
+ * @param {boolean} [windowed]
+ */
+export function lineAgeData(
+  points,
+  times,
+  fade,
+  byLength = false,
+  windowed = false,
+) {
+  let kept = Array.from(times);
+  let along = points;
+  if (!byLength) {
+    const removed = [];
+    Cesium.arrayRemoveDuplicates(
+      points,
+      Cesium.Cartesian3.equalsEpsilon,
+      false,
+      removed,
+    );
+    if (removed.length) {
+      const gone = new Set(removed);
+      kept = kept.filter((_, i) => !gone.has(i));
+      along = points.filter((_, i) => !gone.has(i));
+    }
+  }
+  const count = kept.length;
+  const fractions = new Float64Array(count);
+  if (byLength) {
+    let total = 0;
+    let previous = null;
+    for (let i = 0; i < count; i++) {
+      const here = Cesium.Cartographic.fromCartesian(along[i]);
+      if (previous && here)
+        total += new Cesium.EllipsoidGeodesic(previous, here).surfaceDistance;
+      fractions[i] = total;
+      if (here) previous = here;
+    }
+    for (let i = 0; i < count; i++)
+      fractions[i] = total > 0 ? fractions[i] / total : 0;
+  } else
+    for (let i = 0; i < count; i++)
+      fractions[i] = count > 1 ? i / (count - 1) : 0;
+  let base = -Infinity;
+  for (const time of kept) if (time > base) base = time;
+  if (!Number.isFinite(base)) base = 0;
+  const width = Math.max(1, Math.min(count, AGE_TEXTURE_WIDTH));
+  const rows = Math.max(1, Math.ceil(count / width));
+  const data = new Float32Array(width * rows * 4);
+  for (let i = 0; i < count; i++) {
+    data[i * 4] = fractions[i];
+    data[i * 4 + 1] = (kept[i] - base) / 1000;
+  }
+  return {
+    data,
+    width,
+    rows,
+    count,
+    base,
+    uniforms: {
+      ageCount: count,
+      ageWidth: width,
+      ageRows: rows,
+      ageByLength: byLength ? 1 : 0,
+      ageWindow: fade.windowMs / 1000,
+      ageAlphaFloor: fade.alphaFloor,
+      ageSquaredFloor: fade.squaredAlphaFloor ?? -1,
+      ageWidthFloor: fade.widthFloor ?? 1,
+      ageShow: showUniform(windowed ? fade.showMs : undefined),
+    },
+  };
+}
+
+/**
+ * A window's `ageShow` uniform: its seconds; -1 for an endless one, cut at
+ * now alone; 0 for none.
+ * @param {number|undefined} showMs
+ */
+const showUniform = (showMs) =>
+  showMs === undefined ? 0 : Number.isFinite(showMs) ? showMs / 1000 : -1;
+
+/**
+ * A line's `ageFade`, checked: one finite time a position, over a positive
+ * window, its floors from 0 to 1, and a `showMs` positive where it has one.
+ * Refused otherwise.
+ * @param {import('../contract/draw').LineItem} item
+ */
+function checkAgeFade(item) {
+  const fade = item.ageFade;
+  if (fade == null) return;
+  const count =
+    item.positions instanceof Float64Array
+      ? item.positions.length / 3
+      : item.positions.length;
+  const floor = (value) => value === undefined || (value >= 0 && value <= 1);
+  if (
+    !fade.times ||
+    fade.times.length !== count ||
+    !Array.prototype.every.call(fade.times, Number.isFinite) ||
+    !(fade.windowMs > 0 && Number.isFinite(fade.windowMs)) ||
+    !(fade.alphaFloor >= 0 && fade.alphaFloor <= 1) ||
+    !floor(fade.squaredAlphaFloor) ||
+    !floor(fade.widthFloor) ||
+    !(fade.showMs === undefined || fade.showMs > 0)
+  )
+    throw new TypeError(
+      'a line fades with one finite time a position, over a positive window, with floors from 0 to 1, shown over a positive span',
+    );
+}
+
+/**
+ * Make a material of `fabric`'s type on its own once, before one is a part
+ * of a composite material. Cesium keeps a type's uniform names, for all the
+ * page's materials of that type, from the first it makes, and a part has
+ * them numbered as the composite's: a plain material of that type made
+ * later then fails in a polyline collection (`material._uniforms[uniform]
+ * is not a function`), stopping the frame.
+ * @param {{type: string}} fabric
+ */
+function ownUniforms(fabric) {
+  if (!Cesium.Material._uniformList[fabric.type])
+    new Cesium.Material({ fabric }).destroy();
+}
+
+/**
+ * A line's `breaks`, checked: strictly increasing whole position indices,
+ * each past the first position and within the line (`0 < i < count`).
+ * Refused otherwise.
+ * @param {import('../contract/draw').LineItem} item
+ */
+function checkBreaks(item) {
+  const breaks = item.breaks;
+  if (breaks == null) return;
+  const count =
+    item.positions instanceof Float64Array
+      ? item.positions.length / 3
+      : item.positions.length;
+  let previous = 0;
+  const fits =
+    (Array.isArray(breaks) || breaks instanceof Uint32Array) &&
+    Array.prototype.every.call(breaks, (at) => {
+      const ok = Number.isInteger(at) && at > previous && at < count;
+      previous = at;
+      return ok;
+    });
+  if (!fits)
+    throw new TypeError(
+      'a line breaks at whole, increasing position indices after its first position and before its end',
+    );
+}
+
+/**
  * The `flow` lines' clock, seconds, for a line flowing at `speed` cells a
  * second: wrapped to one cell's time, which draws the same dashes, so the
  * single-precision uniform never runs out of digits over a long session.
@@ -471,12 +914,18 @@ const animating = (record) => record.gpu?.animating();
 export function createCesiumDraw({
   scene,
   report,
-  capabilities = new Set(GPU_ICON_CAPABILITIES),
+  capabilities = new Set(gpuIconCapabilities(scene)),
   requestRender: requestFrame = null,
   date = null,
   now = () => performance.now(),
 }) {
   const sets = new Map();
+  // Lines fade with the age of their points (`LineItem.ageFade`).
+  const ageFades = capabilities.has('lineAgeFade');
+  // And draw only within a span of the scene clock (`LineAgeFade.showMs`).
+  const timeWindows = ageFades && capabilities.has('lineTimeWindow');
+  // And as several runs, not joined across their breaks (`LineItem.breaks`).
+  const lineBreaks = capabilities.has('lineBreaks');
   // Fields share the sets' ids.
   const fieldPart = createCesiumFields({
     scene,
@@ -547,24 +996,31 @@ export function createCesiumDraw({
       setsVersion += 1;
     };
     record.rebuild = rebuild;
+    // A set whose owner asks for its frames is changed in place without
+    // asking for one: the owner writes it as a frame begins (asking then
+    // would draw that frame twice), or its next frame draws the change.
+    const ownerFrames = () => spec.motionClock?.frames === 'owner';
     // Changed in place: what height queries see through may have changed.
     const patched = () => {
       setsVersion += 1;
-      requestRender();
+      if (!ownerFrames()) requestRender();
     };
     // Icons changed in place: height queries see through the sets' pick
     // ids, which an icon keeps, so only icons added or gone change them.
     const iconsPatched = (synced) => {
       if (synced === ICONS_CHANGED) setsVersion += 1;
-      requestRender();
+      if (!ownerFrames()) requestRender();
     };
     // A shape's pulse the renderer cannot run is refused before anything
     // changes.
     const checkPulses = (list) => {
       if (kind === 'lines')
-        for (const item of list)
+        for (const item of list) {
           if (item.style?.kind === 'split' && item.mode !== 'draped')
             throw new TypeError('a split line is draped');
+          if (ageFades) checkAgeFade(item);
+          if (lineBreaks) checkBreaks(item);
+        }
       if (kind !== 'shapes') return;
       for (const item of list) pulseOf(item);
       if (list.some((item) => item.animate)) record.mayPulse = true;
@@ -589,14 +1045,14 @@ export function createCesiumDraw({
       },
       upsert(list) {
         checkPulses(list);
+        // Icons drawn already, with the images they are drawn with, each
+        // changed where it is.
+        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         if (onGpu(record, list)) {
           for (const item of list) items.set(item.id, item);
           record.gpu.write(list);
           return patched();
         }
-        // Icons drawn already, with the images they are drawn with, each
-        // changed where it is.
-        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         // Points restyled, moved or added keep the pick ids they had, so
         // only points added change what height queries see through.
         const points = patchPoints(record, list);
@@ -673,7 +1129,9 @@ export function createCesiumDraw({
           spec.motionClock?.kind === 'live'
         ) {
           spec.motionClock = options.motionClock;
-          requestRender();
+          // A set whose owner asks for its frames reads the new delay in
+          // the owner's next one: the delay alone asks for none.
+          if (options.motionClock.frames !== 'owner') requestRender();
           return;
         }
         // Refused, changing nothing, where icons on the GPU cannot take it
@@ -877,6 +1335,7 @@ export function createCesiumDraw({
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
+    viewsOf: (id) => viewSheets.get(id),
     requestRender: (reason) => {
       if (!live()) return;
       if (requestFrame) requestFrame(reason);
@@ -893,10 +1352,16 @@ export function createCesiumDraw({
    */
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
-    if (!record.gpu && !force && !gpu.wants(list, record.spec)) return false;
-    gpu.check(list, record.spec);
+    if (
+      !record.gpu &&
+      !force &&
+      !record.spec.recede &&
+      !list.some((item) => gpu.wants(item, item.image))
+    )
+      return false;
+    gpu.check(list, record.spec, record);
     if (record.gpu) return true;
-    if (!replacing) gpu.check(record.items.values(), record.spec);
+    if (!replacing) gpu.check(record.items.values(), record.spec, record);
     record.gpu = gpu.attach(record);
     record.billboards = null;
     record.billboardHost = null;
@@ -1104,8 +1569,10 @@ export function createCesiumDraw({
   }
 
   /**
-   * Draped lines drawn over the surface (where the scene cannot drape) show
-   * while any of their ends or middle is this side of the horizon.
+   * Lines drawn over the surface (draped ones where the scene cannot drape,
+   * overlays, overlay outlines) are left out of the frame while all their
+   * ends and middle are past the horizon; of one in view, the parts past the
+   * horizon are dropped fragment by fragment (`overlayLineAppearance`).
    */
   function cullOverlayLines() {
     let horizon;
@@ -1418,6 +1885,9 @@ export function createCesiumDraw({
   // when its icon is drawn, and registering an atlas again swaps the images
   // of the icons that drew from it.
   const atlases = new Map();
+  // Registered view sheets by id: image and checked layout. A new object on
+  // each registration lets sets notice the change.
+  const viewSheets = new Map();
   /** The blob each material or quad draws, held while it lives (`holdImage`). */
   const heldBlobs = new WeakMap();
 
@@ -1774,7 +2244,12 @@ export function createCesiumDraw({
         ok = false;
         break;
       }
-      const image = iconImage(record, list[i].image);
+      const ref = list[i].image;
+      if (gpu.wants(list[i], ref)) {
+        ok = false;
+        break;
+      }
+      const image = iconImage(record, ref);
       if (
         image === undefined ||
         imageKeyOf(image) !== entry.image ||
@@ -2309,32 +2784,51 @@ export function createCesiumDraw({
    * (the route annotations' dashes, which run toward the line's end on the
    * clock `flowTime` keeps) is noted for the frame clock.
    */
-  function lineMaterial(record, style, reveal) {
+  function lineMaterial(record, style, reveal, age) {
     const fabric = lineFabric(style);
     // Built from its type, then given its values, as `fromType` does:
     // values in the fabric would be merged into copies of the type's.
     const template = ({ type, source, uniforms }) =>
       source ? { type, source, uniforms } : { type };
-    // A pattern's image carries its own alpha, and a split line's colours
-    // may each have one: drawn in the translucent pass, whatever its colour.
+    // A pattern's image carries its own alpha, a split line's colours may
+    // each have one, and an aged line fades: drawn in the translucent pass,
+    // whatever its colour.
     const translucent =
-      style.kind === 'pattern' || style.kind === 'split'
+      style.kind === 'pattern' || style.kind === 'split' || age
         ? { translucent: true }
         : {};
-    const material =
-      reveal === undefined
-        ? new Cesium.Material({ fabric: template(fabric), ...translucent })
-        : new Cesium.Material({
-            fabric: {
-              type: `${REVEAL_MATERIAL}_${style.kind}`,
-              materials: { revealed: template(fabric) },
-              uniforms: { reveal },
-              source: REVEAL_SOURCE,
-            },
-            ...translucent,
-          });
-    const drawn = reveal === undefined ? material : material.materials.revealed;
+    let built = template(fabric);
+    if (reveal !== undefined) {
+      ownUniforms(built);
+      built = {
+        type: `${REVEAL_MATERIAL}_${style.kind}`,
+        materials: { revealed: built },
+        uniforms: { reveal },
+        source: REVEAL_SOURCE,
+      };
+    }
+    if (age) {
+      ownUniforms(built);
+      built = {
+        type: `${AGE_MATERIAL}_${reveal === undefined ? '' : 'revealed_'}${style.kind}`,
+        materials: { aged: built },
+        uniforms: {
+          ...age.uniforms,
+          ages: Cesium.Material.DefaultImageId,
+          ageNow: 0,
+        },
+        source: AGE_SOURCE,
+      };
+    }
+    const material = new Cesium.Material({ fabric: built, ...translucent });
+    const drawn = styleMaterial(material);
     Object.assign(drawn.uniforms, fabric.uniforms);
+    if (age) {
+      // Translucent whatever its style's colour: a composite material is
+      // translucent only where all of its parts are.
+      material.translucent = true;
+      noteAge(record, material, age);
+    }
     const flow = flowOf(material, style);
     if (flow) record.flowMaterials.push(flow);
     if (style.kind === 'pattern') holdImage(material, style.image);
@@ -2346,11 +2840,7 @@ export function createCesiumDraw({
    * line draws), for the frame clock; null for other styles.
    */
   const flowOf = (material, style) =>
-    style.kind !== 'flow'
-      ? null
-      : material.type === FLOW_MATERIAL
-        ? material
-        : material.materials.revealed;
+    style.kind !== 'flow' ? null : styleMaterial(material);
 
   /** Stop running the clock of a line material that no longer draws. */
   function dropFlow(record, material, style) {
@@ -2361,6 +2851,125 @@ export function createCesiumDraw({
 
   /** Whether a line draws only the first part of its length. */
   const revealed = (item) => item.revealFraction !== undefined;
+
+  /**
+   * Note an age-faded line's material, which takes the scene's time each
+   * frame (`runAges`) and its points' times as a texture. `owner`, the
+   * primitive drawing it where that is not a polyline collection's (which
+   * destroys the materials of the lines it lets go): the material goes with
+   * it (`claimAges`).
+   */
+  function noteAge(record, material, age) {
+    (record.ages ??= new Map()).set(material, {
+      age,
+      texture: null,
+      dirty: true,
+      owner: null,
+    });
+    (record.unclaimedAges ??= []).push(material);
+    material.uniforms.ageNow = (sceneMs() - age.base) / 1000;
+  }
+
+  /** The aged materials made since the last claim are `owner`'s. */
+  function claimAges(record, owner) {
+    for (const material of record.unclaimedAges?.splice(0) ?? []) {
+      const entry = record.ages.get(material);
+      if (entry && owner) entry.owner = owner;
+    }
+  }
+
+  /** An aged line's material takes its line's new points and times. */
+  function writeAge(record, material, age) {
+    const entry = record.ages?.get(material);
+    if (!entry) return;
+    const was = entry.age;
+    Object.assign(material.uniforms, age.uniforms);
+    entry.age = age;
+    material.uniforms.ageNow = (sceneMs() - age.base) / 1000;
+    if (
+      was.width === age.width &&
+      was.rows === age.rows &&
+      was.data.every((value, i) => Object.is(value, age.data[i]))
+    )
+      return;
+    entry.dirty = true;
+    requestRender();
+  }
+
+  /** The scene's time now, epoch ms: the frame's, once one has drawn. */
+  const sceneMs = () =>
+    Cesium.JulianDate.toDate(
+      scene.frameState?.time ?? Cesium.JulianDate.now(),
+    ).getTime();
+
+  /**
+   * Each frame, before it draws: every aged line's material takes the
+   * scene's time, and its points' times where they changed (written into
+   * its texture, or a new one where it changed size). A material whose
+   * line is gone goes, with its texture.
+   */
+  function runAges() {
+    let ms = null;
+    for (const record of sets.values()) {
+      if (!record.ages?.size) continue;
+      ms ??= sceneMs();
+      for (const [material, entry] of record.ages) {
+        if (dropAge(record, material, entry)) continue;
+        material.uniforms.ageNow = (ms - entry.age.base) / 1000;
+        if (entry.dirty && scene.context) uploadAge(material, entry);
+      }
+    }
+  }
+
+  /** Let an aged material go if its line is gone; true if it went. */
+  function dropAge(record, material, entry) {
+    if (!material.isDestroyed() && !entry.owner?.isDestroyed()) return false;
+    if (!material.isDestroyed()) material.destroy();
+    // One handed over but never taken is no one's.
+    if (entry.texture && !entry.texture.isDestroyed()) entry.texture.destroy();
+    record.ages.delete(material);
+    return true;
+  }
+
+  /** Write an aged material's times into its texture, made as needed. */
+  function uploadAge(material, entry) {
+    const { data, width, rows } = entry.age;
+    const source = { width, height: rows, arrayBufferView: data };
+    entry.dirty = false;
+    const texture = entry.texture;
+    if (
+      texture &&
+      !texture.isDestroyed() &&
+      texture.width === width &&
+      texture.height === rows
+    ) {
+      texture.copyFrom({ source });
+      return;
+    }
+    if (
+      texture &&
+      !texture.isDestroyed() &&
+      materialTexture(material, 'ages') !== texture
+    )
+      texture.destroy();
+    entry.texture = new Cesium.Texture({
+      context: scene.context,
+      width,
+      height: rows,
+      pixelFormat: Cesium.PixelFormat.RGBA,
+      pixelDatatype: Cesium.PixelDatatype.FLOAT,
+      flipY: false,
+      source,
+      sampler: new Cesium.Sampler({
+        wrapS: Cesium.TextureWrap.CLAMP_TO_EDGE,
+        wrapT: Cesium.TextureWrap.CLAMP_TO_EDGE,
+        minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+        magnificationFilter: Cesium.TextureMagnificationFilter.NEAREST,
+      }),
+    });
+    // The material destroys the texture it held once it takes this one.
+    material.uniforms.ages = entry.texture;
+  }
 
   /** The fabric of a line style's material. */
   function lineFabric(style) {
@@ -2440,7 +3049,12 @@ export function createCesiumDraw({
     }
   }
 
-  function linePositions(item) {
+  /**
+   * A line's positions as drawn: a geodesic one cut along its arc. With
+   * `times` (one a position), `timesOut` takes the time of each point drawn,
+   * running evenly between the positions'.
+   */
+  function linePositions(item, times = null, timesOut = null) {
     const flat = item.positions instanceof Float64Array;
     const points = [];
     const n = flat ? item.positions.length / 3 : item.positions.length;
@@ -2454,7 +3068,10 @@ export function createCesiumDraw({
             )
           : toCartesian(item.positions[i]),
       );
-    if (item.mode !== 'geodesic') return points;
+    if (item.mode !== 'geodesic') {
+      if (timesOut) for (let i = 0; i < n; i++) timesOut.push(times[i]);
+      return points;
+    }
     const dense = [];
     for (let i = 0; i + 1 < points.length; i++) {
       const a = Cesium.Cartographic.fromCartesian(points[i]);
@@ -2469,6 +3086,7 @@ export function createCesiumDraw({
       );
       for (let k = 0; k < steps; k++) {
         const s = k / steps;
+        if (timesOut) timesOut.push(times[i] + (times[i + 1] - times[i]) * s);
         const at = geodesic.interpolateUsingFraction(s);
         dense.push(
           Cesium.Cartesian3.fromRadians(
@@ -2480,7 +3098,30 @@ export function createCesiumDraw({
       }
     }
     dense.push(points.at(-1));
+    if (timesOut) timesOut.push(times[n - 1]);
     return dense;
+  }
+
+  /** Whether a line fades with age here: it asks, and the port lists it. */
+  const aged = (item) => ageFades && item.ageFade != null;
+
+  /**
+   * What an age-faded line's material draws from (`lineAgeData`), for the
+   * line drawn along `positions` (as `linePositions` made them from it, by
+   * default); undefined for a line that does not fade. A draped line, and
+   * one drawn over the surface for it, lies along its texture by length.
+   */
+  function ageOf(item, positions) {
+    if (!aged(item)) return undefined;
+    const times = [];
+    const drawn = linePositions(item, item.ageFade.times, times);
+    return lineAgeData(
+      positions ?? drawn,
+      times,
+      item.ageFade,
+      item.mode === 'draped' || item.overlaid === true,
+      timeWindows,
+    );
   }
 
   /**
@@ -2503,8 +3144,15 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction, positions)
       : undefined;
-    const material = lineMaterial(record, item.style, reveal);
-    return new Cesium.Primitive({
+    const age = ageOf(item, positions);
+    const material = lineMaterial(record, item.style, reveal, age);
+    // A line drawn over the surface drops what is past the horizon, in both
+    // its looks (`overlayLineAppearance`).
+    const look = (m) =>
+      item.overlaid
+        ? overlayLineAppearance(m)
+        : new Cesium.PolylineMaterialAppearance({ material: m });
+    const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
         geometry: new Cesium.PolylineGeometry({
           positions,
@@ -2519,17 +3167,17 @@ export function createCesiumDraw({
         }),
         id,
       }),
-      appearance: new Cesium.PolylineMaterialAppearance({ material }),
+      appearance: look(material),
       depthFailAppearance: item.depthFail
-        ? new Cesium.PolylineMaterialAppearance({
-            material: lineMaterial(record, item.depthFail, reveal),
-          })
+        ? look(lineMaterial(record, item.depthFail, reveal, age))
         : undefined,
       show: item.show !== false,
       asynchronous: false,
       // A set that never picks keeps these out of the pick pass too.
       allowPicking: record.spec.pickable !== false,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /**
@@ -2562,7 +3210,10 @@ export function createCesiumDraw({
    * colours only, so an outlined line draws by its own material.
    */
   const batchable = (item) =>
-    item.style.kind === 'solid' && !item.style.outline && !revealed(item);
+    item.style.kind === 'solid' &&
+    !item.style.outline &&
+    !revealed(item) &&
+    !aged(item);
 
   /**
    * A ground primitive of a draped line's own, drawn by a material (a
@@ -2582,18 +3233,21 @@ export function createCesiumDraw({
         record,
         item.style,
         revealed(item) ? revealUniform(item.revealFraction) : undefined,
+        ageOf(item, positions),
       );
       appearance = new Cesium.PolylineMaterialAppearance({
         material: part.material,
       });
     }
-    return new Cesium.GroundPolylinePrimitive({
+    const primitive = new Cesium.GroundPolylinePrimitive({
       geometryInstances: [drapedInstance(item, part, solid, positions)],
       appearance,
       classificationType: classificationOf(part.clampTo),
       allowPicking: record.spec.pickable !== false,
       asynchronous: !sync,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /**
@@ -2666,9 +3320,50 @@ export function createCesiumDraw({
         item.mode === 'draped' &&
         item.style.kind === 'solid' &&
         !item.style.outline &&
-        !revealed(item)
+        !revealed(item) &&
+        !aged(item)
       )) ||
-    (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail);
+    (item.frame === 'inertial' && item.mode !== 'draped' && item.depthFail) ||
+    // A line in runs with no segments of its own: a piece a run.
+    (broken(item) && !segmented(item));
+
+  /** Whether a line is drawn in runs, not joined across its breaks. */
+  const broken = (item) =>
+    lineBreaks && item.breaks != null && item.breaks.length > 0;
+
+  /** The positions that start a run of a line in runs, or null. */
+  const runStarts = (item) => (broken(item) ? new Set(item.breaks) : null);
+
+  /**
+   * Where a line drawn piece by piece is cut into pieces, by position
+   * index: `[a, b]` from position `a` to `b`, `j` its segment (its pair of
+   * positions, for its colour and show), `last` whether it ends its run (an
+   * arrow's head is drawn there). A segmented line has a piece a segment,
+   * but for those across a break; one in runs a piece a run; any other one
+   * piece. A run of one position draws nothing, and has no piece.
+   */
+  function pieceSpans(item, count, bySegment) {
+    const starts = runStarts(item);
+    const spans = [];
+    if (bySegment) {
+      for (let j = 0; j + 1 < count; j++)
+        if (!starts?.has(j + 1))
+          spans.push({
+            a: j,
+            b: j + 1,
+            j,
+            last: j + 2 >= count || Boolean(starts?.has(j + 2)),
+          });
+      return spans;
+    }
+    if (!starts) return [{ a: 0, b: count - 1, j: 0, last: true }];
+    let a = 0;
+    for (const at of [...starts, count]) {
+      if (at - 1 > a) spans.push({ a, b: at - 1, j: -1, last: true });
+      a = at;
+    }
+    return spans;
+  }
 
   /**
    * The style a segment of a line draws in: the line's, in the segment's
@@ -2687,11 +3382,14 @@ export function createCesiumDraw({
    * A line drawn piece by piece: a segment a piece for a segmented line
    * (each its own primitive and material, under a pick id of its own that
    * reads as the line's, so a segment's colour and show change in place),
-   * else one piece for the whole line. A revealed line reveals each piece
-   * by its share of the line's length. Draped pieces are ground polylines.
-   * Inertial pieces turn with the sky (`turnInertial`).
+   * a run a piece for a line in runs (`pieceSpans`), else one piece for
+   * the whole line. A revealed line reveals each piece by its share of the
+   * line's length. Draped pieces are ground polylines; the undraped pieces
+   * of a line in runs with no depth-fail style, in the Earth's frame, are
+   * polylines in the set's collection (`polylines`), the rest primitives
+   * in `host`. Inertial pieces turn with the sky (`turnInertial`).
    */
-  function linePieces(record, item, host, groundOut) {
+  function linePieces(record, item, host, groundOut, polylines) {
     const id = pickId(record, item);
     // Its own positions: a geodesic piece is cut along its arc as it is drawn.
     const points = linePositions({ ...item, mode: '3d' });
@@ -2699,25 +3397,35 @@ export function createCesiumDraw({
       look: lineLook(item),
       id,
       from: flatPositions(item.positions),
+      ageFrom: aged(item) ? Array.from(item.ageFade.times) : null,
       reveal: item.revealFraction,
       pieces: [],
     };
     const bySegment = segmented(item);
-    const spans = bySegment
-      ? points.slice(1).map((_, j) => [j, j + 1])
-      : [[0, points.length - 1]];
-    const lengths = spans.map(([a, b]) => {
+    const spans = pieceSpans(item, points.length, bySegment);
+    const lengths = spans.map(({ a, b }) => {
       let length = 0;
       for (let k = a; k < b; k++)
         length += Cesium.Cartesian3.distance(points[k], points[k + 1]);
       return length;
     });
+    // The revealed length runs along the pieces, the gaps between runs
+    // having none.
     const total = lengths.reduce((sum, length) => sum + length, 0);
+    // Several pieces of one line: each under a pick id of its own that
+    // reads as the line's.
+    const several = bySegment || spans.length > 1;
+    // Runs of a line drawn in the collection, as a line of one run is.
+    const inCollection =
+      broken(item) &&
+      item.mode !== 'draped' &&
+      !item.depthFail &&
+      item.frame !== 'inertial';
     let start = 0;
-    spans.forEach(([a, b], j) => {
+    spans.forEach(({ a, b, j, last }, k) => {
       const positions = points.slice(a, b + 1);
       const begins = start;
-      start += lengths[j];
+      start += lengths[k];
       if (!drawable(positions)) {
         part.pieces.push(null);
         return;
@@ -2728,18 +3436,28 @@ export function createCesiumDraw({
             1,
             Math.max(
               0,
-              (item.revealFraction * total - begins) / (lengths[j] || 1),
+              (item.revealFraction * total - begins) / (lengths[k] || 1),
             ),
           )
         : 1;
-      const pieceId = bySegment ? Object.create(id) : id;
-      if (bySegment) record.pickIds.push(pieceId);
+      const pieceId = several ? Object.create(id) : id;
+      if (several) record.pickIds.push(pieceId);
       const sub = {
         ...item,
         positions,
-        style: pieceStyle(item, j, j === spans.length - 1),
+        style: pieceStyle(item, j, last),
         ...(revealed(item) && shown < 1 ? { revealFraction: shown } : {}),
+        // Its own points' times.
+        ...(aged(item)
+          ? {
+              ageFade: {
+                ...item.ageFade,
+                times: Array.prototype.slice.call(item.ageFade.times, a, b + 1),
+              },
+            }
+          : {}),
       };
+      delete sub.breaks;
       if (!(revealed(item) && shown < 1)) delete sub.revealFraction;
       const draped = item.mode === 'draped';
       const showing = pieceShows(item, j, shown);
@@ -2748,17 +3466,33 @@ export function createCesiumDraw({
       // would never show. Showing it later needs no build.
       const primitive = draped
         ? groundPiece(record, sub, pieceId, true)
-        : depthFailLine(record, sub, pieceId);
+        : inCollection
+          ? addPolyline(record, polylines, sub, pieceId).polyline
+          : depthFailLine(record, sub, pieceId);
       if (!draped) primitive.show = showing;
       // Ground pieces swap in with the set's other ground primitives.
       if (draped) groundOut.push(primitive);
-      else host.add(primitive);
+      else if (!inCollection) host.add(primitive);
       if (item.frame === 'inertial' && item.mode !== 'draped')
         (record.inertialPieces ??= []).push(primitive);
+      // Drawn over the surface for a draped line: hidden past the horizon
+      // (`cullOverlayLines`), as a line of one run is.
+      const overlay =
+        item.overlaid && record.overlayLines
+          ? {
+              part: { deep: primitive },
+              shown: showing,
+              ends: overlayEnds(positions),
+            }
+          : undefined;
+      if (overlay) record.overlayLines.push(overlay);
       part.pieces.push({
         primitive,
+        // The collection it is drawn in, for a polyline there.
+        home: inCollection ? polylines : null,
+        overlay,
         j,
-        last: j === spans.length - 1,
+        last,
         shown,
         draped,
         id: pieceId,
@@ -2767,6 +3501,9 @@ export function createCesiumDraw({
     });
     return part;
   }
+
+  /** Whether a piece of a line is gone (with its viewer, say). */
+  const pieceGone = (piece) => (piece.home ?? piece.primitive).isDestroyed();
 
   /** Whether a piece shows: its line, its segment and some of it revealed. */
   const pieceShows = (item, j, shown = 1) =>
@@ -2779,7 +3516,7 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction)
       : undefined;
-    return new Cesium.GroundPolylinePrimitive({
+    const primitive = new Cesium.GroundPolylinePrimitive({
       geometryInstances: [
         new Cesium.GeometryInstance({
           geometry: new Cesium.GroundPolylineGeometry({
@@ -2792,25 +3529,29 @@ export function createCesiumDraw({
         }),
       ],
       appearance: new Cesium.PolylineMaterialAppearance({
-        material: lineMaterial(record, item.style, reveal),
+        material: lineMaterial(record, item.style, reveal, ageOf(item)),
       }),
       classificationType: classificationOf(
         item.clampTo ?? record.spec.clampTo ?? 'both',
       ),
       allowPicking: record.spec.pickable !== false,
     });
+    claimAges(record, primitive);
+    return primitive;
   }
 
   /** A pieced line's colours and shows, written in place. */
   function writePieces(part, item) {
     for (const piece of part.pieces) {
-      if (!piece || piece.primitive.isDestroyed()) continue;
+      if (!piece || pieceGone(piece)) continue;
       const style = pieceStyle(item, piece.j, piece.last);
-      const material = piece.primitive.appearance.material;
-      if (style.kind !== 'pattern')
-        paintLine(material.materials?.revealed ?? material, style);
+      const material = piece.home
+        ? piece.primitive.material
+        : piece.primitive.appearance.material;
+      if (style.kind !== 'pattern') paintLine(material, style);
       const show = pieceShows(item, piece.j, piece.shown);
-      if (!piece.draped) piece.primitive.show = show;
+      if (piece.overlay) piece.overlay.shown = show;
+      else if (!piece.draped) piece.primitive.show = show;
       else if (piece.primitive.ready) {
         showOn(piece.primitive, piece.id, show);
         piece.pendingShow = undefined;
@@ -2821,6 +3562,16 @@ export function createCesiumDraw({
   /** Whether the scene can drape lines (Cesium's ground polylines need
    *  depth textures, which every WebGL 2 context has). */
   const drapes = () => scene.frameState?.context?.depthTexture !== false;
+
+  /**
+   * A line as drawn: a draped one clamped as an overlay, or any draped one
+   * where the scene cannot drape, is drawn over the surface (`overlayLine`).
+   */
+  const overlaidLine = (record, item) =>
+    item.mode === 'draped' &&
+    (!drapes() || (item.clampTo ?? record.spec.clampTo) === 'overlay')
+      ? overlayLine(item)
+      : item;
 
   /**
    * A draped line as drawn where the scene cannot drape: undraped along its
@@ -2842,8 +3593,23 @@ export function createCesiumDraw({
       const first = segmentShow.indexOf(true);
       const last = segmentShow.lastIndexOf(true);
       if (first < 0) line.show = false;
-      else if (first > 0 || last < segmentShow.length - 1)
+      else if (first > 0 || last < segmentShow.length - 1) {
         line.positions = linePositions(item).slice(first, last + 2);
+        // Its runs' starts, among the positions it keeps.
+        if (broken(item))
+          line.breaks = Array.from(item.breaks)
+            .filter((at) => at > first && at < last + 2)
+            .map((at) => at - first);
+        if (item.ageFade)
+          line.ageFade = {
+            ...item.ageFade,
+            times: Array.prototype.slice.call(
+              item.ageFade.times,
+              first,
+              last + 2,
+            ),
+          };
+      }
     }
     return line;
   }
@@ -2855,11 +3621,12 @@ export function createCesiumDraw({
    */
   function overlayRecoloured(record, part, item) {
     const deep = part.deep;
-    if (!item.overlaid || !deep || revealed(item)) return false;
+    // An aged one may have new times: built anew.
+    if (!item.overlaid || !deep || revealed(item) || aged(item)) return false;
     if (!flatEquals(item.positions, part.overlayFrom)) return false;
     // Only its colour may have changed (`patchLines` checked its look).
     paintLine(deep.appearance.material, item.style);
-    deep.depthFailAppearance.material.uniforms.color = toColor(
+    styleMaterial(deep.depthFailAppearance.material).uniforms.color = toColor(
       item.style.color,
     );
     const line = record.overlayLines.find((entry) => entry.part === part);
@@ -2951,14 +3718,14 @@ export function createCesiumDraw({
           'the Cesium renderer draws solid and dashed lines behind the surface only',
         );
 
-    // Where the scene cannot drape at all, draped lines draw over the
-    // surface instead (`overlay`): undraped, in their own colour where the
-    // surface hides them, and hidden past the horizon (`cullOverlayLines`).
-    const overlay = !drapes();
-    const items = overlay
-      ? [...record.items.values()].map(overlayLine)
-      : [...record.items.values()];
-    record.overlayLines = overlay ? [] : null;
+    // Draped lines clamped as an overlay, and every draped line where the
+    // scene cannot drape at all, draw over the surface instead (`overlay`):
+    // undraped, in their own colour where the surface hides them, and
+    // hidden past the horizon (`cullOverlayLines`).
+    const items = [...record.items.values()].map((item) =>
+      overlaidLine(record, item),
+    );
+    record.overlayLines = [];
     const polylines = new Cesium.PolylineCollection();
     // Lines in the inertial frame, turned with the sky each frame.
     let inertial = null;
@@ -2988,7 +3755,10 @@ export function createCesiumDraw({
     for (const item of items) {
       if (piecewise(item)) {
         if (item.mode !== 'draped') pieces ??= new Cesium.PrimitiveCollection();
-        parts.set(item.id, linePieces(record, item, pieces, groundPieces));
+        parts.set(
+          item.id,
+          linePieces(record, item, pieces, groundPieces, polylines),
+        );
         continue;
       }
       if (item.mode === 'draped') {
@@ -3016,7 +3786,7 @@ export function createCesiumDraw({
           draped.get(clampTo).push(...instances);
           continue;
         }
-        if (item.style.kind === 'glow' && !revealed(item)) {
+        if (item.style.kind === 'glow' && !revealed(item) && !aged(item)) {
           if (!glows.has(part.look)) glows.set(part.look, []);
           glows.get(part.look).push({ item, part });
           continue;
@@ -3087,8 +3857,8 @@ export function createCesiumDraw({
         shape: settled ? looks.shape(item) : null,
         positions: settled ? flatPositions(item.positions) : null,
         // An outlined line, which never settles, takes its colours in
-        // place too: how it draws but for them.
-        outlined: item.style.outline ? looks.shape(item) : null,
+        // place too: how it draws but for them; and so does an aged one.
+        outlined: item.style.outline || aged(item) ? looks.shape(item) : null,
         id,
         polyline,
         reveal,
@@ -3192,6 +3962,7 @@ export function createCesiumDraw({
 
   /** Give a line's material its style's colours, its outline's too. */
   function paintLine(material, style) {
+    material = styleMaterial(material);
     material.uniforms.color = toColor(style.color);
     if (style.outline && 'outlineColor' in material.uniforms)
       material.uniforms.outlineColor = toColor(style.outline.color);
@@ -3223,6 +3994,18 @@ export function createCesiumDraw({
       item.segmentShow != null,
       revealed(item),
       item.frame,
+      // Where its runs start.
+      broken(item) ? Array.from(item.breaks) : null,
+      // How it fades with age (its times change with its positions).
+      aged(item)
+        ? [
+            item.ageFade.windowMs,
+            item.ageFade.alphaFloor,
+            item.ageFade.squaredAlphaFloor,
+            item.ageFade.widthFloor,
+            showUniform(timeWindows ? item.ageFade.showMs : undefined),
+          ]
+        : null,
     ]);
 
   /**
@@ -3238,7 +4021,24 @@ export function createCesiumDraw({
     (a.segmentColors != null) === (b.segmentColors != null) &&
     (a.segmentShow != null) === (b.segmentShow != null) &&
     revealed(a) === revealed(b) &&
-    a.frame === b.frame;
+    a.frame === b.frame &&
+    (broken(a) ? a.breaks : null) === (broken(b) ? b.breaks : null) &&
+    sameAgeLook(a, b);
+
+  /** Whether two lines fade with age alike, but for their times. */
+  const sameAgeLook = (a, b) => {
+    if (aged(a) !== aged(b)) return false;
+    if (!aged(a)) return true;
+    const x = a.ageFade;
+    const y = b.ageFade;
+    return (
+      x.windowMs === y.windowMs &&
+      x.alphaFloor === y.alphaFloor &&
+      x.squaredAlphaFloor === y.squaredAlphaFloor &&
+      x.widthFloor === y.widthFloor &&
+      (!timeWindows || x.showMs === y.showMs)
+    );
+  };
 
   /**
    * `lineLook`, kept for the last item asked for: within one upsert, lines
@@ -3276,6 +4076,16 @@ export function createCesiumDraw({
       else flat.push(p.lon, p.lat, p.height ?? 0, NaN);
     return flat;
   }
+
+  /** Whether a line's age times are `times` (null: it does not fade). */
+  const sameTimes = (item, times) =>
+    aged(item)
+      ? times !== null &&
+        item.ageFade.times.length === times.length &&
+        Array.prototype.every.call(item.ageFade.times, (time, i) =>
+          Object.is(time, times[i]),
+        )
+      : times === null;
 
   const samePositions = (a, b) =>
     a === b ||
@@ -3404,10 +4214,10 @@ export function createCesiumDraw({
   function patchLines(record, list) {
     const parts = record.lineParts;
     if (record.kind !== 'lines' || !parts) return false;
-    // Where the scene cannot drape, draped lines are patched as the lines
-    // drawn over the surface for them, each built anew alone where it
-    // changes (as any line with a depth-fail colour is).
-    if (record.overlayLines) list = list.map(overlayLine);
+    // Draped lines drawn over the surface (`overlaidLine`) are patched as
+    // those lines, each built anew alone where it changes (as any line with
+    // a depth-fail colour is).
+    list = list.map((item) => overlaidLine(record, item));
     // Each draped line's positions, flattened once for both passes.
     const flats = new Map();
     // Each item's look, in order: an item sent twice is changed twice.
@@ -3423,8 +4233,9 @@ export function createCesiumDraw({
           !piecewise(item) ||
           lookOf.look(item) !== was.look ||
           !flatEquals(item.positions, was.from) ||
+          !sameTimes(item, was.ageFrom) ||
           item.revealFraction !== was.reveal ||
-          was.pieces.some((piece) => piece?.primitive.isDestroyed())
+          was.pieces.some((piece) => piece && pieceGone(piece))
         )
           return false;
         looks.push(was.look);
@@ -3446,6 +4257,9 @@ export function createCesiumDraw({
       if (was.deep !== undefined && record.deepLines?.isDestroyed())
         return false;
       if (!was.clampTo) continue;
+      // A draped line that fades with age is built anew: its times may
+      // have changed with or without its positions.
+      if (aged(item)) return false;
       const flat = flatEquals(item.positions, was.positions)
         ? was.positions
         : flatPositions(item.positions);
@@ -3515,7 +4329,9 @@ export function createCesiumDraw({
         continue;
       }
       if (was.material && revealed(item))
-        was.material.uniforms.reveal = revealUniform(item.revealFraction);
+        unaged(was.material).uniforms.reveal = revealUniform(
+          item.revealFraction,
+        );
       if (was.solo) {
         // Not yet drawn, it is built again showing as asked.
         if (was.ground && was.ground.ready) showPart(was, show);
@@ -3549,7 +4365,12 @@ export function createCesiumDraw({
     const reveal = revealed(item)
       ? revealUniform(item.revealFraction, positions)
       : undefined;
-    const material = lineMaterial(record, item.style, reveal);
+    const material = lineMaterial(
+      record,
+      item.style,
+      reveal,
+      ageOf(item, positions),
+    );
     const polyline = polylines.add({
       positions,
       width: item.widthPx,
@@ -3557,9 +4378,11 @@ export function createCesiumDraw({
       show: item.show !== false,
       id,
     });
+    // The collection destroys the material when it lets the line go.
+    claimAges(record, null);
     return {
       polyline,
-      reveal: reveal === undefined ? null : material,
+      reveal: reveal === undefined ? null : unaged(material),
       parked: false,
     };
   }
@@ -3573,6 +4396,10 @@ export function createCesiumDraw({
     item.mode !== 'draped' &&
     item.frame !== 'inertial' &&
     !item.depthFail &&
+    // A line in runs draws a piece a run.
+    !broken(item) &&
+    // A batch draws one colour per line, unfaded.
+    !aged(item) &&
     item.style.kind === 'solid' &&
     // A batch draws one colour per line, no outline.
     !item.style.outline &&
@@ -3680,6 +4507,9 @@ export function createCesiumDraw({
     if (!unmoved) was.polyline.positions = positions;
     was.polyline.show = show;
     if (recolour) paintLine(was.polyline.material, item.style);
+    // Its points' times, with its points.
+    if (aged(item))
+      writeAge(record, was.polyline.material, ageOf(item, positions));
     if (was.reveal)
       was.reveal.uniforms.reveal = revealUniform(
         item.revealFraction,
@@ -4018,10 +4848,15 @@ export function createCesiumDraw({
   function segmentInstances(record, item, part) {
     const points = linePositions(item);
     const instances = [];
+    const starts = runStarts(item);
     part.segments = [];
     part.drawn = [];
     for (let j = 0; j + 1 < points.length; j++) {
-      if (Cesium.Cartesian3.equals(points[j], points[j + 1])) {
+      // Nothing across a break, between two runs.
+      if (
+        starts?.has(j + 1) ||
+        Cesium.Cartesian3.equals(points[j], points[j + 1])
+      ) {
         part.segments.push(null);
         part.drawn.push(null);
         continue;
@@ -4170,8 +5005,17 @@ export function createCesiumDraw({
    * ellipse with an image fill is cut finely, so a round image's edge runs
    * round.
    */
-  function groundGeometry(item, imageFill = false) {
+  function groundGeometry(item, imageFill = false, overlay = false) {
     const g = item.geometry;
+    // An overlay fill is drawn where it is built, on the ellipsoid, finely
+    // cut so it follows the curve; it carries positions alone.
+    const onEllipsoid = overlay
+      ? {
+          height: 0,
+          granularity: OVERLAY_GRANULARITY,
+          vertexFormat: Cesium.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT,
+        }
+      : {};
     switch (g.kind) {
       case 'polygon': {
         const [outer, ...holes] = g.rings.map((ring) => ring.map(toCartesian));
@@ -4180,6 +5024,7 @@ export function createCesiumDraw({
             outer,
             holes.map((h) => new Cesium.PolygonHierarchy(h)),
           ),
+          ...onEllipsoid,
         });
       }
       case 'ellipse': {
@@ -4200,7 +5045,7 @@ export function createCesiumDraw({
                   Cesium.MaterialAppearance.MaterialSupport.TEXTURED
                     .vertexFormat,
               }
-            : {}),
+            : onEllipsoid),
         });
       }
       case 'rectangle':
@@ -4213,6 +5058,7 @@ export function createCesiumDraw({
           ),
           rotation: g.rotation ?? 0,
           stRotation: g.rotation ?? 0,
+          ...onEllipsoid,
         });
       default:
         throw new Error(`the Cesium renderer cannot clamp ${g.kind} shapes`);
@@ -4382,8 +5228,11 @@ export function createCesiumDraw({
    * ground batches are: a fill goes in the first batch it overlaps nothing
    * in, so overlapping translucent fills blend over each other.
    */
-  function groundFills(record, items) {
+  function groundFills(record, items, host) {
     const batches = [];
+    // Outlines of overlay shapes, drawn over the surface and hidden past
+    // the horizon as overlay lines are (`cullOverlayLines`).
+    record.overlayLines = [];
     // Each clamped item as drawn, for upserts that only show or hide it;
     // the set keeps them once every one is built.
     const parts = new Map();
@@ -4412,6 +5261,12 @@ export function createCesiumDraw({
       const imageFill = objectFill;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
+      const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      const overlay = clampTo === 'overlay';
+      if (imageFill && overlay)
+        throw new Error(
+          'the Cesium renderer fills overlay shapes with colours only',
+        );
       // Refused before anything is made, so nothing is left half built.
       const image = imageFill ? imageAt(imageFill.image) : null;
       // Hidden colour fills are built too, hidden, so showing them is a
@@ -4421,7 +5276,7 @@ export function createCesiumDraw({
       // load when they show.
       let geometry;
       try {
-        geometry = groundGeometry(item, Boolean(imageFill));
+        geometry = groundGeometry(item, Boolean(imageFill), overlay);
       } catch (error) {
         if (item.show === false) continue;
         throw error;
@@ -4449,7 +5304,18 @@ export function createCesiumDraw({
             },
         id: part.id,
       });
-      const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      if (overlay) {
+        // Overlay fills blend over each other in one primitive: they are
+        // not draped, so they need no batches apart.
+        let batch = batches.find((b) => b.overlay);
+        if (!batch) {
+          batch = { clampTo, overlay: true, instances: [], parts: [] };
+          batches.push(batch);
+        }
+        batch.instances.push(instance);
+        batch.parts.push(part);
+        continue;
+      }
       if (imageFill) {
         // An image fill is a ground primitive of its own, with its material.
         // (Cesium turns its texture wrongly across the antimeridian: its
@@ -4488,6 +5354,15 @@ export function createCesiumDraw({
       ? Cesium.GroundPrimitive
       : UnpickableGroundPrimitive;
     const grounds = batches.map((batch) => {
+      if (batch.overlay) {
+        const fill = new Cesium.Primitive({
+          geometryInstances: batch.instances,
+          appearance: overlayFillAppearance(),
+          allowPicking: pickable,
+        });
+        for (const part of batch.parts) part.ground = fill;
+        return fill;
+      }
       const material = batch.imageFill
         ? holdImage(
             imageMaterial(batch.image, batch.imageFill.repeat),
@@ -4529,6 +5404,10 @@ export function createCesiumDraw({
       const part = parts.get(item.id);
       // Picked as its shape.
       part.id ??= pickId(record, item);
+      if ((item.clampTo ?? record.spec.clampTo) === 'overlay') {
+        part.outlineOverlay = overlayOutline(record, item, part, rings, host);
+        continue;
+      }
       // A pulsing outline's rings share one colour, its material's.
       const pulsing = Boolean(part.pulse);
       const outline = new Cesium.GroundPolylinePrimitive({
@@ -4569,6 +5448,49 @@ export function createCesiumDraw({
     }
     record.shapeParts = parts;
     return grounds;
+  }
+
+  /**
+   * An overlay shape's outline: each ring a line on the ellipsoid along the
+   * surface's curve, drawn in its colour where the surface hides it too (so
+   * over the tiles and terrain), and hidden past the horizon fragment by
+   * fragment (`overlayLineAppearance`), as a draped line is drawn where the scene
+   * cannot drape (`overlayLine`). Its primitives, drawn in `host`.
+   */
+  function overlayOutline(record, item, part, rings, host) {
+    const style = { kind: 'solid', color: item.outline };
+    const shown = item.show !== false;
+    const drawn = [];
+    for (const ring of rings) {
+      const positions = ring.map((p) =>
+        Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
+          p,
+          new Cesium.Cartesian3(),
+        ),
+      );
+      const line = depthFailLine(
+        record,
+        {
+          positions,
+          widthPx: item.outlineWidth ?? 1,
+          mode: '3d',
+          overlaid: true,
+          style,
+          depthFail: style,
+          show: shown,
+        },
+        part.id,
+      );
+      if (!line) continue;
+      host.add(line);
+      drawn.push(line);
+      record.overlayLines.push({
+        part: { deep: line },
+        shown,
+        ends: overlayEnds(positions),
+      });
+    }
+    return drawn;
   }
 
   /**
@@ -4644,7 +5566,7 @@ export function createCesiumDraw({
         continue;
       }
       const was = parts?.get(item.id);
-      if (!was || was.outlineGround) return false;
+      if (!was || was.outlineGround || was.outlineOverlay) return false;
       if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
       if (sameLook(was, item)) {
         moves.push(false);
@@ -4938,6 +5860,17 @@ export function createCesiumDraw({
                 ),
               );
           }
+          // An overlay outline pulses through its lines' materials.
+          for (const line of part.outlineOverlay ?? []) {
+            if (line.isDestroyed() || !part.look.outline) continue;
+            pulsing = true;
+            const colour = baseColour(part, part.look.outline).withAlpha(
+              pulseAlpha(part.pulse, now),
+            );
+            styleMaterial(line.appearance.material).uniforms.color = colour;
+            styleMaterial(line.depthFailAppearance.material).uniforms.color =
+              colour;
+          }
           // A clamped outline pulses through its material's colour.
           const outline = part.outlineGround;
           if (outline && !outline.isDestroyed() && part.look.outline) {
@@ -5007,8 +5940,10 @@ export function createCesiumDraw({
    */
   function moveShape(record, part, item) {
     const host = record.host;
+    const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+    const overlay = clampTo === 'overlay';
     // Built first: geometry it cannot build leaves the part as it was.
-    const geometry = groundGeometry(item);
+    const geometry = groundGeometry(item, false, overlay);
     if (part.solo) {
       if (part.ground && !part.ground.isDestroyed()) host.remove(part.ground);
     } else {
@@ -5027,28 +5962,36 @@ export function createCesiumDraw({
     part.pendingColour = undefined;
     part.id.meta = item.meta;
     const pickable = record.spec.pickable !== false;
-    const Ground = pickable
-      ? Cesium.GroundPrimitive
-      : UnpickableGroundPrimitive;
-    part.ground = new Ground({
-      geometryInstances: [
-        new Cesium.GeometryInstance({
-          geometry,
-          attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-              toColor(item.fill),
-            ),
-            show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
-          },
-          id: part.id,
-        }),
-      ],
-      classificationType: classificationOf(
-        item.clampTo ?? record.spec.clampTo ?? 'both',
-      ),
-      allowPicking: pickable,
-      asynchronous: false,
-    });
+    const geometryInstances = [
+      new Cesium.GeometryInstance({
+        geometry,
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+            toColor(item.fill),
+          ),
+          show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
+        },
+        id: part.id,
+      }),
+    ];
+    if (overlay)
+      part.ground = new Cesium.Primitive({
+        geometryInstances,
+        appearance: overlayFillAppearance(),
+        allowPicking: pickable,
+        asynchronous: false,
+      });
+    else {
+      const Ground = pickable
+        ? Cesium.GroundPrimitive
+        : UnpickableGroundPrimitive;
+      part.ground = new Ground({
+        geometryInstances,
+        classificationType: classificationOf(clampTo),
+        allowPicking: pickable,
+        asynchronous: false,
+      });
+    }
     host.add(part.ground);
   }
 
@@ -5291,7 +6234,7 @@ export function createCesiumDraw({
           );
     }
     host.add(outlines);
-    const ground = groundFills(record, clamped);
+    const ground = groundFills(record, clamped, host);
     record.solidParts = solids;
     if (!ground.length) return replaceHost(record, host);
     replaceHost(
@@ -5312,10 +6255,14 @@ export function createCesiumDraw({
     replaceHost,
     horizonNow,
     requestRender,
+    parts: capabilities.has('modelParts'),
+    now,
   });
   const buildModels = (record) => modelSets.build(record);
   // Whether shapes pulsed in the last frame, which draws on in the next.
   let pulsing = false;
+  // Whether a shown model's parts spun in the last frame, likewise.
+  let spinning = false;
   const lineWidth = (px) =>
     typeof scene.clampLineWidth === 'function'
       ? scene.clampLineWidth(px)
@@ -5422,6 +6369,29 @@ export function createCesiumDraw({
         }
       if (changed) scene.requestRender();
     },
+    ...(capabilities.has('viewSheets')
+      ? {
+          views(id, sheet) {
+            const layout = viewLayout(sheet);
+            if (viewSheets.has(id)) {
+              for (const record of sets.values()) {
+                if (record.kind !== 'icons') continue;
+                for (const item of record.items.values())
+                  if (
+                    isViewRef(item.image) &&
+                    item.image.views === id &&
+                    !blockFits(item.image.first, layout)
+                  )
+                    throw new RangeError(
+                      `a live view's frames run past the new layout of sheet '${id}'`,
+                    );
+              }
+            }
+            viewSheets.set(id, Object.freeze({ image: sheet.image, layout }));
+            scene.requestRender();
+          },
+        }
+      : {}),
   };
 
   return {
@@ -5447,12 +6417,13 @@ export function createCesiumDraw({
       cullHorizon();
       clusterIcons();
       runFlows();
+      runAges();
       for (const record of sets.values()) {
         if (record.inertialLines || record.inertialPieces?.length)
           turnInertial(record);
         record.drapeInertial?.();
       }
-      modelSets.beforeRender(sets.values());
+      spinning = modelSets.beforeRender(sets.values());
       quadSets.beforeRender(sets.values());
     },
     /** Each frame, after it drew: clamp state, and ground swaps. */
@@ -5483,7 +6454,8 @@ export function createCesiumDraw({
       // Rows moving on a live clock, and flowing lines, draw on in the
       // frames that follow.
       const playing = quadSets.afterRender(sets.values());
-      if (anySet(animating) || flowing() || pulsing || playing) requestRender();
+      if (anySet(animating) || flowing() || pulsing || spinning || playing)
+        requestRender();
     },
     /**
      * Let go of the sets; with `removeHosts`, take what they draw out of
@@ -5494,6 +6466,12 @@ export function createCesiumDraw({
       clampListeners.clear();
       // Fields go with the port, and their frame listeners with them.
       fieldPart.dispose();
+      // Part shaders and their textures go with it too.
+      modelSets.dispose();
+      // Aged lines' materials whose lines are gone, with their textures.
+      for (const record of sets.values())
+        for (const [material, entry] of record.ages ?? [])
+          dropAge(record, material, entry);
       // Late model loads find no host and destroy themselves.
       for (const record of sets.values()) {
         if (removeHosts && !scene.isDestroyed?.()) {
@@ -5538,7 +6516,11 @@ provideUnboundDraw((viewer) => {
   const part = createCesiumDraw({
     scene,
     report: uncaught,
-    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields']),
+    capabilities: new Set([
+      ...gpuIconCapabilities(scene),
+      'fields',
+      'modelParts',
+    ]),
   });
   unboundParts.set(part.port, part);
   const offs = [

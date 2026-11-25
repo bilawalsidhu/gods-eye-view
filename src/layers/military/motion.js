@@ -35,7 +35,6 @@ import {
   recoveryMs,
   limitCourseStep,
 } from '../../data/motionModel.js';
-import { CLASS_SCALE_2D } from '../../data/aircraftClass.js';
 import { placeLiveAircraft } from '../flights/placed.js';
 import {
   modelVisualAnchor,
@@ -44,7 +43,6 @@ import {
 import {
   displayDelayMs,
   followsClock,
-  MODEL_MIN_PX,
   BILLBOARD_SCALE,
   TRACKED_BILLBOARD_SCALE_BY_DISTANCE,
   DR_CORRECTION_MS,
@@ -312,20 +310,17 @@ export function createMotion({
       const spec = parts.rendering._modelSpec(
         flightState.records.data.get(icao24),
       );
-      // Drawn as the fleet draws it: its own size, never under MODEL_MIN_PX.
+      // Drawn as the fleet draws it: at its true size.
       const focalLengthPx = viewportHeightPx / (2 * Math.tan(pose.fovy / 2));
       const projectedDiameterPx =
         (2 * spec.nativeRadiusM * spec.scale * focalLengthPx) / rangeM;
-      return Math.max(MODEL_MIN_PX, projectedDiameterPx);
+      return projectedDiameterPx;
     }
 
     const sprite = readEntityRecord(flightState._trackedEntity)?.sprite;
     const width = sprite?.width ?? 28;
     const height = sprite?.height ?? 28;
-    const scale =
-      sprite?.scale ??
-      BILLBOARD_SCALE *
-        (CLASS_SCALE_2D[flightState.records.data.get(icao24)?.klass] || 1);
+    const scale = sprite?.scale ?? BILLBOARD_SCALE;
     const scaleByDistance =
       sprite?.scaleByDistance ?? TRACKED_BILLBOARD_SCALE_BY_DISTANCE;
     const distanceScale = nearFarScalarValueAtDistance(scaleByDistance, rangeM);
@@ -354,6 +349,8 @@ export function createMotion({
     const sameTrack =
       flightState._drReconcileValid && flightState._drReconcileIcao === icao24;
     const raw = _deadReckon(icao24, flightState._scratchDrRaw);
+    flightState._cachedDRPlaced =
+      Boolean(raw) && flightState._drSpeedPlaced === true;
     flightState._cachedDRCourse = flightState._drCourseDeg;
     flightState._cachedDRSpeedMps = flightState._drSpeedMps;
     flightState._cachedDRHold = flightState._drCourseHold;
@@ -480,6 +477,16 @@ export function createMotion({
    *  later in the frame, so recomputing _trackedDisplayPosition there jitters the label against the
    *  now-stable plane. Null when no valid fix (callers fall back to the icon position). */
 
+  /** Whether a host-supplied placement placed the tracked aircraft where
+   *  `_trackedDisplayCached` holds it this frame, rather than this layer's
+   *  own motion at its display delay. */
+
+  function _trackedPlaced() {
+    return (
+      _trackedDisplayCached() !== null && flightState._cachedDRPlaced === true
+    );
+  }
+
   function _trackedDisplayCached() {
     return flightState._drReconcileValid &&
       flightState._drReconcileIcao === flightState._trackedIcao
@@ -515,9 +522,8 @@ export function createMotion({
   }
 
   /** The tracked model's rendered bounding radius (m), or 0 when no model of this
-   *  contact is drawing. Carries the scale it is drawn at, which may be
-   *  above `scale` to satisfy its pixel floor — the trail head has to be judged
-   *  against the size the operator SEES, not the nominal one. */
+   *  contact is drawing, at the scale it is drawn at — the trail head has to
+   *  be judged against the size the operator SEES. */
   /** World-space origin of the tracked model, or null when no model of this
    *  contact is drawing. This is the centre the rendered bounding sphere is
    *  measured from, so the trail clip and the envelope agree on one frame. */
@@ -574,7 +580,11 @@ export function createMotion({
         flightState._trackedTrailPos,
       );
     }
-    return _trackedDisplayCached();
+    // Only this frame's: the trail head is drawn before the frame's own
+    // position callbacks run, and the frame before may be long gone.
+    return flightState._cachedDRFrame === renderedFrames(flightState._viewer)
+      ? _trackedDisplayCached()
+      : null;
   }
 
   /** Smoothed world course for the tracked aircraft this frame. Reads the
@@ -703,6 +713,7 @@ export function createMotion({
     _trackedFocusSizePx,
     _trackedDisplayPosition,
     _trackedDisplayCached,
+    _trackedPlaced,
     _trackedVisualCached,
     _trackedModelCenterWorld,
     _trackedModelEnvelopeM,

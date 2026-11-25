@@ -145,3 +145,85 @@ test("a tracked trail takes the fixes after its newest point, up to the snapshot
   );
   assert.equal(historyAfterTrail(history, [], 120_000).length, 3);
 });
+
+test('playing on, the fixes a contact holds stay as they are and only the seam and newer ones are made', () => {
+  const held = mergeAircraftTimelineFixes(
+    [],
+    { fixes: [fix(0, 0), fix(60_000, 1), fix(120_000, 2)] },
+    META,
+    100,
+    60_000,
+  );
+  const kept = held.map((entry) => entry);
+  // The next snapshot's run reaches back into the held fixes, a little
+  // differently picked: those held stay, the newer are added after them.
+  const next = mergeAircraftTimelineFixes(
+    held,
+    {
+      fixes: [
+        fix(30_000, 0.6),
+        fix(90_000, 1.6),
+        fix(120_000, 2.1),
+        fix(180_000, 3),
+        fix(240_000, 4),
+      ],
+    },
+    META,
+    100,
+    120_000,
+  );
+  assert.deepEqual(
+    next.map((entry) => entry.epochMs),
+    [0, 60_000, 120_000, 180_000, 240_000],
+  );
+  for (const [k, entry] of kept.slice(0, -1).entries())
+    assert.equal(next[k], entry, 'a held entry is kept, not made again');
+  // The seam is made again from the new run: its course heads where the
+  // new run goes, so the course and height do not step there.
+  assert.notEqual(next[2], kept[2]);
+  const lat = (entry) =>
+    Cesium.Math.toDegrees(
+      Cesium.Cartographic.fromCartesian(entry.position).latitude,
+    );
+  assert.ok(Math.abs(lat(next[2]) - 2.1) < 1e-9);
+  assert.ok(Math.abs(lat(next[3]) - 3) < 1e-9);
+  // Each new fix heads where the track goes next, read from the new run.
+  assert.ok(
+    Math.abs(next[3].track) < 1e-6 || Math.abs(next[3].track - 360) < 1e-6,
+  );
+});
+
+test('a run that starts after the held fixes, or a history not of its own fixes, is merged whole', () => {
+  const held = mergeAircraftTimelineFixes(
+    [],
+    { fixes: [fix(0, 0), fix(60_000, 1)] },
+    META,
+    100,
+    0,
+  );
+  const later = mergeAircraftTimelineFixes(
+    held,
+    { fixes: [fix(120_000, 2), fix(180_000, 3)] },
+    META,
+    100,
+    120_000,
+  );
+  assert.deepEqual(
+    later.map((entry) => entry.epochMs),
+    [0, 60_000, 120_000, 180_000],
+  );
+  // A run reaching back over the held fixes replaces them, as before, when
+  // the history holds a live report.
+  const report = { ...held[1], timeline: undefined };
+  const mixed = mergeAircraftTimelineFixes(
+    [held[0], report],
+    { fixes: [fix(30_000, 0.5), fix(90_000, 1.5)] },
+    META,
+    100,
+    60_000,
+  );
+  assert.deepEqual(
+    mixed.map((entry) => entry.epochMs),
+    [0, 30_000, 90_000],
+  );
+});

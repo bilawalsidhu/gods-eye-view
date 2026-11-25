@@ -5,7 +5,7 @@
  * item's `url` re-poses and restyles its model in place (position,
  * orientation, scale, `axisScale` and pixel bounds, `shading`, `tint`,
  * `colorBlend`, `maskColor`, `clip`, `environmentMap`, `displayRange`,
- * `show`); only a new `url` loads again, and the old model keeps drawing
+ * `nodes`, `show`); only a new `url` loads again, and the old model keeps drawing
  * until the new one is ready, so a swap never blinks. `ready` fires once per
  * load, when the model has loaded and is posed. An item with its `gltf`
  * bytes is built from them; its url is then not fetched.
@@ -26,6 +26,20 @@
  * `shading: 'thermal'` draws the model unlit and white-hot (its texture
  * left out), then tinted as asked: a hot target, as the thermal views draw
  * them. Heights are absolute: models clamp nothing.
+ *
+ * An item's `parts` (with `modelParts`) poses the moving parts of a model
+ * whose mesh carries `_PART` and whose root node carries a part table
+ * (`render/modelParts.js`): its model then draws with a custom shader of
+ * its own whose vertex stage moves each vertex by its part's matrix, read
+ * from a small float texture (`PARTS_VERTEX` says its layout), with the
+ * item's mask, unlit or thermal look in the same shader; a moved part's
+ * material normal turns with it. The texture is written again in place
+ * when the part state changes, and each frame while a part of a model in
+ * view spins (frames are asked for while one does). Spins keep their angle
+ * across a change of rate. A model at rest, or without a part table, draws
+ * exactly as it would without `parts`, on the shared shaders above. Cesium
+ * culls and picks a model by its bounds as its file draws it, so a part
+ * moved outside them is drawn only while those bounds are in view.
  */
 import * as Cesium from 'cesium';
 import {
@@ -34,6 +48,15 @@ import {
   recedeParams,
   recededAlpha,
 } from '../recession.js';
+import { customShaderTexture } from './internals.js';
+import {
+  glbJson,
+  gltfMeshMatrix,
+  gltfPartTable,
+  partMatrices,
+  PART_HIGHLIGHT,
+  asksHighlight,
+} from '../modelParts.js';
 
 const BLEND_MODES = {
   highlight: Cesium.ColorBlendMode.HIGHLIGHT,
@@ -54,6 +77,62 @@ export const MODEL_RETRY_MS = 5000;
  * model's colour every frame.
  */
 export const RECEDE_WRITE_EPSILON = 0.005;
+
+/**
+ * Each model's posed nodes (`ModelItem.nodes`): name → the 16 numbers last
+ * written, so an update that keeps a node's matrix writes nothing.
+ */
+const posedNodes = new WeakMap();
+/** A posed name the model has no node for: looked up once, then skipped. */
+const NO_NODE = Symbol('no such node');
+const scratchNodeMatrix = new Cesium.Matrix4();
+
+/**
+ * Write the item's node transforms to `model` once it is ready: changed
+ * ones only, and a node whose name left the map back to its authored pose.
+ * Names the model lacks are skipped.
+ */
+function poseNodes(item, model) {
+  if (model.ready !== true) return;
+  const wanted = item.nodes;
+  let posed = posedNodes.get(model);
+  if (!wanted && !posed) return;
+  if (!posed) posedNodes.set(model, (posed = new Map()));
+  for (const [name, last] of posed) {
+    if (wanted && Object.hasOwn(wanted, name)) continue;
+    posed.delete(name);
+    if (last === NO_NODE) continue;
+    const node = model.getNode(name);
+    if (node) node.matrix = Cesium.Matrix4.clone(node.originalMatrix);
+  }
+  if (!wanted) return;
+  for (const name of Object.keys(wanted)) {
+    const matrix = wanted[name];
+    if (!matrix || matrix.length < 16) continue;
+    const last = posed.get(name);
+    if (last === NO_NODE) continue;
+    if (last && sameMatrix(last, matrix)) continue;
+    const node = model.getNode(name);
+    if (!node) {
+      posed.set(name, NO_NODE);
+      continue;
+    }
+    // The last matrix written, kept in one array per node, copied in place.
+    let kept = last;
+    if (!(kept instanceof Float64Array)) {
+      kept = new Float64Array(16);
+      posed.set(name, kept);
+    }
+    for (let i = 0; i < 16; i++) kept[i] = matrix[i];
+    // The node copies the matrix it is given.
+    node.matrix = Cesium.Matrix4.fromArray(matrix, 0, scratchNodeMatrix);
+  }
+}
+
+function sameMatrix(a, b) {
+  for (let i = 0; i < 16; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
 
 /** Cesium's own blend amount, for a `mix` that names none. */
 const DEFAULT_MIX = 0.5;
@@ -144,6 +223,366 @@ void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
   return undefined;
 }
 
+/** The colour a part with `highlight: true` is drawn in. */
+const PART_HIGHLIGHT_COLOR = '#ffc400';
+
+/** How much of a highlighted part's colour the highlight replaces. */
+const PART_HIGHLIGHT_MIX = 0.6;
+
+/** Texels in a part's row of its texture. */
+const PART_TEXELS = 8;
+/** Floats in a part's row: `PART_TEXELS` RGBA texels. */
+const PART_FLOATS = PART_TEXELS * 4;
+
+/** A texel's centre across a part's row, as a texture coordinate. */
+const texelAt = (i) => ((i + 0.5) / PART_TEXELS).toFixed(4);
+
+/**
+ * The vertex stage of a posed model. A part's row of the texture holds the
+ * three rows of its matrix in the mesh's own frame (texels 0..2), the three
+ * rows of that matrix's inverse transpose (3..5; texel 3's alpha is 1 where
+ * the part is moved, 0 where it is at rest), and its highlight colour (6,
+ * alpha 0 for none). Each vertex is moved by its part's matrix; the normal
+ * turn is passed on in eye space, for the fragment stage to turn the
+ * material's own normal (normal maps and back-face flips kept) by it.
+ * Positions are the mesh's own (before its node's transform), as are the
+ * matrices written for it, and as `czm_normal` takes them to eye space.
+ */
+const PARTS_VERTEX = `
+void vertexMain(VertexInput vsInput, inout czm_modelVertexOutput vsOutput) {
+  float row = (floor(vsInput.attributes.part + 0.5) + 0.5) / u_partRows;
+  vec4 r0 = texture(u_partMatrices, vec2(${texelAt(0)}, row));
+  vec4 r1 = texture(u_partMatrices, vec2(${texelAt(1)}, row));
+  vec4 r2 = texture(u_partMatrices, vec2(${texelAt(2)}, row));
+  vec4 n0 = texture(u_partMatrices, vec2(${texelAt(3)}, row));
+  v_partHighlight = texture(u_partMatrices, vec2(${texelAt(6)}, row));
+  vec4 p = vec4(vsOutput.positionMC, 1.0);
+  vsOutput.positionMC = vec3(dot(r0, p), dot(r1, p), dot(r2, p));
+  v_partMoved = n0.a;
+  if (n0.a > 0.5) {
+    vec4 n1 = texture(u_partMatrices, vec2(${texelAt(4)}, row));
+    vec4 n2 = texture(u_partMatrices, vec2(${texelAt(5)}, row));
+    mat3 turn = transpose(mat3(n0.xyz, n1.xyz, n2.xyz));
+    v_partNormalEC = czm_normal * turn * inverse(czm_normal);
+  } else {
+    v_partNormalEC = mat3(1.0);
+  }
+}`;
+
+/**
+ * A posed model's custom shader: its parts moved (`PARTS_VERTEX`), drawn in
+ * `shading` with `mask` painted where `_TINT` marks the model (not under
+ * `thermal`), and its highlighted parts in their colour. Lit, a moved
+ * part's material normal is turned with it; the body and parts at rest keep
+ * theirs as the material made them. `data` is the part texture's first
+ * contents, `rows` its parts.
+ */
+function partShaderOf(shading, mask, data, rows) {
+  const lit = shading !== 'unlit' && shading !== 'thermal';
+  const masked = Boolean(mask) && shading !== 'thermal';
+  return new Cesium.CustomShader({
+    mode: Cesium.CustomShaderMode.MODIFY_MATERIAL,
+    ...(lit ? {} : { lightingModel: Cesium.LightingModel.UNLIT }),
+    uniforms: {
+      u_partMatrices: {
+        type: Cesium.UniformType.SAMPLER_2D,
+        value: partTexture(data, rows),
+      },
+      u_partRows: { type: Cesium.UniformType.FLOAT, value: rows },
+      ...(masked
+        ? {
+            u_maskColor: {
+              type: Cesium.UniformType.VEC3,
+              value: new Cesium.Cartesian3(mask.red, mask.green, mask.blue),
+            },
+          }
+        : {}),
+    },
+    varyings: {
+      v_partNormalEC: Cesium.VaryingType.MAT3,
+      v_partMoved: Cesium.VaryingType.FLOAT,
+      v_partHighlight: Cesium.VaryingType.VEC4,
+    },
+    vertexShaderText: PARTS_VERTEX,
+    fragmentShaderText: `
+void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+${
+  lit
+    ? `  if (v_partMoved > 0.5)
+    material.normalEC = normalize(v_partNormalEC * material.normalEC);`
+    : ''
+}
+${shading === 'thermal' ? '  material.diffuse = vec3(1.0);' : ''}
+${
+  masked
+    ? `  vec3 mask = czm_srgbToLinear(u_maskColor);
+  material.diffuse *= mix(vec3(1.0), mask, fsInput.attributes.tint);`
+    : ''
+}
+  if (v_partHighlight.a > 0.0) {
+    vec3 highlight = czm_srgbToLinear(v_partHighlight.rgb);
+    material.diffuse = mix(material.diffuse, highlight, ${PART_HIGHLIGHT_MIX.toFixed(2)});
+    material.emissive = max(material.emissive, highlight * 0.5);
+  }
+}`,
+  });
+}
+
+/** A part texture's contents as a texture uniform: `PART_TEXELS` float texels a row, read unfiltered. */
+function partTexture(data, rows) {
+  return new Cesium.TextureUniform({
+    typedArray: data,
+    width: PART_TEXELS,
+    height: rows,
+    pixelFormat: Cesium.PixelFormat.RGBA,
+    pixelDatatype: Cesium.PixelDatatype.FLOAT,
+    repeat: false,
+    minificationFilter: Cesium.TextureMinificationFilter.NEAREST,
+    magnificationFilter: Cesium.TextureMagnificationFilter.NEAREST,
+  });
+}
+
+/** An affine column-major 4×4's inverse. */
+function inverseAffine(m) {
+  const [a, b, c] = [m[0], m[1], m[2]];
+  const [d, e, f] = [m[4], m[5], m[6]];
+  const [g, h, i] = [m[8], m[9], m[10]];
+  const A = e * i - f * h;
+  const B = -(b * i - c * h);
+  const C = b * f - c * e;
+  const det = a * A + d * B + g * C;
+  if (!(Math.abs(det) > 1e-30)) return null;
+  const r = 1 / det;
+  const out = [
+    A * r,
+    B * r,
+    C * r,
+    0,
+    -(d * i - f * g) * r,
+    (a * i - c * g) * r,
+    -(a * f - c * d) * r,
+    0,
+    (d * h - e * g) * r,
+    -(a * h - b * g) * r,
+    (a * e - b * d) * r,
+    0,
+    0,
+    0,
+    0,
+    1,
+  ];
+  for (let row = 0; row < 3; row++)
+    out[12 + row] = -(
+      out[row] * m[12] +
+      out[4 + row] * m[13] +
+      out[8 + row] * m[14]
+    );
+  return out;
+}
+
+/** What a glTF document (or GLB) says of its parts: its table and mesh frame; null without a table. */
+const partInfos = new WeakMap();
+
+/** `source`'s part table and mesh frame, read once; null for a model without moving parts. */
+function partInfoOf(source) {
+  if (partInfos.has(source)) return partInfos.get(source);
+  let info = null;
+  try {
+    const json = source instanceof Uint8Array ? glbJson(source) : source;
+    const table = gltfPartTable(json);
+    const mesh = table && gltfMeshMatrix(json);
+    const meshInverse = mesh && inverseAffine(mesh);
+    if (table && table.parts.length > 1 && meshInverse)
+      info = { table, mesh, meshInverse };
+  } catch {
+    // A malformed table: the model draws whole.
+    info = null;
+  }
+  partInfos.set(source, info);
+  return info;
+}
+
+/** Whether a part state asks for anything. */
+const asksParts = (state) =>
+  Boolean(state) &&
+  typeof state === 'object' &&
+  ['spin', 'deploy', 'poses'].some(
+    (key) => state[key] && Object.keys(state[key]).length > 0,
+  );
+
+/** Scratch for one model's part matrices and flags, and one matrix's rows. */
+let scratchParts = new Float64Array(16 * 32);
+let scratchFlags = new Uint8Array(32);
+const scratchRow = new Float64Array(4);
+const scratchL = new Float64Array(12);
+
+/** How far from the identity a part's matrix may be and still be at rest. */
+const AT_REST_EPSILON = 1e-9;
+
+/** Highlight colours by what was asked, read once (a few at most). */
+const highlightColors = new Map();
+
+/**
+ * The colour a part's `highlight` asks for, read once: `true` the
+ * renderer's own, a colour that parses as itself; null for anything else
+ * (drawn without a highlight).
+ */
+export function partHighlightColor(value) {
+  if (!asksHighlight(value)) return null;
+  const key = value === true ? PART_HIGHLIGHT_COLOR : String(value);
+  let color = highlightColors.get(key);
+  if (color === undefined) {
+    if (value === true || typeof value === 'string')
+      color = Cesium.Color.fromCssColorString(key.trim()) ?? null;
+    else color = new Cesium.Color(value[0], value[1], value[2], 1);
+    if (highlightColors.size >= 256) highlightColors.clear();
+    highlightColors.set(key, color);
+  }
+  return color;
+}
+
+/**
+ * Write a model's part texture into `data` (`PART_FLOATS` a part, the
+ * layout `PARTS_VERTEX` reads) for `state` at `timeS`: for each part the
+ * rows of its matrix in the mesh's own frame, L = meshInverse · X · mesh,
+ * then the rows of L's inverse transpose (normals turn by it, exact under a
+ * stretch or a mesh frame that is not a rotation) with whether the part is
+ * moved, then its highlight colour. Whether any part is not at rest.
+ */
+export function writePartTexture(info, state, timeS, scale, data) {
+  const { table, mesh, meshInverse } = info;
+  const n = table.parts.length;
+  if (scratchParts.length < n * 16) {
+    scratchParts = new Float64Array(n * 16);
+    scratchFlags = new Uint8Array(n);
+  }
+  const posed = partMatrices(table, state, timeS, scratchParts, {
+    flags: scratchFlags,
+    scale,
+  });
+  const poses = state?.poses;
+  const x = scratchParts;
+  const ix = scratchRow;
+  const L = scratchL;
+  for (let k = 0; k < n; k++) {
+    const o = k * 16;
+    const d = k * PART_FLOATS;
+    let moved = false;
+    for (let row = 0; row < 3; row++) {
+      // (meshInverse · X) row `row`, as four column entries.
+      for (let col = 0; col < 4; col++) {
+        let sum = 0;
+        for (let j = 0; j < 4; j++)
+          sum += meshInverse[j * 4 + row] * x[o + col * 4 + j];
+        ix[col] = sum;
+      }
+      for (let col = 0; col < 4; col++) {
+        let sum = 0;
+        for (let j = 0; j < 4; j++) sum += ix[j] * mesh[col * 4 + j];
+        L[row * 4 + col] = sum;
+        data[d + row * 4 + col] = sum;
+        if (Math.abs(sum - (row === col ? 1 : 0)) > AT_REST_EPSILON)
+          moved = true;
+      }
+    }
+    // The inverse transpose of L's 3×3: its cofactors over its determinant.
+    const a = L[0];
+    const b = L[1];
+    const c = L[2];
+    const e = L[4];
+    const f = L[5];
+    const g = L[6];
+    const h = L[8];
+    const i = L[9];
+    const j = L[10];
+    const c00 = f * j - g * i;
+    const c01 = -(e * j - g * h);
+    const c02 = e * i - f * h;
+    const c10 = -(b * j - c * i);
+    const c11 = a * j - c * h;
+    const c12 = -(a * i - b * h);
+    const c20 = b * g - c * f;
+    const c21 = -(a * g - c * e);
+    const c22 = a * f - b * e;
+    const det = a * c00 + b * c01 + c * c02;
+    const nd = d + 12;
+    // At rest, or hidden (collapsed to a point): normals as they are.
+    const turned = moved && Math.abs(det) > 1e-12;
+    const r = turned ? 1 / det : 0;
+    data[nd] = turned ? c00 * r : 1;
+    data[nd + 1] = turned ? c01 * r : 0;
+    data[nd + 2] = turned ? c02 * r : 0;
+    data[nd + 3] = turned ? 1 : 0;
+    data[nd + 4] = turned ? c10 * r : 0;
+    data[nd + 5] = turned ? c11 * r : 1;
+    data[nd + 6] = turned ? c12 * r : 0;
+    data[nd + 7] = 0;
+    data[nd + 8] = turned ? c20 * r : 0;
+    data[nd + 9] = turned ? c21 * r : 0;
+    data[nd + 10] = turned ? c22 * r : 1;
+    data[nd + 11] = 0;
+    const color =
+      scratchFlags[k] & PART_HIGHLIGHT
+        ? partHighlightColor(poses?.[table.parts[k].name]?.highlight)
+        : null;
+    const hd = d + 24;
+    data[hd] = color ? color.red : 0;
+    data[hd + 1] = color ? color.green : 0;
+    data[hd + 2] = color ? color.blue : 0;
+    data[hd + 3] = color ? 1 : 0;
+  }
+  return posed;
+}
+
+/**
+ * A posed model's spins, turned on to `timeS` (seconds): each spinning
+ * part's angle moves on at its rate since it last did, so a change of rate
+ * never makes a part jump. A part that stops spinning keeps its angle.
+ */
+export function advanceSpins(spins, timeS) {
+  const dt = timeS - spins.at;
+  spins.at = timeS;
+  if (!(dt > 0)) return;
+  for (const [name, rate] of spins.rates)
+    spins.angles[name] = (spins.angles[name] + rate * dt) % 360;
+}
+
+/**
+ * Spins at `state`'s rates from `timeS` on, carrying the angles reached; a
+ * part starting to spin starts at an angle of `startAngle`'s (by default a
+ * random one, so a fleet posed at once does not turn in step).
+ */
+export function respin(
+  spins,
+  table,
+  state,
+  timeS,
+  startAngle = () => Math.random() * 360,
+) {
+  advanceSpins(spins, timeS);
+  spins.rates.clear();
+  for (const [name, rate] of Object.entries(state?.spin ?? {})) {
+    const index = table.byName.get(name);
+    if (
+      index === undefined ||
+      !table.parts[index].axis ||
+      typeof rate !== 'number' ||
+      !Number.isFinite(rate) ||
+      rate === 0
+    )
+      continue;
+    spins.rates.set(name, rate);
+    if (!(name in spins.angles)) spins.angles[name] = startAngle();
+  }
+}
+
+/** New spins: none yet, at `timeS`. */
+export const newSpins = (timeS) => ({
+  rates: new Map(),
+  angles: {},
+  at: timeS,
+});
+
 /** A contract distance curve's value at `distance`: linear, clamped. */
 export function nearFarValue(curve, distance) {
   if (!curve) return 1;
@@ -228,8 +667,11 @@ const focusOf = (item) =>
  * The models part of a Cesium draw port.
  * @param {{scene: object, toColor: Function, pickId: Function,
  *   replaceHost: Function, horizonNow: () => object|null,
- *   requestRender: () => void}} options From the draw port: its colour
- *   conversion, pick ids, host swap, horizon and render request.
+ *   requestRender: () => void, parts?: boolean,
+ *   now?: () => number}} options From the draw port: its colour
+ *   conversion, pick ids, host swap, horizon and render request; whether it
+ *   poses models' parts (`modelParts`), and the clock (milliseconds) spins
+ *   are turned by.
  */
 export function createModelSets({
   scene,
@@ -238,7 +680,238 @@ export function createModelSets({
   replaceHost,
   horizonNow,
   requestRender,
+  parts: posesParts = false,
+  now = () => performance.now(),
 }) {
+  /** Each Cesium model drawn posed: its part shader, texture and spins. */
+  const posings = new Map();
+  /** The GLB bytes each model was built from, where it was. */
+  const modelBytes = new WeakMap();
+  /** Part shaders let go, destroyed once no draw uses them. */
+  const retired = [];
+  // Float textures carry the part matrices, and WebGL 2's shading language
+  // turns the normals: without them models draw whole.
+  const canPose = () =>
+    scene.context?.floatingPointTexture !== false &&
+    scene.context?.webgl2 !== false;
+
+  /** A model's part table and mesh frame, or null. */
+  function partInfoOfModel(model) {
+    const bytes = modelBytes.get(model);
+    if (bytes) return partInfoOf(bytes);
+    const json = model.loader?.gltfJson;
+    return json ? partInfoOf(json) : null;
+  }
+
+  /** Let go of a model's posing: its shader goes once no draw uses it. */
+  function unpose(model) {
+    const posing = posings.get(model);
+    if (!posing) return;
+    posings.delete(model);
+    retired.push({ shader: posing.shader, frames: 0 });
+  }
+
+  /** Write a posing's texture where its shader reads it. */
+  function upload(posing) {
+    const texture = customShaderTexture(posing.shader, 'u_partMatrices');
+    if (
+      texture &&
+      !texture.isDestroyed?.() &&
+      texture.width === PART_TEXELS &&
+      texture.height === posing.rows
+    )
+      texture.copyFrom({
+        source: {
+          arrayBufferView: posing.data,
+          width: PART_TEXELS,
+          height: posing.rows,
+        },
+      });
+    else
+      posing.shader.setUniform(
+        'u_partMatrices',
+        partTexture(posing.data, posing.rows),
+      );
+  }
+
+  /**
+   * The state a posing's texture is written for: its item's deploys and
+   * poses, its spins as the angles they have reached (written at a time of
+   * 1 s, each angle given as a rate).
+   */
+  function spunState(posing) {
+    const drawn = posing.drawn;
+    drawn.deploy = posing.state.deploy;
+    drawn.poses = posing.state.poses;
+    drawn.spin = posing.spins.angles;
+    return drawn;
+  }
+
+  /** Write a posing's texture for now. Whether any part is not at rest. */
+  function writePosing(posing, timeS) {
+    advanceSpins(posing.spins, timeS);
+    return writePartTexture(
+      posing.info,
+      spunState(posing),
+      1,
+      posing.scale,
+      posing.data,
+    );
+  }
+
+  /**
+   * The shader `model` draws its entry's item's `parts` with, its texture
+   * written for them now; undefined when the model draws whole (no `parts`,
+   * no part table, or every part at rest), its posing let go.
+   */
+  function posedShader(entry, model) {
+    const item = entry.item;
+    const state = posesParts ? item.parts : undefined;
+    const posing = posings.get(model);
+    const info = asksParts(state) && canPose() ? partInfoOfModel(model) : null;
+    if (!info) {
+      unpose(model);
+      return undefined;
+    }
+    const axes = item.axisScale;
+    const scale =
+      axes && (axes[0] !== 1 || axes[1] !== 1 || axes[2] !== 1)
+        ? axes
+        : undefined;
+    const key = JSON.stringify(state);
+    const scaleKey = scale ? scale.join(',') : '';
+    const shading = item.shading;
+    const sameLook =
+      posing?.info === info &&
+      posing.shading === shading &&
+      posing.mask === entry.mask;
+    // A fleet re-poses every frame with the same parts: written when they
+    // change (a spin turns in the frame pass).
+    if (sameLook && posing.key === key && posing.scaleKey === scaleKey)
+      return posing.shader;
+    const timeS = now() / 1000;
+    // Spins go on from where they were, whatever else changed.
+    const spins = posing?.info === info ? posing.spins : newSpins(timeS);
+    respin(spins, info.table, state, timeS);
+    const spinning = spins.rates.size > 0;
+    const rows = info.table.parts.length;
+    const next = {
+      info,
+      shader: sameLook ? posing.shader : null,
+      shading,
+      mask: entry.mask,
+      data: sameLook ? posing.data : new Float32Array(rows * PART_FLOATS),
+      rows,
+      key,
+      scaleKey,
+      scale,
+      spinning,
+      state,
+      spins,
+      drawn: posing?.drawn ?? {},
+    };
+    const posed = writePosing(next, timeS);
+    if (!posed && !spinning) {
+      unpose(model);
+      return undefined;
+    }
+    if (sameLook) {
+      Object.assign(posing, next);
+      upload(posing);
+      return posing.shader;
+    }
+    unpose(model);
+    next.shader = partShaderOf(shading, entry.mask, next.data, rows);
+    posings.set(model, next);
+    return next.shader;
+  }
+
+  /** Pixels across a model's bounds under which its spins are not turned. */
+  const MIN_SPIN_PIXELS = 4;
+  const scratchSpinSphere = new Cesium.BoundingSphere();
+
+  /**
+   * Whether a model is worth turning this frame: shown, in the view, and
+   * at least `MIN_SPIN_PIXELS` across.
+   */
+  function seen(model, culling, width, height) {
+    if (!model.show || !model.ready) return false;
+    const sphere = model.boundingSphere;
+    if (!sphere || !(sphere.radius > 0)) return false;
+    if (
+      culling &&
+      culling.computeVisibility(sphere) === Cesium.Intersect.OUTSIDE
+    )
+      return false;
+    if (!(width > 0 && height > 0)) return true;
+    Cesium.BoundingSphere.clone(sphere, scratchSpinSphere);
+    scratchSpinSphere.radius = 0;
+    const metresPerPixel = scene.camera.getPixelSize(
+      scratchSpinSphere,
+      width,
+      height,
+    );
+    return (
+      !(metresPerPixel > 0) ||
+      !Number.isFinite(metresPerPixel) ||
+      (2 * sphere.radius) / metresPerPixel >= MIN_SPIN_PIXELS
+    );
+  }
+
+  /**
+   * Before a frame: turn the spinning parts of each model in view to now,
+   * sweep the posings of models gone, and destroy part shaders no draw
+   * uses any more. Whether any model in view spins (frames go on being
+   * asked for; one out of view or too small to see asks for none).
+   */
+  function turnParts() {
+    for (let i = retired.length - 1; i >= 0; i--)
+      if ((retired[i].frames += 1) > 2) {
+        const [{ shader }] = retired.splice(i, 1);
+        shader.destroy?.();
+      }
+    if (!posings.size) return false;
+    const timeS = now() / 1000;
+    const camera = scene.camera;
+    const culling =
+      camera?.frustum?.computeCullingVolume && camera.positionWC
+        ? camera.frustum.computeCullingVolume(
+            camera.positionWC,
+            camera.directionWC,
+            camera.upWC,
+          )
+        : null;
+    const width = scene.drawingBufferWidth ?? scene.canvas?.width ?? 0;
+    const height = scene.drawingBufferHeight ?? scene.canvas?.height ?? 0;
+    let spinning = false;
+    for (const [model, posing] of posings) {
+      if (model.isDestroyed?.()) {
+        unpose(model);
+        continue;
+      }
+      if (!posing.spinning || !seen(model, culling, width, height)) continue;
+      spinning = true;
+      writePosing(posing, timeS);
+      upload(posing);
+    }
+    return spinning;
+  }
+
+  /**
+   * Let go of every posing and part shader now, their textures with them:
+   * the port is done, and no frame comes to retire them. A model still
+   * drawn is left drawing whole.
+   */
+  function dispose() {
+    for (const [model, posing] of posings) {
+      if (!model.isDestroyed?.() && model.customShader === posing.shader)
+        model.customShader = undefined;
+      posing.shader.destroy?.();
+    }
+    posings.clear();
+    for (const { shader } of retired.splice(0)) shader.destroy?.();
+  }
+
   /** The set's host, made once: its models are changed where they are. */
   function hostOf(record) {
     if (record.host && !record.host.isDestroyed?.()) return record.host;
@@ -337,6 +1010,7 @@ export function createModelSets({
           settle(false);
           return model.destroy();
         }
+        if (item.gltf) modelBytes.set(model, item.gltf);
         entry.next = model;
         entry.styled = null;
         style(record, entry, model, true);
@@ -413,7 +1087,7 @@ export function createModelSets({
     if (model.minimumPixelSize !== minimum) model.minimumPixelSize = minimum;
     if (model.maximumScale !== item.maxScale)
       model.maximumScale = item.maxScale;
-    const shader = entryShader(entry);
+    const shader = posedShader(entry, model) ?? entryShader(entry);
     if (model.customShader !== shader) model.customShader = shader;
     const clip = item.clip === 'belowOrigin';
     if (Boolean(model.clippingPlanes) !== clip)
@@ -439,6 +1113,7 @@ export function createModelSets({
     const hidden = range && !(range[1] > range[0]);
     if (entry.styled?.range !== rangeKey) entry.styled = { range: rangeKey };
     entry.dynamic = needsFrame(item, record.spec);
+    poseNodes(item, model);
     apply(entry, model, entry.frame ?? STILL, hidden);
   }
 
@@ -583,10 +1258,14 @@ export function createModelSets({
     notePickIds(record);
   }
 
-  /** Each frame, before it draws: distance curves, pixel caps and the cull. */
+  /**
+   * Each frame, before it draws: distance curves, pixel caps, the cull and
+   * spinning parts. Whether any shown model spins.
+   */
   function beforeRender(sets) {
+    const spinning = turnParts();
     const eye = scene.camera?.positionWC;
-    if (!eye) return;
+    if (!eye) return spinning;
     const width = scene.drawingBufferWidth ?? scene.canvas?.width ?? 0;
     const height = scene.drawingBufferHeight ?? scene.canvas?.height ?? 0;
     let horizon;
@@ -677,6 +1356,7 @@ export function createModelSets({
           if (m) apply(entry, m, frame, hidden);
       }
     }
+    return spinning;
   }
 
   /**
@@ -701,5 +1381,5 @@ export function createModelSets({
     }
   }
 
-  return { build, upsert, beforeRender, restyle };
+  return { build, upsert, beforeRender, restyle, dispose };
 }
