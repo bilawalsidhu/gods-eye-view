@@ -337,12 +337,14 @@ scale). Only the ellipsoid hides them: nothing past its horizon from the eye
 is drawn, so the far side of the globe never shows through. The GNSS
 integrity cells draw this way. The Cesium port draws the fills as one
 primitive on the ellipsoid, cut every tenth of a degree so their edges follow
-the curve, in the translucent pass with no depth test, and drops each
-fragment past the ellipsoid's horizon in its fragment shader (`overlayFillAppearance`
+the curve, in the translucent pass with no depth test (`overlayFillAppearance`
 in `src/render/cesium/draw.js`); their outlines, and draped lines, are drawn
 as it draws draped lines where it cannot drape (`overlayLine`: on the
-ellipsoid's curve, in their colour where the surface hides them, each hidden
-once the whole of it is past the horizon). Overlay fills are colours only
+ellipsoid's curve, and in their colour where the surface hides them). Fills
+and lines alike drop each fragment past the ellipsoid's horizon in their
+fragment shaders (`OVERLAY_HORIZON`), tested at the surface point over the
+fragment, since flat triangles and straight pieces pass metres under the
+ellipsoid: a line crossing the limb shows only its near part. Overlay fills are colours only
 (an image fill is refused); icons, points and models clamp to an overlay as
 to `both`, and extruded shapes and walls stand on the surface as with
 `both`. The check `draw.shapes.overlay` draws one with the globe hidden and

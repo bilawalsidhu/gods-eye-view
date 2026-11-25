@@ -8,6 +8,7 @@ import {
   LONG_SETTLE_MS,
   MOVING_SHAPES,
   OVERLAY_GRANULARITY,
+  overlayInView,
   revealUniform,
   SETTLE_MS,
   unboundDrawPart,
@@ -6024,6 +6025,17 @@ test('an overlay shape draws its fill on the ellipsoid over everything, and its 
       (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
     );
     assert.ok(outline, 'the outline, drawn where the surface hides it too');
+    // Both its looks drop what is past the horizon, fragment by fragment: a
+    // ring crossing the limb shows only its near part.
+    for (const look of [outline.appearance, outline.depthFailAppearance])
+      assert.match(
+        look.fragmentShaderSource,
+        /overlayPastHorizon\(v_overlayRte\)\) discard/,
+      );
+    assert.match(
+      outline.appearance.vertexShaderSource,
+      /v_overlayRte = p\.xyz/,
+    );
     // On the ellipsoid, along the surface's curve.
     const [first] = outline.geometryInstances.geometry._positions;
     assert.ok(Math.abs(Cesium.Cartographic.fromCartesian(first).height) < 1e-3);
@@ -6036,6 +6048,75 @@ test('an overlay shape draws its fill on the ellipsoid over everything, and its 
     set.dispose();
     assert.equal(scene.added.length, 0);
   }));
+
+test('an overlay line crossing the horizon keeps its near part and drops its far part', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    const set = draw.lines({ id: 'over', clampTo: 'overlay' });
+    // Along the equator, from under the eye to the far side of the Earth.
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    set.set([
+      {
+        id: 'across',
+        positions: [at(0), at(60), at(120), at(170)],
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: [0, 1, 0, 1] },
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    const line = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    // Its near end is in view, so the line is in the frame...
+    const eye = Cesium.Cartesian3.fromDegrees(0, 0, 5e6);
+    scene.camera.positionWC = eye;
+    frame();
+    assert.equal(line.show, true);
+    // ...and its colour where the surface hides it, which would draw it
+    // through the Earth, drops the far part fragment by fragment.
+    for (const look of [line.appearance, line.depthFailAppearance])
+      assert.match(
+        look.fragmentShaderSource,
+        /overlayPastHorizon\(v_overlayRte\)\) discard/,
+      );
+    // The test the shader makes: from 5,000 km up over 0°, the horizon is
+    // about 56° away.
+    for (const [lon, seen] of [
+      [0, true],
+      [30, true],
+      [50, true],
+      [60, false],
+      [120, false],
+      [170, false],
+    ])
+      assert.equal(overlayInView(at(lon), eye), seen, `${lon}°`);
+    set.dispose();
+  }));
+
+test('an overlay is tested at the surface over it: a flat triangle sagging under the ellipsoid stays in view from just above', () => {
+  // The middle of the chord between two points 0.4° apart sags about 39 m
+  // under the ellipsoid; seen from 1 m over the surface point above it.
+  const a = Cesium.Cartesian3.fromDegrees(-0.2, 0, 0);
+  const b = Cesium.Cartesian3.fromDegrees(0.2, 0, 0);
+  const middle = Cesium.Cartesian3.midpoint(a, b, new Cesium.Cartesian3());
+  const under = Cesium.Cartographic.fromCartesian(middle);
+  assert.ok(under.height < -30, 'under the ellipsoid');
+  const eye = Cesium.Cartesian3.fromRadians(under.longitude, under.latitude, 1);
+  assert.equal(overlayInView(middle, eye), true);
+  // Not so a point truly past the horizon of that eye (about 3.6 km).
+  assert.equal(
+    overlayInView(Cesium.Cartesian3.fromDegrees(0.2, 0, 0), eye),
+    false,
+  );
+});
 
 test('an overlay shape refuses an image fill', () =>
   withImageClasses(() => {

@@ -107,12 +107,53 @@ export function heightReferenceOf(height, clampTo = 'both') {
 }
 
 /**
+ * Whether a fragment of an overlay (shapes clamped `'overlay'`, and draped
+ * lines drawn over the surface) is past the ellipsoid's horizon from the eye,
+ * given its position less the eye's (`rte`, world metres): then it is dropped,
+ * so nothing beyond the Earth's limb shows through it. The test is the
+ * ellipsoid's alone, made at the surface point over the fragment, since the
+ * flat triangles of a fill and the straight pieces of a line pass under the
+ * ellipsoid (metres, for a shape tens of kilometres wide), and the point drawn
+ * would be lost up close and near the horizon. In the ellipsoid's unit sphere,
+ * with `p` the point drawn and `n` its direction, the surface point `n` is in
+ * view while the eye is on its side of the plane tangent there:
+ * `dot(n, eye) >= 1`, written `dot(n, p - eye) <= |p| - 1` so the eye's large
+ * coordinates cancel before the test.
+ */
+const OVERLAY_HORIZON = `
+bool overlayPastHorizon(vec3 rte)
+{
+    if (czm_sceneMode != czm_sceneMode3D) return false;
+    vec3 vt = rte * czm_ellipsoidInverseRadii;
+    vec3 p = czm_viewerPositionWC * czm_ellipsoidInverseRadii + vt;
+    float r = length(p);
+    return dot(p / r, vt) > r - 1.0;
+}
+`;
+
+/** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
+ *  `position` (world metres) is drawn from `eye`. */
+export function overlayInView(position, eye) {
+  const inverse = Cesium.Ellipsoid.WGS84.oneOverRadii;
+  const vt = Cesium.Cartesian3.multiplyComponents(
+    Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3()),
+    inverse,
+    new Cesium.Cartesian3(),
+  );
+  const p = Cesium.Cartesian3.add(
+    Cesium.Cartesian3.multiplyComponents(eye, inverse, new Cesium.Cartesian3()),
+    vt,
+    new Cesium.Cartesian3(),
+  );
+  const r = Cesium.Cartesian3.magnitude(p);
+  return Cesium.Cartesian3.dot(p, vt) / r <= r - 1;
+}
+
+/**
  * Fills clamped as an overlay (`clampTo: 'overlay'`): on the ellipsoid, drawn
- * over the tiles and terrain with no depth test, so neither hides them, and a
- * fragment past the ellipsoid's horizon from the eye is dropped, so the
- * cells beyond the Earth's limb never show through it. The test is the
- * ellipsoid's alone: in its unit sphere, a point is in view while the eye
- * stands on its side of the plane tangent there.
+ * over the tiles and terrain with no depth test, so neither hides them, and
+ * hidden past the ellipsoid's horizon fragment by fragment
+ * (`OVERLAY_HORIZON`).
  */
 const OVERLAY_FILL_VS = `in vec3 position3DHigh;
 in vec3 position3DLow;
@@ -120,31 +161,71 @@ in vec4 color;
 in float batchId;
 
 out vec4 v_color;
-out vec3 v_positionEC;
+out vec3 v_overlayRte;
 
 void main()
 {
     vec4 p = czm_computePosition();
     v_color = color;
-    v_positionEC = (czm_modelViewRelativeToEye * p).xyz;
+    v_overlayRte = p.xyz;
     gl_Position = czm_modelViewProjectionRelativeToEye * p;
 }
 `;
 const OVERLAY_FILL_FS = `in vec4 v_color;
-in vec3 v_positionEC;
-
+in vec3 v_overlayRte;
+${OVERLAY_HORIZON}
 void main()
 {
-    if (czm_sceneMode == czm_sceneMode3D)
-    {
-        vec3 at = (czm_inverseView * vec4(v_positionEC, 1.0)).xyz * czm_ellipsoidInverseRadii;
-        vec3 eye = czm_viewerPositionWC * czm_ellipsoidInverseRadii;
-        if (dot(at, eye - at) < 0.0)
-            discard;
-    }
+    if (overlayPastHorizon(v_overlayRte))
+        discard;
     out_FragColor = czm_gammaCorrect(v_color);
 }
 `;
+
+/**
+ * A line's appearance, drawn over the surface as an overlay: Cesium's
+ * polyline material appearance, its fragments past the horizon dropped
+ * (`OVERLAY_HORIZON`), for its colour and its colour where the surface hides
+ * it alike, so the part of a line behind the Earth never shows.
+ */
+let overlayLineShaders;
+function overlayLineAppearance(material) {
+  if (!overlayLineShaders) {
+    const plain = new Cesium.PolylineMaterialAppearance();
+    const vs = plain.vertexShaderSource;
+    const fs = plain.fragmentShaderSource;
+    const main = /void main\(\)\s*\{/g;
+    const lastMain = (source) => {
+      let at = -1;
+      for (const m of source.matchAll(main)) at = m.index;
+      if (at < 0) throw new Error('Cesium polyline shader has no main');
+      return at;
+    };
+    const vsAt = lastMain(vs);
+    const vsBody = vs
+      .slice(vsAt)
+      .replace(
+        /vec4 p = czm_computePosition\(\);/,
+        'vec4 p = czm_computePosition();\n    v_overlayRte = p.xyz;',
+      );
+    if (vsBody === vs.slice(vsAt))
+      throw new Error('Cesium polyline shader no longer computes its position');
+    const fsAt = lastMain(fs);
+    overlayLineShaders = {
+      vertexShaderSource: `${vs.slice(0, vsAt)}out vec3 v_overlayRte;\n${vsBody}`,
+      fragmentShaderSource: `${fs.slice(0, fsAt)}in vec3 v_overlayRte;\n${OVERLAY_HORIZON}\n${fs
+        .slice(fsAt)
+        .replace(
+          main,
+          'void main()\n{\n    if (overlayPastHorizon(v_overlayRte)) discard;',
+        )}`,
+    };
+  }
+  return new Cesium.PolylineMaterialAppearance({
+    material,
+    ...overlayLineShaders,
+  });
+}
 
 /** The longest straight step of an overlay fill's edges and triangles, in
  *  radians: a tenth of a degree, so a cell's edges follow the curve and
@@ -1418,8 +1499,10 @@ export function createCesiumDraw({
   }
 
   /**
-   * Draped lines drawn over the surface (where the scene cannot drape) show
-   * while any of their ends or middle is this side of the horizon.
+   * Lines drawn over the surface (draped ones where the scene cannot drape,
+   * overlays, overlay outlines) are left out of the frame while all their
+   * ends and middle are past the horizon; of one in view, the parts past the
+   * horizon are dropped fragment by fragment (`overlayLineAppearance`).
    */
   function cullOverlayLines() {
     let horizon;
@@ -2985,6 +3068,12 @@ export function createCesiumDraw({
       : undefined;
     const age = ageOf(item, positions);
     const material = lineMaterial(record, item.style, reveal, age);
+    // A line drawn over the surface drops what is past the horizon, in both
+    // its looks (`overlayLineAppearance`).
+    const look = (m) =>
+      item.overlaid
+        ? overlayLineAppearance(m)
+        : new Cesium.PolylineMaterialAppearance({ material: m });
     const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
         geometry: new Cesium.PolylineGeometry({
@@ -3000,11 +3089,9 @@ export function createCesiumDraw({
         }),
         id,
       }),
-      appearance: new Cesium.PolylineMaterialAppearance({ material }),
+      appearance: look(material),
       depthFailAppearance: item.depthFail
-        ? new Cesium.PolylineMaterialAppearance({
-            material: lineMaterial(record, item.depthFail, reveal, age),
-          })
+        ? look(lineMaterial(record, item.depthFail, reveal, age))
         : undefined,
       show: item.show !== false,
       asynchronous: false,
@@ -5288,8 +5375,8 @@ export function createCesiumDraw({
   /**
    * An overlay shape's outline: each ring a line on the ellipsoid along the
    * surface's curve, drawn in its colour where the surface hides it too (so
-   * over the tiles and terrain), and hidden once the whole ring is past the
-   * horizon (`cullOverlayLines`), as a draped line is drawn where the scene
+   * over the tiles and terrain), and hidden past the horizon fragment by
+   * fragment (`overlayLineAppearance`), as a draped line is drawn where the scene
    * cannot drape (`overlayLine`). Its primitives, drawn in `host`.
    */
   function overlayOutline(record, item, part, rings, host) {
