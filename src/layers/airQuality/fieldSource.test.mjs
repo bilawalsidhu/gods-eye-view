@@ -177,3 +177,17 @@ test('a grid of another run is refused and the next step reads the manifest agai
     );
   }
 });
+test('a step of a run the server has replaced is refused as a changed run', async () => {
+  const fixture = fixtureFetch();
+  let manifest = JSON.parse(read('manifest.json'));
+  const source = createLocalAirQualityFieldSource({
+    fetchImpl: (url, options) =>
+      url.endsWith('/manifest')
+        ? Response.json(manifest)
+        : fixture.fetchImpl(url, options),
+  });
+  const { run } = await source.getManifest();
+  manifest = { ...manifest, run: '2026-11-21T00:00:00Z' };
+  await source.getManifest();
+  await assert.rejects(source.getStep(0, { run }), { code: 'run_changed' });
+});

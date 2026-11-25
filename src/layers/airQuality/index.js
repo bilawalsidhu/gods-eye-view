@@ -13,9 +13,11 @@ import { globeImageryHost } from '../weather/shellPlacement.js';
 import {
   fieldCoverage,
   fieldIdOf,
+  fieldLayout,
   fieldStepAt,
   fieldStepTime,
   fieldStrength,
+  gridFingerprint,
   paintField,
   readFieldManifest,
   readFieldStep,
@@ -385,6 +387,10 @@ export function createAirQualityLayer({
     manifest: null,
     /** What the request in flight asks for: 'now', or a time's three-hour bucket. */
     manifestWant: null,
+    /** The clock's jump count when that request was made. */
+    manifestJumps: 0,
+    /** A run the host said it no longer has: it covers no time asked for. */
+    goneRun: null,
     /** Whether the source explicitly reported that the forecast is unavailable. */
     manifestUnavailable: false,
     data: null,
@@ -1560,9 +1566,15 @@ export function createAirQualityLayer({
     return (
       step !== null &&
       field.data?.run === field.manifest.run &&
-      field.data.step === step
+      field.data.step === step &&
+      field.data.layout === fieldLayout(field.manifest)
     );
   };
+  /** A loaded step's painted images of `id`, known by what they are painted from. */
+  const paintKey = (data, id) =>
+    `${data.run}|${data.step}|${id}|${data.layout}|${gridFingerprint(
+      data.grids.global[id],
+    )}|${gridFingerprint(data.grids.europe?.[id])}`;
   /** Whether the step the layer's time shows failed to load. */
   const shownStepFailed = () =>
     field.manifest !== null &&
@@ -1650,11 +1662,23 @@ export function createAirQualityLayer({
     const live = liveTime();
     const time = layerTime();
     const held = field.manifest;
-    const covered = held !== null && fieldStepAt(held, time) !== null;
+    const covered =
+      held !== null &&
+      held.run !== field.goneRun &&
+      fieldStepAt(held, time) !== null;
     // Nothing to ask away from now inside the run held.
     const want = live ? 'now' : covered ? null : bucketOf(time);
     if (field.manifestRequest) {
       if (field.manifestWant === want) return;
+      // Playing on, an ask for an earlier time stays: an archive may answer
+      // after more than three hours of play. A seek lets it go.
+      if (
+        typeof want === 'number' &&
+        typeof field.manifestWant === 'number' &&
+        clock.isPlaying() &&
+        clock.getState().jumps === field.manifestJumps
+      )
+        return;
       // An ask for another time is let go: its answer would replace the run
       // this time needs. Its span may be asked again later.
       field.manifestRequest.abort();
@@ -1669,6 +1693,7 @@ export function createAirQualityLayer({
     const request = new AbortController();
     field.manifestRequest = request;
     field.manifestWant = want;
+    field.manifestJumps = clock.getState().jumps;
     Promise.resolve()
       .then(() =>
         fieldSource.getManifest({
@@ -1688,8 +1713,22 @@ export function createAirQualityLayer({
               code: 'malformed',
             },
           );
+        // Played past the time asked for, a run that does not cover the time
+        // now is not taken; the time now is asked for.
+        if (
+          typeof want === 'number' &&
+          bucketOf(layerTime()) !== want &&
+          fieldStepAt(manifest, layerTime()) === null
+        ) {
+          field.asks.delete(want);
+          return;
+        }
         const replaced = field.manifest?.run !== manifest.run;
+        // Grids read under other scales or geometry are loaded again.
+        const relaid =
+          !replaced && fieldLayout(field.manifest) !== fieldLayout(manifest);
         field.manifest = manifest;
+        if (relaid) cancelAhead();
         // A span answered by the run let go may be asked again; a failed one keeps its wait.
         if (replaced) {
           cancelAhead();
@@ -1706,8 +1745,11 @@ export function createAirQualityLayer({
         // is not asked again.
         if (want === 'now')
           field.asks.set(want, Date.now() + FIELD_MANIFEST_MS);
-        // A step of another run is not drawn once this run is held.
-        if (field.stepRequest && field.stepRequest.run !== manifest.run)
+        // A step of another run or layout is not drawn once this run is held.
+        if (
+          field.stepRequest &&
+          (relaid || field.stepRequest.run !== manifest.run)
+        )
           cancelStep();
       })
       .catch((error) => {
@@ -1781,6 +1823,7 @@ export function createAirQualityLayer({
         const data = {
           run: request.run,
           step,
+          layout: fieldLayout(manifest),
           grids: readFieldStep(manifest, step, raw),
         };
         if (field.stepRequest === request) {
@@ -1789,9 +1832,20 @@ export function createAirQualityLayer({
         } else field.ahead = data;
       })
       .catch((error) => {
+        const shown = field.stepRequest === request;
         if (field.aheadRequest === request) field.failedAhead = key;
-        if (field.stepRequest !== request) return;
-        if (error?.code === 'run_changed') field.asks.delete('now');
+        if (
+          error?.code === 'run_changed' &&
+          (shown || field.aheadRequest === request)
+        ) {
+          // The host no longer has the run held: the run for the layer's
+          // time is asked for at once, even where the old one covered it.
+          field.goneRun = request.run;
+          field.asks.delete('now');
+          field.asks.delete(bucketOf(layerTime()));
+          if (!shown) askManifest();
+        }
+        if (!shown) return;
         field.failedStep = key;
         field.retryStepAt = Date.now() + FIELD_RETRY_MS;
         console.warn(
@@ -1840,7 +1894,7 @@ export function createAirQualityLayer({
       )
         return;
       if (
-        fieldDrawing.prepare(`${ahead.run}|${ahead.step}|${id}`, () =>
+        fieldDrawing.prepare(paintKey(ahead, id), () =>
           paintField(field.manifest, ahead.grids, id, scaleOf(view)),
         )
       )
@@ -1954,6 +2008,9 @@ export function createAirQualityLayer({
       clear();
       return;
     }
+    // Another view's images go, with a paint of it left for when the field
+    // shows again, before the strength could show them.
+    if (drawnField && drawnField.id !== id) clear();
     syncStrength();
     const { manifest, data } = field;
     if (fieldReady()) {
@@ -1961,9 +2018,11 @@ export function createAirQualityLayer({
       // same field waits under the old one.
       if (drawnField && (drawnField.run !== data.run || drawnField.id !== id))
         clear();
+      // A paint left for later uses this view's colours, whatever the view then.
+      const colours = scaleOf(view);
       if (
-        fieldDrawing.show(`${data.run}|${data.step}|${id}`, () =>
-          paintField(manifest, data.grids, id, scaleOf(view)),
+        fieldDrawing.show(paintKey(data, id), () =>
+          paintField(manifest, data.grids, id, colours),
         )
       ) {
         drawnField = { run: data.run, id };

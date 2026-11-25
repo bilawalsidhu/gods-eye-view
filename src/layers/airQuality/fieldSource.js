@@ -92,7 +92,10 @@ export function createLocalAirQualityFieldSource({
         await source.getManifest({ signal });
       const held = manifest;
       if (run && run !== held.run)
-        throw new Error('Air-quality field run no longer available');
+        throw Object.assign(
+          new Error('Air-quality field run no longer available'),
+          { code: 'run_changed' },
+        );
       if (!held.global.steps.includes(step))
         throw new Error('Air-quality field has no such step');
       const inset = held.europe?.steps.includes(step) ? held.europe : null;

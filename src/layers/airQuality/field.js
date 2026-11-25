@@ -14,14 +14,16 @@
  *   does without a source.
  * - `getStep(step, { signal?, run? })` → `Promise<{ global: Grids, europe?:
  *   Grids }>`: one forecast step (hours after `run`) of the run `run`, with
- *   `europe` when `europe.steps` lists the step.
+ *   `europe` when `europe.steps` lists the step. A run the host no longer has
+ *   rejects with `code: 'run_changed'`, and the layer asks for a run again.
  *
  * `Manifest = { source?, sourceShort?, run, scale, global: Region, europe?:
  * Region & { rectangle, blendDeg? } }`:
  * - `source`: the model's name; `sourceShort` a short form of it (e.g.
  *   `'CAMS'`). The card's time line names the model by `sourceShort`, else
  *   `source`.
- * - `run`: ISO start time, read as UTC when it omits a zone. Steps are hours after it.
+ * - `run`: ISO start time (`T` or a space before the time), read as UTC when
+ *   it omits a zone. Steps are hours after it.
  * - `scale`: per field id, what a grid's integers are divided by.
  * - `Region = { width, height, lon0, lat0, step, wrap, steps }`: `width` ×
  *   `height` grid points, the first at (`lon0`, `lat0`) and `step` degrees
@@ -73,7 +75,18 @@ export const fieldIdOf = (view) =>
   view === 'aqi' ? 'aqi' : (AQI_POLLUTANTS[view] ?? null);
 
 const MAX_CREDIT_CHARS = 2000;
-const ZONELESS_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+/** An ISO run time: the date, `T` or a space, the time, and maybe a zone. */
+const ISO_RUN =
+  /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)([Zz]|[+-]\d{2}:?\d{2})?$/;
+/** A run's epoch ms, read as UTC without a zone; NaN for any other string. */
+function runTime(run) {
+  const iso = ISO_RUN.exec(run);
+  if (!iso) return NaN;
+  const zone = (iso[3] ?? 'Z')
+    .toUpperCase()
+    .replace(/^([+-]\d{2})(\d{2})$/, '$1:$2');
+  return Date.parse(`${iso[1]}T${iso[2]}${zone}`);
+}
 const malformed = () => new Error('Malformed air-quality field');
 
 function readRegion(raw, { inset = false } = {}) {
@@ -88,7 +101,8 @@ function readRegion(raw, { inset = false } = {}) {
     ![lon0, lat0, step].every(Number.isFinite) ||
     step <= 0 ||
     Math.abs(lat0) > 90 ||
-    lat0 - (height - 1) * step < -90 - SNAP ||
+    // A float32 step may carry the last row a hair past the pole.
+    lat0 - (height - 1) * step < -90 - step * 1e-3 ||
     !Array.isArray(steps) ||
     !steps.length ||
     !steps.every(
@@ -102,14 +116,16 @@ function readRegion(raw, { inset = false } = {}) {
     throw malformed();
   const wraps = wrap === true;
   const span = width * step;
-  const tolerance = step * 1e-3;
-  if (!wraps && span >= 360 - tolerance) throw malformed();
+  // A row within half a step (and 0.1 % of a turn) of 360° is a whole turn:
+  // a float32 step misses 360° by a few hundredths of a step.
+  const slack = Math.min(step / 2, 0.36);
+  if (!wraps && span > 360 - slack) throw malformed();
   // A wrapping region is one whole row of the globe, and its world image
   // stays within the point budget; an inset never wraps.
   if (
     wraps &&
     (inset ||
-      Math.abs(span - 360) > tolerance ||
+      Math.abs(span - 360) >= slack ||
       width * Math.round(180 / step) > MAX_REGION_POINTS)
   )
     throw malformed();
@@ -153,10 +169,7 @@ function readRegion(raw, { inset = false } = {}) {
  */
 export function readFieldManifest(raw) {
   if (!raw || typeof raw !== 'object') throw malformed();
-  const runMs =
-    typeof raw.run === 'string'
-      ? Date.parse(ZONELESS_ISO.test(raw.run) ? `${raw.run}Z` : raw.run)
-      : NaN;
+  const runMs = typeof raw.run === 'string' ? runTime(raw.run) : NaN;
   if (typeof raw.run !== 'string' || !Number.isFinite(runMs)) throw malformed();
   const scale = {};
   for (const id of FIELD_IDS) {
@@ -216,6 +229,51 @@ export function readFieldStep(manifest, step, data) {
       ? readGrids(manifest.europe, data.europe)
       : null;
   return Object.freeze({ global, ...(europe ? { europe } : {}) });
+}
+
+const layouts = new WeakMap();
+const regionLayout = (region) =>
+  region && [
+    region.width,
+    region.height,
+    region.lon0,
+    region.lat0,
+    region.step,
+    region.wrap,
+    region.rectangle ?? null,
+    region.blendDeg ?? null,
+  ];
+/**
+ * What a step's grids are read with besides their values: the scales and
+ * each region's geometry. Grids loaded under one layout are not read under
+ * another.
+ */
+export function fieldLayout(manifest) {
+  let layout = layouts.get(manifest);
+  if (layout === undefined) {
+    layout = JSON.stringify([
+      manifest.scale,
+      regionLayout(manifest.global),
+      regionLayout(manifest.europe),
+    ]);
+    layouts.set(manifest, layout);
+  }
+  return layout;
+}
+
+const fingerprints = new WeakMap();
+/** A grid's values in a few characters (FNV-1a), kept per array; '' for none. */
+export function gridFingerprint(values) {
+  if (!values) return '';
+  let fingerprint = fingerprints.get(values);
+  if (fingerprint === undefined) {
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < values.length; i++)
+      hash = Math.imul(hash ^ values[i], 0x01000193);
+    fingerprint = `${values.length}.${(hash >>> 0).toString(36)}`;
+    fingerprints.set(values, fingerprint);
+  }
+  return fingerprint;
 }
 
 /** Degrees east of `from`, in [0, 360). */

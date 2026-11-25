@@ -24,6 +24,18 @@ test('a zone-less run time is one instant in every time zone', () => {
   if (utc !== 'rejected') assert.equal(Number(utc), Date.UTC(2026, 10, 25, 12));
 });
 
+test('a zone-less run with a space before the time is one instant in every time zone', () => {
+  const run = '2026-11-25 12:00:00';
+  const utc = String(Date.UTC(2026, 10, 25, 12));
+  assert.equal(parseIn('America/New_York', run), utc);
+  assert.equal(parseIn('Europe/Paris', run), utc);
+});
+
+test('a zone-less run that is not ISO is refused in every time zone', () => {
+  for (const tz of ['UTC', 'America/New_York', 'Europe/Paris'])
+    assert.equal(parseIn(tz, 'Nov 25 2026 12:00'), 'rejected');
+});
+
 test('control: explicit Z and offset agree across time zones', () => {
   const z = String(Date.UTC(2026, 10, 25, 12));
   assert.equal(parseIn('America/New_York', '2026-11-25T12:00:00Z'), z);

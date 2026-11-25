@@ -19,6 +19,7 @@ import {
 import { EEA_HOURLY_BANDS, EEA_HOURLY_LIMITS } from './interpretation.js';
 import { US_AQI_BANDS, US_AQI_LIMITS } from './usAqi.js';
 import { createAirQualityLayer } from './index.js';
+import { createLocalAirQualityFieldSource } from './fieldSource.js';
 import { createWorldClock } from '../../time/worldClock.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { formatUtcDayMonth } from '../../i18n/index.js';
@@ -496,6 +497,36 @@ test('a manifest that is not one is refused', () => {
     { ...good, europe: { ...good.global } },
   ])
     assert.throws(() => readFieldManifest(bad), /Malformed air-quality field/);
+});
+
+test('a pole-to-pole grid whose step was stored in float32 is accepted', () => {
+  const pole = { width: 900, height: 451, lon0: 0, lat0: 90, wrap: true };
+  // 450 steps of float32 0.4 end 0.0000027° past the South Pole.
+  assert.equal(
+    manifestOf({ ...pole, step: Math.fround(0.4) }).global.height,
+    451,
+  );
+  // A grid a whole row past the pole stays refused.
+  assert.throws(
+    () => manifestOf({ ...pole, height: 452, step: 0.4 }),
+    /Malformed air-quality field/,
+  );
+});
+
+test('a wrapping grid with a float32-derived step is one whole row of the globe', () => {
+  // Two float32 longitudes 0.4° apart: 900 columns span 359.9945°.
+  const step = Math.fround(359.6) - Math.fround(359.2);
+  const row = { width: 900, height: 451, lon0: 0, lat0: 90 };
+  assert.equal(manifestOf({ ...row, step, wrap: true }).global.wrap, true);
+  // One column short is not a whole row, and the full row must wrap.
+  assert.throws(
+    () => manifestOf({ ...row, width: 899, step: 0.4, wrap: true }),
+    /Malformed air-quality field/,
+  );
+  assert.throws(
+    () => manifestOf({ ...row, step, wrap: false }),
+    /Malformed air-quality field/,
+  );
 });
 
 // ── the layer with a field ─────────────────────────────────────────────────
@@ -1189,6 +1220,119 @@ test('replacing a manifest releases the previous run’s painted images', async 
   }
 });
 
+test('a same-run manifest with new scales loads its step again: the tiles and the map read the new grids', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const count = fakeDocument(t);
+  const run = new Date(Date.now() - 6 * HOUR).toISOString();
+  let divisor = 10;
+  const { layer } = fieldHarness({
+    fieldSource: {
+      getManifest: async () => ({
+        source: 'CAMS',
+        run,
+        scale: { ...SCALE, aqi: divisor },
+        global: { ...WORLD, steps: [0, 3, 6, 24] },
+      }),
+      // The host corrects the divisor and the grids together: still AQI 44.
+      getStep: async () => ({
+        global: Object.fromEntries(
+          FIELD_IDS.map((id) => [
+            id,
+            new Uint16Array(12).fill(
+              NOW_VALUES[id] * (id === 'aqi' ? divisor : SCALE[id]),
+            ),
+          ]),
+        ),
+      }),
+    },
+  });
+  t.after(() => layer.destroy());
+  const aqi = () => tileOf(layer.getRowControls(), 'index', 'aqi').value;
+  await layer.update();
+  await settle();
+  assert.equal(aqi(), '44');
+  assert.equal(count(), 1);
+  divisor = 20;
+  t.mock.timers.tick(11 * 60_000);
+  await layer.update();
+  await settle();
+  assert.equal(aqi(), '44');
+  assert.equal(count(), 2);
+});
+
+test('a step whose grids changed since it was painted is painted again when shown again', async (t) => {
+  const count = fakeDocument(t);
+  const host = hostField();
+  let aqi = 44;
+  const { layer, clock, live } = fieldHarness({
+    fieldSource: {
+      getManifest: host.source.getManifest,
+      async getStep(step, options) {
+        const data = await host.source.getStep(step, options);
+        if (step === 6) data.global.aqi.fill(aqi * SCALE.aqi);
+        return data;
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  await layer.update();
+  await settle();
+  clock.seek(host.run + 24 * HOUR);
+  await settle();
+  assert.equal(count(), 2);
+  // The host corrects step 6 in place: back there the map shows what the tiles read.
+  aqi = 150;
+  clock.goLive();
+  await settle();
+  assert.equal(tileOf(layer.getRowControls(), 'index', 'aqi').value, '150');
+  assert.equal(count(), 3);
+  const [expected] = paintField(
+    readFieldManifest(await host.source.getManifest()),
+    {
+      global: gridsOf(WORLD, (x, y, id) =>
+        id === 'aqi' ? 150 : NOW_VALUES[id],
+      ),
+    },
+    'aqi',
+    { bands: US_AQI_BANDS, limits: US_AQI_LIMITS },
+  );
+  assert.deepEqual(live()[0].spec.image.painted, expected.rgba);
+});
+
+test('a pollutant left to paint while the field was hidden keeps its own colours', async (t) => {
+  const count = fakeDocument(t);
+  const host = hostField();
+  const camera = { height: 40_000 };
+  const { layer, live } = fieldHarness({
+    fieldSource: host.source,
+    renderer: {
+      camera: {
+        on: () => () => {},
+        viewRectangle: () => ({ west: 10, south: -40, east: 30, north: -25 }),
+        pose: () => ({ height: camera.height }),
+      },
+    },
+  });
+  t.after(() => layer.destroy());
+  layer.setParams({ view: 'PM2.5' });
+  await settle();
+  assert.equal(count(), 0);
+  // The camera rises with no camera event yet, and PM10 is chosen: only PM10 is painted.
+  camera.height = 2_000_000;
+  layer.setParams({ view: 'PM10' });
+  await settle();
+  assert.equal(count(), 1);
+  layer.setParams({ view: 'PM2.5' });
+  await settle();
+  const [expected] = paintField(
+    readFieldManifest(await host.source.getManifest()),
+    await host.source.getStep(6),
+    'pm25',
+    PM25,
+  );
+  assert.deepEqual(live()[0].spec.image.painted, expected.rgba);
+});
+
 test('while playing, the next step is fetched and painted ahead', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const count = fakeDocument(t);
@@ -1618,6 +1762,145 @@ test('a late answer for another time does not replace the live run', async () =>
   answer(await hostField({ run: older }).source.getManifest());
   await settle();
   assert.equal(clock.coverage().start, latest);
+});
+
+/**
+ * Core's local server holding run A (six hours old, to +27 h) until
+ * `replace()` swaps in run B (now, to +21 h): grids of a run it no longer
+ * holds answer 409. A's grids read AQI 30, B's 90.
+ */
+function replacedRun() {
+  const now = Date.now();
+  const runs = {
+    a: {
+      run: new Date(now - 6 * HOUR).toISOString(),
+      steps: [0, 3, 6, 24, 27],
+      aqi: 300,
+    },
+    b: { run: new Date(now).toISOString(), steps: [0, 3, 18, 21], aqi: 900 },
+  };
+  let held = runs.a;
+  const fetchImpl = async (url) => {
+    if (url.endsWith('/manifest'))
+      return Response.json({
+        source: 'CAMS',
+        run: held.run,
+        scale: SCALE,
+        global: { ...WORLD, steps: held.steps },
+      });
+    if (new URL(url, 'http://host').searchParams.get('run') !== held.run)
+      return new Response('', { status: 409 });
+    return new Response(new Uint16Array(12).fill(held.aqi).buffer);
+  };
+  return {
+    runA: Date.parse(runs.a.run),
+    runB: Date.parse(runs.b.run),
+    source: createLocalAirQualityFieldSource({ fetchImpl }),
+    replace: () => (held = runs.b),
+  };
+}
+const settleLonger = async () => {
+  for (let turn = 0; turn < 4; turn++) await settle();
+};
+
+test('paused at a time a replaced run covered, the layer reaches the run replacing it', async (t) => {
+  const host = replacedRun();
+  const clock = createWorldClock();
+  clock.seek(host.runA + 24 * HOUR);
+  const { layer } = fieldHarness({ fieldSource: host.source, clock });
+  t.after(() => layer.destroy());
+  const aqi = () => tileOf(layer.getRowControls(), 'index', 'aqi').value;
+  await layer.update();
+  await settleLonger();
+  assert.equal(aqi(), '30');
+  // Both runs cover +27 h of A; the host now holds B only.
+  host.replace();
+  clock.seek(host.runA + 27 * HOUR);
+  await settleLonger();
+  assert.equal(clock.coverage().start, host.runB);
+  assert.equal(aqi(), '90');
+});
+
+test('playing, a prefetch refused because the host replaced the run reaches the run replacing it', async (t) => {
+  const host = replacedRun();
+  const clock = createWorldClock({
+    monotonicNow: () => 0,
+    requestFrame: null,
+    cancelFrame: null,
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  clock.seek(host.runA + 24 * HOUR);
+  const { layer } = fieldHarness({ fieldSource: host.source, clock });
+  t.after(() => layer.destroy());
+  await layer.update();
+  await settleLonger();
+  host.replace();
+  // Play starts the prefetch of A's +27 h, which the host refuses.
+  clock.play({ rate: 3600 });
+  await settleLonger();
+  assert.equal(clock.coverage().start, host.runB);
+  assert.equal(tileOf(layer.getRowControls(), 'index', 'aqi').value, '90');
+});
+
+test('playing through spans away from the run, the ask in flight is kept and its run taken where it covers the time', async (t) => {
+  let mono = 0;
+  let tick = () => {};
+  const clock = createWorldClock({
+    monotonicNow: () => mono,
+    requestFrame: null,
+    cancelFrame: null,
+    setInterval: (notify) => {
+      tick = notify;
+      return 1;
+    },
+    clearInterval() {},
+  });
+  const archived = Date.now() - 240 * HOUR;
+  const asks = [];
+  const host = hostField();
+  const { layer } = fieldHarness({
+    clock,
+    fieldSource: {
+      getStep: host.source.getStep,
+      getManifest: (options = {}) =>
+        options.atMs === undefined
+          ? host.source.getManifest()
+          : new Promise((resolve) => asks.push({ ...options, resolve })),
+    },
+  });
+  t.after(() => layer.destroy());
+  const runAt = (run) =>
+    hostField({ run, steps: [0, 24, 48, 72, 96, 120] }).source.getManifest();
+  await layer.update();
+  await settle();
+  clock.seek(archived + 12 * HOUR);
+  await settle();
+  // A day a second: each three hours pass in 125 ms, before the archive answers.
+  clock.play({ rate: 86_400 });
+  for (let i = 0; i < 3; i++) {
+    mono += 125;
+    tick();
+    await settle();
+  }
+  assert.equal(asks.length, 1);
+  assert.equal(asks[0].signal.aborted, false);
+  // A run that does not reach the time now is not taken: the time now is asked for.
+  asks[0].resolve(await runAt(archived - 200 * HOUR));
+  await settle();
+  assert.equal(clock.coverage().start, host.run);
+  assert.equal(asks.length, 2);
+  assert.equal(asks[1].atMs, clock.now());
+  asks[1].resolve(await runAt(archived));
+  await settle();
+  assert.equal(clock.coverage().start, archived);
+  // A seek lets an ask in flight go.
+  clock.seek(archived + 200 * HOUR);
+  await settle();
+  clock.seek(archived + 300 * HOUR);
+  await settle();
+  assert.equal(asks.length, 4);
+  assert.equal(asks[2].signal.aborted, true);
 });
 
 test('clipping both pole rows never creates a zero-height texture', () => {
