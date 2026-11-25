@@ -30,17 +30,26 @@ const tags = (markup, name) =>
 const dock = template('CommandDockView.vue');
 const context = template('ContextView.vue');
 const inView = template('panels/ViewContext.vue');
+const suggested = template('panels/SuggestedLayers.vue');
+const nearby = template('panels/NearbyLists.vue');
 const views = {
   // The voice control, the tab bar and the reticles are views of their own.
   'CommandDockView.vue': { markup: dock, buttons: 0, icons: 0, closes: 0 },
   // Search and Expand in the header, the two tabs, Contacts, the cockpit
   // entry, SEARCH NEARBY SITES and the TR-3B chip.
   'ContextView.vue': { markup: context, buttons: 8, icons: 7, closes: 0 },
-  // An off layer's worldwide tile, an item's row, the place and layer chips
-  // and Ask GEV; a layer's Turn off is a UiCloseButton. The glyphs: the
-  // header's eye, a worldwide tile's (on and off), a layer group's, an
-  // item's motion and the layer chips' add.
-  'panels/ViewContext.vue': { markup: inView, buttons: 5, icons: 6, closes: 1 },
+  // Buttons select a globe row or open Data Layers. Icons mark the pointer,
+  // weather, worldwide counts, layer counts and readings. Globe rows use EntityMark.
+  'panels/ViewContext.vue': { markup: inView, buttons: 2, icons: 5, closes: 0 },
+  // Open in Data Layers; a layer's glyph and the pointer's layers.
+  'panels/SuggestedLayers.vue': {
+    markup: suggested,
+    buttons: 1,
+    icons: 2,
+    closes: 0,
+  },
+  // An item's row; a list's glyph and an item's motion.
+  'panels/NearbyLists.vue': { markup: nearby, buttons: 1, icons: 2, closes: 0 },
 };
 
 test('the dock and Context hand-write no button; each is a UiButton', () => {
@@ -65,6 +74,8 @@ test('no tag hand-writes aria-pressed; the pressed toggles take :pressed', () =>
   // Search, Expand and TR-3B.
   assert.equal(pressed(context), 3);
   assert.equal(pressed(inView), 0);
+  assert.equal(pressed(suggested), 0);
+  assert.equal(pressed(nearby), 0);
 });
 
 test("Context's tabs say they are chosen, not pressed", () => {
@@ -90,8 +101,11 @@ test('they hand-write no Material glyph; each is a UiIcon', () => {
     for (const icon of found) assert.match(icon, /\s:size="null"/, file);
   }
   // An item's motion glyph is an image with its own name, not decoration.
-  const [motion] = tags(inView, 'UiIcon').filter((i) =>
-    /view-context__row-motion/.test(i),
+  // Each globe-view block's head and each nearby row lead with a mark.
+  assert.equal(tags(inView, 'EntityMark').length, 1);
+  assert.equal(tags(nearby, 'EntityMark').length, 1);
+  const [motion] = tags(nearby, 'UiIcon').filter((i) =>
+    /nearby-lists__motion/.test(i),
   );
   assert.match(motion, /\srole="img"/);
   assert.match(motion, /\s:aria-label=/);

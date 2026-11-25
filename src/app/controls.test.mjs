@@ -12,8 +12,18 @@ before(() => {
 });
 after(() => uninstallDom());
 
-test('the application controls start and stop', () => {
+test('the application controls start and stop with the host weather service', () => {
+  let shellServices;
+  const weather = {
+    getConditions(lat, lon) {
+      assert.equal(this, weather);
+      return { lat, lon };
+    },
+  };
   class Controls {
+    constructor(_viewer, { services }) {
+      shellServices = services;
+    }
     hasShareState = true;
     orbitController = { stop() {} };
     hud = { destroy() {} };
@@ -30,7 +40,7 @@ test('the application controls start and stop', () => {
       operations: {
         surface: { controlServices: {} },
         searchAndFlyTo() {},
-        requests: { regional: {}, weather: {} },
+        requests: { regional: {}, weather },
       },
     },
     loaderStatus: {},
@@ -39,4 +49,8 @@ test('the application controls start and stop', () => {
     defer: (cleanup) => cleanups.push(cleanup),
   });
   for (const cleanup of cleanups.reverse()) cleanup();
+  assert.deepEqual(shellServices.fetchSpotWeather(48.5, -123.1), {
+    lat: 48.5,
+    lon: -123.1,
+  });
 });

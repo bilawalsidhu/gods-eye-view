@@ -442,7 +442,8 @@
   gap: 0.35rem;
   padding: 0.4rem 0.8rem;
 }
-#gev-chat-attachments button {
+#gev-chat-attachments button,
+#gev-chat-attachments .chat-map-reference {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,6 +455,8 @@
   color: var(--accent);
   font: inherit;
   font-size: 0.7rem;
+}
+#gev-chat-attachments button {
   cursor: pointer;
 }
 /* The composer owns focus indication; avoid a second box around its textarea. */

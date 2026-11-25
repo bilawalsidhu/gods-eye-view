@@ -5,15 +5,20 @@ import { msg, t } from '../i18n/index.js';
  * the voice control presenter. Recent commands and autocomplete are always on;
  * command history is deliberately transient.
  */
-export function bindChatPreferences({ ui, getDraft, setDraft }) {
+export function bindChatPreferences({
+  ui,
+  getDraft,
+  getReference = () => null,
+  setDraft,
+}) {
   const key = 'gev.chat.preferences';
   let quick = true;
   let recent = [];
   let historyIndex = -1;
-  let saved = '';
+  let saved = { text: '', reference: null };
   const resetHistory = () => {
     historyIndex = -1;
-    saved = '';
+    saved = { text: '', reference: null };
   };
   const quickCommands = () =>
     [
@@ -100,11 +105,16 @@ export function bindChatPreferences({ ui, getDraft, setDraft }) {
       if (input.selectionStart !== 0 || (!up && historyIndex < 0)) return false;
       event.preventDefault();
       if (up) {
-        if (historyIndex < 0) saved = getDraft();
+        if (historyIndex < 0)
+          saved = { text: getDraft(), reference: getReference() };
         historyIndex = Math.min(historyIndex + 1, recent.length - 1);
       } else historyIndex--;
-      const next = historyIndex < 0 ? saved : recent[historyIndex];
-      setDraft(next, { caret: historyIndex < 0 ? next.length : 0 });
+      if (historyIndex < 0)
+        setDraft(saved.text, {
+          caret: saved.text.length,
+          reference: saved.reference,
+        });
+      else setDraft(recent[historyIndex], { caret: 0 });
       render();
       return true;
     },

@@ -89,6 +89,7 @@ export class PanelChrome {
     this._chromeStore = store;
     this._chromeToken = store.connect({
       toggle: (panelId) => this._togglePanel(panelId),
+      reveal: (panelId) => this._revealPanel?.(panelId),
     });
     this._cockpitPanelRestore = null;
     this._cockpitContextCollapsedForDataPanel = false;

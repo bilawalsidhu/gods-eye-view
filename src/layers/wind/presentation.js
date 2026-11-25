@@ -50,16 +50,26 @@ function displayScalar(reading) {
   });
 }
 
+/**
+ * One wind sample in the active language: "12,0 km/h from NW", or calm.
+ * @param {number} speed Metres per second.
+ * @param {string} from A compass point from windFrom, or 'Calm'.
+ * @param {string} [units]
+ */
+export function windValueText(speed, from, units = 'km/h') {
+  const shown = displaySpeed(speed, units);
+  return from === 'Calm'
+    ? `${shown}${t(' · calm')}`
+    : `${shown}${t(' from {direction}', { direction: t(from) })}`;
+}
+
 /** The wind line in the active language; the reading itself stays English. */
 function windText(reading) {
   if (!Number.isFinite(reading.speed))
     return reading.wind === 'Aim the map center at Earth'
       ? t('Aim the map center at Earth')
       : reading.wind;
-  const speed = displaySpeed(reading.speed, reading.units);
-  return reading.from === 'Calm'
-    ? `${speed}${t(' · calm')}`
-    : `${speed}${t(' from {direction}', { direction: t(reading.from) })}`;
+  return windValueText(reading.speed, reading.from, reading.units);
 }
 
 /** "29.93°N · 97.74°W" from the English reading, in the active language. */

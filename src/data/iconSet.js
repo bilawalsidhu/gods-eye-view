@@ -100,6 +100,12 @@ export const ICON_RECEDES = 4;
  * −31 m before its floor warms) otherwise reads as beyond the limb.
  */
 export const ICON_CULL_LIFT = 8;
+/**
+ * The row's image is a subject of the set's view sheet
+ * ({@link module:viewSheet}): its far image is the subject's first cell, and
+ * the renderer draws the frame that shows it from the eye.
+ */
+export const ICON_VIEWS = 16;
 /** The ellipsoid height a CULL_LIFT row is raised to for the horizon test. */
 export const ICON_CULL_HEIGHT_M = HORIZON_LIFT_M;
 /**

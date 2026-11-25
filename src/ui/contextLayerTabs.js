@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue';
+import { isAircraftLayer } from '../data/aircraftLayerIds.js';
 import { msg } from '../i18n/index.js';
 
 // Context's layer tabs: when a layer that has its own settings is on, those
@@ -6,7 +7,6 @@ import { msg } from '../i18n/index.js';
 // in the Context panel, so they sit beside what they affect.
 // Each tab's content is teleported into `#context-tab-<id>`; when the layer
 // goes off the content returns to its usual panel.
-const AIRCRAFT = ['flights', 'military', 'local-adsb'];
 
 // Layers that draw labels and cards through the world overlay, which the
 // Dense settings (density, allocation, fade, outside) govern.
@@ -36,7 +36,7 @@ export const LABEL_LAYERS = new Set([
 // Which of the layers that are on each tab acts on.
 export const TAB_AFFECTS = {
   labels: (on) => [...on].filter((id) => LABEL_LAYERS.has(id)),
-  aircraft: (on) => [...on].filter((id) => AIRCRAFT.includes(id)),
+  aircraft: (on) => [...on].filter(isAircraftLayer),
 };
 
 export const LAYER_TABS = [

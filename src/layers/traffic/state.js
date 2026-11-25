@@ -105,6 +105,7 @@ export function createState({ services, source }) {
    */
 
   layerState._flowError = null;
+  layerState._flowRevision = 0;
 
   /**
    * True while the drawn flow came from cached proxy tiles (TomTom budget

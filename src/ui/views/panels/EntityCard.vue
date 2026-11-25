@@ -1,8 +1,12 @@
 <script setup>
+import { approximatePosition } from '../../distanceText.js';
+import { formatCockpitCoordinatePair } from '../../cockpitPresentation.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
-import { formatNumber, t } from '../../../i18n/index.js';
+import { t } from '../../../i18n/index.js';
 import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
+import { contextAgeText } from '../../contextTime.js';
+import { distanceText } from '../../distanceText.js';
 import AircraftModelHero from './AircraftModelHero.vue';
 import SatelliteGroundView from './SatelliteGroundView.vue';
 import FlightCockpitView from './FlightCockpitView.vue';
@@ -17,6 +21,7 @@ import { useCctvStore } from '../../stores/cctv.js';
 import SpotConditions from './SpotConditions.vue';
 import { shownLayerName } from '../../layerNames.js';
 import { countryName, nearestCity } from '../../../data/wikidataCities.js';
+import { reportingProviderCredit } from '../../../layers/wildlifeSightings/photoText.js';
 
 // The Context panel's card for one thing on the map: what it is, its facts,
 // links, actions, and what else is near it. It reads from the entity card
@@ -26,7 +31,7 @@ const props = defineProps({
   withContacts: Boolean,
 });
 const store = useEntityCardStore();
-const { card, lost, tick, away, finding, located } = storeToRefs(store);
+const { card, lost, locationWithheld, tick, away, finding, located } = storeToRefs(store);
 // A matching frame can supply a label for the camera card.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
@@ -42,16 +47,6 @@ const shownTitle = computed(() => {
   }
 });
 
-function ago(ms) {
-  const seconds = Math.round(ms / 1000);
-  if (seconds < 60) return t('{n} s ago', { n: seconds });
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return t('{n} min ago', { n: minutes });
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return t('{n} h ago', { n: hours });
-  return t('{n} d ago', { n: Math.round(hours / 24) });
-}
-
 const status = computed(() => {
   void tick.value;
   const current = card.value;
@@ -62,7 +57,7 @@ const status = computed(() => {
     return {
       tone: 'aged',
       text: t('Last reading · {age}', {
-        age: ago(Math.max(0, located.value.atMs - located.value.observedAtMs)),
+        age: contextAgeText(located.value.atMs - located.value.observedAtMs),
       }),
     };
   if (lost.value) return { tone: 'lost', text: t('Out of feed · last reading') };
@@ -70,8 +65,8 @@ const status = computed(() => {
     return {
       tone: current.moving && current.observedAgeMs < 120_000 ? 'live' : 'aged',
       text: current.moving
-        ? t('Live · {age}', { age: ago(current.observedAgeMs) })
-        : ago(current.observedAgeMs),
+        ? t('Live · {age}', { age: contextAgeText(current.observedAgeMs) })
+        : contextAgeText(current.observedAgeMs),
     };
   if (current.moving) return { tone: 'live', text: t('Live') };
   return null;
@@ -80,24 +75,20 @@ const status = computed(() => {
 const position = computed(() => {
   const current = card.value;
   if (!Number.isFinite(current?.lat) || !Number.isFinite(current?.lon)) return '';
-  const lat = `${Math.abs(current.lat).toFixed(3)}°${current.lat >= 0 ? 'N' : 'S'}`;
-  const lon = `${Math.abs(current.lon).toFixed(3)}°${current.lon >= 0 ? 'E' : 'W'}`;
-  return `${lat}  ${lon}`;
+  if (current.obscured) return t('Location obscured to a 0.2° cell');
+  const text = formatCockpitCoordinatePair(current.lat, current.lon);
+  return approximatePosition(current) ? `${text} (${t('approximate')})` : text;
 });
-
-const distance = (km) =>
-  km < 1
-    ? t('{n} m', { n: formatNumber(Math.round(km * 1000)) })
-    : t('{n} km', { n: formatNumber(km < 10 ? Number(km.toFixed(1)) : Math.round(km)) });
 
 const source = computed(() => {
   void tick.value;
   return store.sourceOf(card.value);
 });
+const acartiaCredit = computed(() => reportingProviderCredit(card.value?.acartiaProvider));
 const ageText = computed(() => {
   void tick.value;
   const age = card.value?.observedAgeMs;
-  return Number.isFinite(age) ? t('updated {age}', { age: ago(age) }) : '';
+  return Number.isFinite(age) ? t('updated {age}', { age: contextAgeText(age) }) : '';
 });
 
 // The headline figures, as big tiles: the fields the item's kind leads with
@@ -178,8 +169,8 @@ const routeProgress = computed(() => {
         : t('{n} min', { n: Math.max(1, Math.round(hours * 60)) });
   return {
     share: Math.min(1, Math.max(0, share)),
-    flown: distance(flown),
-    left: distance(left),
+    flown: distanceText(flown),
+    left: distanceText(left),
     eta,
   };
 });
@@ -468,6 +459,14 @@ watch(
         </dl>
       </section>
 
+      <p v-if="acartiaCredit" class="entity-card__source">
+        {{ acartiaCredit }} · {{ t('CC BY 4.0') }}
+      </p>
+      <div v-if="acartiaCredit || card.observationHref || card.wildlifeViewingGuidance" class="entity-card__attribution-links">
+        <a v-if="acartiaCredit" href="https://acartia.io/" target="_blank" rel="noopener noreferrer">{{ t('Acartia') }} ↗</a>
+        <a v-if="card.observationHref" :href="card.observationHref" target="_blank" rel="noopener noreferrer">{{ t('iNaturalist') }} ↗</a>
+        <a v-if="card.wildlifeViewingGuidance" href="https://www.bewhalewise.org" target="_blank" rel="noopener noreferrer">{{ t('Be Whale Wise') }} ↗</a>
+      </div>
       <div v-if="card.links.length" class="entity-card__links">
         <a v-for="link in card.links" :key="link.kind" :href="link.href" target="_blank" rel="noopener noreferrer">{{ t(link.label) }} ↗</a>
       </div>
@@ -492,7 +491,7 @@ watch(
       </div>
 
       <slot />
-      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon)" :key="card.key" entity :lat="card.lat" :lon="card.lon" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
+      <SpotConditions v-if="Number.isFinite(card.lat) && Number.isFinite(card.lon) && !locationWithheld" :key="card.key" :lat="card.lat" :lon="card.lon" :approximate="approximatePosition(card)" :exclude-key="card.key" :settle-km="settleKm" :with-contacts="props.withContacts" />
 
       <p v-if="source" class="entity-card__source">
         <span>{{ t('Source') }}</span> {{ source }}<template v-if="ageText"> · {{ ageText }}</template>

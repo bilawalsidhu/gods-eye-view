@@ -1,3 +1,4 @@
+import { analystRecordLimit } from './analystRecordLimit.js';
 import {
   clearOverlaySource,
   setOverlayEntries,
@@ -88,6 +89,7 @@ const INCIDENT = Object.freeze({
   subtitle: msg('NEPAL · 26 AUG 2026'),
 });
 const TRIGGER_RECORD = Object.freeze({
+  id: 'us7000tbwb',
   lat: 28.271,
   lon: 85.515,
   heightM: 4200,
@@ -266,6 +268,48 @@ export function largestGeoJsonRing(geojson) {
     .map((polygon) => polygon?.[0])
     .filter((ring) => Array.isArray(ring) && ring.length >= 3);
   return rings.sort((a, b) => b.length - a.length)[0] || [];
+}
+
+/** The presentations that pin the incident's key places. */
+const PLACE_PRESENTATIONS = new Set([
+  BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,
+  BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
+  BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
+]);
+
+/**
+ * Plain records for locator pins. Translate descriptive marks and turn
+ * uppercase place names into title case ("Syabru Besi").
+ * @param {ReadonlyArray<{id: string, title: string, lat: number, lon: number, heightM: number, elevationM?: number}>} places
+ * @param {number} [maxCount]
+ * @returns {Array<object>}
+ */
+export function bhoteKoshiPlaceRecords(places, maxCount = Infinity) {
+  const limit = analystRecordLimit(maxCount);
+  return (Array.isArray(places) ? places : [])
+    .filter(
+      (place) => Number.isFinite(place?.lat) && Number.isFinite(place?.lon),
+    )
+    .slice(0, limit)
+    .map((place) => {
+      const title = String(place.title || place.id);
+      const translation = PLACE_TITLE_TEXT.get(title);
+      return {
+        id: place.id,
+        name: translation
+          ? t(translation)
+          : title
+              .toLowerCase()
+              .replace(/(^|\s)\p{L}/gu, (letter) => letter.toUpperCase()),
+        lat: place.lat,
+        lon: place.lon,
+        pinHeightM: place.heightM,
+        ...(Number.isFinite(place.elevationM) && {
+          elevationM: place.elevationM,
+        }),
+        source: 'OpenStreetMap + GeoPera',
+      };
+    });
 }
 
 /**
@@ -1292,6 +1336,33 @@ export function createBhoteKoshiLocatorLayer({
         ],
         legend: [],
       };
+    },
+    /**
+     * Plain records for the active presentation's incident places, nearby
+     * cities or USGS trigger report.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!_enabled) return [];
+      if (_presentation === BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION) {
+        if (maxCount < 1) return [];
+        return [
+          {
+            id: TRIGGER_RECORD.id,
+            name: t(TRIGGER_RECORD.title),
+            lat: TRIGGER_RECORD.lat,
+            lon: TRIGGER_RECORD.lon,
+            pinHeightM: TRIGGER_RECORD.heightM,
+            source: 'USGS',
+            website: TRIGGER_SOURCE_URL,
+          },
+        ];
+      }
+      if (_presentation === BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION)
+        return bhoteKoshiPlaceRecords(NEARBY_CITIES, maxCount);
+      if (!PLACE_PRESENTATIONS.has(_presentation)) return [];
+      return bhoteKoshiPlaceRecords(INCIDENT_OVERVIEW_PLACES, maxCount);
     },
     getStats() {
       return {

@@ -1,5 +1,13 @@
 import { t } from '../../i18n/index.js';
 
+export function reportingProviderCredit(provider) {
+  if (!provider?.name) return '';
+  const { name, entity } = provider;
+  return entity
+    ? t('Reported by {name} ({entity})', { name, entity })
+    : t('Reported by {name}', { name });
+}
+
 /** Compact card ages in translated minutes, hours or days. */
 export function formatAge(deltaMs) {
   if (!Number.isFinite(deltaMs) || deltaMs < 0) return null;

@@ -8,6 +8,7 @@ import { bindRenderer } from '../render/rendererOf.js';
 
 export function fakeDrawPort() {
   const sets = new Map();
+  const viewSheets = [];
   const make = (kind) => (spec) => {
     const live = sets.get(spec.id);
     if (live && !live.disposed)
@@ -97,6 +98,11 @@ export function fakeDrawPort() {
     clampState: () => 'draped',
     on: () => () => {},
     atlas() {},
+    /** The `views(id, sheet)` registrations, in order, as `[id, sheet]`. */
+    viewSheets,
+    views(id, sheet) {
+      viewSheets.push([id, sheet]);
+    },
   };
 }
 

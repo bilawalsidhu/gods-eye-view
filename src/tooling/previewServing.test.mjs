@@ -122,6 +122,7 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         ['/api/overpass', 405],
         ['/api/overpass/status', 200],
         ['/api/cctv/sources', 200],
+        ['/api/layer-counts', 200],
         ['/api/gbfs/', 400],
         ['/api/tomtom/status', 200],
         // The Street Level QA gate intercepts these in the browser; this is
@@ -151,6 +152,10 @@ test('real dev and built-preview servers serve provider JSON and terminate unkno
         const body = await response.json();
         if (route === '/api/cctv/sources')
           assert.equal(body.sources[0].id, 'fixture');
+        if (route === '/api/layer-counts') {
+          assert.ok(Array.isArray(body.counts), route);
+          assert.equal(response.headers.get('cache-control'), 'no-store');
+        }
         if (route === '/api/mapillary/status')
           assert.deepEqual(body, { configured: false }, route);
         if (route.startsWith('/api/mapillary/tiles'))

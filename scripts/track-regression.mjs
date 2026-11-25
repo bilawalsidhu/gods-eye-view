@@ -2969,8 +2969,8 @@ async function main() {
     // camera move and on the first frame a hidden contact is shown again —
     // is now observed on the drawn rows: the on-screen nose the drawn course
     // projects to, against the one the plane's feed course projects to, at
-    // the same position, on exactly those two frames (same 10° bound, same
-    // per-frame budgets). That the shader turns an icon to the screen angle
+    // the same position, on exactly those two frames (same 10° bound).
+    // That the shader turns an icon to the screen angle
     // its course projects to is the renderer's own contract, which the
     // renderer conformance reference scenes draw (course-rotated arrows,
     // top and tilted views); a CPU readback cannot see the GPU's rotation. The reveal hides and re-shows the row through the
@@ -2985,10 +2985,8 @@ async function main() {
     //       reappear wearing its stale/creation-north nose for up to 1 s).
     // Staged deterministically: park the camera nadir over the synthetic
     // cluster, let it settle, then trigger each path with the camera idle.
-    // Observe the first completed settle frame within 500 ms of forcing
-    // moveEnd and the first reveal frame within 500 ms of that settle frame
-    // (the budgets once sat inside the 1 s idle rotation refresh; they are
-    // kept as they were).
+    // Observe the first frame after forcing moveEnd and the first frame that
+    // draws the row again (`src/tooling/trackArrivalObservation.mjs`).
     // ============================================================
     console.log('\nChange 4 — arrival rotation: the drawn nose on the settle frame and the first reveal');
     const arrival = await evalPage(async () => {
@@ -3064,20 +3062,13 @@ async function main() {
           };
         };
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
-        // The settle/reveal budgets and the retry were written for the removed
-        // CPU passes (a frame late enough for the 1 s idle refresh to repair
-        // it was inconclusive); they are kept unchanged as a guard. A
-        // wall-clock timeout gets one more attempt; one that measured a wrong
-        // angle — a wrong first reveal, or a wrong settle frame before a
-        // reveal timeout — never does.
-        //
         // The reveal: the row is hidden right after the settle frame, frames
         // must actually draw it hidden, and only then is it shown again, so
         // the frame measured is the first one that draws it after a hidden
         // frame. It stays hidden for two drawn frames, past the frame that
-        // follows the settle frame, so the reveal is timed on an ordinary
+        // follows the settle frame, so the reveal is counted on an ordinary
         // frame rather than on whether that one was pipelined; each hidden
-        // frame restarts the reveal's clock, and the setup is `hiddenMs`.
+        // frame restarts the reveal's count, and the setup is `hiddenMs`.
         const REVEAL_HIDDEN_FRAMES = 2;
         let revealArmed = false;
         let hiddenFrames = 0;
@@ -3118,7 +3109,7 @@ async function main() {
         });
         // A reveal is only one after a frame drew the row hidden.
         if (!observed.error && hiddenFrames === 0) {
-          return { ...observed, error: 'no frame drew the row hidden before its reveal', hasModel };
+          return { ...observed, error: 'no frame drew the row hidden before its reveal', hiddenFrames, hasModel };
         }
         return { ...observed, hiddenFrames, hasModel };
       };
@@ -3129,8 +3120,8 @@ async function main() {
         military: await probe(dm.layers.get('military').module, 'bbb101', militaryCourse),
       };
     });
-    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts}`
-      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms hidden=${a.hiddenMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms attempts=${a.attempts} hasModel=${a.hasModel}`);
+    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts} hiddenFrames=${a.hiddenFrames ?? 0}`
+      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} revealFrame=${a.revealFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms hidden=${a.hiddenMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms attempts=${a.attempts} hasModel=${a.hasModel}`);
     record('arrival: the drawn nose is right on the settle frame and the first reveal, flights',
       arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));
     record('arrival: the drawn nose is right on the settle frame and the first reveal, military',

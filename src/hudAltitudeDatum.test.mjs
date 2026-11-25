@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
-import { ensureGeoidReady } from './data/geoid.js';
+import { ensureGeoidReady, geoidHeight } from './data/geoid.js';
 import { fakeCameraPort } from './testSupport/fakeCameraPort.mjs';
 import { toDegrees as deg } from './geo/index.js';
 
@@ -268,6 +268,59 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
     hud?.destroy();
     env.restore();
   }
+});
+
+test('the summary ALT tag reads a 999.6 m MSL height as 1.0KM, not 1000M', async () => {
+  await ensureGeoidReady();
+  const env = installHudEnvironment();
+  const geoidN = geoidHeight(SFO.latDeg, SFO.lonDeg);
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera.port, publish: env.publish });
+    hud._updateCameraData(); // cold: requests the grid
+    await ensureGeoidReady();
+    await Promise.resolve();
+    env.camera.setPose({ height: 999.6 + geoidN });
+    hud._updateCameraData();
+    assert.match(env.elements.get('hud-alt').textContent, /^ALT: 1000m/);
+    assert.match(hud._composeSummary(), /\| ALT 1\.0KM \|/);
+    env.camera.setPose({ height: 999.4 + geoidN });
+    hud._updateCameraData();
+    assert.match(hud._composeSummary(), /\| ALT 999M \|/);
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+function readoutsWithSun(sunEl) {
+  const env = installHudEnvironment();
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { camera: env.camera?.port, publish: env.publish });
+    hud._estimateSunElevation = () => sunEl;
+    hud._updateCameraData();
+    return {
+      alt: env.elements.get('hud-alt').textContent,
+      summary: env.elements.get('hud-summary').textContent,
+    };
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+}
+
+test('the summary reads a sun 0.3° below the horizon as SUN 0°, not -0°', () => {
+  // Math.round(-0.3) is -0, which Intl.NumberFormat prints as "-0".
+  assert.match(readoutsWithSun(-0.3).summary, /\| SUN 0° \|/);
+  assert.match(readoutsWithSun(-0.6).summary, /\| SUN -1° \|/);
+});
+
+test('the corner readout reads a sun 0.04° below the horizon as 0.0, not -0.0', () => {
+  // (-0.04).toFixed(1) is "-0.0".
+  assert.match(readoutsWithSun(-0.04).alt, /SUN: 0\.0° EL$/);
+  // Values that are not -0 keep toFixed's rounding.
+  assert.match(readoutsWithSun(-0.25).alt, /SUN: -0\.3° EL$/);
 });
 
 test('a summary asked for one view is dropped once the camera moves', async () => {

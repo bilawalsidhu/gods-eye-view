@@ -343,13 +343,40 @@ name is read once, when the layer is built, and held to the same rule as a
 manifest's `display.source`. The map credit still comes from each manifest's
 `display.credit`, so a source that is not nowCOAST sets that too.
 
-`application/services` accepts boundary, terrain, regional-context, weather and
-summary services; its weather service supplies cockpit local conditions, not the
-Weather layers. `application/requests` supplies the existing HTTP protocols
-with configurable endpoints and a scoped transport. Changing an endpoint works
-only for a compatible protocol; another protocol supplies a service adapter.
+`createApplicationScene({ requestServices })` supplies local conditions to the
+Cockpit and to the Context Inspector when no card is selected. Its
+`weather.getConditions(latitude, longitude, { signal })` resolves to an object
+with a normalized `weather` observation and optional `retrievedAt` and `status`
+fields. Return `null` for a missing reading and honor the request's abort signal.
+The Inspector requests `exactPoint: true` for the local clock. When an
+adapter reuses another point's weather, return that point in
+`coordinates: { latitude, longitude }` so the Inspector can keep UTC.
+An observation without coordinates is assumed to describe the requested point.
+The Inspector credits Open-Meteo when the observation carries
+`weather.source: 'open-meteo'`, as the bundled provider does.
+A selected card gets its weather from `requestServices.regional.getBrief`.
+The Weather layers use the separate frame and snapshot sources above.
+`createApplicationControls` accepts an Inspector override in
+`services.fetchSpotWeather` with the same contract.
+
+`application/services` accepts boundary, terrain, regional-context, weather,
+summary and layer count services. The standalone Inspector uses the page-scoped
+weather service. The `ui/composition` StyleManager uses `services.fetchSpotWeather`
+or `requestServices.weather.getConditions` when supplied. If a host supplies only
+`services.fetchRegionalBrief`, that adapter also serves Inspector weather.
+Otherwise the composed shell uses the page-scoped point-weather service.
+The bare `ui/shell` takes the host's `services.fetchSpotWeather` and falls
+back to a supplied `services.fetchRegionalBrief`.
+`application/requests` supplies the existing HTTP protocols with
+configurable endpoints and a scoped transport. Changing an endpoint works only
+for a compatible protocol; another protocol supplies a service adapter.
 Cancellation discards late response bodies, and replacing a source invalidates
 its pending results. Source disposal does not silently reinstate a default.
+Inspector worldwide counts use the page-scoped
+`configureApplicationServices({ layerCounts })` adapter. To use another host
+with the same count protocol, build that adapter with
+`createApplicationRequestServices({ endpoints: { layerCounts: url } }).layerCounts`
+and configure it before mounting the app.
 
 `ui/composition` supplies the default engines to the shell. Applications can
 supply a HUD implementation or request policy through control services. The
@@ -360,23 +387,25 @@ screen (`#loading-screen` with a `.loader-status` line) as static markup so it
 paints before any script runs. `createApplication()` renders the views before
 anything reads the page; `omitViews` names views the application leaves out,
 such as `provider-settings`, and their hosts are removed. Leaving out
-`layer-panels` also leaves out the scene sharing dialogs it draws, and leaving
-out `scene-chrome` the before/after imagery dividers (the imagery still splits,
-with no line or handle to move it), the status chips, the toast, the ORBIT
-indicator, the FPS readout, the Scene actions panel, the data-pack attribution
-cards, the wind inspection marker, the Space Missions replay vehicle, the
-full-globe celestial ring, the screen-space map annotations, the visible
-map target list and the Global Context compass;
-leaving out `command-dock` the voice control and its pointer reticle;
-leaving out `context` the Bhote Koshi reconstruction panel; and leaving out
-`intel-hud` the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
-implementation publishes to the `gev-hud` store. An unknown
-view name is an error. An application that offers its own language choice
-starts and switches the language with the `./i18n` entry (`startPageLocale`,
-`followPageLocale`, `switchLocale`; see [I18N.md](./I18N.md)) and passes
-`localePicker: false` to `createApplicationControls` instead of editing the
-markup. Node tests that import application modules register the component
-loader with `node --import=<core package>/build/register-vue`.
+`layer-panels` also leaves out the scene sharing dialogs it draws. If the host
+supplies its own Data Layers markup, Context opens it without applying the
+stock Suggestions filter. Omitting `scene-chrome` removes the before/after
+imagery dividers (the imagery still splits, with no line or handle to move
+it), the status chips, the toast, the ORBIT indicator, the FPS readout, the
+Scene actions panel, the data-pack attribution cards, the wind inspection
+marker, the Space Missions replay vehicle, the full-globe celestial ring,
+the screen-space map annotations, the visible map target list and the Global
+Context compass. Omitting `command-dock` removes the voice control and its
+pointer reticle. Omitting `context` removes the right-side Context rail and
+the Space Missions and Bhote Koshi reconstruction panels. Omitting `intel-hud`
+removes the Intel HUD overlay (`#intel-hud`), whose readouts the HUD
+implementation publishes to the `gev-hud` store. An unknown view name is an
+error. An application that offers its own language choice starts and switches
+the language with the `./i18n` entry (`startPageLocale`, `followPageLocale`,
+`switchLocale`; see [I18N.md](./I18N.md)) and passes `localePicker: false` to
+`createApplicationControls` instead of editing the markup. Node tests that
+import application modules register the component loader with
+`node --import=<core package>/build/register-vue`.
 
 ### Cockpit subjects
 

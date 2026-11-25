@@ -1130,6 +1130,9 @@ export function createTracking({
       // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
       // or model still loading); transparent once the tracked model is actually up.
       color: _trackedIconColor,
+      // The course a view-sheet image is drawn along (the same display
+      // course the screen rotation below is projected from).
+      course: () => parts.motion._trackedDisplayCourse(),
       // Screen-projected rotation, evaluated per frame on the camera's own
       // axes, so it stays exact through a tracked orbit. The tracked target
       // must never vanish into tile geometry — tracking a taxiing plane at

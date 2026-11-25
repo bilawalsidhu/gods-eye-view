@@ -6,6 +6,7 @@ import {
   getSelectedEntityContext,
   selectEntityContext,
 } from '../data/contextStore.js';
+import { describeEntity, findRecord } from '../data/entityContext.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 import { createLibraryDatasetLayer } from './layers.js';
 
@@ -151,7 +152,7 @@ test('a refresh keeps the old features drawn until the new ones are in, and the 
     [...set.items.values()].find(
       (item) => item.meta.record.properties.name === name,
     ).meta;
-  selectEntityContext(carrierOf(first, 'a'));
+  selectEntityContext(carrierOf(first, 'b'));
   // Drawn while the new build is made: watch the shapes sets made.
   const shapes = env.fake.draw.shapes;
   const drawnWhileBuilding = [];
@@ -160,7 +161,11 @@ test('a refresh keeps the old features drawn until the new ones are in, and the 
     return shapes(spec);
   };
   t.mock.timers.tick(60_000);
-  await env.layer.update(env.viewer);
+  const refreshing = env.layer.update(env.viewer);
+  // The fetch has settled and the replacement is awaiting its pin assets.
+  await Promise.resolve();
+  selectEntityContext(carrierOf(first, 'a'));
+  await refreshing;
   assert.ok(drawnWhileBuilding.length > 0);
   assert.ok(drawnWhileBuilding.every(Boolean), 'the old build was still drawn');
   assert.equal(first.disposed, true);
@@ -178,21 +183,54 @@ test('a refresh keeps the old features drawn until the new ones are in, and the 
   assert.deepEqual(labels, ['a', 'c']);
 });
 
-test('a selected feature without an id stays selected by its place and label', async (t) => {
+test('a refresh keeps the selected anonymous feature through a reorder and clears it on removal', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: START });
-  // Without ids, a feature's part id is its index: 'a' moves from 1 to 0.
-  const env = harness(t, [result('b', 'a'), result('a', 'c')]);
+  const site = (operator) => ({
+    ...point('Shared site'),
+    properties: { name: 'Shared site', operator },
+  });
+  const north = site('North');
+  const south = site('South');
+  const env = harness(t, [
+    { features: [north, south] },
+    { features: structuredClone([south, north]) },
+    { features: structuredClone([south]) },
+  ]);
   await env.layer.enable(env.viewer);
-  const [first] = env.builds();
-  const carrier = [...first.items.values()].find(
-    (item) => item.meta.record.properties.name === 'a',
-  ).meta;
-  selectEntityContext(carrier);
+  const layerId = env.layer.id;
+  const manager = { layers: new Map([[layerId, { module: env.layer }]]) };
+  const carrierOf = (operator) =>
+    [...env.builds()[0].items.values()].find(
+      (item) => item.meta.record.properties.operator === operator,
+    ).meta;
+  const northBefore = selectEntityContext(carrierOf('North'));
+  const card = describeEntity(manager, { layerId, id: northBefore.id });
+
   t.mock.timers.tick(60_000);
   await env.layer.update(env.viewer);
-  const selected = getSelectedEntityContext();
-  assert.equal(selected?.properties.name, 'a');
-  assert.notEqual(selected.entity, carrier);
+  const afterReorder = getSelectedEntityContext();
+  const northAfter = carrierOf('North');
+  assert.notEqual(northAfter, northBefore.entity);
+  assert.equal(findRecord(manager, card.identity)?.operator, 'North');
+
+  selectEntityContext(northAfter);
+  t.mock.timers.tick(60_000);
+  await env.layer.update(env.viewer);
+  const afterRemoval = getSelectedEntityContext();
+  assert.equal(findRecord(manager, card.identity), null);
+
+  assert.deepEqual(
+    [
+      afterReorder?.properties.operator,
+      afterRemoval?.properties.operator ?? null,
+    ],
+    ['North', null],
+  );
+  assert.equal(
+    afterReorder.entity,
+    northAfter,
+    'the current renderer carrier is selected',
+  );
 });
 
 test('a refresh whose rebuild fails keeps the drawn features', async (t) => {

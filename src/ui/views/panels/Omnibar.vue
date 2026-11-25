@@ -286,7 +286,7 @@ const strip = computed(() => {
     };
   }
   if (!asked && !selected.value) {
-    const groups = entityCard.inView({ perLayer: 2 });
+    const groups = entityCard.inView({ perLayer: 2, viewport: true });
     const chips = groups
       .flatMap((group) => group.items.map((item) => ({ ...item, icon: group.icon })))
       .sort((a, b) => a.distanceKm - b.distanceKm)
@@ -838,7 +838,7 @@ async function choose(item, { viaKey = false } = {}) {
   busy.value = true;
   error.value = '';
   try {
-    if (item.kind === 'view-ask') entityCard.askAboutView(entityCard.inView());
+    if (item.kind === 'view-ask') entityCard.askAboutView(entityCard.inView({ viewport: true }));
     else if (item.kind === 'sel-fly') entityCard.flyTo();
     else if (item.kind === 'sel-follow') entityCard.follow();
     else if (item.kind === 'sel-cockpit') entityCard.cockpit();

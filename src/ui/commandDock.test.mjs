@@ -7,6 +7,7 @@ import { createPinia } from 'pinia';
 import { createApp, h, nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { useDisplayStore } from './stores/display.js';
+import { useEntityCardStore } from './stores/entityCard.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { useVoiceStore } from './stores/voice.js';
@@ -345,6 +346,66 @@ function omnibarFixture(t, onSearch = () => {}) {
     option,
   };
 }
+
+test('omnibar uses loaded records when one viewport point snapshot throws', async (t) => {
+  const { $, pinia, input } = omnibarFixture(t);
+  const point = (id, name, lon) => ({ id, name, lat: 0, lon });
+  const rows = [
+    {
+      id: 'local-dams',
+      name: 'Dams',
+      enabled: true,
+      module: {
+        getNearbyContextPoints() {
+          throw new Error('point snapshot unavailable');
+        },
+        getAnalystRecords: () => [point('dam', 'Dam from loaded records', 0)],
+      },
+    },
+    {
+      id: 'local-firms',
+      name: 'FIRMS',
+      enabled: true,
+      module: {
+        getNearbyContextPoints: () => ({
+          points: [
+            point('fire-in', 'Fire from live snapshot', 0.4),
+            point('fire-out', 'Fire beyond viewport', 5),
+          ],
+          recordForPoint: (record) => record,
+        }),
+        getAnalystRecords: () => [
+          point('ordinary', 'Capped fire records', 0.5),
+        ],
+      },
+    },
+  ];
+  const prompts = [];
+  const cards = useEntityCardStore(pinia);
+  const manager = {
+    getAll: () => rows,
+    layers: new Map(rows.map((row) => [row.id, row])),
+    isEnabled: (id) => rows.some((row) => row.id === id),
+  };
+  cards.connect({
+    dataManager: () => manager,
+    askText: (prompt) => prompts.push(prompt),
+  });
+  cards.setView({
+    center: { lat: 0, lon: 0 },
+    heightM: 20_000_000,
+    rect: { west: -1, east: 1, south: -1, north: 1 },
+  });
+  input.focus();
+  await nextTick();
+  const chips = [...document.querySelectorAll('.omnibar-strip__chip')];
+  assert.equal(chips.length, 2, 'the fallback dam and the in-viewport fire');
+  assert.match(chips[0].textContent, /Dam from loaded records/);
+  assert.match(chips[1].textContent, /Fire from live snapshot/);
+  $('.omnibar-item--view-ask').click();
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /showing 1 Dams, 1 FIRMS/);
+});
 
 test('omnibar preserves ambiguous and disambiguated place queries, including IME input', async (t) => {
   const searched = [];

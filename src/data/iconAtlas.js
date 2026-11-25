@@ -42,8 +42,8 @@ export const MAX_ICON_SLOTS = 176;
 export const MIN_ICON_SLOTS = 64;
 /**
  * Vertex uniform vectors the icon shader keeps for everything else: its own
- * and the renderer's (about 34), with room for drivers that keep constants
- * in uniforms.
+ * and the renderer's (about 45, the view sheet's layout among them), with
+ * room for drivers that keep constants in uniforms.
  */
 const OTHER_VERTEX_UNIFORMS = 80;
 

@@ -4,6 +4,7 @@ import { shallowRef } from 'vue';
 /**
  * @typedef {object} PanelChromeHandlers
  * @property {(panelId: string) => void} toggle A collapse button's click.
+ * @property {(panelId: string) => void} reveal Bring a panel's phone sheet forward.
  */
 
 /**

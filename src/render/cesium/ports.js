@@ -18,7 +18,7 @@ import { createControlledCamera } from './controlledCamera.js';
 import { listenerList, toCartesian, uncaught } from './common.js';
 import { createCesiumCredits } from './credits.js';
 import { createCesiumDraw } from './draw.js';
-import { GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { gpuIconCapabilities } from './gpuIcons.js';
 import { createCesiumEffects } from './effects.js';
 import { renderNow, willDraw } from './frame.js';
 import { createCesiumGlobe } from './globe.js';
@@ -102,7 +102,7 @@ export function cesiumCapabilities(scene, only) {
     ...(scene?.screenSpaceCameraController && scene?.preRender
       ? ['keepEarthFramed']
       : []),
-    ...GPU_ICON_CAPABILITIES,
+    ...gpuIconCapabilities(scene),
     // Icon sets cluster on screen, on billboards and the GPU (`draw.js`).
     'cluster',
     'styles',
