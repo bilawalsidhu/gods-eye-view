@@ -4,8 +4,12 @@
 // src/layers/airQuality/field.js describes them), the layer draws that field
 // and puts its forecast on the timeline. Unset (the default), the manifest
 // route answers "not configured" and the layer shows stations only. Nothing is
-// downloaded: only files already in the folder are served.
-import { readFile, stat } from 'node:fs/promises';
+// downloaded: only files already in the folder are served. Bake each new run
+// into a separate folder and swap it in. Grids for another run receive 409.
+import { createHash } from 'node:crypto';
+import { readFieldManifest } from '../../src/layers/airQuality/field.js';
+import { constants } from 'node:fs';
+import { open, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 const ROUTE = '/api/air-quality/field';
@@ -23,6 +27,55 @@ const UNAVAILABLE = Object.freeze({
   code: 'unavailable',
   reason: 'Model field unavailable',
 });
+const refuse = (code) => Object.assign(new Error(code), { code });
+/** One regular file inside `root`, read through one handle, at most `cap` bytes. */
+async function readContained(root, file, cap) {
+  const [base, real] = await Promise.all([realpath(root), realpath(file)]);
+  if (!real.startsWith(base.endsWith(path.sep) ? base : base + path.sep))
+    throw refuse('outside_folder');
+  // Non-blocking, so a FIFO cannot hold the request open.
+  const handle = await open(
+    real,
+    constants.O_RDONLY | (constants.O_NONBLOCK ?? 0),
+  );
+  try {
+    const info = await handle.stat();
+    if (!info.isFile()) throw refuse('not_a_file');
+    if (info.size > cap) throw refuse('too_large');
+    const bytes = Buffer.alloc(info.size + 1);
+    let length = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(
+        bytes,
+        length,
+        bytes.length - length,
+        length,
+      );
+      if (!bytesRead) break;
+      length += bytesRead;
+      if (length === bytes.length) break;
+    }
+    // Grew while read: being rewritten.
+    if (length > info.size) throw refuse('too_large');
+    return bytes.subarray(0, length);
+  } finally {
+    await handle.close();
+  }
+}
+/** The folder's manifest, validated. */
+async function readManifest(root) {
+  const raw = (
+    await readContained(
+      root,
+      path.join(root, 'manifest.json'),
+      MAX_MANIFEST_BYTES,
+    )
+  ).toString('utf8');
+  const { runMs, ...manifest } = readFieldManifest(
+    JSON.parse(raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw),
+  );
+  return manifest;
+}
 
 /**
  * The local field routes: `GET manifest` (the folder's manifest.json, or an
@@ -59,16 +112,24 @@ export function airQualityFieldProxy({
     const root = path.resolve(configured);
     if (!grid) {
       try {
-        const file = path.join(root, 'manifest.json');
-        if ((await stat(file)).size > MAX_MANIFEST_BYTES)
-          throw new Error('manifest too large');
-        const manifest = JSON.parse(await readFile(file, 'utf8'));
-        return send(200, manifest);
+        return send(200, await readManifest(root));
       } catch (error) {
         if (!warned) {
           warned = true;
+          const position =
+            error instanceof SyntaxError
+              ? /position (\d+)/.exec(error.message)?.[1]
+              : undefined;
+          const detail =
+            error instanceof SyntaxError
+              ? position
+                ? `invalid JSON at position ${position}`
+                : 'invalid JSON'
+              : typeof error?.code === 'string'
+                ? error.code
+                : 'invalid manifest';
           console.warn(
-            `[air-quality] AIR_QUALITY_FIELD_DIR has no readable manifest.json: ${error?.message ?? error}`,
+            `[air-quality] AIR_QUALITY_FIELD_DIR has no readable manifest.json (${detail})`,
           );
         }
         return send(200, UNAVAILABLE);
@@ -77,32 +138,41 @@ export function airQualityFieldProxy({
     // Only the matched names reach the path: nothing outside the folder.
     const [, region, step, id] = grid;
     const file = path.join(root, region, step, `${id}.u16`);
-    let info;
+    const run = new URLSearchParams((req.url || '').split('?')[1]).get('run');
+    let manifest;
     try {
-      info = await stat(file);
+      manifest = await readManifest(root);
+    } catch {
+      return run === null
+        ? send(404, { error: 'not_found' })
+        : send(409, { error: 'run_changed' });
+    }
+    if (run !== null && manifest.run !== run)
+      return send(409, { error: 'run_changed' });
+    if (!manifest[region]?.steps.includes(Number(step)))
+      return send(404, { error: 'not_found' });
+    let bytes;
+    try {
+      bytes = await readContained(root, file, MAX_GRID_BYTES);
     } catch {
       return send(404, { error: 'not_found' });
     }
-    if (!info.isFile() || info.size > MAX_GRID_BYTES)
-      return send(404, { error: 'not_found' });
-    const modified = new Date(Math.floor(info.mtimeMs / 1000) * 1000);
-    const since = Date.parse(req.headers?.['if-modified-since'] ?? '');
+    const etag =
+      '"' + createHash('sha1').update(bytes).digest('base64url') + '"';
     const headers = {
       'Content-Type': 'application/octet-stream',
       // Revalidated each time: the folder may be baked again in place.
       'Cache-Control': 'no-cache',
-      'Last-Modified': modified.toUTCString(),
+      ETag: etag,
     };
-    if (Number.isFinite(since) && modified.getTime() <= since) {
+    if (
+      (req.headers?.['if-none-match'] ?? '')
+        .split(',')
+        .some((v) => v.trim() === '*' || v.trim().replace(/^W\//, '') === etag)
+    ) {
       if (res.destroyed) return;
       res.writeHead(304, headers);
       return res.end();
-    }
-    let bytes;
-    try {
-      bytes = await readFile(file);
-    } catch {
-      return send(404, { error: 'not_found' });
     }
     if (res.destroyed) return;
     res.writeHead(200, { ...headers, 'Content-Length': bytes.byteLength });

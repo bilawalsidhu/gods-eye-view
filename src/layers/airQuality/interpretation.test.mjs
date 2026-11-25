@@ -18,6 +18,15 @@ const base = {
   averagingMinutes: 60,
 };
 test('all published pollutant boundaries classify inclusively without rounding down', () => {
+  // The published EEA bands (and CO's WHO-based steps), pinned here.
+  assert.deepEqual(EEA_HOURLY_LIMITS, {
+    'PM2.5': [5, 15, 50, 90, 140],
+    PM10: [15, 45, 120, 195, 270],
+    NO2: [10, 25, 60, 100, 150],
+    O3: [60, 100, 120, 160, 180],
+    SO2: [20, 40, 125, 190, 275],
+    CO: [4, 7, 10, 35, 100],
+  });
   for (const [parameter, limits] of Object.entries(EEA_HOURLY_LIMITS)) {
     // Each pollutant in the layer's unit: µg/m³, CO mg/m³.
     const units = parameter === 'CO' ? 'mg/m³' : 'µg/m³';
@@ -262,8 +271,7 @@ test('an implausible hourly value is unrated in a pollutant view, as in the AQI 
   assert.equal(stuck.color, '#8cb4ce');
   // At its ceiling a value is still rated.
   assert.equal(hourly('PM2.5', 3000).assessment.label, 'Extremely poor');
-  // Carbon monoxide's top band begins at the AQI view's ceiling (100 mg/m³):
-  // here its ceiling is 200 mg/m³, in the layer's units (175 ppm is 200.5).
+  // Carbon monoxide's ceiling is 200 mg/m³ in every view (175 ppm is 200.5).
   assert.equal(hourly('CO', 150, 'mg/m³').assessment.label, 'Extremely poor');
   assert.match(hourly('CO', 175, 'ppm').assessment.reason, /Implausibly high/);
   assert.equal(hourly('NO2', 1500).assessment.label, 'Extremely poor');

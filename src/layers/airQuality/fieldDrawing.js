@@ -1,6 +1,11 @@
 // The model field drawn through the renderer's ports: globe imagery on the
 // globe, the draw port's raster shell over photorealistic 3D tiles.
-import { findDraw, findFrame, findGlobe } from '../../render/rendererOf.js';
+import {
+  rendererOf,
+  findDraw,
+  findFrame,
+  findGlobe,
+} from '../../render/rendererOf.js';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import {
   followShellLift,
@@ -15,13 +20,15 @@ const SLOTS = Object.freeze({
 });
 /** New globe images replace the old ones once drawn, or after this long. */
 const SWAP_AFTER_MS = 1500;
+const CACHE_SIZE = 8;
 
 let shells = 0;
 let paints = 0;
 
-/** One painted image (`field.js` `paintField`) on a canvas, or null without a page. */
-function canvasFor({ width, height, rgba }) {
-  const canvas = globalThis.document?.createElement?.('canvas');
+const pageCanvas = () => globalThis.document?.createElement?.('canvas');
+
+/** One painted image on a canvas, or null if the source canvas lacks a 2D context. */
+function canvasFor({ width, height, rgba }, limit, canvas = pageCanvas()) {
   const context = canvas?.getContext?.('2d');
   if (!context) return null;
   canvas.width = width;
@@ -29,6 +36,14 @@ function canvasFor({ width, height, rgba }) {
   const pixels = context.createImageData(width, height);
   pixels.data.set(rgba);
   context.putImageData(pixels, 0, 0);
+  if (limit > 0 && Math.max(width, height) > limit) {
+    const ratio = limit / Math.max(width, height);
+    const small = globalThis.document.createElement('canvas');
+    small.width = Math.max(1, Math.floor(width * ratio));
+    small.height = Math.max(1, Math.floor(height * ratio));
+    small.getContext('2d')?.drawImage(canvas, 0, 0, small.width, small.height);
+    return small;
+  }
   return canvas;
 }
 
@@ -43,17 +58,18 @@ function canvasFor({ width, height, rgba }) {
  * whole), and on the globe the new images are added clear, load under the
  * old ones, and take their place in one frame once the globe's imagery has
  * settled (or after `SWAP_AFTER_MS`). `setStrength` scales every shown
- * image's opacity (the fade by camera height); 0 hides them.
+ * image's opacity (the fade by camera height); 0 hides them. The last eight
+ * sets of canvases are kept by key.
  * @param {{getViewer: () => object | null, getHost: () => {collection: object | null, kind: string}}} options
  */
 export function createFieldDrawing({ getViewer, getHost }) {
   /** What is drawn: `{ name, imagery }` on the globe, `{ name, field, offLift }` as shells. */
   let entries = [];
   let drawnOn = null;
+  let pending = null;
   let shownKey = null;
   let strength = FIELD_FADE.maxAlpha;
-  /** The last painted images, as canvases (their pixels let go), by key. */
-  let painted = null;
+  const cache = new Map();
   /** New globe images, clear while they load under the ones shown. */
   let incoming = [];
   let swapTimer = null;
@@ -105,6 +121,7 @@ export function createFieldDrawing({ getViewer, getHost }) {
     frame.requestRender?.('air-quality');
   };
   const remove = () => {
+    pending = null;
     stopSwap();
     for (const entry of incoming.splice(0)) dropEntry(entry);
     for (const entry of entries.splice(0)) dropEntry(entry);
@@ -115,7 +132,7 @@ export function createFieldDrawing({ getViewer, getHost }) {
   const addImagery = (host, { name, canvas, rectangle }, staged = false) => {
     const imagery = host.collection.add({
       kind: 'single-image',
-      url: canvas.toDataURL('image/png'),
+      image: canvas,
       rectangle,
       zOrder: WEATHER_IMAGERY_Z[SLOTS[name]],
     });
@@ -143,8 +160,39 @@ export function createFieldDrawing({ getViewer, getHost }) {
     applyStrength(entry);
     return entry;
   };
-  return {
+  const paintedFor = (key, paint, viewer) => {
+    const cached = cache.get(key);
+    if (cached) {
+      cache.delete(key);
+      cache.set(key, cached);
+      return cached;
+    }
+    const first = pageCanvas();
+    if (!first?.getContext?.('2d')) return null;
+    const limit = rendererOf(viewer)?.quality?.device?.()?.maxTextureSize ?? 0;
+    const version = (paints += 1);
+    const images = paint().map(({ name, rectangle, ...pixels }, i) => ({
+      name,
+      rectangle,
+      canvas: canvasFor(pixels, limit, i === 0 ? first : undefined),
+      key: `air-quality-field:${name}:${version}`,
+    }));
+    if (images.some(({ canvas }) => !canvas)) return null;
+    cache.set(key, images);
+    if (cache.size > CACHE_SIZE) cache.delete(cache.keys().next().value);
+    return images;
+  };
+  const forget = () => cache.clear();
+  const drawing = {
     remove,
+    forget,
+    visible: () => strength > 0,
+    prepare(key, paint) {
+      const viewer = getViewer();
+      if (!strength || !viewer || !globalThis.document?.createElement)
+        return false;
+      return paintedFor(key, paint, viewer) !== null;
+    },
     /**
      * Draw the images `paint()` returns, known by `key`: the same key on the
      * same host keeps what is drawn, without painting again.
@@ -165,27 +213,23 @@ export function createFieldDrawing({ getViewer, getHost }) {
         remove();
         return false;
       }
-      if (painted?.key !== key) {
-        const version = (paints += 1);
-        painted = {
-          key,
-          // Only the canvases are kept: the pixels go once painted.
-          images: paint().map(({ name, rectangle, ...pixels }) => ({
-            name,
-            rectangle,
-            canvas: canvasFor(pixels),
-            key: `air-quality-field:${name}:${version}`,
-          })),
-        };
+      if (strength === 0) {
+        // Invisible: nothing is painted or encoded. What is drawn (hidden)
+        // goes, and this key is painted once the field shows again.
+        remove();
+        pending = { key, paint };
+        return true;
       }
-      if (painted.images.some(({ canvas }) => !canvas)) {
+      pending = null;
+      const images = paintedFor(key, paint, viewer);
+      if (!images) {
         remove();
         return false;
       }
       if (host.kind === 'tileset') {
         if (drawnOn !== 'tileset') remove();
         // A shell already drawn takes its new image in place.
-        const next = painted.images.map((image) => {
+        const next = images.map((image) => {
           const entry = entries.find(({ name }) => name === image.name);
           if (!entry) return addShell(viewer, draw, image);
           entry.field.update({
@@ -201,11 +245,11 @@ export function createFieldDrawing({ getViewer, getHost }) {
         // A newer step than one still loading replaces that one.
         stopSwap();
         for (const entry of incoming.splice(0)) dropEntry(entry);
-        incoming = painted.images.map((image) => addImagery(host, image, true));
+        incoming = images.map((image) => addImagery(host, image, true));
         swapLater(viewer);
       } else {
         remove();
-        entries = painted.images.map((image) => addImagery(host, image));
+        entries = images.map((image) => addImagery(host, image));
       }
       drawnOn = host.kind;
       shownKey = hostKey;
@@ -216,11 +260,18 @@ export function createFieldDrawing({ getViewer, getHost }) {
       if (value === strength) return;
       strength = value;
       for (const entry of entries) applyStrength(entry);
+      if (value > 0 && pending) {
+        const { key, paint } = pending;
+        pending = null;
+        if (drawing.show(key, paint))
+          findFrame(getViewer())?.requestRender?.('air-quality');
+      }
     },
     /** Let go of what is drawn and of the painted images. */
     dispose() {
       remove();
-      painted = null;
+      forget();
     },
   };
+  return drawing;
 }

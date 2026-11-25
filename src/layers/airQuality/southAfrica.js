@@ -1,8 +1,8 @@
 /**
  * SAAQIS observations. Pure and portable: no network, scene, or UI imports.
  * A concentration is not an AQI; retain source units and never invent a band.
- * SAAQIS's own index is not read: the layer rates the concentrations itself.
  */
+import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 export const SA_POLLUTANTS = Object.freeze([
   'PM2.5',
   'PM10',
@@ -10,12 +10,7 @@ export const SA_POLLUTANTS = Object.freeze([
   'SO2',
   'O3',
   'CO',
-  'CO2',
-  'NO',
-  'NOX',
-  'H2S',
 ]);
-export const SA_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const UNITS = new Set([
   'µg/m³',
   'ug/m3',
@@ -40,12 +35,16 @@ export function normalizeSaStations(regions) {
   if (!Array.isArray(regions) || regions.length > 100)
     throw new Error('Malformed SAAQIS regions');
   const stations = new Map();
+  const conflicting = new Set();
+  let count = 0;
   for (const region of regions) {
     if (!Array.isArray(region?.stations))
       throw new Error('Malformed SAAQIS stations');
+    count += region.stations.length;
+  }
+  if (count > 2000) throw new Error('SAAQIS catalog exceeds limit');
+  for (const region of regions) {
     for (const station of region.stations) {
-      if (stations.size >= 2000)
-        throw new Error('SAAQIS catalog exceeds limit');
       const lat = numeric(station?.location?.latitude);
       const lon = numeric(station?.location?.longitude);
       if (
@@ -57,8 +56,22 @@ export function normalizeSaStations(regions) {
         !text(station.name)
       )
         continue;
-      stations.set(String(station.stationId), {
-        stationId: String(station.stationId),
+      const id = String(station.stationId);
+      if (conflicting.has(id)) continue;
+      const known = stations.get(id);
+      if (known) {
+        if (
+          known.name !== text(station.name) ||
+          known.lat !== lat ||
+          known.lon !== lon
+        ) {
+          stations.delete(id);
+          conflicting.add(id);
+        }
+        continue;
+      }
+      stations.set(id, {
+        stationId: id,
         name: text(station.name),
         province: text(region.name),
         owner: text(station.owner),
@@ -96,7 +109,7 @@ export function saObservationTime(value) {
   return Number.isFinite(time) ? time : null;
 }
 
-/** Latest *valid channel* timestamps, rather than the enclosing station time. */
+/** Latest valid readings timed by the channel, else by the enclosing station. */
 export function normalizeSaMeasurements(entries, stations) {
   if (!Array.isArray(entries) || entries.length > 2000)
     throw new Error('Malformed SAAQIS observations');
@@ -145,8 +158,7 @@ export function normalizeSaMeasurements(entries, stations) {
         averagingMinutes: 60,
         kind: 'observation',
         band: null,
-        risk: null,
-        color: '#8cb4ce',
+        color: AIR_QUALITY_UNRATED_COLOR,
         label: `${value.toFixed(2)} ${units}`,
         zone: station.province,
         note: 'Provisional SAAQIS hourly concentration; not an air quality index or an emissions estimate.',
@@ -154,23 +166,4 @@ export function normalizeSaMeasurements(entries, stations) {
     }
   }
   return [...readings.values()];
-}
-
-/** Recheck age on every read, including cached responses. No city allowlist. */
-export function selectSaReadings(
-  snapshot,
-  parameter = 'PM2.5',
-  now = Date.now(),
-) {
-  if (!SA_POLLUTANTS.includes(parameter) || !Array.isArray(snapshot?.readings))
-    throw new Error('Malformed South African air quality snapshot');
-  return snapshot.readings
-    .filter(
-      (row) =>
-        row.parameter === parameter &&
-        Number.isFinite(row.observedMs) &&
-        row.observedMs <= now + 5 * 60 * 1000 &&
-        now - row.observedMs <= SA_MAX_AGE_MS,
-    )
-    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }

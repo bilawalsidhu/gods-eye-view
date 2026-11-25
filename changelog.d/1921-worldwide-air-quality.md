@@ -19,10 +19,20 @@
   to read it. A stand-alone install without keys therefore shows no stations:
   the layer still turns on, its Layers row says KEY REQUIRED and names the keys
   it needs instead of reading unavailable, and its card says which keys to add,
-  OpenAQ's first. For hosts: installs with keys and hosts with their own
-  providers are unaffected; a host using the reference source needs the
-  `/api/air-quality` routes or its own providers, or should withhold the
-  layer, since Canada's readings no longer come from the browser directly.
+  OpenAQ's first. Installs with keys are unaffected. A host's own provider
+  returns pollutant concentrations, one row per station and pollutant. For example:
+
+  ```js
+  const row = {
+    id, provider, stationId, name, lat, lon, observedMs,
+    parameter: 'PM2.5', units: 'µg/m³', value: 9,
+    kind: 'observation', averagingMinutes: 60,
+  };
+  ```
+
+  Rows of the previous index contract (`scale`, `value` and `band` without
+  `parameter`) draw no stations. A host using the reference source needs the
+  `/api/air-quality` routes or its own providers, or should withhold the layer.
   `createEcccAirQualitySource` is removed from `./layers/air-quality` and
   `./layers/air-quality/source`, as are the AQHI helpers `./layers/air-quality`
   exported (`AIR_QUALITY_BANDS`, `AIR_QUALITY_PROVIDERS`, `airQualityBandById`,
@@ -31,5 +41,3 @@
   source without provider definitions is read as one station network, and an
   empty list of them is refused. A layer's `requiresKeyId` may now be a string
   or an array of key ids, all of which the Layers row names.
-- Reject calendar-impossible SAAQIS observation timestamps instead of
-  silently rolling them into another day (khanmjk, #1291).

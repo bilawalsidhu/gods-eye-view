@@ -1,13 +1,12 @@
+import { parseRetryAfter } from './regional/nominatimGate.js';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 
-/** OpenAQ documents reset as seconds; also accept an absolute epoch. */
+/** OpenAQ supplies the seconds until its request window resets. */
 function resetTime(raw, now) {
-  if (!raw?.trim()) return null;
-  const n = Number(raw);
-  if (!Number.isFinite(n) || n < 0) return null;
-  const at = n > 1e12 ? n : n > 1e9 ? n * 1000 : now + n * 1000;
-  return Math.min(now + 24 * HOUR, Math.max(now, at));
+  const value = raw?.trim();
+  if (!value || !/^\d+$/.test(value)) return null;
+  return Math.min(now + 24 * HOUR, now + Number(value) * 1000);
 }
 
 /** One conservative budget for all views, including provider cooldown headers. */
@@ -67,18 +66,15 @@ export function createOpenAqBudget(now = Date.now) {
         resetAt = reset;
       }
       if (response.status === 429) {
-        const raw = response.headers.get('retry-after');
-        const retry =
-          raw && /^\d+(\.\d+)?$/.test(raw.trim())
-            ? time + Number(raw) * 1000
-            : Date.parse(raw);
+        const delay = parseRetryAfter(
+          response.headers.get('retry-after'),
+          time,
+        );
         blockedUntil = Math.max(
           blockedUntil,
           Math.min(
             time + 24 * HOUR,
-            Number.isFinite(retry) && retry > time
-              ? retry
-              : reset || time + MINUTE,
+            delay ? time + delay : reset || time + MINUTE,
           ),
         );
       }

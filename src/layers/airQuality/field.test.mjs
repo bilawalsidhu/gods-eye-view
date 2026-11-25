@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   FIELD_IDS,
+  FIELD_MISSING,
+  fieldIdOf,
+  sampleRegion,
   europeWeight,
   FIELD_FADE,
-  fieldColor,
+  fieldOpacity,
+  scalePosition,
   fieldStrength,
   fieldCoverage,
   fieldStepAt,
@@ -13,6 +17,7 @@ import {
   sampleField,
 } from './field.js';
 import { EEA_HOURLY_BANDS, EEA_HOURLY_LIMITS } from './interpretation.js';
+import { US_AQI_BANDS, US_AQI_LIMITS } from './usAqi.js';
 import { createAirQualityLayer } from './index.js';
 import { createWorldClock } from '../../time/worldClock.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
@@ -186,11 +191,129 @@ test('a missing cell gives null', () => {
 const pixel = (image, x, y) => [
   ...image.rgba.slice((y * image.width + x) * 4, (y * image.width + x) * 4 + 4),
 ];
+/** The colour the field paints `value` in: `[r, g, b, alpha 0–1]`, one grid point painted alone. */
+const paintedColor = (value) => {
+  const region = { width: 2, height: 2, lon0: 0, lat0: 1, step: 1 };
+  const manifest = readFieldManifest({
+    run: '2026-11-20T00:00:00Z',
+    scale: { ...SCALE, pm25: 1000 },
+    global: { steps: [0], ...region },
+  });
+  const values = new Uint16Array(4).fill(Math.round(value * 1000));
+  const [image] = paintField(
+    manifest,
+    { global: Object.fromEntries(FIELD_IDS.map((id) => [id, values])) },
+    'pm25',
+    PM25,
+  );
+  return [
+    ...pixel(image, 0, 0).slice(0, 3),
+    fieldOpacity(scalePosition(PM25.limits, value)),
+  ];
+};
 const rgbOf = (hex) =>
   hex
     .slice(1)
     .match(/\w\w/g)
     .map((pair) => parseInt(pair, 16));
+
+test('the colour table and separable sampling paint within 1 of the band formula', () => {
+  const global = {
+    width: 90,
+    height: 46,
+    lon0: 0,
+    lat0: 90,
+    step: 4,
+    wrap: true,
+  };
+  const europe = {
+    width: 30,
+    height: 20,
+    lon0: 0,
+    lat0: 20,
+    step: 1,
+    rectangle: { west: -0.5, south: 0.5, east: 29.5, north: 20.5 },
+    blendDeg: 3,
+  };
+  const manifest = manifestOf(global, europe, { scale: { ...SCALE, co: 100 } });
+  const scales = [
+    ['aqi', US_AQI_BANDS, US_AQI_LIMITS],
+    ...Object.entries(EEA_HOURLY_LIMITS).map(([view, limits]) => [
+      view,
+      EEA_HOURLY_BANDS,
+      limits,
+    ]),
+  ];
+  let seed = 12345;
+  for (const [view, bands, limits] of scales) {
+    const id = fieldIdOf(view);
+    const divisor = manifest.scale[id];
+    const top = 2 * limits.at(-1) - limits.at(-2);
+    const grid = (region) => ({
+      [id]: Uint16Array.from(
+        { length: region.width * region.height },
+        (_, i) => {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          if (i % 31 === 0) return FIELD_MISSING;
+          if (i % 7 === 0) return 0;
+          return Math.min(
+            FIELD_MISSING - 1,
+            Math.round((seed / 2 ** 32) * 1.3 * top * divisor),
+          );
+        },
+      ),
+    });
+    const grids = { global: grid(global), europe: grid(europe) };
+    const rgb = bands.map(({ color }) => rgbOf(color));
+    for (const image of paintField(manifest, grids, id, { bands, limits })) {
+      const inset = image.name === 'europe';
+      for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < image.width; x++) {
+          const lon = inset
+            ? europe.lon0 + x
+            : -180 + ((x + 0.5) / image.width) * 360;
+          const lat = inset
+            ? europe.lat0 - y
+            : 90 - ((y + 0.5) / image.height) * 180;
+          const w = europeWeight(manifest.europe, lon, lat);
+          const coarse = sampleRegion(
+            manifest.global,
+            grids.global[id],
+            divisor,
+            lon,
+            lat,
+          );
+          const value =
+            w > 0 || coarse === null
+              ? sampleField(manifest, grids, id, lon, lat)
+              : coarse;
+          const p = scalePosition(limits, value);
+          const alpha = fieldOpacity(p);
+          const share = inset
+            ? w
+            : (1 - w) / (1 - FIELD_FADE.maxAlpha * w * alpha);
+          const actual = pixel(image, x, y);
+          if (value === null || share === 0) {
+            assert.deepEqual(actual, [0, 0, 0, 0]);
+            continue;
+          }
+          const q = Math.min(rgb.length - 1, Math.max(0, p - 0.5));
+          const i = Math.min(rgb.length - 2, Math.floor(q));
+          const expected = rgb[i].map((c, k) =>
+            Math.round(c + (rgb[i + 1][k] - c) * (q - i)),
+          );
+          expected.push(Math.round(255 * alpha * share));
+          for (const [k, channel] of expected.entries())
+            assert.ok(
+              Math.abs(actual[k] - channel) <= 1,
+              `${view} ${image.name} (${x}, ${y}) channel ${k}`,
+            );
+          if (w > 0 && w < 1) assert.equal(actual[3], expected[3]);
+        }
+      }
+    }
+  }
+});
 
 test('the field paints each band at its middle, opacity min(0.82, 0.05 + 0.26·p)', () => {
   // PM2.5 10 µg/m³ is the middle of Fair (5–15): p = 1.5.
@@ -238,12 +361,12 @@ test('the field paints each band at its middle, opacity min(0.82, 0.05 + 0.26·p
   assert.deepEqual(pixel(image, 2, 1).slice(0, 3), [
     ...rgbOf(EEA_HOURLY_BANDS[2].color),
   ]);
-  const halfway = fieldColor(PM25.bands, PM25.limits, 15);
+  const halfway = paintedColor(15);
   const [fair, moderate] = [1, 2].map((i) => rgbOf(EEA_HOURLY_BANDS[i].color));
-  assert.deepEqual(
-    halfway.slice(0, 3),
-    fair.map((c, i) => Math.round(c + (moderate[i] - c) * 0.5)),
-  );
+  for (const [i, c] of fair.entries())
+    assert.ok(
+      Math.abs(halfway[i] - Math.round(c + (moderate[i] - c) * 0.5)) <= 1,
+    );
   assert.equal(halfway[3], 0.05 + 0.26 * 2);
 
   // A wrapping global field is resampled onto the world from 180° W.
@@ -299,7 +422,7 @@ test('where the Europe inset is drawn the map shows the value the tiles read, wi
         const lon = europe.lon0 + x * europe.step;
         const lat = europe.lat0 - y * europe.step;
         const value = sampleField(manifest, grids, 'pm25', lon, lat);
-        const [r, g, b, a] = fieldColor(PM25.bands, PM25.limits, value);
+        const [r, g, b, a] = paintedColor(value);
         const over = pixel(fine, x, y);
         const under = pixel(wide, lon - global.lon0, global.lat0 - lat);
         const top = (strength * over[3]) / 255;
@@ -498,6 +621,7 @@ function fakeDocument(t) {
   let made = 0;
   globalThis.document = {
     createElement() {
+      made++;
       const canvas = {
         width: 0,
         height: 0,
@@ -509,7 +633,7 @@ function fakeDocument(t) {
             canvas.painted = image.data;
           },
         }),
-        toDataURL: () => `data:image/png;base64,${(made += 1)}`,
+        toDataURL: () => assert.fail('encoded a field canvas'),
       };
       return canvas;
     },
@@ -517,6 +641,7 @@ function fakeDocument(t) {
   t.after(() => {
     globalThis.document = previous;
   });
+  return () => made;
 }
 
 /**
@@ -761,7 +886,7 @@ test('away from now stations are hidden', async () => {
   assert.equal(points().show, true);
   assert.equal(
     layer.getRowControls().sublists[0].subtitle,
-    'measured at the station',
+    'calculated from the station',
   );
 });
 
@@ -802,7 +927,7 @@ test('with a field the tiles read the model at the view centre, and the time lin
   await settle();
   layer.setParams({ station: 'saaqis:cape-town:aqi' });
   controls = layer.getRowControls();
-  assert.equal(controls.sublists[0].subtitle, 'measured at the station');
+  assert.equal(controls.sublists[0].subtitle, 'calculated from the station');
   assert.equal(tileOf(controls, 'pollutants', 'PM2.5').value, '12');
 });
 
@@ -995,6 +1120,125 @@ test('the field fades with camera height: full from 600 km, nothing at 60 km', a
   assert.equal(image.alpha, 0.85);
 });
 
+test('scrubbing back or switching back paints nothing; 8 images are kept', async (t) => {
+  const count = fakeDocument(t);
+  const host = hostField({ europe: true });
+  const { layer, clock } = fieldHarness({ fieldSource: host.source });
+  t.after(() => layer.destroy());
+  await layer.update();
+  await settle();
+  const seek = async (step) => {
+    clock.seek(host.run + step * HOUR);
+    await settle();
+  };
+  const show = async (view) => {
+    layer.setParams({ view });
+    await settle();
+  };
+  assert.equal(count(), 2);
+  await seek(24);
+  await seek(6);
+  assert.equal(count(), 4);
+  await show('PM10');
+  await show('aqi');
+  assert.equal(count(), 6);
+  for (const view of ['PM2.5', 'O3', 'NO2', 'SO2', 'CO']) await show(view);
+  assert.equal(count(), 16);
+  // Refresh +24 h AQI. Adding a ninth key then evicts +6 h PM10.
+  await show('aqi');
+  await seek(24);
+  assert.equal(count(), 16);
+  await show('PM10');
+  assert.equal(count(), 18);
+  await seek(6);
+  assert.equal(count(), 20);
+  layer.disable();
+  layer.enable();
+  await layer.update();
+  await settle();
+  assert.equal(count(), 22);
+});
+
+test('replacing a manifest releases the previous run’s painted images', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+  const count = fakeDocument(t);
+  const first = hostField({ europe: true });
+  const second = hostField({ europe: true, run: first.run + HOUR });
+  let current = first;
+  const { layer } = fieldHarness({
+    fieldSource: {
+      getManifest: (options) => current.source.getManifest(options),
+      getStep: (step, options) => current.source.getStep(step, options),
+    },
+  });
+  t.after(() => layer.destroy());
+  await layer.update();
+  await settle();
+  assert.equal(count(), 2);
+  // Both runs cover now at step 6. Returning to the first run must repaint it.
+  for (const [host, expected] of [
+    [second, 4],
+    [first, 6],
+  ]) {
+    current = host;
+    t.mock.timers.tick(11 * 60_000);
+    await layer.update();
+    await settle();
+    assert.equal(host.calls.step.at(-1).step, 6);
+    assert.equal(count(), expected);
+  }
+});
+
+test('while playing, the next step is fetched and painted ahead', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const count = fakeDocument(t);
+  const host = hostField({ europe: true });
+  const clock = createWorldClock({
+    monotonicNow: () => 0,
+    requestFrame: null,
+    cancelFrame: null,
+    setInterval: () => 1,
+    clearInterval() {},
+  });
+  const { layer, moveTo, live } = fieldHarness({
+    fieldSource: host.source,
+    clock,
+  });
+  t.after(() => layer.destroy());
+  await layer.update();
+  await settle();
+  clock.seek(host.run + 6 * HOUR);
+  moveTo(40_000);
+  clock.play({ rate: 3600 });
+  await settle();
+  assert.deepEqual(
+    host.calls.step.map(({ step }) => step),
+    [6],
+  );
+  moveTo(1_000_000);
+  await settle();
+  assert.deepEqual(
+    host.calls.step.map(({ step }) => step),
+    [6, 24],
+  );
+  assert.equal(count(), 2);
+  const shown = live().map(({ spec }) => spec.image);
+  t.mock.timers.tick(50);
+  assert.equal(count(), 4);
+  assert.deepEqual(
+    live().map(({ spec }) => spec.image),
+    shown,
+  );
+  clock.seek(host.run + 16 * HOUR);
+  await settle();
+  assert.equal(count(), 4);
+  assert.deepEqual(
+    host.calls.step.map(({ step }) => step),
+    [6, 24],
+  );
+  assert.ok(live().every(({ spec }) => !shown.includes(spec.image)));
+});
+
 test('while the timeline plays the clock waits for the next step, at most 20 s', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const host = hostField({ hang: new Set([24]) });
@@ -1165,12 +1409,21 @@ test('back at now from a run asked for another time, the newest run is asked for
   await settle();
   clock.seek(older + 12 * HOUR);
   await settle();
-  assert.equal(layer.getClockCoverage().start, older);
+  assert.equal(clock.coverage().start, older);
   clock.goLive();
   await settle();
   assert.deepEqual(asks, ['now', older + 12 * HOUR, 'now']);
-  assert.equal(layer.getClockCoverage().start, latest);
+  assert.equal(clock.coverage().start, latest);
   assert.equal(clock.follows('air-quality'), true);
+  clock.seek(older + 12 * HOUR);
+  await settle();
+  assert.deepEqual(asks, ['now', older + 12 * HOUR, 'now', older + 12 * HOUR]);
+  assert.equal(clock.coverage().start, older);
+  assert.ok(
+    !layer
+      .getRowControls()
+      .summary.lines.some((line) => line.id === 'model-time'),
+  );
 });
 
 test('back at now holding an older run that still covers now, the newest run is asked for at once', async () => {
@@ -1195,12 +1448,12 @@ test('back at now holding an older run that still covers now, the newest run is 
   await settle();
   clock.seek(now - 12 * HOUR);
   await settle();
-  assert.equal(layer.getClockCoverage().start, older);
+  assert.equal(clock.coverage().start, older);
   clock.goLive();
   await settle();
   assert.deepEqual(asks, ['now', now - 12 * HOUR, 'now']);
-  assert.equal(layer.getClockCoverage().start, latest);
-  assert.equal(layer.getClockCoverage().end, latest + 24 * HOUR);
+  assert.equal(clock.coverage().start, latest);
+  assert.equal(clock.coverage().end, latest + 24 * HOUR);
 });
 
 test('on the globe a new step is drawn in one frame once loaded: never both steps at once', async (t) => {
@@ -1308,4 +1561,70 @@ test('outside the run one muted line says the model has no forecast for the time
   clock.seek(host.run + 24 * HOUR);
   await settle();
   assert.equal(line(), undefined);
+});
+
+test('below 60 km a new view is only painted when the field shows again', async (t) => {
+  fakeDocument(t);
+  const { layer, moveTo, imagery, live } = fieldHarness({
+    fieldSource: hostField().source,
+  });
+  await layer.update();
+  await settle();
+  moveTo(40_000);
+  const before = imagery.length;
+  layer.setParams({ view: 'PM10' });
+  await settle();
+  assert.equal(imagery.length, before);
+  assert.ok(live().every((image) => !image.show));
+  moveTo(1_000_000);
+  assert.equal(imagery.length, before + 1);
+  assert.equal(live().length, 1);
+  assert.equal(live()[0].show, true);
+});
+test('a clock paused inside an older run shows that run', async () => {
+  const clock = createWorldClock();
+  const host = hostField({ run: Date.now() - 200 * HOUR });
+  clock.seek(host.run + 6 * HOUR);
+  const { layer } = fieldHarness({ fieldSource: host.source, clock });
+  await layer.update();
+  await settle();
+  assert.equal(clock.coverage().start, host.run);
+  assert.ok(clock.follows('air-quality'));
+  assert.equal(
+    layer.getRowControls().sublists[0].subtitle,
+    'model at view centre',
+  );
+});
+test('a late answer for another time does not replace the live run', async () => {
+  const now = Date.now(),
+    latest = now - 6 * HOUR,
+    older = now - 20 * HOUR;
+  let answer;
+  const { clock, layer } = fieldHarness({
+    fieldSource: {
+      getStep: hostField().source.getStep,
+      getManifest: ({ atMs }) =>
+        atMs === undefined
+          ? hostField({ run: latest }).source.getManifest()
+          : new Promise((resolve) => (answer = resolve)),
+    },
+  });
+  await layer.update();
+  await settle();
+  clock.seek(now - 12 * HOUR);
+  await settle();
+  clock.goLive();
+  await settle();
+  answer(await hostField({ run: older }).source.getManifest());
+  await settle();
+  assert.equal(clock.coverage().start, latest);
+});
+
+test('clipping both pole rows never creates a zero-height texture', () => {
+  const global = { width: 2, height: 2, lon0: 0, lat0: 90, step: 179 };
+  const manifest = manifestOf(global);
+  assert.deepEqual(
+    paintField(manifest, { global: gridsOf(global, 10) }, 'pm25', PM25),
+    [],
+  );
 });

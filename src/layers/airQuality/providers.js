@@ -4,6 +4,16 @@ import { interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { CPCB_POLLUTANTS } from './cpcb.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
+import { requestWithDeadline } from '../../sources/requestDeadline.js';
+/** Maximum readings accepted in one snapshot before filtering by view. */
+const MAX_SNAPSHOT_READINGS = 50_000;
+/** `endpoint` with `fields` set in its query, keeping any query it has. */
+function withQuery(endpoint, fields) {
+  const at = endpoint.indexOf('?');
+  const params = new URLSearchParams(at < 0 ? '' : endpoint.slice(at + 1));
+  for (const [key, value] of Object.entries(fields)) params.set(key, value);
+  return `${at < 0 ? endpoint : endpoint.slice(0, at)}?${params}`;
+}
 
 /**
  * Fixed-route snapshot adapter; caller supplies the acquisition endpoint.
@@ -12,9 +22,13 @@ import { readResponseJsonCapped } from '../../sources/httpBody.js';
  * hourly bands when `hourly`, or with `mode: 'aqi'` every pollutant the
  * snapshot holds: the layer folds them into one reading per station. A
  * national snapshot is reused for `reuseMs` across views.
+ * A snapshot holds at most 50,000 readings. Requests reject redirects.
+ * Set keyed to false for a keyless route to report authorization failures as unavailable.
+ * Account changes require a new source so cached answers and coverage belong to that account.
  */
 export function createAirQualitySnapshotSource({
   endpoint,
+  keyed = true,
   hourly = false,
   reuseMs = 0,
   fetchImpl = (...args) => globalThis.fetch(...args),
@@ -22,66 +36,108 @@ export function createAirQualitySnapshotSource({
 } = {}) {
   let coverage = null;
   let reused = null;
-  /** Fetch and check one snapshot. */
+  const malformed = () =>
+    Object.assign(new Error(msg('Malformed air quality snapshot')), {
+      code: 'malformed',
+    });
+  const failure = (code) =>
+    Object.assign(new Error(msg('Air quality provider unavailable')), { code });
   async function fetchPayload(url, signal) {
-    const requestSignal = AbortSignal.any([
-      AbortSignal.timeout(50_000),
-      ...(signal ? [signal] : []),
-    ]);
-    const response = await fetchImpl(url, { signal: requestSignal });
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403)
-        throw Object.assign(
-          new Error(msg('Provider key rejected. Check Provider Settings.')),
-          { code: 'key_rejected' },
-        );
-      if (response.status === 428)
-        throw Object.assign(new Error(msg('Provider API key required')), {
-          code: 'no_key',
-        });
-      if (response.status === 429) {
-        const body = await readResponseJsonCapped(
-          response,
-          8192,
-          requestSignal,
-        ).catch(() => null);
-        signal?.throwIfAborted();
-        const retryAt = Number.isFinite(body?.retryAt)
-          ? Math.min(
-              now() + 24 * 3600_000,
-              Math.max(now() + 1000, body.retryAt),
-            )
-          : now() + 60_000;
-        throw Object.assign(
-          new Error(
-            msg(
-              'Provider request budget reached. Cached data will refresh later.',
-            ),
-          ),
-          { retryAt },
-        );
-      }
-      throw new Error(msg('Air quality provider unavailable'));
-    }
-    const payload = await readResponseJsonCapped(
-      response,
-      64 * 1024 * 1024,
-      requestSignal,
+    return requestWithDeadline(
+      async (requestSignal) => {
+        let response;
+        try {
+          response = await fetchImpl(url, {
+            signal: requestSignal,
+            redirect: 'error',
+          });
+        } catch {
+          requestSignal.throwIfAborted();
+          throw failure('unavailable');
+        }
+        if (!response.ok) {
+          if (response.status === 429) {
+            const body = await readResponseJsonCapped(
+              response,
+              8192,
+              requestSignal,
+            ).catch(() => null);
+            requestSignal.throwIfAborted();
+            throw Object.assign(
+              new Error(
+                msg(
+                  'Provider request budget reached. Cached data will refresh later.',
+                ),
+              ),
+              {
+                code: 'rate_limited',
+                retryAt: Number.isFinite(body?.retryAt)
+                  ? body.retryAt
+                  : now() + 60_000,
+              },
+            );
+          }
+          if (keyed && response.status === 403) {
+            const body = await readResponseJsonCapped(
+              response,
+              8192,
+              requestSignal,
+            ).catch(() => null);
+            requestSignal.throwIfAborted();
+            if (body?.error === 'access_denied')
+              throw Object.assign(
+                new Error(
+                  msg(
+                    "The provider refused access for this key. Check the key's project, region or permissions.",
+                  ),
+                ),
+                { code: 'access_denied' },
+              );
+          } else await response.body?.cancel().catch(() => {});
+          if (keyed && (response.status === 401 || response.status === 403))
+            throw Object.assign(
+              new Error(msg('Provider key rejected. Check Provider Settings.')),
+              { code: 'key_rejected' },
+            );
+          if (keyed && response.status === 428)
+            throw Object.assign(new Error(msg('Provider API key required')), {
+              code: 'no_key',
+            });
+          throw failure('unavailable');
+        }
+        let payload;
+        try {
+          payload = await readResponseJsonCapped(
+            response,
+            64 * 1024 * 1024,
+            requestSignal,
+          );
+        } catch (error) {
+          requestSignal.throwIfAborted();
+          throw error?.code === 'RESPONSE_TOO_LARGE' ? error : malformed();
+        }
+        // A network this server leaves switched off: no failure, nothing to show.
+        // English data for the console; the card shows no line for it.
+        if (payload?.unavailable === true && payload.code === 'not_configured')
+          throw Object.assign(new Error('Air quality provider not enabled'), {
+            code: 'not_configured',
+          });
+        // A viewport answer carries counts in place of its station catalogue.
+        if (
+          payload?.schemaVersion !== 1 ||
+          (payload.stations !== undefined &&
+            !Array.isArray(payload.stations)) ||
+          !Array.isArray(payload.readings)
+        )
+          throw malformed();
+        if (payload.readings.length > MAX_SNAPSHOT_READINGS)
+          throw Object.assign(new Error(msg('Upstream response too large')), {
+            code: 'RESPONSE_TOO_LARGE',
+          });
+        return payload;
+      },
+      { signal, timeoutMs: 50_000 },
     );
-    // A network this server leaves switched off: no failure, nothing to show.
-    // English data for the console; the card shows no line for it.
-    if (payload?.unavailable === true && payload.code === 'not_configured')
-      throw Object.assign(new Error('Air quality provider not enabled'), {
-        code: 'not_configured',
-      });
-    // A viewport answer carries counts in place of its station catalogue.
-    if (
-      payload?.schemaVersion !== 1 ||
-      (payload.stations !== undefined && !Array.isArray(payload.stations)) ||
-      !Array.isArray(payload.readings)
-    )
-      throw new Error(msg('Malformed air quality snapshot'));
-    return payload;
   }
   return {
     getCoverage: () => coverage,
@@ -89,7 +145,10 @@ export function createAirQualitySnapshotSource({
       const allPollutants = mode === 'aqi';
       signal?.throwIfAborted();
       const url = view
-        ? `${endpoint}?view=${encodeURIComponent(view.join(','))}${allPollutants ? '&mode=aqi' : hourly ? `&parameter=${encodeURIComponent(parameter)}` : ''}`
+        ? withQuery(endpoint, {
+            view: view.join(','),
+            ...(allPollutants ? { mode: 'aqi' } : hourly ? { parameter } : {}),
+          })
         : endpoint;
       // A national snapshot (no view) serves every view and pollutant: a
       // view switch within `reuseMs` filters the same payload again.
@@ -113,7 +172,15 @@ export function createAirQualitySnapshotSource({
         .sort(
           (a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id),
         );
-      coverage = { ...payload, readings: undefined };
+      const count = (v) => (Number.isFinite(v) ? v : undefined);
+      coverage = {
+        stale: payload.stale === true,
+        partial: payload.partial === true,
+        checked: count(payload.checked),
+        eligible: count(payload.eligible),
+        failureStatus: count(payload.failureStatus),
+        retryAt: count(payload.retryAt),
+      };
       return readings;
     },
   };
@@ -125,9 +192,7 @@ export function createAirQualitySnapshotSource({
  * Every provider is a station network, drawn together with the others in
  * one de-duplicated set; `direct: true` marks a network publishing its own
  * monitors, which wins over an aggregator's copy of the same site
- * (`merge.js`). No network's own index is used: the layer rates each station
- * from its concentrations. Canada's stations come through OpenAQ, as every
- * other country's do.
+ * (merge.js).
  */
 export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
   return [
@@ -135,14 +200,13 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
       id: 'saaqis',
       title: msg('South Africa'),
       label: msg('Air quality · South Africa'),
-      coverage: msg('South Africa · SAAQIS'),
       network: 'SAAQIS',
       sourceLabel: 'SAAQIS · South Africa',
       direct: true,
       parameters: SA_POLLUTANTS,
-      averagingLabel: msg('Hourly average'),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/south-africa',
+        keyed: false,
         hourly: true,
         // One layer refresh: a view switch does not ask again.
         reuseMs: 60_000,
@@ -152,21 +216,19 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
     },
     {
       id: 'cpcb',
+      publishedTimes: true,
       title: msg('India'),
       label: msg('Air quality'),
-      coverage: msg('India · CPCB via OGD'),
       network: 'CPCB',
       sourceLabel: 'CPCB · data.gov.in',
       direct: true,
       parameters: CPCB_POLLUTANTS,
       requiresKeyId: 'data-gov-in',
-      // The India route refreshes its national snapshot every 20 minutes.
-      refreshMs: 1_200_000,
-      // Unrated until both the units and the averaging period are confirmed
-      // (CPCB_UNITS_VERIFIED, CPCB_AVERAGING_MINUTES).
+      // The feed leaves its units and averaging period unconfirmed.
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/india',
         hourly: true,
+        // The India route refreshes its national snapshot every 20 minutes.
         reuseMs: 1_200_000,
         fetchImpl,
         now,
@@ -179,13 +241,11 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
       worldwide: true,
       title: msg('Worldwide · OpenAQ'),
       label: msg('Air quality · Worldwide'),
-      coverage: msg('Worldwide · available OpenAQ stations'),
       network: 'OpenAQ',
       sourceLabel: 'OpenAQ · Worldwide',
       direct: false,
       parameters: OPENAQ_POLLUTANTS,
       requiresKeyId: 'openaq',
-      averagingLabel: msg('Hourly average'),
       source: createAirQualitySnapshotSource({
         endpoint: '/api/air-quality/openaq',
         hourly: true,
@@ -195,8 +255,8 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
     },
   ];
 }
-
-/** Compose explicit providers without selecting their network in the renderer. */
+/** Compose explicit providers with separate coverage and cached national answers.
+ * Create a new source when switching accounts. */
 export function createAirQualitySource(options = {}) {
   const definitions =
     options.providers ?? createDefaultAirQualityProviders(options);
@@ -205,6 +265,7 @@ export function createAirQualitySource(options = {}) {
   const registry = new Map();
   for (const definition of definitions) {
     if (
+      typeof definition?.id !== 'string' ||
       !/^[a-z][a-z0-9-]{0,39}$/.test(definition.id) ||
       registry.has(definition.id) ||
       typeof definition.source?.getSnapshot !== 'function' ||
@@ -222,47 +283,17 @@ export function createAirQualitySource(options = {}) {
       }),
     );
   }
-  // Providers are asked in parallel, so request order and coverage are kept
-  // per provider: one provider's answer never stands in for another's.
-  let coverage = null;
+  // Parallel providers keep their own coverage.
   const coverageByProvider = new Map();
-  const generations = new Map();
-  const cache = new Map();
-  const clock = options.now || Date.now;
   return {
-    providers: Object.freeze([...registry.keys()]),
     definitions: Object.freeze([...registry.values()]),
-    /** The named provider's coverage, or the last answer from any provider. */
-    getCoverage: (provider) =>
-      provider === undefined
-        ? coverage
-        : (coverageByProvider.get(provider) ?? null),
-    async getSnapshot({
-      provider = registry.keys().next().value,
-      ...request
-    } = {}) {
+    getCoverage: (provider) => coverageByProvider.get(provider) ?? null,
+    async getSnapshot({ provider, ...request } = {}) {
       const entry = registry.get(provider);
       if (!entry) throw new Error(msg('Unknown air quality provider'));
-      const ticket = (generations.get(provider) || 0) + 1;
-      generations.set(provider, ticket);
-      const cacheKey = `${provider}:${request.mode || request.parameter || ''}:${request.view?.join(',') || ''}`;
-      const previous = cache.get(cacheKey);
-      if (previous && clock() - previous.at < (entry.refreshMs || 0)) {
-        coverage = previous.coverage;
-        coverageByProvider.set(provider, previous.coverage);
-        return previous.readings;
-      }
       const readings = await entry.source.getSnapshot(request);
       request.signal?.throwIfAborted();
-      if (ticket === generations.get(provider)) {
-        coverage = entry.source.getCoverage?.() ?? null;
-        coverageByProvider.set(provider, coverage);
-        if (entry.refreshMs > 0) {
-          cache.delete(cacheKey);
-          cache.set(cacheKey, { readings, coverage, at: clock() });
-          while (cache.size > 16) cache.delete(cache.keys().next().value);
-        }
-      }
+      coverageByProvider.set(provider, entry.source.getCoverage?.() ?? null);
       return readings;
     },
   };

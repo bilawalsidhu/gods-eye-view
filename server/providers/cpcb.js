@@ -1,3 +1,5 @@
+import { cachedSnapshot } from './common/snapshotCache.js';
+import { admitSameSite } from './common/same-site.js';
 import { readResponseJsonCapped } from './common/http.js';
 import { normalizeCpcbRecords } from '../../src/layers/airQuality/cpcb.js';
 
@@ -6,6 +8,7 @@ const RESOURCE =
 const TTL = 20 * 60_000;
 const PAGE_SIZE = 1000;
 const MAX_ROWS = 20_000;
+const MAX_SNAPSHOT_BYTES = 32 * 1024 * 1024;
 const FIELDS = [
   'country',
   'state',
@@ -32,18 +35,28 @@ export function cpcbProxy({
   apiKey = () => process.env.DATA_GOV_IN_API_KEY,
   now = () => Date.now(),
   timeoutMs = 30_000,
-  // Rating settings for the normalizer; default to the module's.
-  unitsVerified,
-  averagingMinutes,
 } = {}) {
-  let cache = null;
-  let cachedAt = 0;
-  let inflight = null;
-  let retryAt = 0;
-  /** 401 or 403 while OGD rejects the key; cleared by a good refresh. */
-  let keyRejected = null;
+  const shared = cachedSnapshot({
+    ttlMs: TTL,
+    retryMs: 60_000,
+    staleMs: 6 * 3600_000,
+    acquire: refresh,
+    now,
+  });
+  let encoded = null;
+  /** The answer's JSON, encoded once for every request sharing it. */
+  const body = (snapshot, stale) => {
+    if (encoded?.snapshot !== snapshot || encoded.stale !== stale)
+      encoded = {
+        snapshot,
+        stale,
+        text: JSON.stringify({ ...snapshot, stale }),
+      };
+    return encoded.text;
+  };
   async function refresh(key) {
     const signal = AbortSignal.timeout(timeoutMs);
+    const seen = new Map();
     const records = [];
     let total = null;
     for (let offset = 0; offset < MAX_ROWS; offset += PAGE_SIZE) {
@@ -73,9 +86,11 @@ export function cpcbProxy({
       const count = Number(page.total);
       if (
         !Array.isArray(page.records) ||
+        !(
+          Number.isSafeInteger(page.total) ||
+          (typeof page.total === 'string' && /^\d+$/.test(page.total))
+        ) ||
         page.records.length > PAGE_SIZE ||
-        page.total === null ||
-        page.total === undefined ||
         !Number.isSafeInteger(count) ||
         count < 0 ||
         count > MAX_ROWS ||
@@ -86,26 +101,32 @@ export function cpcbProxy({
       for (const row of page.records) {
         if (!row || typeof row !== 'object' || Array.isArray(row))
           throw new Error('Invalid OGD row');
-        records.push(
-          Object.fromEntries(
-            FIELDS.map((field) => [
-              field,
-              typeof row[field] === 'string'
-                ? row[field].slice(0, 500)
-                : typeof row[field] === 'number'
-                  ? row[field]
-                  : null,
-            ]),
-          ),
+        const record = Object.fromEntries(
+          FIELDS.map((field) => [
+            field,
+            typeof row[field] === 'string'
+              ? row[field].slice(0, 500)
+              : typeof row[field] === 'number'
+                ? row[field]
+                : null,
+          ]),
         );
+        const identity = JSON.stringify([
+          record.state,
+          record.city,
+          record.station,
+          record.pollutant_id,
+        ]);
+        if ((seen.get(identity) ?? offset) !== offset)
+          throw new Error('Inconsistent OGD pages');
+        seen.set(identity, offset);
+        records.push(record);
       }
       if (records.length === total) {
-        const snapshot = normalizeCpcbRecords(
-          { records },
-          { now: now(), unitsVerified, averagingMinutes },
-        );
-        if (!snapshot) throw new Error('Invalid OGD snapshot');
-        return {
+        const normalized = normalizeCpcbRecords({ records }, { now: now() });
+        if (!normalized || (records.length && !normalized.stations.length))
+          throw new Error('Unrecognised OGD rows');
+        const snapshot = {
           schemaVersion: 1,
           fetchedAt: now(),
           source: 'CPCB',
@@ -113,8 +134,11 @@ export function cpcbProxy({
             'Central Pollution Control Board via Open Government Data Platform India',
           sourceUrl:
             'https://www.data.gov.in/catalog/real-time-air-quality-index',
-          ...snapshot,
+          readings: normalized.readings,
         };
+        if (Buffer.byteLength(JSON.stringify(snapshot)) > MAX_SNAPSHOT_BYTES)
+          throw new Error('OGD snapshot too large');
+        return snapshot;
       }
       if (page.records.length !== PAGE_SIZE || records.length > total)
         throw new Error('Incomplete OGD snapshot');
@@ -124,12 +148,14 @@ export function cpcbProxy({
   const install = (server) => {
     server.middlewares.use('/api/air-quality/india', async (req, res, next) => {
       if ((req.url || '/').split('?')[0] !== '/') return next();
+      if (admitSameSite(req, res)) return;
       const send = (status, body) => {
+        if (res.destroyed) return;
         res.writeHead(status, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',
         });
-        res.end(JSON.stringify(body));
+        res.end(typeof body === 'string' ? body : JSON.stringify(body));
       };
       if (req.method !== 'GET') {
         res.setHeader('Allow', 'GET');
@@ -138,33 +164,19 @@ export function cpcbProxy({
       const key = apiKey()?.trim();
       // The layer reads 428 as "needs a key" (Provider Settings).
       if (!key) return send(428, { error: 'no_key' });
-      if (cache && now() - cachedAt < TTL)
-        return send(200, { ...cache, stale: false });
-      if (!inflight && now() >= retryAt) {
-        inflight = refresh(key)
-          .then((snapshot) => {
-            cache = snapshot;
-            cachedAt = now();
-            retryAt = 0;
-            keyRejected = null;
-          })
-          .catch((error) => {
-            // Never log upstream error text or a URL: either could contain the key.
-            retryAt = now() + 60_000;
-            keyRejected = [401, 403].includes(error?.status)
-              ? error.status
-              : null;
-          })
-          .finally(() => {
-            inflight = null;
-          });
+      let answer;
+      try {
+        answer = await shared.get(key);
+      } catch (error) {
+        // Never log upstream error text or a URL: either could contain the key.
+        return [401, 403].includes(error?.status)
+          ? send(error.status, { error: 'key_rejected' })
+          : send(502, { error: 'upstream_unavailable' });
       }
-      await inflight;
       // The layer shows "Provider key rejected. Check Provider Settings."
-      if (keyRejected) return send(keyRejected, { error: 'key_rejected' });
-      if (cache && now() - cachedAt <= 6 * 60 * 60_000)
-        return send(200, { ...cache, stale: now() - cachedAt >= TTL });
-      return send(502, { error: 'upstream_unavailable' });
+      if ([401, 403].includes(answer.failure?.status))
+        return send(answer.failure.status, { error: 'key_rejected' });
+      if (!res.destroyed) send(200, body(answer.snapshot, answer.stale));
     });
   };
   return {

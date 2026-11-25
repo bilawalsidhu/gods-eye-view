@@ -1,4 +1,5 @@
-/** Portable OpenAQ normalization; latest values remain unclassified. */
+/** Portable OpenAQ normalization; latest values carry no EEA band (the AQI view rates them). */
+import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 import { interpretHourly } from './interpretation.js';
 export const OPENAQ_POLLUTANTS = Object.freeze([
   'PM2.5',
@@ -7,10 +8,6 @@ export const OPENAQ_POLLUTANTS = Object.freeze([
   'SO2',
   'O3',
   'CO',
-  'CO2',
-  'NO',
-  'NOX',
-  'H2S',
 ]);
 export const OPENAQ_PARAMETER_NAMES = Object.freeze({
   pm25: 'PM2.5',
@@ -19,10 +16,6 @@ export const OPENAQ_PARAMETER_NAMES = Object.freeze({
   so2: 'SO2',
   o3: 'O3',
   co: 'CO',
-  co2: 'CO2',
-  no: 'NO',
-  nox: 'NOX',
-  h2s: 'H2S',
 });
 const text = (v) => (typeof v === 'string' ? v.trim().slice(0, 200) : '');
 const coordinate = (v, max) =>
@@ -34,6 +27,7 @@ export function normalizeOpenAqLocations(locations) {
   for (const row of locations) {
     if (
       !Number.isSafeInteger(row?.id) ||
+      row.isMobile === true ||
       !coordinate(row.coordinates?.latitude, 90) ||
       !coordinate(row.coordinates?.longitude, 180) ||
       !Array.isArray(row.sensors)
@@ -50,7 +44,8 @@ export function normalizeOpenAqLocations(locations) {
         id: s.id,
         parameter: OPENAQ_PARAMETER_NAMES[s.parameter.name],
         units: text(s.parameter.units),
-      }));
+      }))
+      .slice(0, 64);
     if (!sensors.length) continue;
     unique.set(row.id, {
       stationId: String(row.id),
@@ -58,16 +53,19 @@ export function normalizeOpenAqLocations(locations) {
       lat: row.coordinates.latitude,
       lon: row.coordinates.longitude,
       country: text(row.country?.code),
-      zone: text(row.country?.name),
+      monitor: row.isMonitor === true,
+      zone: text(row.locality) || text(row.country?.name),
       owner: text(row.owner?.name),
       network: text(row.provider?.name),
       sensors,
       licenses: (row.licenses || []).slice(0, 20).map((l) => ({
         name: text(l.name),
         attribution: text(l.attribution?.name),
-        url: /^https?:\/\//.test(l.attribution?.url || '')
-          ? l.attribution.url
-          : null,
+        url:
+          /^https?:\/\//.test(l.attribution?.url || '') &&
+          l.attribution.url.length <= 500
+            ? l.attribution.url
+            : null,
       })),
       lastObservedMs: Date.parse(row.datetimeLast?.utc) || null,
     });
@@ -101,7 +99,16 @@ export function normalizeOpenAqLatest(station, results, now = Date.now()) {
     )
       continue;
     records.set(id, {
-      ...station,
+      stationId: station.stationId,
+      name: station.name,
+      lat: station.lat,
+      lon: station.lon,
+      country: station.country,
+      zone: station.zone,
+      owner: station.owner,
+      network: station.network,
+      licenses: station.licenses,
+      monitor: station.monitor,
       id,
       provider: 'openaq',
       sensorId: sensor.id,
@@ -113,9 +120,7 @@ export function normalizeOpenAqLatest(station, results, now = Date.now()) {
       kind: 'observation',
       averagingMinutes: null,
       band: null,
-      risk: null,
-      rating: null,
-      color: '#8cb4ce',
+      color: AIR_QUALITY_UNRATED_COLOR,
       label: `${item.value.toFixed(2)} ${sensor.units}`,
       note: 'OpenAQ observation; source averaging period unspecified; not an AQI or emissions estimate.',
     });
@@ -137,6 +142,8 @@ export function normalizeOpenAqHours(
       const from = Date.parse(row.period?.datetimeFrom?.utc);
       const to = Date.parse(row.period?.datetimeTo?.utc);
       return (
+        Number.isFinite(row.value) &&
+        row.value >= 0 &&
         row.period?.interval === '01:00:00' &&
         to - from === 3600_000 &&
         to <= now &&

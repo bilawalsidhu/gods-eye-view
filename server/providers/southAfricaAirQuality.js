@@ -1,3 +1,5 @@
+import { cachedSnapshot } from './common/snapshotCache.js';
+import { admitSameSiteKeyless } from './common/same-site.js';
 import { readResponseJsonCapped } from './common/http.js';
 import {
   normalizeSaStations,
@@ -13,9 +15,13 @@ export function createSaAcquisition({
   fetchImpl = globalThis.fetch,
   now = Date.now,
 } = {}) {
-  let cache = null;
-  let pending = null;
-  let retryAfter = 0;
+  const shared = cachedSnapshot({
+    ttlMs: TTL,
+    retryMs: 60_000,
+    staleMs: 6 * 3600_000,
+    acquire,
+    now,
+  });
   async function acquire() {
     const signal = AbortSignal.timeout(45_000);
     const read = async (url, options) => {
@@ -63,17 +69,25 @@ export function createSaAcquisition({
       ).data;
     const regions = await get('regions');
     const stations = normalizeSaStations(regions);
-    const ids = regions
-      .filter(
-        (region) =>
-          region.stations.length && Number.isSafeInteger(region.regionId),
-      )
-      .map((region) => region.regionId);
+    const ids = [];
+    for (const region of regions) {
+      if (!region.stations.length) continue;
+      const id =
+        typeof region.regionId === 'string' && /^\d+$/.test(region.regionId)
+          ? Number(region.regionId)
+          : region.regionId;
+      if (!Number.isSafeInteger(id)) throw new Error('Malformed SAAQIS region');
+      ids.push(id);
+    }
     if (!ids.length) throw new Error('SAAQIS regions unavailable');
     const entries = await get(
       `regions/data/latest?unitConversion=true&regionsIds=${ids.join(',')}&timebase=60`,
     );
     // Concentrations only: SAAQIS's own index is not asked for.
+    const readings = normalizeSaMeasurements(entries, stations);
+    const known = new Set(stations.map((s) => s.stationId));
+    if (entries.length && !entries.some((e) => known.has(String(e?.stationId))))
+      throw new Error('Malformed SAAQIS observations');
     return {
       schemaVersion: 1,
       fetchedAt: now(),
@@ -82,34 +96,16 @@ export function createSaAcquisition({
         'South African Air Quality Information System; originating monitoring networks',
       sourceUrl: ROOT,
       stations,
-      readings: normalizeSaMeasurements(entries, stations),
+      readings,
     };
   }
   return {
     async getSnapshot() {
-      if (cache && now() - cache.fetchedAt < TTL)
-        return { ...cache, stale: false };
-      if (!pending && now() >= retryAfter) {
-        pending = acquire()
-          .then((value) => {
-            cache = value;
-            return value;
-          })
-          .catch((error) => {
-            retryAfter = now() + 60_000;
-            throw error;
-          })
-          .finally(() => {
-            pending = null;
-          });
-      }
       try {
-        if (!pending) throw new Error('SAAQIS retry cooldown');
-        return { ...(await pending), stale: false };
+        const { snapshot, stale } = await shared.get();
+        // Last-good data stays labelled stale until a refresh succeeds.
+        return { ...snapshot, stale };
       } catch {
-        // Last-good data stays labelled stale, never silently current.
-        if (cache && now() - cache.fetchedAt <= 6 * 60 * 60 * 1000)
-          return { ...cache, stale: true };
         throw new Error('SAAQIS observations unavailable');
       }
     },
@@ -142,6 +138,7 @@ export function southAfricaAirQualityProxy({
 } = {}) {
   const source = createSaAcquisition(options);
   const handler = async (req, res) => {
+    if (admitSameSiteKeyless(req, res)) return;
     const send = (status, data) => {
       if (res.destroyed) return;
       res.writeHead(status, {
@@ -156,7 +153,7 @@ export function southAfricaAirQualityProxy({
       return send(400, { error: 'invalid_air_quality_query' });
     if (!saaqisEnabled(env)) return send(200, NOT_CONFIGURED);
     try {
-      send(200, await source.getSnapshot());
+      send(200, { ...(await source.getSnapshot()), stations: undefined });
     } catch {
       send(503, { error: 'SAAQIS observations unavailable' });
     }

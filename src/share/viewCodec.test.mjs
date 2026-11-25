@@ -1445,28 +1445,6 @@ test('air-quality compact links retain the view and open on the US AQI by defaul
   }
 });
 
-test('a compact link carrying the retired AQHI view opens on the US AQI', () => {
-  // The view's code letter is the only byte two views' links differ in;
-  // `k`, Canada's AQHI, was never released.
-  const bytesFor = (view) => {
-    const layerState = createDefaultLayerState();
-    layerState.enabledLayerIds = ['air-quality'];
-    layerState.options['air-quality'] = { view };
-    return payloadBytes(encodeShareView({ layerState }));
-  };
-  const pm25 = bytesFor('PM2.5');
-  const pm10 = bytesFor('PM10');
-  const at = pm25.findIndex((byte, index) => byte !== pm10[index]);
-  assert.equal(pm25[at], 'p'.charCodeAt(0));
-  const retired = [...pm25];
-  retired[at] = 'k'.charCodeAt(0);
-  const result = decodeOk(hashOf(retired));
-  assert.deepEqual(result.state.layerState.enabledLayerIds, ['air-quality']);
-  assert.deepEqual(result.state.layerState.options['air-quality'], {
-    view: 'aqi',
-  });
-});
-
 test('the world time is written only away from live, and may lie ahead', () => {
   const at = (worldTime) =>
     decodeShareView(encodeShareView({ sharedAtMs: NOW_MS, worldTime }), {

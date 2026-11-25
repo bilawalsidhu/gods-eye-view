@@ -1,9 +1,8 @@
 /**
  * Deterministic real-app South African provider gate.
  * Run with a dev server: node scripts/qa-south-africa-air-quality.mjs
- * South Africa is off by default (SAAQIS_ENABLED=1 switches the server route
- * on); this gate answers the route itself with synthetic snapshots, as a
- * switched-on network, so it runs either way and reads nothing upstream.
+ * Supplies synthetic South African observations, answers OpenAQ and India as
+ * keyless and the field as unconfigured, independently of the server settings.
  * Optional --live audits the national public source directly (no credentials
  * printed); that audit ignores SAAQIS_ENABLED.
  */
@@ -13,21 +12,26 @@ import { createSaAcquisition } from '../server/providers/southAfricaAirQuality.j
 import {
   normalizeSaStations,
   normalizeSaMeasurements,
-  selectSaReadings,
-  SA_POLLUTANTS,
 } from '../src/layers/airQuality/southAfrica.js';
+import { OBSERVATION_MAX_AGE_MS } from '../src/layers/airQuality/model.js';
 
 if (process.argv.includes('--live')) {
   const snapshot = await createSaAcquisition().getSnapshot();
+  const checkedAt = Date.now();
   const fresh = new Set(
-    SA_POLLUTANTS.flatMap((parameter) =>
-      selectSaReadings(snapshot, parameter).map((row) => row.stationId),
-    ),
+    snapshot.readings
+      .filter(
+        (row) =>
+          Number.isFinite(row.observedMs) &&
+          row.observedMs <= checkedAt + 300_000 &&
+          checkedAt - row.observedMs <= OBSERVATION_MAX_AGE_MS,
+      )
+      .map((row) => row.stationId),
   );
   console.log(
     JSON.stringify(
       {
-        checkedAt: new Date().toISOString(),
+        checkedAt: new Date(checkedAt).toISOString(),
         catalog: snapshot.stations.length,
         reportingAnyPollutant: fresh.size,
         provinces: [...new Set(snapshot.stations.map((row) => row.province))]
@@ -139,19 +143,31 @@ try {
   await page.setViewport({ width: 1440, height: 1000 });
   const cdp = await page.createCDPSession();
   await cdp.send('Fetch.enable', {
-    patterns: [{ urlPattern: '*/api/air-quality/south-africa*' }],
+    patterns: ['south-africa*', 'openaq*', 'india*', 'field/*'].map(
+      (route) => ({ urlPattern: '*/api/air-quality/' + route }),
+    ),
   });
-  cdp.on('Fetch.requestPaused', async ({ requestId }) => {
-    await cdp.send('Fetch.fulfillRequest', {
-      requestId,
-      responseCode: fail ? 503 : 200,
-      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
-      body: Buffer.from(
-        JSON.stringify(fail ? { error: 'unavailable' } : snapshot),
-      ).toString('base64'),
-    });
+  cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+    const route = new URL(request.url).pathname.split('/air-quality/')[1];
+    const [status, body] =
+      route === 'south-africa'
+        ? [fail ? 503 : 200, fail ? { error: 'unavailable' } : snapshot]
+        : route === 'field/manifest'
+          ? [200, { unavailable: true, code: 'not_configured' }]
+          : route.startsWith('field/')
+            ? [404, {}]
+            : [428, { error: 'no_key' }];
+    await cdp
+      .send('Fetch.fulfillRequest', {
+        requestId,
+        responseCode: status,
+        responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+        body: Buffer.from(JSON.stringify(body)).toString('base64'),
+      })
+      .catch(() => {});
   });
-  await page.goto(
+  await gotoSafely(
+    page,
     `${process.env.QA_BASE_URL || 'http://127.0.0.1:4173'}/?welcome=0`,
     {
       waitUntil: 'domcontentloaded',
@@ -298,4 +314,15 @@ try {
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
+}
+
+/** Opens `target`; a failure names its origin only, never a query that may carry a token. */
+async function gotoSafely(page, target, options) {
+  try {
+    return await page.goto(target, options);
+  } catch (error) {
+    throw new Error(
+      `navigation to ${new URL(target).origin} failed: ${String(error?.message ?? error).split(' at ')[0]}`,
+    );
+  }
 }

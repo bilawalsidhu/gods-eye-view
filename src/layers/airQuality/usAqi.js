@@ -23,6 +23,7 @@
  * Values are in µg/m³, CO in mg/m³: the layer's units (`units.js`). Gases
  * convert back to ppb (CO to ppm) at 25 °C, the EPA's reference conditions.
  */
+import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 import { EPA_GAS_FACTORS, concentrationIn } from './units.js';
 
 /** The five upper limits between the six categories. */
@@ -74,11 +75,11 @@ export const AQI_PARAMETERS = Object.freeze(
 /** Above these (µg/m³; CO mg/m³) a value is taken to be an instrument fault. */
 export const AQI_CEILINGS = Object.freeze({
   pm25: 3000,
-  pm10: 6000,
+  pm10: 20_000,
   o3: 1000,
   no2: 1500,
   so2: 3000,
-  co: 100,
+  co: 200,
 });
 
 /** A value this much older than the station's newest one is not used. */
@@ -228,12 +229,7 @@ export function usAqi(values) {
  */
 const pm25Ceiling = (pm10) => 1.5 * pm10 + 10;
 
-/**
- * The values worth an index, and why each other one is not: above its
- * pollutant's ceiling (`'implausible'`), or PM2.5 well above the station's
- * PM10 (`'above-pm10'`: more than 1.5 × PM10 + 10 µg/m³).
- */
-export function plausibility(values) {
+function withinCeilings(values) {
   const kept = {};
   const excluded = {};
   for (const [key, ceiling] of Object.entries(AQI_CEILINGS)) {
@@ -241,6 +237,10 @@ export function plausibility(values) {
     if (values[key] <= ceiling) kept[key] = values[key];
     else excluded[key] = 'implausible';
   }
+  return { kept, excluded };
+}
+
+function dropPm25AbovePm10(kept, excluded) {
   if (
     kept.pm25 !== undefined &&
     kept.pm10 !== undefined &&
@@ -249,17 +249,19 @@ export function plausibility(values) {
     delete kept.pm25;
     excluded.pm25 = 'above-pm10';
   }
-  return { kept, excluded };
 }
 
-/** The plausible values alone (`plausibility`). */
-export const plausible = (values) => plausibility(values).kept;
+/** Values within the fault ceilings and consistent with the station’s PM10. */
+export function plausibility(values) {
+  const result = withinCeilings(values);
+  dropPm25AbovePm10(result.kept, result.excluded);
+  return result;
+}
 
 /**
  * A station's index from the values it reports (`aqiStations`). The values
- * kept are the plausible ones no more than `AQI_MAX_SPREAD_MS` older than the
- * newest of them (`times`, per value); the observation time is that of the
- * pollutant leading the index.
+ * kept are within their ceilings and within AQI_MAX_SPREAD_MS of the newest.
+ * PM2.5 is checked against the PM10 still kept.
  * @returns {{aqi: {index: number, leading: string} | null,
  *   used: object, excluded: Object<string, string>, observedMs: number|null}}
  *   `excluded` gives each value left out its reason: `'units'` or
@@ -267,7 +269,7 @@ export const plausible = (values) => plausibility(values).kept;
  *   `'too-old'`.
  */
 export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
-  const { kept, excluded: implausible } = plausibility(values);
+  const { kept, excluded: implausible } = withinCeilings(values);
   const reasons = { ...excluded, ...implausible };
   const times = Object.keys(kept)
     .map((key) => valueTimes[key])
@@ -282,6 +284,7 @@ export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
         delete kept[key];
         reasons[key] = 'too-old';
       }
+  dropPm25AbovePm10(kept, reasons);
   const aqi = usAqi(kept);
   const leadingTime = aqi ? valueTimes[aqi.leading] : undefined;
   return {
@@ -314,7 +317,6 @@ const POLLUTANT_FIELDS = [
   'rated',
   'aqi',
   'band',
-  'risk',
   'averagingMinutes',
   'observedMs',
   'periodStart',
@@ -356,6 +358,7 @@ export function aqiStations(readings) {
       for (const field of POLLUTANT_FIELDS) delete identity[field];
       station = {
         ...identity,
+        stationId: reading.stationId ?? reading.id,
         id: `${reading.provider}:${reading.stationId ?? reading.id}:aqi`,
         parameter: 'aqi',
         scale: 'US AQI',
@@ -369,7 +372,7 @@ export function aqiStations(readings) {
         reportedMs: -Infinity,
         anyRated: false,
         aqi: null,
-        color: '#8cb4ce',
+        color: AIR_QUALITY_UNRATED_COLOR,
         label: '',
         note: 'US AQI computed from the latest value of each pollutant; not an official reading.',
       };

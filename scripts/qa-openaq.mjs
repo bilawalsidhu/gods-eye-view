@@ -69,6 +69,7 @@ try {
   const cdp = await page.createCDPSession();
   let status = 200;
   let scoped = false;
+  const requestedKinds = [];
   const requestedViews = [];
   await cdp.send('Fetch.enable', {
     patterns: [
@@ -99,7 +100,11 @@ try {
         .catch(() => {});
       return;
     }
-    const raw = new URL(request.url).searchParams.get('view');
+    const query = new URL(request.url).searchParams;
+    const kind = query.get('mode') === 'aqi' ? 'aqi' : query.get('parameter');
+    requestedKinds.push(kind);
+    const valid = kind === 'aqi' || kind === 'PM2.5';
+    const raw = query.get('view');
     const view = raw?.split(',').map(Number);
     requestedViews.push(view);
     const selected =
@@ -117,27 +122,33 @@ try {
     await cdp
       .send('Fetch.fulfillRequest', {
         requestId,
-        responseCode: status,
+        responseCode: valid ? status : 400,
         responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
         body: Buffer.from(
           JSON.stringify(
-            status === 200
-              ? {
-                  ...payload,
-                  readings: selected,
-                  stations: selected,
-                }
-              : {
-                  error: status === 429 ? 'rate_limited' : 'no_key',
-                  retryAt: status === 429 ? Date.now() + 1500 : null,
-                },
+            !valid
+              ? { error: 'unexpected' }
+              : status === 200
+                ? {
+                    ...payload,
+                    readings:
+                      kind === 'aqi'
+                        ? selected.map((r, i) => ({ ...r, value: 30 + i }))
+                        : selected,
+                    stations: selected,
+                  }
+                : {
+                    error: status === 429 ? 'rate_limited' : 'no_key',
+                    retryAt: status === 429 ? Date.now() + 1500 : null,
+                  },
           ),
         ).toString('base64'),
       })
       .catch(() => {}); // Navigation/disable may have cancelled the request.
   });
-  await page.goto(
-    `${base}/?welcome=0&setup=1#v=2&lat=0&lon=20&alt=12000000&pitch=-90&map=esri-imagery&l=4&lo=4.p.o`,
+  await gotoSafely(
+    page,
+    `${base}/?welcome=0&setup=1#v=2&lat=0&lon=20&alt=12000000&pitch=-90&map=esri-imagery&l=4`,
     { waitUntil: 'domcontentloaded', timeout: 90000 },
   );
   await page.waitForFunction(
@@ -156,10 +167,10 @@ try {
   });
   const input = await page.$eval(
     'input[data-env-var="OPENAQ_API_KEY"]',
-    (el) => ({ type: el.type, value: el.value }),
+    (el) => ({ type: el.type, empty: el.value.length === 0 }),
   );
   assert.equal(input.type, 'password');
-  assert.equal(input.value, '');
+  assert.equal(input.empty, true);
   await page.click('[data-key-setup-close]');
   const layerState = () =>
     page.evaluate(() => {
@@ -198,6 +209,8 @@ try {
   );
   let state = await layerState();
   assert.equal(state.params.view, 'PM2.5');
+  assert.ok(state.records.every((r) => r.value < 20));
+  assert.ok(requestedKinds.includes('aqi') && requestedKinds.includes('PM2.5'));
   assert.deepEqual(
     new Set(state.records.map((r) => r.country)),
     new Set(fixtures.map((r) => r[0])),
@@ -264,7 +277,9 @@ try {
       window.__godsEyeView.dataManager.layers
         .get('air-quality')
         .module.getRowControls()
-        .summary.lines.some((line) => /OpenAQ unavailable/.test(line.text)),
+        .summary.lines.some((line) =>
+          /OpenAQ: request budget reached/.test(line.text),
+        ),
     { timeout: 15000 },
   );
   const cooldown = await layerState();
@@ -358,4 +373,15 @@ try {
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
+}
+
+/** Opens `target`; a failure names its origin only, never a query that may carry a token. */
+async function gotoSafely(page, target, options) {
+  try {
+    return await page.goto(target, options);
+  } catch (error) {
+    throw new Error(
+      `navigation to ${new URL(target).origin} failed: ${String(error?.message ?? error).split(' at ')[0]}`,
+    );
+  }
 }

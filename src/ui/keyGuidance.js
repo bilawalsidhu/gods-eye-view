@@ -15,7 +15,7 @@ export function keyRequirementText(id) {
 
 /**
  * The same for several keys, their variables in one list in the UI
- * language ("Needs X and Y — …"); unknown or hidden keys are left out, and
+ * language ("Needs X or Y — …"); unknown or hidden keys are left out, and
  * none known is ''.
  * @param {Array<string>} ids Registry entry ids, in the order to name them.
  */
@@ -23,6 +23,10 @@ export function keysRequirementText(ids = []) {
   const envVars = [
     ...new Set(ids.map((id) => (id ? keySetupRequirementEnvVars(id) : null))),
   ].filter(Boolean);
+  if (envVars.length > 1)
+    return t('Needs {envVars} — add one in Provider Settings', {
+      envVars: formatList(envVars, { type: 'disjunction' }),
+    });
   return envVars.length
     ? t('Needs {envVars} — add it in Provider Settings', {
         envVars: formatList(envVars),

@@ -85,6 +85,7 @@ export function createWeatherPanel({
   const count = panel?.querySelector('#weather-panel-count');
   let entries = [];
   let destroyed = false;
+  const selections = new Map();
   let previousIds = null;
   let hasAppeared = false;
   const page = panel || document;
@@ -324,6 +325,19 @@ export function createWeatherPanel({
             )?.id) ||
           ordered[0]?.id ||
           null;
+      }
+      // A new selection on the map (a lead result) opens its card, even over
+      // another open one; refreshes of the same selection leave the open card.
+      for (const id of selections.keys())
+        if (!ids.has(id)) selections.delete(id);
+      for (const { id, summary } of entries) {
+        const result = summary.result?.lead === true ? summary.result : null;
+        const key = result ? String(result.key ?? result.label ?? '') : null;
+        if (key !== null && key !== (selections.get(id) ?? null)) {
+          openId = id;
+          openPanels.set(page, id);
+        }
+        selections.set(id, key);
       }
       if (ids.size) hasAppeared = true;
       previousIds = ids;

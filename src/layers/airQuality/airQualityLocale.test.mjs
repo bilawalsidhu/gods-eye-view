@@ -71,16 +71,25 @@ for (const locale of ['es', 'ru']) {
   test(`${locale}: the Weather card of Air quality is translated`, async () => {
     const layer = harness({ getSnapshot: async () => [reading] });
     await layer.update();
+    layer.setParams({ station: 'saaqis:A:aqi' });
     const controls = inLocale(locale, () => layer.getRowControls());
     const english = [
+      ...controls.summary.toggles.map((t) => t.label),
+      controls.list.title,
+      ...controls.sublists
+        .flatMap((g) => g.tiles.map((tile) => tile.note))
+        .filter(Boolean),
       controls.summary.label,
       controls.summary.coverage,
       controls.summary.status,
       ...controls.legend.map((entry) => entry.label),
       ...controls.list.items.map((item) => item.text),
     ].filter((text) =>
-      /\b(Air quality|South Africa|stations?|Good|Moderate)\b/.test(text),
+      /\b(Air quality|South Africa|stations?|STATIONS|HIGHEST IN VIEW|Good|Fair|Moderate|Poor|Unhealthy|Hazardous)\b/.test(
+        text,
+      ),
     );
+    assert.ok(controls.sublists.some((g) => g.tiles.some((t) => t.note)));
     assert.deepEqual(english, [], `English left in the ${locale} card`);
   });
 

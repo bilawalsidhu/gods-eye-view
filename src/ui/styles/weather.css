@@ -387,7 +387,7 @@ html:not([lang='en']) .rail-card-setting {
 
 .rail-card-tiles-sub {
   overflow: hidden;
-  color: rgba(199, 214, 222, 0.45);
+  color: rgba(199, 214, 222, 0.78);
   letter-spacing: 0.04rem;
   text-overflow: ellipsis;
   text-transform: none;
@@ -425,9 +425,7 @@ html:not([lang='en']) .rail-card-setting {
 
 .rail-card-tile strong {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 /* The band in words beside a tile's value. */

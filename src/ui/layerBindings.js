@@ -135,10 +135,13 @@ export class LayerBindings {
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'air-quality',
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
-      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
+      let noun = 'weather';
+      if (id === 'weather-cyclones') noun = 'cyclone';
+      if (id === 'air-quality') noun = 'air quality';
       layer.attachShellServices({
         runNavigation: (navigate) =>
           this.runImmediateNavigation(noun, navigate),
@@ -151,14 +154,6 @@ export class LayerBindings {
     if (typeof fires?.attachShellServices === 'function') {
       fires.attachShellServices({ imageryHost: this.services.imageryHost });
       this._weatherShellModules.push(fires);
-    }
-    // Air quality drapes a host's model field on it too.
-    const airQuality = this._dataManager?.layers?.get('air-quality')?.module;
-    if (typeof airQuality?.attachShellServices === 'function') {
-      airQuality.attachShellServices({
-        imageryHost: this.services.imageryHost,
-      });
-      this._weatherShellModules.push(airQuality);
     }
     // News flies to a chosen report or hotspot through the same release.
     const news = this._dataManager?.layers?.get('news')?.module;

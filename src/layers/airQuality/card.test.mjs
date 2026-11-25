@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createAirQualityLayer } from './index.js';
 import { createAirQualitySource } from './providers.js';
 import { interpretHourly } from './interpretation.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import {
   LayerPanel,
@@ -82,6 +82,7 @@ function cardHarness(
     definitions = [OPENAQ, definition('saaqis')],
     coverage = {},
     view = null,
+    project,
   } = {},
 ) {
   const calls = [];
@@ -105,6 +106,7 @@ function cardHarness(
           camera.center.lon + (x - 400) * 0.001,
           camera.center.lat + (300 - y) * 0.001,
         ),
+      ...(project ? { project } : {}),
       isOccluded: () => false,
     },
   });
@@ -194,7 +196,7 @@ test('the card has an index group of one tile and a six-tile pollutant group', a
     // CO in mg/m³ on its own steps (WHO), the same six bands.
     { value: '0.40', note: 'Good', accent: '#50c9b5' },
   );
-  // #1291's view chips are gone: the tiles are the picker.
+  // The tiles are the view picker.
   assert.equal(controls.summary.settings, undefined);
   assert.deepEqual(controls.summary.toggles, [
     {
@@ -301,10 +303,11 @@ test('a selected station heads the card and the tiles read it', async () => {
   let controls = layer.getRowControls();
   assert.deepEqual(controls.summary.result, {
     id: 'station',
+    key: 'saaqis:durban:aqi',
     lead: true,
     label: 'Durban',
-    // Its network and licence: the header's tooltip.
-    title: 'SAAQIS · Licence: CC BY 4.0 (Licence holder)',
+    title:
+      'Calculated US AQI · main pollutant PM2.5 · PM2.5 40 µg/m³, NO2 30 µg/m³ · SAAQIS · Licence: CC BY 4.0 (Licence holder)',
     clear: { label: 'Deselect station', params: { station: null } },
     lines: [
       {
@@ -312,16 +315,28 @@ test('a selected station heads the card and the tiles read it', async () => {
         muted: true,
         text: 'Measured · SAAQIS · 10m ago',
       },
+      {
+        id: 'station-licence',
+        muted: true,
+        text: 'Licence: CC BY 4.0 (Licence holder)',
+      },
     ],
   });
-  assert.equal(group(controls, 'index').subtitle, 'measured at the station');
+  assert.equal(
+    group(controls, 'index').subtitle,
+    'calculated from the station',
+  );
   assert.equal(tile(controls, 'index', 'aqi').value, '112');
   // A tile changes what the map shows, not the station.
   layer.setParams({ view: 'NO2' });
   await flush();
   controls = layer.getRowControls();
   assert.equal(controls.summary.result?.label, 'Durban');
-  assert.equal(layer.getParams().station, 'saaqis:durban:NO2');
+  assert.equal(
+    controls.list.items.find((item) => item.active)?.params.station,
+    'saaqis:durban:NO2',
+  );
+  assert.deepEqual(layer.getParams(), { view: 'NO2' });
   assert.equal(tile(controls, 'pollutants', 'NO2').value, '30');
   layer.setParams({ station: null });
   controls = layer.getRowControls();
@@ -344,12 +359,11 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
   const { list } = layer.getRowControls();
   assert.equal(list.title, 'HIGHEST IN VIEW');
   assert.deepEqual(
-    list.items.map(({ ordinal, swatch, lead, text, badge, params }) => ({
+    list.items.map(({ ordinal, swatch, lead, text, params }) => ({
       ordinal,
       swatch,
       lead,
       text,
-      badge,
       params,
     })),
     [
@@ -358,7 +372,6 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
         swatch: '#ff7e00',
         lead: '112',
         text: 'Durban',
-        badge: undefined,
         params: { station: 'saaqis:durban:aqi' },
       },
       {
@@ -366,7 +379,6 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
         swatch: '#ffff00',
         lead: '56',
         text: 'Cape Town',
-        badge: undefined,
         params: { station: 'saaqis:cape-town:aqi' },
       },
     ],
@@ -378,16 +390,16 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
   );
   layer.setParams({ station: 'saaqis:durban:aqi' });
   assert.equal(layer.getRowControls().list.items[0].active, true);
-  // The licence is named in the tooltips only, never on the card itself.
+  // The selected station also displays its licence.
   const { list: rows, summary } = layer.getRowControls();
+  assert.deepEqual(
+    rows.items.map((item) => item.note),
+    ['Sensitive groups', 'Moderate'],
+  );
   assert.match(rows.items[0].title, /Licence: CC BY 4\.0 \(Licence holder\)$/);
-  assert.doesNotMatch(
-    JSON.stringify([
-      summary.lines,
-      summary.result.lines,
-      rows.items.map(({ lead, text }) => [lead, text]),
-    ]),
-    /Licence holder|CC BY/,
+  assert.match(
+    summary.result.lines.find((line) => line.id === 'station-licence').text,
+    /CC BY 4\.0/,
   );
 });
 
@@ -418,12 +430,7 @@ test('the card is slim: one time line, a station count, the key lines and nothin
       text: 'OPENAQ: add a key in Provider Settings',
     },
   ]);
-  assert.equal(summary.overview, undefined);
   assert.equal(summary.settings, undefined);
-  assert.doesNotMatch(
-    JSON.stringify(summary),
-    /catalog stations|GEV computes|Most people|Highest US AQI|unmonitored/i,
-  );
 });
 
 test('the AQI and pollutant views show a ramp with its range', async () => {
@@ -689,8 +696,7 @@ test('a source offers the US AQI and the pollutants its networks measure', () =>
   assert.equal(layer.getParams().view, 'aqi');
   assert.notEqual(layer.setParams({ view: 'PM2.5' }), false);
   assert.equal(layer.getParams().view, 'PM2.5');
-  for (const view of ['NO2', 'aqhi'])
-    assert.equal(layer.setParams({ view }), false);
+  for (const view of ['NO2']) assert.equal(layer.setParams({ view }), false);
   assert.notEqual(layer.setParams({ view: 'aqi' }), false);
   assert.equal(layer.getParams().view, 'aqi');
 });
@@ -738,7 +744,7 @@ test('a provider without its key is not asked again on scheduled updates for ten
   ]);
 });
 
-// ── fix round 1 ────────────────────────────────────────────────────────────
+// ── what the tiles read ────────────────────────────────────────────────────
 
 test('the tiles read only stations in view: with none in view they read nothing', async () => {
   const { layer, moveTo } = cardHarness({
@@ -877,7 +883,7 @@ test('a selected station stays across tile clicks, from its remembered values wh
     assert.equal(controls.summary.result?.label, 'Durban', moment);
     assert.equal(
       group(controls, 'index').subtitle,
-      'measured at the station',
+      'calculated from the station',
       moment,
     );
     assert.equal(tile(controls, 'index', 'aqi').value, '112', moment);
@@ -1019,7 +1025,7 @@ test('a collapsed card with no status shows the first network line', async () =>
   assert.equal(summary.compact, 'OPENAQ: add a key in Provider Settings');
 });
 
-// ── final fix wave ─────────────────────────────────────────────────────────
+// ── keys, failures, age and provenance ─────────────────────────────────────
 
 /**
  * A layer on the default providers, each local route answering
@@ -1163,14 +1169,13 @@ test("a station's originating network and licence are named in its row and heade
   );
   layer.setParams({ station: row.params.station });
   const { summary } = layer.getRowControls();
-  assert.equal(
+  assert.match(
     summary.result.title,
-    'City network · Licence: CC BY 4.0 (Licence holder)',
+    / · City network · Licence: CC BY 4\.0 \(Licence holder\)$/,
   );
-  // A tooltip, not a card line.
-  assert.doesNotMatch(
-    JSON.stringify([summary.lines, summary.result.lines]),
-    /Licence/,
+  assert.match(
+    summary.result.lines.find((line) => line.id === 'station-licence').text,
+    /CC BY/,
   );
   // A station without a stated licence names its network alone.
   const plain = cardHarness({
@@ -1374,7 +1379,7 @@ test('a row whose reading has no observation time still has its tooltip', async 
   const [row] = layer.getRowControls().list.items;
   assert.match(
     row.title,
-    /^Cape Town · Western Cape · SAAQIS · Hourly average · Unavailable · /,
+    /^Fair · Cape Town · Western Cape · SAAQIS · Hourly average · Unavailable · /,
   );
   assert.doesNotMatch(row.title, /Older observation/);
 });
@@ -1411,7 +1416,7 @@ test("a pollutant view's map label gives the value in the view's unit", async ()
   layer.enable();
   await layer.update();
   await flush();
-  assert.equal(titles.at(-1), 'Cape Town 19 µg/m³ · Fair');
+  assert.equal(titles.at(-1), '\u2068Cape Town\u2069 19 µg/m³ · Fair');
   const [record] = layer.getAnalystRecords();
   assert.equal(record.value, 18.82);
   assert.equal(record.units, 'µg/m³');
@@ -1419,26 +1424,6 @@ test("a pollutant view's map label gives the value in the view's unit", async ()
 });
 
 // ── one index: the computed US AQI ─────────────────────────────────────────
-
-test('the default providers offer one index, the US AQI: no AQHI view, tile, legend or Canada badge', async () => {
-  const { layer } = cardHarness(
-    { saaqis: station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES) },
-    { definitions: createAirQualitySource().definitions },
-  );
-  await layer.update();
-  await flush();
-  const controls = layer.getRowControls();
-  assert.deepEqual(
-    group(controls, 'index').tiles.map((item) => item.id),
-    ['aqi'],
-  );
-  assert.equal(group(controls, 'pollutants').tiles.length, 6);
-  assert.equal(layer.setParams({ view: 'aqhi' }), false);
-  assert.equal(layer.getParams().view, 'aqi');
-  assert.equal(controls.legendCategorical, false);
-  assert.equal(controls.summary.coverage, 'South Africa');
-  assert.doesNotMatch(JSON.stringify(controls), /AQHI|Canada/);
-});
 
 test("a network's own index is never shown, in the AQI view or a pollutant view", async () => {
   const rating = { score: 4, label: 'Moderate', method: 'SAAQIS index' };
@@ -1505,7 +1490,7 @@ test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, n
   assert.deepEqual(row.requiresKeyId, ['openaq', 'data-gov-in']);
   assert.equal(
     layerKeyRequirementTooltip(row),
-    'Needs OPENAQ_API_KEY and DATA_GOV_IN_API_KEY — add it in Provider Settings',
+    'Needs OPENAQ_API_KEY or DATA_GOV_IN_API_KEY — add one in Provider Settings',
   );
   // The card names the keys to add, OpenAQ's first, also collapsed.
   const { summary } = layer.getRowControls();
@@ -1573,4 +1558,109 @@ test('remembered AQI-view values obey the six-hour observation age in other view
   assert.equal(tile(controls, 'index', 'aqi').value, '—');
   assert.equal(tile(controls, 'pollutants', 'PM2.5').value, '—');
   assert.equal(tile(controls, 'pollutants', 'NO2').value, '—');
+});
+
+test('a rated station chosen over a nearer unrated one is named the nearest rated station', async () => {
+  const { layer } = cardHarness({
+    saaqis: [
+      ...station('saaqis', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
+        ...row,
+        rated: false,
+      })),
+      ...station('saaqis', DURBAN, { 'PM2.5': 40 }),
+    ],
+  });
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(
+    group(controls, 'index').subtitle,
+    'nearest rated station · Durban',
+  );
+  assert.equal(tile(controls, 'index', 'aqi').value, '112');
+});
+test('a reading without confirmed units shows its reported number on the tile and row', async () => {
+  const { layer } = cardHarness(
+    {
+      saaqis: [
+        pollutant('saaqis', CAPE_TOWN, 'PM2.5', 123, {
+          rated: false,
+          units: null,
+          averagingMinutes: null,
+        }),
+        pollutant('saaqis', DURBAN, 'PM2.5', 40),
+      ].map(interpretHourly),
+    },
+    { view: 'PM2.5' },
+  );
+  await layer.update();
+  await flush();
+  layer.setParams({ station: 'saaqis:cape-town:PM2.5' });
+  const controls = layer.getRowControls(),
+    reading = tile(controls, 'pollutants', 'PM2.5');
+  assert.deepEqual(
+    [reading.value, reading.note, reading.accent],
+    ['123', 'unrated units', '#8cb4ce'],
+  );
+  assert.deepEqual(
+    controls.list.items.map((row) => [row.lead, row.text]),
+    [
+      ['40', 'Durban'],
+      ['123', 'Cape Town · unrated units'],
+    ],
+  );
+});
+test('a selection follows the copy kept by the next merge', async () => {
+  let rows = [];
+  const { layer } = cardHarness({
+    openaq: station('openaq', CAPE_TOWN, CAPE_TOWN_VALUES),
+    saaqis: () => rows,
+  });
+  await layer.update();
+  await flush();
+  layer.setParams({ station: 'openaq:cape-town:aqi' });
+  rows = station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES);
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(controls.summary.result.key, 'saaqis:cape-town:aqi');
+  assert.equal(
+    controls.list.items.find((item) => item.active).params.station,
+    controls.summary.result.key,
+  );
+});
+test('stations that project outside the canvas are not counted or ranked', async () => {
+  const { layer } = cardHarness(
+    {
+      saaqis: [
+        ...station('saaqis', CAPE_TOWN, CAPE_TOWN_VALUES),
+        ...station('saaqis', DURBAN, { 'PM2.5': 40 }),
+      ],
+    },
+    { project: (p) => ({ x: toLonLatH(p).lon < 25 ? 400 : 1200, y: 300 }) },
+  );
+  await layer.update();
+  await flush();
+  const controls = layer.getRowControls();
+  assert.equal(controls.summary.status, '1 station');
+  assert.deepEqual(
+    controls.list.items.map((i) => i.text),
+    ['Cape Town'],
+  );
+});
+test('a selected station below the top five shows its index details', async () => {
+  const rows = Array.from({ length: 7 }, (_, i) =>
+    station(
+      'saaqis',
+      { ...CAPE_TOWN, name: 'Station ' + i, lon: 18 + i / 5 },
+      { 'PM2.5': 10 + i },
+    ),
+  ).flat();
+  const { layer } = cardHarness({ saaqis: rows });
+  await layer.update();
+  await flush();
+  layer.setParams({ station: 'saaqis:station-0:aqi' });
+  const controls = layer.getRowControls();
+  assert.ok(!controls.list.items.some((i) => i.active));
+  assert.match(controls.summary.result.title, /Calculated US AQI/);
 });

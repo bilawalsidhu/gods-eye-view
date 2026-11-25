@@ -5,7 +5,6 @@ import {
   US_AQI_LIMITS,
   aqiStations,
   plausibility,
-  plausible,
   stationIndex,
   usAqi,
   usAqiBand,
@@ -89,24 +88,31 @@ test('no rated value gives null', () => {
 });
 
 test('plausible drops PM2.5 well above PM10', () => {
-  assert.deepEqual(plausible({ pm25: 308, pm10: 92 }), { pm10: 92 });
-  assert.deepEqual(plausible({ pm25: 40, pm10: 92 }), { pm25: 40, pm10: 92 });
+  assert.deepEqual(plausibility({ pm25: 308, pm10: 92 }).kept, { pm10: 92 });
+  assert.deepEqual(plausibility({ pm25: 40, pm10: 92 }).kept, {
+    pm25: 40,
+    pm10: 92,
+  });
 });
 
 test('a lone outlier does not reach 500', () => {
-  assert.deepEqual(plausible({ pm10: 7000 }), {});
-  assert.equal(usAqi(plausible({ pm10: 7000 })), null);
+  assert.deepEqual(plausibility({ co: 150 }).kept, { co: 150 });
+  assert.deepEqual(plausibility({ pm10: 20_001 }).kept, {});
+  assert.equal(usAqi(plausibility({ pm10: 20_001 }).kept), null);
   assert.deepEqual(
-    plausible({
+    plausibility({
       pm25: 3001,
       o3: 1001,
       no2: 1501,
       so2: 3001,
-      co: 101,
-    }),
+      co: 201,
+    }).kept,
     {},
   );
-  assert.deepEqual(plausible({ pm25: 3000, co: 100 }), { pm25: 3000, co: 100 });
+  assert.deepEqual(plausibility({ pm25: 3000, co: 100 }).kept, {
+    pm25: 3000,
+    co: 100,
+  });
 });
 
 test('the bands are the EPA categories and colours', () => {
@@ -473,7 +479,7 @@ const row = (parameter, value, extra = {}) =>
     ...extra,
   });
 
-test('the AQI view runs its values through plausible()', async () => {
+test('the AQI view runs its values through plausibility()', async () => {
   // PM2.5 above the same station's PM10: PM10 alone sets the index (69).
   let { layer, point } = injectedLayer([row('PM2.5', 300), row('PM10', 92)]);
   await layer.update();
@@ -578,15 +584,15 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
 
 test('PM2.5 is dropped only when it exceeds PM10 by a real margin: 1.5 × PM10 + 10', () => {
   // Smoke: PM2.5 close to PM10 stays and sets the index.
-  assert.deepEqual(plausible({ pm25: 150, pm10: 145 }), {
+  assert.deepEqual(plausibility({ pm25: 150, pm10: 145 }).kept, {
     pm25: 150,
     pm10: 145,
   });
-  assert.deepEqual(usAqi(plausible({ pm25: 150, pm10: 145 })), {
+  assert.deepEqual(usAqi(plausibility({ pm25: 150, pm10: 145 }).kept), {
     index: 225,
     leading: 'pm25',
   });
-  assert.deepEqual(plausible({ pm25: 12.3, pm10: 12.0 }), {
+  assert.deepEqual(plausibility({ pm25: 12.3, pm10: 12.0 }).kept, {
     pm25: 12.3,
     pm10: 12.0,
   });
@@ -596,9 +602,11 @@ test('PM2.5 is dropped only when it exceeds PM10 by a real margin: 1.5 × PM10 +
     excluded: { pm25: 'above-pm10' },
   });
   // The margin itself.
-  assert.deepEqual(plausible({ pm25: 160, pm10: 100 }), {
+  assert.deepEqual(plausibility({ pm25: 160, pm10: 100 }).kept, {
     pm25: 160,
     pm10: 100,
   });
-  assert.deepEqual(plausible({ pm25: 160.1, pm10: 100 }), { pm10: 100 });
+  assert.deepEqual(plausibility({ pm25: 160.1, pm10: 100 }).kept, {
+    pm10: 100,
+  });
 });

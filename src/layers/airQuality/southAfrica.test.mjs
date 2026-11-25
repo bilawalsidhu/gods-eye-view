@@ -4,14 +4,23 @@ import assert from 'node:assert/strict';
 import {
   normalizeSaStations,
   normalizeSaMeasurements,
-  selectSaReadings,
   saObservationTime,
   SA_POLLUTANTS,
 } from './southAfrica.js';
-import { createAirQualitySource } from './providers.js';
+import {
+  createAirQualitySnapshotSource,
+  createAirQualitySource,
+} from './providers.js';
 import { createAirQualityLayer } from './index.js';
 
 const now = Date.parse('2026-10-20T10:00:00Z');
+/** The current readings of one pollutant, as the snapshot adapter answers them. */
+const current = (payload, parameter = 'PM2.5') =>
+  createAirQualitySnapshotSource({
+    endpoint: '/api/air-quality/south-africa',
+    now: () => now,
+    fetchImpl: async () => Response.json(payload),
+  }).getSnapshot({ parameter });
 const regions = [
   {
     regionId: 2,
@@ -135,17 +144,17 @@ test('impossible SAAQIS calendar dates never become current observations', () =>
   );
 });
 
-test('fresh station timestamp cannot hide years-old channel data', () => {
+test('fresh station timestamp cannot hide years-old channel data', async () => {
   const p = snapshot([channel({ datetime: '2020-06-01T00:00:00+02:00' })]);
   assert.equal(
     p.readings.length,
     1,
     'inventory can retain last reported values',
   );
-  assert.deepEqual(selectSaReadings(p, 'PM2.5', now), []);
+  assert.deepEqual(await current(p), []);
 });
 
-test('invalid, inactive, null, negative, exotic units and future measurements never appear current', () => {
+test('invalid, inactive, null, negative, exotic units and future measurements never appear current', async () => {
   for (const override of [
     { valid: false },
     { active: false },
@@ -156,30 +165,32 @@ test('invalid, inactive, null, negative, exotic units and future measurements ne
     { units: 'mg/Nm3' },
     { datetime: '2026-10-21T12:00:00+02:00' },
   ])
-    assert.equal(
-      selectSaReadings(snapshot([channel(override)]), 'PM2.5', now).length,
-      0,
-    );
-  assert.equal(
-    selectSaReadings(snapshot([channel({ value: 0 })]), 'PM2.5', now)[0].value,
-    0,
-  );
+    assert.equal((await current(snapshot([channel(override)]))).length, 0);
+  assert.equal((await current(snapshot([channel({ value: 0 })])))[0].value, 0);
 });
 
-test('concentrations retain original units, hourly period and attribution without AQI or emissions claims', () => {
-  const p = snapshot([
-    channel(),
-    channel({ name: 'CO2', value: 420, units: 'ppm' }),
+test('concentrations retain units, hourly period and attribution; pollutants without a view are left out', async () => {
+  const [reading] = await current(
+    snapshot([channel({ name: 'NO2', value: 10, units: 'ppb' })]),
+    'NO2',
+  );
+  assert.equal(reading.units, 'ppb');
+  assert.equal(reading.band, null);
+  assert.equal(reading.kind, 'observation');
+  assert.equal(reading.averagingMinutes, 60);
+  assert.equal(reading.owner, 'City of Cape Town');
+  assert.deepEqual(
+    snapshot([channel({ name: 'CO2', value: 420, units: 'ppm' })]).readings,
+    [],
+  );
+  assert.deepEqual([...SA_POLLUTANTS].sort(), [
+    'CO',
+    'NO2',
+    'O3',
+    'PM10',
+    'PM2.5',
+    'SO2',
   ]);
-  const [co2] = selectSaReadings(p, 'CO2', now);
-  assert.equal(co2.units, 'ppm');
-  assert.equal(co2.band, null);
-  assert.equal(co2.risk, null);
-  assert.equal(co2.kind, 'observation');
-  assert.equal(co2.averagingMinutes, 60);
-  assert.equal(co2.owner, 'City of Cape Town');
-  assert.equal(selectSaReadings(p, 'PM2.5', now).length, 1);
-  assert.ok(SA_POLLUTANTS.includes('H2S'));
 });
 
 test('duplicate station/pollutant observations keep the newest valid value', () => {
@@ -202,11 +213,10 @@ test('provider composition propagates errors and rechecks cached measurement age
       return Response.json(snapshot([channel()]));
     },
   });
-  // South Africa is the first provider: the default one asked.
-  assert.equal((await source.getSnapshot()).length, 1);
+  assert.equal((await source.getSnapshot({ provider: 'saaqis' })).length, 1);
   assert.equal(calls, 1);
   assert.equal((await source.getSnapshot({ provider: 'saaqis' })).length, 1);
-  assert.equal(source.getCoverage().stations.length, 2);
+  assert.equal(source.getCoverage('saaqis').stale, false);
   clock += 7 * 3600_000;
   assert.deepEqual(await source.getSnapshot({ provider: 'saaqis' }), []);
   await assert.rejects(source.getSnapshot({ provider: 'other' }), /Unknown/);
@@ -232,9 +242,7 @@ test('view switch clears old markers and ignores late requests; camera changes u
     getSnapshot: ({ provider, parameter }) =>
       provider === 'saaqis'
         ? Promise.resolve(
-            parameter === 'PM2.5'
-              ? selectSaReadings(snapshot([channel()]), 'PM2.5', now)
-              : [],
+            parameter === 'PM2.5' ? current(snapshot([channel()])) : [],
           )
         : new Promise((resolve) => late.push(resolve)),
   };
@@ -395,8 +403,7 @@ test('stale coverage says the network shows cached data; partial alone says noth
     const layer = createAirQualityLayer({
       source: {
         definitions: [definition],
-        getSnapshot: async () =>
-          selectSaReadings(snapshot([channel()]), 'PM2.5', now),
+        getSnapshot: async () => current(snapshot([channel()])),
         getCoverage: () => coverage,
       },
       overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },

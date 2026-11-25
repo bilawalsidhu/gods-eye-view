@@ -2983,23 +2983,6 @@ test('the plain token 4 opens the layer on the US AQI', () => {
   );
 });
 
-test("Canada's retired AQHI view opens on the US AQI", () => {
-  // The token `k` was never released; a link or a saved state carrying it,
-  // or the view's name, opens the default view.
-  const decoded = decodeLayerStateParams(
-    new URLSearchParams('v=2&l=4&lo=4.v.k'),
-  );
-  assert.deepEqual(decoded.enabledLayerIds, ['air-quality']);
-  assert.deepEqual(decoded.options['air-quality'], { view: 'aqi' });
-  assert.deepEqual(
-    normalizeLayerState({
-      enabledLayerIds: ['air-quality'],
-      options: { 'air-quality': { view: 'aqhi' } },
-    }).options['air-quality'],
-    { view: 'aqi' },
-  );
-});
-
 function enabledLayerParam(sink) {
   return new URLSearchParams(encode(sink.provider())).get('l');
 }

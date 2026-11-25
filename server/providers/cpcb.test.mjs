@@ -86,7 +86,7 @@ test('pagination, coalescing and cache: credentials and arbitrary upstream field
   assert.equal(urls.length, 2);
   assert.equal(results[0].body.schemaVersion, 1);
   assert.equal(results[0].body.readings.length, 1001);
-  assert.equal(results[0].body.stations.length, 1001);
+  assert.equal(results[0].body.stations, undefined);
   assert.equal(JSON.stringify(results).includes('private-test-key'), false);
   assert.equal(JSON.stringify(results).includes('api_key'), false);
   assert.equal(urls[0].origin, 'https://api.data.gov.in');
@@ -183,21 +183,4 @@ test('a key OGD rejects is answered as rejected, without the key', async () => {
     clock += 61_000;
     assert.equal((await request()).status, 200);
   }
-});
-
-test('the rating settings reach the normalizer', async () => {
-  const request = harness({
-    apiKey: () => 'test-key',
-    unitsVerified: true,
-    averagingMinutes: 60,
-    fetchImpl: async () => Response.json({ total: 1, records: [ogdRow()] }),
-  });
-  const [reading] = (await request()).body.readings;
-  assert.equal(reading.rated, true);
-  assert.equal(reading.units, 'µg/m³');
-  const unrated = harness({
-    apiKey: () => 'test-key',
-    fetchImpl: async () => Response.json({ total: 1, records: [ogdRow()] }),
-  });
-  assert.equal((await unrated()).body.readings[0].rated, false);
 });

@@ -37,6 +37,7 @@ test('OpenAQ preserves source attribution and joins sensor IDs without inventing
   const stations = normalizeOpenAqLocations([
     location,
     location,
+    { ...location, id: 3, isMobile: true },
     { ...location, id: 2, coordinates: { latitude: null, longitude: 10 } },
   ]);
   assert.equal(stations.length, 1);
@@ -55,9 +56,23 @@ test('OpenAQ preserves source attribution and joins sensor IDs without inventing
   );
   assert.equal(rows.length, 1);
   assert.equal(rows[0].parameter, 'PM2.5');
-  assert.equal(rows[0].rating, null);
+  assert.equal('rating' in rows[0], false);
+  assert.equal('sensors' in rows[0], false);
   assert.equal(rows[0].averagingMinutes, null);
   assert.equal(rows[0].licenses[0].attribution, 'Original network');
+});
+
+test('OpenAQ treats only an explicitly identified monitor as a reference monitor', () => {
+  for (const [metadata, expected] of [
+    [{ isMonitor: true }, true],
+    [{ isMonitor: false }, false],
+    [{}, false],
+  ]) {
+    const [station] = normalizeOpenAqLocations([{ ...location, ...metadata }]);
+    assert.equal(station.monitor, expected);
+    const [reading] = normalizeOpenAqLatest(station, [latest], now);
+    assert.equal(reading.monitor, expected);
+  }
 });
 
 test('an injected provider controls source, parameters and UI without renderer edits', async () => {
@@ -67,7 +82,6 @@ test('an injected provider controls source, parameters and UI without renderer e
     title: 'Community',
     label: 'Community observations',
     network: 'Community network',
-    coverage: 'Regional',
     observation: true,
     parameters: ['NO2'],
     legend: [],
@@ -80,7 +94,7 @@ test('an injected provider controls source, parameters and UI without renderer e
   };
   const source = createAirQualitySource({ providers: [definition] });
   assert.equal(calls, 0);
-  await source.getSnapshot();
+  await source.getSnapshot({ provider: 'community-network' });
   assert.equal(calls, 1);
   const layer = createAirQualityLayer({
     source,
@@ -93,7 +107,7 @@ test('an injected provider controls source, parameters and UI without renderer e
     [['aqi'], ['NO2']],
   );
   assert.equal(layer.setParams({ view: 'PM2.5' }), false);
-  assert.equal(layer.setParams({ view: 'aqhi' }), false);
+
   assert.equal(layer.setParams({ view: 'NO2' }), undefined);
   assert.equal(layer.getParams().view, 'NO2');
   assert.throws(
@@ -154,11 +168,11 @@ test('injected viewport travels through the fixed snapshot route without exposin
   assert.ok(!source.definitions.find((p) => p.id === 'saaqis').viewDriven);
 });
 
-test('snapshot adapter carries bounded cooldown metadata and tolerates malformed rate-limit responses', async () => {
+test('snapshot adapter carries cooldown metadata and tolerates malformed rate-limit responses', async () => {
   const { createAirQualitySnapshotSource } = await import('./providers.js');
   for (const [body, expected] of [
     [JSON.stringify({ retryAt: now + 120_000 }), now + 120_000],
-    [JSON.stringify({ retryAt: now + 1e12 }), now + 24 * 3600_000],
+    [JSON.stringify({ retryAt: now + 1e12 }), now + 1e12],
     ['upstream busy', now + 60_000],
   ]) {
     const source = createAirQualitySnapshotSource({
@@ -173,17 +187,15 @@ test('snapshot adapter carries bounded cooldown metadata and tolerates malformed
   }
 });
 
-test('providers asked in parallel keep their own coverage and cache', async () => {
+test('providers asked in parallel keep their own coverage', async () => {
   const calls = [];
   const provider = (id, slow) => ({
     id,
     title: id,
     label: id,
     network: id,
-    coverage: id,
     observation: true,
     parameters: ['PM2.5'],
-    refreshMs: 60_000,
     source: {
       getCoverage: () => ({ network: id }),
       async getSnapshot() {
@@ -209,7 +221,7 @@ test('providers asked in parallel keep their own coverage and cache', async () =
   assert.equal(source.getCoverage('slow').network, 'slow');
   assert.equal(source.getCoverage('fast').network, 'fast');
   await ask();
-  assert.deepEqual(calls, ['slow', 'fast'], 'both answers were cached');
+  assert.deepEqual(calls, ['slow', 'fast', 'slow', 'fast']);
 });
 
 test('an hourly note names the bands used: WHO-based for CO, EEA for the rest', () => {

@@ -5,10 +5,9 @@ import {
   findCamera,
   findFrame,
   findQuery,
-  rendererOf,
 } from '../../render/rendererOf.js';
-import { registerDynamicCredit } from '../../data/dataCredits.js';
-import { worldClock } from '../../time/worldClock.js';
+import { replaceDynamicCredit } from '../../data/dataCredits.js';
+import { worldClock, isWorldTime } from '../../time/worldClock.js';
 import { globeImageryHost } from '../weather/shellPlacement.js';
 import {
   fieldCoverage,
@@ -50,8 +49,16 @@ import {
   usAqiBand,
 } from './usAqi.js';
 import { concentrationIn, layerUnits } from './units.js';
-import { formatUtcDayMonth, msg, t, tn } from '../../i18n/index.js';
 import {
+  onLocaleChange,
+  formatNumber,
+  formatUtcDayMonth,
+  msg,
+  t,
+  tn,
+} from '../../i18n/index.js';
+import {
+  AIR_QUALITY_UNRATED_COLOR,
   AIR_QUALITY_UNKNOWN_COLOR,
   AIR_QUALITY_OVERLAY_SOURCE_ID,
   AIR_QUALITY_OVERLAY_COHORT_LIMIT,
@@ -61,12 +68,29 @@ import {
   mapAnalystRecord,
   newestObservation,
   readingsAreStale,
-  readingsInView,
+  isInRectangle,
   selectAirQualityOverlayCohort,
 } from './model.js';
 export * from './model.js';
 export { createAirQualitySource } from './providers.js';
 
+/** Picking source ID for station and group clicks. */
+const STATION_CLICK_SOURCE = 'air-quality-stations';
+/** A label's claim for the selected station: above any reading's. */
+const SELECTED_LABEL_VALUE = 1e7;
+/** Time on either side of now for which stations can accompany the current step. */
+const STATIONS_NOW_MS = 3600_000;
+/** Bidi controls a source's text may carry: marks, embeddings, overrides, isolates. */
+const BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+/** A station name on its map label: without bidi controls, isolated so it cannot reorder the value after it. */
+const labelName = (name) =>
+  `\u2068${String(name ?? '').replace(BIDI_CONTROLS, '')}\u2069`;
+/** A failure as a fixed reason for the console: its code, its HTTP status, or its kind. */
+const failureReason = (error) =>
+  error?.code ||
+  (Number.isInteger(error?.status)
+    ? `HTTP ${error.status}`
+    : error?.name || 'error');
 /** Readings listed in the readout card. */
 const READOUT_LIMIT = 5;
 /** Station dots, CSS pixels: plain and selected. */
@@ -125,8 +149,6 @@ const SOURCE_DEFINITION = Object.freeze({
   network: 'Air quality',
   parameters: AIR_QUALITY_POLLUTANT_VIEWS,
 });
-/** The colour of a station no index rates. */
-const UNRATED_COLOR = '#8cb4ce';
 /** The index's name: the same text in every language. */
 const AQI_NAME = 'US AQI';
 /** Pollutant names on the tiles, chemical formulas as written. */
@@ -161,7 +183,15 @@ const EXCLUSION_REASONS = Object.freeze({
 });
 /** A concentration in the layer's units as a number, without its unit. */
 function concentrationText(parameter, value) {
-  return value.toFixed(parameter === 'CO' ? 2 : value < 10 ? 1 : 0);
+  const onLimit = EEA_HOURLY_LIMITS[parameter]?.some(
+    (limit) => value > limit && Math.round(value) === limit,
+  );
+  const digits = parameter === 'CO' ? 2 : value < 10 || onLimit ? 1 : 0;
+  return formatNumber(value, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
 }
 
 /** One station value as text, in the layer's units. */
@@ -211,7 +241,8 @@ const scaleOf = (view) =>
  *
  * At far zoom, stations that would overlap on screen draw as one group
  * (`groups.js`) in the band colour of their members' mean; a click on a group
- * flies in to its stations, a click on a station selects it (`station`).
+ * flies in until its stations separate, or selects the highest if they cannot separate
+ * or that flight would zoom out. A click on a station selects it (`station`).
  * Without `input` (the input dispatcher's `inputFor`) the layer takes no
  * clicks. `picking` is the pick
  * registry (`src/data/pickRegistry.js`): the drawn stations and groups are
@@ -240,7 +271,7 @@ export function createAirQualityLayer({
   pointer = null,
   fieldSource = null,
   clock = worldClock,
-  registerCredit = registerDynamicCredit,
+  registerCredit = replaceDynamicCredit,
 } = {}) {
   if (typeof source?.getSnapshot !== 'function')
     throw new TypeError('Air quality requires a snapshot source');
@@ -259,16 +290,14 @@ export function createAirQualityLayer({
   let _viewer = null;
   let _points = null;
   /**
-   * The station readings drawn as points; each drawn point by item id, with
+   * Each drawn point by item id, with
    * where it is drawn and its size; the readings drawn on their own, which
    * keep their labels.
    */
-  let _stations = [];
   let _drawn = new Map();
   let _labelled = new Set();
   let _offClick = null;
   let _readings = [];
-  let _count = 0;
   let _lastUpdate = null;
   let _enabled = false;
   let rowControlsListener = null;
@@ -300,7 +329,7 @@ export function createAirQualityLayer({
    * heads the card in every view, also one where it has no reading.
    */
   let selectedSeen = null;
-  /** The station the tiles last read, kept while a new view loads. */
+  /** The nearest-station result the tiles last read, kept while a new view loads. */
   let lastNearest = null;
   /** The providers the current view asks. */
   const asked = () =>
@@ -322,15 +351,18 @@ export function createAirQualityLayer({
     settled: false,
     /** Whether its last failure was the network refusing the key. */
     keyRejected: false,
+    /** Whether its last failure was the network's request budget. */
+    rateLimited: false,
   });
   /** Per-provider acquisition state, keyed by provider id. */
-  let states = new Map(asked().map((entry) => [entry.id, freshState()]));
+  let states = new Map();
   const stateOf = (entry) => {
     if (!states.has(entry.id)) states.set(entry.id, freshState());
     return states.get(entry.id);
   };
   /** Which provider a drawn reading came from (ids may be reused by hosts). */
   let owners = new WeakMap();
+  let replacedBy = new Map();
   const ownerOf = (reading) =>
     owners.get(reading) ?? asked()[0] ?? definitions[0];
   let overlayEntries = [];
@@ -346,6 +378,10 @@ export function createAirQualityLayer({
    */
   const field = {
     manifest: null,
+    /** What the request in flight asks for: 'now', or a time's three-hour bucket. */
+    manifestWant: null,
+    /** Whether the source explicitly reported that the forecast is unavailable. */
+    manifestUnavailable: false,
     data: null,
     absent: !fieldSource,
     /** The last manifest ask failed. */
@@ -361,6 +397,9 @@ export function createAirQualityLayer({
     wasLive: true,
     manifestRequest: null,
     stepRequest: null,
+    aheadRequest: null,
+    ahead: null,
+    failedAhead: null,
     /** When each ask may be made again: 'now', or a time's three hours. */
     asks: new Map(),
     /** The step that failed to load, `run|step`, and when to try again. */
@@ -373,6 +412,7 @@ export function createAirQualityLayer({
   const layerTime = clock.timeFor(CLOCK_ID);
   let releaseHold = null;
   let releaseWait = null;
+  let aheadIdle = null;
   let uncover = null;
   let offClock = null;
   let offMapStack = null;
@@ -382,6 +422,8 @@ export function createAirQualityLayer({
   let clockKey = null;
   let syncing = false;
   let imageryHost = null;
+  let offLocale = null;
+  let runNavigation = null;
   let fieldDrawing = null;
 
   /**
@@ -525,7 +567,7 @@ export function createAirQualityLayer({
     if (!rect) return null;
     const width = (rect.east - rect.west + 360) % 360 || 360;
     const lon = ((rect.west + width / 2 + 540) % 360) - 180;
-    const canvas = rendererOf(_viewer)?.canvas;
+    const canvas = canvasOf(_viewer);
     const focus =
       canvas &&
       findQuery(_viewer)?.pickEllipsoid(
@@ -560,7 +602,8 @@ export function createAirQualityLayer({
     const old = Object.keys(station.values ?? {}).filter(
       (key) => !isCurrent(times[key]),
     );
-    if (!old.length) return station;
+    if (!old.length)
+      return station.valueTimes ? station : { ...station, valueTimes: times };
     const values = { ...station.values };
     const excluded = { ...station.excluded };
     for (const key of old) {
@@ -605,7 +648,7 @@ export function createAirQualityLayer({
           : reading.averagingMinutes,
       value: aqi?.index ?? null,
       band: aqi ? band.label : null,
-      color: band?.color ?? UNRATED_COLOR,
+      color: band?.color ?? AIR_QUALITY_UNRATED_COLOR,
       label: aqi ? aqiText(aqi.index) : '—',
     };
   };
@@ -663,18 +706,21 @@ export function createAirQualityLayer({
    * `network` and, where its source states them, the station's licences and
    * their holders (OpenAQ names them per station).
    */
+  const licenceText = (reading) => {
+    const names = new Set();
+    for (const item of Array.isArray(reading?.licenses) ? reading.licenses : [])
+      if (typeof item?.name === 'string' && item.name)
+        names.add(
+          item.attribution ? `${item.name} (${item.attribution})` : item.name,
+        );
+    // Three named; any more counted.
+    return [
+      ...[...names].slice(0, 3),
+      ...(names.size > 3 ? [`+${names.size - 3}`] : []),
+    ].join(', ');
+  };
   const originText = (reading, network) => {
-    const licences = (Array.isArray(reading?.licenses) ? reading.licenses : [])
-      .map((item) =>
-        typeof item?.name === 'string' && item.name
-          ? item.attribution
-            ? `${item.name} (${item.attribution})`
-            : item.name
-          : '',
-      )
-      .filter((text, index, all) => text && all.indexOf(text) === index)
-      .slice(0, 3)
-      .join(', ');
+    const licences = licenceText(reading);
     return licences
       ? `${network} · ${t('Licence: {licence}', { licence: licences })}`
       : network;
@@ -702,12 +748,24 @@ export function createAirQualityLayer({
         : (reading.assessment.concentration ?? null);
   /** The band colour of a value on the view's scale; unrated without one. */
   const bandColor = (value) => {
-    if (!Number.isFinite(value)) return UNRATED_COLOR;
-    if (view === 'aqi') return usAqiBand(value)?.color ?? UNRATED_COLOR;
+    if (!Number.isFinite(value)) return AIR_QUALITY_UNRATED_COLOR;
+    if (view === 'aqi')
+      return usAqiBand(value)?.color ?? AIR_QUALITY_UNRATED_COLOR;
     return (
-      EEA_HOURLY_BANDS[hourlyBandIndex(view, value)]?.color ?? UNRATED_COLOR
+      EEA_HOURLY_BANDS[hourlyBandIndex(view, value)]?.color ??
+      AIR_QUALITY_UNRATED_COLOR
     );
   };
+  /**
+   * Whether a pollutant-view reading carries a number its network gives no
+   * units for (`rated: false`, `units: null`): shown as reported, never
+   * converted, banded, ranked or part of an index.
+   */
+  const unconfirmedUnits = (reading) =>
+    view !== 'aqi' &&
+    reading?.rated === false &&
+    reading.units == null &&
+    Number.isFinite(reading.value);
   /**
    * A reading's number on the view's scale as text; unrated, its value in
    * the view's unit when that converts, else a dash.
@@ -720,7 +778,10 @@ export function createAirQualityLayer({
       view === 'aqi'
         ? null
         : concentrationIn(view, reading.value, reading.units);
-    return converted === null ? NO_VALUE : concentrationText(view, converted);
+    if (converted !== null) return concentrationText(view, converted);
+    return unconfirmedUnits(reading)
+      ? concentrationText(view, reading.value)
+      : NO_VALUE;
   };
   /**
    * A reading's value on its map label: in a pollutant view in the view's
@@ -728,7 +789,11 @@ export function createAirQualityLayer({
    * units do not convert, its own label.
    */
   const mapLabelValue = (reading) => {
-    if (!AIR_QUALITY_POLLUTANT_VIEWS.includes(view)) return reading.label;
+    if (
+      !AIR_QUALITY_POLLUTANT_VIEWS.includes(view) ||
+      unconfirmedUnits(reading)
+    )
+      return reading.label;
     const text = scaleText(reading);
     return text === NO_VALUE ? reading.label : `${text} ${layerUnits(view)}`;
   };
@@ -738,19 +803,22 @@ export function createAirQualityLayer({
     return values ? { lon: values[4], lat: values[5] } : null;
   };
   /**
-   * Of `candidates` (the stations in view), the one nearest the view
-   * centre, one rated on the view's scale before any unrated one; null
-   * without a view or a candidate.
+   * Return the nearest station, preferring rated candidates, and whether a
+   * nearer unrated station was passed over (`skippedCloser`). Without a
+   * view centre or a candidate, return null.
    */
   const nearestStation = (candidates) => {
     const centre = viewCentre();
     if (!centre) return null;
     const cos = Math.cos((centre.lat * Math.PI) / 180);
     let best = null;
+    let closest = null;
     for (const reading of candidates) {
       const rated = isRatedReading(reading, view);
       const dLon = ((reading.lon - centre.lon + 540) % 360) - 180;
       const distance = (reading.lat - centre.lat) ** 2 + (dLon * cos) ** 2;
+      if (!closest || distance < closest.distance)
+        closest = { reading, distance };
       if (
         !best ||
         (rated && !best.rated) ||
@@ -758,7 +826,12 @@ export function createAirQualityLayer({
       )
         best = { reading, rated, distance };
     }
-    return best?.reading ?? null;
+    return best
+      ? {
+          reading: best.reading,
+          skippedCloser: best.distance > closest.distance,
+        }
+      : null;
   };
   /**
    * Values at the view centre from the model field, as the map shows them
@@ -841,18 +914,22 @@ export function createAirQualityLayer({
         coveragePercent: live.valueCoverage?.[key],
         rated: live.rated,
       };
-    if (live && live.parameter === id && !live.qualityFlagged) {
-      const value =
-        live.rated === false
-          ? null
-          : concentrationIn(id, live.value, live.units);
-      if (value !== null)
-        return {
-          value,
-          averagingMinutes: live.averagingMinutes,
-          coveragePercent: live.coveragePercent,
-          rated: live.rated,
-        };
+    if (live && live.parameter === id) {
+      // The view's own reading decides its tile, as it decides its row: a
+      // flagged value, or one its network gives no units for, shows unbanded.
+      const unconfirmed = unconfirmedUnits(live);
+      const value = unconfirmed
+        ? live.value
+        : concentrationIn(id, live.value, live.units);
+      if (value === null) return null;
+      return {
+        value,
+        averagingMinutes: live.averagingMinutes,
+        coveragePercent: live.coveragePercent,
+        qualityFlagged: live.qualityFlagged === true,
+        rated: live.rated,
+        unconfirmed,
+      };
     }
     const value = remembered?.used?.[key];
     if (!Number.isFinite(value)) return null;
@@ -875,25 +952,46 @@ export function createAirQualityLayer({
   const tileGroups = (selected, candidates, loading) => {
     const model = selected ? null : fieldValues();
     let station = selected;
+    let skippedCloser = false;
     if (!station && !model) {
-      station = nearestStation(candidates);
-      if (!station && loading) station = lastNearest;
-      lastNearest = station;
+      let nearest = nearestStation(candidates);
+      if (!nearest && loading) nearest = lastNearest;
+      lastNearest = nearest;
+      station = nearest?.reading ?? null;
+      skippedCloser = nearest?.skippedCloser === true;
     }
     const live = station && _readings.includes(station) ? station : null;
     const remembered = rememberedStation(station);
-    const tile = (id, label, value, band, context, text) => {
-      const category = band ? bandLabel(band.label, context) : '';
+    const tile = (
+      id,
+      label,
+      value,
+      band,
+      context,
+      text,
+      unconfirmed = false,
+    ) => {
+      const category = band
+        ? bandLabel(band.label, context)
+        : unconfirmed
+          ? t('unrated units')
+          : '';
       return {
         id,
         value: value === null ? NO_VALUE : text(value),
         // The band in words rides beside the value; long names shortened.
-        note: band ? bandLabel(band.short ?? band.label, context) : '',
+        note: band
+          ? bandLabel(band.short ?? band.label, context)
+          : unconfirmed
+            ? t('unrated units')
+            : '',
         label,
         title: category ? `${label} · ${category}` : label,
         accent:
           band?.color ??
-          (value === null ? AIR_QUALITY_UNKNOWN_COLOR : UNRATED_COLOR),
+          (value === null
+            ? AIR_QUALITY_UNKNOWN_COLOR
+            : AIR_QUALITY_UNRATED_COLOR),
         active: view === id,
         params: { view: id },
       };
@@ -933,6 +1031,7 @@ export function createAirQualityLayer({
         at ? tileBand(id, at.value, at) : null,
         'EEA hourly quality',
         text,
+        at?.unconfirmed === true,
       );
     });
     return [
@@ -942,11 +1041,13 @@ export function createAirQualityLayer({
         // Where the numbers come from: a station's instruments, a model at
         // the middle of the view, or the station nearest it.
         subtitle: selected
-          ? t('measured at the station')
+          ? t('calculated from the station')
           : model
             ? t('model at view centre')
             : station
-              ? t('nearest station · {name}', { name: station.name })
+              ? skippedCloser
+                ? t('nearest rated station · {name}', { name: station.name })
+                : t('nearest station · {name}', { name: station.name })
               : '',
         tiles: indexTiles,
       },
@@ -990,7 +1091,7 @@ export function createAirQualityLayer({
     };
     const groups = measured
       ? groupStations(
-          _stations.map((reading) => ({
+          _readings.map((reading) => ({
             id: reading.id,
             lat: reading.lat,
             lon: reading.lon,
@@ -1000,7 +1101,7 @@ export function createAirQualityLayer({
           cellDegAt(measured),
           { selectedId: selectedStation },
         )
-      : _stations.map((reading) => ({ members: [{ reading }] }));
+      : _readings.map((reading) => ({ members: [{ reading }] }));
     const items = [];
     for (const group of groups) {
       if (group.members.length === 1) {
@@ -1008,7 +1109,7 @@ export function createAirQualityLayer({
         const selected = reading.id === selectedStation;
         const id = `air-quality:${reading.id}`;
         const px = selected ? SELECTED_STATION_PX : STATION_PX;
-        _drawn.set(id, { reading, lon: reading.lon, lat: reading.lat, px });
+        _drawn.set(id, { id, reading, lon: reading.lon, lat: reading.lat, px });
         _labelled.add(reading.id);
         items.push({
           id,
@@ -1018,7 +1119,20 @@ export function createAirQualityLayer({
           outlineColor: selected ? SELECTED_OUTLINE : '#000000',
           outlineWidth: selected ? SELECTED_OUTLINE_WIDTH : 1,
           height: 'clampGround',
-          meta: { ...reading },
+          meta: {
+            value: reading.value,
+            label: reading.label,
+            observedMs: reading.observedMs,
+            aqiExcluded: reading.aqiExcluded,
+            id: reading.id,
+            provider: reading.provider,
+            stationId: reading.stationId,
+            name: reading.name,
+            parameter: reading.parameter,
+            rated: reading.rated,
+            aqi: reading.aqi,
+            assessment: reading.assessment,
+          },
         });
         continue;
       }
@@ -1026,7 +1140,7 @@ export function createAirQualityLayer({
       // with their number.
       const id = `air-quality-group:${group.members[0].id}:${group.members.length}`;
       const px = Math.round(12 + 6 * Math.log10(group.members.length));
-      _drawn.set(id, { group, lon: group.lon, lat: group.lat, px });
+      _drawn.set(id, { id, group, lon: group.lon, lat: group.lat, px });
       items.push({
         id,
         pos: { lon: group.lon, lat: group.lat, height: 0 },
@@ -1047,12 +1161,17 @@ export function createAirQualityLayer({
    */
   const openGroup = (group) => {
     const target = groupTarget(group.members, viewRectangle());
-    if (target.rect)
-      findCamera(_viewer)?.flyTo(
-        { rect: target.rect },
-        { durationS: GROUP_FLIGHT_S },
-      );
-    else layer.setParams({ station: target.station.id });
+    if (target.rect) {
+      const fly = () =>
+        findCamera(_viewer)?.flyTo(
+          { rect: target.rect },
+          { durationS: GROUP_FLIGHT_S },
+        );
+      // Through the shell's navigation handoff when there is one, so a
+      // tracked entity lets the camera go.
+      if (runNavigation) runNavigation(() => (_enabled ? fly() : undefined));
+      else fly();
+    } else layer.setParams({ station: target.station.id });
   };
 
   /** One of this layer's drawn points, by a hit on it. */
@@ -1073,6 +1192,18 @@ export function createAirQualityLayer({
       side && toLonLatH(side),
     );
   };
+  /**
+   * A click on open map within a few pixels of a drawn station or group,
+   * claimed so other layers leave it alone (`registerClickClaim`).
+   */
+  const claimNear = (click) => {
+    if (!_enabled || !showStations || !_points || !_viewer) return null;
+    if (!click?.surface || !atNow()) return null;
+    if (pointer && !pointer.isPointerFree()) return null;
+    if (!isTrackingSelectionGesture(click.gesture)) return null;
+    const item = drawnNear(click);
+    return item ? { sourceId: STATION_CLICK_SOURCE, entryId: item.id } : null;
+  };
 
   /**
    * A click on a group flies to it; on a station, selects it; on open map,
@@ -1084,7 +1215,8 @@ export function createAirQualityLayer({
     if (!atNow()) return;
     if (pointer && !pointer.isPointerFree()) return;
     if (!isTrackingSelectionGesture(event?.gesture)) return;
-    if (picking?.clickCard?.(event)) return;
+    const card = picking?.clickCard?.(event);
+    if (card && card.sourceId !== STATION_CLICK_SOURCE) return;
     // The renderer's exact pick, a touch's widened one, then, over open map,
     // a station or group within a few pixels: a 7 px dot is a small target.
     const item =
@@ -1134,7 +1266,18 @@ export function createAirQualityLayer({
     if (same) {
       selectedStation = same.id;
       seen(same);
+      return;
     }
+    // Another network's copy of the site won the merge: the selection moves to it.
+    for (const [dropped, kept] of replacedBy)
+      if (
+        dropped.id === selectedStation ||
+        (selectedKey && stationKey(dropped) === selectedKey)
+      ) {
+        selectedStation = kept.id;
+        seen(kept);
+        return;
+      }
   };
 
   /**
@@ -1155,8 +1298,8 @@ export function createAirQualityLayer({
         return [reading];
       }),
     }));
-    _readings = mergeObservations(lists, { view });
-    _count = _readings.length;
+    replacedBy = new Map();
+    _readings = mergeObservations(lists, { view, replaced: replacedBy });
     followSelection();
     layer._render();
     armAgeOut();
@@ -1170,7 +1313,10 @@ export function createAirQualityLayer({
     let next = Infinity;
     for (const entry of asked())
       for (const raw of stateOf(entry).readings) {
-        const times = [raw.observedMs, ...Object.values(raw.valueTimes ?? {})];
+        const times = [
+          raw.observedMs,
+          ...Object.keys(raw.values ?? {}).map((key) => raw.valueTimes?.[key]),
+        ];
         for (const ms of times)
           if (Number.isFinite(ms) && isCurrent(ms))
             next = Math.min(next, ms + OBSERVATION_MAX_AGE_MS);
@@ -1179,7 +1325,10 @@ export function createAirQualityLayer({
     ageTimer = setTimeout(
       () => {
         ageTimer = null;
-        if (_enabled) apply();
+        if (_enabled) {
+          apply();
+          notify();
+        }
       },
       Math.max(0, next - Date.now()) + 1000,
     );
@@ -1204,19 +1353,36 @@ export function createAirQualityLayer({
         // enable: the lifecycle manager must keep the layer and its refresh
         // loop on.
         return _enabled;
+      const list = Array.isArray(readings) ? readings : [];
+      // The AQI view draws one reading per station with all its values.
+      const rows = asking.mode === 'aqi' ? aqiStations(list) : list;
+      // A row the layer cannot present is left out, so it never stops this
+      // provider's other rows, or another provider's, being drawn.
+      const usable = rows.filter((row) => {
+        try {
+          present(row);
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      if (usable.length < rows.length)
+        console.warn(
+          `[Data:AirQuality] Left out ${rows.length - usable.length} malformed rows (${entry.id})`,
+        );
+      const coverage = source.getCoverage?.(entry.id) ?? null;
       state.request = null;
       state.status = 'ok';
       state.settled = true;
       state.keyRejected = false;
+      state.rateLimited = false;
       state.error = null;
       parked.delete(entry.id);
-      const list = Array.isArray(readings) ? readings : [];
-      // The AQI view draws one reading per station with all its values.
-      state.readings = asking.mode === 'aqi' ? aqiStations(list) : list;
+      state.readings = usable;
       if (asking.mode === 'aqi')
-        aqiMemory.set(entry.id, { at: Date.now(), readings: state.readings });
-      state.coverage = source.getCoverage?.(entry.id) ?? null;
-      setRetry(entry, state.coverage?.retryAt);
+        aqiMemory.set(entry.id, { at: Date.now(), readings: usable });
+      state.coverage = coverage;
+      setRetry(entry, coverage?.retryAt);
       _lastUpdate = Date.now();
       apply();
       return true;
@@ -1226,6 +1392,7 @@ export function createAirQualityLayer({
       state.settled = true;
       // A key the network refused: the card says to check it.
       state.keyRejected = error?.code === 'key_rejected';
+      state.rateLimited = error?.code === 'rate_limited';
       // Earlier readings stay drawn: a failed refresh is degraded, not empty.
       state.status =
         error?.code === 'no_key'
@@ -1245,7 +1412,7 @@ export function createAirQualityLayer({
             error?.message ||
             msg('Air quality request failed');
       setRetry(entry, error?.retryAt);
-      if (state.status !== 'disabled')
+      if (!isParked(state))
         console.warn(
           `[Data:AirQuality] Refresh failed (${entry.id}):`,
           state.error,
@@ -1260,17 +1427,21 @@ export function createAirQualityLayer({
     }
   };
 
+  /** Whether a model field may show: a run held, or one being asked for. */
+  const fieldAnswering = () =>
+    !field.absent &&
+    (field.manifest !== null || field.manifestRequest !== null);
   /**
    * True as soon as one provider answers (`run` resolves true), or after
    * `FIRST_ANSWER_CAP_MS` while some are still asking; otherwise, once all
    * have settled, true when one of them needs a key or is off on this server
    * (`run` resolves `'parked'`: guidance, not a failure), else whether the
-   * layer may still show something (`fallback`).
+   * layer may still show something (`fallback()`, read once all have settled).
    */
   const firstAnswer = (jobs, fallback) =>
     new Promise((resolve) => {
       if (!jobs.length) {
-        resolve(fallback);
+        resolve(fallback());
         return;
       }
       let left = jobs.length;
@@ -1285,7 +1456,7 @@ export function createAirQualityLayer({
           if (ok === true) settle(true);
           else {
             if (ok === 'parked') guided = true;
-            if (--left === 0) settle(guided || fallback);
+            if (--left === 0) settle(guided || fallback());
           }
         });
     });
@@ -1345,7 +1516,12 @@ export function createAirQualityLayer({
     );
     return firstAnswer(
       jobs,
-      !entries.length || waiting || guided || otherViewOnOffer(),
+      () =>
+        !entries.length ||
+        waiting ||
+        guided ||
+        otherViewOnOffer() ||
+        fieldAnswering(),
     );
   };
 
@@ -1366,7 +1542,9 @@ export function createAirQualityLayer({
     if (liveTime()) return true;
     const step = shownStep();
     return (
-      step !== null && step === fieldStepAt(field.manifest, clock.wallNow())
+      step !== null &&
+      step === fieldStepAt(field.manifest, clock.wallNow()) &&
+      Math.abs(layerTime() - clock.wallNow()) <= STATIONS_NOW_MS
     );
   };
   /** Whether the model field is on the map: a run held. */
@@ -1407,7 +1585,8 @@ export function createAirQualityLayer({
 
   /**
    * A host's model field carries its own credit (its licence may ask for
-   * exact wording); it joins the data credits while the field is held.
+   * exact wording): it joins the data credits once a run is read and stays
+   * for the session; a new wording from the same source replaces it.
    */
   const creditField = (manifest) => {
     if (!manifest.credit || !_viewer) return;
@@ -1416,13 +1595,15 @@ export function createAirQualityLayer({
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     registerCredit(_viewer, {
-      key: `air-quality-field|${manifest.credit}`,
+      key: `air-quality-field|${manifest.sourceShort || manifest.source || 'model'}`,
       html,
     });
   };
 
   /** Let go of the run held, and of its step. */
   const dropRun = () => {
+    cancelAhead();
+    fieldDrawing?.forget();
     field.manifest = null;
     field.data = null;
     field.failedStep = null;
@@ -1431,8 +1612,9 @@ export function createAirQualityLayer({
   /**
    * Back at now holding a run asked for another time, the newest run is
    * asked for at once, whether or not the run held covers now (an older one
-   * may, with a shorter forecast). At now a run that does not cover now is
-   * let go (expired: stations only until a newer run).
+   * may, with a shorter forecast). Keep a run that covers now or starts later.
+   * An expired run also stays while the clock is away from live at a time
+   * the run covers.
    */
   const expireRun = () => {
     const live = liveTime();
@@ -1441,7 +1623,13 @@ export function createAirQualityLayer({
     const held = field.manifest;
     if (!held || !live) return;
     if (returned && field.heldFor !== 'now') field.asks.delete('now');
-    if (fieldStepAt(held, clock.wallNow()) !== null) return;
+    const wallNow = clock.wallNow();
+    if (fieldStepAt(held, wallNow) !== null) return;
+    // A run that starts later stays: its span is on the timeline until now reaches it.
+    if (wallNow < fieldCoverage(held).start) return;
+    // The clock is away from live (paused or playing) at a time the run covers:
+    // the layer follows it there (`syncClock` holds the clock) instead.
+    if (!clock.isLive() && fieldStepAt(held, clock.now()) !== null) return;
     if (field.heldFor !== 'now') field.asks.delete('now');
     dropRun();
   };
@@ -1453,19 +1641,29 @@ export function createAirQualityLayer({
    * A failed ask is tried again after `FIELD_RETRY_MS`.
    */
   const askManifest = () => {
-    if (field.absent || !_enabled || field.manifestRequest) return;
+    if (field.absent || !_enabled) return;
     const live = liveTime();
     const time = layerTime();
     const held = field.manifest;
     const covered = held !== null && fieldStepAt(held, time) !== null;
-    if (covered && !live) return;
-    const want = live ? 'now' : bucketOf(time);
+    // Nothing to ask away from now inside the run held.
+    const want = live ? 'now' : covered ? null : bucketOf(time);
+    if (field.manifestRequest) {
+      if (field.manifestWant === want) return;
+      // An ask for another time is let go: its answer would replace the run
+      // this time needs. Its span may be asked again later.
+      field.manifestRequest.abort();
+      field.manifestRequest = null;
+      field.asks.delete(field.manifestWant);
+    }
+    if (want === null) return;
     if (Date.now() < (field.asks.get(want) ?? 0)) return;
     // Only the recent spans are remembered.
     if (field.asks.size > 64) field.asks.clear();
     field.asks.set(want, Infinity);
     const request = new AbortController();
     field.manifestRequest = request;
+    field.manifestWant = want;
     Promise.resolve()
       .then(() =>
         fieldSource.getManifest({
@@ -1476,10 +1674,28 @@ export function createAirQualityLayer({
       .then((raw) => {
         if (field.manifestRequest !== request) return;
         const manifest = readFieldManifest(raw);
+        // A span the world clock cannot hold is not put on the timeline.
+        const span = fieldCoverage(manifest);
+        if (!isWorldTime(span.start) || !isWorldTime(span.end))
+          throw Object.assign(
+            new Error('Air-quality field run outside the clock'),
+            {
+              code: 'malformed',
+            },
+          );
+        const replaced = field.manifest?.run !== manifest.run;
         field.manifest = manifest;
+        // A span answered by the run let go may be asked again; a failed one keeps its wait.
+        if (replaced) {
+          cancelAhead();
+          fieldDrawing?.forget();
+          for (const [key, at] of field.asks)
+            if (at === Infinity && key !== want) field.asks.delete(key);
+        }
         creditField(manifest);
         field.heldFor = want;
         field.manifestFailed = false;
+        field.manifestUnavailable = false;
         field.everRead = true;
         // At now the newest run is asked again later; a span away from now
         // is not asked again.
@@ -1498,10 +1714,11 @@ export function createAirQualityLayer({
           return;
         }
         field.manifestFailed = true;
+        field.manifestUnavailable = error?.code === 'unavailable';
         field.asks.set(want, Date.now() + FIELD_RETRY_MS);
         console.warn(
           '[Data:AirQuality] Model field manifest failed:',
-          error?.message || error,
+          failureReason(error),
         );
       })
       .finally(() => {
@@ -1524,7 +1741,7 @@ export function createAirQualityLayer({
    * as weather does, but never longer than `FIELD_WAIT_MS`.
    */
   const waitForStep = () => {
-    if (!clock.follows(CLOCK_ID) || !clock.isPlaying()) return;
+    if (!clock.follows(CLOCK_ID) || !clock.isPlaying()) return false;
     const release = clock.wait(CLOCK_ID);
     let timer = null;
     const done = () => {
@@ -1534,9 +1751,145 @@ export function createAirQualityLayer({
     };
     timer = setTimeout(done, FIELD_WAIT_MS);
     releaseWait = done;
+    return true;
   };
 
-  /** Load the step the layer's time shows, if it is not loaded or loading. */
+  /** The request may become the shown step while a prefetch is in flight. */
+  const startStep = (manifest, step) => {
+    const key = `${manifest.run}|${step}`;
+    const request = {
+      run: manifest.run,
+      step,
+      held: false,
+      controller: new AbortController(),
+    };
+    Promise.resolve()
+      .then(() =>
+        fieldSource.getStep(step, {
+          signal: request.controller.signal,
+          run: request.run,
+        }),
+      )
+      .then((raw) => {
+        if (field.stepRequest !== request && field.aheadRequest !== request)
+          return;
+        const data = {
+          run: request.run,
+          step,
+          grids: readFieldStep(manifest, step, raw),
+        };
+        if (field.stepRequest === request) {
+          field.data = data;
+          if (field.failedStep === key) field.failedStep = null;
+        } else field.ahead = data;
+      })
+      .catch((error) => {
+        if (field.aheadRequest === request) field.failedAhead = key;
+        if (field.stepRequest !== request) return;
+        if (error?.code === 'run_changed') field.asks.delete('now');
+        field.failedStep = key;
+        field.retryStepAt = Date.now() + FIELD_RETRY_MS;
+        console.warn(
+          '[Data:AirQuality] Model field step failed:',
+          failureReason(error),
+        );
+      })
+      .finally(() => {
+        if (field.aheadRequest === request) {
+          field.aheadRequest = null;
+          paintAheadLater();
+          return;
+        }
+        if (field.stepRequest !== request) return;
+        field.stepRequest = null;
+        releaseWait?.();
+        releaseWait = null;
+        syncField();
+        notify();
+      });
+    return request;
+  };
+
+  const cancelAhead = () => {
+    field.aheadRequest?.controller.abort();
+    field.aheadRequest = null;
+    field.ahead = null;
+    field.failedAhead = null;
+    aheadIdle?.();
+    aheadIdle = null;
+  };
+
+  const paintAheadLater = () => {
+    const ahead = field.ahead;
+    if (!ahead || aheadIdle || ahead.paintedId === fieldIdOf(view)) return;
+    const paint = () => {
+      aheadIdle = null;
+      const id = fieldIdOf(view);
+      if (
+        ahead !== field.ahead ||
+        ahead.run !== field.manifest?.run ||
+        !clock.follows(CLOCK_ID) ||
+        !clock.isPlaying() ||
+        !fieldDrawing?.visible() ||
+        !id
+      )
+        return;
+      if (
+        fieldDrawing.prepare(`${ahead.run}|${ahead.step}|${id}`, () =>
+          paintField(field.manifest, ahead.grids, id, scaleOf(view)),
+        )
+      )
+        ahead.paintedId = id;
+    };
+    if (typeof globalThis.requestIdleCallback === 'function') {
+      const handle = globalThis.requestIdleCallback(paint, { timeout: 1000 });
+      aheadIdle = () => globalThis.cancelIdleCallback(handle);
+    } else {
+      const handle = setTimeout(paint, 50);
+      aheadIdle = () => clearTimeout(handle);
+    }
+  };
+
+  const askAhead = () => {
+    const manifest = field.manifest;
+    if (
+      !_enabled ||
+      !fieldDrawing?.visible() ||
+      !manifest ||
+      !fieldReady() ||
+      !fieldIdOf(view) ||
+      !clock.follows(CLOCK_ID) ||
+      !clock.isPlaying()
+    ) {
+      cancelAhead();
+      return;
+    }
+    const current = field.data.step;
+    const next = manifest.global.steps.find((step) => step > current);
+    if (next === undefined) {
+      cancelAhead();
+      return;
+    }
+    if (field.ahead?.run === manifest.run && field.ahead.step === next) {
+      paintAheadLater();
+      return;
+    }
+    if (
+      field.aheadRequest?.run === manifest.run &&
+      field.aheadRequest.step === next
+    )
+      return;
+    const key = `${manifest.run}|${next}`;
+    if (
+      field.failedAhead === key ||
+      (field.failedStep === key && Date.now() < field.retryStepAt)
+    )
+      return;
+    cancelAhead();
+    field.aheadRequest = startStep(manifest, next);
+  };
+
+  /** Load the step the layer's time shows, adopting a prefetch if available. */
   const askStep = () => {
     const manifest = field.manifest;
     if (!_enabled || !manifest) return;
@@ -1547,52 +1900,27 @@ export function createAirQualityLayer({
     }
     const pending = field.stepRequest;
     if (pending?.run === manifest.run && pending.step === step) return;
-    const key = `${manifest.run}|${step}`;
-    if (field.failedStep === key && Date.now() < field.retryStepAt) {
-      cancelStep();
+    cancelStep();
+    if (field.ahead?.run === manifest.run && field.ahead.step === step) {
+      field.data = field.ahead;
+      if (field.failedStep === `${manifest.run}|${step}`)
+        field.failedStep = null;
+      cancelAhead();
       return;
     }
-    cancelStep();
-    const request = {
-      run: manifest.run,
-      step,
-      controller: new AbortController(),
-    };
-    field.stepRequest = request;
-    waitForStep();
-    Promise.resolve()
-      .then(() =>
-        fieldSource.getStep(step, {
-          signal: request.controller.signal,
-          run: request.run,
-        }),
+    const early = field.aheadRequest;
+    if (early?.run === manifest.run && early.step === step) {
+      field.aheadRequest = null;
+      field.stepRequest = early;
+    } else {
+      if (
+        field.failedStep === `${manifest.run}|${step}` &&
+        Date.now() < field.retryStepAt
       )
-      .then((raw) => {
-        if (field.stepRequest !== request) return;
-        field.data = {
-          run: request.run,
-          step,
-          grids: readFieldStep(manifest, step, raw),
-        };
-        if (field.failedStep === key) field.failedStep = null;
-      })
-      .catch((error) => {
-        if (field.stepRequest !== request) return;
-        field.failedStep = key;
-        field.retryStepAt = Date.now() + FIELD_RETRY_MS;
-        console.warn(
-          '[Data:AirQuality] Model field step failed:',
-          error?.message || error,
-        );
-      })
-      .finally(() => {
-        if (field.stepRequest !== request) return;
-        field.stepRequest = null;
-        releaseWait?.();
-        releaseWait = null;
-        syncField();
-        notify();
-      });
+        return;
+      field.stepRequest = startStep(manifest, step);
+    }
+    field.stepRequest.held = waitForStep();
   };
 
   /** The field's strength for the camera's height now (`FIELD_FADE`). */
@@ -1624,6 +1952,10 @@ export function createAirQualityLayer({
     syncStrength();
     const { manifest, data } = field;
     if (fieldReady()) {
+      // Another run's or view's images go at once: only a new step of the
+      // same field waits under the old one.
+      if (drawnField && (drawnField.run !== data.run || drawnField.id !== id))
+        clear();
       if (
         fieldDrawing.show(`${data.run}|${data.step}|${id}`, () =>
           paintField(manifest, data.grids, id, scaleOf(view)),
@@ -1660,6 +1992,7 @@ export function createAirQualityLayer({
       askManifest();
       askStep();
       drawField();
+      askAhead();
       clockKey = clockState();
       syncVisibility();
       layer._publishOverlays();
@@ -1674,8 +2007,16 @@ export function createAirQualityLayer({
    */
   const onClock = () => {
     if (!_enabled || field.absent || syncing) return;
-    if (clockState() === clockKey) return;
+    // Play began while the step was loading: hold the clock for it too, once.
+    if (field.stepRequest && !field.stepRequest.held)
+      field.stepRequest.held = waitForStep();
+    if (clockState() === clockKey) {
+      askAhead();
+      return;
+    }
+    // A new step must adopt its prefetch before askAhead chooses its successor.
     syncField();
+    followView();
     notify();
   };
 
@@ -1689,6 +2030,7 @@ export function createAirQualityLayer({
     field.asks.clear();
     cancelStep();
     field.data = null;
+    cancelAhead();
     fieldDrawing?.dispose();
     drawnField = null;
     if (releaseHold) {
@@ -1721,6 +2063,51 @@ export function createAirQualityLayer({
       .join(' · ');
   };
 
+  /** Ask view-driven providers again after the camera stops, while stations follow now. */
+  const followView = () => {
+    if (!atNow()) return;
+    const key = JSON.stringify(currentView());
+    // Only providers that fetch per view follow the camera; one still
+    // waiting for a key is asked again by a scheduled refresh, once
+    // NO_KEY_RETRY_MS has passed.
+    const moved = asked().filter(
+      (entry) =>
+        entry.viewDriven &&
+        !isParked(stateOf(entry)) &&
+        stateOf(entry).requestedView !== key,
+    );
+    if (moved.length) {
+      for (const entry of moved) {
+        const state = stateOf(entry);
+        state.request?.abort();
+        state.request = null;
+        state.status = 'loading';
+        state.coverage = null;
+        state.error = null;
+        state.retryAt = null;
+      }
+      armRetry();
+      clearTimeout(moveTimer);
+      moveTimer = setTimeout(() => {
+        moveTimer = null;
+        void refresh(
+          asked().filter(
+            (entry) => entry.viewDriven && !isParked(stateOf(entry)),
+          ),
+        );
+      }, 400);
+    }
+  };
+  /** A station's claim on a map label: the selected one first, then by `rankOf`. */
+  const labelValue = (reading) => {
+    if (reading.id === selectedStation) return SELECTED_LABEL_VALUE;
+    const [band, amount] = rankOf(reading);
+    return band < 0
+      ? 0
+      : 1 +
+          Math.min(band, 999) * 1000 +
+          Math.min(999, Math.max(0, Math.round(amount)));
+  };
   const syncVisibility = () => {
     const shown = _enabled && showStations && atNow();
     if (_points) _points.show = shown;
@@ -1743,6 +2130,7 @@ export function createAirQualityLayer({
         show: false,
       });
       _viewer = viewer;
+      offLocale = onLocaleChange(() => layer._render());
       try {
         _offClick = input?.(viewer)?.onClick?.(onClick) ?? null;
       } catch {
@@ -1768,7 +2156,11 @@ export function createAirQualityLayer({
         offClock = clock.subscribe(onClock);
         // The field fades in and out with the camera's height.
         const offChange = findCamera(viewer)?.on('changed', () => {
-          if (_enabled) syncStrength();
+          if (_enabled) {
+            const visible = fieldDrawing?.visible();
+            syncStrength();
+            if (visible !== fieldDrawing?.visible()) askAhead();
+          }
         });
         offCameraChange = typeof offChange === 'function' ? offChange : null;
         // A new map source may move the field to another surface.
@@ -1788,41 +2180,10 @@ export function createAirQualityLayer({
         this._publishOverlays();
         // The surface may have changed (globe imagery or 3D tiles).
         drawField();
-        const key = JSON.stringify(currentView());
-        // Only providers that fetch per view follow the camera; one still
-        // waiting for a key is asked again by a scheduled refresh, once
-        // NO_KEY_RETRY_MS has passed.
-        const moved = asked().filter(
-          (entry) =>
-            entry.viewDriven &&
-            !isParked(stateOf(entry)) &&
-            stateOf(entry).requestedView !== key,
-        );
-        if (moved.length) {
-          for (const entry of moved) {
-            const state = stateOf(entry);
-            state.request?.abort();
-            state.request = null;
-            state.status = 'loading';
-            state.coverage = null;
-            state.error = null;
-            state.retryAt = null;
-          }
-          armRetry();
-          clearTimeout(moveTimer);
-          moveTimer = setTimeout(() => {
-            moveTimer = null;
-            void refresh(
-              asked().filter(
-                (entry) => entry.viewDriven && !isParked(stateOf(entry)),
-              ),
-            );
-          }, 400);
-        }
+        followView();
         notify();
       });
       _readings = [];
-      _count = 0;
       _lastUpdate = null;
       _enabled = false;
       overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, false);
@@ -1832,6 +2193,7 @@ export function createAirQualityLayer({
       _enabled = true;
       // Other layers' clicks leave a station or group alone (pickRegistry).
       picking?.registerPickOwner?.(layer.id, (id) => _drawn.has(id));
+      picking?.registerClickClaim?.(layer.id, claimNear);
       // Readings kept while off are drawn again, unless they have aged out.
       apply();
       syncVisibility();
@@ -1841,6 +2203,10 @@ export function createAirQualityLayer({
 
     /** The shell's imagery host (globe or 3D tiles), where the field drapes. */
     attachShellServices(services) {
+      runNavigation =
+        typeof services?.runNavigation === 'function'
+          ? services.runNavigation
+          : null;
       imageryHost =
         typeof services?.imageryHost === 'function'
           ? services.imageryHost
@@ -1854,6 +2220,7 @@ export function createAirQualityLayer({
       _enabled = false;
       haltField();
       picking?.unregisterPickOwner?.(layer.id);
+      picking?.unregisterClickClaim?.(layer.id);
       // The click and moveEnd listeners stay until destroy: each returns at
       // once while the layer is off, so enable needs no new subscriptions.
       if (_points) _points.show = false;
@@ -1864,7 +2231,7 @@ export function createAirQualityLayer({
 
     /** Only `view` is saved and shared; the others are session state. */
     getParams() {
-      return { view, stations: showStations, station: selectedStation };
+      return { view };
     },
 
     setParams(params = {}) {
@@ -1893,16 +2260,15 @@ export function createAirQualityLayer({
       }
       if (nextView === view) {
         if (changed) {
-          drawPoints();
+          this._render();
           syncVisibility();
-          this._publishOverlays();
           notify();
         }
         return;
       }
       halt();
       view = nextView;
-      states = new Map(asked().map((entry) => [entry.id, freshState()]));
+      states = new Map();
       _lastUpdate = null;
       apply();
       syncVisibility();
@@ -1948,14 +2314,6 @@ export function createAirQualityLayer({
     },
 
     /**
-     * The span this layer gives the world clock's timeline (its model run's
-     * first step to its last while the field is on), or null.
-     */
-    getClockCoverage() {
-      return coverage();
-    },
-
-    /**
      * Each asked provider's state, for the card: ok, loading, failed, no-key,
      * or disabled (this server leaves the network off).
      */
@@ -1982,13 +2340,11 @@ export function createAirQualityLayer({
         return createAirQualityOverlayEntry({
           id: reading.id,
           position: fromDegrees(reading.lon, reading.lat),
-          title: `${reading.name} ${mapLabelValue(reading)}${category ? ` · ${category}` : ''}`,
+          title: `${labelName(reading.name)} ${mapLabelValue(reading)}${category ? ` · ${category}` : ''}`,
           accent: reading.color,
-          // Every station has the same claim on a label.
-          value: 0,
+          value: labelValue(reading),
         });
       });
-      _stations = _readings;
       drawPoints();
       this._publishOverlays();
     },
@@ -2002,10 +2358,11 @@ export function createAirQualityLayer({
       }
       // A station inside a group has no label of its own: only the stations
       // drawn on their own (and the selected one) keep theirs.
+      const rect = viewRectangle();
       const visibleIds = new Set(
-        readingsInView(_readings, viewRectangle(), _readings.length)
-          .map((row) => row.id)
-          .filter((id) => _labelled.has(id)),
+        _readings
+          .filter((r) => _labelled.has(r.id) && isInRectangle(r, rect))
+          .map((r) => r.id),
       );
       overlayHost.setEntries(
         AIR_QUALITY_OVERLAY_SOURCE_ID,
@@ -2045,35 +2402,30 @@ export function createAirQualityLayer({
       offVisibility?.();
       offVisibility = null;
       picking?.unregisterPickOwner?.(layer.id);
-      _stations = [];
+      picking?.unregisterClickClaim?.(layer.id);
+      offLocale?.();
+      offLocale = null;
       _drawn = new Map();
       _labelled = new Set();
       removeMoveEnd?.();
       removeMoveEnd = null;
       _viewer = null;
       overlayEntries = [];
-      states = new Map(asked().map((entry) => [entry.id, freshState()]));
+      states = new Map();
       aqiMemory.clear();
       selectedSeen = null;
       lastNearest = null;
       owners = new WeakMap();
       _readings = [];
-      _count = 0;
+      replacedBy = new Map();
       _lastUpdate = null;
       rowControlsListener = null;
     },
 
     /**
-     * Readout descriptor for the Weather panel, kept slim: the selected
-     * station, one time line (the networks drawn and how fresh), how many
-     * stations are in view, a line for each network that needs a key or
-     * failed, the stations switch, the scale, two groups of tiles (the US
-     * AQI, the one index, across its row; the pollutants; each the value at
-     * one place and a click away from the map), and the highest readings in
-     * view.
-     *
-     * The tiles read the selected station, else the station nearest the view
-     * centre. Station details stay in a list row's tooltip.
+     * The Weather panel's readout card. The tiles read the selected station,
+     * else the model at the view centre, else the nearest station
+     * (`tileGroups`); station details are in the tooltips.
      */
     getRowControls() {
       const entries = asked();
@@ -2096,12 +2448,31 @@ export function createAirQualityLayer({
         !covering.length && (isLoading() || (waitingForView && !error));
       const rectangle = viewRectangle();
       const query = findQuery(_viewer);
-      /** Of `list`, the readings inside the view and this side of the globe. */
+      const canvas = _viewer ? canvasOf(_viewer) : null;
+      const width = canvas?.clientWidth;
+      const height = canvas?.clientHeight;
+      // A tilted or turned view's lon/lat box takes in ground off screen: where
+      // the renderer projects, a station must land on the canvas.
+      const onScreen =
+        typeof query?.project === 'function' && width > 0 && height > 0
+          ? (position) => {
+              const xy = query.project(position);
+              return (
+                Boolean(xy) &&
+                xy.x >= 0 &&
+                xy.x <= width &&
+                xy.y >= 0 &&
+                xy.y <= height
+              );
+            }
+          : () => true;
+      /** Of `list`, the readings on screen: inside the view, this side of the globe. */
       const inViewNow = (list) =>
-        readingsInView(list, rectangle, list.length).filter(
-          (reading) =>
-            !query?.isOccluded?.(fromDegrees(reading.lon, reading.lat)),
-        );
+        list.filter((reading) => {
+          if (!isInRectangle(reading, rectangle)) return false;
+          const position = fromDegrees(reading.lon, reading.lat);
+          return !query?.isOccluded?.(position) && onScreen(position);
+        });
       const visible = inViewNow(_readings);
       // Stations are readings of now: away from now (a forecast or a past
       // step of the model field) they are hidden, and the card leaves them
@@ -2151,9 +2522,9 @@ export function createAirQualityLayer({
               ? t('{network}: key rejected — check Provider Settings', {
                   network: entry.network,
                 })
-              : state.status === 'failed'
+              : state.status === 'failed' && !state.rateLimited
                 ? t('{network} unavailable', { network: entry.network })
-                : covered?.failureStatus === 429
+                : state.rateLimited || covered?.failureStatus === 429
                   ? t(
                       '{network}: request budget reached; cached data will refresh later',
                       { network: entry.network },
@@ -2177,7 +2548,9 @@ export function createAirQualityLayer({
       if (
         fieldSource &&
         !field.absent &&
-        ((field.manifestFailed && field.everRead) || shownStepFailed())
+        ((field.manifestFailed &&
+          (field.everRead || field.manifestUnavailable)) ||
+          shownStepFailed())
       )
         providerLines.push({
           id: 'model-field',
@@ -2220,6 +2593,43 @@ export function createAirQualityLayer({
         selectedStation === null || !now
           ? null
           : (selectedSeen?.reading ?? null);
+      const selectedNetwork = selected
+        ? selected.network || selectedSeen.network
+        : '';
+      // Its index or comparison, the station's owner and where its data comes
+      // from: what its row's tooltip says.
+      const selectedTitle = selected
+        ? [
+            selected.parameter === 'aqi'
+              ? aqiDetails(selected)
+              : pollutantDetails(selected),
+            selected.owner && selected.owner !== selectedNetwork
+              ? selected.owner
+              : '',
+            originText(selected, selectedNetwork),
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : '';
+      /** A row's category on the view's scale, in its short form; '' unrated. */
+      const rowCategory = (reading) => {
+        if (!isRatedReading(reading, view)) return '';
+        const band =
+          view === 'aqi'
+            ? usAqiBand(reading.aqi.index)
+            : EEA_HOURLY_BANDS[reading.assessment.severity];
+        return band
+          ? bandLabel(
+              band.short ?? band.label,
+              view === 'aqi' ? 'US AQI category' : 'EEA hourly quality',
+            )
+          : '';
+      };
+      const published =
+        selected &&
+        definitions.find((d) => d.id === selected.provider)?.publishedTimes ===
+          true;
+      const licence = licenceText(selected);
       return {
         readout: true,
         summary: {
@@ -2269,13 +2679,10 @@ export function createAirQualityLayer({
           result: selected
             ? {
                 id: 'station',
+                key: selected.id,
                 lead: true,
                 label: selected.name,
-                // Its network and licence, as its row's tooltip ends.
-                title: originText(
-                  selected,
-                  selected.network || selectedSeen.network,
-                ),
+                title: selectedTitle,
                 clear: {
                   label: t('Deselect station'),
                   params: { station: null },
@@ -2284,13 +2691,29 @@ export function createAirQualityLayer({
                   {
                     id: 'station-source',
                     muted: true,
-                    text: t('Measured · {provider} · {age}', {
-                      provider: selected.network || selectedSeen.network,
-                      age: Number.isFinite(selected.observedMs)
-                        ? shortAgo(selected.observedMs)
-                        : t('Unavailable'),
-                    }),
+                    text:
+                      published && Number.isFinite(selected.observedMs)
+                        ? selectedNetwork +
+                          ' · ' +
+                          t('updated {age}', {
+                            age: shortAgo(selected.observedMs),
+                          })
+                        : t('Measured · {provider} · {age}', {
+                            provider: selectedNetwork,
+                            age: Number.isFinite(selected.observedMs)
+                              ? shortAgo(selected.observedMs)
+                              : t('Unavailable'),
+                          }),
                   },
+                  ...(licence
+                    ? [
+                        {
+                          id: 'station-licence',
+                          muted: true,
+                          text: t('Licence: {licence}', { licence }),
+                        },
+                      ]
+                    : []),
                 ],
               }
             : null,
@@ -2299,6 +2722,7 @@ export function createAirQualityLayer({
         legendCategorical: false,
         sublists: tileGroups(selected, candidates, loading && now),
         list: {
+          singleLine: true,
           title: t('HIGHEST IN VIEW'),
           ariaLabel: t('Observations in view'),
           // One line a row: rank, band colour, value, name. The station's
@@ -2313,13 +2737,19 @@ export function createAirQualityLayer({
               : t('Unavailable');
             const older =
               timed && Date.now() - reading.observedMs > 2 * 3600_000;
+            const rated = isRatedReading(reading, view);
+            const category = categoryText(reading);
             return {
               id: reading.id,
-              ordinal: index + 1,
+              ordinal: rated ? index + 1 : null,
+              unranked: !rated,
+              note: rowCategory(reading),
               swatch: reading.color,
               lead: scaleText(reading),
-              text: reading.name,
-              title: `${reading.name} · ${reading.zone} · ${reading.owner || owner.network} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
+              text: unconfirmedUnits(reading)
+                ? reading.name + ' · ' + t('unrated units')
+                : reading.name,
+              title: `${category ? category + ' · ' : ''}${reading.name} · ${reading.zone} · ${reading.owner || owner.network}${reading.monitor === false ? ' · ' + t('Low-cost sensor') : reading.monitor === true ? ' · ' + t('Reference monitor') : ''} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
               accent: reading.color,
               active: reading.id === selectedStation,
               params: { station: reading.id },
@@ -2353,8 +2783,22 @@ export function createAirQualityLayer({
       // network actually measured. Freshness is judged on the latter, so a feed
       // that keeps answering with hours-old observations reports STALE rather
       // than being narrated as live by the HUD and voice provenance envelope.
+      // An empty set is a view without stations, not a stale feed, when no network
+      // kept a row and one that answered vouches for its answer (coverage not
+      // stale). With rows that all aged out, or nothing to go by, it reads stale.
+      const emptyAnswer =
+        !_readings.length &&
+        asked().every((entry) => stateOf(entry).readings.length === 0) &&
+        asked().some((entry) => {
+          const state = stateOf(entry);
+          return (
+            state.status === 'ok' &&
+            state.coverage &&
+            state.coverage.stale !== true
+          );
+        });
       return {
-        count: _count,
+        count: _readings.length,
         source: sourceLabel(),
         lastUpdate: _lastUpdate,
         // Until the first network answers in this view the Layers row shows
@@ -2373,7 +2817,7 @@ export function createAirQualityLayer({
         // Only a completed refresh can be stale; before one there is no feed.
         stale:
           _lastUpdate !== null &&
-          (coverageStale() || readingsAreStale(_readings)),
+          (coverageStale() || (!emptyAnswer && readingsAreStale(_readings))),
       };
     },
   };

@@ -246,3 +246,27 @@ test("SAAQIS's own index is neither requested nor attached", async () => {
   );
   assert.equal('rating' in result.readings[0], false);
 });
+
+test('a cross-site request is refused before the portal is contacted', async () => {
+  let handler;
+  southAfricaAirQualityProxy({
+    env: { SAAQIS_ENABLED: '1' },
+    fetchImpl: () => assert.fail('unexpected portal request'),
+  }).configureServer({
+    middlewares: {
+      use(_path, route) {
+        handler = route;
+      },
+    },
+  });
+  const res = { setHeader() {}, end() {} };
+  await handler(
+    {
+      method: 'GET',
+      url: '/',
+      headers: { host: 'localhost:5173', 'sec-fetch-site': 'cross-site' },
+    },
+    res,
+  );
+  assert.equal(res.statusCode, 403);
+});

@@ -1,11 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CPCB_AVERAGING_MINUTES,
   CPCB_POLLUTANTS,
-  CPCB_UNITS_VERIFIED,
   cpcbObservationTime,
-  cpcbRated,
   normalizeCpcbRecords,
 } from './cpcb.js';
 import { createAirQualitySource } from './providers.js';
@@ -80,7 +77,7 @@ test('one reading per station and pollutant, newest wins; reported averages are 
   for (const reading of rows) {
     assert.equal(reading.provider, 'cpcb');
     assert.equal(reading.scale, reading.parameter);
-    assert.equal(reading.risk, null);
+    assert.equal('risk' in reading, false);
     assert.equal(reading.band, null);
   }
   assert.equal(readingsOf([row(), row({ state: 'Other' })]).length, 2);
@@ -132,11 +129,7 @@ test('current OGD avg_value schema is accepted alongside legacy pollutant_avg', 
   );
 });
 
-test('India is rated only with verified units and a known averaging period', () => {
-  // Neither is confirmed yet.
-  assert.equal(CPCB_UNITS_VERIFIED, false);
-  assert.equal(CPCB_AVERAGING_MINUTES, null);
-  assert.equal(cpcbRated(), false);
+test('India readings are unrated and keep the reported value', () => {
   const [reading] = readingsOf([row()]);
   assert.equal(reading.units, null);
   assert.equal(reading.averagingMinutes, undefined);
@@ -144,25 +137,6 @@ test('India is rated only with verified units and a known averaging period', () 
   assert.equal(reading.aqi, null);
   assert.equal(reading.color, '#8cb4ce');
   assert.equal(reading.label, '123');
-  const first = (options, patch) =>
-    normalizeCpcbRecords({ records: [row(patch)] }, { now, ...options })
-      .readings[0];
-  assert.equal(first({ unitsVerified: true }).rated, false);
-  assert.equal(first({ unitsVerified: true }).units, 'µg/m³');
-  assert.equal(first({ averagingMinutes: 60 }).rated, false);
-  const both = first({ unitsVerified: true, averagingMinutes: 60 });
-  assert.equal(both.rated, true);
-  assert.equal(both.units, 'µg/m³');
-  assert.equal(both.averagingMinutes, 60);
-  assert.equal(both.label, '123 µg/m³');
-  assert.equal(both.aqi, null);
-  assert.equal(
-    first(
-      { unitsVerified: true, averagingMinutes: 60 },
-      { pollutant_id: 'CO', pollutant_avg: '1.2' },
-    ).units,
-    'mg/m³',
-  );
 });
 
 // ── India in the layer, through the default providers ─────────────────────
@@ -180,8 +154,8 @@ const snapshot = (body = {}) => ({
   ...body,
 });
 /** What the local India route answers for these OGD rows. */
-const indiaSnapshot = (records, options = {}) =>
-  snapshot(normalizeCpcbRecords({ records }, { now: Date.now(), ...options }));
+const indiaSnapshot = (records) =>
+  snapshot(normalizeCpcbRecords({ records }, { now: Date.now() }));
 const openAqCopy = (lat, lon) => ({
   id: 'openaq:9:PM2.5',
   provider: 'openaq',
@@ -261,7 +235,6 @@ test('India readings are drawn as one more observation provider', async () => {
 });
 
 test('unverified India readings are unrated and leave the AQI alone', async () => {
-  assert.equal(CPCB_UNITS_VERIFIED, false);
   const { layer, points } = indiaLayer({
     '/api/air-quality/india': indiaSnapshot([row({ last_update: recent() })]),
     '/api/air-quality/openaq': snapshot(),
@@ -286,41 +259,6 @@ test('unverified India readings are unrated and leave the AQI alone', async () =
     /units or averaging period .* not confirmed/,
   );
   layer.destroy();
-});
-
-test('the rating gate decides the colour of India stations through the layer', async () => {
-  const stationIn = async (options) => {
-    const { layer, points } = indiaLayer({
-      '/api/air-quality/india': indiaSnapshot(
-        [row({ last_update: recent() })],
-        options,
-      ),
-      '/api/air-quality/openaq': snapshot(),
-      '/api/air-quality/south-africa': snapshot(),
-    });
-    layer.setParams({ view: 'PM2.5' });
-    await layer.update();
-    const [station] = [...points().items.values()];
-    layer.destroy();
-    return station;
-  };
-  // 123 µg/m³ of PM2.5 over one hour: "Very poor" on the EEA hourly bands.
-  const rated = await stationIn({ unitsVerified: true, averagingMinutes: 60 });
-  assert.equal(rated.meta.rated, true);
-  assert.equal(rated.meta.assessment.label, 'Very poor');
-  assert.equal(rated.color, '#e96070');
-  assert.equal(rated.meta.aqi, null);
-  for (const options of [
-    {},
-    { unitsVerified: true },
-    { averagingMinutes: 60 },
-  ]) {
-    const station = await stationIn(options);
-    const name = JSON.stringify(options);
-    assert.equal(station.meta.rated, false, name);
-    assert.equal(station.color, '#8cb4ce', name);
-    assert.equal(station.meta.assessment.label, undefined, name);
-  }
 });
 
 test('a rejected data.gov.in key is reported as a key problem', async () => {

@@ -269,14 +269,14 @@ export const DATA_CREDITS = [
   {
     key: 'cpcb-ogd',
     html:
-      'Indian air-quality observations: Central Pollution Control Board via ' +
+      'Indian air-quality observations: Central Pollution Control Board, Real time Air Quality Index, via ' +
       '<a href="https://www.data.gov.in/catalog/real-time-air-quality-index" target="_blank" rel="noopener">Open Government Data Platform India</a> · Government Open Data License – India',
   },
   {
     key: 'eea-aqi-bands',
     html:
-      'Air quality. Bands and colours: ' +
-      '<a href="https://airindex.eea.europa.eu/AQI/" target="_blank" rel="noopener">European Air Quality Index (EEA)</a> · CC BY 4.0 · ' +
+      'Air quality. Pollutant bands: ' +
+      '<a href="https://airindex.eea.europa.eu/AQI/" target="_blank" rel="noopener">European Air Quality Index (EEA)</a> · CC BY 4.0 · colours adapted by GEV · ' +
       'Carbon monoxide: WHO air quality guidelines',
   },
   {
@@ -939,4 +939,30 @@ export function registerDynamicCredit(viewer, credit) {
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   if (!viewer) return;
   for (const credit of credits) addDataCredit(viewer, credit);
+}
+
+/** The credits registered under each replaceable key: viewer, markup, and their removers. */
+const _replaceableCredits = new WeakMap();
+/**
+ * Register `credit`, replacing what an earlier call registered under its
+ * key (a source whose wording changes, such as a model run's year).
+ * @returns {boolean} True when the credit is (now) registered.
+ */
+export function replaceDynamicCredit(viewer, credit) {
+  if (!viewer || !credit?.key || !credit?.html) return false;
+  const credits = findCredits(viewer);
+  if (!credits) return false;
+  let byKey = _replaceableCredits.get(viewer);
+  if (!byKey) {
+    byKey = new Map();
+    _replaceableCredits.set(viewer, byKey);
+  }
+  const held = byKey.get(credit.key);
+  if (held?.html === credit.html) return true;
+  if (held) for (const off of held.offs) off?.();
+  const offs = creditsFromMarkup(credit.html).map((one) =>
+    credits.addStatic(one),
+  );
+  byKey.set(credit.key, { html: credit.html, offs });
+  return true;
 }

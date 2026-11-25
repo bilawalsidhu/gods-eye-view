@@ -7,7 +7,7 @@
  * cell covers about the same ground everywhere. Then, largest first, each
  * cell takes in the neighbouring cells whose centres are closer than three
  * quarters of a cell. Longitudes wrap, so a group can sit on the dateline.
- * Only rated stations are grouped: a group's colour is its members' mean.
+ * Group colours use the rated members’ mean, or the neutral colour when every station is unrated.
  */
 import { toLonLatH } from '../../geo/ellipsoid.js';
 
@@ -76,9 +76,8 @@ export function cellDegAt(camera, px = CLUSTER_PX) {
  * @param {number} cellDeg
  * @param {{selectedId?: string|null}} [options]
  * @returns {Array<{members: S[], lat: number, lon: number, mean: number|null}>}
- *   Groups largest first, then the stations left on their own: the unrated
- *   ones (`mean` null) and, last, the selected one, which is never grouped.
- *   `mean` is the members' mean value.
+ *   Groups largest first, with the selected station alone at the end.
+ *   The mean uses the rated members, or is null for a group with none.
  */
 export function groupStations(stations, cellDeg, { selectedId = null } = {}) {
   const list = Array.isArray(stations) ? stations : [];
@@ -96,15 +95,10 @@ export function groupStations(stations, cellDeg, { selectedId = null } = {}) {
     return `${row}:${((((col - first) % span) + span) % span) + first}`;
   };
   const cells = new Map();
-  const singles = [];
   let selected = null;
   for (const station of list) {
     if (selectedId !== null && station.id === selectedId) {
       selected = station;
-      continue;
-    }
-    if (!Number.isFinite(station.value)) {
-      singles.push(station);
       continue;
     }
     const row = rowOf(station.lat);
@@ -125,6 +119,7 @@ export function groupStations(stations, cellDeg, { selectedId = null } = {}) {
   );
   for (const group of ordered) {
     if (group.gone) continue;
+    group.gone = true; // Emitted once: no later cell takes it in.
     const count = group.members.length;
     const lat = group.lat / count;
     const lon = group.lon / count;
@@ -146,7 +141,7 @@ export function groupStations(stations, cellDeg, { selectedId = null } = {}) {
       const apart = Math.hypot((otherLon - lon) * cos, other.lat / m - lat);
       if (apart > cell * JOIN_CELLS) continue;
       other.gone = true;
-      group.members.push(...other.members);
+      for (const member of other.members) group.members.push(member);
       group.lat += other.lat;
       group.lon += otherLon * m;
       group.sum += other.sum;
@@ -154,7 +149,6 @@ export function groupStations(stations, cellDeg, { selectedId = null } = {}) {
     }
     out.push(result(group));
   }
-  out.push(...singles.map(alone));
   if (selected) out.push(alone(selected));
   return out;
 }

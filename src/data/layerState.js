@@ -300,8 +300,7 @@ function satelliteFilterOption() {
 
 const OPTION_GROUPS = Object.freeze({
   // One view for every station network together: the US AQI (default) or
-  // one rated pollutant. Providers are not part of the state. The code `k`
-  // (Canada's AQHI, never released) is retired: it opens the default view.
+  // one rated pollutant. Providers are not part of the state.
   'air-quality': Object.freeze([
     enumOption(
       'view',

@@ -1,6 +1,6 @@
 <script setup>
 import { onBeforeUnmount } from 'vue';
-import { t } from '../../i18n/index.js';
+import { isolate, t } from '../../i18n/index.js';
 import { formatScaleRange } from '../unitLabels.js';
 import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
@@ -75,6 +75,20 @@ function legendView(legend) {
     labels: legend?.labels || [],
   };
 }
+// Clearing removes the focused close button: focus first moves to what
+// stays, the cleared item's row, else the card's pressed tile, else its
+// header, so the keyboard keeps its place.
+function clearResult(block, event) {
+  const button = event?.currentTarget;
+  const card = button?.closest?.('.rail-card');
+  if (card && button.ownerDocument?.activeElement === button)
+    (
+      card.querySelector('.data-row-list-item.active') ||
+      card.querySelector('.rail-card-tile.is-active') ||
+      card.querySelector('.rail-card-header')
+    )?.focus();
+  dispatch(block.clear, block);
+}
 </script>
 
 <template>
@@ -121,7 +135,7 @@ function legendView(legend) {
             :label="block.clear?.label || t('Clear reading')"
             :title="block.clear?.label || t('Clear reading')"
             :hidden="!block.clear"
-            @click="dispatch(block.clear, block)" /></div
+            @click="clearResult(block, $event)" /></div
         ><div class="rail-card-result-lines"
           ><RailCardBlocks
             :blocks="[
@@ -224,7 +238,7 @@ function legendView(legend) {
               :style="tileAccent(tile)"
             ></i
             ><strong
-              >{{ String(tile.value ?? '')
+              >{{ isolate(String(tile.value ?? ''))
               }}<small v-if="tile.note"> ({{ tile.note }})</small></strong
             ><span>{{ tile.label || '' }}</span></UiButton
           ></div

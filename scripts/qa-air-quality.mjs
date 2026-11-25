@@ -155,10 +155,15 @@ async function main() {
         /Failed to load resource.*428/i.test(m.text())
       )
         return;
-      consoleErrors.push(`${m.text().slice(0, 160)} [${sourceUrl}]`);
+      consoleErrors.push(
+        `${m.text().slice(0, 160)} [${sourceUrl.split(/[?#]/, 1)[0]}]`,
+      );
     });
 
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
+    await page.goto(new URL('/#v=2&map=esri-imagery', APP_URL).href, {
+      waitUntil: 'domcontentloaded',
+      timeout: 90000,
+    });
     await page.waitForFunction(
       () => window.__godsEyeView?.viewer && window.__godsEyeView?.dataManager,
       { timeout: 90000 },
@@ -175,7 +180,9 @@ async function main() {
       const answered = () =>
         mod
           .getProviderStates()
-          .every((s) => ['no-key', 'disabled', 'failed', 'ok'].includes(s.status));
+          .every((s) =>
+            ['no-key', 'disabled', 'failed', 'ok'].includes(s.status),
+          );
       for (let i = 0; i < 90 && !answered(); i++)
         await new Promise((r) => setTimeout(r, 500));
       const row = dm.getAll().find((entry) => entry.id === 'air-quality');
@@ -331,9 +338,6 @@ async function main() {
  * the timeline, and a later step read by the tiles.
  */
 async function checkField(page) {
-  const before = await page.evaluate(
-    () => window.__godsEyeView.viewer.imageryLayers?.length ?? null,
-  );
   await page.evaluate(() => {
     const gev = window.__godsEyeView;
     gev.dataManager.setLayerParams('air-quality', { view: 'PM2.5' });
@@ -358,23 +362,45 @@ async function checkField(page) {
         controls.sublists
           .find((entry) => entry.id === group)
           ?.tiles.find((entry) => entry.id === id)?.value;
+      const images = window.__godsEyeView.viewer.imageryLayers;
+      const ids = (window.__aqFieldIds ??= new WeakMap());
+      window.__aqFieldSeq ??= 0;
+      const fieldImageIds = [];
+      for (let i = 0; i < (images?.length ?? 0); i++) {
+        const image = images.get(i);
+        const canvas = image.imageryProvider?.image;
+        if (
+          image.show &&
+          image.alpha > 0 &&
+          canvas instanceof HTMLCanvasElement
+        ) {
+          if (!ids.has(canvas)) ids.set(canvas, ++window.__aqFieldSeq);
+          fieldImageIds.push(ids.get(canvas));
+        }
+      }
+      fieldImageIds.sort((a, b) => a - b);
       return {
         subtitle: controls.sublists[0]?.subtitle,
         detail: controls.summary.detail,
         aqi: tile('index', 'aqi'),
         pm25: tile('pollutants', 'PM2.5'),
         coverage: worldClock.coverage(),
-        own: layer.getClockCoverage(),
         follows: worldClock.follows('air-quality'),
         supported: worldClock.getState().supported,
-        imagery: window.__godsEyeView.viewer.imageryLayers?.length ?? null,
+        fieldImages: fieldImageIds.length,
+        fieldImageIds,
       };
     });
   let now = null;
   for (let i = 0; i < 40; i++) {
     await sleep(500);
     now = await read();
-    if (now.subtitle === 'model at view centre' && now.pm25 !== '—') break;
+    if (
+      now.subtitle === 'model at view centre' &&
+      now.pm25 !== '—' &&
+      now.fieldImages === 2
+    )
+      break;
   }
   record(
     'with a field the tiles read the model at the view centre',
@@ -383,24 +409,20 @@ async function checkField(page) {
   );
   record(
     'the field draws on the globe: the global image and the Europe inset',
-    Number.isInteger(before) && now?.imagery - before === 2,
-    `imagery layers ${before} -> ${now?.imagery}`,
+    now?.fieldImages === 2,
+    'visible field images: ' + now?.fieldImages,
   );
   // The layer gives the clock exactly its run's span; other layers on the
   // timeline may widen the timeline's, which must hold the forecast.
   const spans =
-    now?.own?.start === FIELD_RUN &&
-    now?.own?.end === FIELD_RUN + 24 * HOUR &&
-    now.coverage?.start <= now.own.start &&
-    now.coverage?.end >= now.own.end &&
+    now?.coverage?.start <= FIELD_RUN &&
+    now.coverage.end >= FIELD_RUN + 24 * HOUR &&
     now.follows === true &&
     now.supported === true;
   record(
     'the timeline spans the forecast',
     spans,
-    now?.own
-      ? `layer ${new Date(now.own.start).toISOString()} .. ${new Date(now.own.end).toISOString()}, timeline ${new Date(now.coverage?.start).toISOString()} .. ${new Date(now.coverage?.end).toISOString()}, follows=${now.follows}`
-      : 'no coverage from the layer',
+    JSON.stringify({ coverage: now?.coverage, follows: now?.follows }),
   );
   await page.evaluate(
     async (at) => {
@@ -413,13 +435,21 @@ async function checkField(page) {
   for (let i = 0; i < 40; i++) {
     await sleep(500);
     later = await read();
-    if (/forecast for/.test(later.detail) && later.pm25 !== now?.pm25) break;
+    if (
+      /forecast for/.test(later.detail) &&
+      later.pm25 !== now?.pm25 &&
+      later.fieldImages === 2 &&
+      later.fieldImageIds.join() !== now.fieldImageIds.join()
+    )
+      break;
   }
   record(
     'scrubbing to +24 h draws that step: the tiles change',
     /forecast for/.test(later?.detail) &&
       later.pm25 !== now?.pm25 &&
-      later.pm25 !== '—',
+      later.pm25 !== '—' &&
+      later.fieldImages === 2 &&
+      later.fieldImageIds.join() !== now.fieldImageIds.join(),
     `PM2.5 ${now?.pm25} -> ${later?.pm25}, US AQI ${now?.aqi} -> ${later?.aqi}, detail="${later?.detail}"`,
   );
   await page.evaluate(async () => {

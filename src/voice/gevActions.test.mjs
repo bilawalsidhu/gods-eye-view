@@ -8998,53 +8998,43 @@ test('a failed military voice entry switches off only the layer it switched on',
   }
 });
 
-test('"AQHI" opens air quality and chooses no view: the US AQI is its one index', async () => {
-  globalThis.window = globalThis.window || {
-    clearTimeout,
-    setTimeout,
-    requestIdleCallback: null,
-  };
-  const steps = [];
-  let enabled = false;
-  const dataManager = {
-    layers: new Map([['air-quality', { module: {} }]]),
-    getAll: () => [{ id: 'air-quality', name: 'Air quality', enabled }],
-    isEnabled: () => enabled,
-    getLayerLifecycleState: () => ({
-      enabled,
-      lifecycleState: enabled ? 'enabled' : 'disabled',
-      uncertain: false,
-    }),
-    setLayerParams(id, params, options) {
-      steps.push(['params', id, params, options.origin]);
-      return true;
+test('a radius count over air quality describes its viewport coverage', async () => {
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 0, lastUpdate: Date.now() }),
+      getAnalystRecords: () => [],
     },
-    async setEnabled(id, value) {
-      steps.push(['enabled', id, value]);
-      enabled = value;
-      return true;
+  });
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'radius', lat: 30, lon: -97, radiusKm: 20 },
+    operation: 'count',
+  });
+  assert.match(
+    result.coverage.note,
+    /air-quality loads OpenAQ stations by viewport/,
+  );
+  assert.doesNotMatch(result.coverage.note, /flights layer loads by viewport/);
+});
+
+test('AQI station concentrations can be filtered by pollutant', async () => {
+  const rows = [40, 10].map((pm25, i) => ({
+    id: String(i),
+    lat: 1,
+    lon: 2,
+    parameter: 'aqi',
+    pm25,
+  }));
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 2, lastUpdate: Date.now() }),
+      getAnalystRecords: () => rows,
     },
-  };
-  const runner = createGevActionRunner({
-    viewer: {
-      clock: { onTick: { addEventListener: () => () => {} } },
-      scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
-      camera: { moveEnd: { addEventListener() {} } },
-    },
-    styleManager: {},
-    dataManager,
   });
-  const result = await runner('set_layer_visibility', {
-    layerId: 'aqhi',
-    enabled: true,
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'pm25', op: 'gt', value: 35 }],
   });
-  assert.equal(result.ok, true);
-  // Canada's AQHI is retired: the alias names the layer, not a view of it.
-  assert.deepEqual(steps, [['enabled', 'air-quality', true]]);
-  steps.length = 0;
-  await runner('set_layer_visibility', {
-    layerId: 'air quality',
-    enabled: true,
-  });
-  assert.deepEqual(steps, [['enabled', 'air-quality', true]]);
+  assert.equal(result.count, 1);
 });

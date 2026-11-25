@@ -75,6 +75,8 @@ export interface ImagerySpec {
   worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
   url?: string;
+  /** A single-image canvas. Its pixels must stay unchanged while the layer uses it. */
+  image?: HTMLCanvasElement;
   /** `'canvas'` (`imageHooks`): draws one tile. */
   drawTile?: (tile: TileRequest, canvas: HTMLCanvasElement) => void;
   subdomains?: string[];

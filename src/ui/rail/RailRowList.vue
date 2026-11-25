@@ -1,4 +1,5 @@
 <script setup>
+import { isolate } from '../../i18n/index.js';
 import { onMounted, onUpdated, ref } from 'vue';
 import UiButton from '../kit/UiButton.vue';
 
@@ -17,7 +18,7 @@ const swatchStyle = (item) =>
     : undefined;
 
 const rowClass = (item) =>
-  `data-row-list-item${item.disabled ? ' note' : ''}${item.current ? ' current' : ''}`;
+  `data-row-list-item${item.disabled ? ' note' : ''}${item.current ? ' current' : ''}${item.unranked ? ' unranked' : ''}`;
 
 // Follow the flight, but never steal a scroll the reader is making
 // themselves: only when the step actually changed.
@@ -43,6 +44,7 @@ onUpdated(followCurrent);
   <ol
     ref="root"
     class="data-row-list ui-scroll"
+    :class="{ 'is-single-line': list?.singleLine === true }"
     :data-block-id="blockId"
     :hidden="!list?.items?.length"
     :aria-label="list?.ariaLabel || ''"
@@ -65,9 +67,12 @@ onUpdated(followCurrent);
           aria-hidden="true"
           :style="swatchStyle(item)"
         ></span
-        ><span class="data-row-list-lead">{{ String(item.lead ?? '') }}</span
-        ><span class="data-row-list-text">{{
-          String(item.text ?? '')
+        ><span class="data-row-list-lead">{{
+          isolate(String(item.lead ?? ''))
+        }}</span
+        ><span class="data-row-list-text">{{ String(item.text ?? '') }}</span
+        ><span v-if="item.note" class="data-row-list-note">{{
+          String(item.note)
         }}</span></UiButton
       ></li
     ></ol

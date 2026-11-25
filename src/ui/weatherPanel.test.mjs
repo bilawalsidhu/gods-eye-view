@@ -793,12 +793,12 @@ test('air-quality readout renders the US AQI ramp, its coverage, one index tile 
         .filter(Boolean)
         .join(' '),
     ),
-    ['154 Hamilton', '11 Toronto'],
+    ['154 Hamilton Unhealthy', '11 Toronto Good'],
   );
   // One line a row; the station's details are the tooltip.
   assert.match(
     list.children[0].children[0].title,
-    /^Hamilton · on · Ontario network · Hourly average · /,
+    /^Unhealthy · Hamilton · on · Ontario network · Hourly average · /,
   );
   view.destroy();
   layer.destroy();
@@ -910,4 +910,26 @@ test('the wind card notes it stays live only while its source does not follow th
     /Does not follow history/,
   );
   view.destroy();
+});
+
+test('selecting a station opens its card and refreshing that selection keeps the open card', () => {
+  const f = fixture(),
+    panel = createWeatherPanel(f);
+  const station = (key) => ({
+    ...cyclone,
+    id: 'air-quality',
+    summary: {
+      ...cyclone.summary,
+      result: key ? { id: 'station', lead: true, key, label: 'Station' } : null,
+    },
+  });
+  panel.update([station(null), wind]);
+  clickHeader(f, wind.id);
+  panel.update([station('a'), wind]);
+  assert.equal(card(f, 'air-quality').dataset.open, 'true');
+  clickHeader(f, wind.id);
+  panel.update([station('a'), wind]);
+  assert.deepEqual(opened(f), [wind.id]);
+  panel.update([station('b'), wind]);
+  assert.equal(card(f, 'air-quality').dataset.open, 'true');
 });

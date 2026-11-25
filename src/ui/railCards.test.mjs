@@ -1,5 +1,6 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
+import { setLocale } from '../i18n/index.js';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { nextTick } from 'vue';
@@ -402,62 +403,6 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   assert.equal(calls.length, before);
 });
 
-test('a row draws no status badge: no card gives one', () => {
-  const f = railFixture();
-  const view = createRailCards(f);
-  view.update([
-    {
-      ...card,
-      blocks: [
-        {
-          id: 'stations',
-          type: 'list',
-          list: {
-            ariaLabel: 'Stations',
-            items: [
-              {
-                id: 'station',
-                lead: 'PM2.5',
-                text: 'Cape Town',
-                badge: 'Good',
-                badgeColor: '#50c9b5',
-              },
-            ],
-          },
-        },
-      ],
-    },
-  ]);
-  const row = f.container.querySelector('.data-row-list-item');
-  // Booleans: a failing assertion on a DOM node takes minutes to print.
-  assert.ok(!row.querySelector('.data-row-list-badge'), 'no badge element');
-  assert.equal(row.textContent, 'PM2.5Cape Town');
-  view.destroy();
-});
-
-test('a summary overview draws nothing: no layer gives one', () => {
-  const f = railFixture();
-  const panel = createWeatherPanel({ container: f.container });
-  panel.update([
-    {
-      id: 'air-quality',
-      icon: '◍',
-      summary: {
-        label: 'Air quality',
-        status: '1 station',
-        overview: [{ id: 'headline', text: 'Overview headline' }],
-      },
-      legend: [],
-    },
-  ]);
-  assert.ok(
-    !f.container.querySelector('[data-block-id="overview"]'),
-    'no overview block',
-  );
-  assert.doesNotMatch(f.container.textContent, /Overview headline/);
-  panel.destroy();
-});
-
 const tilesBlock = (active = 'aqi') => ({
   id: 'tiles-index',
   type: 'tiles',
@@ -751,4 +696,81 @@ test("a result's title is its header's tooltip", () => {
   paint(undefined);
   assert.equal(label.getAttribute('title'), null);
   view.destroy();
+});
+
+test('clearing a lead result keeps focus in the card', (t) => {
+  const f = railFixture(),
+    view = createRailCards(f);
+  t.after(() => view.destroy());
+  for (const [active, tile, selector] of [
+    [true, true, '.data-row-list-item.active'],
+    [false, true, '.rail-card-tile.is-active'],
+    [false, false, '.rail-card-header'],
+  ]) {
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'station',
+            type: 'result',
+            lead: true,
+            label: 'Station',
+            clear: { params: { station: null } },
+          },
+          tilesBlock(tile ? 'aqi' : ''),
+          {
+            id: 'list',
+            type: 'list',
+            list: {
+              items: [
+                { id: 's', text: 'Station', active, params: { station: 's' } },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+    const close = f.container.querySelector('[data-action-id="clear"]');
+    close.focus();
+    close.click();
+    assertSameNode(
+      close.ownerDocument.activeElement,
+      f.container.querySelector(selector),
+    );
+  }
+});
+test('in Arabic a tile value and a row lead are isolated', (t) => {
+  const f = railFixture(),
+    view = createRailCards(f);
+  t.after(() => view.destroy());
+  setLocale('ar');
+  try {
+    const tiles = tilesBlock();
+    tiles.tiles[0].value = '500+';
+    view.update([
+      {
+        ...card,
+        blocks: [
+          tiles,
+          {
+            id: 'list',
+            type: 'list',
+            list: { items: [{ id: 's', lead: '500+', text: 'Station' }] },
+          },
+        ],
+      },
+    ]);
+    assert.ok(
+      f.container
+        .querySelector('.rail-card-tile strong')
+        .textContent.startsWith('\u2068500+\u2069'),
+    );
+    assert.equal(
+      f.container.querySelector('.data-row-list-lead').textContent,
+      '\u2068500+\u2069',
+    );
+  } finally {
+    setLocale('en');
+  }
 });

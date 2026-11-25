@@ -84,7 +84,7 @@ test('a group near the dateline joins across ±180', () => {
   assert.equal(groups[0].mean, 20);
 });
 
-test('unrated stations are never grouped: a group is of rated stations only', () => {
+test('unrated stations group with neighbours and only rated values contribute to the mean', () => {
   const groups = groupStations(
     [
       station('a', 1.1, 1.1, 40),
@@ -93,20 +93,15 @@ test('unrated stations are never grouped: a group is of rated stations only', ()
     ],
     1,
   );
-  assert.equal(groups.length, 2);
-  const rated = groups.find((group) => group.members.length === 2);
-  assert.deepEqual(ids(rated), ['a', 'b']);
-  assert.equal(rated.mean, 30);
-  const grey = groups.find((group) => group !== rated);
-  assert.deepEqual(ids(grey), ['grey']);
-  assert.equal(grey.mean, null);
-  assert.equal(
-    groupStations(
-      [station('a', 1.1, 1.1, null), station('b', 1.2, 1.2, null)],
-      1,
-    ).length,
-    2,
+  assert.equal(groups.length, 1);
+  assert.deepEqual(ids(groups[0]), ['a', 'b', 'grey']);
+  assert.equal(groups[0].mean, 30);
+  const grey = groupStations(
+    [station('a', 1.1, 1.1, null), station('b', 1.2, 1.2, null)],
+    1,
   );
+  assert.equal(grey.length, 1);
+  assert.equal(grey[0].mean, null);
 });
 
 test('a high-latitude neighbour in the next column joins', () => {

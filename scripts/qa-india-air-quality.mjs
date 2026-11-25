@@ -53,18 +53,19 @@ try {
             schemaVersion: 1,
             ...normalizeCpcbRecords({
               records: [
-                {
-                  country: 'India',
-                  state: 'Delhi',
-                  city: 'Delhi',
-                  station: 'QA synthetic station',
-                  latitude: '28.6',
-                  longitude: '77.2',
-                  pollutant_id: 'PM2.5',
-                  avg_value: '123',
-                  last_update,
-                },
-              ],
+                ['PM2.5', '123'],
+                ['PM10', '77'],
+              ].map(([pollutant_id, avg_value]) => ({
+                country: 'India',
+                state: 'Delhi',
+                city: 'Delhi',
+                station: 'QA synthetic station',
+                latitude: '28.6',
+                longitude: '77.2',
+                pollutant_id,
+                avg_value,
+                last_update,
+              })),
             }),
             stale: mode === 'stale',
           };
@@ -77,7 +78,10 @@ try {
   // A provider that said it has no key, or that answered, is left alone for a
   // while (the layer keeps its answer), so each case starts on a fresh load.
   const open = async () => {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 90_000 });
+    await gotoSafely(page, url, {
+      waitUntil: 'domcontentloaded',
+      timeout: 90_000,
+    });
     await page.waitForFunction(() => window.__godsEyeView?.dataManager, {
       timeout: 90_000,
     });
@@ -183,18 +187,39 @@ try {
     const layer =
       window.__godsEyeView.dataManager.layers.get('air-quality').module;
     return (
-      layer.getParams().view === 'PM10' && layer.getStats().lastUpdate !== null
+      layer.getParams().view === 'PM10' &&
+      layer.getProviderStates().find((s) => s.id === 'cpcb')?.status === 'ok' &&
+      layer.getAnalystRecords().some((r) => r.provider === 'cpcb')
     );
   });
-  const empty = await page.evaluate(() =>
+  const rows = await page.evaluate(() =>
     window.__godsEyeView.dataManager.layers
       .get('air-quality')
-      .module.getStats(),
+      .module.getAnalystRecords(),
   );
-  assert.equal(empty.count, 0, 'PM2.5 must not be relabeled as PM10');
+  assert.ok(
+    rows.some(
+      (r) =>
+        r.provider === 'cpcb' &&
+        r.parameter === 'PM10' &&
+        r.reportedValue === 77,
+    ),
+  );
+  assert.ok(rows.every((r) => r.reportedValue !== 123));
   console.log(
     'PASS India air quality: key required, station rendering, unrated values, stale cache, Provider Settings key, pollutant isolation',
   );
 } finally {
   await browser.close();
+}
+
+/** Opens `target`; a failure names its origin only, never a query that may carry a token. */
+async function gotoSafely(page, target, options) {
+  try {
+    return await page.goto(target, options);
+  } catch (error) {
+    throw new Error(
+      `navigation to ${new URL(target).origin} failed: ${String(error?.message ?? error).split(' at ')[0]}`,
+    );
+  }
 }

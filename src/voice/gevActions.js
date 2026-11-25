@@ -4721,7 +4721,7 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
     const matches =
       dataManager?.layers
         ?.get(layerId)
-        ?.module?.getAnalystRecords?.()
+        ?.module?.getAnalystRecords?.(ANALYST_RECORD_CAP)
         .filter(
           (item) =>
             String(
@@ -6165,14 +6165,17 @@ function effectiveAnalystScopeKind(args, coverage) {
 function withViewportCoverageNote(coverage) {
   if (!coverage) return coverage;
   const current = typeof coverage.note === 'string' ? coverage.note : '';
-  if (current.includes(VIEWPORT_COVERAGE_NOTE)) return coverage;
-  const separator = current ? '; ' : '';
-  return {
-    ...coverage,
-    note: current
-      ? `${current}${separator}${VIEWPORT_COVERAGE_NOTE}`
-      : VIEWPORT_COVERAGE_NOTE,
-  };
+  const notes = new Set();
+  for (const { layerKey } of coverage.layersQueried || []) {
+    const query = voiceLayer(layerKey)?.query;
+    if (query?.viewportLoaded) {
+      const note = query.viewportNote || VIEWPORT_COVERAGE_NOTE;
+      if (!current.includes(note)) notes.add(note);
+    }
+  }
+  return notes.size
+    ? { ...coverage, note: [current, ...notes].filter(Boolean).join('; ') }
+    : coverage;
 }
 
 /** Whether this query counts records from a viewport-loaded layer. */

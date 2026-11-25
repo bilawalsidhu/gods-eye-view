@@ -70,15 +70,21 @@ test('a configured folder is served: its manifest and its grids, nothing else', 
     json(manifest),
     JSON.parse(readFileSync(`${FIXTURE}manifest.json`, 'utf8')),
   );
-  const grid = await request('/grid/europe/024/aqi.u16?run=2026-11-20');
+  assert.equal(
+    (await request('/grid/europe/024/aqi.u16?run=other')).status,
+    409,
+  );
+  const grid = await request(
+    `/grid/europe/024/aqi.u16?run=${encodeURIComponent(json(manifest).run)}`,
+  );
   assert.equal(grid.status, 200);
   assert.equal(grid.head['Content-Type'], 'application/octet-stream');
   assert.ok(
     Buffer.from(grid.body).equals(readFileSync(`${FIXTURE}europe/024/aqi.u16`)),
   );
-  // Unchanged since the browser's copy: not sent again.
+  assert.match(grid.head.ETag, /^"[^"]+"$/);
   const again = await request('/grid/europe/024/aqi.u16', {
-    headers: { 'if-modified-since': grid.head['Last-Modified'] },
+    headers: { 'if-none-match': grid.head.ETag },
   });
   assert.equal(again.status, 304);
   for (const url of [

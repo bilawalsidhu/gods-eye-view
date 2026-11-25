@@ -1,3 +1,4 @@
+import { admitSameSite } from './common/same-site.js';
 import { readResponseJsonCapped } from './common/http.js';
 import { createOpenAqBudget } from './openAqBudget.js';
 import {
@@ -11,18 +12,12 @@ import {
   aqiStations,
 } from '../../src/layers/airQuality/usAqi.js';
 
-// Geographic scope is configuration, not a station/city allowlist. UN M49 Africa
-// countries/areas, including Indian/Atlantic Ocean islands and territories.
-// https://unstats.un.org/unsd/methodology/m49/
-export const AFRICA_SCOPE = Object.freeze({
-  id: 'africa',
-  countries: Object.freeze(
-    'DZ AO BJ BW BF BI CV CM CF TD KM CG CD CI DJ EG GQ ER SZ ET GA GM GH GN GW KE LS LR LY MG MW ML MR MU YT MA MZ NA NE NG RE RW SH ST SN SC SL SO ZA SS SD TZ TG TN UG EH ZM ZW IO TF'.split(
-      ' ',
-    ),
-  ),
-});
-export const GLOBAL_SCOPE = Object.freeze({ id: 'global', countries: null });
+/** Stations checked per pass. */
+const BATCH = 4;
+/** Matching sensors tried at one station before it counts as empty. */
+const MAX_SENSORS = 3;
+/** Time before retrying a failed station check. */
+const STATION_RETRY_MS = 5 * 60_000;
 const ROOT = 'https://api.openaq.org/v3/';
 const HOUR = 3600_000;
 /** A refused key is tried upstream again after this long, unless it changes. */
@@ -82,7 +77,7 @@ const catalogBox = ([w, s, e, n]) => {
     Math.min(90, Math.ceil(n / step) * step),
   ];
 };
-function createViewState(view, time) {
+function createViewState(view, time, previous) {
   const [w, s, e, n, lon, lat] = view;
   const width = (e - w + 360) % 360 || 360;
   const radius = Math.min(5, width / 2);
@@ -106,8 +101,9 @@ function createViewState(view, time) {
   return {
     at: time,
     stations: new Map(),
-    readings: new Map(),
-    checked: new Map(),
+    readings: previous?.readings ?? new Map(),
+    checked: previous?.checked ?? new Map(),
+    failed: previous?.failed ?? new Map(),
     pages: [
       ...new Map(
         [...priority, ...boxes]
@@ -120,47 +116,31 @@ function createViewState(view, time) {
 
 /** Cancel upstream work only once all consumers of a coalesced view leave. */
 function consumeView(job, signal) {
-  const consumer = {};
-  job.consumers.add(consumer);
   return new Promise((resolve, reject) => {
-    const leave = () => {
-      signal?.removeEventListener('abort', abort);
-      job.consumers.delete(consumer);
-      if (!job.consumers.size) job.controller.abort();
+    const consumer = {
+      resolve,
+      reject,
+      leave: () => signal?.removeEventListener('abort', abort),
     };
     const abort = () => {
-      leave();
+      consumer.leave();
+      job.consumers.delete(consumer);
+      if (!job.consumers.size) job.controller.abort();
       reject(signal.reason);
     };
-    job.promise.then(resolve, reject).finally(leave);
+    job.consumers.add(consumer);
     if (signal?.aborted) return abort();
     signal?.addEventListener('abort', abort, { once: true });
   });
 }
 
-/** Bounded, demand-driven acquisition with injected scope and IO. */
+/** Bounded, demand-driven viewport acquisition with injected IO. */
 export function createOpenAqAcquisition({
   fetchImpl = globalThis.fetch,
   now = Date.now,
   getKey = () => process.env.OPENAQ_API_KEY || '',
-  scope = GLOBAL_SCOPE,
-  batchSize = 24,
 } = {}) {
-  if (
-    !(scope.countries === null || scope.countries?.length) ||
-    !Number.isInteger(batchSize) ||
-    batchSize < 1 ||
-    batchSize > 24
-  )
-    throw new TypeError('Invalid OpenAQ scope or batch size');
-  let keyAtCache = null,
-    catalog = null,
-    catalogAt = 0,
-    pending = null,
-    cached = null,
-    cachedAt = 0;
-  const readings = new Map(),
-    checked = new Map();
+  let keyAtCache = null;
   /**
    * The key OpenAQ last refused (401 or 403), with its answer and when: it is
    * not sent upstream again until it changes or `REFUSED_KEY_MS` pass.
@@ -168,22 +148,15 @@ export function createOpenAqAcquisition({
   let refused = null;
   const budget = createOpenAqBudget(now);
   const catalogPages = new Map();
-  let discoveryPage = 1,
-    discoveryDone = false,
-    discoveryAt = 0;
-  const globalCatalog = new Map();
-  let discoverySeen = new Set(),
-    parameterPages = null,
-    parameterCursor = 0;
-  const globalReadings = new Map();
   const viewLatest = new Map();
   const views = new Map(),
     viewCache = new Map(),
     viewPending = new Map();
-  async function acquireView(get, view, parameter, mode, signal) {
+  async function acquireView(get, view, parameter, mode, signal, cancel) {
     const id = viewId(view, parameter, mode);
     let state = views.get(id);
-    if (!state || now() - state.at > HOUR) state = createViewState(view, now());
+    if (!state || now() - state.at > HOUR)
+      state = createViewState(view, now(), state);
     views.delete(id);
     views.set(id, state);
     while (views.size > 8) {
@@ -191,16 +164,28 @@ export function createOpenAqAcquisition({
       views.delete(oldest);
       viewCache.delete(oldest);
     }
-    let failed = false;
-    let failureStatus = null;
+    let catalogFailure = null,
+      stationFailure = null,
+      limited = false,
+      succeeded = 0;
+    let timedOut = false;
+    const expired = () => signal.aborted && !cancel?.aborted;
     let retryAt = null;
     // Keep observations across view-cache eviction and even when discovery is blocked.
     for (const entry of viewLatest.values())
-      if (entry.station && inside(entry.station, view))
+      if (
+        entry.station &&
+        inside(entry.station, view) &&
+        !state.stations.has(entry.station.stationId)
+      )
         state.stations.set(entry.station.stationId, entry.station);
     // Reuse completed covering regions before spending a request. At most one
     // uncached catalog page per pass leaves capacity for actual observations.
     for (let i = 0; i < 4; i++) {
+      if (expired()) {
+        timedOut = true;
+        break;
+      }
       signal?.throwIfAborted();
       const page = state.pages.find((p) => !p.done);
       if (!page) break;
@@ -222,7 +207,7 @@ export function createOpenAqAcquisition({
         const data =
           cachedPage ||
           (await get(
-            `locations?bbox=${page.bbox.join(',')}&limit=1000&page=${page.page}&order_by=id&sort_order=asc`,
+            `locations?bbox=${page.bbox.join(',')}&limit=1000&page=${page.page}&order_by=id&sort_order=asc&mobile=false`,
           ).then((data) => ({
             at: now(),
             bbox: page.bbox,
@@ -236,11 +221,7 @@ export function createOpenAqAcquisition({
             catalogPages.delete(catalogPages.keys().next().value);
         }
         for (const station of data.stations) {
-          if (
-            !inside(station, view) ||
-            (scope.countries && !scope.countries.includes(station.country))
-          )
-            continue;
+          if (!inside(station, view)) continue;
           if (
             state.stations.size >= 100_000 &&
             !state.stations.has(station.stationId)
@@ -252,10 +233,14 @@ export function createOpenAqAcquisition({
         page.done = data.done;
         if (!cachedPage) break;
       } catch (e) {
+        if (expired()) {
+          timedOut = true;
+          break;
+        }
         signal?.throwIfAborted();
         if ([401, 403].includes(e.status)) throw e;
-        failed = true;
-        failureStatus = e.status || 503;
+        if (e.status === 429) limited = true;
+        else catalogFailure = e.status || 503;
         retryAt = e.retryAt || null;
         break;
       }
@@ -275,7 +260,10 @@ export function createOpenAqAcquisition({
       const previous = viewLatest.get(
         `${station.stationId}:${parameter || ''}`,
       );
-      if (previous) {
+      if (
+        previous &&
+        previous.at >= (state.checked.get(station.stationId) ?? -Infinity)
+      ) {
         // A due refresh must not erase still-current observations during cooldown.
         state.readings.set(
           station.stationId,
@@ -289,10 +277,12 @@ export function createOpenAqAcquisition({
         wrapLon(s.lon - view[4]) * Math.cos((view[5] * Math.PI) / 180),
         s.lat - view[5],
       );
+    const backoff = (s) =>
+      now() - (state.failed.get(s.stationId) ?? -Infinity) < STATION_RETRY_MS;
+    const needsCheck = (s) =>
+      now() - (state.checked.get(s.stationId) ?? -Infinity) >= 20 * 60_000;
     const due = eligible
-      .filter(
-        (s) => now() - (state.checked.get(s.stationId) || 0) >= 20 * 60_000,
-      )
+      .filter((s) => needsCheck(s) && !backoff(s))
       .sort(
         (a, b) =>
           (state.checked.get(a.stationId) || 0) -
@@ -300,9 +290,7 @@ export function createOpenAqAcquisition({
       )
       // Leave capacity for subsequent camera moves and other active views.
       // A stationary view continues discovery on its next refresh.
-      .slice(0, Math.min(batchSize, 4));
-    // Background enrichment yields before consuming capacity reserved for a new
-    // place. Cached readings are still returned immediately during this pause.
+      .slice(0, BATCH);
     const hasNearby = [...state.readings.values()]
       .flat()
       .some((r) => distance(r) < 5);
@@ -325,29 +313,45 @@ export function createOpenAqAcquisition({
       );
     }
     // Two bounded workers shorten the time to first visible markers; all share
-    // the same process request budget as global acquisition and other views.
-    for (let i = 0; i < due.length && failureStatus !== 429; i += 2) {
+    // the same process request budget as other views.
+    for (let i = 0; i < due.length && !limited && !timedOut; i += 2) {
+      if (expired()) {
+        timedOut = true;
+        break;
+      }
       signal?.throwIfAborted();
       const results = await Promise.allSettled(
         due.slice(i, i + 2).map(async (station) => {
           try {
-            const sensor =
-              parameter &&
-              station.sensors.find((s) => s.parameter === parameter);
-            const data = await get(
-              sensor
-                ? `sensors/${sensor.id}/hours?limit=24&page=1&datetime_from=${encodeURIComponent(new Date(now() - 6 * HOUR).toISOString())}&datetime_to=${encodeURIComponent(new Date(now()).toISOString())}`
-                : `locations/${station.stationId}/latest?limit=1000&page=1`,
-            );
-            if (data.results.length >= (sensor ? 24 : 1000))
-              throw error(503, 'OpenAQ station exceeds acquisition limit');
-            state.readings.set(
-              station.stationId,
-              sensor
+            const sensors = parameter
+              ? station.sensors
+                  .filter((s) => s.parameter === parameter)
+                  .slice(0, MAX_SENSORS)
+              : [null];
+            let rows = [];
+            for (const sensor of sensors) {
+              const data = await get(
+                sensor
+                  ? `sensors/${sensor.id}/hours?limit=24&page=1&datetime_from=${encodeURIComponent(new Date(now() - 6 * HOUR).toISOString())}&datetime_to=${encodeURIComponent(new Date(now()).toISOString())}`
+                  : `locations/${station.stationId}/latest?limit=1000&page=1`,
+              );
+              if (data.results.length >= (sensor ? 24 : 1000))
+                throw error(503, 'OpenAQ station exceeds acquisition limit');
+              rows = sensor
                 ? normalizeOpenAqHours(station, sensor, data.results, now())
-                : normalizeOpenAqLatest(station, data.results, now()),
-            );
+                : normalizeOpenAqLatest(station, data.results, now());
+              if (rows.length) break;
+            }
+            const key = `${station.stationId}:${parameter || ''}`;
+            const previous = viewLatest.get(key);
+            const newest = (list) =>
+              list.reduce((at, row) => Math.max(at, row.observedMs), -Infinity);
+            if (previous && newest(previous.readings) > newest(rows))
+              rows = previous.readings;
+            state.readings.set(station.stationId, rows);
             state.checked.set(station.stationId, now());
+            state.failed.delete(station.stationId);
+            succeeded++;
             viewLatest.delete(`${station.stationId}:${parameter || ''}`);
             viewLatest.set(`${station.stationId}:${parameter || ''}`, {
               at: now(),
@@ -357,10 +361,18 @@ export function createOpenAqAcquisition({
             while (viewLatest.size > 5_000)
               viewLatest.delete(viewLatest.keys().next().value);
           } catch (e) {
+            if (expired()) {
+              timedOut = true;
+              state.failed.set(station.stationId, now());
+              return;
+            }
             signal?.throwIfAborted();
             if ([401, 403].includes(e.status)) throw e;
-            failed = true;
-            failureStatus = e.status === 429 ? 429 : failureStatus || 503;
+            if (e.status === 429) limited = true;
+            else {
+              stationFailure = 503;
+              state.failed.set(station.stationId, now());
+            }
             retryAt = e.retryAt || retryAt;
           }
         }),
@@ -371,9 +383,31 @@ export function createOpenAqAcquisition({
     const fresh = [...state.readings.values()]
       .flat()
       .filter((r) => now() - r.observedMs <= 6 * HOUR);
+    const stale =
+      limited ||
+      catalogFailure !== null ||
+      (stationFailure !== null && !succeeded);
+    const failureStatus = !stale
+      ? null
+      : limited
+        ? 429
+        : (catalogFailure ?? stationFailure);
+    if (stale && !limited && !state.stations.size && !state.readings.size)
+      throw Object.assign(error(failureStatus, 'OpenAQ request unavailable'), {
+        retryAt,
+      });
+    const catalogDone = state.pages.every((p) => p.done);
+    const waiting = eligible.filter(needsCheck);
+    const ready = waiting.some((s) => !backoff(s));
+    const nextRetry = waiting.reduce(
+      (at, s) =>
+        backoff(s)
+          ? Math.min(at, state.failed.get(s.stationId) + STATION_RETRY_MS)
+          : at,
+      Infinity,
+    );
     return {
       schemaVersion: 1,
-      fetchedAt: now(),
       source: 'OpenAQ',
       sourceUrl: 'https://openaq.org/',
       scope: 'viewport',
@@ -386,146 +420,23 @@ export function createOpenAqAcquisition({
       checked: eligible.filter((s) => state.checked.has(s.stationId)).length,
       eligible: eligible.length,
       countriesReporting: new Set(fresh.map((r) => r.country)).size,
-      catalogComplete: state.pages.every((p) => p.done),
+      catalogComplete: catalogDone,
       partial:
-        failed ||
-        state.pages.some((p) => !p.done) ||
+        stale ||
+        timedOut ||
+        !catalogDone ||
         eligible.some((s) => !state.checked.has(s.stationId)),
-      stale: failed,
+      stale,
       failureStatus,
       retryAt:
         retryAt ||
-        (failed
+        (stale
           ? now() + 60_000
-          : state.pages.some((p) => !p.done) ||
-              eligible.some((s) => !state.checked.has(s.stationId))
+          : !catalogDone || ready || timedOut
             ? now() + 8000
-            : null),
-    };
-  }
-  async function acquireGlobal(request) {
-    const started = Date.now();
-    let failed = false;
-    const get = async (path) => {
-      if (failed || Date.now() - started > 30_000) return null;
-      try {
-        return await request(path);
-      } catch (e) {
-        if ([401, 403].includes(e.status)) throw e;
-        if (e.status === 404 && path.startsWith('parameters/'))
-          return { results: [] };
-        failed = true;
-        return null;
-      }
-    };
-    // Resume catalog pagination across refreshes: never truncate at a regional
-    // page limit, and leave request capacity for observations on every refresh.
-    if (discoveryDone && now() - discoveryAt > HOUR) {
-      discoveryPage = 1;
-      discoveryDone = false;
-      discoverySeen = new Set();
-    }
-    for (let i = 0; i < 8 && !discoveryDone; i++) {
-      const data = await get(
-        `locations?limit=1000&page=${discoveryPage}&order_by=id&sort_order=asc`,
-      );
-      if (!data) break;
-      for (const station of normalizeOpenAqLocations(data.results)) {
-        if (scope.countries && !scope.countries.includes(station.country))
-          continue;
-        discoverySeen.add(station.stationId);
-        globalCatalog.set(station.stationId, station);
-      }
-      if (globalCatalog.size > 100_000)
-        throw error(503, 'OpenAQ catalog exceeds memory limit');
-      discoveryPage++;
-      if (data.results.length < 1000) {
-        discoveryDone = true;
-        discoveryAt = now();
-        for (const id of globalCatalog.keys())
-          if (!discoverySeen.has(id)) globalCatalog.delete(id);
-        for (const [id, row] of globalReadings)
-          if (!globalCatalog.has(row.stationId)) globalReadings.delete(id);
-      }
-    }
-    if (!parameterPages) {
-      const data = await get('parameters?limit=1000&page=1');
-      if (data)
-        parameterPages = data.results
-          .filter(
-            (p) => Number.isSafeInteger(p.id) && OPENAQ_PARAMETER_NAMES[p.name],
-          )
-          .map((p) => ({
-            id: p.id,
-            page: 1,
-            since: new Date(now() - 6 * HOUR).toISOString(),
-            complete: false,
-          }));
-    }
-    // Global parameter endpoints return up to 1,000 observations per request.
-    // Round-robin pagination prevents large pollutant networks starving others.
-    const finishedThisRefresh = new Set();
-    for (
-      let i = 0;
-      i < 16 && finishedThisRefresh.size < (parameterPages?.length || 0);
-      i++
-    ) {
-      const cursor = parameterPages[parameterCursor++ % parameterPages.length];
-      if (finishedThisRefresh.has(cursor.id)) continue;
-      const data = await get(
-        `parameters/${cursor.id}/latest?limit=1000&page=${cursor.page}&datetime_min=${encodeURIComponent(cursor.since)}`,
-      );
-      if (!data) break;
-      const groups = new Map();
-      for (const item of data.results) {
-        const id = String(item.locationsId);
-        if (!groups.has(id)) groups.set(id, []);
-        groups.get(id).push(item);
-      }
-      for (const [id, items] of groups) {
-        const station = globalCatalog.get(id);
-        if (!station) continue; // Joined on a later sweep as discovery advances.
-        for (const row of normalizeOpenAqLatest(station, items, now())) {
-          const old = globalReadings.get(row.id);
-          if (
-            !old ||
-            row.observedMs > old.observedMs ||
-            (row.observedMs === old.observedMs && row.sensorId < old.sensorId)
-          )
-            globalReadings.set(row.id, row);
-        }
-      }
-      if (data.results.length < 1000) {
-        cursor.page = 1;
-        cursor.since = new Date(now() - 6 * HOUR).toISOString();
-        cursor.complete = true;
-        finishedThisRefresh.add(cursor.id);
-      } else cursor.page++;
-    }
-    for (const [id, row] of globalReadings)
-      if (now() - row.observedMs > 6 * HOUR) globalReadings.delete(id);
-    const fresh = [...globalReadings.values()];
-    const stations = [...globalCatalog.values()];
-    return {
-      schemaVersion: 1,
-      fetchedAt: now(),
-      source: 'OpenAQ',
-      scope: scope.id,
-      sourceUrl: 'https://openaq.org/',
-      stations,
-      readings: fresh,
-      checked: new Set(fresh.map((r) => r.stationId)).size,
-      eligible: stations.filter(
-        (s) => !s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR,
-      ).length,
-      countriesReporting: new Set(fresh.map((r) => r.country)).size,
-      catalogComplete: discoveryDone,
-      partial:
-        failed ||
-        !discoveryDone ||
-        !parameterPages?.length ||
-        parameterPages.some((p) => !p.complete),
-      stale: failed,
+            : Number.isFinite(nextRetry)
+              ? nextRetry
+              : null),
     };
   }
   async function acquire(key, view, parameter, mode, consumerSignal) {
@@ -558,94 +469,7 @@ export function createOpenAqAcquisition({
         throw error(503, 'Malformed OpenAQ response');
       return data;
     }
-    if (view) return acquireView(get, view, parameter, mode, signal);
-    if (scope.countries === null) return acquireGlobal(get);
-    if (!catalog || now() - catalogAt > HOUR) {
-      const countries = await get('countries?limit=1000&page=1');
-      const ids = countries.results
-        .filter(
-          (c) => scope.countries.includes(c.code) && Number.isSafeInteger(c.id),
-        )
-        .map((c) => c.id);
-      const locations = [];
-      if (ids.length) {
-        let complete = false;
-        for (let page = 1; page <= 10; page++) {
-          const data = await get(
-            `locations?countries_id=${ids.join(',')}&limit=1000&page=${page}&order_by=id&sort_order=asc`,
-          );
-          locations.push(...data.results);
-          if (
-            data.results.length < 1000 ||
-            (typeof data.meta?.found === 'number' &&
-              Number.isFinite(data.meta.found) &&
-              locations.length >= Number(data.meta.found))
-          ) {
-            complete = true;
-            break;
-          }
-        }
-        if (!complete)
-          throw error(503, 'OpenAQ catalog exceeds acquisition limit');
-      }
-      catalog = normalizeOpenAqLocations(locations).filter((s) =>
-        scope.countries.includes(s.country),
-      );
-      catalogAt = now();
-      const retained = new Set(catalog.map((station) => station.stationId));
-      for (const id of readings.keys())
-        if (!retained.has(id)) readings.delete(id);
-      for (const id of checked.keys())
-        if (!retained.has(id)) checked.delete(id);
-    }
-    const eligible = catalog.filter(
-      (s) => !s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR,
-    );
-    const due = eligible
-      .filter((s) => now() - (checked.get(s.stationId) || 0) >= 20 * 60_000)
-      .sort(
-        (a, b) =>
-          (checked.get(a.stationId) || 0) - (checked.get(b.stationId) || 0) ||
-          a.stationId.localeCompare(b.stationId),
-      )
-      .slice(0, batchSize);
-    let failed = false;
-    for (const station of due) {
-      try {
-        const result = await get(
-          `locations/${station.stationId}/latest?limit=1000&page=1`,
-        );
-        if (result.results.length === 1000)
-          throw error(503, 'OpenAQ station exceeds acquisition limit');
-        readings.set(
-          station.stationId,
-          normalizeOpenAqLatest(station, result.results, now()),
-        );
-        checked.set(station.stationId, now());
-      } catch (e) {
-        if ([401, 403, 429].includes(e.status)) throw e;
-        failed = true;
-        checked.set(station.stationId, now());
-        if (signal.aborted) break;
-      }
-    }
-    const fresh = [...readings.values()]
-      .flat()
-      .filter((r) => now() - r.observedMs <= 6 * HOUR);
-    return {
-      schemaVersion: 1,
-      fetchedAt: now(),
-      source: 'OpenAQ',
-      scope: scope.id,
-      sourceUrl: 'https://openaq.org/',
-      stations: catalog,
-      readings: fresh,
-      checked: eligible.filter((s) => readings.has(s.stationId)).length,
-      eligible: eligible.length,
-      countriesReporting: new Set(fresh.map((r) => r.country)).size,
-      partial: failed || eligible.some((s) => !readings.has(s.stationId)),
-      stale: failed,
-    };
+    return acquireView(get, view, parameter, mode, signal, consumerSignal);
   }
   return {
     /**
@@ -656,21 +480,18 @@ export function createOpenAqAcquisition({
       signal?.throwIfAborted();
       if (
         parameter !== undefined &&
-        (!view || !Object.values(OPENAQ_PARAMETER_NAMES).includes(parameter))
+        !Object.values(OPENAQ_PARAMETER_NAMES).includes(parameter)
       )
         throw error(400, 'Invalid pollutant');
-      if (
-        mode !== undefined &&
-        (mode !== 'aqi' || !view || parameter !== undefined)
-      )
+      if (mode !== undefined && (mode !== 'aqi' || parameter !== undefined))
         throw error(400, 'Invalid air quality mode');
       if (view) view = parseOpenAqView(view.join(','));
       const key = getKey().trim();
       if (!key) throw error(428, 'OpenAQ key required');
       if (refused?.key === key && now() - refused.at < REFUSED_KEY_MS)
         throw error(refused.status, 'OpenAQ key rejected');
+      if (!view) throw error(400, 'Viewport required');
       if (key !== keyAtCache) {
-        if (pending) await pending.catch(() => {});
         if (viewPending.size)
           await Promise.allSettled(
             [...viewPending.values()].map((job) => job.promise),
@@ -680,76 +501,45 @@ export function createOpenAqAcquisition({
         catalogPages.clear();
         viewLatest.clear();
         viewCache.clear();
-        catalog = null;
-        cached = null;
-        discoveryPage = 1;
-        discoveryDone = false;
-        globalCatalog.clear();
-        discoverySeen.clear();
-        globalReadings.clear();
-        parameterPages = null;
-        parameterCursor = 0;
-        readings.clear();
-        checked.clear();
       }
-      if (view) {
-        const id = viewId(view, parameter, mode);
-        const previous = viewCache.get(id);
-        if (
-          previous &&
-          now() < (previous.retryAt || previous.fetchedAt + 60_000)
-        )
-          return previous;
-        let job = viewPending.get(id);
-        if (job?.controller.signal.aborted) {
-          await job.promise.catch(() => {});
-          job = viewPending.get(id);
-        }
-        if (!job) {
-          if (viewPending.size >= 2)
-            throw Object.assign(error(429, 'OpenAQ viewport requests busy'), {
-              retryAt: now() + 2000,
-            });
-          job = { controller: new AbortController(), consumers: new Set() };
-          job.promise = acquire(
-            key,
-            view,
-            parameter,
-            mode,
-            job.controller.signal,
-          )
-            .then((value) => {
-              if (views.has(id)) viewCache.set(id, value);
-              return value;
-            })
-            .finally(() => {
-              if (viewPending.get(id) === job) viewPending.delete(id);
-            });
-          viewPending.set(id, job);
-        }
-        return consumeView(job, signal);
+      const id = viewId(view, parameter, mode);
+      const previous = viewCache.get(id);
+      if (previous && now() < (previous.value.retryAt || previous.at + 60_000))
+        return previous.value;
+      let job = viewPending.get(id);
+      if (job?.controller.signal.aborted) {
+        await job.promise.catch(() => {});
+        job = viewPending.get(id);
       }
-      if (cached && now() - cachedAt < 60_000) return cached;
-      if (!pending)
-        pending = acquire(key)
+      if (!job) {
+        if (viewPending.size >= 2)
+          throw Object.assign(error(429, 'OpenAQ viewport requests busy'), {
+            retryAt: now() + 2000,
+          });
+        job = { controller: new AbortController(), consumers: new Set() };
+        job.promise = acquire(key, view, parameter, mode, job.controller.signal)
           .then((value) => {
-            cached = value;
-            cachedAt = now();
+            if (views.has(id)) viewCache.set(id, { value, at: now() });
             return value;
           })
-          .catch((e) => {
-            if (
-              cached &&
-              ![401, 403].includes(e.status) &&
-              now() - cachedAt <= 6 * HOUR
-            )
-              return { ...cached, stale: true, partial: true };
-            throw e;
-          })
           .finally(() => {
-            pending = null;
+            if (viewPending.get(id) === job) viewPending.delete(id);
           });
-      return pending;
+        const settle = (method, outcome) => {
+          for (const consumer of job.consumers) {
+            consumer.leave();
+            consumer[method](outcome);
+          }
+          job.consumers.clear();
+        };
+        // One handler per job, which also keeps an abandoned job's rejection handled.
+        job.promise.then(
+          (value) => settle('resolve', value),
+          (e) => settle('reject', e),
+        );
+        viewPending.set(id, job);
+      }
+      return consumeView(job, signal);
     },
   };
 }
@@ -758,6 +548,7 @@ export function createOpenAqAcquisition({
 export function openAqProxy(options = {}) {
   const source = createOpenAqAcquisition(options);
   const handler = async (req, res) => {
+    if (admitSameSite(req, res)) return;
     const send = (status, data) => {
       if (res.destroyed) return;
       res.writeHead(status, {
@@ -798,7 +589,14 @@ export function openAqProxy(options = {}) {
       );
     } catch (e) {
       send(e.status || 503, {
-        error: e.status === 428 ? 'no_key' : 'OpenAQ unavailable',
+        error:
+          e.status === 428
+            ? 'no_key'
+            : e.status === 403
+              ? 'access_denied'
+              : e.status === 401
+                ? 'key_rejected'
+                : 'OpenAQ unavailable',
         retryAt: e.retryAt || null,
       });
     } finally {

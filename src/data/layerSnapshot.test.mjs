@@ -309,3 +309,16 @@ test('the warning tag names the layers in the reported state first', () => {
     names: ['CCTV', 'Live Flights'],
   });
 });
+
+test('a layer waiting on its keys with no records is unavailable and names the keys', () => {
+  const snapshot = (count) =>
+    layerSnapshot({
+      id: 'air-quality',
+      enabled: true,
+      requiresKeyId: ['openaq', 'data-gov-in'],
+      stats: { keyRequired: true, count },
+    });
+  assert.equal(snapshot(0).feedState, 'unavailable');
+  assert.match(snapshot(0).error, /OPENAQ_API_KEY or DATA_GOV_IN_API_KEY/);
+  assert.equal(snapshot(3).feedState, 'nominal');
+});

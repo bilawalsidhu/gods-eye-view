@@ -142,9 +142,9 @@ test("an analyst record gives a pollutant's value in the layer's units, as the c
   const co = observation('CO', 2, 'ppm');
   assert.ok(Math.abs(co.value - 2 * 1.1456) < 1e-9);
   assert.equal(co.units, 'mg/m³');
-  // Units that do not convert keep the source's value and units.
-  assert.deepEqual(
-    (({ value, units }) => ({ value, units }))(observation('CO2', 420, 'ppm')),
-    { value: 420, units: 'ppm' },
-  );
+  const unconverted = observation('CO2', 420, 'ppm');
+  assert.equal(unconverted.value, null);
+  assert.equal(unconverted.units, null);
+  assert.equal(unconverted.reportedValue, 420);
+  assert.equal(unconverted.reportedUnits, 'ppm');
 });

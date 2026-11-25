@@ -14,7 +14,7 @@ import { msg } from '../../i18n/index.js';
 import { followShellLift, WEATHER_SHELL_HEIGHTS } from './shellPlacement.js';
 
 // The host, heights and lift live in shellPlacement.js, light enough for a
-// layer that drapes a field of its own; exported here as before.
+// layer that drapes a field of its own; re-exported here for current importers.
 export {
   followShellLift,
   globeImageryHost,

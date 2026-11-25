@@ -288,6 +288,13 @@ const layers = [
         parameter: ['t'],
         averagingMinutes: ['n', 'min'],
         kind: ['t'],
+        note: ['t'],
+        pm25: ['n', 'µg/m³'],
+        pm10: ['n', 'µg/m³'],
+        o3: ['n', 'µg/m³'],
+        no2: ['n', 'µg/m³'],
+        so2: ['n', 'µg/m³'],
+        co: ['n', 'mg/m³'],
         band: ['t'],
         scale: ['t'],
         provider: ['t'],
@@ -295,6 +302,9 @@ const layers = [
         zone: ['t'],
         observedMs: ['ms'],
       },
+      viewportLoaded: true,
+      viewportNote:
+        'air-quality loads OpenAQ stations by viewport; CPCB and SAAQIS stations are national',
       timeField: 'observedMs',
     },
   },
@@ -523,6 +533,7 @@ function normalizeEntry(entry) {
           window: entry.query.window || null,
           caveat: entry.query.caveat || null,
           viewportLoaded: entry.query.viewportLoaded === true,
+          viewportNote: entry.query.viewportNote || null,
         })
       : null,
   });

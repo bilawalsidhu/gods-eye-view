@@ -21,19 +21,20 @@
  * - `source`: the model's name; `sourceShort` a short form of it (e.g.
  *   `'CAMS'`). The card's time line names the model by `sourceShort`, else
  *   `source`.
- * - `run`: the run's start, an ISO time; steps are hours after it.
+ * - `run`: ISO start time, read as UTC when it omits a zone. Steps are hours after it.
  * - `scale`: per field id, what a grid's integers are divided by.
  * - `Region = { width, height, lon0, lat0, step, wrap, steps }`: `width` ×
  *   `height` grid points, the first at (`lon0`, `lat0`) and `step` degrees
- *   apart, rows north first; `wrap` when a row goes round the globe; `steps`
- *   the forecast hours it has, ascending.
- * - `europe.rectangle` (`{west, south, east, north}`, degrees) is the inset's
- *   edge, and `blendDeg` the band inside it over which it blends into the
- *   global field (default `EUROPE_BLEND_DEG`).
+ *   apart, rows north first. A full-turn row requires `wrap: true`. Insets cannot
+ *   wrap. `steps` lists the forecast hours in ascending order.
+ * - `europe.rectangle` gives the outer cell edges, half a step beyond the first
+ *   and last grid points. `blendDeg` is the blending band inside those edges.
  *
  * `Grids = Record<FieldId, Uint16Array>`: each value × `scale[id]`, rounded;
  * `FIELD_MISSING` where there is none. Concentrations in µg/m³, CO in mg/m³,
  * the US AQI as its index.
+ * Values represent forecast hours and use the station scales for hourly values.
+ * Each step hands over new arrays. Sources must leave their contents intact.
  */
 import { AQI_POLLUTANTS } from './usAqi.js';
 
@@ -61,7 +62,7 @@ export const FIELD_FADE = Object.freeze({
   fullM: 600_000,
   noneM: 60_000,
 });
-/** The most grid points a region may have (a 0.1° world is 6.5 million). */
+/** Maximum number of grid points across a step's regions. */
 const MAX_REGION_POINTS = 8_000_000;
 const HOUR_MS = 3600_000;
 /** Grid cells within this of a grid point read as on it. */
@@ -71,6 +72,8 @@ const SNAP = 1e-9;
 export const fieldIdOf = (view) =>
   view === 'aqi' ? 'aqi' : (AQI_POLLUTANTS[view] ?? null);
 
+const MAX_CREDIT_CHARS = 2000;
+const ZONELESS_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 const malformed = () => new Error('Malformed air-quality field');
 
 function readRegion(raw, { inset = false } = {}) {
@@ -85,6 +88,7 @@ function readRegion(raw, { inset = false } = {}) {
     ![lon0, lat0, step].every(Number.isFinite) ||
     step <= 0 ||
     Math.abs(lat0) > 90 ||
+    lat0 - (height - 1) * step < -90 - SNAP ||
     !Array.isArray(steps) ||
     !steps.length ||
     !steps.every(
@@ -96,13 +100,26 @@ function readRegion(raw, { inset = false } = {}) {
     )
   )
     throw malformed();
+  const wraps = wrap === true;
+  const span = width * step;
+  const tolerance = step * 1e-3;
+  if (!wraps && span >= 360 - tolerance) throw malformed();
+  // A wrapping region is one whole row of the globe, and its world image
+  // stays within the point budget; an inset never wraps.
+  if (
+    wraps &&
+    (inset ||
+      Math.abs(span - 360) > tolerance ||
+      width * Math.round(180 / step) > MAX_REGION_POINTS)
+  )
+    throw malformed();
   const region = {
     width,
     height,
     lon0,
     lat0,
     step,
-    wrap: wrap === true,
+    wrap: wraps,
     steps: Object.freeze([...steps]),
   };
   if (inset) {
@@ -136,7 +153,10 @@ function readRegion(raw, { inset = false } = {}) {
  */
 export function readFieldManifest(raw) {
   if (!raw || typeof raw !== 'object') throw malformed();
-  const runMs = Date.parse(raw.run);
+  const runMs =
+    typeof raw.run === 'string'
+      ? Date.parse(ZONELESS_ISO.test(raw.run) ? `${raw.run}Z` : raw.run)
+      : NaN;
   if (typeof raw.run !== 'string' || !Number.isFinite(runMs)) throw malformed();
   const scale = {};
   for (const id of FIELD_IDS) {
@@ -148,15 +168,24 @@ export function readFieldManifest(raw) {
     typeof value === 'string' && value.trim()
       ? value.trim().slice(0, length)
       : '';
+  const credit = typeof raw.credit === 'string' ? raw.credit.trim() : '';
+  if (credit.length > MAX_CREDIT_CHARS) throw malformed();
+  const global = readRegion(raw.global);
+  const europe = raw.europe ? readRegion(raw.europe, { inset: true }) : null;
+  if (
+    global.width * global.height + (europe ? europe.width * europe.height : 0) >
+    MAX_REGION_POINTS
+  )
+    throw malformed();
   return Object.freeze({
     source: text(raw.source, 80),
     sourceShort: text(raw.sourceShort, 24),
-    credit: text(raw.credit, 500),
+    credit,
     run: raw.run,
     runMs,
     scale: Object.freeze(scale),
-    global: readRegion(raw.global),
-    ...(raw.europe ? { europe: readRegion(raw.europe, { inset: true }) } : {}),
+    global,
+    ...(europe ? { europe } : {}),
   });
 }
 
@@ -192,69 +221,103 @@ export function readFieldStep(manifest, step, data) {
 /** Degrees east of `from`, in [0, 360). */
 const eastOf = (lon, from) => (((lon - from) % 360) + 360) % 360;
 
-/**
- * One region's value at a place, bilinear between its four nearest grid
- * points; null outside the region or where one of them that counts (has
- * some weight there) has no data.
- */
-export function sampleRegion(region, values, scale, lon, lat) {
-  if (!region || !values) return null;
-  const { width, height, lon0, lat0, step, wrap } = region;
-  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  // A point on the grid's last row or column reads as on it, whatever the
-  // float rounding of its coordinates.
-  const snap = (g, last) =>
-    g < 0 && g > -SNAP ? 0 : g > last && g < last + SNAP ? last : g;
+/** Fold the outer half-cells onto their edge points, or snap round-off at a boundary. */
+function boundedCoordinate(g, last, halfCells) {
+  if (halfCells)
+    return g > -0.5 && g < last + 0.5 ? Math.max(0, Math.min(last, g)) : null;
+  if (g < 0) return g > -SNAP ? 0 : null;
+  if (g > last) return g < last + SNAP ? last : null;
+  return g;
+}
+
+function columnOf(region, lon) {
+  const { width, lon0, step, wrap } = region;
   let gx = eastOf(lon, lon0) / step;
   if (wrap) gx %= width;
   else {
-    if (gx > 360 / step - SNAP) gx = 0;
-    gx = snap(gx, width - 1);
-    if (gx > width - 1) return null;
+    if (gx > 360 / step - 0.5) gx -= 360 / step;
+    gx = boundedCoordinate(gx, width - 1, !region.rectangle);
+    if (gx === null) return null;
   }
-  const gy = snap((lat0 - lat) / step, height - 1);
-  if (!(gy >= 0 && gy <= height - 1)) return null;
-  const x0 = Math.min(width - 1, Math.floor(gx));
-  const x1 = wrap ? (x0 + 1) % width : Math.min(width - 1, x0 + 1);
-  const y0 = Math.min(height - 1, Math.floor(gy));
-  const y1 = Math.min(height - 1, y0 + 1);
-  const tx = gx - x0;
-  const ty = gy - y0;
-  // A point with no data spoils the value only where it has some weight.
-  const corner = (index, weight) => {
-    const value = values[index];
-    if (value !== FIELD_MISSING) return value;
-    return weight > 0 ? null : 0;
-  };
-  const a = corner(y0 * width + x0, (1 - tx) * (1 - ty));
-  const b = corner(y0 * width + x1, tx * (1 - ty));
-  const c = corner(y1 * width + x0, (1 - tx) * ty);
-  const d = corner(y1 * width + x1, tx * ty);
+  const first = Math.min(width - 1, Math.floor(gx));
+  const next = wrap ? (first + 1) % width : Math.min(width - 1, first + 1);
+  return { first, next, fraction: gx - first };
+}
+
+function rowOf(region, lat) {
+  const last = region.height - 1;
+  const gy = boundedCoordinate(
+    (region.lat0 - lat) / region.step,
+    last,
+    !region.wrap && !region.rectangle,
+  );
+  if (gy === null) return null;
+  const first = Math.min(last, Math.floor(gy));
+  return { first, next: Math.min(last, first + 1), fraction: gy - first };
+}
+
+function corner(value, weight) {
+  if (value !== FIELD_MISSING) return value;
+  return weight > 0 ? null : 0;
+}
+
+function blend(values, width, x0, x1, tx, y0, y1, ty, scale) {
+  const a = corner(values[y0 * width + x0], (1 - tx) * (1 - ty));
+  const b = corner(values[y0 * width + x1], tx * (1 - ty));
+  const c = corner(values[y1 * width + x0], (1 - tx) * ty);
+  const d = corner(values[y1 * width + x1], tx * ty);
   if (a === null || b === null || c === null || d === null) return null;
   return (
     ((a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty) / scale
   );
 }
 
-/**
- * The Europe inset's share at a place: 0 at its edge and outside it, rising
- * smoothly (smoothstep) to 1 at `blendDeg` inside it.
- */
-export function europeWeight(region, lon, lat) {
-  if (!region?.rectangle) return 0;
-  const { west, east, south, north } = region.rectangle;
-  const fromWest = eastOf(lon, west);
-  const inside = Math.min(
-    fromWest,
-    east - west - fromWest,
-    lat - south,
-    north - lat,
+/** Bilinear value, or null outside the grid or where a weighted corner is missing. */
+export function sampleRegion(region, values, scale, lon, lat) {
+  if (!region || !values || !Number.isFinite(lon) || !Number.isFinite(lat))
+    return null;
+  const x = columnOf(region, lon);
+  const y = rowOf(region, lat);
+  if (!x || !y) return null;
+  return blend(
+    values,
+    region.width,
+    x.first,
+    x.next,
+    x.fraction,
+    y.first,
+    y.next,
+    y.fraction,
+    scale,
   );
+}
+
+function insideLon(region, lon) {
+  const { west, east } = region.rectangle;
+  const fromWest = eastOf(lon, west);
+  return Math.min(fromWest, east - west - fromWest);
+}
+
+function insideLat(region, lat) {
+  const { south, north } = region.rectangle;
+  return Math.min(lat - south, north - lat);
+}
+
+function weightOf(region, inside) {
   if (!(inside > 0)) return 0;
   const band = region.blendDeg ?? EUROPE_BLEND_DEG;
   if (!(band > 0) || inside >= band) return 1;
   const w = inside / band;
   return w * w * (3 - 2 * w);
+}
+
+/** The inset's share rises smoothly from its edge to one blend band inside. */
+export function europeWeight(region, lon, lat) {
+  if (!region?.rectangle) return 0;
+  return weightOf(
+    region,
+    Math.min(insideLon(region, lon), insideLat(region, lat)),
+  );
 }
 
 /**
@@ -300,29 +363,40 @@ export function scalePosition(limits, value) {
 /** A field's opacity at scale position `p`: clean air stays mostly clear. */
 export const fieldOpacity = (p) => Math.min(0.82, 0.05 + 0.26 * p);
 
-const rgbCache = new WeakMap();
-const rgbOf = (bands) => {
-  let rgb = rgbCache.get(bands);
-  if (!rgb) {
-    rgb = bands.map(({ color }) =>
-      color
-        .replace('#', '')
-        .match(/\w\w/g)
-        .map((pair) => parseInt(pair, 16)),
-    );
-    rgbCache.set(bands, rgb);
+const tableCache = new WeakMap();
+const TABLE_SIZE = 4096;
+
+function colorTable(bands, limits) {
+  let tables = tableCache.get(bands);
+  if (!tables) {
+    tables = new WeakMap();
+    tableCache.set(bands, tables);
   }
-  return rgb;
-};
+  if (tables.has(limits)) return tables.get(limits);
+  const rgb = bands.map(({ color }) =>
+    color
+      .replace('#', '')
+      .match(/\w\w/g)
+      .map((pair) => parseInt(pair, 16)),
+  );
+  const top = 2 * limits.at(-1) - limits.at(-2);
+  // Supported clients are little-endian: four RGBA bytes form one packed pixel.
+  const packed = new Uint32Array(TABLE_SIZE + 1);
+  const rgba = new Uint8ClampedArray(packed.buffer);
+  for (let i = 0; i <= TABLE_SIZE; i++)
+    writeColor(rgba, i * 4, rgb, limits, (i * top) / TABLE_SIZE);
+  const table = { packed, perUnit: TABLE_SIZE / top };
+  tables.set(limits, table);
+  return table;
+}
 
 /**
  * Write a value's colour on a scale into `rgba` at `offset` (0–255 each):
  * each band's own colour sits at the middle of the band, so the field and a
  * station dot of that value agree there, and runs into its neighbours'
- * between two middles; the opacity is `fieldOpacity`, times `share`. No
- * allocation: it runs once a pixel.
+ * between two middles. Opacity is given by `fieldOpacity`.
  */
-function writeColor(rgba, offset, rgb, limits, value, share = 1) {
+function writeColor(rgba, offset, rgb, limits, value) {
   const p = scalePosition(limits, value);
   const q = Math.min(rgb.length - 1, Math.max(0, p - 0.5));
   const i = Math.min(rgb.length - 2, Math.floor(q));
@@ -332,22 +406,7 @@ function writeColor(rgba, offset, rgb, limits, value, share = 1) {
   rgba[offset] = Math.round(low[0] + (high[0] - low[0]) * f);
   rgba[offset + 1] = Math.round(low[1] + (high[1] - low[1]) * f);
   rgba[offset + 2] = Math.round(low[2] + (high[2] - low[2]) * f);
-  rgba[offset + 3] = Math.round(255 * fieldOpacity(p) * share);
-}
-
-/**
- * A value's colour on a scale, `[r, g, b, alpha]` (0–255, alpha 0–1), as the
- * field paints it (`writeColor`).
- */
-export function fieldColor(bands, limits, value) {
-  const rgba = [0, 0, 0, 0];
-  writeColor(rgba, 0, rgbOf(bands), limits, value);
-  return [
-    rgba[0],
-    rgba[1],
-    rgba[2],
-    fieldOpacity(scalePosition(limits, value)),
-  ];
+  rgba[offset + 3] = Math.round(255 * fieldOpacity(p));
 }
 
 /**
@@ -362,35 +421,75 @@ export function fieldStrength(heightM) {
   return (maxAlpha * Math.log(heightM / noneM)) / Math.log(fullM / noneM);
 }
 
+/** A longitude edge in [-180, 180]: 180 itself stays 180, a crossing keeps west east of east. */
+const lonEdge = (lon) =>
+  lon > 180 || lon < -180 ? ((((lon + 180) % 360) + 360) % 360) - 180 : lon;
+/** The rows of a region drawn: those whose cells lie between the poles. */
+function imageRows({ lat0, step, height }) {
+  const first = Math.max(0, Math.ceil((lat0 + step / 2 - 90) / step - SNAP));
+  const last = Math.min(
+    height - 1,
+    Math.floor((lat0 - step / 2 + 90) / step + SNAP),
+  );
+  return { first, count: last - first + 1 };
+}
 /** The rectangle a region's grid points cover, each the middle of its cell. */
 function regionRectangle(region) {
-  if (region.rectangle) return region.rectangle;
+  if (region.rectangle) {
+    const r = region.rectangle;
+    return { ...r, west: lonEdge(r.west), east: lonEdge(r.east) };
+  }
   const half = region.step / 2;
+  const { first, count } = imageRows(region);
+  const west = region.lon0 - half,
+    east = region.lon0 + (region.width - 0.5) * region.step;
   return {
-    west: region.lon0 - half,
-    east: region.lon0 + (region.width - 0.5) * region.step,
-    north: Math.min(90, region.lat0 + half),
-    south: Math.max(-90, region.lat0 - (region.height - 0.5) * region.step),
+    west: lonEdge(west),
+    east: lonEdge(east),
+    north: Math.min(90, region.lat0 - first * region.step + half),
+    south: Math.max(
+      -90,
+      region.lat0 - (first + count - 1) * region.step - half,
+    ),
   };
 }
 
-/**
- * One image's pixels, row by row: `valueAt(x, y)` painted (null left
- * clear), at `shareAt(x, y, alpha)` of its own opacity `alpha`.
- */
-function paintImage(width, height, valueAt, rgb, limits, shareAt = null) {
-  const rgba = new Uint8ClampedArray(width * height * 4);
-  for (let y = 0; y < height; y++)
-    for (let x = 0; x < width; x++) {
-      const value = valueAt(x, y);
-      if (value === null) continue;
-      const share = shareAt
-        ? shareAt(x, y, fieldOpacity(scalePosition(limits, value)))
-        : 1;
-      if (share > 0)
-        writeColor(rgba, (y * width + x) * 4, rgb, limits, value, share);
+/** Precompute one axis of a region sampled on the output image's grid. */
+function axisTerms(region, coordinates, termsOf) {
+  const first = new Int32Array(coordinates.length);
+  const next = new Int32Array(coordinates.length);
+  const fraction = new Float64Array(coordinates.length);
+  const valid = new Uint8Array(coordinates.length);
+  for (let i = 0; i < coordinates.length; i++) {
+    const terms = termsOf(region, coordinates[i]);
+    if (terms) {
+      first[i] = terms.first;
+      next[i] = terms.next;
+      fraction[i] = terms.fraction;
+      valid[i] = 1;
     }
-  return rgba;
+  }
+  return { first, next, fraction, valid };
+}
+
+function gridSampler(region, values, scale, lons, lats) {
+  if (!values) return () => null;
+  const col = axisTerms(region, lons, columnOf);
+  const row = axisTerms(region, lats, rowOf);
+  return (x, y) => {
+    if (!col.valid[x] || !row.valid[y]) return null;
+    return blend(
+      values,
+      region.width,
+      col.first[x],
+      col.next[x],
+      col.fraction[x],
+      row.first[y],
+      row.next[y],
+      row.fraction[y],
+      scale,
+    );
+  };
 }
 
 /**
@@ -411,82 +510,111 @@ function paintImage(width, height, valueAt, rgb, limits, shareAt = null) {
  * the band is up to 14 % (at 0.44 strength) more opaque than one image. The
  * inset is clear at its edge and the global image clear where `w` is 1, so
  * neither has an edge to show.
+ * Colours come from a 4096-interval lookup table, within one per channel of the band formula.
+ * Wrapped images sample pixel centres. A single-cell peak can appear diluted.
+ * Beside missing data, texture filtering fades the map over one cell.
  * @param {{bands: Array<{color: string}>, limits: number[]}} scale
  */
 export function paintField(manifest, grids, id, { bands, limits }) {
   const scale = manifest.scale[id];
-  const rgb = rgbOf(bands);
+  const table = colorTable(bands, limits);
   const global = manifest.global;
   const europe = grids.europe ? manifest.europe : null;
-  const wrapped = global.wrap;
-  const width = global.width;
-  const height = wrapped ? Math.round(180 / global.step) : global.height;
-  const rectangle = wrapped
-    ? { west: -180, south: -90, east: 180, north: 90 }
-    : regionRectangle(global);
-  const lonAt = wrapped
-    ? (x) => -180 + ((x + 0.5) / width) * 360
-    : (x) => global.lon0 + x * global.step;
-  const latAt = wrapped
-    ? (y) => 90 - ((y + 0.5) / height) * 180
-    : (y) => global.lat0 - y * global.step;
   const wide = grids.global[id];
-  const images = [
-    {
-      name: 'global',
-      rectangle,
+  const local = grids.europe?.[id];
+
+  function paintRegion(region, inset) {
+    const wrapped = region.wrap;
+    const width = region.width;
+    const rows = wrapped || inset ? null : imageRows(region);
+    const height = wrapped
+      ? Math.round(180 / region.step)
+      : (rows?.count ?? region.height);
+    if (height <= 0) return null;
+    const firstRow = rows?.first ?? 0;
+    const samplesGrid = wrapped || europe !== null;
+    const lons =
+      samplesGrid &&
+      Float64Array.from({ length: width }, (_, x) =>
+        wrapped
+          ? -180 + ((x + 0.5) / width) * 360
+          : region.lon0 + x * region.step,
+      );
+    const lats =
+      samplesGrid &&
+      Float64Array.from({ length: height }, (_, y) =>
+        wrapped
+          ? 90 - ((y + 0.5) / height) * 180
+          : region.lat0 - (y + firstRow) * region.step,
+      );
+    const coarseAt =
+      samplesGrid && gridSampler(global, wide, scale, lons, lats);
+    const fineAt =
+      europe && !inset && gridSampler(europe, local, scale, lons, lats);
+    const lonDistance = europe && lons.map((lon) => insideLon(europe, lon));
+    const latDistance = europe && lats.map((lat) => insideLat(europe, lat));
+    const rgba = new Uint8ClampedArray(width * height * 4);
+    const pixels = new Uint32Array(rgba.buffer);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const index = y * width + x;
+        const w = europe
+          ? weightOf(europe, Math.min(lonDistance[x], latDistance[y]))
+          : 0;
+        if (inset ? w <= 0 : w >= 1) continue;
+        let value;
+        if (inset) {
+          const raw = local[index];
+          value = raw === FIELD_MISSING ? null : raw / scale;
+          if (value === null || w < 1) {
+            const coarse = coarseAt(x, y);
+            if (value === null) value = coarse;
+            else if (coarse !== null) value = coarse + (value - coarse) * w;
+          }
+        } else {
+          if (wrapped) value = coarseAt(x, y);
+          else {
+            const raw = wide[index + firstRow * width];
+            value = raw === FIELD_MISSING ? null : raw / scale;
+          }
+          if (europe && (value === null || w > 0)) {
+            if (!wrapped) value = coarseAt(x, y);
+            const fine = fineAt(x, y);
+            if (fine !== null)
+              value = value === null ? fine : value + (fine - value) * w;
+          }
+        }
+        if (value === null) continue;
+        const j = Math.min(
+          TABLE_SIZE,
+          Math.max(0, Math.round(value * table.perUnit)),
+        );
+        let color = table.packed[j];
+        if (w > 0 && w < 1) {
+          const alpha = fieldOpacity(scalePosition(limits, value));
+          const share = inset
+            ? w
+            : (1 - w) / (1 - FIELD_FADE.maxAlpha * w * alpha);
+          color = (color & 0xffffff) | (Math.round(255 * alpha * share) << 24);
+        }
+        pixels[index] = color;
+      }
+    }
+    return {
+      name: inset ? 'europe' : 'global',
+      rectangle: wrapped
+        ? { west: -180, south: -90, east: 180, north: 90 }
+        : regionRectangle(region),
       width,
       height,
-      rgba: paintImage(
-        width,
-        height,
-        (x, y) => {
-          if (europe)
-            return sampleField(manifest, grids, id, lonAt(x), latAt(y));
-          if (wrapped)
-            return sampleRegion(global, wide, scale, lonAt(x), latAt(y));
-          const raw = wide[y * width + x];
-          return raw === FIELD_MISSING ? null : raw / scale;
-        },
-        rgb,
-        limits,
-        europe &&
-          ((x, y, alpha) => {
-            const w = europeWeight(europe, lonAt(x), latAt(y));
-            return w > 0 ? (1 - w) / (1 - FIELD_FADE.maxAlpha * w * alpha) : 1;
-          }),
-      ),
-    },
-  ];
-  if (europe) {
-    const values = grids.europe[id];
-    const lonOf = (x) => europe.lon0 + x * europe.step;
-    const latOf = (y) => europe.lat0 - y * europe.step;
-    images.push({
-      name: 'europe',
-      rectangle: regionRectangle(europe),
-      width: europe.width,
-      height: europe.height,
-      rgba: paintImage(
-        europe.width,
-        europe.height,
-        (x, y) => {
-          const lon = lonOf(x);
-          const lat = latOf(y);
-          const raw = values[y * europe.width + x];
-          const fine = raw === FIELD_MISSING ? null : raw / scale;
-          const w = europeWeight(europe, lon, lat);
-          if (fine !== null && w >= 1) return fine;
-          const coarse = sampleRegion(global, wide, scale, lon, lat);
-          if (fine === null) return coarse;
-          return coarse === null ? fine : coarse + (fine - coarse) * w;
-        },
-        rgb,
-        limits,
-        (x, y) => europeWeight(europe, lonOf(x), latOf(y)),
-      ),
-    });
+      rgba,
+    };
   }
+
+  const images = [];
+  const world = paintRegion(global, false);
+  if (world) images.push(world);
+  if (europe) images.push(paintRegion(europe, true));
   return images;
 }
 

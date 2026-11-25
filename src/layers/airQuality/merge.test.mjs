@@ -44,6 +44,7 @@ test('a rated copy beats an unrated direct reading, and then the newer one loses
       { provider: 'openaq', direct: false, readings: [site('openaq', openaq)] },
     ]).map((kept) => kept.provider);
   assert.deepEqual(merge({ ...unrated, ...older }, rated), ['openaq']);
+  assert.deepEqual(merge(unrated, { ...rated, monitor: false }), ['cpcb']);
   // Neither rated: the direct reading wins even when it is older.
   assert.deepEqual(merge({ ...unrated, ...older }, {}), ['cpcb']);
   assert.deepEqual(merge({ ...rated, ...older }, rated), ['cpcb']);
@@ -172,4 +173,22 @@ test('neighbouring grid cells are checked, and the dedupe distance is an option'
     ['saaqis'],
   );
   assert.equal(mergeObservations(lists, { dedupeM: 10 }).length, 2);
+});
+
+test('three providers at one site all resolve to the best reading', () => {
+  const rows = ['direct', 'first', 'second'].map((provider, i) =>
+    reading(provider, '1', 0, [0, 0.0006, 0.0007][i]),
+  );
+  const replaced = new Map();
+  const kept = mergeObservations(
+    rows.map((row, i) => ({
+      provider: row.provider,
+      direct: i === 0,
+      readings: [row],
+    })),
+    { replaced },
+  );
+  assert.deepEqual(kept, [rows[0]]);
+  assert.equal(replaced.get(rows[1]), rows[0]);
+  assert.equal(replaced.get(rows[2]), rows[0]);
 });

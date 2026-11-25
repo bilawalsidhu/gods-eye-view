@@ -7,13 +7,15 @@
  * A reading is carried as `{ provider, scale, value, band }` — who measured
  * it, what the value is on (a pollutant's concentration, or the US AQI the
  * layer computes from concentrations, `usAqi.js`), the value itself and its
- * band. No network's own index is read: every station is rated from its
- * concentrations, on the same scales everywhere.
+ * band.
  */
 import { concentrationIn, layerUnits } from './units.js';
 
 /** Colour used when a station reports no usable reading. */
 export const AIR_QUALITY_UNKNOWN_COLOR = '#6b7785';
+
+/** The colour of a station no index rates. */
+export const AIR_QUALITY_UNRATED_COLOR = '#8cb4ce';
 
 export const AIR_QUALITY_OVERLAY_SOURCE_ID = 'air-quality';
 export const AIR_QUALITY_OVERLAY_COHORT_LIMIT = 48;
@@ -118,6 +120,15 @@ export function selectAirQualityOverlayCohort(
     .slice(0, cap);
 }
 
+/** Whether a reading lies inside a lon/lat rectangle; a null rectangle holds everything. */
+export function isInRectangle(reading, rect) {
+  if (!rect) return true;
+  if (reading.lat < rect.south || reading.lat > rect.north) return false;
+  // A rectangle crossing the antimeridian has west > east.
+  return rect.west <= rect.east
+    ? reading.lon >= rect.west && reading.lon <= rect.east
+    : reading.lon >= rect.west || reading.lon <= rect.east;
+}
 /**
  * The worst readings inside a lon/lat rectangle, for the readout card.
  *
@@ -134,18 +145,14 @@ export function readingsInView(readings, rect, limit = 5) {
   if (!Array.isArray(readings)) return [];
   const cap = Math.max(0, Math.floor(Number(limit) || 0));
   if (cap === 0) return [];
-  const inside = !rect
-    ? readings
-    : readings.filter((reading) => {
-        if (reading.lat < rect.south || reading.lat > rect.north) return false;
-        // A rectangle crossing the antimeridian has west > east.
-        return rect.west <= rect.east
-          ? reading.lon >= rect.west && reading.lon <= rect.east
-          : reading.lon >= rect.west || reading.lon <= rect.east;
-      });
+  const inside = readings.filter((r) => isInRectangle(r, rect));
   return inside
     .slice()
-    .sort((a, b) => b.value - a.value || a.stationId.localeCompare(b.stationId))
+    .sort(
+      (a, b) =>
+        b.value - a.value ||
+        String(a.stationId ?? a.id).localeCompare(String(b.stationId ?? b.id)),
+    )
     .slice(0, cap);
 }
 
@@ -161,17 +168,18 @@ export function mapAnalystRecord(raw, index = 0) {
     const t = String(v ?? '').trim();
     return t || null;
   };
-  // A pollutant's value in the layer's units (µg/m³, CO mg/m³), as the card
-  // gives it; units that do not convert keep the source's.
+  // Only comparable readings have a value in the layer's units.
+  const pollutant = raw?.kind === 'observation' && raw.parameter !== 'aqi';
+  const comparable = raw?.rated !== false && raw?.qualityFlagged !== true;
   const converted =
-    raw?.kind === 'observation' && raw.parameter !== 'aqi'
+    pollutant && comparable
       ? concentrationIn(raw.parameter, raw.value, raw.units)
       : null;
   return {
     id: text(raw?.id) || `AIR-${String(index).padStart(4, '0')}`,
     provider: text(raw?.provider),
     scale: text(raw?.scale),
-    value: converted ?? num(raw?.value),
+    value: pollutant ? converted : comparable ? num(raw?.value) : null,
     band: text(raw?.band),
     name: text(raw?.name),
     zone: text(raw?.zone),
@@ -182,7 +190,14 @@ export function mapAnalystRecord(raw, index = 0) {
       ? {
           parameter: text(raw.parameter),
           units:
-            converted === null ? text(raw.units) : layerUnits(raw.parameter),
+            converted !== null
+              ? layerUnits(raw.parameter)
+              : pollutant
+                ? null
+                : text(raw.units),
+          ...(pollutant
+            ? { reportedValue: num(raw.value), reportedUnits: text(raw.units) }
+            : {}),
           averagingMinutes: num(raw.averagingMinutes),
           kind: 'observation',
           country: text(raw.country),
@@ -193,6 +208,13 @@ export function mapAnalystRecord(raw, index = 0) {
           // leading it and the values it used (µg/m³; CO mg/m³).
           ...(raw.parameter === 'aqi'
             ? {
+                ...Object.fromEntries(
+                  Object.entries(raw.aqiValues ?? {}).filter(
+                    ([id, v]) =>
+                      ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co'].includes(id) &&
+                      Number.isFinite(v),
+                  ),
+                ),
                 aqi: raw.aqi
                   ? {
                       index: num(raw.aqi.index),

@@ -66,9 +66,8 @@ test('a layer requires both a snapshot source and an overlay host', () => {
   );
 });
 
-test('a source that names no providers is one station network, not an AQHI source', async () => {
-  // Canada's AQHI is retired: a plain source (a host's, or the catalog's
-  // stand-in for an absent one) is no longer taken for its index provider.
+test('a source that names no providers is one station network', async () => {
+  // A plain source is asked as one station network in the AQI view.
   for (const definitions of [undefined]) {
     const calls = [];
     const viewer = {};
@@ -84,7 +83,7 @@ test('a source that names no providers is one station network, not an AQHI sourc
       overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     });
     assert.equal(layer.getParams().view, 'aqi');
-    assert.equal(layer.setParams({ view: 'aqhi' }), false);
+
     layer.init(viewer);
     layer.enable();
     assert.equal(await layer.update(), true);
@@ -629,7 +628,7 @@ test('a pollutant view asks only the networks measuring it', async () => {
     openaq: [observed('openaq', 'paris', 48.85, 2.35)],
     saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
   });
-  assert.equal(layer.setParams({ view: 'aqhi' }), false);
+
   layer.setParams({ view: 'NO2' });
   settle();
   await new Promise((resolve) => setImmediate(resolve));
@@ -643,8 +642,6 @@ test('a pollutant view asks only the networks measuring it', async () => {
   assert.equal(drawn('points').items.size, 2);
   assert.deepEqual(layer.getParams(), {
     view: 'NO2',
-    stations: true,
-    station: null,
   });
 });
 
@@ -657,7 +654,7 @@ test('the stations switch hides and shows the station markers', async () => {
   await pending;
   layer.setParams({ stations: false });
   assert.equal(drawn('points').show, false);
-  assert.equal(layer.getParams().stations, false);
+  assert.equal(layer.getRowControls().summary.toggles[0].on, false);
   layer.setParams({ stations: true });
   assert.equal(drawn('points').show, true);
 });
@@ -809,7 +806,7 @@ test('a dense view draws groups, a close view draws singles', async () => {
   assert.equal(points().items.size, 2, 'groups follow the camera back out');
 });
 
-test('unrated stations draw on their own; the AQI view colours by the mean index', async () => {
+test('unrated stations group in the neutral colour; the AQI view colours by the mean index', async () => {
   const unrated = (id, lat, lon) => ({
     ...pm25(id, lat, lon, 10),
     color: '#8cb4ce',
@@ -819,8 +816,8 @@ test('unrated stations draw on their own; the AQI view colours by the mean index
     [unrated('a', 48.85, 2.35), unrated('b', 48.9, 2.4)],
     { view: 'PM2.5' },
   );
-  assert.equal(grey.points().items.size, 2);
-  assert.equal(grey.bubbles().length, 0);
+  assert.equal(grey.points().items.size, 1);
+  assert.equal(grey.bubbles()[0].color, '#8cb4ce');
   // PM2.5 12 µg/m³ is a US AQI of 56 at each station: Moderate.
   const aqi = await zoomHarness([
     observed('saaqis', 'a', 48.85, 2.35),
@@ -859,7 +856,7 @@ test('a click on a group flies to its stations and selects nothing', async () =>
   assert.ok(Math.abs(rect.south - 48.65) < 1e-9);
   assert.ok(Math.abs(rect.north - 49.05) < 1e-9);
   assert.deepEqual(flights[0].options, { durationS: 1.4 });
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
 });
 
 test('a group click keeps a station already selected', async () => {
@@ -870,7 +867,10 @@ test('a group click keeps a station already selected', async () => {
   layer.setParams({ station: 'saaqis:cape-town' });
   click(bubbles()[0].id);
   assert.equal(flights.length, 1);
-  assert.equal(layer.getParams().station, 'saaqis:cape-town');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:cape-town',
+  );
 });
 
 test('stations that cannot come apart: a click selects the higher and the camera stays', async () => {
@@ -881,7 +881,10 @@ test('stations that cannot come apart: a click selects the higher and the camera
   );
   click(bubbles()[0].id);
   assert.equal(flights.length, 0);
-  assert.equal(layer.getParams().station, 'saaqis:high');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:high',
+  );
 });
 
 test('a group larger than the view is not flown out to', async () => {
@@ -894,7 +897,10 @@ test('a group larger than the view is not flown out to', async () => {
   );
   click(bubbles()[0].id);
   assert.equal(flights.length, 0);
-  assert.equal(layer.getParams().station, 'saaqis:paris-2');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:paris-2',
+  );
 });
 
 test('a click on a station selects it, drawn large and never grouped', async () => {
@@ -903,7 +909,10 @@ test('a click on a station selects it, drawn large and never grouped', async () 
     { view: 'PM2.5' },
   );
   click('air-quality:saaqis:cape-town');
-  assert.equal(layer.getParams().station, 'saaqis:cape-town');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:cape-town',
+  );
   assert.equal(flights.length, 0);
   const selected = points().items.get('air-quality:saaqis:cape-town');
   assert.equal(selected.pixelSize, 13);
@@ -919,7 +928,7 @@ test('a click on a station selects it, drawn large and never grouped', async () 
   assert.equal(bubbles()[0].pixelSize, Math.round(12 + 6 * Math.log10(2)));
   // Empty map lets go of it.
   click(null);
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
 });
 
 test('a click a few pixels off a station still selects it', async () => {
@@ -929,10 +938,13 @@ test('a click a few pixels off a station still selects it', async () => {
   zoomTo(0.0001);
   // paris-1 is drawn at the centre, 400 × 300; 3 px to its right.
   click(null, { screenPosition: { x: 403, y: 300 } });
-  assert.equal(layer.getParams().station, 'saaqis:paris-1');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:paris-1',
+  );
   // 30 px away is open map.
   click(null, { screenPosition: { x: 430, y: 300 } });
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
 });
 
 test('a click is ignored while disabled, with stations hidden, under a card, or with the pointer held', async () => {
@@ -948,22 +960,29 @@ test('a click is ignored while disabled, with stations hidden, under a card, or 
   });
   layer.disable();
   click(id);
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
   layer.enable();
   layer.setParams({ stations: false });
   click(id);
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
   layer.setParams({ stations: true });
   card.over = true;
   click(id);
-  assert.equal(layer.getParams().station, null, 'the card takes the click');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    null,
+    'the card takes the click',
+  );
   card.over = false;
   pointer.free = false;
   click(id);
-  assert.equal(layer.getParams().station, null);
+  assert.equal(layer.getRowControls().summary.result?.key ?? null, null);
   pointer.free = true;
   click(id);
-  assert.equal(layer.getParams().station, 'saaqis:cape-town');
+  assert.equal(
+    layer.getRowControls().summary.result?.key ?? null,
+    'saaqis:cape-town',
+  );
 });
 
 test('destroy removes the click subscription', async () => {
@@ -1046,4 +1065,21 @@ test('an index above 500 reads 500+ and adds at most 500 to its group mean', asy
     aqiSite('stuck', 48.86, 2.45, 999),
   ]);
   assert.equal(edge.bubbles()[0].color, '#ffff00');
+});
+
+test('a cluster click flies through the shell navigation handoff', async () => {
+  const { layer, bubbles, click, flights } = await zoomHarness(
+    parisAndCapeTown(),
+    { view: 'PM2.5' },
+  );
+  let calls = 0;
+  layer.attachShellServices({
+    runNavigation: (navigate) => {
+      calls++;
+      navigate();
+    },
+  });
+  click(bubbles()[0].id);
+  assert.equal(calls, 1);
+  assert.equal(flights.length, 1);
 });

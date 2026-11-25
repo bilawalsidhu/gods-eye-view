@@ -756,6 +756,7 @@
     "runtime": "node",
     "exports": ["./server/providers/openai"],
     "modules": [
+      "src/keySetupCore.mjs",
       "src/i18n/marker.js",
       "src/i18n/locale.js",
       "src/hudLayoutPolicy.js",
@@ -7229,6 +7230,7 @@
   "reference-sources": {
     "exports": ["./sources/reference", "./layers/submarine-cables/source"],
     "modules": [
+      "src/sources/requestDeadline.js",
       "src/sources/reference.js",
       "src/layers/earthquakes/source.js",
       "src/layers/earthquakes/records.js",
@@ -8127,6 +8129,8 @@
   "tools": {
     "exports": ["./tools"],
     "modules": [
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/data/headingDegrees.js",
       "src/tools/index.js",
       "src/tools/catalog.js",
@@ -8304,6 +8308,7 @@
   "air-quality": {
     "exports": ["./layers/air-quality"],
     "modules": [
+      "src/sources/requestDeadline.js",
       "src/layers/airQuality/index.js",
       "src/data/dataCredits.js",
       "src/render/creditMarkup.js",
@@ -8356,6 +8361,7 @@
   "air-quality-source": {
     "exports": ["./layers/air-quality/source"],
     "modules": [
+      "src/sources/requestDeadline.js",
       "src/layers/airQuality/model.js",
       "src/layers/airQuality/source.js",
       "src/sources/httpBody.js",
@@ -8373,6 +8379,8 @@
   "agent-world-packet": {
     "exports": ["./agent/world-packet"],
     "modules": [
+      "src/keySetupCore.mjs",
+      "src/localRequestGate.mjs",
       "src/geo/index.js",
       "src/geo/geodesic.js",
       "src/geo/horizon.js",

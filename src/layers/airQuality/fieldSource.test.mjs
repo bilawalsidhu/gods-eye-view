@@ -89,8 +89,8 @@ test('a server with no field configured says so, and the source passes it on', a
   await assert.rejects(elsewhere.getManifest(), { code: 'not_configured' });
 });
 
-test('before a manifest was ever read, a page, a server error or no answer means no field', async () => {
-  for (const fetchImpl of [
+test('before a manifest was ever read, a page means no field and transient failures can be retried', async () => {
+  for (const [index, fetchImpl] of [
     // A static host answering every path with its page.
     async () =>
       new Response('<!doctype html><title>GEV</title>', {
@@ -100,23 +100,28 @@ test('before a manifest was ever read, a page, a server error or no answer means
     async () => {
       throw new TypeError('fetch failed');
     },
-  ]) {
+  ].entries()) {
     const source = createLocalAirQualityFieldSource({ fetchImpl });
-    await assert.rejects(source.getManifest(), { code: 'not_configured' });
+    await assert.rejects(
+      source.getManifest(),
+      (error) => (error.code === 'not_configured') === (index === 0),
+    );
   }
   // Once a manifest was read, a failure is a failure, tried again later.
   const { fetchImpl } = fixtureFetch();
   let down = false;
   const source = createLocalAirQualityFieldSource({
     fetchImpl: async (url, options) =>
-      down ? new Response('{}', { status: 502 }) : fetchImpl(url, options),
+      down ? new Response('{}', { status: down }) : fetchImpl(url, options),
   });
   await source.getManifest();
-  down = true;
-  await assert.rejects(source.getManifest(), (error) => {
-    assert.notEqual(error.code, 'not_configured');
-    return true;
-  });
+  for (const status of [502, 404]) {
+    down = status;
+    await assert.rejects(
+      source.getManifest(),
+      (error) => error.code !== 'not_configured',
+    );
+  }
 });
 
 test('a grid of the wrong size is refused', async () => {
@@ -140,4 +145,35 @@ test('the CAMS fixture carries the full credit CAMS requires', async () => {
     manifest.credit,
     'Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains.',
   );
+});
+
+test('a step is given time for its bytes beyond the base deadline', async () => {
+  const fixture = fixtureFetch();
+  const source = createLocalAirQualityFieldSource({
+    timeoutMs: 30,
+    fetchImpl: async (url, options) => {
+      if (url.includes('/grid/'))
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      return fixture.fetchImpl(url, options);
+    },
+  });
+  const { run } = await source.getManifest();
+  assert.equal((await source.getStep(0, { run })).global.pm25.length, 26 * 26);
+});
+test('a grid of another run is refused and the next step reads the manifest again', async () => {
+  const fixture = fixtureFetch();
+  const source = createLocalAirQualityFieldSource({
+    fetchImpl: (url, options) =>
+      url.includes('/grid/')
+        ? new Response('{}', { status: 409 })
+        : fixture.fetchImpl(url, options),
+  });
+  const { run } = await source.getManifest();
+  for (let i = 1; i <= 2; i++) {
+    await assert.rejects(source.getStep(0, { run }), { code: 'run_changed' });
+    assert.equal(
+      fixture.urls.filter((url) => url.endsWith('/manifest')).length,
+      i,
+    );
+  }
 });

@@ -2,6 +2,7 @@
  * EEA revised hourly bands: https://airindex.eea.europa.eu/AQI/
  * Upper bounds are inclusive; decimal values are not rounded into a lower band.
  */
+import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 import { concentrationFactor, layerUnits } from './units.js';
 import { AQI_CEILINGS, AQI_POLLUTANTS } from './usAqi.js';
 const msg = (text) => text;
@@ -74,18 +75,14 @@ export function hourlyBandIndex(parameter, value) {
   return severity < 0 ? 5 : severity;
 }
 
-/**
- * The highest value of a pollutant a pollutant view rates, in the layer's
- * units: the AQI view's plausibility ceiling (`AQI_CEILINGS`), unless that
- * would leave the top band empty. Carbon monoxide's ceiling (100 mg/m³) is
- * where its top band begins, so there it is twice that edge, 200 mg/m³.
- */
+/** One fault ceiling per pollutant in every view. */
 export function hourlyCeiling(parameter) {
   const ceiling = AQI_CEILINGS[AQI_POLLUTANTS[parameter]];
-  const top = EEA_HOURLY_LIMITS[parameter]?.at(-1);
-  if (!Number.isFinite(ceiling)) return Infinity;
-  return Number.isFinite(top) && ceiling <= top ? 2 * top : ceiling;
+  return Number.isFinite(ceiling) ? ceiling : Infinity;
 }
+
+/** Minimum hourly data coverage (45 minutes). */
+export const HOURLY_MIN_COVERAGE = 75;
 
 /** Unknown, flagged, incomplete and incompatible readings never turn green. */
 export function interpretHourly(reading) {
@@ -97,12 +94,7 @@ export function interpretHourly(reading) {
       'The units or averaging period of this network are not confirmed; no health category is assigned.',
     );
   else if (!limits)
-    reason =
-      reading.parameter === 'CO2'
-        ? msg(
-            'CO₂ concentration is not an emissions rate and has no category on this scale.',
-          )
-        : msg('This pollutant has no category on the EEA hourly scale.');
+    reason = msg('This pollutant has no category on the EEA hourly scale.');
   else if (reading.averagingMinutes !== 60)
     reason = msg('A verified one-hour average is needed to rate this reading.');
   else if (reading.qualityFlagged)
@@ -111,7 +103,8 @@ export function interpretHourly(reading) {
     );
   else if (
     reading.coveragePercent !== undefined &&
-    (!Number.isFinite(reading.coveragePercent) || reading.coveragePercent < 100)
+    (!Number.isFinite(reading.coveragePercent) ||
+      reading.coveragePercent < HOURLY_MIN_COVERAGE)
   )
     reason = msg(
       'The hourly average is incomplete; no health category is assigned.',
@@ -131,7 +124,12 @@ export function interpretHourly(reading) {
     reason = msg(
       'Implausibly high for this pollutant; no health category is assigned.',
     );
-  if (reason) return { ...reading, assessment: { reason }, color: '#8cb4ce' };
+  if (reason)
+    return {
+      ...reading,
+      assessment: { reason },
+      color: AIR_QUALITY_UNRATED_COLOR,
+    };
   const severity = hourlyBandIndex(reading.parameter, value);
   const band = EEA_HOURLY_BANDS[severity];
   return {

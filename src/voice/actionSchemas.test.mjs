@@ -42,8 +42,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality adds source units, pollutant, averaging period and observation kind; value is the view's own figure.
-    // Air quality extends the manifest; its always-empty risk field leaves it.
+    // Air quality includes each station's value, pollutant, averaging period, kind and method note.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
@@ -65,7 +64,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // visual style; set_cyber_sonar is excluded above).
     // The Space Missions panel adds one panel target.
     // Fire Perimeters queries add lastGrowthTime.
-    'be264b3f126c4e856ec3ae1def64d44ef1fa076b52ec9977e6c6a8e4a2acdddc',
+    '167fc1c4e7362f3b16e795be1a8b39b504cf82589d9425f2ef8fe0b2f3701a4d',
   );
 });
 

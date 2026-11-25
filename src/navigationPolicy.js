@@ -36,6 +36,7 @@ const COCKPIT_REFUSALS = Object.freeze({
   // Radar, satellite and lightning fly to the layer's coverage area (their
   // «View coverage» button); the cyclone layer flies to the selected storm.
   weather: msg('Exit cockpit to view weather coverage'),
+  'air quality': msg('Exit cockpit to fly to a location'),
   cyclone: msg('Exit cockpit to fly to a cyclone'),
   // The News panel's cards and the news layer's hotspots fly to the event.
   news: msg('Exit cockpit to fly to a news report'),

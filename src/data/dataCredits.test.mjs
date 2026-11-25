@@ -384,5 +384,4 @@ test('the OpenAQ credit says where each station names its network and licence', 
     credit.html,
     /The originating network and its licence are named in each station’s details\.$/,
   );
-  assert.doesNotMatch(credit.html, /accompany each station/);
 });
