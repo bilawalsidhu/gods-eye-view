@@ -27,7 +27,7 @@ const props = defineProps({
 });
 const store = useEntityCardStore();
 const { card, lost, tick, away, finding, located } = storeToRefs(store);
-// Cameras carry only an id; the CCTV panel's store knows the picked one's name.
+// A matching frame can supply a label for the camera card.
 const { frame: cctvFrame } = storeToRefs(useCctvStore());
 const shownTitle = computed(() => {
   const current = card.value;

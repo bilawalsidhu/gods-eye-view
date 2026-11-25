@@ -237,14 +237,14 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     return dm.isEnabled(id) === false;
   }
 
-  function refresh() {
+  function refresh({ forAction = false } = {}) {
     const current = card.value;
     if (!current) return;
     // A card does not outlive its layer: turning the layer off (or clearing
     // all layers) closes it and lets go of the camera.
     if (layerOff(current.layerId)) return clear();
-    // A closed panel shows nothing, so it reads nothing until it opens.
-    if (shell.value?.isOpen && !shell.value.isOpen()) return;
+    // Stop polling a closed panel. Omnibar actions still need its current position.
+    if (!forAction && shell.value?.isOpen && !shell.value.isOpen()) return;
     const next = describeEntity(dataManager(), current.identity);
     // Keep showing the last reading when the item drops out of its feed.
     if (!next || next.key !== current.key || next.basis !== 'record') {
@@ -424,7 +424,12 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     stopLocating();
   }
 
-  const flyTo = () => card.value && shell.value?.flyTo?.(card.value);
+  function currentActionCard() {
+    // A mount edit can land between the card's regular refreshes.
+    if (card.value?.layerId === 'cctv') refresh({ forAction: true });
+    return card.value;
+  }
+  const flyTo = () => currentActionCard() && shell.value?.flyTo?.(card.value);
   const follow = () => {
     if (!card.value) return;
     asked = card.value.key;
@@ -432,7 +437,7 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   };
   const isFollowing = () =>
     Boolean(card.value && following.value === card.value.key);
-  const ask = () => card.value && shell.value?.ask?.(card.value);
+  const ask = () => currentActionCard() && shell.value?.ask?.(card.value);
   /** The regional brief (weather, local news) for a spot, from the shell. */
   const readBrief = (lat, lon) =>
     shell.value?.regionalBrief

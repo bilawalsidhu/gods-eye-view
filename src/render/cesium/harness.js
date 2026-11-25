@@ -105,6 +105,7 @@ export const CESIUM_CHECKS = new Set([
   'draw.displayRange',
   'draw.sets',
   'draw.shapes.clamped',
+  'draw.shapes.overlay',
   'draw.shapes.drapedRotation',
   'draw.shapes.resize',
   'effects.crossfade',
