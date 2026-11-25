@@ -365,7 +365,9 @@ test('view state moves a camera height that rounds to 1,000 m into kilometres', 
     }).say;
   assert.equal(camera(999.4), 'Camera 999 m up. Normal style. No layers on.');
   assert.equal(camera(999.6), 'Camera 1 km up. Normal style. No layers on.');
+  assert.equal(camera(999.5), 'Camera 1 km up. Normal style. No layers on.');
   assert.equal(camera(1000), 'Camera 1 km up. Normal style. No layers on.');
+  assert.equal(camera(1499.6), 'Camera 1 km up. Normal style. No layers on.');
 });
 
 test('annotation speech names only what failed and never announces drawing', () => {

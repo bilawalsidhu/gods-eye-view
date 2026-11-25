@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import { hudReadouts } from './testSupport/hudReadouts.mjs';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
-import { ensureGeoidReady } from './data/geoid.js';
+import { ensureGeoidReady, geoidHeight } from './data/geoid.js';
 
 const MGRS_STUB_URL = 'gev-test-stub:mgrs';
 registerHooks({
@@ -270,6 +270,29 @@ test('the corrected readouts are the MSL datum, not a coincidence of the SFO sig
       `100 m ellipsoidal over London is 54 m MSL, got ${env.elements.get('hud-alt').textContent}`,
     );
     assert.match(env.elements.get('hud-summary').textContent, /\| ALT 54M \|/);
+  } finally {
+    hud?.destroy();
+    env.restore();
+  }
+});
+
+test('the summary ALT tag reads a 999.6 m MSL height as 1.0KM, not 1000M', async () => {
+  await ensureGeoidReady();
+  const env = installHudEnvironment();
+  const geoidN = geoidHeight(SFO.latDeg, SFO.lonDeg);
+  let hud;
+  try {
+    hud = new IntelHUD(env.viewer, { publish: env.publish });
+    hud._updateCameraData(); // cold: requests the grid
+    await ensureGeoidReady();
+    await Promise.resolve();
+    env.viewer.camera.positionCartographic.height = 999.6 + geoidN;
+    hud._updateCameraData();
+    assert.match(env.elements.get('hud-alt').textContent, /^ALT: 1000m/);
+    assert.match(hud._composeSummary(), /\| ALT 1\.0KM \|/);
+    env.viewer.camera.positionCartographic.height = 999.4 + geoidN;
+    hud._updateCameraData();
+    assert.match(hud._composeSummary(), /\| ALT 999M \|/);
   } finally {
     hud?.destroy();
     env.restore();

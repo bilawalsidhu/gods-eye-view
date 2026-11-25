@@ -159,6 +159,8 @@ test('the HUD formatter translates the catalogued city, then upper-cases it', ()
 test('the summary ALT tag moves a height that rounds to 1,000 m into kilometres', () => {
   assert.equal(hudAltitude(999.4), '999M');
   assert.equal(hudAltitude(999.6), '1.0KM');
+  assert.equal(hudAltitude(999.5), '1.0KM');
   assert.equal(hudAltitude(1000), '1.0KM');
+  assert.equal(hudAltitude(1049.6), '1.0KM');
   assert.equal(hudAltitude(40210), '40.2KM');
 });
