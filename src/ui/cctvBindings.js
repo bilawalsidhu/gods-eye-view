@@ -1,3 +1,5 @@
+import { t } from '../i18n/index.js';
+
 export function _initCctvPanel() {
   if (!this._cctvPanel) return;
 
@@ -57,6 +59,12 @@ export function _initCctvPanel() {
     );
   });
 
+  // The picker defers rebuilds while focused; catch up once it lets go.
+  this.listen(this._cctvSelect, 'blur', () => {
+    this._picker = null;
+    this._renderCctvState(this._cctvState);
+  });
+
   this.listen(this._cctvSelect, 'change', async () => {
     const generation = ++this._actionGeneration;
     const activeId = this._cctvState?.activeCameraId;
@@ -70,9 +78,9 @@ export function _initCctvPanel() {
       (activeId && activeId !== this._cctvState?.activeCameraId)
     )
       return;
-    // Picking a camera from the dropdown flies to it. The catalog spans
-    // three metros, so a bare selection used to leave the view in the old
-    // city with a camera active thousands of km away.
+    // Picking a camera from the dropdown flies to it. The dropdown lists the
+    // cameras in view (and the active camera, which may be far away), so a
+    // bare selection could leave the view somewhere else.
     this.actions.runExplicitFocus(
       () => (this.cctv.selectCamera(cameraId) ? cameraId : null),
       (selectedId) => this.cctv.focusCamera(selectedId, 2.2),
@@ -143,7 +151,7 @@ export function _initCctvPanel() {
       },
       { origin: 'user' },
     );
-    this.actions.showToast('CCTV calibration saved');
+    this.actions.showToast(t('CCTV calibration saved'));
   });
 
   this.listen(this._cctvCalibResetBtn, 'click', () => {

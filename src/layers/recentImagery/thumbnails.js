@@ -1,6 +1,6 @@
 /**
  * Thumbnail loader for the Recent Imagery strip: one Worldview snapshot per
- * candidate day. The response's `Data-Present` header is the only proof that
+ * candidate day (one per side of a dateline box). The response's `Data-Present` header is the only proof that
  * a day has pixels in the box (GIBS answers an empty tile with HTTP 200), and
  * `Acquisition-Time` carries the sensing time. Fetches are bounded, and so
  * are decoded images: residency is least-recently-USED, where a request or a
@@ -8,15 +8,27 @@
  * card on every render, so a read that counted would evict the visible cards
  * first). Eviction revokes the image only; what the probe proved is kept.
  */
-import { thumbnailOrder } from './model.js';
-import { createRecentImagerySource } from './source.js';
+import { boxKey, thumbnailOrder } from './model.js';
+import { createRecentImagerySource, dataPresent } from './source.js';
 
 const EMPTY = Object.freeze({
   status: 'unknown',
   objectUrl: null,
   acquisitionTime: null,
+  availableBoxes: null,
+  emptyBoxes: null,
   loading: false,
 });
+
+/** Keep earlier halves of one answer (present or empty) unless the new probe answered them. */
+function keepProvenHalves(previous, next, opposite) {
+  if (!Array.isArray(next) || !Array.isArray(opposite)) return previous;
+  const drop = new Set([...next, ...opposite].map(boxKey));
+  return [
+    ...next,
+    ...(previous ?? []).filter((half) => !drop.has(boxKey(half))),
+  ];
+}
 
 /**
  * @param {{ fetchImpl?: typeof fetch, maxInFlight?: number, maxDecoded?: number, createObjectUrl?: (blob: Blob) => string, revokeObjectUrl?: (url: string) => void, size?: number }} [options]
@@ -90,22 +102,26 @@ export function createThumbnailLoader({
     let status = 'error';
     let objectUrl = null;
     let acquisitionTime = null;
+    // Per-half evidence (see withHalves in source.js), or null without it.
+    let availableBoxes = null;
+    let emptyBoxes = null;
     let cancelled = false;
     try {
       const response = await requestThumbnail(entry.candidate, entry.box, {
         size,
         signal: controller.signal,
       });
+      // Each half's explicit answer counts even when the shown response fails.
+      availableBoxes = response?.presentBoxes ?? null;
+      emptyBoxes = response?.emptyBoxes ?? null;
       if (controller.signal.aborted) {
         cancelled = true;
       } else if (response?.ok) {
-        const present = String(
-          response.headers?.get?.('Data-Present') ?? 'true',
-        ).toLowerCase();
+        const present = dataPresent(response);
         acquisitionTime = response.headers?.get?.('Acquisition-Time') || null;
         if (present === 'false') {
           status = 'empty';
-        } else {
+        } else if (present === 'true') {
           const blob = await response.blob();
           if (controller.signal.aborted) cancelled = true;
           else {
@@ -117,7 +133,11 @@ export function createThumbnailLoader({
     } catch (error) {
       if (controller.signal.aborted || error?.name === 'AbortError')
         cancelled = true;
-      else status = 'error';
+      else {
+        status = 'error';
+        availableBoxes = error?.presentBoxes ?? availableBoxes;
+        emptyBoxes = error?.emptyBoxes ?? emptyBoxes;
+      }
     } finally {
       inFlight -= 1;
       entry.loading = false;
@@ -129,6 +149,17 @@ export function createThumbnailLoader({
       pump();
       return;
     }
+    // Each half keeps its latest explicit answer.
+    entry.availableBoxes = keepProvenHalves(
+      entry.availableBoxes,
+      availableBoxes,
+      emptyBoxes,
+    );
+    entry.emptyBoxes = keepProvenHalves(
+      entry.emptyBoxes,
+      emptyBoxes,
+      availableBoxes,
+    );
     // A failed re-fetch of an evicted image keeps what the day proved.
     if (status !== 'error' || entry.status !== 'present') {
       entry.status = status;
@@ -166,6 +197,19 @@ export function createThumbnailLoader({
       const existing = entries.get(key);
       if (existing) {
         touch(existing);
+        if (existing.loading && existing.controller?.signal.aborted) {
+          // Wanted again before the abort settles: a fresh entry, so the old
+          // run cannot discard it.
+          const renewed = {
+            ...existing,
+            priority,
+            loading: false,
+            controller: null,
+          };
+          entries.set(key, renewed);
+          enqueue(renewed);
+          return;
+        }
         if (existing.loading) return;
         if (existing.status === 'unknown') {
           existing.priority = priority;
@@ -183,6 +227,8 @@ export function createThumbnailLoader({
         status: 'unknown',
         objectUrl: null,
         acquisitionTime: null,
+        availableBoxes: null,
+        emptyBoxes: null,
         loading: false,
         controller: null,
         touched: 0,
@@ -210,9 +256,31 @@ export function createThumbnailLoader({
         candidates.length,
         extra,
       );
-      order.forEach((index, priority) => {
+      return order.map((index, priority) => {
         this.request(candidates[index], box, priority);
+        return candidates[index].key;
       });
+    },
+
+    /**
+     * Cancel queued and in-flight work for every key not in `keys`. Settled
+     * entries stay under the LRU; a cancelled re-fetch of a present day keeps
+     * its status.
+     * @param {Iterable<string>} keys
+     */
+    retain(keys) {
+      const wanted = new Set(keys);
+      for (let index = queue.length - 1; index >= 0; index -= 1) {
+        const entry = queue[index];
+        if (wanted.has(entry.key)) continue;
+        queue.splice(index, 1);
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
+      for (const entry of [...entries.values()]) {
+        if (!entry.loading || wanted.has(entry.key)) continue;
+        entry.controller?.abort();
+        if (entry.status === 'unknown') entries.delete(entry.key);
+      }
     },
 
     /**
@@ -237,7 +305,7 @@ export function createThumbnailLoader({
     /**
      * Read a day's state. A read is not a use: it never changes residency.
      * @param {string} key Candidate key.
-     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, loading: boolean }}
+     * @returns {{ status: 'unknown'|'present'|'empty'|'error', objectUrl: string | null, acquisitionTime: string | null, availableBoxes: Array<object> | null, emptyBoxes: Array<object> | null, loading: boolean }}
      */
     get(key) {
       const entry = entries.get(key);
@@ -246,6 +314,8 @@ export function createThumbnailLoader({
         status: entry.status,
         objectUrl: entry.objectUrl,
         acquisitionTime: entry.acquisitionTime,
+        availableBoxes: entry.availableBoxes,
+        emptyBoxes: entry.emptyBoxes,
         loading: entry.loading,
       };
     },

@@ -16,11 +16,18 @@
  * route.
  */
 
-import * as Cesium from 'cesium';
+import { roadLabel } from '../../data/routeSteps.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { hexColor } from '../../render/color.js';
+import { drawOf } from '../../render/rendererOf.js';
+import { t, msg, formatNumber, getLocale } from '../../i18n/index.js';
+import { inputFor } from '../../input/dispatcher.js';
 import {
-  formatRouteDistance,
-  formatRouteDuration,
-} from '../../data/routeSteps.js';
+  formatQuantity,
+  quantitySeparator,
+  unitLabel,
+} from '../../ui/unitLabels.js';
+import { distanceParts } from '../../data/distanceFormat.js';
 
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_ID = 'directions-step';
 export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
@@ -28,21 +35,62 @@ export const DIRECTIONS_STEP_OVERLAY_SOURCE_OPTIONS = Object.freeze({
   collisionCapacity: 0,
   moving: false,
 });
+/** The A and B letters above the endpoint markers. */
+export const DIRECTIONS_MARKER_OVERLAY_SOURCE_ID = 'directions-markers';
+export const DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS = Object.freeze({
+  cohortLimit: 2,
+  collisionCapacity: 0,
+  moving: false,
+});
 
 /** Travel modes, keyed by the `/api/route` profile name. */
 export const DIRECTIONS_MODES = Object.freeze({
-  car: Object.freeze({ chip: 'DRIVE', word: 'Drive', icon: '🚗' }),
-  foot: Object.freeze({ chip: 'WALK', word: 'Walk', icon: '🚶' }),
-  bike: Object.freeze({ chip: 'BIKE', word: 'Bike', icon: '🚲' }),
+  car: Object.freeze({ chip: msg('DRIVE'), word: msg('Drive'), icon: '🚗' }),
+  foot: Object.freeze({ chip: msg('WALK'), word: msg('Walk'), icon: '🚶' }),
+  bike: Object.freeze({ chip: msg('BIKE'), word: msg('Bike'), icon: '🚲' }),
 });
 export const DEFAULT_DIRECTIONS_MODE = 'car';
 
+/**
+ * The row error for a failed route request (createDirectionsSource errors),
+ * as English data; the Layers panel shows it translated (ROUTING_ERROR_PATTERNS
+ * in src/ui/statusText.js).
+ */
+export function presentRoutingFailure(error) {
+  if (error?.status === 429) {
+    return error.refusal
+      ? // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+        `${error.refusal} — try again in a moment`
+      : msg('Routing is rate limited — try again in a moment');
+  }
+  if (Number.isFinite(error?.status) && error.status > 0)
+    // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+    return `Routing unavailable (HTTP ${error.status})`;
+  return error?.message || msg('Routing unavailable');
+}
+
 /** Route colour — the annotation palette's cyan, so voice routes and Directions match. */
 export const DIRECTIONS_ROUTE_COLOR = '#39d0ff';
-const MARKER_A_COLOR = Cesium.Color.fromCssColorString('#5dff9f');
-const MARKER_B_COLOR = Cesium.Color.fromCssColorString('#ff6b6b');
-const STEP_COLOR = Cesium.Color.WHITE.withAlpha(0.95);
-const STEP_OUTLINE = Cesium.Color.fromCssColorString(DIRECTIONS_ROUTE_COLOR);
+const MARKER_A_CSS = '#5dff9f';
+const MARKER_B_CSS = '#ff6b6b';
+const MARKER_A_COLOR = hexColor(MARKER_A_CSS);
+const MARKER_B_COLOR = hexColor(MARKER_B_CSS);
+const MARKER_OUTLINE = [0, 0, 0, 1];
+const STEP_COLOR = [1, 1, 1, 0.95];
+const STEP_OUTLINE = hexColor(DIRECTIONS_ROUTE_COLOR);
+/**
+ * The route's flowing dashes, as the voice route annotation draws them:
+ * 64 cells along the whole route, each lit for its first 46%, running
+ * toward B at 0.55 cells a second.
+ */
+const ROUTE_STYLE = Object.freeze({
+  kind: 'flow',
+  color: hexColor(DIRECTIONS_ROUTE_COLOR, 0.95),
+  repeat: 64,
+  duty: 0.46,
+  speed: 0.55,
+});
+const ROUTE_WIDTH_PX = 9;
 const STEP_PIXEL_SIZE = 8;
 const STEP_SELECTED_PIXEL_SIZE = 13;
 /** Route request timeout (ms) — the proxy itself gives OSRM 12 s. */
@@ -67,6 +115,282 @@ export const STEP_ANCHOR_SLOW_RETRY_MS = 2000;
 export const STEP_ANCHOR_FAST_ATTEMPTS = 5;
 /** How often the row repaints the highlighted step while FLY is running (ms). */
 export const FLIGHT_PROGRESS_MS = 250;
+
+// ---------------------------------------------------------------------------
+// Display text in the page's language. The proxy's English `instruction` stays
+// the machine value; steps are phrased from their OSRM type/modifier/road.
+// ---------------------------------------------------------------------------
+
+/**
+ * Localized "850 m", "1.2 km", "21 km" (the rounding of `formatRouteDistance`
+ * in src/data/routeSteps.js); number and unit never break apart.
+ * @param {number} meters
+ * @returns {string}
+ */
+export function routeDistanceText(meters) {
+  const parts = distanceParts(meters, { metreStep: 10, exactBelowM: 100 });
+  if (!parts) return '';
+  return formatQuantity(parts.value, parts.unit, {
+    minimumFractionDigits: parts.digits,
+    maximumFractionDigits: parts.digits,
+  });
+}
+
+/**
+ * Localized "40 s", "12 min", "1 h 5 min" (the rounding of
+ * `formatRouteDuration` in src/data/routeSteps.js); never broken apart.
+ * @param {number} seconds
+ * @returns {string}
+ */
+export function routeDurationText(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '';
+  const wholeSeconds = Math.round(seconds);
+  if (wholeSeconds < 60) return formatQuantity(wholeSeconds, 's');
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return formatQuantity(minutes, 'min');
+  const hours = formatQuantity(Math.floor(minutes / 60), 'h');
+  const rest = minutes % 60;
+  if (!rest) return hours;
+  // "1 h 5 min"; Japanese runs the parts together: 1時間5分.
+  return `${hours}${quantitySeparator(unitLabel('h'))}${formatQuantity(rest, 'min')}`;
+}
+
+/** "left", "slightly right", … as it reads inside a maneuver sentence. */
+function directionWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'direction' });
+    case 'right':
+      return t('right', { context: 'direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'direction' });
+    case 'straight':
+      return t('straight', { context: 'direction' });
+    case 'uturn':
+      return t('around', { context: 'direction' });
+    default:
+      return modifier;
+  }
+}
+
+/**
+ * The side to keep at a fork. English reuses the turn words; a language may
+ * need another form here ("держитесь левее", not "держитесь налево").
+ */
+function forkWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'fork direction' });
+    case 'right':
+      return t('right', { context: 'fork direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'fork direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'fork direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'fork direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'fork direction' });
+    case 'straight':
+      return t('straight', { context: 'fork direction' });
+    default:
+      return directionWord(modifier);
+  }
+}
+
+/** The lane to use, as an adjective where a language needs one ("левую полосу"). */
+function laneWord(modifier) {
+  switch (modifier) {
+    case 'left':
+      return t('left', { context: 'lane direction' });
+    case 'right':
+      return t('right', { context: 'lane direction' });
+    case 'slight left':
+      return t('slightly left', { context: 'lane direction' });
+    case 'slight right':
+      return t('slightly right', { context: 'lane direction' });
+    case 'sharp left':
+      return t('sharply left', { context: 'lane direction' });
+    case 'sharp right':
+      return t('sharply right', { context: 'lane direction' });
+    case 'straight':
+      return t('straight', { context: 'lane direction' });
+    default:
+      return directionWord(modifier);
+  }
+}
+
+/** "1st", "2nd", … for a roundabout exit. */
+function exitOrdinal(exit) {
+  const number = formatNumber(exit);
+  switch (new Intl.PluralRules('en', { type: 'ordinal' }).select(exit)) {
+    case 'one':
+      return t('{number}st', { context: 'ordinal', number });
+    case 'two':
+      return t('{number}nd', { context: 'ordinal', number });
+    case 'few':
+      return t('{number}rd', { context: 'ordinal', number });
+    default:
+      return t('{number}th', { context: 'ordinal', number });
+  }
+}
+
+/**
+ * One maneuver in the page's language, from the step's OSRM type, modifier,
+ * exit and road. English matches `instructionFor` in src/data/routeSteps.js
+ * word for word. A step without a type (an older payload) keeps the proxy's
+ * English instruction.
+ * @param {{type?:string, modifier?:string|null, exit?:number|null, name?:string, ref?:string|null, instruction?:string}} step
+ * @returns {string}
+ */
+export function directionsInstruction(step) {
+  const type =
+    typeof step?.type === 'string' ? step.type.trim().toLowerCase() : '';
+  if (!type)
+    return typeof step?.instruction === 'string' ? step.instruction : '';
+  const modifier =
+    typeof step.modifier === 'string' ? step.modifier.trim().toLowerCase() : '';
+  const road = roadLabel(step);
+  const direction = directionWord(modifier);
+  const values = { road, direction };
+  switch (type) {
+    case 'depart':
+      return road ? t('Head out on {road}', values) : t('Head out');
+    case 'arrive':
+      if (modifier === 'left')
+        return t('Arrive at your destination, on the left');
+      if (modifier === 'right')
+        return t('Arrive at your destination, on the right');
+      return t('Arrive at your destination');
+    case 'turn':
+      if (modifier === 'uturn')
+        return road
+          ? t('Make a U-turn onto {road}', values)
+          : t('Make a U-turn');
+      if (modifier === 'straight')
+        return road
+          ? t('Continue straight onto {road}', values)
+          : t('Continue straight');
+      if (direction)
+        return road
+          ? t('Turn {direction} onto {road}', values)
+          : t('Turn {direction}', values);
+      return road
+        ? t('Turn onto {road}', values)
+        : t('Turn', { context: 'maneuver' });
+    case 'continue':
+      if (modifier === 'uturn')
+        return road
+          ? t('Make a U-turn onto {road}', values)
+          : t('Make a U-turn');
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Continue {direction} onto {road}', values)
+          : t('Continue {direction}', values);
+      return road
+        ? t('Continue straight onto {road}', values)
+        : t('Continue straight');
+    case 'end of road':
+      if (direction)
+        return road
+          ? t('At the end of the road, turn {direction} onto {road}', values)
+          : t('At the end of the road, turn {direction}', values);
+      return road
+        ? t('At the end of the road, continue onto {road}', values)
+        : t('At the end of the road, continue');
+    case 'fork':
+      if (direction) {
+        const fork = { road, direction: forkWord(modifier) };
+        return road
+          ? t('Keep {direction} at the fork onto {road}', fork)
+          : t('Keep {direction} at the fork', fork);
+      }
+      return road
+        ? t('Continue at the fork onto {road}', values)
+        : t('Continue at the fork');
+    case 'merge':
+      if (direction)
+        return road
+          ? t('Merge {direction} onto {road}', values)
+          : t('Merge {direction}', values);
+      return road
+        ? t('Merge onto {road}', values)
+        : t('Merge', { context: 'maneuver' });
+    case 'on ramp':
+      if (modifier === 'left' || modifier === 'right')
+        return road
+          ? t('Take the ramp on the {direction} onto {road}', values)
+          : t('Take the ramp on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the ramp {direction} onto {road}', values)
+          : t('Take the ramp {direction}', values);
+      return road ? t('Take the ramp onto {road}', values) : t('Take the ramp');
+    case 'off ramp':
+      if (modifier === 'left' || modifier === 'right')
+        return road
+          ? t('Take the exit on the {direction} onto {road}', values)
+          : t('Take the exit on the {direction}', values);
+      if (direction && modifier !== 'straight')
+        return road
+          ? t('Take the exit {direction} onto {road}', values)
+          : t('Take the exit {direction}', values);
+      return road ? t('Take the exit onto {road}', values) : t('Take the exit');
+    case 'roundabout':
+    case 'rotary':
+      if (Number.isInteger(step.exit) && step.exit >= 1) {
+        const exit = exitOrdinal(step.exit);
+        return road
+          ? t('At the roundabout, take the {exit} exit onto {road}', {
+              exit,
+              road,
+            })
+          : t('At the roundabout, take the {exit} exit', { exit });
+      }
+      return road
+        ? t('Enter the roundabout onto {road}', values)
+        : t('Enter the roundabout');
+    case 'roundabout turn':
+      if (direction)
+        return road
+          ? t('At the roundabout, turn {direction} onto {road}', values)
+          : t('At the roundabout, turn {direction}', values);
+      return road
+        ? t('At the roundabout, continue onto {road}', values)
+        : t('At the roundabout, continue');
+    case 'exit roundabout':
+    case 'exit rotary':
+      return road
+        ? t('Exit the roundabout onto {road}', values)
+        : t('Exit the roundabout');
+    case 'use lane': {
+      const side = modifier.includes('left')
+        ? 'left'
+        : modifier.includes('right')
+          ? 'right'
+          : '';
+      if (side) {
+        const lane = { road, direction: laneWord(side) };
+        return road
+          ? t('Use the {direction} lane onto {road}', lane)
+          : t('Use the {direction} lane', lane);
+      }
+      return road
+        ? t('Continue onto {road}', values)
+        : t('Continue', { context: 'maneuver' });
+    }
+    default:
+      return road
+        ? t('Continue onto {road}', values)
+        : t('Continue', { context: 'maneuver' });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for tests)
@@ -98,6 +422,16 @@ export function normalizeDirectionsParams(params = {}) {
 }
 
 /**
+ * A travel-mode word inside a sentence: lower case, except in German, where
+ * the words are nouns and keep their capital ("Auto", "Fahrrad").
+ * @param {string} word Translated mode word.
+ * @returns {string}
+ */
+function modeWordInSentence(word) {
+  return getLocale() === 'de' ? word : word.toLowerCase();
+}
+
+/**
  * Row chips for a given state. Pure so the chip logic is testable without a DOM.
  * @param {{mode:string, armed:null|'a'|'b', a:object|null, b:object|null, status:string, route:object|null}} state
  * @returns {{chips: object[], legend: object[]}}
@@ -107,32 +441,35 @@ export function directionsRowControls(state) {
   const routing = status === 'routing';
   const chips = Object.entries(DIRECTIONS_MODES).map(([id, spec]) => ({
     id: `mode-${id}`,
-    label: spec.chip,
+    label: t(spec.chip),
     active: mode === id,
     state: mode === id ? 'active' : 'idle',
-    title: `${spec.word} — reroute for ${spec.word.toLowerCase()}`,
+    title: t('{mode} — reroute for {modeLower}', {
+      mode: t(spec.word),
+      modeLower: modeWordInSentence(t(spec.word)),
+    }),
     params: { mode: id },
   }));
   chips.push({
     id: 'set-a',
-    label: armed === 'a' ? 'CLICK MAP' : a ? 'A ✓' : 'SET A',
+    label: armed === 'a' ? t('CLICK MAP') : a ? 'A ✓' : t('SET A'),
     active: armed === 'a',
     state: armed === 'a' ? 'active' : 'idle',
     title:
       armed === 'a'
-        ? 'Click a spot on the globe to place A (click again to cancel)'
-        : 'Then click the globe to place the start',
+        ? t('Click a spot on the globe to place A (click again to cancel)')
+        : t('Then click the globe to place the start'),
     params: { arm: armed === 'a' ? null : 'a' },
   });
   chips.push({
     id: 'set-b',
-    label: armed === 'b' ? 'CLICK MAP' : b ? 'B ✓' : 'SET B',
+    label: armed === 'b' ? t('CLICK MAP') : b ? 'B ✓' : t('SET B'),
     active: armed === 'b',
     state: armed === 'b' ? 'active' : 'idle',
     title:
       armed === 'b'
-        ? 'Click a spot on the globe to place B (click again to cancel)'
-        : 'Then click the globe to place the destination',
+        ? t('Click a spot on the globe to place B (click again to cancel)')
+        : t('Then click the globe to place the destination'),
     params: { arm: armed === 'b' ? null : 'b' },
   });
   chips.push({
@@ -140,26 +477,28 @@ export function directionsRowControls(state) {
     label: '⇄',
     disabled: !(a && b) || routing,
     state: 'idle',
-    title: 'Swap A and B',
+    title: t('Swap A and B'),
     params: { swap: true },
   });
   const flying = Number.isInteger(flightStep);
   chips.push({
     id: 'fly',
-    label: routing ? 'FLY ···' : flying ? 'FLYING' : 'FLY',
+    label: routing ? t('FLY ···') : flying ? t('FLYING') : t('FLY'),
     disabled: !route || routing,
     busy: routing || flying,
     active: flying,
     state: routing || flying ? 'loading' : 'idle',
-    title: route ? 'Fly the camera along the route' : 'Place A and B first',
+    title: route
+      ? t('Fly the camera along the route')
+      : t('Place A and B first'),
     params: { fly: true },
   });
   chips.push({
     id: 'clear',
-    label: 'CLEAR',
+    label: t('CLEAR', { context: 'action' }),
     disabled: !a && !b && !route,
     state: 'idle',
-    title: 'Remove the route and both markers',
+    title: t('Remove the route and both markers'),
     params: { clear: true },
   });
   return {
@@ -171,39 +510,6 @@ export function directionsRowControls(state) {
       flightStep: flightStep ?? null,
     }),
   };
-}
-
-/**
- * Plain names for the tools that can be holding the pointer, and how to leave
- * each one. A tool missing from here still gets a usable sentence from its id.
- */
-export const POINTER_TOOL_EXITS = Object.freeze({
-  draw: Object.freeze({
-    name: 'Draw',
-    leave: 'press Escape twice to leave Draw',
-  }),
-});
-
-/**
- * What to say when a globe click cannot be armed because something else owns
- * the pointer.
- *
- * The claim failing used to be silent: the chip simply did not light and the
- * operator was left to guess which of the open tools was eating the click
- * (owner field test — he thought Directions was broken). So the message names
- * the tool and says how to put it down. Pure.
- * @param {string|null} owner Current pointer-owner id.
- * @param {'a'|'b'} which Endpoint that was being armed.
- * @returns {string|null} Toast text, or null when nothing holds the pointer.
- */
-export function pointerBlockedMessage(owner, which) {
-  const id = typeof owner === 'string' ? owner.trim() : '';
-  if (!id || id === DIRECTIONS_POINTER_OWNER) return null;
-  const endpoint = which === 'b' ? 'B' : 'A';
-  const known = POINTER_TOOL_EXITS[id];
-  const name = known?.name || id;
-  const leave = known?.leave || `turn ${name} off`;
-  return `${name} is active — ${leave}, then set ${endpoint}`;
 }
 
 /**
@@ -272,8 +578,8 @@ export function directionsStepList({
   const items = steps.map((step, index) => ({
     id: `step-${index}`,
     ordinal: index + 1,
-    lead: formatRouteDistance(step.distanceM) || '—',
-    text: step.instruction,
+    lead: routeDistanceText(step.distanceM) || '—',
+    text: directionsInstruction(step),
     active: index === active,
     current: Number.isInteger(flightStep) && index === flightStep,
     params: { step: index },
@@ -285,13 +591,15 @@ export function directionsStepList({
       id: 'step-truncated',
       ordinal: items.length + 1,
       lead: '',
-      text: `Only the first ${steps.length} turns of this route are shown`,
+      text: t('Only the first {count} turns of this route are shown', {
+        count: steps.length,
+      }),
       active: false,
       current: false,
       disabled: true,
     });
   }
-  return { ariaLabel: 'Turn-by-turn directions', items };
+  return { ariaLabel: t('Turn-by-turn directions'), items };
 }
 
 /**
@@ -320,34 +628,15 @@ export function stepIndexAtDistance(steps, traveledM) {
  * @returns {object}
  */
 export function directionsStats(state) {
-  const {
-    mode,
-    a,
-    b,
-    status,
-    error,
-    route,
-    lastUpdate,
-    armed,
-    pointerBlocked,
-  } = state;
-  const source = 'OSM routing';
-  if (pointerBlocked) {
-    return {
-      count: route?.steps.length || 0,
-      lastUpdate,
-      error: 'Another map tool is using clicks — close it, then SET A again',
-      status: 'empty',
-      source,
-    };
-  }
+  const { mode, a, b, status, error, route, lastUpdate, armed } = state;
+  const source = 'OSM routing'; // English in layer state; the layer row translates it
   if (status === 'routing') {
     return {
       count: 0,
       lastUpdate,
       error: null,
       loading: true,
-      loadingLabel: 'Routing…',
+      loadingLabel: t('Routing…'),
       source,
     };
   }
@@ -355,7 +644,7 @@ export function directionsStats(state) {
     return {
       count: 0,
       lastUpdate,
-      error: error || 'No route found',
+      error: error || msg('No route found'),
       status: 'empty',
       source,
     };
@@ -364,10 +653,17 @@ export function directionsStats(state) {
   // set (not only while loading), so the route summary and the placement
   // guidance ride on it; `coverage` carries the same text for stats readers.
   if (route) {
-    const word = DIRECTIONS_MODES[mode]?.word || mode;
-    const summary =
-      `${formatRouteDistance(route.distanceM)} · ${formatRouteDuration(route.durationS)} · ${word}` +
-      (route.stepsTruncated ? ` · first ${route.steps.length} turns` : '');
+    const spec = DIRECTIONS_MODES[mode];
+    const word = spec ? t(spec.word) : mode;
+    const values = {
+      distance: routeDistanceText(route.distanceM),
+      duration: routeDurationText(route.durationS),
+      mode: word,
+      count: route.steps.length,
+    };
+    const summary = route.stepsTruncated
+      ? t('{distance} · {duration} · {mode} · first {count} turns', values)
+      : t('{distance} · {duration} · {mode}', values);
     return {
       count: route.steps.length,
       lastUpdate,
@@ -378,10 +674,13 @@ export function directionsStats(state) {
     };
   }
   let coverage;
-  if (armed) coverage = `Click the globe to place ${armed.toUpperCase()}`;
-  else if (a && !b) coverage = 'SET B, then click the globe';
-  else if (!a && b) coverage = 'SET A, then click the globe';
-  else coverage = 'SET A, then click the globe';
+  if (armed)
+    coverage = t('Click the globe to place {endpoint}', {
+      endpoint: armed.toUpperCase(),
+    });
+  else if (a && !b) coverage = t('SET B, then click the globe');
+  else if (!a && b) coverage = t('SET A, then click the globe');
+  else coverage = t('SET A, then click the globe');
   return {
     count: 0,
     lastUpdate,
@@ -403,20 +702,29 @@ export function directionsStepCopy(steps, index) {
   const step = steps[index];
   const details = [];
   const leg = [];
-  if (step.distanceM > 0) leg.push(formatRouteDistance(step.distanceM));
-  if (step.durationS > 0) leg.push(formatRouteDuration(step.durationS));
+  if (step.distanceM > 0) leg.push(routeDistanceText(step.distanceM));
+  if (step.durationS > 0) leg.push(routeDurationText(step.durationS));
+  const position = { step: index + 1, total: steps.length };
   details.push(
-    `Step ${index + 1} of ${steps.length}${leg.length ? ` · then ${leg.join(' · ')}` : ''}`,
+    leg.length
+      ? t('Step {step} of {total} · then {leg}', {
+          ...position,
+          leg: leg.join(' · '),
+        })
+      : t('Step {step} of {total}', position),
   );
   const next = steps[index + 1];
-  if (next) details.push(`Then: ${next.instruction}`);
-  return { title: step.instruction, details };
+  if (next)
+    details.push(
+      t('Then: {instruction}', { instruction: directionsInstruction(next) }),
+    );
+  return { title: directionsInstruction(step), details };
 }
 
 /**
  * Shared-host card for the selected maneuver.
  * @param {number} index
- * @param {Cesium.Cartesian3} position
+ * @param {{x: number, y: number, z: number}} position
  * @param {{title:string, details:string[]}} copy
  * @returns {object|null}
  */
@@ -437,6 +745,32 @@ export function createDirectionsStepOverlayEntry(index, position, copy) {
     interactive: false,
     anchorRadiusPx: 9,
     minAnchorGapPx: 11,
+    verticalOnly: true,
+    placement: 'above',
+    edgeFade: 'keyhole',
+    horizonCull: true,
+    terrainOcclusion: false,
+  };
+}
+
+/**
+ * The letter above one endpoint marker, as a world-overlay label. It is
+ * protected, like the step card, so it never yields to ambient labels.
+ * @param {'A'|'B'} letter
+ * @param {{x: number, y: number, z: number}|(() => {x: number, y: number, z: number}|null)} position
+ * @param {string} accent CSS colour of the marker.
+ */
+export function createDirectionsMarkerOverlayEntry(letter, position, accent) {
+  return {
+    id: `directions-marker-${letter.toLowerCase()}`,
+    position,
+    variant: 'label',
+    title: letter,
+    accent,
+    protected: true,
+    priority: Number.MAX_SAFE_INTEGER - 1,
+    interactive: false,
+    gapPx: 13,
     verticalOnly: true,
     placement: 'above',
     edgeFade: 'keyhole',
@@ -499,13 +833,16 @@ export function normalizeRoutePayload(payload, mode) {
   };
 }
 
+/** Directions layers made, so each one's draw sets have ids of their own. */
+let _instances = 0;
+
 /**
  * Construct one Directions layer over the application scene owners.
  *
  * Each catalog builds its own, so two applications on a page never share the
  * route, the markers, the pointer claim or the flight this layer owns. The
  * shared services are injected, which is what keeps this module's own imports
- * down to Cesium and the pure step formatter.
+ * down to the renderer's draw port, geodesy and the pure step formatter.
  * @param {{services: object, source: {getRoute: Function}}} options
  * @returns {object} The layer module the data manager registers.
  */
@@ -530,6 +867,10 @@ export function createDirectionsLayer({ services, source }) {
   let _mode = DEFAULT_DIRECTIONS_MODE;
   /** @type {null|'a'|'b'} which endpoint the next globe click places */
   let _armed = null;
+  /** Surface heights of clicked endpoints, by point. */
+  const _surfaceHeights = new WeakMap();
+  /** Endpoints whose floor cell resolve has settled, height or not. */
+  const _floorSettled = new WeakSet();
   /** @type {{lat:number, lon:number}|null} */
   let _a = null;
   /** @type {{lat:number, lon:number}|null} */
@@ -542,17 +883,25 @@ export function createDirectionsLayer({ services, source }) {
   let _routeSeq = 0;
   let _routeAbort = null;
   let _lastUpdate = null;
-  let _markerA = null;
-  let _markerB = null;
-  let _routeEntity = null;
-  let _stepPoints = null;
+  /**
+   * The layer's draw sets on its viewer's renderer (`drawOf`), made at
+   * `init`: the A and B markers, the maneuver dots and the route.
+   * @type {{markers: object, steps: object, route: object}|null}
+   */
+  let _sets = null;
+  /** Whether a route is drawn. */
+  let _routeDrawn = false;
+  /**
+   * Each maneuver dot drawn, by step index: where it stands (once its ground
+   * cell has answered) and whether it shows.
+   * @type {Map<number, {pos: {x: number, y: number, z: number}, show: boolean}>}
+   */
+  const _stepDots = new Map();
   let _selectedStep = null;
-  let _clickHandler = null;
+  let _clickSubscription = null;
   let _renderHeld = false;
   let _rowControlsListener = null;
   let _dataManager = null;
-  /** Set when arming failed because another tool holds the pointer. */
-  let _pointerBlocked = false;
   /**
    * What `claimPointer` handed back for the claim this layer currently holds, or
    * null. Held rather than re-derived so the release names THIS claim: a claim
@@ -579,6 +928,15 @@ export function createDirectionsLayer({ services, source }) {
   // Internals
   // ---------------------------------------------------------------------------
 
+  /** Let the layer's draw sets go. */
+  function detachSets() {
+    if (!_sets) return;
+    for (const set of Object.values(_sets)) set.dispose();
+    _sets = null;
+    _routeDrawn = false;
+    _stepDots.clear();
+  }
+
   function state() {
     return {
       enabled: _enabled,
@@ -592,7 +950,6 @@ export function createDirectionsLayer({ services, source }) {
       lastUpdate: _lastUpdate,
       selectedStep: _selectedStep,
       flightStep: _flightStep,
-      pointerBlocked: _pointerBlocked,
     };
   }
 
@@ -606,7 +963,7 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function syncRenderHold() {
-    const shouldHold = _enabled && Boolean(_routeEntity);
+    const shouldHold = _enabled && _routeDrawn;
     if (shouldHold && !_renderHeld) {
       services.render.holdContinuousRender('directions');
       _renderHeld = true;
@@ -616,90 +973,111 @@ export function createDirectionsLayer({ services, source }) {
     }
   }
 
-  function pickGround(screenPosition) {
-    const scene = _viewer?.scene;
-    let cartesian = null;
-    if (
-      scene?.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
-      try {
-        cartesian = scene.pickPosition(screenPosition);
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (
-      !services.scenePick.isPickedWorldPosition(cartesian) &&
-      typeof _viewer?.camera?.pickEllipsoid === 'function'
-    ) {
-      try {
-        cartesian = _viewer.camera.pickEllipsoid(
-          screenPosition,
-          Cesium.Ellipsoid.WGS84,
-        );
-      } catch {
-        cartesian = null;
-      }
-    }
-    if (!services.scenePick.isPickedWorldPosition(cartesian)) return null;
-    const carto = Cesium.Cartographic.fromCartesian(cartesian);
+  /**
+   * Where a click lands on the ground, from the click's own ground pick (the
+   * rendered surface, else the ellipsoid; null over the sky).
+   * @param {{ground: () => ({x: number, y: number, z: number}|null)}} event
+   */
+  function pickGround(event) {
+    const ecef = event.ground?.();
+    if (!ecef) return null;
+    const carto = toLonLatH(ecef);
     if (!carto) return null;
+    const point = { lat: carto.lat, lon: carto.lon };
+    // A pick at the ellipsoid itself is the fallback when the drawn surface
+    // gave no position; the floor path places that letter instead.
+    if (Math.abs(carto.height) > 0.01) _surfaceHeights.set(point, carto.height);
+    return point;
+  }
+
+  /** An endpoint marker: a dot on the ground, drawn over everything. */
+  function markerItem(letter, point, color) {
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      id: `directions:marker:${letter}`,
+      pos: { lon: point.lon, lat: point.lat, height: 0 },
+      height: 'clampGround',
+      pixelSize: 14,
+      color,
+      outlineColor: MARKER_OUTLINE,
+      outlineWidth: 2,
+      disableDepthTest: Number.POSITIVE_INFINITY,
     };
   }
 
-  function markerEntity(letter, point, color) {
-    return _viewer.entities.add({
-      id: `directions:marker:${letter}`,
-      position: Cesium.Cartesian3.fromDegrees(point.lon, point.lat, 0),
-      point: {
-        pixelSize: 14,
-        color,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-      label: {
-        text: letter,
-        font: 'bold 13px "JetBrains Mono", "SF Mono", monospace',
-        fillColor: Cesium.Color.WHITE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        pixelOffset: new Cesium.Cartesian2(0, -20),
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      },
-    });
+  /**
+   * Where a marker's letter hangs: over the surface the user clicked, or for an
+   * endpoint placed without a click, over the shared ground floor once its cell
+   * is known. Until then the letter stays hidden, as the step dots do, rather
+   * than hanging at the ellipsoid far below its point; only a cell that settled
+   * with no height falls back to the ellipsoid. Resolved once.
+   */
+  function markerLabelPosition(point) {
+    let position = null;
+    return () => {
+      if (position) return position;
+      const height =
+        _surfaceHeights.get(point) ??
+        services.ground.cachedGroundFloor(point.lat, point.lon);
+      if (!Number.isFinite(height) && !_floorSettled.has(point)) return null;
+      position = fromDegrees(
+        point.lon,
+        point.lat,
+        Number.isFinite(height) ? height : 0,
+      );
+      return position;
+    };
   }
 
-  function removeEntity(entity) {
-    if (entity && _viewer && !_viewer.isDestroyed?.())
-      _viewer.entities.remove(entity);
+  /** Publish the letters for whichever endpoints are placed. */
+  function publishMarkerLabels() {
+    const entries = [];
+    for (const [letter, point, accent] of [
+      ['A', _a, MARKER_A_CSS],
+      ['B', _b, MARKER_B_CSS],
+    ])
+      if (point)
+        entries.push(
+          createDirectionsMarkerOverlayEntry(
+            letter,
+            markerLabelPosition(point),
+            accent,
+          ),
+        );
+    _overlayHost.setEntries(
+      DIRECTIONS_MARKER_OVERLAY_SOURCE_ID,
+      entries,
+      DIRECTIONS_MARKER_OVERLAY_SOURCE_OPTIONS,
+    );
   }
 
   function placeMarker(letter, point) {
-    if (!_viewer) return;
-    if (letter === 'a') {
-      removeEntity(_markerA);
-      _markerA = markerEntity('A', point, MARKER_A_COLOR);
-    } else {
-      removeEntity(_markerB);
-      _markerB = markerEntity('B', point, MARKER_B_COLOR);
-    }
+    if (!_viewer || !_sets) return;
+    _sets.markers.upsert([
+      letter === 'a'
+        ? markerItem('A', point, MARKER_A_COLOR)
+        : markerItem('B', point, MARKER_B_COLOR),
+    ]);
+    publishMarkerLabels();
+    if (_surfaceHeights.has(point)) return;
+    // The letter appears when its floor cell lands, even under a still camera.
+    services.ground
+      .resolveGroundFloorCells([{ lat: point.lat, lon: point.lon }])
+      .catch(() => {})
+      .then(() => {
+        _floorSettled.add(point);
+        if (_viewer && (point === _a || point === _b))
+          services.render.governorRequestRender('directions-place');
+      });
   }
 
   function clearRouteGraphics() {
     services.credits?.hideOsmCredit?.(_viewer, 'directions');
     _clearStepSelection();
     stopStepAnchoring();
-    removeEntity(_routeEntity);
-    _routeEntity = null;
-    _stepPoints?.removeAll();
+    _sets?.route.clear();
+    _routeDrawn = false;
+    _stepDots.clear();
+    _sets?.steps.clear();
     syncRenderHold();
   }
 
@@ -718,31 +1096,28 @@ export function createDirectionsLayer({ services, source }) {
    */
   function anchorStepPoints() {
     _anchorTimer = null;
-    if (!_stepPoints || !_route || !_enabled) return;
+    if (!_sets || !_route || !_enabled) return;
     const steps = _route.steps;
     const pending = [];
     let unresolved = 0;
     for (const index of stepMarkerIndices(steps)) {
       const step = steps[index];
-      const point = findStepPoint(index);
-      if (!point) continue;
+      const dot = _stepDots.get(index);
+      if (!dot) continue;
       const height = stepMarkerHeightM(
         services.ground.cachedGroundFloor(step.lat, step.lon),
         services.ground.GROUND_FLOOR_LIFT_M,
       );
       if (height === null) {
         unresolved += 1;
-        point.show = false;
+        dot.show = false;
         pending.push({ lat: step.lat, lon: step.lon });
         continue;
       }
-      point.position = Cesium.Cartesian3.fromDegrees(
-        step.lon,
-        step.lat,
-        height,
-      );
-      point.show = true;
+      dot.pos = fromDegrees(step.lon, step.lat, height);
+      dot.show = true;
     }
+    drawStepDots();
     // A card already open on a step that has just been anchored moves with it.
     if (_selectedStep !== null) refreshStepCard(_selectedStep);
     services.render.governorRequestRender('directions-anchor');
@@ -761,52 +1136,69 @@ export function createDirectionsLayer({ services, source }) {
     _anchorTimer = setTimeout(anchorStepPoints, delay);
   }
 
+  /** One maneuver dot as the steps set draws it. */
+  function stepDotItem(index, dot) {
+    return {
+      id: `directions:step:${index}`,
+      pos: dot.pos,
+      color: STEP_COLOR,
+      pixelSize:
+        index === _selectedStep ? STEP_SELECTED_PIXEL_SIZE : STEP_PIXEL_SIZE,
+      outlineColor: STEP_OUTLINE,
+      outlineWidth: 2,
+      show: dot.show,
+      // The shared ground floor is a coarse cell, and on the photoreal stack
+      // the rendered mesh can stand above it. Keeping the dot always visible
+      // is the same choice every other anchored sprite in the app makes.
+      disableDepthTest: Number.POSITIVE_INFINITY,
+    };
+  }
+
+  /** Draw the maneuver dots as they now are (moved and restyled in place). */
+  function drawStepDots(indices = _stepDots.keys()) {
+    if (!_sets) return;
+    const items = [];
+    for (const index of indices) {
+      const dot = _stepDots.get(index);
+      if (dot) items.push(stepDotItem(index, dot));
+    }
+    if (items.length) _sets.steps.upsert(items);
+  }
+
   function drawRoute(route) {
     clearRouteGraphics();
-    if (!_viewer) return;
-    services.annotations.ensureFlowFabricRegistered();
-    const positions = Cesium.Cartesian3.fromDegreesArray(route.geometry.flat());
-    _routeEntity = _viewer.entities.add({
-      id: 'directions:route',
-      polyline: {
-        positions,
-        width: 9,
-        material: new services.annotations.FlowMaterialProperty(
-          DIRECTIONS_ROUTE_COLOR,
-        ),
-        clampToGround: true,
-        // BOTH: drape on 3D tiles when they are up and on terrain when they are
+    if (!_viewer || !_sets) return;
+    _sets.route.set([
+      {
+        id: 'directions:route',
+        positions: route.geometry.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
+        widthPx: ROUTE_WIDTH_PX,
+        mode: 'draped',
+        // Draped on 3D tiles when they are up and on terrain when they are
         // not, so the keyless globe shows the route too.
-        classificationType: Cesium.ClassificationType.BOTH,
+        clampTo: 'both',
+        style: ROUTE_STYLE,
       },
-    });
+    ]);
+    _routeDrawn = true;
     // One dot per decision; A and B already mark departure and arrival. The dots
     // start hidden and appear as anchorStepPoints resolves each ground cell.
     const cells = [];
+    const dots = [];
     for (const index of stepMarkerIndices(route.steps)) {
       const step = route.steps[index];
       cells.push({ lat: step.lat, lon: step.lon });
-      _stepPoints.add({
-        id: `directions:step:${index}`,
-        position: Cesium.Cartesian3.fromDegrees(step.lon, step.lat, 0),
-        color: STEP_COLOR,
-        pixelSize: STEP_PIXEL_SIZE,
-        outlineColor: STEP_OUTLINE,
-        outlineWidth: 2,
-        show: false,
-        // The shared ground floor is a coarse cell, and on the photoreal stack
-        // the rendered mesh can stand above it. Keeping the dot always visible
-        // is the same choice every other anchored sprite in the app makes.
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      });
+      const dot = { pos: fromDegrees(step.lon, step.lat, 0), show: false };
+      _stepDots.set(index, dot);
+      dots.push(stepDotItem(index, dot));
     }
+    _sets.steps.set(dots);
     services.credits?.showOsmCredit?.(_viewer, 'directions');
     services.ground.warmGroundFloor(cells);
     _anchorAttempts = 0;
     _anchorStartedAt = Date.now();
     anchorStepPoints();
     syncRenderHold();
-    services.sprites.restoreSpriteOrder(_viewer);
     services.render.governorRequestRender('directions-route');
   }
 
@@ -839,11 +1231,10 @@ export function createDirectionsLayer({ services, source }) {
         clearRouteGraphics();
         _status = 'error';
         _error =
-          payload?.error === 'no route found'
-            ? 'No route found between A and B'
-            : payload?.error
-              ? `Routing failed: ${payload.error}`
-              : 'No route found between A and B';
+          // i18n-ignore: English data, shown through ROUTING_ERROR_PATTERNS
+          payload?.error && payload.error !== 'no route found'
+            ? `Routing failed: ${payload.error}`
+            : msg('No route found between A and B');
         return;
       }
       _route = route;
@@ -860,10 +1251,10 @@ export function createDirectionsLayer({ services, source }) {
       // happened instead.
       _error =
         error?.name === 'AbortError'
-          ? 'Routing timed out'
+          ? msg('Routing timed out')
           : error?.name === 'TypeError'
-            ? 'Routing unavailable — no response from the routing service'
-            : error?.message || 'Routing unavailable';
+            ? msg('Routing unavailable — no response from the routing service')
+            : presentRoutingFailure(error);
     } finally {
       clearTimeout(timer);
       if (_routeAbort === controller) _routeAbort = null;
@@ -884,12 +1275,15 @@ export function createDirectionsLayer({ services, source }) {
    * Give the pointer back, but only once the click that consumed it has finished
    * being dispatched.
    *
-   * Every layer binds its own handler to the same canvas, and they all run
-   * inside ONE browser event. Releasing the claim the instant this layer places
-   * an endpoint hands the rest of that same click to every ambient handler
-   * registered after this one — placing A on top of a bikeshare station also
-   * deselected the station. A timer, not a microtask: a microtask checkpoint
-   * runs between two DOM listeners, which is exactly the gap this closes.
+   * The input dispatcher decides who hears a click before any subscriber
+   * runs, so its own click subscribers cannot hear this click once it is let
+   * go. DOM `click` listeners on the canvas (the evidence cards) are another
+   * matter: the renderer's click comes from the pointer's `up`, and the
+   * browser's `click` follows inside the SAME input event, where they ask
+   * `isPointerFree()`. Releasing the claim the instant this layer places an
+   * endpoint would hand that same click to them. A timer, not a microtask: a
+   * microtask checkpoint runs between two DOM listeners, which is exactly the
+   * gap this closes.
    */
   function releaseClaimAfterDispatch() {
     if (_pointerClaim === null || _releaseTimer) return;
@@ -906,7 +1300,6 @@ export function createDirectionsLayer({ services, source }) {
    */
   function disarm({ afterDispatch = false } = {}) {
     _armed = null;
-    _pointerBlocked = false;
     if (afterDispatch) releaseClaimAfterDispatch();
     else releaseClaim();
   }
@@ -915,8 +1308,8 @@ export function createDirectionsLayer({ services, source }) {
    * Place one endpoint at a picked ground point and reroute when both are set.
    *
    * The globe click handler is the only caller in the running app; it is
-   * exported because a ScreenSpaceEventHandler needs a real canvas, and the
-   * ownership timing this function decides is exactly what has to be tested.
+   * exported so the ownership timing this function decides can be tested on
+   * its own.
    * @param {'a'|'b'} which Which endpoint to place.
    * @param {{lat: number, lon: number}} point Ground point in degrees.
    * @returns {boolean} Whether the endpoint was placed.
@@ -941,8 +1334,9 @@ export function createDirectionsLayer({ services, source }) {
    * Arm (or cancel) a globe click for one endpoint.
    *
    * Placement is a TOOL: it takes the pointer so no ambient layer also selects
-   * whatever happened to be under the click. If another tool already holds it,
-   * this refuses — nothing is armed and the row says why.
+   * whatever happened to be under the click. The newest claim takes over: the
+   * tool holding it is told and turns itself off, and a newer tool taking it
+   * disarms this layer.
    * @param {null|'a'|'b'} which
    * @returns {boolean} Whether the layer is armed after this call.
    */
@@ -951,23 +1345,19 @@ export function createDirectionsLayer({ services, source }) {
       disarm();
       return false;
     }
-    // A claim does not stack, not even under the same name — two live instances
-    // of one tool are two owners. So re-arming for the other endpoint reuses the
-    // lease already held instead of asking for a second one.
+    // Two live instances of one tool are two owners, so a second claim under
+    // the same name would end this layer's own. Re-arming for the other
+    // endpoint reuses the lease already held instead.
     if (!services.input.isLeaseCurrent(_pointerClaim)) {
-      const lease = services.input.claimPointer(DIRECTIONS_POINTER_OWNER);
-      if (!lease) {
-        _armed = null;
-        _pointerBlocked = true;
-        // The row already says it, but the row is not where the operator is
-        // looking after pressing a chip — say it where the app says everything.
-        const message = pointerBlockedMessage(
-          services.input.pointerOwner(),
-          which,
-        );
-        if (message) _shellSeams?.showToast?.(message);
-        return false;
-      }
+      // The newest claim takes over: a tool holding the pointer is told and
+      // turns itself off, and a newer one disarms this layer as Escape would.
+      const lease = services.input.claimPointer(DIRECTIONS_POINTER_OWNER, {
+        onLost: () => {
+          if (_pointerClaim !== lease) return;
+          disarm();
+          notifyRow();
+        },
+      });
       _pointerClaim = lease;
     }
     // A pending release from the previous placement would otherwise hand the
@@ -976,7 +1366,6 @@ export function createDirectionsLayer({ services, source }) {
       clearTimeout(_releaseTimer);
       _releaseTimer = null;
     }
-    _pointerBlocked = false;
     _armed = which;
     _clearStepSelection();
     return true;
@@ -993,10 +1382,8 @@ export function createDirectionsLayer({ services, source }) {
     _route = null;
     _status = 'idle';
     _error = null;
-    removeEntity(_markerA);
-    removeEntity(_markerB);
-    _markerA = null;
-    _markerB = null;
+    _sets?.markers.clear();
+    _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
     clearRouteGraphics();
     services.render.governorRequestRender('directions-clear');
   }
@@ -1058,7 +1445,7 @@ export function createDirectionsLayer({ services, source }) {
       [
         {
           type: 'route',
-          label: 'Directions',
+          label: t('Directions'),
           path: _route.geometry.map(([lon, lat]) => ({ lon, lat, height: 0 })),
         },
       ],
@@ -1087,22 +1474,10 @@ export function createDirectionsLayer({ services, source }) {
   // --- Step selection ---
 
   function _clearStepSelection() {
-    if (_selectedStep !== null && _stepPoints) {
-      const point = findStepPoint(_selectedStep);
-      if (point) point.pixelSize = STEP_PIXEL_SIZE;
-    }
+    const was = _selectedStep;
     _selectedStep = null;
+    if (was !== null) drawStepDots([was]);
     _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
-  }
-
-  function findStepPoint(index) {
-    if (!_stepPoints) return null;
-    const id = `directions:step:${index}`;
-    for (let i = 0; i < _stepPoints.length; i += 1) {
-      const point = _stepPoints.get(i);
-      if (point.id === id) return point;
-    }
-    return null;
   }
 
   /**
@@ -1114,13 +1489,13 @@ export function createDirectionsLayer({ services, source }) {
    * the same shared floor, and a step whose cell is still cold has no anchor at
    * all rather than one at sea level.
    * @param {number} index Step index.
-   * @returns {Cesium.Cartesian3|null}
+   * @returns {{x: number, y: number, z: number}|null}
    */
   function stepAnchorPosition(index) {
     const step = _route?.steps?.[index];
     if (!step) return null;
-    const point = findStepPoint(index);
-    if (point?.show) return Cesium.Cartesian3.clone(point.position);
+    const dot = _stepDots.get(index);
+    if (dot?.show) return { ...dot.pos };
     const height = stepMarkerHeightM(
       services.ground.cachedGroundFloor(step.lat, step.lon),
       services.ground.GROUND_FLOOR_LIFT_M,
@@ -1129,7 +1504,7 @@ export function createDirectionsLayer({ services, source }) {
       services.ground.warmGroundFloor([{ lat: step.lat, lon: step.lon }]);
       return null;
     }
-    return Cesium.Cartesian3.fromDegrees(step.lon, step.lat, height);
+    return fromDegrees(step.lon, step.lat, height);
   }
 
   function refreshStepCard(index) {
@@ -1166,20 +1541,17 @@ export function createDirectionsLayer({ services, source }) {
       return false;
     }
     _selectedStep = index;
-    const point = findStepPoint(index);
-    if (point) point.pixelSize = STEP_SELECTED_PIXEL_SIZE;
+    drawStepDots([index]);
     services.render.governorRequestRender('directions-select');
     return true;
   }
 
-  function stepIndexFromPick(picked) {
-    const candidates = [picked?.primitive?.id, picked?.id];
-    for (const candidate of candidates) {
-      if (typeof candidate !== 'string') continue;
-      const match = /^directions:step:(\d+)$/.exec(candidate);
-      if (match) return Number(match[1]);
-    }
-    return null;
+  /** The step of a maneuver dot this layer draws under a click, or null. */
+  function stepIndexFromHit(hit) {
+    if (!hit || !_sets || hit.set !== _sets.steps.id) return null;
+    const match = /^directions:step:(\d+)$/.exec(hit.id);
+    const index = match ? Number(match[1]) : null;
+    return index !== null && _stepDots.has(index) ? index : null;
   }
 
   function _onKeyDown(event) {
@@ -1193,44 +1565,52 @@ export function createDirectionsLayer({ services, source }) {
   }
 
   function _installClickHandler(viewer) {
-    if (_clickHandler) return;
-    _clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
-    _clickHandler.setInputAction((click) => {
-      if (!_enabled) return;
-      // Placement acts only while this layer actually HOLDS the pointer, and the
-      // maneuver-dot selection below is an ambient handler like any other: it
-      // yields the moment a tool (this one included) owns the click.
-      // The lease, not the owner name: a superseded instance of this layer must
-      // not act on a click its replacement owns.
-      if (_armed && services.input.isLeaseCurrent(_pointerClaim)) {
-        const point = pickGround(click.position);
+    if (_clickSubscription) return;
+    const input = inputFor(viewer);
+    // Placement acts only while this layer actually HOLDS the pointer. The
+    // lease, not the owner name: a superseded instance of this layer must not
+    // act on a click its replacement owns.
+    const offPlace = input.onPointer(
+      'click',
+      (event) => {
+        if (!_enabled || !_armed) return;
+        const point = pickGround(event);
         if (!point) return;
         placeDirectionsEndpoint(_armed, point);
-        return;
-      }
-      if (!services.input.isPointerFree()) return;
-      let picked = null;
+      },
+      { lease: () => _pointerClaim },
+    );
+    // The maneuver-dot selection is an ambient handler like any other: it
+    // yields the moment a tool (this one included) owns the click.
+    const offSelect = input.onClick((event) => {
+      if (!_enabled) return;
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (services.picking?.isUnderOtherCard?.(event)) return;
+      let hit = null;
       try {
-        picked = viewer.scene.pick(click.position);
+        hit = event.drawHit;
       } catch {
-        picked = null;
+        hit = null;
       }
-      const index = stepIndexFromPick(picked);
+      const index = stepIndexFromHit(hit);
       if (index !== null) {
         _selectStep(index);
         return;
       }
       if (_selectedStep !== null) _clearStepSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
+    _clickSubscription = () => {
+      offPlace();
+      offSelect();
+    };
     if (typeof document !== 'undefined')
       document.addEventListener('keydown', _onKeyDown);
   }
 
   function _removeClickHandler() {
-    if (_clickHandler) {
-      _clickHandler.destroy();
-      _clickHandler = null;
-    }
+    _clickSubscription?.();
+    _clickSubscription = null;
     // Teardown can outlive the document (page unload, and every headless test).
     if (typeof document !== 'undefined')
       document.removeEventListener('keydown', _onKeyDown);
@@ -1248,17 +1628,29 @@ export function createDirectionsLayer({ services, source }) {
     updateInterval: 0,
 
     /**
-     * Create the maneuver-dot collection. Called once at bootstrap.
-     * @param {Cesium.Viewer} viewer
+     * Make the layer's draw sets on the viewer's renderer. Called once at
+     * bootstrap.
+     * @param {object} viewer
      */
     init(viewer) {
       _viewer = viewer;
-      _stepPoints = new Cesium.PointPrimitiveCollection({
-        blendOption: Cesium.BlendOption.TRANSLUCENT,
-      });
-      viewer.scene.primitives.add(_stepPoints);
-      services.sprites.registerSpriteCollection('directions', _stepPoints);
-      _stepPoints.show = false;
+      detachSets();
+      const draw = drawOf(viewer);
+      const prefix = `directions:${++_instances}`;
+      _sets = {
+        markers: draw.points({ id: `${prefix}:markers` }),
+        steps: draw.points({
+          id: `${prefix}:steps`,
+          blend: 'translucent',
+          show: false,
+          drawOrder: services.sprites.spriteDrawOrder?.('directions') ?? 0,
+        }),
+        route: draw.lines({ id: `${prefix}:route` }),
+      };
+      // Drawn from the start, empty, so the dots take their place in the
+      // scene now, as their collection did; their place among the other
+      // sprite layers is their draw order.
+      _sets.steps.set([]);
       _enabled = false;
       _mode = DEFAULT_DIRECTIONS_MODE;
       disarm();
@@ -1269,19 +1661,19 @@ export function createDirectionsLayer({ services, source }) {
       _error = null;
       _flightStep = null;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
-      services.sprites.restoreSpriteOrder(viewer);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       console.log('[Data:Directions] Initialized');
     },
 
     /**
      * Show the row chips and listen for placement clicks.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     enable(viewer) {
       _enabled = true;
-      _pointerBlocked = false;
-      _stepPoints.show = true;
+      if (_sets) _sets.steps.show = true;
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, true);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, true);
       _installClickHandler(viewer);
       services.picking.registerPickOwner(
         'directions',
@@ -1289,20 +1681,20 @@ export function createDirectionsLayer({ services, source }) {
           typeof pickedId === 'string' && pickedId.startsWith('directions:'),
       );
       syncRenderHold();
-      services.sprites.restoreSpriteOrder(viewer);
     },
 
     /**
      * Remove the route, markers and listeners.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     disable(viewer) {
       _enabled = false;
       clearAll();
       _overlayHost.setVisible(DIRECTIONS_STEP_OVERLAY_SOURCE_ID, false);
+      _overlayHost.setVisible(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID, false);
       _removeClickHandler();
       services.picking.unregisterPickOwner('directions');
-      if (_stepPoints) _stepPoints.show = false;
+      if (_sets) _sets.steps.show = false;
       syncRenderHold();
       void viewer;
     },
@@ -1376,10 +1768,7 @@ export function createDirectionsLayer({ services, source }) {
      * the same immediate-navigation facade voice destinations use — so the route
      * dolly is one more caller of the single camera owner rather than a second
      * one. `floorFn`/`warmFn` are the shared ground floor the dolly flies over.
-     * `showToast` is the app's own toast, so a refusal is said where the rest of
-     * the UI says things.
-     * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function,
-     *   showToast?: Function}|null} services
+     * @param {{runNavigation?: Function, floorFn?: Function, warmFn?: Function}|null} services
      */
     attachShellServices(services) {
       _shellSeams = services || null;
@@ -1387,7 +1776,7 @@ export function createDirectionsLayer({ services, source }) {
 
     /**
      * Tear down entirely.
-     * @param {Cesium.Viewer} viewer
+     * @param {object} viewer
      */
     destroy(viewer) {
       if (_enabled) this.disable(viewer);
@@ -1400,20 +1789,17 @@ export function createDirectionsLayer({ services, source }) {
       _shellSeams = null;
       _dataManager = null;
       _rowControlsListener = null;
-      if (_stepPoints) {
-        services.sprites.unregisterSpriteCollection('directions', _stepPoints);
-        viewer.scene.primitives.remove(_stepPoints);
-        _stepPoints = null;
-      }
+      detachSets();
+      void viewer;
       _overlayHost.clearSource(DIRECTIONS_STEP_OVERLAY_SOURCE_ID);
+      _overlayHost.clearSource(DIRECTIONS_MARKER_OVERLAY_SOURCE_ID);
       _viewer = null;
     },
 
     /**
      * Place one endpoint at a picked ground point. The globe click handler is
-     * the only caller in the running app; it is on the instance because a
-     * ScreenSpaceEventHandler needs a real canvas, and the ownership timing
-     * this decides is exactly what has to be tested.
+     * the only caller in the running app; it is on the instance so the
+     * ownership timing this decides can be tested on its own.
      */
     placeEndpoint: placeDirectionsEndpoint,
 

@@ -1,0 +1,295 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+  bindRenderer,
+  cameraOf,
+  canvasOf,
+  drawOf,
+  findCamera,
+  findCredits,
+  findDraw,
+  findEffects,
+  findInput,
+  nativeClickOf,
+  provideNativeClick,
+  provideUnboundCamera,
+  provideUnboundInput,
+  releaseUnboundInput,
+  provideUnboundCredits,
+  provideUnboundDraw,
+  provideUnboundEffects,
+  rendererOf,
+} from './rendererOf.js';
+
+test('a scene finds its renderer until it is unbound', () => {
+  const scene = {};
+  const renderer = { id: 'r' };
+  assert.equal(rendererOf(scene), null);
+  assert.equal(rendererOf(null), null);
+  const unbind = bindRenderer(scene, renderer);
+  assert.equal(rendererOf(scene), renderer);
+  assert.throws(() => bindRenderer(scene, { id: 'other' }), /already has/);
+  unbind();
+  assert.equal(rendererOf(scene), null);
+});
+
+test("canvasOf answers with the renderer's canvas, else the host's own", () => {
+  const own = { id: 'own' };
+  const drawn = { id: 'drawn' };
+  const scene = { canvas: own };
+  assert.equal(canvasOf(scene), own);
+  assert.equal(canvasOf({}), null);
+  assert.equal(canvasOf(null), null);
+  const unbind = bindRenderer(scene, { canvas: drawn });
+  assert.equal(canvasOf(scene), drawn);
+  unbind();
+  assert.equal(canvasOf(scene), own);
+});
+
+test('a stale unbind leaves a later binding alone', () => {
+  const scene = {};
+  const unbindFirst = bindRenderer(scene, { id: 'first' });
+  unbindFirst();
+  const second = { id: 'second' };
+  bindRenderer(scene, second);
+  unbindFirst();
+  assert.equal(rendererOf(scene), second);
+});
+
+test('cameraOf names the missing renderer instead of returning nothing', () => {
+  const scene = {};
+  assert.throws(() => cameraOf(scene), /no renderer camera/);
+  const camera = { pose() {} };
+  const unbind = bindRenderer(scene, { camera });
+  assert.equal(cameraOf(scene), camera);
+  unbind();
+});
+
+test('with no renderer bound, cameraOf builds one camera per scene until a renderer is bound', (t) => {
+  t.after(() => provideUnboundCamera(null));
+  const built = [];
+  provideUnboundCamera((host) => {
+    if (!host.camera) return null;
+    const entry = { port: { id: built.length }, disposed: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { camera: {} };
+  assert.equal(cameraOf(viewer), built[0].port);
+  assert.equal(cameraOf(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(built.length, 1);
+  assert.throws(
+    () => cameraOf({}),
+    /no renderer camera/,
+    'nothing to build over',
+  );
+  assert.equal(findCamera({}), null);
+  assert.equal(findCamera(null), null);
+
+  const camera = { pose() {} };
+  const unbind = bindRenderer(viewer, { camera });
+  assert.equal(
+    built[0].disposed,
+    1,
+    'the renderer supersedes the built camera',
+  );
+  assert.equal(cameraOf(viewer), camera);
+  unbind();
+  assert.equal(cameraOf(viewer), built[1].port, 'unbound again: a fresh one');
+});
+
+test('a destroyed scene gets no built camera, and lets go of the one it had', (t) => {
+  t.after(() => provideUnboundCamera(null));
+  let disposed = 0;
+  provideUnboundCamera(() => ({ port: {}, dispose: () => (disposed += 1) }));
+  let destroyed = false;
+  const viewer = { isDestroyed: () => destroyed };
+  cameraOf(viewer);
+  destroyed = true;
+  assert.throws(() => cameraOf(viewer), /destroyed/);
+  assert.equal(disposed, 1);
+  assert.equal(findCamera(viewer), null, 'findCamera answers null instead');
+  assert.throws(() => cameraOf(viewer), /destroyed/);
+  assert.equal(disposed, 1, 'once');
+});
+
+test('with no renderer bound, findCredits builds one port per scene and keeps it working once one is', (t) => {
+  t.after(() => provideUnboundCredits(null));
+  const built = [];
+  provideUnboundCredits((host) => {
+    if (!host.creditDisplay) return null;
+    const entry = { port: { id: built.length }, disposed: 0, released: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    entry.release = () => (entry.released += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { creditDisplay: {} };
+  assert.equal(findCredits(viewer), built[0].port);
+  assert.equal(findCredits(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(findCredits({}), null, 'nothing to build over');
+  assert.equal(findCredits(null), null);
+
+  const credits = { list: () => [] };
+  const unbind = bindRenderer(viewer, { credits });
+  assert.equal(findCredits(viewer), credits);
+  assert.equal(
+    built[0].disposed,
+    0,
+    'the credits added through the built port stay until their Off',
+  );
+  assert.equal(built[0].released, 1, 'but it stops following the frames');
+  unbind();
+  assert.equal(
+    findCredits(viewer),
+    built[1].port,
+    'unbound again: a fresh one',
+  );
+
+  let destroyed = false;
+  const gone = { creditDisplay: {}, isDestroyed: () => destroyed };
+  const port = findCredits(gone);
+  destroyed = true;
+  assert.equal(findCredits(gone), null);
+  assert.equal(built.find((entry) => entry.port === port).disposed, 1);
+});
+
+test('with no renderer bound, findEffects builds one effects port per scene until a renderer is bound', (t) => {
+  t.after(() => provideUnboundEffects(null));
+  const built = [];
+  provideUnboundEffects((host) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, disposed: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  assert.equal(findEffects(viewer), built[0].port);
+  assert.equal(findEffects(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(findEffects({}), null, 'nothing to build over');
+  assert.equal(findEffects(null), null);
+  const effects = { styles() {} };
+  const unbind = bindRenderer(viewer, { effects });
+  assert.equal(built[0].disposed, 1, 'the renderer supersedes the built port');
+  assert.equal(findEffects(viewer), effects);
+  unbind();
+  assert.equal(
+    findEffects(viewer),
+    built[1].port,
+    'unbound again: a fresh one',
+  );
+  let destroyed = false;
+  const gone = { scene: {}, isDestroyed: () => destroyed };
+  findEffects(gone);
+  destroyed = true;
+  assert.equal(findEffects(gone), null);
+  assert.equal(built[2].disposed, 1, 'let go with its scene');
+});
+
+test('with no renderer bound, findDraw builds one draw port per scene; a renderer releases it', (t) => {
+  t.after(() => provideUnboundDraw(null));
+  const built = [];
+  provideUnboundDraw((host) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, disposed: 0, released: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    entry.release = () => (entry.released += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  assert.equal(findDraw(viewer), built[0].port);
+  assert.equal(drawOf(viewer), built[0].port, 'kept, not rebuilt');
+  assert.equal(findDraw({}), null, 'nothing to build over');
+  assert.throws(() => drawOf({}), /no renderer to draw with/);
+  assert.equal(findDraw(null), null);
+
+  const draw = { icons() {} };
+  const unbind = bindRenderer(viewer, { draw });
+  assert.equal(drawOf(viewer), draw);
+  assert.equal(built[0].disposed, 0, 'its sets keep drawing until disposed');
+  assert.equal(built[0].released, 1);
+  unbind();
+
+  let destroyed = false;
+  const gone = { scene: {}, isDestroyed: () => destroyed };
+  const port = findDraw(gone);
+  destroyed = true;
+  assert.throws(() => drawOf(gone), /destroyed/);
+  assert.equal(built.find((entry) => entry.port === port).disposed, 1);
+});
+
+test("with no renderer bound, findInput builds one input port per scene, given the building call's options; a renderer replaces it", (t) => {
+  t.after(() => provideUnboundInput(null));
+  const built = [];
+  provideUnboundInput((host, options) => {
+    if (!host.scene) return null;
+    const entry = { port: { id: built.length }, options, disposed: 0 };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  const options = { now: () => 0 };
+  assert.equal(findInput(viewer, options), built[0].port);
+  assert.equal(built[0].options, options);
+  assert.equal(findInput(viewer, { other: true }), built[0].port, 'kept');
+  assert.equal(findInput({}), null);
+  releaseUnboundInput(viewer, { not: 'it' });
+  assert.equal(built[0].disposed, 0, 'another port is left alone');
+  releaseUnboundInput(viewer, built[0].port);
+  assert.equal(built[0].disposed, 1);
+  assert.equal(findInput(viewer), built[1].port, 'a new one after release');
+  const input = { on() {} };
+  const unbind = bindRenderer(viewer, { input });
+  assert.equal(built[1].disposed, 1, "the renderer's supersedes it");
+  assert.equal(findInput(viewer), input);
+  releaseUnboundInput(viewer, input);
+  assert.equal(findInput(viewer), input, "a renderer's own stays");
+  unbind();
+});
+
+test('a renderer bound later leaves a kept input port working for its holder until released', (t) => {
+  t.after(() => provideUnboundInput(null));
+  const built = [];
+  provideUnboundInput(() => {
+    const entry = { port: { id: built.length }, disposed: 0, keep: true };
+    entry.dispose = () => (entry.disposed += 1);
+    built.push(entry);
+    return entry;
+  });
+  const viewer = { scene: {} };
+  const held = findInput(viewer);
+  const input = { on() {} };
+  const unbind = bindRenderer(viewer, { input });
+  t.after(unbind);
+  assert.equal(built[0].disposed, 0, 'its holder still listens on it');
+  assert.equal(findInput(viewer), input, 'new callers get the renderer’s');
+  releaseUnboundInput(viewer, held);
+  assert.equal(built[0].disposed, 1, 'let go of by its holder');
+  releaseUnboundInput(viewer, held);
+  assert.equal(built[0].disposed, 1, 'once');
+});
+
+test("nativeClickOf answers from the adapter's factory, never for a destroyed scene", (t) => {
+  t.after(() => provideNativeClick(null));
+  assert.equal(
+    nativeClickOf({ scene: {} }, { x: 0, y: 0 }),
+    null,
+    'none provided',
+  );
+  const asked = [];
+  provideNativeClick((host, at) => {
+    asked.push([host, at]);
+    return host.scene ? { native: { pick: 'raw' }, foreign: () => null } : null;
+  });
+  const viewer = { scene: {} };
+  const at = { x: 1, y: 2 };
+  assert.equal(nativeClickOf(viewer, at).native.pick, 'raw');
+  assert.deepEqual(asked, [[viewer, at]]);
+  assert.equal(nativeClickOf({}, at), null);
+  assert.equal(nativeClickOf(null, at), null);
+  assert.equal(nativeClickOf({ scene: {}, isDestroyed: () => true }, at), null);
+});

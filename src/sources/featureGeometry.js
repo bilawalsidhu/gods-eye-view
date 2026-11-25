@@ -14,28 +14,48 @@ export function ringAreaM2(ring) {
   return Math.abs(area) / 2;
 }
 
-export function stitchLine(segments) {
-  const same = (a, b) => approximateDistanceM(a[1], a[0], b[1], b[0]) < 2;
+/**
+ * Join line pieces whose ends meet (closer than `toleranceM`, or at most it
+ * when `inclusive`) into as few chains as possible. Each chain grows greedily
+ * from the first unused piece.
+ */
+export function stitchLines(
+  segments,
+  { toleranceM = 2, inclusive = false, maxChains = Infinity } = {},
+) {
+  const same = (a, b) => {
+    const d = approximateDistanceM(a[1], a[0], b[1], b[0]);
+    return inclusive ? d <= toleranceM : d < toleranceM;
+  };
   const remaining = segments.map((s) => s.slice());
-  let line = remaining.shift();
-  let advanced = true;
-  while (advanced && remaining.length) {
-    advanced = false;
-    for (let i = 0; i < remaining.length; i++) {
-      const s = remaining[i];
-      if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
-      else if (same(line[line.length - 1], s[s.length - 1]))
-        line = line.concat(s.slice(0, -1).reverse());
-      else if (same(line[0], s[s.length - 1]))
-        line = s.slice(0, -1).concat(line);
-      else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
-      else continue;
-      remaining.splice(i, 1);
-      advanced = true;
-      break;
+  const chains = [];
+  while (remaining.length && chains.length < maxChains) {
+    let line = remaining.shift();
+    let advanced = true;
+    while (advanced && remaining.length) {
+      advanced = false;
+      for (let i = 0; i < remaining.length; i++) {
+        const s = remaining[i];
+        if (same(line[line.length - 1], s[0])) line = line.concat(s.slice(1));
+        else if (same(line[line.length - 1], s[s.length - 1]))
+          line = line.concat(s.slice(0, -1).reverse());
+        else if (same(line[0], s[s.length - 1]))
+          line = s.slice(0, -1).concat(line);
+        else if (same(line[0], s[0])) line = s.slice(1).reverse().concat(line);
+        else continue;
+        remaining.splice(i, 1);
+        advanced = true;
+        break;
+      }
     }
+    chains.push(line);
   }
-  return line;
+  return chains;
+}
+
+/** The chain grown from the first segment. */
+export function stitchLine(segments) {
+  return stitchLines(segments, { maxChains: 1 })[0];
 }
 
 export function bufferCorridor(line, halfWidthM) {
@@ -77,6 +97,7 @@ export function simplifyRing(ring, tolM) {
   return out.length >= 4 ? out : ring;
 }
 
+/** Douglas-Peucker on [lon, lat] points with a tolerance in degrees. */
 export function douglasPeucker(points, tol) {
   const n = points.length;
   if (n < 3) return points.slice();
@@ -113,7 +134,7 @@ export function douglasPeucker(points, tol) {
   return out;
 }
 
-export function perpDistance(p, a, b) {
+function perpDistance(p, a, b) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const len2 = dx * dx + dy * dy;
@@ -149,7 +170,7 @@ export function stitchRing(ways) {
   return endpointGapM(largest) <= allow ? largest : [];
 }
 
-export function largestByArea(components) {
+function largestByArea(components) {
   let best = components[0];
   let bestArea = approximateAreaM2(best);
   for (let i = 1; i < components.length; i += 1) {
@@ -162,7 +183,7 @@ export function largestByArea(components) {
   return best;
 }
 
-export function ringSpanM(chain) {
+function ringSpanM(chain) {
   let minLat = Infinity;
   let maxLat = -Infinity;
   let minLon = Infinity;
@@ -176,7 +197,7 @@ export function ringSpanM(chain) {
   return approximateDistanceM(minLat, minLon, maxLat, maxLon);
 }
 
-export function buildRingComponents(ways) {
+function buildRingComponents(ways) {
   const same = (a, b) =>
     Math.abs(a.lon - b.lon) < 1e-7 && Math.abs(a.lat - b.lat) < 1e-7;
   const remaining = ways.map((w) => w.slice());
@@ -207,7 +228,7 @@ export function buildRingComponents(ways) {
   return components;
 }
 
-export function endpointGapM(chain) {
+function endpointGapM(chain) {
   if (!chain || chain.length < 2) return Infinity;
   const a = chain[0];
   const b = chain[chain.length - 1];
@@ -233,6 +254,37 @@ export function ringCentroid(ring) {
   return { lat: sumLat / ring.length, lon: sumLon / ring.length };
 }
 
+/**
+ * The point on any of `lines` ([lon, lat] chains) nearest `lat, lon`, with
+ * its distance in metres, or null when no line has a segment.
+ */
+export function nearestPointOnLines(lines, lat, lon) {
+  const mLat = 111320;
+  const mLon = mLat * Math.cos((lat * Math.PI) / 180);
+  let best = null;
+  let bestD2 = Infinity;
+  for (const line of lines || []) {
+    for (let i = 0; i + 1 < line.length; i++) {
+      const ax = (line[i][0] - lon) * mLon;
+      const ay = (line[i][1] - lat) * mLat;
+      const dx = (line[i + 1][0] - line[i][0]) * mLon;
+      const dy = (line[i + 1][1] - line[i][1]) * mLat;
+      const len2 = dx * dx + dy * dy;
+      const t = len2
+        ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2))
+        : 0;
+      const x = ax + t * dx;
+      const y = ay + t * dy;
+      if (x * x + y * y < bestD2) {
+        bestD2 = x * x + y * y;
+        best = { lat: lat + y / mLat, lon: lon + x / mLon, distanceM: 0 };
+      }
+    }
+  }
+  if (best) best.distanceM = Math.sqrt(bestD2);
+  return best;
+}
+
 export function approximateAreaM2(coords) {
   // Shoelace in a local equirectangular projection (good enough for buildings).
   if (coords.length < 3) return 0;
@@ -250,10 +302,13 @@ export function approximateAreaM2(coords) {
   return Math.abs(area) / 2;
 }
 
+/** Local equirectangular distance in metres, the short way round 180°. */
 export function approximateDistanceM(latA, lonA, latB, lonB) {
   const latScale = 111_320;
   const lonScale = latScale * Math.cos(((latA + latB) / 2) * (Math.PI / 180));
-  return Math.hypot((latB - latA) * latScale, (lonB - lonA) * lonScale);
+  let dLon = lonB - lonA;
+  dLon -= 360 * Math.round(dLon / 360);
+  return Math.hypot((latB - latA) * latScale, dLon * lonScale);
 }
 
 export function pointInPolygon(lon, lat, coords) {

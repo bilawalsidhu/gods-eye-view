@@ -1,4 +1,5 @@
 import { cancelCameraArrival } from './cameraArrival.js';
+import { libraryEntryIdOf } from './libraryLayerIds.js';
 
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
@@ -72,13 +73,20 @@ function refreshFailureFromStats(stats, label) {
 /**
  * LayerLifecycle — Manages registration, toggling, and update loops
  * for real-time data overlays on the CesiumJS globe.
+ * Hosts may inject a visibilityTarget with hidden/visibilityState and event
+ * listener methods. Without one, periodic work retains its headless behavior.
  */
 export class LayerLifecycle {
   constructor(
     viewer,
-    { allowQaRegistration = false, getSourceAvailability } = {},
+    {
+      allowQaRegistration = false,
+      getSourceAvailability,
+      visibilityTarget = null,
+    } = {},
   ) {
     this._catalogSourceAvailability = getSourceAvailability;
+    this._visibilityTarget = visibilityTarget;
     this.viewer = viewer;
     this._activityListeners = new Set();
     this.layers = new Map(); // id → { module, enabled, initialized, intervalId, lifecycleState, lifecycleUncertain }
@@ -90,6 +98,7 @@ export class LayerLifecycle {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+    this._libraryLayerIds = new Set();
   }
 
   register(layerModule) {
@@ -116,6 +125,41 @@ export class LayerLifecycle {
     const destroyed = await this.destroyLayer(layerId);
     if (destroyed) this._qaLayerIds.delete(layerId);
     return destroyed;
+  }
+
+  /**
+   * Register a Data Library layer after the catalog is sealed. Only ids in
+   * the library namespace (`lib-<entry id>`) are accepted, so this seam can
+   * never stand in for a core layer, and library layers never join the core
+   * share-token registry: their selection travels in `lib=` instead.
+   * @param {object} layerModule
+   * @returns {string} The registered id.
+   */
+  registerLibraryLayer(layerModule) {
+    if (!this._registrationsFinalized)
+      throw new Error('Library layers register after the catalog is sealed');
+    if (!libraryEntryIdOf(layerModule?.id))
+      throw new Error('Library layer ids must use the lib- namespace');
+    this._registerLayer(layerModule);
+    this._libraryLayerIds.add(layerModule.id);
+    this._publishActivity({ type: 'registrations', layerId: layerModule.id });
+    return layerModule.id;
+  }
+
+  /** Destroy a layer registered through `registerLibraryLayer`. */
+  async unregisterLibraryLayer(layerId) {
+    if (!this._libraryLayerIds.has(layerId)) return false;
+    const destroyed = await this.destroyLayer(layerId);
+    if (destroyed) {
+      this._libraryLayerIds.delete(layerId);
+      this._publishActivity({ type: 'registrations', layerId });
+    }
+    return destroyed;
+  }
+
+  /** Whether a registered layer came from the Data Library. */
+  isLibraryLayer(layerId) {
+    return this._libraryLayerIds.has(layerId);
   }
 
   _registerLayer(layerModule) {
@@ -281,6 +325,12 @@ export class LayerLifecycle {
       return false;
     const refreshEpoch = ++entry.refreshEpoch;
     entry.refreshing = true;
+    // The update's own cancellation: the caller's, or a newer refresh that
+    // supersedes this one (`refreshLayer`'s `supersede`).
+    const controller = new AbortController();
+    const forward = () => controller.abort(signal.reason);
+    signal?.addEventListener?.('abort', forward, { once: true });
+    entry.refreshController = controller;
     this._publishActivity({ type: 'status' });
     this._notifyListeners({
       type: 'refresh-transition',
@@ -292,7 +342,9 @@ export class LayerLifecycle {
     let result;
     let failure = null;
     try {
-      result = await entry.module.update(this.viewer, { signal });
+      result = await entry.module.update(this.viewer, {
+        signal: controller.signal,
+      });
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
       this._publishActivity({ type: 'data-updated', layerId });
@@ -305,9 +357,13 @@ export class LayerLifecycle {
         );
     } catch (error) {
       failure = error;
+    } finally {
+      signal?.removeEventListener?.('abort', forward);
+      if (entry.refreshController === controller)
+        entry.refreshController = null;
     }
 
-    if (signal?.aborted) {
+    if (controller.signal.aborted) {
       if (
         this.layers.get(layerId) === entry &&
         !entry.destroying &&
@@ -363,16 +419,18 @@ export class LayerLifecycle {
   }
 
   /**
-   * Request one fresh update for an already-enabled layer. If the periodic
-   * loop currently owns a refresh, wait for it to settle and then run a new
-   * update so viewport-dependent callers do not reuse work started for the
-   * prior camera location.
+   * Request one fresh update for an already-enabled layer. If a refresh is
+   * in flight, wait for it to settle and then run a new update so
+   * viewport-dependent callers do not reuse work started for the prior
+   * camera location; with `supersede`, cancel it instead (its update's
+   * signal aborts and it settles `false`) and start the new one at once.
    * @param {string} layerId Registered layer id.
    * @param {object} [options] Refresh authority.
    * @param {AbortSignal|null} [options.signal] Caller cancellation authority.
+   * @param {boolean} [options.supersede] Cancel a refresh in flight rather than wait for it.
    * @returns {Promise<boolean>} True only when the requested fresh update settles successfully.
    */
-  async refreshLayer(layerId, { signal = null } = {}) {
+  async refreshLayer(layerId, { signal = null, supersede = false } = {}) {
     const entry = this.layers.get(layerId);
     if (
       !entry ||
@@ -383,7 +441,14 @@ export class LayerLifecycle {
     )
       return false;
 
-    if (entry.refreshing) {
+    // Another caller may start a refresh while this one waits: wait again.
+    while (entry.refreshing) {
+      if (supersede) {
+        const controller = entry.refreshController;
+        this._invalidateRefresh(layerId, entry, 'superseded');
+        controller?.abort(new DOMException('Refresh superseded', 'AbortError'));
+        break;
+      }
       const settled = await new Promise((resolve) => {
         let done = false;
         const finish = (value) => {
@@ -528,6 +593,13 @@ export class LayerLifecycle {
     }
   }
 
+  _stopUpdateLoop(entry) {
+    clearInterval(entry.intervalId);
+    entry.intervalId = null;
+    entry.removeVisibilityListener?.();
+    entry.removeVisibilityListener = null;
+  }
+
   _armUpdateLoop(layerId, entry) {
     const configuredRefreshInterval = Number(entry.module.refreshInterval);
     const updateInterval = Number(entry.module.updateInterval);
@@ -538,9 +610,45 @@ export class LayerLifecycle {
           ? updateInterval
           : 0;
     if (refreshInterval > 0) {
-      entry.intervalId = setInterval(() => {
+      const visibilityDocument = this._visibilityTarget;
+      let intervalId = null;
+      let dueAt = 0;
+      const canPoll = () =>
+        !visibilityDocument?.hidden &&
+        visibilityDocument?.visibilityState !== 'hidden' &&
+        entry.enabled &&
+        !entry.destroying &&
+        !entry.refreshing &&
+        entry.intervalId === intervalId;
+      // dueAt and the interval phase share one origin, so every interval tick
+      // is a due poll. A visibility catch-up re-arms the interval at the new
+      // deadline; otherwise the old phase would skip its next tick.
+      const schedule = () => {
+        clearInterval(intervalId);
+        dueAt = Date.now() + refreshInterval;
+        intervalId = setInterval(onInterval, refreshInterval);
+        entry.intervalId = intervalId;
+      };
+      const onInterval = () => {
+        if (!canPoll()) return;
+        dueAt = Date.now() + refreshInterval;
         void this._runPeriodicUpdate(layerId, entry);
-      }, refreshInterval);
+      };
+      const onVisibilityChange = () => {
+        if (!canPoll() || Date.now() < dueAt) return;
+        schedule();
+        void this._runPeriodicUpdate(layerId, entry);
+      };
+      schedule();
+      visibilityDocument?.addEventListener?.(
+        'visibilitychange',
+        onVisibilityChange,
+      );
+      entry.removeVisibilityListener = () =>
+        visibilityDocument?.removeEventListener?.(
+          'visibilitychange',
+          onVisibilityChange,
+        );
     } else if (updateInterval === 0) {
       entry.intervalId = setInterval(() => {
         if (!entry.enabled) return;
@@ -772,8 +880,7 @@ export class LayerLifecycle {
         entry.lifecycleUncertain = !compensated && !cleanupConfirmed;
         settleLifecycle();
         if (!entry.enabled && entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         this._publishActivity({ type: 'status' });
         if (!compensated) {
@@ -833,8 +940,7 @@ export class LayerLifecycle {
       }
       if (signal?.aborted) return finishCancelledDisable('disable');
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
       entry.lifecycleUncertain = false;
@@ -845,8 +951,7 @@ export class LayerLifecycle {
       let abortCleanup = null;
       const cancelEnable = () => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         // Disable immediately so modules with their own AbortController (Radio)
         // cancel pending update work at the same turn boundary. A second
@@ -876,8 +981,7 @@ export class LayerLifecycle {
         // a later abort cannot revoke a successful retry.
         signal?.removeEventListener('abort', cancelEnable);
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         await abortCleanup;
         let cleanupConfirmed = false;
@@ -918,8 +1022,7 @@ export class LayerLifecycle {
       };
       const finishFailedEnable = async (phase, error) => {
         if (entry.intervalId) {
-          clearInterval(entry.intervalId);
-          entry.intervalId = null;
+          this._stopUpdateLoop(entry);
         }
         let cleanupConfirmed = false;
         try {
@@ -1029,8 +1132,7 @@ export class LayerLifecycle {
       // Always clear any stale interval before assigning a new one, so we never
       // orphan a running timer and end up double-polling.
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
 
       // Manager-owned periodic refresh work has one normalized loading/error
@@ -1606,6 +1708,15 @@ export class LayerLifecycle {
         }
       }
     }
+    // Clear All owns the whole selection, not only the layers it switched off
+    // itself. A layer already off for a passive reason (isolated by a context
+    // mode, released by a dependency owner, or superseded mid-batch) gets no
+    // OFF of its own here, so publish the set that is still on afterwards.
+    this._notifyListeners({
+      type: 'selection-cleared',
+      origin,
+      enabledLayerIds: [...this.getEnabledLayerIds()],
+    });
     const items = targetIds.map((id) => {
       const state = this.getLayerLifecycleState(id) || {
         enabled: false,
@@ -1735,6 +1846,44 @@ export class LayerLifecycle {
     const entry = this.layers.get(layerId);
     if (!entry) return;
     await entry.toggleChain.catch(() => {});
+  }
+
+  /**
+   * Wait until a layer's lifecycle queue is idle, following any request that
+   * joins it while waiting, but no longer than `timeoutMs` or `signal` allows.
+   * @param {string} layerId Layer id.
+   * @param {{signal?: AbortSignal, timeoutMs?: number}} [options]
+   * @returns {Promise<boolean>} true once idle; false on timeout or abort.
+   */
+  async waitForLayerIdle(layerId, { signal, timeoutMs = 30000 } = {}) {
+    const entry = this.layers.get(layerId);
+    if (!entry) return true;
+    if (signal?.aborted) return false;
+    let timer = null;
+    let onAbort = null;
+    const givenUp = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      onAbort = () => resolve(false);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      let pending;
+      do {
+        pending = entry.toggleChain;
+        const idle = await Promise.race([
+          pending.then(
+            () => true,
+            () => true,
+          ),
+          givenUp,
+        ]);
+        if (!idle) return false;
+      } while (pending !== entry.toggleChain);
+      return true;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
   }
 
   _reserveLayerParamsIntent(layerId, params, origin = 'programmatic') {
@@ -2158,8 +2307,7 @@ export class LayerLifecycle {
         return false;
       }
       if (entry.intervalId) {
-        clearInterval(entry.intervalId);
-        entry.intervalId = null;
+        this._stopUpdateLoop(entry);
       }
       entry.enabled = false;
     }
@@ -2179,6 +2327,7 @@ export class LayerLifecycle {
     }
     this.layers.delete(layerId);
     this._qaLayerIds.delete(layerId);
+    this._libraryLayerIds.delete(layerId);
     return true;
   }
 
@@ -2222,6 +2371,10 @@ export class LayerLifecycle {
         // showInTogglePanel). The layer reports stats.keyRequired while that
         // key is absent; the panel builds the guidance text from the pair.
         requiresKeyId: entry.module.requiresKeyId || null,
+        // Data Library entry id; the panel groups these under Library.
+        libraryEntryId: this._libraryLayerIds.has(id)
+          ? libraryEntryIdOf(id)
+          : null,
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,
@@ -2333,9 +2486,25 @@ export class LayerLifecycle {
   /**
    * Ask presentation to repaint layer rows now, for data that lands outside
    * the manager tick (Transit's proximity polls, Directions' route steps).
+   * @param {string} [layerId] - The layer whose row changed.
    */
-  refreshLayerStats() {
+  refreshLayerStats(layerId) {
+    this._dropRecoveredRefreshError(layerId);
     this._publishActivity({ type: 'status' });
+  }
+
+  /**
+   * Drop a tick failure the layer's stats no longer report (the camera left
+   * that feed) instead of showing it until the next tick.
+   */
+  _dropRecoveredRefreshError(layerId) {
+    const entry = layerId ? this.layers.get(layerId) : null;
+    if (!entry?.managerRefreshError || entry.refreshing) return;
+    const failure = refreshFailureFromStats(
+      this._moduleStats(entry),
+      entry.module.name || layerId,
+    );
+    if (!failure) entry.managerRefreshError = null;
   }
 
   _publishActivity(change) {

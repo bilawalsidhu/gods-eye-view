@@ -6,6 +6,7 @@ import { createControls as installationControls } from '../layers/installations/
 import { createQueries as transitQueries } from '../layers/transit/queries.js';
 import { createCyclonesLayer } from '../layers/cyclones/index.js';
 import { ANALYST_LAYERS } from '../data/analystEngine.js';
+import { fakeInput } from '../input/testDoubles.mjs';
 
 /** Every declared analyst field must be a key the accessor actually emits. */
 function assertDeclaredFields(layerId, record) {
@@ -74,9 +75,11 @@ test('bikeshare stations join coordinates from station information', () => {
   assert.deepEqual(methods.getAnalystRecords(), []);
 });
 
-test('launches carry time and hours until launch', () => {
-  const at = Date.now() + 5 * 3_600_000;
+test('launches carry time and hours until launch at the world time', () => {
+  const now = Date.UTC(2026, 10, 1);
+  const at = now + 5 * 3_600_000;
   const state = {
+    now: () => now,
     _enabled: true,
     _launches: [
       {
@@ -181,16 +184,7 @@ test('cyclones flatten the storm position and stay empty while off', async () =>
         fetchedAt: Date.now(),
       }),
     },
-    cesium: {
-      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-      ScreenSpaceEventHandler: class {
-        setInputAction() {}
-        destroy() {}
-        isDestroyed() {
-          return false;
-        }
-      },
-    },
+    cesium: {},
     createRendering: () => ({
       setSnapshot: async () => true,
       setSelection() {},
@@ -200,12 +194,13 @@ test('cyclones flatten the storm position and stay empty while off', async () =>
       ownsPickId: () => false,
       getDiagnostics: () => ({}),
     }),
-    hitTestOverlay: () => null,
   });
-  layer.init({
+  const viewer = {
     scene: { canvas: new EventTarget(), pick: () => null },
     camera: {},
-  });
+  };
+  const input = fakeInput(viewer);
+  layer.init(viewer);
   assert.deepEqual(layer.getAnalystRecords(), []);
   layer.enable();
   await layer.update();

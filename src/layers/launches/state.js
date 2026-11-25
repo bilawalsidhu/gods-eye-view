@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { worldClock, worldTimeFor } from '../../time/worldClock.js';
+import { SATELLITE_SETTLE_TIMEOUT_MS } from './policy.js';
 
 export function createState({ services }) {
   const { setOverlayEntries, setOverlaySourceVisible, clearOverlaySource } =
@@ -11,7 +12,8 @@ export function createState({ services }) {
     clearSource: clearOverlaySource,
   });
 
-  state._dataSource = null;
+  // The layer's draw sets by name, while it is initialised.
+  state._missionSets = null;
 
   state._count = 0;
 
@@ -19,11 +21,18 @@ export function createState({ services }) {
 
   state._lastError = null;
 
+  state._entryCameraView = null;
+
+  state._entryLandedView = null;
+
+  /** Navigation took the camera; set until the layer flies again. */
+  state._cameraReleased = false;
+
+  state._stale = false;
+
   state._orbitMatches = 0;
 
-  state._clickHandler = null;
-
-  state._moveHandler = null;
+  state._inputSubscription = null;
 
   state._viewer = null;
 
@@ -43,6 +52,9 @@ export function createState({ services }) {
 
   state._lifecycleToken = 0;
 
+  /** Bound on waiting for pending Satellites work around a mission. */
+  state.satelliteSettleTimeoutMs = SATELLITE_SETTLE_TIMEOUT_MS;
+
   state._enabled = false;
 
   state._selectedLaunchId = null;
@@ -51,9 +63,22 @@ export function createState({ services }) {
 
   state._launches = [];
 
-  state._missionPanel = null;
+  state._missionPanelReady = false;
 
-  state._missionRoster = null;
+  state._missionPanelView = null;
+
+  state._missionPanelSignature = null;
+
+  state._missionPanelListeners = new Set();
+  state._globePickListeners = new Set();
+
+  state._missionRosterView = null;
+
+  state._missionRosterSignature = null;
+
+  state._missionTelemetry = null;
+
+  state._missionPanelScrollRequest = 0;
 
   state._missionRosterHoverTimer = null;
 
@@ -63,9 +88,10 @@ export function createState({ services }) {
 
   state._missionHoverReticleImage = null;
 
+  // The replay vehicle overlay as its view renders it; null without one.
   state._replayVehicleOverlay = null;
 
-  state._replayVehicleOverlayText = '';
+  state._replayVehicleOverlayListeners = new Set();
 
   state._animationStarts = new Map();
 
@@ -97,6 +123,8 @@ export function createState({ services }) {
 
   state._replayPaused = false;
 
+  state._replayTransportLabel = null;
+
   state._replayPausedAtMs = null;
 
   state._replaySpeed = 1;
@@ -113,7 +141,7 @@ export function createState({ services }) {
 
   state._missionZoomAnchorId = null;
 
-  state._launchPadZonePrimitive = null;
+  state._launchPadZoneItem = null;
 
   state._launchPadZoneRemover = null;
 
@@ -121,16 +149,37 @@ export function createState({ services }) {
 
   state._missionOrbitPrimitives = new Map();
 
-  state._declutterTime = new Cesium.JulianDate();
+  /** The time the launch window ends at, in epoch ms. */
 
-  state._declutterOccluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    new Cesium.Cartesian3(),
-  );
+  state.now = worldTimeFor('rocket-launches');
 
-  state._missionRingDate = new Date(0);
+  /** A launched mission's satellite flies on the satellites layer's time. */
 
-  state._missionOrbitPatternRegistered = false;
+  state.orbitNow = worldTimeFor('satellites');
+
+  /** The launches loaded changed, and with them the time they cover. */
+
+  state.coverageChanged = () => worldClock.coverageChanged();
+
+  /**
+   * Whether a launch has yet to lift off at the world time. While live none
+   * has, so the layer shows every launch in its window as it always did.
+   */
+
+  state.launchPending = (launch) => {
+    if (worldClock.isLive()) return false;
+    const launchMs = Date.parse(launch?.launchTime);
+    return Number.isFinite(launchMs) && launchMs > state.now();
+  };
+
+  /** Whether a launch is hidden for lifting off after the world time. */
+
+  state.launchHidden = (launch) =>
+    launch?.id !== state._selectedLaunchId && state.launchPending(launch);
+
+  /** The launches hidden at the last frame, by id, to spot a change. */
+
+  state._pendingLaunchIds = new Set();
 
   state._pathDistanceCache = new WeakMap();
   state._sourceController = new AbortController();

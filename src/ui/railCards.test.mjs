@@ -1,7 +1,10 @@
+import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { assertSameNode } from '../testSupport/domAssert.mjs';
+import { nextTick } from 'vue';
 import { createRailCards } from './railCards.js';
-import { railFixture } from './railTestFixture.mjs';
+import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
 const legend = {
   colors: ['#112233', '#ffffff', '#abcdef'],
@@ -25,8 +28,7 @@ const card = {
   ],
 };
 test('keyed cards and optional blocks reorder without redundant writes', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const view = createRailCards(f);
   view.update([card]);
   const article = f.container.children[0];
@@ -50,13 +52,15 @@ test('keyed cards and optional blocks reorder without redundant writes', () => {
     [],
   ]) {
     view.update(cards);
-    writes = 0;
+    f.writes();
     view.update(cards);
-    assert.equal(writes, 0);
+    assert.equal(f.writes(), 0);
   }
   view.update([{ ...card, blocks: [...card.blocks].reverse() }]);
   assert.deepEqual(
-    f.container.children[0].children[1].children.map((n) => n.dataset.blockId),
+    [...f.container.children[0].children[1].children].map(
+      (n) => n.dataset.blockId,
+    ),
     ['actions', 'legend', 'details'],
   );
   view.destroy();
@@ -91,8 +95,8 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
       },
     ]),
   ]);
-  assert.equal(f.document.activeElement, button);
-  assert.equal(button.parent.tagName, 'FOOTER');
+  assertSameNode(f.document.activeElement, button);
+  assert.equal(button.parentElement.tagName, 'FOOTER');
   assert.equal(
     f.find((n) => n.className === 'rail-card-action-hint').textContent,
     'at map center',
@@ -119,9 +123,164 @@ test('footer buttons retain focus and current callbacks; links use safe new tabs
   button.click();
   assert.deepEqual(calls, [2]);
 });
+test('a live setting range whose owner clamps shows the clamped value', async () => {
+  const f = railFixture();
+  const model = (value) => ({
+    ...card,
+    blocks: [
+      {
+        id: 'settings',
+        type: 'settings',
+        settings: [
+          {
+            id: 'image',
+            label: 'IMAGE',
+            range: {
+              id: 'gain',
+              param: 'gain',
+              min: 0,
+              max: 100,
+              step: 1,
+              value,
+              ariaLabel: 'Gain',
+            },
+          },
+        ],
+      },
+    ],
+  });
+  // The owner takes at most 80 and answers at once.
+  const view = createRailCards({
+    ...f,
+    onParams: (_id, params) => view.update([model(Math.min(80, params.gain))]),
+  });
+  view.update([model(80)]);
+  await nextTick();
+  const slider = f.find((node) => node.dataset.rangeId === 'gain');
+  slider.value = '95';
+  slider.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(slider.value, '80');
+  view.destroy();
+});
+test('setting ranges stay below presets and commit expensive filters on release', async () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const model = (value) => ({
+    ...card,
+    blocks: [
+      {
+        id: 'settings',
+        type: 'settings',
+        settings: [
+          {
+            id: 'image',
+            label: 'IMAGE',
+            chips: [
+              {
+                id: 'clouds-only',
+                label: 'Clouds only',
+                params: { infrared: 100 },
+              },
+              { id: 'full', label: 'Full', params: { infrared: 0 } },
+            ],
+            range: {
+              id: 'cloud-filter',
+              param: 'infrared',
+              min: 0,
+              max: 100,
+              step: 1,
+              value,
+              label: 'FILTER',
+              unit: '%',
+              ariaLabel: 'Cloud filter strength',
+              commitOnChange: true,
+            },
+          },
+        ],
+      },
+    ],
+  });
+  view.update([model(100)]);
+  const setting = f.find((node) => node.dataset.blockId === 'image');
+  assert.equal(setting.children[1].className, 'rail-card-chips');
+  assert.equal(setting.children[2].className, 'rail-card-setting-range-row');
+  assert.equal(setting.children[2].children[0].textContent, 'FILTER');
+  const slider = f.find((node) => node.dataset.rangeId === 'cloud-filter');
+  assert.equal(slider.tagName, 'INPUT');
+  assert.equal(slider.type, 'range');
+  assert.equal(slider.min, '0');
+  assert.equal(slider.max, '100');
+  assert.equal(slider.step, '1');
+  assert.equal(slider.value, '100');
+  assert.equal(slider.getAttribute('aria-label'), 'Cloud filter strength');
+  slider.focus();
+  slider.value = '53';
+  slider.dispatchEvent(new Event('input'));
+  await nextTick();
+  assert.equal(calls.length, 0, 'expensive image work waits until release');
+  assert.equal(
+    f.find((node) => node.className === 'rail-card-setting-range-value')
+      .textContent,
+    '53%',
+  );
+  view.update([model(100)]);
+  assert.equal(slider.value, '53', 'a status refresh retains the pending drag');
+  assert.equal(
+    slider.getAttribute('aria-valuetext'),
+    '53%',
+    'the accessible preview also survives a refresh',
+  );
+  slider.dispatchEvent(new Event('change'));
+  assert.deepEqual(calls.at(-1), ['a', { infrared: 53 }]);
+  await nextTick();
+  assert.equal(slider.value, '53', 'release keeps the handle until the owner');
+  view.update([model(53)]);
+  assert.equal(slider.value, '53');
+  assertSameNode(f.document.activeElement, slider);
+  slider.value = '41';
+  slider.dispatchEvent(new Event('input'));
+  await nextTick();
+  view.update([model(70)]);
+  assert.equal(
+    slider.value,
+    '70',
+    'an authoritative value supersedes the draft',
+  );
+  view.destroy();
+  slider.value = '41';
+  slider.dispatchEvent(new Event('change'));
+  assert.equal(calls.length, 1, 'destroy removes the range listener');
+});
+test('controls of a removed block dispatch nothing', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const actions = {
+    id: 'actions',
+    type: 'actions',
+    actions: [{ id: 'go', label: 'Go', params: { go: 1 } }],
+  };
+  view.update([{ ...card, blocks: [actions] }]);
+  const button = f.find((node) => node.dataset.actionId === 'go');
+  view.update([{ ...card, blocks: [] }]);
+  button.click();
+  assert.deepEqual(calls, []);
+  view.update([{ ...card, blocks: [{ ...actions }] }]);
+  f.find((node) => node.dataset.actionId === 'go').click();
+  assert.deepEqual(calls, [['a', { go: 1 }]]);
+  view.destroy();
+});
+
 test('legend validates colors, preserves the freezing anchor and ignores CSSOM normalization', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const view = createRailCards(f);
   const show = (legend) =>
     view.update([
@@ -132,26 +291,11 @@ test('legend validates colors, preserves the freezing anchor and ignores CSSOM n
   const ramp = f.find((n) => n.className === 'rail-card-ramp');
   assert.equal(zero.hidden, false);
   assert.equal(zero.style.left, '50%');
-  Object.defineProperty(ramp.style, 'background', {
-    get: () =>
-      'linear-gradient(to right, rgb(17, 34, 51), rgb(255, 255, 255), rgb(171, 205, 239))',
-    set() {
-      writes++;
-    },
-    configurable: true,
-  });
-  Object.defineProperty(zero.style, 'left', {
-    get: () => '50.0%',
-    set() {
-      writes++;
-    },
-    configurable: true,
-  });
-  writes = 0;
+  // An unchanged legend writes nothing, whatever the browser normalizes the
+  // colors it reads back to.
+  f.writes();
   show(legend);
-  assert.equal(writes, 0);
-  delete ramp.style.background;
-  delete zero.style.left;
+  assert.equal(f.writes(), 0);
   show({
     ...legend,
     colors: Array(10).fill('#abcdef'),
@@ -167,8 +311,7 @@ test('legend validates colors, preserves the freezing anchor and ignores CSSOM n
   view.destroy();
 });
 test('labelled rows, lists and results retain focus and dispatch current params', () => {
-  let writes = 0;
-  const f = railFixture(() => writes++);
+  const f = railFixture();
   const calls = [];
   const view = createRailCards({
     ...f,
@@ -232,7 +375,7 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   const chip = f.find((n) => n.dataset.chipId === 'motion');
   chip.focus();
   view.update([model(true)]);
-  assert.equal(f.document.activeElement, chip);
+  assertSameNode(f.document.activeElement, chip);
   chip.click();
   assert.deepEqual(calls.at(-1), ['a', { paused: false }]);
   const storm = f.find(
@@ -247,9 +390,9 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   clear.click();
   assert.deepEqual(calls.at(-1), ['a', { inspect: false }]);
   assert.equal(f.find((n) => n.dataset.lineId === 'wind').children.length, 0);
-  writes = 0;
+  f.writes();
   view.update([model(true)]);
-  assert.equal(writes, 0);
+  assert.equal(f.writes(), 0);
   view.destroy();
   const before = calls.length;
   chip.click();

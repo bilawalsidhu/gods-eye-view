@@ -1,3 +1,5 @@
+import { readAdsbVerticalRateFpm } from '../sources/adsbFields.js';
+
 const KNOT_TO_MPS = 0.514444;
 const FOOT_TO_M = 0.3048;
 const FPM_TO_MPS = 0.00508;
@@ -43,27 +45,39 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
     .toLowerCase();
   const latitude = finiteNumber(aircraft?.lat);
   const longitude = finiteNumber(aircraft?.lon);
-  if (!hex || latitude === null || longitude === null) return null;
+  if (
+    !hex ||
+    latitude === null ||
+    longitude === null ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  )
+    return null;
 
   const seenPosition = Math.max(
     0,
-    finiteNumber(aircraft?.seen_pos) ?? finiteNumber(aircraft?.seen) ?? 0,
+    finiteNumber(aircraft?.seen_pos) ?? finiteNumber(aircraft?.seen) ?? NaN,
   );
   const seen = Math.max(0, finiteNumber(aircraft?.seen) ?? seenPosition);
   const onGround = aircraft?.alt_baro === 'ground';
   const barometricFeet = onGround ? null : finiteNumber(aircraft?.alt_baro);
   const geometricFeet = finiteNumber(aircraft?.alt_geom);
   const groundSpeedKnots = finiteNumber(aircraft?.gs);
-  const verticalRateFpm =
-    finiteNumber(aircraft?.baro_rate) ?? finiteNumber(aircraft?.geom_rate);
-  const track = finiteNumber(aircraft?.track);
+  const verticalRateFpm = readAdsbVerticalRateFpm(aircraft);
+  // A parked or slow aircraft reports no ground track, but often its true
+  // heading (surface messages): the way its nose points, which is what an
+  // aircraft standing still is drawn by. Magnetic heading is not true north.
+  const track =
+    finiteNumber(aircraft?.track) ?? finiteNumber(aircraft?.true_heading);
 
   return [
     hex,
     String(aircraft?.flight || aircraft?.r || '').trim() || null,
     null,
-    Math.max(0, nowSeconds - seenPosition),
-    Math.max(0, nowSeconds - seen),
+    Number.isFinite(seenPosition)
+      ? Math.max(0, nowSeconds - seenPosition)
+      : null,
+    Number.isFinite(seen) ? Math.max(0, nowSeconds - seen) : null,
     longitude,
     latitude,
     barometricFeet === null ? null : barometricFeet * FOOT_TO_M,
@@ -84,7 +98,7 @@ export function normalizeAdsbLolAircraftState(aircraft, nowSeconds) {
  * Normalize an adsb.lol point response to an OpenSky-compatible response.
  * Invalid rows and positionless contacts are intentionally excluded.
  * @param {object} payload adsb.lol v2 response.
- * @returns {{time:number,states:Array[]}}
+ * @returns {{time:number,states:Array[],emergencyByIcao?:object,typeByIcao?:object}}
  */
 export function normalizeAdsbLolPointResponse(payload) {
   const responseNow = finiteNumber(payload?.now);
@@ -94,8 +108,35 @@ export function normalizeAdsbLolPointResponse(payload) {
       : Math.floor(
           responseNow > 10_000_000_000 ? responseNow / 1000 : responseNow,
         );
-  const states = (Array.isArray(payload?.ac) ? payload.ac : [])
-    .map((aircraft) => normalizeAdsbLolAircraftState(aircraft, nowSeconds))
-    .filter(Boolean);
-  return { time: nowSeconds, states };
+  const aircraft = Array.isArray(payload?.ac) ? payload.ac : [];
+  const states = [];
+  // Keep the OpenSky vectors unchanged. The regional fallback's extra readsb
+  // status and type travel alongside them, keyed only to admitted aircraft.
+  const admitted = new Set();
+  const statuses = [];
+  const types = [];
+  for (const row of aircraft) {
+    const state = normalizeAdsbLolAircraftState(row, nowSeconds);
+    if (!state) continue;
+    states.push(state);
+    // The live contract admits the first valid vector for each ICAO. Its
+    // status must come from that same row, never an invalid or later duplicate.
+    const id = state[0];
+    if (admitted.has(id)) continue;
+    admitted.add(id);
+    if (typeof row.emergency === 'string')
+      statuses.push([id, row.emergency.trim().toLowerCase()]);
+    const type = typeof row.t === 'string' ? row.t.trim().toUpperCase() : '';
+    if (type) types.push([id, type]);
+  }
+  const emergencyByIcao = Object.fromEntries(statuses);
+  const typeByIcao = Object.fromEntries(types);
+  return {
+    time: nowSeconds,
+    states,
+    ...(Object.keys(emergencyByIcao).length ? { emergencyByIcao } : {}),
+    // The ICAO type designator (readsb `t`), so the aircraft is classed from
+    // its first fix instead of after a lookup.
+    ...(types.length ? { typeByIcao } : {}),
+  };
 }

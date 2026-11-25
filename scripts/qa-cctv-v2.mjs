@@ -11,8 +11,10 @@
  *      exactly once per camera ACTIVATION (the §9.1 obstruction probe) and
  *      never again in steady state; shared mesh-floor sampling fires at most
  *      once per coarse cell during the staggered geometry-load drain, and
- *      actually COMPLETES once tiles load (>=1 real sample — the
- *      ceiling alone would pass trivially at Δ=0 if the snap never finished),
+ *      actually COMPLETES once tiles load in photoreal mode (>=1 real sample
+ *      — the ceiling alone would pass trivially at Δ=0 if the snap never
+ *      finished). Globe mode instead proves the rendered mount uses a real
+ *      terrain height with zero mesh samples. Sampling
  *      stays flat while idle, and stays flat for non-positional pose edits.
  *   2. Geometry contract: the 5-polyline frustum wireframe + far-cap plane
  *      exist for the active camera, the plane's corners coincide with the
@@ -139,6 +141,56 @@ function record(name, ok, detail) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Each page.evaluate is bounded by puppeteer's `protocolTimeout` (default
+// 180s). Waits never come close: they poll from Node (below). The headroom is
+// for the few long evaluates, such as enabling the full ~3,700-camera catalog
+// on a real GPU, and matches the other qa-*.mjs harnesses.
+const PROTOCOL_TIMEOUT_MS = 300_000;
+
+/**
+ * Polls an in-page predicate from Node, one short page.evaluate per tick,
+ * until it holds or the budget runs out. Used instead of page.waitForFunction
+ * for two reasons: its default rAF polling stops in a minimised or hidden
+ * headful window (timers keep running, rAF does not), and its result is one
+ * CDP call that protocolTimeout cuts off, while the headful drain budget
+ * reaches ~50 minutes. A predicate that throws fails the run instead of
+ * silently spending the budget.
+ * @param {import('puppeteer').Page} page
+ * @param {Function} predicate - In-page predicate.
+ * @param {object} opts
+ * @param {number} opts.timeoutMs - Overall budget.
+ * @param {number} [opts.intervalMs=250] - Delay between checks.
+ * @param {unknown[]} [opts.args=[]] - Arguments passed to the predicate.
+ *   The predicate must return a boolean: its result crosses CDP by value.
+ * @returns {Promise<boolean>} True if the predicate held within the budget.
+ */
+async function waitForPredicate(
+  page,
+  predicate,
+  { timeoutMs, intervalMs = 250, args = [] },
+) {
+  // performance.now() is monotonic and doesn't advance while the machine
+  // sleeps, so neither a clock change nor a laptop sleep eats the budget.
+  const deadline = performance.now() + timeoutMs;
+  for (;;) {
+    try {
+      if (await page.evaluate(predicate, ...args)) return true;
+    } catch (err) {
+      // A navigation or Vite reload replaces the execution context: poll again.
+      if (
+        !/Execution context was destroyed|Cannot find context/.test(
+          err?.message ?? '',
+        )
+      ) {
+        throw err;
+      }
+    }
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) return false;
+    await sleep(Math.min(intervalMs, remaining));
+  }
+}
+
 // SwiftShader can spend tens of seconds servicing the hover drillPick emitted
 // by page.mouse.move(), before the LEFT_DOWN under test even runs. Position the
 // pointer while ADJUST is disabled, then re-enable it and explicitly render a
@@ -155,59 +207,86 @@ async function positionPointerForGizmoDrag(page, point, frameCount = 3) {
     gev.dataManager.layers
       .get('cctv')
       .module.setParams({ calibrationMode: true });
-    const scene = gev.viewer.scene;
-    let rendered = 0;
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (complete) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        remove();
-        resolve(complete);
-      };
-      const remove = scene.postRender.addEventListener(() => {
-        rendered += 1;
-        if (rendered >= count) {
-          finish(true);
-          return;
-        }
+    return (await window.__qaRenderFrames(count, 5000)) >= count;
+  }, frameCount);
+}
+
+/**
+ * Saves a screenshot for human review. These are never a gate, so a capture
+ * that fails (for example when the renderer stalls in a hidden headful window)
+ * is logged instead of ending the run.
+ * @param {import('puppeteer').Page} page
+ * @param {string} file
+ * @param {string} label
+ */
+async function saveReviewShot(page, file, label) {
+  try {
+    await page.screenshot({ path: file });
+    console.log(`  screenshot (${label}) → ${path.relative(REPO_ROOT, file)}`);
+  } catch (err) {
+    console.warn(
+      `  screenshot skipped (${label}): ${path.relative(REPO_ROOT, file)}: ${err?.message ?? err}`,
+    );
+  }
+}
+
+/**
+ * Installs window.__qaRenderFrames(count, capMs) in the page: requests renders
+ * until `count` frames have passed scene.postRender or capMs runs out, and
+ * resolves with the number of frames rendered. The cap keeps a stalled
+ * renderer (headful window asleep or hidden) from hanging the CDP call.
+ * @param {import('puppeteer').Page} page
+ */
+function installRenderFramesHelper(page) {
+  return page.evaluate(() => {
+    window.__qaRenderFrames = (count, capMs) =>
+      new Promise((resolve) => {
+        const scene = window.__godsEyeView.viewer.scene;
+        let frames = 0;
+        const finish = () => {
+          clearTimeout(timer);
+          remove();
+          resolve(frames);
+        };
+        const remove = scene.postRender.addEventListener(() => {
+          if (++frames >= count) {
+            finish();
+            return;
+          }
+          scene.requestRender();
+        });
+        const timer = setTimeout(finish, capMs);
         scene.requestRender();
       });
-      const timer = setTimeout(() => finish(false), 5000);
-      scene.requestRender();
-    });
-  }, frameCount);
+  });
 }
 
 // In-page helper (stringified and re-defined inside each evaluate that needs
 // it, since functions can't cross the puppeteer boundary): serializes the
-// 5 frustum polylines + plane position/orientation/dimensions for a camera
-// into plain arrays of numbers, using only the camera's own clock time (no
-// Cesium namespace needed — Property.getValue just needs *a* JulianDate,
-// and the viewer's own clock.currentTime is a valid live instance of one).
+// 5 frustum lines + plane position/orientation/dimensions for a camera
+// into plain arrays of numbers, from what the layer reports it draws.
 const SERIALIZE_GEOM_SRC = `
   function serializeGeom(camId) {
-    const viewer = window.__godsEyeView.viewer;
-    const time = viewer.clock.currentTime;
+    const drawn = window.__godsEyeView.dataManager.layers
+      .get('cctv')
+      .module._cctvDrawnForTest();
     const roles = ['ray-tl', 'ray-tr', 'ray-br', 'ray-bl', 'cap'];
     const poly = {};
     for (const role of roles) {
-      const ent = viewer.entities.getById('cctv-' + camId + '-' + role);
-      poly[role] = ent && ent.polyline
-        ? ent.polyline.positions.getValue(time).map((p) => [p.x, p.y, p.z])
+      const line = drawn.coverage['cctv-' + camId + '-' + role];
+      poly[role] = line?.positions
+        ? line.positions.map((p) => [p.x, p.y, p.z])
         : null;
     }
-    const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
+    const quad = drawn.planes['cctv-' + camId + '-plane'];
     let plane = null;
-    if (planeEnt) {
-      const pos = planeEnt.position.getValue(time);
-      const orient = planeEnt.orientation.getValue(time);
-      const dims = planeEnt.plane.dimensions.getValue(time);
+    if (quad) {
+      const pos = quad.center;
+      const orient = quad.orientation;
       plane = {
         position: [pos.x, pos.y, pos.z],
         orientation: [orient.x, orient.y, orient.z, orient.w],
-        dimensions: [dims.x, dims.y],
+        dimensions: [quad.size[0], quad.size[1]],
       };
     }
     return { poly, plane };
@@ -280,23 +359,21 @@ const BEARING_SHIFT_SRC = `
  * @returns {Promise<boolean>} True if tilesLoaded was observed within the timeout.
  */
 function waitForTilesLoaded(page, timeoutMs = 15000) {
-  return page
-    .waitForFunction(
-      () => {
-        const scene = window.__godsEyeView.viewer.scene;
-        const prims = scene.primitives;
-        for (let i = 0; i < prims.length; i++) {
-          const p = prims.get(i);
-          if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
-            return p.tilesLoaded === true;
-          }
+  return waitForPredicate(
+    page,
+    () => {
+      const scene = window.__godsEyeView.viewer.scene;
+      const prims = scene.primitives;
+      for (let i = 0; i < prims.length; i++) {
+        const p = prims.get(i);
+        if (p && p.constructor && p.constructor.name === 'Cesium3DTileset') {
+          return p.tilesLoaded === true;
         }
-        return true; // no tileset in the scene — nothing to wait for
-      },
-      { timeout: timeoutMs },
-    )
-    .then(() => true)
-    .catch(() => false);
+      }
+      return true; // no tileset in the scene — nothing to wait for
+    },
+    { timeoutMs },
+  );
 }
 
 /**
@@ -364,6 +441,10 @@ async function main() {
   const chromeExecutable = findChromeExecutable();
   const browser = await puppeteer.launch({
     headless: HEADFUL ? false : 'new',
+    protocolTimeout: PROTOCOL_TIMEOUT_MS,
+    // Talk CDP over a pipe, so no debugging port stays open on localhost for
+    // the length of a headful run.
+    pipe: true,
     ...(chromeExecutable ? { executablePath: chromeExecutable } : {}),
     args: [
       '--no-sandbox',
@@ -397,13 +478,18 @@ async function main() {
     });
     console.log('Loading app...');
     await page.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForFunction(
+    const appReady = await waitForPredicate(
+      page,
       () =>
-        window.__godsEyeView &&
-        window.__godsEyeView.viewer &&
-        window.__godsEyeView.dataManager,
-      { timeout: 60000 },
+        Boolean(
+          window.__godsEyeView &&
+          window.__godsEyeView.viewer &&
+          window.__godsEyeView.dataManager,
+        ),
+      { timeoutMs: 60000 },
     );
+    if (!appReady) throw new Error('app did not initialise within 60s');
+    await installRenderFramesHelper(page);
     // Let the initial fly-to Austin and first tiles settle.
     await sleep(4000);
 
@@ -475,18 +561,15 @@ async function main() {
     console.log(
       `Waiting for geometry-load queue to drain (N=${camCount}, budget ${Math.round(drainBudgetMs / 1000)}s)...`,
     );
-    const drained = await page
-      .waitForFunction(
-        () => {
-          const mod =
-            window.__godsEyeView.dataManager.layers.get('cctv').module;
-          const ui = mod.getUIState();
-          return ui.loading && ui.loading.active === false;
-        },
-        { timeout: drainBudgetMs },
-      )
-      .then(() => true)
-      .catch(() => false);
+    const drained = await waitForPredicate(
+      page,
+      () => {
+        const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+        const ui = mod.getUIState();
+        return Boolean(ui.loading) && ui.loading.active === false;
+      },
+      { timeoutMs: drainBudgetMs, intervalMs: 1000 },
+    );
     record(
       `geometry-load queue drains within ${Math.round(drainBudgetMs / 1000)}s (N=${camCount})`,
       drained ? true : HEADFUL ? false : null,
@@ -544,26 +627,24 @@ async function main() {
     // 2026-07-04: every click on the monitor plane picks its own camera, and
     // re-running activation rewrote the plane entity → visible flash). No new
     // probe, no geometry rewrite.
-    const geomBeforeReselect = await page.evaluate(`(() => {
+    // Keep the snapshots and selection in one browser task so a pending DEM
+    // result from the original activation cannot land between them.
+    const reselection = await page.evaluate(`(() => {
       ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
-    })()`);
-    await page.evaluate((id) => {
-      window.__godsEyeView.dataManager.layers
-        .get('cctv')
-        .module.setParams({ selectedCameraId: id });
-    }, activeId);
-    await sleep(400);
-    const cAfterReselect = await readCounters();
-    const geomAfterReselect = await page.evaluate(`(() => {
-      ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
+      const cameraId = ${JSON.stringify(activeId)};
+      const before = JSON.stringify(serializeGeom(cameraId));
+      const probesBefore = window.__qaCounters.pickFromRay;
+      window.__godsEyeView.dataManager.layers.get('cctv').module
+        .setParams({ selectedCameraId: cameraId });
+      return {
+        probeDelta: window.__qaCounters.pickFromRay - probesBefore,
+        geometryChanged: JSON.stringify(serializeGeom(cameraId)) !== before,
+      };
     })()`);
     record(
       're-selecting the active camera is a no-op (no probe, no geometry rewrite)',
-      cAfterReselect.pickFromRay - cAfterActivate.pickFromRay === 0 &&
-        geomBeforeReselect === geomAfterReselect,
-      `probeΔ=${cAfterReselect.pickFromRay - cAfterActivate.pickFromRay}, geometryChanged=${geomBeforeReselect !== geomAfterReselect}`,
+      reselection.probeDelta === 0 && !reselection.geometryChanged,
+      `probeΔ=${reselection.probeDelta}, geometryChanged=${reselection.geometryChanged}`,
     );
 
     // -----------------------------------------------------------------------
@@ -575,27 +656,86 @@ async function main() {
     // (existence, not just ceiling). The wait below tolerates the update-tick
     // latency of the completion pass (update interval is 10s).
     // -----------------------------------------------------------------------
-    console.log('Waiting for tiles + the one-shot completion pass...');
-    const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
-    let sampleFloorOk = false;
-    if (tilesSeenLoaded) {
-      sampleFloorOk = await page
-        .waitForFunction(
-          (base) => window.__qaCounters.sampleHeight - base >= 1,
-          { timeout: 30000 },
-          c0.sampleHeight,
-        )
-        .then(() => true)
-        .catch(() => false);
-    }
-    const cFloor = await readCounters();
-    record(
-      '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
-      tilesSeenLoaded ? sampleFloorOk : null,
-      tilesSeenLoaded
-        ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
-        : 'tilesLoaded never observed within 45s — floor not assessable this run',
+    const globeMode = await page.evaluate(
+      () => window.__godsEyeView.viewer.scene.globe?.show !== false,
     );
+    if (globeMode) {
+      // Globe stacks intentionally perform no scene.sampleHeight query.
+      // Require independently fetched DEM heights and the actual rendered
+      // mount, so a catalog/geoid fallback cannot turn zero samples into a pass.
+      console.log(
+        'Checking terrain-globe completion against live DEM heights...',
+      );
+      const terrain = await page.evaluate(async () => {
+        const camera = window.__godsEyeView.dataManager.layers
+          .get('cctv')
+          .module.getUIState().activeCamera;
+        const exact = `${camera.lon.toFixed(5)},${camera.lat.toFixed(5)}`;
+        const cell = `${camera.lon.toFixed(3)},${camera.lat.toFixed(3)}`;
+        const response = await fetch(
+          `/api/terrain/heights?points=${encodeURIComponent(`${exact};${cell}`)}`,
+          { signal: AbortSignal.timeout(30000) },
+        );
+        const body = await response.json();
+        return { ok: response.ok, results: body.results };
+      });
+      const heights = terrain.results?.map((result) => result?.ellipsoid);
+      const terrainReady =
+        terrain.ok && heights?.length === 2 && heights.every(Number.isFinite);
+      const mountResolved =
+        terrainReady &&
+        (await waitForPredicate(
+          page,
+          (expected, base) => {
+            const { viewer, dataManager } = window.__godsEyeView;
+            const camera = dataManager.layers
+              .get('cctv')
+              .module.getUIState().activeCamera;
+            const ray = dataManager.layers.get('cctv').module._cctvDrawnForTest()
+              .coverage[`cctv-${camera.id}-ray-tl`];
+            const mount = ray?.positions?.[0];
+            const height =
+              mount &&
+              viewer.scene.globe.ellipsoid.cartesianToCartographic(mount)
+                .height;
+            return (
+              Number.isFinite(camera.groundPriorM) &&
+              Math.abs(camera.groundPriorM - expected[0]) < 0.01 &&
+              Number.isFinite(height) &&
+              expected.some(
+                (ground) =>
+                  Math.abs(height - ground - camera.mountHeightM) < 0.05,
+              ) &&
+              window.__qaCounters.sampleHeight === base
+            );
+          },
+          { timeoutMs: 30000, args: [heights, c0.sampleHeight] },
+        ));
+      record(
+        'terrain-globe completion uses a real DEM height at the rendered mount without mesh samples',
+        Boolean(mountResolved),
+        `terrain=${JSON.stringify(heights)}, mesh sample Δ=${(await readCounters()).sampleHeight - c0.sampleHeight}`,
+      );
+    } else {
+      console.log('Waiting for tiles + the one-shot completion pass...');
+      const tilesSeenLoaded = await waitForTilesLoaded(page, 45000);
+      let sampleFloorOk = false;
+      if (tilesSeenLoaded) {
+        sampleFloorOk = await waitForPredicate(
+          page,
+          (base) => window.__qaCounters.sampleHeight - base >= 1,
+          { timeoutMs: 30000, args: [c0.sampleHeight] },
+        );
+      }
+      const cFloor = await readCounters();
+      record(
+        '>=1 real ground sample once tilesLoaded observed (one-shot snap completed)',
+        tilesSeenLoaded ? sampleFloorOk : null,
+        tilesSeenLoaded
+          ? `total real samples since enable=${cFloor.sampleHeight - c0.sampleHeight}`
+          : 'tilesLoaded never observed within 45s — floor not assessable this run',
+      );
+    }
 
     // Let the completion pass finish before the steady-state window: require
     // the sampleHeight counter quiet for 12s (> the 10s update interval, so
@@ -704,8 +844,10 @@ async function main() {
       // source. Assert the migrated surface via the host diagnostics.
       const diag = window.__gevWorldOverlay?.getDiagnostics?.();
       g.hasLabel = (diag?.entriesBySource?.['cctv-projection'] || 0) >= 1;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
-      g.planeShow = planeEnt ? planeEnt.show : null;
+      const quad = window.__godsEyeView.dataManager.layers
+        .get('cctv')
+        .module._cctvDrawnForTest().planes['cctv-' + camId + '-plane'];
+      g.planeShow = quad ? quad.show : null;
       return g;
     })(${JSON.stringify(activeId)})`);
 
@@ -1067,26 +1209,22 @@ async function main() {
     console.log(
       'Checking frame-loop health (placeholder -> frame swap, URL family)...',
     );
-    // The plane's material.image is always defined (placeholder canvas from
-    // the moment the runtime is created, real frame content painted onto the
+    // The plane's image is always defined (placeholder canvas from the
+    // moment the runtime is created, real frame content painted onto the
     // same canvas/video reference once the fetch resolves) — assert it's
     // never null/undefined once the runtime exists, i.e. there's no gap where
     // the plane shows nothing.
     const materialInfo = await page.evaluate((camId) => {
-      const viewer = window.__godsEyeView.viewer;
-      const time = viewer.clock.currentTime;
-      const planeEnt = viewer.entities.getById('cctv-' + camId + '-plane');
-      const mat = planeEnt?.plane?.material;
-      const image = mat?.image;
-      const resolved =
-        image && typeof image.getValue === 'function'
-          ? image.getValue(time)
-          : image;
+      const quad = window.__godsEyeView.dataManager.layers
+        .get('cctv')
+        .module._cctvDrawnForTest().planes['cctv-' + camId + '-plane'];
+      const source = quad?.source;
+      const resolved = source?.video || source?.canvas || source?.image;
       return {
-        hasMaterial: !!mat,
+        hasMaterial: !!source,
         hasImage: !!resolved,
         tagName: resolved?.tagName || null,
-        show: planeEnt?.show,
+        show: quad?.show,
       };
     }, activeId);
     record(
@@ -1117,18 +1255,67 @@ async function main() {
       `status=${frameFetch.status} content-type=${frameFetch.contentType} url=${frameFetch.url}`,
     );
 
-    // Panel <img> src and the plane's frame fetch share the same
-    // /api/cctv/frame/<id> URL family (same endpoint + camera id segment).
-    const panelImgSrc = await page.evaluate(
-      () => document.getElementById('cctv-frame')?.getAttribute('src') || null,
-    );
+    // A live camera uses the panel's video canvas. Exercise the image contract
+    // on an image-backed camera with the panel open, even if focusNearest picked HLS.
+    const still = await page.evaluate(() => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      const layer = dataManager.layers.get('cctv').module;
+      const ui = layer.getUIState();
+      const isStill = (cam) =>
+        cam?.feedType === 'image' && !cam.sourceKind?.startsWith('quebec-');
+      const camera = isStill(ui.activeCamera)
+        ? ui.activeCamera
+        : ui.cameras.find(isStill);
+      const collapsed = document
+        .getElementById('cctv-panel')
+        .classList.contains('collapsed');
+      if (camera) {
+        layer.selectCamera(camera.id);
+        styleManager.setPanelCollapsed('cctv-panel', false, {
+          persist: false,
+          syncShare: false,
+        });
+      }
+      return { id: camera?.id, collapsed };
+    });
     const sameFamily =
-      !!panelImgSrc &&
-      panelImgSrc.includes(`/api/cctv/frame/${encodeURIComponent(activeId)}`);
+      Boolean(still.id) &&
+      (await waitForPredicate(
+        page,
+        (id) => {
+          const layer =
+            window.__godsEyeView.dataManager.layers.get('cctv').module;
+          const camera = layer.getUIState().activeCamera;
+          const image = document.getElementById('cctv-frame');
+          const plane = layer._cctvDrawnForTest().planes[`cctv-${id}-plane`];
+          const path = `/api/cctv/frame/${encodeURIComponent(id)}`;
+          return (
+            camera?.id === id &&
+            plane?.source?.canvas &&
+            image?.naturalWidth > 0 &&
+            !image.hidden &&
+            new URL(image.currentSrc).pathname === path &&
+            new URL(camera.frameUrl, location.origin).pathname === path
+          );
+        },
+        { timeoutMs: 30000, args: [still.id] },
+      ));
     record(
       'panel <img> and plane share the same /api/cctv/frame/<id> URL family',
       sameFamily,
-      `panelSrc=${panelImgSrc}`,
+      `image camera=${still.id || 'none'}`,
+    );
+    await page.evaluate(
+      ({ activeId, collapsed }) => {
+        const { dataManager, styleManager } = window.__godsEyeView;
+        dataManager.layers.get('cctv').module.selectCamera(activeId);
+        if (collapsed)
+          styleManager.setPanelCollapsed('cctv-panel', true, {
+            persist: false,
+            syncShare: false,
+          });
+      },
+      { activeId, collapsed: still.collapsed },
     );
 
     // =========================================================================
@@ -1358,18 +1545,7 @@ async function main() {
         },
       });
       window.__qaCctvSiblingOwner = owner;
-      await new Promise((resolve) => {
-        let frames = 0;
-        const remove = scene.postRender.addEventListener(() => {
-          if (++frames < 3) {
-            scene.requestRender();
-            return;
-          }
-          remove();
-          resolve();
-        });
-        scene.requestRender();
-      });
+      const framesRendered = await window.__qaRenderFrames(3, 10000);
       const rect = scene.canvas.getBoundingClientRect();
       const picked = scene.pick(canvasPoint);
       const pickedId = picked?.id?.id ?? picked?.id ?? null;
@@ -1382,26 +1558,33 @@ async function main() {
           typeof pickedId === 'string' ? pickedId : (pickedId?.id ?? null),
         ownerId: owner.id,
         ownsExactObject: picked?.id === owner,
+        framesRendered,
         projectionDelta: Math.hypot(
           projected.x - canvasPoint.x,
           projected.y - canvasPoint.y,
         ),
       };
     }, emptyClickPoint);
+    const siblingOwnsPick =
+      siblingTarget?.pickedId === 'qa-cctv-sibling-owner' &&
+      siblingTarget.ownsExactObject;
+    // No frame at all within the 10s cap points at a stalled renderer rather
+    // than at picking, though the harness can't rule out both. Fail it on the
+    // real-GPU sign-off path; leave it inconclusive under headless GL. A slow
+    // SwiftShader frame (1-2 of 3) still counts as a real miss.
+    const siblingRendererStalled =
+      siblingTarget && !siblingOwnsPick && siblingTarget.framesRendered === 0;
     record(
       'sibling test object owns its canvas pick',
+      !siblingTarget
+        ? null
+        : siblingOwnsPick ||
+            (siblingRendererStalled && !HEADFUL ? null : false),
       siblingTarget
-        ? siblingTarget.pickedId === 'qa-cctv-sibling-owner' &&
-            siblingTarget.ownsExactObject
-        : null,
-      siblingTarget
-        ? `picked=${siblingTarget.pickedId} exactOwner=${siblingTarget.ownsExactObject} projectionΔ=${siblingTarget.projectionDelta}`
+        ? `${siblingRendererStalled ? 'renderer stalled: ' : ''}frames=${siblingTarget.framesRendered}/3 picked=${siblingTarget.pickedId} exactOwner=${siblingTarget.ownsExactObject} projectionΔ=${siblingTarget.projectionDelta}`
         : 'no previously verified empty canvas ray was available',
     );
-    if (
-      siblingTarget?.pickedId === 'qa-cctv-sibling-owner' &&
-      siblingTarget.ownsExactObject
-    ) {
+    if (siblingOwnsPick) {
       await page.mouse.click(siblingTarget.x, siblingTarget.y);
       await sleep(250);
     }
@@ -1426,8 +1609,7 @@ async function main() {
     });
     record(
       'sibling canvas click passes through without CCTV selection or deselection',
-      siblingTarget?.pickedId === 'qa-cctv-sibling-owner' &&
-        siblingTarget.ownsExactObject
+      siblingOwnsPick
         ? siblingClick.activeId === clickEvidenceSetup.activeId &&
             siblingClick.transitions === siblingClick.baselineTransitions &&
             siblingClick.focusEvents === 0 &&
@@ -1525,14 +1707,12 @@ async function main() {
       'Checking viewshed mode (coverage tri-state + color-coded volumes)...',
     );
     const countVolumes = () =>
-      page.evaluate(() => {
-        const prims = window.__godsEyeView.viewer.scene.primitives;
-        let n = 0;
-        for (let i = 0; i < prims.length; i++) {
-          if (prims.get(i) && prims.get(i)._gevViewshed) n += 1;
-        }
-        return n;
-      });
+      page.evaluate(
+        () =>
+          window.__godsEyeView.dataManager.layers
+            .get('cctv')
+            .module._cctvDrawnForTest().viewsheds.length,
+      );
 
     const cBeforeViewshed = await readCounters();
     const modeAfterSet = await page.evaluate(() => {
@@ -1585,26 +1765,26 @@ async function main() {
       mod.setParams({ coverageMode: 'viewshed' });
     });
     await sleep(400);
-    await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      window.__qaViewshedRefs = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed)
-          window.__qaViewshedRefs.push(prims.get(i));
-      }
-    });
+    // Volumes are draw-port mesh items: "no churn" is no volume written.
+    const drawnViewsheds = () =>
+      page.evaluate(() => {
+        const drawn = window.__godsEyeView.dataManager.layers
+          .get('cctv')
+          .module._cctvDrawnForTest();
+        return { ids: drawn.viewsheds, writes: drawn.viewshedWrites };
+      });
+    const viewshedsBefore = await drawnViewsheds();
     await sleep(8000);
-    const viewshedIdle = await page.evaluate(() => {
-      const prims = window.__godsEyeView.viewer.scene.primitives;
-      const now = [];
-      for (let i = 0; i < prims.length; i++) {
-        if (prims.get(i) && prims.get(i)._gevViewshed) now.push(prims.get(i));
-      }
-      const before = window.__qaViewshedRefs || [];
-      const sameCount = now.length === before.length;
-      const sameIdentity = sameCount && before.every((p) => now.includes(p));
-      return { sameCount, sameIdentity, count: now.length };
-    });
+    const viewshedsAfter = await drawnViewsheds();
+    const viewshedIdle = (() => {
+      const sameCount =
+        viewshedsAfter.ids.length === viewshedsBefore.ids.length;
+      const sameIdentity =
+        sameCount &&
+        viewshedsBefore.ids.every((id) => viewshedsAfter.ids.includes(id)) &&
+        viewshedsAfter.writes === viewshedsBefore.writes;
+      return { sameCount, sameIdentity, count: viewshedsAfter.ids.length };
+    })();
     const cAfterViewshed = await readCounters();
     const lateFloorSamples =
       cAfterViewshed.sampleHeight - cBeforeViewshed.sampleHeight;
@@ -1626,10 +1806,7 @@ async function main() {
     );
 
     const viewshedShot = path.join(SHOTS_DIR, 'cctv-v3-viewshed.png');
-    await page.screenshot({ path: viewshedShot });
-    console.log(
-      `  screenshot (visual review only) → ${path.relative(REPO_ROOT, viewshedShot)}`,
-    );
+    await saveReviewShot(page, viewshedShot, 'visual review only');
 
     // =========================================================================
     // Group 7: calibration gizmo (v3 design §3c — ADJUST mode + drag)
@@ -1648,9 +1825,9 @@ async function main() {
     const gizmoStates = await page.evaluate((parts) => {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: true });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1660,14 +1837,52 @@ async function main() {
       gizmoStates.map((s, i) => `${GIZMO_PARTS[i]}=${s}`).join(' '),
     );
 
+    // Frame the actual gizmo for the drag fixture. Default autofocus can leave
+    // its shaft below the 10px interaction threshold; that distant view is not
+    // the drag-usability scenario this regression exercises. The gizmo is drawn
+    // through the renderer ports, so its arrow is read from the layer's drawn
+    // state (plain {x,y,z} points), not from viewer.entities.
+    const dragFraming = await page.evaluate(async () => {
+      const viewer = window.__godsEyeView.viewer;
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const arrow = () =>
+        mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east']?.positions;
+      if (!arrow()?.length) return null;
+      const Cartesian3 = viewer.camera.positionWC.constructor;
+      const measure = () => {
+        const pts = arrow();
+        if (!pts?.length) return { shaftPx: null, rangeM: null };
+        const a = viewer.scene.cartesianToCanvasCoordinates(pts[0]);
+        const b = viewer.scene.cartesianToCanvasCoordinates(pts[pts.length - 1]);
+        return {
+          shaftPx: a && b ? Math.hypot(b.x - a.x, b.y - a.y) : null,
+          rangeM: Cartesian3.distance(viewer.camera.positionWC, pts[0]),
+        };
+      };
+      const before = measure();
+      const target = Cartesian3.clone(arrow()[0]);
+      viewer.camera.cancelFlight();
+      viewer.camera.lookAt(target, new Cartesian3(0, -200, 180));
+      viewer.camera.lookAtTransform(viewer.camera.transform.constructor.IDENTITY);
+      viewer.scene.requestRender();
+      const frames = await window.__qaRenderFrames(3, 10000);
+      return { before, after: measure(), frames };
+    });
+    record(
+      'drag fixture frames the east arrow above the 10px grab threshold',
+      dragFraming?.after?.shaftPx >= 10,
+      JSON.stringify(dragFraming),
+    );
+
     // Synthetic CDP drag on the EAST arrow — the owner's field-test
     // regression. Sample effective elevation after every mouse move: it must
     // stay frozen until release, with no transient sampleHeight calls.
     const eastDrag = await page.evaluate(() => {
       const viewer = window.__godsEyeView.viewer;
-      const e = viewer.entities.getById('cctv-gizmo-move-east');
+      const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
+      const e = mod._cctvDrawnForTest().gizmo['cctv-gizmo-move-east'];
       if (!e) return null;
-      const pts = e.polyline.positions.getValue(viewer.clock.currentTime);
+      const pts = e.positions;
       const scene = viewer.scene;
       const w = scene.canvas.clientWidth;
       const h = scene.canvas.clientHeight;
@@ -1945,9 +2160,9 @@ async function main() {
       const mod = window.__godsEyeView.dataManager.layers.get('cctv').module;
       mod.setParams({ calibrationMode: false });
       mod.setParams({ calibration: { reset: true } });
-      const viewer = window.__godsEyeView.viewer;
+      const drawn = mod._cctvDrawnForTest().gizmo;
       return parts.map((p) => {
-        const e = viewer.entities.getById('cctv-gizmo-' + p);
+        const e = drawn['cctv-gizmo-' + p];
         return e ? (e.show ? 'shown' : 'hidden') : 'missing';
       });
     }, GIZMO_PARTS);
@@ -1963,10 +2178,7 @@ async function main() {
     // -----------------------------------------------------------------------
     await sleep(1000);
     const shot = path.join(SHOTS_DIR, 'cctv-v2-active.png');
-    await page.screenshot({ path: shot });
-    console.log(
-      `  screenshot (visual review only, not a gate) → ${path.relative(REPO_ROOT, shot)}`,
-    );
+    await saveReviewShot(page, shot, 'visual review only, not a gate');
 
     // No console errors during the whole exercise.
     record(

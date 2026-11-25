@@ -5,7 +5,9 @@ export const HLS_LIMITS = Object.freeze({
   sessions: 2,
   leasesPerSession: 8,
   playlistBytes: 256 * 1024,
-  segmentBytes: 4 * 1024 * 1024,
+  // High-resolution cameras can exceed 4 MiB in a single ten-second TS segment.
+  // Retained data still shares the independent 24 MiB session budget below.
+  segmentBytes: 8 * 1024 * 1024,
   sessionBytes: 24 * 1024 * 1024,
   segments: 12,
   pollMs: 2000,
@@ -13,6 +15,9 @@ export const HLS_LIMITS = Object.freeze({
   timeoutMs: 10000,
   readyMs: 12000,
 });
+
+/** Every lease or session slot is taken, or the viewer's lease ended mid-request: the source itself has not failed. */
+export class HlsCapacityError extends Error {}
 
 /** Refuse redirects; count actual streamed bytes, including chunked responses. */
 export async function fetchHlsBytes(
@@ -70,7 +75,7 @@ export async function fetchHlsBytes(
   }
 }
 
-export function sameOriginHlsUrl(value, base) {
+function sameOriginHlsUrl(value, base) {
   const url = new URL(value, base);
   if (
     !['https:', 'http:'].includes(url.protocol) ||
@@ -150,7 +155,7 @@ export function createHlsPuller({
     let lease = entry.leases.get(leaseId);
     if (!lease) {
       if (!create || entry.leases.size >= limits.leasesPerSession)
-        throw new Error('HLS lease capacity reached');
+        throw new HlsCapacityError('HLS lease capacity reached');
       lease = {};
       entry.leases.set(leaseId, lease);
     }
@@ -262,7 +267,7 @@ export function createHlsPuller({
     }
     // Reserve synchronously, before any await: concurrent creation is singleflight.
     if (active.size >= limits.sessions)
-      throw new Error('HLS session capacity reached');
+      throw new HlsCapacityError('HLS session capacity reached');
     entry = {
       cameraId,
       url,

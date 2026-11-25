@@ -8,12 +8,19 @@ import {
   cockpitAnchorCorrectionStep,
   cockpitAltitudeDisplayFt,
   cockpitGroundSafeHeight,
+  cockpitSubjectStepSec,
   cockpitSurfaceWaitExpired,
   cockpitUiUpdateDue,
+  COCKPIT_SUBJECT_LIFT_MPS,
+  easeCockpitLift,
   compassDivisions,
+  compassMarkerSlot,
+  scrollingCompassDivisions,
   formatAltitudeRulerTick,
   formatCockpitContextScope,
+  formatCockpitEmergency,
   formatCompassDivision,
+  formatHeadingReadout,
   formatSpeedRulerTick,
   normalizeHeading,
   relativeBearing,
@@ -24,6 +31,7 @@ import {
   speedRulerStep,
   speedRulerTicks,
 } from './cockpitMath.js';
+import { bandBesideMidpointObstacles } from './ui/panelRailGeometry.js';
 
 test('cockpit presentation updates are throttled independently of camera frames', () => {
   assert.equal(cockpitUiUpdateDue(1000, 0, 100), true);
@@ -50,6 +58,31 @@ test('cockpit anchor correction bounds late-fix catch-up and render stalls', () 
   assert.ok(cockpitAnchorCorrectionStep(5000, 250, 2) <= 5.5);
   assert.equal(cockpitAnchorCorrectionStep(0, 250, 0.1), 0);
   assert.equal(cockpitAnchorCorrectionStep(Number.NaN, 250, 0.1), 0);
+});
+
+test('an application subject on a slow cadence is corrected for its whole step', () => {
+  // The built-in views' step stays capped at 0.1 s...
+  const capped = cockpitAnchorCorrectionStep(100, 0, 0.5);
+  assert.equal(capped, cockpitAnchorCorrectionStep(100, 0, 0.1));
+  // ...while a subject updated every 500 ms is corrected for all of it.
+  const whole = cockpitAnchorCorrectionStep(100, 0, 0.5, 0.5);
+  assert.ok(Math.abs(whole / capped - 5) < 1e-9);
+  assert.equal(cockpitAnchorCorrectionStep(100, 0, 0.5, Number.NaN), capped);
+});
+
+test('an application subject steps by its interval, never by a long stall', () => {
+  assert.equal(cockpitSubjectStepSec(16, 0), 0.016);
+  assert.equal(cockpitSubjectStepSec(500, 500), 0.5);
+  assert.equal(cockpitSubjectStepSec(520, 500), 0.52);
+  // Slow frames (5 a second) count in full...
+  assert.equal(cockpitSubjectStepSec(200, 50), 0.2);
+  assert.equal(cockpitSubjectStepSec(1000, 0), 1);
+  // ...and a hidden tab's minutes as one late update.
+  assert.equal(cockpitSubjectStepSec(60_000, 500), 1.5);
+  assert.equal(cockpitSubjectStepSec(60_000, 0), 1);
+  assert.equal(cockpitSubjectStepSec(-5, 500), 0);
+  assert.equal(cockpitSubjectStepSec(Number.NaN, 500), 0);
+  assert.equal(cockpitSubjectStepSec(1000, Number.NaN), 1);
 });
 
 test('cockpit camera clearance never falls below the rendered ground floor', () => {
@@ -149,9 +182,58 @@ test('compass divisions remain ordered across north', () => {
   assert.deepEqual(compassDivisions(359), [270, 300, 330, 0, 30, 60, 90]);
 });
 
+test('compass marks sit in division slots off the caret, or off the tape', () => {
+  // Measured from the exact heading under the caret, not the nearest division.
+  assert.equal(compassMarkerSlot(350, 350), 0);
+  assert.equal(compassMarkerSlot(35, 350), 1.5);
+  assert.equal(compassMarkerSlot(260, 350), -3);
+  assert.equal(compassMarkerSlot(80, 350), 3);
+  assert.equal(compassMarkerSlot(90, 350), null);
+  assert.equal(compassMarkerSlot(180, 350), null);
+  assert.equal(compassMarkerSlot(Number.NaN, 0), null);
+});
+
+test('a scrolling tape puts the exact heading under the caret', () => {
+  // At 100° the divisions sit a third of a slot off their snapped places,
+  // so the bow mark (also 100°) lines up with the caret, not 10° beside it.
+  const tape = scrollingCompassDivisions(100);
+  assert.deepEqual(
+    tape.map(({ heading }) => heading),
+    [330, 0, 30, 60, 90, 120, 150, 180, 210],
+  );
+  const nearest = tape.find((division) => division.nearest);
+  assert.equal(nearest.heading, 90);
+  assert.equal(nearest.slot, -0.3333);
+  assert.equal(tape.find(({ heading }) => heading === 120).slot, 0.6667);
+  assert.equal(compassMarkerSlot(100, 100), 0);
+  assert.equal(compassMarkerSlot(90, 100), nearest.slot);
+  // Across north the slots stay continuous.
+  assert.deepEqual(
+    scrollingCompassDivisions(355, 1).map(({ heading, slot }) => [
+      heading,
+      slot,
+    ]),
+    [
+      [330, -0.8333],
+      [0, 0.1667],
+      [30, 1.1667],
+    ],
+  );
+  assert.deepEqual(scrollingCompassDivisions(Number.NaN), []);
+});
+
 test('compass labels use cardinals where exact and degrees elsewhere', () => {
   assert.equal(formatCompassDivision(270), 'W');
   assert.equal(formatCompassDivision(30), '030');
+});
+
+test('a heading that rounds to north reads 000, not 360', () => {
+  assert.equal(formatHeadingReadout(359.6), '000');
+  assert.equal(formatHeadingReadout(359.4), '359');
+  assert.equal(formatHeadingReadout(0), '000');
+  assert.equal(formatHeadingReadout(10.2), '010');
+  assert.equal(formatHeadingReadout(-0.6), '359');
+  assert.equal(formatHeadingReadout(Number.NaN), '---');
 });
 
 test('great-circle bearing resolves cardinal directions', () => {
@@ -203,6 +285,143 @@ test('HUD rail layout constrains an oversized panel to the safe corridor', () =>
   assert.equal(layout.top, 250);
   assert.equal(layout.maxHeight, 238);
   assert.equal(layout.constrained, true);
+});
+
+test('HUD rail layout keeps a short window clear of an obstacle across its midpoint', () => {
+  // 480px window: midpoint 240. Each obstacle is neither wholly above nor
+  // wholly below the midpoint, and must still limit the band.
+  const above = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 40,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 200, bottom: 300 }],
+  });
+  // Room above: 200 - 10 - 40 = 150; below: 460 - 310 = 150. A tie keeps the
+  // band above the obstacle.
+  assert.equal(above.safeTop, 40);
+  assert.equal(above.safeBottom, 190);
+  assert(above.top + Math.min(120, above.maxHeight) <= 190);
+
+  const below = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 40,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 120, bottom: 260 }],
+  });
+  // Room above: 70; below: 190. The band goes under the obstacle.
+  assert.equal(below.safeTop, 270);
+  assert.equal(below.safeBottom, 460);
+  assert(below.top >= 270);
+});
+
+test('HUD rail layout leaves the band as it is when an obstacle across the midpoint leaves no room', () => {
+  const layout = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 120,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 100,
+    baseBottom: 400,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 80, bottom: 420 }],
+  });
+  assert.equal(layout.safeTop, 100);
+  assert.equal(layout.safeBottom, 400);
+});
+
+test('HUD rail layout reads several obstacles across the midpoint the same in any order', () => {
+  const a = { left: 0, right: 400, top: 100, bottom: 260 };
+  const b = { left: 0, right: 400, top: 200, bottom: 470 };
+  const layoutWith = (obstacles) =>
+    resolveHudRailLayout({
+      viewportHeight: 480,
+      panelHeight: 120,
+      laneLeft: 20,
+      laneRight: 340,
+      baseTop: 40,
+      baseBottom: 460,
+      gap: 10,
+      obstacles,
+    });
+  // Together they cover 100 to 470: the only room is above, 40 to 90.
+  for (const layout of [layoutWith([a, b]), layoutWith([b, a])]) {
+    assert.equal(layout.safeTop, 40);
+    assert.equal(layout.safeBottom, 90);
+    assert.equal(layout.maxHeight, 50);
+  }
+});
+
+test('HUD rail layout counts obstacles beside those across the midpoint', () => {
+  const band = (obstacles) => {
+    const layout = resolveHudRailLayout({
+      viewportHeight: 480,
+      panelHeight: 120,
+      laneLeft: 20,
+      laneRight: 340,
+      baseTop: 40,
+      baseBottom: 460,
+      gap: 10,
+      obstacles: obstacles.map(([top, bottom]) => ({
+        left: 0,
+        right: 400,
+        top,
+        bottom,
+      })),
+    });
+    return [layout.safeTop, layout.safeBottom];
+  };
+  // One inside the span below the midpoint: 150px below the span, 50 above.
+  assert.deepEqual(band([[100, 300], [250, 280]]), [310, 460]);
+  // One touching the midpoint from below: 190px below, 100 above.
+  assert.deepEqual(band([[150, 260], [240, 250]]), [270, 460]);
+  // One inside the span above the midpoint: 150px above, 50 below.
+  assert.deepEqual(band([[200, 400], [210, 230]]), [40, 190]);
+  // A lower obstacle past the span limits the room below it: 100px between
+  // them against 70 above, and with a taller one only 60, so above.
+  assert.deepEqual(band([[120, 260], [380, 420]]), [270, 370]);
+  assert.deepEqual(band([[120, 260], [340, 420]]), [40, 110]);
+  // Neighbours exactly two gaps away leave no room between: one block, 100
+  // to 400, and a tie (50px a side) goes above.
+  assert.deepEqual(band([[100, 180], [200, 300], [320, 400]]), [40, 90]);
+  // A neighbour exactly two gaps below joins it too: 150 to 300, 100px
+  // above against 150 below.
+  assert.deepEqual(band([[150, 250], [270, 300]]), [310, 460]);
+  // A side under 8% of the window (38.4px) is no room: 30px above, none
+  // below, so the band stays as it is.
+  assert.deepEqual(band([[80, 455]]), [40, 460]);
+  // Exactly the minimum is enough.
+  const exact = bandBesideMidpointObstacles({
+    midpoint: 240,
+    top: 40,
+    bottom: 460,
+    obstacles: [{ top: 90, bottom: 465 }],
+    gap: 10,
+    minimum: 40,
+  });
+  assert.deepEqual([exact?.top, exact?.bottom], [40, 80]);
+});
+
+test('HUD rail layout keeps a band beside a midpoint obstacle inside its own edges', () => {
+  const layout = resolveHudRailLayout({
+    viewportHeight: 480,
+    panelHeight: 80,
+    laneLeft: 20,
+    laneRight: 340,
+    baseTop: 350,
+    baseBottom: 460,
+    gap: 10,
+    obstacles: [{ left: 0, right: 400, top: 100, bottom: 260 }],
+  });
+  assert.equal(layout.safeTop, 350);
+  assert.equal(layout.safeBottom, 460);
 });
 
 test('HUD rail layout can anchor controls to the start of the safe corridor', () => {
@@ -354,7 +573,7 @@ test('tracked-identity resolution falls back to layer precedence', () => {
   const civilian = { icao24: 'aaa077' };
   const military = { icao24: 'ae01ce' };
   // No stamped identity (or one that matches neither layer) keeps the historic
-  // civilian-first order so tracking paths without gevTrackedId still work.
+  // civilian-first order so tracking paths without an entity record trackedId still work.
   assert.equal(resolveTrackedAircraftInfo({ civilian, military }).layerId, 'flights');
   assert.equal(
     resolveTrackedAircraftInfo({ civilian, military, trackedId: 'satellites:25544' }).layerId,
@@ -363,4 +582,49 @@ test('tracked-identity resolution falls back to layer precedence', () => {
   assert.equal(resolveTrackedAircraftInfo({ military, trackedId: '' }).layerId, 'military');
   assert.equal(resolveTrackedAircraftInfo({ trackedId: 'flights:aaa077' }), null);
   assert.equal(resolveTrackedAircraftInfo(), null);
+});
+
+test('cockpit emergency wording states the broadcast code, not a conclusion', () => {
+  assert.equal(
+    formatCockpitEmergency({ label: 'General emergency', squawk: '7700', source: 'squawk', severity: 'emergency' }),
+    'SQUAWK 7700 · GENERAL EMERGENCY',
+  );
+  assert.equal(
+    formatCockpitEmergency({ label: 'Downed aircraft', squawk: '1200', source: 'ads-b', severity: 'emergency' }),
+    'ADS-B EMERGENCY · DOWNED AIRCRAFT',
+    'an unrelated squawk is not quoted beside an ADS-B status',
+  );
+  assert.equal(
+    formatCockpitEmergency({ label: 'Minimum fuel', squawk: null, source: 'ads-b', severity: 'priority' }),
+    'ADS-B PRIORITY · MINIMUM FUEL',
+  );
+  assert.equal(formatCockpitEmergency(null), null);
+  assert.equal(formatCockpitEmergency({ label: '' }), null);
+});
+
+test('an application subject’s ground lift eases its clearance, never the floor', () => {
+  // On entry the lift asked for applies at once.
+  assert.equal(easeCockpitLift(null, 1.5, 0, 0.016), 1.5);
+  // A floor cell that rises by a metre is met at the lift rate...
+  let lift = 0;
+  const frames = [];
+  for (let i = 0; i < 60; i += 1) {
+    lift = easeCockpitLift(lift, 1, 0, 0.016);
+    frames.push(lift);
+  }
+  assert.ok(frames[0] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9);
+  for (let i = 1; i < frames.length; i += 1)
+    assert.ok(
+      frames[i] - frames[i - 1] <= COCKPIT_SUBJECT_LIFT_MPS * 0.016 + 1e-9,
+    );
+  assert.ok(Math.abs(frames.at(-1) - 1) < 1e-9, 'reached in under a second');
+  // ...and given back the same way.
+  assert.ok(Math.abs(easeCockpitLift(1, 0, 0, 0.1) - 0.85) < 1e-9);
+  // What keeps the eye out of the floor itself is never eased.
+  assert.equal(easeCockpitLift(0, 201.5, 200, 0.016), 200);
+  assert.equal(
+    easeCockpitLift(0.2, -3, -3, 0.016),
+    0.2 - COCKPIT_SUBJECT_LIFT_MPS * 0.016,
+  );
+  assert.equal(easeCockpitLift(0, Number.NaN, Number.NaN, 0.016), 0);
 });

@@ -29,16 +29,25 @@ export function createIngestion({
         layerState._tilesReadyReenqueued = true;
         // Per-regime resolution (Task 5): only records unresolved for the
         // CURRENT surface regime need the completion pass. On globe stacks
-        // projectionTilesReady() is false while a (hidden) Google tileset
-        // exists, so this latch effectively fires for the google-3d regime —
+        // projectionTilesReady() is false (only drawn photoreal tiles can be
+        // ready), so this latch fires for the google-3d regime alone —
         // terrain-globe records resolve from the prior in their drain pass.
-        const unresolved = layerState._records.filter(
-          (record) => !parts.ground.isGroundResolved(record),
-        );
+        const unresolved = parts.geometryQueue
+          .geometryWorkingSet()
+          .filter(
+            (record) =>
+              !parts.ground.isGroundResolved(record) &&
+              parts.geometryQueue.withinViewBudget(record),
+          );
         if (unresolved.length)
           parts.geometryQueue.enqueueGeometryRefresh(unresolved);
       }
       await parts.health.syncHealthState();
+      // New health can change which camera wins a crowded cell.
+      if (layerState._enabled && parts.rendering.refreshHorizonCulling()) {
+        parts.geometryQueue.enqueueViewGeometry();
+        parts.cards.refreshAmbientCards();
+      }
       parts.navigation.maybeAutoHop(now);
       parts.presentation.notifyListeners();
     },

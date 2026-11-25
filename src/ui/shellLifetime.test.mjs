@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { LocationNavigation } from './locationNavigation.js';
 import { LayerBindings } from './layerBindings.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { worldClock } from '../time/worldClock.js';
 
 function replaceWindow(t, value) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -12,12 +14,13 @@ function replaceWindow(t, value) {
   });
 }
 
-function location(t) {
+function location(t, { homeView = null } = {}) {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   replaceWindow(t, { setTimeout });
   const calls = [];
   let hooks;
   const owner = new LocationNavigation({
+    homeView,
     viewer: { camera: {
       cancelFlight() {}, lookAtTransform() {},
       positionCartographic: { latitude: 0, longitude: 0, height: 20000000 },
@@ -25,7 +28,11 @@ function location(t) {
     services: {
       OrbitController: class { stop() { calls.push('orbit-stop'); } },
       GLOBE_VIEW: { heightM: 20000000 },
-      flyToGlobeView(_viewer, callbacks) { hooks = callbacks; return {}; },
+      flyToGlobeView(_viewer, callbacks) {
+        hooks = callbacks;
+        calls.push(callbacks.view ? `fly ${callbacks.view.lat},${callbacks.view.lon}` : 'fly here');
+        return {};
+      },
       interruptCameraMotion() {},
       militaryAwarenessLayer: {}, satellitesLayer: {}, rocketLaunchesLayer: {},
       trafficLayer: {
@@ -59,6 +66,24 @@ test('shell disposal settles a pending globe reset once and revokes its timeout'
   assert.equal((await owner.resetToGlobeView()).cancelled, true);
 });
 
+test('the logo goes live and flies to the home view, replacing a globe reset under way', async (t) => {
+  const { owner, calls, readHooks } = location(t, {
+    homeView: { lon: -82.5, lat: 35, height: 23000000 },
+  });
+  worldClock.seek(Date.now() - 3 * 3600 * 1000);
+  assert.equal(worldClock.isLive(), false);
+  const reset = owner.resetToGlobeView();
+  const home = owner.returnToStart();
+  assert.notEqual(home, reset);
+  assert.equal((await reset).cancelled, true);
+  assert.equal(worldClock.isLive(), true);
+  assert.deepEqual(calls.filter((c) => c.startsWith('fly')), ['fly here', 'fly 35,-82.5']);
+  readHooks().onComplete();
+  assert.equal((await home).cancelled, false);
+  assert.equal((await home).heightKm, 23000);
+  owner.destroy();
+});
+
 test('world jump completion cannot revive navigation after shell disposal', (t) => {
   const { owner, calls } = location(t);
   let complete;
@@ -80,6 +105,7 @@ function bindings(t) {
     hud: { attachDataManager() {} },
     _contextControls: { connect() {} },
     _cctvControls: { connect() {} }, _radioControls: { connect() {} },
+    _streetLevelControls: { connects: 0, connect() { this.connects += 1; } },
   };
   const owner = new LayerBindings({
     viewer: {}, services: {}, readControls: () => controls,
@@ -97,7 +123,7 @@ function bindings(t) {
       subscribe() { events.push([id, 'subscribe']); return () => events.push([id, 'unsubscribe']); },
     };
   }
-  return { owner, manager, events };
+  return { owner, manager, events, controls };
 }
 
 test('manager replacement releases Directions even when the new manager has no route layer', (t) => {
@@ -116,16 +142,27 @@ test('manager replacement releases Directions even when the new manager has no r
   assert.equal(events.length, count);
 });
 
+test('attaching the manager reconnects Street Level, so its switch-on requests reach the panel', (t) => {
+  const { owner, manager, controls } = bindings(t);
+  owner.attachDataManager(manager('first'));
+  assert.equal(controls._streetLevelControls.connects, 1);
+  owner.stop(); owner.disconnect();
+});
+
 test('camera-entry listeners are removed before any asynchronous layer cleanup', (t) => {
   const { owner } = bindings(t);
   let changes = 0;
   let trackedCallback;
-  owner.viewer = { trackedEntityChanged: {
-    addEventListener(callback) {
+  // What the camera follows changes through its port's followChanged.
+  owner.viewer = {};
+  bindRenderer(owner.viewer, { camera: {
+    followed: null,
+    on(event, callback) {
+      if (event !== 'followChanged') return () => {};
       trackedCallback = callback;
       return () => { changes += 1; };
     },
-  } };
+  } });
   owner._stampNavigation = () => { changes += 100; };
   owner.observeCamera();
   owner.stop();

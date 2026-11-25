@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { LocalSdrControls } from './localSdrControls.js';
+import { createOwners } from './stores/owners.js';
 
 function stubDocument() {
   const elements = new Map();
@@ -9,7 +10,6 @@ function stubDocument() {
     activeElement: null,
     getElementById(id) {
       if (!elements.has(id)) {
-        const listeners = new Map();
         elements.set(id, {
           id,
           value: '',
@@ -20,10 +20,6 @@ function stubDocument() {
           classList: { toggle() {} },
           setAttribute() {},
           closest: () => null,
-          addEventListener(type, handler) {
-            listeners.set(type, handler);
-          },
-          fire: (type, event = {}) => listeners.get(type)?.(event),
         });
       }
       return elements.get(id);
@@ -77,6 +73,12 @@ function stubReceiver() {
       return true;
     },
   };
+}
+
+// The radio store as the card's owner sees it: published views and the
+// card's controls, which act() calls.
+function stubStore(onPublish = () => {}) {
+  return { ...createOwners(), publishSdr: onPublish };
 }
 
 function stubRadio() {
@@ -141,28 +143,56 @@ test('card controls drive gain, FM mode and the Local ADS-B layer', async (t) =>
   const doc = stubDocument();
   const receiver = stubReceiver();
   const layerCalls = [];
+  const store = stubStore();
   const controls = new LocalSdrControls({
     document: doc,
     receiver,
+    store,
     actions: {
       isLocalAdsbEnabled: () => true,
       setLocalAdsbEnabled: async (enabled) => layerCalls.push(enabled),
     },
   });
   t.after(() => controls.destroy());
-  const gain = doc.getElementById('sdr-gain-select');
-  gain.value = '20.7';
-  gain.fire('change');
+  store.act('setSdrGain', '20.7');
   assert.deepEqual(receiver.calls.at(-1), ['setGain', '20.7']);
 
   receiver.emit({ connected: true, status: 'streaming', mode: 'adsb' });
-  await doc.getElementById('sdr-mode-fm-btn').fire('click');
+  store.act('setSdrMode', 'fm');
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(layerCalls, [false]);
   assert.deepEqual(receiver.calls.at(-1), ['setMode', 'fm']);
 
-  await doc.getElementById('sdr-mode-adsb-btn').fire('click');
+  store.act('setSdrMode', 'adsb');
+  await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(layerCalls, [false, true]);
   assert.equal(controls.isActive(), true);
+
+  store.act('tuneSdr', '101.1');
+  assert.deepEqual(receiver.calls.at(-1), ['tuneFm', 101_100_000]);
+  store.act('tuneSdr', 'abc');
+  assert.deepEqual(
+    receiver.calls.at(-1),
+    ['tuneFm', 101_100_000],
+    'not a number',
+  );
+
+  controls.destroy();
+  store.act('setSdrGain', '0.0');
+  assert.deepEqual(receiver.calls.at(-1), ['tuneFm', 101_100_000], 'destroyed');
+});
+
+test('a page without the card connects nothing', (t) => {
+  const store = stubStore();
+  const receiver = stubReceiver();
+  const controls = new LocalSdrControls({
+    document: { getElementById: () => null },
+    receiver,
+    store,
+  });
+  t.after(() => controls.destroy());
+  store.act('setSdrGain', '0.0');
+  assert.equal(receiver.calls.length, 0);
 });
 
 test('the card shows one read-only decoder-feed line after a single probe', async (t) => {
@@ -184,15 +214,16 @@ test('the card shows one read-only decoder-feed line after a single probe', asyn
       for (const listener of listeners) listener(state);
     },
   };
+  let shown = null;
   const controls = new LocalSdrControls({
     document: doc,
     receiver: stubReceiver(),
     feeds,
+    store: stubStore((view) => (shown = view)),
   });
   t.after(() => controls.destroy());
-  const line = doc.getElementById('sdr-feed-status');
   assert.equal(probes, 1);
-  assert.equal(line.hidden, true);
+  assert.equal(shown.feedLine, null);
   feeds.set({
     configured: true,
     polling: true,
@@ -202,6 +233,5 @@ test('the card shows one read-only decoder-feed line after a single probe', asyn
     ],
   });
   await new Promise((resolve) => setTimeout(resolve, 30));
-  assert.equal(line.hidden, false);
-  assert.equal(line.textContent, 'Decoder feeds: 1090 live · 978 live');
+  assert.equal(shown.feedLine, 'Decoder feeds: 1090 live · 978 live');
 });

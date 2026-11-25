@@ -1,3 +1,5 @@
+import { displaySceneTitle, displayShotTitle } from './recipes.js';
+
 const DEFAULT_SHOT_DURATION_SEC = 4;
 const clamp01 = (value) => Math.max(0, Math.min(1, value));
 const deepClone = (value) => JSON.parse(JSON.stringify(value));
@@ -63,8 +65,10 @@ export function layerStatesForShot(
     state.params.sceneContext = {
       sceneId: scene.id,
       sceneTitle: scene.title,
+      sceneDisplayTitle: displaySceneTitle(scene),
       shotId: shot.id,
       shotTitle: shot.title,
+      shotDisplayTitle: displayShotTitle(shot.title, shot, scene),
       shotIndex,
       shotCount: scene.shots.length,
       durationSec: shot.durationSec || DEFAULT_SHOT_DURATION_SEC,
@@ -149,8 +153,8 @@ export function effectiveShotHoldSec(
   );
 }
 
-/** Estimate flight plus effective hold without mutating saved layer parameters. */
-export function shotRuntimeDurationSec(scene, shot, packs) {
+/** Resolve a shot's effective hold and flight-plus-hold seconds without mutating saved layer parameters. */
+export function shotRuntimeTiming(scene, shot, packs) {
   const states = deepClone(shot?.layers || {});
   const sourceRecipe = packs.recipeForShot(shot);
   for (const state of Object.values(states)) {
@@ -164,8 +168,14 @@ export function shotRuntimeDurationSec(scene, shot, packs) {
       };
     }
   }
-  return (
-    (shot?.durationSec || DEFAULT_SHOT_DURATION_SEC) +
-    effectiveShotHoldSec(scene, shot, packs, states)
-  );
+  const holdSec = effectiveShotHoldSec(scene, shot, packs, states);
+  return {
+    holdSec,
+    durationSec: (shot?.durationSec || DEFAULT_SHOT_DURATION_SEC) + holdSec,
+  };
+}
+
+/** Estimate flight plus effective hold without mutating saved layer parameters. */
+export function shotRuntimeDurationSec(scene, shot, packs) {
+  return shotRuntimeTiming(scene, shot, packs).durationSec;
 }

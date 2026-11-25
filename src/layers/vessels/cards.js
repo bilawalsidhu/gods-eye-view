@@ -1,7 +1,12 @@
 import {
+  AID_TO_NAVIGATION_STYLE,
   accentForVesselType,
+  displayVesselType,
   normalizeVesselType,
 } from '../../data/vesselLabels.js';
+import { isAidToNavigation } from '../../data/vesselTypes.js';
+import { formatNumber, t } from '../../i18n/index.js';
+import { roundHeadingDegrees } from '../../data/headingDegrees.js';
 
 export function createCards({
   vesselState,
@@ -10,27 +15,31 @@ export function createCards({
   layer,
   options,
 }) {
-  const { state } = vesselState;
-
   function updateSelectedVesselHud(record) {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-
     // Pinned vessels missing from recent refreshes get a stale marker
     const stale = (record.missedRefreshes || 0) > 0;
-    el.classList.add('active');
-    el.textContent = [
-      `AIS: ${trimHudValue(record.name, 32)}`,
-      `${trimHudValue(record.type || 'VESSEL', 24)}  SPD: ${formatSpeed(record.speed)}  HDG: ${formatHeading(record.heading ?? record.course)}`,
-      `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? '  · STALE' : ''}`,
-    ].join('\n');
+    // An aid to navigation is a fixed mark: it has no speed or heading to show.
+    const aid = isAidToNavigation(record);
+    services.readouts?.presentSelectedVessel({
+      text: [
+        t('AIS: {name}', { name: trimHudValue(record.name, 32) }),
+        aid
+          ? aidKind(
+              trimHudValue(record.type || t('AID TO NAVIGATION'), 24),
+              record,
+            )
+          : t('{type}  SPD: {speed}  HDG: {heading}', {
+              type: trimHudValue(record.type || t('VESSEL'), 24),
+              speed: formatSpeed(record.speed),
+              heading: formatHeading(record.heading ?? record.course),
+            }),
+        `MMSI: ${record.mmsi || '--'}  ${formatPositionTime(record)}${stale ? `  · ${t('STALE')}` : ''}`,
+      ].join('\n'),
+    });
   }
 
   function resetSelectedVesselHud() {
-    const el = document.getElementById('hud-ais-vessel');
-    if (!el) return;
-    el.classList.remove('active');
-    el.textContent = 'AIS: --';
+    services.readouts?.presentSelectedVessel(null);
   }
 
   function trimHudValue(value, maxLength) {
@@ -43,28 +52,29 @@ export function createCards({
   /**
    * Card model for an ambient (decluttered-in) vessel — name title plus one
    * compact type/speed/heading detail line, anchored at the record's current
-   * rendered position (height-datum caveat: no datum work here). Pure —
-   * exported for unit tests.
+   * rendered position (height-datum caveat: no datum work here). An aid to
+   * navigation's line is its kind alone. Pure — exported for unit tests.
    * @param {Object} record - Vessel record.
    * @returns {Object} vesselLabels entry.
    */
 
   function buildVesselCard(record) {
     const parts = [];
+    const aid = isAidToNavigation(record);
     const type = vesselTypeShort(record);
     if (type) parts.push(type);
-    if (record.speed !== null && record.speed !== undefined)
+    if (record.virtual === true) parts.push(t('VIRTUAL'));
+    if (!aid && record.speed !== null && record.speed !== undefined)
       parts.push(formatSpeed(record.speed));
     const direction = record.heading ?? record.course;
-    if (Number.isFinite(direction)) parts.push(`${Math.round(direction)}°`);
+    if (!aid && Number.isFinite(direction))
+      parts.push(`${roundHeadingDegrees(direction)}°`);
     return {
       id: vesselOverlayEntryId(record),
-      actionable: Boolean(record?.mmsi),
-      position:
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position,
+      actionable: Boolean(record?.id),
+      position: components.rendering.iconPosition(record),
       gapPx: 10,
-      accent: accentForVesselType(record.type),
+      accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 26),
       details: parts.length ? [parts.join(' · ')] : [],
       selected: false,
@@ -75,35 +85,39 @@ export function createCards({
   /**
    * Card model for the click-selected vessel — the full-detail card, drawn last
    * (on top) and never distance-faded by the overlay. Pinned-but-vanished
-   * vessels carry a STALE marker (mirrors the HUD readout). Pure — exported
-   * for unit tests.
+   * vessels carry a STALE marker (mirrors the HUD readout). An aid to
+   * navigation shows its kind with no speed or heading. Pure — exported for
+   * unit tests.
    * @param {Object} record - Selected vessel record.
    * @returns {Object} vesselLabels entry.
    */
 
   function buildSelectedVesselCard(record) {
+    const aid = isAidToNavigation(record);
     const direction = record.heading ?? record.course;
     const details = [
-      [
-        vesselTypeShort(record) || 'VESSEL',
-        formatSpeed(record.speed),
-        Number.isFinite(direction) ? `${Math.round(direction)}°` : '--°',
-      ].join(' · '),
+      aid
+        ? aidKind(vesselTypeShort(record) || t('AID TO NAVIGATION'), record)
+        : [
+            vesselTypeShort(record) || t('VESSEL'),
+            formatSpeed(record.speed),
+            Number.isFinite(direction)
+              ? `${roundHeadingDegrees(direction)}°`
+              : '--°',
+          ].join(' · '),
     ];
     const destination = String(record.destination || '').trim();
     if (destination) details.push(`→ ${trimHudValue(destination, 24)}`);
     const stale = (record.missedRefreshes || 0) > 0;
     details.push(
-      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ' · STALE' : ''}`,
+      `MMSI ${record.mmsi || '--'} · ${formatPositionTime(record)}${stale ? ` · ${t('STALE')}` : ''}`,
     );
     return {
       id: vesselOverlayEntryId(record),
-      actionable: Boolean(record?.mmsi),
-      position:
-        components.rendering.getVisual(record).billboard?.position ||
-        components.rendering.getVisual(record).position,
+      actionable: Boolean(record?.id),
+      position: components.rendering.iconPosition(record),
       gapPx: 12,
-      accent: accentForVesselType(record.type),
+      accent: vesselAccent(record, aid),
       title: trimHudValue(displayVesselName(record), 32),
       details,
       selected: true,
@@ -111,21 +125,49 @@ export function createCards({
     };
   }
 
-  /** Stable overlay identity for MMSI-keyed and source-retained unkeyed rows. */
+  /** An aid's kind, marked virtual when nothing physical stands there. */
+
+  function aidKind(kind, record) {
+    return record.virtual === true ? `${kind} · ${t('VIRTUAL')}` : kind;
+  }
+
+  /** A card's accent: an aid's disc colour, else its ship type's. */
+
+  function vesselAccent(record, aid) {
+    return aid
+      ? AID_TO_NAVIGATION_STYLE.accent
+      : accentForVesselType(record.type);
+  }
+
+  /** Stable overlay identity for keyed and source-retained unkeyed rows. */
 
   function vesselOverlayEntryId(record) {
-    const mmsi = String(record?.mmsi || '').trim();
-    if (mmsi) return `vessel:${mmsi}`;
+    const id = String(record?.id || '').trim();
+    if (id) return `vessel:${id}`;
     const name = String(record?.name || 'VESSEL').trim() || 'VESSEL';
     const lat = Number.isFinite(record?.lat) ? record.lat.toFixed(5) : 'x';
     const lon = Number.isFinite(record?.lon) ? record.lon.toFixed(5) : 'x';
     return `vessel:unkeyed:${name}:${lat}:${lon}`;
   }
 
-  /** Uppercased, card-width-bounded AIS type (empty string when unknown). */
+  /**
+   * Uppercased AIS type for the card (empty string when unknown). Free feed
+   * text is bounded to the card width; a translated type token is a short
+   * catalog word and shows whole, never cut mid-word ("AUXILIAR DE PUERTO").
+   * An aid's kind is the whole line, so it keeps the room speed and heading
+   * would take ("CARDINAL MARK N", not "CARDINAL MARK ").
+   */
 
   function vesselTypeShort(record) {
-    return normalizeVesselType(record.type).toUpperCase().slice(0, 14);
+    if (isAidToNavigation(record)) {
+      const kind = String(record.type || '').trim();
+      return kind ? trimHudValue(kind.toUpperCase(), 26) : '';
+    }
+    const feedType = normalizeVesselType(record.type);
+    const shown = displayVesselType(record.type);
+    return shown === feedType
+      ? feedType.toUpperCase().slice(0, 14)
+      : shown.toUpperCase();
   }
 
   /**
@@ -150,23 +192,36 @@ export function createCards({
 
   function displayVesselName(record) {
     const name = String(record.name || '').trim();
-    if (name && name !== 'VESSEL' && name !== record.mmsi) return name;
-    return record.mmsi ? `MMSI ${record.mmsi}` : 'VESSEL';
+    // A source may name a vessel by its id when it has no name.
+    if (name && name !== 'VESSEL' && name !== record.mmsi && name !== record.id)
+      return name;
+    return record.mmsi ? `MMSI ${record.mmsi}` : t('VESSEL');
   }
 
   function formatSpeed(speed) {
-    return speed === null ? '--KT' : `${speed.toFixed(1)}KT`;
+    return t('{speed}KT', {
+      speed:
+        speed === null
+          ? '--'
+          : formatNumber(speed, {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+              useGrouping: false,
+            }),
+    });
   }
 
   function formatHeading(heading) {
-    return Number.isFinite(heading) ? `${Math.round(heading)}DEG` : '--DEG';
+    return t('{heading}DEG', {
+      heading: roundHeadingDegrees(heading) ?? '--',
+    });
   }
 
   function formatPositionTime(record) {
-    if (!record.lastPositionUtc) return 'POS: LIVE';
+    if (!record.lastPositionUtc) return t('POS: LIVE');
     const date = new Date(record.lastPositionUtc);
-    if (Number.isNaN(date.getTime())) return 'POS: LIVE';
-    return `POS: ${date.toISOString().slice(11, 19)}Z`;
+    if (Number.isNaN(date.getTime())) return t('POS: LIVE');
+    return t('POS: {time}Z', { time: date.toISOString().slice(11, 19) });
   }
   return {
     updateSelectedVesselHud,

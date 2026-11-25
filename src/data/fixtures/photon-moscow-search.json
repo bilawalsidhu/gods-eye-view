@@ -1,0 +1,110 @@
+{
+  "biased": {
+    "features": [
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [71.8339931, 38.948412]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Тоҷикистон"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.6063916, 55.625578]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.6174782, 55.7505412]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.0536908, 55.7098009]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [32.163334, 56.917778]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      }
+    ]
+  },
+  "unbiased": {
+    "features": [
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.6063916, 55.625578]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.6174782, 55.7505412]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [37.0536908, 55.7098009]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [32.163334, 56.917778]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Россия"
+        }
+      },
+      {
+        "geometry": {
+          "type": "Point",
+          "coordinates": [71.8339931, 38.948412]
+        },
+        "properties": {
+          "name": "Москва",
+          "country": "Тоҷикистон"
+        }
+      }
+    ]
+  }
+}

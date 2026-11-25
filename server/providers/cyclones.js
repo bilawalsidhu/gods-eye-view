@@ -1,11 +1,24 @@
-import { readResponseTextCapped } from './common/http.js';
+import {
+  readResponseBytesCapped,
+  readResponseTextCapped,
+} from './common/http.js';
+import { JTWC_USABLE_MS, readJtwcStorms } from './jtwc.js';
 
 const STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 const GIS =
   'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer';
 const HOUR = 3600_000;
+// Data, not UI copy: src/layers/cyclones/index.js keeps the same English in
+// msg() and translates it when shown (likewise 'Cyclone data unavailable').
 const COVERAGE =
-  'Atlantic and eastern/central North Pacific; not worldwide cyclone coverage.';
+  'NHC/CPHC: Atlantic and eastern/central North Pacific. JTWC: western North Pacific, North Indian Ocean and Southern Hemisphere.';
+const SOURCE = 'NOAA NHC / CPHC · JTWC';
+const ATTRIBUTION =
+  'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center; Joint Typhoon Warning Center (U.S. Navy / U.S. Air Force)';
+/** How long a storm's advisory stays usable after issuance, by agency. */
+export function cycloneUsableMs(storm) {
+  return storm?.agency === 'jtwc' ? JTWC_USABLE_MS : 12 * HOUR;
+}
 const LAYERS = [
   { id: 5, cap: 512 * 1024, count: 500, kind: 'points' },
   { id: 6, cap: 512 * 1024, count: 32, kind: 'track' },
@@ -41,6 +54,14 @@ function number(value, min, max) {
   const n = Number(value);
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 }
+// CurrentStorms.json reports movementSpeed in miles per hour (intensity is in
+// knots); convert so `speedKt` means what it says.
+function knotsFromMph(mph) {
+  return mph === null ? null : Math.round(mph * 0.868976);
+}
+// NHC stamps an advisory with its nominal time (e.g. 03:00Z) and publishes it
+// up to about half an hour before; allow that, but not a clock far ahead.
+const EARLY_ADVISORY_MS = 90 * 60_000;
 function iso(value, now) {
   if (
     typeof value !== 'string' ||
@@ -50,7 +71,7 @@ function iso(value, now) {
   const n = Date.parse(value);
   if (
     !Number.isFinite(n) ||
-    n > now + 5 * 60_000 ||
+    n > now + EARLY_ADVISORY_MS ||
     now - n > 12 * HOUR ||
     new Date(n).toISOString().replace('.000Z', 'Z') !==
       value.replace('.000Z', 'Z')
@@ -104,6 +125,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
     const positionAt = iso(raw.lastUpdate, now);
     return {
       id: raw.id,
+      agency: 'nhc',
       name: text(raw.name),
       classification: text(raw.classification, 16),
       basin: raw.id.slice(0, 2).toUpperCase(),
@@ -115,7 +137,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
       pressureHpa: number(raw.pressure, 800, 1100),
       movement: {
         directionDegrees: number(raw.movementDir, 0, 360),
-        speedKt: number(raw.movementSpeed, 0, 200),
+        speedKt: knotsFromMph(number(raw.movementSpeed, 0, 200)),
       },
       advisoryUrl: officialLink(forecast.url),
       outlookUrl: raw.id.startsWith('al')
@@ -128,6 +150,7 @@ export function parseCycloneStatus(payload, now = Date.now()) {
       forecastPoints: [],
       track: null,
       cone: null,
+      dangerArea: null,
     };
   });
 }
@@ -252,8 +275,13 @@ export function cycloneProxy({
   fetchImpl = fetch,
   now = () => Date.now(),
   timeoutMs = 12_000,
+  // JTWC's own deadline, inside NHC's: a slow JTWC never holds NHC's answer.
+  jtwcTimeoutMs = 8_000,
+  readJtwc = readJtwcStorms,
 } = {}) {
   let cache = null;
+  // JTWC's storms from its last good read, reused while a read fails.
+  let jtwcCache = null;
   let operation = null;
   let attemptedAt = -Infinity;
   async function upstream(url, cap, signal) {
@@ -276,7 +304,64 @@ export function cycloneProxy({
     signal.throwIfAborted();
     return result;
   }
+  // A JTWC product: text or bytes; null when JTWC has none posted (403/404).
+  async function jtwcRead(url, kind, signal) {
+    signal.throwIfAborted();
+    const response = await fetchImpl(url, {
+      signal,
+      redirect: 'error',
+      headers: { 'User-Agent': 'Gods Eye View (public JTWC warning context)' },
+    });
+    if (
+      kind === 'bytes' &&
+      (response.status === 403 || response.status === 404)
+    ) {
+      await response.body?.cancel();
+      return null;
+    }
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error('cyclone_upstream_unavailable');
+    }
+    return kind === 'bytes'
+      ? readResponseBytesCapped(response, 4 * 1024 * 1024, signal)
+      : readResponseTextCapped(response, 256 * 1024, signal);
+  }
+  /**
+   * JTWC's storms, read under their own deadline. A read that fails or runs
+   * out of time gives JTWC's last good storms still usable, so it never fails,
+   * delays past its deadline or stales NHC's answer.
+   */
+  async function jtwc(signal) {
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal.addEventListener('abort', abort, { once: true });
+    const timer = setTimeout(abort, jtwcTimeoutMs);
+    try {
+      const storms = await Promise.race([
+        readJtwc((url, kind) => jtwcRead(url, kind, controller.signal), now()),
+        new Promise((_, reject) =>
+          controller.signal.addEventListener(
+            'abort',
+            () => reject(new Error('jtwc_timeout')),
+            { once: true },
+          ),
+        ),
+      ]);
+      jtwcCache = storms;
+      return storms;
+    } catch {
+      return (jtwcCache || []).filter(
+        (storm) => now() - Date.parse(storm.issuedAt) <= JTWC_USABLE_MS,
+      );
+    } finally {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', abort);
+    }
+  }
   async function refresh(signal) {
+    // JTWC is read beside NHC and never rejects.
+    const pendingJtwc = jtwc(signal);
     let storms = parseCycloneStatus(
       await upstream(STATUS_URL, 128 * 1024, signal),
       now(),
@@ -313,6 +398,14 @@ export function cycloneProxy({
         }));
       }
     }
+    // One storm per id: NHC's advisory where NHC lists the storm (a storm
+    // crossing 180° keeps its id), JTWC's elsewhere.
+    const fromJtwc = await pendingJtwc;
+    const listed = new Set(storms.map((storm) => storm.id));
+    storms = [
+      ...storms,
+      ...fromJtwc.filter((storm) => !listed.has(storm.id)),
+    ].slice(0, 32);
     signal.throwIfAborted();
     cache = { storms, fetchedAt: now() };
     return cache;
@@ -355,9 +448,8 @@ export function cycloneProxy({
   function describe(value, stale = false) {
     return {
       schemaVersion: 1,
-      source: 'NOAA NHC / CPHC',
-      attribution:
-        'NOAA/NWS National Hurricane Center / Central Pacific Hurricane Center',
+      source: SOURCE,
+      attribution: ATTRIBUTION,
       coverage: COVERAGE,
       fetchedAt: value?.fetchedAt ?? null,
       stale: stale || !value,
@@ -392,13 +484,16 @@ export function cycloneProxy({
         json(200, describe(await acquire(controller.signal)));
       } catch (error) {
         if (error.status === 429) return json(429, { error: 'cyclone_busy' });
-        const usable =
-          cache &&
-          now() - cache.fetchedAt <= 12 * HOUR &&
-          cache.storms.every(
-            (storm) => now() - Date.parse(storm.issuedAt) <= 12 * HOUR,
-          );
-        json(200, describe(usable ? cache : null, true));
+        // Each storm is served while its own advisory is usable.
+        const usable = cache &&
+          now() - cache.fetchedAt <= 12 * HOUR && {
+            ...cache,
+            storms: cache.storms.filter(
+              (storm) =>
+                now() - Date.parse(storm.issuedAt) <= cycloneUsableMs(storm),
+            ),
+          };
+        json(200, describe(usable || null, true));
       }
     } finally {
       res.removeListener?.('close', close);

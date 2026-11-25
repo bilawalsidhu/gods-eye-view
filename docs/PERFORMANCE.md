@@ -32,6 +32,11 @@ hardware-rendered overlay scenes.
 | 3 | 558.527 ms | 1,809.592 ms | 438.8 ms | 60 / 60 FPS | 105.1 MiB |
 | Median | 604.849 ms | 1,855.836 ms | 439.5 ms | 60 / 60 FPS | 105.1 MiB |
 
+These frame rates were measured when the globe was capped at 60 FPS. It now
+draws at the display's refresh rate while anything moves and ticks at most 60
+times a second when parked (the render governor's idle rate,
+`IDLE_FRAME_RATE` in `src/renderGovernor.js`).
+
 The initial-settle measurement is the more useful launch reference because it
 includes the first visual and data settling window. All three samples reached
 the display ceiling during both motion and rest.
@@ -97,7 +102,8 @@ operational sample contained 3,909 observations and two selected labels, but its
 live aircraft and traffic rows were empty, so it remains a limited stress case.
 
 Snow, Noir, dense detection, and text-heavy combined layers are the clearest
-controlled comparison points for later optimization work.
+controlled comparison points for later optimization work. Snow has since been
+retired as a visual preset; its row records the measurement as taken.
 
 ## Keyed live sources
 
@@ -128,6 +134,12 @@ Use the same controls before attributing a difference to the application:
 6. Record live object counts before attributing a difference to the client.
 7. Treat a live-source outage as missing coverage, not as evidence of low client
    rendering cost.
+8. Record whether the app is running in Pinokio's embedded view or in an
+   external browser. One Pinokio 8.2.0 user reported severe stutter in the
+   embedded view that went away when the same local URL was opened in a normal
+   browser ([#365](https://github.com/bilawalsidhu/gods-eye-view/issues/365)).
+   Do not compare embedded-view and external-browser measurements directly;
+   compare the reported GPU renderer and matched scene settings first.
 
 ## What is not established yet
 

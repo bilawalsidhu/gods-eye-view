@@ -1,10 +1,8 @@
+import { t } from '../i18n/index.js';
 import {
-  contextLayerEnableBlockReason,
-  isExplicitUserIntentOrigin,
   runWithContextModeChanging,
   settleContextModeChange,
   shouldCaptureContextSession,
-  shouldDeferContextEntryDuringClear,
 } from '../contextModePolicy.js';
 
 export function connectContextManager(manager) {
@@ -27,31 +25,6 @@ export function connectContextManager(manager) {
           this._captureContextSessionSnapshot({
             excludeLayerIds: [change.layerId],
           });
-          if (
-            shouldDeferContextEntryDuringClear({
-              change,
-              clearInFlight: Boolean(this._clearSelectedLayersPromise),
-            })
-          ) {
-            this._contextModeDeferredEntryIntent = {
-              layerId: change.layerId,
-              intentEpoch: change.intentEpoch,
-              origin: change.origin,
-            };
-            this._contextModeEntering = 'space-missions';
-            this._syncContextModeButtons();
-          }
-        } else if (
-          change?.layerId === 'rocket-launches' &&
-          change.enabled === false &&
-          isExplicitUserIntentOrigin(change.origin, change.layerId)
-        ) {
-          this._contextModeDeferredEntryIntent = null;
-          if (this._clearSelectedLayersPromise) {
-            this._contextSessionSnapshot = null;
-            this._contextModeEntering = null;
-            this._syncContextModeButtons();
-          }
         }
       });
   }
@@ -59,80 +32,50 @@ export function connectContextManager(manager) {
     this._dataManagerVisibilityGuardUnsubscribe =
       this._dataManager.addVisibilityGuard(async (change) => {
         if (this.destroyed) return null;
-        const layerName =
-          this._dataManager?.layers?.get(change.layerId)?.module?.name ||
-          change.layerId;
-        const reason = contextLayerEnableBlockReason({
-          contextMode: this._contextModeEntering || this._contextMode,
-          change,
-          layerName,
-        });
-        if (reason) return reason;
+        // A direct Contacts start (the coordinator layer itself, not the
+        // Context chooser) isolates its dependencies like the chooser does.
         if (
-          change.enabled &&
-          ['military-awareness', 'rocket-launches'].includes(change.layerId) &&
-          shouldCaptureContextSession(change) &&
-          (!this._contextModeChanging ||
-            (change.layerId === 'rocket-launches' &&
-              this._contextModeDeferredEntryIntent?.intentEpoch ===
-                change.intentEpoch))
-        ) {
-          const entryMode =
-            change.layerId === 'rocket-launches' ? 'space-missions' : null;
-          const deferredClearEntry =
-            this._contextModeDeferredEntryIntent?.intentEpoch ===
-            change.intentEpoch;
-          // A deferred entry owns the state after Clear settles. Restoring
-          // Clear's transient busy flag here would leave Context stuck.
-          const priorChanging = deferredClearEntry
-            ? false
-            : this._contextModeChanging;
-          const notificationToken =
-            change.notificationToken || Symbol('direct-context-shell-entry');
-          const ownsNotificationToken = !change.notificationToken;
-          if (ownsNotificationToken) {
-            this._userFacingContextNotificationTokens.add(notificationToken);
-          }
-          this._contextModeEntering = entryMode;
-          this._contextModeChanging = true;
+          !change.enabled ||
+          change.layerId !== 'military-awareness' ||
+          !shouldCaptureContextSession(change) ||
+          this._contextModeChanging
+        )
+          return null;
+        const notificationToken =
+          change.notificationToken || Symbol('direct-context-shell-entry');
+        const ownsNotificationToken = !change.notificationToken;
+        if (ownsNotificationToken) {
+          this._userFacingContextNotificationTokens.add(notificationToken);
+        }
+        this._contextModeEntering = null;
+        this._contextModeChanging = true;
+        try {
+          await this._clearLayersOutsideContextMode(null, {
+            notificationToken,
+          });
+          if (this.destroyed) return false;
+        } catch (error) {
+          console.warn(`[Context] ${change.layerId} isolation failed`, error);
           try {
-            if (deferredClearEntry) {
-              await this._clearSelectedLayersManagerPromise;
-              if (this.destroyed) return false;
-              if (
-                this._contextModeDeferredEntryIntent?.intentEpoch !==
-                change.intentEpoch
-              )
-                return false;
-              this._contextModeDeferredEntryIntent = null;
-            }
-            await this._clearLayersOutsideContextMode(entryMode, {
+            await this._restoreContextSession({
+              excludeLayerIds: [change.layerId],
               notificationToken,
             });
-            if (this.destroyed) return false;
-          } catch (error) {
-            this._contextModeEntering = null;
-            console.warn(`[Context] ${change.layerId} isolation failed`, error);
-            try {
-              await this._restoreContextSession({
-                excludeLayerIds: [change.layerId],
-                notificationToken,
-              });
-            } catch (restoreError) {
-              console.warn(
-                `[Context] ${change.layerId} rollback failed`,
-                restoreError,
-              );
-            }
-            return `${entryMode === 'space-missions' ? 'Space Missions' : 'Context'} could not start because another layer did not stop cleanly`;
-          } finally {
-            if (ownsNotificationToken) {
-              this._userFacingContextNotificationTokens.delete(
-                notificationToken,
-              );
-            }
-            if (!this.destroyed) settleContextModeChange(this, priorChanging);
+          } catch (restoreError) {
+            console.warn(
+              `[Context] ${change.layerId} rollback failed`,
+              restoreError,
+            );
           }
+          return t(
+            '{mode} could not start because another layer did not stop cleanly',
+            { mode: t('Context') },
+          );
+        } finally {
+          if (ownsNotificationToken) {
+            this._userFacingContextNotificationTokens.delete(notificationToken);
+          }
+          if (!this.destroyed) settleContextModeChange(this, false);
         }
         return null;
       });

@@ -1,3 +1,4 @@
+import { t, tn } from '../i18n/index.js';
 import {
   settleUserFacingContextAction,
   contextModeWord,
@@ -5,8 +6,8 @@ import {
 
 export async function _runUserFacingContextAction(
   operation,
-  message = 'Context could not restore every layer; try again',
-  { falseIsFailure = true } = {},
+  message = t('Context could not restore every layer; try again'),
+  { falseIsFailure = true, localizedMessage = null } = {},
 ) {
   if (this.destroyed) return false;
   const notificationToken = Symbol('user-facing-context-action');
@@ -18,7 +19,10 @@ export async function _runUserFacingContextAction(
       onFailure: (error) => {
         if (this.destroyed) return;
         console.warn('[Context] user-facing transition failed', error);
-        this.showToast(message);
+        this.showToast(
+          localizedMessage ||
+            (typeof message === 'function' ? message() : message),
+        );
       },
     });
   } finally {
@@ -54,7 +58,6 @@ export function getContextModeState() {
     changing: Boolean(this._contextModeChanging),
     entering: this._contextModeEntering || null,
     canContact: !this._contextMode || this._contextMode === 'flights',
-    canMission: !this._contextMode || this._contextMode === 'space-missions',
     snapshotCaptured: Boolean(this._contextSessionSnapshot),
   };
 }
@@ -110,7 +113,7 @@ export async function setContextMode(
       };
     }
     const canonical = mode === 'contacts' ? 'flights' : mode;
-    if (!['flights', 'space-missions'].includes(canonical)) {
+    if (canonical !== 'flights') {
       return {
         ok: false,
         action: 'set_context_mode',
@@ -205,8 +208,6 @@ export function clearSelectedLayers() {
   this._contextModeChanging = true;
   this._contextMode = null;
   this._contextModeEntering = null;
-  this._contextModeEntryIntent = null;
-  this._contextModeReplacementIntent = null;
   this._contextSessionSnapshot = null;
   this._contextRestoreState = null;
   this._preservePanelStateDuringLayerClear = true;
@@ -222,21 +223,29 @@ export function clearSelectedLayers() {
   const operation = managerOperation
     .then((result) => {
       if (result.targetIds.length === 0) {
-        this.showToast('No selected data layers');
+        this.showToast(t('No selected data layers'));
       } else if (result.notClearedIds.length > 0) {
         this.showToast(
-          `${result.notClearedIds.length} data layer${result.notClearedIds.length === 1 ? '' : 's'} could not be cleared`,
+          tn(
+            result.notClearedIds.length,
+            '{count} data layer could not be cleared',
+            '{count} data layers could not be cleared',
+          ),
         );
       } else {
         this.showToast(
-          `Cleared ${result.clearedIds.length} data layer${result.clearedIds.length === 1 ? '' : 's'}`,
+          tn(
+            result.clearedIds.length,
+            'Cleared {count} data layer',
+            'Cleared {count} data layers',
+          ),
         );
       }
       return result;
     })
     .catch((error) => {
       console.warn('[Data] clear selected layers failed', error);
-      this.showToast('Selected data layers could not be cleared');
+      this.showToast(t('Selected data layers could not be cleared'));
       return {
         targetIds: [],
         items: [],

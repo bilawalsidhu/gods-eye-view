@@ -1,3 +1,6 @@
+import { t } from '../i18n/index.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
+
 const DISCONNECT_GRACE_MS = 6000;
 
 function releaseStartResources({ localStream = null, localPc = null } = {}) {
@@ -50,7 +53,8 @@ export class RealtimeConnection {
     return this.readStatus();
   }
   async start({ pushToTalk = false } = {}) {
-    if (this.isActive() || this.lifetimeSignal?.aborted) return;
+    if (isStoriesOpen() || this.isActive() || this.lifetimeSignal?.aborted)
+      return;
     this.pauseRadioForVoice();
     const pushToTalkKeyHeld = pushToTalk && this.input.pushToTalkKeyHeld;
     const spaceKeyHeld = this.input.spaceKeyHeld;
@@ -59,7 +63,7 @@ export class RealtimeConnection {
     this.input.pushToTalkKeyHeld = pushToTalkKeyHeld;
     this.input.spaceKeyHeld = spaceKeyHeld;
     if (!window.RTCPeerConnection || !navigator.mediaDevices?.getUserMedia) {
-      this.setStatus('error', 'WebRTC microphone support unavailable');
+      this.setStatus('error', t('WebRTC microphone support unavailable'));
       return;
     }
 
@@ -78,7 +82,7 @@ export class RealtimeConnection {
     // — this is what "applies next session" means.
     this.cost.prepareSession();
     this.syncCostUi();
-    this.setStatus('connecting', 'Requesting microphone');
+    this.setStatus('connecting', t('Requesting microphone'));
     this.debugLog('session.starting', {
       epoch,
       tier: this.cost.voiceTier,
@@ -179,9 +183,9 @@ export class RealtimeConnection {
         if (!ownsChannel()) return;
         const detail = this.input.pushToTalkMode
           ? this.input.pushToTalkKeyHeld
-            ? 'Release Space to send'
-            : 'Hold Space to talk'
-          : 'Ask or command';
+            ? t('Release Space to send')
+            : t('Hold Space to talk')
+          : t('Ask or command');
         this.setStatus('listening', detail);
         this.debugLog('data_channel.open', {
           connection: this.connectionDiagnostics(dataChannel),
@@ -374,6 +378,10 @@ export class RealtimeConnection {
       this.stream = null;
     }
     if (this.audioEl) {
+      // This session owns the element's remote media; peer closure is not track release.
+      const remoteStream = this.audioEl.srcObject;
+      this.audioEl.srcObject = null;
+      remoteStream?.getTracks?.().forEach((track) => track.stop());
       this.audioEl.remove();
       this.audioEl = null;
     }

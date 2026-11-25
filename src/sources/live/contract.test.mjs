@@ -8,6 +8,8 @@ import {
   normalizeVesselObservation,
   openSkySnapshot,
   readsbSnapshot,
+  readSnapshotTimeline,
+  vesselSnapshot,
 } from './index.js';
 
 const now = 1800000000000;
@@ -67,6 +69,71 @@ test('mixed-invalid and duplicate admissions are explicitly incomplete; all-inva
   assert.equal(openSkySnapshot({ states: [] }).complete, true);
 });
 
+test('position-less OpenSky rows are seen, not missing; malformed rows stay incomplete', () => {
+  // OpenSky's spec allows null longitude/latitude; every live /states/all
+  // carries such rows.
+  const unpositioned = ['DEF456', ...aircraft.slice(1)];
+  unpositioned[5] = null;
+  unpositioned[6] = null;
+  const snapshot = openSkySnapshot({ states: [aircraft, unpositioned] });
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['def456']);
+  assert.equal(snapshot.rejectedCount, 1);
+  const malformed = [...aircraft];
+  malformed[5] = 181;
+  const garbled = openSkySnapshot({
+    states: [aircraft, unpositioned, malformed],
+  });
+  assert.equal(garbled.complete, false);
+  assert.deepEqual([...garbled.retainIds], ['def456']);
+  // No usable id, only half a position, a truncated row, or no row at all.
+  for (const row of [
+    [' ', ...unpositioned.slice(1)],
+    Object.assign([...unpositioned], { 5: -97 }),
+    ['DEF456'],
+    null,
+  ])
+    assert.equal(openSkySnapshot({ states: [aircraft, row] }).complete, false);
+  // Repeated position-less rows stay complete.
+  const repeated = openSkySnapshot({
+    states: [aircraft, unpositioned, unpositioned],
+  });
+  assert.equal(repeated.complete, true);
+  // A feed with no positions at all still cannot prove absence.
+  assert.throws(() => openSkySnapshot({ states: [unpositioned] }), {
+    code: 'malformed',
+  });
+});
+
+test('position-less readsb rows are seen, not missing; malformed rows stay incomplete', () => {
+  // readsb omits lat/lon for a contact heard without a current position; a
+  // live adsb.lol /v2/mil fetch had 82 such rows of 239.
+  const positioned = { hex: 'ae638d', lat: 20.3, lon: -158.5, seen_pos: 0.2 };
+  const heard = { hex: 'ADFAC3', type: 'mode_s', rr_lat: 19.9, seen: 24.2 };
+  const lastPosition = {
+    hex: '3b752d',
+    lastPosition: { lat: 45.3, lon: 5.98, seen_pos: 61.56 },
+  };
+  const read = (ac) => readsbSnapshot({ ac }, { observedAtMs: null });
+  const snapshot = read([positioned, heard, lastPosition]);
+  assert.equal(snapshot.records.length, 1);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['adfac3', '3b752d']);
+  assert.equal(snapshot.rejectedCount, 2);
+  // No usable id, only half a position, an unreadable one, or no row at all.
+  for (const row of [
+    { ...heard, hex: ' ' },
+    { ...heard, lat: 30 },
+    { ...heard, lon: -97 },
+    { ...heard, lat: 'x', lon: 'y' },
+    null,
+  ])
+    assert.equal(read([positioned, heard, row]).complete, false);
+  // A feed with no positions at all still cannot prove absence.
+  assert.throws(() => read([heard]), { code: 'malformed' });
+});
+
 test('readsb units and position/contact ages are normalized once against the source epoch', () => {
   const row = normalizeReadsbAircraft(
     {
@@ -101,6 +168,36 @@ test('readsb units and position/contact ages are normalized once against the sou
   );
 });
 
+test('a readsb aircraft with no track takes its true heading, never its magnetic one', () => {
+  const course = (extra) =>
+    normalizeReadsbAircraft(
+      { hex: 'a4418c', lat: 37.6, lon: -122.38, alt_baro: 'ground', ...extra },
+      now,
+    ).courseDeg;
+  assert.equal(
+    course({ track: 56.25, true_heading: 40 }),
+    56.25,
+    'track first',
+  );
+  assert.equal(course({ true_heading: 185.62 }), 185.62, 'true heading');
+  assert.equal(course({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(course({}), null, 'none');
+});
+
+test('readsb vertical rate falls back to the GNSS rate when no baro rate is sent', () => {
+  // readsb reports the rate under geom_rate when the aircraft's source is
+  // GNSS; 26 of 157 positioned rows in a live /v2/mil fetch had only that.
+  const row = { hex: 'ae638d', lat: 20.3, lon: -158.5, geom_rate: -2432 };
+  assert.equal(
+    normalizeReadsbAircraft(row, now).verticalRateMps,
+    -2432 * 0.00508,
+  );
+  assert.equal(
+    normalizeReadsbAircraft({ ...row, baro_rate: -2400 }, now).verticalRateMps,
+    -2400 * 0.00508,
+  );
+});
+
 test('vessel identity, opaque reference and heading/course remain distinct, unknowns stay null', () => {
   const row = normalizeVesselObservation(
     {
@@ -116,6 +213,7 @@ test('vessel identity, opaque reference and heading/course remain distinct, unkn
     'opaque-reference',
   );
   assert.equal(row.id, '123456789');
+  assert.equal(row.mmsi, '123456789');
   assert.equal(row.reference, 'opaque-reference');
   assert.equal(row.headingDeg, 45);
   assert.equal(row.courseDeg, 60);
@@ -123,6 +221,18 @@ test('vessel identity, opaque reference and heading/course remain distinct, unkn
   assert.equal(row.altitudeDatum, 'sea-surface');
   assert.equal(row.observedAtMs, now);
   assert.equal('extra' in row, false);
+  // Only a source's own true marks a virtual aid to navigation.
+  assert.equal(row.virtual, false);
+  const base = { mmsi: '993672001', lat: 30, lon: -97 };
+  assert.equal(
+    normalizeVesselObservation({ ...base, virtual: true }).virtual,
+    true,
+  );
+  for (const virtual of ['true', 1, false, null])
+    assert.equal(
+      normalizeVesselObservation({ ...base, virtual }).virtual,
+      false,
+    );
   assert.equal(
     normalizeVesselObservation({ mmsi: 'x', lat: null, lon: null }),
     null,
@@ -170,11 +280,10 @@ test('construction is inert; adapters preserve routes, viewport query, cache epo
   assert.equal(mil.observedAtMs, now - 60000);
   assert.equal(mil.records[0].positionTimeMs, now - 75000);
   assert.equal(mil.stale, true);
-  const track = await military.getTrack('abc123');
-  assert.equal(track.complete, false);
-  assert.equal(track.records[0].observedAtMs, now - 50000);
-  assert.equal(track.records[0].baroAltitudeM, 304.8);
-  assert.equal(track.records[0].ellipsoidAltitudeM, null);
+  assert.equal(military.getTrack, undefined);
+  assert.ok(
+    requests.every(({ url }) => !url.startsWith('/api/military/track')),
+  );
 });
 
 test('cancellation after slow body parsing rejects even with a transport that ignores abort', async () => {
@@ -289,7 +398,8 @@ test('classification identities include positionless aircraft without admitting 
     snapshot.records.map((record) => record.id),
     ['def456'],
   );
-  assert.equal(snapshot.complete, false);
+  assert.equal(snapshot.complete, true);
+  assert.deepEqual([...snapshot.retainIds], ['abc123']);
 });
 
 test('identity lookup validates its response and honors body-parse cancellation', async () => {
@@ -312,4 +422,236 @@ test('identity lookup validates its response and honors body-parse cancellation'
   await assert.rejects(source.getIdentities({}, { signal: abort.signal }), {
     name: 'AbortError',
   });
+});
+
+test('squawks are validated and omitted OpenSky status differs from an explicit ADS-B clear', () => {
+  const squawking = [...aircraft, '7700'];
+  const civil = openSkySnapshot({ states: [squawking] }, { now }).records[0];
+  assert.equal(civil.squawk, '7700');
+  assert.equal(civil.emergency, undefined);
+  assert.equal(openSkySnapshot({ states: [aircraft] }).records[0].squawk, null);
+  const mil = normalizeReadsbAircraft(
+    { hex: 'abc123', lat: 30, lon: -97, squawk: '7600', emergency: 'NORDO' },
+    now,
+  );
+  assert.equal(mil.squawk, '7600');
+  assert.equal(mil.emergency, 'nordo');
+  const quiet = normalizeReadsbAircraft(
+    { hex: 'abc123', lat: 30, lon: -97 },
+    now,
+  );
+  assert.equal(quiet.squawk, null);
+  assert.equal(quiet.emergency, null);
+});
+
+test('a photo enrichment asks Planespotters directly and returns the checked photo', async () => {
+  const requests = [];
+  const source = createFlightSource({
+    fetchImpl: async (url, init) => {
+      requests.push({ url, init });
+      return response({
+        photos: [
+          {
+            thumbnail_large: {
+              src: 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg',
+              size: { width: 420, height: 280 },
+            },
+            link: 'https://www.planespotters.net/photo/1745410/x?utm_source=api',
+            photographer: 'Jan Seler',
+          },
+        ],
+      });
+    },
+  });
+  const signal = new AbortController().signal;
+  const photo = await source.getEnrichment(
+    { kind: 'photo', id: 'a0f1bb' },
+    { signal },
+  );
+  assert.equal(
+    requests[0].url,
+    'https://api.planespotters.net/pub/photos/hex/a0f1bb',
+  );
+  assert.ok(requests[0].init.signal, 'the request is cancellable');
+  assert.equal(requests[0].init.credentials, 'omit');
+  assert.deepEqual(photo, {
+    found: true,
+    src: 'https://t.plnspttrs.net/33043/1745410_822dfe330c_280.jpg',
+    width: 420,
+    height: 280,
+    photographer: 'Jan Seler',
+    link: 'https://www.planespotters.net/photo/1745410/x?utm_source=api',
+  });
+});
+
+test('a photo enrichment reads an empty answer as no photo and refuses a bad hex', async () => {
+  let calls = 0;
+  const source = createFlightSource({
+    fetchImpl: async (_url, _init) => {
+      calls++;
+      return response({ photos: [] });
+    },
+  });
+  assert.deepEqual(
+    await source.getEnrichment({ kind: 'photo', id: 'a0f1bb' }),
+    { found: false },
+  );
+  await assert.rejects(source.getEnrichment({ kind: 'photo', id: '../x' }), {
+    code: 'unsupported',
+  });
+  assert.equal(calls, 1);
+});
+
+test('a photo enrichment outage rejects without echoing the body', async () => {
+  for (const status of [403, 429, 502]) {
+    const source = createFlightSource({
+      fetchImpl: async () => response({ error: 'sensitive' }, {}, status),
+    });
+    await assert.rejects(
+      source.getEnrichment({ kind: 'photo', id: 'a0f1bb' }),
+      (error) => {
+        assert.equal(error.status, status);
+        assert.equal(error.message.includes('sensitive'), false);
+        return true;
+      },
+    );
+  }
+});
+
+test('a source declares a timeline only with a coverage reader and a positive step', () => {
+  assert.equal(readSnapshotTimeline(null), null);
+  assert.equal(readSnapshotTimeline({ getSnapshot() {} }), null);
+  assert.equal(readSnapshotTimeline({ timeline: { stepMs: 10_000 } }), null);
+  assert.equal(
+    readSnapshotTimeline({ timeline: { coverage: () => null, stepMs: 0 } }),
+    null,
+  );
+  assert.equal(
+    readSnapshotTimeline({
+      timeline: { coverage: () => null, stepMs: 10_000, subscribe: 'no' },
+    }),
+    null,
+  );
+  const span = { start: 1000, end: 5000 };
+  const plain = readSnapshotTimeline({
+    timeline: { coverage: () => span, stepMs: 10_000 },
+  });
+  assert.equal(plain.stepMs, 10_000);
+  assert.deepEqual(plain.coverage(), span);
+  assert.equal(plain.subscribe, null);
+  const listeners = [];
+  const told = readSnapshotTimeline({
+    timeline: {
+      coverage: () => null,
+      stepMs: 5_000,
+      subscribe(listener) {
+        listeners.push(listener);
+        return () => listeners.splice(listeners.indexOf(listener), 1);
+      },
+    },
+  });
+  const stop = told.subscribe(() => {});
+  assert.equal(listeners.length, 1);
+  stop();
+  assert.equal(listeners.length, 0);
+});
+
+test('vessel snapshots key rows by the id idFor gives; the MMSI is an attribute', () => {
+  const at = { lat: 30, lon: -97 };
+  const rows = [
+    { uuid: 'hull-a', mmsi: '123456789', ...at },
+    { uuid: 'hull-b', mmsi: '123456789', ...at },
+    { uuid: 'hull-c', mmsi: 'not-an-mmsi', ...at },
+    { uuid: 'hull-a', mmsi: '123456789', ...at },
+  ];
+  const keyed = vesselSnapshot(
+    { rows },
+    { idFor: (row) => row.uuid || row.mmsi },
+  );
+  assert.deepEqual(
+    keyed.records.map(({ id, mmsi, reference }) => [id, mmsi, reference]),
+    [
+      ['hull-a', '123456789', 'hull-a'],
+      ['hull-b', '123456789', 'hull-b'],
+      ['hull-c', '', 'hull-c'],
+    ],
+  );
+  assert.equal(keyed.rejectedCount, 1, 'a repeated id is one vessel');
+
+  // AISStream rows have only MMSIs: one MMSI is one vessel, as before.
+  const ais = vesselSnapshot({ rows });
+  assert.deepEqual(
+    ais.records.map(({ id, mmsi, reference }) => [id, mmsi, reference]),
+    [
+      ['123456789', '123456789', '123456789'],
+      ['not-an-mmsi', '', 'not-an-mmsi'],
+    ],
+  );
+  const referenced = vesselSnapshot(
+    { rows: rows.slice(0, 1) },
+    { idFor: (row) => row.uuid, referenceFor: (row) => `track:${row.uuid}` },
+  );
+  assert.equal(referenced.records[0].reference, 'track:hull-a');
+});
+
+test('a vessel with no name is not named by its id; a ten-digit MMSI is an MMSI', () => {
+  const at = { lat: 30, lon: -97 };
+  const [unnamed, longMmsi, named] = vesselSnapshot(
+    {
+      rows: [
+        { uuid: 'f00dcafe-0000-0000-0000-000000000001', ...at },
+        { uuid: 'hull-x', mmsi: '1234567890', ...at },
+        { uuid: 'hull-y', mmsi: '244123456', name: 'EVER GIVEN', ...at },
+      ],
+    },
+    { idFor: (row) => row.uuid },
+  ).records;
+  assert.equal(unnamed.name, '');
+  assert.equal(unnamed.mmsi, '');
+  assert.deepEqual(
+    [longMmsi.mmsi, longMmsi.name],
+    ['1234567890', '1234567890'],
+  );
+  assert.equal(named.name, 'EVER GIVEN');
+});
+
+test('aircraft a feed names as estimated are marked estimated, and only those', () => {
+  const row = (id) => [id, 'TEST1', 'US', 1, 1, -77, 39, 1000, false, 100, 90];
+  const vectors = openSkySnapshot({
+    time: 1,
+    states: [row('abc123'), row('def456')],
+    estimatedByIcao: ['ABC123', 'zzz999'],
+  }).records;
+  assert.equal(vectors[0].estimated, true);
+  assert.equal('estimated' in vectors[1], false);
+  assert.equal(
+    'estimated' in openSkySnapshot({ states: [row('abc123')] }).records[0],
+    false,
+  );
+  const rows = readsbSnapshot(
+    {
+      ac: [
+        { hex: 'abc123', lat: 39, lon: -77, estimated: true },
+        { hex: 'def456', lat: 39, lon: -77 },
+      ],
+    },
+    { observedAtMs: null },
+  ).records;
+  assert.equal(rows[0].estimated, true);
+  assert.equal('estimated' in rows[1], false);
+});
+
+test('a type sent alongside the state vectors becomes the record type code', () => {
+  const row = (id) => [id, 'TEST1', 'US', 1, 1, -77, 39, 1000, false, 100, 90];
+  const snapshot = openSkySnapshot({
+    time: 1,
+    states: [row('abc123'), row('def456')],
+    typeByIcao: { abc123: ' ec45 ', zzz999: 'B738' },
+  });
+  assert.equal(snapshot.records[0].typeCode, 'EC45');
+  assert.equal(snapshot.records[1].typeCode, null);
+  assert.equal(
+    openSkySnapshot({ states: [row('abc123')] }).records[0].typeCode,
+    null,
+  );
 });

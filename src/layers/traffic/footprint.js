@@ -1,9 +1,10 @@
-import * as Cesium from 'cesium';
+import { toCartographicRadians } from '../../geo/ellipsoid.js';
+import { toDegrees } from '../../geo/vector.js';
 import { tilesForBounds, tileToBBox } from '../../data/tomtomTiles.js';
 
-export const RETICLE_RANGE_KM = 10;
-export const RETICLE_TILE_CAP = 16;
-export const tileKey = (tile) => `${tile.z}/${tile.x}/${tile.y}`;
+const RETICLE_RANGE_KM = 10;
+const RETICLE_TILE_CAP = 16;
+const tileKey = (tile) => `${tile.z}/${tile.x}/${tile.y}`;
 const cross = (a, b, c) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 
@@ -62,49 +63,60 @@ export function footprintTiles(polygon, zoom, near) {
     });
 }
 
-/** Reusable camera scratch; sampled only on camera events, never in the animation loop. */
+const NO_DIRECTION = Object.freeze({ x: 0, y: 0, z: 0 });
+
+/**
+ * The pick ray's direction at a pixel; none (a zero vector, as an unset ray
+ * had) where the renderer has no ray there, such as on a canvas of no size.
+ */
+function rayDirection(query, x, y) {
+  try {
+    return query.pickRay(x, y)?.direction ?? NO_DIRECTION;
+  } catch {
+    return NO_DIRECTION;
+  }
+}
+
+/**
+ * The ground footprint of the reticle square, sampled through the camera and
+ * query ports on camera events only, never in the animation loop. Null
+ * without both ports.
+ * @returns {(view: {camera: object|null, query: object|null, width: number,
+ *   height: number}, altitude: number) => object|null}
+ */
 export function createReticleFootprint() {
-  const pixels = Array.from({ length: 25 }, () => new Cesium.Cartesian2());
-  const hits = Array.from({ length: 25 }, () => new Cesium.Cartesian3());
-  const carto = new Cesium.Cartographic();
-  const ray = new Cesium.Ray();
-  return (viewer, altitude) => {
-    const { camera, scene } = viewer;
-    if (!camera.getPickRay) return null;
-    const nadir = camera.positionCartographic;
+  return ({ camera, query, width, height }, altitude) => {
+    if (!camera || !query) return null;
+    const pose = camera.pose();
+    const nadir = toCartographicRadians(pose.position);
+    if (!nadir) return null;
     const near = {
-      lat: Cesium.Math.toDegrees(nadir.latitude),
-      lon: Cesium.Math.toDegrees(nadir.longitude),
+      lat: toDegrees(nadir.lat),
+      lon: toDegrees(nadir.lon),
     };
-    const width = scene.canvas.clientWidth || scene.canvas.width,
-      height = scene.canvas.clientHeight || scene.canvas.height;
     const side = Math.min(width, height),
       left = (width - side) / 2,
       top = (height - side) / 2;
     const points = [];
     for (let row = 0; row < 5; row++)
       for (let col = 0; col < 5; col++) {
-        const i = row * 5 + col,
-          p = pixels[i];
-        p.x = left + (side * col) / 4;
-        p.y = top + (side * row) / 4;
-        const hit = camera.pickEllipsoid(p, Cesium.Ellipsoid.WGS84, hits[i]);
+        const x = left + (side * col) / 4,
+          y = top + (side * row) / 4;
+        const hit = query.pickEllipsoid(x, y);
+        const carto = hit && toCartographicRadians(hit);
         let dx, dy;
-        if (hit) {
-          Cesium.Cartographic.fromCartesian(hit, Cesium.Ellipsoid.WGS84, carto);
-          dy = (Cesium.Math.toDegrees(carto.latitude) - near.lat) * 111.195;
-          let dlon = Cesium.Math.toDegrees(carto.longitude) - near.lon;
+        if (carto) {
+          dy = (toDegrees(carto.lat) - near.lat) * 111.195;
+          let dlon = toDegrees(carto.lon) - near.lon;
           dlon -= 360 * Math.round(dlon / 360);
-          dx = dlon * 111.195 * Math.cos(nadir.latitude);
+          dx = dlon * 111.195 * Math.cos(nadir.lat);
         } else {
-          camera.getPickRay(p, ray);
-          const d = ray.direction;
-          dx =
-            -Math.sin(nadir.longitude) * d.x + Math.cos(nadir.longitude) * d.y;
+          const d = rayDirection(query, x, y);
+          dx = -Math.sin(nadir.lon) * d.x + Math.cos(nadir.lon) * d.y;
           dy =
-            -Math.sin(nadir.latitude) * Math.cos(nadir.longitude) * d.x -
-            Math.sin(nadir.latitude) * Math.sin(nadir.longitude) * d.y +
-            Math.cos(nadir.latitude) * d.z;
+            -Math.sin(nadir.lat) * Math.cos(nadir.lon) * d.x -
+            Math.sin(nadir.lat) * Math.sin(nadir.lon) * d.y +
+            Math.cos(nadir.lat) * d.z;
           const length = Math.hypot(dx, dy) || 1;
           dx = (dx / length) * RETICLE_RANGE_KM;
           dy = (dy / length) * RETICLE_RANGE_KM;
@@ -120,8 +132,7 @@ export function createReticleFootprint() {
           const scale = Math.min(1, range / Math.max(1e-9, Math.hypot(dx, dy)));
           return [
             near.lon +
-              (dx * scale) /
-                (111.195 * Math.max(0.05, Math.cos(nadir.latitude))),
+              (dx * scale) / (111.195 * Math.max(0.05, Math.cos(nadir.lat))),
             near.lat + (dy * scale) / 111.195,
           ];
         }),
@@ -151,11 +162,11 @@ export function createReticleFootprint() {
         coarse,
         detail,
         viewKey: [
-          nadir.latitude,
-          nadir.longitude,
+          nadir.lat,
+          nadir.lon,
           nadir.height / 10000,
-          camera.heading,
-          camera.pitch,
+          pose.heading,
+          pose.pitch,
         ]
           .map((v) => Number(v || 0).toFixed(7))
           .join(','),

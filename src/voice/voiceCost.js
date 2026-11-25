@@ -50,7 +50,7 @@ export const VOICE_MODELS = Object.freeze({
   standard: Object.freeze({
     tier: 'standard',
     id: 'gpt-realtime-2',
-    label: 'STANDARD',
+    label: 'STANDARD', // i18n-ignore: model data; the tier button has its own text
     /** USD per 1M tokens — gpt-realtime-2. */
     rates: Object.freeze({
       textInput: 4,
@@ -66,7 +66,7 @@ export const VOICE_MODELS = Object.freeze({
   mini: Object.freeze({
     tier: 'mini',
     id: 'gpt-realtime-2.1-mini',
-    label: 'MINI',
+    label: 'MINI', // i18n-ignore: model data; the tier button has its own text
     /** USD per 1M tokens — gpt-realtime-2.1-mini (~3.2× cheaper on audio). */
     rates: Object.freeze({
       textInput: 0.6,

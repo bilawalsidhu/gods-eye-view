@@ -1,17 +1,21 @@
-const priorities = new WeakMap();
+/**
+ * Draw order of the weather imagery through the globe port: scalar context
+ * (wind), infrared, radar, then lightning, independent of enable order, and
+ * above the port's other layers (zOrder 0).
+ */
+/** What each product's imagery shows (the imagery's `shows`): both cloud products are clouds. */
+export const WEATHER_IMAGERY_SHOWS = Object.freeze({
+  wind: 'wind',
+  clouds: 'clouds',
+  'clouds-regional': 'clouds',
+  radar: 'radar',
+  lightning: 'lightning',
+});
 
-/** Scalar context, infrared, radar, then lightning: independent of enable order. */
-export function orderWeatherImagery(collection, layer, priority) {
-  priorities.set(layer, priority);
-  if (typeof collection.raiseToTop !== 'function') return;
-  const weather = [];
-  for (let i = 0; i < collection.length; i++) {
-    const item = collection.get(i);
-    if (priorities.has(item)) weather.push(item);
-  }
-  const ordered = [...weather].sort(
-    (a, b) => priorities.get(a) - priorities.get(b),
-  );
-  if (weather.every((item, i) => item === ordered[i])) return;
-  for (const item of ordered) collection.raiseToTop(item);
-}
+export const WEATHER_IMAGERY_Z = Object.freeze({
+  wind: 1,
+  clouds: 2,
+  'clouds-regional': 2,
+  radar: 3,
+  lightning: 4,
+});

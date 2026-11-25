@@ -1,4 +1,6 @@
-import * as Cesium from 'cesium';
+import { PI_OVER_TWO } from '../../geo/vector.js';
+import { t } from '../../i18n/index.js';
+import { cameraOf } from '../../render/rendererOf.js';
 import {
   SATELLITE_STANDALONE_DEFAULTS,
   LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M,
@@ -76,14 +78,14 @@ export function createPolicyHelpers({
       : 0;
     return {
       orbit: orbitName
-        ? `${orbitAllowed ? '' : 'PLANNED · '}${orbitName}`
+        ? `${orbitAllowed ? '' : t('PLANNED · ')}${orbitName}`
         : null,
       ascent:
         suppliedTrajectoryPoints > 1
-          ? 'SUPPLIED TRAJECTORY POINTS'
+          ? t('SUPPLIED TRAJECTORY POINTS')
           : replayAvailable
-            ? 'RECONSTRUCTED ESTIMATE'
-            : 'UNAVAILABLE',
+            ? t('RECONSTRUCTED ESTIMATE')
+            : t('UNAVAILABLE'),
       replayAvailable: Boolean(replayAvailable),
     };
   }
@@ -196,7 +198,8 @@ export function createPolicyHelpers({
 
   function formatMissionEventTime(launchTime) {
     const date = new Date(launchTime);
-    if (!launchTime || !Number.isFinite(date.getTime())) return 'UNAVAILABLE';
+    if (!launchTime || !Number.isFinite(date.getTime()))
+      return t('UNAVAILABLE');
     return `${date.toISOString().slice(0, 10)}\n${date.toISOString().slice(11, 19)} UTC`;
   }
 
@@ -223,20 +226,15 @@ export function createPolicyHelpers({
 
   function previewMissionFromRoster(launch) {
     if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
-    const range = parts.panel.missionHoverPreviewRange(
-      layerState._viewer.camera.positionCartographic?.height,
-    );
-    const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(position, 0),
+    const camera = cameraOf(layerState._viewer);
+    const range = parts.panel.missionHoverPreviewRange(camera.pose().height);
+    layerState._cameraReleased = false;
+    camera.flyToBounds(
+      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          -Cesium.Math.PI_OVER_TWO,
-          range,
-        ),
-        duration: 0.8,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        offset: { heading: 0, pitch: -PI_OVER_TWO, range },
+        durationS: 0.8,
+        easing: 'cubicInOut',
       },
     );
   }

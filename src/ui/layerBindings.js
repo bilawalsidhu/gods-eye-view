@@ -1,3 +1,4 @@
+import { onFollowChanged } from '../data/followed.js';
 import { isExplicitLayerStateOrigin } from '../data/layerState.js';
 import {
   registerCctvFocusRequestListener,
@@ -49,11 +50,17 @@ export class LayerBindings {
   get _contextControls() {
     return this.readControls()._contextControls;
   }
+  get _spaceMissionsControls() {
+    return this.readControls()._spaceMissionsControls;
+  }
   get _cctvControls() {
     return this.readControls()._cctvControls;
   }
   get _radioControls() {
     return this.readControls()._radioControls;
+  }
+  get _streetLevelControls() {
+    return this.readControls()._streetLevelControls;
   }
   observeCamera() {
     this._cctvRequestFocusHandler = (event) =>
@@ -77,11 +84,13 @@ export class LayerBindings {
       window,
       this._worldRequestFocusHandler,
     );
-    this._navigationOwnerChangedRemover =
-      this.viewer.trackedEntityChanged.addEventListener((entity) => {
-        if (entity && !this._disposed)
+    this._navigationOwnerChangedRemover = onFollowChanged(
+      this.viewer,
+      (followed) => {
+        if (followed && !this._disposed)
           this._stampNavigation({ cancelPendingSelection: false });
-      });
+      },
+    );
     // Vessel/installation focus flies without ever assigning a tracked entity,
     // so it cannot reach the listener above. It announces instead.
     this._removeNavigationAuthorityListener =
@@ -113,7 +122,6 @@ export class LayerBindings {
         this.runImmediateNavigation('route', navigate),
       floorFn: (lat, lon) => this.services.cachedGroundFloor(lat, lon),
       warmFn: (cells) => this.services.warmGroundFloor(cells),
-      showToast: (message) => this._showToast(message),
     });
   }
 
@@ -130,12 +138,37 @@ export class LayerBindings {
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
+      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
       layer.attachShellServices({
         runNavigation: (navigate) =>
-          this.runImmediateNavigation('weather', navigate),
+          this.runImmediateNavigation(noun, navigate),
         imageryHost: this.services.imageryHost,
       });
       this._weatherShellModules.push(layer);
+    }
+    // Active Fires drapes its far-zoom heatmap on the same imagery host.
+    const fires = this._dataManager?.layers?.get('local-firms')?.module;
+    if (typeof fires?.attachShellServices === 'function') {
+      fires.attachShellServices({ imageryHost: this.services.imageryHost });
+      this._weatherShellModules.push(fires);
+    }
+    // News flies to a chosen report or hotspot through the same release.
+    const news = this._dataManager?.layers?.get('news')?.module;
+    if (typeof news?.attachShellServices === 'function') {
+      news.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('news', navigate),
+      });
+      this._weatherShellModules.push(news);
+    }
+    // Bike share flies into a covered city from its marker the same way.
+    const bikeshare = this._dataManager?.layers?.get('bikeshare')?.module;
+    if (typeof bikeshare?.attachShellServices === 'function') {
+      bikeshare.attachShellServices({
+        runNavigation: (navigate) =>
+          this.runImmediateNavigation('bike share', navigate),
+      });
+      this._weatherShellModules.push(bikeshare);
     }
   }
 
@@ -224,6 +257,7 @@ export class LayerBindings {
       this._dataManagerUnsubscribe = null;
     }
     this._contextControls.connect(this._dataManager);
+    this._spaceMissionsControls?.connect(this._dataManager);
     if (typeof this._dataManager?.subscribe === 'function') {
       this._dataManagerUnsubscribe = this._dataManager.subscribe((change) => {
         this._feedback._loadingFeedbackEvent = change;
@@ -234,6 +268,8 @@ export class LayerBindings {
     this._syncContextModeButtons();
     this._cctvControls.connect();
     this._radioControls.connect();
+    // Its switch-on requests come from the manager, which arrives after it.
+    this._streetLevelControls?.connect();
     this._connectDirectionsCamera();
     this._connectWeatherCamera();
     if (!this._awarenessSelectedHandler) {
@@ -287,6 +323,7 @@ export class LayerBindings {
     this._directionsShellModule?.attachShellServices?.(null);
     this._directionsShellModule = null;
     this._dataManager = null;
+    this._spaceMissionsControls?.connect(null);
     this._connectWeatherCamera();
   }
 }

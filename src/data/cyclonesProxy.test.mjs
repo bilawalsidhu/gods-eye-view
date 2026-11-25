@@ -74,7 +74,12 @@ function collections(adv = '10') {
 }
 function install(options = {}, preview = false) {
   let handler;
-  const plugin = cycloneProxy({ now: () => NOW, ...options });
+  // JTWC has its own tests below; these cover NHC alone.
+  const plugin = cycloneProxy({
+    now: () => NOW,
+    readJtwc: async () => [],
+    ...options,
+  });
   plugin[preview ? 'configurePreviewServer' : 'configureServer']({
     middlewares: {
       use(path, callback) {
@@ -115,7 +120,8 @@ test('status retains official clocks, knots, source links and finite current pos
   assert.equal(storm.issuedAt, TIME);
   assert.equal(storm.positionAt, TIME);
   assert.deepEqual(storm.position, { longitude: -125.8, latitude: 15.5 });
-  assert.deepEqual(storm.movement, { directionDegrees: 255, speedKt: 12 });
+  // NHC publishes movementSpeed in mph: 12 mph is 10 kt.
+  assert.deepEqual(storm.movement, { directionDegrees: 255, speedKt: 10 });
   assert.equal(storm.windKt, 25);
   assert.equal(storm.pressureHpa, 1006);
   assert.match(storm.advisoryUrl, /^https:\/\/www\.nhc\.noaa\.gov\/text\//);
@@ -160,6 +166,44 @@ test('malformed, duplicate, oversized, future and expired status is rejected rat
   ])
     assert.throws(() => parseCycloneStatus(payload, NOW));
   assert.deepEqual(parseCycloneStatus({ activeStorms: [] }, NOW), []);
+});
+
+test('advisories published before their nominal time are accepted, far-future ones are not', () => {
+  // NHC wrote the 03:00Z advisory at 02:34Z.
+  const early = Date.UTC(2026, 8, 16, 2, 34);
+  assert.equal(parseCycloneStatus(status(), early)[0].issuedAt, TIME);
+  assert.throws(
+    () => parseCycloneStatus(status(), Date.UTC(2026, 8, 16, 1, 25)),
+    /invalid_cyclone_data/,
+  );
+});
+
+test('advisory and position times are bounded at 90 minutes ahead and 12 hours old', () => {
+  const MINUTE = 60_000;
+  const at = (offsetMs) => new Date(NOW + offsetMs).toISOString();
+  const fields = {
+    issuedAt: (value) =>
+      status({
+        forecastAdvisory: {
+          advNum: '010',
+          issuance: value,
+          url: 'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml',
+        },
+      }),
+    positionAt: (value) => status({ lastUpdate: value }),
+  };
+  for (const [field, payload] of Object.entries(fields)) {
+    for (const offset of [90 * MINUTE, -12 * 60 * MINUTE]) {
+      const [storm] = parseCycloneStatus(payload(at(offset)), NOW);
+      assert.equal(storm[field], at(offset), `${field} ${offset}`);
+    }
+    for (const offset of [90 * MINUTE + 1, -12 * 60 * MINUTE - 1])
+      assert.throws(
+        () => parseCycloneStatus(payload(at(offset)), NOW),
+        /invalid_cyclone_data/,
+        `${field} ${offset}`,
+      );
+  }
 });
 
 test('coherent geometry is retained with holes/dateline while older advisory geometry is omitted', () => {
@@ -258,7 +302,7 @@ test('dev and preview serve only fixed bounded NOAA queries, caching a complete 
     const snapshot = body(await request());
     assert.equal(snapshot.unavailable, false);
     assert.equal(snapshot.stale, false);
-    assert.match(snapshot.coverage, /not worldwide/);
+    assert.match(snapshot.coverage, /JTWC: western North Pacific/);
     assert.equal(snapshot.storms[0].geometryStatus, 'current');
     assert.equal(snapshot.fetchedAt, NOW);
     assert.equal(calls.length, 4);
@@ -451,4 +495,158 @@ test('shared refresh caps waiting consumers and rejects redirects without exposi
       }),
   });
   assert.equal(body(await redirected.request()).unavailable, true);
+});
+
+function jtwcStorm(overrides = {}) {
+  return {
+    id: 'sh042027',
+    agency: 'jtwc',
+    name: 'Xavier',
+    classification: 'TC',
+    basin: 'SH',
+    position: { longitude: -164.5, latitude: -11.6 },
+    positionAt: TIME,
+    advisoryNumber: '15',
+    issuedAt: TIME,
+    windKt: 45,
+    pressureHpa: 995,
+    movement: { directionDegrees: 245, speedKt: 4 },
+    advisoryUrl: 'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+    outlookUrl: 'https://www.metoc.navy.mil/jtwc/products/abpwweb.txt',
+    geometryStatus: 'pending',
+    geometryAdvisoryNumber: null,
+    forecastPoints: [],
+    track: null,
+    cone: null,
+    dangerArea: null,
+    ...overrides,
+  };
+}
+
+test('JTWC storms join NHC’s, and NHC’s advisory wins for a storm both list', async () => {
+  const crossing = jtwcStorm({
+    id: 'ep152026',
+    basin: 'EP',
+    name: 'JTWC copy',
+  });
+  const { request } = install({
+    fetchImpl: fetcher(),
+    readJtwc: async () => [jtwcStorm(), crossing],
+  });
+  const snapshot = body(await request());
+  assert.deepEqual(
+    snapshot.storms.map((storm) => [storm.id, storm.agency, storm.name]),
+    [
+      ['ep152026', 'nhc', 'Fifteen-E'],
+      ['sh042027', 'jtwc', 'Xavier'],
+    ],
+  );
+  assert.equal(snapshot.stale, false);
+  assert.match(snapshot.source, /JTWC/);
+  assert.match(snapshot.attribution, /Joint Typhoon Warning Center/);
+});
+
+test('JTWC reads go through the bounded fetch with no redirects', async () => {
+  const calls = [];
+  const { request } = install({
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      if (url.includes('jtwc.rss'))
+        return new Response(
+          '<rss><item><guid>NWPAC-NIO-WARNINGS</guid>No Current Tropical Cyclone Warnings</item><item><guid>EPAC-CPAC-WARNINGS</guid>No Current Tropical Cyclone Warnings</item><item><guid>SH-WARNINGS</guid>No Current Tropical Cyclone Warnings</item></rss>',
+        );
+      return fetcher()(url, options);
+    },
+    readJtwc: undefined,
+  });
+  const snapshot = body(await request());
+  assert.equal(snapshot.stale, false);
+  const jtwc = calls.filter(({ url }) => url.includes('metoc.navy.mil'));
+  assert.deepEqual(
+    jtwc.map(({ url }) => url),
+    ['https://www.metoc.navy.mil/jtwc/rss/jtwc.rss'],
+  );
+  assert.equal(jtwc[0].options.redirect, 'error');
+});
+
+test('a failed JTWC read keeps its last storms and leaves NHC’s answer fresh', async () => {
+  let fail = false;
+  let clock = NOW;
+  const { request } = install({
+    fetchImpl: fetcher(),
+    now: () => clock,
+    readJtwc: async () => {
+      if (fail) throw new Error('jtwc down');
+      return [jtwcStorm()];
+    },
+  });
+  assert.equal(body(await request()).storms.length, 2);
+  fail = true;
+  clock += 6 * 60_000;
+  const kept = body(await request());
+  assert.equal(kept.stale, false);
+  assert.equal(kept.reason, null);
+  assert.deepEqual(
+    kept.storms.map((storm) => storm.id),
+    ['ep152026', 'sh042027'],
+  );
+  // Past their use, both advisories leave the cached answer.
+  clock = Date.parse(TIME) + 13 * 3600_000 + 60_000;
+  const later = body(await request());
+  assert.deepEqual(
+    later.storms.map((storm) => storm.id),
+    [],
+  );
+});
+
+test('a cached answer drops each storm whose own advisory is past use, not all of them', async () => {
+  let up = true;
+  let clock = NOW;
+  const { request } = install({
+    fetchImpl: async (url, options) => {
+      if (!up) throw new Error('down');
+      return fetcher()(url, options);
+    },
+    now: () => clock,
+    readJtwc: async () => [
+      jtwcStorm({ issuedAt: new Date(NOW - 30 * 60_000).toISOString() }),
+    ],
+  });
+  assert.equal(body(await request()).storms.length, 2);
+  up = false;
+  // 12 h 10 min after the NHC advisory: NHC's is past use, JTWC's is not.
+  clock = Date.parse(TIME) + 12 * 3600_000 + 10 * 60_000;
+  const cached = body(await request());
+  assert.equal(cached.stale, true);
+  assert.deepEqual(
+    cached.storms.map((storm) => storm.id),
+    ['sh042027'],
+  );
+});
+
+test('a JTWC that hangs or answers 500 leaves NHC’s answer unchanged', async (t) => {
+  const nhcOnly = body(await install({ fetchImpl: fetcher() }).request());
+  assert.equal(nhcOnly.stale, false);
+  const jtwcCalls = [];
+  for (const mode of ['500', 'hang']) {
+    const { request } = install({
+      readJtwc: undefined,
+      jtwcTimeoutMs: 20,
+      fetchImpl: async (url, options) => {
+        if (!String(url).includes('metoc.navy.mil'))
+          return fetcher()(url, options);
+        jtwcCalls.push(mode);
+        if (mode === '500') return new Response('down', { status: 500 });
+        // Hangs until its own deadline aborts it.
+        return new Promise((_, reject) =>
+          options.signal.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          ),
+        );
+      },
+    });
+    const answer = body(await request());
+    assert.deepEqual(answer, nhcOnly, `JTWC ${mode}`);
+  }
+  assert.deepEqual(jtwcCalls, ['500', 'hang']);
 });

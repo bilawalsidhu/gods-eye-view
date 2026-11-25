@@ -1,9 +1,16 @@
-import * as Cesium from 'cesium';
 import {
   clearOverlaySource,
   setOverlayEntries,
 } from '../overlays/worldOverlay.js';
+import { inputFor } from '../input/dispatcher.js';
+import { clickCard } from './pickRegistry.js';
+import { isTrackingSelectionGesture } from './trackingClickGesture.js';
 import { governorRequestRender } from '../renderGovernor.js';
+import { drawOf, findCamera } from '../render/rendererOf.js';
+import { hexColor } from '../render/color.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { toRadians } from '../geo/vector.js';
+import { lengthFraction } from '../geo/polyline.js';
 import {
   BHOTE_KOSHI_LOCATOR_CREDIT,
   registerDynamicCredit,
@@ -12,8 +19,9 @@ import {
 } from './dataCredits.js';
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import { INCIDENT_OVERVIEW_PLACES } from './bhoteKoshiIncidentPlaces.js';
+import { t, msg, getLocale, isolate } from '../i18n/index.js';
 
-export const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
+const BHOTE_KOSHI_LOCATOR_LAYER_ID = 'bhote-koshi-locator';
 export const BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID =
   'bhote-koshi-locator-callout';
 export const NEPAL_CONTEXT_PRESENTATION = 'nepal-context';
@@ -34,7 +42,6 @@ const BORDER_START_DELAY_MS = 700;
 const INCIDENT_CALLOUT_GAP_MS = 200;
 const CALLOUT_REVEAL_DURATION_MS = 1200;
 const CALLOUT_PULSE_DURATION_MS = 1800;
-const CALLOUT_DOT_SIZE_PX = 7;
 const CALLOUT_RING_MIN_SIZE_PX = 16;
 const CALLOUT_RING_SIZE_RANGE_PX = 14;
 const CITY_CALLOUT_START_DELAY_MS = 350;
@@ -51,23 +58,45 @@ const TRIGGER_ORBIT_DURATION_SEC = 2.8;
 const TRIGGER_SOURCE_URL =
   'https://earthquake.usgs.gov/earthquakes/eventpage/us7000tbwb/executive';
 
+// Descriptive pin titles translate at display (same entries as the event
+// panel); place names stay Latin, anything else shows as authored.
+const PLACE_TITLE_TEXT = new Map(
+  [
+    msg('Collapse viewpoint'),
+    msg('Dammed lake'),
+    msg('Second landslide'),
+    msg('Border gate'),
+    msg('Dandagaun viewpoint'),
+    msg('Bidur bridge'),
+    msg('Devighat bridge'),
+  ].map((text) => [text.toUpperCase(), text]),
+);
+
+function placeTitle(title) {
+  const text = PLACE_TITLE_TEXT.get(title);
+  // Isolated: the card draws left to right after its "11 · " counter, so in
+  // Arabic a translated title with a Latin place name («نقطة الإطلالة في
+  // DANDAGAUN») must keep its own right-to-left order.
+  return text ? isolate(t(text).toLocaleUpperCase(getLocale())) : title;
+}
+
 const INCIDENT = Object.freeze({
   lat: 28.3632333,
   lon: 85.4423639,
   heightM: 5200,
-  title: 'BHOTE KOSHI FLOOD INCIDENT',
-  subtitle: 'NEPAL · 26 AUG 2026',
+  title: msg('BHOTE KOSHI FLOOD INCIDENT'),
+  subtitle: msg('NEPAL · 26 AUG 2026'),
 });
 const TRIGGER_RECORD = Object.freeze({
   lat: 28.271,
   lon: 85.515,
   heightM: 4200,
-  title: 'USGS INITIAL REPORT',
+  title: msg('USGS INITIAL REPORT'),
   details: Object.freeze([
-    '26 AUG 2026 · 08:37 NPT',
-    '28.2710° N · 85.5150° E',
-    'INITIAL M4.4 · RECLASSIFIED M5.2 LANDSLIDE',
-    'USGS EVENT us7000tbwb · OPEN SOURCE',
+    msg('26 AUG 2026 · 08:37 NPT'),
+    msg('28.2710° N · 85.5150° E'),
+    msg('INITIAL M4.4 · RECLASSIFIED M5.2 LANDSLIDE'),
+    msg('USGS EVENT us7000tbwb · OPEN SOURCE'),
   ]),
 });
 const TRIGGER_APPROACH_CAMERA = Object.freeze({
@@ -90,11 +119,13 @@ const NEPAL = Object.freeze({
   lat: 28.3949,
   lon: 84.124,
   heightM: 6800,
+  // i18n-ignore: country name, shown as is
   title: 'NEPAL',
 });
 const NEARBY_CITIES = Object.freeze([
   Object.freeze({
     id: 'kathmandu',
+    // i18n-ignore: city name
     title: 'KATHMANDU',
     lat: 27.7017,
     lon: 85.3206,
@@ -103,6 +134,7 @@ const NEARBY_CITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'bhaktapur',
+    // i18n-ignore: city name
     title: 'BHAKTAPUR',
     lat: 27.673,
     lon: 85.43,
@@ -111,6 +143,7 @@ const NEARBY_CITIES = Object.freeze([
   }),
   Object.freeze({
     id: 'dhulikhel',
+    // i18n-ignore: city name
     title: 'DHULIKHEL',
     lat: 27.6221,
     lon: 85.5428,
@@ -118,10 +151,11 @@ const NEARBY_CITIES = Object.freeze([
     placement: 'right-lower',
   }),
 ]);
-const BORDER_COLOR = Cesium.Color.fromCssColorString('#20e7f2');
 const BORDER_ACCENT = '#20e7f2';
 const INCIDENT_ACCENT = '#ffad55';
-const INCIDENT_COLOR = Cesium.Color.fromCssColorString(INCIDENT_ACCENT);
+
+// Each layer's draw sets have ids of their own.
+let layerSerial = 0;
 
 const DEFAULT_OVERLAY_HOST = Object.freeze({
   setEntries: setOverlayEntries,
@@ -168,10 +202,6 @@ function presentationUsesBoundary(value) {
   );
 }
 
-function presentationAnimatesBoundary(value) {
-  return value === BHOTE_KOSHI_REGIONAL_PRESENTATION;
-}
-
 function smoothstep(from, to, value) {
   if (to <= from) return value >= to ? 1 : 0;
   const amount = Math.max(0, Math.min(1, (value - from) / (to - from)));
@@ -193,26 +223,21 @@ export function anchoredCalloutPresentation(elapsedMs) {
   };
 }
 
-/** Return the progressive prefix used by the animated Nepal border. */
-export function revealPolylinePositions(positions, progress) {
-  if (!Array.isArray(positions) || positions.length < 2) return [];
+/**
+ * How much of a line's length is drawn when it is revealed vertex by
+ * vertex: `progress` of its vertices (the head between two of them), as a
+ * fraction of its length, for the draw port's `revealFraction`.
+ * @param {Array<{x: number, y: number, z: number}>} positions
+ * @param {number} progress 0..1
+ */
+export function revealLengthFraction(positions, progress) {
+  if (!Array.isArray(positions) || positions.length < 2) return 0;
   const clamped = Math.max(0, Math.min(1, Number(progress) || 0));
-  if (clamped >= 1) return positions;
+  if (clamped >= 1) return 1;
+  if (clamped <= 0) return 0;
   const scaled = clamped * (positions.length - 1);
-  const completed = Math.floor(scaled);
-  const revealed = positions.slice(0, completed + 1);
-  const next = Math.min(completed + 1, positions.length - 1);
-  if (next > completed) {
-    revealed.push(
-      Cesium.Cartesian3.lerp(
-        positions[completed],
-        positions[next],
-        scaled - completed,
-        new Cesium.Cartesian3(),
-      ),
-    );
-  }
-  return revealed.length >= 2 ? revealed : [positions[0], positions[0]];
+  const index = Math.floor(scaled);
+  return lengthFraction(positions, index, scaled - index);
 }
 
 /** Close a region ring without duplicating an already-closed final vertex. */
@@ -257,16 +282,32 @@ export function createBhoteKoshiLocatorLayer({
   cancelFrame = (handle) => cancelAnimationFrame(handle),
   scheduleDelay = (callback, delayMs) => setTimeout(callback, delayMs),
   cancelDelay = (handle) => clearTimeout(handle),
+  input = inputFor,
 } = {}) {
   let _viewer = null;
-  let _dataSource = null;
+  // The globe click that opens an actionable callout of ours on top.
+  let _removeClick = null;
+  const _serial = ++layerSerial;
+  // Whether the layer draws: from enable until it is let go.
+  let _drawing = false;
+  let _sets = null;
+  // What the presentation draws, each item worked out for the time now:
+  // pulsing halos, lines revealed as they grow, and the country fill, drawn
+  // once it is due.
+  let _halos = [];
+  let _lines = [];
+  let _fill = null;
+  let _fillShown = false;
+  // Each line's reveal and show as last drawn.
+  const _drawnLines = new Map();
+  // Each halo's look as last drawn.
+  const _drawnHalos = new Map();
   let _enabled = false;
   let _boundaryReady = false;
   let _boundaryResolved = false;
   let _boundaryRing = null;
   let _generation = 0;
   let _presentation = BHOTE_KOSHI_REGIONAL_PRESENTATION;
-  let _borderAnimationFrame = null;
   let _calloutPulseFrame = null;
   let _triggerApproachTimer = null;
   let _removeTriggerMoveStart = null;
@@ -306,30 +347,164 @@ export function createBhoteKoshiLocatorLayer({
     _removeTriggerMoveEnd = null;
     const wasInFlight = _triggerApproachInFlight;
     _triggerApproachInFlight = false;
-    if (wasInFlight) _viewer?.camera?.cancelFlight?.();
+    if (wasInFlight) findCamera(_viewer)?.cancelFlight();
     if (!preserveCallout) _triggerCalloutStartedAt = Number.POSITIVE_INFINITY;
   }
 
   function stopAnimations() {
-    if (_borderAnimationFrame !== null) cancelFrame(_borderAnimationFrame);
     if (_calloutPulseFrame !== null) cancelFrame(_calloutPulseFrame);
-    _borderAnimationFrame = null;
     _calloutPulseFrame = null;
     _placeRevealMoving = false;
     _placeRevealSettledAt = Number.POSITIVE_INFINITY;
     clearTriggerApproach();
   }
 
-  function removeDataSource() {
+  function removeDrawn() {
     stopAnimations();
     overlayHost.clearSource(BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
-    if (_dataSource && _viewer?.dataSources)
-      _viewer.dataSources.remove(_dataSource, true);
-    _dataSource = null;
+    if (_sets) for (const set of Object.values(_sets)) set.dispose();
+    _sets = null;
+    _drawing = false;
+    resetDrawn();
+  }
+
+  function resetDrawn() {
+    _halos = [];
+    _lines = [];
+    _fill = null;
+    _fillShown = false;
+    _drawnLines.clear();
+    _drawnHalos.clear();
+  }
+
+  /** The layer's draw sets, made on first use: fill under lines under halos. */
+  function drawSets() {
+    if (_sets) return _sets;
+    const draw = drawOf(_viewer);
+    const prefix = `${BHOTE_KOSHI_LOCATOR_LAYER_ID}:${_serial}`;
+    // Presentation only: clicks go through to what is under them.
+    _sets = {
+      fill: draw.shapes({ id: `${prefix}:fill`, pickable: false }),
+      lines: draw.lines({ id: `${prefix}:lines`, pickable: false }),
+      halos: draw.points({ id: `${prefix}:halos`, pickable: false }),
+    };
+    return _sets;
+  }
+
+  /** Draw the presentation as it now stands, in place of what was drawn. */
+  function commitDrawn() {
+    const sets = drawSets();
+    _drawnLines.clear();
+    _fillShown = Boolean(_fill?.visible());
+    sets.fill.set(_fillShown ? [_fill.item] : []);
+    sets.lines.set(
+      _lines.map((line) => {
+        const item = line();
+        _drawnLines.set(item.id, lineKey(item));
+        return item;
+      }),
+    );
+    _drawnHalos.clear();
+    sets.halos.set(
+      _halos.map((halo) => {
+        const item = halo();
+        _drawnHalos.set(item.id, haloKey(item));
+        return item;
+      }),
+    );
+  }
+
+  const haloKey = (item) =>
+    `${item.pixelSize}:${item.color}:${item.outlineColor}:${item.show}`;
+
+  const lineKey = (item) => `${item.revealFraction}:${item.show !== false}`;
+
+  /**
+   * Bring what is drawn to the time now: halos pulse, lines that grew or
+   * showed are changed in place, and the fill shows once it is due.
+   */
+  function syncDrawn() {
+    if (!_drawing || !_sets) return;
+    if (!_fillShown && _fill?.visible()) {
+      _fillShown = true;
+      _sets.fill.set([_fill.item]);
+    }
+    const changed = [];
+    for (const line of _lines) {
+      const item = line();
+      const key = lineKey(item);
+      if (_drawnLines.get(item.id) === key) continue;
+      _drawnLines.set(item.id, key);
+      changed.push(item);
+    }
+    if (changed.length) _sets.lines.upsert(changed);
+    const pulsed = [];
+    for (const halo of _halos) {
+      const item = halo();
+      const key = haloKey(item);
+      if (_drawnHalos.get(item.id) === key) continue;
+      _drawnHalos.set(item.id, key);
+      pulsed.push(item);
+    }
+    if (pulsed.length) _sets.halos.upsert(pulsed);
+  }
+
+  /**
+   * A pulsing halo point: `progress()` (0..1) sizes it and fades its fill
+   * and ring (`fillAlpha`, `ringAlpha`), shown while `visible()`.
+   */
+  function addHalo({
+    id,
+    subject,
+    color,
+    visible,
+    progress,
+    fillAlpha,
+    ringAlpha,
+    scaleByDistance,
+  }) {
+    const pos = { lon: subject.lon, lat: subject.lat, height: subject.heightM };
+    _halos.push(() => {
+      const p = progress();
+      return {
+        id,
+        pos,
+        pixelSize: CALLOUT_RING_MIN_SIZE_PX + CALLOUT_RING_SIZE_RANGE_PX * p,
+        color: hexColor(color, fillAlpha(p)),
+        outlineColor: hexColor(color, ringAlpha(p)),
+        outlineWidth: 2,
+        disableDepthTest: Number.POSITIVE_INFINITY,
+        scaleByDistance,
+        show: visible(),
+      };
+    });
+  }
+
+  /**
+   * A draped line revealed vertex by vertex as `progress()` runs 0..1,
+   * shown while `visible()`.
+   */
+  function addRevealedLine({
+    id,
+    positions,
+    widthPx,
+    color,
+    progress,
+    visible,
+  }) {
+    _lines.push(() => ({
+      id,
+      positions,
+      widthPx,
+      mode: 'draped',
+      clampTo: 'both',
+      style: { kind: 'solid', color },
+      revealFraction: revealLengthFraction(positions, progress()),
+      show: visible(),
+    }));
   }
 
   function addCallout(
-    dataSource,
     subject,
     color,
     {
@@ -339,51 +514,27 @@ export function createBhoteKoshiLocatorLayer({
       showAnchor = true,
     } = {},
   ) {
-    const position = Cesium.Cartesian3.fromDegrees(
-      subject.lon,
-      subject.lat,
-      subject.heightM,
-    );
+    const position = fromDegrees(subject.lon, subject.lat, subject.heightM);
     const visibleAt = sequenceStartedAt + visibleAfterMs;
     const isVisible = () => now() >= visibleAt;
     const pulseProgress = () => {
       const elapsed = Math.max(0, now() - visibleAt);
       return (elapsed % CALLOUT_PULSE_DURATION_MS) / CALLOUT_PULSE_DURATION_MS;
     };
-    const ringSize = new Cesium.CallbackProperty(() => {
-      return (
-        CALLOUT_RING_MIN_SIZE_PX + CALLOUT_RING_SIZE_RANGE_PX * pulseProgress()
-      );
-    }, false);
-    const ringColor = new Cesium.CallbackProperty((_time, result) => {
-      const dynamicColor = Cesium.Color.clone(color, result);
-      dynamicColor.alpha = isVisible() ? 0.14 * (1 - pulseProgress()) : 0;
-      return dynamicColor;
-    }, false);
-    const ringOutlineColor = new Cesium.CallbackProperty((_time, result) => {
-      const dynamicColor = Cesium.Color.clone(color, result);
-      dynamicColor.alpha = isVisible()
-        ? 0.08 + 0.72 * (1 - pulseProgress())
-        : 0;
-      return dynamicColor;
-    }, false);
     if (showAnchor) {
-      dataSource.entities.add({
+      addHalo({
         id: `${subject === INCIDENT ? 'bhote-koshi-incident' : 'nepal-context'}-halo`,
-        position,
-        show: new Cesium.CallbackProperty(isVisible, false),
-        point: {
-          pixelSize: ringSize,
-          color: ringColor,
-          outlineColor: ringOutlineColor,
-          outlineWidth: 2,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(
-            250000,
-            0.8,
-            25000000,
-            1.35,
-          ),
+        subject,
+        color,
+        visible: isVisible,
+        progress: pulseProgress,
+        fillAlpha: (p) => (isVisible() ? 0.14 * (1 - p) : 0),
+        ringAlpha: (p) => (isVisible() ? 0.08 + 0.72 * (1 - p) : 0),
+        scaleByDistance: {
+          near: 250000,
+          nearValue: 0.8,
+          far: 25000000,
+          farValue: 1.35,
         },
       });
     }
@@ -394,8 +545,8 @@ export function createBhoteKoshiLocatorLayer({
         position,
         variant: 'card',
         paintLane: 'thumbnail',
-        title: subject.title,
-        details: [subject.subtitle],
+        title: t(subject.title),
+        details: [t(subject.subtitle)],
         accent: INCIDENT_ACCENT,
         sourceAlpha: () => presentation().alpha,
         presentationScale: () => presentation().scale,
@@ -472,25 +623,22 @@ export function createBhoteKoshiLocatorLayer({
         _placeRevealSettledAt = Number.POSITIVE_INFINITY;
         publishOverlayEntries();
       }
+      syncDrawn();
       requestRender('bhote-koshi-locator-callout-pulse');
       _calloutPulseFrame = scheduleFrame(pulseFrame);
     };
     _calloutPulseFrame = scheduleFrame(pulseFrame);
   }
 
-  function addIncidentCallout(
-    dataSource,
-    sequenceStartedAt,
-    visibleAfterMs = 0,
-  ) {
-    addCallout(dataSource, INCIDENT, INCIDENT_COLOR, {
+  function addIncidentCallout(sequenceStartedAt, visibleAfterMs = 0) {
+    addCallout(INCIDENT, INCIDENT_ACCENT, {
       sequenceStartedAt,
       visibleAfterMs,
     });
   }
 
-  function addTriggerRecordCallout(dataSource) {
-    const position = Cesium.Cartesian3.fromDegrees(
+  function addTriggerRecordCallout() {
+    const position = fromDegrees(
       TRIGGER_RECORD.lon,
       TRIGGER_RECORD.lat,
       TRIGGER_RECORD.heightM,
@@ -505,30 +653,19 @@ export function createBhoteKoshiLocatorLayer({
         CALLOUT_PULSE_DURATION_MS
       );
     };
-    dataSource.entities.add({
+    addHalo({
       id: 'bhote-koshi-trigger-record-halo',
-      position,
-      show: new Cesium.CallbackProperty(isVisible, false),
-      point: {
-        pixelSize: new Cesium.CallbackProperty(
-          () =>
-            CALLOUT_RING_MIN_SIZE_PX +
-            CALLOUT_RING_SIZE_RANGE_PX * pulseProgress(),
-          false,
-        ),
-        color: new Cesium.CallbackProperty((_time, result) => {
-          const color = Cesium.Color.clone(INCIDENT_COLOR, result);
-          color.alpha = 0.16 * (1 - pulseProgress());
-          return color;
-        }, false),
-        outlineColor: new Cesium.CallbackProperty((_time, result) => {
-          const color = Cesium.Color.clone(INCIDENT_COLOR, result);
-          color.alpha = isVisible() ? 0.08 + 0.78 * (1 - pulseProgress()) : 0;
-          return color;
-        }, false),
-        outlineWidth: 2,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
-        scaleByDistance: new Cesium.NearFarScalar(3000, 1, 250000, 0.82),
+      subject: TRIGGER_RECORD,
+      color: INCIDENT_ACCENT,
+      visible: isVisible,
+      progress: pulseProgress,
+      fillAlpha: (p) => 0.16 * (1 - p),
+      ringAlpha: (p) => (isVisible() ? 0.08 + 0.78 * (1 - p) : 0),
+      scaleByDistance: {
+        near: 3000,
+        nearValue: 1,
+        far: 250000,
+        farValue: 0.82,
       },
     });
     queueOverlayEntry({
@@ -536,8 +673,8 @@ export function createBhoteKoshiLocatorLayer({
       position,
       variant: 'card',
       paintLane: 'thumbnail',
-      title: TRIGGER_RECORD.title,
-      details: [...TRIGGER_RECORD.details],
+      title: t(TRIGGER_RECORD.title),
+      details: TRIGGER_RECORD.details.map((line) => t(line)),
       accent: INCIDENT_ACCENT,
       sourceAlpha: () => presentation().alpha,
       presentationScale: () => presentation().scale,
@@ -549,8 +686,9 @@ export function createBhoteKoshiLocatorLayer({
       protected: true,
       active: true,
       interactive: true,
-      accessibilityLabel:
+      accessibilityLabel: t(
         'Open the USGS initial report for the 26 August 2026 Nepal landslide',
+      ),
       activate: () => {
         const opened = window.open(
           TRIGGER_SOURCE_URL,
@@ -591,8 +729,8 @@ export function createBhoteKoshiLocatorLayer({
     _removeTriggerMoveEnd = null;
     _triggerCalloutStartedAt = now();
     requestRender('bhote-koshi-trigger-record-reveal');
-    const camera = _viewer?.camera;
-    if (!camera?.flyTo) return;
+    const port = findCamera(_viewer);
+    if (!port) return;
     const generation = _generation;
     _triggerApproachInFlight = true;
     const finish = () => {
@@ -600,50 +738,54 @@ export function createBhoteKoshiLocatorLayer({
       attempt.phase = 'finished';
       _triggerApproachInFlight = false;
     };
-    camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(
-        TRIGGER_APPROACH_CAMERA.lon,
-        TRIGGER_APPROACH_CAMERA.lat,
-        TRIGGER_APPROACH_CAMERA.alt,
-      ),
-      orientation: {
-        heading: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.heading),
-        pitch: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.pitch),
-        roll: Cesium.Math.toRadians(TRIGGER_APPROACH_CAMERA.roll),
+    port.flyTo(
+      {
+        lon: TRIGGER_APPROACH_CAMERA.lon,
+        lat: TRIGGER_APPROACH_CAMERA.lat,
+        height: TRIGGER_APPROACH_CAMERA.alt,
       },
-      duration: TRIGGER_APPROACH_DURATION_SEC,
-      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
-      complete: () => {
-        if (_triggerApproachAttempt !== attempt || attempt.phase !== 'flying')
-          return;
-        if (
-          !_enabled ||
-          generation !== _generation ||
-          _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
-        ) {
-          finish();
-          return;
-        }
-        attempt.phase = 'orbiting';
-        camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(
-            TRIGGER_ORBIT_CAMERA.lon,
-            TRIGGER_ORBIT_CAMERA.lat,
-            TRIGGER_ORBIT_CAMERA.alt,
-          ),
-          orientation: {
-            heading: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.heading),
-            pitch: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.pitch),
-            roll: Cesium.Math.toRadians(TRIGGER_ORBIT_CAMERA.roll),
-          },
-          duration: TRIGGER_ORBIT_DURATION_SEC,
-          easingFunction: Cesium.EasingFunction.SINUSOIDAL_IN_OUT,
-          complete: finish,
-          cancel: finish,
-        });
+      {
+        orientation: {
+          heading: toRadians(TRIGGER_APPROACH_CAMERA.heading),
+          pitch: toRadians(TRIGGER_APPROACH_CAMERA.pitch),
+          roll: toRadians(TRIGGER_APPROACH_CAMERA.roll),
+        },
+        durationS: TRIGGER_APPROACH_DURATION_SEC,
+        easing: 'cubicInOut',
+        onComplete: () => {
+          if (_triggerApproachAttempt !== attempt || attempt.phase !== 'flying')
+            return;
+          if (
+            !_enabled ||
+            generation !== _generation ||
+            _presentation !== BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION
+          ) {
+            finish();
+            return;
+          }
+          attempt.phase = 'orbiting';
+          port.flyTo(
+            {
+              lon: TRIGGER_ORBIT_CAMERA.lon,
+              lat: TRIGGER_ORBIT_CAMERA.lat,
+              height: TRIGGER_ORBIT_CAMERA.alt,
+            },
+            {
+              orientation: {
+                heading: toRadians(TRIGGER_ORBIT_CAMERA.heading),
+                pitch: toRadians(TRIGGER_ORBIT_CAMERA.pitch),
+                roll: toRadians(TRIGGER_ORBIT_CAMERA.roll),
+              },
+              durationS: TRIGGER_ORBIT_DURATION_SEC,
+              easing: 'sineInOut',
+              onComplete: finish,
+              onCancel: finish,
+            },
+          );
+        },
+        onCancel: finish,
       },
-      cancel: finish,
-    });
+    );
   }
 
   function armTriggerApproach() {
@@ -654,40 +796,36 @@ export function createBhoteKoshiLocatorLayer({
     const attempt = { phase: 'armed' };
     _triggerApproachAttempt = attempt;
     const start = () => startTriggerApproach(attempt);
-    const camera = _viewer?.camera;
-    if (
-      !camera?.moveStart?.addEventListener ||
-      !camera?.moveEnd?.addEventListener
-    ) {
+    const camera = findCamera(_viewer);
+    if (!camera) {
       start();
       return;
     }
-    _removeTriggerMoveStart = camera.moveStart.addEventListener(() => {
+    _removeTriggerMoveStart = camera.on('moveStart', () => {
       if (_triggerApproachAttempt !== attempt || attempt.phase !== 'armed')
         return;
       if (_triggerApproachTimer !== null) cancelDelay(_triggerApproachTimer);
       _triggerApproachTimer = null;
       _removeTriggerMoveStart?.();
       _removeTriggerMoveStart = null;
-      _removeTriggerMoveEnd = camera.moveEnd.addEventListener(start);
+      _removeTriggerMoveEnd = camera.on('moveEnd', start);
     });
     _triggerApproachTimer = scheduleDelay(start, TRIGGER_APPROACH_ARM_MS);
   }
 
   function addNepalCallout(
-    dataSource,
     sequenceStartedAt = now(),
     labelPlacement = 'right',
     { showAnchor = true } = {},
   ) {
-    addCallout(dataSource, NEPAL, BORDER_COLOR, {
+    addCallout(NEPAL, BORDER_ACCENT, {
       labelPlacement,
       sequenceStartedAt,
       showAnchor,
     });
   }
 
-  function addNearbyCityCallouts(dataSource, sequenceStartedAt) {
+  function addNearbyCityCallouts(sequenceStartedAt) {
     NEARBY_CITIES.forEach((city, index) => {
       const visibleAt =
         sequenceStartedAt +
@@ -697,11 +835,7 @@ export function createBhoteKoshiLocatorLayer({
         smoothstep(0, 1, (now() - visibleAt) / CITY_CALLOUT_REVEAL_MS);
       const labelOnLeft = city.placement === 'left';
       const labelLower = city.placement === 'right-lower';
-      const position = Cesium.Cartesian3.fromDegrees(
-        city.lon,
-        city.lat,
-        city.heightM,
-      );
+      const position = fromDegrees(city.lon, city.lat, city.heightM);
       queueOverlayEntry({
         id: `bhote-koshi-city-${city.id}`,
         position,
@@ -738,7 +872,6 @@ export function createBhoteKoshiLocatorLayer({
   }
 
   function addIncidentPlaceCallouts(
-    dataSource,
     sequenceStartedAt,
     { pulseHalos = false, places = INCIDENT_OVERVIEW_PLACES } = {},
   ) {
@@ -751,11 +884,7 @@ export function createBhoteKoshiLocatorLayer({
         smoothstep(0, 1, (now() - visibleAt) / PLACE_CALLOUT_REVEAL_MS);
       const labelOnLeft = place.placement === 'left';
       const labelLower = place.placement === 'right-lower';
-      const position = Cesium.Cartesian3.fromDegrees(
-        place.lon,
-        place.lat,
-        place.heightM,
-      );
+      const position = fromDegrees(place.lon, place.lat, place.heightM);
       if (pulseHalos) {
         const pulseSequenceDurationMs =
           PLACE_CALLOUT_STAGGER_MS * places.length;
@@ -783,30 +912,19 @@ export function createBhoteKoshiLocatorLayer({
             Math.min(1, pulseWindowElapsed() / PLACE_CALLOUT_STAGGER_MS),
           );
         };
-        dataSource.entities.add({
+        addHalo({
           id: `bhote-koshi-place-${place.id}-halo`,
-          position,
-          show: new Cesium.CallbackProperty(pulseIsActive, false),
-          point: {
-            pixelSize: new Cesium.CallbackProperty(
-              () =>
-                CALLOUT_RING_MIN_SIZE_PX +
-                CALLOUT_RING_SIZE_RANGE_PX * pulseProgress(),
-              false,
-            ),
-            color: new Cesium.CallbackProperty((_time, result) => {
-              const color = Cesium.Color.clone(INCIDENT_COLOR, result);
-              color.alpha = 0.16 * (1 - pulseProgress());
-              return color;
-            }, false),
-            outlineColor: new Cesium.CallbackProperty((_time, result) => {
-              const color = Cesium.Color.clone(INCIDENT_COLOR, result);
-              color.alpha = 0.08 + 0.78 * (1 - pulseProgress());
-              return color;
-            }, false),
-            outlineWidth: 2,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            scaleByDistance: new Cesium.NearFarScalar(5000, 1, 500000, 0.82),
+          subject: place,
+          color: INCIDENT_ACCENT,
+          visible: pulseIsActive,
+          progress: pulseProgress,
+          fillAlpha: (p) => 0.16 * (1 - p),
+          ringAlpha: (p) => 0.08 + 0.78 * (1 - p),
+          scaleByDistance: {
+            near: 5000,
+            nearValue: 1,
+            far: 500000,
+            farValue: 0.82,
           },
         });
       }
@@ -815,7 +933,7 @@ export function createBhoteKoshiLocatorLayer({
         position,
         variant: 'label',
         paintLane: 'ambient-label',
-        title: `${String(index + 1).padStart(2, '0')} · ${place.title}`,
+        title: `${String(index + 1).padStart(2, '0')} · ${placeTitle(place.title)}`,
         details: [],
         accent: INCIDENT_ACCENT,
         sourceAlpha: progress,
@@ -845,105 +963,67 @@ export function createBhoteKoshiLocatorLayer({
     });
   }
 
-  function addIncidentFloodPath(dataSource, sequenceStartedAt) {
+  function addIncidentFloodPath(sequenceStartedAt) {
     const positions = BHOTE_KOSHI_FLOOD_PATH.map(([lon, lat]) =>
-      Cesium.Cartesian3.fromDegrees(lon, lat),
+      fromDegrees(lon, lat),
     );
     const drawStartedAt = sequenceStartedAt + FLOOD_PATH_START_DELAY_MS;
-    const animatedPositions = new Cesium.CallbackProperty(
-      () =>
-        revealPolylinePositions(
-          positions,
-          (now() - drawStartedAt) / FLOOD_PATH_DRAW_DURATION_MS,
-        ),
-      false,
-    );
-    dataSource.entities.add({
+    addRevealedLine({
       id: 'bhote-koshi-flood-path',
-      show: new Cesium.CallbackProperty(() => now() >= drawStartedAt, false),
-      polyline: {
-        positions: animatedPositions,
-        width: 3.5,
-        clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.96),
-        classificationType: Cesium.ClassificationType.BOTH,
-      },
+      positions,
+      widthPx: 3.5,
+      color: hexColor(BORDER_ACCENT, 0.96),
+      progress: () => (now() - drawStartedAt) / FLOOD_PATH_DRAW_DURATION_MS,
+      visible: () => now() >= drawStartedAt,
     });
   }
 
-  function addNepalBoundary(dataSource, ring, sequenceStartedAt) {
+  function addNepalBoundary(ring, sequenceStartedAt) {
     const closed = closeRegionRing(ring);
     if (closed.length < 4) return false;
-    const positions = Cesium.Cartesian3.fromDegreesArray(closed.flat());
-    const hierarchy = new Cesium.PolygonHierarchy(positions.slice(0, -1));
+    const positions = closed.map(([lon, lat]) => fromDegrees(lon, lat));
     const drawStartedAt = sequenceStartedAt + BORDER_START_DELAY_MS;
-    const animatedPositions = new Cesium.CallbackProperty(
-      () =>
-        revealPolylinePositions(
-          positions,
-          (now() - drawStartedAt) / BORDER_DRAW_DURATION_MS,
-        ),
-      false,
-    );
-    dataSource.entities.add({
-      id: 'nepal-border-fill',
-      show: new Cesium.CallbackProperty(() => now() >= drawStartedAt, false),
-      polygon: {
-        hierarchy,
-        material: BORDER_COLOR.withAlpha(0.055),
-        classificationType: Cesium.ClassificationType.BOTH,
+    const progress = () => (now() - drawStartedAt) / BORDER_DRAW_DURATION_MS;
+    _fill = {
+      visible: () => now() >= drawStartedAt,
+      item: {
+        id: 'nepal-border-fill',
+        geometry: {
+          kind: 'polygon',
+          rings: [closed.slice(0, -1).map(([lon, lat]) => ({ lon, lat }))],
+        },
+        fill: hexColor(BORDER_ACCENT, 0.055),
+        height: 'clampGround',
+        clampTo: 'both',
       },
-    });
-    dataSource.entities.add({
-      id: 'nepal-border-halo',
-      polyline: {
-        positions: animatedPositions,
-        width: 5,
-        clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.12),
-        classificationType: Cesium.ClassificationType.BOTH,
-      },
-    });
-    dataSource.entities.add({
-      id: 'nepal-border-highlight',
-      polyline: {
-        positions: animatedPositions,
-        width: 2.5,
-        clampToGround: true,
-        material: BORDER_COLOR.withAlpha(0.96),
-        classificationType: Cesium.ClassificationType.BOTH,
-      },
-    });
-    const generation = _generation;
-    const drawFrame = () => {
-      if (
-        !_enabled ||
-        generation !== _generation ||
-        !presentationAnimatesBoundary(_presentation)
-      )
-        return;
-      requestRender('bhote-koshi-locator-border-draw');
-      if (now() - drawStartedAt < BORDER_DRAW_DURATION_MS) {
-        _borderAnimationFrame = scheduleFrame(drawFrame);
-      } else {
-        _borderAnimationFrame = null;
-      }
     };
-    _borderAnimationFrame = scheduleFrame(drawFrame);
+    for (const [id, widthPx, alpha] of [
+      ['nepal-border-halo', 5, 0.12],
+      ['nepal-border-highlight', 2.5, 0.96],
+    ])
+      addRevealedLine({
+        id,
+        positions,
+        widthPx,
+        color: hexColor(BORDER_ACCENT, alpha),
+        progress,
+        visible: () => true,
+      });
+    // The callout pulse draws each step of the reveal (`syncDrawn`).
     return true;
   }
 
   function renderPresentation() {
-    if (!_dataSource) return;
+    if (!_drawing) return;
     stopAnimations();
     overlayHost.clearSource(BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
     _overlayEntries = [];
-    _dataSource.entities.removeAll();
+    resetDrawn();
     if (_presentation === NEPAL_CONTEXT_PRESENTATION) {
-      addNepalCallout(_dataSource);
+      addNepalCallout();
     } else if (_presentation === BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION) {
       const sequenceStartedAt = now();
-      addIncidentPlaceCallouts(_dataSource, sequenceStartedAt, {
+      addIncidentPlaceCallouts(sequenceStartedAt, {
         pulseHalos: true,
         places: INCIDENT_OVERVIEW_PLACES,
       });
@@ -960,8 +1040,8 @@ export function createBhoteKoshiLocatorLayer({
         PLACE_CALLOUT_START_DELAY_MS -
         (INCIDENT_OVERVIEW_PLACES.length - 1) * PLACE_CALLOUT_STAGGER_MS -
         PLACE_CALLOUT_REVEAL_MS;
-      addIncidentFloodPath(_dataSource, sequenceStartedAt);
-      addIncidentPlaceCallouts(_dataSource, settledPlacesAt);
+      addIncidentFloodPath(sequenceStartedAt);
+      addIncidentPlaceCallouts(settledPlacesAt);
     } else if (_presentation === BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION) {
       const sequenceStartedAt = now();
       const settledPathAt =
@@ -973,21 +1053,22 @@ export function createBhoteKoshiLocatorLayer({
         PLACE_CALLOUT_START_DELAY_MS -
         (INCIDENT_OVERVIEW_PLACES.length - 1) * PLACE_CALLOUT_STAGGER_MS -
         PLACE_CALLOUT_REVEAL_MS;
-      addIncidentFloodPath(_dataSource, settledPathAt);
-      addIncidentPlaceCallouts(_dataSource, settledPlacesAt);
+      addIncidentFloodPath(settledPathAt);
+      addIncidentPlaceCallouts(settledPlacesAt);
     } else if (_presentation === BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION) {
       const sequenceStartedAt = now();
       const settledPathAt =
         sequenceStartedAt -
         FLOOD_PATH_START_DELAY_MS -
         FLOOD_PATH_DRAW_DURATION_MS;
-      addIncidentFloodPath(_dataSource, settledPathAt);
-      addTriggerRecordCallout(_dataSource);
+      addIncidentFloodPath(settledPathAt);
+      addTriggerRecordCallout();
       armTriggerApproach();
     } else {
       const sequenceStartedAt = now();
-      addNepalCallout(_dataSource, sequenceStartedAt, 'left');
+      addNepalCallout(sequenceStartedAt, 'left');
       if (!_boundaryResolved) {
+        commitDrawn();
         publishOverlayEntries();
         startCalloutAnimation();
         requestRender('bhote-koshi-locator-presentation');
@@ -996,24 +1077,20 @@ export function createBhoteKoshiLocatorLayer({
       if (_presentation === BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION) {
         const settledAt =
           sequenceStartedAt - BORDER_START_DELAY_MS - BORDER_DRAW_DURATION_MS;
-        if (_boundaryRing)
-          addNepalBoundary(_dataSource, _boundaryRing, settledAt);
-        addIncidentCallout(
-          _dataSource,
-          sequenceStartedAt - CALLOUT_REVEAL_DURATION_MS,
-        );
-        addNearbyCityCallouts(_dataSource, sequenceStartedAt);
+        if (_boundaryRing) addNepalBoundary(_boundaryRing, settledAt);
+        addIncidentCallout(sequenceStartedAt - CALLOUT_REVEAL_DURATION_MS);
+        addNearbyCityCallouts(sequenceStartedAt);
       } else {
-        if (_boundaryRing)
-          addNepalBoundary(_dataSource, _boundaryRing, sequenceStartedAt);
+        if (_boundaryRing) addNepalBoundary(_boundaryRing, sequenceStartedAt);
         const incidentDelayMs = _boundaryRing
           ? BORDER_START_DELAY_MS +
             BORDER_DRAW_DURATION_MS +
             INCIDENT_CALLOUT_GAP_MS
           : BORDER_START_DELAY_MS;
-        addIncidentCallout(_dataSource, sequenceStartedAt, incidentDelayMs);
+        addIncidentCallout(sequenceStartedAt, incidentDelayMs);
       }
     }
+    commitDrawn();
     publishOverlayEntries({ moving: _placeRevealMoving });
     startCalloutAnimation();
     requestRender('bhote-koshi-locator-presentation');
@@ -1031,13 +1108,12 @@ export function createBhoteKoshiLocatorLayer({
     _boundaryResolved = false;
     _boundaryRing = null;
     const generation = ++_generation;
-    removeDataSource();
-    const dataSource = new Cesium.CustomDataSource('bhote-koshi-locator');
-    _dataSource = dataSource;
+    removeDrawn();
+    _drawing = true;
     renderPresentation();
-    viewer.dataSources.add(dataSource);
     registerDynamicCredit(viewer, BHOTE_KOSHI_LOCATOR_CREDIT);
     showOsmCredit(viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    installCalloutClick(viewer);
     requestRender('bhote-koshi-locator-callout');
 
     try {
@@ -1057,7 +1133,7 @@ export function createBhoteKoshiLocatorLayer({
       return true;
     } catch (error) {
       if (error?.name === 'AbortError') {
-        if (generation === _generation) removeDataSource();
+        if (generation === _generation) removeDrawn();
         throw error;
       }
       console.warn(
@@ -1072,14 +1148,40 @@ export function createBhoteKoshiLocatorLayer({
     }
   }
 
+  /**
+   * An actionable callout of ours (the trigger record's) is a card painted
+   * over the globe: a click on it opens its source, as its keyboard action
+   * does. Like the other cards, it leaves a drag alone and, on top, takes the
+   * click over whatever is drawn under it.
+   */
+  function installCalloutClick(viewer) {
+    if (_removeClick) return;
+    let clicks = null;
+    try {
+      clicks = input?.(viewer) ?? null;
+    } catch {
+      clicks = null;
+    }
+    _removeClick =
+      clicks?.onClick?.((event) => {
+        if (!_enabled || !isTrackingSelectionGesture(event.gesture)) return;
+        // The card painted on top, read once per click so every layer agrees.
+        const top = clickCard(event);
+        if (top?.sourceId !== BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID) return;
+        if (typeof top.entry?.activate === 'function') top.entry.activate();
+      }) ?? null;
+  }
+
   async function disable() {
     hideOsmCredit(_viewer, BHOTE_KOSHI_LOCATOR_LAYER_ID);
+    _removeClick?.();
+    _removeClick = null;
     _enabled = false;
     _boundaryReady = false;
     _boundaryResolved = false;
     _boundaryRing = null;
     _generation += 1;
-    removeDataSource();
+    removeDrawn();
     requestRender('bhote-koshi-locator-disable');
     return true;
   }
@@ -1121,57 +1223,67 @@ export function createBhoteKoshiLocatorLayer({
         chips: [
           {
             id: 'nepal-context',
+            // i18n-ignore: country name
             label: 'NEPAL',
             active: _presentation === NEPAL_CONTEXT_PRESENTATION,
-            title:
+            title: t(
               'Show the Nepal context callout without a border or country fill',
+            ),
             params: { presentation: NEPAL_CONTEXT_PRESENTATION },
           },
           {
             id: 'bhote-koshi-regional',
+            // i18n-ignore: river name (Bhote Koshi)
             label: 'BHOTE',
             active: _presentation === BHOTE_KOSHI_REGIONAL_PRESENTATION,
-            title:
+            title: t(
               'Introduce Nepal, draw its border, then reveal the Bhote Koshi incident',
+            ),
             params: { presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION },
           },
           {
             id: 'bhote-koshi-city-context',
-            label: 'CITIES',
+            label: t('CITIES'),
             active: _presentation === BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
-            title:
+            title: t(
               'Keep the regional incident context and introduce nearby city labels',
+            ),
             params: { presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION },
           },
           {
             id: 'bhote-koshi-incident-places',
-            label: 'PLACES',
+            label: t('PLACES'),
             active: _presentation === BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION,
-            title:
+            title: t(
               'Introduce the reconstruction scene key places from trigger to downstream',
+            ),
             params: { presentation: BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION },
           },
           {
             id: 'bhote-koshi-flood-path',
-            label: 'PATH',
+            label: t('PATH'),
             active: _presentation === BHOTE_KOSHI_FLOOD_PATH_PRESENTATION,
-            title:
+            title: t(
               'Animate the sourced cyan river-centerline route to Trishuli Bazaar',
+            ),
             params: { presentation: BHOTE_KOSHI_FLOOD_PATH_PRESENTATION },
           },
           {
             id: 'bhote-koshi-path-overview',
-            label: 'OVERVIEW',
+            label: t('OVERVIEW'),
             active: _presentation === BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION,
-            title: 'Keep the completed flood path and location labels visible',
+            title: t(
+              'Keep the completed flood path and location labels visible',
+            ),
             params: { presentation: BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION },
           },
           {
             id: 'bhote-koshi-trigger-record',
-            label: 'RECORD',
+            label: t('RECORD'),
             active: _presentation === BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
-            title:
+            title: t(
               'Reveal the trigger record while making a slow camera approach',
+            ),
             params: {
               presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
               preview: true,
@@ -1213,6 +1325,3 @@ export function createBhoteKoshiLocatorLayer({
     },
   };
 }
-
-const bhoteKoshiLocatorLayer = createBhoteKoshiLocatorLayer();
-export default bhoteKoshiLocatorLayer;

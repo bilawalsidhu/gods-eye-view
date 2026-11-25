@@ -7,6 +7,9 @@ import {
   BLOOM_SCALE_VERSION,
   decodeBloomIntensity,
 } from '../bloom.js';
+import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { isStoryTagList } from './storyTags.js';
+import { isStoryThumb } from './storyThumb.js';
 
 /** @constant {number} Current schema version for project migration */
 export const PROJECT_VERSION = SCENE_DOCUMENT_VERSION;
@@ -122,6 +125,7 @@ export function recipeToScene(recipe) {
     const mapStack = keyframe.mapStack || post.mapStack;
     return {
       id: uid('shot'),
+      // i18n-ignore: persisted fallback; legacy bootstrap matches 'Shot N'
       title: keyframe.title || `Shot ${idx + 1}`,
       durationSec: Math.max(
         0.2,
@@ -171,6 +175,7 @@ export function recipeToScene(recipe) {
 
   return {
     id: recipe.id || uid('scene'),
+    // i18n-ignore: persisted fallback; built-in titles display through director
     title: recipe.title || 'Untitled Scene',
     releaseLayerIds: [
       ...new Set(
@@ -225,6 +230,7 @@ export function normalizeShot(
 
   return {
     id: rawShot?.id || uid('shot'),
+    // i18n-ignore: persisted fallback; legacy bootstrap matches 'Shot N'
     title: rawShot?.title || `Shot ${index + 1}`,
     durationSec: Math.max(
       0.2,
@@ -259,7 +265,9 @@ export function normalizeShot(
     ...(rawShot?.dataPackIds ? { dataPackIds: [...rawShot.dataPackIds] } : {}),
     ...(rawShot?.move ? { move: deepClone(rawShot.move) } : {}),
     visual: {
-      style: visual.style || 'normal',
+      style: RETIRED_STYLES.includes(visual.style)
+        ? 'normal'
+        : visual.style || 'normal',
       bloom: normalizeBloomState(bloom, {
         projectVersion,
         fallbackIntensity: 50,
@@ -279,6 +287,9 @@ export function normalizeShot(
       hud: {
         visible: typeof hud.visible === 'boolean' ? hud.visible : true,
         variant: typeof hud.variant === 'string' ? hud.variant : 'tactical',
+        // Sonar on beside a layout whose code cannot say so; absent is off
+        // unless the variant names the retired Cyber layout.
+        ...(hud.sonar === true ? { sonar: true } : {}),
       },
       detection: {
         ...(typeof detection.allocation === 'string'
@@ -349,9 +360,19 @@ export function normalizeProject(rawProject) {
       );
       return {
         id: scene?.id || uid('scene'),
+        // i18n-ignore: persisted fallback for a saved scene without a title
         title: scene?.title || `Scene ${sceneIdx + 1}`,
         ...(scene?.dataPacks ? { dataPacks: deepClone(scene.dataPacks) } : {}),
         ...(scene?.anchors ? { anchors: deepClone(scene.anchors) } : {}),
+        // Published to the Stories page.
+        ...(scene?.stories === true ? { stories: true } : {}),
+        // The Stories card's thumbnail and tags.
+        ...(isStoryThumb(scene?.storyThumb)
+          ? { storyThumb: scene.storyThumb }
+          : {}),
+        ...(isStoryTagList(scene?.storyTags) && scene.storyTags.length
+          ? { storyTags: [...scene.storyTags] }
+          : {}),
         releaseLayerIds: [
           ...new Set(
             (Array.isArray(scene?.releaseLayerIds)

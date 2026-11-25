@@ -13,6 +13,7 @@ import { createPlaceSearch } from '../search/placeSearch.js';
 // Run with: npm test   (node --test)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import {
   resolveAnnotationTarget as resolveTarget,
   selectFootprint,
@@ -157,7 +158,8 @@ test('refineScope: entityKind refines only an unresolved (auto) scope', () => {
 });
 
 function closeViewportViewer() {
-  return {
+  // The resolver reads the camera through the renderer's camera port.
+  return bindFakeCesiumCamera({
     camera: {
       positionCartographic: {
         latitude: 30.2672 * Math.PI / 180,
@@ -165,7 +167,7 @@ function closeViewportViewer() {
         height: 1000,
       },
     },
-  };
+  });
 }
 
 function geocodePayload({ lat, lon, types, label }) {
@@ -200,7 +202,7 @@ test('ask-side admin bypass: "the Texas Capitol" recovers near-view despite a fa
   const calls = [];
   installGoogleMocks(t, async (url) => {
     calls.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => geocodePayload({
         lat: 31.0000,
         lon: -99.0000,
@@ -235,7 +237,7 @@ test('ask-side admin bypass: explicit "state of Texas" skips recovery and proxim
   const calls = [];
   installGoogleMocks(t, async (url) => {
     calls.push(String(url));
-    assert.match(String(url), /^https:\/\/maps\.googleapis\.com\/maps\/api\/geocode/);
+    assert.match(String(url), /^\/api\/google\/geocode\?/);
     return { json: async () => geocodePayload({
       lat: 31.0000,
       lon: -99.0000,
@@ -273,7 +275,7 @@ for (const fixture of [
     const calls = [];
     installGoogleMocks(t, async (url) => {
       calls.push(String(url));
-      if (String(url).startsWith('https://maps.googleapis.com/')) {
+      if (String(url).startsWith('/api/google/geocode')) {
         return { json: async () => geocodePayload({
           lat: fixture.lat,
           lon: fixture.lon,
@@ -299,7 +301,7 @@ test('ask-side admin bypass: bare "Texas" remains on the guarded recovery path',
   const calls = [];
   installGoogleMocks(t, async (url) => {
     calls.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => geocodePayload({
         lat: 31.0000,
         lon: -99.0000,
@@ -328,7 +330,7 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
   const calls = [];
   installGoogleMocks(t, async (url) => {
     calls.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       const query = new URL(String(url)).searchParams.get('address');
       return { json: async () => geocodePayload({
         lat: 39.7817,
@@ -369,18 +371,18 @@ test('ask-side admin bypass: admin level 2/3 result types never grant a township
 // Synthetic footprints reproduce the real Capitol/YOTEL selection without live APIs.
 const CAPITOL_ANCHOR = { lat: 38.8899389, lon: -77.0090505 };
 function capitolViewer() {
-  return { camera: { positionCartographic: {
+  return bindFakeCesiumCamera({ camera: { positionCartographic: {
     latitude: CAPITOL_ANCHOR.lat * Math.PI / 180,
     longitude: CAPITOL_ANCHOR.lon * Math.PI / 180,
     height: 1000,
-  } } };
+  } } });
 }
 function installCapitolMocks(t, elements, components = [
   { long_name: 'Washington', types: ['locality', 'political'] },
   { long_name: 'Capitol Hill', types: ['neighborhood', 'political'] },
 ]) {
   installGoogleMocks(t, async (url) => {
-    if (String(url).startsWith('https://maps.googleapis.com/')) {
+    if (String(url).startsWith('/api/google/geocode')) {
       return { json: async () => ({ status: 'OK', results: [{
         formatted_address: 'Washington, DC 20004, USA',
         types: ['establishment', 'landmark', 'point_of_interest', 'tourist_attraction'],
@@ -458,7 +460,7 @@ test('keyless: a key that geocodes to nothing still anchors the annotation', asy
   const requests = [];
   installGoogleMocks(t, async (url) => {
     requests.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    if (String(url).startsWith('/api/google/geocode')) return GOOGLE_FOUND_NOTHING;
     return {
       ok: true,
       json: async () => ({
@@ -495,7 +497,7 @@ test('keyless: a key that geocodes to nothing still anchors the annotation', asy
     high: { latitude: 30.28, longitude: -97.68 },
   });
   // Google is asked first and exactly once; one Photon call answers it.
-  assert.equal(requests.filter((url) => url.includes('maps.googleapis.com')).length, 1);
+  assert.equal(requests.filter((url) => url.includes('/api/google/geocode')).length, 1);
   assert.equal(requests.filter((url) => url.includes('photon.komoot.io')).length, 1);
 });
 
@@ -512,7 +514,7 @@ test('keyless: OSM matching uses the feature\'s canonical name, not the user\'s 
 
   installGoogleMocks(t, async (url, init) => {
     const href = String(url);
-    if (href.startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    if (href.startsWith('/api/google/geocode')) return GOOGLE_FOUND_NOTHING;
     if (href.startsWith('/api/google/text-search')) return { ok: true, json: async () => ({ places: [] }) };
     if (href.startsWith('https://photon.komoot.io/')) {
       return {
@@ -575,7 +577,7 @@ test('keyless: a Photon outage is not remembered as "no such place"', async (t) 
   const requests = [];
   installGoogleMocks(t, async (url) => {
     requests.push(String(url));
-    if (String(url).startsWith('https://maps.googleapis.com/')) return GOOGLE_FOUND_NOTHING;
+    if (String(url).startsWith('/api/google/geocode')) return GOOGLE_FOUND_NOTHING;
     if (!photonReachable) throw new Error('network down');
     return photonUp;
   });

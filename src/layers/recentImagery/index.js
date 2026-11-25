@@ -20,7 +20,7 @@ import {
   PRODUCTS,
   boxCentre,
   boxFromPin,
-  boxFromRectangle,
+  boxFromDegrees,
   boxSideKm,
   dequantizeBox,
   fitViewHeightM,
@@ -28,11 +28,19 @@ import {
   parseCandidateKey,
   quantizeBox,
   rankLatest,
-  shortDay,
   utcDay,
   validateBox,
   viewTooLargeMessage,
 } from './model.js';
+import { msg, t } from '../../i18n/index.js';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { READOUT_WORDS, displayDay, displayMetres } from './display.js';
+import {
+  canvasOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../../render/rendererOf.js';
 
 /**
  * Quiet time after the last arrow key before the focused day previews, so a
@@ -46,10 +54,11 @@ export const SPLIT_PUBLISH_MS = 400;
 /** The three modes, in share-link order (`m` = index). */
 export const MODES = Object.freeze(['image', 'basemap', 'ab']);
 
-const COMPARISON_IN_USE = 'Comparison in use by another scene';
-const COMPARISON_UNAVAILABLE = 'Esri map unavailable · no swipe';
-const COMPARISON_NEEDS_GLOBE = 'Swipe needs a globe map';
-const ESRI_KEPT = 'Imagery stays on Esri · CLEAR to use Google 3D';
+// Kept English in the snapshot (AI tools read it); the card translates them.
+const COMPARISON_IN_USE = msg('Comparison in use by another scene');
+const COMPARISON_UNAVAILABLE = msg('Esri map unavailable · no swipe');
+const COMPARISON_NEEDS_GLOBE = msg('Swipe needs a globe map');
+const ESRI_KEPT = msg('Imagery stays on Esri · CLEAR to use Google 3D');
 /** ZOOM IN's flight time, in seconds. */
 const ZOOM_FIT_SECONDS = 1.2;
 const DEFAULT_SPLIT = 0.5;
@@ -64,10 +73,6 @@ const clampUnit = (value, fallback) => {
 const boxSignature = (box) =>
   box ? BOX_EDGES.map((edge) => Number(box[edge]).toFixed(6)).join(',') : '';
 const sourceOf = (product) => PRODUCTS[product]?.source || null;
-const toDegrees = (radians) => (radians * 180) / Math.PI;
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-const ellipsoidOf = (viewer) =>
-  viewer?.scene?.ellipsoid || viewer?.scene?.globe?.ellipsoid || null;
 
 /**
  * The ground under the canvas centre, in degrees; null when the centre is
@@ -76,20 +81,14 @@ const ellipsoidOf = (viewer) =>
  * @returns {{ lon: number, lat: number } | null}
  */
 function viewCentre(viewer) {
-  const ellipsoid = ellipsoidOf(viewer);
-  const canvas = viewer?.scene?.canvas;
+  const query = findQuery(viewer);
+  const canvas = canvasOf(viewer);
   const width = Number(canvas?.clientWidth);
   const height = Number(canvas?.clientHeight);
-  if (!ellipsoid?.cartesianToCartographic || !(width > 0) || !(height > 0))
-    return null;
-  const hit = viewer.camera?.pickEllipsoid?.(
-    { x: width / 2, y: height / 2 },
-    ellipsoid,
-  );
-  const ground = hit ? ellipsoid.cartesianToCartographic(hit) : null;
-  return ground
-    ? { lon: toDegrees(ground.longitude), lat: toDegrees(ground.latitude) }
-    : null;
+  if (!query || !(width > 0) || !(height > 0)) return null;
+  const hit = query.pickEllipsoid(width / 2, height / 2);
+  const ground = hit ? toLonLatH(hit) : null;
+  return ground ? { lon: ground.lon, lat: ground.lat } : null;
 }
 const modeFrom = (value) =>
   MODES.includes(value)
@@ -100,13 +99,14 @@ const modeFrom = (value) =>
 
 /**
  * Create the layer.
- * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
+ * @param {{ catalog?: { searchHls: Function }, renderer: object, thumbnails: object, host?: Function, globeOf?: Function, now?: () => Date, days?: number, setTimeoutImpl?: Function, clearTimeoutImpl?: Function }} options
  */
 export function createRecentImageryLayer({
   catalog = { searchHls },
   renderer,
   thumbnails,
   host = resolveImageryHost,
+  globeOf = findGlobe,
   now = () => new Date(),
   days = CATALOG_DAYS,
   setTimeoutImpl = (fn, ms) => globalThis.setTimeout(fn, ms),
@@ -147,6 +147,8 @@ export function createRecentImageryLayer({
   let _pendingTimer = null;
   /** A focused day still being probed: it previews once present. */
   let _followKey = null;
+  /** The automatic day was empty and a user pick has first claim on its slot. */
+  let _handoverDeferred = false;
   let _auto = null;
   let _notice = null;
   let _split = DEFAULT_SPLIT;
@@ -283,16 +285,37 @@ export function createRecentImageryLayer({
   const rank = (list) =>
     rankLatest(list.map(withAvailability), { truncated: _truncated });
 
-  /** Focus the START HERE day and preview it when the mode's slot is empty. */
-  function autoPreview() {
+  /**
+   * Focus the START HERE day and preview it when the mode's slot is empty.
+   * @param {string | null} [emptyKey] The empty automatic day handed over;
+   *   focus still on it moves too, since a followed day previews only while
+   *   it is focused.
+   */
+  function autoPreview(emptyKey = null) {
     const ranked = rank(sourcedCandidates());
     if (!ranked.candidate) return;
     const key = ranked.candidate.key;
-    if (!_focusKey) _focusKey = key;
+    if (!_focusKey || _focusKey === emptyKey) _focusKey = key;
     if (!previewSlot() || activeSlotOf(key)) return;
     _auto = { key, reason: ranked.reason, certain: ranked.certain };
     if (drapable(candidateFor(key))) _previewKey = key;
     else _followKey = key;
+  }
+
+  /** A debounced or followed pick can still take the slot until its probe settles. */
+  function pickWaiting() {
+    if (_pending) return true;
+    const followed = candidateFor(_followKey);
+    if (!followed) return false;
+    const status = thumbnails.get(followed.key)?.status;
+    return status !== 'empty' && status !== 'error';
+  }
+
+  /** A pick dropped for an empty day hands a deferred slot over now. */
+  function resumeHandover() {
+    if (!_handoverDeferred || pickWaiting()) return false;
+    syncRender();
+    return true;
   }
 
   /**
@@ -315,7 +338,12 @@ export function createRecentImageryLayer({
       _previewKey = null;
       _auto = null;
       changed = true;
-      if (wasAuto) autoPreview();
+      // A day the user picked meanwhile, still being probed or debounced,
+      // takes the slot instead of the next ranked day.
+      if (wasAuto) {
+        if (pickWaiting()) _handoverDeferred = true;
+        else autoPreview(preview.key);
+      }
     }
     // A followed day that turns out empty is dropped; an automatic one hands
     // over to the next ranked day.
@@ -325,8 +353,15 @@ export function createRecentImageryLayer({
       _followKey = null;
       if (wasAuto) {
         _auto = null;
-        autoPreview();
+        autoPreview(followed.key);
       }
+      changed = true;
+    }
+    if (_handoverDeferred && !pickWaiting()) {
+      const failedKey = _followKey || followed?.key || null;
+      _handoverDeferred = false;
+      _followKey = null;
+      autoPreview(failedKey);
       changed = true;
     }
     return changed;
@@ -377,7 +412,13 @@ export function createRecentImageryLayer({
     const changed =
       next.collection !== _hostInfo.collection || next.kind !== _hostInfo.kind;
     _hostInfo = next;
-    renderer.rebind(next);
+    // The layers drape through the viewer's globe port, on the tileset too
+    // when that is the host.
+    renderer.rebind({
+      ...next,
+      globe: next.kind === 'none' ? null : globeOf(_viewer),
+      tileset: next.kind === 'tileset' ? _tileset : null,
+    });
     return changed;
   }
 
@@ -540,6 +581,8 @@ export function createRecentImageryLayer({
     for (const slotId of SLOT_IDS) {
       const candidate = candidateFor(shown[slotId]);
       if (candidate && _hostInfo.collection) {
+        const { availableBoxes, emptyBoxes } =
+          thumbnails.get(candidate.key) ?? {};
         renderer.showSlot(slotId, candidate, _box, {
           alpha: _alpha,
           splitDirection: !live
@@ -547,6 +590,8 @@ export function createRecentImageryLayer({
             : (slotId === 'a') !== _swapped
               ? 'left'
               : 'right',
+          availableBoxes,
+          emptyBoxes,
         });
       } else {
         renderer.hideSlot(slotId);
@@ -554,7 +599,11 @@ export function createRecentImageryLayer({
     }
     if (!comparison) return;
     if (shown.a || shown.b) acquireComparison();
-    else if (_lease || _comparisonReady || _comparisonError)
+    // Keep the current basemap while the user's pick has first claim on the slot.
+    else if (
+      !_handoverDeferred &&
+      (_lease || _comparisonReady || _comparisonError)
+    )
       releaseComparison();
   }
 
@@ -568,12 +617,14 @@ export function createRecentImageryLayer({
     const list = stripList();
     if (!list.length) return;
     reconcileFocus();
-    thumbnails.requestOrdered(list, _box, {
-      focusIndex: Math.max(0, focusIndexIn(list)),
-      firstVisible: _visible.first,
-      lastVisible: _visible.last,
-      extra: 2,
-    });
+    const wanted = new Set(
+      thumbnails.requestOrdered(list, _box, {
+        focusIndex: Math.max(0, focusIndexIn(list)),
+        firstVisible: _visible.first,
+        lastVisible: _visible.last,
+        extra: 2,
+      }),
+    );
     for (const key of new Set([
       _assigned.a,
       _assigned.b,
@@ -581,8 +632,11 @@ export function createRecentImageryLayer({
       _followKey,
     ])) {
       const candidate = candidateFor(key);
-      if (sourceOn(candidate)) thumbnails.request(candidate, _box, 0);
+      if (!sourceOn(candidate)) continue;
+      thumbnails.request(candidate, _box, 0);
+      wanted.add(candidate.key);
     }
+    thumbnails.retain(wanted);
   }
 
   function resetCatalog() {
@@ -591,6 +645,7 @@ export function createRecentImageryLayer({
     _catalogErrors = [];
     _catalogError = null;
     _auto = null;
+    _handoverDeferred = false;
   }
 
   function cancelSearch() {
@@ -630,7 +685,7 @@ export function createRecentImageryLayer({
     } catch (error) {
       if (abort.signal.aborted) return;
       resetCatalog();
-      _catalogError = error?.message || 'Imagery catalog unavailable';
+      _catalogError = error?.message || msg('Imagery catalog unavailable');
     } finally {
       if (_searchAbort === abort) {
         _searchAbort = null;
@@ -652,7 +707,9 @@ export function createRecentImageryLayer({
   function applyPreview(key) {
     clearPending();
     _followKey = null;
-    if (key === _previewKey) return false;
+    const changed = key !== _previewKey || _handoverDeferred;
+    _handoverDeferred = false;
+    if (!changed) return false;
     if (_auto?.key !== key) _auto = null;
     _previewKey = key;
     if (_enabled) syncRender();
@@ -669,7 +726,7 @@ export function createRecentImageryLayer({
     const key = activeSlotOf(candidate.key) ? null : candidate.key;
     if (key === _previewKey) return;
     if (key && !drapable(candidate)) {
-      _followKey = key;
+      if (availability(candidate) !== 'empty') _followKey = key;
       return;
     }
     _pending = { key };
@@ -678,7 +735,17 @@ export function createRecentImageryLayer({
       const pending = _pending;
       _pending = null;
       if (_destroyed || !pending) return;
-      if (pending.key && !drapable(candidateFor(pending.key))) return;
+      if (pending.key && !drapable(candidateFor(pending.key))) {
+        if (_handoverDeferred) {
+          // Its empty card may already be hidden. Let focus follow the hand-over.
+          _focusKey = pending.key;
+          _followKey = pending.key;
+          syncRender();
+          requestThumbnails();
+          notify();
+        }
+        return;
+      }
       if (applyPreview(pending.key)) notify();
     }, FOCUS_DEBOUNCE_MS);
   }
@@ -748,15 +815,21 @@ export function createRecentImageryLayer({
 
   function notes() {
     const out = [];
-    if (_truncated) out.push('Catalog truncated · a newer clear day may exist');
+    if (_truncated)
+      out.push(t('Catalog truncated · a newer clear day may exist'));
     for (const error of _catalogErrors) {
       const label = PRODUCTS[error.product]?.label || error.product;
-      out.push(`${label} catalog unavailable · ${error.message}`);
+      out.push(
+        t('{label} catalog unavailable · {detail}', {
+          label,
+          detail: error.message,
+        }),
+      );
     }
     const today = utcDay(now());
     const viirsToday = candidateFor(`VIIRS:${today}`);
     if (viirsToday?.availability === 'unknown' && _sources.viirs)
-      out.push('Daily overview for today may still be empty until the pass');
+      out.push(t('Daily overview for today may still be empty until the pass'));
     return out;
   }
 
@@ -767,7 +840,7 @@ export function createRecentImageryLayer({
       key: key || null,
       candidate: candidateFor(key),
       label: parsed
-        ? `${shortDay(parsed.day)} · ${PRODUCTS[parsed.product].name} · ${PRODUCTS[parsed.product].resolutionM} m`
+        ? `${displayDay(parsed.day)} · ${t(PRODUCTS[parsed.product].name)} · ${displayMetres(PRODUCTS[parsed.product].resolutionM)}`
         : null,
       sourceOff,
       drapable: drapable(candidateFor(key)),
@@ -783,6 +856,15 @@ export function createRecentImageryLayer({
       const pending = candidateFor(_pending?.key);
       if (!_sources[id] && pending && sourceOf(pending.product) === id)
         clearPending();
+      // A followed pick goes too. An automatic day keeps its follow.
+      const followed = candidateFor(_followKey);
+      if (
+        !_sources[id] &&
+        followed &&
+        sourceOf(followed.product) === id &&
+        _auto?.key !== followed.key
+      )
+        _followKey = null;
     }
     return changed;
   }
@@ -809,22 +891,32 @@ export function createRecentImageryLayer({
         // A probe can take a pinned day off the map or let a followed focus
         // preview; both change more than the cards, so a full notification
         // follows the thumbnail one.
+        const previousFollow = _followKey;
+        const previousPreview = _previewKey;
         const pruned = pruneEmpty();
-        if (pruned) syncRender();
+        if (
+          pruned &&
+          (_followKey !== previousFollow || _previewKey !== previousPreview)
+        ) {
+          // The new automatic day's probe may have been cancelled off-screen.
+          requestThumbnails();
+        }
         const followed =
           Boolean(_followKey) &&
           _followKey === _focusKey &&
           drapable(candidateFor(_followKey)) &&
           applyPreview(_followKey);
-        // A pinned or previewed day that was still being probed drapes now.
         const shown = plan();
         const owned = renderer.getOwned?.() || {};
         const drapesChanged = SLOT_IDS.some(
           (slotId) => (owned[slotId]?.key || null) !== shown[slotId],
         );
-        if (drapesChanged && !pruned && !followed) syncRender();
+        // One render per probe: the key can stay the same while its halves change.
+        // A host found moved changes the divider, so the panel renders in full.
+        const moved = !followed && syncHost();
+        if (!followed) syncRender();
         notify('thumbnail');
-        if (pruned || followed || drapesChanged) notify();
+        if (pruned || followed || drapesChanged || moved) notify();
       });
       syncHost();
       if (_box && !_candidates.length) void runSearch();
@@ -947,10 +1039,10 @@ export function createRecentImageryLayer({
      * @returns {boolean}
      */
     useCurrentView(viewer = _viewer) {
-      const rectangle = viewer?.camera?.computeViewRectangle?.();
+      const rectangle = findCamera(viewer)?.viewRectangle();
       if (!rectangle)
         return refuseBox('Point the camera at the ground to use the view');
-      const box = boxFromRectangle(rectangle);
+      const box = boxFromDegrees(rectangle);
       if (validateBox(box).reason === 'too-large') {
         const { width, height } = boxSideKm(box);
         return refuseBox(
@@ -969,24 +1061,19 @@ export function createRecentImageryLayer({
      */
     zoomToFit() {
       const target = _boxError ? _refusalTarget : null;
-      const camera = _viewer?.camera;
-      const ellipsoid = ellipsoidOf(_viewer);
-      if (!target || !camera?.flyTo || !ellipsoid?.cartographicToCartesian)
-        return null;
-      const canvas = _viewer.scene?.canvas;
+      // No camera port: a viewer of the caller's own whose renderer did not
+      // bring the camera factory (GEV's own imagery renderer does).
+      const port = findCamera(_viewer);
+      if (!target || !port) return null;
+      const canvas = canvasOf(_viewer);
       const height = fitViewHeightM({
         width: canvas?.clientWidth,
         height: canvas?.clientHeight,
-        fovy: camera.frustum?.fovy,
+        fovy: port.pose().fovy,
       });
-      camera.flyTo({
-        destination: ellipsoid.cartographicToCartesian({
-          longitude: toRadians(target.lon),
-          latitude: toRadians(target.lat),
-          height,
-        }),
+      port.flyTo(fromDegrees(target.lon, target.lat, height), {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-        duration: ZOOM_FIT_SECONDS,
+        durationS: ZOOM_FIT_SECONDS,
       });
       return height;
     },
@@ -1013,6 +1100,7 @@ export function createRecentImageryLayer({
       if (list[next].key === _focusKey) return;
       _focusKey = list[next].key;
       schedulePreviewFromFocus();
+      resumeHandover();
       requestThumbnails();
       notify();
     },
@@ -1051,6 +1139,7 @@ export function createRecentImageryLayer({
       if (!drapable(candidate)) {
         clearPending();
         _followKey = availability(candidate) === 'empty' ? null : candidate.key;
+        if (resumeHandover()) requestThumbnails();
         notify();
         return false;
       }
@@ -1064,14 +1153,10 @@ export function createRecentImageryLayer({
      * @returns {boolean} Whether a preview was showing or on its way.
      */
     clearPreview() {
-      const had = Boolean(_pending || _followKey || plan().preview);
-      clearPending();
-      _followKey = null;
-      if (_previewKey) {
-        _previewKey = null;
-        _auto = null;
-        if (_enabled) syncRender();
-      }
+      const had = Boolean(
+        _pending || _followKey || _handoverDeferred || plan().preview,
+      );
+      applyPreview(null);
       if (had) notify();
       return had;
     },
@@ -1101,6 +1186,7 @@ export function createRecentImageryLayer({
       // The preview belonged to the old pins; the next focus move brings it back.
       clearPending();
       _followKey = null;
+      _handoverDeferred = false;
       _previewKey = null;
       _auto = null;
       if (_enabled) {
@@ -1201,6 +1287,16 @@ export function createRecentImageryLayer({
       notify('alpha');
     },
 
+    /** Stop catalog/preview work owned by a cancelled voice action. */
+    cancelPendingSearch() {
+      // Without a note the emptied strip would read as "no imagery".
+      if (_searching) _notice = msg('Search cancelled');
+      cancelSearch();
+      clearPending();
+      syncRender();
+      notify();
+    },
+
     /**
      * Forget the box, the candidates, both pins, the preview and any pending
      * pick; reset opacity and split and cancel the box tool. Mode and
@@ -1227,7 +1323,7 @@ export function createRecentImageryLayer({
         _alpha = 1;
         for (const slotId of SLOT_IDS) renderer.setAlpha(slotId, 1);
       }
-      _notice = 'Box and images cleared';
+      _notice = msg('Box and images cleared');
       syncRender();
       publish([...BOX_EDGES, 'a', 'b', 'split']);
       notify();
@@ -1276,7 +1372,9 @@ export function createRecentImageryLayer({
         candidates,
         focusIndex,
         focus,
-        readout: focus ? formatCandidateReadout(focus, now()) : '',
+        readout: focus
+          ? formatCandidateReadout(focus, now(), READOUT_WORDS)
+          : '',
         recommended: ranked.candidate
           ? { key: ranked.candidate.key, reason: ranked.reason }
           : null,
@@ -1329,17 +1427,18 @@ export function createRecentImageryLayer({
         chips: [
           {
             id: 'hls',
-            label: 'MORE DETAIL · 30 m',
+            label: t('MORE DETAIL · 30 m'),
             active: _sources.hls,
-            title: 'Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days',
+            title: t('Sentinel-2 and Landsat via HLS, 30 m, every 2–6 days'),
             params: { hls: !_sources.hls },
           },
           {
             id: 'viirs',
-            label: 'DAILY OVERVIEW · 250 m',
+            label: t('DAILY OVERVIEW · 250 m'),
             active: _sources.viirs,
-            title:
+            title: t(
               'VIIRS daily mosaic, 250 m, follows broad changes; little detail under 25 km',
+            ),
             params: { viirs: !_sources.viirs },
           },
         ],
@@ -1381,6 +1480,7 @@ export function createRecentImageryLayer({
         if ('a' in params || 'b' in params) {
           clearPending();
           _followKey = null;
+          _handoverDeferred = false;
           for (const slotId of SLOT_IDS) {
             if (slotId in params)
               _assigned[slotId] = parseCandidateKey(params[slotId])

@@ -1,3 +1,5 @@
+import { formatNumber, isolate, msg, t } from '../i18n/index.js';
+
 /** Shortest-wrap signed degrees, for heading offsets typed as absolute values. */
 const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
@@ -10,7 +12,7 @@ const signedNormalizeDeg = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
  */
 const CCTV_CAL_FIELDS = {
   heading: {
-    label: 'HDG',
+    label: msg('HDG'),
     unit: '°',
     decimals: 1,
     get: (cam) => cam.headingDeg,
@@ -19,21 +21,21 @@ const CCTV_CAL_FIELDS = {
     }),
   },
   pitch: {
-    label: 'PITCH',
+    label: msg('PITCH'),
     unit: '°',
     decimals: 1,
     get: (cam) => cam.pitchDeg,
     toPatch: (value, base) => ({ pitchDeg: value - base.pitchDeg }),
   },
   fov: {
-    label: 'FOV',
+    label: msg('FOV'),
     unit: '°',
     decimals: 0,
     get: (cam) => cam.fovDeg,
     toPatch: (value, base) => ({ fovDeg: value - base.fovDeg }),
   },
   range: {
-    label: 'RANGE',
+    label: msg('RANGE'),
     unit: 'm',
     decimals: 0,
     get: (cam) => cam.rangeM,
@@ -42,27 +44,49 @@ const CCTV_CAL_FIELDS = {
     }),
   },
   height: {
-    label: 'HGT',
+    label: msg('HGT'),
     unit: 'm',
     decimals: 0,
     get: (cam) => cam.mountHeightM,
     toPatch: (value, base) => ({ heightM: value - base.mountHeightM }),
   },
   north: {
-    label: 'ΔN',
+    label: msg('ΔN'),
     unit: 'm',
     decimals: 1,
     get: (cam) => cam.calibration?.offsetNorthM || 0,
     toPatch: (value) => ({ offsetNorthM: value }),
   },
   east: {
-    label: 'ΔE',
+    label: msg('ΔE'),
     unit: 'm',
     decimals: 1,
     get: (cam) => cam.calibration?.offsetEastM || 0,
     toPatch: (value) => ({ offsetEastM: value }),
   },
 };
+
+/** Chip text for one pose value: locale decimals, translated metre unit. */
+function calValueText(field, value) {
+  const options = {
+    minimumFractionDigits: field.decimals,
+    maximumFractionDigits: field.decimals,
+  };
+  if (field.unit === 'm') {
+    // English keeps its compact "RANGE 120m"; other languages space the unit.
+    const metres = formatNumber(Number(value), {
+      useGrouping: false,
+      ...options,
+    });
+    return `${t(field.label)} ${isolate(t('{value}m', { value: metres }))}`;
+  }
+  const number = formatNumber(Number(value), {
+    useGrouping: false,
+    ...options,
+  });
+  // Isolated so a minus sign stays on its number in right-to-left text.
+  return `${t(field.label)} ${isolate(`${number}${field.unit}`)}`;
+}
 
 export function _activeCctvCameraId() {
   return this._cctvState?.activeCameraId || this._cctvSelect?.value || '';
@@ -81,105 +105,85 @@ export function _resetCctvCalibration() {
     },
     { origin: 'user' },
   );
-  this.actions.showToast('CCTV calibration reset');
+  this.actions.showToast(t('CCTV calibration reset'));
 }
 
 export function _beginCctvCalValueEdit(chip) {
   if (this.destroyed) return;
   this._calibrationEdit?.(false);
-  const field = CCTV_CAL_FIELDS[chip.dataset.calField];
+  const fieldId = chip.dataset.calField;
+  const field = CCTV_CAL_FIELDS[fieldId];
   const activeCamera = this._cctvState?.activeCamera;
   if (!field || !activeCamera?.basePose) return;
   const cameraId = this._activeCctvCameraId();
   const basePose = { ...activeCamera.basePose };
-  const editListeners = new AbortController();
-  const startValue = field.get(activeCamera);
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.step = field.decimals > 0 ? '0.1' : '1';
-  input.value = Number(startValue).toFixed(field.decimals);
-  input.className = 'cctv-cal-input';
-  chip.textContent = `${field.label} `;
-  chip.appendChild(input);
-  input.focus();
-  input.select();
 
   let finished = false;
-  const finish = (commit) => {
+  /**
+   * End the edit: commit converts the typed value to a calibration offset
+   * against the pose captured when it began; anything else just closes it.
+   */
+  const finish = (commit, typedText = '') => {
     if (finished) return;
     finished = true;
-    editListeners.abort();
     this._calibrationEdit = null;
-    const typed = parseFloat(input.value);
-    input.remove();
+    this.store.setCalEdit(null);
+    const typed = parseFloat(typedText);
     if (
       commit &&
       !this.destroyed &&
       Number.isFinite(typed) &&
       this._cctvState?.enabled &&
       this.actions.isEnabled() &&
-      cameraId === this._activeCctvCameraId()
+      cameraId &&
+      cameraId === this._activeCctvCameraId() &&
+      this.actions.setParams
     ) {
-      if (cameraId && this.actions.setParams) {
-        this.actions.setParams(
-          {
-            selectedCameraId: cameraId,
-            calibration: { cameraId, patch: field.toPatch(typed, basePose) },
-          },
-          { origin: 'user' },
-        );
-        return; // re-render restores the chip text from fresh state
-      }
+      this.actions.setParams(
+        {
+          selectedCameraId: cameraId,
+          calibration: { cameraId, patch: field.toPatch(typed, basePose) },
+        },
+        { origin: 'user' },
+      );
     }
-    this._syncCctvCalReadout(
-      !!this._cctvState?.enabled,
-      this._cctvState?.activeCamera || null,
-    );
   };
   this._calibrationEdit = finish;
-  input.addEventListener(
-    'keydown',
-    (event) => {
-      if (event.key === 'Enter') finish(true);
-      else if (event.key === 'Escape') {
-        event.preventDefault();
-        finish(false);
-      }
-      event.stopPropagation();
-    },
-    { signal: editListeners.signal },
-  );
-  input.addEventListener('blur', () => finish(true), {
-    signal: editListeners.signal,
-  });
-  input.addEventListener('click', (event) => event.stopPropagation(), {
-    signal: editListeners.signal,
+  // The readout renders a number input in this chip; Enter or blur commits
+  // and Escape cancels through `finish`.
+  this.store.setCalEdit({
+    field: fieldId,
+    label: `${t(field.label)} `,
+    ariaLabel: t(field.label),
+    step: field.decimals > 0 ? '0.1' : '1',
+    value: Number(field.get(activeCamera)).toFixed(field.decimals),
+    finish,
   });
 }
 
-export function _syncCctvCalReadout(enabled, activeCamera) {
+/**
+ * The calibration block for a camera state: ADJUST, the pose chips and
+ * whether calibration is possible. Chips show the effective pose.
+ * @param {object|null} state Camera layer UI state.
+ * @param {boolean} enabled Whether the layer is on.
+ */
+export function presentCctvCalibration(state, enabled) {
+  const activeCamera = state?.activeCamera || null;
   const canCalibrate = !!enabled && !!activeCamera;
-  if (this._cctvAdjustBtn) {
-    const adjustOn = !!this._cctvState?.calibrationMode;
-    this._cctvAdjustBtn.classList.toggle('active', adjustOn && canCalibrate);
-    this._cctvAdjustBtn.textContent = adjustOn ? 'ADJUST ON' : 'ADJUST';
-    this._cctvAdjustBtn.disabled = !canCalibrate;
+  const adjustOn = !!state?.calibrationMode;
+  const values = {};
+  for (const [id, field] of Object.entries(CCTV_CAL_FIELDS)) {
+    const value = canCalibrate ? field.get(activeCamera) : null;
+    values[id] = Number.isFinite(value)
+      ? calValueText(field, value)
+      : `${t(field.label)} --`;
   }
-  if (this._cctvCalReadout) {
-    for (const chip of this._cctvCalReadout.querySelectorAll(
-      '.cctv-cal-value',
-    )) {
-      if (chip.querySelector('input')) continue; // an edit is in flight — don't clobber
-      const field = CCTV_CAL_FIELDS[chip.dataset.calField];
-      if (!field) continue;
-      const value = canCalibrate ? field.get(activeCamera) : null;
-      chip.textContent = Number.isFinite(value)
-        ? `${field.label} ${Number(value).toFixed(field.decimals)}${field.unit}`
-        : `${field.label} --`;
-      chip.disabled = !canCalibrate;
-    }
-  }
-  for (const el of [this._cctvCalibSaveBtn, this._cctvCalibResetBtn]) {
-    if (el) el.disabled = !canCalibrate;
-  }
+  return {
+    disabled: !canCalibrate,
+    adjust: {
+      active: adjustOn && canCalibrate,
+      text: adjustOn ? t('ADJUST ON') : t('ADJUST'),
+    },
+    values,
+  };
 }

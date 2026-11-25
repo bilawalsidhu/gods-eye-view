@@ -1,13 +1,18 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../render/cesium/input.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { fakeSceneFrame } from '../testSupport/fakeCesiumScene.mjs';
 import { gstime } from 'satellite.js';
+import { worldClock } from '../time/worldClock.js';
+import { createModel } from '../layers/launches/model.js';
 import rocketLaunchesLayer, {
   _setRocketMissionOverlayHostForTest,
   _setSelectedRocketMissionForTest,
   approximateOrbitPath,
-  bindMissionRosterItemKeyboardPreview,
-  captureMissionRosterFocus,
   buildMissionPaths,
   cameraHeadingForPath,
   compactLaunchSiteName,
@@ -45,7 +50,6 @@ import rocketLaunchesLayer, {
   replayStartAfterPause,
   replayVehicleScreenRotation,
   resolveMissionRosterPreviewLaunch,
-  restoreMissionRosterFocus,
   releaseAircraftTracking,
   ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT,
   ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
@@ -447,6 +451,18 @@ test('holds replay at the pad for a real-time countdown independent of replay sp
   assert.ok(liftoff.phaseProgress > 0);
 });
 
+test('runs the five-second tile hold before a full T-10 countdown', () => {
+  const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
+  // REPLAY ASCENT puts liftoff 5 s (tile hold) + 10 s (countdown) ahead.
+  const hold = replayState(launch, 115000, 12, 28, 5400, 1, 104500, 5);
+  assert.equal(hold.preCountdownActive, true);
+  assert.equal(hold.countdownActive, false);
+  const countdown = replayState(launch, 115000, 12, 28, 5400, 1, 105000, 5);
+  assert.equal(countdown.preCountdownActive, false);
+  assert.equal(countdown.countdownActive, true);
+  assert.equal(countdown.countdownSeconds, 10);
+});
+
 test('hands replay directly from ascent into orbit', () => {
   const launch = { launchTime: '2026-07-20T10:00:00Z', timeline: [] };
   const orbit = replayState(launch, 0, 12, 28, 5400, 1, 16_000);
@@ -513,42 +529,6 @@ test('keyboard focus previews roster missions and clears without selecting them'
   ]);
 });
 
-test('rendered mission row focus and blur drive the preview ownership controller', () => {
-  const listeners = new Map();
-  const calls = [];
-  const button = {
-    addEventListener(type, listener) {
-      listeners.set(type, listener);
-    },
-  };
-  const nextButton = {
-    dataset: { missionRosterIndex: '4' },
-    closest: () => nextButton,
-  };
-  const roster = { contains: (candidate) => candidate === nextButton };
-  const ownership = {
-    pointerEnter: (index) => calls.push(['pointer-enter', index]),
-    pointerLeave: () => calls.push(['pointer-leave']),
-    focus: (index) => calls.push(['focus', index]),
-    blur: (index) => calls.push(['blur', index]),
-  };
-
-  bindMissionRosterItemKeyboardPreview(button, 2, ownership, roster);
-  listeners.get('mouseenter')();
-  listeners.get('mouseleave')();
-  listeners.get('focus')();
-  listeners.get('blur')({ relatedTarget: nextButton });
-  listeners.get('blur')({ relatedTarget: null });
-
-  assert.deepEqual(calls, [
-    ['pointer-enter', 2],
-    ['pointer-leave'],
-    ['focus', 2],
-    ['blur', 4],
-    ['blur', null],
-  ]);
-});
-
 test('leaving a hovered row for an internal roster gap restores keyboard preview', () => {
   const calls = [];
   const ownership = createMissionRosterPreviewOwnership({
@@ -565,50 +545,6 @@ test('leaving a hovered row for an internal roster gap restores keyboard preview
     ['preview', 0],
     ['preview', 1],
   ]);
-});
-
-test('mission roster refresh restores keyboard focus by stable mission identity after reorder', () => {
-  const focused = {
-    dataset: { missionRosterId: 'mission-b' },
-    closest: () => focused,
-  };
-  let restored = false;
-  const replacement = {
-    dataset: { missionRosterId: 'mission-b' },
-    focus: ({ preventScroll }) => { restored = preventScroll; },
-  };
-  const list = {
-    contains: (candidate) => candidate === focused,
-    querySelectorAll: () => [
-      { dataset: { missionRosterId: 'mission-c' } },
-      replacement,
-      { dataset: { missionRosterId: 'mission-a' } },
-    ],
-  };
-
-  const snapshot = captureMissionRosterFocus(list, focused);
-  assert.deepEqual(snapshot, { launchId: 'mission-b' });
-  assert.equal(restoreMissionRosterFocus(list, snapshot, null), 'restored');
-  assert.equal(restored, true);
-});
-
-test('mission roster refresh continues after the list when the focused mission departed', () => {
-  const focused = {
-    dataset: { missionRosterId: 'departed' },
-    closest: () => focused,
-  };
-  let continuationFocused = false;
-  const list = {
-    contains: (candidate) => candidate === focused,
-    querySelectorAll: () => [{ dataset: { missionRosterId: 'remaining' } }],
-  };
-  const continuation = {
-    focus: ({ preventScroll }) => { continuationFocused = preventScroll; },
-  };
-
-  const snapshot = captureMissionRosterFocus(list, focused);
-  assert.equal(restoreMissionRosterFocus(list, snapshot, continuation), 'continued');
-  assert.equal(continuationFocused, true);
 });
 
 test('pending mission preview resolves the current refreshed record by identity', () => {
@@ -640,9 +576,9 @@ test('latest roster input owns preview and restores the remaining owner on leave
 });
 
 test('assigns distinct stable colors to mission operators', () => {
-  assert.equal(missionMarkerColor({ provider: 'NASA', name: 'Science Flight' }).toCssColorString(), 'rgb(255,159,67)');
-  assert.equal(missionMarkerColor({ provider: 'SpaceX', name: 'Starlink Group' }).toCssColorString(), 'rgb(76,201,240)');
-  assert.equal(missionMarkerColor({ provider: 'Private Launch Co.', name: 'Test Flight' }).toCssColorString(), 'rgb(192,132,252)');
+  assert.deepEqual(missionMarkerColor({ provider: 'NASA', name: 'Science Flight' }), [255 / 255, 159 / 255, 67 / 255, 1]);
+  assert.deepEqual(missionMarkerColor({ provider: 'SpaceX', name: 'Starlink Group' }), [76 / 255, 201 / 255, 240 / 255, 1]);
+  assert.deepEqual(missionMarkerColor({ provider: 'Private Launch Co.', name: 'Test Flight' }), [192 / 255, 132 / 255, 252 / 255, 1]);
 });
 
 test('normalizes recent launches and preserves supplied trajectory/orbit data', () => {
@@ -674,6 +610,37 @@ test('uses Launch Library 2 pad latitude/longitude fields', () => {
   assert.equal(launches.length, 1);
   assert.equal(launches[0].lat, 34.632);
   assert.equal(launches[0].lon, -120.611);
+});
+
+test('null or blank pad coordinates stay unknown instead of becoming 0', () => {
+  const base = { net: '2026-07-20T10:00:00Z' };
+  for (const blank of [null, '', '  ', false]) {
+    assert.deepEqual(
+      normalizeRocketLaunches([{ ...base, id: 'blank', pad: { latitude: blank, longitude: blank } }], NOW),
+      [],
+    );
+  }
+});
+
+test('null pad coordinates use the location fallback instead of 0,0', () => {
+  const base = { net: '2026-07-20T10:00:00Z' };
+  const [fallback] = normalizeRocketLaunches([{ ...base, id: 'fallback',
+    pad: { latitude: null, longitude: null, location: { coordinates: '-80.6,28.6' } } }], NOW);
+  assert.equal(fallback.lat, 28.6);
+  assert.equal(fallback.lon, -80.6);
+});
+
+test('an undisclosed landing keeps top-level position and stage numbers unknown', () => {
+  const base = { net: '2026-07-20T10:00:00Z' };
+  const [launch] = normalizeRocketLaunches([{ ...base, id: 'landing', pad: { latitude: 1, longitude: 2 },
+    rocket: { launcher_stage: [{ launcher_flight_number: null,
+      landing: { attempt: true, latitude: null, longitude: null, downrange_distance: null,
+        landing_location: { latitude: null, longitude: null } } }] } }], NOW);
+  const [stage] = launch.recoveryStages;
+  assert.equal(stage.lat, null);
+  assert.equal(stage.lon, null);
+  assert.equal(stage.downrangeKm, null);
+  assert.equal(stage.flightNumber, null);
 });
 
 test('normalizes detailed payload and stage recovery records', () => {
@@ -726,6 +693,126 @@ test('normalizes detailed payload and stage recovery records', () => {
   assert.equal(launches[0].recoveryStages[0].downrangeKm, 610);
   assert.equal(launches[0].recoveryStages[0].lat, 30.1);
   assert.equal(launches[0].recoveryStages[0].lon, -76.2);
+});
+
+test('finiteCoordinate normalizes finite numbers and rejects non-numeric or non-finite inputs', () => {
+  const model = createModel({});
+  assert.equal(model.finiteCoordinate(42.5), 42.5);
+  assert.equal(model.finiteCoordinate('28.5619'), 28.5619);
+  assert.equal(model.finiteCoordinate('-80.5772'), -80.5772);
+  assert.equal(model.finiteCoordinate(0), 0);
+  assert.equal(model.finiteCoordinate('0'), 0);
+  assert.equal(model.finiteCoordinate(undefined), null);
+  assert.equal(model.finiteCoordinate('invalid'), null);
+  assert.equal(model.finiteCoordinate('TBD'), null);
+  assert.equal(model.finiteCoordinate(Number.NaN), null);
+  assert.equal(model.finiteCoordinate(Number.POSITIVE_INFINITY), null);
+  assert.equal(model.finiteCoordinate(Number.NEGATIVE_INFINITY), null);
+});
+
+test('normalizes recovery stage coordinates, downrange distance, and flight numbers with non-finite fallbacks', () => {
+  const launches = normalizeRocketLaunches(
+    {
+      results: [
+        {
+          id: 'recovery-fallbacks',
+          name: 'Falcon 9 | Edge Case Stage Normalization',
+          net: '2026-07-20T10:00:00Z',
+          pad: { latitude: '28.608', longitude: '-80.604' },
+          rocket: {
+            launcher_stage: [
+              {
+                id: 88,
+                type: { name: 'Booster' },
+                launcher_flight_number: 'invalid-flight',
+                landing: {
+                  attempt: true,
+                  success: false,
+                  downrange_distance: 'TBD',
+                  landing_location: {
+                    name: 'Ocean Impact',
+                    latitude: 'N/A',
+                    longitude: undefined,
+                  },
+                },
+              },
+              {
+                id: 89,
+                type: { name: 'Expended Stage' },
+                landing: {
+                  attempt: false,
+                  type: { name: 'Expendable' },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    NOW,
+  );
+
+  assert.equal(launches[0].recoveryStages.length, 2);
+
+  const booster = launches[0].recoveryStages[0];
+  assert.equal(booster.status, 'LOST');
+  assert.equal(booster.success, false);
+  assert.equal(booster.attempted, true);
+  assert.equal(booster.flightNumber, null);
+  assert.equal(booster.downrangeKm, null);
+  assert.equal(booster.lat, null);
+  assert.equal(booster.lon, null);
+
+  const expendable = launches[0].recoveryStages[1];
+  assert.equal(expendable.status, 'EXPENDABLE');
+  assert.equal(expendable.attempted, false);
+  assert.equal(expendable.success, null);
+});
+
+test('normalizes payload amounts and fractional string masses', () => {
+  const launches = normalizeRocketLaunches(
+    {
+      results: [
+        {
+          id: 'payload-edge-cases',
+          name: 'Electron | Mixed Payloads',
+          net: '2026-07-20T10:00:00Z',
+          pad: { latitude: '-39.26', longitude: '177.86' },
+          rocket: {
+            payloads: [
+              {
+                id: 601,
+                amount: 'not-a-number',
+                payload: { id: 11, name: 'Unknown Amount Payload' },
+              },
+              {
+                id: 602,
+                amount: 3,
+                payload: { id: 12, name: 'Triple Payload' },
+              },
+              {
+                id: 603,
+                payload: {
+                  id: 13,
+                  name: 'Valid Fractional Mass Payload',
+                  mass: '12.75',
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+    NOW,
+  );
+
+  // Blank, negative and non-numeric masses are pinned by "missing payload
+  // details stay unknown without inventing mass or classification".
+  const payloads = launches[0].payloads;
+  assert.equal(payloads.length, 3);
+  assert.equal(payloads[0].amount, 1);
+  assert.equal(payloads[1].amount, 3);
+  assert.equal(payloads[2].massKg, 12.75);
 });
 
 test('keeps payload and recovery collections empty when LL2 does not disclose them', () => {
@@ -1076,36 +1163,34 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     removeEventListener(type) { listeners.delete(`document:${type}`); },
   };
   const canvas = new FakeElement('canvas');
-  const dataSources = [];
-  const camera = {
-    positionCartographic: null,
-    positionWC: Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000),
-    cancelFlight() {},
-    lookAtTransform() {},
-  };
+  let eye = fromDegrees(-80.604, 28.608, 18_000_000);
   const scene = {
     canvas,
-    camera,
-    frameState: { frameNumber: 1 },
     postRender: new Cesium.Event(),
     preRender: new Cesium.Event(),
     preUpdate: new Cesium.Event(),
-    primitives: { add: (primitive) => primitive, remove: () => true },
-    drillPick: () => [],
   };
-  const viewer = {
-    camera,
-    scene,
-    dataSources: {
-      add(dataSource) { dataSources.push(dataSource); return dataSource; },
-      remove(dataSource) {
-        const index = dataSources.indexOf(dataSource);
-        if (index >= 0) dataSources.splice(index, 1);
-        return index >= 0;
-      },
+  const viewer = { scene };
+  const { draw } = bindFakeDraw(viewer, {
+    frame: fakeSceneFrame(viewer),
+    camera: {
+      // No pose to fly from: the full-globe framing on enable stays put.
+      pose: () => ({ lon: Number.NaN, lat: Number.NaN, height: 18_000_000, position: eye, fovy: Number.NaN }),
+      on: () => () => {},
+      release() {},
+      cancelFlight() {},
     },
-    selectedEntity: undefined,
+    query: { drillPick: () => [] },
+  });
+  // The mission sets' items by id, across the layer's draw sets.
+  const missionItems = () => {
+    const items = new Map();
+    for (const record of draw.sets.values())
+      if (!record.disposed && /:(lines|sites|markers)$/.test(record.spec.id))
+        for (const [id, item] of record.items) items.set(id, item);
+    return items;
   };
+  const item = (id) => missionItems().get(id);
   const hostCalls = [];
   const host = {
     setEntries: (...args) => hostCalls.push(['entries', ...args]),
@@ -1159,11 +1244,24 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     rocketLaunchesLayer.init(viewer);
     initialized = true;
     await rocketLaunchesLayer.enable();
+    assert.equal(worldClock.coverage(), null, 'nothing loaded, no time to show');
     await rocketLaunchesLayer.update();
+    const at = Date.parse(launchTime);
+    // The launch is a mark labelled with its mission's name.
+    assert.deepEqual(worldClock.coverage(), {
+      start: at,
+      end: at,
+      marks: [at],
+      markDetails: [
+        { time: at, label: 'GAUNTLET PAYLOAD', id: 'mission-runtime', kind: 'launch' },
+      ],
+    });
+    assert.equal(worldClock.isSupported(), true, 'loaded launches bring up the timeline');
 
-    const entities = dataSources[0].entities.values;
-    assert.ok(entities.length >= 7, 'runtime guard requires the populated mission build path');
-    assert.ok(entities.every((entity) => entity.label === undefined));
+    assert.ok(missionItems().size >= 7, 'runtime guard requires the populated mission build path');
+    // Every set is a kind with no world text: labels are the host's.
+    const kinds = new Set(['lines', 'points', 'icons', 'shapes']);
+    assert.ok([...draw.sets.values()].every((record) => kinds.has(record.kind)));
     const ambientPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID
     ));
@@ -1175,26 +1273,25 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       collisionCapacity: ROCKET_MISSION_AMBIENT_OVERLAY_COLLISION_CAPACITY,
       moving: false,
     });
-    const launchEntity = dataSources[0].entities.getById('rocket-launch:mission-runtime');
-    assert.deepEqual(
+    assert.equal(
       ambientPublication[2][0].position,
-      launchEntity.position.getValue(Cesium.JulianDate.now()),
-      'ambient host marker must reuse the entity anchor Cartesian',
+      item('rocket-launch:mission-runtime').pos,
+      'ambient host marker must reuse the site marker anchor',
     );
     const frameTime = Cesium.JulianDate.now();
     scene.preRender.raiseEvent(scene, frameTime);
-    assert.equal(launchEntity.point.show.getValue(frameTime), true);
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(99.396, -28.608, 18_000_000);
+    assert.equal(item('rocket-launch:mission-runtime').show, true);
+    eye = fromDegrees(99.396, -28.608, 18_000_000);
     scene.preRender.raiseEvent(scene, frameTime);
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      item('rocket-launch:mission-runtime').show,
       false,
       'pre-render horizon pass must hide a rear-side depth-free mission dot before draw and pick',
     );
-    camera.positionWC = Cesium.Cartesian3.fromDegrees(-80.604, 28.608, 18_000_000);
+    eye = fromDegrees(-80.604, 28.608, 18_000_000);
     scene.preRender.raiseEvent(scene, frameTime);
     assert.equal(
-      launchEntity.point.show.getValue(frameTime),
+      item('rocket-launch:mission-runtime').show,
       true,
       'mission dot must return when its surface anchor faces the camera again',
     );
@@ -1220,17 +1317,16 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
       && entry.paintLane === 'selected'
       && entry.edgeFade === 'keyhole'
     )));
-    const satelliteEntity = dataSources[0].entities.getById('rocket-satellite:mission-runtime');
-    const satellitePosition = satelliteEntity.position.getValue(Cesium.JulianDate.now());
-    assert.equal(
+    scene.preRender.raiseEvent(scene, frameTime);
+    assert.deepEqual(
       selectedPublication[2][2].position(),
-      satellitePosition,
-      'payload host getter must return the exact per-frame live-position cache',
+      item('rocket-satellite:mission-runtime').pos,
+      'payload host getter must return where the frame drew the payload',
     );
 
-    // Jitter regression net: live-state propagation advances at most once per
-    // frameNumber, and the host getter is a pure read that never advances it.
-    // Without both halves, the host label and the native dot can propagate to
+    // Jitter regression net: live-state propagation advances at most once a
+    // frame, and the host getter is a pure read that never advances it.
+    // Without both halves, the host label and the drawn dot can propagate to
     // different wall-clock instants inside one frame — the documented
     // label-separation jitter class.
     const payloadEntry = selectedPublication[2][2];
@@ -1238,52 +1334,40 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     try {
       let nowMs = realDateNow();
       Date.now = () => nowMs;
-      scene.frameState.frameNumber = 41;
-      const frameA = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
+      scene.preRender.raiseEvent(scene, frameTime);
+      const frameA = { ...item('rocket-satellite:mission-runtime').pos };
+      assert.deepEqual({ ...payloadEntry.position() }, frameA);
       nowMs += 30_000;
       assert.deepEqual(
-        Cesium.Cartesian3.clone(satelliteEntity.position.getValue(Cesium.JulianDate.now())),
+        { ...payloadEntry.position() },
         frameA,
-        'a second native read in the same frame must not re-propagate',
+        'host getter must not advance propagation between frames',
       );
-      nowMs += 30_000;
-      scene.frameState.frameNumber = 42;
+      scene.preRender.raiseEvent(scene, frameTime);
+      const frameB = { ...item('rocket-satellite:mission-runtime').pos };
+      assert.notDeepEqual(frameB, frameA, 'a new frame propagates (non-vacuous)');
       assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
-        frameA,
-        'host getter must not advance propagation, even on a new frame',
-      );
-      const frameB = Cesium.Cartesian3.clone(
-        satelliteEntity.position.getValue(Cesium.JulianDate.now()),
-      );
-      assert.notDeepEqual(frameB, frameA, 'native read on a new frame propagates (non-vacuous)');
-      assert.deepEqual(
-        Cesium.Cartesian3.clone(payloadEntry.position()),
+        { ...payloadEntry.position() },
         frameB,
-        'host getter reads the advanced cache after native propagation',
+        'host getter reads the advanced cache after the frame drew it',
       );
     } finally {
       Date.now = realDateNow;
-      scene.frameState.frameNumber = 1;
     }
-    const reentryEntity = dataSources[0].entities.getById('rocket-reentry:mission-runtime:0');
     assert.deepEqual(
       selectedPublication[2][1].position,
-      reentryEntity.polyline.positions.getValue(Cesium.JulianDate.now())[0],
-      're-entry host label must reuse the recovery-path interface Cartesian',
+      item('rocket-reentry:mission-runtime:0').positions[0],
+      're-entry host label must reuse the recovery-path interface point',
     );
-    const transferEntity = dataSources[0].entities.getById('rocket-transfer:mission-runtime');
     assert.deepEqual(
       selectedPublication[2][3].position,
-      transferEntity.polyline.positions.getValue(Cesium.JulianDate.now()).at(-1),
-      'orbit host label must reuse the insertion Cartesian',
+      item('rocket-transfer:mission-runtime').positions.at(-1),
+      'orbit host label must reuse the insertion point',
     );
 
     launchName = 'Mission Refresh | Gauntlet Payload';
     await rocketLaunchesLayer.update();
-    assert.ok(dataSources[0].entities.values.every((entity) => entity.label === undefined));
+    assert.ok(missionItems().size >= 7);
     const refreshPublication = hostCalls.findLast(([type, sourceId]) => (
       type === 'entries' && sourceId === ROCKET_MISSION_SELECTED_OVERLAY_SOURCE_ID
     ));
@@ -1298,6 +1382,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     assert.equal(deselectedPublication[2][0].protected, false);
 
     await rocketLaunchesLayer.disable();
+    assert.equal(worldClock.coverage(), null, 'off, launches show no time');
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],
@@ -1306,7 +1391,7 @@ test('real mission build, select, refresh, deselect, disable, and destroy paths 
     ]);
     await rocketLaunchesLayer.destroy(viewer);
     initialized = false;
-    assert.equal(dataSources.length, 0);
+    assert.ok([...draw.sets.values()].every((record) => record.disposed));
     assert.deepEqual(hostCalls.slice(-4), [
       ['clear', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID],
       ['visible', ROCKET_MISSION_AMBIENT_OVERLAY_SOURCE_ID, false],
@@ -1418,4 +1503,12 @@ test('missing payload details stay unknown without inventing mass or classificat
   }
   const [launch] = normalizeRocketLaunches([{ id: 'missing', pad: { latitude: 1, longitude: 2 }, net: '2026-07-20T10:00:00Z' }], NOW);
   assert.deepEqual(launch.payloads, []);
+});
+
+test('away from live the feed keeps its own window of launches', (t) => {
+  t.after(() => worldClock.goLive());
+  worldClock.seek(Date.now() - 20 * 86_400_000);
+  const net = new Date(Date.now() - 86_400_000).toISOString();
+  const launches = normalizeRocketLaunches([{ id: 'recent', pad: { latitude: 1, longitude: 2 }, net }]);
+  assert.deepEqual(launches.map((launch) => launch.id), ['recent']);
 });

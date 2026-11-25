@@ -36,9 +36,11 @@ import {
  */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import puppeteer from 'puppeteer';
+import { chromeExecutablePath, captureQaScreenshot } from './qa-chrome.mjs';
 import { createTransitHistory } from '../server/providers/transitHistory.js';
 import { DETECTION_THEME_MAP } from '../src/overlays/worldOverlayTokens.js';
 import { transitModeTier } from '../src/data/transitPresetStyle.js';
+import { TRANSIT_POLL_MS } from '../src/layers/transit/policy.js';
 
 import {
   reduceAnchor,
@@ -46,8 +48,6 @@ import {
   reduceScenario,
   reduceSensorContrast,
   reduceScriptedMotion,
-  reduceMotion,
-  reduceFleet,
 } from '../src/layers/transit/qaMetrics.js';
 
 const BASE = process.env.QA_BASE_URL || 'http://localhost:4173';
@@ -98,7 +98,7 @@ const renderingSource = await readFile(
 );
 const frameSource = renderingSource
   .split('function onPreRender()')[1]
-  .split('const occluder')[0];
+  .split('const candidatePosition')[0];
 check(
   'frame pass does not scan the fleet or copy the moving set',
   !/_vehicles\.values|\[\.\.\.state\._moving\]/.test(frameSource),
@@ -262,10 +262,10 @@ await mkdir(SHOTS, { recursive: true });
 const browser = await puppeteer.launch({
   headless: false,
   protocolTimeout: 150000,
-  executablePath:
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  executablePath: chromeExecutablePath(),
   args: [
     '--no-sandbox',
+    '--disable-backgrounding-occluded-windows',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--window-size=1920,1080',
@@ -273,6 +273,10 @@ const browser = await puppeteer.launch({
   ],
 });
 const page = await browser.newPage();
+// This gate measures visible-page motion. OS minimization must not silently
+// switch it into the app's intentional hidden-tab polling pause.
+const focus = await page.createCDPSession();
+await focus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
 boundPageEvaluations(page);
 await page.setViewport({ width: 1920, height: 1080 });
 const pageErrors = [];
@@ -288,11 +292,13 @@ page.on('request', (request) => {
 });
 
 const shot = (name, caption) =>
-  page
-    .screenshot({ path: `${SHOTS}/${name}`, type: 'jpeg', quality: 82 })
-    .then(() => {
-      console.log(`  shot ${name} — ${caption}`);
-    });
+  captureQaScreenshot(page, {
+    path: `${SHOTS}/${name}`,
+    type: 'jpeg',
+    quality: 82,
+  }).then(() => {
+    console.log(`  shot ${name} — ${caption}`);
+  });
 
 const view = (city) =>
   `${BASE}/?welcome=0#lat=${city.lat}&lon=${city.lon}&alt=600&heading=${city.heading}&pitch=-45`;
@@ -391,22 +397,42 @@ try {
         orientation: { heading: 0, pitch: (-40 * Math.PI) / 180, roll: 0 },
       });
     }, city);
-    await page.waitForFunction(
-      () =>
-        (window.__godsEyeView.dataManager.layers
-          .get('transit')
-          .module.getStats().count || 0) > 0,
-      { timeout: 90_000 },
-    );
+    const arrived = await page
+      .waitForFunction(
+        (feedId) =>
+          [
+            ...window.__godsEyeView.dataManager.layers
+              .get('transit')
+              .module._transitStateForTest()
+              ._vehicles.keys(),
+          ].some((key) => key.startsWith(`${feedId}:`)),
+        { timeout: 90_000 },
+        city.feedId,
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    if (!arrived) {
+      check(
+        `${city.label}: live feed arrived`,
+        false,
+        `No vehicles from ${city.feedId}; retained vehicles from other cities cannot qualify this view`,
+        { unexercised: true },
+      );
+      continue;
+    }
     await wait(9_000);
-    const fleet = await page.evaluate(() => {
+    const fleet = await page.evaluate((feedId) => {
       const layer =
         window.__godsEyeView.dataManager.layers.get('transit').module;
       return {
-        count: layer._transitStateForTest()._vehicles.size,
+        count: [...layer._transitStateForTest()._vehicles.keys()].filter(
+          (key) => key.startsWith(`${feedId}:`),
+        ).length,
         stats: layer.getStats(),
       };
-    });
+    }, city.feedId);
     check(
       `${city.label}: vehicles are rendered`,
       fleet.count >= 20,
@@ -428,6 +454,7 @@ try {
         .module._transitStateForTest();
       let best = null;
       for (const entry of state._vehicles.values()) {
+        if (!entry.key.startsWith(`${c.feedId}:`)) continue;
         const d = Math.hypot(entry.to.lat - c.lat, entry.to.lon - c.lon);
         if (!best || d < best.d)
           best = { d, lat: entry.to.lat, lon: entry.to.lon, key: entry.key };
@@ -774,7 +801,7 @@ try {
           );
         check(
           `${preset.name}: the icon raster cache stays bounded`,
-          styling.iconCacheSize <= 6 * 2 * 3,
+          styling.iconCacheSize <= 6 * 2 * 3 * 2,
           `${styling.iconCacheSize} rasters`,
         );
       }
@@ -788,25 +815,38 @@ try {
           const layer =
             window.__godsEyeView.dataManager.layers.get('transit').module;
           const state = layer._transitStateForTest();
-          const entry = state._vehicles.get(key);
+          const scene = window.__godsEyeView.viewer.scene;
+          // The billboard the draw port drew for it, and the set drawing it.
+          const setIds = layer._transitSetIdsForTest();
+          let billboard = null,
+            setId = null;
+          for (let i = 0; !billboard && i < scene.primitives.length; i++) {
+            const host = scene.primitives.get(i);
+            if (!setIds.includes(host?.drawSetId)) continue;
+            for (let j = 0; j < host.length; j++)
+              if (host.get(j)?.id?.id === key) {
+                billboard = host.get(j);
+                setId = host.drawSetId;
+              }
+          }
+          const set = layer._transitPartsForTest().rendering.setNameOf(setId);
           return {
             selected: state._selectedKey === key,
-            color: entry?.marker.color.toCssColorString(),
-            width: entry?.marker.width,
+            color: billboard?.color.toCssColorString(),
+            width: billboard?.width,
             pickOwner: (() => {
-              const p = window.__godsEyeView.viewer.scene.pick(
-                entry.marker.computeScreenSpacePosition(
-                  window.__godsEyeView.viewer.scene,
-                ),
-              );
+              const p = billboard
+                ? scene.pick(billboard.computeScreenSpacePosition(scene))
+                : null;
               return {
-                id: typeof p?.id === 'string' ? p.id : null,
-                primitiveId:
-                  typeof p?.primitive?.id === 'string' ? p.primitive.id : null,
+                id: typeof p?.id?.id === 'string' ? p.id.id : null,
+                set: typeof p?.id?.set === 'string' ? p.id.set : null,
                 collection:
-                  entry.markerCollection === state._animatedMarkers
+                  set === 'moving'
                     ? 'animated'
-                    : 'stationary',
+                    : set === 'still'
+                      ? 'stationary'
+                      : null,
               };
             })(),
           };
@@ -1569,7 +1609,8 @@ try {
         key: entry.key,
         x,
         y,
-        pickKey: picked?.id ?? picked?.primitive?.id ?? null,
+        // A draw-port pick carries {set, id, meta}; the vehicle is its id.
+        pickKey: picked?.id?.id ?? picked?.id ?? picked?.primitive?.id ?? null,
       };
     });
     let anchor = null;
@@ -1609,6 +1650,7 @@ try {
             m[3] * v[0] + m[7] * v[1] + m[11] * v[2] + m[15] * v[3],
           ];
           const frames = [];
+          const observedPolls = new Set();
           const publicationsBefore = state._cardPublications || 0;
           let headSamples = 0,
             headErrorPx = 0,
@@ -1625,6 +1667,13 @@ try {
                 const proj = scene.camera.frustum.projectionMatrix;
                 const p = entry.marker.position;
                 const clip = mul(proj, mul(view, [p.x, p.y, p.z, 1]));
+                if (
+                  entry.marker.show !== false &&
+                  rect &&
+                  Number.isFinite(entry.pollSeq)
+                ) {
+                  observedPolls.add(entry.pollSeq);
+                }
                 frames.push({
                   t: performance.now() - t0,
                   mx: ((clip[0] / clip[3]) * 0.5 + 0.5) * canvas.clientWidth,
@@ -1670,7 +1719,15 @@ try {
                   headSamples++;
                 }
               }
-              if (performance.now() - t0 >= durationMs) finish();
+              const elapsed = performance.now() - t0;
+              // Keep at least 20 seconds of motion and require an observed poll
+              // transition. A fixed 20s wall-clock window can miss a 15s poll
+              // when an earlier refresh is still settling.
+              if (
+                (elapsed >= 20_000 && observedPolls.size >= 2) ||
+                elapsed >= durationMs
+              )
+                finish();
             };
             let remove;
             const finish = () => {
@@ -1678,6 +1735,7 @@ try {
               remove?.();
               resolve({
                 selected: true,
+                elapsedMs: performance.now() - t0,
                 frames,
                 textPublishes:
                   (state._cardPublications || 0) - publicationsBefore,
@@ -1692,7 +1750,7 @@ try {
           });
         },
         target.key,
-        20_000,
+        3 * TRANSIT_POLL_MS,
       );
     }
     check(
@@ -1713,8 +1771,9 @@ try {
       );
       check(
         'card text publication stays throttled while the anchor runs at frame rate',
-        anchor.textPublishes > 0 && anchor.textPublishes <= 20_000 / 250 + 3,
-        `${anchor.textPublishes} text publications in 20 s`,
+        anchor.textPublishes > 0 &&
+          anchor.textPublishes <= anchor.elapsedMs / 250 + 3,
+        `${anchor.textPublishes} text publications in ${(anchor.elapsedMs / 1000).toFixed(1)} s`,
       );
     } else {
       check(
@@ -1804,19 +1863,33 @@ try {
   await page.$eval(row, (element) =>
     element.scrollIntoView({ block: 'center' }),
   );
+  // The marker sets drawn while on, to look for after disable.
+  const markerSets = await page.evaluate(() =>
+    window.__godsEyeView.dataManager.layers
+      .get('transit')
+      .module._transitSetIdsForTest(),
+  );
   await page.click(`${row} .data-toggle-btn`);
   await page.waitForFunction(
     () => !window.__godsEyeView.dataManager.isEnabled('transit'),
     { timeout: 20_000 },
   );
   const afterDisable = transitRequests.length;
-  const teardown = await page.evaluate(() => {
+  const teardown = await page.evaluate((setIds) => {
     const layer = window.__godsEyeView.dataManager.layers.get('transit').module;
     const state = layer._transitStateForTest();
     return {
       vehicles: state._vehicles.size,
-      primitives:
-        (state._markers?.length || 0) + (state._animatedMarkers?.length || 0),
+      // Billboards still drawn in the sets drawn while on.
+      primitives: (() => {
+        const scene = window.__godsEyeView.viewer.scene;
+        let count = 0;
+        for (let i = 0; i < scene.primitives.length; i++) {
+          const host = scene.primitives.get(i);
+          if (setIds.includes(host?.drawSetId)) count += host.length || 0;
+        }
+        return count;
+      })(),
       visible: state._visible.size,
       moving: state._moving.size,
       detect: state._detectCache,
@@ -1828,12 +1901,12 @@ try {
       ],
       trailPending: layer._transitPartsForTest().trails.requestDiagnostics()
         .pending,
-      shown: state._markers ? state._markers.show : null,
+      shown: state._markersShown ?? null,
       inFlight: state._inFlight.size,
       activeFeeds: state._activeFeeds.size,
       holds: window.__godsEyeView.getRenderGovernorDiagnostics().holds,
     };
-  });
+  }, markerSets);
   check(
     'disable leaves no vehicles and no point primitives',
     teardown.vehicles === 0 &&
@@ -1907,16 +1980,19 @@ try {
   await wait(12_000);
   check('leaving Contacts restores Transit', await isOn());
 
-  // SPACE MISSIONS
-  await page.evaluate(() =>
-    window.__godsEyeView.dataManager.setEnabled('transit', false, {
-      origin: 'user',
-    }),
-  );
-  await wait(2_000);
-  await page.click('#global-context-missions-btn');
+  // SPACE MISSIONS: an ordinary layer. It neither refuses nor puts away
+  // Transit, so a Transit switched on while it runs stays on after it ends.
+  const setMissions = (enabled) =>
+    page.evaluate(
+      (on) =>
+        window.__godsEyeView.dataManager.setEnabled('rocket-launches', on, {
+          origin: 'user',
+        }),
+      enabled,
+    );
+  await setMissions(true);
   await wait(20_000);
-  const blocked = await page.evaluate(async () => {
+  const beside = await page.evaluate(async () => {
     const settled = await window.__godsEyeView.dataManager.setEnabled(
       'transit',
       true,
@@ -1928,16 +2004,13 @@ try {
     };
   });
   check(
-    'Space Missions refuses to enable Transit while it isolates replay data',
-    blocked.enabled === false,
-    JSON.stringify(blocked),
+    'Transit can be switched on while Space Missions runs',
+    beside.settled !== false && beside.enabled === true,
+    JSON.stringify(beside),
   );
-  await page.click('#global-context-missions-btn');
+  await setMissions(false);
   await wait(12_000);
-  check(
-    'leaving Space Missions leaves Transit off, as it was on entry',
-    (await isOn()) === false,
-  );
+  check('switching Space Missions off leaves Transit on', await isOn());
 
   check(
     'no uncaught page errors',

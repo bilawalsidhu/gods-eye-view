@@ -1,7 +1,9 @@
+import { msg, t } from '../i18n/index.js';
 import {
   PUSH_TO_TALK_HOLD_DELAY_MS,
   MICROPHONE_VISUALIZER_GATE,
   ASSISTANT_VISUALIZER_GATE,
+  isStoriesOpen,
   isPushToTalkKey,
   SPACE_INTERACTIVE_SELECTOR,
   isInteractiveSpaceTarget,
@@ -10,8 +12,8 @@ import {
   resolveVoiceVisualizerSpeaker,
   resolveVoiceControlHint,
   gateVoiceVisualizerLevel,
-  resetVoiceVisualizerBars,
 } from './realtimeInputPolicy.js';
+import { VOICE_VISUALIZER_BARS } from './control.js';
 import { shouldPauseRadioForVoice } from './realtimeProtocol.js';
 
 /** Own physical push-to-talk gestures, microphone controls and audio meters. */
@@ -54,7 +56,14 @@ export class RealtimeInput {
   bindPushToTalkShortcut() {
     if (this.shortcutKeyDownHandler) return;
     this.shortcutKeyDownHandler = (event) => {
-      if (!shouldHandlePushToTalkKeyDown(event)) return;
+      // Space types in chat; it never talks while chat is open, nor while
+      // Stories owns the keyboard (body.stories-mode).
+      if (
+        this.ui.state?.chat?.open === true ||
+        isStoriesOpen() ||
+        !shouldHandlePushToTalkKeyDown(event)
+      )
+        return;
       if (event.repeat) {
         if (this.spaceKeyHeld && !this.pushToTalkHoldPreservesNative)
           event.preventDefault();
@@ -87,6 +96,10 @@ export class RealtimeInput {
         this.pushToTalkHoldTimer = null;
         if (holdGeneration !== this.pushToTalkHoldGeneration) return;
         if (!this.spaceKeyHeld || this.pushToTalkKeyHeld) return;
+        if (isStoriesOpen()) {
+          this.shortcutBlurHandler();
+          return;
+        }
         // A pointer or Tab focus change during the delay cancels the original
         // gesture rather than letting voice claim a key held for another owner.
         if (document.activeElement !== this.pushToTalkHoldFocusOwner) return;
@@ -115,15 +128,16 @@ export class RealtimeInput {
           // off if it is talking. Short taps never reach this point.
           if (mayInterrupt) this.bargeIn?.();
           this.beginPointerTurn?.('keydown');
-          this.ui.root.dataset.pushToTalk = 'held';
+          this.ui.update('root', { pushToTalk: 'held' });
           this.setMicrophoneEnabled(true);
           if (this.status === 'listening')
-            this.setStatus('listening', 'Release Space to send');
+            this.setStatus('listening', msg('Release Space to send'));
         } else {
           this.start({ pushToTalk: true });
           // start() performs a controlled stop() before connecting. Restore the
           // marker it clears so the UI reflects this still-held gesture.
-          if (this.pushToTalkKeyHeld) this.ui.root.dataset.pushToTalk = 'held';
+          if (this.pushToTalkKeyHeld)
+            this.ui.update('root', { pushToTalk: 'held' });
         }
       }, PUSH_TO_TALK_HOLD_DELAY_MS);
     };
@@ -190,11 +204,11 @@ export class RealtimeInput {
     this.releasePointerHold?.();
     if (!this.pushToTalkKeyHeld) return;
     this.pushToTalkKeyHeld = false;
-    delete this.ui.root.dataset.pushToTalk;
+    this.ui.update('root', { pushToTalk: null });
     if (!this.pushToTalkMode) return;
     this.setMicrophoneEnabled(false);
     if (this.status === 'listening')
-      this.setStatus('listening', 'Hold Space to talk');
+      this.setStatus('listening', msg('Hold Space to talk'));
     else this.updateVoiceButtonLabel();
   }
 
@@ -204,8 +218,7 @@ export class RealtimeInput {
    * @returns {void}
    */
   setMicrophoneEnabled(enabled) {
-    if (this.ui?.root)
-      this.ui.root.dataset.microphone = enabled ? 'active' : 'muted';
+    this.ui?.update('root', { microphone: enabled ? 'active' : 'muted' });
     this.stream?.getAudioTracks?.().forEach((track) => {
       track.enabled = Boolean(enabled);
     });
@@ -219,10 +232,7 @@ export class RealtimeInput {
   startVoiceVisualizer(stream) {
     this.stopVoiceVisualizer();
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const bars = Array.from(
-      this.ui.root.querySelectorAll('.gev-voice-visualizer span'),
-    );
-    if (!AudioContextClass || !stream || !bars.length) return;
+    if (!AudioContextClass || !stream || !this.ui) return;
     try {
       const context = new AudioContextClass();
       this.visualizerAudioContext = context;
@@ -251,17 +261,18 @@ export class RealtimeInput {
           },
         );
         if (!signal) {
-          resetVoiceVisualizerBars(bars);
+          this.restVoiceVisualizer();
           this.visualizerFrame = requestAnimationFrame(render);
           return;
         }
         signal.analyser.getByteFrequencyData(signal.data);
         const binCount = signal.data.length;
-        bars.forEach((bar, index) => {
-          const start = Math.floor((index / bars.length) * binCount);
+        const count = VOICE_VISUALIZER_BARS;
+        const bars = Array.from({ length: count }, (_, index) => {
+          const start = Math.floor((index / count) * binCount);
           const end = Math.max(
             start + 1,
-            Math.floor(((index + 1) / bars.length) * binCount),
+            Math.floor(((index + 1) / count) * binCount),
           );
           let energy = 0;
           for (let bin = start; bin < end; bin++) energy += signal.data[bin];
@@ -274,15 +285,12 @@ export class RealtimeInput {
             gateVoiceVisualizerLevel(normalized, gate),
             0.72,
           );
-          bar.style.setProperty(
-            '--audio-level',
-            `${Math.round(5 + shaped * 29)}px`,
-          );
-          bar.style.setProperty(
-            '--audio-opacity',
-            `${(0.5 + shaped * 0.5).toFixed(2)}`,
-          );
+          return {
+            level: `${Math.round(5 + shaped * 29)}px`,
+            opacity: `${(0.5 + shaped * 0.5).toFixed(2)}`,
+          };
         });
+        this.ui?.setBars(bars);
         this.visualizerFrame = requestAnimationFrame(render);
       };
       render();
@@ -352,9 +360,12 @@ export class RealtimeInput {
       this.visualizerAudioContext.close().catch(() => {});
       this.visualizerAudioContext = null;
     }
-    resetVoiceVisualizerBars(
-      this.ui?.root?.querySelectorAll('.gev-voice-visualizer span'),
-    );
+    this.restVoiceVisualizer();
+  }
+
+  /** Return the waveform to its CSS standby baseline. */
+  restVoiceVisualizer() {
+    this.ui?.setBars(null);
   }
 
   /**
@@ -362,14 +373,13 @@ export class RealtimeInput {
    * @returns {void}
    */
   updateVoiceButtonLabel() {
-    if (!this.ui.buttonLabel) return;
-    this.ui.buttonLabel.textContent = 'MIC';
-    if (this.ui.helpDetail) {
-      this.ui.helpDetail.textContent = resolveVoiceControlHint(
-        this.pushToTalkMode,
-        this.pushToTalkKeyHeld,
-      );
-    }
+    if (!this.ui) return;
+    // The mic button's caption; the first-run tip names it the same way.
+    this.ui.update('mic', { text: () => t('MIC') });
+    const { pushToTalkMode, pushToTalkKeyHeld } = this;
+    this.ui.update('help', {
+      text: () => resolveVoiceControlHint(pushToTalkMode, pushToTalkKeyHeld),
+    });
   }
 
   setVoiceSpeaker(speaker, { keepVisualizerSpeaker = false } = {}) {
@@ -380,7 +390,7 @@ export class RealtimeInput {
       nextSpeaker,
       keepVisualizerSpeaker,
     );
-    this.ui.root.dataset.speaker = nextSpeaker;
+    this.ui.update('root', { speaker: nextSpeaker });
     if (shouldPauseRadioForVoice({ speaker: nextSpeaker }))
       this.pauseRadioForVoice();
   }
@@ -390,10 +400,7 @@ export class RealtimeInput {
     this.pushToTalkKeyHeld = false;
     this.spaceKeyHeld = false;
     this.resetPushToTalkGesture();
-    if (this.ui?.root) {
-      delete this.ui.root.dataset.pushToTalk;
-      delete this.ui.root.dataset.microphone;
-    }
+    this.ui?.update('root', { pushToTalk: null, microphone: null });
   }
 
   detachBindings() {

@@ -1,30 +1,64 @@
-import * as Cesium from 'cesium';
-import { STREET_LEVEL_LAYER_ID } from './policy.js';
+import {
+  CLICK_PICK_WINDOW_PX,
+  STREET_LEVEL_LAYER_ID,
+  STREET_LEVEL_SET_PREFIX,
+} from './policy.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { toLonLatH } from '../../geo/index.js';
 
-/** Hover picks at most ~8 times a second (like the CCTV layer), never per frame. */
-const HOVER_PICK_INTERVAL_MS = 120;
-
-/** One click/hover handler for every provider's coverage and image cones. */
+/** One click handler for every provider's lines and cones, and the marker. */
 export function createSelection({ state, parts }) {
-  const { picking, input } = state.services;
+  const { picking } = state.services;
 
-  function ownsPick(pickedId) {
-    return parts.router.ownsPick(pickedId);
+  /**
+   * The pick id a click hit: a line part of ours answers for its sequence
+   * (`meta.pick`); anything else by its own id.
+   */
+  function pickIdOf({ drawHit, id }) {
+    if (drawHit?.set.startsWith(STREET_LEVEL_SET_PREFIX))
+      return drawHit.meta?.pick ?? drawHit.id;
+    return id;
   }
 
-  function onClick(click) {
-    const viewer = state.viewer;
-    if (!viewer || !state.enabled) return;
-    if (input?.isPointerFree && !input.isPointerFree()) return;
-    const picked = viewer.scene.pick(click.position);
-    const id = picking?.resolvePickId
-      ? picking.resolvePickId(picked)
-      : picked?.id;
-    const route = parts.router.resolve(id);
-    if (!route?.instance) return;
-    const entry = state.providers.get(route.providerId);
-    if (!entry?.on) return;
-    route.instance.handlePick(route.id);
+  /** The id carries a provider's prefix: that provider handles the pick. */
+  function onClick(event) {
+    if (!state.viewer || !state.enabled) return;
+    // Another layer's card or label painted on top takes the click, read once
+    // per click so every layer agrees: no image, sequence or ground under it
+    // opens. Street Level paints no cards of its own.
+    if (picking?.isUnderOtherCard?.(event)) return;
+    const hit = event.windowHit(CLICK_PICK_WINDOW_PX, CLICK_PICK_WINDOW_PX);
+    const windowId = pickIdOf(hit);
+    // A coarse tap's touch contact (event.hit) reaches farther than this
+    // window: an item of ours there is still ours.
+    const contact = event.hit;
+    const contactId =
+      contact && !contact.surface
+        ? pickIdOf({ drawHit: contact.set ? contact : null, id: event.id })
+        : null;
+    const route =
+      parts.router.resolve(windowId) ??
+      (contactId ? parts.router.resolve(contactId) : null);
+    // Not ours: the ground handler decides whether it is the map itself.
+    if (!route) {
+      parts.openAtGround?.({ surface: hit.surface, ground: groundOf(event) });
+      return;
+    }
+    // The position marker is the core's own: nothing to select.
+    if (!route.instance) return;
+    route.instance.handlePick(route.id, {
+      groundPoint: () => groundPointOf(event),
+    });
+  }
+
+  /** The world position under a click, measured when first asked; null over the sky. */
+  const groundOf = (event) => () => event.ground();
+
+  /** Lon/lat of the ground under a click, or null (sky). */
+  function groundPointOf(event) {
+    const position = event.ground();
+    const ground = position && toLonLatH(position);
+    return ground ? { lon: ground.lon, lat: ground.lat } : null;
   }
 
   /**
@@ -47,138 +81,21 @@ export function createSelection({ state, parts }) {
     parts.clearSequences();
   }
 
-  let hoverQueued = false;
-  let hoverCursor = false;
-  let hoverPosition = null;
-  let hoverLastPickAt = -Infinity;
-  let hoverTimer = null;
-  let pointerButtons = 0;
-  let removeHoverWatchers = null;
-
-  function setHoverCursor(canvas, hit) {
-    if (hit && !hoverCursor) {
-      canvas.style.cursor = 'pointer';
-      hoverCursor = true;
-    } else if (!hit && hoverCursor) {
-      canvas.style.cursor = '';
-      hoverCursor = false;
-    }
-  }
-
-  function pickHover() {
-    hoverQueued = false;
-    const viewer = state.viewer;
-    // Switched off (or torn down) since the frame was queued.
-    if (!viewer || !state.enabled || !state.clickHandler) return;
-    // A drag in progress: the pointer is the camera's.
-    if (pointerButtons !== 0) return;
-    const canvas = viewer.scene?.canvas;
-    if (!canvas || viewer.isDestroyed?.()) return;
-    hoverLastPickAt = Date.now();
-    let hit = false;
-    try {
-      const picked = viewer.scene.pick(hoverPosition);
-      const id = picking?.resolvePickId
-        ? picking.resolvePickId(picked)
-        : picked?.id;
-      hit = ownsPick(id);
-    } catch {
-      hit = false;
-    }
-    setHoverCursor(canvas, hit);
-  }
-
-  /**
-   * Pointer cursor over anything this layer owns. Throttled; a move inside
-   * the interval is picked when it ends, so the cursor never sticks.
-   */
-  function onMove(movement) {
-    const viewer = state.viewer;
-    if (!viewer || !state.enabled) return;
-    hoverPosition = movement.endPosition;
-    queueHoverPick();
-  }
-
-  /** Pick `hoverPosition` on a coming frame, within the throttle. */
-  function queueHoverPick() {
-    if (hoverQueued) return;
-    hoverQueued = true;
-    const wait = hoverLastPickAt + HOVER_PICK_INTERVAL_MS - Date.now();
-    if (wait <= 0) {
-      requestAnimationFrame(pickHover);
-      return;
-    }
-    hoverTimer = setTimeout(() => {
-      hoverTimer = null;
-      requestAnimationFrame(pickHover);
-    }, wait);
-  }
-
-  /**
-   * Track held buttons (a drag picks nothing) and re-pick when the camera
-   * rests. Hover keeps running while it moves: a tracking camera never stops.
-   */
-  function watchHover(viewer) {
-    const canvas = viewer.scene.canvas;
-    const camera = viewer.camera;
-    const onButtons = (event) => {
-      pointerButtons = event.buttons ?? 0;
-    };
-    for (const type of ['pointerdown', 'pointermove', 'pointerup'])
-      canvas.addEventListener?.(type, onButtons);
-    const removeEnd = camera?.moveEnd?.addEventListener(() => {
-      if (hoverPosition) queueHoverPick();
-    });
-    removeHoverWatchers = () => {
-      for (const type of ['pointerdown', 'pointermove', 'pointerup'])
-        canvas.removeEventListener?.(type, onButtons);
-      removeEnd?.();
-    };
-  }
-
-  function unwatchHover() {
-    removeHoverWatchers?.();
-    removeHoverWatchers = null;
-    clearTimeout(hoverTimer);
-    hoverTimer = null;
-    hoverQueued = false;
-    hoverPosition = null;
-    hoverLastPickAt = -Infinity;
-    pointerButtons = 0;
-  }
-
   function install(viewer) {
-    if (state.clickHandler) return;
-    state.clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state.clickHandler.setInputAction(
-      onClick,
-      Cesium.ScreenSpaceEventType.LEFT_CLICK,
-    );
-    state.clickHandler.setInputAction(
-      onMove,
-      Cesium.ScreenSpaceEventType.MOUSE_MOVE,
-    );
-    watchHover(viewer);
+    if (state.clickSubscription) return;
+    state.clickSubscription = inputFor(viewer).onClick(onClick);
     document.addEventListener('keydown', onKeyDown);
-    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, ownsPick);
+    picking?.registerPickOwner?.(STREET_LEVEL_LAYER_ID, parts.router.ownsPick);
   }
 
   function uninstall() {
     // Nothing to undo for a layer that was never enabled.
-    if (!state.clickHandler) return;
-    unwatchHover();
-    if (hoverCursor && state.viewer?.scene?.canvas) {
-      state.viewer.scene.canvas.style.cursor = '';
-      hoverCursor = false;
-    }
-    if (state.clickHandler && !state.clickHandler.isDestroyed())
-      state.clickHandler.destroy();
-    state.clickHandler = null;
+    if (!state.clickSubscription) return;
+    state.clickSubscription();
+    state.clickSubscription = null;
     document.removeEventListener('keydown', onKeyDown);
     picking?.unregisterPickOwner?.(STREET_LEVEL_LAYER_ID);
   }
 
-  return { install, uninstall, ownsPick };
+  return { install, uninstall, ownsPick: parts.router.ownsPick };
 }

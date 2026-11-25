@@ -1,0 +1,47 @@
+{
+  "id": "ky-statewide-imagery",
+  "kind": "tiles",
+  "family": "imagery",
+  "title": "Kentucky Statewide Imagery",
+  "provider": "KyFromAbove",
+  "description": "Aerial orthophotos: Statewide coverage of Kentucky.",
+  "icon": "▣",
+  "maintainer": "github:asturksever",
+  "coverage": {
+    "countries": ["US"],
+    "bbox": [-89.7044, 36.457, -81.8842, 39.1519]
+  },
+  "source": {
+    "format": "bbox",
+    "url": "https://kyraster.ky.gov/arcgis/rest/services/ImageServices/Ky_KYAPED_Phase3_3IN_IR/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&f=image",
+    "fetch": "browser-direct",
+    "cacheSeconds": 86400,
+    "minZoom": 6,
+    "maxZoom": 19,
+    "bounded": true
+  },
+  "display": {
+    "opacity": 1,
+    "outline": "bbox",
+    "aerial": true
+  },
+  "imagery": {
+    "type": "ortho",
+    "resolution": "6 in (statewide), 3 in (urban)",
+    "resolutionM": 0.1524,
+    "trueOrtho": false,
+    "vintage": "2015–present",
+    "updateCycle": "Annual partial; full refresh every 3 years",
+    "registry": "https://imagery-registry.netlify.app/"
+  },
+  "licence": {
+    "name": "Public domain with attribution",
+    "url": "https://kygeonet.ky.gov/"
+  },
+  "attribution": {
+    "text": "KyFromAbove",
+    "url": "https://registry.opendata.aws/kyfromabove/"
+  },
+  "status": "community",
+  "reviewed": "2026-10-23"
+}

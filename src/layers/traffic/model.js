@@ -1,15 +1,13 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance } from '../../geo/vector.js';
 import { roadSurfaceChunks } from './surface.js';
+import { t, translateKnown } from '../../i18n/index.js';
 import {
   flowDensityMult,
   flowBucket,
   flowSpeedScale,
 } from '../../data/trafficFlowStyle.js';
-import {
-  DOT_HEIGHT_OFFSET,
-  DENSITY_MULT,
-  JAM_DOT_FAR_SCALE,
-} from './policy.js';
+import { DOT_HEIGHT_OFFSET, DENSITY_MULT } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
   /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
@@ -25,22 +23,20 @@ export function createModel({ state: layerState, services, parts, source }) {
       for (const coords of roadSurfaceChunks(road.coordinates)) {
         const type = road.type;
         const oneway = road.oneway;
-        // Pre-compute Cartesian3 waypoints (lon, lat, height) for fast lerp animation
+        // Pre-compute ECEF waypoints (lon, lat, height) for fast lerp animation
         const waypoints = coords.map(([lng, lat]) => {
           const floor = services.ground?.cachedGroundFloor?.(lat, lng);
           const h =
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
               : layerState._viewHeightEstimate || 0) + DOT_HEIGHT_OFFSET;
-          return Cesium.Cartesian3.fromDegrees(lng, lat, h);
+          return fromDegrees(lng, lat, h);
         });
 
         // Pre-compute segment distances in meters for speed-to-t conversion
         const segmentDist = [];
         for (let i = 0; i < waypoints.length - 1; i++) {
-          segmentDist.push(
-            Cesium.Cartesian3.distance(waypoints[i], waypoints[i + 1]),
-          );
+          segmentDist.push(distance(waypoints[i], waypoints[i + 1]));
         }
 
         for (const direction of oneway ? [oneway] : [1, -1])
@@ -228,6 +224,7 @@ export function createModel({ state: layerState, services, parts, source }) {
    * @param {boolean} [input.liveMode] - `/api/tomtom/status` reported a key.
    * @param {boolean} [input.fetching] - A viewport load is in flight.
    * @param {string|null} [input.flowError] - `deriveTrafficFlowError` result, if any.
+   * @param {boolean} [input.stale] - The flow came from cached proxy tiles.
    * @param {number} [input.coveragePct] - Share of shown dots on matched roads, 0–100.
    * @param {boolean} [input.statusUnavailable] - The status probe itself failed.
    * @param {string} [input.roadSource] - Name of the geometry being drawn.
@@ -238,6 +235,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     liveMode = false,
     fetching = false,
     flowError = null,
+    stale = false,
     coveragePct = 0,
     statusUnavailable = false,
     roadSource = 'OpenStreetMap',
@@ -251,8 +249,21 @@ export function createModel({ state: layerState, services, parts, source }) {
       // drops `loadingLabel` in its error branch, so the owner's SIMULATED copy
       // has to BE the error text or the steady state reverts to a bare
       // "TomTom daily budget reached" that never says what is on screen.
-      const degraded = `SIMULATED — ${flowError}`;
+      // The reason is ours (flow.js marks it) or carries an HTTP code.
+      const degraded = t('SIMULATED — {reason}', {
+        reason: translateKnown(flowError),
+      });
       return { mode, error: degraded, loadingLabel: degraded };
+    }
+    // Cached proxy tiles (TomTom budget spent or upstream failing) are not live.
+    if (liveMode && stale && !fetching) {
+      return {
+        mode,
+        error: null,
+        loadingLabel: t('STALE · Roads: {source} · Flow: cached TomTom tiles', {
+          source: roadSource,
+        }),
+      };
     }
     // TomTom and Hybrid name their geometry; OpenStreetMap keeps its match copy.
     if (liveMode && roadSource === 'TomTom') {
@@ -260,10 +271,14 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'Syncing flow · Roads: TomTom'
+          ? t('Syncing flow · Roads: {source}', { source: roadSource })
           : coveragePct > 0
-            ? 'LIVE · Roads: TomTom · Roads without flow hidden'
-            : 'LIVE · Roads: TomTom · No flow roads in view',
+            ? t('LIVE · Roads: {source} · Roads without flow hidden', {
+                source: roadSource,
+              })
+            : t('LIVE · Roads: {source} · No flow roads in view', {
+                source: roadSource,
+              }),
       };
     }
     if (liveMode && roadSource === 'TomTom + OpenStreetMap') {
@@ -271,8 +286,16 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? `Syncing flow · Roads: ${roadSource}`
-          : `${coveragePct > 0 ? 'LIVE' : 'SIMULATED'} · Roads: ${roadSource} · Flow ${coveragePct}%`,
+          ? t('Syncing flow · Roads: {source}', { source: roadSource })
+          : coveragePct > 0
+            ? t('LIVE · Roads: {source} · Flow {percent}%', {
+                source: roadSource,
+                percent: coveragePct,
+              })
+            : t('SIMULATED · Roads: {source} · Flow {percent}%', {
+                source: roadSource,
+                percent: coveragePct,
+              }),
       };
     }
     if (liveMode) {
@@ -280,10 +303,24 @@ export function createModel({ state: layerState, services, parts, source }) {
         mode,
         error: null,
         loadingLabel: fetching
-          ? 'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated'
+          ? t(
+              'Syncing flow · Roads: OpenStreetMap · Flow: TomTom · Unmatched: simulated',
+            )
           : coveragePct > 0
-            ? `LIVE · Roads: OpenStreetMap · Flow: TomTom · ${coveragePct}% cov${coveragePct < 100 ? ' · Unmatched: simulated' : ''}`
-            : 'SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)',
+            ? coveragePct < 100
+              ? t(
+                  'LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov · Unmatched: simulated',
+                  {
+                    percent: coveragePct,
+                  },
+                )
+              : t(
+                  'LIVE · Roads: OpenStreetMap · Flow: TomTom · {percent}% cov',
+                  {
+                    percent: coveragePct,
+                  },
+                )
+            : t('SIMULATED · Roads: OpenStreetMap · Flow: TomTom (no matches)'),
       };
     }
     // Keyless simulation — one terse line that names the mode and the remedy
@@ -293,8 +330,8 @@ export function createModel({ state: layerState, services, parts, source }) {
       mode,
       error: null,
       loadingLabel: statusUnavailable
-        ? 'SIMULATED — traffic service unreachable'
-        : 'SIMULATED — add TomTom key for live',
+        ? t('SIMULATED — traffic service unreachable')
+        : t('SIMULATED — add TomTom key for live'),
     };
   }
 
@@ -315,17 +352,15 @@ export function createModel({ state: layerState, services, parts, source }) {
       const flow = dot.road?.source ? dot.road.source.flow : dot.road?.flow;
       dot.road.flow = flow;
       if (flow?.closure || (!flow && layerState._uncoveredMode === 'hide')) {
-        dot.point.show = false;
+        parts.style.showDot(dot, false);
         dot.mps = 0;
         closedDots += 1;
         continue;
       }
-      dot.point.show = true;
+      parts.style.showDot(dot, true);
       const bucket = flow ? flowBucket(flow.level) : null;
       dot.bucket = bucket;
-      dot.point.color = bucket
-        ? layerState._activeBucketColors[bucket]
-        : Cesium.Color.WHITE.withAlpha(0.85);
+      parts.style.paintDot(dot, bucket);
       dot.nominalSize =
         parts.style.baseDotSize(dot.road?.type, bucket) +
         (bucket === 'jam' ? 1 : 0) +
@@ -344,12 +379,7 @@ export function createModel({ state: layerState, services, parts, source }) {
             moving: Math.random() < 0.4,
             until: now + Math.random() * 2000,
           };
-        dot.point.scaleByDistance = new Cesium.NearFarScalar(
-          100,
-          1.5,
-          layerState._fadeScaleFar,
-          JAM_DOT_FAR_SCALE,
-        );
+        parts.style.emphasizeJamDot(dot);
       } else {
         dot.creep = null;
       }

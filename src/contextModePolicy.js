@@ -6,9 +6,18 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
     'ais-live-vessels',
     'military-installations',
   ]),
-  'space-missions': new Set(['rocket-launches', 'satellites']),
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
+/**
+ * Layers Context never touches: Space Missions and the Satellites layer it
+ * depends on. Contacts neither switches them off on entry nor restores them
+ * on exit, so they run beside it in either order and keep their own state
+ * (the mission controller owns the Satellites dependency).
+ */
+export const CONTEXT_INDEPENDENT_LAYER_IDS = Object.freeze([
+  'rocket-launches',
+  'satellites',
+]);
 /** Return whether an origin represents a direct user choice on this route. */
 export function isExplicitUserIntentOrigin(origin, layerId = null) {
   return origin === 'user' || origin === 'voice';
@@ -19,7 +28,8 @@ export function recordContextRestoreExplicitChange({ restoreState, change }) {
   if (
     !restoreState?.enabledLayerIds ||
     change?.type !== 'visibility' ||
-    !isExplicitUserIntentOrigin(change.origin, change.layerId)
+    !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   )
     return false;
   if (!restoreState.explicitLayerStates)
@@ -113,10 +123,7 @@ export async function settleUserFacingContextAction({
  * one into `userAdded` makes exit restoration re-enable the mode layer the
  * user just turned off.
  */
-export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze([
-  'military-awareness',
-  'rocket-launches',
-]);
+export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness']);
 
 /**
  * Leave a Context transaction: publish the settled coordination flag, then
@@ -185,7 +192,8 @@ export function shouldExitContextForLayerChange({
     change?.type !== 'visibility' ||
     !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
     change.layerId === 'military-awareness' ||
-    CONTEXT_COMPANIONS.has(change.layerId)
+    CONTEXT_COMPANIONS.has(change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   ) {
     return false;
   }
@@ -207,6 +215,7 @@ export function contextAllowedLayerIds(contextMode) {
   return new Set([
     ...(CONTEXT_DEPENDENCIES[contextMode] || ['military-awareness']),
     ...CONTEXT_COMPANIONS,
+    ...CONTEXT_INDEPENDENT_LAYER_IDS,
   ]);
 }
 
@@ -224,21 +233,6 @@ export function shouldCaptureContextSession(change) {
     isExplicitUserIntentOrigin(change.origin, change.layerId) &&
     change.enabled &&
     CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId),
-  );
-}
-
-/**
- * Return whether one explicit mission intent superseded an in-flight Clear All
- * reservation and therefore needs deferred Context adoption.
- */
-export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
-  return Boolean(
-    clearInFlight &&
-    change?.type === 'visibility-requested' &&
-    change.layerId === 'rocket-launches' &&
-    change.enabled === true &&
-    isExplicitUserIntentOrigin(change.origin, change.layerId) &&
-    Number.isInteger(change.intentEpoch),
   );
 }
 
@@ -265,7 +259,8 @@ export function recordContextSessionUserChange({
   if (
     !snapshot?.userAdded ||
     change?.type !== 'visibility' ||
-    !isExplicitUserIntentOrigin(change.origin, change.layerId)
+    !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   ) {
     return false;
   }
@@ -311,58 +306,8 @@ export function contextSnapshotLayerIds(
 ) {
   const snapshot = new Set(restoringLayerIds || currentEnabledLayerIds || []);
   for (const layerId of excludeLayerIds || []) snapshot.delete(layerId);
+  for (const layerId of CONTEXT_INDEPENDENT_LAYER_IDS) snapshot.delete(layerId);
   return snapshot;
-}
-
-/**
- * Block layers that would mix unrelated live/current data into Space Missions.
- * The manager calls this before lifecycle work so a refused layer never starts.
- * @param {object} input Current mode and requested visibility transition.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {object|null} input.change Requested visibility transition.
- * @param {string|null} [input.layerName] User-facing layer name.
- * @returns {string|null} Honest user-facing refusal reason, or null when allowed.
- */
-export function contextLayerEnableBlockReason({
-  contextMode,
-  change,
-  layerName = null,
-}) {
-  if (
-    contextMode !== 'space-missions' ||
-    change?.enabled !== true ||
-    contextAllowedLayerIds('space-missions').has(change.layerId)
-  ) {
-    return null;
-  }
-  const label = String(layerName || change.layerId || 'that layer');
-  return `Space Missions isolates replay data. Exit the mode to enable ${label}.`;
-}
-
-/**
- * Resolve who owns a cancelled direct Space Missions entry. A newer ON keeps
- * the entry shell reserved for its replacement transaction; every other
- * cancellation must roll back the isolated pre-entry session.
- *
- * @param {object} input Cancellation and current manager intent state.
- * @param {object|null} input.change Manager visibility notification.
- * @returns {'ignore'|'replacement'|'restore'} Cancellation disposition.
- */
-export function spaceMissionEntryCancellationDisposition({ change }) {
-  if (
-    change?.type !== 'visibility-cancelled' ||
-    change.layerId !== 'rocket-launches' ||
-    change.enabled !== true
-  )
-    return 'ignore';
-  if (
-    change.cancellationReason === 'superseded' &&
-    Number.isInteger(change.successorIntentEpoch) &&
-    change.successorIntentEpoch > change.intentEpoch &&
-    change.successorEnabled === true
-  )
-    return 'replacement';
-  return 'restore';
 }
 
 /**
@@ -380,30 +325,91 @@ export function contextRestoreLayerIds(snapshot = {}) {
   return restored;
 }
 
+/** The layers an aircraft Cockpit subject can come from. */
+export const COCKPIT_AIRCRAFT_LAYER_IDS = Object.freeze([
+  'flights',
+  'military',
+]);
+
 /**
- * Cockpit entry belongs to the operational Contacts context bundle. A tracked
- * aircraft alone is not sufficient: both observed-flight feeds must still be
- * active so the cockpit's surrounding-contact picture is not presented as a
- * complete context view when one source is disabled.
+ * Cockpit entry needs only the aircraft it rides: that aircraft's own layer
+ * (Live Flights for a civilian, Military Flights for a military aircraft) must
+ * be on. Contacts and the other feeds are not required. When a source the
+ * surrounding picture uses is off, the Cockpit's Contact card and Live
+ * Signals say the picture is partial instead of blocking entry, so a partial
+ * picture is never presented as complete. A Context mode change in flight
+ * still owns the camera, so entry waits it out.
  *
- * @param {object} input Current context and dependency visibility.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {boolean} input.contextModeChanging Whether the Context transaction is unsettled.
- * @param {boolean} input.flightsEnabled Whether Live Flights is enabled.
- * @param {boolean} input.militaryEnabled Whether Military Flights is enabled.
+ * @param {object} input Current subject and Context state.
+ * @param {string|null} input.subjectLayerId Layer of the tracked aircraft
+ *   ('flights' or 'military'), or null with none tracked.
+ * @param {boolean} input.subjectLayerEnabled Whether that layer is enabled.
+ * @param {boolean} input.contextModeChanging Whether a Context transaction is unsettled.
  * @returns {boolean} Whether cockpit entry may be offered or activated.
  */
 export function cockpitEntryAllowed({
-  contextMode,
+  subjectLayerId,
+  subjectLayerEnabled,
   contextModeChanging,
-  flightsEnabled,
-  militaryEnabled,
 }) {
   return (
-    contextMode === 'flights' &&
+    COCKPIT_AIRCRAFT_LAYER_IDS.includes(subjectLayerId) &&
+    Boolean(subjectLayerEnabled) &&
+    !contextModeChanging
+  );
+}
+
+/**
+ * Whether the selected vessel's bridge view can be entered. Like aircraft
+ * Cockpit it needs only its own layer, Live AIS Vessels, with a vessel
+ * selected. A Context mode change in flight still owns the camera, so entry
+ * waits it out.
+ * @param {{vesselsEnabled: boolean, contextModeChanging: boolean}} state
+ * @returns {boolean}
+ */
+export function bridgeEntryAllowed({ vesselsEnabled, contextModeChanging }) {
+  return Boolean(vesselsEnabled) && !contextModeChanging;
+}
+
+/**
+ * Whether the tracked satellite's orbital view can be entered. Like the
+ * bridge it needs only its own layer, Satellites, with a satellite tracked.
+ * A Context mode change in flight still owns the camera, so entry waits it
+ * out. A subject the satellites layer marks as not enterable (debris:
+ * rocket bodies, fragments, dead satellites; `satelliteClassEnterable` in
+ * src/layers/satellites/classes.js) can be tracked but is never ridden: it is
+ * no mission and has no view to offer.
+ * @param {{satellitesEnabled: boolean, contextModeChanging: boolean,
+ *   subjectEnterable?: boolean}} state
+ * @returns {boolean}
+ */
+export function orbitEntryAllowed({
+  satellitesEnabled,
+  contextModeChanging,
+  subjectEnterable = true,
+}) {
+  return (
+    Boolean(satellitesEnabled) &&
     !contextModeChanging &&
-    Boolean(flightsEnabled) &&
-    Boolean(militaryEnabled)
+    subjectEnterable !== false
+  );
+}
+
+/**
+ * Whether an application subject provider's candidate can be ridden. Like the
+ * bridge and orbit it needs only its own layer on, and waits out a Context
+ * change in flight; the provider then has its own say (`isEntryAllowed`).
+ * @param {{layerEnabled: boolean, contextModeChanging: boolean,
+ *   providerAllows: boolean}} state
+ * @returns {boolean}
+ */
+export function subjectEntryAllowed({
+  layerEnabled,
+  contextModeChanging,
+  providerAllows,
+}) {
+  return (
+    Boolean(layerEnabled) && !contextModeChanging && providerAllows === true
   );
 }
 
@@ -418,7 +424,6 @@ export function cockpitEntryAllowed({
  */
 export const CONTEXT_MODE_VOICE_NAMES = Object.freeze({
   flights: 'contacts',
-  'space-missions': 'space-missions',
 });
 
 /**

@@ -145,7 +145,7 @@ const CODEX_LOGIN_ENV =
   /^(?:PATH|PATHEXT|HOME|USER|USERNAME|LOGNAME|SHELL|LANG|LANGUAGE|LC_[A-Z_]+|TERM|TZ|TMPDIR|TEMP|TMP|XDG_[A-Z_]+|DISPLAY|WAYLAND_DISPLAY|DBUS_SESSION_BUS_ADDRESS|BROWSER|WSL_[A-Z_]+|WSLENV|(?:HTTPS?|ALL|NO)_PROXY|SSL_CERT_(?:FILE|DIR)|NODE_EXTRA_CA_CERTS|SYSTEMROOT|WINDIR|COMSPEC|USERPROFILE|APPDATA|LOCALAPPDATA|PROGRAMDATA|HOMEDRIVE|HOMEPATH|CODEX_[A-Z_]+)$/i;
 
 /** The environment `codex login` runs with: the allowlist, then `CODEX_HOME`. */
-export function codexLoginEnvironment(environment, codexHome) {
+function codexLoginEnvironment(environment, codexHome) {
   const env = {};
   for (const [name, value] of Object.entries(environment || {}))
     if (CODEX_LOGIN_ENV.test(name) && value !== undefined) env[name] = value;

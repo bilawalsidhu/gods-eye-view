@@ -114,6 +114,47 @@ test('a batch larger than the cache bound still reports every point it resolved'
   assert.equal(warm.length, 4);
 });
 
+test('warm batch consumers retain their terrain cells ahead of unused cells', async () => {
+  let calls = 0;
+  const terrain = createTerrainHeights({
+    maxCacheEntries: 2,
+    source: {
+      async getHeights(points) {
+        calls++;
+        return points.map((p) => ({ ellipsoid: 100 + p.lon }));
+      },
+    },
+  });
+  const p = (lon) => ({ lat: 0, lon });
+  await terrain.resolveEllipsoidalGround([p(1)]);
+  await terrain.resolveEllipsoidalGround([p(2)]);
+  await terrain.resolveEllipsoidalGround([p(1)]);
+  assert.equal(calls, 2);
+  await terrain.resolveEllipsoidalGround([p(3)]);
+  assert.equal(terrain.cachedEllipsoidalGround(0, 1), 101);
+  assert.equal(terrain.cachedEllipsoidalGround(0, 2), null);
+  assert.equal(calls, 3);
+});
+
+test('a batch still reports its warm points after its own fetches evict them', async () => {
+  const terrain = createTerrainHeights({
+    source: stubSource(),
+    maxCacheEntries: 2,
+  });
+  await terrain.resolveEllipsoidalGround([pointAt(0)]);
+
+  const results = await terrain.resolveEllipsoidalGround([
+    pointAt(0),
+    pointAt(1),
+    pointAt(2),
+  ]);
+
+  results.forEach((result, i) => {
+    assert.equal(result.source, 'reearth', `point ${i} reported resolved`);
+    assert.equal(result.ellipsoid, heightAt(lonAt(i)));
+  });
+});
+
 test('an out-of-range cache bound falls back to the default instead of disabling the cache', async () => {
   for (const maxCacheEntries of [0, -1, Number.NaN, undefined]) {
     const terrain = createTerrainHeights({

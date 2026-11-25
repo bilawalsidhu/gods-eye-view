@@ -6,7 +6,43 @@ import {
   releasePointer,
   isPointerFree,
 } from '../../data/inputOwnership.js';
-import { isOwnedByOtherLayer } from '../../data/pickRegistry.js';
+import {
+  isOwnedByOtherLayer,
+  setClickCardHitTest,
+} from '../../data/pickRegistry.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+
+/** Record each click subscription the layer makes, as the old handler fakes did. */
+function recordHandlers(viewer, handlers) {
+  const fake = fakeInput(viewer);
+  const subscribe = fake.input.onClick;
+  fake.input.onClick = (fn) => {
+    const handler = {
+      destroyed: false,
+      // A live subscription hears clicks through the dispatcher; a removed
+      // one is called directly, as a queued callback would be.
+      click: (click) =>
+        handler.destroyed
+          ? fn({
+              screenPosition: click.position,
+              get pick() {
+                return viewer.scene.pick(click.position);
+              },
+            })
+          : fake.click(click.position),
+    };
+    handlers.push(handler);
+    const off = subscribe(fn);
+    return () => {
+      handler.destroyed = true;
+      off();
+    };
+  };
+}
+import * as contextStore from '../../data/contextStore.js';
+import { createGevActionRunner } from '../../voice/gevActions.js';
+import { fromRadians } from '../../geo/ellipsoid.js';
 
 const time = '2026-09-16T03:00:00.000Z';
 const storm = (id = 'ep152026') => ({
@@ -44,10 +80,18 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-test('map selection yields to pointer owners and owns only its enabled handler', async () => {
+test('map selection yields to pointer owners and owns only its enabled handler', async (t) => {
   const handlers = [],
-    pickedEntity = {},
-    foreignEntity = {};
+    // A pick of an item in one of the layer's draw sets, and one of another
+    // layer's set: the dispatcher hands each to pickStorm as a draw hit.
+    pickedEntity = {
+      set: 'weather-cyclones:1:points',
+      id: 'cyclone:ep162026:center',
+    },
+    foreignEntity = {
+      set: 'other-layer:points',
+      id: 'cyclone:ep162026:center',
+    };
   let picked = { id: pickedEntity },
     overlayHit = null,
     overlayTests = 0,
@@ -58,42 +102,28 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     setSelection() {},
     clear() {},
     destroy() {},
-    pickStorm: (value) => (value?.id === pickedEntity ? 'ep162026' : null),
+    pickStorm: (hit) =>
+      hit?.set === pickedEntity.set && hit.id === pickedEntity.id
+        ? 'ep162026'
+        : null,
     ownsPickId: (id) => id === 'cyclone:ep162026:center',
     getDiagnostics: () => ({}),
   };
-  const cesium = {
-    ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-    ScreenSpaceEventHandler: class {
-      constructor(canvas) {
-        assert.ok(canvas);
-        handlers.push(this);
-        this.destroyed = false;
-      }
-      setInputAction(callback, type) {
-        assert.equal(type, 'left');
-        this.click = callback;
-      }
-      destroy() {
-        this.destroyed = true;
-      }
-      isDestroyed() {
-        return this.destroyed;
-      }
-    },
-  };
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium,
     createRendering: () => rendering,
-    hitTestOverlay: () => {
-      overlayTests++;
-      return overlayHit;
-    },
   });
+  setClickCardHitTest(() => {
+    overlayTests++;
+    return overlayHit;
+  });
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 100, top: 200 });
   const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {
@@ -108,6 +138,8 @@ test('map selection yields to pointer owners and owns only its enabled handler',
       },
     },
   };
+  bindFakeCesiumCamera(viewer);
+  recordHandlers(viewer, handlers);
   layer.init(viewer);
   layer.setRowControlsListener(() => notices++);
   assert.equal(handlers.length, 0, 'disabled module installs no handler');
@@ -152,41 +184,15 @@ test('map selection yields to pointer owners and owns only its enabled handler',
     'foreground AIS card wins before scene picking',
   );
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // A native capture runs before an earlier sibling handler clears hit rects.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 110, clientY: 220 });
-  canvas.dispatchEvent(up);
-  overlayHit = null;
+  // Any other layer's card on top takes the click, not only a vessel's.
+  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   handlers[0].click(click);
   assert.equal(
     layer.getDiagnostics().selectedId,
     'ep152026',
-    'captured AIS hit survives synchronous sibling overlay rebuild',
+    'a camera card over the storm keeps the click',
   );
-  // A captured background hit remains background even if a sibling adds a card.
-  canvas.dispatchEvent(up);
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  // A new gesture clears an unconsumed release snapshot.
-  canvas.dispatchEvent(up);
-  canvas.dispatchEvent(new Event('pointerdown'));
   overlayHit = null;
-  handlers[0].click(click);
-  assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'ais-live-vessels', entryId: 'vessel:123' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
-  handlers[0].click({ position: { x: 15, y: 25 } });
-  assert.equal(
-    layer.getDiagnostics().selectedId,
-    'ep162026',
-    'a different click cannot reuse the captured card',
-  );
-  layer.setParams({ stormId: 'ep152026' });
-  overlayHit = { sourceId: 'cctv', entryId: 'camera:1' };
   const before = notices;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
@@ -236,13 +242,12 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   assert.equal(layer.getDiagnostics().selectionActive, false);
   const afterDisable = picks;
   const afterDisableOverlay = overlayTests;
-  canvas.dispatchEvent(up);
+  handlers[0].click(click);
   assert.equal(
     overlayTests,
     afterDisableOverlay,
-    'disable removes native capture listeners',
+    'a disabled layer reads no card',
   );
-  handlers[0].click(click);
   assert.equal(picks, afterDisable, 'queued disabled callback is inert');
   layer.enable();
   await layer.update();
@@ -261,25 +266,13 @@ test('map selection yields to pointer owners and owns only its enabled handler',
   );
   assert.equal(handlers[1].destroyed, true);
 });
-test('a click on a storm card or lead-hour label selects that storm without picking', async () => {
+test('a click on a storm card or lead-hour label selects that storm without picking', async (t) => {
   const handlers = [];
   let picks = 0,
     overlayHit = null,
     hostArgument;
   const layer = createCyclonesLayer({
     feed: { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
-    cesium: {
-      ScreenSpaceEventType: { LEFT_CLICK: 'left' },
-      ScreenSpaceEventHandler: class {
-        constructor() {
-          handlers.push(this);
-        }
-        setInputAction(callback) {
-          this.click = callback;
-        }
-        destroy() {}
-      },
-    },
     overlayHost: 'host',
     createRendering: ({ overlayHost }) => {
       hostArgument = overlayHost;
@@ -293,11 +286,15 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         getDiagnostics: () => ({}),
       };
     },
-    hitTestOverlay: () => overlayHit,
   });
+  setClickCardHitTest(() => overlayHit);
+  t.after(() => setClickCardHitTest(null));
   const canvas = new EventTarget();
   canvas.getBoundingClientRect = () => ({ left: 0, top: 0 });
-  layer.init({
+  const viewer = {
+    get canvas() {
+      return this.scene?.canvas;
+    },
     scene: {
       canvas,
       pick() {
@@ -305,7 +302,9 @@ test('a click on a storm card or lead-hour label selects that storm without pick
         return { content: {} };
       },
     },
-  });
+  };
+  recordHandlers(viewer, handlers);
+  layer.init(viewer);
   assert.equal(hostArgument, 'host', 'the overlay host reaches the renderer');
   layer.enable();
   await layer.update();
@@ -322,15 +321,11 @@ test('a click on a storm card or lead-hour label selects that storm without pick
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:al019999' };
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep152026');
-  // The native release snapshot carries the card identity too.
-  const up = new Event('pointerup');
-  Object.assign(up, { clientX: 10, clientY: 20 });
   overlayHit = { sourceId: 'weather-cyclones', entryId: 'storm:ep162026' };
-  canvas.dispatchEvent(up);
-  overlayHit = null;
   handlers[0].click(click);
   assert.equal(layer.getDiagnostics().selectedId, 'ep162026');
   assert.equal(picks, 0, 'card clicks never fall through to the scene');
+  overlayHit = null;
   handlers[0].click(click);
   assert.equal(picks, 1);
   assert.equal(layer.getDiagnostics().selectedId, null, 'empty map clears');
@@ -338,7 +333,7 @@ test('a click on a storm card or lead-hour label selects that storm without pick
 });
 function harness(
   feed = { getSnapshot: async () => snapshot() },
-  { reducedMotion = false } = {},
+  { reducedMotion = false, context = null } = {},
 ) {
   const applied = [],
     navigation = [],
@@ -354,7 +349,10 @@ function harness(
     setSelection(id) {
       selection = id;
     },
-    getFocusSphere: () => ({ radius: 500000 }),
+    getFocusSphere: () => ({
+      center: { x: 6378137, y: 0, z: 0 },
+      radius: 500000,
+    }),
     clear() {
       cleared++;
     },
@@ -368,6 +366,7 @@ function harness(
   };
   const layer = createCyclonesLayer({
     feed,
+    context,
     createRendering: () => rendering,
     matchMedia: () => ({ matches: reducedMotion }),
     openLink: (url) => opened.push(url),
@@ -378,6 +377,7 @@ function harness(
         navigation.push({ sphere, options }),
     },
   };
+  bindFakeCesiumCamera(viewer);
   layer.init(viewer);
   layer.attachShellServices({
     runNavigation: (fn) => {
@@ -401,6 +401,266 @@ function harness(
     },
   };
 }
+// Real shared-context store on a stand-in window; the voice runner reads it.
+async function withSharedContext(t, body) {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const host = new EventTarget();
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: host,
+  });
+  const layers = [];
+  t.after(() => {
+    try {
+      for (const layer of layers) layer.destroy();
+    } finally {
+      if (previousWindow)
+        Object.defineProperty(globalThis, 'window', previousWindow);
+      else delete globalThis.window;
+    }
+  });
+  const events = [];
+  host.addEventListener('gev:entity-selected', ({ detail }) =>
+    events.push(['selected', detail.id]),
+  );
+  host.addEventListener('gev:entity-selection-cleared', ({ detail }) =>
+    events.push(['cleared', detail.layerId, detail.reason]),
+  );
+  // The voice runner bounds its basemap wait with the window timers.
+  Object.assign(host, { setTimeout, clearTimeout });
+  const cartographic = {
+    longitude: (-125.8 * Math.PI) / 180,
+    latitude: (15.5 * Math.PI) / 180,
+    height: 5_000_000,
+  };
+  const position = fromRadians(
+    cartographic.longitude,
+    cartographic.latitude,
+    cartographic.height,
+  );
+  const viewer = bindFakeCesiumCamera({
+    clock: { onTick: { addEventListener: () => () => {} } },
+    scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
+    camera: {
+      moveEnd: { addEventListener() {} },
+      positionWC: position,
+      positionCartographic: cartographic,
+      heading: 0,
+      pitch: 0,
+    },
+  });
+  const runner = createGevActionRunner({
+    viewer,
+    styleManager: {},
+    dataManager: {
+      layers: new Map(),
+      isEnabled: (id) => id === 'weather-cyclones',
+      getAll: () => [],
+    },
+  });
+  const selectedProperties = async () => {
+    const result = await runner('get_entity_context', { scope: 'selected' });
+    assert.equal(result.scope, 'selected');
+    return result.selected.properties;
+  };
+  const store = contextStore.getContextStore();
+  const open = (feed) => {
+    const h = harness(feed, { context: contextStore });
+    layers.push(h.layer);
+    return h;
+  };
+  await body({ events, selectedProperties, store, open });
+}
+
+test('shared cyclone context distinguishes switches, deliberate clears and feed eviction', async (t) => {
+  await withSharedContext(
+    t,
+    async ({ events, selectedProperties, store, open }) => {
+      let next = snapshot([
+        { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
+        {
+          ...storm('ep162026'),
+          movement: { directionDegrees: 0, speedKt: 10 },
+        },
+      ]);
+      const h = open({ getSnapshot: async () => next });
+      h.layer.enable();
+      await h.layer.update();
+      assert.deepEqual(
+        events,
+        [],
+        'the automatic first-storm row selection must not claim shared context',
+      );
+      assert.equal(store.entities.size, 0);
+
+      h.layer.setParams({ stormId: 'ep152026' });
+      assert.equal(store.entities.get('cyclone:ep152026').label, 'Fifteen-E');
+      let properties = await selectedProperties();
+      assert.equal(properties.classification, 'PTC');
+      assert.equal(properties.classificationName, 'Post-tropical cyclone');
+      assert.equal(properties.advisoryNumber, '10');
+      assert.equal(
+        properties.movementDirectionDegrees,
+        '315',
+        'selected storm movement should survive voice summarization',
+      );
+      assert.equal(properties.movementSpeedKt, '12');
+      assert.equal(
+        properties.advisoryUrl,
+        'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml',
+      );
+      assert.equal(properties.staleCacheFetchedAt, undefined);
+
+      h.layer.setParams({ stormId: 'ep162026' });
+      properties = await selectedProperties();
+      assert.equal(
+        properties.movementDirectionDegrees,
+        '0',
+        'a due-north heading is a value, not a missing one',
+      );
+      assert.equal(properties.movementSpeedKt, '10');
+      assert.deepEqual(events, [
+        ['selected', 'cyclone:ep152026'],
+        ['selected', 'cyclone:ep162026'],
+      ]);
+      assert.deepEqual([...store.entities.keys()], ['cyclone:ep162026']);
+
+      next = snapshot([
+        { ...storm(), movement: { directionDegrees: 315, speedKt: 12 } },
+        { ...storm('ep162026'), movement: { directionDegrees: 0, speedKt: 0 } },
+      ]);
+      await h.layer.update();
+      assert.equal(events.length, 2, 'refresh must not announce selection');
+      properties = await selectedProperties();
+      assert.equal(
+        properties.movementSpeedKt,
+        '0',
+        'stationary is a value, refreshed into the selected record',
+      );
+
+      h.layer.setParams({ clear: true });
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'deliberate',
+      ]);
+      assert.equal(store.entities.size, 0);
+
+      h.layer.setParams({ stormId: 'ep162026' });
+      next = snapshot([storm()]);
+      await h.layer.update();
+      assert.deepEqual(
+        events.at(-1),
+        ['cleared', 'weather-cyclones', 'evicted'],
+        'a vanished user-selected storm must clear instead of transferring context to the fallback row',
+      );
+      assert.equal(store.entities.size, 0);
+      assert.equal(store.selectedEntityId, null);
+
+      h.layer.setParams({ stormId: 'ep152026' });
+      h.layer.disable();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'deliberate',
+      ]);
+      assert.equal(store.entities.size, 0);
+    },
+  );
+});
+
+test('shared cyclone context is evicted when the source fails and marks a stale cache', async (t) => {
+  await withSharedContext(
+    t,
+    async ({ events, selectedProperties, store, open }) => {
+      let next = snapshot([{ ...storm(), classification: 'XX' }]);
+      let fail = false;
+      const h = open({
+        getSnapshot: async () => {
+          if (fail) throw new Error('Network unavailable');
+          return next;
+        },
+      });
+      h.layer.enable();
+      await h.layer.update();
+      h.layer.setParams({ stormId: 'ep152026' });
+      let properties = await selectedProperties();
+      assert.equal(properties.classification, 'XX');
+      assert.equal(
+        properties.classificationName,
+        undefined,
+        'an unknown code is not given a guessed meaning',
+      );
+
+      next = { ...snapshot(), stale: true };
+      await h.layer.update();
+      properties = await selectedProperties();
+      assert.equal(properties.staleCacheFetchedAt, time);
+      assert.equal(events.length, 1, 'refresh must not announce selection');
+
+      next = {
+        ...snapshot([]),
+        unavailable: true,
+        reason: 'Cyclone data unavailable',
+      };
+      await h.layer.update();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'evicted',
+      ]);
+      assert.equal(store.entities.size, 0);
+
+      next = snapshot();
+      await h.layer.update();
+      h.layer.setParams({ stormId: 'ep152026' });
+      assert.equal(store.selectedEntityId, 'cyclone:ep152026');
+      fail = true;
+      await h.layer.update();
+      assert.deepEqual(events.at(-1), [
+        'cleared',
+        'weather-cyclones',
+        'evicted',
+      ]);
+      assert.equal(store.entities.size, 0);
+      assert.equal(store.selectedEntityId, null);
+    },
+  );
+});
+
+test('cyclone clears leave another layer selection and its records alone', async (t) => {
+  await withSharedContext(t, async ({ events, store, open }) => {
+    const h = open({ getSnapshot: async () => snapshot() });
+    h.layer.enable();
+    await h.layer.update();
+    h.layer.setParams({ stormId: 'ep152026' });
+    const foreign = {};
+    contextStore.registerEntityContext(foreign, {
+      id: 'flight:abc123',
+      layerId: 'flights',
+      label: 'Foreign',
+    });
+    contextStore.selectEntityContext(foreign);
+    const before = events.length;
+
+    h.layer.setParams({ clear: true });
+    assert.equal(store.selectedEntityId, 'flight:abc123');
+    assert.ok(store.entities.has('flight:abc123'));
+    assert.equal(store.entities.has('cyclone:ep152026'), false);
+    assert.equal(
+      events.length,
+      before,
+      'no clear is reported for a foreign selection',
+    );
+
+    // A cyclone clear does not report a dangling foreign selection as evicted.
+    store.entities.delete('flight:abc123');
+    h.layer.disable();
+    assert.equal(store.selectedEntityId, 'flight:abc123');
+    assert.equal(events.length, before);
+  });
+});
+
 test('refresh preserves selection intent, including explicit clears and missing storms', async () => {
   let next = snapshot([storm(), storm('ep162026')]);
   const h = harness({ getSnapshot: async () => next });
@@ -513,12 +773,13 @@ test('only the latest queued focus runs and an unchanged selection survives refr
 });
 test('classification display expands known codes without altering the source or guessing unknown meanings', async () => {
   for (const [code, label] of [
-    ['PTC', 'Potential tropical cyclone'],
+    ['PC', 'Potential tropical cyclone'],
+    ['PTC', 'Post-tropical cyclone'],
     ['HU', 'Hurricane'],
     ['TS', 'Tropical storm'],
     ['TD', 'Tropical depression'],
-    ['SS', 'Subtropical storm'],
-    ['SD', 'Subtropical depression'],
+    ['STS', 'Subtropical storm'],
+    ['STD', 'Subtropical depression'],
     ['EX', 'EX'],
     ['UNKNOWN', 'UNKNOWN'],
   ]) {
@@ -537,6 +798,59 @@ test('classification display expands known codes without altering the source or 
     }
   }
 });
+// Quantities join number and unit with a no-break space.
+const plain = (text) => text?.replace(/\u00a0/g, ' ') ?? null;
+test('an advisory without pressure, movement or link leaves those values out', async () => {
+  const record = {
+    ...storm(),
+    windKt: 85,
+    pressureHpa: null,
+    movement: { directionDegrees: null, speedKt: null },
+    advisoryUrl: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([record]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const { summary, info } = h.layer.getRowControls();
+    const intensity = summary.lines.find((line) => line.id === 'intensity');
+    assert.equal(plain(intensity.text), 'Maximum sustained wind: 85 kt');
+    assert.deepEqual(
+      summary.lines.map((line) => line.id),
+      ['position', 'intensity', 'geometry'],
+    );
+    assert.deepEqual(summary.actions, [], 'no advisory link to open');
+    assert.ok(plain(info).includes('Maximum sustained wind: 85 kt\n'));
+    for (const text of [info, ...summary.lines.map((line) => line.text)])
+      assert.doesNotMatch(text, /Unavailable|Pressure/);
+  } finally {
+    h.layer.destroy();
+  }
+});
+test('an advisory with only one of wind and pressure shows that one alone', async () => {
+  for (const [values, expected] of [
+    [{ windKt: null, pressureHpa: 990 }, 'Pressure: 990 hPa'],
+    [
+      { windKt: 60, pressureHpa: 990 },
+      'Maximum sustained wind: 60 kt · Pressure: 990 hPa',
+    ],
+    [{ windKt: null, pressureHpa: null }, null],
+  ]) {
+    const h = harness({
+      getSnapshot: async () => snapshot([{ ...storm(), ...values }]),
+    });
+    try {
+      h.layer.enable();
+      await h.layer.update();
+      const { summary, info } = h.layer.getRowControls();
+      const intensity = summary.lines.find((line) => line.id === 'intensity');
+      assert.equal(plain(intensity?.text), expected);
+      assert.doesNotMatch(info, /Unavailable|\n\n/);
+    } finally {
+      h.layer.destroy();
+    }
+  }
+});
 test('advisory selection uses accessible row descriptors and shared camera handoff', async () => {
   const h = harness(
     { getSnapshot: async () => snapshot([storm(), storm('ep162026')]) },
@@ -547,7 +861,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   const controls = h.layer.getRowControls();
   assert.equal(controls.readout, true);
   assert.deepEqual(controls.chips, []);
-  assert.equal(controls.summary.coverage, 'Atlantic · E/C Pacific');
+  assert.equal(controls.summary.coverage, 'All tropical basins');
   assert.equal(controls.summary.actions[0].href, storm().advisoryUrl);
   assert.equal(controls.summary.lines.length, 3);
   assert.deepEqual(controls.summary.settings, []);
@@ -556,7 +870,7 @@ test('advisory selection uses accessible row descriptors and shared camera hando
   ]);
   assert.match(controls.summary.compact, /2 active storms · .* selected/);
   assert.equal(controls.summary.sections, undefined);
-  assert.match(controls.list.ariaLabel, /NHC/);
+  assert.match(controls.list.ariaLabel, /cyclone advisories and warnings/);
   assert.equal(controls.list.items.length, 2);
   assert.equal(controls.list.items[0].active, true);
   assert.match(controls.info, /awaiting advisory 10/);
@@ -565,7 +879,9 @@ test('advisory selection uses accessible row descriptors and shared camera hando
     1,
   );
   assert.equal(controls.summary.status, 'Track/cone awaiting advisory 10');
-  assert.match(controls.info, /09-16 03:00 UTC/);
+  // No line break inside the date: a word joiner holds the hyphen.
+  assert.match(controls.info, /issued 09-\u206016\u00a003:00\u00a0UTC/);
+  assert.match(controls.info, /: 25\u00a0kt · .*: 1006\u00a0hPa/);
   assert.match(controls.infoTitle, /not storm size/);
   assert.match(controls.infoTitle, /follows the surface/);
   assert.equal(controls.list.items[1].params.focus, true);
@@ -596,7 +912,10 @@ test('empty successful coverage, unavailable source and stale advisory are diffe
   h.layer.enable();
   await h.layer.update();
   assert.equal(h.layer.getStats().empty, true);
-  assert.match(h.layer.getRowControls().summary.detail, /No active NHC\/CPHC/);
+  assert.match(
+    h.layer.getRowControls().summary.detail,
+    /No active tropical cyclone warnings/,
+  );
   next = { ...snapshot(), stale: true };
   await h.layer.update();
   assert.match(h.layer.getRowControls().summary.status, /stale/);
@@ -670,4 +989,64 @@ test('external cancellation and acquisition failure cannot install or retain unl
   assert.match(h.layer.getStats().error, /Network/);
   assert.ok(h.cleared > 0);
   h.layer.destroy();
+});
+
+test('a JTWC warning reads as a warning, notes the official regional centre and its danger area', async () => {
+  const jtwc = {
+    ...storm('sh042027'),
+    agency: 'jtwc',
+    name: 'Xavier',
+    classification: 'TC',
+    basin: 'SH',
+    advisoryNumber: '15',
+    advisoryUrl: 'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+    dangerArea: null,
+  };
+  const h = harness({ getSnapshot: async () => snapshot([jtwc]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.match(
+      plain(controls.summary.detail),
+      /^Xavier · Tropical cyclone · Warning 15 · issued/,
+    );
+    assert.deepEqual(controls.summary.actions, [
+      { id: 'advisory', label: 'JTWC warning ↗', href: jtwc.advisoryUrl },
+    ]);
+    const note = controls.summary.lines.find((line) => line.id === 'note');
+    assert.equal(
+      note.text,
+      'JTWC warning: the regional centre’s warning is official. JTWC winds are 1-minute averages.',
+    );
+    assert.match(controls.info, /awaiting warning 15/);
+    assert.match(controls.info, /regional centre’s warning is official/);
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', '34-knot wind danger area'],
+    );
+    assert.equal(h.layer.getStats().source, 'JTWC');
+  } finally {
+    h.layer.destroy();
+  }
+});
+
+test('an NHC advisory carries no JTWC note and keeps its cone legend', async () => {
+  const h = harness({ getSnapshot: async () => snapshot([storm()]) });
+  try {
+    h.layer.enable();
+    await h.layer.update();
+    const controls = h.layer.getRowControls();
+    assert.equal(
+      controls.summary.lines.find((line) => line.id === 'note'),
+      undefined,
+    );
+    assert.deepEqual(
+      controls.legend.map((item) => item.label),
+      ['Advisory center / forecast track', 'Center-track uncertainty cone'],
+    );
+    assert.equal(h.layer.getStats().source, 'NOAA NHC / CPHC');
+  } finally {
+    h.layer.destroy();
+  }
 });

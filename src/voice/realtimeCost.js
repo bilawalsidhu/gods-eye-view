@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.js';
 import {
   readStoredVoiceTier,
   readStoredVoiceLimits,
@@ -45,45 +46,84 @@ export class RealtimeCost {
    */
   syncCostUi() {
     const state = this.costTracker.state();
+    // The panel's warning outside the closed panel mirrors the readout.
+    const showCost = (cost) => {
+      this.ui.update('cost', { hidden: false, ...cost });
+      const hidden = !['warn', 'cap', 'unknown'].includes(cost.level);
+      this.ui.update('costWarning', {
+        hidden,
+        text: hidden ? '' : cost.text,
+        title: cost.title,
+        level: cost.level,
+      });
+    };
     const pendingTier = resolveVoiceModel(this.voiceTier).tier;
     const isMini = pendingTier === 'mini';
-    if (this.ui?.tierButton) {
-      this.ui.tierButton.textContent = isMini ? 'MINI' : 'STD';
-      this.ui.tierButton.setAttribute(
-        'aria-pressed',
-        isMini ? 'true' : 'false',
-      );
-      const pendingId = resolveVoiceModel(pendingTier).id;
-      this.ui.tierButton.title =
+    if (!this.ui) return;
+    const pendingId = resolveVoiceModel(pendingTier).id;
+    this.ui.update('tier', {
+      text: isMini ? t('MINI') : t('STD'),
+      pressed: isMini,
+      title:
         this.isActive() && state.modelId !== pendingId
-          ? `Next session: ${pendingId} — this session stays on ${state.modelId}`
-          : `Voice model: ${pendingId} — click to switch to ${
-              isMini ? 'standard' : 'mini'
-            }; applies next session`;
-    }
-    if (this.ui?.costValue) {
-      const liveAuth = this.sessionCloudVoiceAuth || this.cloudVoiceAuth;
-      if (liveAuth === 'oauth') {
-        const { responses, input, output, captions } = this.oauthUsage;
-        this.ui.costValue.hidden = false;
-        this.ui.costValue.textContent = 'COST UNKNOWN';
-        this.ui.costValue.dataset.level = 'unknown';
-        this.ui.costValue.title =
-          `ChatGPT OAuth session: ${responses} response(s), ${input} input and ${output} output tokens, ${captions} caption transcription(s) reported. ` +
-          'USD cost and the API spend cap are unavailable for this auth mode.' +
+          ? t('Next session: {pendingId} — this session stays on {modelId}', {
+              pendingId,
+              modelId: state.modelId,
+            })
+          : t(
+              'Voice model: {pendingId} — click to switch to {target}; applies next session',
+              {
+                pendingId,
+                target: isMini ? t('standard') : t('mini'),
+              },
+            ),
+    });
+    const liveAuth = this.sessionCloudVoiceAuth || this.cloudVoiceAuth;
+    if (liveAuth === 'oauth') {
+      const { responses, input, output, captions } = this.oauthUsage;
+      showCost({
+        text: t('COST UNKNOWN'),
+        level: 'unknown',
+        title:
+          t(
+            'ChatGPT OAuth session: {responses} response(s), {input} input and {output} output tokens, {captions} caption transcription(s) reported.',
+            { responses, input, output, captions },
+          ) +
+          ' ' +
+          t(
+            'USD cost and the API spend cap are unavailable for this auth mode.',
+          ) +
           (state.incomplete
-            ? ' Usage is incomplete because a response was still in flight when the session ended.'
-            : '');
-        return;
-      }
-      this.ui.costValue.hidden = false;
-      this.ui.costValue.textContent = state.display;
-      this.ui.costValue.dataset.level = state.level;
-      this.ui.costValue.title =
-        `Estimated session cost on ${state.modelId} — ${state.responses} response(s). ` +
-        `Warns at ${formatCostUsd(state.warnUsd)}, ends the session at ${formatCostUsd(state.capUsd)}.` +
-        (state.note ? ` ${state.note}` : '');
+            ? ' ' +
+              t(
+                'Usage is incomplete because a response was still in flight when the session ended.',
+              )
+            : ''),
+      });
+      return;
     }
+    showCost({
+      text: state.display,
+      level: state.level,
+      title:
+        t(
+          'Estimated session cost on {modelId} — {responses} response(s). Warns at {warn}, ends the session at {cap}.',
+          {
+            modelId: state.modelId,
+            responses: state.responses,
+            warn: formatCostUsd(state.warnUsd),
+            cap: formatCostUsd(state.capUsd),
+          },
+        ) +
+        // `state.note` is the tracker's English diagnostic; the tooltip says
+        // the same in the interface language.
+        (state.incomplete
+          ? ' ' +
+            t(
+              'Estimate is incomplete — a response was still in flight when the session ended, so its usage was never reported.',
+            )
+          : ''),
+    });
   }
 
   /**
@@ -122,11 +162,13 @@ export class RealtimeCost {
       });
     }
     this.syncCostUi();
-    if (this.isActive() && this.ui?.detail) {
-      this.setStatus(
-        this.status,
-        `${this.voiceTier.toUpperCase()} applies next session`,
-      );
+    if (this.isActive() && this.ui) {
+      // The tier as the interface names it; the stored value stays English.
+      const tier =
+        resolveVoiceModel(this.voiceTier).tier === 'mini'
+          ? t('MINI')
+          : t('STANDARD');
+      this.setStatus(this.status, t('{tier} applies next session', { tier }));
     }
     return this.voiceTier;
   }
@@ -240,7 +282,10 @@ export class RealtimeCost {
     try {
       this.stop({ preserveStatus: true });
     } finally {
-      this.setStatus('idle', `Session ended — cost cap ${state.display}`);
+      this.setStatus(
+        'idle',
+        t('Session ended — cost cap {cost}', { cost: state.display }),
+      );
       this.syncCostUi();
     }
   }

@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { negativePiToPi, toDegrees, toRadians } from '../../geo/vector.js';
+import { findCamera } from '../../render/rendererOf.js';
 import { GBFS_CITY_REGISTRY } from './registry.js';
 import {
   ACTIVATION_EXIT_ALTITUDE_M,
@@ -12,44 +13,42 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
   /**
    * Get the camera's current altitude in meters above the ellipsoid.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+   * @param {object} viewer - The viewer the layer draws on.
    * @returns {number} Altitude in meters, or Infinity if unavailable.
    */
 
   function getCameraAltitude(viewer) {
-    const carto = viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
+    const height = findCamera(viewer)?.pose().height;
+    return Number.isFinite(height) ? height : Infinity;
   }
 
   /**
    * Determine the lat/lon the camera is currently looking at.
-   * Prefers the center of the computed view rectangle; falls back to the
-   * camera's own cartographic position when the rectangle is unavailable.
-   * @param {Cesium.Viewer} viewer - Cesium viewer instance.
+   * Prefers the center of the view rectangle; falls back to the camera's
+   * own position when the rectangle is unavailable.
+   * @param {object} viewer - The viewer the layer draws on.
    * @returns {{ lat: number, lon: number }|null} Center coordinates in degrees, or null.
    */
 
   function getCameraCenterLatLon(viewer) {
+    const camera = findCamera(viewer);
     // Try view rectangle center first (more accurate for tilted views)
-    const rect = viewer?.camera?.computeViewRectangle?.(
-      viewer.scene.globe?.ellipsoid,
-    );
+    const rect = camera?.viewRectangle();
     if (rect) {
-      const center = Cesium.Rectangle.center(rect);
+      // Across the antimeridian the east edge is west of the west one.
+      let east = toRadians(rect.east);
+      const west = toRadians(rect.west);
+      if (east < west) east += 2 * Math.PI;
       return {
-        lat: Cesium.Math.toDegrees(center.latitude),
-        lon: Cesium.Math.toDegrees(center.longitude),
+        lat: (rect.south + rect.north) * 0.5,
+        lon: toDegrees(negativePiToPi((west + east) * 0.5)),
       };
     }
 
     // Fallback: use the camera's own position
-    const carto = viewer?.camera?.positionCartographic;
-    if (carto) {
-      return {
-        lat: Cesium.Math.toDegrees(carto.latitude),
-        lon: Cesium.Math.toDegrees(carto.longitude),
-      };
-    }
+    const pose = camera?.pose();
+    if (pose && Number.isFinite(pose.lat) && Number.isFinite(pose.lon))
+      return { lat: pose.lat, lon: pose.lon };
 
     return null;
   }
@@ -116,12 +115,34 @@ export function createViewport({ state: layerState, services, parts, source }) {
     parts.rendering.removeCityPoints(cityId);
   }
 
+  /**
+   * Show the covered cities' markers, or hide them: shown while the layer is
+   * on and the camera is too high for stations.
+   * @param {boolean} shown
+   */
+  function showCoverage(shown) {
+    const set = layerState._coverageSet;
+    if (!set || set.show === shown) return;
+    set.show = shown;
+    governorRequestRender('bikeshare-coverage');
+  }
+
+  /** Repaint the row now: it follows the camera, the manager tick is 60 s. */
+  function refreshRow() {
+    layerState._dataManager?.refreshLayerStats?.('bikeshare');
+  }
+
   /** Deactivate all currently active cities and clear the active set. */
 
   function deactivateAllCities() {
     const cityIds = Array.from(layerState._activeCityIds);
     for (const cityId of cityIds) deactivateCity(cityId);
     layerState._activeCityIds.clear();
+    // A failure belongs to a city in range; none are once everything is off.
+    layerState._failedCityIds.clear();
+    layerState._count = 0;
+    // Nothing is left on the map to date.
+    layerState._lastUpdate = null;
   }
 
   /**
@@ -168,11 +189,19 @@ export function createViewport({ state: layerState, services, parts, source }) {
         return;
       parts.rendering.applyStatusToPoints(cityId, statusMap);
       layerState._lastUpdate = Date.now();
-      layerState._error = null;
+      layerState._failedCityIds.delete(cityId);
     } catch (error) {
       if (error?.name === 'AbortError') return;
+      // A rejection from superseded work must not mark (or tear down) a city
+      // that a newer proximity check or re-enable now owns.
+      if (
+        !layerState._enabled ||
+        !layerState._activeCityIds.has(cityId) ||
+        generation !== layerState._proximityGeneration
+      )
+        return;
       console.warn(`[Data:Bikeshare] ${cityId} activate error:`, error);
-      layerState._error = 'GBFS fetch error';
+      layerState._failedCityIds.add(cityId);
       deactivateCity(cityId);
       layerState._activeCityIds.delete(cityId);
     } finally {
@@ -192,12 +221,16 @@ export function createViewport({ state: layerState, services, parts, source }) {
 
     const generation = ++layerState._proximityGeneration;
     const altitude = getCameraAltitude(layerState._viewer);
+    const wasGateEnabled = layerState._altitudeGateEnabled;
     // Altitude gate: disable all cities when camera is too high
     if (!shouldActivateAtAltitude(altitude)) {
+      showCoverage(true);
       deactivateAllCities();
+      if (wasGateEnabled) refreshRow();
       return;
     }
 
+    showCoverage(false);
     const center = getCameraCenterLatLon(layerState._viewer);
     if (!center) return;
 
@@ -208,12 +241,26 @@ export function createViewport({ state: layerState, services, parts, source }) {
         deactivateCity(cityId);
       }
     }
-
-    layerState._activeCityIds = nextActive;
-    if (layerState._activeCityIds.size === 0) {
-      layerState._count = 0;
-      return;
+    // A failure never outlives its city's range.
+    let failureCleared = false;
+    for (const cityId of layerState._failedCityIds) {
+      if (!nextActive.has(cityId)) {
+        layerState._failedCityIds.delete(cityId);
+        failureCleared = true;
+      }
     }
+
+    const changed =
+      !wasGateEnabled ||
+      failureCleared ||
+      nextActive.size !== layerState._activeCityIds.size ||
+      [...nextActive].some((cityId) => !layerState._activeCityIds.has(cityId));
+    layerState._activeCityIds = nextActive;
+    if (nextActive.size === 0) {
+      layerState._count = 0;
+      layerState._lastUpdate = null;
+    }
+    if (changed) refreshRow();
 
     // Only activate cities that don't already have rendered points
     const toActivate = [];
@@ -225,6 +272,9 @@ export function createViewport({ state: layerState, services, parts, source }) {
     await Promise.all(
       toActivate.map((cityId) => activateCity(cityId, generation)),
     );
+    // Superseded loads repaint too: a newer check may have painted the row
+    // while this one was still loading, or found nothing to load itself.
+    if (layerState._enabled) refreshRow();
   }
 
   /** Schedule a debounced proximity check after camera movement. */
@@ -252,6 +302,7 @@ export function createViewport({ state: layerState, services, parts, source }) {
     activateCity,
     runProximityCheck,
     scheduleProximityCheck,
+    showCoverage,
     onCameraChanged,
   };
 }

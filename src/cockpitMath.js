@@ -1,9 +1,18 @@
-export { resolveHudRailLayout } from './ui/panelRailGeometry.js';
+import {
+  normalizeHeading,
+  roundHeadingDegrees,
+} from './data/headingDegrees.js';
 
-/** Normalize a heading into the [0, 360) range. */
-export function normalizeHeading(value) {
-  if (!Number.isFinite(value)) return 0;
-  return ((value % 360) + 360) % 360;
+export { resolveHudRailLayout } from './ui/panelRailGeometry.js';
+export { normalizeHeading };
+
+/**
+ * Three-digit heading readout, 000–359.
+ * Rounding 359.5° and above lands on north (000), not 360.
+ */
+export function formatHeadingReadout(degrees) {
+  if (!Number.isFinite(degrees)) return '---';
+  return String(roundHeadingDegrees(degrees)).padStart(3, '0');
 }
 
 /** Advance a displayed heading along the shortest arc without exceeding a slew rate. */
@@ -23,8 +32,15 @@ export function slewHeading(current, target, maxStepDeg) {
  * then uses this amount to converge on the layer's delayed display position.
  * Capping correction below forward speed prevents a late feed fix from
  * becoming a first-person surge or reversal while still removing drift.
+ * @param {number} [maxDtSec] The longest step corrected for: 0.1 s, or an
+ *   application subject's own (cockpitSubjectStepSec).
  */
-export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
+export function cockpitAnchorCorrectionStep(
+  distanceM,
+  speedMps,
+  dtSec,
+  maxDtSec = 0.1,
+) {
   if (
     !Number.isFinite(distanceM) ||
     distanceM <= 0 ||
@@ -32,11 +48,37 @@ export function cockpitAnchorCorrectionStep(distanceM, speedMps, dtSec) {
     dtSec <= 0
   )
     return 0;
-  const dt = Math.min(0.1, dtSec);
+  const dt = Math.min(
+    Number.isFinite(maxDtSec) && maxDtSec > 0 ? maxDtSec : 0.1,
+    dtSec,
+  );
   const speed = Number.isFinite(speedMps) ? Math.max(0, speedMps) : 0;
   const eased = distanceM * (1 - Math.exp(-1.25 * dt));
   const correctionRateMps = Math.max(0.75, speed * 0.22);
   return Math.min(distanceM, eased, correctionRateMps * dt);
+}
+
+/** How late past its interval an update may come and still count in full. */
+const COCKPIT_SUBJECT_LATE_SEC = 1;
+
+/**
+ * The seconds an application subject's camera update advances its heading
+ * slew, ground lift and anchor by: the time since the last update, at most
+ * its interval plus COCKPIT_SUBJECT_LATE_SEC. A subject updated every 500 ms,
+ * or a browser drawing 5 frames a second, then keeps up, while a long stall
+ * (a hidden tab) counts as one late update.
+ * @param {number} elapsedMs Time since the last camera update.
+ * @param {number} intervalMs The subject's update interval (0: every frame).
+ * @returns {number}
+ */
+export function cockpitSubjectStepSec(elapsedMs, intervalMs) {
+  const elapsedSec = Number.isFinite(elapsedMs)
+    ? Math.max(0, elapsedMs) / 1000
+    : 0;
+  const intervalSec = Number.isFinite(intervalMs)
+    ? Math.max(0, intervalMs) / 1000
+    : 0;
+  return Math.min(intervalSec + COCKPIT_SUBJECT_LATE_SEC, elapsedSec);
 }
 
 /** Return whether a throttled cockpit presentation update is due. */
@@ -57,6 +99,42 @@ export function cockpitSurfaceWaitExpired(nowMs, startedMs, timeoutMs = 5000) {
   if (![nowMs, startedMs, timeoutMs].every(Number.isFinite) || timeoutMs < 0)
     return true;
   return nowMs - startedMs >= timeoutMs;
+}
+
+/**
+ * How fast the clearance a ground clamp adds under an application subject's
+ * eye comes and goes (m/s).
+ */
+export const COCKPIT_SUBJECT_LIFT_MPS = 1.5;
+
+/**
+ * The lift the ground clamp gives an application subject's eye this update.
+ * The floor is read from coarse cells that refine as tiles load, so the lift
+ * it asks for jumps; a ridden eye takes the clearance part of it at
+ * `rateMps`, while what it needs to stay out of the floor itself (`hardM`)
+ * applies at once.
+ * @param {number|null} previousM The lift given last update; null on entry.
+ * @param {number} targetM The lift the floor and clearance ask for (m).
+ * @param {number} hardM The lift that keeps the eye out of the floor (m).
+ * @param {number} dtSec Seconds since the last update.
+ * @param {number} [rateMps]
+ * @returns {number} At least 0, at least `hardM`.
+ */
+export function easeCockpitLift(
+  previousM,
+  targetM,
+  hardM,
+  dtSec,
+  rateMps = COCKPIT_SUBJECT_LIFT_MPS,
+) {
+  const target = Number.isFinite(targetM) ? Math.max(0, targetM) : 0;
+  const hard = Number.isFinite(hardM) ? Math.max(0, hardM) : 0;
+  if (!Number.isFinite(previousM)) return Math.max(target, hard);
+  const step =
+    Math.max(0, Number.isFinite(rateMps) ? rateMps : 0) *
+    Math.max(0, Number.isFinite(dtSec) ? dtSec : 0);
+  const eased = previousM + Math.max(-step, Math.min(step, target - previousM));
+  return Math.max(0, hard, eased);
 }
 
 /**
@@ -83,11 +161,65 @@ export function cockpitAltitudeDisplayFt(altitudeM, onGround) {
   return Number.isFinite(altitudeM) ? altitudeM * 3.28084 : null;
 }
 
-/** Format the cockpit Context scope without overstating installation coverage. */
+/** The English emergency line; see formatCockpitEmergency. */
+const ENGLISH_EMERGENCY = Object.freeze({
+  squawk: ({ squawk, label }) => `SQUAWK ${squawk} · ${label}`,
+  adsb: ({ priority, label }) =>
+    `ADS-B ${priority ? 'PRIORITY' : 'EMERGENCY'} · ${label}`,
+});
+
+/**
+ * HUD wording for a tracked aircraft's transponder emergency, or null.
+ * States what was broadcast, never a conclusion about the flight: the Mode A
+ * code when it names the status, else the ADS-B field it came from (an
+ * unrelated squawk is dropped).
+ * The cockpit passes its own formatter so the page shows it in the active
+ * language; this module stays i18n-free.
+ * @param {{label?: string, squawk?: string|null,
+ *   source?: string, severity?: string}|null|undefined} emergency
+ * @param {{squawk: Function, adsb: Function}} [format] Builds the line from
+ *   `{ name, label, squawk }` and `{ name, label, priority }`, where
+ *   `label` is the upper-cased `name`.
+ * @returns {string|null}
+ */
+export function formatCockpitEmergency(emergency, format = ENGLISH_EMERGENCY) {
+  const label = String(emergency?.label || '')
+    .trim()
+    .toUpperCase();
+  if (!label) return null;
+  const name = String(emergency.label).trim();
+  if (emergency.source === 'squawk' && emergency.squawk)
+    return format.squawk({ name, label, squawk: emergency.squawk });
+  return format.adsb({
+    name,
+    label,
+    priority: emergency.severity === 'priority',
+  });
+}
+
+/** The English Context scope line; see formatCockpitContextScope. */
+const ENGLISH_CONTEXT_SCOPE = Object.freeze({
+  window: ({ label, radiusKm }) =>
+    `${label} · ${radiusKm ?? '—'} KM AIR/SEA WINDOW`,
+  installations: ({ scope, coverage }) =>
+    `${scope} · INSTALLATIONS ${coverage}`,
+});
+
+/**
+ * Format the cockpit Context scope without overstating installation coverage.
+ * @param {string|number} subjectLabel
+ * @param {number} radiusM
+ * @param {string|null} [installationCoverage]
+ * @param {{window: Function, installations: Function}} [format] Builds the
+ *   line from `{ label, radiusKm }` (radiusKm is null when unknown) and
+ *   `{ scope, coverage }`.
+ * @returns {string}
+ */
 export function formatCockpitContextScope(
   subjectLabel,
   radiusM,
   installationCoverage = null,
+  format = ENGLISH_CONTEXT_SCOPE,
 ) {
   const normalizedLabel =
     typeof subjectLabel === 'string'
@@ -97,12 +229,12 @@ export function formatCockpitContextScope(
         : '—';
   const radiusKm =
     Number.isFinite(radiusM) && radiusM >= 0
-      ? String(Math.round(radiusM / 1000))
-      : '—';
+      ? Math.round(radiusM / 1000)
+      : null;
   const coverage =
     typeof installationCoverage === 'string' ? installationCoverage.trim() : '';
-  const base = `${normalizedLabel} · ${radiusKm} KM AIR/SEA WINDOW`;
-  return coverage ? `${base} · INSTALLATIONS ${coverage}` : base;
+  const base = format.window({ label: normalizedLabel, radiusKm });
+  return coverage ? format.installations({ scope: base, coverage }) : base;
 }
 
 /** Return seven 30-degree compass divisions centered on a heading. */
@@ -111,6 +243,46 @@ export function compassDivisions(heading) {
   return [-90, -60, -30, 0, 30, 60, 90].map((offset) =>
     normalizeHeading(center + offset),
   );
+}
+
+/**
+ * A heading tape that scrolls continuously: the 30-degree divisions within
+ * `reach` divisions of `heading`, each placed by its offset from the exact
+ * heading in division slots, so the centre caret reads the heading itself
+ * rather than the nearest division. `nearest` marks the division closest to
+ * the caret.
+ * @param {number} heading Degrees true.
+ * @param {number} [reach] Divisions each side of the caret.
+ * @returns {Array<{heading: number, slot: number, nearest: boolean}>}
+ */
+export function scrollingCompassDivisions(heading, reach = 4) {
+  if (!Number.isFinite(heading)) return [];
+  const exact = normalizeHeading(heading);
+  const centre = Math.round(exact / 30) * 30;
+  const divisions = [];
+  for (let step = -reach; step <= reach; step += 1) {
+    const division = normalizeHeading(centre + step * 30);
+    divisions.push({
+      heading: division,
+      slot: Number((relativeBearing(division, exact) / 30).toFixed(4)),
+      nearest: step === 0,
+    });
+  }
+  return divisions;
+}
+
+/**
+ * Where a heading falls on the `scrollingCompassDivisions(tapeHeading)` tape:
+ * its offset from the caret (the tape's exact heading) in division slots of
+ * 30 degrees, or null when it lies more than three divisions out.
+ * @param {number} heading Degrees true.
+ * @param {number} tapeHeading The heading under the tape's caret.
+ * @returns {?number}
+ */
+export function compassMarkerSlot(heading, tapeHeading) {
+  if (!Number.isFinite(heading) || !Number.isFinite(tapeHeading)) return null;
+  const slot = Number((relativeBearing(heading, tapeHeading) / 30).toFixed(4));
+  return Math.abs(slot) <= 3 ? slot : null;
 }
 
 /** Format a compass division as a cardinal/intercardinal label or degrees. */
@@ -243,7 +415,7 @@ export function relativeBearing(bearing, heading) {
  * Resolve which flight layer owns the cockpit's tracked aircraft.
  *
  * Both layers can briefly describe a tracked aircraft during a cross-layer
- * handoff, so the viewer's normalized tracked identity (`gevTrackedId`) is the
+ * handoff, so the viewer's normalized tracked identity (the entity record's `trackedId`) is the
  * tie-breaker — the same rule `militaryAwareness.currentTrackedFlightSubject`
  * uses. Layer precedence remains the fallback when no normalized identity is
  * available, so tracking paths that never stamp one keep working.

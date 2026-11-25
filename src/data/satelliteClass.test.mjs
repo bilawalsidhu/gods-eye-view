@@ -5,15 +5,16 @@ import {
   SATELLITE_CLASS_ORDER,
   satelliteClassColor,
   satelliteClassLabel,
-  satelliteClassLegend,
   satelliteClassOf,
-  tallySatelliteClasses,
+  satelliteClassText,
 } from './satelliteClass.js';
 import satellitesLayer, {
   _catalogGroupForTest,
   _clearDenseCatalogStateForTest,
   _setDenseCatalogStateForTest,
 } from './satellites.js';
+import { CATALOG_GROUPS } from '../layers/satellites/policy.js';
+import { SATELLITE_CLASS_DISPLAY } from '../layers/satellites/classes.js';
 
 /**
  * A real, parseable TLE under an arbitrary 5-digit catalog number, so the dense
@@ -35,15 +36,19 @@ const ISS_TLE = tleFor('25544', 'ISS (ZARYA)');
 /** Poll the chip until the async dense load settles (or give up). */
 async function settleChip(maxTicks = 50) {
   for (let i = 0; i < maxTicks; i++) {
-    const chip = satellitesLayer.getRowControls().chips[0];
+    const chip = starlinkChip();
     if (chip && !chip.busy) return chip;
     await new Promise((resolve) => setTimeout(resolve, 1));
   }
-  return satellitesLayer.getRowControls().chips[0];
+  return starlinkChip();
 }
 
+/** The STARLINK class chip: the dense catalog toggle (id `catalog`). */
+const starlinkChip = () =>
+  satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog');
+
 /** Every CelesTrak group the catalog ingests, plus the dense-mode tag. */
-const INGESTED_GROUPS = ['stations', 'visual', 'gps-ops', 'glonass', 'galileo', 'geo', 'dense'];
+const INGESTED_GROUPS = [...CATALOG_GROUPS.map((group) => group.tag), 'dense'];
 
 test('every ingested CelesTrak group resolves to a real class', () => {
   // Guards against drift: adding a group to CATALOG_GROUPS without classifying
@@ -146,69 +151,7 @@ test('the dense shell stays dimmer than the class it sits among', () => {
   );
 });
 
-test('tallying groups counts by class, folding the GNSS constellations together', () => {
-  const counts = tallySatelliteClasses([
-    'gps-ops', 'gps-ops', 'glonass', 'galileo',
-    'geo', 'geo', 'geo',
-    'stations',
-    'visual',
-    'dense', 'dense',
-  ]);
-  assert.equal(counts.nav, 4, 'all three GNSS groups fold into NAV');
-  assert.equal(counts.geo, 3);
-  assert.equal(counts.station, 1);
-  assert.equal(counts.visual, 1);
-  assert.equal(counts.comms, 2);
-});
-
-test('tallying tolerates an empty or missing input', () => {
-  assert.deepEqual({ ...tallySatelliteClasses([]) }, {});
-  assert.deepEqual({ ...tallySatelliteClasses(undefined) }, {});
-});
-
-test('the tally files the ISS under STATION even when a partial outage moved it', () => {
-  // The legend and the card must never disagree. With the stations feed down,
-  // the ISS is ingested as `visual`; counting it there would let STATION vanish
-  // from the legend while the tracked card still reads "STATION · ISS".
-  const outage = tallySatelliteClasses([
-    { group: 'visual', isIss: true },
-    { group: 'visual' },
-    { group: 'visual' },
-  ]);
-  assert.equal(outage.station, 1, 'the ISS is counted as a STATION');
-  assert.equal(outage.visual, 2, 'and is not double-counted under VISUAL');
-
-  const legend = satelliteClassLegend(outage);
-  assert.equal(legend.some((row) => row.klass === 'station'), true,
-    'STATION stays in the legend, matching the card');
-
-  // Bare group tags still work — the descriptor form is additive.
-  assert.deepEqual({ ...tallySatelliteClasses(['visual', 'visual']) }, { visual: 2 });
-  assert.equal(satelliteClassOf('visual', { isIss: true }).klass, 'station',
-    'one helper owns the rule for every consumer');
-});
-
-test('the legend lists present classes in order and omits absent ones', () => {
-  const legend = satelliteClassLegend(tallySatelliteClasses(['geo', 'gps-ops', 'stations']));
-  assert.deepEqual(legend.map((row) => row.klass), ['station', 'nav', 'geo'],
-    'legend follows SATELLITE_CLASS_ORDER, not input order');
-  // COMMS only exists in DENSE mode — the legend must not advertise a class
-  // that has nothing on screen.
-  assert.equal(legend.some((row) => row.klass === 'comms'), false);
-
-  const row = legend.find((entry) => entry.klass === 'nav');
-  assert.equal(row.label, 'NAV');
-  assert.equal(row.color, SATELLITE_CLASSES.nav.color);
-  assert.equal(row.count, 1);
-  assert.ok(row.blurb.length > 0, 'every legend row carries a plain-language gloss');
-});
-
-test('the legend drops zero and negative counts', () => {
-  assert.deepEqual(satelliteClassLegend({ nav: 0, geo: -1, station: 2 }).map((r) => r.klass), ['station']);
-  assert.deepEqual(satelliteClassLegend(null), []);
-});
-
-test('the DENSE row chip is stateless and declares the params to apply', () => {
+test('the STARLINK row chip is stateless and declares the params to apply', () => {
   // The chip never carries its own state: it declares the params to apply, so
   // whatever else drives the catalog param (Space Missions capture/restore)
   // stays authoritative. Whether it reads ACTIVE is decided by the dense LOAD,
@@ -217,7 +160,7 @@ test('the DENSE row chip is stateless and declares the params to apply', () => {
     _setDenseCatalogStateForTest({});
     const chip = satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog');
     assert.equal(chip.id, 'catalog');
-    assert.equal(chip.label, 'DENSE');
+    assert.equal(chip.label, 'STARLINK');
     assert.equal(chip.active, false);
     assert.equal(chip.busy, false);
     assert.equal(chip.state, 'idle');
@@ -236,7 +179,7 @@ test('an invalid catalog mode is rejected without disturbing the chip', () => {
   assert.equal(chip.active, false);
 });
 
-test('DENSE reports loading, then ACTIVE only once the points exist', async () => {
+test('STARLINK reports loading, then ACTIVE only once the points exist', async () => {
   const originalFetch = globalThis.fetch;
   const refreshes = [];
   try {
@@ -247,7 +190,7 @@ test('DENSE reports loading, then ACTIVE only once the points exist', async () =
     satellitesLayer.setParams({ catalog: 'dense' });
     // The param flips synchronously, but the shell has not arrived yet — the
     // chip must say BUSY, never ACTIVE.
-    const pending = satellitesLayer.getRowControls().chips[0];
+    const pending = starlinkChip();
     assert.equal(pending.busy, true);
     assert.equal(pending.disabled, true);
     assert.equal(pending.active, false, 'never active before the points exist');
@@ -256,21 +199,22 @@ test('DENSE reports loading, then ACTIVE only once the points exist', async () =
     const settled = await settleChip();
     assert.equal(settled.active, true, 'active once the dense points are on screen');
     assert.equal(settled.state, 'active');
-    assert.equal(settled.label, 'DENSE');
+    assert.equal(settled.label, 'STARLINK');
     assert.deepEqual(settled.params, { catalog: 'core' }, 'a settled chip toggles back off');
 
-    // The completion pushed a refresh, and the legend gained COMMS with it —
-    // without that push the row would keep the pre-load counts for 5 minutes.
+    // The completion pushed a refresh, and the STARLINK chip gained its swatch
+    // and count with it — without that push the row would keep the pre-load
+    // counts for 5 minutes.
     assert.ok(refreshes.length >= 2, 'load start and load completion each pushed a refresh');
-    const legend = satellitesLayer.getRowControls().legend;
-    assert.equal(legend.some((row) => row.klass === 'comms'), true);
+    assert.equal(settled.swatch, SATELLITE_CLASS_DISPLAY.starlink.color);
+    assert.equal(settled.count, 1);
   } finally {
     globalThis.fetch = originalFetch;
     _clearDenseCatalogStateForTest();
   }
 });
 
-test('a failed DENSE load reverts the mode rather than leaving an active chip', async () => {
+test('a failed STARLINK load reverts the mode rather than leaving an active chip', async () => {
   const originalFetch = globalThis.fetch;
   const warn = console.warn;
   console.warn = () => {};
@@ -285,15 +229,12 @@ test('a failed DENSE load reverts the mode rather than leaving an active chip', 
 
     assert.equal(settled.active, false, 'a 502 must never present as a live dense catalog');
     assert.equal(settled.state, 'error');
-    assert.equal(settled.label, 'DENSE ✕');
+    assert.equal(settled.label, 'STARLINK ✕');
     assert.match(settled.title, /502/, 'the chip explains why');
     assert.equal(satellitesLayer.getParams().catalog, 'core', 'the mode reverts to reality');
     assert.deepEqual(settled.params, { catalog: 'dense' }, 'clicking retries');
-    assert.equal(
-      satellitesLayer.getRowControls().legend.some((row) => row.klass === 'comms'),
-      false,
-      'no COMMS class is advertised when nothing loaded',
-    );
+    assert.equal(settled.swatch, undefined, 'no STARLINK swatch when nothing loaded');
+    assert.equal(settled.count, undefined, 'and no STARLINK count');
     assert.ok(pushes >= 2, 'the failure pushed its own refresh');
 
     // Retrying against a healthy feed clears the error — it does not latch.
@@ -365,9 +306,9 @@ test('an explicit return to core clears a failure the user never caused', async 
 
     // A no-op restore of the pre-mission snapshot.
     satellitesLayer.setParams({ catalog: 'core', showPoints: true, showOrbits: true });
-    const restored = satellitesLayer.getRowControls().chips[0];
+    const restored = starlinkChip();
     assert.equal(restored.state, 'idle', 'the error does not survive the restore');
-    assert.equal(restored.label, 'DENSE');
+    assert.equal(restored.label, 'STARLINK');
     assert.doesNotMatch(restored.title, /502/);
   } finally {
     console.warn = warn;
@@ -376,10 +317,10 @@ test('an explicit return to core clears a failure the user never caused', async 
   }
 });
 
-test('a real stations-feed outage keeps STATION in the legend, matching the card', async () => {
+test('a real stations-feed outage keeps the ISS counted under STATIONS', async () => {
   // End-to-end version of the tally rule: drive a real rebuild in which only
   // the `visual` group answers, so the ISS is genuinely ingested as `visual`.
-  // The legend must still file it under STATION or it disagrees with the card.
+  // The STATIONS chip must still count it or it disagrees with the card.
   const originalFetch = globalThis.fetch;
   const log = console.log;
   const warn = console.warn;
@@ -397,13 +338,14 @@ test('a real stations-feed outage keeps STATION in the legend, matching the card
     assert.equal(_catalogGroupForTest(25544), 'visual',
       'the outage really did ingest the ISS from the visual group');
 
-    const legend = satellitesLayer.getRowControls().legend;
-    assert.equal(legend.find((row) => row.klass === 'station')?.count, 1,
-      'STATION survives the outage because the ISS is counted there');
-    assert.equal(legend.some((row) => row.klass === 'visual'), false,
-      'and it is not also counted under VISUAL');
-    assert.equal(satelliteClassLabel('visual', { isIss: true }), 'STATION · ISS',
-      'the card says the same thing the legend does');
+    const counted = satellitesLayer
+      .getRowControls()
+      .chips.filter((entry) => entry.count !== undefined);
+    assert.deepEqual(counted.map((entry) => [entry.id, entry.count]), [['class-stations', 1]],
+      'STATIONS survives the outage because the ISS is counted there, and only there');
+    const [iss] = satellitesLayer.getAnalystRecords();
+    assert.equal(iss?.satelliteClass, 'STATIONS · ISS',
+      'the card says the same thing the chip does');
   } finally {
     console.log = log;
     console.warn = warn;
@@ -431,15 +373,21 @@ test('a catalog rebuild refreshes the detection overlay class strings', async ()
       text: async () => (String(url).endsWith(`/${homeGroup}`) ? ALT_TLE : ''),
     });
 
+    // Every class on: the seeded satellite's class must not hide it.
+    satellitesLayer.setParams({
+      classes: { telecom: true, probes: true, debris: true },
+    });
     await satellitesLayer.update(viewer);
     const first = satellitesLayer.getDetectableObjects().find((o) => o.sourceId === 33333);
     assert.ok(first, 'the seeded satellite is collectable');
-    assert.equal(first.klass, 'GEO');
+    // A payload with no SATCAT record and no recognisable name takes its
+    // group's class (src/layers/satellites/classes.js).
+    assert.equal(first.klass, 'TELECOM');
 
-    homeGroup = 'visual';
+    homeGroup = 'resource';
     await satellitesLayer.update(viewer);
     const second = satellitesLayer.getDetectableObjects().find((o) => o.sourceId === 33333);
-    assert.equal(second.klass, 'VISUAL', 'the cached record does not outlive its catalog');
+    assert.equal(second.klass, 'IMAGING', 'the cached record does not outlive its catalog');
   } finally {
     console.log = log;
     console.warn = warn;
@@ -451,17 +399,128 @@ test('a catalog rebuild refreshes the detection overlay class strings', async ()
 test('a dependency owner hiding the points surrenders the whole row', async () => {
   try {
     _setDenseCatalogStateForTest({});
-    assert.equal(satellitesLayer.getRowControls().chips.length, 1);
+    assert.equal(satellitesLayer.getRowControls().chips.length, 6);
 
     // Space Missions borrows this layer for TLE lookup with showPoints:false.
     satellitesLayer.setParams({ showPoints: false });
     const owned = satellitesLayer.getRowControls();
     assert.deepEqual(owned.chips, [], 'no chip to click while the owner holds the params');
-    assert.deepEqual(owned.legend, [], 'no legend describing an empty sky');
+    assert.equal(owned.legend, undefined, 'no counts describing an empty sky');
 
     satellitesLayer.setParams({ showPoints: true });
-    assert.equal(satellitesLayer.getRowControls().chips.length, 1, 'released on restore');
+    assert.equal(satellitesLayer.getRowControls().chips.length, 6, 'released on restore');
   } finally {
     _clearDenseCatalogStateForTest();
   }
+});
+
+test('every class but Starlink shows by default; each class chip turns its class on and off', async () => {
+  const originalFetch = globalThis.fetch;
+  const log = console.log;
+  const warn = console.warn;
+  console.log = () => {};
+  console.warn = () => {};
+  const served = {
+    '/api/celestrak/stations': ISS_TLE,
+    '/api/celestrak/resource': tleFor('90002', 'SENTINEL-2A'),
+    '/api/celestrak/gps-ops': tleFor('90001', 'GPS BIII-1'),
+    '/api/celestrak/visual': tleFor('90003', 'SL-16 R/B'),
+  };
+  const shown = () => satellitesLayer.getAllPositions().map((row) => row.id).sort();
+  const chip = (id) =>
+    satellitesLayer.getRowControls().chips.find((entry) => entry.id === `class-${id}`);
+  try {
+    _setDenseCatalogStateForTest({});
+    globalThis.fetch = async (url) => ({
+      ok: true,
+      text: async () => served[String(url)] || '',
+    });
+    await satellitesLayer.update({ scene: { primitives: { add: (p) => p, remove() {} } } });
+    assert.deepEqual(shown(), [25544, 90001, 90002, 90003], 'all but Starlink');
+    assert.deepEqual(
+      satellitesLayer.getRowControls().chips.map((entry) => entry.label),
+      ['STATIONS', 'IMAGING', 'TELECOM', 'STARLINK', 'PROBES', 'DEBRIS'],
+    );
+    assert.equal(chip('imaging').active, true);
+    assert.equal(chip('telecom').active, true);
+    assert.equal(
+      satellitesLayer.getRowControls().chips.find((entry) => entry.id === 'catalog').active,
+      false,
+    );
+    assert.deepEqual(chip('telecom').params, { classes: { telecom: false } });
+    // One pill per class carries what the legend did: an on class shows its
+    // point colour and its count beside its name, an off one only its name.
+    const controls = satellitesLayer.getRowControls();
+    assert.equal(controls.legend, undefined, 'no separate list of counts');
+    assert.deepEqual(
+      controls.chips.map((entry) => [entry.id, entry.swatch, entry.count]),
+      [
+        ['class-stations', SATELLITE_CLASS_DISPLAY.stations.color, 1],
+        ['class-imaging', SATELLITE_CLASS_DISPLAY.imaging.color, 1],
+        ['class-telecom', SATELLITE_CLASS_DISPLAY.telecom.color, 1],
+        ['catalog', undefined, undefined],
+        // On, but nothing of the class is loaded: the colour shows, no count.
+        ['class-probes', SATELLITE_CLASS_DISPLAY.probes.color, undefined],
+        ['class-debris', SATELLITE_CLASS_DISPLAY.debris.color, 1],
+      ],
+    );
+
+    satellitesLayer.setParams(chip('telecom').params);
+    satellitesLayer.setParams(chip('debris').params);
+    assert.deepEqual(shown(), [25544, 90002], 'telecom and debris off');
+    assert.equal(chip('debris').active, false);
+    assert.equal(chip('debris').swatch, undefined, 'an off pill drops its colour');
+    assert.equal(chip('debris').count, undefined, 'and its count');
+    assert.equal(chip('debris').label, 'DEBRIS', 'and keeps its name');
+    assert.deepEqual(satellitesLayer.getParams().classes, {
+      stations: true,
+      imaging: true,
+      telecom: false,
+      starlink: false,
+      probes: true,
+      debris: false,
+    });
+
+    satellitesLayer.setParams(chip('telecom').params);
+    satellitesLayer.setParams(chip('imaging').params);
+    assert.deepEqual(shown(), [25544, 90001], 'telecom back on, imaging off');
+    assert.equal(satellitesLayer.setParams({ classes: 'all' }), false, 'malformed request refused');
+
+    // A saved or shared choice comes back as class letters.
+    assert.equal(satellitesLayer.setParams({ classes: 'sip' }), true);
+    assert.deepEqual(satellitesLayer.getParams().classes, {
+      stations: true,
+      imaging: true,
+      telecom: false,
+      starlink: false,
+      probes: true,
+      debris: false,
+    });
+    assert.deepEqual(shown(), [25544, 90002], 'restored from letters');
+  } finally {
+    console.log = log;
+    console.warn = warn;
+    globalThis.fetch = originalFetch;
+    _clearDenseCatalogStateForTest();
+  }
+});
+
+test('the shown class is the six-class one, with a subtype that says more', () => {
+  assert.equal(satelliteClassText('telecom', 'gps-ops'), 'TELECOM · GPS');
+  assert.equal(
+    satelliteClassText('stations', 'visual', { isIss: true }),
+    'STATIONS · ISS',
+  );
+  assert.equal(satelliteClassText('imaging', 'resource'), 'IMAGING');
+  assert.equal(satelliteClassText('imaging', 'visual'), 'IMAGING');
+  // A subtype that only repeats the class is dropped.
+  assert.equal(satelliteClassText('starlink', 'dense'), 'STARLINK');
+  // A dead geostationary comsat is debris, not GEO.
+  assert.equal(satelliteClassText('debris', 'geo'), 'DEBRIS');
+  // Without a class the group's label stands.
+  assert.equal(satelliteClassText(null, 'gps-ops'), 'NAV · GPS');
+  assert.equal(
+    satelliteClassText('telecom', 'gps-ops', { localize: false }),
+    'TELECOM · GPS',
+  );
 });

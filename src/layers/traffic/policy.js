@@ -1,14 +1,21 @@
-import * as Cesium from 'cesium';
+import { hexColor } from '../../render/color.js';
 
 /**
  * @file Street Traffic selects TomTom, OpenMapTiles or Hybrid motor roads,
  * with directional TomTom congestion in live mode. Tile acquisition is
- * bounded and camera-driven; animation lerps precomputed Cartesian waypoints.
+ * bounded and camera-driven; animation lerps precomputed ECEF waypoints.
  */
 
 /** @const {number} Meters — hide all traffic dots above this camera altitude */
 
 export const ACTIVATION_ALTITUDE = 8000;
+
+/**
+ * How far the view moves before the camera tells the layer (the camera's
+ * `changed` threshold): fine, so it notices entering a coverage area.
+ */
+
+export const CAMERA_CHANGED_THRESHOLD = 0.05;
 
 /** @const {number} Meters — above this altitude, only major roads are fetched */
 
@@ -108,14 +115,37 @@ export const SIZE_BY_TYPE = {
  * Live-flow bucket colors (thresholds live in `trafficFlowStyle.js`):
  * green free flow / amber slow / red jam, all at 0.9 alpha.
  * Roads without flow data (`road.flow == null`) keep the sim's white.
- * @const {Object<string, Cesium.Color>}
+ * Renderer colours (`[r, g, b, a]`, 0..1), frozen: painted colours are
+ * cached by identity.
+ * @const {Object<string, number[]>}
  */
 
-export const FLOW_BUCKET_COLORS = {
-  free: Cesium.Color.fromCssColorString('#2ecc71').withAlpha(0.9),
-  slow: Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.9),
-  jam: Cesium.Color.fromCssColorString('#e05252').withAlpha(0.9),
-};
+export const FLOW_BUCKET_COLORS = Object.freeze({
+  free: Object.freeze(hexColor('#2ecc71', 0.9)),
+  slow: Object.freeze(hexColor('#f0b23e', 0.9)),
+  jam: Object.freeze(hexColor('#e05252', 0.9)),
+});
+
+/** @const {number[]} Simulated (no flow data) dot colour: white at 0.85. */
+
+export const SIM_DOT_COLOR = Object.freeze([1, 1, 1, 0.85]);
+
+// ─── Flow road lines (`lines` row toggle, live mode only) ────────────────
+/**
+ * @const {number} Max flow-colored road lines per render. Jam first, then
+ * slow, then free-flow, longest first within a bucket, so a dense city keeps
+ * its congestion when the cap trims the free roads.
+ */
+
+export const FLOW_LINE_CAP = 1500;
+
+/** @const {number} Px — flow road-line width (every bucket). */
+
+export const FLOW_LINE_WIDTH = 4;
+
+/** @const {number} Flow road-line opacity: the bucket colors, steady. */
+
+export const FLOW_LINE_ALPHA = 0.8;
 
 // ─── Jam-viz prototype (live mode only — see 2026-07-21 design doc) ────────
 /** @const {number} Max congestion heat-line polylines per render (jam first). */
@@ -138,14 +168,13 @@ export const HEAT_JAM_BASE_ALPHA = 0.55;
 
 export const HEAT_JAM_PULSE_ALPHA = 0.2;
 
-/** @const {Cesium.Color} Jam corridor color (bucket red, alpha pulsed live). */
+/** @const {number[]} Jam corridor color (bucket red, alpha pulsed live). */
 
-export const HEAT_JAM_COLOR = Cesium.Color.fromCssColorString('#e05252');
+export const HEAT_JAM_COLOR = Object.freeze(hexColor('#e05252'));
 
-/** @const {Cesium.Color} Slow corridor color (bucket amber, faint + static). */
+/** @const {number[]} Slow corridor color (bucket amber, faint + static). */
 
-export const HEAT_SLOW_COLOR =
-  Cesium.Color.fromCssColorString('#f0b23e').withAlpha(0.2);
+export const HEAT_SLOW_COLOR = Object.freeze(hexColor('#f0b23e', 0.2));
 
 /** @const {number} Far-distance scale floor for jam dots (shipped: 0.3). */
 
@@ -175,13 +204,3 @@ export const STYLED_MIN_BASE_PX = 5;
 /** @const {number} Maximum tile cache entries before LRU eviction */
 
 export const TILE_CACHE_MAX_ENTRIES = 64;
-
-/**
- * Milliseconds the first dot paint will wait for flow data. Cached flow
- * settles within this window (decode cache, 120 s TTL) and renders fully
- * colored; a cold tile fetch loses the race, dots paint immediately in
- * white, and recolorDotsInPlace applies the colors when flow arrives —
- * field-test round 1's "takes forever to load" was the sequential wait.
- */
-
-export const FLOW_RENDER_RACE_MS = 250;

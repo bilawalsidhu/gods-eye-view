@@ -1,4 +1,14 @@
-import * as Cesium from 'cesium';
+import {
+  canvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
+import { dot, sub } from '../geo/vector.js';
+import { loadYouTubeApi } from './youtubeApi.js';
+import { t, msg, onLocaleChange } from '../i18n/index.js';
+import { h, render as renderVue } from 'vue';
+import BhoteKoshiMediaCards from '../ui/bhoteKoshi/BhoteKoshiMediaCards.vue';
 
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
@@ -39,62 +49,59 @@ const MEDIA_PRECONNECT_ORIGINS = Object.freeze({
   facebook: Object.freeze(['https://www.facebook.com']),
 });
 
+// Known English from public/events/bhote-koshi-2026/event.json, translated at
+// display (whole or by " · " parts). Anything else shows as authored.
+const EVENT_PACK_TEXT = new Set([
+  // Field reports: our labels (credits after " · " stay) and their statuses.
+  msg('Rasuwagadhi witness video'),
+  msg('Bhote Koshi valley footage'),
+  msg('Flood footage'),
+  msg('Compilation and casualty claims'),
+  msg('SOURCE GEOCONFIRMED · WORLD-PINNED'),
+  msg('SOURCE CREDITED · LOCATION UNRESOLVED'),
+  msg('REFERENCE ONLY · CLAIMS UNVERIFIED'),
+  msg('SOURCE GEOCONFIRMED'),
+  // Reconstruction caveat.
+  msg(
+    '2021 historical reference versus 2026 post-event imagery; changes are cumulative and include the July 2025 Rasuwagadhi flood. Schematic downstream progression, not modeled arrival time; not an official hazard model.',
+  ),
+  // Evidence titles that are more than a place name.
+  msg('Immediate collapse viewpoint'),
+  msg('Collapse viewpoint'),
+  msg('Debris-dammed lake'),
+  msg('Dammed lake'),
+  msg('Second landslide'),
+  msg('Gyirong border gate'),
+  msg('Border gate'),
+  msg('Timure evidence cluster'),
+  msg('Mailung / Upper Trishuli bridge'),
+  msg('Dandagaun viewpoint restaurant'),
+  msg('Dandagaun viewpoint'),
+  msg('Bidur - Trishuli bridge'),
+  msg('Bidur bridge'),
+  msg('Devighat / Taadi Khola Bridge'),
+  msg('Devighat bridge'),
+]);
+
+/**
+ * Display text for an authored event-pack string.
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function bhoteEventText(value) {
+  const text = value == null ? '' : String(value);
+  if (EVENT_PACK_TEXT.has(text)) return t(text);
+  if (!text.includes(' · ')) return text;
+  return text
+    .split(' · ')
+    .map((part) => (EVENT_PACK_TEXT.has(part) ? t(part) : part))
+    .join(' · ');
+}
+
 let _xWidgetsPromise = null;
 let _facebookSdkPromise = null;
 let _facebookEmbedSequence = 0;
-const youtubeApis = new WeakMap();
-
-function loadYouTubeApi(documentRef, globalRef) {
-  if (typeof globalRef.YT?.Player === 'function')
-    return Promise.resolve(globalRef.YT);
-  if (youtubeApis.has(documentRef)) return youtubeApis.get(documentRef);
-  const pending = new Promise((resolve, reject) => {
-    const previous = globalRef.onYouTubeIframeAPIReady;
-    let timer;
-    let settled = false;
-    const script = documentRef.createElement('script');
-    const finish = (error) => {
-      if (settled) return;
-      settled = true;
-      globalRef.clearTimeout(timer);
-      if (globalRef.onYouTubeIframeAPIReady === ready)
-        globalRef.onYouTubeIframeAPIReady = previous;
-      if (error) {
-        script.remove();
-        reject(error);
-      } else resolve(globalRef.YT);
-    };
-    const ready = () => {
-      try {
-        previous?.();
-      } finally {
-        finish(
-          typeof globalRef.YT?.Player === 'function'
-            ? null
-            : new Error('YouTube API unavailable'),
-        );
-      }
-    };
-    globalRef.onYouTubeIframeAPIReady = ready;
-    script.src = 'https://www.youtube.com/iframe_api';
-    script.async = true;
-    script.addEventListener(
-      'error',
-      () => finish(new Error('YouTube API unavailable')),
-      { once: true },
-    );
-    timer = globalRef.setTimeout(
-      () => finish(new Error('YouTube API timed out')),
-      5000,
-    );
-    documentRef.head.append(script);
-  }).catch((error) => {
-    youtubeApis.delete(documentRef);
-    throw error;
-  });
-  youtubeApis.set(documentRef, pending);
-  return pending;
-}
+let _cardSequence = 0;
 
 /** A trimmed clip follows provider time, never time spent loading its iframe. */
 export function createTrimmedYouTubePlayback({
@@ -240,7 +247,7 @@ function loadFacebookSdk(documentRef, globalRef = globalThis) {
         prior?.();
       } finally {
         if (facebookSdkReady(globalRef.FB)) finish();
-        else finish(new Error('Facebook player API did not initialize.'));
+        else finish(new Error(msg('Facebook player API did not initialize.')));
       }
     };
     globalRef.fbAsyncInit = ready;
@@ -256,12 +263,12 @@ function loadFacebookSdk(documentRef, globalRef = globalThis) {
     }
     script.addEventListener?.(
       'error',
-      () => finish(new Error('Facebook player API could not load.')),
+      () => finish(new Error(msg('Facebook player API could not load.'))),
       { once: true },
     );
     timer =
       globalRef.setTimeout?.(
-        () => finish(new Error('Facebook player API timed out.')),
+        () => finish(new Error(msg('Facebook player API timed out.'))),
         EMBED_TIMEOUT_MS,
       ) ?? null;
   }).catch((error) => {
@@ -398,7 +405,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
     };
     const ready = () => {
       if (xWidgetsReady(globalRef.twttr)) finish();
-      else finish(new Error('X embed API did not initialize.'));
+      else finish(new Error(msg('X embed API did not initialize.')));
     };
     let script = documentRef.querySelector?.(`script[src="${X_WIDGET_URL}"]`);
     if (!script) {
@@ -411,7 +418,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
     }
     script.addEventListener?.(
       'error',
-      () => finish(new Error('X embed could not load.')),
+      () => finish(new Error(msg('X embed could not load.'))),
       {
         once: true,
       },
@@ -440,7 +447,7 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
         },
       );
     timer = setTimeout(
-      () => finish(new Error('X embed timed out.')),
+      () => finish(new Error(msg('X embed timed out.'))),
       EMBED_TIMEOUT_MS,
     );
   }).catch((error) => {
@@ -450,9 +457,17 @@ function loadXWidgets(documentRef, globalRef = globalThis) {
   return _xWidgetsPromise;
 }
 
+// Outcomes a trimmed YouTube clip reports to the card status.
+const YOUTUBE_PHASE_LABELS = Object.freeze({
+  unavailable: msg('UNAVAILABLE'),
+  timeout: msg('TIMEOUT'),
+  blocked: msg('BLOCKED'),
+});
+
 function providerLabel(provider) {
   return (
-    { youtube: 'YOUTUBE', facebook: 'FACEBOOK', x: 'X' }[provider] || 'SOURCE'
+    { youtube: 'YOUTUBE', facebook: 'FACEBOOK', x: 'X' }[provider] ||
+    t('SOURCE')
   );
 }
 
@@ -480,23 +495,22 @@ function ensureProviderConnections(documentRef, provider) {
   }
 }
 
+/**
+ * Where an anchor (ECEF) is in the card root, through the renderer's camera
+ * and query ports; null behind the eye, off the root, or with no renderer.
+ */
 function anchorOnScreen(viewer, anchor, root) {
-  if (!viewer?.scene || !anchor || !root) return null;
-  const camera = viewer.camera;
-  if (camera?.positionWC && camera?.directionWC) {
-    const delta = Cesium.Cartesian3.subtract(
-      anchor,
-      camera.positionWC,
-      new Cesium.Cartesian3(),
-    );
-    if (Cesium.Cartesian3.dot(delta, camera.directionWC) <= 0) return null;
-  }
-  const pixel = Cesium.SceneTransforms.worldToWindowCoordinates(
-    viewer.scene,
-    anchor,
-  );
+  if (!anchor || !root) return null;
+  const camera = findCamera(viewer);
+  const query = findQuery(viewer);
+  if (!camera || !query) return null;
+  const pose = camera.pose();
+  if (dot(sub(anchor, pose.position), pose.direction) <= 0) return null;
+  const pixel = query.project(anchor);
   if (!pixel) return null;
-  const canvasBounds = viewer.canvas?.getBoundingClientRect?.();
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvas = canvasOf(viewer);
+  const canvasBounds = canvas?.getBoundingClientRect?.();
   const rootBounds = root.getBoundingClientRect?.();
   if (!canvasBounds || !rootBounds) return null;
   const x = pixel.x + canvasBounds.left - rootBounds.left;
@@ -511,7 +525,8 @@ function anchorOnScreen(viewer, anchor, root) {
   return { x, y, width: rootBounds.width, height: rootBounds.height };
 }
 
-function placeCard(card, leader, anchor) {
+/** Place a media card beside its map anchor, in the lane between the panels. */
+export function placeCard(card, leader, anchor) {
   const margin = 18;
   const gap = 42;
   const width = card.offsetWidth || 392;
@@ -522,22 +537,22 @@ function placeCard(card, leader, anchor) {
   let laneRight = anchor.width - margin;
   let laneBottom = anchor.height - margin;
   if (rootBounds && documentRef?.querySelector) {
-    const leftPanel = documentRef
-      .querySelector('#scene-panel')
-      ?.getBoundingClientRect?.();
-    const rightRail = documentRef
-      .querySelector('#right-context-rail')
-      ?.getBoundingClientRect?.();
     const commandDock = documentRef
       .querySelector('#command-dock')
       ?.getBoundingClientRect?.();
-    if (leftPanel?.width > 0)
-      laneLeft = Math.max(laneLeft, leftPanel.right - rootBounds.left + margin);
-    if (rightRail?.width > 0)
-      laneRight = Math.min(
-        laneRight,
-        rightRail.left - rootBounds.left - margin,
-      );
+    // The scene panel and the context rail swap sides in right-to-left
+    // languages: each narrows the lane from the side it sits on.
+    for (const selector of ['#scene-panel', '#right-context-rail']) {
+      const panel = documentRef
+        .querySelector(selector)
+        ?.getBoundingClientRect?.();
+      if (!(panel?.width > 0)) continue;
+      const start = panel.left - rootBounds.left;
+      const end = panel.right - rootBounds.left;
+      if (start + end < rootBounds.width)
+        laneLeft = Math.max(laneLeft, end + margin);
+      else laneRight = Math.min(laneRight, start - margin);
+    }
     if (commandDock?.height > 0)
       laneBottom = Math.min(
         laneBottom,
@@ -577,6 +592,8 @@ function placeCard(card, leader, anchor) {
 function createRoot(documentRef, viewer) {
   const root = documentRef.createElement('div');
   root.id = 'bhote-koshi-embedded-media-root';
+  // Drawn over the globe for the scene: Stories keeps it while one plays.
+  root.setAttribute('data-globe-overlay', '');
   root.setAttribute('aria-live', 'polite');
   (viewer?.container || documentRef.body)?.append(root);
   return root;
@@ -616,7 +633,60 @@ export function createBhoteKoshiEmbeddedMedia({
   let record = null;
   let warmRecord = null;
   let generation = 0;
+  let destroyed = false;
+  // The cards in the root, in the order they were shown: the current one and
+  // any still leaving. Their text is kept as the calls that word it, so a
+  // locale change words it again.
+  const cards = [];
+
+  /** Render the cards and the YouTube preload into the root, synchronously. */
+  function render() {
+    if (destroyed) return;
+    const warmFrame = warmRecord?.frame;
+    renderVue(
+      h(BhoteKoshiMediaCards, {
+        warm: warmFrame
+          ? {
+              key: warmRecord.key,
+              src: warmFrame.src,
+              title: warmFrame.title(),
+            }
+          : null,
+        cards: cards.map((current) => ({
+          id: current.id,
+          provider: current.source.provider,
+          portrait: current.portrait,
+          entering: current.entering,
+          leaving: current.leaving,
+          unavailable: current.unavailable,
+          label: current.label(),
+          title: current.title(),
+          status: current.status(),
+          url: current.source.url,
+          frame: current.frame && {
+            src: current.frame.src,
+            title: current.frame.title(),
+            onLoad: current.frame.onLoad,
+          },
+          bind: current.bind,
+        })),
+      }),
+      root,
+    );
+  }
+  const offLocale = onLocaleChange(render);
   const leavingRecords = new Set();
+
+  /** Word a card's status and draw it. */
+  function setStatus(current, text) {
+    current.status = text;
+    render();
+  }
+  /** Mark a card unavailable or not and draw it. */
+  function setUnavailable(current, unavailable) {
+    current.unavailable = unavailable;
+    render();
+  }
 
   const prefersReducedMotion = () =>
     globalRef.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ===
@@ -737,7 +807,9 @@ export function createBhoteKoshiEmbeddedMedia({
           globalRef.setTimeout?.(() => {
             if (!session.active || session.ready) return;
             session.error = new Error(
-              'Facebook embed unavailable. The post may be private, removed, region-restricted, or blocked.',
+              msg(
+                'Facebook embed unavailable. The post may be private, removed, region-restricted, or blocked.',
+              ),
             );
             session.onError?.(session.error);
           }, EMBED_TIMEOUT_MS) ?? null;
@@ -756,8 +828,10 @@ export function createBhoteKoshiEmbeddedMedia({
     if (current.exitTimer != null) globalRef.clearTimeout?.(current.exitTimer);
     destroyFacebookSession(current.facebookSession);
     current.youtubeSession?.destroy();
-    current.card?.remove?.();
+    const at = cards.indexOf(current);
+    if (at !== -1) cards.splice(at, 1);
     leavingRecords.delete(current);
+    render();
   }
 
   const position = () => {
@@ -773,13 +847,14 @@ export function createBhoteKoshiEmbeddedMedia({
         current.enterFrame = scheduleFrame(() => {
           current.enterFrame = null;
           if (token !== generation || record !== current) return;
-          current.card.classList.add('is-entering');
+          current.entering = true;
+          render();
         });
       }
     }
   };
   const removePostRender =
-    viewer.scene?.postRender?.addEventListener?.(position);
+    findFrame(viewer)?.on('postRender', () => position()) ?? null;
 
   function hide({ immediate = false, preserveWarm = false } = {}) {
     if (!preserveWarm) clearWarm();
@@ -795,9 +870,10 @@ export function createBhoteKoshiEmbeddedMedia({
       removeRecord(current);
       return;
     }
-    current.card.classList.remove('is-entering');
-    current.card.classList.add('is-leaving');
+    current.entering = false;
+    current.leaving = true;
     leavingRecords.add(current);
+    render();
     current.exitTimer =
       globalRef.setTimeout?.(
         () => removeRecord(current),
@@ -807,10 +883,10 @@ export function createBhoteKoshiEmbeddedMedia({
 
   function clearWarm(key = null) {
     if (!warmRecord || (key && warmRecord.key !== key)) return;
-    if (warmRecord.facebookSession)
-      destroyFacebookSession(warmRecord.facebookSession);
-    else warmRecord.iframe?.remove?.();
+    const facebookSession = warmRecord.facebookSession;
     warmRecord = null;
+    if (facebookSession) destroyFacebookSession(facebookSession);
+    else render();
   }
 
   function takeWarmFacebook(key, host) {
@@ -850,25 +926,26 @@ export function createBhoteKoshiEmbeddedMedia({
       warmRecord = { key, facebookSession };
       return true;
     }
-    const iframe = documentRef.createElement('iframe');
-    iframe.className = 'bhote-embedded-media-warmup';
-    iframe.src = embeddedMediaFrameUrl(source, {
-      autoplay: false,
-      startAtSec,
-      endAtSec,
-    });
-    iframe.title = `Preloading ${providerLabel(source.provider)} media`;
-    iframe.tabIndex = -1;
-    iframe.setAttribute('aria-hidden', 'true');
-    iframe.loading = 'eager';
-    iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-    root.append(iframe);
-    warmRecord = { key, iframe };
+    warmRecord = {
+      key,
+      frame: {
+        src: embeddedMediaFrameUrl(source, {
+          autoplay: false,
+          startAtSec,
+          endAtSec,
+        }),
+        title: () =>
+          t('Preloading {provider} media', {
+            provider: providerLabel(source.provider),
+          }),
+      },
+    };
+    render();
     return true;
   }
 
   async function mountX(current, token) {
-    current.status.textContent = 'LOADING X POST…';
+    setStatus(current, () => t('LOADING X POST…'));
     try {
       const api = await xLoader(documentRef, globalRef);
       if (token !== generation || record !== current) return;
@@ -885,13 +962,19 @@ export function createBhoteKoshiEmbeddedMedia({
       );
       if (token !== generation || record !== current) return;
       if (!widget)
-        throw new Error('The X post is unavailable or cannot be embedded.');
-      current.status.textContent = 'X POST · PROVIDER CONTROLS';
+        throw new Error(
+          msg('The X post is unavailable or cannot be embedded.'),
+        );
+      setStatus(current, () => t('X POST · PROVIDER CONTROLS'));
       position();
     } catch (error) {
       if (token !== generation || record !== current) return;
-      current.card.classList.add('is-unavailable');
-      current.status.textContent = `${String(error?.message || 'X embed unavailable')} OPEN ORIGINAL.`;
+      current.unavailable = true;
+      setStatus(current, () =>
+        t('{reason} OPEN ORIGINAL.', {
+          reason: t(String(error?.message || msg('X embed unavailable'))),
+        }),
+      );
       position();
     }
   }
@@ -904,19 +987,25 @@ export function createBhoteKoshiEmbeddedMedia({
     session.shouldPlay = autoplay === true;
     session.onReady = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = 'FACEBOOK · PROVIDER CONTROLS';
-      current.card.classList.remove('is-unavailable');
+      current.status = () => t('FACEBOOK · PROVIDER CONTROLS');
+      setUnavailable(current, false);
       position();
     };
     session.onError = (error) => {
       if (token !== generation || record !== current) return;
-      current.card.classList.add('is-unavailable');
-      current.status.textContent = `${String(error?.message || 'Facebook embed unavailable')} OPEN ORIGINAL.`;
+      current.unavailable = true;
+      setStatus(current, () =>
+        t('{reason} OPEN ORIGINAL.', {
+          reason: t(
+            String(error?.message || msg('Facebook embed unavailable')),
+          ),
+        }),
+      );
       position();
     };
     session.onPlaybackBlocked = () => {
       if (token !== generation || record !== current) return;
-      current.status.textContent = 'AUTOPLAY BLOCKED · USE PROVIDER CONTROLS';
+      setStatus(current, () => t('AUTOPLAY BLOCKED · USE PROVIDER CONTROLS'));
     };
     if (session.ready) session.onReady();
     else if (session.error) session.onError(session.error);
@@ -962,85 +1051,69 @@ export function createBhoteKoshiEmbeddedMedia({
     if (warmRecord && warmRecord.key !== warmKey) clearWarm();
     hide({ preserveWarm: true });
     const token = ++generation;
-    const card = documentRef.createElement('section');
-    const portraitClass = isPortraitMedia(media) ? ' is-portrait' : '';
-    card.className = `bhote-embedded-callout is-${source.provider}${portraitClass}`;
-    card.dataset.provider = source.provider;
-    card.setAttribute(
-      'aria-label',
-      `Embedded ${providerLabel(source.provider)} media for ${observation?.title || 'witness source'}`,
-    );
-    const leader = documentRef.createElementNS(
-      'http://www.w3.org/2000/svg',
-      'svg',
-    );
-    leader.classList.add('bhote-embedded-callout-leader');
-    leader.setAttribute('aria-hidden', 'true');
-    leader.innerHTML =
-      '<path pathLength="1" fill="none" stroke="rgba(147,213,228,.72)" stroke-width="1.5"/><circle r="4" fill="#6be8ff" stroke="#ffffff" stroke-width="1.5"/>';
-    const player = documentRef.createElement('div');
-    player.className = 'bhote-embedded-callout-player';
-    const footer = documentRef.createElement('footer');
-    const title = documentRef.createElement('strong');
-    title.textContent = String(
-      observation?.shortTitle || observation?.title || 'Witness source',
-    ).toUpperCase();
-    const status = documentRef.createElement('small');
-    status.setAttribute('role', 'status');
-    status.textContent = `${providerLabel(source.provider)} · EMBEDDED SOURCE`;
-    const link = documentRef.createElement('a');
-    link.href = source.url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = 'OPEN ORIGINAL ↗';
-    footer.append(title, status, link);
-    const body = documentRef.createElement('div');
-    body.className = 'bhote-embedded-callout-body';
-    body.append(player, footer);
-    card.append(leader, body);
-    root.append(card);
-    record = {
+    const providerName = () => providerLabel(source.provider);
+    const sourceName = () =>
+      observation?.title
+        ? bhoteEventText(observation.title)
+        : t('witness source');
+    const current = {
+      id: ++_cardSequence,
       key,
       source,
       anchor,
-      card,
-      leader,
-      player,
-      status,
+      portrait: isPortraitMedia(media),
+      entering: false,
+      leaving: false,
+      unavailable: false,
+      label: () =>
+        t('Embedded {provider} media for {source}', {
+          provider: providerName(),
+          source: sourceName(),
+        }),
+      title: () =>
+        bhoteEventText(
+          observation?.shortTitle || observation?.title || t('Witness source'),
+        ).toUpperCase(),
+      status: () =>
+        t('{provider} · EMBEDDED SOURCE', { provider: providerName() }),
+      frame: null,
+      frameElement: null,
+      card: null,
+      leader: null,
+      player: null,
       entered: false,
     };
-
-    if (source.provider === 'x') {
-      void mountX(record, token);
-    } else if (source.provider === 'facebook') {
-      bindFacebook(record, token, warmKey, autoplay);
-    } else {
-      const iframe = documentRef.createElement('iframe');
-      iframe.src = embeddedMediaFrameUrl(source, {
-        autoplay,
-        startAtSec,
-        endAtSec,
-      });
-      const controlled =
+    // The elements the card's view draws: placed after each frame, filled by
+    // the provider.
+    current.bind = (name, element) => {
+      if (element) current[name] = element;
+    };
+    let controlled = false;
+    if (source.provider === 'youtube') {
+      const url = new URL(
+        embeddedMediaFrameUrl(source, {
+          autoplay,
+          startAtSec,
+          endAtSec,
+        }),
+      );
+      controlled =
         autoplay &&
         Number.isFinite(Number(endAtSec)) &&
         Number(endAtSec) > startAtSec;
       if (controlled) {
-        const url = new URL(iframe.src);
         url.searchParams.set('enablejsapi', '1');
         if (globalRef.location?.origin)
           url.searchParams.set('origin', globalRef.location.origin);
-        iframe.src = url.href;
       }
-      iframe.title = `${providerLabel(source.provider)} media: ${observation?.title || 'witness source'}`;
-      iframe.allow =
-        'autoplay; encrypted-media; picture-in-picture; fullscreen';
-      iframe.allowFullscreen = true;
-      iframe.loading = 'eager';
-      iframe.referrerPolicy = 'strict-origin-when-cross-origin';
-      iframe.addEventListener?.(
-        'load',
-        () => {
+      current.frame = {
+        src: url.href,
+        title: () =>
+          t('{provider} media: {source}', {
+            provider: providerName(),
+            source: sourceName(),
+          }),
+        onLoad: () => {
           if (token !== generation || record?.key !== key) return;
           clearWarm(warmKey);
           if (
@@ -1049,38 +1122,54 @@ export function createBhoteKoshiEmbeddedMedia({
               record.youtubeSession.getState().phase,
             )
           ) {
-            status.textContent = `${providerLabel(source.provider)} · PROVIDER CONTROLS`;
+            setStatus(current, () =>
+              t('{provider} · PROVIDER CONTROLS', { provider: providerName() }),
+            );
           }
           position();
         },
-        { once: true },
-      );
-      player.append(iframe);
-      if (controlled) {
-        const current = record;
-        current.youtubeSession = createTrimmedYouTubePlayback({
-          iframe,
-          endAtSec: Number(endAtSec),
-          startAtSec,
-          globalRef,
-          loadApi: () => youtubeLoader(documentRef, globalRef),
-          isCurrent: () => token === generation && record === current,
-          onStatus: (phase) => {
-            if (phase !== 'completed')
-              status.textContent = `YOUTUBE ${phase.toUpperCase()} · OPEN ORIGINAL`;
-          },
-        });
-      }
+      };
+    }
+    record = current;
+    cards.push(current);
+    render();
+
+    if (source.provider === 'x') {
+      void mountX(current, token);
+    } else if (source.provider === 'facebook') {
+      bindFacebook(current, token, warmKey, autoplay);
+    } else if (controlled) {
+      current.youtubeSession = createTrimmedYouTubePlayback({
+        iframe: current.frameElement,
+        endAtSec: Number(endAtSec),
+        startAtSec,
+        globalRef,
+        loadApi: () => youtubeLoader(documentRef, globalRef),
+        isCurrent: () => token === generation && record === current,
+        onStatus: (phase) => {
+          if (phase !== 'completed')
+            setStatus(current, () =>
+              t('YOUTUBE {state} · OPEN ORIGINAL', {
+                state: YOUTUBE_PHASE_LABELS[phase]
+                  ? t(YOUTUBE_PHASE_LABELS[phase])
+                  : phase.toUpperCase(),
+              }),
+            );
+        },
+      });
     }
     position();
     return true;
   }
 
   function destroy() {
+    offLocale();
     hide({ immediate: true });
     for (const current of [...leavingRecords]) removeRecord(current);
     clearWarm();
     removePostRender?.();
+    destroyed = true;
+    renderVue(null, root);
     root.remove();
   }
 
