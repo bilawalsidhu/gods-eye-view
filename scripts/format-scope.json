@@ -1710,5 +1710,6 @@
   "src/ui/livePanel.test.mjs",
   "src/ui/stationPanel.test.mjs",
   "src/ui/styles/live.css",
-  "src/ui/styles/station.css"
+  "src/ui/styles/station.css",
+  "src/layers/flights/tracking.test.mjs"
 ]

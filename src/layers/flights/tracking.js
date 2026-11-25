@@ -1261,7 +1261,13 @@ export function createTracking({
       flightState.feed._count = icons.count;
     } else if (icons.show) {
       // Fire-and-forget refresh; only while the layer is actually enabled.
-      void flightsLayer.update(flightState._viewer);
+      // Context restoration can disable Flights before this refresh settles.
+      void Promise.resolve(flightsLayer.update(flightState._viewer)).catch(
+        (error) => {
+          if (error?.name === 'AbortError') return;
+          console.warn('[Data:Flights] Military handoff refresh error:', error);
+        },
+      );
     }
   }
 
