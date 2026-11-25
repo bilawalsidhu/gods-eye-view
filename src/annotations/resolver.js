@@ -14,7 +14,6 @@ import {
   nearestPointOnLines,
 } from '../sources/featureGeometry.js';
 import { defaultGeospatial } from '../search/defaults.js';
-import * as Cesium from 'cesium';
 import { lookupNeighborhoodRing } from '../data/neighborhoodPolygons.js';
 import {
   lookupNaturalRegionOutline,
@@ -45,6 +44,9 @@ import {
 import { createOutlineRungs } from './outlineRungs.js';
 import { unavailablePlaceSearch } from '../search/placeSearch.js';
 import { isPickedWorldPosition } from '../data/scenePick.js';
+import { heightsOf } from '../queries/heights.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { canvasOf, findCamera, findQuery } from '../render/rendererOf.js';
 
 /** Prepare only local dateline outlines for planar admission and centering. */
 function localOutlineFrame(fp) {
@@ -178,7 +180,7 @@ export function createAnnotationResolver({
    * Resolve a single annotation target to a normalized world anchor.
    *
    * @param {object} opts
-   * @param {Cesium.Viewer} opts.viewer
+   * @param {object} opts.viewer The viewer the renderer is bound to.
    * @param {string} [opts.target]      Place name to geocode.
    * @param {number} [opts.latitude]    Explicit latitude (wins over target).
    * @param {number} [opts.longitude]   Explicit longitude.
@@ -2216,11 +2218,10 @@ export function createAnnotationResolver({
    */
   function viewportProximity(viewer) {
     try {
-      const carto = viewer?.camera?.positionCartographic;
-      if (!carto) return null;
-      const lat = Cesium.Math.toDegrees(carto.latitude);
-      const lon = Cesium.Math.toDegrees(carto.longitude);
-      const radiusKm = Math.max((carto.height / 1000) * 3, 5);
+      const pose = viewer ? findCamera(viewer)?.pose() : null;
+      if (!pose) return null;
+      const { lat, lon } = pose;
+      const radiusKm = Math.max((pose.height / 1000) * 3, 5);
       if (![lat, lon, radiusKm].every(Number.isFinite)) return null;
       return { lat, lon, radiusKm };
     } catch {
@@ -2231,12 +2232,12 @@ export function createAnnotationResolver({
   /** Exported for searchAndFlyTo (src/locations.js), which shares this bias. */
   function viewportBias(viewer) {
     try {
-      const rect = viewer?.camera?.computeViewRectangle?.();
+      const rect = viewer ? findCamera(viewer)?.viewRectangle() : null;
       if (!rect) return null;
-      const swLat = Cesium.Math.toDegrees(rect.south).toFixed(4);
-      const swLng = Cesium.Math.toDegrees(rect.west).toFixed(4);
-      const neLat = Cesium.Math.toDegrees(rect.north).toFixed(4);
-      const neLng = Cesium.Math.toDegrees(rect.east).toFixed(4);
+      const swLat = rect.south.toFixed(4);
+      const swLng = rect.west.toFixed(4);
+      const neLat = rect.north.toFixed(4);
+      const neLng = rect.east.toFixed(4);
       if ([swLat, swLng, neLat, neLng].some((v) => v === 'NaN')) return null;
       return `${swLat},${swLng}|${neLat},${neLng}`;
     } catch {
@@ -2289,58 +2290,39 @@ export function createAnnotationResolver({
    * name the place, and we anchor the mark to the actual world point under it.
    */
   function pickWorldFromScreen(viewer, nx, ny) {
-    const scene = viewer?.scene;
-    if (!scene) return null;
-    const canvas = scene.canvas;
+    const query = viewer ? findQuery(viewer) : null;
+    // The renderer's canvas; a viewer with no renderer bound, its own.
+    const canvas = canvasOf(viewer);
+    if (!query || !canvas) return null;
     const w = canvas.clientWidth || canvas.width || 0;
     const h = canvas.clientHeight || canvas.height || 0;
     if (!w || !h) return null;
     const px = Math.max(0, Math.min(1, nx)) * w;
     const py = Math.max(0, Math.min(1, ny)) * h;
-    const pos = new Cesium.Cartesian2(px, py);
 
     // Each stage is validated before it is accepted: a depth pick over empty sky
-    // can return a NaN or centre-of-the-earth Cartesian, and converting one of
-    // those throws inside Cesium. A degenerate pick IS a missed pick, so it falls
-    // through to the next stage and ultimately to the caller's null.
-    let cart = null;
-    if (
-      scene.pickPositionSupported &&
-      typeof scene.pickPosition === 'function'
-    ) {
+    // can return a NaN or centre-of-the-earth position, and converting one of
+    // those throws inside the renderer. A degenerate pick IS a missed pick, so it
+    // falls through to the next stage and ultimately to the caller's null.
+    const attempt = (pick) => {
       try {
-        cart = scene.pickPosition(pos);
+        return pick();
       } catch {
-        cart = null;
+        return null;
       }
-    }
-    if (
-      !isPickedWorldPosition(cart) &&
-      typeof viewer.camera.pickEllipsoid === 'function'
-    ) {
-      try {
-        cart = viewer.camera.pickEllipsoid(pos, Cesium.Ellipsoid.WGS84);
-      } catch {
-        cart = null;
-      }
-    }
-    if (
-      !isPickedWorldPosition(cart) &&
-      typeof viewer.camera.getPickRay === 'function'
-    ) {
-      try {
-        const ray = viewer.camera.getPickRay(pos);
-        cart = ray ? scene.globe?.pick(ray, scene) || null : null;
-      } catch {
-        cart = null;
-      }
-    }
+    };
+    // The depth pick answers null where the renderer has no depth support.
+    let cart = attempt(() => query.pickPosition(px, py));
+    if (!isPickedWorldPosition(cart))
+      cart = attempt(() => query.pickEllipsoid(px, py));
+    if (!isPickedWorldPosition(cart))
+      cart = attempt(() => query.pickGlobe(query.pickRay(px, py)));
     if (!isPickedWorldPosition(cart)) return null;
-    const carto = Cesium.Cartographic.fromCartesian(cart);
+    const carto = toLonLatH(cart);
     if (!carto) return null;
     return {
-      lat: Cesium.Math.toDegrees(carto.latitude),
-      lon: Cesium.Math.toDegrees(carto.longitude),
+      lat: carto.lat,
+      lon: carto.lon,
       // The height the pick actually landed on — a roof, a hillside, or 0 on
       // the ellipsoid. Callers that only want a coordinate ignore it; the draw
       // tool's live preview needs it, or the rubber band sinks to sea level
@@ -2355,28 +2337,18 @@ export function createAnnotationResolver({
    * the tiles for that spot aren't loaded we fall back to the ellipsoid (0).
    */
   function sampleGroundHeight(viewer, lon, lat) {
-    const scene = viewer?.scene;
-    if (!scene) return 0;
-    try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const carto = Cesium.Cartographic.fromDegrees(lon, lat);
-        const surface = Cesium.Cartographic.toCartesian(carto);
-        const clamped = scene.clampToHeight(surface);
-        if (clamped) {
-          const h = Cesium.Cartographic.fromCartesian(clamped).height;
-          if (Number.isFinite(h)) return h;
-        }
+    if (!viewer) return 0;
+    const heights = heightsOf(viewer);
+    // A miss is tiles not ready: fall through to the terrain, then 0.
+    if (heights.supported().clamp) {
+      const clamped = heights.clampNow(fromDegrees(lon, lat, 0));
+      if (clamped) {
+        const h = toLonLatH(clamped)?.height;
+        if (Number.isFinite(h)) return h;
       }
-    } catch {
-      /* tiles not ready — fall through */
     }
-    const globeHeight = scene.globe?.getHeight?.(
-      Cesium.Cartographic.fromDegrees(lon, lat),
-    );
-    return Number.isFinite(globeHeight) && globeHeight > 0 ? globeHeight : 0;
+    const globeHeight = heights.now({ lon, lat }, { against: 'terrain' });
+    return globeHeight !== null && globeHeight > 0 ? globeHeight : 0;
   }
 
   function shortLabel(formattedAddress) {

@@ -92,12 +92,6 @@ html:lang(he) :is(#intel-hud, #cockpit-hud) {
     left: var(--right-rail-x);
   }
 }
-@media (min-width: 961px) and (min-height: 650px) {
-  html[dir='rtl'][data-ui-theme='cyber'] #right-context-rail {
-    right: auto;
-    left: calc(51px + var(--panel-rail-clearance));
-  }
-}
 
 /* The dock's wings swap sides (Location on the right, Visual presets on the
    left), so each slide-up tray is anchored from the wing's outer edge and
@@ -131,15 +125,9 @@ html[dir='rtl'] #command-dock :is(#location-bar, #control-panel) .dock-pin-btn {
 }
 
 /* The right rail sits on the left: its expand/collapse arrows point the
-   other way, and the start window's "go" arrows point along the reading
-   direction. */
-html[dir='rtl'] #right-context-rail .panel-collapse-btn,
-html[dir='rtl'] .first-run-arrow {
+   other way. (The first-run card flips its own arrow in first-run.css.) */
+html[dir='rtl'] #right-context-rail .panel-collapse-btn {
   transform: scaleX(-1);
-}
-html[dir='rtl'] .first-run-choices button:hover .first-run-arrow,
-html[dir='rtl'] .first-run-choices button:focus-visible .first-run-arrow {
-  transform: translateX(-2px) scaleX(-1);
 }
 
 /* The cockpit is an aircraft panel, not page chrome: its windows keep their
@@ -241,4 +229,48 @@ html[dir='rtl'] select.gev-field--compact {
    to high from left to right; the numbers keep that order. */
 html[dir='rtl'] .rail-card-scale {
   direction: ltr;
+}
+
+/* ── Side rails, mirrored ──────────────────────────────────────────────
+   The left stack sits on the right edge, so the left rail's name panel
+   opens to its left and the right rail's to its right, each toward the
+   middle of the screen, as they do in left-to-right. */
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded::after {
+  right: calc(100% + 6px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--left .ui-rail--expanded .ui-rail__label {
+  right: calc(100% + 24px);
+  left: auto;
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded::after {
+  right: auto;
+  left: calc(100% + 6px);
+}
+html[dir='rtl'] .gev-panel-rail--right .ui-rail--expanded .ui-rail__label {
+  right: auto;
+  left: calc(100% + 24px);
+}
+
+/* Panels moved to the screen edge slide over their rail toward that edge. */
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail) {
+  transform: translateX(var(--panel-rail-clearance, 48px));
+}
+html[dir='rtl']
+  body.panels-edge-left:not(.mobile-shell):not(.cockpit-mode)
+  #left-panel-stack
+  > :not(.gev-panel-rail):not(.collapsed) {
+  transform: translate(var(--panel-rail-clearance, 48px), var(--edge-rail-row));
+}
+html[dir='rtl']
+  body.panels-edge-right:not(.mobile-shell):not(.cockpit-mode)
+  #right-context-rail
+  > :not(.gev-panel-rail) {
+  transform: translate(
+    calc(-1 * var(--panel-rail-clearance, 48px)),
+    var(--edge-rail-row)
+  );
 }

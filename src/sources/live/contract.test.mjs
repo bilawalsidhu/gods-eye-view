@@ -168,6 +168,22 @@ test('readsb units and position/contact ages are normalized once against the sou
   );
 });
 
+test('a readsb aircraft with no track takes its true heading, never its magnetic one', () => {
+  const course = (extra) =>
+    normalizeReadsbAircraft(
+      { hex: 'a4418c', lat: 37.6, lon: -122.38, alt_baro: 'ground', ...extra },
+      now,
+    ).courseDeg;
+  assert.equal(
+    course({ track: 56.25, true_heading: 40 }),
+    56.25,
+    'track first',
+  );
+  assert.equal(course({ true_heading: 185.62 }), 185.62, 'true heading');
+  assert.equal(course({ mag_heading: 278.44 }), null, 'not magnetic');
+  assert.equal(course({}), null, 'none');
+});
+
 test('readsb vertical rate falls back to the GNSS rate when no baro rate is sent', () => {
   // readsb reports the rate under geom_rate when the aircraft's source is
   // GNSS; 26 of 157 positioned rows in a live /v2/mil fetch had only that.
@@ -205,6 +221,18 @@ test('vessel identity, opaque reference and heading/course remain distinct, unkn
   assert.equal(row.altitudeDatum, 'sea-surface');
   assert.equal(row.observedAtMs, now);
   assert.equal('extra' in row, false);
+  // Only a source's own true marks a virtual aid to navigation.
+  assert.equal(row.virtual, false);
+  const base = { mmsi: '993672001', lat: 30, lon: -97 };
+  assert.equal(
+    normalizeVesselObservation({ ...base, virtual: true }).virtual,
+    true,
+  );
+  for (const virtual of ['true', 1, false, null])
+    assert.equal(
+      normalizeVesselObservation({ ...base, virtual }).virtual,
+      false,
+    );
   assert.equal(
     normalizeVesselObservation({ mmsi: 'x', lat: null, lon: null }),
     null,
@@ -585,4 +613,45 @@ test('a vessel with no name is not named by its id; a ten-digit MMSI is an MMSI'
     ['1234567890', '1234567890'],
   );
   assert.equal(named.name, 'EVER GIVEN');
+});
+
+test('aircraft a feed names as estimated are marked estimated, and only those', () => {
+  const row = (id) => [id, 'TEST1', 'US', 1, 1, -77, 39, 1000, false, 100, 90];
+  const vectors = openSkySnapshot({
+    time: 1,
+    states: [row('abc123'), row('def456')],
+    estimatedByIcao: ['ABC123', 'zzz999'],
+  }).records;
+  assert.equal(vectors[0].estimated, true);
+  assert.equal('estimated' in vectors[1], false);
+  assert.equal(
+    'estimated' in openSkySnapshot({ states: [row('abc123')] }).records[0],
+    false,
+  );
+  const rows = readsbSnapshot(
+    {
+      ac: [
+        { hex: 'abc123', lat: 39, lon: -77, estimated: true },
+        { hex: 'def456', lat: 39, lon: -77 },
+      ],
+    },
+    { observedAtMs: null },
+  ).records;
+  assert.equal(rows[0].estimated, true);
+  assert.equal('estimated' in rows[1], false);
+});
+
+test('a type sent alongside the state vectors becomes the record type code', () => {
+  const row = (id) => [id, 'TEST1', 'US', 1, 1, -77, 39, 1000, false, 100, 90];
+  const snapshot = openSkySnapshot({
+    time: 1,
+    states: [row('abc123'), row('def456')],
+    typeByIcao: { abc123: ' ec45 ', zzz999: 'B738' },
+  });
+  assert.equal(snapshot.records[0].typeCode, 'EC45');
+  assert.equal(snapshot.records[1].typeCode, null);
+  assert.equal(
+    openSkySnapshot({ states: [row('abc123')] }).records[0].typeCode,
+    null,
+  );
 });

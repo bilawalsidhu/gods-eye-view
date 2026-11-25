@@ -1,3 +1,6 @@
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
+import { bindRenderer } from '../render/rendererOf.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
@@ -8,6 +11,11 @@ import {
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { setLocale } from '../i18n/index.js';
+import {
+  registerPickOwner,
+  setClickCardHitTest,
+  unregisterPickOwner,
+} from './pickRegistry.js';
 import { SceneDirector } from '../scenes/director.js';
 import { createPlaybackClock } from '../director/clock.js';
 import { createDefaultScenePacks } from '../scenes/packs/defaults.js';
@@ -24,32 +32,58 @@ import {
   createBhoteKoshiLocatorLayer,
   largestGeoJsonRing,
   NEPAL_CONTEXT_PRESENTATION,
-  revealPolylinePositions,
+  revealLengthFraction,
 } from './bhoteKoshiLocator.js';
 
-function viewerFixture() {
-  const added = [];
-  const removed = [];
-  return {
+/**
+ * A viewer with a fake draw port bound; with `camera`, the Cesium camera
+ * port over that fake camera too. `_test` reads what is drawn: every live
+ * item by id (`drawn`), and `sets` of the layer.
+ */
+function viewerFixture({ camera } = {}) {
+  const draw = fakeDrawPort();
+  const viewer = {
     creditDisplay: { addStaticCredit() {}, removeStaticCredit() {} },
-    dataSources: {
-      add(source) {
-        added.push(source);
-      },
-      remove(source) {
-        removed.push(source);
-      },
-    },
-    _test: { added, removed },
   };
+  if (camera) {
+    viewer.camera = camera;
+    bindFakeCesiumCamera(viewer, { draw });
+  } else bindRenderer(viewer, { draw });
+  const live = () =>
+    [...draw.sets.values()].filter(
+      (set) => !set.disposed && set.spec.id.startsWith('bhote-koshi-locator:'),
+    );
+  viewer._test = {
+    draw,
+    live,
+    /** Every live item, by id. */
+    drawn() {
+      const items = new Map();
+      for (const set of live())
+        for (const [id, item] of set.items) items.set(id, item);
+      return items;
+    },
+    ids: () => [...viewer._test.drawn().keys()],
+    item: (id) => viewer._test.drawn().get(id),
+  };
+  return viewer;
 }
 
+/** Frames that run only when a test ticks them. */
 function nonRunningAnimation() {
+  let queued = [];
   return {
-    scheduleFrame() {
-      return 1;
+    scheduleFrame(callback) {
+      queued.push(callback);
+      return queued.length;
     },
     cancelFrame() {},
+    /** Run the frames asked for so far (each asks for its next). */
+    tick() {
+      const run = queued;
+      queued = [];
+      for (const callback of run) callback();
+    },
   };
 }
 
@@ -132,21 +166,18 @@ test('Bhote Koshi locator selects the largest GeoJSON country exterior', () => {
   );
 });
 
-test('Bhote Koshi locator reveals a border progressively', () => {
+test('Bhote Koshi locator reveals a border progressively, vertex by vertex', () => {
   const positions = [
-    new Cesium.Cartesian3(0, 0, 0),
-    new Cesium.Cartesian3(10, 0, 0),
-    new Cesium.Cartesian3(20, 0, 0),
+    { x: 0, y: 0, z: 0 },
+    { x: 10, y: 0, z: 0 },
+    { x: 40, y: 0, z: 0 },
   ];
-  assert.deepEqual(revealPolylinePositions(positions, 0), [
-    positions[0],
-    positions[0],
-  ]);
-  assert.deepEqual(revealPolylinePositions(positions, 0.25), [
-    positions[0],
-    new Cesium.Cartesian3(5, 0, 0),
-  ]);
-  assert.equal(revealPolylinePositions(positions, 1), positions);
+  assert.equal(revealLengthFraction(positions, 0), 0);
+  // A quarter of the vertices: halfway along the first, shorter segment.
+  assert.equal(revealLengthFraction(positions, 0.25), 5 / 40);
+  assert.equal(revealLengthFraction(positions, 0.75), 25 / 40);
+  assert.equal(revealLengthFraction(positions, 1), 1);
+  assert.equal(revealLengthFraction(positions.slice(0, 1), 0.5), 0);
 });
 
 test('Bhote Koshi locator stages its anchored callout from dot to leader to text', () => {
@@ -169,6 +200,7 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   const overlayHost = overlayHostFixture();
   const renders = [];
   let nowMs = 0;
+  const frames = nonRunningAnimation();
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => ({
       name: 'Nepal',
@@ -182,24 +214,29 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
     requestRender: (reason) => renders.push(reason),
     overlayHost,
     now: () => nowMs,
-    ...nonRunningAnimation(),
+    ...frames,
   });
 
   assert.equal(await layer.init(viewer), true);
   assert.equal(await layer.enable(viewer, { origin: 'scene' }), true);
-  assert.equal(viewer._test.added.length, 1);
-  const source = viewer._test.added[0];
-  const ids = source.entities.values.map((entity) => entity.id);
+  const sets = viewer._test.live();
+  assert.deepEqual(
+    sets.map(({ kind }) => kind),
+    ['shapes', 'lines', 'points'],
+    'the fill under the lines under the halos',
+  );
+  assert.ok(sets.every(({ spec }) => spec.pickable === false));
+  // The fill is drawn once it is due, below.
+  const ids = viewer._test.ids();
   for (const id of [
     'nepal-context-halo',
-    'nepal-border-fill',
     'nepal-border-highlight',
     'bhote-koshi-incident-halo',
   ]) {
     assert.ok(ids.includes(id), `${id} belongs to the regional sequence`);
   }
-  const incidentHalo = source.entities.getById('bhote-koshi-incident-halo');
-  const border = source.entities.getById('nepal-border-highlight');
+  const incidentHalo = () => viewer._test.item('bhote-koshi-incident-halo');
+  const border = () => viewer._test.item('nepal-border-highlight');
   const publication = overlayHost._test.publications.at(-1);
   assert.equal(publication.sourceId, BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID);
   assert.equal(publication.entries.length, 2);
@@ -225,15 +262,31 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   assert.equal(incident.contentAlpha(), 0);
   assert.equal(incident.presentationScale(), 0.96);
   assert.equal(nepal.sourceAlpha(), 0);
-  assert.ok(border.polyline.positions.getValue().length < 5);
-  assert.equal(incidentHalo.show.getValue(), false);
-  assert.equal(incidentHalo.point.pixelSize.getValue(), 16);
+  assert.equal(border().revealFraction, 0);
+  assert.equal(border().mode, 'draped');
+  assert.equal(border().positions.length, 5);
+  assert.equal(viewer._test.item('nepal-border-fill'), undefined);
+  assert.equal(incidentHalo().show, false);
+  assert.equal(incidentHalo().pixelSize, 16);
+  nowMs = 800;
+  frames.tick();
+  const fill = viewer._test.item('nepal-border-fill');
+  assert.equal(fill.height, 'clampGround', 'the fill, due, drapes');
+  assert.equal(fill.geometry.rings[0].length, 4);
+  assert.ok(border().revealFraction > 0 && border().revealFraction < 0.1);
   nowMs = 3100;
+  frames.tick();
   assert.equal(nepal.sourceAlpha(), 1);
-  assert.equal(border.polyline.positions.getValue().length, 5);
-  assert.equal(incidentHalo.show.getValue(), false);
+  assert.equal(border().revealFraction, 1);
+  assert.equal(incidentHalo().show, false);
+  const lines = sets.find(({ kind }) => kind === 'lines');
+  const lineWrites = lines.writes;
   nowMs = 3300;
-  assert.equal(incidentHalo.show.getValue(), true);
+  frames.tick();
+  frames.tick();
+  assert.equal(lines.writes, lineWrites, 'settled lines are not drawn again');
+  assert.equal(incidentHalo().show, true);
+  assert.equal(incidentHalo().disableDepthTest, Number.POSITIVE_INFINITY);
   assert.equal(incident.sourceAlpha(), 0);
   nowMs = 4500;
   assert.equal(incident.sourceAlpha(), 1);
@@ -247,7 +300,7 @@ test('Bhote Koshi regional locator sequences Nepal, border, then the incident', 
   assert.ok(renders.includes('bhote-koshi-locator-boundary'));
 
   assert.equal(await layer.disable(), true);
-  assert.equal(viewer._test.removed.length, 1);
+  assert.equal(viewer._test.live().length, 0, 'its sets let go');
   assert.equal(
     overlayHost._test.clears.at(-1),
     BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
@@ -275,10 +328,7 @@ test('Bhote Koshi locator switches between Nepal context and the regional incide
 
   layer.setParams({ presentation: NEPAL_CONTEXT_PRESENTATION });
   await layer.enable(viewer);
-  assert.deepEqual(
-    viewer._test.added[0].entities.values.map((entity) => entity.id),
-    ['nepal-context-halo'],
-  );
+  assert.deepEqual(viewer._test.ids(), ['nepal-context-halo']);
   const nepalLabel = overlayHost._test.publications.at(-1).entries[0];
   assert.equal(nepalLabel.variant, 'label');
   assert.equal(nepalLabel.placement, 'right');
@@ -298,11 +348,8 @@ test('Bhote Koshi locator switches between Nepal context and the regional incide
   );
 
   layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
-  assert.ok(viewer._test.added[0].entities.getById('nepal-border-highlight'));
-  assert.equal(
-    viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'),
-    undefined,
-  );
+  assert.ok(viewer._test.item('nepal-border-highlight'));
+  assert.equal(viewer._test.item('bhote-koshi-city-kathmandu'), undefined);
   assert.equal(
     overlayHost._test.publications
       .at(-1)
@@ -311,10 +358,7 @@ test('Bhote Koshi locator switches between Nepal context and the regional incide
   );
 
   layer.setParams({ presentation: NEPAL_CONTEXT_PRESENTATION });
-  assert.deepEqual(
-    viewer._test.added[0].entities.values.map((entity) => entity.id),
-    ['nepal-context-halo'],
-  );
+  assert.deepEqual(viewer._test.ids(), ['nepal-context-halo']);
   await layer.destroy();
 });
 
@@ -336,7 +380,10 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
   });
   layer.setParams({ presentation: BHOTE_KOSHI_INCIDENT_PLACES_PRESENTATION });
   await layer.enable(viewer);
-  const source = viewer._test.added[0];
+  const tick = () => {
+    const frame = pulseFrame;
+    frame?.();
+  };
   const event = JSON.parse(
     await readFile(
       new URL(
@@ -348,7 +395,7 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
   );
   assert.equal(event.evidenceSpine.length, 16);
   assert.equal(event.evidenceSpine.at(-1).id, 'charaudi');
-  assert.equal(source.entities.values.length, 15);
+  assert.equal(viewer._test.ids().length, 15);
   const labels = overlayHost._test.publications.at(-1).entries;
   assert.equal(labels.length, 15);
   assert.equal(overlayHost._test.publications.at(-1).options.moving, true);
@@ -371,10 +418,11 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
     nowMs = 349 + index * 650;
     assert.equal(pin.sourceAlpha(), 0);
     nowMs += 1;
+    tick();
     assert.equal(pin.sourceAlpha(), 0);
     assert.equal(
-      source.entities.values.filter(
-        (entity) => entity.id.endsWith('-halo') && entity.show.getValue(),
+      [...viewer._test.drawn().values()].filter(
+        (item) => item.id.endsWith('-halo') && item.show,
       ).length,
       1,
     );
@@ -384,10 +432,10 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
   assert.ok(nowMs < INCIDENT_OVERVIEW_HOLD_SEC * 1000);
   // A repeat halo cycle must not erase already revealed labels.
   nowMs = 350 + 15 * 650;
+  tick();
   assert.equal(
-    source.entities
-      .getById('bhote-koshi-place-immediate-collapse-viewpoint-halo')
-      .show.getValue(),
+    viewer._test.item('bhote-koshi-place-immediate-collapse-viewpoint-halo')
+      .show,
     true,
   );
   assert.equal(
@@ -405,9 +453,7 @@ test('Incident Corridor reveals all fifteen overview pins and keeps layout activ
   assert.equal(overlayHost._test.publications.at(-1).options.moving, false);
   layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
   assert.equal(
-    source.entities.values.some((entity) =>
-      entity.id.startsWith('bhote-koshi-place-'),
-    ),
+    viewer._test.ids().some((id) => id.startsWith('bhote-koshi-place-')),
     false,
   );
   await layer.destroy();
@@ -457,18 +503,18 @@ test('Bhote Koshi flood path draws a solid cyan sourced route after the place sh
   const viewer = viewerFixture();
   const overlayHost = overlayHostFixture();
   let nowMs = 0;
+  const frames = nonRunningAnimation();
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => null,
     requestRender() {},
     overlayHost,
     now: () => nowMs,
-    ...nonRunningAnimation(),
+    ...frames,
   });
 
   layer.setParams({ presentation: BHOTE_KOSHI_FLOOD_PATH_PRESENTATION });
   await layer.enable(viewer);
-  const source = viewer._test.added[0];
-  const path = source.entities.getById('bhote-koshi-flood-path');
+  const path = () => viewer._test.item('bhote-koshi-flood-path');
   const labels = overlayHost._test.publications.at(-1).entries;
   const trigger = labels.find(
     ({ id }) => id === 'bhote-koshi-place-immediate-collapse-viewpoint',
@@ -477,46 +523,56 @@ test('Bhote Koshi flood path draws a solid cyan sourced route after the place sh
     ({ id }) => id === 'bhote-koshi-place-bidur-trishuli-bridge',
   );
 
-  assert.equal(source.entities.values.length, 1);
+  assert.equal(viewer._test.ids().length, 1);
   assert.equal(labels.length, 15);
   assert.equal(bidur.title, '14 · BIDUR BRIDGE');
   for (const place of INCIDENT_OVERVIEW_PLACES) {
     const pin = labels.find(({ id }) => id === `bhote-koshi-place-${place.id}`);
     assert.equal(pin.sourceAlpha(), 1, place.id);
   }
-  assert.equal(path.polyline.clampToGround.getValue(), true);
-  assert.ok(path.polyline.material instanceof Cesium.ColorMaterialProperty);
+  assert.equal(path().mode, 'draped');
+  assert.equal(path().clampTo, 'both');
+  assert.equal(path().widthPx, 3.5);
+  assert.equal(path().style.kind, 'solid');
+  const color = Cesium.Color.fromCssColorString('#20e7f2').withAlpha(0.96);
   assert.ok(
-    path.polyline.material.color
-      .getValue()
-      .equalsEpsilon(
-        Cesium.Color.fromCssColorString('#20e7f2').withAlpha(0.96),
+    path().style.color.every(
+      (value, i) =>
+        Math.abs(value - Cesium.Color.pack(color, [])[i]) <
         Cesium.Math.EPSILON7,
-      ),
+    ),
   );
-  assert.equal(path.show.getValue(), false);
+  assert.equal(path().show, false);
   assert.equal(trigger.sourceAlpha(), 1);
   assert.equal(bidur.sourceAlpha(), 1);
 
   nowMs = 250;
-  assert.equal(path.show.getValue(), true);
-  assert.equal(path.polyline.positions.getValue().length, 2);
+  frames.tick();
+  assert.equal(path().show, true);
+  assert.equal(path().revealFraction, 0);
   nowMs = 2250;
-  const halfwayCount = path.polyline.positions.getValue().length;
-  assert.ok(Math.abs(halfwayCount - BHOTE_KOSHI_FLOOD_PATH.length / 2) <= 2);
+  frames.tick();
+  // Halfway through its vertices.
+  const positions = path().positions;
+  assert.equal(path().revealFraction, revealLengthFraction(positions, 0.5));
+  assert.ok(path().revealFraction > 0.2 && path().revealFraction < 0.8);
   nowMs = 4250;
-  assert.equal(
-    path.polyline.positions.getValue().length,
-    BHOTE_KOSHI_FLOOD_PATH.length,
-  );
+  frames.tick();
+  assert.equal(path().revealFraction, 1);
   assert.deepEqual(BHOTE_KOSHI_FLOOD_PATH[0], [85.48476, 28.33255]);
   // More observation pins must not extend or straighten the sourced route.
-  assert.deepEqual(
-    path.polyline.positions.getValue(),
-    BHOTE_KOSHI_FLOOD_PATH.map(([lon, lat]) =>
-      Cesium.Cartesian3.fromDegrees(lon, lat),
-    ),
-  );
+  assert.equal(positions.length, BHOTE_KOSHI_FLOOD_PATH.length);
+  positions.forEach((position, i) => {
+    const [lon, lat] = BHOTE_KOSHI_FLOOD_PATH[i];
+    assert.ok(
+      Cesium.Cartesian3.equalsEpsilon(
+        position,
+        Cesium.Cartesian3.fromDegrees(lon, lat),
+        0,
+        1e-6,
+      ),
+    );
+  });
   assert.deepEqual(BHOTE_KOSHI_FLOOD_PATH.at(-1), [85.14943, 27.92177]);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Flood path');
   assert.deepEqual(layer.getParams(), {
@@ -547,11 +603,10 @@ test('Bhote Koshi path-overview presentation keeps the route settled without Nep
 
   layer.setParams({ presentation: BHOTE_KOSHI_PATH_OVERVIEW_PRESENTATION });
   await layer.enable(viewer);
-  const source = viewer._test.added[0];
-  const path = source.entities.getById('bhote-koshi-flood-path');
+  const path = viewer._test.item('bhote-koshi-flood-path');
   const labels = overlayHost._test.publications.at(-1).entries;
 
-  assert.equal(source.entities.values.length, 1);
+  assert.equal(viewer._test.ids().length, 1);
   assert.equal(labels.length, 15);
   for (const [index, place] of INCIDENT_OVERVIEW_PLACES.entries()) {
     const pin = labels.find(({ id }) => id === `bhote-koshi-place-${place.id}`);
@@ -561,23 +616,21 @@ test('Bhote Koshi path-overview presentation keeps the route settled without Nep
     );
     assert.equal(pin.sourceAlpha(), 1);
   }
-  assert.equal(path.show.getValue(), true);
-  assert.equal(
-    path.polyline.positions.getValue().length,
-    BHOTE_KOSHI_FLOOD_PATH.length,
-  );
+  assert.equal(path.show, true);
+  assert.equal(path.revealFraction, 1);
+  assert.equal(path.positions.length, BHOTE_KOSHI_FLOOD_PATH.length);
   assert.ok(
-    Cesium.Cartesian3.equals(
-      path.polyline.positions.getValue()[0],
+    Cesium.Cartesian3.equalsEpsilon(
+      path.positions[0],
       Cesium.Cartesian3.fromDegrees(85.48476, 28.33255),
+      0,
+      1e-6,
     ),
   );
-  assert.equal(source.entities.getById('nepal-border-fill'), undefined);
-  assert.equal(source.entities.getById('nepal-border-highlight'), undefined);
+  assert.equal(viewer._test.item('nepal-border-fill'), undefined);
+  assert.equal(viewer._test.item('nepal-border-highlight'), undefined);
   assert.equal(
-    source.entities.getById(
-      'bhote-koshi-place-immediate-collapse-viewpoint-halo',
-    ),
+    viewer._test.item('bhote-koshi-place-immediate-collapse-viewpoint-halo'),
     undefined,
   );
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Path overview');
@@ -604,14 +657,13 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
     preview: true,
   });
   await layer.enable(viewer);
-  const source = viewer._test.added[0];
   const publication = overlayHost._test.publications.at(-1);
   const record = publication.entries[0];
 
-  assert.deepEqual(
-    source.entities.values.map(({ id }) => id),
-    ['bhote-koshi-flood-path', 'bhote-koshi-trigger-record-halo'],
-  );
+  assert.deepEqual(viewer._test.ids(), [
+    'bhote-koshi-flood-path',
+    'bhote-koshi-trigger-record-halo',
+  ]);
   assert.equal(record.title, 'USGS INITIAL REPORT');
   assert.deepEqual(record.details, [
     '26 AUG 2026 · 08:37 NPT',
@@ -624,7 +676,7 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
   assert.equal(record.sourceAlpha(), 0);
   nowMs = 1200;
   assert.equal(record.sourceAlpha(), 1);
-  assert.equal(source.entities.getById('nepal-border-highlight'), undefined);
+  assert.equal(viewer._test.item('nepal-border-highlight'), undefined);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Trigger record');
   assert.deepEqual(layer.getParams(), {
     presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
@@ -633,20 +685,21 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
 });
 
 test('Bhote Koshi trigger-record waits for the scene camera, zooms, then orbits', async () => {
-  const viewer = viewerFixture();
   const overlayHost = overlayHostFixture();
   const moveStart = new Cesium.Event();
   const moveEnd = new Cesium.Event();
   const flights = [];
   let armedCallback = null;
-  viewer.camera = {
-    moveStart,
-    moveEnd,
-    flyTo(options) {
-      flights.push(options);
+  const viewer = viewerFixture({
+    camera: {
+      moveStart,
+      moveEnd,
+      flyTo(options) {
+        flights.push(options);
+      },
+      cancelFlight() {},
     },
-    cancelFlight() {},
-  };
+  });
   const layer = createBhoteKoshiLocatorLayer({
     boundaryResolver: async () => null,
     requestRender() {},
@@ -688,21 +741,24 @@ test('Bhote Koshi trigger-record waits for the scene camera, zooms, then orbits'
 
 for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
   test(`Scene Stop revokes locator ${phase} and stale callbacks cannot own a successor`, async () => {
-    const viewer = viewerFixture();
     const timers = new Map();
     const callbacks = [];
     const flights = [];
     let nextTimer = 0;
     const moveStart = new Cesium.Event();
     const moveEnd = new Cesium.Event();
-    viewer.camera = {
-      moveStart,
-      moveEnd,
-      flyTo(options) {
-        flights.push(options);
+    const viewer = viewerFixture({
+      camera: {
+        moveStart,
+        moveEnd,
+        flyTo(options) {
+          flights.push(options);
+        },
+        cancelFlight() {},
       },
-      cancelFlight() {},
-    };
+    });
+    // The renderer's camera port relays these; the layer's own come on top.
+    const portListeners = [moveStart, moveEnd].map((e) => e.numberOfListeners);
     const layer = createBhoteKoshiLocatorLayer({
       boundaryResolver: async () => null,
       overlayHost: overlayHostFixture(),
@@ -745,8 +801,10 @@ for (const phase of ['timer', 'move-end', 'approach', 'orbit']) {
       const oldFlights = [...flights];
       SceneDirector.prototype.stopScene.call(director);
       assert.equal(timers.size, 0, 'Stop cancels the actual delayed work');
-      assert.equal(moveStart.numberOfListeners, 0);
-      assert.equal(moveEnd.numberOfListeners, 0);
+      assert.deepEqual(
+        [moveStart, moveEnd].map((e) => e.numberOfListeners),
+        portListeners,
+      );
       callbacks[0]();
       moveEnd.raiseEvent();
       for (const flight of oldFlights) flight.complete();
@@ -807,8 +865,7 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
 
   layer.setParams({ presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION });
   await layer.enable(viewer);
-  const source = viewer._test.added[0];
-  const borderFill = source.entities.getById('nepal-border-fill');
+  const borderFill = viewer._test.item('nepal-border-fill');
   const entries = overlayHost._test.publications.at(-1).entries;
   const incident = entries.find(
     ({ id }) => id === 'bhote-koshi-incident-callout',
@@ -823,7 +880,8 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
     ({ id }) => id === 'bhote-koshi-city-dhulikhel',
   );
 
-  assert.equal(borderFill.show.getValue(), true);
+  assert.ok(borderFill, 'the settled fill is drawn at once');
+  assert.equal(viewer._test.item('nepal-border-highlight').revealFraction, 1);
   assert.equal(incident.contentAlpha(), 1);
   assert.equal(kathmandu.title, 'KATHMANDU');
   assert.equal(bhaktapur.title, 'BHAKTAPUR');
@@ -866,9 +924,7 @@ test('Bhote Koshi locator degrades to labels when the regional boundary is unava
   });
   try {
     await layer.enable(viewer);
-    const ids = viewer._test.added[0].entities.values.map(
-      (entity) => entity.id,
-    );
+    const ids = viewer._test.ids();
     assert.ok(ids.includes('nepal-context-halo'));
     assert.ok(ids.includes('bhote-koshi-incident-halo'));
     assert.equal(ids.includes('bhote-koshi-city-kathmandu'), false);
@@ -899,15 +955,9 @@ test('Bhote Koshi regional locator waits for its boundary before starting the fu
   });
 
   const enabling = layer.enable(viewer);
-  assert.ok(viewer._test.added[0].entities.getById('nepal-context-halo'));
-  assert.equal(
-    viewer._test.added[0].entities.getById('nepal-border-highlight'),
-    undefined,
-  );
-  assert.equal(
-    viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'),
-    undefined,
-  );
+  assert.ok(viewer._test.item('nepal-context-halo'));
+  assert.equal(viewer._test.item('nepal-border-highlight'), undefined);
+  assert.equal(viewer._test.item('bhote-koshi-incident-halo'), undefined);
   assert.equal(overlayHost._test.publications.length, 1);
   assert.deepEqual(
     overlayHost._test.publications[0].entries.map(({ id }) => id),
@@ -923,14 +973,9 @@ test('Bhote Koshi regional locator waits for its boundary before starting the fu
     ],
   });
   await enabling;
-  assert.ok(
-    viewer._test.added[0].entities.getById('bhote-koshi-incident-halo'),
-  );
-  assert.ok(viewer._test.added[0].entities.getById('nepal-border-highlight'));
-  assert.equal(
-    viewer._test.added[0].entities.getById('bhote-koshi-city-kathmandu'),
-    undefined,
-  );
+  assert.ok(viewer._test.item('bhote-koshi-incident-halo'));
+  assert.ok(viewer._test.item('nepal-border-highlight'));
+  assert.equal(viewer._test.item('bhote-koshi-city-kathmandu'), undefined);
   assert.equal(overlayHost._test.publications.length, 2);
   assert.deepEqual(
     overlayHost._test.publications.at(-1).entries.map(({ id }) => id),
@@ -960,6 +1005,123 @@ test('Bhote Koshi locator cancels a stale boundary resolution and removes its su
       [88, 30],
     ],
   });
+  assert.ok(viewer._test.live().length > 0, 'drawn while it resolves');
   await assert.rejects(enabling, (error) => error?.name === 'AbortError');
-  assert.equal(viewer._test.removed.length, 1);
+  assert.equal(viewer._test.live().length, 0, 'let go');
+});
+
+test('Bhote Koshi locator layers draw sets of their own, and halos only as they change', async () => {
+  const viewer = viewerFixture();
+  const ring = [
+    [80, 26],
+    [88, 26],
+    [88, 30],
+    [80, 30],
+  ];
+  let nowMs = 0;
+  const frames = nonRunningAnimation();
+  const make = () =>
+    createBhoteKoshiLocatorLayer({
+      boundaryResolver: async () => ({ name: 'Nepal', ring }),
+      requestRender() {},
+      overlayHost: overlayHostFixture(),
+      now: () => nowMs,
+      ...frames,
+    });
+  const first = make();
+  const second = make();
+  assert.equal(await first.enable(viewer, { origin: 'scene' }), true);
+  assert.equal(await second.enable(viewer, { origin: 'scene' }), true);
+  const ids = viewer._test.live().map(({ spec }) => spec.id);
+  assert.equal(ids.length, 6);
+  assert.equal(new Set(ids).size, 6, 'no two layers share a set');
+
+  // Before the incident halo is due, nothing about any halo changes.
+  const halos = viewer._test.live().filter(({ kind }) => kind === 'points');
+  nowMs = 100;
+  frames.tick();
+  const writes = halos.map((set) => set.writes);
+  frames.tick();
+  frames.tick();
+  assert.deepEqual(
+    halos.map((set) => set.writes),
+    writes,
+    'unchanged halos are not drawn again',
+  );
+
+  assert.equal(await first.disable(), true);
+  assert.equal(viewer._test.live().length, 3, 'the other layer keeps its sets');
+  assert.equal(await second.disable(), true);
+  assert.equal(viewer._test.live().length, 0);
+});
+
+// The trigger record's callout is an actionable card: the layers under it
+// stand aside for it, so a click on it opens its source, as its keyboard
+// action does; anything else on top is left alone.
+test('a click on the locator callout runs its action', async () => {
+  const viewer = viewerFixture();
+  let onClick = null;
+  let top = null;
+  const activated = [];
+  const layer = createBhoteKoshiLocatorLayer({
+    overlayHost: overlayHostFixture(),
+    requestRender() {},
+    ...nonRunningAnimation(),
+    input: () => ({
+      onClick(callback) {
+        onClick = callback;
+        return () => {
+          onClick = null;
+        };
+      },
+    }),
+  });
+  // The card on top at a click, as the host answers the pick registry.
+  setClickCardHitTest(() => top);
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  const click = (extra = {}) =>
+    onClick?.({
+      screenPosition: { x: 5, y: 5 },
+      gesture: { travelPx: 0, durationMs: 80 },
+      topHit: null,
+      hit: null,
+      ...extra,
+    });
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entryId: 'bhote-koshi-trigger-record-callout',
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger']);
+  top = {
+    sourceId: 'earthquake-card',
+    entry: { activate: () => activated.push('other') },
+  };
+  click();
+  assert.deepEqual(activated, ['trigger'], 'another layer on top is its own');
+  // A drag that ends on it is not a click on it.
+  top = {
+    sourceId: BHOTE_KOSHI_LOCATOR_OVERLAY_SOURCE_ID,
+    entry: { activate: () => activated.push('trigger') },
+  };
+  click({ gesture: { travelPx: 30, durationMs: 80 } });
+  assert.deepEqual(activated, ['trigger'], 'a drag does not open it');
+  // On top, it takes the click over an aircraft or a camera under it, exact
+  // or a touch contact: those layers stand aside under a card.
+  registerPickOwner('test-planes', (id) => id === 'plane:1');
+  try {
+    const plane = { set: 'planes:1', id: 'plane:1' };
+    const cam = { set: 'cams:1', id: 'cam:1' };
+    click({ topHit: plane, hit: plane });
+    click({ topHit: null, hit: plane });
+    click({ topHit: cam, hit: cam });
+    assert.equal(activated.length, 4, 'the callout on top acts each time');
+  } finally {
+    unregisterPickOwner('test-planes');
+    setClickCardHitTest(null);
+  }
+  await layer.disable();
+  assert.equal(onClick, null, 'disable removes the click handler');
 });

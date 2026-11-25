@@ -8,18 +8,24 @@ import { fileURLToPath } from 'node:url';
 import { createPinia } from 'pinia';
 import { createApp, nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
-import { createBriefState } from './cockpitBriefPages.js';
+import {
+  briefCycleTarget,
+  cockpitBriefPages,
+  createBriefState,
+} from './cockpitBriefPages.js';
 import {
   maybeRefreshRegionalBrief,
   publishBriefView,
   renderRegionalBrief,
   renderRegionalBriefStatus,
   setBriefAutoRotate,
+  setBriefLiveOffered,
   showBriefPage,
   updateLocalPosition,
 } from './cockpitBriefing.js';
 import { setSignalCollapsed } from './cockpitLayout.js';
 import { useCockpitStore } from './stores/cockpit.js';
+import { useLiveStore } from './stores/live.js';
 import CockpitBriefing from './views/panels/CockpitBriefing.vue';
 
 function fixture(t) {
@@ -35,9 +41,11 @@ function fixture(t) {
     destroyed: false,
     briefPageIndex: 0,
     briefAutoRotateEnabled: false,
+    briefLiveOffered: false,
     brief: createBriefState(),
     publishBrief: (view) => store.publishBrief(view),
     publishBriefView,
+    showBriefPage,
     scheduleContextLayout() {},
     startBriefRotation() {},
     stopBriefRotation() {},
@@ -49,11 +57,50 @@ function fixture(t) {
     [...document.querySelectorAll('[data-cockpit-brief-page]')]
       .filter((page) => !page.hidden)
       .map((page) => page.dataset.cockpitBriefPage);
+  // The tabs on offer: the LIVE tab is in the markup but hidden without a stream.
   const current = () =>
-    [...document.querySelectorAll('[data-cockpit-brief-index]')].map((tab) =>
-      tab.getAttribute('aria-current'),
+    [...document.querySelectorAll('[data-cockpit-brief-index]')]
+      .filter((tab) => !tab.hidden)
+      .map((tab) => tab.getAttribute('aria-current'));
+  // A stream on offer for the ridden subject, as LiveControls publishes it;
+  // the briefing then offers its LIVE page.
+  const liveStore = useLiveStore(pinia);
+  const liveActed = [];
+  liveStore.connect({
+    cycleLive: (direction) => liveActed.push(['cycle', direction]),
+    playLive: () => liveActed.push(['play']),
+    stopLive: () => liveActed.push(['stop']),
+    retryLive: () => liveActed.push(['retry']),
+    hideLive: (where) => liveActed.push(['hide', where]),
+  });
+  const offerLive = async (view) => {
+    liveStore.publish(
+      view && {
+        label: 'ISS (ZARYA)',
+        streams: [
+          { id: 'iss-exterior', title: 'Exterior cameras', owner: 'NASA' },
+          { id: 'iss-crew', title: 'Live video and audio', owner: 'NASA' },
+        ],
+        index: 0,
+        count: 2,
+        current: {
+          id: 'iss-exterior',
+          title: 'Exterior cameras',
+          owner: 'NASA',
+          ownerUrl: 'https://www.youtube.com/@NASA',
+          note: 'NASA video, via YouTube',
+          watchUrl: 'https://www.youtube.com/watch?v=ROboUHfPUrU',
+        },
+        state: 'idle',
+        reason: null,
+        ...view,
+      },
     );
-  return { $, text, owner, visiblePages, current };
+    setBriefLiveOffered.call(owner, view !== null);
+    await nextTick();
+    await nextTick();
+  };
+  return { $, text, owner, visiblePages, current, offerLive, liveActed };
 }
 
 const INFO = { latitude: 30.25, longitude: -97.75 };
@@ -109,6 +156,157 @@ test('pages, the cycle toggle and the source follow the controller', async (t) =
   assert.equal(auto.getAttribute('aria-label'), 'CYCLE ON');
   assert.equal(auto.getAttribute('aria-pressed'), 'true');
   assert.match(auto.title, /^Stop automatic page cycling/);
+});
+
+test('without a stream the briefing keeps its three pages and hides the LIVE tab', async (t) => {
+  const { $, text, owner, visiblePages } = fixture(t);
+  const liveTab = $('[data-cockpit-brief-index="3"]');
+  assert.equal(liveTab.hidden, true);
+  assert.equal(liveTab.textContent, 'LIVE');
+  assert.equal(liveTab.getAttribute('aria-label'), 'Show Live Video');
+  assert.equal(
+    $('[data-cockpit-brief-page="live"]').querySelector('*'),
+    null,
+    'no page body without a stream',
+  );
+  // Next from Local wraps to Live Signals, past the page not on offer.
+  showBriefPage.call(owner, 3);
+  await nextTick();
+  assert.deepEqual(visiblePages(), ['signals']);
+  assert.equal(text('#cockpit-brief-position'), '1 / 3');
+});
+
+test('with a stream the LIVE page is the fourth, reached by the arrows and its tab', async (t) => {
+  const { $, text, owner, visiblePages, current, offerLive } = fixture(t);
+  await offerLive({});
+  assert.equal(text('#cockpit-brief-position'), '1 / 4');
+  const liveTab = $('[data-cockpit-brief-index="3"]');
+  assert.equal(liveTab.hidden, false);
+  assert.deepEqual(current(), ['true', 'false', 'false', 'false']);
+  showBriefPage.call(owner, 2);
+  showBriefPage.call(owner, owner.briefPageIndex + 1);
+  await nextTick();
+  assert.deepEqual(visiblePages(), ['live']);
+  assert.deepEqual(current(), ['false', 'false', 'false', 'true']);
+  assert.equal(text('#cockpit-brief-kicker'), 'LIVE VIDEO');
+  assert.equal(
+    text('#cockpit-brief-subtitle'),
+    'STREAM ATTACHED TO THE SUBJECT',
+  );
+  assert.equal(text('#cockpit-brief-position'), '4 / 4');
+  assert.equal(
+    text('#cockpit-brief-source'),
+    'YOUTUBE EMBEDDED PLAYER · MUTED',
+  );
+  assert.equal($('#cockpit-signal-stream').dataset.briefPage, 'live');
+  // The page shows what the LIVE section shows, with the player's own screen.
+  const page = $('[data-cockpit-brief-page="live"]');
+  assert.equal(
+    page.querySelector('.cockpit-live-subject strong').textContent,
+    'ISS (ZARYA)',
+  );
+  assert.equal(text('#cockpit-live-stream-title'), 'Exterior cameras · 1/2');
+  assert.ok($('#cockpit-live-player-host'));
+  assert.ok($('#cockpit-live-previous'));
+  assert.ok($('#cockpit-live-next'));
+  assert.equal(text('#cockpit-live-badge-text'), 'OFF');
+  assert.equal(text('#cockpit-live-status'), 'Click to play');
+  assert.ok($('#cockpit-live-play'), 'Play, under the IP notice');
+  assert.match(
+    page.querySelector('.cockpit-live-privacy').textContent,
+    /sees your IP address/,
+  );
+  assert.equal(
+    $('#cockpit-live-watch-link').getAttribute('href'),
+    'https://www.youtube.com/watch?v=ROboUHfPUrU',
+  );
+  // Next from LIVE wraps to Live Signals.
+  showBriefPage.call(owner, owner.briefPageIndex + 1);
+  await nextTick();
+  assert.deepEqual(visiblePages(), ['signals']);
+  assert.equal(text('#cockpit-brief-position'), '1 / 4');
+});
+
+test('the LIVE page loads the stream only on Play, stops it when left, and its controls reach LiveControls', async (t) => {
+  const { $, owner, offerLive, liveActed } = fixture(t);
+  await offerLive({});
+  assert.deepEqual(liveActed, [], 'riding the station loads no player');
+  showBriefPage.call(owner, 3);
+  await nextTick();
+  $('#cockpit-live-play').click();
+  assert.deepEqual(liveActed, [['play']]);
+  await offerLive({ state: 'playing' });
+  const page = $('[data-cockpit-brief-page="live"]');
+  assert.equal($('#cockpit-live-badge-text').textContent, 'ON AIR');
+  assert.equal(
+    page.querySelector('.live-dot').classList.contains('on-air'),
+    true,
+  );
+  assert.equal(
+    page.querySelector('.live-screen').classList.contains('active'),
+    true,
+  );
+  assert.equal($('#cockpit-live-status').textContent, 'Live');
+  $('#cockpit-live-next').click();
+  $('#cockpit-live-previous').click();
+  assert.deepEqual(liveActed, [['play'], ['cycle', 1], ['cycle', -1]]);
+  // Leaving the page stops what plays there.
+  showBriefPage.call(owner, 0);
+  await nextTick();
+  assert.deepEqual(liveActed.at(-1), ['hide', 'cockpit']);
+  showBriefPage.call(owner, 3);
+  await nextTick();
+  await offerLive({ state: 'offline', reason: 'timeout' });
+  const card = page.querySelector('.live-card');
+  assert.equal(card.classList.contains('offline'), true);
+  assert.equal(card.querySelector('strong').textContent, 'Stream is offline');
+  $('#cockpit-live-retry').click();
+  assert.deepEqual(liveActed.at(-1), ['retry']);
+  await offerLive({ state: 'unavailable', reason: 'error-150' });
+  assert.equal($('#cockpit-live-retry'), null);
+  assert.equal(
+    $('#cockpit-live-status').textContent,
+    'This stream cannot play here',
+  );
+});
+
+test('the stream going while LIVE is shown falls back to Live Signals with three pages', async (t) => {
+  const { $, text, owner, visiblePages, offerLive } = fixture(t);
+  await offerLive({});
+  showBriefPage.call(owner, 3);
+  await nextTick();
+  assert.deepEqual(visiblePages(), ['live']);
+  await offerLive(null);
+  assert.deepEqual(visiblePages(), ['signals']);
+  assert.equal(text('#cockpit-brief-position'), '1 / 3');
+  assert.equal($('[data-cockpit-brief-index="3"]').hidden, true);
+  // Going on another page, the page stays and only the count changes.
+  showBriefPage.call(owner, 1);
+  await offerLive({});
+  assert.deepEqual(visiblePages(), ['news']);
+  assert.equal(text('#cockpit-brief-position'), '2 / 4');
+  // Offering what is already offered changes nothing.
+  const views = [];
+  owner.publishBrief = (view) => views.push(view);
+  setBriefLiveOffered.call(owner, true);
+  assert.equal(views.length, 0);
+});
+
+test('the automatic cycle never turns to the LIVE page and waits while it is shown', () => {
+  const three = cockpitBriefPages(false);
+  assert.deepEqual(
+    [0, 1, 2].map((index) => briefCycleTarget(three, index)),
+    [1, 2, 0],
+  );
+  const four = cockpitBriefPages(true);
+  assert.equal(four.length, 4);
+  assert.equal(four[3].id, 'live');
+  assert.deepEqual(
+    [0, 1, 2].map((index) => briefCycleTarget(four, index)),
+    [1, 2, 0],
+    'Local goes back to Live Signals, past LIVE',
+  );
+  assert.equal(briefCycleTarget(four, 3), null, 'shown by hand, LIVE stays');
 });
 
 test('regional news and local conditions render what the region returned', async (t) => {

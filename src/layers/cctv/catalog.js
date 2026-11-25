@@ -226,6 +226,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             (source.url ? 'configured' : 'seed'),
         ).toLowerCase(),
         feedType,
+        hasSnapshot: source.hasSnapshot === true,
         feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
         lat,
         lon,

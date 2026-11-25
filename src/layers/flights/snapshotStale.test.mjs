@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { createFlightSnapshotRenderer } from './snapshotRenderer.js';
+import { createMotion } from './motion.js';
+import { createFlightState } from './state.js';
 
 // A poll that repeats a contact's last position with new speed or course
 // must not move it past where the stale rules allow, and never adds a
@@ -20,21 +22,41 @@ function stub(overrides = {}) {
 function harness({ ground = () => null }) {
   const appended = [];
   const history = [];
-  const flightState = {
-    _trackedIcao: ICAO,
-    _trackedEntity: null,
-    _positionHistory: new Map([[ICAO, history]]),
-    _billboards: new Map([[ICAO, { position: new Cesium.Cartesian3() }]]),
-    _billboardCollection: stub(),
-    _cullPositions: new Map(),
-    _displayCourse: new Map(),
-    _groundSnap: stub(),
-    _displayFloorState: new Map(),
-    _models: new Map(),
-    _viewer: null,
-    _cockpitContactMode: false,
-    records: { data: new Map() },
+  const iconIds = new Set();
+  const groundFloor = stub({
+    cachedGroundFloor: ground,
+    GROUND_FLOOR_LIFT_M: 0.5,
+  });
+  const services = stub({
+    camera: stub(),
+    focus: stub(),
+    groundFloor,
+    meshFloor: stub(),
+    groundSnap: stub({ createGroundSnap: () => stub() }),
+  });
+  const flightState = createFlightState({
+    services,
+    source: { label: 'Fixture aircraft' },
+  });
+  // The shared icon set the layer draws its contacts into.
+  flightState._icons = {
+    has: (id) => iconIds.has(id),
+    ids: () => [...iconIds],
+    get count() {
+      return iconIds.size;
+    },
   };
+  flightState._trackedIcao = ICAO;
+  flightState._positionHistory.set(ICAO, history);
+  const parts = {
+    rendering: stub({ _modelOwnsVisual: () => false }),
+    icons: stub({
+      _iconIds: () => [...iconIds],
+      _addIcon: (id) => iconIds.add(id),
+      _forgetContact: (id) => iconIds.delete(id),
+    }),
+  };
+  parts.motion = createMotion({ flightState, services, parts, layer: {} });
   let meta = null;
   let fixEpochMs = 0;
   const records = stub({
@@ -48,18 +70,16 @@ function harness({ ground = () => null }) {
     flightState,
     records,
     militaryRegistry: stub({ isMilitaryIcao: () => false }),
-    groundFloor: stub({ cachedGroundFloor: ground }),
+    groundFloor,
     meshFloor: stub(),
-    rendering: stub({
-      _modelOwnsVisual: () => false,
-      _fleetBillboardColor: () => Cesium.Color.WHITE,
-    }),
+    rendering: parts.rendering,
     tracking: stub({
       _militaryLayerSuppresses: () => false,
       _appendTrailFix: (position, epochMs) =>
         appended.push({ position, epochMs }),
     }),
-    motion: stub(),
+    motion: parts.motion,
+    icons: parts.icons,
     enrichment: stub(),
     queries: stub({ _likelyLanded: () => false }),
   });

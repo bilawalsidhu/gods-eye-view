@@ -4,12 +4,10 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import {
-  SCENE_EXCLUSIVITY_PROBE_LAYER_ID,
   SCENE_KEPT_SELECTION_PARAM_KEYS,
   SCENE_SELECTION_PARAM_PATTERN,
   SCENE_TRACKING_PARAM_KEYS,
   sceneLayerPlan,
-  sceneRequiresContextModeExit,
   stripSceneTrackingParams,
 } from './scenePolicy.js';
 import { SCENE_RECIPES } from './recipes.js';
@@ -175,32 +173,6 @@ test('the family pattern catches selection names the old sweep would have missed
   for (const ordinary of ['models3d', 'catalog', 'showOrbits', 'densityScale', 'coverageMode', 'calibration']) {
     assert.equal(SCENE_SELECTION_PARAM_PATTERN.test(ordinary), false, `${ordinary} is not a selection param`);
   }
-});
-
-test('the exclusivity probe id is reserved — no real layer may claim it', () => {
-  // The probe asks a mode "would you refuse a layer you have no opinion
-  // about?". If a real layer ever took this id, the probe would be asking
-  // about a layer the mode DOES have an opinion on, and an isolating mode
-  // could read as non-isolating.
-  for (const entry of LAYER_STATE_REGISTRY) {
-    assert.notEqual(entry.id, SCENE_EXCLUSIVITY_PROBE_LAYER_ID);
-  }
-  assert.equal(REGISTERED.has(SCENE_EXCLUSIVITY_PROBE_LAYER_ID), false);
-  // Every real id is kebab-case; the sentinel deliberately is not.
-  for (const entry of LAYER_STATE_REGISTRY) {
-    assert.match(entry.id, /^[a-z][a-z0-9-]*$/, `${entry.id} breaks the layer-id convention`);
-  }
-  assert.doesNotMatch(SCENE_EXCLUSIVITY_PROBE_LAYER_ID, /^[a-z][a-z0-9-]*$/);
-});
-
-test('an isolating context mode must be exited before a shot applies', () => {
-  // Read off the shared guard, not a mode name: Space Missions refuses every
-  // enable outside its replay bundle, so a shot applied inside it is not the
-  // composition it describes.
-  assert.equal(sceneRequiresContextModeExit('space-missions'), true);
-  assert.equal(sceneRequiresContextModeExit('flights'), false);
-  assert.equal(sceneRequiresContextModeExit(null), false);
-  assert.equal(sceneRequiresContextModeExit(undefined), false);
 });
 
 test('shipped recipes touch only their four declared layers', () => {

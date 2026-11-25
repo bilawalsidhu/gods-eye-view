@@ -1,10 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
-import { createLibraryTileLayer, minimumTerrainLevelFor } from './layers.js';
+import {
+  LIBRARY_AERIAL_Z,
+  clearNoData,
+  createLibraryTileLayer,
+  libraryImagerySpec,
+  minimumTerrainLevelFor,
+} from './layers.js';
 import { LIBRARY_ENTRIES, libraryEntry } from './catalog.js';
 import { libraryTileUrl } from './manifest.js';
 import { createLibrarySource } from './source.js';
+import { layerOptions } from '../render/cesium/imagery.js';
+import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
 
 /** A tiles entry without its border outline, so no network is touched. */
 function entryWithoutOutline(id) {
@@ -13,79 +21,147 @@ function entryWithoutOutline(id) {
   return { ...entry, display };
 }
 
-function globeViewer() {
-  return {
-    scene: { globe: { show: true } },
-    imageryLayers: new Cesium.ImageryLayerCollection(),
-    dataSources: { add: async () => {}, remove: () => {} },
-  };
+/** A viewer whose renderer has a globe port (shown) and a draw port. */
+function globeViewer(t) {
+  const viewer = {};
+  const globe = fakeGlobePort();
+  const { draw, unbind } = bindFakeDraw(viewer, { globe });
+  t.after(unbind);
+  return { viewer, globe, draw };
 }
 
 const source = { tileTemplate: (entry) => entry.source.url };
-const tileProvider = (url) =>
-  new Cesium.UrlTemplateImageryProvider({
-    url,
-    tilingScheme: new Cesium.WebMercatorTilingScheme(),
-  });
+const xyz = (url, zOrder) => ({
+  kind: 'xyz',
+  url,
+  ...(zOrder ? { zOrder } : {}),
+});
 
-test('aerial imagery drapes above every other imagery layer', async () => {
-  const viewer = globeViewer();
-  const collection = viewer.imageryLayers;
-  const base = collection.addImageryProvider(
-    tileProvider('https://base.example.org/{z}/{x}/{y}.png'),
+test('aerial imagery drapes above every other imagery layer', async (t) => {
+  const { viewer, globe } = globeViewer(t);
+  const base = globe.imagery.add(
+    xyz('https://base.example.org/{z}/{x}/{y}.png'),
   );
   const photos = createLibraryTileLayer(
     entryWithoutOutline('ign-orthophotos-france'),
-    { source, cesium: Cesium },
+    { source },
   );
   await photos.init(viewer);
   await photos.enable(viewer);
-  const top = () => collection.get(collection.length - 1);
-  assert.equal(collection.length, 2);
+  const top = () => globe.layers.at(-1);
+  assert.equal(globe.layers.length, 2);
   assert.notEqual(top(), base);
   const ign = top();
+  assert.equal(ign.spec.zOrder, LIBRARY_AERIAL_Z);
 
   // A drape added later (weather, another library basemap) goes under it.
-  const weather = collection.addImageryProvider(
-    tileProvider('https://weather.example.org/{z}/{x}/{y}.png'),
+  const weather = globe.imagery.add(
+    xyz('https://weather.example.org/{z}/{x}/{y}.png', 4),
   );
   assert.equal(top(), ign);
-  assert.equal(collection.indexOf(weather), 1);
+  assert.equal(globe.layers.indexOf(weather), 1);
 
-  // IGN's dark blue "no imagery here" fill is drawn transparent, and its
+  // IGN's dark blue "no imagery here" fill is cleared tile by tile, and its
   // tiles are requested only inside the France bbox.
-  assert.ok(
-    ign.colorToAlpha.equals(Cesium.Color.fromCssColorString('#0a3b59')),
-  );
-  assert.ok(ign.colorToAlphaThreshold > 0 && ign.colorToAlphaThreshold < 0.05);
-  const west = Cesium.Math.toDegrees(ign.imageryProvider.rectangle.west);
-  assert.ok(Math.abs(west - -5.5) < 1e-9);
+  assert.equal(typeof ign.spec.tileTransform, 'function');
+  assert.ok(Math.abs(ign.spec.rectangle.west - -5.5) < 1e-9);
+  assert.equal(ign.spec.tiling, 'webMercator');
 
-  // Off: the drape and its listener are gone, so later layers stay put.
+  // Off: the drape and its listener are gone.
   await photos.disable();
-  assert.equal(collection.contains(ign), false);
-  const later = collection.addImageryProvider(
-    tileProvider('https://later.example.org/{z}/{x}/{y}.png'),
-  );
-  assert.equal(top(), later);
+  assert.equal(ign.removed, true);
+  assert.equal(ign.listenerCount('tileError'), 0);
+  assert.equal(globe.layers.includes(ign), false);
 });
 
-test('a non-aerial tile layer keeps its place and its own colours', async () => {
-  const viewer = globeViewer();
-  const collection = viewer.imageryLayers;
+test('the no-data fill clears as a colour-to-alpha threshold does', () => {
+  const fill = [10, 59, 89];
+  const pixels = new Uint8ClampedArray([
+    ...fill,
+    255,
+    // Within 0.02 of each channel: JPEG noise along the fill's edge.
+    12,
+    57,
+    91,
+    255,
+    // A real pixel.
+    120,
+    130,
+    90,
+    255,
+  ]);
+  clearNoData(pixels, [10 / 255, 59 / 255, 89 / 255, 1], 0.02);
+  assert.deepEqual([pixels[3], pixels[7], pixels[11]], [0, 0, 255]);
+});
+
+test('a non-aerial tile layer keeps its place and its own colours', async (t) => {
+  const { viewer, globe } = globeViewer(t);
   const topo = createLibraryTileLayer(entryWithoutOutline('usgs-topo'), {
     source,
-    cesium: Cesium,
   });
   await topo.init(viewer);
   await topo.enable(viewer);
-  const drape = collection.get(0);
-  collection.addImageryProvider(
-    tileProvider('https://weather.example.org/{z}/{x}/{y}.png'),
-  );
-  assert.equal(collection.indexOf(drape), 0);
-  assert.equal(drape.colorToAlpha, undefined);
+  const drape = globe.layers[0];
+  globe.imagery.add(xyz('https://weather.example.org/{z}/{x}/{y}.png'));
+  assert.equal(globe.layers.indexOf(drape), 0);
+  assert.equal(drape.spec.zOrder, undefined);
+  assert.equal(drape.spec.tileTransform, undefined);
   await topo.destroy();
+  assert.equal(drape.removed, true);
+});
+
+test('tile errors count toward unavailable, but a provider 4xx does not', async (t) => {
+  const { viewer, globe } = globeViewer(t);
+  const topo = createLibraryTileLayer(entryWithoutOutline('usgs-topo'), {
+    source,
+  });
+  await topo.init(viewer);
+  await topo.enable(viewer);
+  const [drape] = globe.layers;
+  assert.equal(topo.getStats().countLabel, 'DRAPED');
+  for (let i = 0; i < 30; i++)
+    drape.fail({ tile: { x: i, y: 0, level: 3 }, status: 404 });
+  assert.equal(topo.getStats().error, null);
+  for (let i = 0; i < 24; i++)
+    drape.fail({ tile: { x: i, y: 0, level: 3 }, status: 503 });
+  assert.equal(topo.getStats().error, 'tiles unavailable');
+  await topo.destroy();
+});
+
+test('with no globe shown there is nowhere to drape', async (t) => {
+  const { viewer, globe } = globeViewer(t);
+  globe.setGlobeVisible(false);
+  const topo = createLibraryTileLayer(entryWithoutOutline('usgs-topo'), {
+    source,
+  });
+  await topo.init(viewer);
+  await topo.enable(viewer);
+  assert.equal(globe.layers.length, 0);
+  assert.equal(topo.getStats().status, 'idle');
+  await topo.destroy();
+});
+
+test('a bbox outline draws on the ground with the drape, and goes with it', async (t) => {
+  const { viewer, draw } = globeViewer(t);
+  const entry = libraryEntry('usgs-topo');
+  const outlined = {
+    ...entry,
+    coverage: { ...entry.coverage, bbox: [1, 2, 3, 4] },
+    display: { ...entry.display, outline: 'bbox' },
+  };
+  const layer = createLibraryTileLayer(outlined, { source });
+  await layer.init(viewer);
+  await layer.enable(viewer);
+  await new Promise((resolve) => setImmediate(resolve));
+  const set = draw.find('lib-usgs-topo:outline');
+  assert.ok(set, 'an outline set is drawn');
+  const [ring] = [...set.items.values()];
+  assert.equal(ring.mode, 'draped');
+  assert.equal(ring.positions.length, 5);
+  assert.equal(layer.getDiagnostics().outlineRings, 1);
+  await layer.disable();
+  assert.equal(set.disposed, true);
+  assert.equal(layer.getDiagnostics().outlineRings, 0);
 });
 
 test('every shipped aerial photo entry is clipped to its coverage', () => {
@@ -134,7 +210,7 @@ test('bbox and TMS templates become the URLs Cesium and the proxy request', () =
   );
 });
 
-test('an entry too dense to draw zoomed out is hidden below its scale', async () => {
+test('an entry too dense to draw zoomed out is hidden below its scale', async (t) => {
   const cadastre = entryWithoutOutline('kartverket-cadastre');
   assert.equal(cadastre.source.minZoom, 14);
   assert.equal(minimumTerrainLevelFor(cadastre), 13);
@@ -148,20 +224,23 @@ test('an entry too dense to draw zoomed out is hidden below its scale', async ()
     undefined,
   );
 
-  // Switched on zoomed out, then zoomed further out: no globe tile coarser
-  // than level 13 takes imagery from it, so no z14 tile is ever requested.
-  const viewer = globeViewer();
-  const layer = createLibraryTileLayer(cadastre, { source, cesium: Cesium });
+  // It keeps its minimum level and is hidden where the view is coarser, as
+  // Cesium's own layer was (minimumTerrainLevel z13 on the geographic globe).
+  const { viewer, globe } = globeViewer(t);
+  const layer = createLibraryTileLayer(cadastre, { source });
   await layer.init(viewer);
   await layer.enable(viewer);
-  const imagery = viewer.imageryLayers.get(viewer.imageryLayers.length - 1);
-  const terrain = new Cesium.EllipsoidTerrainProvider();
-  for (const level of [0, 4, 12])
-    assert.equal(
-      imagery._createTileImagerySkeletons({ level, data: {} }, terrain),
-      false,
-      `globe level ${level} takes no cadastre imagery`,
-    );
+  const [imagery] = globe.layers;
+  assert.equal(imagery.spec.minLevel, 14);
+  assert.equal(imagery.spec.hiddenBelowMinLevel, true);
+  assert.equal(imagery.spec.admit, undefined);
+  assert.deepEqual(layerOptions(imagery.spec), { minimumTerrainLevel: 13 });
+  // An entry that is not dense keeps its minimum level.
+  const lee = libraryEntry('lee-county-fl');
+  const spec = libraryImagerySpec(lee, lee.source.url);
+  assert.equal(spec.minLevel, lee.source.minZoom ?? 0);
+  assert.equal(spec.hiddenBelowMinLevel, undefined);
+  assert.equal(layerOptions(spec), undefined);
   await layer.disable();
-  assert.equal(viewer.imageryLayers.length, 0);
+  assert.equal(globe.layers.length, 0);
 });

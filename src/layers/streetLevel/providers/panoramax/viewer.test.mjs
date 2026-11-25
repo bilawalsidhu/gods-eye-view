@@ -2,8 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { PANORAMAX_SOURCES, createPanoramaxViewer } from './viewer.js';
 import { normalizeItem } from './policy.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
 import { stacItem } from '../../../../testSupport/panoramaxFixtures.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const photo = (options) =>
   normalizeItem(stacItem({ lon: 2.35, lat: 48.85, ...options }));
@@ -59,7 +66,7 @@ function setup() {
   });
   const poses = [];
   viewer.onPose((pose) => poses.push(pose));
-  return { viewer, poses, loads, renderers, stepped, host: fakeHost() };
+  return { viewer, poses, loads, renderers, stepped, host: fakeHost(viewer) };
 }
 
 const parts = (host) => {
@@ -252,7 +259,7 @@ test('without WebGL a 360° picture shows its whole equirectangular image flat',
       throw new Error('no WebGL');
     },
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   await viewer.open('pano');
   const { picture } = parts(host);
@@ -272,7 +279,7 @@ test('a picture whose SD fails falls back to the thumbnail; the original only fo
       return { src: url };
     },
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   await viewer.open('flat');
   assert.deepEqual(tried, [PHOTOS.flat.urls.sd, PHOTOS.flat.urls.thumb]);
@@ -326,7 +333,7 @@ test('an SD panorama refused for its size is not fetched again as a flat photo',
       destroy() {},
     }),
   });
-  const host = fakeHost();
+  const host = fakeHost(viewer);
   await viewer.mount(host);
   await viewer.open('pano');
   const sdLoads = loads.filter((l) => l.url === PHOTOS.pano.urls.sd);

@@ -68,7 +68,7 @@ test('before RadioControls renders, the panel shows its initial markup', (t) => 
   assert.equal($('radio-filter').options.length, 1);
   assert.equal($('radio-filter').options[0].value, 'all');
   assert.equal($('radio-filter').options[0].textContent, 'All');
-  assert.equal($('radio-play-btn').getAttribute('class'), null);
+  assert.equal(coreClasses($('radio-play-btn')), '');
   assert.equal($('radio-play-btn').disabled, true);
   assert.equal($('radio-volume').value, '80');
   assert.equal($('radio-volume-value').textContent, '80%');
@@ -120,7 +120,7 @@ test('the panel renders the presented directory, station, transport and playback
   assert.equal($('radio-station-homepage').getAttribute('href'), 'https://example.org/');
   assert.equal($('radio-station-homepage').hidden, false);
   const play = $('radio-play-btn');
-  assert.equal(play.className, 'active');
+  assert.equal(coreClasses(play), 'active');
   assert.equal(play.textContent, 'PAUSE');
   assert.equal(play.getAttribute('aria-label'), 'Pause selected radio station');
   assert.equal($('radio-prev-btn').disabled, false);
@@ -128,7 +128,7 @@ test('the panel renders the presented directory, station, transport and playback
   assert.equal($('radio-playback-state').textContent, 'Playing KJAZ');
 
   await render({ audioState: 'error', filter: 'all' });
-  assert.equal(play.className, '');
+  assert.equal(coreClasses(play), '');
   assert.equal($('radio-playback-state').className, 'radio-playback-state error');
   assert.equal($('radio-station-homepage').hasAttribute('href'), false);
   assert.equal($('radio-station-homepage').hidden, true);
