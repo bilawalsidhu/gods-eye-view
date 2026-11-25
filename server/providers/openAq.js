@@ -398,7 +398,7 @@ export function createOpenAqAcquisition({
     // Nothing acquired yet: a failure, not a cached view.
     if (stale && !limited && !state.readings.size)
       throw Object.assign(error(failureStatus, 'OpenAQ request unavailable'), {
-        retryAt,
+        retryAt: retryAt ?? now() + 60_000,
       });
     // The deadline before any catalog page or reading: a failure, not an
     // empty view.

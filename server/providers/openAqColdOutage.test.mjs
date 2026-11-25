@@ -151,4 +151,6 @@ test('OpenAQ cold station outage: listed stations whose first checks all fail ar
     `resolved: stale=${result?.stale} readings=${result?.readings.length} failureStatus=${result?.failureStatus}`,
   );
   assert.equal(failure.status, 503);
+  // The answer says when to ask again.
+  assert.equal(failure.retryAt, start + 60_000);
 });

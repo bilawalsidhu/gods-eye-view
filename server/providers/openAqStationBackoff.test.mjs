@@ -77,14 +77,21 @@ test('failed station fairness: persistent failures at the four nearest stations 
     fetchImpl,
   });
   const view = [10, -10, 30, 10, 20, 0];
-  let snap;
+  let snap,
+    acquired = false;
   for (let i = 0; i < 8; i++) {
-    // Nothing acquired yet and every check failed: the first answer is a 503.
-    snap = await source.getSnapshot({ view }).catch((e) => {
-      if (e.status !== 503) throw e;
-      return null;
-    });
-    clock = Math.max(clock + 1000, (snap?.retryAt ?? clock + 60_000) + 1);
+    let retryAt;
+    try {
+      snap = await source.getSnapshot({ view });
+      acquired ||= snap.readings.length > 0;
+      retryAt = snap.retryAt ?? clock + 60_000;
+    } catch (e) {
+      // Nothing acquired yet and every check failed: a retryable 503.
+      if (e.status !== 503 || acquired) throw e;
+      assert.ok(Number.isFinite(e.retryAt), `retryAt=${e.retryAt}`);
+      retryAt = e.retryAt;
+    }
+    clock = Math.max(clock + 1000, retryAt + 1);
   }
   assert.ok(
     snap.readings.length >= 2,
