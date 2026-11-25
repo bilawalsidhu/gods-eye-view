@@ -2969,8 +2969,8 @@ async function main() {
     // camera move and on the first frame a hidden contact is shown again —
     // is now observed on the drawn rows: the on-screen nose the drawn course
     // projects to, against the one the plane's feed course projects to, at
-    // the same position, on exactly those two frames (same 10° bound, same
-    // per-frame budgets). That the shader turns an icon to the screen angle
+    // the same position, on exactly those two frames (same 10° bound).
+    // That the shader turns an icon to the screen angle
     // its course projects to is the renderer's own contract, which the
     // renderer conformance reference scenes draw (course-rotated arrows,
     // top and tilted views); a CPU readback cannot see the GPU's rotation. The reveal hides and re-shows the row through the
@@ -2986,8 +2986,7 @@ async function main() {
     // Staged deterministically: park the camera nadir over the synthetic
     // cluster, let it settle, then trigger each path with the camera idle.
     // Observe the first frame after forcing moveEnd and the first frame that
-    // draws the row again, counted in frames, not milliseconds: the nose a
-    // frame draws does not depend on how long the frame took.
+    // draws the row again (`src/tooling/trackArrivalObservation.mjs`).
     // ============================================================
     console.log('\nChange 4 — arrival rotation: the drawn nose on the settle frame and the first reveal');
     const arrival = await evalPage(async () => {
@@ -3063,10 +3062,6 @@ async function main() {
           };
         };
         const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
-        // A renderer that stops drawing, or a reveal that misses its frames,
-        // gets one more attempt; an observation that measured a wrong angle
-        // (a wrong first reveal, or a wrong settle frame) never does.
-        //
         // The reveal: the row is hidden right after the settle frame, frames
         // must actually draw it hidden, and only then is it shown again, so
         // the frame measured is the first one that draws it after a hidden
@@ -3114,7 +3109,7 @@ async function main() {
         });
         // A reveal is only one after a frame drew the row hidden.
         if (!observed.error && hiddenFrames === 0) {
-          return { ...observed, error: 'no frame drew the row hidden before its reveal', hasModel };
+          return { ...observed, error: 'no frame drew the row hidden before its reveal', hiddenFrames, hasModel };
         }
         return { ...observed, hiddenFrames, hasModel };
       };
@@ -3125,7 +3120,7 @@ async function main() {
         military: await probe(dm.layers.get('military').module, 'bbb101', militaryCourse),
       };
     });
-    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts}`
+    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; ${arrivalAngleViolated(a) ? 'angle violation (not retried); ' : ''}${Number.isFinite(a.dMoveEnd) ? `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° ` : ''}${Number.isFinite(a.dReveal) ? `reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° ` : ''}elapsed=${Number(a.elapsedMs).toFixed(1)} ms attempts=${a.attempts} hiddenFrames=${a.hiddenFrames ?? 0}`
       : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} revealFrame=${a.revealFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms hidden=${a.hiddenMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms attempts=${a.attempts} hasModel=${a.hasModel}`);
     record('arrival: the drawn nose is right on the settle frame and the first reveal, flights',
       arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));

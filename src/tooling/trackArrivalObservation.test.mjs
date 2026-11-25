@@ -71,6 +71,15 @@ function fixture(start = observeArrivalRotation) {
   };
 }
 
+// A settle frame, one frame that draws the contact hidden, then
+// ARRIVAL_REVEAL_MAX_FRAMES more hidden frames: the reveal never comes.
+function missReveal(f, settleError = 0) {
+  f.frame(8, { shown: true, rotationError: settleError });
+  f.frame(16, { shown: false, revealStartsNow: true });
+  for (let i = 1; i <= ARRIVAL_REVEAL_MAX_FRAMES; i++)
+    f.frame(16 + 8 * i, { shown: false, revealStartsNow: false });
+}
+
 test('slow frames pass: the settle frame and the next frame are measured, however long they take', async () => {
   // Headless SwiftShader on a busy machine: 650–750 ms between frames.
   const f = fixture();
@@ -115,17 +124,13 @@ test('a reveal one frame late, behind a frame already in flight, passes', async 
 
 test(`a reveal not drawn within ${ARRIVAL_REVEAL_MAX_FRAMES} frames fails`, async () => {
   const f = fixture();
-  f.frame(8, { shown: true, rotationError: 0 });
-  f.frame(16, { shown: false, revealStartsNow: true });
-  for (let i = 1; i <= ARRIVAL_REVEAL_MAX_FRAMES; i++)
-    f.frame(16 + 8 * i, { shown: false, revealStartsNow: false });
+  missReveal(f);
   const result = await f.observation;
   assert.match(
     result.error,
     new RegExp(`reveal not drawn within ${ARRIVAL_REVEAL_MAX_FRAMES} frames`),
   );
   assert.equal(result.dMoveEnd, 0);
-  assert.equal(result.flipFrame, -1);
   assert.equal(arrivalRotationPassed(result), false);
   assert.equal(f.resources.listeners, 0);
   assert.equal(f.resources.timers, 0);
@@ -168,13 +173,14 @@ test('a renderer that draws no settle frame ends the observation', async () => {
   const f = fixture();
   f.expire(ARRIVAL_STALL_MS);
   const result = await f.observation;
-  assert.match(result.error, /moveEnd.*no frame for 10000 ms/);
+  assert.match(
+    result.error,
+    new RegExp(`moveEnd.*no frame for ${ARRIVAL_STALL_MS} ms`),
+  );
   assert.equal(result.moveEndMs, null);
   assert.equal(arrivalRotationPassed(result), false);
   assert.equal(f.resources.listeners, 0);
   assert.equal(f.resources.timers, 0);
-  f.frame(ARRIVAL_STALL_MS + 8, { shown: true, rotationError: 0 });
-  assert.equal(result.flipFrame, -1);
 });
 
 test('the stall clock restarts on every frame', async () => {
@@ -182,9 +188,13 @@ test('the stall clock restarts on every frame', async () => {
   f.frame(8, { shown: true, rotationError: 0 });
   f.frame(9_000, { shown: false, revealStartsNow: true });
   f.expire(ARRIVAL_STALL_MS + 8);
-  f.frame(15_000, { shown: true, rotationError: 0, revealStartsNow: false });
+  // An unmarked hidden frame restarts it too.
+  f.frame(18_000, { shown: false, revealStartsNow: false });
+  f.expire(ARRIVAL_STALL_MS + 9_000);
+  f.frame(27_000, { shown: true, rotationError: 0 });
   const result = await f.observation;
   assert.equal(result.error, undefined);
+  assert.equal(result.revealFrame, 2);
   assert.equal(arrivalRotationPassed(result), true);
 });
 
@@ -241,10 +251,7 @@ test('a wrong settle angle followed by a stall is final, not retried into a pass
 test('a missed reveal after a correct settle earns one more attempt', async () => {
   const f = retryFixture();
   await settle();
-  f.frame(8, { shown: true, rotationError: 0 });
-  f.frame(16, { shown: false, revealStartsNow: true });
-  for (let i = 1; i <= ARRIVAL_REVEAL_MAX_FRAMES; i++)
-    f.frame(16 + 8 * i, { shown: false, revealStartsNow: false });
+  missReveal(f);
   await settle();
   f.frame(100, { shown: true, rotationError: 0 });
   f.frame(108, { shown: true, rotationError: 0 });
@@ -253,6 +260,23 @@ test('a missed reveal after a correct settle earns one more attempt', async () =
   assert.equal(f.counts.prepares, 2);
   assert.equal(f.resources.moveEnds, 2);
   assert.equal(arrivalRotationPassed(result), true);
+});
+
+test('a wrong settle angle followed by a missed reveal is final, not retried into a pass', async () => {
+  const f = retryFixture();
+  await settle();
+  missReveal(f, 0.5);
+  await settle();
+  // An otherwise clean second attempt, which must never be started.
+  f.frame(100, { shown: true, rotationError: 0 });
+  f.frame(108, { shown: true, rotationError: 0 });
+  const result = await f.observation;
+  assert.match(result.error, /reveal not drawn/);
+  assert.equal(result.dMoveEnd, 0.5, 'the measured settle angle is kept');
+  assert.equal(result.attempts, 1);
+  assert.equal(f.counts.prepares, 1);
+  assert.equal(f.resources.moveEnds, 1);
+  assert.equal(arrivalRotationPassed(result), false);
 });
 
 test('stalls stop after the attempt limit and still fail', async () => {

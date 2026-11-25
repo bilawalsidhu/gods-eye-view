@@ -1,15 +1,13 @@
 /**
- * Frames the reveal may take, counted from the frame it is measured from: the
- * next frame, or the one after it when the next was already in flight. The
- * settle frame is always the first frame after moveEnd. Neither is timed: the
- * angle a frame draws does not depend on how long the frame took.
+ * Frames the reveal may take after the last frame that drew the contact
+ * hidden (or the settle frame): the next frame, or the one after it when the
+ * next was already in flight. The count is not timed: the angle a frame draws
+ * does not depend on how long the frame took.
  */
 export const ARRIVAL_REVEAL_MAX_FRAMES = 2;
 
 /**
- * Wall-clock wait for the next frame. Only a renderer that stopped drawing
- * reaches it, however slow its frames are; the observation is then
- * inconclusive.
+ * Maximum wall-clock wait for the next frame before the observation ends.
  */
 export const ARRIVAL_STALL_MS = 10_000;
 
@@ -21,12 +19,13 @@ export const ARRIVAL_MAX_ATTEMPTS = 2;
 
 /**
  * Observe the first frame after a forced moveEnd (the settle frame) and the
- * first frame that draws the contact again (the reveal). The reveal is counted
- * from the settle frame, where the contact is hidden. `read` snapshots
- * visibility and rotation error against the current position. A hidden sample
- * carrying `revealStartsNow` (a frame drew the contact hidden and it was just
- * shown again) restarts the count there: the frames spent drawing it hidden
- * are the probe's setup, reported as `hiddenMs`, not part of the reveal.
+ * first frame that draws the contact again (the reveal). `startReveal` hides
+ * the contact right after the settle frame; `read` snapshots visibility and
+ * rotation error against the current position. A hidden sample carrying
+ * `revealStartsNow` marks a frame that drew the contact hidden: the reveal is
+ * counted from the last such frame, or from the settle frame when no frame is
+ * marked. The frames spent drawing it hidden are the probe's setup, reported
+ * as `hiddenMs`, not part of the reveal.
  */
 export function observeArrivalRotation({
   scene,
@@ -41,8 +40,6 @@ export function observeArrivalRotation({
     const startedAt = now();
     let moveEnd = null;
     let moveEndMs = null;
-    // Where the reveal is counted from: the settle frame, or the frame a
-    // `revealStartsNow` sample marks.
     let revealFromMs = null;
     let revealFromFrame = 0;
     let revealFrames = 0;
@@ -66,7 +63,6 @@ export function observeArrivalRotation({
       elapsedMs: now() - startedAt,
       moveEndMs,
       ...(moveEnd ? { dMoveEnd: moveEnd.rotationError } : {}),
-      flipFrame: -1,
     });
     const armStall = () => {
       clearTimer(timer);
@@ -88,6 +84,7 @@ export function observeArrivalRotation({
           startReveal();
         } else {
           revealFrames++;
+          const revealFrame = revealFrames - revealFromFrame;
           if (sample.shown) {
             // Keep the FIRST visible result, including a wrong angle. Never
             // wait for a subsequent frame to repair a failed reveal.
@@ -96,7 +93,7 @@ export function observeArrivalRotation({
               dReveal: sample.rotationError,
               shown: sample.shown,
               flipFrame: revealFrames,
-              revealFrame: revealFrames - revealFromFrame,
+              revealFrame,
               moveEndMs,
               revealMs: elapsedMs - revealFromMs,
               hiddenMs: revealFromMs - moveEndMs,
@@ -107,10 +104,7 @@ export function observeArrivalRotation({
           if (sample.revealStartsNow) {
             revealFromMs = elapsedMs;
             revealFromFrame = revealFrames;
-          } else if (
-            revealFrames - revealFromFrame >=
-            ARRIVAL_REVEAL_MAX_FRAMES
-          ) {
+          } else if (revealFrame >= ARRIVAL_REVEAL_MAX_FRAMES) {
             finish(
               unfinished(
                 `not drawn within ${ARRIVAL_REVEAL_MAX_FRAMES} frames`,
