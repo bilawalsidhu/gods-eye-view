@@ -124,7 +124,15 @@ export function cpcbProxy({
       }
       if (records.length === total) {
         const normalized = normalizeCpcbRecords({ records }, { now: now() });
-        if (!normalized || (records.length && !normalized.stations.length))
+        // Renamed station or average fields must not install an empty snapshot.
+        if (
+          !normalized ||
+          (records.length &&
+            (!normalized.stations.length ||
+              !records.some(
+                (r) => r.avg_value !== null || r.pollutant_avg !== null,
+              )))
+        )
           throw new Error('Unrecognised OGD rows');
         const snapshot = {
           schemaVersion: 1,

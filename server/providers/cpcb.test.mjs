@@ -184,3 +184,28 @@ test('a key OGD rejects is answered as rejected, without the key', async () => {
     assert.equal((await request()).status, 200);
   }
 });
+
+test('a renamed average field keeps the last good snapshot instead of a fresh empty one', async () => {
+  let clock = NOW,
+    renamed = false;
+  const request = harness({
+    apiKey: () => 'secret',
+    now: () => clock,
+    fetchImpl: async () =>
+      Response.json({
+        total: 1,
+        records: [
+          renamed
+            ? ogdRow({ avg_value: undefined, average_value: '42' })
+            : ogdRow(),
+        ],
+      }),
+  });
+  assert.equal((await request()).body.readings.length, 1);
+  renamed = true;
+  clock += 21 * 60_000;
+  const after = await request();
+  assert.equal(after.status, 200);
+  assert.equal(after.body.stale, true);
+  assert.equal(after.body.readings.length, 1);
+});

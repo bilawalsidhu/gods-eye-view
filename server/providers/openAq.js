@@ -383,29 +383,38 @@ export function createOpenAqAcquisition({
     const fresh = [...state.readings.values()]
       .flat()
       .filter((r) => now() - r.observedMs <= 6 * HOUR);
+    // A failed station check makes the view stale only once no station of it
+    // has a check younger than the check interval.
     const stale =
       limited ||
       catalogFailure !== null ||
-      (stationFailure !== null && !succeeded);
+      (stationFailure !== null &&
+        ![...state.checked.values()].some((at) => now() - at < 20 * 60_000));
     const failureStatus = !stale
       ? null
       : limited
         ? 429
         : (catalogFailure ?? stationFailure);
-    if (stale && !limited && !state.stations.size && !state.readings.size)
+    // Nothing acquired yet: a failure, not a cached view.
+    if (stale && !limited && !state.readings.size)
       throw Object.assign(error(failureStatus, 'OpenAQ request unavailable'), {
         retryAt,
       });
+    // The deadline before any catalog page or reading: a failure, not an
+    // empty view.
+    if (
+      timedOut &&
+      !state.readings.size &&
+      state.pages.every((p) => p.page === 1)
+    )
+      throw Object.assign(error(503, 'OpenAQ request unavailable'), {
+        retryAt: now() + 60_000,
+      });
     const catalogDone = state.pages.every((p) => p.done);
     const waiting = eligible.filter(needsCheck);
+    // A station's own backoff stays out of the view's retry time: a later
+    // refresh asks it again once that backoff ends.
     const ready = waiting.some((s) => !backoff(s));
-    const nextRetry = waiting.reduce(
-      (at, s) =>
-        backoff(s)
-          ? Math.min(at, state.failed.get(s.stationId) + STATION_RETRY_MS)
-          : at,
-      Infinity,
-    );
     return {
       schemaVersion: 1,
       source: 'OpenAQ',
@@ -434,9 +443,7 @@ export function createOpenAqAcquisition({
           ? now() + 60_000
           : !catalogDone || ready || timedOut
             ? now() + 8000
-            : Number.isFinite(nextRetry)
-              ? nextRetry
-              : null),
+            : null),
     };
   }
   async function acquire(key, view, parameter, mode, consumerSignal) {

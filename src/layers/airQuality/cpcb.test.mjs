@@ -327,6 +327,35 @@ test('the India source asks the local route and keeps its stale status', async (
   assert.equal(source.getCoverage('cpcb').stale, true);
 });
 
+test('a stale India snapshot is asked again on the next refresh; a fresh one is reused', async () => {
+  let clock = Date.now(),
+    stale = true;
+  const urls = [];
+  const source = createAirQualitySource({
+    now: () => clock,
+    fetchImpl: async (url) => {
+      urls.push(url);
+      return Response.json({
+        ...indiaSnapshot([row({ last_update: recent() })]),
+        stale,
+      });
+    },
+  });
+  const ask = () =>
+    source.getSnapshot({ provider: 'cpcb', parameter: 'PM2.5' });
+  await ask();
+  assert.equal(source.getCoverage('cpcb').stale, true);
+  // The route has recovered by the next layer refresh.
+  stale = false;
+  clock += 60_000;
+  await ask();
+  assert.equal(urls.length, 2);
+  assert.equal(source.getCoverage('cpcb').stale, false);
+  clock += 60_000;
+  await ask();
+  assert.equal(urls.length, 2, 'a fresh national snapshot is reused');
+});
+
 test('an already aborted India request does not fetch', async () => {
   const source = createAirQualitySource({
     fetchImpl: () => assert.fail('unexpected fetch'),

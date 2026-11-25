@@ -151,13 +151,14 @@ export function createAirQualitySnapshotSource({
           })
         : endpoint;
       // A national snapshot (no view) serves every view and pollutant: a
-      // view switch within `reuseMs` filters the same payload again.
+      // view switch within `reuseMs` filters the same payload again. One the
+      // server marks stale is not kept, so a recovery shows on the next ask.
       const reusable = !view && reuseMs > 0;
       const payload =
         reusable && reused?.url === url && now() - reused.at < reuseMs
           ? reused.payload
           : await fetchPayload(url, signal);
-      if (reusable && reused?.payload !== payload)
+      if (reusable && reused?.payload !== payload && payload.stale !== true)
         reused = { url, payload, at: now() };
       signal?.throwIfAborted();
       const readings = payload.readings

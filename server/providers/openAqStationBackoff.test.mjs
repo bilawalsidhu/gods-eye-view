@@ -79,8 +79,12 @@ test('failed station fairness: persistent failures at the four nearest stations 
   const view = [10, -10, 30, 10, 20, 0];
   let snap;
   for (let i = 0; i < 8; i++) {
-    snap = await source.getSnapshot({ view });
-    clock = Math.max(clock + 1000, (snap.retryAt ?? clock + 60_000) + 1);
+    // Nothing acquired yet and every check failed: the first answer is a 503.
+    snap = await source.getSnapshot({ view }).catch((e) => {
+      if (e.status !== 503) throw e;
+      return null;
+    });
+    clock = Math.max(clock + 1000, (snap?.retryAt ?? clock + 60_000) + 1);
   }
   assert.ok(
     snap.readings.length >= 2,
