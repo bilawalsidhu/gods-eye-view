@@ -258,8 +258,21 @@ body.mobile-shell:not(.cockpit-mode):not(.scene-playback-mode):not(
   #gev-omnibar-input {
     font-size: 16px;
   }
+  /* Results fill the height above the field (44px, 6px above the dock,
+     11px gap) up to the top inset, so a keyboard on a short screen still
+     leaves rows: the desktop reserve of 144px left none at 375px tall. */
   #gev-omnibar .omnibar-results {
     inset-inline: -62px;
+    max-height: min(
+      360px,
+      max(
+        0px,
+        calc(
+          100dvh - var(--omnibar-dock-raised) - 69px -
+            env(safe-area-inset-top, 0px) - 8px
+        )
+      )
+    );
   }
   #gev-omnibar :is(.omnibar-item, .omnibar-strip__chip) {
     min-height: 44px;
@@ -336,6 +349,12 @@ body.mobile-shell #corner-actions {
   top: calc(var(--mobile-top-inset) + 60px);
   inset-inline-end: 12px;
   bottom: auto;
+}
+
+/* A keyboard up leaves a landscape phone ~170px above it: the dock and its
+   results take that, so the corner buttons the dock would cover step aside. */
+body.mobile-shell.mobile-keyboard-open #corner-actions {
+  visibility: hidden;
 }
 
 /* Full-screen modes hide the phone chrome like the desktop chrome. Scene

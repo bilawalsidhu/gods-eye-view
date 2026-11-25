@@ -35,6 +35,8 @@ export {
 } from './mobileSheets.js';
 
 export const MOBILE_SHELL_MEDIA_QUERY = '(max-width: 720px)';
+/** On the page root while a phone keyboard covers part of the screen. */
+export const KEYBOARD_OPEN_CLASS = 'mobile-keyboard-open';
 export const MOBILE_TABS = Object.freeze([
   Object.freeze({ sheet: 'layers', label: msg('Layers'), icon: 'layers' }),
   Object.freeze({ sheet: 'cameras', label: msg('Cameras'), icon: 'videocam' }),
@@ -191,14 +193,17 @@ export function initMobileShell({
           visualViewport.height -
           visualViewport.offsetTop
         : 0;
-    writeVar(
-      '--mobile-keyboard-inset',
-      `${Math.max(0, Math.round(covered))}px`,
-    );
+    const inset = Math.max(0, Math.round(covered));
+    writeVar('--mobile-keyboard-inset', `${inset}px`);
+    // With a keyboard up the dock and its results take the screen above it;
+    // the top corner buttons step aside (mobile-shell.css).
+    if (inset > 0) body.classList.add(KEYBOARD_OPEN_CLASS);
+    else body.classList.remove(KEYBOARD_OPEN_CLASS);
   };
   const clearKeyboard = () => {
     written.delete('--mobile-keyboard-inset');
     body.style.removeProperty('--mobile-keyboard-inset');
+    body.classList.remove(KEYBOARD_OPEN_CLASS);
   };
   if (visualViewport) {
     listen(visualViewport, 'resize', measureKeyboard);

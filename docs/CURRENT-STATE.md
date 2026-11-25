@@ -921,7 +921,7 @@ lends detection for the session, the reset's detection becomes what leaving
 Contacts puts back and what a share link carries. It leaves the map source, the pinned scope terminus, Sonar's
 settings, other styles' parameters, the layers and the panels alone.
 
-With Scope off the side rails, open panels and the dock's trays carry a soft
+With Scope off the side rails, open panels and the dock carry a soft
 drop shadow and the rails' labels and icons a text shadow
 (`src/ui/styles/scope-off-shadows.css`), so their edges hold against bright
 imagery.
@@ -1704,7 +1704,7 @@ Newer manual choices, Stop and provider replacement prevent an older operation
 from revealing its UI. Ambiguous requests to open settings ask whether the user
 means Voice Settings or Provider Settings before opening either panel. Named
 Voice Settings applies directly; Provider Settings opens the existing local
-provider dialog when available. Visual Presets targets the visual controls tray,
+provider dialog when available. Visual Presets opens the Visual panel,
 while Scenes (the Authoring panel) targets saved scenes. Selecting Preview does not enable a disabled
 Preview preference. Unverified speech captions use the localized Recent
 speech label; ordinary user captions retain YOU. Caption attribution does not
@@ -1758,11 +1758,7 @@ Cockpit (as Cockpit's own state reports it) or when another card was picked
 while the action ran, which then stays, and steps a panel docked in the lane down to its bar so the rail
 shows it; a panel above the dock leaves the rail in view and stays as it is.
 Minimized panels always sit as a bar centred above the dock; restoring returns a
-docked panel to the lane. A centred panel steps down to its bar when the pointer
-reaches the Location or Visual Presets button and rests above an open tray,
-without moving keyboard focus. Expanded over an open tray, it docks into the
-lane until the trays close; a panel that stepped down expands in the centre
-again once the trays close and the pointer leaves the wings. Panel height animates when one panel replaces the
+docked panel to the lane. Panel height animates when one panel replaces the
 other or the voice view changes. Minimized voice shows the last sentence from
 each side, and the empty Voice Preview suggests things to say until voice
 starts. Settings opened from chat keep chat's frame and show the shared AI
@@ -4326,12 +4322,8 @@ they do not reduce the materialized entity count or establish an FPS gain.
 
 ## Keyboard interaction and focus
 
-- Enter on the map-source disclosure opens immediately. A short Space press
-  opens it on key release. Either route focuses the selected source once visible;
-  a bounded retry handles delayed opening transitions, and closing the tray or
-  moving focus elsewhere cancels the handoff.
 - Keyboard focus rings are a global interface state and stay visible when a
-  button is active or selected. Visual Styles, Location suboptions, Context and
+  button is active or selected. Visual Styles, Context and
   mission actions, Cockpit utilities, native fields, and sliders use the same
   visible-ring contract.
 - A short Space press on a focused control keeps its native key-release action.
@@ -4339,12 +4331,6 @@ they do not reduce the materialized entity count or establish an FPS gain.
   and push-to-talk starts; releasing a claimed hold cannot activate the old
   control. The same hold works on the map and page background. Text-entry
   controls remain protected.
-- The Location disclosure is reachable with Tab or Shift+Tab and shows a
-  keyboard focus ring. Its city, point-of-interest, search-toggle, and search
-  field controls show inset rings, including selected items. Enter toggles its
-  tray immediately, while Space does so on release; either route makes the revealed controls immediately reachable by Tab;
-  Escape closes it and clears any unfinished search. Escape from a tray control
-  returns focus to the disclosure; Escape on the disclosure clears focus after closing.
 - Data Layers ON/OFF buttons show a visible keyboard focus ring without
   changing their enabled state or feed-status presentation.
 - Display controls and shader-parameter sliders show keyboard focus in both
@@ -4398,13 +4384,6 @@ HTTP failure status and no-store policy but does not forward the upstream body.
 Existing successful, in-flight, missing-data, and stale-cache behavior remains
 in place. Failure diagnostics identify the service and, for Launch Library,
 HTTP status without printing raw exception text or upstream bodies.
-
-## Map Source keyboard focus
-
-Keyboard opening focuses the selected map-source tile, falling back to the first
-only when no source is selected. A bounded retry handles delayed tray visibility.
-Moving focus away, pointer interaction, closing the tray, or disposing the UI
-cancels pending work; a later reopening cannot inherit an old focus request.
 
 ## September 8, 2026
 
@@ -8387,8 +8366,9 @@ and unreachable upstream (502/504) separately from road geometry.
 ### Omnibar
 
 The desktop Omnibar sits above the footer with the existing mic and chat
-buttons on either side. Suggestions open upward. On phones the Omnibar is
-a field near the top, beside the Search sheet, and opens downward. While voice is on, the desktop field shows
+buttons on either side. Suggestions open upward. On phones the same dock spans
+the width above the World Timeline and tab bar, with 44px targets, rises above
+the on-screen keyboard and steps aside while a sheet is open. While voice is on, the desktop field shows
 three audio traces in place of the search text and icon. The thinking dots
 sit on the field's top edge. World Time appears immediately above the dock
 and hides while suggestions, chat, or voice settings are visible. `/`

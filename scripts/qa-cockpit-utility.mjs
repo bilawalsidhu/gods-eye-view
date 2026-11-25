@@ -881,7 +881,7 @@ try {
     const { styleManager, dataManager, viewer } = window.__godsEyeView;
     const awareness = dataManager.layers.get('military-awareness')?.module;
     const before = awareness?.getContextSnapshot?.()?.subject || null;
-    document.querySelector('#location-pills .location-pill')?.click();
+    styleManager._locationControls.chooseCity('nyc');
     await new Promise((resolve) => setTimeout(resolve, 3600));
     const after = awareness?.getContextSnapshot?.()?.subject || null;
     const released = !viewer.trackedEntity;

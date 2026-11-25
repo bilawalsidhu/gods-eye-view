@@ -887,6 +887,10 @@ test('a phone keyboard lifts the dock by the height it covers', () => {
     viewport.height = 500;
     viewport.dispatchEvent(new Event('resize'));
     assert.equal(inset(), '344px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      true,
+    );
     // The page scrolled under the keyboard: the cover is what is below.
     viewport.offsetTop = 40;
     viewport.dispatchEvent(new Event('scroll'));
@@ -896,6 +900,10 @@ test('a phone keyboard lifts the dock by the height it covers', () => {
     document.dispatchEvent(new Event('focusout'));
     runFrames();
     assert.equal(inset(), '0px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      false,
+    );
     resize(false);
     assert.equal(inset(), undefined);
     resize(true);
