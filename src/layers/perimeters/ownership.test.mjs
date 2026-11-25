@@ -13,14 +13,18 @@ import { clickCard } from '../../data/pickRegistry.js';
 import { fakeInput, fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
-// The fills set of the layer the last harness made: perimeter picks name it.
-let fillsSetId = null;
-/** A Cesium pick of a perimeter's fill, as the draw port makes it. */
-const perimeterPick = (id) => ({ id: { set: fillsSetId, id } });
+// The draw port of the layer the last harness made: perimeter picks name
+// its first fills set.
+let lastDraw = null;
 const liveSet = (draw, suffix) =>
   [...draw.sets.values()].find(
     (record) => !record.disposed && record.spec.id.endsWith(suffix),
   );
+/** A Cesium pick of a perimeter's fill, as the draw port makes it. */
+const perimeterPick = (id) => {
+  const set = liveSet(lastDraw, ':fills');
+  return { id: { set: set?.spec.id, id, meta: set?.items.get(id)?.meta } };
+};
 
 function harness(
   source,
@@ -81,10 +85,10 @@ function harness(
     inciwebPublications: { getPublication: publication },
     openExternal: (url) => opened.push(url),
   });
+  lastDraw = draw;
   if (init) {
     layer.init(viewer);
     layer.enable(viewer);
-    fillsSetId = liveSet(draw, ':fills').spec.id;
   }
   return {
     layer,
@@ -178,9 +182,10 @@ test('each piece draws as a clamped fill and its outline as draped lines, colour
         ],
       }),
   });
+  assert.equal(h.fills(), undefined, 'no sets before the first read');
+  assert.equal(await h.layer.update(h.viewer), true);
   assert.equal(h.fills().show, true);
   assert.equal(h.lines().show, true);
-  assert.equal(await h.layer.update(h.viewer), true);
   assert.deepEqual(
     [...h.fills().items.keys()],
     [
@@ -254,7 +259,11 @@ test("a pick selects only an item of the layer's own sets", async () => {
   );
   await h.layer.update(h.viewer);
   pickResult = {
-    id: { set: 'someone-else', id: 'fire-perimeter:2026-NMGNF-000123:0' },
+    id: {
+      set: 'someone-else',
+      meta: { fireId: fire.id },
+      id: 'fire-perimeter:2026-NMGNF-000123:0',
+    },
   };
   h.clicks.handler({ position: { x: 10, y: 10 } });
   assert.equal(h.overlay.entries.get('fire-perimeters')?.length ?? 0, 0);
@@ -263,6 +272,7 @@ test("a pick selects only an item of the layer's own sets", async () => {
     id: {
       set: h.lines().spec.id,
       id: 'fire-perimeter:2026-NMGNF-000123:line:0',
+      meta: h.lines().items.get('fire-perimeter:2026-NMGNF-000123:line:0').meta,
     },
   };
   h.clicks.handler({ position: { x: 10, y: 10 } });

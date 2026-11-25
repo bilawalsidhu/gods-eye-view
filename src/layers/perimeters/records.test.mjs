@@ -328,6 +328,38 @@ test('the revision follows fire ids and update times, not feed order', () => {
   );
 });
 
+test("a piece's id follows its fire's last edit, else its outline, and its place", () => {
+  const ids = (...features) =>
+    firePerimeterSnapshot(rowsOf(...features), { now: NOW }).pieces.map(
+      ({ fireId, id }) => `${fireId} ${id}`,
+    );
+  const two = {
+    geometry: { type: 'MultiPolygon', coordinates: [[ring], [ring]] },
+  };
+  assert.deepEqual(ids(feature(two)), [
+    '2026-NMGNF-000123 1757950000000/0',
+    '2026-NMGNF-000123 1757950000000/1',
+  ]);
+  assert.deepEqual(
+    ids(fixture(1, { poly_DateCurrent: 1757960000000 })),
+    ['2026-NMGNF-000123 1757960000000/0'],
+    'an edit draws the fire anew',
+  );
+  // Undated, a hash of the mapping time and outline stands in.
+  const undated = fixture(1, { poly_DateCurrent: null });
+  const shifted = {
+    ...undated,
+    geometry: {
+      type: 'Polygon',
+      coordinates: [ring.map(([lon, lat]) => [lon + 1, lat])],
+    },
+  };
+  const [first] = ids(undated);
+  assert.match(first, /^2026-NMGNF-000123 h[0-9a-z]+\/0$/);
+  assert.equal(ids(undated)[0], first, 'the same each read');
+  assert.notEqual(ids(shifted)[0], first);
+});
+
 test('the snapshot carries staleness', () => {
   const snapshot = firePerimeterSnapshot(rowsOf(feature()), {
     stale: true,

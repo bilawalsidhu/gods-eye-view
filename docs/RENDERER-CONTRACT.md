@@ -328,6 +328,33 @@ each position and its heights above it, and an image fill where the scene
 cannot drape materials (no depth textures). The check `draw.shapes.clamped`
 draws each.
 
+A set clamped as an overlay (`clampTo: 'overlay'`) draws its clamped flat
+fills and outlines, and its draped lines, as a flat layer over everything:
+on the ellipsoid, after the 3D tiles and terrain and without their depth, so
+neither hides them, and never draped onto the tiles (a ground primitive's
+volume, hundreds of kilometres wide, streaks through photoreal tiles at globe
+scale). Only the ellipsoid hides them: nothing past its horizon from the eye
+is drawn, so the far side of the globe never shows through. The GNSS
+integrity cells draw this way. The Cesium port draws the fills as one
+primitive on the ellipsoid, cut every tenth of a degree so their edges follow
+the curve, in the translucent pass with no depth test (`overlayFillAppearance`
+in `src/render/cesium/draw.js`); their outlines, and draped lines, are drawn
+as it draws draped lines where it cannot drape (`overlayLine`: on the
+ellipsoid's curve, and in their colour where the surface hides them). Fills
+and lines alike drop each fragment past the ellipsoid's horizon in their
+fragment shaders (`OVERLAY_HORIZON`), tested at the surface point over the
+fragment, since flat triangles and straight pieces pass metres under the
+ellipsoid: a line crossing the limb shows only its near part. The test is
+written so float32 decides it a few metres from an eye a metre up and
+within metres of the true horizon from any height, counts an eye under the
+ellipsoid as a metre up so low ground keeps its overlays,
+and tests a line's fragments along the segment as drawn, cut at the near
+plane. Overlay fills are colours only
+(an image fill is refused); icons, points and models clamp to an overlay as
+to `both`, and extruded shapes and walls stand on the surface as with
+`both`. The check `draw.shapes.overlay` draws one with the globe hidden and
+one past the horizon behind it.
+
 The Cesium port takes every kind of `ImageRef` wherever an image is drawn
 (icons on billboards and on the GPU, line patterns, shape fills, quads and
 raster shells): a URL, SVG, a blob (by an object URL made once per blob,
