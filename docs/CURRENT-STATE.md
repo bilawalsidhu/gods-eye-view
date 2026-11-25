@@ -10247,3 +10247,29 @@ browser-only media links, refresh cadence, and location provenance where
 available. When MLIT serves its recognized adjustment image, `/api/cctv/frame`
 returns a God’s Eye maintenance card and `/api/cctv/health` reports the camera
 as degraded with the provider-adjustment reason.
+
+### Ports & terminals — NGA World Port Index
+
+The optional `ports` core layer under Infrastructure fetches its global
+World Port Index reference snapshot through the same-origin `/api/ports`
+server proxy. The server reads a fixed NGA Pub 150 mirror hosted by DOE
+NETL, with ordered 1,000-row ArcGIS pages, 4 MiB per-page caps, monotonic
+`objectid` checks, duplicate WPI-ID refusal, and an eight-page bound.
+Terminating short pages are complete; a cap reached on full pages produces
+an explicit partial response. Capped client reads are abortable, and late
+responses cannot repopulate a disabled/destroyed layer. Successfully
+retrieved data is cached for a day, with bounded stale retention and
+retry backoff. Failure without a usable snapshot is not an empty dataset.
+
+Each marker has a stable `wpi:<number>` pick ID and a source-linked profile
+card showing name, WPI number, country code, UN/LOCODE, and Yes/No/Unknown
+facility flags. The source's mirror-edit timestamp, server retrieval date,
+and unknown NGA edition date are separately identified. Operator,
+ownership, throughput, capacity, operational status, and expansion are
+explicitly Unavailable; this is a reference-data layer rather than
+live port status or terminal-specific commercial intelligence.
+Country and positive-only facility filters are session-local.
+The layer's enabled state uses share token `03`. NGA and DOE NETL credits
+appear in the Data Attribution panel. [Design and source notes](WORLD-PORT-INDEX.md).
+Regression gates: `src/layers/ports/{records,index}.test.mjs` and
+`server/providers/ports.test.mjs`.

@@ -765,3 +765,25 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+### World Port Index ports and terminals
+
+The opt-in **Ports & terminals** layer uses US National Geospatial-Intelligence
+Agency World Port Index (Pub 150) reference records through the government-hosted
+DOE NETL ArcGIS [World Port Index mirror, layer 17](https://arcgis.netl.doe.gov/server/rest/services/Hosted/CCS_EJ_SJ_Data/FeatureServer/17).
+Source: [NGA](https://msi.nga.mil/Publications/WPI); see also
+[NGA reuse policy](https://www.nga.mil/resources/Privacy_Policy.html)
+and [NETL disclaimer](https://netl.doe.gov/home/disclaimer). NGA publication
+date is **not** inferred from mirror edit time, which remains a distinct
+reported metadata field. Data is keyless, fixed-origin, server-fetched,
+ordered paginated, and response-size limited; successful snapshots are
+cached temporarily, with explicit partial/stale/error states. The feature
+does not assume that a listed port is operating today.
+
+WPI facility flags for container, solid bulk, oil and LNG use confirmed
+affirmative entries only for filtering. Unknown is not No. Operator,
+ownership, annual throughput, handling capacity, current operational
+status and expansion are shown as Unavailable unless individually verified
+by authoritative dated records. No unsupported global commercial dataset
+is invented. Data attribution is in the application's credits panel and
+the selected-port card. Details: [World Port Index integration](docs/WORLD-PORT-INDEX.md).
