@@ -2968,8 +2968,13 @@ and a link to the photo's page. Military aircraft and a converted TR-3B are
 never looked up. A flight lookup (type, route or photo) whose source failed
 temporarily is asked again after a 60-second cool-down while the aircraft
 stays in view or tracked; an answer, found or not, and a permanent refusal
-stay final for the session. A route belongs to the callsign it was looked up
-for, so a callsign change drops the old route. See `DATA_SOURCES.md`.
+stay final for the session. A route belongs to the aircraft's current callsign
+association: a callsign change, a switch away and back (A → B → A) or the
+aircraft leaving and returning drops the old route, ignores a late answer for
+it and allows a fresh lookup. adsbdb routes carry no date, so each one keeps
+its source, the time the proxy fetched it and `verification: 'unverified-reference'`,
+and the tracked label, the voice answers and `get_aircraft_info` mark it as
+unverified. See `DATA_SOURCES.md`.
 
 `gods-eye-view/server/providers/live` is a Node-only entry for the existing
 plugins and shared request helpers. Importing it starts no sockets or timers.
@@ -4434,6 +4439,8 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   origin-to-destination minor arc also has a generous 200 km extension at
 >   either end. Missing coordinates and coincident or antipodal endpoint pairs
 >   retain their loose, unjudgeable behavior; vertical-trend checks are unchanged.
+>   A route that passes is still an undated adsbdb reference and is shown marked
+>   as unverified.
 > - **Aircraft label convention (both flight layers, 2026-08-18):** every civil
 >   and military label surface resolves **callsign → registration → icao24**
 >   (`_contactLabel()` in `flights.js`; the same chain inline in

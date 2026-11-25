@@ -1,5 +1,6 @@
-- Mark undated adsbdb aircraft routes as unverified reference data in flight
-  cards, voice context, and MCP queries, and discard delayed route enrichment
-  after a tracked aircraft's callsign changes (dvilrgamerz, #1586).
-- Reject stale callbacks after callsign reuse (A → B → A) or aircraft
-  re-admission, while allowing a fresh lookup for the new association.
+- Mark adsbdb aircraft routes as unverified in the tracked-flight label, the
+  voice answers about a selected or pointed aircraft and the
+  `get_aircraft_info` tool: adsbdb routes carry no date, so they may not match
+  today's flight. A route answer that arrives after the callsign switched away
+  and back, or after the aircraft left and returned, is no longer shown
+  (dvilrgamerz, #1586).
