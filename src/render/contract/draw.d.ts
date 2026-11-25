@@ -27,8 +27,18 @@ import type {
 /** How an item's height is read. */
 export type HeightMode = 'absolute' | 'clampGround' | 'relativeGround';
 
-/** What `clampGround` / `relativeGround` clamp to. */
-export type ClampTarget = 'terrain' | 'tiles' | 'both';
+/**
+ * What `clampGround` / `relativeGround` clamp to. `overlay`: clamped
+ * shapes' flat fills and outlines, and draped lines, are drawn on the
+ * ellipsoid (height 0) over everything else, 3D tiles and terrain included,
+ * which never hide them: neither draped onto the tiles nor hidden under
+ * them. Only the ellipsoid hides them: what lies past its horizon from the
+ * eye is not drawn (the far side of the globe never shows through it).
+ * Their edges follow the surface's curve between their positions, as a
+ * draped item's do. Icons, points and models clamp to an `overlay` as to
+ * `both`; extruded shapes and walls stand on the surface as with `both`.
+ */
+export type ClampTarget = 'terrain' | 'tiles' | 'both' | 'overlay';
 
 /**
  * `cluster`: screen-space clustering of a set's icons. Which icons cluster
@@ -754,7 +764,8 @@ export interface DrawPort {
   field?(spec: FieldSpec): FieldHandle;
   /**
    * Whether clamped items (`clampTo: 'tiles' | 'both'`, draped lines and
-   * shapes) are draped onto the 3D tiles now (`draped`), or drawn over them
+   * shapes; never `overlay` ones, always drawn over the tiles) are draped
+   * onto the 3D tiles now (`draped`), or drawn over them
    * and hidden past the ellipsoid's horizon (`overlay`), the fallback a
    * renderer uses where it cannot drape. Without tiles in the base it is
    * `draped`: clamping to terrain or the ellipsoid always drapes, on a
