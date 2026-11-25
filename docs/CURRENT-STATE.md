@@ -4451,6 +4451,14 @@ The `get_active_fires` tool reports acquisition times as UTC ISO timestamps,
 including zero-padded hours and minutes; missing or invalid dates and times
 remain `null`, including impossible calendar dates from a custom source.
 
+`/api/firms` keeps the serialised body and reuses it for the same cache entry
+and `stale` flag while the trailing-24-hour filter keeps the same detections.
+With a live feed that is about a minute: the span ends when the oldest kept
+acquisition minute turns 24 hours old, and a clock set back rebuilds the body.
+Payload responses carry `Vary: Accept-Encoding` and are gzipped once per kept
+body for clients that accept gzip; bodies under 1 KiB or ones gzip cannot
+shrink stay identity.
+
 The FIRMS proxy records source success after appending its rows. If aggregation
 throws, that source reports failure without a contradictory success entry.
 The existing per-record append continues to support large feeds; sequential

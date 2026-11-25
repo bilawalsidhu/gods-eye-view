@@ -199,7 +199,9 @@ Callers retain their request admission and transport policy.
 
 `gods-eye-view/sources/firms-csv` exports the existing CSV parser, header
 recognition, acquisition-time conversion and trailing-day filter independently
-of the Node middleware. It imports no Node, DOM, rendering or network code.
+of the Node middleware, and `trailing24hWindow`, which returns that filter's
+records with the span of clock values over which they stay the same. It imports
+no Node, DOM, rendering or network code.
 The Node provider continues using the same implementation; contract fixtures
 cover malformed rows, acquisition times, empty feeds and the inclusive time
 window. The boundary gate checks each entry independently.
