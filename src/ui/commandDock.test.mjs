@@ -329,13 +329,12 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
       'layers:layers:Layers',
       'cameras:videocam:Cameras',
       'context:radar:Context',
-      'search:search:Search',
       'more:more_horiz:More',
     ],
   );
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false', 'false'],
+    ['false', 'false', 'false', 'false'],
   );
   store.publishPhoneShell({
     enabled: true,
@@ -346,7 +345,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, false);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'true', 'false', 'false'],
+    ['false', 'false', 'true', 'false'],
   );
   store.publishPhoneShell({ enabled: false, sheet: null, tabs: MOBILE_TABS });
   await nextTick();
@@ -354,7 +353,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, true);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false', 'false'],
+    ['false', 'false', 'false', 'false'],
   );
   store.publishPhoneShell(null);
   await nextTick();
@@ -383,6 +382,10 @@ test('the phone tabs are labelled in the UI language', async (t) => {
 test('closing a sheet returns focus to its tab once the tab bar shows it closed', async (t) => {
   const { $, pinia } = fixture(t);
   const store = useDisplayStore(pinia);
+  // The Cameras sheet's first panel, with its first control.
+  const cctv = document.body.appendChild(document.createElement('section'));
+  cctv.id = 'cctv-panel';
+  cctv.appendChild(document.createElement('button')).id = 'cctv-first';
   const init = () =>
     initMobileShell({
       documentRef: document,
@@ -398,12 +401,12 @@ test('closing a sheet returns focus to its tab once the tab bar shows it closed'
   let shell = init();
   t.after(() => shell.destroy());
   await nextTick();
-  const tab = $('#mobile-tab-bar [data-mobile-sheet="search"]');
+  const tab = $('#mobile-tab-bar [data-mobile-sheet="cameras"]');
   tab.focus();
   tab.click();
   await nextTick();
   assert.equal(tab.getAttribute('aria-expanded'), 'true');
-  assert.equal(document.activeElement?.id, 'location-search');
+  assert.equal(document.activeElement?.id, 'cctv-first');
   let expandedAtFocus = null;
   tab.addEventListener('focus', () => {
     expandedAtFocus = tab.getAttribute('aria-expanded');

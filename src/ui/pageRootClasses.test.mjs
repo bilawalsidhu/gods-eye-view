@@ -22,7 +22,6 @@ import IntelHudView from './views/IntelHudView.vue';
 import LayerPanelsView from './views/LayerPanelsView.vue';
 import StoriesView from './views/StoriesView.vue';
 import WelcomeView from './views/WelcomeView.vue';
-import LocalePicker from './views/panels/LocalePicker.vue';
 import Omnibar from './views/panels/Omnibar.vue';
 import WorldTimeline from './views/panels/WorldTimeline.vue';
 
@@ -232,17 +231,6 @@ test('the World Timeline holds has-world-timeline while it is drawn', async (t) 
   assert.ok(!on('has-world-timeline'));
 });
 
-test('the language picker holds has-locale-picker while it is drawn', (t) => {
-  const { unmount } = mount(t, LocalePicker, {
-    current: 'en',
-    onSelect: () => {},
-  });
-  assert.ok(document.getElementById('locale-picker'));
-  assert.ok(on('has-locale-picker'));
-  unmount();
-  assert.ok(!on('has-locale-picker'));
-});
-
 test('the panel stack holds left-panel-open while a panel directly in it is open', async (t) => {
   const { unmount } = mount(t, LayerPanelsView);
   await settle();
@@ -432,9 +420,9 @@ const ROOT_CLASSES = Object.freeze({
   'launcher-shown': '#first-run-launcher',
   'loading-screen-shown': '#loading-screen:not(.hidden)',
   'has-world-timeline': '#world-timeline',
-  'has-locale-picker': '#locale-picker',
-  'has-omnibar': '#gev-omnibar',
 });
+// has-omnibar and dock-has-voice are selected only together, inside a
+// :where() that adds no weight (omnibar-dock.css).
 
 /** The compound selectors of `selector`, split at combinators and commas outside parentheses. */
 function compounds(selector) {

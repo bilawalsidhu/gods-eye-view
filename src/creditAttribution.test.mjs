@@ -269,18 +269,21 @@ const RECOGNIZED = new Set([
 
 const DOCKED_RAIL = 'body.context-docked #right-context-rail';
 
-// The desktop Omnibar layout: the scope its stylesheet nests every rule in.
-// It applies on the desktop shell (above the 720px phone breakpoint) while
-// the Omnibar and the voice control share the dock; outside it the legacy
-// layout below governs.
+// The Omnibar layout: the scopes its stylesheet nests every rule in. The dock
+// scope applies at every width while the Omnibar and the voice control share
+// the dock; the desktop scope, which places the credits and corners around
+// it, applies on the desktop shell (above the 720px phone breakpoint).
+// Outside them the legacy layout below governs.
+const OMNIBAR_DOCK_SCOPE =
+  'body:not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(.has-omnibar.dock-has-voice *)';
 const OMNIBAR_SCOPE =
   'body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(.recording-mode):where(.has-omnibar.dock-has-voice *)';
 const OMNIBAR = Object.freeze({
-  dock: `${OMNIBAR_SCOPE} #command-dock`,
+  dock: `${OMNIBAR_DOCK_SCOPE} #command-dock`,
   credit: `${OMNIBAR_SCOPE} :is(#cesium-credits, #gev-credits)`,
   minimalCredit: `${OMNIBAR_SCOPE}:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) :is(#cesium-credits, #gev-credits)`,
   minimalRail: `${OMNIBAR_SCOPE}:not(.context-docked):is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active) #right-context-rail`,
-  trays: `${OMNIBAR_SCOPE} #command-dock > :is(#location-bar, #control-panel)`,
+  trays: `${OMNIBAR_DOCK_SCOPE} #command-dock > :is(#location-bar, #control-panel)`,
 });
 // What each Omnibar-scope rule may set on a modelled box; the Omnibar
 // clearance test resolves every one of them through the full cascade.
@@ -609,7 +612,7 @@ test('the model refuses every cascade construct it cannot resolve', () => {
     // Expanded Context covers the right edge top to bottom; the credit row
     // stops short of it instead (the docked-Context test below).
     if (part === DOCKED_RAIL) continue;
-    if (part.startsWith(OMNIBAR_SCOPE)) {
+    if (part.startsWith(OMNIBAR_SCOPE) || part.startsWith(OMNIBAR_DOCK_SCOPE)) {
       const allowed = OMNIBAR_RECOGNIZED.get(part);
       for (const decl of guarded) {
         if (!allowed?.has(decl.prop))
@@ -875,9 +878,13 @@ test('right rail measurement cannot persist into a painted attribution layout', 
 
 // ── Clearance ───────────────────────────────────────────────────────────────
 
-/** A custom property's value as the Omnibar scope declares it. */
+/** A custom property's value as the Omnibar scopes declare it. */
 function omnibarVar(name) {
-  const decls = RULES.filter((rule) => rule.parts.includes(OMNIBAR_SCOPE))
+  const decls = RULES.filter(
+    (rule) =>
+      rule.parts.includes(OMNIBAR_SCOPE) ||
+      rule.parts.includes(OMNIBAR_DOCK_SCOPE),
+  )
     .flatMap((rule) => rule.decls)
     .filter((decl) => decl.prop === name);
   assert.equal(
