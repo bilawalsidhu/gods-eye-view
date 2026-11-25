@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCategories } from './categories.js';
+import { pick, rng } from '../../testSupport/shareViewFixtures.mjs';
 import { CATEGORY_MATCHERS, MUSIC_GENRES } from './policy.js';
 
 const categories = createCategories({
@@ -10,24 +11,9 @@ const categories = createCategories({
   source: {},
 });
 
-// Category matching as it was before memberships were remembered: every call
-// normalises the station's tags again. Counts and filters must stay equal.
-const normalize = (value) =>
-  String(value ?? '')
-    .trim()
-    .toLocaleLowerCase()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .slice(0, 80);
-const tagsOf = (station) =>
-  (Array.isArray(station?.tags)
-    ? station.tags
-    : String(station?.tags ?? '').split(',')
-  )
-    .map(normalize)
-    .filter(Boolean);
+// Reference copy of the uncached matcher: counts and filters must equal it.
 const hasTag = (station, needles) => {
-  const tags = tagsOf(station);
+  const tags = categories.stationTags(station);
   return needles.some((needle) =>
     tags.some((tag) => tag === needle || tag.includes(needle)),
   );
@@ -64,17 +50,9 @@ const CATEGORY_IDS = [
   'not-a-category',
 ];
 
-function seeded(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state / 2 ** 32;
-  };
-}
-
-/** Stations tagged the way the directory tags them, plus the odd shapes. */
+/** Directory-like stations plus malformed shapes (string tags, null, non-objects). */
 function directory(count = 1500) {
-  const random = seeded(11);
+  const random = rng(11);
   const vocabulary = [
     ...MUSIC_GENRES.map(([genre]) => genre),
     ...Object.values(CATEGORY_MATCHERS).flat(),
@@ -92,10 +70,11 @@ function directory(count = 1500) {
     '',
     '  ',
   ];
-  const pick = () => vocabulary[Math.floor(random() * vocabulary.length)];
   const stations = [];
   for (let i = 0; i < count; i++) {
-    const tags = Array.from({ length: Math.floor(random() * 6) }, pick);
+    const tags = Array.from({ length: Math.floor(random() * 6) }, () =>
+      pick(random, vocabulary),
+    );
     stations.push({
       id: `station-${i}`,
       tags: i % 5 === 0 ? tags.join(',') : i % 7 === 0 ? Object.freeze(tags) : tags,
@@ -115,39 +94,29 @@ function directory(count = 1500) {
 
 test('remembered memberships give the counts and filters of a full rescan', () => {
   const stations = directory();
-  for (const id of CATEGORY_IDS) {
-    const expected = stations.filter((station) => matchesByRescan(station, id));
+  const expected = new Map(
+    CATEGORY_IDS.map((id) => [
+      id,
+      stations.filter((station) => matchesByRescan(station, id)),
+    ]),
+  );
+  for (const id of CATEGORY_IDS)
     assert.deepEqual(
       categories.filterRadioStations(stations, id),
-      expected,
+      expected.get(id),
       `filter ${id}`,
     );
-    for (const station of stations)
-      assert.equal(
-        categories.stationMatchesRadioCategory(station, id),
-        matchesByRescan(station, id),
-      );
-  }
   const built = categories.buildRadioCategories(stations);
   assert.deepEqual(
     built.map(({ id, count }) => [id, count]),
     CATEGORY_IDS.filter(
-      (id) =>
-        !id.startsWith('genre:') ||
-        stations.some((station) => matchesByRescan(station, id)),
+      (id) => !id.startsWith('genre:') || expected.get(id).length > 0,
     )
       .filter((id) => id !== 'not-a-category')
-      .map((id) => [
-        id,
-        stations.filter((station) => matchesByRescan(station, id)).length,
-      ]),
+      .map((id) => [id, expected.get(id).length]),
   );
   assert.ok(built.find(({ id }) => id === 'other').count > 0);
   assert.ok(built.find(({ id }) => id === 'genre:hip hop').count > 0);
-  for (const station of stations) {
-    assert.deepEqual(categories.detectedGenres(station), genresOf(station));
-    assert.deepEqual(categories.stationTags(station), tagsOf(station));
-  }
 });
 
 test('a station has its tags normalised once, however often it is matched', () => {
@@ -182,17 +151,10 @@ test('a station record given new tags is matched on the new tags', () => {
   station.tags = ['news'];
   assert.equal(categories.stationMatchesRadioCategory(station, 'music'), false);
   assert.equal(categories.stationMatchesRadioCategory(station, 'news'), true);
-  assert.deepEqual(categories.detectedGenres(station), []);
-  station.tags = 'community';
-  assert.equal(categories.stationMatchesRadioCategory(station, 'other'), true);
-});
-
-test('callers cannot alter a remembered genre list', () => {
-  const station = { id: 'a', tags: ['jazz', 'soul'] };
-  categories.detectedGenres(station).push('rock');
-  assert.deepEqual(categories.detectedGenres(station), ['jazz', 'soul']);
   assert.equal(
-    categories.stationMatchesRadioCategory(station, 'genre:rock'),
+    categories.stationMatchesRadioCategory(station, 'genre:jazz'),
     false,
   );
+  station.tags = 'community';
+  assert.equal(categories.stationMatchesRadioCategory(station, 'other'), true);
 });

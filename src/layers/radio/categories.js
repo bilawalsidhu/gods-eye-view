@@ -32,12 +32,9 @@ export function createCategories({
       tags.some((tag) => tag === needle || tag.includes(needle)),
     );
 
-  // A station's tags decide its categories, and neither changes while the
-  // station record lives. Matching used to normalise every tag again for
-  // every needle of every category of every station: about 0.9 s and a
-  // 445 ms freeze per directory load of 750 stations, repeated for the active
-  // filter on every horizon scan. Keyed by the record and its tags value, so
-  // a record given new tags is read again.
+  // Station records and their tags are frozen (catalogModel.freezeRadioStation),
+  // so a station's categories are worked out once. Only the tags reference is
+  // checked: an array edited in place keeps its old categories.
   const membershipByStation = new WeakMap();
 
   function stationMembership(station) {
@@ -51,21 +48,12 @@ export function createCategories({
     const categories = new Set(genres.map((genre) => `genre:${genre}`));
     for (const [id, needles] of Object.entries(CATEGORY_MATCHERS))
       if (tagsInclude(tags, needles)) categories.add(id);
-    const sorted = categories.size > genres.length;
     if (genres.length > 0 || tagsInclude(tags, ['music', 'hits', 'songs']))
       categories.add('music');
-    else if (!sorted) categories.add('other');
-    const membership = { source: station?.tags, tags, genres, categories };
+    if (categories.size === 0) categories.add('other');
+    const membership = { source: station?.tags, categories };
     if (keyed) membershipByStation.set(station, membership);
     return membership;
-  }
-
-  function hasTag(station, needles) {
-    return tagsInclude(stationMembership(station).tags, needles);
-  }
-
-  function detectedGenres(station) {
-    return [...stationMembership(station).genres];
   }
 
   /** Return whether a station belongs in a station-tag category. */
@@ -138,8 +126,6 @@ export function createCategories({
   return {
     normalizeRadioTag,
     stationTags,
-    hasTag,
-    detectedGenres,
     stationMatchesRadioCategory,
     buildRadioCategories,
     filterRadioStations,
