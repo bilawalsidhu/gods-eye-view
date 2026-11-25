@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 
 import { filterTrailing24h, parseFirmsCsv } from '../../src/data/firmsCsv.js';
 import { readResponseTextCapped } from './common/http.js';
+import { createInpeFires } from './inpeQueimadas.js';
 
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -147,8 +148,13 @@ export async function fetchFirms(
  *   GET /api/firms        → {fetchedAt, stale, ttlMs, sources, count, fires}
  *   GET /api/firms/status → {hasKey, lastFetch, count, stale, ttlMs, transactions}
  *
- * Keyless (no FIRMS_MAP_KEY): /api/firms → 503 {error:'no_key'}; status →
- * {hasKey:false}. Upstream is never touched without a key.
+ * Keyless (no FIRMS_MAP_KEY): /api/firms serves INPE Programa Queimadas'
+ * South American detections (server/providers/inpeQueimadas.js) with
+ * `provider: 'inpe'` and `coverage: 'south-america'`, refreshed every 10
+ * minutes under the same single-flight and serve-stale rules. Status reports
+ * {hasKey:false, keyless:'inpe'}. FIRMS_INPE_ENABLED=0 restores the old
+ * keyless answer, 503 {error:'no_key'}. FIRMS itself is never touched without
+ * a key.
  *
  * /api/firms answers the trailing 24 hours to now. A source may instead
  * answer the 24 hours to a set time, naming its end as `at` (epoch ms); the
@@ -181,6 +187,16 @@ export function firmsProxy() {
   let statusInflight = null;
 
   const mapKey = () => String(process.env.FIRMS_MAP_KEY || '').trim();
+
+  /** INPE publishes every 10 minutes; refreshing faster would only re-read the listing. */
+  const INPE_TTL_MS = 10 * 60_000;
+  const inpeEnabled = () =>
+    String(process.env.FIRMS_INPE_ENABLED ?? '').trim() !== '0';
+  const inpe = createInpeFires();
+  /** @type {?{at: number, sources: Array<object>, fires: Array<object>}} */
+  let inpeMem = null;
+  /** @type {?Promise<?{at: number, sources: Array<object>, fires: Array<object>}>} */
+  let inpeInflight = null;
 
   async function readDiskOnce() {
     if (diskChecked) return;
@@ -275,6 +291,51 @@ export function firmsProxy() {
     };
   }
 
+  /** The keyless payload: FIRMS' shape plus where its detections come from. */
+  function buildInpePayload(entry, stale) {
+    return {
+      ...buildPayload(entry, stale),
+      ttlMs: INPE_TTL_MS,
+      provider: 'inpe',
+      coverage: 'south-america',
+    };
+  }
+
+  /** Keyless path: INPE's South American detections, same cache rules as FIRMS. */
+  async function serveInpe(sendJson) {
+    const entry = inpeMem;
+    if (entry && Date.now() - entry.at < INPE_TTL_MS) {
+      sendJson(200, buildInpePayload(entry, false));
+      return;
+    }
+    if (!inpeInflight) {
+      inpeInflight = inpe
+        .refresh()
+        .then((fresh) => {
+          inpeMem = fresh;
+          return fresh;
+        })
+        .catch((err) => {
+          console.warn(
+            `[firms-proxy] INPE refresh failed (${err?.message || err}) — serving cache if any`,
+          );
+          return null;
+        })
+        .finally(() => {
+          inpeInflight = null;
+        });
+    }
+    const pending = inpeInflight;
+    const fresh = await pending;
+    if (fresh) {
+      sendJson(200, buildInpePayload(fresh, false));
+    } else if (entry) {
+      sendJson(200, buildInpePayload(entry, true));
+    } else {
+      sendJson(502, { error: 'INPE fetch failed and no cache available' });
+    }
+  }
+
   /** mapkey_status transactions, cached 5 min, best-effort (null on failure). */
   function getTransactions(key) {
     const now = Date.now();
@@ -334,12 +395,17 @@ export function firmsProxy() {
 
         if (subPath === '/status') {
           if (!key) {
+            const keyless = inpeEnabled();
             sendJson(200, {
               hasKey: false,
-              lastFetch: null,
-              count: null,
-              stale: false,
-              ttlMs: TTL_MS,
+              keyless: keyless ? 'inpe' : null,
+              lastFetch: keyless && inpeMem ? inpeMem.at : null,
+              count: keyless && inpeMem ? inpeMem.fires.length : null,
+              stale:
+                keyless && inpeMem
+                  ? Date.now() - inpeMem.at >= INPE_TTL_MS
+                  : false,
+              ttlMs: keyless ? INPE_TTL_MS : TTL_MS,
               transactions: null,
             });
             return;
@@ -357,7 +423,8 @@ export function firmsProxy() {
         }
 
         if (!key) {
-          sendJson(503, { error: 'no_key' });
+          if (inpeEnabled()) await serveInpe(sendJson);
+          else sendJson(503, { error: 'no_key' });
           return;
         }
 

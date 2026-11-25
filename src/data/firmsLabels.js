@@ -5,6 +5,7 @@
  */
 
 import { FRP_RAMP, hexToRgb } from './firmsIntensity.js';
+import { msg } from '../i18n/index.js';
 
 /** Shipped ambient FIRMS card ceiling. Selected fires bypass this cohort. */
 export const FIRMS_AMBIENT_COHORT_LIMIT = 18;
@@ -53,6 +54,19 @@ export function accentForSeverity(stopName) {
 export function formatFrpMw(frp) {
   const digits = Number(Number(frp).toFixed(1)) >= 10 ? 0 : 1;
   return Number(frp).toFixed(digits);
+}
+
+/**
+ * The English entity label a fire registers for voice and context readouts;
+ * src/voice/speech.js translates both forms. A detection without FRP (INPE
+ * publishes none) reads "FIRE" rather than "Fire · FRP 0.0 MW".
+ * @param {?number} frp Megawatts, or null when the source has none.
+ * @returns {string}
+ */
+export function fireEntityLabel(frp) {
+  return Number.isFinite(frp)
+    ? `Fire · FRP ${formatFrpMw(frp)} MW` // i18n-ignore: English entity label; the voice card translates it
+    : msg('FIRE');
 }
 
 /** Raw FIRMS satellite code → short display name (N = Suomi NPP). */

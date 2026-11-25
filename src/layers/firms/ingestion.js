@@ -44,6 +44,7 @@ export function createIngestion({
       layerState._keyRequired = false;
       layerState._error = null;
       layerState._stale = Boolean(payload?.stale);
+      layerState._provider = payload?.provider === 'inpe' ? 'inpe' : 'firms';
       // A snapshot of the 24 hours to a set time names it; one of the
       // trailing 24 hours to now does not.
       layerState._at = isSnapshotEnd(payload?.at) ? payload.at : null;

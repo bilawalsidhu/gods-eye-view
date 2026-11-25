@@ -14,6 +14,12 @@ import {
   formatFrpMw,
 } from '../../data/firmsLabels.js';
 import { FRP_RAMP, frpRampStop } from '../../data/firmsIntensity.js';
+
+/**
+ * Megawatts a detection without FRP (INPE publishes none) is colored as: the
+ * middle 'flame' stop, so unknown heat reads neither weakest nor hottest.
+ */
+const UNKNOWN_FRP_COLOR_MW = FRP_RAMP[2].minFrp;
 import {
   VIEW_PADDING,
   DETECTION_COLOR_STOPS,
@@ -124,7 +130,10 @@ export function createModel({
 
   function heatScore(cell) {
     return (
-      cell.intensity + cell.count * 0.8 + cell.night * 0.6 + cell.maxFrp * 0.12
+      cell.intensity +
+      cell.count * 0.8 +
+      cell.night * 0.6 +
+      (cell.maxFrp ?? 0) * 0.12
     );
   }
 
@@ -151,7 +160,10 @@ export function createModel({
    */
 
   function detectionColorStop(fire) {
-    return frpColorStop(fire?.frp);
+    // A detection with no FRP (INPE publishes none) is drawn mid-ramp: its
+    // heat is unknown, not zero.
+    const frp = Number.isFinite(fire?.frp) ? fire.frp : UNKNOWN_FRP_COLOR_MW;
+    return frpColorStop(frp);
   }
 
   /** FRP → core marker pixel size, clamped to 8..28px. */
@@ -315,11 +327,13 @@ export function createModel({
    */
 
   function buildSelectedFireCard(fire, nowMs) {
-    const meta = [
-      t('{value} conf', {
-        value: confidenceLabel(confidenceBucket(fire.confidence)),
-      }),
-    ];
+    const meta = Number.isFinite(fire.confidence)
+      ? [
+          t('{value} conf', {
+            value: confidenceLabel(confidenceBucket(fire.confidence)),
+          }),
+        ]
+      : [];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(t('{value} ago', { value: age }));
@@ -336,7 +350,9 @@ export function createModel({
       cullPosition: fireCullPosition(fire),
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: Number.isFinite(fire.frp)
+        ? t('FIRE · {frp} MW', { frp: formatFrpLabel(fire.frp) })
+        : t('FIRE'),
       details: [
         meta.join(' · '),
         formatLatLonLabel(fire.lat, fire.lon) +
@@ -360,7 +376,9 @@ export function createModel({
 
   function buildFireCard(candidate, nowMs) {
     const fire = candidate.fire;
-    const meta = [confidenceLabel(confidenceBucket(fire.confidence))];
+    const meta = Number.isFinite(fire.confidence)
+      ? [confidenceLabel(confidenceBucket(fire.confidence))]
+      : [];
     if (fire.acqMs > 0) {
       const age = formatAgeLabel(nowMs - fire.acqMs);
       if (age) meta.push(age);
@@ -374,7 +392,9 @@ export function createModel({
       cullPosition: candidate.cullPosition || candidate.position,
       gapPx: frpPixelSize(fire.frp),
       accent: accentForSeverity(detectionColorStop(fire).name),
-      title: t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) }),
+      title: Number.isFinite(fire.frp)
+        ? t('▲ {frp} MW', { frp: formatFrpLabel(fire.frp) })
+        : t('FIRE'),
       details: [meta.join(' · ')],
       selected: false,
       priority: Number(fire.frp) || 0,
@@ -392,7 +412,9 @@ export function createModel({
 
   function buildCellCard(candidate, nowMs) {
     const cell = candidate.cell;
-    const parts = [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })];
+    const parts = Number.isFinite(cell.maxFrp)
+      ? [t('max {value} MW', { value: formatFrpLabel(cell.maxFrp) })]
+      : [];
     if (cell.newestAcqMs > 0) {
       const age = formatAgeLabel(nowMs - cell.newestAcqMs);
       if (age) parts.push(t('new {value}', { value: age }));
@@ -456,7 +478,10 @@ export function createModel({
    */
 
   function cellCardAccent(cell) {
-    return accentForSeverity(frpColorStop(cell?.maxFrp ?? 0).name);
+    const frp = Number.isFinite(cell?.maxFrp)
+      ? cell.maxFrp
+      : UNKNOWN_FRP_COLOR_MW;
+    return accentForSeverity(frpColorStop(frp).name);
   }
 
   /** Coordinate line like "30.512°N 75.831°E". */
