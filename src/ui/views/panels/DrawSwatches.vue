@@ -6,11 +6,15 @@ import {
   DRAW_COLOR_CSS,
   DRAW_COLOR_NAMES,
 } from '../../../annotations/drawMarks.js';
+import UiButton from '../../kit/UiButton.vue';
 
 // Draw's five colours as one radio group: the next shape's colour and a
 // drawn shape's picker. Only the checked colour is a tab stop; the arrows,
 // Home and End move to and choose another, as a radio group's do. Each swatch
 // shows its colour from DRAW_COLOR_CSS, the same value the shape is drawn in.
+// The swatches are ghost UiButtons with role="radio": they say they are
+// chosen with aria-checked and their own `active` class, never aria-pressed,
+// and `buttons` keeps their elements for the arrows.
 // The template is one line: templates keep whitespace.
 const props = defineProps({
   modelValue: { type: String, default: 'primary' },
@@ -44,5 +48,5 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="draw-colors" role="radiogroup" :aria-label="props.label" @keydown="onKey"><button v-for="(color, index) in DRAW_COLORS" :key="color" :ref="(el) => (buttons[index] = el)" type="button" class="draw-color" :class="{ active: color === props.modelValue }" role="radio" :data-color="color" :data-control="`color-${color}`" :aria-checked="String(color === props.modelValue)" :tabindex="color === props.modelValue ? 0 : -1" :style="{ background: DRAW_COLOR_CSS[color] }" :title="t(DRAW_COLOR_NAMES[color])" :aria-label="t(DRAW_COLOR_NAMES[color])" @click="emit('update:modelValue', color), emit('choose', color)"></button></div>
+  <div class="draw-colors" role="radiogroup" :aria-label="props.label" @keydown="onKey"><UiButton v-for="(color, index) in DRAW_COLORS" :key="color" :ref="(swatch) => (buttons[index] = swatch?.$el)" class="draw-color" :class="{ active: color === props.modelValue }" role="radio" :data-color="color" :data-control="`color-${color}`" :aria-checked="String(color === props.modelValue)" :tabindex="color === props.modelValue ? 0 : -1" :style="{ background: DRAW_COLOR_CSS[color] }" :label="t(DRAW_COLOR_NAMES[color])" @click="emit('update:modelValue', color), emit('choose', color)" /></div>
 </template>

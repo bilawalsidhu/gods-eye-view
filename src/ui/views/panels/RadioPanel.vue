@@ -52,10 +52,10 @@ const radioWords = computed(() => ({
     </div>
     <RadioTuner />
     <div class="radio-transport" role="group" :aria-label="t('Radio playback')">
-      <button id="radio-prev-btn" @click="act('cycleRadio', -1)" type="button" :aria-label="t('Previous filtered station')" :disabled="radio ? radio.transport.stepDisabled : true">{{ t('PREV') }}</button>
-      <button id="radio-play-btn" @click="act('toggleRadioPlayback')" type="button" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected station')" :disabled="radio ? radio.transport.play.disabled : true">{{ radio ? radio.transport.play.text : t('PLAY') }}</button>
-      <button id="radio-next-btn" @click="act('cycleRadio', 1)" type="button" :aria-label="t('Next filtered station')" :disabled="radio ? radio.transport.stepDisabled : true">{{ t('NEXT') }}</button>
-      <button id="radio-stop-btn" @click="act('stopRadio')" type="button" :aria-label="t('Stop radio playback')" :disabled="radio ? radio.transport.stopDisabled : true">{{ t('STOP') }}</button>
+      <UiButton id="radio-prev-btn" @click="act('cycleRadio', -1)" :aria-label="t('Previous filtered station')" :disabled="radio ? radio.transport.stepDisabled : true">{{ t('PREV') }}</UiButton>
+      <UiButton id="radio-play-btn" @click="act('toggleRadioPlayback')" v-class-toggle="{ active: radio?.transport.play.active }" :aria-label="radio ? radio.transport.play.label : t('Play selected station')" :disabled="radio ? radio.transport.play.disabled : true">{{ radio ? radio.transport.play.text : t('PLAY') }}</UiButton>
+      <UiButton id="radio-next-btn" @click="act('cycleRadio', 1)" :aria-label="t('Next filtered station')" :disabled="radio ? radio.transport.stepDisabled : true">{{ t('NEXT') }}</UiButton>
+      <UiButton id="radio-stop-btn" @click="act('stopRadio')" :aria-label="t('Stop radio playback')" :disabled="radio ? radio.transport.stopDisabled : true">{{ t('STOP') }}</UiButton>
     </div>
     <label class="radio-volume-row" for="radio-volume">
       <span>{{ t('VOLUME') }}</span>

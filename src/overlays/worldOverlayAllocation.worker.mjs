@@ -1,3 +1,4 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import * as Cesium from 'cesium';
 import {
   AMBIENT_CARD_COLLISION_CAPACITY,
@@ -84,6 +85,7 @@ import {
   setDetectionTuning,
   setMode as setDetectionMode,
 } from '../data/detection.js';
+import { withEntityRecord } from '../data/entityRecords.js';
 
 /**
  * @module worldOverlayAllocation.worker
@@ -319,6 +321,7 @@ function installMockEnvironment({ width, height, dpr }) {
     },
     scene: { postRender, requestRender() {} },
   };
+  bindOverlayPorts(viewer);
 
   return {
     viewer,
@@ -650,16 +653,19 @@ function buildPhase3TrackedWorkload(count) {
     ({ selected }) => selected,
   );
   const selected = vesselRegistration.entries.splice(selectedIndex, 1)[0];
-  const trackedEntity = {
-    gevTrackedId: 'flights:allocation-probe',
-    gevDisplayPosition: selected.position,
-    gevLabelModel: {
-      // i18n-ignore: benchmark fixture
-      title: 'ALLOC01',
-      details: ['FL350 · 451 kts', 'TEST AIR · A320'],
-      accent: '#39d0ff',
+  const trackedEntity = withEntityRecord(
+    {},
+    {
+      trackedId: 'flights:allocation-probe',
+      displayPosition: selected.position,
+      labelModel: {
+        // i18n-ignore: benchmark fixture
+        title: 'ALLOC01',
+        details: ['FL350 · 451 kts', 'TEST AIR · A320'],
+        accent: '#39d0ff',
+      },
     },
-  };
+  );
   const tracked = createTrackedOverlayEntry(trackedEntity);
   tracked.horizonCull = false;
   vesselRegistration.options = {
@@ -801,7 +807,7 @@ function buildPhase5BikeshareWorkload(count) {
     isInstalled: true,
     isRenting: true,
     isReturning: true,
-    point: { position },
+    position,
   });
   entry.horizonCull = false;
   workload.registrations.push({

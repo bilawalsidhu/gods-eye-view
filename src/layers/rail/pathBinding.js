@@ -1,3 +1,4 @@
+import { FIX_FLAGS } from '../../data/contactPlayback.js';
 import { pointAtS, projectOnPath } from '../../data/railPaths.js';
 
 /**
@@ -47,11 +48,45 @@ export function pathWindowM(dtMs) {
   return window > PATH_WINDOW_MAX_M ? NaN : window;
 }
 
+/**
+ * Arc a train must move before it tells which way it runs (m); a standing
+ * train's GPS jitter stays within it.
+ */
+export const DIRECTION_MIN_M = 15;
+
+/**
+ * The direction after one more arc position `s`: once `s` is DIRECTION_MIN_M
+ * or more from `turn.s`, the sign of that move, and `turn.s` moves to `s`.
+ */
+function steer(direction, turn, s) {
+  if (!Number.isFinite(s)) return direction;
+  if (!Number.isFinite(turn.s)) turn.s = s;
+  const step = s - turn.s;
+  if (Math.abs(step) < DIRECTION_MIN_M) return direction;
+  turn.s = s;
+  return Math.sign(step);
+}
+
 function createBinding(shapeIndex, path, via, s, fix) {
   return {
     shapeIndex,
     path,
     via,
+    /**
+     * Which way the drawn train runs along the shape: +1 along it, -1
+     * against it, 0 until it has moved DIRECTION_MIN_M (steer). Kept until
+     * a rebind, and while the train stands.
+     * Once a playback segment has told it (`directionPlayed`), only playback
+     * changes it: the newest reports run ahead of the drawn train, so a
+     * reversal they show turns it when playback reaches it.
+     */
+    direction: 0,
+    directionPlayed: false,
+    /** steer() turn points: one for the reports, one for the played segments. */
+    reportTurn: { s },
+    playTurn: { s: NaN, epoch: NaN },
+    /** The newest operator bearing its reports gave (deg), NaN before one. */
+    bearingDeg: Number.isFinite(fix.bearingDeg) ? fix.bearingDeg : NaN,
     /** Arc and time of the newest report. */
     fixS: s,
     fixT: fix.t,
@@ -104,7 +139,7 @@ function bestRouteShape(pack, routeId, fix, accept) {
  *
  * @param {object} pack From createRailPathPack.
  * @param {{tripId?: string, routeId?: string}} ids
- * @param {{t: number, lat: number, lon: number}} fix The newest report.
+ * @param {{t: number, lat: number, lon: number, bearingDeg?: number}} fix The newest report.
  * @returns {object|null} A binding, or null to keep straight-line motion.
  */
 export function bindTrainPath(pack, { tripId, routeId } = {}, fix) {
@@ -126,7 +161,7 @@ export function bindTrainPath(pack, { tripId, routeId } = {}, fix) {
 /**
  * Follow a new report on the bound shape.
  * @param {object} binding
- * @param {{t: number, lat: number, lon: number}} fix
+ * @param {{t: number, lat: number, lon: number, bearingDeg?: number}} fix
  * @returns {boolean} False when the report lies off the line: the binding is wrong.
  */
 export function followFix(binding, fix) {
@@ -139,6 +174,9 @@ export function followFix(binding, fix) {
     pathWindowM(fix.t - binding.fixT),
   );
   if (!hit || hit.offsetM > PATH_OFF_TRACK_M) return false;
+  if (!binding.directionPlayed)
+    binding.direction = steer(binding.direction, binding.reportTurn, hit.s);
+  if (Number.isFinite(fix.bearingDeg)) binding.bearingDeg = fix.bearingDeg;
   binding.fixS = hit.s;
   binding.fixT = fix.t;
   binding.fixLat = fix.lat;
@@ -189,7 +227,7 @@ function projectReport(binding, fix, hintS, hintT) {
  *
  * @param {object} binding
  * @param {{fromSeq: number, toSeq: number, fraction: number}} sample Playback sample.
- * @param {{from: {seq:number, t:number, lat:number, lon:number},
+ * @param {{from: {seq:number, t:number, lat:number, lon:number, flags?:number},
  *   to: {seq:number, t:number, lat:number, lon:number}}} segment The sample's two reports.
  * @param {{lat?: number, lon?: number, bearingDeg?: number}} out
  * @returns {boolean} False when the train should stay on its straight-line point.
@@ -230,6 +268,17 @@ export function placeOnPath(binding, sample, segment, out) {
     cache.sFrom = sFrom;
     cache.sTo = sTo;
     cache.ok = Number.isFinite(sFrom) && Number.isFinite(sTo);
+    if (cache.ok) {
+      const turn = binding.playTurn;
+      // A break or a new epoch is a corrected position, not a move: steer
+      // on from there.
+      if (from.flags & FIX_FLAGS.BREAK || from.epoch !== turn.epoch)
+        turn.s = sFrom;
+      turn.epoch = from.epoch;
+      binding.direction = steer(binding.direction, turn, sFrom);
+      binding.direction = steer(binding.direction, turn, sTo);
+      if (binding.direction) binding.directionPlayed = true;
+    }
   }
   if (!cache.ok) return false;
   const f = Number.isFinite(sample.fraction)

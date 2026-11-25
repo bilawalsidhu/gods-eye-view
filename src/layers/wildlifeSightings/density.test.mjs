@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import * as Cesium from 'cesium';
+import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
 import { wildlifeGridCellBounds } from './gridViewport.js';
 import {
   createWildlifeDensity,
@@ -8,9 +9,11 @@ import {
   wildlifeDensityRanks,
   wildlifeDensityKernel,
   WILDLIFE_DENSITY_MAX_ALPHA,
-  WILDLIFE_DENSITY_NEAR_FADE,
   WILDLIFE_DENSITY_OVERLAP,
+  WILDLIFE_DENSITY_SPLAT_PX,
 } from './density.js';
+import { bindFakeCesiumCamera } from '../../testSupport/fakeCameraPort.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { WILDLIFE_WORK_UNIT } from './performance.js';
 
 function cell(column, count = 1, options = {}) {
@@ -25,25 +28,62 @@ function cell(column, count = 1, options = {}) {
   };
 }
 
-function harness({ documentStyle = 'normal', camera = {} } = {}) {
+function harness({
+  documentStyle = 'normal',
+  camera = { positionCartographic: { height: 0 } },
+} = {}) {
   const counts = { positions: 0, writes: 0, created: 0, updates: 0 };
-  class BillboardCollection extends Cesium.BillboardCollection {
-    add(options) {
-      counts.created++;
-      const point = super.add(options);
-      return new Proxy(point, {
-        get: (target, key) => Reflect.get(target, key, target),
-        set(target, key, value) {
-          counts.writes++;
-          return Reflect.set(target, key, value, target);
-        },
-      });
-    }
-    update() {
-      counts.updates++;
-    }
-  }
-  const primitives = new Cesium.PrimitiveCollection();
+  const draw = fakeDrawPort();
+  const viewer = { camera, scene: {} };
+  bindFakeCesiumCamera(viewer, { draw });
+  const glowSets = () =>
+    [...draw.sets.values()].filter(
+      (record) => !record.disposed && record.spec.id.endsWith(':density'),
+    );
+  // Each splat reads its item live, by id, with its colour by channel.
+  const views = new Map();
+  const view = (record, id) => {
+    if (!views.has(id))
+      views.set(
+        id,
+        new Proxy(
+          {},
+          {
+            get(_target, key) {
+              const item = glowSets()[0]?.items.get(id);
+              if (key === 'color') {
+                const [red, green, blue, alpha] = item.color;
+                return { red, green, blue, alpha };
+              }
+              return item?.[key];
+            },
+          },
+        ),
+      );
+    return views.get(id);
+  };
+  const glow = () => {
+    const record = glowSets()[0];
+    if (!record) return null;
+    const ids = [...record.items.keys()];
+    return {
+      spec: record.spec,
+      length: ids.length,
+      get: (index) => view(record, ids[index]),
+    };
+  };
+  // The draw port's writes to the glow, every batch counted once.
+  Object.defineProperty(counts, 'writes', {
+    get: () =>
+      [...draw.sets.values()]
+        .filter((record) => record.spec.id.endsWith(':density'))
+        .reduce((sum, record) => sum + record.writes, 0),
+  });
+  const primitives = {
+    get length() {
+      return glowSets().length;
+    },
+  };
   let handle = 0;
   const timers = new Map();
   const idle = new Map();
@@ -62,11 +102,10 @@ function harness({ documentStyle = 'normal', camera = {} } = {}) {
     },
   };
   const density = createWildlifeDensity({
-    cesium: { ...Cesium, BillboardCollection },
-    viewer: { scene: { primitives }, camera },
+    viewer,
     positionForCell(row) {
       counts.positions++;
-      return Cesium.Cartesian3.fromDegrees(row.lon, row.lat);
+      return fromDegrees(row.lon, row.lat);
     },
     requestRender: (reason) => renders.push(reason),
     setTimer(fn) {
@@ -98,6 +137,7 @@ function harness({ documentStyle = 'normal', camera = {} } = {}) {
   }
   return {
     density,
+    glow,
     primitives,
     counts,
     renders,
@@ -179,68 +219,43 @@ test('uniform occupied cells make a continuous field with no visible lattice', (
   assert.ok(modulation < 0.007, `${(100 * modulation).toFixed(3)}% modulation`);
 });
 
-test('each glow kernel fades on the GPU as the camera comes inside it, scaled to its own width', () => {
+test('each glow kernel is a pixel-sized splat drawn over depth at its cell', () => {
   const h = harness();
-  h.density.update([cell(0, 4), cell(1, 9)]);
-  const collection = h.density.collection;
+  const rows = [cell(0, 4), cell(1, 9)];
+  h.density.update(rows);
+  const collection = h.glow();
   assert.equal(collection.length, 2);
   for (let i = 0; i < collection.length; i++) {
     const point = collection.get(i);
-    const width = point.scale * point.width;
-    const fade = point.translucencyByDistance;
-    assert.ok(fade, 'no screen-filling kernel when zoomed inside it');
-    assert.ok(
-      Math.abs(fade.near - width * WILDLIFE_DENSITY_NEAR_FADE.near) < 1e-6,
-    );
-    assert.equal(fade.nearValue, 0);
-    assert.ok(
-      Math.abs(fade.far - width * WILDLIFE_DENSITY_NEAR_FADE.far) < 1e-6,
-    );
-    assert.equal(fade.farValue, 1);
+    assert.deepEqual(point.size, [
+      WILDLIFE_DENSITY_SPLAT_PX,
+      WILDLIFE_DENSITY_SPLAT_PX,
+    ]);
+    assert.equal(point.disableDepthTest, Infinity);
+    assert.ok(Math.abs(toLonLatH(point.pos).lon - rows[i].lon) < 1e-9);
   }
   h.density.destroy();
 });
 
-test('occupied grid counts produce unlabelled world-sized glow billboards that never enter Cesium picking', () => {
+test('occupied grid counts produce unlabelled glow icons that never enter picking', () => {
   const h = harness();
   const rows = [cell(0, 1), cell(1, 100), cell(2, 1000000)];
   const result = h.density.update(rows);
   assert.equal(result.sightingCount, 1000101);
   assert.equal(h.primitives.length, 1);
-  const collection = h.density.collection;
-  assert.equal(collection.allowPicking, false);
+  const collection = h.glow();
+  assert.equal(collection.spec.pickable, false);
+  assert.equal(
+    collection.spec.blend,
+    undefined,
+    'the default blend, so translucent glow writes no depth over badges',
+  );
   assert.equal(collection.length, 3);
   const first = collection.get(0);
-  assert.equal(
-    first.id,
-    undefined,
-    'density has no sighting identity or pick payload',
-  );
-  assert.equal(first.sizeInMeters, true);
-  assert.equal(first.scaleByDistance, undefined);
+  assert.equal(first.pickable, false, 'density has no pick payload');
+  assert.doesNotMatch(first.id, /wildlife:/, 'nor a sighting identity');
   assert.match(decodeURIComponent(first.image), /radialGradient/);
   assert.doesNotMatch(decodeURIComponent(first.image), /text|badge|raven/);
-  const bounds = wildlifeGridCellBounds(rows[0].id);
-  const logicalHeight =
-    (((bounds.north - bounds.south) * Math.PI) / 180) * 6378137;
-  assert.ok(first.width * first.scale >= 1.5 * logicalHeight);
-  assert.equal(first.width, first.height);
-  assert.ok(
-    first.width <= 65536,
-    'encoded dimensions fit Cesium width packing',
-  );
-  assert.ok(
-    first.width * first.scale > 65536,
-    'continental splats retain their true footprint through scale',
-  );
-  collection.update({ passes: { pick: true } });
-  assert.equal(
-    h.counts.updates,
-    0,
-    'the real public pick update is suppressed',
-  );
-  collection.update({ passes: { render: true } });
-  assert.equal(h.counts.updates, 1);
   h.settle();
   const rankOf = wildlifeDensityRanks(rows);
   for (let i = 0; i < collection.length; i++)
@@ -258,7 +273,7 @@ test('progressive tile arrival fades only new cells and reuses existing glow wit
   const one = cell(0, 4);
   const two = cell(1, 10);
   h.density.update([one]);
-  const first = h.density.collection.get(0);
+  const first = h.glow().get(0);
   const starting = first.color.alpha;
   h.fadeStep();
   assert.ok(first.color.alpha > starting);
@@ -272,7 +287,7 @@ test('progressive tile arrival fades only new cells and reuses existing glow wit
       1e-12,
     'a streamed tile re-ranks but does not restart incumbents',
   );
-  assert.equal(h.density.collection.get(0), first);
+  assert.equal(h.glow().get(0), first);
   assert.equal(h.density.size, 2);
   h.settle();
   const settled = first.color.alpha;
@@ -280,7 +295,7 @@ test('progressive tile arrival fades only new cells and reuses existing glow wit
   assert.equal(first.color.alpha, settled);
   h.density.update([two]);
   assert.equal(h.density.size, 1);
-  assert.equal(h.density.collection.length, 1);
+  assert.equal(h.glow().length, 1);
   h.density.update([]);
   assert.equal(h.density.size, 0);
   assert.equal(
@@ -327,21 +342,18 @@ test('visibility and antimeridian padding are applied on data/moveEnd work only'
 
 test('density culls far-side cells and front-side kernels that would spill over the limb', () => {
   const camera = {
-    positionWC: Cesium.Cartesian3.fromDegrees(0, 0, 5_000_000),
+    positionWC: fromDegrees(0, 0, 5_000_000),
     positionCartographic: { height: 5_000_000 },
   };
   const h = harness({ camera });
-  const occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    camera.positionWC,
-  );
+  const occluder = horizonFrom(camera.positionWC);
   const cells = [
     cell(0, 1, { lat: 0, lon: 0 }),
     cell(1, 2, { lat: 0, lon: 54 }),
     cell(2, 4, { lat: 0, lon: 110 }),
   ];
   assert.equal(
-    occluder.isPointVisible(Cesium.Cartesian3.fromDegrees(54, 0)),
+    occluder.isPointVisible(fromDegrees(54, 0)),
     true,
     'the limb fixture has a visible centre but an overflowing footprint',
   );
@@ -363,11 +375,11 @@ test('density fades from regional detail to a clear whole-globe view without fra
   const cells = [cell(0, 12)];
   h.density.update(cells);
   h.settle();
-  const point = h.density.collection.get(0);
+  const point = h.glow().get(0);
   const fullAlpha = point.color.alpha;
   camera.positionCartographic.height = 5_500_000;
   h.density.update(cells);
-  assert.equal(h.density.collection.get(0), point);
+  assert.equal(h.glow().get(0), point);
   assert.ok(Math.abs(point.color.alpha - fullAlpha / 2) < 1e-12);
   const writes = h.counts.writes;
   h.density.update(cells);
@@ -385,7 +397,7 @@ test('density fades from regional detail to a clear whole-globe view without fra
     positions,
     'altitude changes reuse decoded positions',
   );
-  assert.equal(h.density.collection.get(0).color.alpha, fullAlpha);
+  assert.equal(h.glow().get(0).color.alpha, fullAlpha);
   h.density.destroy();
 });
 
@@ -393,7 +405,7 @@ test('styles follow persisted mono/CRT and cockpit vision overrides, without add
   const h = harness({ documentStyle: 'thermal' });
   h.density.update([cell(0)]);
   h.settle();
-  const point = h.density.collection.get(0);
+  const point = h.glow().get(0);
   assert.equal(point.color.red, point.color.green);
   assert.equal(point.color.green, point.color.blue);
   const alpha = point.color.alpha;
@@ -417,15 +429,13 @@ test('styles follow persisted mono/CRT and cockpit vision overrides, without add
   h.density.destroy();
 });
 
-test('clear/disable and destroy release the atlas, primitives, coordinates, timers and listeners', () => {
+test('clear/disable and destroy release the glow set, coordinates, timers and listeners', () => {
   const h = harness();
   const row = cell(0);
   h.density.update([row]);
-  const old = h.density.collection;
   assert.equal(h.timers.size, 1);
   h.fadeStep();
   h.density.clear();
-  assert.equal(old.isDestroyed(), true);
   assert.equal(h.density.collection, null);
   assert.equal(h.density.size, 0);
   assert.equal(h.primitives.length, 0);
@@ -451,6 +461,18 @@ test('clear/disable and destroy release the atlas, primitives, coordinates, time
   assert.equal(h.primitives.length, 0);
   assert.equal(h.timers.size, 0);
   assert.equal(h.idle.size, 0);
+});
+
+test('destroy mid-update drops the glow writes still batched', async () => {
+  const h = harness();
+  const work = h.density.updateWork([cell(0), cell(1)]);
+  while (!h.primitives.length && !work.next().done);
+  assert.equal(h.primitives.length, 1, 'a splat is batched, not yet sent');
+  h.density.destroy();
+  // A batched write reaching the disposed set would throw here.
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(h.primitives.length, 0);
 });
 
 test('dense six-tile updates have a deterministic linear operation budget and no warmed writes/projections', (t) => {

@@ -1,6 +1,6 @@
 import { twoline2satrec } from 'satellite.js';
-import * as Cesium from 'cesium';
 import { msg } from '../../i18n/index.js';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { noradIdFromSatnum, tleLineLaunchYear } from '../../sources/tle.js';
 import { CATALOG_GROUPS, ISS_NORAD, POINT_STYLES } from './policy.js';
 import { classifySatellite, parseSatcatCsv } from './classes.js';
@@ -151,14 +151,11 @@ export function createIngestion({
       if (next === sat.satelliteClass) continue;
       sat.satelliteClass = next;
       changed = true;
-      const point = layerState._points.get(noradId);
-      if (point) {
-        const style = parts.controls._pointStyleFor(noradId, sat.group);
-        point.pixelSize = style.pixelSize;
-        point.color = style.color;
-        point.outlineColor = style.outlineColor;
-        point.outlineWidth = style.outlineWidth;
-      }
+      if (layerState._points.has(noradId))
+        parts.rendering._setPointStyle(
+          noradId,
+          parts.controls._pointStyleFor(noradId, sat.group),
+        );
     }
     if (!changed) return;
     parts.controls._applyClassVisibility();
@@ -275,11 +272,8 @@ export function createIngestion({
           : null;
 
         // Clear existing
-        layerState._pointCollection.removeAll();
-        layerState._points.clear();
-        for (const path of layerState._orbitPaths.values())
-          viewer.scene.primitives.remove(path.primitive);
-        layerState._orbitPaths.clear();
+        parts.rendering._clearPoints();
+        parts.rendering._clearOrbitPaths(viewer);
         layerState._catalog.clear();
         // The detection overlay caches one record per satellite and stamps its
         // id/class at creation only. A rebuild can re-tag a satellite (a failed
@@ -368,27 +362,14 @@ export function createIngestion({
           const pos = parts.orbits.propagatePosition(satrec, now);
           if (!pos) continue;
 
-          const cartesian = Cesium.Cartesian3.fromDegrees(
-            pos.longitude,
-            pos.latitude,
-            pos.altitude,
+          // Add its dot (styling from the shared table, WS-D3)
+          // Hidden classes keep their dot, so a toggle needs no rebuild.
+          parts.rendering._addPoint(
+            noradId,
+            fromDegrees(pos.longitude, pos.latitude, pos.altitude),
+            parts.controls._pointStyleFor(noradId, entry.group),
+            parts.controls._classVisible(noradId),
           );
-
-          // Add point primitive (styling from the shared table, WS-D3)
-          const style = parts.controls._pointStyleFor(noradId, entry.group);
-          const point = layerState._pointCollection.add({
-            position: cartesian,
-            pixelSize: style.pixelSize,
-            color: style.color,
-            outlineColor: style.outlineColor,
-            outlineWidth: style.outlineWidth,
-            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.5, 2e7, 0.6),
-            id: noradId,
-          });
-          // Hidden classes keep their point, so a toggle needs no rebuild.
-          point.show = parts.controls._classVisible(noradId);
-
-          layerState._points.set(noradId, point);
         }
 
         // Show ISS orbital path by default

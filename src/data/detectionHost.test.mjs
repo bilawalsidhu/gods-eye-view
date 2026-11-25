@@ -1,3 +1,4 @@
+import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -41,7 +42,9 @@ import {
   createFakeGl,
   depthImage,
   viewDistanceToDepth,
-} from './fixtures/fakeDepthScene.mjs';
+} from '../render/cesium/fixtures/fakeDepthScene.mjs';
+import { createSceneOcclusionTest } from '../render/cesium/sceneOcclusionProbe.js';
+import { rendererOf } from '../render/rendererOf.js';
 
 test('detection diagnostics count rendered fading rows instead of absent selected identities', () => {
   assert.equal(countFadingRenderEntries([
@@ -264,6 +267,7 @@ function installEnvironment({ width = 800, height = 600, dpr = 2, search = '' } 
     },
     scene: { postRender, requestRender() {} },
   };
+  bindOverlayPorts(viewer);
 
   return {
     viewer,
@@ -549,6 +553,25 @@ test('callouts stop painting the moment the last detectable object goes away', (
       !env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'LASTONE'),
       'an empty field must drop the replay buffer, not strand the last callsign',
     );
+  } finally {
+    env.cleanup();
+  }
+});
+
+test('the view scale reads the camera height the overlay host gives each paint', () => {
+  const env = installEnvironment();
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [{ id: 'flights', getDetectableObjects: () => [] }], () => {});
+    setMode('DENSE');
+    const scaleAt = (height) => {
+      env.viewer.camera.positionCartographic.height = height;
+      env.advance(250);
+      env.postRender.raise();
+      return getDetectionDiagnostics().viewScale;
+    };
+    assert.equal(scaleAt(1000), 'street');
+    assert.equal(scaleAt(10000), 'metro');
   } finally {
     env.cleanup();
   }
@@ -918,13 +941,13 @@ test('a Global Context echo bracket is drawn outside its contact bracket and dim
   }
 });
 
-test('under the Cyber sonar sweep an echo is never brighter than its own bracket', () => {
+test('under the sonar sweep an echo is never brighter than its own bracket', () => {
   const env = installEnvironment();
-  // The cyber theme with its HUD open turns the contact sonar on; its sweep
-  // dims brackets it is not passing over.
+  // Sonar on with its HUD open turns the contact sonar on; its sweep dims
+  // brackets it is not passing over.
   env.document.documentElement = {
     // The lowest sweep floor, so dimmed brackets drop a whole alpha band.
-    dataset: { uiTheme: 'cyber', cyberSonarOpacity: '35' },
+    dataset: { cyberSonar: 'on', cyberSonarOpacity: '35' },
     style: { setProperty() {}, removeProperty() {} },
   };
   const hud = env.document.createElement('div');
@@ -1394,6 +1417,11 @@ function installDepthScene(env, surfaceDistance, { webgl2 = true } = {}) {
   const image = paint();
   const scene = createFakeDepthScene({ gl, ranges: [{ near, far, image }] });
   Object.assign(env.viewer.scene, scene, { camera });
+  // The renderer's occlusion test, as the Cesium query port gives it.
+  const renderer = rendererOf(env.viewer);
+  renderer.capabilities = new Set(['occlusionTest']);
+  renderer.query.occlusionTest = () =>
+    createSceneOcclusionTest(env.viewer.scene);
   return {
     gl,
     /** Draw the next frame's depth. */

@@ -1,13 +1,28 @@
 /**
  * Layer modules for Data Library entries. A dataset renders through the same
- * GeoJSON layer as Datacenters and Dams; tiles drape on whichever imagery
- * host the active map stack offers, as Recent Imagery does.
+ * GeoJSON layer as Datacenters and Dams; tiles drape through the renderer's
+ * globe port on whichever imagery host the active map stack offers, as
+ * Recent Imagery does; view-bounded datasets and coverage outlines draw
+ * through the draw port.
  */
-import * as Cesium from 'cesium';
 import {
   createLocalGeoJsonLayer,
+  fillOf,
   localDatasetError,
+  localGeojsonParts,
+  rhumbPositions,
+  strokeOf,
 } from '../data/localGeojsonCore.js';
+import {
+  canvasOf,
+  drawOf,
+  findCamera,
+  findGlobe,
+  findQuery,
+} from '../render/rendererOf.js';
+import { cssColor } from '../render/color.js';
+import { markBaseTileset } from '../render/baseTilesets.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
 import {
   NATURAL_EARTH_CREDIT,
   registerDynamicCredit,
@@ -147,13 +162,7 @@ export function libraryCredit(entry) {
  */
 export function createLibraryDatasetLayer(
   entry,
-  {
-    services,
-    source,
-    onZoom = null,
-    onRemove = null,
-    screenSpaceEventHandlerFactory,
-  },
+  { services, source, onZoom = null, onRemove = null, inputFor },
 ) {
   let truncated = false;
   let loaded = 0;
@@ -190,9 +199,8 @@ export function createLibraryDatasetLayer(
       icon: entry.icon,
       source: entry.provider,
       labels: true,
-      ...(screenSpaceEventHandlerFactory
-        ? { screenSpaceEventHandlerFactory }
-        : {}),
+      // The pointer input the layer's clicks come through (tests pass one).
+      ...(inputFor ? { inputFor } : {}),
       featureColor: colorBy
         ? (properties) =>
             colorBy.colors[String(properties?.__gevColorKey ?? '')] || null
@@ -281,44 +289,68 @@ export function createLibraryDatasetLayer(
   });
 }
 
-/**
- * Draw one Terrarium tile as shaded relief on a canvas. Cesium loads imagery
- * bitmaps already flipped for WebGL and flips a canvas on upload, so a bitmap
- * is drawn back north-up first and the canvas goes out north-up.
- */
-function renderReliefTile(image, level, y) {
-  const { width, height } = image;
+/** A canvas for one tile: an offscreen one where the browser has it. */
+function tileCanvas(width, height) {
+  if (typeof OffscreenCanvas === 'function')
+    return new OffscreenCanvas(width, height);
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap) {
-    context.translate(0, height);
-    context.scale(1, -1);
-  }
-  context.drawImage(image, 0, 0);
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  const pixels = context.getImageData(0, 0, width, height).data;
-  const relief = terrariumToRelief(
-    pixels,
-    width,
-    height,
-    metresPerPixel(level, y, width),
-  );
-  context.putImageData(new ImageData(relief, width, height), 0, 0);
-  image.close?.();
   return canvas;
 }
 
-/** Wrap a provider so each elevation tile it loads becomes shaded relief. */
-function asReliefProvider(provider) {
-  const load = provider.requestImage.bind(provider);
-  provider.requestImage = (x, y, level, request) => {
-    const pending = load(x, y, level, request);
-    // Undefined means throttled: Cesium asks again later.
-    return pending?.then((image) => renderReliefTile(image, level, y));
+/**
+ * Make every pixel within `threshold` (the largest channel difference, 0–1)
+ * of `rgba` transparent, as a renderer's colour-to-alpha draws it.
+ * @param {Uint8ClampedArray} pixels RGBA, changed in place.
+ * @param {number[]} rgba Colour 0–1.
+ * @param {number} threshold
+ */
+export function clearNoData(pixels, rgba, threshold) {
+  const [r, g, b] = rgba.map((channel) => channel * 255);
+  const limit = threshold * 255;
+  for (let i = 0; i < pixels.length; i += 4) {
+    const diff = Math.max(
+      Math.abs(pixels[i] - r),
+      Math.abs(pixels[i + 1] - g),
+      Math.abs(pixels[i + 2] - b),
+    );
+    if (diff < limit) pixels[i + 3] = 0;
+  }
+  return pixels;
+}
+
+/**
+ * The tile hook an entry needs, or null: a Terrarium elevation tile drawn as
+ * shaded relief, and the provider's "no imagery here" fill (`noDataColor`)
+ * made transparent. The globe port hands each tile upright and takes back
+ * an upright bitmap.
+ * @param {object} entry
+ * @returns {((tile: {x: number, y: number, level: number}, image: ImageBitmap) => Promise<ImageBitmap>) | null}
+ */
+export function libraryTileTransform(entry) {
+  const relief = entry.source.encoding === 'terrarium';
+  const noData = entry.display.noDataColor
+    ? cssColor(entry.display.noDataColor)
+    : null;
+  if (!relief && !noData) return null;
+  return async (tile, image) => {
+    const { width, height } = image;
+    const canvas = tileCanvas(width, height);
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    context.drawImage(image, 0, 0);
+    let pixels = context.getImageData(0, 0, width, height).data;
+    if (relief)
+      pixels = terrariumToRelief(
+        pixels,
+        width,
+        height,
+        metresPerPixel(tile.level, tile.y, width),
+      );
+    if (noData) clearNoData(pixels, noData, NO_DATA_THRESHOLD);
+    context.putImageData(new ImageData(pixels, width, height), 0, 0);
+    return createImageBitmap(canvas);
   };
-  return provider;
 }
 
 /** The relief legend: elevation classes in metres. */
@@ -347,13 +379,14 @@ function webMercatorTileSpan(bbox, zoom) {
 
 /**
  * The globe level below which a tile entry is hidden, or undefined when it
- * draws at every scale. Cesium fetches an imagery layer's minimum level for
- * every globe tile it covers, however far out the camera is: an entry whose
- * coverage needs more than COARSE_TILE_BUDGET tiles at its minimum zoom
- * (Norway's cadastre from z14 is about two million) would allocate them all
- * when zoomed out. Such an entry is shown only from the globe level that
- * matches its minimum zoom (a geographic level spans two Web Mercator ones,
- * so level z − 1).
+ * draws at every scale. The default renderer fetches an imagery layer's
+ * minimum level for every globe tile it covers, however far out the camera
+ * is: an entry whose coverage needs more than COARSE_TILE_BUDGET tiles at
+ * its minimum zoom (Norway's cadastre from z14 is about two million) would
+ * allocate them all when zoomed out. Such an entry is shown only from the
+ * globe level that matches its minimum zoom (a geographic level spans two
+ * Web Mercator ones, so level z − 1): it names no minimum level and holds
+ * back every tile below its minimum zoom (`libraryImagerySpec`).
  * @param {object} entry
  * @returns {number|undefined}
  */
@@ -367,9 +400,59 @@ export function minimumTerrainLevelFor(entry) {
 }
 
 /**
- * A tiles entry as a manager layer.
+ * Draw order of aerial photography among the globe port's imagery: above
+ * every other drape (basemaps at 0, heat, weather up to 4, other library
+ * tiles), whenever they were added.
+ */
+export const LIBRARY_AERIAL_Z = 10;
+
+/**
+ * The globe port imagery spec for a tiles entry.
  * @param {object} entry Validated tiles entry.
- * @param {{ source: object, getTileset?: () => object|null, mapStackController?: object, cesium?: object, requestRender?: (reason: string) => void }} options
+ * @param {string} url Tile URL template.
+ * @param {import('../render/contract/globe').ImagerySpec['fetchTile']|null} [fetchTile]
+ *   Fetches each tile in place of the renderer (`source.tileFetch`).
+ * @returns {import('../render/contract/globe').ImagerySpec}
+ */
+export function libraryImagerySpec(entry, url, fetchTile = null) {
+  const bbox = entry.source.bounded ? entry.coverage.bbox : null;
+  const minZoom = entry.source.minZoom ?? 0;
+  // A dense entry (`minimumTerrainLevelFor`) is hidden where the view is
+  // coarser than its minimum zoom, so nothing is drawn or fetched until the
+  // view is close enough; from there on it draws as any entry does.
+  const dense = minimumTerrainLevelFor(entry) !== undefined;
+  const tileTransform = libraryTileTransform(entry);
+  return {
+    kind: 'xyz',
+    url,
+    tiling: 'webMercator',
+    tileSize: entry.source.tileSize ?? 256,
+    minLevel: minZoom,
+    ...(dense ? { hiddenBelowMinLevel: true } : {}),
+    maxLevel: entry.source.maxZoom ?? 18,
+    credit: { text: entry.provider },
+    // A bounded entry requests tiles inside its coverage only.
+    ...(bbox
+      ? {
+          rectangle: {
+            west: bbox[0],
+            south: bbox[1],
+            east: bbox[2],
+            north: bbox[3],
+          },
+        }
+      : {}),
+    ...(entry.display.aerial ? { zOrder: LIBRARY_AERIAL_Z } : {}),
+    ...(tileTransform ? { tileTransform } : {}),
+    ...(fetchTile ? { fetchTile } : {}),
+  };
+}
+
+/**
+ * A tiles entry as a manager layer. It drapes through the viewer's globe
+ * port, on whichever surface the map stack draws (`resolveImageryHost`).
+ * @param {object} entry Validated tiles entry.
+ * @param {{ source: object, getTileset?: () => object|null, mapStackController?: object, requestRender?: (reason: string) => void, onZoom?: Function|null, onRemove?: Function|null, host?: typeof resolveImageryHost }} options
  */
 export function createLibraryTileLayer(
   entry,
@@ -377,27 +460,34 @@ export function createLibraryTileLayer(
     source,
     getTileset = () => null,
     mapStackController = null,
-    cesium = Cesium,
     requestRender = () => {},
     onZoom = null,
     onRemove = null,
+    host: resolveHost = resolveImageryHost,
   },
 ) {
   const id = libraryLayerId(entry.id);
   const extent = coverageExtent(entry);
   const outlineMode = entry.display.outline || null;
+  /** The coverage outline's set, and how many rings it draws. */
   let outline = null;
+  let outlineCount = 0;
   let outlineEpoch = 0;
+  let outlineBuilds = 0;
 
   function removeOutline() {
     outlineEpoch += 1;
-    if (outline && viewer?.dataSources)
-      viewer.dataSources.remove(outline, true);
+    try {
+      outline?.dispose();
+    } catch {
+      /* its scene is already gone */
+    }
     outline = null;
+    outlineCount = 0;
   }
 
   /**
-   * Draw the covered countries' borders as ground-clamped lines, so the edge
+   * Draw the covered countries' borders as lines on the ground, so the edge
    * of the imagery is plain on the map. A failed border fetch costs only the
    * outline, never the imagery.
    */
@@ -410,22 +500,29 @@ export function createLibraryTileLayer(
         entry,
       );
       if (epoch !== outlineEpoch || !enabled || !rings.length) return;
-      const source = new cesium.CustomDataSource(`${id}:outline`);
-      for (const ring of rings)
-        source.entities.add({
-          polyline: {
-            positions: cesium.Cartesian3.fromDegreesArray(ring.flat()),
-            clampToGround: true,
-            width: OUTLINE_WIDTH_PX,
-            material: cesium.Color.fromCssColorString(OUTLINE_COLOR),
-          },
-        });
-      await viewer.dataSources.add(source);
-      if (epoch !== outlineEpoch || !enabled) {
-        viewer.dataSources.remove(source, true);
-        return;
+      const color = cssColor(OUTLINE_COLOR);
+      const set = drawOf(viewer).lines({
+        id: `${id}:outline:${++outlineBuilds}`,
+        pickable: false,
+      });
+      try {
+        set.set(
+          rings.map((ring, index) => ({
+            id: String(index),
+            positions: ring.map(([lon, lat]) => fromDegrees(lon, lat, 0)),
+            widthPx: OUTLINE_WIDTH_PX,
+            mode: 'draped',
+            clampTo: 'both',
+            style: { kind: 'solid', color },
+            pickable: false,
+          })),
+        );
+      } catch (error) {
+        set.dispose();
+        throw error;
       }
-      outline = source;
+      outline = set;
+      outlineCount = rings.length;
       if (outlineMode !== 'bbox')
         registerDynamicCredit(viewer, NATURAL_EARTH_CREDIT);
       requestRender(`library-tiles:${entry.id}`);
@@ -442,96 +539,54 @@ export function createLibraryTileLayer(
     : baseLegend;
   let viewer = null;
   let enabled = false;
+  /** The globe port's layer while draped. */
   let imagery = null;
-  let collection = null;
+  /** The renderer could not take this entry's tiles (no tile hooks). */
+  let refused = false;
   let tileErrors = 0;
   let lastUpdate = null;
   let unsubscribeMap = null;
   let removeErrorListener = null;
-  let stopKeepingOnTop = null;
-
-  /**
-   * Aerial photography sits above every other drape (basemaps, weather,
-   * other library tiles): raise it now and whenever a layer is added above.
-   */
-  function keepOnTop(target, layer) {
-    const raise = () => {
-      if (target.isDestroyed?.() || !target.contains?.(layer)) return;
-      if (target.indexOf(layer) === target.length - 1) return;
-      target.raiseToTop(layer);
-      requestRender(`library-tiles:${entry.id}`);
-    };
-    raise();
-    const off = target.layerAdded?.addEventListener?.(raise);
-    stopKeepingOnTop = typeof off === 'function' ? off : null;
-  }
 
   function detach() {
     removeErrorListener?.();
     removeErrorListener = null;
-    stopKeepingOnTop?.();
-    stopKeepingOnTop = null;
-    if (imagery && collection && !collection.isDestroyed?.())
-      collection.remove(imagery, true);
+    imagery?.remove();
     imagery = null;
-    collection = null;
   }
 
   function attach() {
     detach();
-    const host = resolveImageryHost({ viewer, tileset: getTileset() });
-    if (!host.collection) return false;
-    const bbox = entry.source.bounded ? entry.coverage.bbox : null;
-    const tileSize = entry.source.tileSize ?? 256;
-    const template = new cesium.UrlTemplateImageryProvider({
-      url: source.tileTemplate(entry),
-      tileWidth: tileSize,
-      tileHeight: tileSize,
-      minimumLevel: entry.source.minZoom ?? 0,
-      maximumLevel: entry.source.maxZoom ?? 18,
-      tilingScheme: new cesium.WebMercatorTilingScheme(),
-      credit: entry.provider,
-      hasAlphaChannel: true,
-      // A bounded entry requests tiles inside its coverage only.
-      ...(bbox && cesium.Rectangle
-        ? { rectangle: cesium.Rectangle.fromDegrees(...bbox) }
-        : {}),
-    });
-    const provider =
-      entry.source.encoding === 'terrarium'
-        ? asReliefProvider(template)
-        : template;
-    const onError = (event) => {
-      // A 4xx is the provider saying "no imagery here" (outside its
-      // coverage), not a failure: do not retry it or count it.
-      const status = event?.error?.statusCode;
-      if (status >= 400 && status < 500) {
-        if (event) event.retry = false;
-        return;
-      }
-      tileErrors += 1;
-    };
-    provider.errorEvent?.addEventListener?.(onError);
-    removeErrorListener = () =>
-      provider.errorEvent?.removeEventListener?.(onError);
-    const minimumTerrainLevel = minimumTerrainLevelFor(entry);
-    imagery =
-      minimumTerrainLevel !== undefined && cesium.ImageryLayer
-        ? new cesium.ImageryLayer(provider, { minimumTerrainLevel })
-        : null;
-    if (imagery) host.collection.add(imagery);
-    else imagery = host.collection.addImageryProvider(provider);
-    imagery.alpha = entry.display.opacity ?? 1;
-    if (entry.display.noDataColor && cesium.Color) {
-      // The provider's "no imagery here" fill, drawn transparent (JPEG
-      // noise along the edge of the fill sits just inside the threshold).
-      imagery.colorToAlpha = cesium.Color.fromCssColorString(
-        entry.display.noDataColor,
+    refused = false;
+    const tileset = getTileset();
+    const host = resolveHost({ viewer, tileset });
+    const globe = findGlobe(viewer);
+    if (!host.collection || !globe) return false;
+    // The globe port drapes on a tileset marked as a base.
+    if (host.kind === 'tileset') markBaseTileset(tileset);
+    try {
+      imagery = globe.imagery.add(
+        libraryImagerySpec(
+          entry,
+          source.tileTemplate(entry),
+          source.tileFetch?.(entry) ?? null,
+        ),
       );
-      imagery.colorToAlphaThreshold = NO_DATA_THRESHOLD;
+    } catch (error) {
+      // A renderer without tile hooks cannot draw relief or clear the
+      // no-data fill: no drape, not a wrong one.
+      console.warn(`[Library] ${entry.id} tiles refused:`, error);
+      refused = true;
+      return false;
     }
-    collection = host.collection;
-    if (entry.display.aerial) keepOnTop(collection, imagery);
+    imagery.alpha = entry.display.opacity ?? 1;
+    removeErrorListener = imagery.on('tileError', (error) => {
+      // A 4xx is the provider saying "no imagery here" (outside its
+      // coverage), not a failure.
+      const status = error?.status;
+      if (status >= 400 && status < 500) return;
+      tileErrors += 1;
+    });
     lastUpdate = Date.now();
     return true;
   }
@@ -560,6 +615,7 @@ export function createLibraryTileLayer(
       tileErrors = 0;
       registerDynamicCredit(viewer, libraryCredit(entry));
       attach();
+      unsubscribeMap?.();
       const off = mapStackController?.subscribe?.(followMap);
       unsubscribeMap = typeof off === 'function' ? off : null;
       void drawOutline();
@@ -583,6 +639,7 @@ export function createLibraryTileLayer(
     },
     getStats() {
       if (!enabled) return { count: 0, lastUpdate };
+      if (refused) return { count: 0, lastUpdate, error: TILES_UNAVAILABLE };
       if (!imagery)
         return {
           count: 0,
@@ -607,7 +664,7 @@ export function createLibraryTileLayer(
       return {
         draped: Boolean(imagery),
         tileErrors,
-        outlineRings: outline?.entities.values.length ?? 0,
+        outlineRings: outlineCount,
       };
     },
   };
@@ -618,10 +675,11 @@ export function createLibraryTileLayer(
  * such as every US building footprint. Below `view.maxAltitudeM` it loads
  * what intersects the camera's box, after the camera settles, and replaces
  * the previous set only once the new one is ready; higher up it asks the
- * viewer to zoom in. Polygons are clamped to the ground (and to Google 3D
- * tiles), as an outline on the surface.
+ * viewer to zoom in. It draws through the viewer's draw port: polygons
+ * fill the ground (and Google 3D tiles) without an outline, lines drape,
+ * and points are small dots on the ground.
  * @param {object} entry Validated dataset entry with `source.view`.
- * @param {{ source: object, onZoom?: Function|null, onRemove?: Function|null, cesium?: object, requestRender?: (reason: string) => void, debounceMs?: number }} options
+ * @param {{ source: object, onZoom?: Function|null, onRemove?: Function|null, requestRender?: (reason: string) => void, debounceMs?: number }} options
  */
 export function createLibraryViewLayer(
   entry,
@@ -629,7 +687,6 @@ export function createLibraryViewLayer(
     source,
     onZoom = null,
     onRemove = null,
-    cesium = Cesium,
     requestRender = () => {},
     debounceMs = VIEW_DEBOUNCE_MS,
   },
@@ -643,29 +700,28 @@ export function createLibraryViewLayer(
       : coverageExtent(entry)),
     maxAltitudeM,
   };
-  const color = cesium.Color.fromCssColorString(
-    entry.display.color || DEFAULT_DATASET_COLOR,
-  );
+  const color = cssColor(entry.display.color || DEFAULT_DATASET_COLOR) ?? [
+    1, 1, 1, 1,
+  ];
   const colorBy = entry.display.colorBy || null;
   const colorByValue = new Map(
-    Object.entries(colorBy?.colors || {}).map(([value, css]) => [
-      value,
-      cesium.Color.fromCssColorString(css),
-    ]),
+    Object.entries(colorBy?.colors || {})
+      .map(([value, css]) => [value, cssColor(css)])
+      .filter(([, rgba]) => rgba),
   );
   let legendCounts = null;
   /** A feature's colour: its colorBy value's, else the entry's. */
-  function colorOf(entity) {
+  function colorOf(properties) {
     if (!colorBy) return color;
-    const properties = entity.properties?.getValue?.(
-      cesium.JulianDate?.now?.(),
-    );
     const key = properties?.__gevColorKey ?? properties?.[colorBy.field];
     return colorByValue.get(String(key ?? '')) || color;
   }
+  const withAlpha = (rgba, alpha) => [rgba[0], rgba[1], rgba[2], alpha];
   let viewer = null;
   let enabled = false;
-  let dataSource = null;
+  /** The sets drawing the current view's features, or null. */
+  let drawn = null;
+  let builds = 0;
   let controller = null;
   let timer = null;
   let removeMoveEnd = null;
@@ -684,14 +740,93 @@ export function createLibraryViewLayer(
     controller = null;
   }
 
+  function disposeSets(sets) {
+    for (const set of Object.values(sets || {})) {
+      try {
+        set.dispose();
+      } catch {
+        /* its scene is already gone */
+      }
+    }
+  }
+
   function clear() {
-    if (dataSource && viewer?.dataSources)
-      viewer.dataSources.remove(dataSource, true);
-    dataSource = null;
+    disposeSets(drawn);
+    drawn = null;
     loadedKey = null;
     count = 0;
     truncated = false;
     legendCounts = null;
+  }
+
+  /** The sets for one view's features, hidden until swapped in. */
+  function build(features) {
+    const draw = drawOf(viewer);
+    const prefix = `${id}:view:${++builds}`;
+    const sets = {};
+    try {
+      sets.fills = draw.shapes({ id: `${prefix}:fills`, show: false });
+      sets.lines = draw.lines({ id: `${prefix}:lines`, show: false });
+      sets.dots = draw.points({ id: `${prefix}:dots`, show: false });
+      const fills = [];
+      const lines = [];
+      const dots = [];
+      for (const part of localGeojsonParts(features)) {
+        const meta = { layerId: id, id: part.id };
+        const style = part.feature.properties;
+        const own = colorOf(style);
+        // As the GeoJSON loader drew them: edges along rhumb lines, and a
+        // feature's simplestyle fill and stroke over the entry's colour (a
+        // colorBy fill over both).
+        if (part.kind === 'polygon')
+          fills.push({
+            id: part.id,
+            geometry: {
+              kind: 'polygon',
+              rings: part.coordinates.map(rhumbPositions),
+            },
+            fill: colorBy
+              ? withAlpha(own, 0.45)
+              : fillOf(style, withAlpha(color, 0.35)),
+            height: 'clampGround',
+            clampTo: 'both',
+            meta,
+          });
+        else if (part.kind === 'line') {
+          const stroke = strokeOf(style, color);
+          lines.push({
+            id: part.id,
+            positions: rhumbPositions(part.coordinates).map(({ lon, lat }) =>
+              fromDegrees(lon, lat, 0),
+            ),
+            widthPx: stroke.widthPx,
+            mode: 'draped',
+            clampTo: 'both',
+            style: { kind: 'solid', color: stroke.color },
+            meta,
+          });
+        }
+        // Points draw as small dots, not pins: a view can hold thousands.
+        else if (part.kind === 'point')
+          dots.push({
+            id: part.id,
+            pos: { lon: part.coordinates[0], lat: part.coordinates[1] },
+            height: 'clampGround',
+            pixelSize: 6,
+            color: own,
+            outlineColor: [0, 0, 0, 0.55],
+            outlineWidth: 1,
+            meta,
+          });
+      }
+      sets.fills.set(fills);
+      sets.lines.set(lines);
+      sets.dots.set(dots);
+    } catch (caught) {
+      disposeSets(sets);
+      throw caught;
+    }
+    return sets;
   }
 
   /**
@@ -699,46 +834,34 @@ export function createLibraryViewLayer(
    * by camera height (an oblique view's visible area reaches the horizon,
    * far beyond what one page can fill), clipped to what is in view.
    */
-  function viewBox(height) {
-    const scene = viewer?.scene;
-    const canvas = scene?.canvas;
-    const ellipsoid = scene?.globe?.ellipsoid ?? cesium.Ellipsoid.WGS84;
+  function viewBox(camera, pose) {
+    const canvas = canvasOf(viewer);
     const target =
       (canvas &&
-        viewer.camera.pickEllipsoid?.(
-          new cesium.Cartesian2(
-            canvas.clientWidth / 2,
-            canvas.clientHeight / 2,
-          ),
-          ellipsoid,
+        findQuery(viewer)?.pickEllipsoid(
+          canvas.clientWidth / 2,
+          canvas.clientHeight / 2,
         )) ||
-      viewer.camera.positionWC;
-    const center =
-      target && cesium.Cartographic.fromCartesian(target, ellipsoid);
-    if (!center) return null;
-    const lat = (center.latitude * 180) / Math.PI;
-    const lon = (center.longitude * 180) / Math.PI;
+      pose.position;
+    if (!target) return null;
+    const { lon, lat } = toLonLatH(target);
     const halfLat = Math.min(
       VIEW_MAX_HALF_DEG,
-      Math.max(VIEW_MIN_HALF_DEG, (height * VIEW_HALF_PER_METRE) / 111_320),
+      Math.max(
+        VIEW_MIN_HALF_DEG,
+        (pose.height * VIEW_HALF_PER_METRE) / 111_320,
+      ),
     );
     const halfLon = halfLat / Math.max(0.2, Math.cos((lat * Math.PI) / 180));
     let box = [lon - halfLon, lat - halfLat, lon + halfLon, lat + halfLat];
-    const visible = viewer.camera.computeViewRectangle?.(ellipsoid);
-    if (visible && visible.west < visible.east) {
-      const degrees = [
-        visible.west,
-        visible.south,
-        visible.east,
-        visible.north,
-      ].map((radians) => (radians * 180) / Math.PI);
+    const visible = camera.viewRectangle?.();
+    if (visible && visible.west < visible.east)
       box = [
-        Math.max(box[0], degrees[0]),
-        Math.max(box[1], degrees[1]),
-        Math.min(box[2], degrees[2]),
-        Math.min(box[3], degrees[3]),
+        Math.max(box[0], visible.west),
+        Math.max(box[1], visible.south),
+        Math.min(box[2], visible.east),
+        Math.min(box[3], visible.north),
       ];
-    }
     // A view across the antimeridian or off the globe is skipped.
     return box[0] < box[2] && box[1] < box[3] && box[0] >= -180 && box[2] <= 180
       ? box
@@ -748,7 +871,9 @@ export function createLibraryViewLayer(
   async function refresh() {
     timer = null;
     if (!enabled || !viewer) return;
-    const height = viewer.camera?.positionCartographic?.height;
+    const camera = findCamera(viewer);
+    const pose = camera?.pose();
+    const height = pose?.height;
     if (!(Number.isFinite(height) && height <= maxAltitudeM)) {
       tooHigh = true;
       abort();
@@ -758,12 +883,12 @@ export function createLibraryViewLayer(
       return;
     }
     tooHigh = false;
-    const box = viewBox(height);
+    const box = viewBox(camera, pose);
     if (!box) return;
     const key = box.map((value) => value.toFixed(4)).join(',');
     // Back on the view already drawn: a request for the view in between is
     // obsolete and must not replace it.
-    if (key === loadedKey && dataSource) {
+    if (key === loadedKey && drawn) {
       // What is drawn is this view's, so an error from the view in between
       // no longer applies.
       if (controller || error) {
@@ -785,46 +910,11 @@ export function createLibraryViewLayer(
         bbox: box,
       });
       if (!enabled || current.signal.aborted) return;
-      const loaded = await cesium.GeoJsonDataSource.load(
-        { type: 'FeatureCollection', features: result.features },
-        {
-          clampToGround: true,
-          fill: color.withAlpha(0.35),
-          stroke: color,
-          markerColor: color,
-        },
-      );
-      if (!enabled || current.signal.aborted) return;
-      loaded.name = entry.title;
-      for (const entity of loaded.entities.values) {
-        const fill = colorOf(entity);
-        // Ground-clamped polygons cannot draw outlines; say so up front
-        // instead of letting Cesium warn on every entity.
-        if (entity.polygon) {
-          entity.polygon.outline = false;
-          if (colorBy) entity.polygon.material = fill.withAlpha(0.45);
-        }
-        // Points draw as small dots, not Cesium's default pins: a view can
-        // hold thousands of them.
-        if (entity.billboard && cesium.PointGraphics) {
-          entity.billboard = undefined;
-          entity.point = new cesium.PointGraphics({
-            pixelSize: 6,
-            color: fill,
-            outlineColor: cesium.Color.BLACK.withAlpha(0.55),
-            outlineWidth: 1,
-            heightReference: cesium.HeightReference?.CLAMP_TO_GROUND,
-          });
-        }
-      }
-      await viewer.dataSources.add(loaded);
-      if (!enabled || current.signal.aborted) {
-        viewer.dataSources.remove(loaded, true);
-        return;
-      }
-      const previous = dataSource;
-      dataSource = loaded;
-      if (previous) viewer.dataSources.remove(previous, true);
+      const sets = build(result.features);
+      const previous = drawn;
+      drawn = sets;
+      for (const set of Object.values(sets)) set.show = true;
+      disposeSets(previous);
       count = result.features.length;
       truncated = result.truncated;
       if (colorBy) legendCounts = countColorKeys(result.features);
@@ -874,12 +964,7 @@ export function createLibraryViewLayer(
       error = null;
       registerDynamicCredit(viewer, libraryCredit(entry));
       removeMoveEnd?.();
-      removeMoveEnd = null;
-      const moveEnd = viewer?.camera?.moveEnd;
-      if (moveEnd?.addEventListener) {
-        moveEnd.addEventListener(schedule);
-        removeMoveEnd = () => moveEnd.removeEventListener(schedule);
-      }
+      removeMoveEnd = findCamera(viewer)?.on('moveEnd', schedule) ?? null;
       await refresh();
     },
     async disable() {

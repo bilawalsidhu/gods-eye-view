@@ -1,9 +1,8 @@
 # Panel surface contract
 
 `src/ui/styles/panel-surfaces.css` supplies an opt-in visual surface for new
-panels. It uses the application's default color, font, border and radius tokens;
-Cyber supplies its existing red/slate palette, monospace typography and shaped
-frame. This is CSS shared by the existing panel system, not a panel registry or
+panels. It uses the application's default color, font, border and radius tokens.
+This is CSS shared by the existing panel system, not a panel registry or
 a controller. A panel ID does not need a new theme selector.
 
 ## Markup
@@ -57,13 +56,12 @@ fit when those contents should instead scroll.
 | Mount                                 | Shared contract                                                                                     | Owner responsibilities                                                                                                                                                                                   |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Direct child of `#left-panel-stack`   | An owner with a direct `[data-panel-surface]` child receives relative positioning and allocated height; inner surface/body skin | Add the wrapper shown above, use the existing layout/disclosure owners, and retain left-rail focus/auto-collapse rules.                                                                                  |
-| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                 | Keep `data-rail-scroller` on the body so measurement preserves its scroll position. Respect Cyber's one-expanded-panel policy.                                                                           |
+| Direct child of `#right-context-rail` | The same hooks with right-rail allocation and intrinsic measurement                                 | Keep `data-rail-scroller` on the body so measurement preserves its scroll position.                                                                                                                      |
 | Surface inside `#command-dock`        | Surface, controls, popup decoration and inherited dock concealment                                  | Supply geometry, stacking, disclosure, pin behavior if wanted, safe viewport bounds and dismissal. This CSS does not extend the existing Location/Visual Presets tray stack manager to arbitrary panels. |
 | `dialog[data-panel-surface]`          | The same surface/body skin; a closed dialog remains hidden                                          | Set width/max-height, use `showModal()` or `show()` and `close()`, and own labels, initial/return focus and dismissal. Do not put `panel-collapsible` on a dialog.                                       |
 
 For rails, `--panel-expanded-width` and `--panel-collapsed-width` customize
-the desired widths within the rail; otherwise Cyber uses its existing left,
-right and collapsed panel widths. `--left-panel-allocated-height` and
+the desired widths within the rail. `--left-panel-allocated-height` and
 `--right-panel-allocated-height` belong
 to the existing layout owner, not to individual panels. The surface must be
 the wrapper's first non-glow child because left-rail intrinsic measurement
@@ -121,9 +119,9 @@ dismiss open popups/dialogs and restore focus before removing a dynamic panel.
 
 ## Decoration, popups and visibility
 
-The shared surface reserves `::before` for its non-interactive background. The
-Cyber frame clips this pseudo-element only; the surface stays unclipped with
-visible overflow. This follows the existing Display and Global Context pattern.
+The shared surface reserves `::before` for its non-interactive background; the
+surface stays unclipped with visible overflow. This follows the existing
+Display and Global Context pattern.
 Putting the shape on an interactive ancestor clips all descendant popups even
 if their `z-index` is high. A scrolling body also clips descendants by design,
 so outward popups must be siblings of the body, or use an explicitly owned
@@ -148,8 +146,8 @@ visible.
 
 ## Check an addition
 
-Use the real application with the default and Cyber themes. Check open,
-collapsed, hidden, disabled/error, theme round trips, clean UI/recording and
+Use the real application with the Tactical and Minimal HUD layouts. Check open,
+collapsed, hidden, disabled/error, layout round trips, clean UI/recording and
 the intended Cockpit behavior. Exercise keyboard focus, Escape, pointer input,
 the last scrolling item, resize without reload and any pin/unpin controls.
 For an outward popup, test visible pixels and pointer hit-testing outside the
