@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { cameraOf } from '../../render/rendererOf.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import {
   classifySatellite,
@@ -9,6 +9,7 @@ import {
   tleEpochMs,
 } from './classes.js';
 import { ISS_NORAD } from './policy.js';
+import { trackedStation } from './stationModels.js';
 
 /** The layer id a satellite subject carries through Cockpit events and state. */
 export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
@@ -19,38 +20,6 @@ export const SATELLITE_COCKPIT_LAYER_ID = 'satellites';
  * legible without competing with the nadir picture.
  */
 export const COCKPIT_ORBIT_DIM_FACTOR = 0.3;
-
-/**
- * Write an orbit ring's alpha as a multiple of the alpha it was built with.
- * The ring's per-instance attributes exist only once Cesium has updated the
- * primitive; until then nothing is written and the next tick retries.
- * @param {{primitive: object, instanceId: string, baseColor: Cesium.Color,
- *   baseDepthFailColor: Cesium.Color, alphaFactor: number}} path
- * @param {number} factor 1 restores the built colours exactly.
- * @returns {boolean} True when the ring now carries `factor`.
- */
-export function applyOrbitPathAlpha(path, factor) {
-  if (!path?.primitive || !path.baseColor) return false;
-  if ((path.alphaFactor ?? 1) === factor) return true;
-  let attributes;
-  try {
-    attributes = path.primitive.getGeometryInstanceAttributes?.(
-      path.instanceId,
-    );
-  } catch {
-    return false;
-  }
-  if (!attributes) return false;
-  const scaled = (color) => color.withAlpha(color.alpha * factor);
-  attributes.color = Cesium.ColorGeometryInstanceAttribute.toValue(
-    factor === 1 ? path.baseColor : scaled(path.baseColor),
-  );
-  attributes.depthFailColor = Cesium.ColorGeometryInstanceAttribute.toValue(
-    factor === 1 ? path.baseDepthFailColor : scaled(path.baseDepthFailColor),
-  );
-  path.alphaFactor = factor;
-  return true;
-}
 
 /**
  * Who and what a catalog entry is: class, COSPAR id, TLE, owner, operator.
@@ -173,9 +142,11 @@ export function createCockpitSubject({ state: layerState, parts }) {
   }
 
   function _setPointShown(noradId, show) {
-    const point = layerState._points.get(noradId);
     // Released points go back to their class's visibility.
-    if (point) point.show = show && parts.controls._classVisible(noradId);
+    parts.rendering._setPointShown(
+      noradId,
+      show && parts.controls._classVisible(noradId),
+    );
   }
 
   /**
@@ -188,12 +159,11 @@ export function createCockpitSubject({ state: layerState, parts }) {
     const held = _cockpitHeld();
     const tracked = layerState._trackedNorad;
 
-    const dot = layerState._trackedEntity?.point;
     if (held) {
-      if (dot) dot.show = false;
+      parts.rendering._setTrackedDotShown(false);
       layerState._cockpitHiddenDot = true;
     } else if (layerState._cockpitHiddenDot) {
-      if (dot) dot.show = true;
+      parts.rendering._setTrackedDotShown(true);
       layerState._cockpitHiddenDot = false;
     }
 
@@ -202,47 +172,47 @@ export function createCockpitSubject({ state: layerState, parts }) {
     for (const noradId of [...hiddenPoints]) {
       if (companions.has(noradId)) continue;
       hiddenPoints.delete(noradId);
-      // The tracked primitive stays hidden: its entity draws the dot.
+      // The tracked point stays hidden: the tracked dot draws it.
       if (noradId !== tracked) _setPointShown(noradId, true);
     }
-    // Re-applied every sync: a catalog rebuild replaces the point
-    // primitives, and the new ones arrive shown.
+    // Re-applied every sync: a catalog rebuild replaces the points, and the
+    // new ones arrive shown.
     for (const noradId of companions) {
       if (noradId === tracked) continue;
       hiddenPoints.add(noradId);
       _setPointShown(noradId, false);
     }
-    if (held) {
-      const trackedPoint = layerState._points.get(tracked);
-      if (trackedPoint) trackedPoint.show = false;
-    }
+    if (held) parts.rendering._setPointShown(tracked, false);
 
     const hiddenPath = layerState._cockpitHiddenPath;
     if (hiddenPath !== null && (!held || hiddenPath !== tracked)) {
-      const path = layerState._orbitPaths.get(hiddenPath);
+      const hasPath = layerState._orbitPaths.has(hiddenPath);
       // The ISS's ring also follows its class (and its tracking).
-      if (path && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
-      else if (path)
-        path.primitive.show = parts.controls.satelliteVisualsVisible(
-          layerState._enabled,
-          layerState._params.showOrbits,
+      if (hasPath && hiddenPath === ISS_NORAD) parts.controls._syncIssOrbit();
+      else if (hasPath)
+        parts.rendering._setOrbitPathShown(
+          hiddenPath,
+          parts.controls.satelliteVisualsVisible(
+            layerState._enabled,
+            layerState._params.showOrbits,
+          ),
         );
       layerState._cockpitHiddenPath = null;
     }
-    if (held) {
-      const path = layerState._orbitPaths.get(tracked);
-      if (path) {
-        path.primitive.show = false;
-        layerState._cockpitHiddenPath = tracked;
-      }
+    if (held && layerState._orbitPaths.has(tracked)) {
+      parts.rendering._setOrbitPathShown(tracked, false);
+      layerState._cockpitHiddenPath = tracked;
     }
 
     // Every other ring is dimmed for the whole session and restored on
     // release; rebuilt rings arrive at full alpha and are dimmed again here.
     const subject = layerState._cockpitSubjectNorad;
-    for (const [noradId, path] of layerState._orbitPaths) {
+    for (const noradId of layerState._orbitPaths.keys()) {
       const dim = subject !== null && noradId !== subject;
-      applyOrbitPathAlpha(path, dim ? COCKPIT_ORBIT_DIM_FACTOR : 1);
+      parts.rendering._setOrbitPathAlpha(
+        noradId,
+        dim ? COCKPIT_ORBIT_DIM_FACTOR : 1,
+      );
     }
   }
 
@@ -275,15 +245,44 @@ export function createCockpitSubject({ state: layerState, parts }) {
     /**
      * The tracked satellite's Earth-fixed position this frame: the per-frame
      * cache the dot and follow camera read, never a separate propagation.
-     * @param {Cesium.Cartesian3} [result] Receives the position.
-     * @returns {Cesium.Cartesian3|null} Null while the layer is off, nothing
+     * @param {{x: number, y: number, z: number}} [result] Receives the
+     *   position.
+     * @returns {{x: number, y: number, z: number}|null} Null while the layer is off, nothing
      *   is tracked or no sample has propagated.
      */
     getCockpitPosition(result) {
       if (!layerState._enabled || layerState._trackedNorad === null)
         return null;
       if (!parts.tracking._getTrackedFramePosition()) return null;
-      return Cesium.Cartesian3.clone(layerState._trackedFrameCartesian, result);
+      const { x, y, z } = layerState._trackedFrameCartesian;
+      const out = result ?? {};
+      out.x = x;
+      out.y = y;
+      out.z = z;
+      return out;
+    },
+
+    /**
+     * Where the Cockpit camera sits and looks when the subject is the
+     * station: a view from a point on the ISS model (issMounts.js) in place
+     * of the straight-down picture. The station offers several (from Nauka,
+     * from Zarya, from a docked vehicle), whichever of its entries is ridden.
+     * @param {string|null} [key] The view asked for; the first on offer when
+     *   it is not given or not on offer.
+     * @returns {{position: object, direction: object, up: object,
+     *   right: object, key: string, label: string,
+     *   views: Array<{key: string, label: string}>}|null} Earth-fixed
+     *   `{x, y, z}` vectors, the view shown and the views on offer; null for
+     *   any other satellite, outside the Cockpit, or until the model has
+     *   loaded.
+     */
+    getCockpitMount(key = null) {
+      if (!_cockpitHeld()) return null;
+      // The station the subject belongs to; a station without views on its
+      // model (Tiangong) answers null, and the Cockpit keeps the nadir picture.
+      return (
+        trackedStation(layerState, parts)?.model?._cockpitMount?.(key) ?? null
+      );
     },
 
     /**
@@ -313,17 +312,16 @@ export function createCockpitSubject({ state: layerState, parts }) {
     refocusTrackedById(noradId) {
       const id = parts.tracking._normalizeTrackedNorad(noradId);
       const viewer = layerState._viewer;
-      const entity = layerState._trackedEntity;
       if (
         id === null ||
         id !== layerState._trackedNorad ||
         !viewer ||
-        !entity ||
-        !viewer.entities?.contains?.(entity)
+        !layerState._followTarget
       )
         return false;
-      viewer.camera?.cancelFlight?.();
-      viewer.trackedEntity = entity;
+      const camera = cameraOf(viewer);
+      camera.cancelFlight();
+      camera.follow(layerState._followTarget);
       return true;
     },
   };

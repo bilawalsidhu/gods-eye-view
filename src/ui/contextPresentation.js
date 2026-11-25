@@ -12,17 +12,10 @@ export function _syncContextModeButtons() {
 export function _presentContext() {
   if (this.destroyed) return;
   const flightsActive = this._contextMode === 'flights';
-  const missionsActive = this._contextMode === 'space-missions';
-  // Both Context choices stay in the ordinary Tab sequence and are never
-  // native-disabled. Arrow keys still provide tablist navigation, but must
-  // not be the only way to reach Space Missions from the keyboard. Semantic
-  // busy state keeps them perceivable while synchronous click guards prevent
-  // a second transition.
   this.publish({
     mode: this._contextMode || 'none',
-    enabled: flightsActive || missionsActive,
+    enabled: flightsActive,
     flightsActive,
-    missionsActive,
     busy: Boolean(this._contextModeChanging),
     installationsBusy: this._installationsSearchBusy,
   });

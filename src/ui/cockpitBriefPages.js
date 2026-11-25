@@ -1,8 +1,28 @@
 /**
  * The Cockpit briefing's pages and the state it starts in. It needs only the
- * i18n module, so the controller and the view can both read it.
+ * i18n module and the regional-news window, so the controller and the view
+ * can both read it.
  */
+import { REGIONAL_NEWS_WINDOW_HOURS } from '../data/regionalNewsWindow.js';
 import { msg, t } from '../i18n/index.js';
+
+// i18n-ignore: provider name
+/** The news feed named before any briefing has answered. */
+export const DEFAULT_NEWS_SOURCE = 'GOOGLE NEWS RSS';
+
+/**
+ * The Regional News footer for a fresh, empty or unavailable list: the feed
+ * and the window its articles are held to.
+ * @param {string} [source]
+ * @param {number} [hours]
+ * @returns {string}
+ */
+export function newsWindowFooter(
+  source = DEFAULT_NEWS_SOURCE,
+  hours = REGIONAL_NEWS_WINDOW_HOURS,
+) {
+  return t('{source} · LAST {hours} H', { source, hours });
+}
 
 export const COCKPIT_BRIEF_PAGES = [
   {
@@ -15,8 +35,7 @@ export const COCKPIT_BRIEF_PAGES = [
     id: 'news',
     kickerKey: msg('REGIONAL NEWS'),
     subtitleKey: msg('LATEST LOCATION-MATCHED REPORTING'),
-    sourceKey: msg('{source} · LOCATION QUERY · RECENT'),
-    sourceName: 'GOOGLE NEWS RSS', // i18n-ignore: provider name
+    // The news footer comes from the news state (`news.footer`), not here.
   },
   {
     id: 'local',
@@ -26,6 +45,48 @@ export const COCKPIT_BRIEF_PAGES = [
     source: 'NATURAL EARTH · OPEN-METEO · UTC',
   },
 ];
+
+/**
+ * The fourth page, LIVE: the ridden subject's live video, the LIVE section
+ * of Context in the card. Offered only while a stream is on offer (the
+ * `gev-live` store's view is not null); the automatic cycle never turns to it.
+ */
+export const COCKPIT_LIVE_BRIEF_PAGE = Object.freeze({
+  id: 'live',
+  kickerKey: msg('LIVE VIDEO'),
+  subtitleKey: msg('STREAM ATTACHED TO THE SUBJECT'),
+  // Attribution stays English; the page itself credits the stream's owner.
+  source: 'YOUTUBE EMBEDDED PLAYER · MUTED',
+});
+
+/**
+ * The pages on offer: the three fixed ones, and LIVE after them while the
+ * ridden subject has a stream.
+ * @param {boolean} liveOffered
+ * @returns {readonly object[]}
+ */
+export function cockpitBriefPages(liveOffered) {
+  return liveOffered
+    ? [...COCKPIT_BRIEF_PAGES, COCKPIT_LIVE_BRIEF_PAGE]
+    : COCKPIT_BRIEF_PAGES;
+}
+
+/**
+ * Where the automatic cycle goes from the page at `index`: the next page
+ * that is not LIVE (video is never started by the cycle), wrapping; null
+ * while LIVE is the shown page, where the cycle waits as it does under the
+ * pointer.
+ * @param {readonly object[]} pages
+ * @param {number} index
+ * @returns {number|null}
+ */
+export function briefCycleTarget(pages, index) {
+  if (pages[index]?.id === 'live') return null;
+  const count = pages.length;
+  let next = (index + 1) % count;
+  if (pages[next]?.id === 'live') next = (next + 1) % count;
+  return next;
+}
 
 // The cycle toggle's tooltip, as literal keys for the extractor.
 export const CYCLE_HELP_KEYS = Object.freeze({
@@ -60,6 +121,7 @@ export function createBriefState() {
       statusHidden: false,
       state: null,
       status: t('ACQUIRING REGIONAL NEWS'),
+      footer: newsWindowFooter(),
       articles: [],
     },
     local: {

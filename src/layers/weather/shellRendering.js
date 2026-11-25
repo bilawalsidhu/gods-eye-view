@@ -1,7 +1,28 @@
+// The shell draws through the draw port's raster-shell field; its detail
+// window follows the camera port and its lift the frame port.
+import {
+  findCamera,
+  findDraw,
+  findFrame,
+  findGlobe,
+  rendererOf,
+} from '../../render/rendererOf.js';
 import { acquireWeatherImage } from './infraredImage.js';
 import { imageryHostStatus } from './imageryHost.js';
+import { WEATHER_IMAGERY_SHOWS } from './imageryOrder.js';
 import { WEATHER_DETAIL_SIZE, WEATHER_IMAGE_SIZES } from './source.js';
 import { msg } from '../../i18n/index.js';
+
+/**
+ * The viewer's own globe imagery, as a weather imagery host: where a layer
+ * drapes when the application shell names no host of its own. Its globe
+ * port's imagery stands for it, one object per port.
+ * @param {object|null|undefined} viewer The scene object the layer holds.
+ * @returns {{collection: object|null, kind: 'globe'}}
+ */
+export function globeImageryHost(viewer) {
+  return { collection: findGlobe(viewer)?.imagery ?? null, kind: 'globe' };
+}
 
 /** Metres above the ellipsoid. Lower shells draw first, so lightning draws last. */
 export const WEATHER_SHELL_HEIGHTS = Object.freeze({
@@ -13,64 +34,19 @@ export const WEATHER_SHELL_HEIGHTS = Object.freeze({
 });
 // Decoded canvases per renderer, full-extent and detail images alike: the shown
 // frame and the warmed next frame, each full-extent and detail (four 4096×2048
-// canvases); nothing older survives them. Cesium holds the shown canvases
-// through the material uniforms in any case.
+// canvases); nothing older survives them. The renderer holds the shown
+// canvases in any case.
 export const WEATHER_SHELL_CACHE_BYTES = 128 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024;
-const MATERIAL_TYPE = 'WeatherFrame';
-// Renders after an image swap: one queues the upload, one uploads and draws, one spare.
-const UPLOAD_FRAMES = 3;
-// An empty detail window: the full-extent image shows everywhere.
-const NO_WINDOW = Object.freeze({ west: 0, south: 0, east: -1, north: -1 });
 // Detail windows, in degrees.
 const DETAIL_MIN_WIDTH = 6;
 const DETAIL_GRID = 0.5;
-const shellHeights = new WeakMap();
 // From far away Google's coarse 3D tiles rise tens of kilometres above the
 // ground and hide the shells, so the shells rise with the camera: 4 m per
 // kilometre of camera height, at most 60 km, in 500 m steps.
 const LIFT_PER_METRE = 0.004;
 const MAX_LIFT = 60_000;
 const LIFT_STEP = 500;
-// Cesium binds a 1×1 white texture to an image uniform until its first upload:
-// draw nothing until the full-extent image has arrived, and sample the detail
-// image only once it has arrived. The window is west, south, east, north in the
-// full-extent image's texture coordinates.
-const MATERIAL_SOURCE = `czm_material czm_getMaterial(czm_materialInput materialInput)
-{
-  czm_material material = czm_getDefaultMaterial(materialInput);
-  vec2 st = materialInput.st;
-  vec4 coarse = texture(image, st);
-  vec2 dst = (st - window.xy) / max(window.zw - window.xy, vec2(1e-6));
-  float inside = float(all(greaterThanEqual(st, window.xy)) && all(lessThanEqual(st, window.zw)));
-  float useDetail = inside * step(1.5, float(detailDimensions.x));
-  vec4 c = mix(coarse, texture(detail, clamp(dst, 0.0, 1.0)), useDetail);
-  material.diffuse = czm_gammaCorrect(c.rgb);
-  material.alpha = c.a * alpha * step(1.5, float(imageDimensions.x));
-  return material;
-}
-`;
-
-function registerMaterial(cesium) {
-  const cache = cesium.Material._materialCache;
-  if (cache.getMaterial(MATERIAL_TYPE)) return;
-  // A plain template: building the first material from a fabric would make that
-  // instance Cesium's shared template and keep its last image alive.
-  cache.addMaterial(MATERIAL_TYPE, {
-    fabric: {
-      type: MATERIAL_TYPE,
-      uniforms: {
-        image: cesium.Material.DefaultImageId,
-        detail: cesium.Material.DefaultImageId,
-        alpha: 1,
-        window: { type: 'vec4', x: 0, y: 0, z: -1, w: -1 },
-      },
-      // Diffuse and alpha share these samples, so one source, not components.
-      source: MATERIAL_SOURCE,
-    },
-    translucent: false,
-  });
-}
 
 const sameEdges = (a, b) =>
   a.west === b.west &&
@@ -85,239 +61,31 @@ export function shellLift(cameraHeight) {
   return Math.round(lift / LIFT_STEP) * LIFT_STEP;
 }
 
-/** Keep weather shells first in the primitive collection, in ascending height:
- * higher shells draw over lower ones and other opaque content draws over both. */
-export function orderWeatherShells(primitives, primitive, height) {
-  shellHeights.set(primitive, height);
-  if (typeof primitives.lowerToBottom !== 'function') return;
-  const shells = [];
-  for (let i = 0; i < primitives.length; i++) {
-    const item = primitives.get(i);
-    if (shellHeights.has(item)) shells.push(item);
-  }
-  const ordered = [...shells].sort(
-    (a, b) => shellHeights.get(a) - shellHeights.get(b),
-  );
-  if (ordered.every((item, i) => primitives.get(i) === item)) return;
-  for (const item of ordered.reverse()) primitives.lowerToBottom(item);
-}
-
-/** One raised rectangle drawing one full-extent image and, inside a window of
- * it, an optional detail image. The owner calls destroy(). */
-export function createShellSurface({
+/**
+ * Tell `apply` the shell lift for the camera's height now and, each frame
+ * before it draws, whenever it changes.
+ * @param {object} viewer
+ * @param {(liftM: number) => void} apply
+ * @param {{cameraOf?: Function, frameOf?: Function}} [ports]
+ * @returns {() => void} Stops.
+ */
+export function followShellLift(
   viewer,
-  cesium,
-  rectangle,
-  height,
-  onSettled = () => {},
-}) {
-  registerMaterial(cesium);
-  const scene = viewer.scene;
-  const primitives = scene.primitives;
-  const material = new cesium.Material({
-    fabric: { type: MATERIAL_TYPE },
-    translucent: false,
-  });
-  // Flat shading keeps the product colours independent of the viewing angle.
-  const appearance = new cesium.EllipsoidSurfaceAppearance({
-    aboveGround: true,
-    flat: true,
-    translucent: false,
-    material,
-  });
-  // Cesium orders its translucent pass itself (weighted OIT or distance), which
-  // cannot honour stacked heights. Draw in the opaque pass in scene.primitives
-  // order, alpha-blended and without depth writes, so higher shells draw over
-  // lower ones and nothing is hidden or picked through a shell.
-  appearance.getRenderState = () => ({
-    depthTest: { enabled: true },
-    depthMask: false,
-    blending: cesium.BlendingState.ALPHA_BLEND,
-  });
-  const primitive = new cesium.Primitive({
-    geometryInstances: new cesium.GeometryInstance({
-      geometry: new cesium.RectangleGeometry({
-        rectangle,
-        height,
-        granularity: cesium.Math.toRadians(0.5),
-        vertexFormat: cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT,
-      }),
-    }),
-    appearance,
-    asynchronous: true,
-    allowPicking: false,
-  });
-  primitives.add(primitive);
-  orderWeatherShells(primitives, primitive, height);
-  // A uniform scale about the Earth's centre lifts every shell alike and keeps
-  // their order.
-  let lift = 0;
-  const offLift = scene.preRender?.addEventListener(() => {
-    const next = shellLift(scene.camera?.positionCartographic?.height);
+  apply,
+  { cameraOf = findCamera, frameOf = findFrame } = {},
+) {
+  let lift = null;
+  const read = () => {
+    const next = shellLift(cameraOf(viewer)?.pose?.().height);
     if (next === lift) return;
     lift = next;
-    primitive.modelMatrix = cesium.Matrix4.fromUniformScale(
-      1 + lift / cesium.Ellipsoid.WGS84.maximumRadius,
-    );
-  });
-  let image = null;
-  let frames = 0;
-  // The detail image, its own upload count and a window waiting for it to draw.
-  let detail = null;
-  let detailFrames = 0;
-  let pendingWindow = null;
-  let offRender = null;
-  let destroyed = false;
-
-  const fits = (size, value) =>
-    !size || (size.x === value.width && size.y === value.height);
-  const uploaded = () =>
-    image !== null && fits(material.uniforms.imageDimensions, image);
-  const detailDrawn = () =>
-    detail !== null &&
-    detailFrames === 0 &&
-    fits(material.uniforms.detailDimensions, detail);
-  const drawn = () =>
-    primitive.ready &&
-    uploaded() &&
-    frames === 0 &&
-    (detail === null || (detailDrawn() && pendingWindow === null));
-  function appliedWindow() {
-    const { x, y, z, w } = material.uniforms.window;
-    return z < x ? null : { west: x, south: y, east: z, north: w };
-  }
-  function setWindow(rect) {
-    const next = rect ?? NO_WINDOW;
-    const { x, y, z, w } = material.uniforms.window;
-    if (
-      x === next.west &&
-      y === next.south &&
-      z === next.east &&
-      w === next.north
-    )
-      return;
-    material.uniforms.window = new cesium.Cartesian4(
-      next.west,
-      next.south,
-      next.east,
-      next.north,
-    );
-    scene.requestRender();
-  }
-  // The render governor may idle the scene; request frames only until the
-  // asynchronous geometry is ready and the latest images have been drawn.
-  function tick() {
-    // Cesium updates a material only while its primitive is shown, so hidden
-    // frames upload nothing and count for nothing.
-    if (primitive.ready && primitive.show) {
-      if (frames > 0) frames--;
-      if (detailFrames > 0) detailFrames--;
-      // A texture is never shown at another window's place.
-      if (pendingWindow && detailDrawn()) {
-        setWindow(pendingWindow);
-        pendingWindow = null;
-      }
-    }
-    if (primitive.show && !drawn()) {
-      scene.requestRender();
-      return;
-    }
-    offRender?.();
-    offRender = null;
-    if (drawn()) onSettled();
-  }
-  function wake() {
-    if (destroyed || !primitive.show || image === null || drawn()) return;
-    offRender ??= scene.postRender.addEventListener(tick);
-    scene.requestRender();
-  }
-
-  return {
-    setImage(next) {
-      if (destroyed || next === image) return;
-      image = next;
-      material.uniforms.image = next;
-      frames = UPLOAD_FRAMES;
-      wake();
-    },
-    setAlpha(value) {
-      if (destroyed || material.uniforms.alpha === value) return;
-      material.uniforms.alpha = value;
-      scene.requestRender();
-    },
-    /** Draw `next` inside `rect` (west, south, east, north in the full-extent
-     * image's texture coordinates, 0–1); null clears it. In the same window only
-     * the image changes, and Cesium keeps drawing the previous texture until
-     * this one is uploaded. A different window applies once its image has
-     * drawn; until then the full-extent image covers it. */
-    setDetail(next, rect) {
-      if (destroyed) return;
-      if (!next) {
-        if (detail === null) return;
-        detail = null;
-        detailFrames = 0;
-        pendingWindow = null;
-        material.uniforms.detail = cesium.Material.DefaultImageId;
-        setWindow(null);
-        scene.requestRender();
-        return;
-      }
-      if (next !== detail) {
-        detail = next;
-        material.uniforms.detail = next;
-        detailFrames = UPLOAD_FRAMES;
-      }
-      const applied = appliedWindow();
-      if (applied && sameEdges(applied, rect)) {
-        pendingWindow = null;
-      } else {
-        setWindow(null);
-        pendingWindow = rect;
-      }
-      wake();
-    },
-    /** Returns whether visibility changed. */
-    setShow(value) {
-      const show = Boolean(value);
-      if (destroyed || primitive.show === show) return false;
-      primitive.show = show;
-      wake();
-      scene.requestRender();
-      return true;
-    },
-    destroy() {
-      if (destroyed) return;
-      destroyed = true;
-      offRender?.();
-      offRender = null;
-      offLift?.();
-      if (!primitives.isDestroyed?.() && primitives.contains(primitive))
-        primitives.remove(primitive);
-      if (!primitive.isDestroyed()) primitive.destroy();
-      // Primitive.destroy leaves the material and its texture alive.
-      if (!material.isDestroyed()) material.destroy();
-      image = null;
-      detail = null;
-      pendingWindow = null;
-      scene.requestRender();
-    },
-    getDiagnostics() {
-      return {
-        height,
-        ready: Boolean(primitive.ready),
-        uploaded: uploaded(),
-        show: primitive.show,
-        alpha: material.uniforms.alpha,
-        rendering: offRender !== null,
-        // `uploaded` once the detail image has drawn; the window applies after.
-        detail: { uploaded: detailDrawn(), window: appliedWindow() },
-      };
-    },
+    apply(next);
   };
+  read();
+  return frameOf(viewer)?.on('preRender', read) ?? (() => {});
 }
 
-function fitTexture(cesium, { width, height }) {
-  const limit = cesium.ContextLimits?.maximumTextureSize;
+function fitTexture({ width, height }, limit) {
   // Halve, down to 1024 px wide, on devices with a smaller texture limit.
   while (limit > 0 && width > limit && width > 1024) {
     width /= 2;
@@ -388,13 +156,15 @@ export function detailWindow(footprint, bounds, previous = null) {
   return previous && sameEdges(previous, next) ? previous : next;
 }
 
+let weatherShells = 0;
+
 /** Observed weather on 3D Tiles: one raised shell per product and one
  * full-extent image per frame. The previous image stays until the next is ready.
  * Inside a window around the view the same surface samples a sharper image of
- * that area, so the two images share one mesh and never blend. */
+ * that area, so the two images share one mesh and never blend. A `frameSource`
+ * with `getImage` supplies both images, the detail window through its `bbox`. */
 export function createWeatherShell({
   viewer,
-  cesium,
   product,
   height = WEATHER_SHELL_HEIGHTS[product],
   getHost = () => ({ collection: null, kind: 'tileset' }),
@@ -405,17 +175,43 @@ export function createWeatherShell({
   decodeImage,
   createCanvas = () => document.createElement('canvas'),
   cacheBytes = WEATHER_SHELL_CACHE_BYTES,
+  drawOf = findDraw,
+  cameraOf = findCamera,
+  frameOf = findFrame,
+  maxTextureSize,
+  frameSource = null,
 }) {
   if (!Object.hasOwn(WEATHER_IMAGE_SIZES, product))
     throw new TypeError('Unknown weather product');
-  const scene = viewer.scene;
-  const size = fitTexture(cesium, WEATHER_IMAGE_SIZES[product]);
-  const detailSize = fitTexture(cesium, WEATHER_DETAIL_SIZE);
+  // Read in the body, not as the parameter's default: an optional method call
+  // in a default parameter is compiled for older browsers into code that
+  // throws (esbuild).
+  const textureLimit =
+    maxTextureSize === undefined
+      ? (rendererOf(viewer)?.quality?.device?.().maxTextureSize ?? 0)
+      : maxTextureSize;
+  const size = fitTexture(WEATHER_IMAGE_SIZES[product], textureLimit);
+  const detailSize = fitTexture(WEATHER_DETAIL_SIZE, textureLimit);
   const infrared = product === 'clouds' || product === 'clouds-regional';
   // Global infrared contrast depends on the requested extent, so a window would
   // not match the image around it; the globe host also shows one mosaic.
   const detailed = product !== 'clouds';
-  let surface = null;
+  const requestRender = () => frameOf(viewer)?.requestRender('weather');
+  // The shell's field, and what it was last given: the committed frame's
+  // bounds and image, and the detail.
+  let field = null;
+  let offLift = null;
+  let fieldBounds = null;
+  let fieldImage = null;
+  let fieldRect = null;
+  let fieldDetail = null;
+  let fieldAlpha = 0;
+  // What its 'drawn' has told: anything yet, the image and the detail it
+  // was last given, and whether a change waits for it.
+  let everDrawn = false;
+  let imageDrawn = false;
+  let detailDrawn = false;
+  let owed = false;
   let current = null;
   let incoming = null;
   let alpha = 0.7;
@@ -440,6 +236,73 @@ export function createWeatherShell({
     `${time}|${infrared ? mode : 'none'}${box ? `|${boundsKey(box)}` : ''}`;
   const wantedDetail = () =>
     current && view ? cacheKey(current.time, current.infrared, view) : null;
+  const imageRef = (canvas, key) => ({ canvas, key });
+
+  function update(patch) {
+    owed = true;
+    field.update(patch);
+  }
+  function onDrawn() {
+    owed = false;
+    everDrawn = true;
+    imageDrawn = true;
+    detailDrawn = fieldDetail !== null;
+    if (incoming?.staged) commit(incoming);
+  }
+  function makeField(rectangle, image) {
+    field = drawOf(viewer).field({
+      kind: 'rasterShell',
+      id: `weather-shell:${product}:${(weatherShells += 1)}`,
+      image,
+      rectangle,
+      heightM: height,
+      alpha,
+      detail: null,
+      shows: WEATHER_IMAGERY_SHOWS[product],
+    });
+    fieldAlpha = alpha;
+    owed = true;
+    field.on('drawn', onDrawn);
+    offLift = followShellLift(viewer, (liftM) => update({ liftM }), {
+      cameraOf,
+      frameOf,
+    });
+  }
+  function dropField() {
+    offLift?.();
+    offLift = null;
+    field?.dispose();
+    field = null;
+    fieldBounds = null;
+    fieldImage = null;
+    fieldRect = null;
+    fieldDetail = null;
+    everDrawn = false;
+    imageDrawn = false;
+    detailDrawn = false;
+    owed = false;
+  }
+  /** Give the field `next` for its detail, unless it has it already. */
+  function giveDetail(next) {
+    if (!field) return;
+    const given = incoming?.staged ? incoming.keptDetail : fieldDetail;
+    const same =
+      next === given ||
+      (next &&
+        given &&
+        next.image.canvas === given.image.canvas &&
+        sameEdges(next.rectangle, given.rectangle));
+    if (same) return;
+    // A frame being staged takes its detail once it is committed; until
+    // then the detail is what the field goes back to if it is given up.
+    if (incoming?.staged) {
+      incoming.keptDetail = next;
+      return;
+    }
+    fieldDetail = next;
+    detailDrawn = false;
+    update({ detail: next });
+  }
 
   function evict(keep = []) {
     const kept = new Set([...keep, current?.key, detail?.key]);
@@ -475,6 +338,7 @@ export function createWeatherShell({
       decodeImage,
       now,
       onFetched,
+      frameSource,
     });
     // An aborted decode may still finish; never repopulate a cleared instance.
     signal.throwIfAborted();
@@ -501,11 +365,19 @@ export function createWeatherShell({
     };
   }
   function syncDetail() {
-    if (detail && current) surface?.setDetail(detail.image, detailRect());
-    else surface?.setDetail(null);
+    if (detail && current)
+      giveDetail({
+        image: imageRef(detail.image, detail.key),
+        rectangle: { ...detail.box },
+      });
+    else giveDetail(null);
   }
   function applyVisibility() {
-    return surface?.setShow(visible()) ?? false;
+    if (!field) return false;
+    const show = visible();
+    if (field.show === show) return false;
+    field.show = show;
+    return true;
   }
   function cancelDetail() {
     clearTimeout(detailJob?.timeout);
@@ -515,7 +387,7 @@ export function createWeatherShell({
   function dropDetail() {
     detail = null;
     // The full-extent image covers the window in the same turn.
-    surface?.setDetail(null);
+    giveDetail(null);
   }
   function installDetail(job, image) {
     if (detailJob !== job) return;
@@ -524,14 +396,14 @@ export function createWeatherShell({
     detail = { box: job.box, key: job.key, image, stale: false };
     syncDetail();
     evict();
-    scene.requestRender();
+    requestRender();
   }
   function failDetail(job) {
     if (detailJob !== job) return;
     clearTimeout(job.timeout);
     detailJob = null;
     if (detail?.stale) dropDetail();
-    scene.requestRender();
+    requestRender();
   }
   /** Bring the detail to the shown frame and window. The previous detail image
    * stays until the next is decoded unless the window itself moved, and over at
@@ -569,16 +441,9 @@ export function createWeatherShell({
   }
   /** Recompute the window from the camera's ground footprint; returns whether it changed. */
   function computeView() {
-    const rectangle = detailed
-      ? viewer.camera?.computeViewRectangle?.(scene.globe?.ellipsoid)
+    const footprint = detailed
+      ? (cameraOf(viewer)?.viewRectangle?.() ?? null)
       : null;
-    const degrees = cesium.Math.toDegrees;
-    const footprint = rectangle && {
-      west: degrees(rectangle.west),
-      south: degrees(rectangle.south),
-      east: degrees(rectangle.east),
-      north: degrees(rectangle.north),
-    };
     const next = detailWindow(
       footprint,
       current.extent,
@@ -592,7 +457,7 @@ export function createWeatherShell({
   function watchCamera() {
     if (offCamera || !detailed) return;
     offCamera =
-      viewer.camera?.moveEnd?.addEventListener(() => {
+      cameraOf(viewer)?.on?.('moveEnd', () => {
         if (current && computeView()) refreshDetail();
       }) ?? null;
   }
@@ -607,18 +472,30 @@ export function createWeatherShell({
     frame.owned = true;
     const abort = () => {
       if (incoming === frame) cancelIncoming();
-      scene.requestRender();
+      requestRender();
     };
     signal.addEventListener('abort', abort, { once: true });
     frame.offAbort = () => signal.removeEventListener('abort', abort);
+  }
+  /** A staged frame given up: the field goes back to what it drew. */
+  function unstage(frame) {
+    if (!frame.staged) return;
+    frame.staged = false;
+    if (fieldBounds === null) {
+      dropField();
+      return;
+    }
+    fieldDetail = frame.keptDetail ?? null;
+    detailDrawn = false;
+    imageDrawn = false;
+    update({ image: fieldImage, rectangle: fieldRect, detail: fieldDetail });
   }
   function close(frame) {
     frame.closed = true;
     frame.controller.abort();
     clearTimeout(frame.timeout);
     frame.offAbort?.();
-    frame.surface?.destroy();
-    frame.surface = null;
+    unstage(frame);
   }
   function cancelIncoming() {
     if (!incoming) return;
@@ -633,7 +510,7 @@ export function createWeatherShell({
     close(frame);
     lastError = msg('Weather tiles unavailable · previous frame retained');
     frame.resolve(false);
-    scene.requestRender();
+    requestRender();
     onChange();
   }
   function commit(frame) {
@@ -641,12 +518,13 @@ export function createWeatherShell({
     incoming = null;
     clearTimeout(frame.timeout);
     frame.offAbort?.();
-    if (frame.surface) {
-      surface?.destroy();
-      surface = frame.surface;
-      frame.surface = null;
-    }
     const { west, south, east, north } = frame.snapshot.bounds;
+    if (frame.staged) {
+      frame.staged = false;
+      fieldBounds = frame.bounds;
+      fieldRect = { west, south, east, north };
+    }
+    fieldImage = frame.image;
     current = {
       time: frame.time,
       product: frame.product,
@@ -657,7 +535,10 @@ export function createWeatherShell({
       mosaic: frame.mosaic,
       loadMs: now() - frame.startedAt,
     };
-    surface.setAlpha(alpha);
+    if (fieldAlpha !== alpha) {
+      fieldAlpha = alpha;
+      update({ alpha });
+    }
     applyVisibility();
     lastError = null;
     evict();
@@ -668,31 +549,35 @@ export function createWeatherShell({
     if (detail?.stale && detail.key !== wantedDetail()) dropDetail();
     refreshDetail();
     frame.resolve(true);
-    scene.requestRender();
+    requestRender();
     onChange();
   }
-  function install(frame, image) {
+  function install(frame, texture) {
     if (frame.closed || incoming !== frame) return;
-    if (surface?.bounds === frame.bounds) {
-      // Cesium keeps drawing the previous texture until this one is uploaded.
-      surface.setImage(image);
+    frame.image = imageRef(texture, frame.key);
+    if (field && fieldBounds === frame.bounds) {
+      // The renderer keeps drawing the previous image until this one is drawn.
+      imageDrawn = false;
+      update({ image: frame.image });
       commit(frame);
       return;
     }
-    // First frame or a new extent: stage an invisible surface and keep the
-    // previous one until the new geometry and texture are drawable.
+    // First frame or a new extent: the field keeps what it draws until the
+    // new rectangle and image can be drawn, then the frame commits.
     const { west, south, east, north } = frame.snapshot.bounds;
-    const next = createShellSurface({
-      viewer,
-      cesium,
-      height,
-      rectangle: cesium.Rectangle.fromDegrees(west, south, east, north),
-      onSettled: () => commit(frame),
-    });
-    next.bounds = frame.bounds;
-    frame.surface = next;
-    next.setAlpha(0);
-    next.setImage(image);
+    const rectangle = { west, south, east, north };
+    frame.staged = true;
+    imageDrawn = false;
+    if (!field) makeField(rectangle, frame.image);
+    else {
+      frame.keptDetail = fieldDetail;
+      fieldDetail = null;
+      detailDrawn = false;
+      update({ image: frame.image, rectangle, detail: null });
+    }
+    // A hidden field tells nothing drawn: the renderer readies the new
+    // content unseen and shows it, not the old, once the field shows.
+    if (!visible()) commit(frame);
   }
 
   return {
@@ -708,7 +593,7 @@ export function createWeatherShell({
         computeView();
         refreshDetail();
       }
-      if (changed) scene.requestRender();
+      if (changed) requestRender();
       return changed;
     },
     cancelPrefetch,
@@ -783,7 +668,9 @@ export function createWeatherShell({
         mosaic: { fetched: false, decodeMs: null, cached: false },
         controller: new AbortController(),
         startedAt: now(),
-        surface: null,
+        image: null,
+        staged: false,
+        keptDetail: null,
         owned: false,
         closed: false,
         resolve: null,
@@ -805,7 +692,7 @@ export function createWeatherShell({
           install(frame, texture);
         })
         .catch(() => fail(frame));
-      scene.requestRender();
+      requestRender();
       onChange();
       return frame.result;
     },
@@ -818,12 +705,15 @@ export function createWeatherShell({
       }
       applyVisibility();
       if (!hidden) refreshDetail();
-      scene.requestRender();
+      requestRender();
     },
     setAlpha(value) {
       alpha = value;
-      surface?.setAlpha(alpha);
-      scene.requestRender();
+      if (field && fieldAlpha !== alpha) {
+        fieldAlpha = alpha;
+        update({ alpha });
+      }
+      requestRender();
     },
     clear() {
       cancelPrefetch();
@@ -832,8 +722,7 @@ export function createWeatherShell({
       offCamera?.();
       offCamera = null;
       dropDetail();
-      surface?.destroy();
-      surface = null;
+      dropField();
       current = null;
       view = null;
       viewBounds = null;
@@ -841,11 +730,21 @@ export function createWeatherShell({
       lastError = null;
       images.clear();
       imageBytes = 0;
-      scene.requestRender();
+      requestRender();
     },
     getDiagnostics() {
-      const drawn = surface?.getDiagnostics();
-      const applied = drawn?.detail.window;
+      // The detail is drawn once its image has drawn in its window.
+      const window =
+        current && detail && detailDrawn && fieldDetail ? detailRect() : null;
+      const drawn = field && {
+        height,
+        ready: everDrawn,
+        uploaded: imageDrawn,
+        show: field.show,
+        alpha: fieldAlpha,
+        rendering: owed && field.show,
+        detail: { uploaded: detailDrawn, window },
+      };
       return {
         host: 'shell',
         height,
@@ -866,8 +765,8 @@ export function createWeatherShell({
                   drawn.ready &&
                   drawn.show &&
                   drawn.detail.uploaded &&
-                  applied &&
-                  sameEdges(applied, detailRect()),
+                  window &&
+                  !owed,
                 ),
                 enabled: view !== null,
               },
@@ -878,7 +777,7 @@ export function createWeatherShell({
           bytes: imageBytes,
           prefetching: !!prefetchJob,
         },
-        imageryCount: Number(!!surface) + Number(!!incoming?.surface),
+        imageryCount: Number(fieldBounds !== null) + Number(!!incoming?.staged),
         mosaic: (incoming || current)?.mosaic,
         infrared: (incoming || current)?.infrared ?? 'filtered',
         loading: !!incoming,

@@ -29,6 +29,7 @@ export const writeCalibrationStoreV2 = layer.writeCalibrationStoreV2;
 export const deriveCalBadge = layer.deriveCalBadge;
 export const computeFrustumGeometry = layer.computeFrustumGeometry;
 export const activationProbeClampRange = layer.activationProbeClampRange;
+export const flatGroundAxisDistance = layer.flatGroundAxisDistance;
 export const frameSignatureFromPixels = layer.frameSignatureFromPixels;
 export const _createCctvProjectionPlaneForTest =
   layer._createCctvProjectionPlaneForTest;
@@ -65,6 +66,7 @@ export const materializeCctvVisibleCoverageEntities =
 export const _extractPickedCameraIdForTest =
   layer._extractPickedCameraIdForTest;
 export const _setCctvCoverageStateForTest = layer._setCctvCoverageStateForTest;
+export const _cctvIconsForTest = layer._cctvIconsForTest;
 export const focusCctvRecord = layer.focusCctvRecord;
 export const maybeAutoHop = layer.maybeAutoHop;
 export const openingCameraId = layer.openingCameraId;

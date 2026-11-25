@@ -251,7 +251,12 @@ test('mint locks canonical action schemas and server instructions with no perman
 
 test('missing key and malformed model fail without an upstream request', async (t) => {
   const missing = await fixture(t, { resolveApiKey: () => '' });
-  assert.equal((await missing.send()).status, 503);
+  const missingResponse = await missing.send();
+  assert.equal(missingResponse.status, 503);
+  assert.deepEqual(await missingResponse.json(), {
+    error: 'Add a Gemini API key in Provider Settings',
+    code: 'API_KEY_MISSING',
+  });
   assert.equal(missing.calls.length, 0);
   for (const model of [
     '',

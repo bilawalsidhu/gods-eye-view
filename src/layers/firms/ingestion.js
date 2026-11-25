@@ -3,6 +3,10 @@ import { fireDetectionKey } from '../../data/firmsLabels.js';
 import { filterFires } from '../../data/firmsIntensity.js';
 import { msg } from '../../i18n/index.js';
 
+/** A time a Date can print: epoch ms within JavaScript's date range. */
+const isSnapshotEnd = (value) =>
+  Number.isFinite(value) && Math.abs(value) <= 8_640_000_000_000_000;
+
 export function createIngestion({
   layerState,
   services,
@@ -16,7 +20,7 @@ export function createIngestion({
   /** Replace a validated snapshot while preserving source freshness and selection identity. */
 
   async function loadHeatmap() {
-    if (!layerState._dataSource || !layerState._enabled) return;
+    if (!layerState._cells || !layerState._enabled) return;
     layerState.request?.abort();
     const request = new AbortController();
     layerState.request = request;
@@ -32,6 +36,7 @@ export function createIngestion({
         return;
       if (payload.keyRequired) {
         layerState._keyRequired = true;
+        layerState._at = null;
         layerState._error = null;
         layerState._stale = false;
         return;
@@ -39,6 +44,9 @@ export function createIngestion({
       layerState._keyRequired = false;
       layerState._error = null;
       layerState._stale = Boolean(payload?.stale);
+      // A snapshot of the 24 hours to a set time names it; one of the
+      // trailing 24 hours to now does not.
+      layerState._at = isSnapshotEnd(payload?.at) ? payload.at : null;
       const previousSelection = layerState._selectedFire;
       layerState._selectedFire = null;
       layerState._allFires = adaptFirmsRecords(payload?.fires);

@@ -2,6 +2,8 @@ import { t } from '../../i18n/index.js';
 import { wildlifeMeasure } from './performance.js';
 import { compareWildlifeIds } from './model.js';
 import { isRecentWildlifeSighting } from './records.js';
+import { canvasOf } from '../../render/rendererOf.js';
+import { wildlifeEyeHeight } from './view.js';
 import {
   ACARTIA_CREDIT,
   registerDynamicCredit,
@@ -156,7 +158,7 @@ export function createSelection({ state, services, parts }) {
     const selected = selectionRow();
     if (
       selected &&
-      (state.viewer.camera?.positionCartographic?.height ?? 0) <
+      (wildlifeEyeHeight(state.viewer) ?? 0) <
         WILDLIFE_SELECTED_LABEL_FADE_HIGH_METERS
     )
       remember(selected);
@@ -197,10 +199,10 @@ export function createSelection({ state, services, parts }) {
 
   function refreshLabels() {
     if (!state.enabled || !overlay) return;
-    const scene = state.viewer.scene;
+    const canvas = canvasOf(state.viewer);
     const horizon = parts.rendering.occluder();
-    const width = scene.canvas?.clientWidth || 0;
-    const height = scene.canvas?.clientHeight || 0;
+    const width = canvas?.clientWidth || 0;
+    const height = canvas?.clientHeight || 0;
     // Rank during camera/data passes; the host handles pixel collisions.
     const nowMs = services.now();
     const candidates = [];
@@ -212,7 +214,7 @@ export function createSelection({ state, services, parts }) {
       const position = state.positions.get(row.stableId);
       if (!position || (horizon && horizon.isPointVisible(position) !== true))
         continue;
-      const screen = services.project(scene, position);
+      const screen = services.project(state.viewer, position);
       if (
         !screen ||
         screen.x < 0 ||
@@ -236,10 +238,10 @@ export function createSelection({ state, services, parts }) {
   }
 
   function ambientCandidates(rows) {
-    const scene = state.viewer.scene;
+    const canvas = canvasOf(state.viewer);
     const horizon = parts.rendering.occluder();
-    const width = scene.canvas?.clientWidth ?? Infinity;
-    const height = scene.canvas?.clientHeight ?? Infinity;
+    const width = canvas?.clientWidth ?? Infinity;
+    const height = canvas?.clientHeight ?? Infinity;
     const screens = new Map();
     const nowMs = services.now();
     const taxa = state.drawnParams?.taxa ?? state.taxa;
@@ -253,7 +255,7 @@ export function createSelection({ state, services, parts }) {
       const position = state.positions.get(row.stableId);
       if (!position || (horizon && horizon.isPointVisible(position) !== true))
         return false;
-      const screen = services.project(scene, position);
+      const screen = services.project(state.viewer, position);
       if (
         !screen ||
         screen.x < 0 ||
@@ -272,8 +274,7 @@ export function createSelection({ state, services, parts }) {
    * photos survive; acquisition also checks the observation window/params. */
   function retainedAmbientRows() {
     if (!state.enabled) return [];
-    const height =
-      state.viewer?.camera?.positionCartographic?.height ?? Infinity;
+    const height = wildlifeEyeHeight(state.viewer) ?? Infinity;
     if (height >= WILDLIFE_CARD_HIDE_MAX_METERS) return [];
     return ambientCandidates(state.ambientRows).eligible;
   }
@@ -281,8 +282,7 @@ export function createSelection({ state, services, parts }) {
   function refreshAmbient() {
     if (!state.enabled) return;
     refreshLabels();
-    const height =
-      state.viewer?.camera?.positionCartographic?.height ?? Infinity;
+    const height = wildlifeEyeHeight(state.viewer) ?? Infinity;
     if (state.ambientActive) {
       if (height >= WILDLIFE_CARD_HIDE_MAX_METERS) state.ambientActive = false;
     } else if (height <= WILDLIFE_CARD_SHOW_MAX_METERS)
@@ -338,6 +338,8 @@ export function createSelection({ state, services, parts }) {
     // i18n-ignore: provider names and feed-supplied organism names are verbatim
     const label = `${name} · ${row.origin === 'acartia' ? 'Acartia' : 'iNaturalist'}`;
     services.context.registerEntityContext(carrier, {
+      // Where voice's in-view scan projects it.
+      targetPosition: carrier.__localBaseCartesian,
       id: row.stableId,
       layerId: 'wildlife-sightings',
       layerName: t('Wildlife Sightings'),
@@ -469,30 +471,34 @@ export function createSelection({ state, services, parts }) {
         'gev:entity-selected',
         onContext,
       );
-    if (typeof services.screenSpaceEventHandlerFactory !== 'function') return;
-    state.clickHandler = services.screenSpaceEventHandlerFactory(state.viewer);
-    state.clickHandler.setInputAction((click) => {
+    // A viewer with no renderer input bound takes no clicks.
+    let input = null;
+    try {
+      input = services.input?.(state.viewer) ?? null;
+    } catch {
+      input = null;
+    }
+    if (!input) return;
+    state.clickHandler = input.onClick((click) => {
       if (!state.enabled || services.pointer?.isPointerFree?.() === false)
         return;
-      const hit =
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_SELECTED_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_OVERLAY_SOURCE_ID,
-        }) ||
-        overlay?.hitTest?.(click.position?.x, click.position?.y, {
-          sourceId: WILDLIFE_LABEL_SOURCE_ID,
-        });
+      // The card or label painted on top takes the click, read once per
+      // click so every layer agrees: ours acts whatever is drawn under it;
+      // another layer's is that layer's click, so the sightings under it do
+      // not act and the selection stays.
+      const hit = services.picking?.clickCard?.(click) ?? null;
       if (hit) {
-        hit.entry?.activate?.();
+        if (sourceIds.includes(hit.sourceId)) hit.entry?.activate?.();
         return;
       }
-      const picked = state.viewer.scene.pick(click.position);
-      const id =
-        services.picking?.resolvePickId?.(picked) ??
-        picked?.id ??
-        picked?.primitive?.id;
+      // A sighting icon's item id is its pick id, `wildlife:<stableId>`.
+      // Read from what is exactly under the click, as the scene's pick was:
+      // a touch's wider contact search would select a sighting the tap
+      // missed, or keep one open for a tap near another layer's contact.
+      const picked = click.topHit;
+      const id = picked
+        ? (services.picking?.resolvePickId?.(picked) ?? picked.id ?? null)
+        : null;
       if (
         typeof id === 'string' &&
         id.startsWith('wildlife:') &&
@@ -505,11 +511,11 @@ export function createSelection({ state, services, parts }) {
       )
         return;
       clearAndRebuild();
-    }, services.cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
   }
 
   function remove() {
-    state.clickHandler?.destroy();
+    state.clickHandler?.();
     state.clickHandler = null;
     state.removeContext?.();
     state.removeContext = null;

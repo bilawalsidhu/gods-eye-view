@@ -1,4 +1,5 @@
 import { cancelCameraArrival } from './cameraArrival.js';
+import { libraryEntryIdOf } from './libraryLayerIds.js';
 
 function cloneLayerParams(value) {
   if (Array.isArray(value)) return value.map(cloneLayerParams);
@@ -97,6 +98,7 @@ export class LayerLifecycle {
     this._registrationDispositions = null;
     this._allowQaRegistration = allowQaRegistration === true;
     this._qaLayerIds = new Set();
+    this._libraryLayerIds = new Set();
   }
 
   register(layerModule) {
@@ -123,6 +125,41 @@ export class LayerLifecycle {
     const destroyed = await this.destroyLayer(layerId);
     if (destroyed) this._qaLayerIds.delete(layerId);
     return destroyed;
+  }
+
+  /**
+   * Register a Data Library layer after the catalog is sealed. Only ids in
+   * the library namespace (`lib-<entry id>`) are accepted, so this seam can
+   * never stand in for a core layer, and library layers never join the core
+   * share-token registry: their selection travels in `lib=` instead.
+   * @param {object} layerModule
+   * @returns {string} The registered id.
+   */
+  registerLibraryLayer(layerModule) {
+    if (!this._registrationsFinalized)
+      throw new Error('Library layers register after the catalog is sealed');
+    if (!libraryEntryIdOf(layerModule?.id))
+      throw new Error('Library layer ids must use the lib- namespace');
+    this._registerLayer(layerModule);
+    this._libraryLayerIds.add(layerModule.id);
+    this._publishActivity({ type: 'registrations', layerId: layerModule.id });
+    return layerModule.id;
+  }
+
+  /** Destroy a layer registered through `registerLibraryLayer`. */
+  async unregisterLibraryLayer(layerId) {
+    if (!this._libraryLayerIds.has(layerId)) return false;
+    const destroyed = await this.destroyLayer(layerId);
+    if (destroyed) {
+      this._libraryLayerIds.delete(layerId);
+      this._publishActivity({ type: 'registrations', layerId });
+    }
+    return destroyed;
+  }
+
+  /** Whether a registered layer came from the Data Library. */
+  isLibraryLayer(layerId) {
+    return this._libraryLayerIds.has(layerId);
   }
 
   _registerLayer(layerModule) {
@@ -288,6 +325,12 @@ export class LayerLifecycle {
       return false;
     const refreshEpoch = ++entry.refreshEpoch;
     entry.refreshing = true;
+    // The update's own cancellation: the caller's, or a newer refresh that
+    // supersedes this one (`refreshLayer`'s `supersede`).
+    const controller = new AbortController();
+    const forward = () => controller.abort(signal.reason);
+    signal?.addEventListener?.('abort', forward, { once: true });
+    entry.refreshController = controller;
     this._publishActivity({ type: 'status' });
     this._notifyListeners({
       type: 'refresh-transition',
@@ -299,7 +342,9 @@ export class LayerLifecycle {
     let result;
     let failure = null;
     try {
-      result = await entry.module.update(this.viewer, { signal });
+      result = await entry.module.update(this.viewer, {
+        signal: controller.signal,
+      });
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
       this._publishActivity({ type: 'data-updated', layerId });
@@ -312,9 +357,13 @@ export class LayerLifecycle {
         );
     } catch (error) {
       failure = error;
+    } finally {
+      signal?.removeEventListener?.('abort', forward);
+      if (entry.refreshController === controller)
+        entry.refreshController = null;
     }
 
-    if (signal?.aborted) {
+    if (controller.signal.aborted) {
       if (
         this.layers.get(layerId) === entry &&
         !entry.destroying &&
@@ -370,16 +419,18 @@ export class LayerLifecycle {
   }
 
   /**
-   * Request one fresh update for an already-enabled layer. If the periodic
-   * loop currently owns a refresh, wait for it to settle and then run a new
-   * update so viewport-dependent callers do not reuse work started for the
-   * prior camera location.
+   * Request one fresh update for an already-enabled layer. If a refresh is
+   * in flight, wait for it to settle and then run a new update so
+   * viewport-dependent callers do not reuse work started for the prior
+   * camera location; with `supersede`, cancel it instead (its update's
+   * signal aborts and it settles `false`) and start the new one at once.
    * @param {string} layerId Registered layer id.
    * @param {object} [options] Refresh authority.
    * @param {AbortSignal|null} [options.signal] Caller cancellation authority.
+   * @param {boolean} [options.supersede] Cancel a refresh in flight rather than wait for it.
    * @returns {Promise<boolean>} True only when the requested fresh update settles successfully.
    */
-  async refreshLayer(layerId, { signal = null } = {}) {
+  async refreshLayer(layerId, { signal = null, supersede = false } = {}) {
     const entry = this.layers.get(layerId);
     if (
       !entry ||
@@ -390,7 +441,14 @@ export class LayerLifecycle {
     )
       return false;
 
-    if (entry.refreshing) {
+    // Another caller may start a refresh while this one waits: wait again.
+    while (entry.refreshing) {
+      if (supersede) {
+        const controller = entry.refreshController;
+        this._invalidateRefresh(layerId, entry, 'superseded');
+        controller?.abort(new DOMException('Refresh superseded', 'AbortError'));
+        break;
+      }
       const settled = await new Promise((resolve) => {
         let done = false;
         const finish = (value) => {
@@ -1790,6 +1848,44 @@ export class LayerLifecycle {
     await entry.toggleChain.catch(() => {});
   }
 
+  /**
+   * Wait until a layer's lifecycle queue is idle, following any request that
+   * joins it while waiting, but no longer than `timeoutMs` or `signal` allows.
+   * @param {string} layerId Layer id.
+   * @param {{signal?: AbortSignal, timeoutMs?: number}} [options]
+   * @returns {Promise<boolean>} true once idle; false on timeout or abort.
+   */
+  async waitForLayerIdle(layerId, { signal, timeoutMs = 30000 } = {}) {
+    const entry = this.layers.get(layerId);
+    if (!entry) return true;
+    if (signal?.aborted) return false;
+    let timer = null;
+    let onAbort = null;
+    const givenUp = new Promise((resolve) => {
+      timer = setTimeout(() => resolve(false), timeoutMs);
+      onAbort = () => resolve(false);
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+    try {
+      let pending;
+      do {
+        pending = entry.toggleChain;
+        const idle = await Promise.race([
+          pending.then(
+            () => true,
+            () => true,
+          ),
+          givenUp,
+        ]);
+        if (!idle) return false;
+      } while (pending !== entry.toggleChain);
+      return true;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+    }
+  }
+
   _reserveLayerParamsIntent(layerId, params, origin = 'programmatic') {
     const entry = this.layers.get(layerId);
     if (
@@ -2231,6 +2327,7 @@ export class LayerLifecycle {
     }
     this.layers.delete(layerId);
     this._qaLayerIds.delete(layerId);
+    this._libraryLayerIds.delete(layerId);
     return true;
   }
 
@@ -2274,6 +2371,10 @@ export class LayerLifecycle {
         // showInTogglePanel). The layer reports stats.keyRequired while that
         // key is absent; the panel builds the guidance text from the pair.
         requiresKeyId: entry.module.requiresKeyId || null,
+        // Data Library entry id; the panel groups these under Library.
+        libraryEntryId: this._libraryLayerIds.has(id)
+          ? libraryEntryIdOf(id)
+          : null,
         enabled: entry.enabled,
         lifecycleState: entry.lifecycleState,
         lifecycleUncertain: entry.lifecycleUncertain,
@@ -2385,9 +2486,25 @@ export class LayerLifecycle {
   /**
    * Ask presentation to repaint layer rows now, for data that lands outside
    * the manager tick (Transit's proximity polls, Directions' route steps).
+   * @param {string} [layerId] - The layer whose row changed.
    */
-  refreshLayerStats() {
+  refreshLayerStats(layerId) {
+    this._dropRecoveredRefreshError(layerId);
     this._publishActivity({ type: 'status' });
+  }
+
+  /**
+   * Drop a tick failure the layer's stats no longer report (the camera left
+   * that feed) instead of showing it until the next tick.
+   */
+  _dropRecoveredRefreshError(layerId) {
+    const entry = layerId ? this.layers.get(layerId) : null;
+    if (!entry?.managerRefreshError || entry.refreshing) return;
+    const failure = refreshFailureFromStats(
+      this._moduleStats(entry),
+      entry.module.name || layerId,
+    );
+    if (!failure) entry.managerRefreshError = null;
   }
 
   _publishActivity(change) {

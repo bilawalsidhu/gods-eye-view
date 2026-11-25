@@ -11,7 +11,11 @@ import {
   _routeInflightCountForTest,
   _setRouteUpstreamIntervalForTest,
 } from '../../server/providers/places/routes.js';
-import { ROUTE_STEPS_MAX } from '../../src/data/routeSteps.js';
+import {
+  ROUTE_STEPS_MAX,
+  normalizeOsrmSteps,
+} from '../../src/data/routeSteps.js';
+import * as placePayloads from '../../src/data/placeProviderPayloads.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -47,6 +51,11 @@ function install(register) {
     return res;
   };
 }
+
+const ROUTES = [
+  ['/api/google/nearby-places', '?lat=30&lon=-97'],
+  ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+];
 
 test('nearby labels rank landmarks, deduplicate names/addresses and bound the projection', () => {
   const place = (name, types, longitude = 0) => ({
@@ -172,16 +181,70 @@ for (const preview of [false, true]) {
       JSON.parse(calls[1].options.body).locationBias.circle.radius,
       50,
     );
-    assert.equal((await request(search, '?lat=30&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '?lat=bad&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '', 'POST')).statusCode, 405);
+    for (const [route, query, method, statusCode] of [
+      [search, '?lat=30&lon=-97', 'GET', 400],
+      [nearby, '?lat=bad&lon=-97', 'GET', 400],
+      [nearby, '', 'POST', 405],
+    ]) {
+      const refused = await request(route, query, method);
+      assert.equal(refused.statusCode, statusCode, `${method} ${route}`);
+      assert.equal(
+        refused.headers['cache-control'],
+        'no-store',
+        `${method} ${route}`,
+      );
+    }
     t.mock.method(globalThis, 'fetch', async () =>
       Response.json({ error: { message: 'Denied' } }, { status: 403 }),
     );
-    assert.deepEqual((await request(search, '?q=museum&lat=30&lon=-97')).body, {
-      places: [],
-      error: 'Denied',
-    });
+    for (const [route, query] of ROUTES) {
+      const refused = await request(route, query);
+      assert.equal(refused.statusCode, 403, route);
+      assert.equal(refused.headers['cache-control'], 'no-store', route);
+      assert.deepEqual(refused.body, { places: [], error: 'Denied' }, route);
+    }
+  });
+}
+
+for (const [name, upstream, statusCode, cacheControl] of [
+  [
+    'unreadable 200',
+    () => new Response('<html>not json</html>', { status: 200 }),
+    502,
+    'no-store',
+  ],
+  [
+    'unreadable 429',
+    () => new Response('<html>Too Many Requests</html>', { status: 429 }),
+    429,
+    'no-store',
+  ],
+  [
+    'transport failure',
+    () => {
+      throw new TypeError('fetch failed');
+    },
+    502,
+    'no-store',
+  ],
+  // Google returns {} for a successful search with no places.
+  ['empty answer ({})', () => Response.json({}), 200, 'private, max-age=300'],
+]) {
+  test(`a Places ${name} is a ${statusCode} with Cache-Control ${cacheControl}`, async () => {
+    const request = install((middlewares) =>
+      googlePlacesContextProxy({
+        resolveApiKey: () => 'fixture-server-key',
+        fetchImpl: async () => upstream(),
+      }).configureServer({ middlewares }),
+    );
+    for (const [route, query] of ROUTES) {
+      const res = await request(route, query);
+      assert.equal(res.statusCode, statusCode, route);
+      assert.equal(res.headers['cache-control'], cacheControl, route);
+      assert.deepEqual(res.body.places, [], route);
+      if (statusCode === 200) assert.equal(res.body.error, null, route);
+      else assert.ok(res.body.error, route);
+    }
   });
 }
 
@@ -236,21 +299,106 @@ test('OSRM routing preserves aliases, cache, span guards and upstream failure be
     assert.equal((await request(route, url)).body.error, error);
   assert.equal(calls, 1);
   now += 600001;
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('offline', { status: 503 }),
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json(
+      { code: 'NoRoute', message: 'Impossible route between points' },
+      { status: 400 },
+    ),
   );
-  assert.deepEqual((await request(route, query)).body, {
-    ok: false,
-    error: 'no route found',
-  });
-  t.mock.method(
-    globalThis,
-    'fetch',
-    async () => new Response('x', { headers: { 'content-type': 'text/html' } }),
+  const noRoute = await request(route, query);
+  assert.equal(noRoute.statusCode, 200);
+  assert.deepEqual(noRoute.body, { ok: false, error: 'no route found' });
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ code: 'NoRoute', routes: [] }),
   );
   assert.equal((await request(route, query)).body.error, 'no route found');
+});
+
+test('a routing outage is reported as one, not as "no route found"', async (t) => {
+  const route = '/api/route';
+  const query = '?profile=car&coords=-97,30;-97.01,30.01';
+  for (const response of [
+    () => new Response('offline', { status: 503 }),
+    () => new Response('blocked', { status: 403 }),
+    () => new Response('x', { headers: { 'content-type': 'text/html' } }),
+    () =>
+      new Response('<html>', {
+        headers: { 'content-type': 'application/json' },
+      }),
+    () => Promise.reject(new TypeError('fetch failed')),
+    () => Promise.reject(new DOMException('aborted', 'AbortError')),
+  ]) {
+    _resetRouteUpstreamForTest();
+    const request = install(installRouteMiddleware);
+    t.mock.method(globalThis, 'fetch', async () => response());
+    const result = await request(route, query);
+    assert.equal(result.statusCode, 502);
+    assert.deepEqual(result.body, {
+      ok: false,
+      error: 'routing service unavailable',
+    });
+  }
+});
+
+test('callers sharing one failed upstream call all hear the outage, and it is not cached', async (t) => {
+  _resetRouteUpstreamForTest();
+  _setRouteUpstreamIntervalForTest(0);
+  t.after(() => _resetRouteUpstreamForTest());
+  const request = install(installRouteMiddleware);
+  let calls = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    await gate;
+    return new Response('offline', { status: 503 });
+  });
+  const route = '/api/route';
+  const query = '?profile=car&coords=-97,30;-97.01,30.01';
+  const all = [
+    request(route, `${query}&steps=1`),
+    request(route, `${query}&steps=1`),
+    request(route, query),
+  ];
+  await Promise.resolve();
+  release();
+  for (const result of await Promise.all(all)) {
+    assert.equal(result.statusCode, 502);
+    assert.equal(result.body.error, 'routing service unavailable');
+  }
+  assert.equal(calls, 1);
+  assert.equal((await request(route, query)).statusCode, 502);
+  assert.equal(calls, 2, 'the next request asks the routing service again');
+});
+
+test('a budget spent in the outbound queue is reported as busy, not as an outage', async (t) => {
+  _resetRouteUpstreamForTest();
+  // The second request waits 13 s for its slot, past the 12 s budget.
+  _setRouteUpstreamIntervalForTest(13_000);
+  t.after(() => _resetRouteUpstreamForTest());
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.now() });
+  const request = install(installRouteMiddleware);
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls += 1;
+    return Response.json(osrmRouteWithSteps(2));
+  });
+  const first = request(
+    '/api/route',
+    '?profile=car&coords=-97,30;-97.01,30.01',
+  );
+  const second = request(
+    '/api/route',
+    '?profile=foot&coords=-97,30;-97.01,30.01',
+  );
+  assert.equal((await first).body.ok, true);
+  t.mock.timers.tick(13_000);
+  const result = await second;
+  assert.equal(result.statusCode, 429);
+  assert.match(result.body.error, /routing busy/);
+  assert.equal(calls, 1, 'the spent request never reaches the routing service');
 });
 
 /** One OSRM route with `count` maneuvers, for the step tests. */
@@ -380,6 +528,10 @@ test('identical concurrent route requests make one upstream call', async (t) => 
   );
 });
 
+test('the place payloads entry serves the same route steps the dev proxy does', () => {
+  assert.equal(placePayloads.normalizeOsrmSteps, normalizeOsrmSteps);
+});
+
 test('a pathological maneuver count is bounded before it reaches the browser', async (t) => {
   _resetRouteUpstreamForTest();
   const request = install(installRouteMiddleware);
@@ -499,6 +651,25 @@ test('the upstream host is pinned: a redirect is refused, not followed', async (
   });
   await request('/api/route', '?profile=car&coords=-97,30;-97.01,30.01');
   assert.deepEqual(seen, ['error'], 'a redirect would escape the pinned host');
+});
+
+test('the routing proxy declines a non-GET before rate limiting or upstream', async (t) => {
+  // A fetch that throws proves the refusal comes before any upstream call.
+  const request = install(installRouteMiddleware);
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('upstream must not be reached');
+  });
+  for (const method of ['POST', 'PUT', 'DELETE', 'PATCH']) {
+    const response = await request(
+      '/api/route',
+      '?profile=car&coords=-97,30;-97.01,30.01',
+      method,
+    );
+    assert.equal(response.statusCode, 405, method);
+    // RFC 9110 section 15.5.6: a 405 names the methods it accepts.
+    assert.equal(response.headers.allow, 'GET', method);
+    assert.deepEqual(response.body, { error: 'Method Not Allowed' });
+  }
 });
 
 test('both paid Google routes refuse cross-site requests before calling Google', async (t) => {

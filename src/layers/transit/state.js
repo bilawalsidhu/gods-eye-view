@@ -1,5 +1,5 @@
-import * as Cesium from 'cesium';
 import { createHistoryBudget } from '../../data/contactPlayback.js';
+import { Vec3 } from '../../geo/vector.js';
 import { worldTimeFor } from '../../time/worldClock.js';
 
 /**
@@ -25,11 +25,13 @@ export function createState({ services }) {
   });
   state._overlayHost = state.DEFAULT_OVERLAY_HOST;
 
-  /** @type {Cesium.Viewer|null} */
+  /** The viewer the layer draws on, or null. */
   state._viewer = null;
-  /** @type {Cesium.BillboardCollection|null} */
-  state._markers = null;
-  state._animatedMarkers = null;
+  /** The still markers' icon draw set, and the moving ones', or null. */
+  state._stillIcons = null;
+  state._movingIcons = null;
+  /** Whether the markers are shown (the layer is on). */
+  state._markersShown = false;
   state._visible = new Set();
   state._visibilityTimer = null;
   state._maintenanceTimer = null;
@@ -40,18 +42,18 @@ export function createState({ services }) {
   state._generation = 0;
 
   state._cameraChangedAttached = false;
+  /** Removes the camera port listener; null when not listening. */
+  state._cameraChangedOff = null;
+  /** Removes the one-shot look after the camera listener's first tick. */
+  state._cameraFirstTickOff = null;
   state._cameraDebounceTimer = null;
   state._altitudeGateOpen = false;
-  /** Camera sensitivity as we found it, so disable() can hand it back. */
-  state._priorPercentageChanged = null;
-  /** The value this layer actually wrote, for an identity-guarded restore. */
-  state._appliedPercentageChanged = null;
 
   /** @type {(() => void)|null} */
   state._preRenderRemove = null;
   state._renderHeld = false;
-  /** @type {Cesium.ScreenSpaceEventHandler|null} */
-  state._clickHandler = null;
+  /** @type {(() => void)|null} Unsubscribes the vehicle-selection click. */
+  state._clickSubscription = null;
   /**
    * The vehicles currently mid-glide. The per-frame pass walks THIS, not the
    * whole fleet, and the render hold is derived from it together with the
@@ -95,6 +97,15 @@ export function createState({ services }) {
 
   /** @type {string|null} */
   state._selectedKey = null;
+  /** When the user last selected a vehicle, even the selected one (ms). */
+  state._selectedAtMs = null;
+  /**
+   * The vehicle a first-person view holds (cockpitSubject.js), or null: its
+   * sprite, 3D model, card, trail and detection box are hidden, and it keeps
+   * moving out of the camera's view.
+   * @type {string|null}
+   */
+  state._cockpitSubjectKey = null;
   state._selectedCardAt = 0;
   /** The card text last published, so an unchanged card is not re-sent. */
   state._selectedCardText = null;
@@ -115,7 +126,7 @@ export function createState({ services }) {
   state._cockpitVision = false;
   /** @type {Array<[string, EventListener]>} window listeners to remove on destroy. */
   state._styleListeners = [];
-  /** @type {{ refreshLayerStats?: () => void }|null} */
+  /** @type {{ refreshLayerStats?: (layerId?: string) => void }|null} */
   state._dataManager = null;
   /** @type {number|null} */
   state._lastUpdate = null;
@@ -123,7 +134,9 @@ export function createState({ services }) {
   state._error = null;
   state._limitWarned = false;
 
-  state._scratchCartesian = new Cesium.Cartesian3();
+  // Where `samplePosition` writes a marker's position, each frame, before
+  // it is copied into the marker: a `Vec3`, so the write allocates nothing.
+  state._scratchCartesian = new Vec3();
 
   return state;
 }

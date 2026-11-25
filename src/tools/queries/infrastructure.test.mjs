@@ -119,6 +119,10 @@ test('datacenters and dams are listed nearest first with their own fields', asyn
     lon: -114.737,
     distance_km: 3.8,
   });
+  assert.equal(
+    dams.data.attribution,
+    '© OpenStreetMap contributors (ODbL 1.0) + Open Infrastructure Map',
+  );
 });
 
 test('the bundled datasets load through the local fetch', async () => {
@@ -135,6 +139,8 @@ test('the bundled datasets load through the local fetch', async () => {
       (record) => Number.isFinite(record.lat) && Number.isFinite(record.lon),
     ),
   );
+  for (const name of ['Acaray', 'Represa Yacyretá-Apipé'])
+    assert.equal(dams.filter((record) => record.name === name).length, 1, name);
   assert.equal(await source.getRecords('local-dams'), dams);
   await assert.rejects(
     source.getRecords('local-other'),
