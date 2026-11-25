@@ -1309,7 +1309,12 @@ test('a click on a local aircraft selects it and centres it once; a drag keeps i
   t.after(() => _resetSelectionForTest());
   const receiver = fakeReceiver({ mode: 'adsb', connected: true });
   const clock = { now: 100_000 };
-  const harness = clickHarness();
+  // Looking straight down on (0°, 0°) from 20 km.
+  const harness = clickHarness({
+    height: 20_000,
+    position: { x: 6_378_137 + 20_000, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
   const { layer, calls, draw } = await enabledLayer(receiver, clock, null, {
     viewer: harness.viewer,
   });
