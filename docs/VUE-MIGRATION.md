@@ -188,13 +188,8 @@ context view shows too). Their glyphs are `UiIcon`s with `:size="null"`,
 so entity-card.css and spot-conditions.css still size them
 (`src/ui/kit/entityCardControls.test.mjs` pins it). Ask GEV's chat bubble
 stays inline SVG, since no Material symbol the page loads draws it.
-The command dock's buttons (the six style buttons, the two tray toggles,
-Location's collapse and the search toggle, beside the pins and pills that
-already were) are ghost `UiButton`s. The style buttons are pressed toggles
-with `active` as their pressed class, so they now carry `aria-pressed`;
-Normal is the pressed one until a style is published. Their glyphs, the
-search 🔎 and the collapse + are text characters, not Material symbols, and
-stay plain text. The Context panel's buttons (its two tabs, Contacts, the
+The command dock holds only the voice control, whose buttons are its own.
+The Context panel's buttons (its two tabs, Contacts, the
 cockpit entry and SEARCH NEARBY SITES, beside the header's search and
 expand and the TR-3B chip) are ghost `UiButton`s; the tabs and Contacts
 are `role="tab"` controls, chosen through `aria-selected` with their own
@@ -434,21 +429,19 @@ slot whenever its view is drawn.
    mirrors each side's panels and the rail renders from it. The rail panels
    are `RailPanel`s: the kit's `UiPanel` drawing Core's panel markup, bound to the `gev-panel-chrome`
    store, with their titles rendered by `t()` rather than `data-i18n`. Each panel's
-   collapse button, the dock tray toggles and the
-   dock pins render the open and pinned state PanelChrome presents to the
-   `gev-panel-chrome` store, and their clicks call it there. Each panel's
+   collapse button renders the open state PanelChrome presents to the
+   `gev-panel-chrome` store, and its clicks call it there. Each panel's
    root draws its own state from there too (`v-panel-state`: `collapsed`,
-   `dock-pinned`, `dock-pinned-top`, `layout-auto-collapsed`,
-   `accordion-collapsed`): PanelChrome, the rails and the accordion present
+   `layout-auto-collapsed`, `accordion-collapsed`): PanelChrome, the rails
+   and the accordion present
    it rather than writing classes. The directive applies it in a synchronous
    watcher, not on Vue's next render, because the rails measure a panel in
    the same task that opens or closes it. PanelChrome and its preference
    restore, and the phone shell, read a panel's state back from the store
    (`_shownPanel`; the markup's classes before its first presentation), so
    once a panel is presented a class written outside the store no longer
-   counts. The rails, the accordion and the hover disclosure
-   (`panelDisclosure.js`), which act within the same task as a layout, read
-   the classes the directive has just drawn. Done.
+   counts. The rails and the accordion, which act within the same task as a
+   layout, read the classes the directive has just drawn. Done.
 3. **Panels.** Each template and its wiring become a component, keeping ids,
    classes and CSS; text a template renders with `t()` drops its `data-i18n`
    marker. The page places each view with a
@@ -543,15 +536,12 @@ slot whenever its view is drawn.
    publishes through `subscribePanel()`, the first layer to hand its rail
    content to a view, and `MissionRoster` and `MissionDetail` the Space
    Missions roster and selected mission that the launches layer publishes
-   the same way), the command dock (in progress: the style buttons, the
-   dock's style mini status and the ACTIVE STYLE corner render the style
-   VisualSettings publishes to the `gev-display` store; the buttons keep
-   their owner's listeners; the map source chips and status badge render
-   what `createMapSourceControls()` publishes beside it, so `./ui/maps`
-   needs no Vue; the location tray's city and landmark pills, mini status
-   and search error render what `LocationControls` publishes to the
-   `gev-location` store, and the search field keeps its listeners; beside
-   the voice control, the dock teleports each voice pointer reticle to the
+   the same way), the command dock (the ACTIVE STYLE corner renders the
+   style VisualSettings publishes to the `gev-display` store; Visual's map
+   source chips and status badge render what `createMapSourceControls()`
+   publishes beside it, so `./ui/maps` needs no Vue; the Omnibar's city and
+   landmark chips and search error render what `LocationControls` publishes
+   to the `gev-location` store; beside the voice control, the dock teleports each voice pointer reticle to the
    body where its `PointerReticle` presents it in the `gev-pointer-reticle`
    store; `startGuide()` renders the Omnibar's guided walk, `OmnibarGuide`,
    synchronously from the view it computes for each step, teleported to the
