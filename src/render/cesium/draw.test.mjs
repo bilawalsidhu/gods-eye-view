@@ -7,6 +7,7 @@ import {
   FEW_LOOSE_LINES,
   LONG_SETTLE_MS,
   MOVING_SHAPES,
+  OVERLAY_GRANULARITY,
   revealUniform,
   SETTLE_MS,
   unboundDrawPart,
@@ -2353,7 +2354,7 @@ test('the fire perimeters layer draws holed ground fills and draped outlines on 
   assert.equal(scene.added.length, 0);
 });
 
-test('the GNSS layer draws its cells as ground fills that stay out of the pick pass', async (t) => {
+test('the GNSS layer draws its cells as an overlay over the 3D tiles, out of the pick pass', async () => {
   const { createGnssIntegrityLayer } =
     await import('../../layers/gnss/index.js');
   const scene = fakeScene();
@@ -2380,27 +2381,35 @@ test('the GNSS layer draws its cells as ground fills that stay out of the pick p
   layer.enable();
   assert.equal(await layer.update(), true);
   const host = scene.added[0];
-  const grounds = [];
-  for (let i = 0; i < host.length; i++)
-    if (host.get(i) instanceof Cesium.GroundPrimitive)
-      grounds.push(host.get(i));
-  assert.equal(grounds.length, 1);
-  const [fill] = grounds;
+  const kids = [];
+  for (let i = 0; i < host.length; i++) kids.push(host.get(i));
+  // Never draped: a ground primitive classifies the 3D tiles, and a cell
+  // hundreds of kilometres wide streaks through them.
+  assert.equal(
+    kids.filter((p) => p instanceof Cesium.GroundPrimitive).length,
+    0,
+  );
+  const fills = kids.filter(
+    (p) => p instanceof Cesium.Primitive && p.geometryInstances?.length,
+  );
+  assert.equal(fills.length, 1, 'one overlay primitive for every cell');
+  const [fill] = fills;
   assert.equal(fill.allowPicking, false);
-  assert.equal(fill.classificationType, Cesium.ClassificationType.BOTH);
+  const { renderState } = fill.appearance;
+  assert.equal(renderState.depthTest.enabled, false, 'over the tiles');
+  assert.equal(renderState.depthMask, false);
+  assert.ok(fill.appearance.translucent, 'drawn after the opaque tiles');
+  assert.match(
+    fill.appearance.fragmentShaderSource,
+    /czm_ellipsoidInverseRadii[\s\S]*discard/,
+    'hidden past the horizon by the ellipsoid alone',
+  );
   const [instance] = fill.geometryInstances;
-  // An H3 hexagon, drawn as a polygon.
+  // An H3 hexagon, drawn as a polygon on the ellipsoid, finely cut.
   assert.ok(instance.geometry instanceof Cesium.PolygonGeometry);
+  assert.equal(instance.geometry._height, 0);
+  assert.equal(instance.geometry._granularity, OVERLAY_GRANULARITY);
   assert.equal(instance.id.id, 'gnss-integrity:841e631ffffffff');
-  // A ground primitive draws its stencil in the pick pass even unpickable,
-  // erasing picks of ground geometry under it; these skip that pass.
-  let updates = 0;
-  t.mock.method(Cesium.GroundPrimitive.prototype, 'update', () => updates++);
-  fill.update({ passes: { pick: true } });
-  assert.equal(updates, 0);
-  fill.update({ passes: { render: true, pick: false } });
-  assert.equal(updates, 1);
-  t.mock.restoreAll();
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
@@ -5911,6 +5920,142 @@ test('where the scene cannot drape, draped lines draw over the surface and hide 
     assert.equal(rebuilt.show, false);
     set.dispose();
     assert.equal(scene.added.length, 0);
+  }));
+
+test('a draped line clamped as an overlay draws over the surface and hides past the horizon, where the scene drapes', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    assert.equal(draw.clampState(), 'draped');
+    const set = draw.lines({ id: 'over', clampTo: 'overlay' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    set.set([
+      {
+        id: 'edge',
+        positions: [at(0), at(0.01)],
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: [0, 1, 0, 1] },
+      },
+      // One of its own clamped to the tiles still drapes.
+      {
+        id: 'draped',
+        positions: [at(0), at(0.01)],
+        widthPx: 2,
+        mode: 'draped',
+        clampTo: 'tiles',
+        style: { kind: 'solid', color: [0, 0, 1, 1] },
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    const grounds = all.filter(
+      (p) => p instanceof Cesium.GroundPolylinePrimitive,
+    );
+    assert.equal(grounds.length, 1, 'only the line clamped to the tiles');
+    assert.equal(
+      grounds[0].classificationType,
+      Cesium.ClassificationType.CESIUM_3D_TILE,
+    );
+    const line = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(line, 'drawn where the surface hides it too');
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    assert.equal(line.show, true);
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(line.show, false, 'past the horizon');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('an overlay shape draws its fill on the ellipsoid over everything, and its outline over the surface culled at the horizon', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    const set = draw.shapes({ id: 'cells', clampTo: 'overlay' });
+    const ring = [
+      { lon: 0, lat: 0 },
+      { lon: 2, lat: 0 },
+      { lon: 2, lat: 2 },
+      { lon: 0, lat: 2 },
+    ];
+    set.set([
+      {
+        id: 'cell',
+        geometry: { kind: 'polygon', rings: [ring] },
+        fill: [1, 0, 0, 0.5],
+        outline: '#ffffff',
+        outlineWidth: 2,
+        height: 'clampGround',
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    assert.ok(
+      !all.some(
+        (p) =>
+          p instanceof Cesium.GroundPrimitive ||
+          p instanceof Cesium.GroundPolylinePrimitive,
+      ),
+      'nothing drapes onto the tiles',
+    );
+    const fill = all.find(
+      (p) =>
+        p instanceof Cesium.Primitive &&
+        p.appearance instanceof Cesium.PerInstanceColorAppearance,
+    );
+    assert.ok(fill, 'the fill');
+    assert.equal(fill.appearance.renderState.depthTest.enabled, false);
+    assert.equal(fill.geometryInstances[0].geometry._height, 0);
+    const outline = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(outline, 'the outline, drawn where the surface hides it too');
+    // On the ellipsoid, along the surface's curve.
+    const [first] = outline.geometryInstances.geometry._positions;
+    assert.ok(Math.abs(Cesium.Cartographic.fromCartesian(first).height) < 1e-3);
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    assert.equal(outline.show, true);
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(outline.show, false, 'past the horizon');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('an overlay shape refuses an image fill', () =>
+  withImageClasses(() => {
+    const { draw } = drawOver();
+    const set = draw.shapes({ id: 'cells', clampTo: 'overlay' });
+    assert.throws(
+      () =>
+        set.set([
+          {
+            id: 'pic',
+            geometry: {
+              kind: 'rectangle',
+              rect: { west: 0, south: 0, east: 1, north: 1 },
+            },
+            fill: { image: 'data:image/png;base64,AA==' },
+            height: 'clampGround',
+          },
+        ]),
+      /overlay shapes with colours only/,
+    );
   }));
 
 test('where the scene cannot drape, an overlay line is culled by its whole arc, and patched by what its positions hold', () =>
