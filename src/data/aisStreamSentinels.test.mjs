@@ -218,15 +218,19 @@ for (const [index, scenario] of [
       undefined,
       'static traffic must not renew position freshness',
     );
+    // Heard again after the retention window, the vessel starts afresh: its
+    // static values and its track went with the expired row.
     position(53.42879, { Sog: 0, Cog: 0, TrueHeading: 0 });
     const next = rowFor(mmsi);
-    for (const [key, value] of Object.entries(scenario.expected))
-      assert.equal(next[key], value, key);
+    assert.equal(next.name, `MMSI ${mmsi}`);
+    assert.equal(next.type, '');
+    assert.equal(next.destination, '');
+    assert.equal(next.imo, '');
     assert.equal(next.speed, 0);
     assert.equal(next.course, 0);
     assert.equal(next.heading, 0);
     assert.equal(next.last_position_epoch, Math.floor(now / 1000));
-    assert.equal(readAisTrack(mmsi).length, 3);
+    assert.deepEqual(readAisTrack(mmsi), []);
   });
 }
 

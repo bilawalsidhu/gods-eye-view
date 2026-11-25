@@ -1073,6 +1073,14 @@ omitted, empty or unavailable fields retain known metadata across Class B's
 separate reports and in the cache used by the next position update. Position
 reports still prefer their own metadata name. Invalid Class B parts are ignored;
 absent fields prefer the latest live value over the static cache.
+A vessel that goes 30 minutes without a position report is forgotten, static
+values and trail included. Its next position report supplies the header name,
+or `MMSI <number>`, until a new static report arrives. Static values received
+before a vessel's first position or kept after the 50,000-vessel cap evicts it
+wait for its next position. The 15 s AIS watchdog tick frees expired vessels
+and trims the static cache to 50,000 entries, dropping entries without a vessel
+row in order of first arrival. Between ticks, `/api/vessels` and its track
+route already omit expired vessels.
 
 Native `<select>` controls declare a dark colour scheme and explicit option
 colours, so the browser-painted option list matches the panel it drops out of.
@@ -7069,6 +7077,10 @@ and unreachable upstream (502/504) separately from road geometry.
 
 - Server-side `ws` websocket to `wss://stream.aisstream.io/v0/stream` maintained by Vite middleware; `AISSTREAM_API_KEY` never reaches the browser (AISStream has no browser CORS). The `ws` package is used rather than Node's built-in WebSocket specifically because only it can hard-abort a wedged socket (see the watchdog note in the delta block at the top).
 - Browser polls same-origin `/api/vessels` cache every 60s.
+- The server cache (`server/providers/vessels/ais-store.js`) holds at most
+  50,000 vessels and evicts the least recently updated first. After 30 minutes
+  without a position, a vessel expires with its static data and trail. The
+  15 s watchdog tick frees expired vessels.
 - The first enable in a session starts one 30-second client grace timer. Until
   an accepted vessel position arrives, `live`/`open`/`connecting` transport reports
   `LOADING`; the timer is not restarted by the 60-second poll. Expiry or a

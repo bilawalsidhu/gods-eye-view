@@ -341,8 +341,7 @@ function startAisStreamWatchdogTick() {
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }
-    // The store no longer prunes per message; this tick is its expiry clock,
-    // so a silent feed still releases vessels it stopped hearing from.
+    // The store's expiry runs here, so a silent feed still frees its vessels.
     pruneAisStreamCache();
   }, AISSTREAM_TICK_MS);
   _aisStreamTickTimer.unref?.();
