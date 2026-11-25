@@ -18,8 +18,6 @@
 // registry (director._captureLayerStates), so those shots declare all sixteen
 // keys and still reconcile in full.
 
-import { contextLayerEnableBlockReason } from '../contextModePolicy.js';
-
 /**
  * Layer params that re-establish a tracked contact — and with it a SECOND
  * writer on the camera.
@@ -89,46 +87,6 @@ export function stripSceneTrackingParams(params) {
     kept[key] = value;
   }
   return Object.keys(kept).length ? kept : undefined;
-}
-
-/**
- * Reserved layer id used ONLY to interrogate a Context mode's enable guard.
- *
- * The probe asks "would this mode refuse a layer it has no opinion about?" —
- * so it must name a layer that can never exist. The double-underscore form is
- * outside the kebab-case convention every real layer id follows, and
- * scenePolicy.test.mjs asserts no registered layer claims it, so the reservation
- * is enforced rather than assumed.
- * @constant {string}
- */
-export const SCENE_EXCLUSIVITY_PROBE_LAYER_ID = '__scene-exclusivity-probe__';
-
-/**
- * Whether an active Context mode must be exited before a shot's layers can be
- * applied.
- *
- * Space Missions is the shipped case: it isolates replay data, so its guard
- * (contextLayerEnableBlockReason) refuses every enable outside its own bundle.
- * A recipe declaring only flights/satellites/earthquakes/traffic would have
- * those enables refused outright — and Orbital Watch, whose satellites the
- * guard does permit, would still play over the mode's rocket-launches replay
- * it never declared. Either way the shot is not the composition it describes.
- *
- * The verdict is read off the guard itself rather than a mode name: a mode
- * that refuses an arbitrary unrelated layer is by definition isolating, so a
- * future isolating mode is covered the day its branch is added to the policy.
- *
- * @param {string|null} contextMode Active (or entering) Context mode.
- * @returns {boolean} Whether playback must leave the mode first.
- */
-export function sceneRequiresContextModeExit(contextMode) {
-  if (!contextMode) return false;
-  return (
-    contextLayerEnableBlockReason({
-      contextMode,
-      change: { layerId: SCENE_EXCLUSIVITY_PROBE_LAYER_ID, enabled: true },
-    }) !== null
-  );
 }
 
 /**

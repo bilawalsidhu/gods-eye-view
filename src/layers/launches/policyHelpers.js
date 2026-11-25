@@ -1,5 +1,6 @@
-import * as Cesium from 'cesium';
+import { PI_OVER_TWO } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
+import { cameraOf } from '../../render/rendererOf.js';
 import {
   SATELLITE_STANDALONE_DEFAULTS,
   LAUNCH_PAD_ZONE_MAX_CAMERA_HEIGHT_M,
@@ -225,21 +226,15 @@ export function createPolicyHelpers({
 
   function previewMissionFromRoster(launch) {
     if (!layerState._viewer || !launch || layerState._selectedLaunchId) return;
-    const range = parts.panel.missionHoverPreviewRange(
-      layerState._viewer.camera.positionCartographic?.height,
-    );
-    const position = Cesium.Cartesian3.fromDegrees(launch.lon, launch.lat);
+    const camera = cameraOf(layerState._viewer);
+    const range = parts.panel.missionHoverPreviewRange(camera.pose().height);
     layerState._cameraReleased = false;
-    layerState._viewer.camera.flyToBoundingSphere(
-      new Cesium.BoundingSphere(position, 0),
+    camera.flyToBounds(
+      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
       {
-        offset: new Cesium.HeadingPitchRange(
-          0,
-          -Cesium.Math.PI_OVER_TWO,
-          range,
-        ),
-        duration: 0.8,
-        easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+        offset: { heading: 0, pitch: -PI_OVER_TWO, range },
+        durationS: 0.8,
+        easing: 'cubicInOut',
       },
     );
   }

@@ -184,6 +184,50 @@ async function main() {
         queueMicrotask(() => this.dispatchEvent(new Event('playing')));
         return Promise.resolve();
       };
+      // What Radio draws, read from the renderer's draw-port sets: the
+      // station dots (`stations`), cluster dots (`clusters`), and the
+      // selected station's dot (`selected`) and bracket
+      // (`selected-bracket`). Each row is a drawn point or billboard whose
+      // pick id is the draw port's `{set, id, meta}`; `show` is whether it
+      // draws, its set's host included.
+      window.__qaRadioRows = (kind) => {
+        const pattern = new RegExp(`^radio:\\d+:${kind}$`);
+        const out = [];
+        const visit = (node, shown) => {
+          if (!node || typeof node.get !== 'function' || typeof node.length !== 'number') return;
+          const here = shown && node.show !== false;
+          for (let index = 0; index < node.length; index += 1) {
+            const child = node.get(index);
+            const id = child?.id;
+            if (id && typeof id === 'object' && !Array.isArray(id) && typeof id.set === 'string') {
+              if (pattern.test(id.set)) {
+                out.push({
+                  primitive: child,
+                  id: id.id,
+                  meta: id.meta,
+                  show: here && child.show !== false,
+                  setShown: here,
+                });
+              }
+            } else visit(child, here);
+          }
+        };
+        visit(window.__godsEyeView.viewer.scene.primitives, true);
+        return out;
+      };
+      // The selected station's drawn dot and bracket, with its pick id.
+      window.__qaRadioSelected = () => {
+        const dot = window.__qaRadioRows('selected')[0] || null;
+        if (!dot) return null;
+        const bracket = window.__qaRadioRows('selected-bracket')[0] || null;
+        return {
+          id: dot.id,
+          show: dot.show,
+          position: dot.primitive.position,
+          dot,
+          bracket,
+        };
+      };
     });
     await page.setRequestInterception(true);
     let catalogDegraded = false;
@@ -420,7 +464,7 @@ async function main() {
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const result = {
         presentationActive: module.getUIState().presentationActive,
-        markerSourceVisible: gev.viewer.dataSources.getByName('Radio stations')[0]?.show,
+        markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
         tunerHidden: document.getElementById('radio-tuner').hidden,
         filterDisabled: document.getElementById('radio-filter').disabled,
         prevDisabled: document.getElementById('radio-prev-btn').disabled,
@@ -514,7 +558,7 @@ async function main() {
     const disablingPresentation = await page.evaluate(() => ({
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
-      markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
+      markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
       full: document.getElementById('radio-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
@@ -583,7 +627,7 @@ async function main() {
     const enablingPresentation = await page.evaluate(() => ({
       manager: window.__godsEyeView.dataManager.getLayerLifecycleState('radio'),
       presentationActive: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().presentationActive,
-      markerSourceVisible: window.__godsEyeView.viewer.dataSources.getByName('Radio stations')[0]?.show,
+      markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
       full: document.getElementById('radio-enable-btn').textContent,
       layerState: document.getElementById('radio-layer-state').textContent,
       message: document.getElementById('radio-playback-state').textContent,
@@ -687,8 +731,6 @@ async function main() {
         const sample = await page.evaluate(async () => {
           const viewer = window.__godsEyeView.viewer;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-          const dataSource = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-            .find((item) => item.name === 'Radio stations');
           const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
           const { radioStationIdFromPick } = await import('/src/data/radio.js');
           return new Promise((resolve) => {
@@ -710,7 +752,9 @@ async function main() {
                 host: getWorldOverlayDiagnostics(),
                 paintedSingletonIds,
                 pickableSingletonIds,
-                nativeLabelCount: dataSource.entities.values.filter((entity) => Boolean(entity.label)).length,
+                // The station dots are a draw-port point set, which draws no
+                // labels of its own; a label primitive would be a row here.
+                nativeLabelCount: window.__qaRadioRows('stations').filter((row) => row.primitive.text !== undefined).length,
               });
             };
             const timeout = setTimeout(finish, 500);
@@ -801,7 +845,7 @@ async function main() {
             params: {},
           };
           let failureUsed = false;
-          const entryLayerId = mode === 'flights' ? 'military-awareness' : 'rocket-launches';
+          const entryLayerId = 'military-awareness';
           dataManager.setEnabled = async (layerId, shouldEnable) => {
             const failsIsolation = phase === 'isolation' && layerId === 'local-datacenters' && !shouldEnable;
             const failsActivation = phase === 'activation' && layerId === entryLayerId && shouldEnable;
@@ -828,7 +872,6 @@ async function main() {
             priorLayerRestored: enabled.has('local-datacenters'),
             entryEnabled: enabled.has(entryLayerId),
             flightsButtonDisabled: document.getElementById('global-context-flights-btn').disabled,
-            missionsButtonDisabled: document.getElementById('global-context-missions-btn').disabled,
             message: document.getElementById('toast').textContent,
           };
         };
@@ -849,7 +892,7 @@ async function main() {
           }
         };
         const contextFailures = [];
-        for (const mode of ['flights', 'space-missions']) {
+        for (const mode of ['flights']) {
           for (const phase of ['isolation', 'activation']) {
             for (const outcome of ['false', 'reject']) {
               contextFailures.push(await runContextFailure(mode, phase, outcome));
@@ -858,7 +901,7 @@ async function main() {
         }
 
         const directEntryFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           for (const outcome of ['false', 'reject']) {
             enabled.clear();
             enabled.add('local-datacenters');
@@ -927,7 +970,7 @@ async function main() {
         styleManager._showToast = originalShowToast;
 
         const directActivationFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           enabled.clear();
           styleManager._contextControls._contextMode = null;
           styleManager._contextControls._contextSessionSnapshot = {
@@ -957,7 +1000,7 @@ async function main() {
         }
 
         const directActivationRollbackFailures = [];
-        for (const layerId of ['military-awareness', 'rocket-launches']) {
+        for (const layerId of ['military-awareness']) {
           enabled.clear();
           styleManager._contextControls._contextMode = null;
           styleManager._contextControls._contextSessionSnapshot = {
@@ -1167,7 +1210,7 @@ async function main() {
     check(
       'user-facing chip, real Context entry rollback, and installation Search failures settle safely',
       userFacingFailures.semanticFalseMessage === 'Radio could not stop cleanly'
-        && userFacingFailures.contextFailures.length === 8
+        && userFacingFailures.contextFailures.length === 4
         && userFacingFailures.contextFailures.every((failure) => (
           failure.result === false
           && failure.visibleMode === null
@@ -1175,10 +1218,9 @@ async function main() {
           && failure.priorLayerRestored
           && !failure.entryEnabled
           && !failure.flightsButtonDisabled
-          && !failure.missionsButtonDisabled
           && failure.message.includes('QA transition failed')
         ))
-        && userFacingFailures.directEntryFailures.length === 4
+        && userFacingFailures.directEntryFailures.length === 2
         && userFacingFailures.directEntryFailures.every((failure) => (
           failure.reason.includes('could not start')
           && failure.retryReason === null
@@ -1189,14 +1231,14 @@ async function main() {
           && failure.priorLayerRestored
           && !failure.modeChanging
         ))
-        && userFacingFailures.directActivationFailures.length === 2
+        && userFacingFailures.directActivationFailures.length === 1
         && userFacingFailures.directActivationFailures.every((failure) => (
           failure.mode === null
           && failure.snapshotCleared
           && failure.priorLayerRestored
           && failure.failedLayerDisabled
         ))
-        && userFacingFailures.directActivationRollbackFailures.length === 2
+        && userFacingFailures.directActivationRollbackFailures.length === 1
         && userFacingFailures.directActivationRollbackFailures.every((failure) => (
           failure.toastMessages.length === 1
           && failure.toastMessages[0] === `${failure.layerId} could not start cleanly`
@@ -1255,12 +1297,10 @@ async function main() {
     });
     await page.select('#radio-filter', 'all');
     const allPalette = await page.evaluate(() => {
-      const source = Array.from({ length: window.__godsEyeView.viewer.dataSources.length }, (_, index) => (
-        window.__godsEyeView.viewer.dataSources.get(index)
-      )).find((item) => item.name === 'Radio stations');
+      const rows = new Map(window.__qaRadioRows('stations').map((row) => [row.id, row]));
       const colorFor = (index) => {
         const id = `radio:00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
-        const color = source?.entities.getById(id)?.point?.color?.getValue?.();
+        const color = rows.get(id)?.primitive.color;
         return color ? [color.red, color.green, color.blue].map((value) => Math.round(value * 255)) : null;
       };
       return { news: colorFor(0), talk: colorFor(1), music: colorFor(7) };
@@ -1277,8 +1317,6 @@ async function main() {
       const viewer = window.__godsEyeView.viewer;
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const baselineSolveRevision = getWorldOverlayDiagnostics().solveRevision;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
       const ellipsoid = viewer.scene.globe.ellipsoid;
       viewer.camera.cancelFlight();
       viewer.camera.setView({
@@ -1289,26 +1327,25 @@ async function main() {
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      source.clustering.enabled = false;
       viewer.scene.requestRender();
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // The camera's move clusters the stations again: wait for a cluster dot.
       return new Promise((resolve) => {
-        const originalPixelRange = source.clustering.pixelRange;
-        const timeout = setTimeout(() => {
-          remove();
-          resolve(null);
-        }, 2_000);
-        const remove = source.clustering.clusterEvent.addEventListener(async (entities, cluster) => {
-          clearTimeout(timeout);
-          remove();
+        const started = performance.now();
+        const poll = async () => {
+          const cluster = window.__qaRadioRows('clusters').find((row) => row.show);
+          if (!cluster) {
+            if (performance.now() - started > 2_000) resolve(null);
+            else setTimeout(poll, 50);
+            return;
+          }
+          // The cluster's dot is a draw-port point, which draws no label.
           const native = {
-            count: entities.length,
-            labelShow: cluster.label.show,
-            labelText: cluster.label.text,
-            pointSize: cluster.point.pixelSize,
-            pointMaxDistance: cluster.point.distanceDisplayCondition?.far ?? null,
+            count: cluster.meta.stationIds.length,
+            labelShow: cluster.primitive.text !== undefined,
+            labelText: cluster.primitive.text ?? '',
+            pointSize: cluster.primitive.pixelSize,
+            pointMaxDistance: cluster.primitive.distanceDisplayCondition?.far ?? null,
           };
-          source.clustering.pixelRange = originalPixelRange;
           const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
           await new Promise((done) => setTimeout(done, 0));
           let painted = null;
@@ -1345,9 +1382,8 @@ async function main() {
             source: radio.getOverlayDiagnostics(),
             host: painted?.host || getWorldOverlayDiagnostics(),
           });
-        });
-        source.clustering.enabled = true;
-        viewer.scene.requestRender();
+        };
+        poll();
       });
     });
     check(
@@ -1393,15 +1429,13 @@ async function main() {
         0,
         cameraRadius * cameraRadius - ellipsoid.maximumRadius * ellipsoid.maximumRadius,
       ));
-      const points = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations')?.clustering?._clusterPointCollection;
       let clusterPoint = null;
-      // Pool order is not visibility order after a camera change. Choose an
-      // on-screen point independently of the native pick result being tested.
+      // Choose an on-screen cluster dot independently of the native pick
+      // result being tested.
       const visiblePoints = [];
-      for (let index = 0; index < (points?.length || 0); index += 1) {
-        const point = points.get(index);
-        if (!point?.show || !Array.isArray(point.id) || !point.id.length) continue;
+      for (const row of window.__qaRadioRows('clusters')) {
+        const point = row.primitive;
+        if (!row.show || !row.meta?.stationIds?.length) continue;
         const anchor = viewer.scene.cartesianToCanvasCoordinates(point.position);
         if (!anchor) continue;
         if (anchor.x < 0 || anchor.y < 0 || anchor.x > viewer.canvas.clientWidth || anchor.y > viewer.canvas.clientHeight) continue;
@@ -2432,26 +2466,23 @@ async function main() {
     await sleep(700);
     const newsClusterTarget = await page.evaluate(() => {
       const gev = window.__godsEyeView;
-      const source = Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      const points = source.clustering._clusterPointCollection;
-      for (let index = 0; index < (points?.length || 0); index += 1) {
-        const point = points.get(index);
-        if (!point.show || !Array.isArray(point.id) || !point.id.length) continue;
-        const canvasPoint = gev.viewer.scene.cartesianToCanvasCoordinates(point.position);
+      const rows = window.__qaRadioRows('clusters');
+      for (const row of rows) {
+        if (!row.show || !row.meta?.stationIds?.length) continue;
+        const canvasPoint = gev.viewer.scene.cartesianToCanvasCoordinates(row.primitive.position);
         if (!canvasPoint) continue;
         return {
           x: canvasPoint.x,
           y: canvasPoint.y,
-          firstId: String(point.id[0]?.id || '').replace(/^radio:/, ''),
-          pointIds: point.id.map((entity) => entity.id),
+          firstId: row.meta.stationIds[0],
+          pointIds: row.meta.stationIds.map((id) => `radio:${id}`),
         };
       }
       return {
         missing: true,
-        points: Array.from({ length: points?.length || 0 }, (_, index) => ({
-          show: points.get(index).show,
-          pointIds: Array.isArray(points.get(index)?.id) ? points.get(index).id.length : 0,
+        points: rows.map((row) => ({
+          show: row.show,
+          pointIds: row.meta?.stationIds?.length || 0,
         })),
       };
     });
@@ -2654,9 +2685,13 @@ async function main() {
     const horizon = await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
       const ellipsoid = viewer.scene.globe.ellipsoid;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      const visibleIds = () => source.entities.values.filter((entity) => entity.show).map((entity) => entity.id);
+      // A station dot standing in a cluster is hidden too; the cluster's
+      // dot draws its stations' ids.
+      const visibleIds = () => [
+        ...window.__qaRadioRows('stations').filter((row) => row.show).map((row) => row.id),
+        ...window.__qaRadioRows('clusters').filter((row) => row.show)
+          .flatMap((row) => row.meta.stationIds.map((id) => `radio:${id}`)),
+      ];
       const setView = (lon, lat = 0) => {
         viewer.camera.cancelFlight();
         viewer.camera.setView({
@@ -2702,8 +2737,7 @@ async function main() {
         buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
       }));
       const snapshot = () => {
-        const markerId = gev.viewer.entities.values
-          .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+        const markerId = window.__qaRadioSelected()?.id || null;
         return {
           slot: Number(slider.value),
           markerId,
@@ -2823,8 +2857,7 @@ async function main() {
       // The tuner renders from the Radio store; let Vue patch before reading.
       await Promise.resolve();
       const shiftedSlot = Number(slider.value);
-      const previewBeforeCancel = gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+      const previewBeforeCancel = window.__qaRadioSelected()?.id || null;
       const flyToCallsBeforeCancel = flyToCalls.length;
       pointer('pointercancel', targetIndex);
       await Promise.resolve();
@@ -2840,8 +2873,7 @@ async function main() {
         tuningActive: afterState.tuningActive,
       };
       const flyToCallsAfterCancel = flyToCalls.length;
-      const selectedEntity = () => gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:')) || null;
+      const selectedEntity = () => window.__qaRadioSelected();
       const restoredEntity = selectedEntity();
       const previewId = restoredEntity?.id || null;
       after.previewId = previewId;
@@ -2858,7 +2890,7 @@ async function main() {
         filter: changedFilterState.filter,
         restoredStationId: changedFilterState.tuningRestoredStationId,
         selectedId: changedFilterState.selected?.id || null,
-        entityRebuilt: Boolean(changedFilterEntity && changedFilterEntity !== restoredEntity),
+        entityRebuilt: Boolean(changedFilterEntity && changedFilterEntity.dot.primitive !== restoredEntity?.dot.primitive),
         entityId: changedFilterEntity?.id || null,
         snapshotPreserved: radio.getAcceptedCatalogSnapshot() === changedFilterSnapshot,
         playDelta: window.__qaRadioPlayCalls.length - changedFilterPlays,
@@ -2882,7 +2914,7 @@ async function main() {
         restoredAfter: sameFilterState.tuningRestoredStationId,
         filter: sameFilterState.filter,
         selectedId: sameFilterState.selected?.id || null,
-        entityRebuilt: Boolean(sameFilterEntity && sameFilterEntity !== sameFilterRestoredEntity),
+        entityRebuilt: Boolean(sameFilterEntity && sameFilterEntity.dot.primitive !== sameFilterRestoredEntity?.dot.primitive),
         entityId: sameFilterEntity?.id || null,
         snapshotPreserved: radio.getAcceptedCatalogSnapshot() === sameFilterSnapshot,
         playDelta: window.__qaRadioPlayCalls.length - sameFilterPlays,
@@ -3327,8 +3359,7 @@ async function main() {
         cancelable: true,
         key: value,
       }));
-      const markerId = () => gev.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null;
+      const markerId = () => window.__qaRadioSelected()?.id || null;
       const startIndex = Number(slider.value);
       const expectedIndex = Math.min(style._radioControls._radioTunerStations.length - 1, startIndex + 1);
       const expectedId = style._radioControls._radioTunerStations[expectedIndex]?.id || null;
@@ -3428,8 +3459,7 @@ async function main() {
         centerIndex,
         slot: Number(slider.value),
         ratio: Number(document.getElementById('radio-tuner').style.getPropertyValue('--radio-tuner-ratio')),
-        markerId: gev.viewer.entities.values
-          .find((entity) => String(entity.id).startsWith('radio:selected:'))?.id || null,
+        markerId: window.__qaRadioSelected()?.id || null,
         expectedId: style._radioControls._radioTunerStations[centerIndex]?.id || null,
       };
       slider.dispatchEvent(new PointerEvent('pointercancel', {
@@ -3554,9 +3584,6 @@ async function main() {
     const markerTarget = await page.evaluate(async () => {
       const viewer = window.__godsEyeView.viewer;
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
-      const source = Array.from({ length: viewer.dataSources.length }, (_, index) => viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations');
-      source.clustering.enabled = false;
       const selectedId = radio.getUIState().selected?.id || null;
       if (selectedId) {
         radio.selectStation(selectedId, {
@@ -3583,9 +3610,6 @@ async function main() {
         });
         viewer.scene.requestRender();
       });
-      // Cesium clears its private cluster collections during the rendered
-      // disabled-state update. Publish the same-filter singleton overlay only
-      // after that frame so this harness mutation cannot leak stale clusters.
       radio.setFilter('news');
       viewer.scene.requestRender();
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -3614,14 +3638,14 @@ async function main() {
           let visibleEntityCount = 0;
           let singletonEntityCount = 0;
           let paintedSingletonCount = 0;
-          for (const entity of source.entities.values) {
-            if (!entity.show) continue;
+          for (const row of window.__qaRadioRows('stations')) {
+            if (!row.show) continue;
             visibleEntityCount += 1;
-            const id = String(entity.id).slice('radio:'.length);
+            const id = String(row.id).slice('radio:'.length);
             const overlayId = `station:${id}`;
             if (!singletonIds.has(overlayId)) continue;
             singletonEntityCount += 1;
-            const position = entity.position?.getValue(viewer.clock.currentTime);
+            const position = row.primitive.position;
             const canvas = position && viewer.scene.cartesianToCanvasCoordinates(position);
             const paintRect = getOverlayPaintRect('radio', overlayId);
             if (paintRect) paintedSingletonCount += 1;
@@ -3631,7 +3655,7 @@ async function main() {
                 id,
                 x: canvas.x,
                 y: canvas.y,
-                ownsNativeLabel: Boolean(entity.label),
+                ownsNativeLabel: row.primitive.text !== undefined,
                 labelPainted: true,
                 singletonTexts: diagnostics.singletonTexts,
               });
@@ -3700,8 +3724,6 @@ async function main() {
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
       radio.stopPlayback();
-      Array.from({ length: gev.viewer.dataSources.length }, (_, index) => gev.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations').clustering.enabled = true;
       // Next plays only while a stream is active, so start from a playing station.
       radio.selectStation('00000000-0000-4000-8000-000000000001', { autoplay: true, focus: false });
     });
@@ -3757,8 +3779,7 @@ async function main() {
     const playing = await page.evaluate(async () => {
       const radio = window.__godsEyeView.dataManager.layers.get('radio').module;
       const viewer = window.__godsEyeView.viewer;
-      const selectedEntity = window.__godsEyeView.viewer.entities.values
-        .find((entity) => String(entity.id).startsWith('radio:selected:'));
+      const selectedEntity = window.__qaRadioSelected();
       const { getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const flightTargets = window.__qaRadioFlyToCalls.map(({ destination }) => {
         const position = viewer.scene.globe.ellipsoid.cartesianToCartographic(destination);
@@ -3775,11 +3796,10 @@ async function main() {
       flightTargets,
       cameraHeight: window.__qaRadioCameraHeight,
       playLabel: document.getElementById('radio-play-btn').getAttribute('aria-label'),
-      regularMarkerSize: Array.from({ length: window.__godsEyeView.viewer.dataSources.length }, (_, index) => window.__godsEyeView.viewer.dataSources.get(index))
-        .find((item) => item.name === 'Radio stations')?.entities.values[0]?.point?.pixelSize?.getValue(),
-      selectedMarkerSize: selectedEntity?.point?.pixelSize?.getValue(),
-      selectedBracketWidth: selectedEntity?.billboard?.width?.getValue(),
-      selectedOwnsNativeLabel: Boolean(selectedEntity?.label),
+      regularMarkerSize: window.__qaRadioRows('stations')[0]?.primitive.pixelSize,
+      selectedMarkerSize: selectedEntity?.dot.primitive.pixelSize,
+      selectedBracketWidth: selectedEntity?.bracket?.primitive.width,
+      selectedOwnsNativeLabel: Boolean(window.__qaRadioRows('selected-label').length),
       overlay: radio.getOverlayDiagnostics(),
       host: getWorldOverlayDiagnostics(),
       expectedPrimary: window.__qaRadioExpectedPrimary,
@@ -3817,7 +3837,7 @@ async function main() {
           id: `qa:${ownerPrefix}:radio-camera-owner`,
           position: viewer.camera.positionWC.clone(),
         });
-        owner.gevTrackedId = `${ownerPrefix}:qa-radio-camera-owner`;
+        window.__godsEyeView.entityRecords.write(owner).trackedId = `${ownerPrefix}:qa-radio-camera-owner`;
         viewer.trackedEntity = owner;
         await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const beforeStationId = radio.getUIState().selected?.id || null;
@@ -3831,7 +3851,7 @@ async function main() {
           afterStationId: radio.getUIState().selected?.id || null,
           flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
           trackedIdentityPreserved: viewer.trackedEntity === owner,
-          trackedId: viewer.trackedEntity?.gevTrackedId || null,
+          trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
         };
         viewer.trackedEntity = undefined;
         viewer.entities.remove(owner);
@@ -3867,11 +3887,11 @@ async function main() {
         id: 'qa:flights:delayed-radio-fallback-owner',
         position: viewer.camera.positionWC.clone(),
       });
-      owner.gevTrackedId = 'flights:qa-delayed-radio-fallback-owner';
+      window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-delayed-radio-fallback-owner';
       viewer.trackedEntity = owner;
       window.__qaDelayedRadioTrackingOwner = owner;
       window.__qaRejectRadioPlay();
-      return owner.gevTrackedId;
+      return window.__godsEyeView.entityRecords.read(owner)?.trackedId;
     });
     await page.waitForFunction(() => window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().audioState === 'playing');
     const delayedFallbackOwnership = await page.evaluate((beforeFlyToCalls) => {
@@ -3880,7 +3900,7 @@ async function main() {
       const result = {
         flyToDelta: window.__qaRadioFlyToCalls.length - beforeFlyToCalls,
         trackedIdentityPreserved: viewer.trackedEntity === owner,
-        trackedId: viewer.trackedEntity?.gevTrackedId || null,
+        trackedId: window.__godsEyeView.entityRecords.read(viewer.trackedEntity)?.trackedId || null,
         selectedId: window.__godsEyeView.dataManager.layers.get('radio').module.getUIState().selected?.id || null,
       };
       viewer.trackedEntity = undefined;
@@ -3940,8 +3960,12 @@ async function main() {
         destination,
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      const selectedEntity = viewer.entities.values
-        .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
+      // The selected station's drawn dot and bracket, read afresh: Radio's
+      // horizon pass shows them on its own timer.
+      const selectedEntity = () => {
+        const drawn = window.__qaRadioSelected();
+        return drawn?.id === `radio:selected:${selected.id}` ? drawn : null;
+      };
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const expectedEntryId = `selected:${selected.id}`;
       let painted = null;
@@ -3949,7 +3973,7 @@ async function main() {
       // after the camera jump, so a stationary view waits for both to settle.
       for (
         let attempt = 0;
-        attempt < 20 && !(painted?.rect && selectedEntity?.show === true);
+        attempt < 20 && !(painted?.rect && selectedEntity()?.show === true);
         attempt += 1
       ) {
         painted = await new Promise((resolve) => {
@@ -3974,7 +3998,7 @@ async function main() {
         expectedEntryId,
         rect: painted?.rect || null,
         host: painted?.host || getWorldOverlayDiagnostics(),
-        selectedEntityShow: selectedEntity?.show,
+        selectedEntityShow: selectedEntity()?.show,
         cameraHeight: viewer.camera.positionCartographic.height,
       };
     });
@@ -3999,8 +4023,12 @@ async function main() {
         }),
         orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
       });
-      const selectedEntity = viewer.entities.values
-        .find((entity) => String(entity.id) === `radio:selected:${selected.id}`);
+      // The selected station's drawn dot and bracket, read afresh: Radio's
+      // horizon pass shows them on its own timer.
+      const selectedEntity = () => {
+        const drawn = window.__qaRadioSelected();
+        return drawn?.id === `radio:selected:${selected.id}` ? drawn : null;
+      };
       const { getOverlayPaintRect, getWorldOverlayDiagnostics } = await import('/src/overlays/worldOverlay.js');
       const expectedEntryId = `selected:${selected.id}`;
       let rect = null;
@@ -4025,7 +4053,8 @@ async function main() {
           viewer.scene.requestRender();
         });
       }
-      const entityPosition = selectedEntity?.position?.getValue?.();
+      const selectedDrawn = selectedEntity();
+      const entityPosition = selectedDrawn?.position;
       const entityAnchor = entityPosition
         && viewer.scene.cartesianToCanvasCoordinates(entityPosition);
       let selectedNativePick = null;
@@ -4035,13 +4064,16 @@ async function main() {
       // billboard satisfy the loop while the point anchor was still missing.
       for (let attempt = 0; entityAnchor && attempt < 8 && !selectedPointPick; attempt += 1) {
         const picks = viewer.scene.drillPick(entityAnchor, 16) || [];
-        selectedNativePick = picks.find((picked) => picked?.id === selectedEntity);
+        selectedNativePick = picks.find((picked) => (
+          picked?.primitive === selectedDrawn.dot.primitive
+          || picked?.primitive === selectedDrawn.bracket?.primitive
+        ));
         selectedPointPick = picks.find((picked) => (
-          picked?.id === selectedEntity
+          picked?.primitive === selectedDrawn.dot.primitive
           && String(picked?.primitive?.constructor?.name || '').includes('PointPrimitive')
         ));
         selectedBillboardPick = picks.find((picked) => (
-          picked?.id === selectedEntity
+          picked?.primitive === selectedDrawn.bracket?.primitive
           && String(picked?.primitive?.constructor?.name || '').includes('Billboard')
         ));
         if (!selectedPointPick) {
@@ -4054,18 +4086,15 @@ async function main() {
           });
         }
       }
-      const selectedPointDistance = selectedEntity?.point?.distanceDisplayCondition?.getValue?.();
+      const selectedPointDistance = selectedDrawn?.dot.primitive.distanceDisplayCondition;
       return {
         rect,
         selectedNativePickable: Boolean(selectedNativePick),
         selectedPointPickable: Boolean(selectedPointPick),
         selectedBillboardPickable: Boolean(selectedBillboardPick),
         selectedPointMaxDistance: selectedPointDistance?.far ?? null,
-        selectedEntityShow: selectedEntity?.show,
-        selectedBracketVisible: Boolean(
-          selectedEntity?.billboard
-          && selectedEntity.billboard.show?.getValue?.() !== false
-        ),
+        selectedEntityShow: selectedDrawn?.show,
+        selectedBracketVisible: Boolean(selectedDrawn?.bracket?.show),
         entityAnchor: entityAnchor ? { x: entityAnchor.x, y: entityAnchor.y } : null,
         entityDistance: entityPosition
           ? Math.hypot(
@@ -4222,7 +4251,7 @@ async function main() {
         id: 'qa:flights:radio-recenter-stage-owner',
         position: viewer.camera.positionWC.clone(),
       });
-      owner.gevTrackedId = 'flights:qa-radio-recenter-stage-owner';
+      window.__godsEyeView.entityRecords.write(owner).trackedId = 'flights:qa-radio-recenter-stage-owner';
       viewer.trackedEntity = owner;
       completeFlight(0);
       const trackingBetweenStagesCalls = calls.length;

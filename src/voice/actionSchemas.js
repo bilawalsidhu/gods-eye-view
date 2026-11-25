@@ -211,6 +211,7 @@ const schemas = [
             'utilities-panel',
             'pp-toggles',
             'global-context-panel',
+            'space-missions-panel',
             'weather-panel',
             'recent-imagery-panel',
             'voice-settings',
@@ -428,6 +429,14 @@ const schemas = [
           },
         },
       },
+    },
+  },
+  {
+    name: 'open_stories',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
     },
   },
   {

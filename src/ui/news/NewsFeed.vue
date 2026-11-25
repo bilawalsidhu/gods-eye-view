@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { t } from '../../i18n/index.js';
+import { formatNumber, t, tn } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
 import UiEmpty from '../kit/UiEmpty.vue';
 import UiSelect from '../kit/UiSelect.js';
@@ -63,9 +63,15 @@ const categoryOptions = computed(() => [
 const windowOptions = computed(() =>
   (props.view?.windowChoices ?? []).map((hours) => ({
     value: String(hours),
-    label: t('Last {hours} h', { hours }),
+    label: lastHours(hours),
   })),
 );
+// The window offers 1 h, so every hour count is a plural: es «Última 1 h».
+function lastHours(hours) {
+  return tn(hours, 'Last {hours} h', 'Last {hours} h', {
+    hours: formatNumber(hours),
+  });
+}
 // The longest choice is the server's whole window, kept as no choice.
 const chooseWindow = (hours) =>
   setFilter('hours', hours === props.view?.windowChoices?.[0] ? null : hours);
@@ -109,7 +115,16 @@ const clear = () => props.onParams({ clear: true });
   <section
     v-if="view"
     class="news-readout"
-    :aria-label="t('News, last {hours} hours', { hours: view.windowHours })"
+    :aria-label="
+      tn(
+        view.windowHours,
+        'News, last {hours} hour',
+        'News, last {hours} hours',
+        {
+          hours: formatNumber(view.windowHours),
+        },
+      )
+    "
   >
     <UiSelect
       v-if="windowOptions.length > 1"
@@ -120,7 +135,7 @@ const clear = () => props.onParams({ clear: true });
       @update:model-value="chooseWindow(Number($event))"
     />
     <p v-else class="news-readout__window ui-mono">{{
-      t('Last {hours} h', { hours: view.windowHours })
+      lastHours(view.windowHours)
     }}</p>
     <div
       class="news-readout__sections"
@@ -196,9 +211,12 @@ const clear = () => props.onParams({ clear: true });
         v-else-if="!view.inView.items.length && !view.inView.loading"
         class="news-readout__empty"
         :title="
-          t('Nothing reported near here in the last {hours} h', {
-            hours: view.windowHours,
-          })
+          tn(
+            view.windowHours,
+            'Nothing reported near here in the last {hours} h',
+            'Nothing reported near here in the last {hours} h',
+            { hours: formatNumber(view.windowHours) },
+          )
         "
       />
       <ol
@@ -223,7 +241,9 @@ const clear = () => props.onParams({ clear: true });
       class="news-readout__section"
       :aria-label="t('Latest news')"
     >
-      <h3 class="news-readout__head ui-mono">{{ t('Latest') }}</h3>
+      <h3 class="news-readout__head ui-mono">{{
+        t('Latest', { context: 'news list' })
+      }}</h3>
       <UiEmpty
         v-if="view.key"
         class="news-readout__empty"
@@ -247,9 +267,12 @@ const clear = () => props.onParams({ clear: true });
         v-else-if="!view.loading && !view.error"
         class="news-readout__empty"
         :title="
-          t('No news matches these filters in the last {hours} h', {
-            hours: view.windowHours,
-          })
+          tn(
+            view.windowHours,
+            'No news matches these filters in the last {hours} h',
+            'No news matches these filters in the last {hours} h',
+            { hours: formatNumber(view.windowHours) },
+          )
         "
       />
       <div class="news-readout__footer">

@@ -115,15 +115,14 @@ test('unjudgeable endpoint geometry and missing coordinates keep the loose contr
   assert.equal(plausible(beyond, null, null), true);
 });
 
-test('the actual native tracked label hides the wrong leg and keeps a healthy route', (t) => {
-  const collection = new Cesium.BillboardCollection();
-  t.after(() => collection.destroy());
+test('the actual native tracked label hides the wrong leg and keeps a healthy route', () => {
   const flightState = {
     records: { data: new Map(), missingPolls: new Map() },
     feed: { _backoff: false },
-    _billboards: new Map(),
     _scratchCarto: new Cesium.Cartographic(),
   };
+  // Where each contact's icon is drawn.
+  const drawn = new Map();
   // Only application host services are supplied. Route admission, WGS84
   // billboard conversion and tracked-label formatting are the actual owners.
   const services = Object.fromEntries(
@@ -142,6 +141,7 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
   services.aircraftPresentation = { isTr3b: () => false };
   const parts = {
     queries: { _contactLabel: (_, info) => info.callsign },
+    icons: { _iconPosition: (id) => drawn.get(id) ?? null },
     motion: { _signalLost: () => null },
   };
   const tracking = createTracking({ flightState, services, parts });
@@ -157,16 +157,9 @@ test('the actual native tracked label hides the wrong leg and keeps a healthy ro
       verticalRate: 0,
       route,
     });
-    flightState._billboards.set(
+    drawn.set(
       id,
-      collection.add({
-        id,
-        position: Cesium.Cartesian3.fromDegrees(
-          position.lon,
-          position.lat,
-          10000,
-        ),
-      }),
+      Cesium.Cartesian3.fromDegrees(position.lon, position.lat, 10000),
     );
     assert.equal(
       tracking._trackedLabelText(id).includes('SFO → LAX'),

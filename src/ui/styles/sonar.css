@@ -1,0 +1,89 @@
+/* Sonar is an opt-in visual style over any HUD layout (Display > HUD >
+   Sonar). Off by default; cockpit mode and reduced motion keep the map still. */
+
+.hud-sonar {
+  display: none;
+}
+
+:root[data-cyber-sonar='on'] #intel-hud .hud-sonar {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  display: block;
+  width: min(
+    var(--cyber-sonar-size-vw, 80vw),
+    var(--cyber-sonar-size-vh, 104vh)
+  );
+  aspect-ratio: 1;
+  border: 1px solid rgba(226, 235, 236, 0.2);
+  border-radius: 50%;
+  opacity: var(--cyber-sonar-visual-intensity, 0.57);
+  overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 0 0 1px rgba(196, 84, 84, 0.12),
+    inset 0 0 48px rgba(196, 84, 84, 0.035);
+}
+
+:root[data-cyber-sonar='on'] #intel-hud .hud-sonar::before,
+:root[data-cyber-sonar='on'] #intel-hud .hud-sonar::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  content: '';
+}
+
+:root[data-cyber-sonar='on'] #intel-hud .hud-sonar::before {
+  opacity: 0.52;
+  background: repeating-radial-gradient(
+    circle,
+    transparent 0 calc(var(--cyber-sonar-ring-step, 12.5%) - 1px),
+    rgba(226, 235, 236, 0.17) calc(var(--cyber-sonar-ring-step, 12.5%) - 1px)
+      var(--cyber-sonar-ring-step, 12.5%)
+  );
+}
+
+:root[data-cyber-sonar='on'] #intel-hud .hud-sonar::after {
+  background: conic-gradient(
+    from 0deg,
+    rgba(245, 250, 250, 0.3) 0deg,
+    rgba(235, 116, 116, 0.14) 0.55deg,
+    rgba(196, 84, 84, 0.075) var(--cyber-sonar-sector-quarter, 6deg),
+    rgba(150, 206, 215, 0.035) var(--cyber-sonar-sector-middle, 14.4deg),
+    transparent var(--cyber-sonar-sector-width, 24deg) 360deg
+  );
+  filter: drop-shadow(0 0 4px rgba(226, 235, 236, 0.1));
+  mask-image: radial-gradient(
+    circle,
+    #000 0 84%,
+    rgba(0, 0, 0, 0.65) 92%,
+    transparent 100%
+  );
+  transform-origin: 50% 50%;
+  will-change: transform;
+  animation: cyber-sonar-sweep 5.2s linear infinite;
+  animation-delay: var(--cyber-sonar-phase-delay, 0ms);
+}
+
+@keyframes cyber-sonar-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#cyber-sonar-status:empty {
+  display: none;
+}
+
+:root[data-cyber-sonar='on'] body.cockpit-mode #intel-hud .hud-sonar,
+:root[data-cyber-sonar='on'] #intel-hud:not(.active) .hud-sonar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-cyber-sonar='on'] #intel-hud .hud-sonar::after {
+    display: none;
+    animation: none;
+  }
+}
