@@ -16,8 +16,19 @@
  * (`onSelectionChanged`) and lets its own selection go, leaving the camera
  * alone unless it follows that layer's own target.
  */
-import { eastNorthUp, framePoint } from '../geo/index.js';
+import {
+  cross,
+  distance,
+  dot,
+  eastNorthUp,
+  framePoint,
+  normalize,
+  scale,
+  sub,
+  toLonLatH,
+} from '../geo/index.js';
 import { findCamera } from '../render/rendererOf.js';
+import { worldClock } from '../time/worldClock.js';
 import { stopFollowing } from './followed.js';
 import {
   keptViewFrom,
@@ -35,9 +46,57 @@ const isPoint = (p) =>
   Number.isFinite(p.z) &&
   p.x * p.x + p.y * p.y + p.z * p.z > 0;
 
+/** Points along a slide of the eye checked for clearing the ground. */
+const PATH_SAMPLES = 32;
+
+/**
+ * Whether the eye, sliding on a straight line from `from` to `to`, stays
+ * well above the ground: never lower than half the lower end's height.
+ * Short slides always do; a slide of thousands of kilometres can cut
+ * under the planet's curve, or end under the ground.
+ */
+function slideClearsGround(from, to) {
+  const ends = [toLonLatH(from), toLonLatH(to)];
+  if (!ends[0] || !ends[1]) return false;
+  const floor = 0.5 * Math.min(ends[0].height, ends[1].height);
+  if (!(floor > 0)) return false;
+  for (let i = 1; i < PATH_SAMPLES; i++) {
+    const t = i / PATH_SAMPLES;
+    const at = toLonLatH({
+      x: from.x + (to.x - from.x) * t,
+      y: from.y + (to.y - from.y) * t,
+      z: from.z + (to.z - from.z) * t,
+    });
+    if (!at || at.height < floor) return false;
+  }
+  return true;
+}
+
+/** `up` made square to `direction`, or the eye's own up (`fallback`). */
+function squareUp(direction, up, fallback) {
+  for (const candidate of [up, fallback]) {
+    const side = cross(direction, candidate);
+    const length = Math.hypot(side.x, side.y, side.z);
+    if (length > 1e-9)
+      return normalize(cross(scale(side, 1 / length), direction));
+  }
+  return up;
+}
+
+/**
+ * The latest centring flight: what was selected when it started, where it
+ * lands, and whether it has landed. Deselecting what it centres cancels it
+ * in flight; once landed, the view it left is the selection's (see
+ * `isCentredOnSelection`).
+ */
+let centring = null;
+
 /**
  * Fly the camera, keeping its distance and angle, to where it sees `at` in
  * the middle: the eye moves on a straight path and the view turns not at all.
+ * When that slide would take the eye under the ground (a satellite far
+ * across the sky, seen from close to the surface), the eye stays where it is
+ * and turns to the target instead.
  * @param {object} camera The camera port.
  * @param {{x: number, y: number, z: number}} at ECEF.
  * @param {number} [durationS]
@@ -48,15 +107,73 @@ export function flyKeepingView(camera, at, durationS = CLICK_CENTER_S) {
   const pose = camera.pose();
   const kept = keptViewFrom(pose, at);
   if (!kept) return false;
+  let destination = framePoint(eastNorthUp(at), kept);
+  let direction = pose.direction;
+  let up = pose.up;
+  if (!slideClearsGround(pose.position, destination)) {
+    destination = { ...pose.position };
+    direction = normalize(sub(at, pose.position));
+    up = squareUp(direction, pose.up, normalize(pose.position));
+  }
   camera.cancelFlight();
-  camera.flyTo(framePoint(eastNorthUp(at), kept), {
-    orientation: { direction: pose.direction, up: pose.up },
+  const flight = camera.flyTo(destination, {
+    orientation: { direction, up },
     durationS: durationS > 0 ? durationS : CLICK_CENTER_S,
     easing: 'cubicInOut',
     // Below both ends: no arc, so the camera does not climb on the way.
     maxHeight: 0,
   });
+  const mine = {
+    flight,
+    selection: current,
+    position: { ...destination },
+    direction: { ...direction },
+    landed: false,
+  };
+  centring = mine;
+  Promise.resolve(flight?.done)
+    .catch(() => {})
+    .then(() => {
+      mine.landed = true;
+    });
   return true;
+}
+
+/** Cancel the centring flight of `selection`, if it is still on its way. */
+function cancelCentring(selection) {
+  if (!centring || centring.selection !== selection) return;
+  const { flight, landed } = centring;
+  centring = null;
+  if (!landed) flight?.cancel?.();
+}
+
+/**
+ * Whether the camera rests where a click's centring left it, on what is
+ * still selected: the view is the selection's, not one to correct.
+ * @param {{position: object, direction: object}|null|undefined} pose
+ */
+export function isCentredOnSelection(pose) {
+  if (!centring || !current || centring.selection !== current) return false;
+  if (!pose?.position || !pose?.direction) return false;
+  return (
+    distance(pose.position, centring.position) < 1 &&
+    dot(normalize(pose.direction), normalize(centring.direction)) > 1 - 1e-9
+  );
+}
+
+/**
+ * World ms per real ms that the clock `clockId` (a layer's own time, from
+ * `worldTimeFor`) runs at now: 1 for a live layer, the playback rate while
+ * the world plays, 0 while it is paused or held.
+ * @param {string|null|undefined} clockId
+ * @param {{getState: () => object}} [clock]
+ */
+export function clockRateFor(clockId, clock = worldClock) {
+  const state = clock?.getState?.();
+  if (!clockId || !state || state.live) return 1;
+  if (!state.following?.includes?.(clockId)) return 1;
+  if (!state.playing || state.buffering) return 0;
+  return Number.isFinite(state.rate) && state.rate > 0 ? state.rate : 1;
 }
 
 /** Whether the Cockpit holds the camera (it keeps it through a click). */
@@ -72,15 +189,18 @@ function cockpitHoldsCamera() {
  * after. The Cockpit keeps the camera: nothing moves there.
  * @param {object} viewer
  * @param {(aheadMs: number) => ({x: number, y: number, z: number}|null)} positionAt
- *   Where the thing is `aheadMs` from now (ECEF). Something that barely
- *   moves may ignore `aheadMs`.
- * @param {{durationS?: number}} [options]
+ *   Where the thing is `aheadMs` from now (ECEF) on its layer's own clock.
+ *   Something that barely moves may ignore `aheadMs`.
+ * @param {{durationS?: number, clockId?: string}} [options] `clockId`: the
+ *   layer's clock (`worldTimeFor`'s id), so the lead is the time that
+ *   passes on it while the camera flies: the flight's length at the
+ *   playback rate, none while it is paused.
  * @returns {boolean} Whether the camera was sent.
  */
 export function centerOnClick(
   viewer,
   positionAt,
-  { durationS = CLICK_CENTER_S } = {},
+  { durationS = CLICK_CENTER_S, clockId = null } = {},
 ) {
   if (!viewer || typeof positionAt !== 'function' || cockpitHoldsCamera())
     return false;
@@ -88,8 +208,9 @@ export function centerOnClick(
   if (!camera) return false;
   let at = null;
   try {
-    at = positionAt(durationS * 1000);
-    if (!isPoint(at)) at = positionAt(0);
+    const aheadMs = durationS * 1000 * clockRateFor(clockId);
+    at = positionAt(aheadMs);
+    if (!isPoint(at) && aheadMs !== 0) at = positionAt(0);
   } catch {
     at = null;
   }
@@ -130,6 +251,7 @@ export function claimSelection(
   { subject = null, origin = 'user' } = {},
 ) {
   const previous = current;
+  if (previous) cancelCentring(previous);
   current = {
     layerId: String(layerId),
     id: id === null || id === undefined ? null : String(id),
@@ -151,6 +273,8 @@ export function releaseSelection(layerId, id) {
   if (id !== undefined && id !== null && current.id !== String(id)) return;
   const previous = current;
   current = null;
+  // Deselected while the camera is on its way to it: the camera stops.
+  cancelCentring(previous);
   notify(null, previous);
 }
 
@@ -202,5 +326,6 @@ function notify(selection, previous) {
 /** Forget the selection and every listener (tests). */
 export function _resetSelectionForTest() {
   current = null;
+  centring = null;
   listeners.clear();
 }

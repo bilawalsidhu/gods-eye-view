@@ -175,17 +175,21 @@ export function createTracking({ state: layerState, services, parts, source }) {
     const noradId = layerState._trackedNorad;
     const sat = noradId ? layerState._catalog.get(noradId) : null;
     if (!sat) return false;
-    return centerOnClick(layerState._viewer, (aheadMs) => {
-      const p = sat.satrec
-        ? parts.orbits.propagatePosition(
-            sat.satrec,
-            new Date(layerState.now() + aheadMs),
-          )
-        : null;
-      return p
-        ? fromDegrees(p.longitude, p.latitude, p.altitude)
-        : parts.rendering._pointPosition(noradId);
-    });
+    return centerOnClick(
+      layerState._viewer,
+      (aheadMs) => {
+        const p = sat.satrec
+          ? parts.orbits.propagatePosition(
+              sat.satrec,
+              new Date(layerState.now() + aheadMs),
+            )
+          : null;
+        return p
+          ? fromDegrees(p.longitude, p.latitude, p.altitude)
+          : parts.rendering._pointPosition(noradId);
+      },
+      { clockId: 'satellites' },
+    );
   }
 
   /**

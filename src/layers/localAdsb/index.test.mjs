@@ -1264,7 +1264,7 @@ function iconPick(draw, id) {
 
 /** A viewer with a canvas and scripted picks, plus the layer's click action.
  *  A click drills through the viewer's `drillHits`. */
-function clickHarness() {
+function clickHarness(pose = {}) {
   const scene = {
     canvas: {},
     pickResult: null,
@@ -1274,7 +1274,7 @@ function clickHarness() {
     drillPick: () =>
       (base.viewer.drillHits ?? []).map((hit) => ({ primitive: {}, id: hit })),
   };
-  const base = fakeViewer({ scene });
+  const base = fakeViewer({ scene }, pose);
   return {
     scene,
     viewer: base,
@@ -1336,6 +1336,31 @@ test('a click on a local aircraft selects it and centres it once; a drag keeps i
   // Another layer's selection lets it go.
   claimSelection('flights', 'def456');
   assert.equal(calls.cleared.length, 1);
+});
+
+test('a click on a moving local aircraft meets it where it will be when the camera arrives', async (t) => {
+  _resetSelectionForTest();
+  t.after(() => _resetSelectionForTest());
+  const receiver = fakeReceiver({ mode: 'adsb', connected: true });
+  const clock = { now: 100_000 };
+  // Looking straight down on (0°, 0°) from 20 km: north is +z.
+  const harness = clickHarness({
+    height: 20_000,
+    position: { x: 6_378_137 + 20_000, y: 0, z: 0 },
+    direction: { x: -1, y: 0, z: 0 },
+  });
+  const { layer, draw } = await enabledLayer(receiver, clock, null, {
+    viewer: harness.viewer,
+  });
+  t.after(() => layer.destroy());
+  // 180 kt due north: about 93 m in the second the camera takes.
+  receiver.set({ aircraft: [record({ groundSpeedKt: 180, trackDeg: 0 })] });
+  await layer.update();
+  harness.scene.pickResult = iconPick(draw, 'local-adsb:abc123');
+  harness.click();
+  const [flight] = harness.viewer.camera.flights;
+  const northM = flight.destination.z;
+  assert.ok(northM > 80 && northM < 110, `led by ${northM} m`);
 });
 
 // The card or label painted on top takes the click: a local aircraft under

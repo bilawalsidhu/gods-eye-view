@@ -7,7 +7,7 @@
  * command. Bind it to a viewer double before `fakeInput`, so the input port
  * the dispatcher builds is the double's own.
  */
-import { eastNorthUp, fromDegrees, scale } from '../geo/index.js';
+import { eastNorthUp, fromDegrees, scale, toLonLatH } from '../geo/index.js';
 import { bindRenderer } from '../render/rendererOf.js';
 
 function poseAt({ lon, lat, height, heading = 0 }) {
@@ -33,16 +33,23 @@ function poseAt({ lon, lat, height, heading = 0 }) {
 
 /**
  * @param {object} viewer The viewer double to bind the port to.
- * @param {{lon?: number, lat?: number, height?: number}} [at]
+ * @param {{lon?: number, lat?: number, height?: number, pose?: object|null}} [at]
+ *   `pose`: an eye of the test's own (`position`, `direction`, `up`) in
+ *   place of the one looking straight down.
  */
 export function bindClickCamera(
   viewer,
-  { lon = -97.74, lat = 30.27, height = 20_000 } = {},
+  { lon = -97.74, lat = 30.27, height = 20_000, pose: own = null } = {},
 ) {
   let pose = poseAt({ lon, lat, height });
+  if (own) {
+    const at = toLonLatH(own.position);
+    pose = { ...pose, ...own, lon: at.lon, lat: at.lat, height: at.height };
+  }
   let followed = null;
   const flights = [];
   const follows = [];
+  const views = [];
   const listeners = new Map();
   const emit = (event) => {
     for (const cb of [...(listeners.get(event) ?? [])]) cb();
@@ -65,6 +72,10 @@ export function bindClickCamera(
     },
     cancelFlight() {},
     release() {},
+    flying: false,
+    setView(spec) {
+      views.push(spec);
+    },
     get followed() {
       return followed;
     },
@@ -80,6 +91,8 @@ export function bindClickCamera(
     port,
     flights,
     follows,
+    /** What `setView` was asked: a correction of the view. */
+    views,
     /** What the camera follows now. */
     get followed() {
       return followed;
@@ -93,6 +106,21 @@ export function bindClickCamera(
       });
       emit('moveStart');
       emit('changed');
+      emit('moveEnd');
+    },
+    /** Land the latest flight: the eye is where it asked, then moveEnd. */
+    land() {
+      const { destination, options } = flights.at(-1);
+      const at = toLonLatH(destination);
+      pose = {
+        ...pose,
+        lon: at.lon,
+        lat: at.lat,
+        height: at.height,
+        position: { ...destination },
+        direction: { ...options.orientation.direction },
+        up: { ...options.orientation.up },
+      };
       emit('moveEnd');
     },
     unbind,

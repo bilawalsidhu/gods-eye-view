@@ -10,6 +10,7 @@ import {
   isFreeGlobeCamera,
 } from '../globeInView.js';
 import { canvasOf, findCamera, findFrame } from '../render/rendererOf.js';
+import { isCentredOnSelection } from '../data/clickSelect.js';
 
 /** Whether two vectors agree to `tolerance` in every component. */
 const within = (a, b, tolerance) =>
@@ -34,7 +35,9 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * catches a saved or shared view that looked away, or any other move that ends
  * looking away from the planet.
  * Heading and position are kept. Following cameras, locked ones (a target's
- * frame), a camera flight in progress, a pointer held down on the canvas
+ * frame), a view a click left centred on what is still selected (a
+ * satellite far out in space, src/data/clickSelect.js), a camera flight in
+ * progress, a pointer held down on the canvas
  * (a drag held still), and any time `paused`
  * returns true (an authored scene playing) are left alone; a check they defer
  * runs once they end, however long they last.
@@ -105,6 +108,7 @@ export function installGlobeInViewRecovery(
     if (camera.flying || paused() || heldPointers.size > 0) return false;
     const pose = camera.pose();
     if (
+      isCentredOnSelection(pose) ||
       !(pose.height > minHeight) ||
       !globeOutOfFrame(pose, { keyholeRadius: keyholeRadius() })
     )

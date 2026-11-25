@@ -750,10 +750,16 @@ export function createLocalAdsbLayer({
       // displaced, and a click on a marker must never read as "deselect".
       if (target && markers.has(target)) {
         selectMarker(target);
-        // A click centres it once; the camera does not follow it
-        // (src/data/clickSelect.js).
+        // A click centres it once, meeting it where it will be when the
+        // camera arrives; the camera does not follow it
+        // (src/data/clickSelect.js). Local reception is always live.
         const marker = markers.get(target);
-        centerOnClick(viewer, () => marker?.position ?? null);
+        centerOnClick(viewer, (aheadMs) => {
+          const display = marker?.motion?.displayAt(now() + aheadMs, {
+            slew: false,
+          });
+          return display ? fixPosition(marker, display) : marker?.position;
+        });
         return;
       }
       // A click on a trail line is not empty map.

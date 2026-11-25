@@ -173,7 +173,7 @@ export function createSelection({ state, services, parts }) {
         const entry = state._vehicles.get(key);
         // Its marker is where the vehicle is drawn; a bus or a tram barely
         // moves in the second the camera takes.
-        centerOnClick(viewer, () => anchorFor(entry)());
+        centerOnClick(viewer, () => anchorFor(entry)(), { clockId: 'transit' });
         return;
       }
       if (state._selectedKey) clearSelection();

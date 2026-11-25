@@ -15,7 +15,18 @@ import {
   claimSelection,
   currentSelection,
 } from '../../data/clickSelect.js';
-import { distance, fromDegrees, normalize, sub } from '../../geo/index.js';
+import {
+  distance,
+  dot,
+  eastNorthUp,
+  fromDegrees,
+  normalize,
+  sub,
+  toLonLatH,
+} from '../../geo/index.js';
+import { installGlobeInViewRecovery } from '../../app/globeInViewRecovery.js';
+import { globeOutOfFrame } from '../../globeInView.js';
+import { worldClock } from '../../time/worldClock.js';
 import { bindClickCamera, dragOnMap } from '../../testSupport/clickCamera.mjs';
 
 const part = (named = {}) =>
@@ -26,24 +37,35 @@ const part = (named = {}) =>
 const NOW = Date.UTC(2026, 10, 25, 18);
 /** Two satellites 400 km up, gliding east at 7.6 km/s. */
 const STARTS = { 25544: -97.7, 48274: -90 };
-const geoAt = (norad, ms) => ({
-  longitude: STARTS[norad] + ((ms - NOW) / 1000) * (7_600 / 111_000),
-  latitude: 30.27,
-  altitude: 400_000,
-});
+/** A geostationary satellite: still over the equator, 35,786 km up. */
+const GEO = 41866;
+const GEO_LON = { value: -17.74 };
+const geoAt = (norad, ms) =>
+  norad === GEO
+    ? { longitude: GEO_LON.value, latitude: 0, altitude: 35_786_000 }
+    : {
+        longitude: STARTS[norad] + ((ms - NOW) / 1000) * (7_600 / 111_000),
+        latitude: 30.27,
+        altitude: 400_000,
+      };
 
-function satellitesLayer(t, { height = 20_000 } = {}) {
+function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
   _resetSelectionForTest();
   const previousDocument = globalThis.document;
   globalThis.document = Object.assign(new EventTarget(), {
     body: { classList: { contains: () => false } },
   });
   let picked = null;
+  let drilled = [];
   const viewer = {
     isDestroyed: () => false,
-    scene: { canvas: new EventTarget(), pick: () => picked },
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => picked,
+      drillPick: () => drilled,
+    },
   };
-  const camera = bindClickCamera(viewer, { height });
+  const camera = bindClickCamera(viewer, { height, pose });
   const input = fakeInput(viewer);
   const services = {
     overlays: part(),
@@ -56,7 +78,7 @@ function satellitesLayer(t, { height = 20_000 } = {}) {
   state._enabled = true;
   state._viewer = viewer;
   state.now = () => NOW;
-  for (const norad of Object.keys(STARTS).map(Number)) {
+  for (const norad of [...Object.keys(STARTS).map(Number), GEO]) {
     state._catalog.set(norad, { name: `SAT ${norad}`, satrec: { norad } });
     state._points.set(norad, {});
   }
@@ -100,6 +122,7 @@ function satellitesLayer(t, { height = 20_000 } = {}) {
     tracking: parts.tracking,
     camera,
     input,
+    viewer,
     click(hit) {
       picked = hit ? { id: hit } : null;
       input.tap({ x: 10, y: 10 });
@@ -171,4 +194,96 @@ test('another satellite selects that one; the map or another layer lets go', (t)
   app.click(DOT(25544));
   claimSelection('flights', 'abc123');
   assert.equal(app.state._trackedNorad, null);
+});
+
+test('a geostationary satellite seen from near the ground is turned to, never slid under the ground to', (t) => {
+  // A camera 1 km up over Austin looking south, 70° above the horizon; the
+  // satellite 55° up in the south, below the middle of the view.
+  const eye = fromDegrees(-97.74, 30.27, 1_000);
+  const enu = eastNorthUp(eye);
+  const along = (e, n, u) =>
+    normalize({
+      x: enu.x.x * e + enu.y.x * n + enu.z.x * u,
+      y: enu.x.y * e + enu.y.y * n + enu.z.y * u,
+      z: enu.x.z * e + enu.y.z * n + enu.z.z * u,
+    });
+  const pitch = (70 * Math.PI) / 180;
+  const pose = {
+    position: eye,
+    direction: along(0, -Math.cos(pitch), Math.sin(pitch)),
+    up: along(0, Math.sin(pitch), Math.cos(pitch)),
+  };
+  GEO_LON.value = -97.74;
+  t.after(() => (GEO_LON.value = -17.74));
+  const app = satellitesLayer(t, { pose });
+  app.click(DOT(GEO));
+  assert.equal(app.state._trackedNorad, GEO);
+  assert.equal(app.camera.flights.length, 1);
+  const { destination, options } = app.camera.flights[0];
+  const p = geoAt(GEO, NOW);
+  const sat = fromDegrees(p.longitude, p.latitude, p.altitude);
+  assert.ok(
+    toLonLatH(destination).height > 500,
+    'the eye stays above the ground',
+  );
+  assert.ok(distance(destination, eye) < 1, 'the eye stays where it is');
+  const towards = normalize(sub(sat, eye));
+  assert.ok(
+    distance(normalize(options.orientation.direction), towards) < 1e-9,
+    'and turns to the satellite',
+  );
+  assert.ok(
+    Math.abs(dot(options.orientation.up, options.orientation.direction)) < 1e-9,
+  );
+});
+
+test('a view a click centred on a satellite far out is not swung back to the planet', (t) => {
+  // From 20,000 km over Austin, a geostationary satellite 80° east: centred,
+  // the planet leaves the frame.
+  const app = satellitesLayer(t, { height: 20_000_000 });
+  const recovery = installGlobeInViewRecovery(app.viewer);
+  t.after(recovery);
+  app.click(DOT(GEO));
+  app.camera.land();
+  assert.ok(
+    globeOutOfFrame(app.camera.port.pose()),
+    'the planet is out of the frame',
+  );
+  assert.deepEqual(app.camera.views, [], 'the view stays on the satellite');
+  // Let go, the same view is one to correct.
+  app.click(null);
+  app.camera.land();
+  assert.equal(app.camera.views.length, 1, 'turned back to the planet');
+});
+
+test('with the world paused, a satellite is centred where it is; at 60x where it will be', (t) => {
+  worldClock.seek(NOW);
+  worldClock.pause();
+  t.after(() => {
+    worldClock.setRate(1);
+    worldClock.goLive();
+  });
+  const app = satellitesLayer(t, { height: 20_000_000 });
+  const centred = () => {
+    const { destination } = app.camera.flights.at(-1);
+    const pose = app.camera.port.pose();
+    return (ms) => {
+      const p = geoAt(25544, ms);
+      const at = fromDegrees(p.longitude, p.latitude, p.altitude);
+      return distance(
+        normalize(sub(at, destination)),
+        normalize(pose.direction),
+      );
+    };
+  };
+  app.click(DOT(25544));
+  assert.ok(centred()(NOW) < 1e-9, 'paused: where it is');
+  app.click(null);
+  worldClock.setRate(60);
+  worldClock.play({ continuous: true });
+  app.click(DOT(25544));
+  assert.ok(
+    centred()(NOW + 60 * CLICK_CENTER_S * 1000) < 1e-9,
+    'at 60x: a minute on',
+  );
 });

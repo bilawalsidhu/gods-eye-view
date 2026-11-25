@@ -1039,8 +1039,11 @@ export function createTracking({
     const icao24 = flightState._trackedIcao;
     const icons = flightState._icons;
     if (!icao24 || !icons?.has(icao24)) return false;
-    return centerOnClick(flightState._viewer, (aheadMs) =>
-      icons.position(icao24, parts.icons._displayMs() + aheadMs, vec()),
+    return centerOnClick(
+      flightState._viewer,
+      (aheadMs) =>
+        icons.position(icao24, parts.icons._displayMs() + aheadMs, vec()),
+      { clockId: 'military' },
     );
   }
 

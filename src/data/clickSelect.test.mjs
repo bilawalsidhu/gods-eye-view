@@ -8,6 +8,7 @@ import {
   _resetSelectionForTest,
   centerOnClick,
   claimSelection,
+  clockRateFor,
   currentSelection,
   onSelectionChanged,
   releaseSelection,
@@ -16,6 +17,7 @@ import {
 import { flyToWorldTarget } from '../worldFocus.js';
 import { distance, fromDegrees, normalize, sub } from '../geo/index.js';
 import { bindClickCamera } from '../testSupport/clickCamera.mjs';
+import { worldClock } from '../time/worldClock.js';
 
 const near = (a, b, eps = 1e-6) => distance(a, b) < eps;
 
@@ -170,4 +172,81 @@ test('a release names its own selection only', (t) => {
     ['abc123', null],
     [null, 'abc123'],
   ]);
+});
+
+/** A world clock double in the state `getState` reports. */
+const clockState = (state) => ({
+  getState: () => ({
+    live: false,
+    playing: true,
+    buffering: false,
+    rate: 1,
+    following: ['flights', 'satellites'],
+    ...state,
+  }),
+});
+
+test('the lead is the time the flight takes on the layer’s own clock', () => {
+  assert.equal(clockRateFor('flights', clockState({ live: true })), 1);
+  assert.equal(clockRateFor('flights', clockState({ rate: 60 })), 60);
+  assert.equal(clockRateFor('flights', clockState({ playing: false })), 0);
+  assert.equal(clockRateFor('flights', clockState({ buffering: true })), 0);
+  // A layer that stays live while the world plays back runs at 1.
+  assert.equal(clockRateFor('transit', clockState({ rate: 60 })), 1);
+  assert.equal(clockRateFor(null, clockState({ rate: 60 })), 1);
+});
+
+test('a paused world aims at where the thing is; a 60x one sixty times further', (t) => {
+  const { viewer } = setup(t);
+  const asked = [];
+  const positionAt = (aheadMs) => {
+    asked.push(aheadMs);
+    return fromDegrees(-97.7, 30.3, 10_000);
+  };
+  worldClock.seek(Date.UTC(2026, 0, 1));
+  t.after(() => worldClock.goLive());
+  worldClock.pause();
+  centerOnClick(viewer, positionAt, { clockId: 'satellites' });
+  worldClock.setRate(60);
+  t.after(() => worldClock.setRate(1));
+  worldClock.play({ continuous: true });
+  centerOnClick(viewer, positionAt, { clockId: 'satellites' });
+  assert.deepEqual(asked, [0, 60 * CLICK_CENTER_S * 1000]);
+});
+
+test('deselecting while the camera is on its way stops it there', (t) => {
+  const { viewer, camera } = setup(t);
+  const cancelled = [];
+  const flyTo = camera.port.flyTo;
+  camera.port.flyTo = (...args) => {
+    flyTo(...args);
+    return {
+      done: new Promise(() => {}),
+      cancel: () => cancelled.push(args[0]),
+    };
+  };
+  claimSelection('flights', 'abc123');
+  centerOnClick(viewer, () => fromDegrees(-97.7, 30.3, 10_000));
+  releaseSelection('flights', 'abc123');
+  assert.equal(cancelled.length, 1, 'cancelled in flight');
+  // Another layer's selection replacing it stops it too.
+  claimSelection('flights', 'abc123');
+  centerOnClick(viewer, () => fromDegrees(-97.7, 30.3, 10_000));
+  claimSelection('ais-live-vessels', 'v1');
+  assert.equal(cancelled.length, 2);
+});
+
+test('a landed centring is not cancelled by a later deselect', async (t) => {
+  const { viewer, camera } = setup(t);
+  let cancels = 0;
+  const flyTo = camera.port.flyTo;
+  camera.port.flyTo = (...args) => {
+    flyTo(...args);
+    return { done: Promise.resolve('complete'), cancel: () => cancels++ };
+  };
+  claimSelection('flights', 'abc123');
+  centerOnClick(viewer, () => fromDegrees(-97.7, 30.3, 10_000));
+  await new Promise((resolve) => setImmediate(resolve));
+  releaseSelection('flights', 'abc123');
+  assert.equal(cancels, 0, 'a later flight of anyone else is left alone');
 });
