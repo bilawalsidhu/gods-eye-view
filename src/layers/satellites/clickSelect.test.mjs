@@ -40,14 +40,18 @@ const STARTS = { 25544: -97.7, 48274: -90 };
 /** A geostationary satellite: still over the equator, 35,786 km up. */
 const GEO = 41866;
 const GEO_LON = { value: -17.74 };
+/** Another, 70° east of Austin. */
+const GEO2 = 41867;
 const geoAt = (norad, ms) =>
   norad === GEO
     ? { longitude: GEO_LON.value, latitude: 0, altitude: 35_786_000 }
-    : {
-        longitude: STARTS[norad] + ((ms - NOW) / 1000) * (7_600 / 111_000),
-        latitude: 30.27,
-        altitude: 400_000,
-      };
+    : norad === GEO2
+      ? { longitude: -27.74, latitude: 0, altitude: 35_786_000 }
+      : {
+          longitude: STARTS[norad] + ((ms - NOW) / 1000) * (7_600 / 111_000),
+          latitude: 30.27,
+          altitude: 400_000,
+        };
 
 function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
   _resetSelectionForTest();
@@ -78,7 +82,7 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
   state._enabled = true;
   state._viewer = viewer;
   state.now = () => NOW;
-  for (const norad of [...Object.keys(STARTS).map(Number), GEO]) {
+  for (const norad of [...Object.keys(STARTS).map(Number), GEO, GEO2]) {
     state._catalog.set(norad, { name: `SAT ${norad}`, satrec: { norad } });
     state._points.set(norad, {});
   }
@@ -261,7 +265,7 @@ test('a geostationary satellite seen from near the ground is framed from above, 
   );
 });
 
-test('a view a click centred on a satellite far out is not swung back to the planet', (t) => {
+test('a view a click centred on a satellite far out is not swung back to the planet', async (t) => {
   // From 20,000 km over Austin, a geostationary satellite 80° east: centred,
   // the planet leaves the frame.
   const app = satellitesLayer(t, { height: 20_000_000 });
@@ -276,7 +280,29 @@ test('a view a click centred on a satellite far out is not swung back to the pla
   assert.deepEqual(app.camera.views, [], 'the view stays on the satellite');
   // Let go, the view is corrected at once, with no move to end.
   app.click(null);
+  await Promise.resolve();
   assert.equal(app.camera.views.length, 1, 'turned back to the planet');
+});
+
+test('switching from one far satellite to another leaves the view to the next centring', async (t) => {
+  const app = satellitesLayer(t, { height: 20_000_000 });
+  const recovery = installGlobeInViewRecovery(app.viewer);
+  t.after(recovery);
+  app.click(DOT(GEO));
+  app.camera.land();
+  const centred = app.camera.port.pose();
+  assert.ok(globeOutOfFrame(centred), 'the planet is out of the frame');
+  // The layer lets the first go and selects the second in one turn.
+  app.click(DOT(GEO2));
+  await Promise.resolve();
+  assert.equal(app.state._trackedNorad, GEO2);
+  assert.deepEqual(app.camera.views, [], 'not swung to the planet between');
+  assert.equal(app.camera.flights.length, 2);
+  assert.deepEqual(
+    app.camera.flights[1].options.orientation.direction,
+    centred.direction,
+    'the next centring starts from the view the first left',
+  );
 });
 
 test('with the world paused, a satellite is centred where it is; at 60x where it will be', (t) => {

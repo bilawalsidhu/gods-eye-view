@@ -11,6 +11,7 @@ import {
 } from '../globeInView.js';
 import { canvasOf, findCamera, findFrame } from '../render/rendererOf.js';
 import {
+  currentSelection,
   isCentredOnSelection,
   onSelectionChanged,
 } from '../data/clickSelect.js';
@@ -175,9 +176,17 @@ export function installGlobeInViewRecovery(
   const removeMoveStart = camera.on('moveStart', startSettling);
   // A view held for a selection is checked once it is let go: the camera
   // has no move to end then, and may be looking at nothing but space.
+  // A switch lets go of one thing and selects the next in the same turn:
+  // only a selection still empty once the turn is over is let go.
+  let releaseQueued = false;
   const removeSelectionChanged = onSelectionChanged((selection) => {
-    if (selection) return;
-    if (!recover() && settleTimer === null) startSettling();
+    if (selection || releaseQueued) return;
+    releaseQueued = true;
+    queueMicrotask(() => {
+      releaseQueued = false;
+      if (!active || currentSelection()) return;
+      if (!recover() && settleTimer === null) startSettling();
+    });
   });
 
   let active = true;
