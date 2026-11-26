@@ -8,6 +8,8 @@ import { createState } from './state.js';
 import { createTracking } from './tracking.js';
 import { createInteraction } from './interaction.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+// Registers the trails' pick ids, as the app does on load.
+import '../../data/trailRenderer.js';
 import * as picking from '../../data/pickRegistry.js';
 import {
   CLICK_CENTER_S,
@@ -135,6 +137,15 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
       input.tap({ x: 10, y: 10 });
       picked = null;
     },
+    /** A click on `hit` with a trail drawn over it. */
+    clickUnderTrail(hit) {
+      const trail = { id: { set: 'trail:1', id: 'gev-trail:1:head' } };
+      picked = trail;
+      drilled = [trail, { id: hit }];
+      input.tap({ x: 10, y: 10 });
+      picked = null;
+      drilled = [];
+    },
     /** A tap whose exact pick finds only the map, with `hit` in reach. */
     touch(hit) {
       drilled = [{ id: hit }];
@@ -181,6 +192,15 @@ test('a drag after the click keeps the satellite selected and the camera free', 
   assert.equal(app.state._trackedNorad, 25544);
   assert.equal(app.camera.followed, null);
   assert.equal(app.camera.flights.length, 1);
+});
+
+test('a second map click follows the satellite a trail is drawn over', (t) => {
+  const app = satellitesLayer(t);
+  app.click(DOT(25544));
+  assert.equal(app.camera.followed, null);
+  app.clickUnderTrail({ set: 'tracked', id: '25544' });
+  assert.equal(app.camera.followed, app.state._followTarget);
+  assert.equal(app.state._trackedNorad, 25544);
 });
 
 test('a second click on the selected satellite follows it; a click on the followed one keeps the follow', (t) => {

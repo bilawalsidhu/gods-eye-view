@@ -9,6 +9,8 @@ import { createTracking as createCivilTracking } from './tracking.js';
 import { createFlightState as createMilitaryState } from '../military/state.js';
 import { createTracking as createMilitaryTracking } from '../military/tracking.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+// Registers the trails' pick ids, as the app does on load.
+import '../../data/trailRenderer.js';
 import * as picking from '../../data/pickRegistry.js';
 import {
   CLICK_CENTER_S,
@@ -94,9 +96,14 @@ function aircraftLayer(t, { layerId, createState, createTracking }) {
     body: { classList: { contains: () => false } },
   });
   let picked = null;
+  let drilled = [];
   const viewer = {
     isDestroyed: () => false,
-    scene: { canvas: new EventTarget(), pick: () => picked },
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => picked,
+      drillPick: () => drilled,
+    },
   };
   const camera = bindClickCamera(viewer);
   const input = fakeInput(viewer);
@@ -156,6 +163,15 @@ function aircraftLayer(t, { layerId, createState, createTracking }) {
       picked = id ? { id: { set: 'icons', id } } : null;
       input.tap({ x: 10, y: 10 });
       picked = null;
+    },
+    /** A click on `id`'s icon with its trail's head drawn over it. */
+    clickUnderTrail(id) {
+      const trail = { id: { set: 'trail:1', id: 'gev-trail:1:head' } };
+      picked = trail;
+      drilled = [trail, { id: { set: 'icons', id } }];
+      input.tap({ x: 10, y: 10 });
+      picked = null;
+      drilled = [];
     },
     advance(ms) {
       displayMs += ms;
@@ -243,6 +259,15 @@ for (const kind of AIRCRAFT_LAYERS) {
     assert.equal(currentSelection()?.id, 'abc123');
     app.click('abc123');
     assert.equal(app.camera.followed, app.flightState._followTarget);
+  });
+
+  test(`${kind.layerId}: a second map click follows the aircraft its trail is drawn over`, (t) => {
+    const app = aircraftLayer(t, kind);
+    app.click('abc123');
+    assert.equal(app.camera.followed, null);
+    app.clickUnderTrail('abc123');
+    assert.equal(app.camera.followed, app.flightState._followTarget);
+    assert.equal(app.flightState._trackedIcao, 'abc123');
   });
 
   test(`${kind.layerId}: another aircraft's click selects that one; the map lets go`, (t) => {

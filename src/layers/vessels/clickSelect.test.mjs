@@ -6,6 +6,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { clickCard, isOwnedByOtherLayer } from '../../data/pickRegistry.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
+// Registers the trails' pick ids, as the app does on load.
+import '../../data/trailRenderer.js';
 import {
   _resetSelectionForTest,
   claimSelection,
@@ -25,26 +27,40 @@ const part = (named = {}) =>
 function vesselsLayer(t) {
   _resetSelectionForTest();
   let picked = null;
+  let drilled = [];
   const viewer = {
     isDestroyed: () => false,
-    scene: { canvas: new EventTarget(), pick: () => picked },
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => picked,
+      drillPick: () => drilled,
+    },
   };
   const camera = bindClickCamera(viewer);
   const input = fakeInput(viewer);
   let drawnHeightM = 0;
   const vessel = { id: 'v1', name: 'NORTHERN STAR', lat: 30.2, lon: -97.6 };
   const other = { id: 'v2', name: 'SOUTHERN CROSS', lat: 29.9, lon: -97.1 };
+  // Keyed by its catalog UUID, with no MMSI.
+  const catalogued = {
+    id: 'a9bc01b8-28d8-e116-1e73-1be093830bb3',
+    mmsi: '',
+    name: 'EVER GIVEN',
+    lat: 30.6,
+    lon: 32.3,
+  };
   const state = {
     feed: { enabled: true },
     records: {
       byId: new Map([
         [vessel.id, vessel],
         [other.id, other],
+        [catalogued.id, catalogued],
       ]),
     },
     icons: {
       setId: 'vessels:icons',
-      has: (id) => id === vessel.id || id === other.id,
+      has: (id) => [vessel.id, other.id, catalogued.id].includes(id),
     },
     selectedRecord: null,
     interactionKeyTarget: new EventTarget(),
@@ -94,6 +110,7 @@ function vesselsLayer(t) {
     state,
     vessel,
     other,
+    catalogued,
     selection,
     viewer,
     camera,
@@ -107,6 +124,15 @@ function vesselsLayer(t) {
       picked = id ? { id: { set: 'vessels:icons', id } } : null;
       input.tap({ x: 10, y: 10 });
       picked = null;
+    },
+    /** A click on `id`'s icon with its trail's head drawn over it. */
+    clickUnderTrail(id) {
+      const trail = { id: { set: 'trail:1', id: 'gev-trail:1:head' } };
+      picked = trail;
+      drilled = [trail, { id: { set: 'vessels:icons', id } }];
+      input.tap({ x: 10, y: 10 });
+      picked = null;
+      drilled = [];
     },
   };
 }
@@ -125,6 +151,18 @@ test('a click on a vessel selects it and centres it once; nothing is followed', 
   const look = normalize(sub(at, app.camera.flights[0].destination));
   assert.ok(distance(look, normalize(pose.direction)) < 1e-9, 'centred');
   assert.equal(currentSelection()?.layerId, 'ais-live-vessels');
+});
+
+test('a second map click follows a ship keyed by its catalog UUID, with no MMSI, under its trail', (t) => {
+  const app = vesselsLayer(t);
+  const id = app.catalogued.id;
+  app.click(id);
+  assert.equal(app.state.selectedRecord, app.catalogued);
+  assert.equal(currentSelection()?.id, id);
+  assert.equal(app.camera.followed, null);
+  app.clickUnderTrail(id);
+  assert.equal(app.camera.followed?.key, `ais-live-vessels:${id}`);
+  assert.equal(app.state.selectedRecord, app.catalogued, 'still selected');
 });
 
 test('a drag after the click keeps the vessel selected and the camera free', (t) => {
