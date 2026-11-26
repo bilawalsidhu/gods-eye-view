@@ -5746,11 +5746,16 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `src/overlays/worldOverlay.js` owns one shared DPR-aware text/card canvas,
 >   one detection blend surface, and one world-overlay post-render
 >   scheduler. Both surfaces share the same sizing, clear, projection,
->   and teardown paths. On a touch-only device (`(pointer: coarse)` and not
->   `(pointer: fine)`, `src/overlays/canvasPixelRatio.js`) both are held at
->   CSS pixels, as the globe is drawn; a fine pointer keeps the display's
->   ratio. The detection surface holds a backing store only while a
->   detection lane is active and is 0x0 otherwise. The host includes bounded per-source/per-collision-domain
+>   and teardown paths. On a touch-only device (`(pointer: coarse)` and no
+>   `(any-pointer: fine)`, `src/overlays/canvasPixelRatio.js`; a tablet with
+>   a trackpad, mouse or pencil is not one) both are held at CSS pixels, as
+>   the globe is drawn; a fine pointer keeps the display's ratio, and
+>   attaching or removing one resizes them (`watchTouchOnly`). The scope
+>   mask (`src/scopeMask.js`) follows the same rule for its feathered
+>   gradient, but draws a hard edge (feather under a pixel) at up to 2x on
+>   every device. Both surfaces start 0x0; the detection surface holds a
+>   backing store only while a detection lane is active, and an idle host
+>   releases it without sizing the shared canvas. The host includes bounded per-source/per-collision-domain
 >   arbitration, horizon/viewport culling, shared keyhole fading, cached UI
 >   exclusions, cockpit source gating, pooled hit
 >   rectangles, and development diagnostics. **UI exclusion is a per-rectangle
