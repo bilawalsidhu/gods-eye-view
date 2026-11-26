@@ -295,37 +295,74 @@ function clampFmFrequency(value) {
   );
 }
 
+const RECEIVER_MESSAGES = {
+  rtl: {
+    connectPrompt: msg('Connect an RTL-SDR to begin.'),
+    waiting: msg('Waiting for an RTL-SDR device…'),
+    noDevice: msg('No RTL-SDR device selected'),
+    accessFailed: msg(
+      'RTL-SDR access failed; close other SDR apps and check USB permissions',
+    ),
+    connectionFailed: msg('RTL-SDR connection failed'),
+    gainFailed: msg('RTL-SDR gain change failed'),
+    streamStopped: msg('RTL-SDR sample stream stopped'),
+    disconnected: msg('RTL-SDR disconnected'),
+  },
+  hackrf: {
+    connectPrompt: msg('Connect a HackRF One to begin.'),
+    waiting: msg('Waiting for a HackRF One…'),
+    noDevice: msg('No HackRF One device selected'),
+    accessFailed: msg(
+      'HackRF One access failed; close other SDR apps and check USB permissions',
+    ),
+    connectionFailed: msg('HackRF One connection failed'),
+    gainFailed: msg('HackRF One gain change failed'),
+    streamStopped: msg('HackRF One sample stream stopped'),
+    disconnected: msg('HackRF One disconnected'),
+  },
+};
+const AUDIO_SUSPENDED_ON_CONNECT = msg(
+  'Browser audio is suspended; press Connect again to resume it',
+);
+const AUDIO_SUSPENDED_ON_MODE_SWITCH = msg(
+  'Browser audio is suspended; select FM again to resume it',
+);
+
+class UsbPickerCancelled extends Error {}
+
 /** A failed connection in English; errorState() shows it translated. */
-function describeConnectionError(error, receiverKind) {
+function describeConnectionError(error, receiverKind, fallback) {
+  const receiver = RECEIVER_MESSAGES[receiverKind];
   const message = String(error?.message || error || '').trim();
-  const hackrf = receiverKind === 'hackrf';
-  if (
+  if (receiverKind === 'hackrf') {
+    if (error instanceof UsbPickerCancelled) return receiver.noDevice;
+    if (
+      error?.name === 'NotFoundError' ||
+      /\bdevice (?:was |is )?disconnected\b/i.test(message)
+    )
+      return receiver.disconnected;
+  } else if (
     error?.name === 'NotFoundError' ||
     /No device was selected|NotFoundError/i.test(message)
+  ) {
+    // The RTL provider can wrap the picker error in its own RadioError.
+    return receiver.noDevice;
+  }
+  if (
+    message === AUDIO_SUSPENDED_ON_CONNECT ||
+    message === AUDIO_SUSPENDED_ON_MODE_SWITCH
   )
-    return hackrf
-      ? msg('No HackRF One device selected')
-      : msg('No RTL-SDR device selected');
+    return message;
   if (
     /does not support the WebUSB|usb/i.test(message) &&
     /support/i.test(message)
   ) {
     return msg('WebUSB requires desktop Chrome or Edge on localhost/HTTPS');
   }
-  if (/access|permission|claim|busy/i.test(message)) {
-    return hackrf
-      ? msg(
-          'HackRF One access failed; close other SDR apps and check USB permissions',
-        )
-      : msg(
-          'RTL-SDR access failed; close other SDR apps and check USB permissions',
-        );
-  }
+  if (/access|permission|claim|busy/i.test(message))
+    return receiver.accessFailed;
   return (
-    message ||
-    (hackrf
-      ? msg('HackRF One connection failed')
-      : msg('RTL-SDR connection failed'))
+    (receiverKind === 'rtl' && message) || fallback || receiver.connectionFailed
   );
 }
 
@@ -420,7 +457,7 @@ export class SdrController {
     };
     this._wording = {
       message: webUsbSupported
-        ? () => t('Connect an RTL-SDR to begin.')
+        ? () => t(RECEIVER_MESSAGES.rtl.connectPrompt)
         : () => t('WebUSB is unavailable in this browser'),
       seekMessage: null,
     };
@@ -502,6 +539,10 @@ export class SdrController {
           onSelected: (device) => {
             if (!isFenced()) this._deviceIdentity = sdrDeviceIdentity(device);
           },
+          mapPickerError: (error) =>
+            hackrf && error?.name === 'NotFoundError'
+              ? new UsbPickerCancelled(error.message, { cause: error })
+              : error,
         }),
         { onDevice: onUsbDevice, isFenced },
       );
@@ -537,9 +578,7 @@ export class SdrController {
       errorText: null,
       message: !this.state.webUsbSupported
         ? () => t('WebUSB is unavailable in this browser')
-        : receiverKind === 'hackrf'
-          ? () => t('Connect a HackRF One to begin.')
-          : () => t('Connect an RTL-SDR to begin.'),
+        : () => t(RECEIVER_MESSAGES[receiverKind].connectPrompt),
     });
   }
 
@@ -1204,10 +1243,7 @@ export class SdrController {
     const superseded = () => this._destroyed || token !== this._sessionToken;
     this._setState({
       status: 'connecting',
-      message:
-        receiverKind === 'hackrf'
-          ? () => t('Waiting for a HackRF One…')
-          : () => t('Waiting for an RTL-SDR device…'),
+      message: () => t(RECEIVER_MESSAGES[receiverKind].waiting),
       errorText: null,
     });
     let acquisition = null;
@@ -1218,9 +1254,7 @@ export class SdrController {
       // has only been constructed can still be suspended after the chooser
       // consumes the click activation.
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
-        throw new Error(
-          msg('Browser audio is suspended; press Connect again to resume it'),
-        );
+        throw new Error(AUDIO_SUSPENDED_ON_CONNECT);
       }
       if (superseded()) return false;
       // An old session's device may still be closing, or an older connect may
@@ -1639,14 +1673,12 @@ export class SdrController {
       } catch (error) {
         if (generation !== this._readGeneration) break;
         console.warn('[SDR] Sample read failed:', error);
-        this._setState({
-          connected: false,
-          ...errorState(
-            this.state.receiverKind === 'hackrf'
-              ? msg('HackRF One sample stream stopped')
-              : msg('RTL-SDR sample stream stopped'),
-          ),
-        });
+        const kind = this.state.receiverKind;
+        const message =
+          kind === 'hackrf' && error?.name !== 'TimeoutError'
+            ? describeConnectionError(error, kind)
+            : RECEIVER_MESSAGES[kind].streamStopped;
+        this._setState({ connected: false, ...errorState(message) });
         await this.stop({ preserveMessage: true });
         break;
       }
@@ -1695,9 +1727,7 @@ export class SdrController {
     });
     try {
       if (nextMode === 'fm' && !(await this._ensureAudio())) {
-        throw new Error(
-          msg('Browser audio is suspended; select FM again to resume it'),
-        );
+        throw new Error(AUDIO_SUSPENDED_ON_MODE_SWITCH);
       }
       // A stall teardown, stop() or reconnect during the switch supersedes
       // it: that path owns the published state, never "streaming" from here.
@@ -1767,7 +1797,7 @@ export class SdrController {
       if (targetMode === 'adsb') this._setState(this._resetAdsbCounters());
     } catch (error) {
       console.warn('[SDR] Gain change failed:', error);
-      this._setState(errorState(msg('RTL-SDR gain change failed')));
+      this._setState(errorState(RECEIVER_MESSAGES.rtl.gainFailed));
       return null;
     }
     return setting;
@@ -1817,7 +1847,15 @@ export class SdrController {
     } catch (error) {
       if (!this._owns(token, device)) return false;
       console.warn('[SDR] HackRF One gain change failed:', error);
-      this._setState(errorState(msg('HackRF One gain change failed')));
+      this._setState(
+        errorState(
+          describeConnectionError(
+            error,
+            'hackrf',
+            RECEIVER_MESSAGES.hackrf.gainFailed,
+          ),
+        ),
+      );
       await this.stop({ preserveMessage: true });
       return false;
     }
@@ -1877,6 +1915,7 @@ export class SdrController {
       return true;
     } catch (error) {
       if (!this._owns(token, device)) return false;
+      console.warn('[SDR] FM retune failed:', error);
       this._setState(errorState(describeConnectionError(error, receiverKind)));
       if (receiverKind === 'hackrf') await this.stop({ preserveMessage: true });
       return false;
@@ -2080,9 +2119,8 @@ export class SdrController {
         : {
             message:
               message ||
-              (this.state.receiverKind === 'hackrf'
-                ? () => t('HackRF One disconnected')
-                : () => t('RTL-SDR disconnected')),
+              (() =>
+                t(RECEIVER_MESSAGES[this.state.receiverKind].disconnected)),
             errorText: null,
           }),
       snr: null,

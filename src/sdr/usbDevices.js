@@ -171,6 +171,7 @@ export function createSdrDeviceMemory(storage, key = SDR_DEVICE_STORAGE_KEY) {
  * @param {() => boolean} [options.consumeForcePicker] Returns true once when
  *   the user asked to choose a different device.
  * @param {(device:object) => void} [options.onSelected] Selected device hook.
+ * @param {(error:unknown) => unknown} [options.mapPickerError] Map errors from the native picker.
  * @returns {USB} Proxy exposing the same WebUSB surface.
  */
 export function createRememberingWebUsb(
@@ -180,9 +181,10 @@ export function createRememberingWebUsb(
     memory = null,
     consumeForcePicker = () => false,
     onSelected = () => {},
+    mapPickerError = (error) => error,
   } = {},
 ) {
-  if (!webUsb?.getDevices || !webUsb?.requestDevice) return webUsb;
+  if (!webUsb?.requestDevice) return webUsb;
   return new Proxy(webUsb, {
     get(target, property) {
       if (property === 'requestDevice') {
@@ -190,7 +192,7 @@ export function createRememberingWebUsb(
           const mode = getMode();
           const filters = Array.isArray(options.filters) ? options.filters : [];
           let device = null;
-          if (!consumeForcePicker()) {
+          if (!consumeForcePicker() && target.getDevices) {
             device = selectAuthorizedSdrDevice(await target.getDevices(), {
               filters,
               mode,
@@ -200,7 +202,11 @@ export function createRememberingWebUsb(
           if (!device) {
             // Only an explicit picker choice is remembered; automatic
             // selection is re-derived from the preference on every connect.
-            device = await target.requestDevice(options);
+            try {
+              device = await target.requestDevice(options);
+            } catch (error) {
+              throw mapPickerError(error);
+            }
             if (device) memory?.set(mode, device);
           }
           if (device) onSelected(device);

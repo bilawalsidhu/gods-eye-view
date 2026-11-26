@@ -9,6 +9,7 @@ import {
 import { RTL2832U_Provider } from '@jtarrio/webrtlsdr/rtlsdr.js';
 import { RTL_SDR_USB_FILTERS } from './usbDevices.js';
 import { SDR_GAIN_STORAGE_KEY } from './gain.js';
+import { getLocale, setLocale, t as translate } from '../i18n/index.js';
 
 function replaceGlobal(name, value) {
   const prior = Object.getOwnPropertyDescriptor(globalThis, name);
@@ -1447,4 +1448,223 @@ test('HackRF applies saved and live gain settings through the controller', async
   assert.equal(device.opened, false);
   controller.selectReceiver('rtl');
   assert.equal(controller.getState().receiverKind, 'rtl');
+});
+
+/** A real HackRF adapter over mock USB. A failed transfer is injected once. */
+function hackrfFailureSession(t, webUsbOverrides = {}) {
+  let failNext = null;
+  let reads = 0;
+  let closes = 0;
+  const transfer = (direction, request, success) => {
+    if (failNext?.direction !== direction || failNext.request !== request)
+      return success;
+    const { result } = failNext;
+    failNext = null;
+    if (result instanceof Error) throw result;
+    return result;
+  };
+  const device = {
+    vendorId: 0x1d50,
+    productId: 0x6089,
+    configuration: { configurationValue: 1 },
+    async open() {
+      this.opened = true;
+    },
+    async claimInterface() {},
+    async controlTransferOut({ request }, data) {
+      return transfer('out', request, {
+        status: 'ok',
+        bytesWritten: data?.byteLength ?? 0,
+      });
+    },
+    async controlTransferIn({ request }) {
+      return transfer('in', request, {
+        status: 'ok',
+        data: new DataView(Uint8Array.of(1).buffer),
+      });
+    },
+    async transferIn(endpoint, length) {
+      reads += 1;
+      await pause(2);
+      return transfer('read', endpoint, {
+        status: 'ok',
+        data: new DataView(new ArrayBuffer(length)),
+      });
+    },
+    async close() {
+      this.opened = false;
+      closes += 1;
+    },
+  };
+  t.after(replaceGlobal('Worker', FakeWorker));
+  const controller = new SdrController({
+    storage: memoryStorage(),
+    webUsb: {
+      getDevices: async () => [device],
+      requestDevice: async () => device,
+      ...webUsbOverrides,
+    },
+  });
+  t.after(() => controller.destroy());
+  controller.selectReceiver('hackrf');
+  // This fixture exercises USB, not the browser's user-activation path.
+  controller._ensureAudio = async () => true;
+  return {
+    controller,
+    device,
+    fail(direction, request, result) {
+      failNext = { direction, request, result };
+    },
+    reads: () => reads,
+    closes: () => closes,
+  };
+}
+
+test('a cancelled HackRF picker has its own message and locks receiver selection while pending', async (t) => {
+  const picker = gate();
+  const started = gate();
+  const { controller, closes } = hackrfFailureSession(t, {
+    getDevices: async () => [],
+    requestDevice: async () => {
+      started.open();
+      await picker.promise;
+      throw new DOMException('No device selected.', 'NotFoundError');
+    },
+  });
+  const connecting = controller.connect('adsb');
+  await within(started.promise);
+  controller.selectReceiver('rtl');
+  assert.equal(controller.getState().receiverKind, 'hackrf');
+  assert.equal(controller.getState().status, 'connecting');
+  picker.open();
+  assert.equal(await within(connecting), false);
+  assert.equal(controller.getState().message, 'No HackRF One device selected');
+  assert.equal(controller.getState().connected, false);
+  assert.equal(closes(), 0);
+});
+
+test('a WebUSB enumeration failure is not reported as a cancelled HackRF picker', async (t) => {
+  const { controller } = hackrfFailureSession(t, {
+    getDevices: async () => {
+      throw new DOMException('Enumeration failed.', 'NotFoundError');
+    },
+    requestDevice: async () => assert.fail('unexpected picker'),
+  });
+  assert.equal(await within(controller.connect('adsb')), false);
+  assert.equal(controller.getState().status, 'error');
+  assert.notEqual(
+    controller.getState().errorText,
+    'No HackRF One device selected',
+  );
+});
+
+test('a HackRF unplug during initial configuration reports a disconnect and permits reopening', async (t) => {
+  const { controller, device, fail, closes, reads } = hackrfFailureSession(t);
+  fail(
+    'out',
+    6,
+    new DOMException('The device was disconnected.', 'NotFoundError'),
+  );
+  assert.equal(await within(controller.connect('adsb')), false);
+  const state = controller.getState();
+  assert.equal(state.status, 'error');
+  assert.equal(state.errorText, 'HackRF One disconnected');
+  assert.equal(state.connected, false);
+  assert.equal(device.opened, false);
+  assert.equal(closes(), 1);
+  assert.equal(reads(), 0);
+  assert.equal(await within(controller.connect('adsb')), true);
+});
+
+test('HackRF USB failures during reception report the issue, close and allow reopening', async (t) => {
+  const scenarios = [
+    {
+      name: 'unplug during mode switch',
+      initialMode: 'adsb',
+      change: (controller) => controller.setMode('fm'),
+      transfer: [
+        'out',
+        6,
+        new DOMException('The device was disconnected.', 'NotFoundError'),
+      ],
+      message: 'HackRF One disconnected',
+    },
+    {
+      name: 'bad configuration response during mode switch',
+      initialMode: 'adsb',
+      change: (controller) => controller.setMode('fm'),
+      transfer: ['out', 6, { status: 'stall', bytesWritten: 0 }],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'failed FM retune',
+      initialMode: 'fm',
+      change: (controller) => controller.tuneFm(101_100_000),
+      transfer: ['out', 16, { status: 'stall', bytesWritten: 0 }],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'failed gain change',
+      initialMode: 'adsb',
+      change: (controller) => controller.setHackrfGain('lna', '24'),
+      transfer: [
+        'in',
+        19,
+        { status: 'ok', data: new DataView(Uint8Array.of(0).buffer) },
+      ],
+      message: 'HackRF One gain change failed',
+    },
+  ];
+  for (const { name, initialMode, change, transfer, message } of scenarios) {
+    await t.test(name, async (t) => {
+      const { controller, device, fail, reads, closes } =
+        hackrfFailureSession(t);
+      assert.equal(await within(controller.connect(initialMode)), true);
+      await pause(12);
+      assert.ok(reads() > 0);
+      fail(...transfer);
+      assert.equal(await within(change(controller)), false);
+      const state = controller.getState();
+      assert.equal(state.status, 'error');
+      assert.equal(state.errorText, message);
+      assert.equal(state.connected, false);
+      assert.equal(state.hackrfGain.lna, 16);
+      assert.equal(device.opened, false);
+      assert.equal(closes(), 1);
+      const readsAtClose = reads();
+      await pause(10);
+      assert.equal(
+        reads(),
+        readsAtClose,
+        'no USB reads after the failure closed the session',
+      );
+      assert.equal(await within(controller.connect(initialMode)), true);
+    });
+  }
+});
+
+test('an invalid HackRF IQ transfer shows a localized message and logs the USB detail', async (t) => {
+  const { controller, fail, closes } = hackrfFailureSession(t);
+  const locale = getLocale();
+  t.after(() => setLocale(locale));
+  setLocale('fr');
+  const warnings = t.mock.method(console, 'warn', () => {});
+  const stopped = new Promise((resolve) => {
+    controller.subscribe((state) => {
+      if (state.status === 'error' && closes() === 1) resolve(state);
+    });
+  });
+  fail('read', 1, { status: 'stall' });
+  assert.equal(await within(controller.connect('adsb')), true);
+  const state = await within(stopped);
+  assert.equal(state.errorText, 'HackRF One connection failed');
+  assert.equal(state.message, translate('HackRF One connection failed'));
+  assert.notEqual(state.message, state.errorText);
+  assert.ok(
+    warnings.mock.calls.some(
+      ({ arguments: args }) =>
+        args[1]?.message === 'HackRF One IQ transfer failed',
+    ),
+  );
+  assert.equal(await within(controller.connect('adsb')), true);
 });
