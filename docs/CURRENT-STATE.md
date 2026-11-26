@@ -4318,8 +4318,18 @@ loading keeps the result hidden; destruction aborts the fetch and rejects late
 parse/add results. Destruction and failed setup remove owned context records,
 so replacing a layer cannot retain stale entities or listeners.
 
-Datacenters and dams retain their full datasets while limiting active marker
-stems per layer: 80 at camera heights of 3,000 km or above, 200 from 200 km,
+Datacenters draw no stems. Far out, sites are grouped into cyan count markers
+with a server-rack glyph, as CCTV groups its cameras: ground cells about 44 px
+across on screen, merged so no two markers overlap. A site left alone draws one
+ground-anchored marker with its footprint and card, never a "1" count. Clicking
+a count flies to frame its sites (approaching long groups in halves); close in,
+below 60 m cells, every site is its own marker. Grouping reruns when the camera
+settles or has moved about 2% of its height, never per frame, and datacenters
+neither sample ground heights nor keep a stem budget. Picking a marker or
+footprint selects the same card and point-and-ask context as before.
+
+Dams retain their full datasets while limiting active marker
+stems: 80 at camera heights of 3,000 km or above, 200 from 200 km,
 and 420 below 200 km. Selection favors existing label priority and nearby
 features, retains stable choices across small camera movements, and refreshes
 during continuous motion. Disable/re-enable resets selection cleanly.

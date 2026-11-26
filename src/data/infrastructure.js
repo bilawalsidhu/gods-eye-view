@@ -21,6 +21,8 @@ export function createInfrastructureLayers(services) {
       labels: true,
       labelMax: 700,
       labelGridPx: 138,
+      // Count markers far out, one ground marker per site close in.
+      markers: 'clusters',
     },
     services,
   );

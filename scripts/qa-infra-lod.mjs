@@ -2,14 +2,16 @@
 /**
  * qa-infra-lod — browser checks for the local-infrastructure LOD declutter.
  *
- * Datacenters and dams use a bounded active-stem set. Cables are loaded for
- * a representative combined view but use their own unchanged renderer.
+ * Dams use a bounded active-stem set; datacenters draw count markers
+ * instead (getClusterDiagnostics()). Cables are loaded for a representative
+ * combined view but use their own unchanged renderer.
  *
  * Two jobs:
  *  1. GATE — with datacenters + dams enabled:
- *       a. at a full-earth camera, each layer's getLodDiagnostics() reports
+ *       a. at a full-earth camera, dams' getLodDiagnostics() reports
  *          computed===true, active<=budgetLimit, budgetLimit===INFRA_LOD_ACTIVE_MIN,
  *          and active<total (the declutter is actually engaged);
+ *          and datacenters have grouped into count markers;
  *       b. flying to a city lifts budgetLimit to INFRA_LOD_ACTIVE_MAX and the
  *          active count grows (or pins to the in-view count);
  *       c. the selection does not churn between camera moves.
@@ -47,6 +49,8 @@ const CONTROL = argv.includes('--control');
 const HEADFUL = argv.includes('--headful');
 
 const INFRA_LAYER_IDS = ['local-datacenters', 'local-dams'];
+// Layers drawn with stems and a stem budget; datacenters cluster instead.
+const STEM_LAYER_IDS = ['local-dams'];
 const CABLE_LAYER_ID = 'telegeography-submarine-cables';
 
 const results = [];
@@ -159,11 +163,20 @@ try {
       out[id] = gev.dataManager.layers.get(id)?.module?.getLodDiagnostics?.() || null;
     }
     return out;
-  }, INFRA_LAYER_IDS).then((lod) => { report(label, lod); return lod; });
+  }, STEM_LAYER_IDS).then((lod) => { report(label, lod); return lod; });
+  const readClusters = () => page.evaluate(() => {
+    const module = window.__godsEyeView.dataManager.layers.get('local-datacenters')?.module;
+    const d = module?.getClusterDiagnostics?.();
+    return d ? { sites: d.sites, lone: d.lone, counts: d.counts, computed: d.computed } : null;
+  });
 
   if (!CONTROL) {
+    const clusters = await readClusters();
+    report('getClusterDiagnostics @ full-earth', clusters);
+    check('local-datacenters: grouped into count markers at full earth',
+      !!clusters && clusters.computed && clusters.counts > 0, clusters);
     const globalLod = await readLod('getLodDiagnostics @ full-earth');
-    for (const id of INFRA_LAYER_IDS) {
+    for (const id of STEM_LAYER_IDS) {
       const d = globalLod[id];
       check(`${id}: LOD selection has run`, !!d && d.computed === true, d);
       check(`${id}: active stems within the band budget`, !!d && d.active <= d.budgetLimit, d);
@@ -202,7 +215,7 @@ try {
     });
     await new Promise((r) => setTimeout(r, 3_000));
     const regionalLod = await readLod('getLodDiagnostics @ city');
-    for (const id of INFRA_LAYER_IDS) {
+    for (const id of STEM_LAYER_IDS) {
       const g = globalLod[id];
       const r = regionalLod[id];
       check(`${id}: city band lifts the budget to INFRA_LOD_ACTIVE_MAX`,

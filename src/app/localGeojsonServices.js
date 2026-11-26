@@ -9,9 +9,11 @@ import {
 } from '../data/contextStore.js';
 import {
   clearOverlaySource,
+  registerWorldOverlayPaintLane,
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
+import { keyholeLabelAlphaFromGeometry } from '../celestialRing.js';
 /** Existing standalone application operations, shared by its local layers. */
 export const localGeoJsonServices = Object.freeze({
   overlayHost: Object.freeze({
@@ -27,4 +29,7 @@ export const localGeoJsonServices = Object.freeze({
   governorRequestRender,
   showOsmCredit,
   hideOsmCredit,
+  // Count markers of a clustered layer paint on the world overlay.
+  registerPaintLane: registerWorldOverlayPaintLane,
+  keyholeAlpha: keyholeLabelAlphaFromGeometry,
 });

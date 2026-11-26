@@ -274,8 +274,12 @@ test('consumer build includes only infrastructure code and resolves assets under
   // renderer bound draws once the caller has loaded
   // `./render/cesium/unbound`.
   assert.deepEqual(sources.map((id) => id.split('/').at(-1)).sort(), [
+    'cameraFraming.js',
     'color.js',
     'contextGeometry.js',
+    'countCellFraming.js',
+    'countCells.js',
+    'countMarkers.js',
     'dispatcher.js',
     'ellipsoid.js',
     'frustum.js',
@@ -287,6 +291,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'infrastructureData.js',
     'infrastructureOverlayEntry.js',
     'inputOwnership.js',
+    'localClusters.js',
     'localGeojsonCore.js',
     'localGeojsonLod.js',
     'pickRegistry.js',
@@ -297,6 +302,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'sphere.js',
     'styleStages.js',
     'vector.js',
+    'worldOverlayTokens.js',
   ]);
   assert.deepEqual(entry.imports, [], 'it reaches no Cesium of its own');
   for (const name of ['datacenters', 'dams']) {
