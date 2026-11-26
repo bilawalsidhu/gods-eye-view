@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createMilitaryFlightLayer } from './index.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
+import { fakeInput } from '../../input/testDoubles.mjs';
+import * as picking from '../../data/pickRegistry.js';
 
 function services() {
   const names = [
@@ -87,10 +89,10 @@ test('military state owns separate contact maps, motion scratch and ground sampl
   for (const key of [
     'records',
     'feed',
-    '_billboards',
+    '_displayCourse',
     '_positionHistory',
     '_groundSnap',
-    '_scratchCarto',
+    '_scratchNearbyPos',
     '_models',
     'lifetime',
   ]) {
@@ -141,7 +143,7 @@ test('a normalized source can retain its stale reason without changing standalon
 test('a newly seen military contact appears at its delayed position, not ahead of it', async () => {
   // The military fleet renders RENDER_DELAY_SEC behind real time, so a fresh
   // contact's first displayed position is its fix projected back to that
-  // delayed time. Creating the billboard at the raw fix drew it ahead until
+  // delayed time. Creating the icon at the raw fix drew it ahead until
   // the next fleet tick jumped it back.
   const Cesium = await import('cesium');
   const { RENDER_DELAY_SEC } = await import('./policy.js');
@@ -177,31 +179,22 @@ test('a newly seen military contact appears at its delayed position, not ahead o
       },
     },
   });
-  const added = [];
   layer.testing._setTrackedMilitaryRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection: {
-      show: false,
-      add(options) {
-        const billboard = { ...options };
-        added.push(billboard);
-        return billboard;
-      },
-      remove() {},
-    },
+    iconLayer: { show: false },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked: false,
   });
   await layer.update({ camera: { positionCartographic: null }, scene: {} });
-  const billboard = added.find((entry) => entry.id === 'ae0001');
-  assert.ok(billboard, 'the new contact gets a billboard');
-  const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+  const icon = layer.testing._iconForTest('ae0001');
+  assert.ok(icon, 'the new contact gets an icon');
+  const shown = Cesium.Cartographic.fromCartesian(icon.position);
   const behindM = Cesium.Cartesian3.distance(
     Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 0),
     Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 0),
@@ -255,8 +248,8 @@ test('a vanished military contact fades while position-less rows keep theirs', a
     icao24: 'seed00',
     entity: null,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
-    billboard: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
-    billboardCollection: { show: true, add: (options) => ({ ...options }) },
+    icon: { show: false, position: Cesium.Cartesian3.fromDegrees(0, 0) },
+    iconLayer: { show: true, add: (options) => ({ ...options }) },
     viewer,
     tracked: false,
   });
@@ -288,4 +281,62 @@ test('voice context reads a track that rounds to north as 0°, not 360°', () =>
     tracking._contextSubjectMetadata('ae1234').properties.heading,
     '0°',
   );
+});
+
+test('a military layer without an icon set declines contact refreshes', () => {
+  // Before init and after destroy there are no icon rows: a TR-3B refresh
+  // reports that the layer owns no such contact instead of throwing.
+  const layer = createMilitaryFlightLayer({
+    source: { label: 'Fixture aircraft', getSnapshot() {} },
+    services: {
+      ...services(),
+      aircraftPresentation: { isTr3b: () => true, tr3bConvertedIds: () => [] },
+    },
+  });
+  assert.equal(layer.refreshTr3b('abc123'), false);
+  assert.equal(layer.trackById('abc123'), false);
+});
+
+// The card or label painted on top takes the click: an aircraft under another
+// layer's card is not even picked, so it is neither tracked nor released.
+test("another layer's card over an aircraft keeps the click", (t) => {
+  const previousDocument = globalThis.document;
+  globalThis.document = Object.assign(new EventTarget(), {
+    body: { classList: { contains: () => false } },
+  });
+  let picks = 0;
+  const viewer = {
+    scene: {
+      canvas: new EventTarget(),
+      pick: () => {
+        picks++;
+        return null;
+      },
+    },
+  };
+  const input = fakeInput(viewer);
+  const flightState = createFlightState({ services: services() });
+  flightState._trackedEntityChangedRemove = () => {};
+  const tracking = createTracking({
+    flightState,
+    services: { ...services(), picking },
+    parts: {},
+    layer: {},
+  });
+  tracking._installClickHandler(viewer);
+  let top = { sourceId: 'earthquake-card', entryId: 'earthquake-card:ak1' };
+  picking.setClickCardHitTest(() => top);
+  t.after(() => {
+    picking.setClickCardHitTest(null);
+    flightState._clickSubscription?.();
+    input.destroy();
+    flightState.lifetime.abort();
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  });
+  input.tap({ x: 10, y: 10 });
+  assert.equal(picks, 0, 'covered: the scene under the card is not picked');
+  top = null;
+  input.tap({ x: 10, y: 10 });
+  assert.ok(picks > 0, 'open map: the click reaches the scene');
 });

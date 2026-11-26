@@ -17,16 +17,17 @@ import {
   tn,
   translateKnown,
 } from '../i18n/index.js';
-import { createImagerySplit } from './imagerySplit.js';
+import { createImagerySplit, globeSplitTarget } from './imagerySplit.js';
 import RecentImageryReadout from './recentImagery/RecentImageryReadout.vue';
 import {
   PRODUCTS,
   hhmm,
+  nonCrossingBoxes,
   wvsSnapshotUrl,
 } from '../layers/recentImagery/model.js';
 import { displayDay, displayMetres } from '../layers/recentImagery/display.js';
 import { formatQuantity } from './unitLabels.js';
-import { pointerOwnerName } from '../data/pointerOwnerNames.js';
+import { canvasOf, findFrame, findGlobe } from '../render/rendererOf.js';
 
 const PANEL_ID = 'recent-imagery-panel';
 const OVERVIEW_MIN_BOX_KM = 25;
@@ -49,7 +50,6 @@ const LAYER_NOTICES = new Set([
 // imageryBoxTool.js); fixed refusals there are msg() text for translateKnown.
 const TOO_LARGE = /^(Box|View) is ([\d,]+) km wide · limit ([\d,]+) km$/;
 const POLAR = /^Imagery stops at ±([\d.]+)° latitude$/;
-const POINTER_BUSY = /^(.+) is using the pointer — close it first$/;
 
 /**
  * The notice line in the UI language: notices and box refusals arrive in
@@ -67,11 +67,6 @@ export function localizeNotice(text) {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }),
-    });
-  const busy = POINTER_BUSY.exec(text);
-  if (busy)
-    return t('{owner} is using the pointer — close it first', {
-      owner: translateKnown(pointerOwnerName(busy[1])),
     });
   const tooLarge = TOO_LARGE.exec(text);
   if (!tooLarge) return translateKnown(text);
@@ -141,6 +136,20 @@ function coverageText(coverage) {
   return t('unknown');
 }
 
+/** A confirmed-empty side means partial coverage. An unanswered side leaves coverage unknown. */
+function shownCoverage(candidate, box) {
+  const { status, availableBoxes, emptyBoxes } = candidate.thumbnail ?? {};
+  const halves = nonCrossingBoxes(box).length;
+  if (emptyBoxes?.length && emptyBoxes.length < halves) return 'partial';
+  if (
+    status !== 'present' ||
+    !Array.isArray(availableBoxes) ||
+    availableBoxes.length >= halves
+  )
+    return candidate.coverage;
+  return 'unknown';
+}
+
 function cloudText(candidate) {
   if (candidate.thumbnail?.status === 'empty') return t('no imagery');
   if (!candidate.cloud) return t('cloud unknown');
@@ -206,7 +215,7 @@ export function createRecentImageryPanel({
   fetchImpl = globalThis.fetch?.bind(globalThis),
   createObjectUrl = (blob) => URL.createObjectURL(blob),
   revokeObjectUrl = (url) => URL.revokeObjectURL(url),
-  requestRender = () => viewer?.scene?.requestRender?.(),
+  requestRender = () => findFrame(viewer)?.requestRender('recent-imagery'),
 } = {}) {
   const document = container?.ownerDocument;
   if (!document?.createElement || !layer) return null;
@@ -522,6 +531,9 @@ export function createRecentImageryPanel({
 
   function exportsView() {
     const ab = snapshot.mode === 'ab';
+    const crossing = Boolean(
+      snapshot.box && snapshot.box.west > snapshot.box.east,
+    );
     return [
       {
         id: 'export',
@@ -531,10 +543,12 @@ export function createRecentImageryPanel({
           label: ab
             ? t('EXPORT {slot}', { slot: slotId.toUpperCase() })
             : t('EXPORT'),
-          title: ab
-            ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
-            : t('Download the image as a PNG'),
-          disabled: !exportTarget(slotId) || exporting.has(slotId),
+          title: crossing
+            ? t('Select one side of the dateline')
+            : ab
+              ? t('Download {slot} as a PNG', { slot: slotId.toUpperCase() })
+              : t('Download the image as a PNG'),
+          disabled: crossing || !exportTarget(slotId) || exporting.has(slotId),
           reserved: slotId === 'b' ? !ab : undefined,
           onClick: () => void exportImage(slotId),
         })),
@@ -572,7 +586,9 @@ export function createRecentImageryPanel({
           }),
         );
       times.push(
-        t('Coverage {coverage}', { coverage: coverageText(focus.coverage) }),
+        t('Coverage {coverage}', {
+          coverage: coverageText(shownCoverage(focus, snapshot.box)),
+        }),
       );
       lines.push({ id: 'acquired', text: times.join(' · ') });
       (focus.granules || []).forEach((granule, index) => {
@@ -702,7 +718,7 @@ export function createRecentImageryPanel({
     }
     if (!live || split || destroyed) return;
     split = createSplit({
-      scene: viewer?.scene,
+      scene: globeSplitTarget(findGlobe(viewer)),
       initialValue: snapshot.split,
       id: 'recent-imagery-split-line',
       handleClass: 'recent-imagery-split-handle',
@@ -723,7 +739,7 @@ export function createRecentImageryPanel({
           right: rightPercent,
         }),
       getViewportWidth: () =>
-        Number(viewer?.scene?.canvas?.clientWidth) ||
+        Number(canvasOf(viewer)?.clientWidth) ||
         Number(document.documentElement?.clientWidth) ||
         0,
       onChange: (value) => layer.setSplit(value),

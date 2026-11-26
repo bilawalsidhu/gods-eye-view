@@ -257,6 +257,13 @@ test('a frame source forwards exactly the documented requests to its feed', asyn
   assert.equal(imagesOnly.getTile, undefined, 'tiles keep the tile route');
   const tilesOnly = weatherFrameSource({ getFrameTile: feed.getFrameTile });
   assert.equal(tilesOnly.getImage, undefined, 'images keep the image route');
+  assert.equal(tilesOnly.maximumLevel, undefined);
+  const leveled = weatherFrameSource({
+    getFrameTile: feed.getFrameTile,
+    frameMaximumLevel: (product) => (product === 'clouds' ? 6 : null),
+  });
+  assert.equal(leveled.maximumLevel('clouds'), 6);
+  assert.equal(leveled.maximumLevel('radar'), null);
 });
 
 test('supplied pixels report their drawn size, draw at the origin and close once', (t) => {

@@ -49,6 +49,8 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | aircraft / flight / military flights                         | aéronef (avion in short copy) / vol / vols militaires                   |
 | vessel, ship / tanker (AIS type)                             | navire / navire-citerne                                                 |
 | satellite / shell (Starlink) / DENSE                         | satellite / couche de la constellation / DENSE                          |
+| FOCUS (the held object; the button)                          | CENTRÉ / CENTRER                                                        |
+| CONFIRMED (sightings chip; a landing)                        | CONFIRMÉES / CONFIRMÉE                                                  |
 | launch / launch site / space mission                         | lancement / site de lancement / mission spatiale                        |
 | ascent / replay / payload / stage / downrange                | ascension / rejeu / charge utile / étage / distance au sol (DIST. SOL)  |
 | contact / tracking / track (HUD)                             | contact / suivi / piste                                                 |
@@ -61,7 +63,6 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | contained / containment (wildfire)                           | circonscrit / part circonscrite (not « maîtrisé », which is controlled) |
 | advisory (NHC/CPHC cyclone)                                  | bulletin                                                                |
 | forecast / lead hours / valid / issued                       | prévision / échéances / valide / émise                                  |
-| AQHI (Canada)                                                | CQAS (cote air santé)                                                   |
 | radio station / tune                                         | station / régler                                                        |
 | bikeshare / transit                                          | vélos partagés / transports en commun                                   |
 | route (directions) / turn (maneuver)                         | itinéraire / manœuvre                                                   |
@@ -80,7 +81,6 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | Recent Imagery / box                                         | imagerie récente / zone                                                 |
 | Daily overview / overview (Recent Imagery VIIRS product)     | vue quotidienne (one name for the product, not « vue d'ensemble »)      |
 | pin (Draw tool) / pin (Recent Imagery)                       | épingle / épingler                                                      |
-| Cyber (HUD layout, effect)                                   | Cyber                                                                   |
 | heading / course (ground track) / altitude / ground speed    | cap / route / altitude / vitesse sol                                    |
 | HDG / BRG / CRS / FOV / DEST / SPD / ALT                     | unchanged                                                               |
 | RANGE / PITCH / HGT (CCTV calibration chips)                 | PORTÉE / INCL. / HAUT.                                                  |

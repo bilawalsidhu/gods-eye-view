@@ -393,3 +393,18 @@ test('key guidance can offer another source that works with a key already set', 
   );
   assert.equal(keySetupWithAlternatives('Needs X', []), 'Needs X');
 });
+
+test('OpenAQ uses the existing free server-side credential registry', () => {
+  const entry = KEY_SETUP_KEYS.find(key => key.id === 'openaq');
+  assert.deepEqual(entry.envVars, ['OPENAQ_API_KEY']);
+  assert.equal(entry.tier, 'free');
+  assert.notEqual(entry.clientExposed, true);
+  assert.equal(entry.getUrl, 'https://explore.openaq.org/register');
+});
+
+test('the air-quality key sits among the free optional keys, after NASA FIRMS', () => {
+  const ids = KEY_SETUP_KEYS.map((key) => key.id);
+  // Most magic per minute first: the 3D planet leads.
+  assert.equal(ids[0], 'google-maps');
+  assert.ok(ids.indexOf('openaq') > ids.indexOf('firms'));
+});

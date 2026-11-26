@@ -42,7 +42,46 @@ export function createQueries({
     high: t('High confidence detections only'),
   });
 
+  function contextRecord(fire, withDetectionKey = true) {
+    const record = components.model.mapAnalystRecord(fire);
+    if (withDetectionKey) record.key = fireDetectionKey(fire);
+    return record;
+  }
+
   const methods = {
+    // Nearby needs every shown position, even when many stronger fires lie
+    // elsewhere. Only its retained rows and text matches need analyst fields.
+    getNearbyContextPoints() {
+      return {
+        points: layerState._enabled ? layerState._firesByFrp.values() : [],
+        recordForPoint: contextRecord,
+      };
+    },
+
+    // FIRE- indices can change between snapshots. A Context detection key
+    // identifies the observed fire even when another fire shares its position.
+    getContextRecord(key) {
+      const sprite = key.startsWith('firms-');
+      if (!sprite && !key.startsWith('firms:')) return undefined;
+      if (!layerState._enabled) return null;
+      if (sprite) {
+        const fire = layerState._pickIndexById.get(key);
+        return fire ? contextRecord(fire) : null;
+      }
+      const [, lat, lon] = key.split(':', 3);
+      const latitude = Number(lat);
+      const longitude = Number(lon);
+      for (const fire of layerState._firesByFrp) {
+        if (
+          Math.abs(fire.lat - latitude) > 0.0001 ||
+          Math.abs(fire.lon - longitude) > 0.0001
+        )
+          continue;
+        if (fireDetectionKey(fire) === key) return contextRecord(fire);
+      }
+      return null;
+    },
+
     /** Return the selected detection as a plain record for application consumers. */
     getSelectedInfo() {
       const fire = layerState._selectedFire;
@@ -278,7 +317,8 @@ export function createQueries({
      * layer's greedy declutter as the SELECTOR and the shared overlay remains
      * the renderer. Walks the FRP-sorted index so the strongest fires come first.
      * @param {{maxCount?: number}} [options]
-     * @returns {Array<{position: Cesium.Cartesian3, id: string, type: string}>}
+     * @returns {Array<{position: {x: number, y: number, z: number}, id: string, type: string}>}
+     *   Positions are ECEF.
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || !layerState._firesByFrp.length) return [];
@@ -333,9 +373,9 @@ export function createQueries({
       components.rendering.applyHandoffFade();
     },
 
-    /** Test seam: entities drawn by the layer's data source. */
+    /** Test seam: shapes drawn in the layer's own set (none: the heat is imagery). */
     _entityCountForTest() {
-      return layerState._dataSource?.entities?.values?.length ?? 0;
+      return layerState._cells?.size() ?? 0;
     },
 
     /** Test seam that binds the production click path and indexes. */
@@ -350,13 +390,13 @@ export function createQueries({
       layerState._totalCount = fires.length;
       layerState._pickIndexById.clear();
       layerState._labelLodDistance = 1e7;
+      components.rendering.ensureDetectionCollections();
       layerState._labelCandidates = fires.map((fire) => {
         layerState._pickIndexById.set(`firms-${fire.index}`, fire);
         return { fire, position: components.model.firePosition(fire) };
       });
       components.cards.rebuildAmbientLabels();
       components.selection.installClickHandler();
-      return layerState._clickHandler;
     },
   };
 

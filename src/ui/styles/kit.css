@@ -40,6 +40,18 @@
   user-select: none;
 }
 
+/* The icon is a font ligature; `ui-icon` is also jQuery UI's sprite-icon class, and a stylesheet
+   that brings jQuery UI's rule into the page (some browser extensions inject it everywhere) pushes
+   the glyph out of its box (`text-indent: -99999px`, `overflow: hidden`, a 16 px box). The doubled
+   class outranks that rule and sets only what the kit never sets elsewhere. */
+.ui-icon.ui-icon {
+  text-indent: 0;
+  overflow: visible;
+  background-image: none;
+  width: auto;
+  height: auto;
+}
+
 .ui-tooltip {
   position: relative;
   display: inline-flex;

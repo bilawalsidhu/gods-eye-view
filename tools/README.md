@@ -1,10 +1,12 @@
 # Tools
 
-CLI scripts for fetching, rendering, and reprojecting geospatial imagery. All tools read the Google Maps API key from `.env` automatically.
+CLI scripts for camera interchange and for fetching, rendering, and reprojecting
+geospatial imagery. The imagery tools read the Google Maps API key from `.env`
+automatically.
 
-Output files go to `output/` by default (gitignored).
+Imagery tool output files go to `output/` by default (gitignored).
 
-When invoking these tools from a separate project, set `GEV_PROJECT_ROOT` to its
+When invoking the imagery tools from a separate project, set `GEV_PROJECT_ROOT` to its
 absolute directory. Environment files, dependencies and relative output paths
 resolve there; bundled rendering HTML stays with the tool. The same setting is
 supported by `dev-fresh.sh`, `dev-secure.sh`, `opensky-import-client.sh` and the
@@ -186,3 +188,14 @@ node tools/streetview-headings.mjs --lat 30.266476 --lon -97.73719
 # 5. Render a 3D view of the same location from above
 node tools/cesium-render.mjs --lookat-lat 30.266476 --lookat-lon -97.73719 --pitch -90 --height 50 --fov 90 --width 2560 --height-px 1440
 ```
+
+---
+
+## export-blender-camera.mjs
+
+Exports the cameras of a saved Director scene as a plain-text USD stage
+(`.usda`) that Blender opens with File > Import > Universal Scene Description.
+It needs no key, environment file, browser, network access or Blender add-on,
+and exports no imagery or geometry. `--output` is required; paths are relative
+to the current directory and `GEV_PROJECT_ROOT` is not read. Usage, format and
+lens units: [Blender cameras](../docs/BLENDER-CAMERAS.md).

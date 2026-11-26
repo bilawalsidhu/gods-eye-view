@@ -3,6 +3,7 @@ import {
   hasStructuredViewIdentity,
 } from './realtimeProtocol.js';
 import { cameraPoseKey } from './pointerContext.js';
+import { canvasOf, findFrame, rendererOf } from '../render/rendererOf.js';
 
 /** The live viewer's camera pose identity (Cesium-free read). */
 function readViewerCameraKey() {
@@ -19,32 +20,28 @@ const VIEWPORT_MAX_ENCODED_BYTES = 200 * 1024;
 
 export async function captureViewportImage() {
   const viewer = window.__godsEyeView?.viewer;
-  const source =
-    viewer?.scene?.canvas ||
-    document.querySelector('#cesiumContainer .cesium-widget canvas');
+  const source = canvasOf(viewer);
   if (!source || !source.width || !source.height) return null;
-  // No fresh frame (hidden, or the bounded render wait timed out) → no
-  // capture. The caller labels this image "Current"; a stale preserved
-  // frame would feed the model old entities as current context. (perf
-  // wave 2 fix)
-  const fresh = await renderFreshCesiumFrame(viewer);
-  if (!fresh) return null;
-
   // Clamp BOTH dimensions by a total-pixel budget so tall portrait windows are
   // downscaled too (the old width-only clamp let them through — M13).
-  const { width, height } = computeDownscale(
+  const { width } = computeDownscale(
     source.width,
     source.height,
     VIEWPORT_MAX_PIXELS,
   );
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  // No fresh frame (hidden, or the bounded render wait timed out) → no
+  // capture. The caller labels this image "Current"; a stale preserved
+  // frame would feed the model old entities as current context. (perf
+  // wave 2 fix)
+  const pixels = await readFreshFrame(viewer, renderFreshCesiumFrame, {
+    scale: width / (source.clientWidth || source.width),
+  });
+  if (!pixels) return null;
+  const ctx = canvasWith(pixels);
   if (!ctx) return null;
+  const canvas = ctx.canvas;
   try {
-    ctx.drawImage(source, 0, 0, width, height);
-    if (isNearlyBlackFrame(ctx, width, height)) {
+    if (isNearlyBlackFrame(ctx, canvas.width, canvas.height)) {
       console.warn('[GEV Voice] Skipped black Cesium viewport capture');
       return null;
     }
@@ -165,38 +162,39 @@ export function pointerCropRect({
  * @returns {Promise<{dataUrl: string, rect: object}|null>} JPEG data URL and
  *   the crop's normalized bounds in the full canvas, or null.
  */
-async function capturePointerCrop(screenPx) {
+export async function capturePointerCrop(screenPx) {
   const viewer = window.__godsEyeView?.viewer;
-  const source = viewer?.scene?.canvas;
+  const source = canvasOf(viewer);
   if (!source?.width || !source?.height || !screenPx) return null;
-  const fresh = await renderFreshPointerFrame(viewer);
-  if (!fresh) return null;
+  const cssWidth = source.clientWidth || source.width;
+  const cssHeight = source.clientHeight || source.height;
   const rect = pointerCropRect({
     x: screenPx.x,
     y: screenPx.y,
-    cssWidth: source.clientWidth || source.width,
-    cssHeight: source.clientHeight || source.height,
+    cssWidth,
+    cssHeight,
     pixelWidth: source.width,
     pixelHeight: source.height,
   });
   if (!rect) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = rect.output;
-  canvas.height = rect.output;
-  const ctx = canvas.getContext('2d');
+  // The crop in CSS pixels, as the renderer reads it.
+  const toCssX = cssWidth / source.width;
+  const toCssY = cssHeight / source.height;
+  const crop = {
+    x: rect.sx * toCssX,
+    y: rect.sy * toCssY,
+    width: rect.sw * toCssX,
+    height: rect.sh * toCssY,
+  };
+  const pixels = await readFreshFrame(viewer, renderFreshPointerFrame, {
+    crop,
+    scale: rect.output / crop.width,
+  });
+  if (!pixels) return null;
+  const ctx = squareOf(canvasWith(pixels), rect.output);
   if (!ctx) return null;
+  const canvas = ctx.canvas;
   try {
-    ctx.drawImage(
-      source,
-      rect.sx,
-      rect.sy,
-      rect.sw,
-      rect.sh,
-      0,
-      0,
-      rect.output,
-      rect.output,
-    );
     if (isNearlyBlackFrame(ctx, rect.output, rect.output)) return null;
     ctx.strokeStyle = 'rgba(0, 230, 255, 0.95)';
     ctx.lineWidth = 2;
@@ -220,13 +218,69 @@ async function capturePointerCrop(screenPx) {
 }
 
 /**
+ * The renderer's pixels of a fresh frame (`readPixels` with `options`), read
+ * in the frame `render` waits for, so they are the frame just drawn on any
+ * renderer; null with no fresh frame, or no renderer to read.
+ * @param {object} viewer
+ * @param {(viewer: object, onFrame: () => void) => Promise<boolean>} render
+ * @param {{crop?: object, scale?: number}} options
+ * @returns {Promise<ImageData|null>}
+ */
+async function readFreshFrame(viewer, render, options) {
+  const renderer = rendererOf(viewer);
+  if (typeof renderer?.readPixels !== 'function') return null;
+  let pixels = null;
+  const fresh = await render(viewer, () => {
+    pixels = renderer.readPixels(options);
+  });
+  return fresh ? pixels : null;
+}
+
+/** A 2D canvas holding `pixels`, or null where none can be made. */
+function canvasWith(pixels) {
+  const canvas = document.createElement('canvas');
+  canvas.width = pixels.width;
+  canvas.height = pixels.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  try {
+    ctx.putImageData(
+      typeof ImageData === 'function' && !(pixels instanceof ImageData)
+        ? new ImageData(pixels.data, pixels.width, pixels.height)
+        : pixels,
+      0,
+      0,
+    );
+  } catch {
+    return null;
+  }
+  return ctx;
+}
+
+/**
+ * `ctx`'s image as a `side` px square: the crop is read at one scale, so a
+ * canvas stretched unevenly reads it a pixel or so off square.
+ */
+function squareOf(ctx, side) {
+  if (!ctx || (ctx.canvas.width === side && ctx.canvas.height === side))
+    return ctx;
+  const canvas = document.createElement('canvas');
+  canvas.width = side;
+  canvas.height = side;
+  const square = canvas.getContext('2d');
+  if (!square) return null;
+  square.drawImage(ctx.canvas, 0, 0, side, side);
+  return square;
+}
+
+/**
  * Pointer crops get one bounded recovery request for a slow render loop.
  * Full-viewport captures intentionally keep their single 400 ms attempt.
  */
-export async function renderFreshPointerFrame(viewer) {
-  if (await renderFreshCesiumFrame(viewer)) return true;
+export async function renderFreshPointerFrame(viewer, onFrame) {
+  if (await renderFreshCesiumFrame(viewer, onFrame)) return true;
   if (typeof document !== 'undefined' && document.hidden) return false;
-  return renderFreshCesiumFrame(viewer);
+  return renderFreshCesiumFrame(viewer, onFrame);
 }
 
 // Scale (w, h) down so w*h <= maxPixels while preserving aspect ratio. Never
@@ -259,15 +313,18 @@ export function estimateDataUrlBytes(dataUrl) {
 }
 
 /**
- * Ensure the canvas holds a CURRENT frame before capture.
+ * Ensure the canvas holds a CURRENT frame before capture. `onFrame` runs
+ * as that frame is drawn (its `postRender`), where a read sees it.
+ * @param {object} viewer
+ * @param {() => void} [onFrame]
  * @returns {Promise<boolean>} true only when a fresh frame was presented —
  *   false while hidden (render loop suspended; a capture would be stale) or
  *   when the bounded wait timed out. Callers must not label a non-fresh
  *   canvas as current. (perf wave 2)
  */
-export async function renderFreshCesiumFrame(viewer) {
-  const scene = viewer?.scene;
-  if (!scene) return false;
+export async function renderFreshCesiumFrame(viewer, onFrame) {
+  const frame = findFrame(viewer);
+  if (!frame) return false;
   // While the document is hidden the render loop is suspended — don't
   // secretly restart rendering for an optional screenshot, and don't pass
   // the stale preserved frame off as current.
@@ -277,8 +334,14 @@ export async function renderFreshCesiumFrame(viewer) {
     // necessarily draw — request a frame and await its postRender (bounded),
     // which also covers the just-became-visible race.
     const rendered = new Promise((resolve) => {
-      const remove = scene.postRender.addEventListener(() => {
+      const remove = frame.on('postRender', () => {
         remove();
+        try {
+          onFrame?.();
+        } catch {
+          resolve(false);
+          return;
+        }
         resolve(true);
       });
       setTimeout(() => {
@@ -286,7 +349,7 @@ export async function renderFreshCesiumFrame(viewer) {
         resolve(false);
       }, 400);
     });
-    scene.requestRender?.();
+    frame.requestRender('voice-capture');
     const fresh = await rendered;
     // A tab switch during the bounded wait invalidates freshness.
     if (typeof document !== 'undefined' && document.hidden) return false;

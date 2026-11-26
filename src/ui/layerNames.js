@@ -166,3 +166,10 @@ export function sourceStatusLabel(source, status) {
   if (status === 'stale') return `${name} · ${t('STALE')}`;
   return name;
 }
+
+export function layerSourceText(row) {
+  const stats = row?.stats || {};
+  return stats.sourceVerbatim === true && stats.source
+    ? stats.source
+    : sourceLabel(stats.source || row?.source);
+}

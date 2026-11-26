@@ -4,9 +4,14 @@ import {
   celestrakSatcatUrl,
   celestrakTleUrl,
 } from '../../../src/data/spaceProviderRequests.js';
+import { parseTleText, tleCatalogNumber } from '../../../src/sources/tle.js';
 import { providerCooldownMs } from './cooldown.js';
 import { admitSameSiteKeyless } from '../common/same-site.js';
-import { readResponseTextCapped } from '../common/http.js';
+import {
+  coalesceProxyRequest,
+  writeJsonAtomic,
+  readResponseTextCapped,
+} from '../common/http.js';
 
 /**
  * Vite plugin: CelesTrak TLE proxy.
@@ -109,11 +114,20 @@ export function celestrakProxy() {
       return null;
     }
 
+    async function restoreFromDisk(group) {
+      const saved = await readDisk(group);
+      // A feed refresh can finish while this disk read is pending.
+      const current = mem.get(group);
+      if (current) return current;
+      if (saved) mem.set(group, saved);
+      return saved;
+    }
+
     async function writeDisk(group, entry) {
       try {
         await fsp.mkdir(CACHE_DIR, { recursive: true });
-        await fsp.writeFile(diskPath(group), JSON.stringify(entry), 'utf8');
-      } catch (err) {
+        await writeJsonAtomic(diskPath(group), entry);
+      } catch {
         console.warn('[celestrak-proxy] cache write failed');
       }
     }
@@ -149,7 +163,7 @@ export function celestrakProxy() {
       return { at: Date.now(), body };
     }
 
-    return async (req, res) => {
+    const handler = async (req, res) => {
       const group = String(req.url || '')
         .replace(/^\//, '')
         .split('?')[0];
@@ -190,11 +204,7 @@ export function celestrakProxy() {
       };
       try {
         const now = Date.now();
-        let entry = mem.get(group);
-        if (!entry) {
-          entry = await readDisk(group);
-          if (entry) mem.set(group, entry);
-        }
+        const entry = mem.get(group) ?? (await restoreFromDisk(group));
         if (entry && now - entry.at < feed.ttlMs) {
           send(200, entry.body, 'HIT', entry);
           return;
@@ -242,15 +252,43 @@ export function celestrakProxy() {
         send(500, 'celestrak proxy error', 'ERROR');
       }
     };
+    return { route: feed.route, handler, mem, readDisk };
   }
 
-  const handlers = feeds.map((feed) => [feed.route, createFeedHandler(feed)]);
+  const handlers = feeds.map(createFeedHandler);
+  const [tle] = handlers;
+  const countRequests = new Map();
+  const readLayerCount = () =>
+    coalesceProxyRequest(countRequests, 'count', scanLayerCount).promise;
+
+  async function scanLayerCount() {
+    const saved = await Promise.all(
+      coreGroups.map((group) =>
+        tle.mem.has(group) ? null : tle.readDisk(group),
+      ),
+    );
+    const ids = new Set();
+    let at = Infinity;
+    for (const [index, group] of coreGroups.entries()) {
+      // Counts don't warm the route cache. Prefer any refresh that landed
+      // in memory while the count was reading the disk.
+      const entry = tle.mem.get(group) ?? saved[index];
+      if (!entry) continue;
+      const records = parseTleText(entry.body);
+      if (!records.length) continue;
+      at = Math.min(at, entry.at);
+      for (const { line1 } of records) ids.add(tleCatalogNumber(line1));
+    }
+    return ids.size ? { count: ids.size, at } : null;
+  }
+
   const installMiddleware = (server) => {
-    for (const [route, handler] of handlers)
+    for (const { route, handler } of handlers)
       server.middlewares.use(route, handler);
   };
   return {
     name: 'celestrak-proxy',
+    api: { readLayerCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

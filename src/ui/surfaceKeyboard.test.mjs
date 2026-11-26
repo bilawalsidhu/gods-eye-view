@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSurfaceKeyboard } from './surfaceKeyboard.js';
 
-function fixture() {
+function fixture({ claimOutsideFocus } = {}) {
   const listeners = new Set();
   const documentRef = {
     activeElement: null,
@@ -54,6 +54,7 @@ function fixture() {
     isActive: () => visible,
     onEscape: () => onEscape(),
     fallbackFocus: () => fallback,
+    claimOutsideFocus,
   });
   opener.focus();
   const event = (key, extra = {}) => ({
@@ -132,6 +133,23 @@ test('Tab enters from outside in either direction and wraps only at an edge', ()
     undefined,
     'wrapping permits native scroll into view',
   );
+});
+
+test('a surface that does not claim outside focus leaves Tab to the page', () => {
+  const f = fixture({ claimOutsideFocus: false });
+  f.controller.activate();
+  // From a control outside (the search bar), Tab follows the page.
+  f.opener.focus();
+  assert.equal(f.send('Tab').defaultPrevented, false);
+  assert.equal(f.send('Tab', { shiftKey: true }).defaultPrevented, false);
+  assert.equal(f.documentRef.activeElement, f.opener);
+  // Focus with nowhere to be still moves in, and wraps inside as before.
+  f.documentRef.activeElement = null;
+  assert.equal(f.send('Tab').defaultPrevented, true);
+  assert.equal(f.documentRef.activeElement, f.first);
+  f.last.focus();
+  f.send('Tab');
+  assert.equal(f.documentRef.activeElement, f.first);
 });
 
 test('Tab uses current controls and skips hidden/disabled nodes without changing native middle movement', () => {

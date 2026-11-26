@@ -1,5 +1,7 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
+import { findCamera, findFrame } from './render/rendererOf.js';
+import { isTouchOnly, watchTouchOnly } from './overlays/canvasPixelRatio.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -89,9 +91,17 @@ let _container = null;
 let _viewer = null;
 let _enabled = true;
 let _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+/**
+ * How strongly the whole mask shows, from the Display panel's Opacity slider:
+ * a fade over the painted mask, separate from the altitude terminus above,
+ * so the terminus band and its repaint gate stay as they are.
+ */
+let _maskOpacity = 1;
 let _resizeObserver = null;
 let _dprQuery = null;
 let _dprListener = null;
+/** Stops watching for a fine pointer attached or taken away (`watchTouchOnly`). */
+let _stopTouchOnlyWatch = null;
 /** Quantized terminus alpha currently PAINTED (drives the repaint gate). */
 let _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
 /** null = adaptive; a number pins the terminus (share-link `sce`). */
@@ -261,8 +271,29 @@ export function getScopeTerminusRepaintCount() {
   return _terminusRepaints;
 }
 
-/** Backing-store scale actually used by the last draw(). */
+/**
+ * Backing-store scale for a feathered mask: the display's ratio up to 2 (a
+ * desktop zoomed out under 1 keeps its own), and
+ * CSS pixels on a touch-only device, where the soft gradient loses nothing at
+ * 1x (a phone's 3x screen would otherwise hold it at 2x). A hard edge (a
+ * feather under a pixel) is drawn at `scopeMaskHardEdgeRatio` instead, so
+ * its circle does not stair-step.
+ */
 export function scopeMaskDevicePixelRatio(
+  ratio = typeof window === 'undefined'
+    ? 1
+    : isTouchOnly(window)
+      ? 1
+      : window.devicePixelRatio,
+) {
+  return Math.min(2, Number(ratio) || 1);
+}
+
+/**
+ * Backing-store scale for a hard-edged mask: the display's ratio up to 2 on
+ * every device, a touch-only one included.
+ */
+export function scopeMaskHardEdgeRatio(
   ratio = typeof window !== 'undefined' ? window.devicePixelRatio : 1,
 ) {
   return Math.min(2, Number(ratio) || 1);
@@ -372,7 +403,11 @@ function draw() {
   const width = _container.clientWidth;
   const height = _container.clientHeight;
   if (!(width > 0) || !(height > 0)) return;
-  const dpr = scopeMaskDevicePixelRatio();
+  const geo = scopeMaskGeometry(width, height, _featherRatio);
+  const dpr =
+    geo && geo.outerR - geo.innerR < 1
+      ? scopeMaskHardEdgeRatio()
+      : scopeMaskDevicePixelRatio();
   _canvas.width = Math.round(width * dpr);
   _canvas.height = Math.round(height * dpr);
   const ctx = _canvas.getContext('2d');
@@ -380,7 +415,6 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
   _painted = false; // resize+clear wiped the surface; ink goes on below
-  const geo = scopeMaskGeometry(width, height, _featherRatio);
   if (!geo) return;
   const { r, g, b } = SCOPE_OUTSIDE_COLOR;
   if (geo.outerR - geo.innerR < 1) {
@@ -433,10 +467,14 @@ export function installScopeMask(viewer) {
   _canvas = document.createElement('canvas');
   _canvas.id = 'scope-mask';
   _canvas.setAttribute('aria-hidden', 'true');
+  _canvas.style.opacity = String(_maskOpacity);
   _container.appendChild(_canvas);
   _resizeObserver = new ResizeObserver(() => draw());
   _resizeObserver.observe(_container);
   watchDevicePixelRatio();
+  // A trackpad attached to a tablet changes the backing ratio, not the size.
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = watchTouchOnly(() => draw(), globalThis.window);
   watchCameraHeight(viewer);
   // Seed from the live camera so the first paint is already correct for the
   // restored/initial altitude instead of flashing the globe-scale terminus.
@@ -446,7 +484,7 @@ export function installScopeMask(viewer) {
 
 /** @returns {number} Live camera height above the ellipsoid, or +Inf if unknown. */
 function currentCameraHeightM() {
-  const height = _viewer?.camera?.positionCartographic?.height;
+  const height = findCamera(_viewer)?.pose().height;
   return Number.isFinite(height) ? height : Number.POSITIVE_INFINITY;
 }
 
@@ -460,9 +498,9 @@ function currentCameraHeightM() {
  * @returns {void}
  */
 function watchCameraHeight(viewer) {
-  const preRender = viewer?.scene?.preRender;
-  if (preRender?.addEventListener) {
-    _cameraSampleRemover = preRender.addEventListener(() => {
+  const frame = findFrame(viewer);
+  if (frame) {
+    _cameraSampleRemover = frame.on('preRender', () => {
       // SCOPE OFF paints nothing, so it samples nothing: no height read, no
       // throttle bookkeeping, no quantize — the listener is a single compare.
       // setScopeMaskEnabled(true) re-syncs the alpha it skipped.
@@ -474,9 +512,9 @@ function watchCameraHeight(viewer) {
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
   }
-  const moveEnd = viewer?.camera?.moveEnd;
-  if (moveEnd?.addEventListener) {
-    _cameraMoveEndRemover = moveEnd.addEventListener(() => {
+  const camera = findCamera(viewer);
+  if (camera) {
+    _cameraMoveEndRemover = camera.on('moveEnd', () => {
       if (!_enabled) return;
       updateScopeTerminusForHeight(currentCameraHeightM());
     });
@@ -538,6 +576,23 @@ export function getScopeMaskFeather() {
 }
 
 /**
+ * @param {number} ratio - How strongly the mask shows, 0 (clear) to 1.
+ * @returns {void}
+ */
+export function setScopeMaskOpacity(ratio) {
+  _maskOpacity = Math.max(
+    0,
+    Math.min(1, Number.isFinite(Number(ratio)) ? Number(ratio) : 1),
+  );
+  if (_canvas) _canvas.style.opacity = String(_maskOpacity);
+}
+
+/** @returns {number} */
+export function getScopeMaskOpacity() {
+  return _maskOpacity;
+}
+
+/**
  * Tear the mask down (canvas + observer). Reinstall with installScopeMask.
  * @returns {void}
  */
@@ -547,6 +602,8 @@ export function destroyScopeMask() {
   _resizeObserver = null;
   teardownDevicePixelRatioWatch();
   teardownCameraHeightWatch();
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = null;
   _canvas?.remove();
   _canvas = null;
   _container = null;
@@ -561,12 +618,15 @@ export function _resetScopeMaskForTest() {
   _resizeObserver = null;
   teardownDevicePixelRatioWatch();
   teardownCameraHeightWatch();
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = null;
   _canvas?.remove();
   _canvas = null;
   _container = null;
   _viewer = null;
   _enabled = true;
   _featherRatio = SCOPE_FEATHER_RATIO_DEFAULT;
+  _maskOpacity = 1;
   _terminusAlpha = SCOPE_OUTSIDE_ALPHA;
   _terminusOverride = null;
   _terminusRepaints = 0;

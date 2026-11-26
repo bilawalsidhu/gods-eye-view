@@ -2953,6 +2953,36 @@ test('explicit provider switches reach durable state without adopting unrelated 
   }
 });
 
+for (const view of ['aqi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+  test(`air-quality view round-trips through a share token: ${view}`, () => {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: { 'air-quality': { view } },
+    });
+    assert.deepEqual(state.options['air-quality'], { view });
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encode(state))),
+      state,
+    );
+  });
+}
+
+test('the plain token 4 opens the layer on the US AQI', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=4'));
+  assert.deepEqual(decoded.enabledLayerIds, ['air-quality']);
+  assert.deepEqual(decoded.options['air-quality'], { view: 'aqi' });
+  // Retired selectors and unknown views fall back to the default view.
+  assert.deepEqual(
+    normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: {
+        'air-quality': { provider: 'national', parameter: 'CO2', view: 'CO2' },
+      },
+    }).options['air-quality'],
+    { view: 'aqi' },
+  );
+});
+
 function enabledLayerParam(sink) {
   return new URLSearchParams(encode(sink.provider())).get('l');
 }
@@ -3229,5 +3259,48 @@ test('an application with every layer registered keeps every requested layer', a
     'earthquakes',
     'traffic',
   ]);
+  coordinator.destroy();
+});
+
+test('start layers turn on when nothing names any, and are never written as the user choice', async () => {
+  const storage = memoryStorage();
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage,
+  });
+  const results = await coordinator.start({
+    allowLocalState: false,
+    startLayerIds: ['earthquakes', 'traffic', 'not-a-layer'],
+  });
+  assert.equal(coordinator.source, 'start');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, [
+    'earthquakes',
+    'traffic',
+  ]);
+  assert.equal(manager.isEnabled('earthquakes'), true);
+  assert.equal(manager.isEnabled('traffic'), true);
+  assert.equal(
+    results.every((result) => result.persistenceWrite === false),
+    true,
+  );
+  assert.deepEqual(storage.writes, []);
+  coordinator.destroy();
+});
+
+test('a shared layer payload wins over start layers', async () => {
+  const manager = productionManager();
+  const coordinator = new LayerStateCoordinator(manager, shareSink(), {
+    storage: memoryStorage(),
+  });
+  const shared = createDefaultLayerState();
+  shared.enabledLayerIds = ['radio'];
+  await coordinator.start({
+    shareLayerState: shared,
+    allowLocalState: false,
+    startLayerIds: ['earthquakes'],
+  });
+  assert.equal(coordinator.source, 'share');
+  assert.deepEqual(coordinator.getDurableState().enabledLayerIds, ['radio']);
+  assert.equal(manager.isEnabled('earthquakes'), false);
   coordinator.destroy();
 });
