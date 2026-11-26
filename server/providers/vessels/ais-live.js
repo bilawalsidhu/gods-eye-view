@@ -10,6 +10,8 @@ import {
   readAisTrack,
   aisStreamRows,
   newestAisPositionAt,
+  aisStreamVesselCount,
+  pruneAisStreamCache,
 } from './ais-store.js';
 // ---------------------------------------------------------------------------
 // AISStream live vessel cache state
@@ -27,6 +29,8 @@ const AISSTREAM_DEFAULT_MESSAGE_TYPES = [
   'ExtendedClassBPositionReport',
   'ShipStaticData',
   'StaticDataReport',
+  // Buoys, beacons and other aids to navigation (AIS message 21).
+  'AidsToNavigationReport',
 ];
 // Watchdog budgets (policy lives in src/data/aisWatchdog.js). Silence is
 // REPORTED quickly and ACTED ON slowly: a dead feed must read as dead within
@@ -155,6 +159,11 @@ export function aisLiveProxy() {
 
   return {
     name: 'ais-live-proxy',
+    api: {
+      // Counts only what the store already holds, without opening or resubscribing the stream.
+      readLayerCount: () =>
+        process.env.AISSTREAM_API_KEY ? aisStreamVesselCount() : null,
+    },
     configureServer(server) {
       install(server.middlewares);
       startAisStreamWatchdogTick();
@@ -251,6 +260,7 @@ function aisWatchdogPolicy() {
  */
 function aisAdapter() {
   if (_aisAdapter) return _aisAdapter;
+  let worldwide = false;
   _aisAdapter = createAisStreamAdapter({
     createSocket: (url) => {
       const WebSocketCtor = aisWebSocketImpl();
@@ -258,8 +268,13 @@ function aisAdapter() {
       return new WebSocketCtor(url);
     },
     resolveUrl: () => aisWatchdogPolicy().url,
-    buildSubscription: aisStreamSubscription,
-    ingestEnvelope: ingestAisStreamEnvelope,
+    buildSubscription: () => {
+      const subscription = aisStreamSubscription();
+      // A reload may change the box while earlier positions remain in the store.
+      worldwide = aisSubscriptionIsWorldwide(subscription.BoundingBoxes);
+      return subscription;
+    },
+    ingestEnvelope: (envelope) => ingestAisStreamEnvelope(envelope, worldwide),
     warn: (message) => console.warn(message),
   });
   _aisAdapter.setWatchdogOptions(aisWatchdogBudgets());
@@ -338,6 +353,8 @@ function startAisStreamWatchdogTick() {
     } catch (error) {
       console.warn('[AISStream] watchdog tick failed', error?.message || '');
     }
+    // The store's expiry runs here, so a silent feed still frees its vessels.
+    pruneAisStreamCache();
   }, AISSTREAM_TICK_MS);
   _aisStreamTickTimer.unref?.();
 }
@@ -381,13 +398,21 @@ function aisStreamSubscription() {
   };
 }
 
-function parseJsonEnv(key, fallback) {
+/**
+ * Whether the stream subscribes to the default worldwide box. Unset or
+ * unreadable AISSTREAM_BOUNDING_BOXES falls back to that box.
+ */
+function aisSubscriptionIsWorldwide(boxes) {
+  return JSON.stringify(boxes) === JSON.stringify(AISSTREAM_DEFAULT_BBOXES);
+}
+
+function parseJsonEnv(key, fallback, { warn = true } = {}) {
   const value = process.env[key];
   if (!value) return fallback;
   try {
     return JSON.parse(value);
   } catch {
-    console.warn(`[AISStream] Invalid ${key}; using default.`);
+    if (warn) console.warn(`[AISStream] Invalid ${key}; using default.`);
     return fallback;
   }
 }

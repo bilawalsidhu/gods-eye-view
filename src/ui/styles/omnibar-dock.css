@@ -1,0 +1,424 @@
+/* The command surface: [mic] [Omnibar] [chat] in one row above the World
+   Timeline, on desktop and on phones alike. Exclusive owners keep their
+   layout. It applies while the Omnibar is on the page and the voice control
+   is in the dock; that state, and the states its rules select on below, are
+   the page-root classes of src/ui/rail/rootClass.js. */
+body:not(.cockpit-mode):not(.scene-playback-mode):not(.ui-clean-view):not(
+    .recording-mode
+  ):where(.has-omnibar.dock-has-voice *) {
+  --omnibar-dock-width: clamp(400px, 32vw, 460px);
+  /* Clear of the attribution line under it, however many lines it wraps
+     onto (--credit-line-height, src/ui/creditLineHeight.js). */
+  --omnibar-credits-clear: calc(1rem + var(--credit-line-height, 28px) + 6px);
+  /* The World Timeline, and the dock and narrow corners placed from it,
+     rise over a line wrapped taller than its usual one or two lines. */
+  --omnibar-dock-bottom: max(74px, calc(var(--omnibar-credits-clear) + 2px));
+  /* The dock sits above the World Timeline, rising by its height
+     (--world-timeline-lift, world-timeline.css) as the plain dock does. */
+  --omnibar-dock-raised: calc(
+    var(--omnibar-dock-bottom) + var(--world-timeline-lift, 0px)
+  );
+
+  #command-dock {
+    --dock-voice-width: var(--omnibar-dock-width);
+    top: auto;
+    bottom: var(--omnibar-dock-raised);
+    z-index: 149;
+    width: var(--omnibar-dock-width);
+    max-width: none;
+    height: 56px;
+    min-height: 0;
+    overflow: visible;
+    align-items: center;
+    padding: 0;
+  }
+  #command-dock > #gev-voice-control {
+    box-sizing: border-box;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 56px;
+    margin: 0;
+    padding: 0 8px;
+    gap: 0;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid rgba(120, 220, 255, 0.16);
+    border-radius: 18px;
+    background: linear-gradient(
+      180deg,
+      rgba(16, 28, 36, 0.9),
+      rgba(6, 14, 20, 0.94)
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(200, 245, 255, 0.07),
+      0 12px 32px rgba(0, 0, 0, 0.45);
+    backdrop-filter: none;
+  }
+  &:is(.omnibar-focus-within *, #gev-omnibar:focus-within)
+    #command-dock
+    > #gev-voice-control {
+    border-color: rgba(54, 220, 255, 0.5);
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.45),
+      0 0 0 3px rgba(54, 220, 255, 0.1);
+  }
+  #command-dock > #gev-voice-control::before,
+  #command-dock > #gev-voice-control::after {
+    content: '';
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    width: 1px;
+    height: auto;
+    transform: none;
+    background: rgba(120, 220, 255, 0.12);
+    pointer-events: none;
+  }
+  #command-dock > #gev-voice-control::before {
+    inset-inline-start: 54px;
+    inset-inline-end: auto;
+  }
+  #command-dock > #gev-voice-control::after {
+    inset-inline-start: auto;
+    inset-inline-end: 54px;
+  }
+  #gev-voice-control > :is(#gev-voice-button, #gev-chat-button):focus-visible {
+    outline: 2px solid #7bd3ef;
+    outline-offset: 2px;
+  }
+  #gev-voice-control > :is(#gev-voice-button, #gev-chat-button) {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 1px solid rgba(120, 220, 255, 0.18);
+    border-radius: 50%;
+    background: rgba(5, 17, 24, 0.48);
+    box-shadow:
+      inset 0 2px 4px rgba(0, 0, 0, 0.58),
+      inset 0 -1px 0 rgba(169, 226, 245, 0.12),
+      0 1px 0 rgba(169, 226, 245, 0.1);
+    transform: none;
+  }
+  #gev-voice-control
+    > :is(#gev-voice-button, #gev-chat-button):is(
+      :hover,
+      [aria-pressed='true'],
+      [aria-expanded='true']
+    ) {
+    background: rgba(54, 220, 255, 0.14);
+    border-color: rgba(54, 220, 255, 0.6);
+  }
+  #command-dock #gev-voice-control .gev-mic-orbit,
+  #command-dock #gev-chat-button > svg {
+    box-sizing: border-box;
+    width: 19px;
+    height: 19px;
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+  #gev-voice-button .gev-mic-orbit img {
+    width: 19px;
+    height: 19px;
+    filter: saturate(0.35) brightness(1.25);
+  }
+  #gev-voice-button .gev-mic-orbit::before,
+  #gev-voice-button .gev-mic-orbit::after {
+    display: none;
+  }
+  #gev-voice-control :is(.gev-mic-label, .gev-chat-label) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Status remains readable while live; idle meter is decorative. */
+  #command-dock
+    #gev-voice-control:not([data-assistant-mode='voice'])
+    > .gev-voice-visualizer,
+  #command-dock
+    #gev-voice-control:not([data-chat-busy='true'])
+    > .gev-chat-thinking {
+    display: none;
+  }
+  #command-dock #gev-voice-control[data-chat-busy='true'] > .gev-chat-thinking {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    height: 0;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 151;
+  }
+  #gev-voice-control > .gev-voice-readout {
+    position: absolute;
+    inset-inline: 0;
+    top: auto;
+    bottom: calc(100% + 8px);
+    pointer-events: none;
+  }
+  #gev-voice-control[data-assistant-mode='idle'] > .gev-voice-readout {
+    visibility: hidden;
+  }
+
+  #gev-omnibar {
+    top: auto;
+    bottom: calc(var(--omnibar-dock-raised) + 11px);
+    left: 50%;
+    width: calc(var(--omnibar-dock-width) - 120px);
+    transform: translateX(-50%);
+  }
+  #gev-omnibar .omnibar-field {
+    height: 34px;
+    padding-inline: 9px 6px;
+    border: 1px solid rgba(151, 213, 231, 0.27);
+    border-radius: 9px;
+    background: rgba(172, 219, 239, 0.07);
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  #gev-omnibar-input {
+    font-size: 0.86rem;
+    text-overflow: ellipsis;
+  }
+  #gev-omnibar-input::placeholder {
+    color: #b6cbd4;
+  }
+  #gev-omnibar .omnibar-field:focus-within {
+    border-color: rgba(95, 230, 255, 0.66);
+    background: rgba(109, 206, 232, 0.1);
+  }
+  #gev-omnibar .omnibar-search-icon {
+    color: #a9cfda;
+  }
+  #gev-omnibar :is(.omnibar-mic, .omnibar-edge) {
+    display: none;
+  }
+  #gev-omnibar .omnibar-results {
+    position: absolute;
+    inset-inline: -60px;
+    top: auto;
+    bottom: calc(100% + 11px);
+    max-height: min(
+      360px,
+      max(0px, calc(100dvh - var(--omnibar-dock-raised) - 144px))
+    );
+    overflow: auto;
+    border-radius: 18px 18px 0 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(50, 54, 62, 0.86);
+    backdrop-filter: blur(26px) saturate(1.2);
+    -webkit-backdrop-filter: blur(26px) saturate(1.2);
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+  }
+  &:is(.omnibar-has-results *, #gev-omnibar.has-results):not(
+      .assistant-voice-mode *,
+      #gev-voice-control[data-assistant-mode='voice']
+    )
+    #command-dock
+    > #gev-voice-control {
+    border-start-start-radius: 0;
+    border-start-end-radius: 0;
+  }
+  #command-dock
+    #gev-voice-control[data-assistant-mode='voice']
+    > .gev-voice-visualizer {
+    position: absolute;
+    display: block;
+    inset: auto 64px 10px;
+    width: auto;
+    height: 28px;
+    opacity: 1;
+    transform: none;
+    pointer-events: none;
+  }
+  #gev-voice-control > .gev-voice-visualizer > span {
+    display: none;
+  }
+  #gev-voice-control > .gev-voice-visualizer > .gev-voice-wave {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 16%,
+      #000 84%,
+      transparent
+    );
+  }
+  .gev-voice-wave path {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .gev-voice-wave__main {
+    stroke: #5fe6ff;
+    stroke-width: 2;
+    filter: drop-shadow(0 0 4px rgba(54, 220, 255, 0.55));
+  }
+  .gev-voice-wave__echo {
+    stroke: #36dcff;
+    stroke-width: 1.2;
+    opacity: 0.35;
+  }
+  .gev-voice-wave__soft {
+    stroke: #9ff1ff;
+    stroke-width: 1;
+    opacity: 0.6;
+  }
+  &:is(.assistant-voice-mode *, #gev-voice-control[data-assistant-mode='voice'])
+    #gev-omnibar {
+    .omnibar-field {
+      background: transparent;
+    }
+    :is(input, .omnibar-kbd, .omnibar-search-icon) {
+      visibility: hidden;
+    }
+    /* Suggestions give way to the waveform; an error stays in view. */
+    .omnibar-results:not(.has-feedback),
+    .omnibar-results .omnibar-list {
+      display: none;
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    #command-dock #gev-voice-control[data-assistant-mode='voice'] {
+      animation: omnibar-listening 2.4s ease-in-out infinite;
+    }
+  }
+}
+
+/* Desktop places the corners, the HUD and the credits around the dock;
+   phones place them in mobile-shell.css. */
+body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
+    .ui-clean-view
+  ):not(.recording-mode):where(.has-omnibar.dock-has-voice *) {
+  --omnibar-coordinates-bottom: max(4.25rem, var(--omnibar-credits-clear));
+
+  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
+    :is(.hud-top-left, .hud-top-right) {
+    top: clamp(92px, 10vh, 112px);
+  }
+
+  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
+    .hud-top-left
+    .hud-readout:has(> #hud-mode) {
+    display: none;
+  }
+  /* The globe actions sit on the title row, level with the title, with the
+     loading line under them (status.css). Narrower, where the row would reach
+     the title, they drop to the HUD's top rows and the loading line drops
+     with them, so it never covers the actions. */
+  #top-center-actions {
+    top: 32px;
+  }
+  @media (max-width: 1179px) {
+    #top-center-actions {
+      top: clamp(86px, 9.55vh, 108px);
+    }
+    #global-loading-status {
+      top: calc(clamp(86px, 9.55vh, 108px) + 42px);
+    }
+  }
+  #left-panel-stack.layout-focus {
+    bottom: var(--left-stack-safe-bottom, 4vh);
+  }
+
+  #world-timeline {
+    bottom: var(--omnibar-dock-bottom);
+    width: var(--omnibar-dock-width);
+  }
+
+  /* Align the plain credits with Power Up. The line wraps at every width
+     rather than running under the corner row (Power Up and the language
+     picker), whose side it stays clear of. */
+  :is(#cesium-credits, #gev-credits),
+  &:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active)
+    :is(#cesium-credits, #gev-credits) {
+    bottom: 1rem;
+  }
+  #gev-credits {
+    width: max-content !important;
+    max-width: calc(100vw - 1.5rem - 26rem);
+    white-space: normal;
+  }
+  /* Right to left the corner row is at the bottom left, so the line takes
+     the bottom right at every width. Expanded Context places it itself. */
+  &:where(html[dir='rtl'] *):not(.context-docked) {
+    :is(#cesium-credits, #gev-credits),
+    &:is(.hud-minimal-active *, #intel-hud[data-variant='minimal'].active)
+      :is(#cesium-credits, #gev-credits) {
+      right: 1.5rem;
+      left: auto;
+      text-align: right;
+    }
+  }
+  /* 8px above the bottom-right corner row (Power Up and the language picker:
+     32px tall, 14px up), as outside the Omnibar layout. */
+  #intel-hud[data-variant='tactical'] .hud-bottom-right {
+    bottom: 3.375rem;
+  }
+  /* Right to left the attribution line is under the readout, which clears
+     it however many lines it wraps onto. */
+  &:where(html[dir='rtl'] *):not(.context-docked)
+    #intel-hud[data-variant='tactical']
+    .hud-bottom-right {
+    bottom: max(3.375rem, var(--omnibar-credits-clear));
+  }
+  /* Narrower than the two corners and the dock between them, the corners
+     rise above the dock. */
+  @media (max-width: 1119px) {
+    --omnibar-coordinates-bottom: max(
+      calc(var(--omnibar-dock-raised) + 56px + 10px),
+      var(--omnibar-credits-clear)
+    );
+    #intel-hud[data-variant='tactical'] .hud-bottom-right,
+    &:where(html[dir='rtl'] *):not(.context-docked)
+      #intel-hud[data-variant='tactical']
+      .hud-bottom-right {
+      bottom: var(--omnibar-coordinates-bottom);
+    }
+  }
+  #intel-hud:is([data-variant='tactical'], [data-variant='minimal'])
+    .hud-bottom-left {
+    bottom: var(--omnibar-coordinates-bottom);
+  }
+  &:not(.context-docked):is(
+      .hud-minimal-active *,
+      #intel-hud[data-variant='minimal'].active
+    )
+    #right-context-rail {
+    --omnibar-minimal-rail-height: min(
+      var(--right-stack-max-height, 70vh),
+      calc(
+        100dvh - var(--right-stack-safe-top, 26vh) -
+          var(--omnibar-coordinates-bottom) - 3.1rem - 1.2vh
+      )
+    );
+    max-height: var(--omnibar-minimal-rail-height);
+    > [data-panel-id]:not(.collapsed) {
+      max-height: var(--omnibar-minimal-rail-height);
+    }
+  }
+}
+
+@keyframes omnibar-listening {
+  0%,
+  100% {
+    border-color: rgba(54, 220, 255, 0.35);
+  }
+  50% {
+    border-color: rgba(54, 220, 255, 0.75);
+  }
+}

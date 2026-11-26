@@ -942,6 +942,15 @@ html:not([lang='en'])
   background: var(--accent-dim);
 }
 
+/* A keyed chip (RailChips.vue `swatch`): the colour of what it turns on before
+   its label and the count after it, while it is on, in the chip's own type.
+   Off, it is a plain chip. */
+.data-toggle-chip.chip-keyed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Async sub-controls: a chip must never read ACTIVE before the data it turns
    on actually exists, so loading and failure are their own visible states. */
 .data-toggle-chip:disabled {
@@ -971,7 +980,8 @@ html:not([lang='en'])
   cursor: default;
 }
 
-.data-toggle-legend-swatch {
+.data-toggle-legend-swatch,
+.data-toggle-chip-swatch {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -1053,6 +1063,15 @@ html:not([lang='en'])
   min-width: 34px;
   flex: none;
   opacity: 0.85;
+}
+
+/* A row's colour dot (a reading's band), before its value. */
+.data-row-list-swatch {
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
 .data-row-list-text {
@@ -1370,4 +1389,23 @@ html:not([lang='en']) .data-row-list-text {
 }
 .sdr-feed-status[hidden] {
   display: none;
+}
+
+.data-row-list-item.unranked {
+  counter-increment: none;
+}
+.data-row-list-item.unranked::before {
+  content: '';
+}
+.data-row-list-note {
+  flex: none;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+/* A ranking reads one line a row in every language: a name is cut, not wrapped. */
+html:not([lang='en']) .data-row-list.is-single-line .data-row-list-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }

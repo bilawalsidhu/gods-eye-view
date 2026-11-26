@@ -40,9 +40,29 @@ try {
   page.on('console', (m) => {
     if (m.type() === 'error') result.errors.push(m.text());
   });
-  await page.evaluateOnNewDocument(() =>
-    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed'),
-  );
+  await page.evaluateOnNewDocument(() => {
+    sessionStorage.setItem('gev:first-run-mission-session:v1', 'dismissed');
+    // The site dots the layer draws, read from its draw-port point set: each
+    // row is a drawn dot whose pick id is the draw port's `{set, id, meta}`;
+    // `meta` is the site's carrier, kept while the site's geometry is.
+    window.__qaInstallationDots = () => {
+      const out = [];
+      const visit = (node) => {
+        if (!node || typeof node.get !== 'function') return;
+        if (typeof node.length !== 'number') return;
+        for (let index = 0; index < node.length; index += 1) {
+          const child = node.get(index);
+          const id = child?.id;
+          if (id && typeof id === 'object' && typeof id.set === 'string') {
+            if (/^military-installations:\d+:dots$/.test(id.set))
+              out.push({ id: id.id, meta: id.meta, primitive: child });
+          } else visit(child);
+        }
+      };
+      visit(window.__godsEyeView.viewer.scene.primitives);
+      return out;
+    };
+  });
   await page.goto(
     args.find((a) => /^https?:/.test(a)),
     { waitUntil: 'domcontentloaded' },
@@ -156,14 +176,15 @@ try {
         .catch(() => {});
       const snapshot = await page.evaluate(() => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const points = ds.entities.values.filter((e) => e.point);
+        const points = window.__qaInstallationDots();
         const stable = points.every(
           (e) =>
             !window.installationEntityRefs.has(e.id) ||
-            window.installationEntityRefs.get(e.id) === e,
+            window.installationEntityRefs.get(e.id) === e.meta,
         );
-        window.installationEntityRefs = new Map(points.map((e) => [e.id, e]));
+        window.installationEntityRefs = new Map(
+          points.map((e) => [e.id, e.meta]),
+        );
         return {
           ...g.dataManager.layers
             .get('military-installations')
@@ -186,7 +207,7 @@ try {
         new Set(row.ids).size !== row.ids.length
       )
         result.failures.push(
-          `${name}/${height}: unstable or duplicate site entities`,
+          `${name}/${height}: unstable or duplicate site markers`,
         );
       if (name.endsWith('return')) {
         const first = result.views.find(
@@ -227,14 +248,11 @@ try {
       await page.mouse.move(640, 400);
       await page.mouse.wheel({ deltaY: -350 });
     } else if (gesture === 'keyboard') {
-      await page.evaluate(() =>
-        document.getElementById('search-toggle').click(),
-      );
-      await page.focus('#location-search');
+      await page.focus('#gev-omnibar-input');
       await page.evaluate(() => {
-        document.getElementById('location-search').value = '';
+        document.getElementById('gev-omnibar-input').value = '';
       });
-      await page.type('#location-search', '33.33, -117.40');
+      await page.type('#gev-omnibar-input', '33.33, -117.40');
       await page.keyboard.press('Enter');
       await sleep(4500);
     } else {
@@ -244,10 +262,7 @@ try {
         0.6,
       );
       await page.waitForFunction(
-        () =>
-          window.__godsEyeView.viewer.dataSources
-            .getByName('military-installations')[0]
-            .entities.values.some((e) => e.point),
+        () => window.__qaInstallationDots().length > 0,
         { timeout: 5000 },
       );
       await page.evaluate(() => {
@@ -268,8 +283,7 @@ try {
       await sleep(1000);
       await page.evaluate(async () => {
         const g = window.__godsEyeView;
-        const ds = g.viewer.dataSources.getByName('military-installations')[0];
-        const id = ds.entities.values.find((e) => e.point).id;
+        const id = window.__qaInstallationDots()[0].id;
         window.installationSubjectId = id;
         await g.dataManager.layers
           .get('military-awareness')

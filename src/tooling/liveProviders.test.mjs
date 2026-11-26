@@ -363,6 +363,8 @@ test('military aircraft route preserves fresh cache and stale response after ups
 test('AIS preview route ingests through the socket, returns tracks and disposes before restart', async (t) => {
   const upstream = new WebSocketServer({ host: '127.0.0.1', port: 0 });
   await once(upstream, 'listening');
+  let now = Date.now();
+  t.mock.method(Date, 'now', () => now);
   const sockets = [];
   t.after(async () => {
     for (const socket of sockets) socket.terminate();
@@ -371,14 +373,32 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
   environment(t, {
     AISSTREAM_API_KEY: 'fixture-key',
     AISSTREAM_URL: `ws://127.0.0.1:${upstream.address().port}`,
-    AISSTREAM_BOUNDING_BOXES: undefined,
+    AISSTREAM_BOUNDING_BOXES: '[[[29,-98],[31,-96]]]',
     AISSTREAM_MESSAGE_TYPES: undefined,
     AISSTREAM_SILENCE_TIMEOUT_MS: '0',
   });
   upstream.on('connection', (socket) => {
     sockets.push(socket);
     socket.on('message', (raw) => {
-      assert.equal(JSON.parse(raw).APIKey, 'fixture-key');
+      const subscription = JSON.parse(raw);
+      assert.equal(subscription.APIKey, 'fixture-key');
+      const mmsi = sockets.length === 1 ? 123456789 : 123456790;
+      assert.deepEqual(
+        subscription.BoundingBoxes,
+        sockets.length === 1
+          ? [
+              [
+                [29, -98],
+                [31, -96],
+              ],
+            ]
+          : [
+              [
+                [-90, -180],
+                [90, 180],
+              ],
+            ],
+      );
       for (const [lat, epoch] of [
         [30, Math.floor(Date.now() / 1000) - 120],
         [30.01, Math.floor(Date.now() / 1000) - 60],
@@ -387,14 +407,14 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
           JSON.stringify({
             MessageType: 'PositionReport',
             MetaData: {
-              MMSI: 123456789,
+              MMSI: mmsi,
               latitude: lat,
               longitude: -97,
               time_utc: new Date(epoch * 1000).toISOString(),
             },
             Message: {
               PositionReport: {
-                UserID: 123456789,
+                UserID: mmsi,
                 Sog: 10,
                 Cog: 90,
                 TrueHeading: 511,
@@ -428,9 +448,31 @@ test('AIS preview route ingests through the socket, returns tracks and disposes 
   plugin.closeBundle();
   for (let i = 0; i < 100 && sockets[0].readyState !== 3; i++) await delay(10);
   assert.equal(sockets[0].readyState, 3);
+  now += 1000;
+  delete process.env.AISSTREAM_BOUNDING_BOXES;
+  assert.equal(
+    plugin.api.readLayerCount(),
+    null,
+    'a harbor fix is not a worldwide snapshot',
+  );
   const restarted = install(plugin);
-  await restarted('/api/vessels');
-  for (let i = 0; i < 100 && sockets.length < 2; i++) await delay(10);
+  let retained;
+  for (let i = 0; i < 100; i++) {
+    retained = JSON.parse((await restarted('/api/vessels')).body).rows;
+    if (retained.length === 2) break;
+    await delay(10);
+  }
+  assert.deepEqual(retained.map((row) => row.mmsi).sort(), [
+    '123456789',
+    '123456790',
+  ]);
+  assert.deepEqual(plugin.api.readLayerCount(), { count: 1, at: now });
+  delete process.env.AISSTREAM_API_KEY;
+  assert.equal(
+    plugin.api.readLayerCount(),
+    null,
+    'removing the key immediately hides the count',
+  );
   assert.equal(sockets.length, 2);
 });
 

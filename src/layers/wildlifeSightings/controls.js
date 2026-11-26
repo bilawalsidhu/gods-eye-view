@@ -1,8 +1,11 @@
-import { t, formatNumber, translateKnown } from '../../i18n/index.js';
+import { analystRecordLimit } from '../../data/analystRecordLimit.js';
+import { t, tn, formatNumber, translateKnown } from '../../i18n/index.js';
 import { msg } from '../../i18n/marker.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import { wildlifeIconicGroup } from './model.js';
 import { formatAge } from './photoText.js';
+import { isRecentWildlifeSighting } from './records.js';
+import { wildlifeEyeHeight } from './view.js';
 import {
   ICONIC_TINTS,
   ICONIC_LEGEND_ORDER,
@@ -25,6 +28,26 @@ const LEGEND_LABELS = Object.freeze({
   Animalia: msg('Other animals'),
   Unknown: msg('Other or unknown'),
 });
+
+function* loadedSightings(state) {
+  yield* state.rows.values();
+  const { selectedId, selectedRow } = state;
+  if (
+    selectedId &&
+    selectedRow?.stableId === selectedId &&
+    !state.rows.has(selectedId)
+  )
+    yield selectedRow;
+}
+
+function isInspectableSighting(row, nowMs, taxa, selectedId) {
+  return (
+    Number.isFinite(row?.lat) &&
+    Number.isFinite(row?.lon) &&
+    ((selectedId && row.stableId === selectedId) ||
+      isRecentWildlifeSighting(row, nowMs, taxa))
+  );
+}
 
 /** Own layer-row descriptors and serializable filter options. */
 export function createControls({ state, services, parts }) {
@@ -71,6 +94,14 @@ export function createControls({ state, services, parts }) {
             : 'idle',
       params,
     };
+  }
+
+  function* inspectableSightings() {
+    const nowMs = services.now();
+    const taxa = state.drawnParams?.taxa ?? state.taxa;
+    for (const row of loadedSightings(state)) {
+      if (isInspectableSighting(row, nowMs, taxa, state.selectedId)) yield row;
+    }
   }
 
   const methods = {
@@ -137,7 +168,8 @@ export function createControls({ state, services, parts }) {
       const chips = [
         chip({
           id: WILDLIFE_CONFIRMED_CHIP_ID,
-          label: t('CONFIRMED'),
+          // The sightings, plural; a launch landing is CONFIRMED alone.
+          label: t('CONFIRMED', { context: 'sightings filter' }),
           title: t('Show only community-confirmed (research-grade) sightings'),
           params: {
             confirmed: confirmedFailed ? state.confirmed : !state.confirmed,
@@ -187,6 +219,50 @@ export function createControls({ state, services, parts }) {
         : t('iNaturalist contributors · licences per record');
       return { chips, legend, info };
     },
+    /**
+     * The loaded sightings as plain records, for the analyst and the Context
+     * panel. Positions are as drawn: an obscured iNaturalist record stands at
+     * the centre of its coarse cell, never at the hidden exact point.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!state.enabled) return [];
+      const limit = analystRecordLimit(maxCount);
+      const result = [];
+      for (const row of inspectableSightings()) {
+        if (result.length >= limit) break;
+        result.push({
+          id: row.stableId,
+          name: row.commonName || row.scientificName || null,
+          scientificName: row.scientificName || null,
+          lat: row.lat,
+          lon: row.lon,
+          taxonGroup: row.iconic || null,
+          observedAtMs: Number.isFinite(row.observedAt) ? row.observedAt : null,
+          observedOn: row.observedOn || null,
+          quality: row.quality || null,
+          threatened: row.threatened === true,
+          cetacean: row.cetacean === true,
+          obscured: row.obscured === true,
+          source: row.origin === 'acartia' ? 'Acartia' : 'iNaturalist',
+          link: row.link || null,
+          acartiaProvider:
+            row.origin === 'acartia' ? (row.provider ?? null) : null,
+          ...((state.heldRows?.has(row) || !state.rows.has(row.stableId)) && {
+            positionUnconfirmed: true,
+          }),
+        });
+      }
+      return result;
+    },
+    /** Count the observations Context can inspect without mapping each record. */
+    getInspectableCount() {
+      if (!state.enabled) return 0;
+      let count = 0;
+      for (const _ of inspectableSightings()) count++;
+      return count;
+    },
     /** Report the visible count, feed state and retry guidance. */
     getStats() {
       const grid = state.gridAvailable === true;
@@ -210,13 +286,18 @@ export function createControls({ state, services, parts }) {
       const stats = {
         count,
         lastUpdate: state.lastUpdate,
+        // Selection can keep an expired record inspectable without a feed update.
+        recordsRevision: state.selectedId,
         error: state.error,
         stale: state.stale,
         loading,
         refreshing,
-        countLabel: t('{count} sightings in view', {
-          count: formatNumber(count),
-        }),
+        countLabel: tn(
+          count,
+          '{count} sighting in view',
+          '{count} sightings in view',
+          { count: formatNumber(count) },
+        ),
         loadingLabel: loading
           ? t('loading...')
           : refreshing
@@ -230,8 +311,7 @@ export function createControls({ state, services, parts }) {
       if (
         !state.error &&
         !state.query &&
-        state.viewer?.camera?.positionCartographic?.height >
-          WILDLIFE_GRID_HEIGHT_METERS
+        wildlifeEyeHeight(state.viewer) > WILDLIFE_GRID_HEIGHT_METERS
       ) {
         // i18n-ignore: feed-state protocol value
         stats.status = 'zoom-in';

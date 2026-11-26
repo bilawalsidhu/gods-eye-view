@@ -12,6 +12,7 @@ export function createIngestion({
   setSourceLabel,
   applyPendingTrackingRestore,
   followsClock = () => false,
+  timedAnswer = () => true,
 }) {
   const methods = {
     async update(viewer, { signal = null } = {}) {
@@ -22,12 +23,26 @@ export function createIngestion({
     },
 
     /**
+     * Back at live from another time: poll at once, and let this live
+     * snapshot stand in for every contact. Those it has keep their
+     * icon and model and move on from where they are drawn; those it lacks
+     * go. Resolves true once it is applied, else false (nothing to poll yet,
+     * or the poll failed); rejects with an AbortError when it was dropped.
+     * @param {object} [viewer]
+     * @returns {Promise<boolean>}
+     */
+    async resumeLive(viewer) {
+      return (await acquire(viewer, { handover: true })) === true;
+    },
+
+    /**
      * Apply the source's snapshot at world time `atMs` (its timeline says it
      * can answer one), in place of every contact when `replace`. Resolves
-     * whether it was applied.
+     * whether it was applied: `{ reachMs }`, the newest fix its records
+     * carry, when they carry fixes; else true, or false when it was not.
      * @param {number} atMs
      * @param {{signal?: AbortSignal|null, replace?: boolean, viewer?: object}} [options]
-     * @returns {Promise<boolean>}
+     * @returns {Promise<boolean|{reachMs: number}>}
      */
     async loadAt(atMs, { signal = null, replace = false, viewer = null } = {}) {
       // Whatever polls or loads for another time no longer applies.
@@ -38,7 +53,10 @@ export function createIngestion({
     },
   };
 
-  async function acquire(viewer, { signal = null, atMs, replace = false }) {
+  async function acquire(
+    viewer,
+    { signal = null, atMs, replace = false, handover = false },
+  ) {
     const nowMs = Date.now();
     const timed = atMs !== undefined;
     const trackingRefreshEpoch = ++feed._trackingRefreshEpoch;
@@ -85,7 +103,9 @@ export function createIngestion({
       setSourceLabel(feed._lastSource);
       const accepted = timed
         ? applySnapshot(snapshot, viewer, { replace })
-        : applySnapshot(snapshot, viewer);
+        : handover
+          ? applySnapshot(snapshot, viewer, { handover: true })
+          : applySnapshot(snapshot, viewer);
       feed._count = accepted.count;
       // Freshness belongs to the source snapshot, not the moment this browser
       // received a cached 200 response.
@@ -99,7 +119,8 @@ export function createIngestion({
       };
       console.log(`[Data:Flights] Updated: ${feed._count} aircraft`);
       applyPendingTrackingRestore();
-      return true;
+      // At a time, what the clock's follower is told of it.
+      return timed ? timedAnswer(snapshot) : true;
     } catch (e) {
       if (updateSignal.aborted || e?.name === 'AbortError') {
         throw new DOMException('Flights update aborted', 'AbortError');

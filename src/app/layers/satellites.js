@@ -8,9 +8,14 @@ import * as render from '../../renderGovernor.js';
 import * as layerState from '../../data/layerState.js';
 
 /** Construct one layer using the application scene owners and a supplied source. */
-export function createApplicationSatellites({ source }) {
+export function createApplicationSatellites({
+  source,
+  resolveAsset = (url) =>
+    `${import.meta.env?.BASE_URL || '/'}${url.replace(/^\//, '')}`,
+}) {
   return createSatellitesLayer({
     source,
+    resolveAsset,
     services: {
       picking,
       focus,

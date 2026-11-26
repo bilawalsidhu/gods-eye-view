@@ -1,13 +1,12 @@
 import { readShellSource } from './testSupport/readShellSource.mjs';
 import { renderApplicationHtml } from './testSupport/applicationHtml.mjs';
-import { readStylesheet } from './testSupport/readStylesheet.mjs';
 // MAP STACK chip row — the dropdown's replacement control surface.
 //
 // The owner's complaint was two clicks (open panel → open dropdown) to change
 // basemap. These tests pin the chip models: the owner-approved allowlist
 // projected from the controller's stack data, one active chip, and the reason
-// an unavailable chip gives. The dock's rendering and clicks are pinned in
-// src/ui/commandDock.test.mjs. Run with: npm test
+// an unavailable chip gives. Visual's rendering and clicks are pinned in
+// src/ui/displayPanelActions.test.mjs. Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -231,99 +230,7 @@ test("models carry the stack's own reason and never invent an active chip", () =
   assert.deepEqual(mapStackChipModels(undefined, 'osm'), []);
 });
 
-test('the active cyan survives hover', () => {
-  const css = readStylesheet(new URL('../style.css', import.meta.url));
-  const hover = css.indexOf('.map-stack-chip:hover');
-  const active = css.indexOf('.map-stack-chip.active {');
-  const unavailable = css.indexOf('.map-stack-chip.unavailable');
-
-  assert.ok(
-    hover > 0 && active > hover,
-    'active must follow hover so it wins at equal specificity',
-  );
-  assert.ok(
-    unavailable > active,
-    'unavailable must follow both so a keyless chip never lights up',
-  );
-  assert.doesNotMatch(
-    css.slice(hover, active),
-    /:not\(/,
-    'a :not() in the hover selector outranks .active and washes the cyan out on hover',
-  );
-});
-
-test('the keyboard focus ring survives on the ACTIVE chip', () => {
-  // The bug this pins: `.active` legitimately wins the color/border/background/
-  // box-shadow it shares with the focus rule, and the base rule sets
-  // `outline: none` — so a focus state built only from those properties is
-  // INVISIBLE on the active chip. The ring must live on a property no other
-  // chip-state rule sets.
-  const css = readStylesheet(new URL('../style.css', import.meta.url));
-  const stripComments = (text) => text.replace(/\/\*[\s\S]*?\*\//g, '');
-  const chipRules = [
-    ...css.matchAll(/([^{}]*\.map-stack-chip[^{}]*)\{([^{}]*)\}/g),
-  ].map(([, selector, body], order) => ({
-    selector: stripComments(selector).trim(),
-    body: stripComments(body),
-    order,
-  }));
-  assert.ok(chipRules.length >= 5, 'expected the chip state rules to be found');
-
-  const ringIndex = chipRules.findIndex(
-    ({ selector, body }) =>
-      selector.includes(':focus-visible') &&
-      /outline:\s*(?!none)\S/.test(body) &&
-      /outline-offset:/.test(body),
-  );
-  assert.ok(
-    ringIndex >= 0,
-    'a :focus-visible rule must draw a real outline ring',
-  );
-
-  // Nothing after it may touch outline again, so the ring cannot be erased by
-  // .active, :disabled, or anything added later.
-  for (const rule of chipRules.slice(ringIndex + 1)) {
-    assert.doesNotMatch(
-      rule.body,
-      /outline/,
-      `"${rule.selector}" must not touch outline — it would erase the focus ring`,
-    );
-  }
-  for (const selector of [
-    '.map-stack-chip.active',
-    '.map-stack-chip.unavailable',
-  ]) {
-    assert.ok(
-      chipRules.some((rule) => rule.selector.includes(selector)),
-      `expected a ${selector} rule to exist for this check to mean anything`,
-    );
-  }
-
-  // `transition: all` animates outline-width off the `outline: none` base, and
-  // Chrome parks that transition at 0px for chips on a wrapped line — the ring
-  // never appeared on rows 2 and 3. The base rule must list its properties.
-  const base = chipRules.find((rule) =>
-    rule.selector.endsWith('.map-stack-chip'),
-  );
-  assert.ok(base, 'expected the base .map-stack-chip rule');
-  assert.doesNotMatch(
-    base.body,
-    /transition:\s*all\b/,
-    'transition: all animates outline-width and kills the focus ring on wrapped rows',
-  );
-  assert.doesNotMatch(
-    base.body,
-    /transition:[^;]*outline/,
-    'the focus ring must not be animated',
-  );
-  assert.match(
-    base.body,
-    /transition:\s*\n?\s*color/,
-    'the hover/active treatment still animates',
-  );
-});
-
-test('the Visual Presets tray owns Map Source and the retired left panel is absent', async () => {
+test('the Visual panel owns Map Source and the retired left panel is absent', async () => {
   const html = await renderApplicationHtml(
     readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
   );
@@ -334,10 +241,6 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /map-stack-select/,
     'the SOURCE dropdown is replaced by the chip row',
   );
-  assert.match(
-    html,
-    /<section class="map-source-section"[\s\S]*?<div id="map-stack-chips" class="map-stack-chip-row" role="group" aria-label="Map source"><\/div>/,
-  );
   assert.doesNotMatch(
     html,
     /id="stack-panel"/,
@@ -345,21 +248,8 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   );
   assert.match(
     html,
-    /id="map-source-label">MAP SOURCE<[\s\S]*?id="map-stack-status"/,
-  );
-  assert.match(
-    html,
-    /<button id="control-panel-toggle"[\s\S]*?data-dock-toggle-target="control-panel"[\s\S]*?aria-controls="control-panel-popover"/,
-    'the compact wing must expose a semantic keyboard disclosure',
-  );
-  const panels = readFileSync(
-    new URL('./ui/panelDisclosure.js', import.meta.url),
-    'utf8',
-  );
-  assert.match(panels, /event\.key !== 'Escape'[\s\S]*?disclosure\?\.focus/);
-  assert.match(
-    ui,
-    /querySelector\(\s*'\.map-stack-chip\.active',?\s*\)\s*\|\|\s*panel\.querySelector\('\.map-stack-chip'\)/,
+    /id="pp-toggles"[\s\S]*?class="visual-presets"[\s\S]*?class="visual-presets__heading visual-presets__heading--row"/,
+    'Visual holds the Map source row',
   );
 
   const controls = readFileSync(
@@ -371,12 +261,12 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /return this\._mapSourceControls\.select\(stackId, \{ syncShare \}\)/,
     'the application action uses the component selection path',
   );
-  const dock = readFileSync(
-    new URL('./ui/views/CommandDockView.vue', import.meta.url),
+  const visual = readFileSync(
+    new URL('./ui/views/panels/VisualPresets.vue', import.meta.url),
     'utf8',
   );
   assert.match(
-    dock,
+    visual,
     /mapSourceControls\.value\?\.select\(chip\.id\)/,
     'chip clicks use the same component selection path',
   );
@@ -405,4 +295,20 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
     /unsubscribe\?\.\(\)/,
     'component destruction releases its subscription',
   );
+});
+
+test('a registered source marked presented shows after the approved ones', () => {
+  const chips = mapStackChipModels(
+    [
+      { id: 'plain', label: 'Plain', available: true, presented: true },
+      ...CONTROLLER_STACKS,
+      { id: 'hidden', label: 'Hidden', available: true },
+    ],
+    'plain',
+  );
+  assert.deepEqual(
+    chips.map((chip) => chip.id),
+    ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'plain'],
+  );
+  assert.equal(chips.at(-1).active, true);
 });

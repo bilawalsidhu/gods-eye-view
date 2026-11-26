@@ -4,6 +4,7 @@ import {
   AWARENESS_MAX_FLIGHT_SEARCH_RADIUS_M,
   findByDoublingRadius,
   AWARENESS_RADIUS_M,
+  aircraftClassMatches,
 } from '../../data/militaryAwarenessEngine.js';
 import {
   AWARENESS_MAX_EXAMPLES,
@@ -52,29 +53,7 @@ export function createNavigation({
     return layerId === 'flights' || layerId === 'military';
   }
 
-  function normalizeAircraftClass(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase();
-  }
-
-  function aircraftClassMatchesFilter(item, aircraftClass) {
-    const requested = normalizeAircraftClass(aircraftClass);
-    if (!requested) return true;
-    const candidates = [
-      item?.aircraftClass,
-      item?.klass,
-      item?.type,
-      item?.typeCode,
-      item?.typeName,
-    ]
-      .map((value) => normalizeAircraftClass(value))
-      .filter(Boolean);
-    if (!candidates.length) return false;
-    return candidates.some(
-      (candidate) => candidate === requested || candidate.includes(requested),
-    );
-  }
+  const aircraftClassMatchesFilter = aircraftClassMatches;
 
   function selectNavigationTargets(
     sourceCohorts,
@@ -265,7 +244,6 @@ export function createNavigation({
     summarizeAwarenessCohortForNavigation,
     resetNavigationVisitedCycle,
     isFlightLayer,
-    normalizeAircraftClass,
     aircraftClassMatchesFilter,
     selectNavigationTargets,
     alternativeFlightAvailable,

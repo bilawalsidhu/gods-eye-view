@@ -8,6 +8,10 @@ import {
   alprLabelDetails,
   markerScale,
 } from './visuals.js';
+import { alprMarkers, createAlprMarkerSet } from './markerState.js';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
+import { bindFakeCesiumScene } from '../../testSupport/fakeCesiumScene.mjs';
+import { rendererOf } from '../../render/rendererOf.js';
 
 function harness(t, count = 2, { floor = null } = {}) {
   const previousImage = globalThis.Image;
@@ -23,23 +27,29 @@ function harness(t, count = 2, { floor = null } = {}) {
     longitude: -97,
     directionDeg: 90,
   }));
-  const entities = new Cesium.EntityCollection();
+  const drawPort = fakeDrawPort();
+  const markers = createAlprMarkerSet();
+  markers.attach(drawPort.icons({ id: 'alpr-cameras:test:markers' }));
+  const iconSet = drawPort.set('alpr-cameras:test:markers');
   for (const record of records)
-    entities.add({
-      id: record.id,
-      billboard: { image: 'fallback', show: true },
-      polyline: { show: true },
-      polygon: { show: true },
+    Object.assign(alprMarkers.write(markers.add(record.id)), {
+      record,
+      position: Cesium.Cartesian3.fromDegrees(
+        record.longitude,
+        record.latitude,
+      ),
     });
+  markers.flush();
   const state = {
     enabled: true,
     selectedId: null,
-    dataSource: { entities },
+    markers,
     viewer: {
       camera: { positionWC: Cesium.Cartesian3.fromDegrees(-97, 30, 500) },
       scene: { globe: { show: true, getHeight: () => 150 } },
     },
   };
+  const { unbind } = bindFakeCesiumScene(state.viewer, { draw: drawPort });
   let paint,
     mapListener,
     active,
@@ -82,6 +92,7 @@ function harness(t, count = 2, { floor = null } = {}) {
     if (previousImage === undefined) delete globalThis.Image;
     else globalThis.Image = previousImage;
     Cesium.SceneTransforms.worldToWindowCoordinates = project;
+    unbind();
   });
   const draw = [];
   const ctx = {
@@ -105,7 +116,11 @@ function harness(t, count = 2, { floor = null } = {}) {
     state,
     records,
     overlay,
-    entities,
+    markers,
+    iconSet,
+    /** A marker's carrier, and the icon last sent for it. */
+    carrier: (id) => markers.get(id),
+    icon: (id) => iconSet.items.get(id),
     draw,
     paint: (occluder) => paint({ ctx, width: 800, height: 600, occluder }),
     /** Run the sampling step queued for the next animation frame, if any. */
@@ -139,20 +154,25 @@ test('a selected camera without a bearing gets its badge and brackets, never a f
   assert.ok(h.draw[0].endsWith('alpr-marker-selected.png'));
   assert.ok(h.draw[1].endsWith('alpr-marker-selected-brackets.png'));
   assert.equal(h.overlay.pick({ x: 100, y: 100 }), 'camera:0');
-  assert.equal(h.entities.getById('camera:0').billboard.show.getValue(), true);
+  assert.equal(h.icon('camera:0').show, true);
+  assert.equal(h.icon('camera:0').color[3], 0.01, 'a faint pick target');
   assert.equal(
-    h.entities.getById('camera:0').billboard.color.getValue().alpha,
-    0.01,
+    h.icon('camera:0').meta,
+    h.carrier('camera:0'),
+    'a pick hands point-and-ask the context carrier',
   );
   assert.equal(directionWedgePositions(h.records[0]), null);
 });
 
 test('the overlay bounds its cohort and promotes selection while leaving farther cameras native', (t) => {
-  const h = harness(t, 70);
+  // Floor anchors, so every camera anchors in one paint.
+  const h = harness(t, 70, { floor: 150 });
   h.state.selectedId = 'camera:69';
   h.overlay.sync(h.records);
   h.paint();
-  const hidden = h.entities.values.filter((e) => e.gevAlprNativeAppearance);
+  const hidden = [...h.markers.values()].filter(
+    (carrier) => alprMarkers.read(carrier)?.canvasOwned,
+  );
   assert.equal(hidden.length, 64);
   assert.ok(hidden.some((e) => e.id === 'camera:69'));
   assert.equal(
@@ -168,24 +188,25 @@ test('surface changes invalidate cached anchors, and disable/disposal release pa
   const h = harness(t, 1);
   h.overlay.sync(h.records);
   h.paint();
-  const entity = h.entities.getById('camera:0');
-  const first = entity.gevAlprCanvasPosition;
+  const carrier = h.carrier('camera:0');
+  const first = alprMarkers.read(carrier)?.canvasPosition;
   h.paint();
   assert.equal(
-    entity.gevAlprCanvasPosition,
+    alprMarkers.read(carrier)?.canvasPosition,
     first,
     'stable anchor across frames',
   );
   h.state.viewer.scene.globe.show = false;
   h.mapChanged();
-  assert.equal(entity.gevAlprCanvasPosition, null);
+  assert.equal(alprMarkers.read(carrier)?.canvasPosition, null);
   h.state.enabled = false;
   h.overlay.clear();
   assert.equal(h.active, false);
   assert.equal(h.overlay.pick({ x: 100, y: 100 }), null);
-  assert.equal(entity.billboard.show.getValue(), true);
-  assert.equal(entity.billboard.color, undefined);
-  assert.equal(entity.position, undefined);
+  const icon = h.icon('camera:0');
+  assert.equal(icon.show, true);
+  assert.equal(icon.color, undefined, 'the native badge again');
+  assert.equal(icon.pos, alprMarkers.read(carrier).position);
   h.overlay.destroy();
   assert.equal(h.removed, 1);
 });
@@ -195,7 +216,8 @@ test('an unresolved surface preserves the native marker; the horizon removes ove
   h.state.viewer.scene.globe.getHeight = () => -15000;
   h.overlay.sync(h.records);
   h.paint();
-  assert.equal(h.entities.getById('camera:0').billboard.show.getValue(), true);
+  assert.equal(h.icon('camera:0').show, true);
+  assert.equal(h.icon('camera:0').color, undefined);
   assert.equal(h.draw.length, 0);
   h.state.viewer.scene.globe.getHeight = () => 150;
   h.paint({ isPointVisible: () => false });
@@ -203,18 +225,37 @@ test('an unresolved surface preserves the native marker; the horizon removes ove
   assert.equal(h.draw.length, 0);
 });
 
-test('repeated paints of a still view never rewrite marker properties', (t) => {
-  // Each Entity write raises definitionChanged; paint used to hide then show
-  // every overlay camera's native marker on every frame.
+test('repeated paints of a still view never rewrite markers', (t) => {
+  // Paint used to hide then show every overlay camera's native marker on
+  // every frame.
   const h = harness(t, 3);
   h.overlay.sync(h.records);
   h.paint();
-  let changes = 0;
-  for (const entity of h.entities.values)
-    entity.definitionChanged.addEventListener(() => changes++);
+  h.paint();
+  const writes = h.iconSet.writes;
   for (let i = 0; i < 5; i++) h.paint();
-  assert.equal(changes, 0);
-  assert.equal(h.entities.getById('camera:0').billboard.show.getValue(), true);
+  assert.equal(h.iconSet.writes, writes);
+  assert.equal(h.icon('camera:0').show, true);
+});
+
+test('a resync hands back only the cameras that leave the overlay', (t) => {
+  const h = harness(t, 2, { floor: 150 });
+  h.overlay.sync(h.records);
+  h.paint();
+  assert.equal(h.icon('camera:0').color[3], 0.01);
+  assert.equal(h.icon('camera:1').color[3], 0.01);
+  const writes = h.iconSet.writes;
+  h.overlay.sync([h.records[0]]);
+  h.markers.flush();
+  assert.equal(h.icon('camera:1').color, undefined, 'native again');
+  assert.equal(h.icon('camera:0').color[3], 0.01, 'still under the canvas');
+  assert.equal(
+    h.iconSet.writes,
+    writes + 1,
+    'one write, for the camera that left',
+  );
+  h.paint();
+  assert.equal(h.iconSet.writes, writes + 1, 'the next paint writes nothing');
 });
 
 test('adapter labels never claim a custom source is public OSM data', () => {
@@ -251,13 +292,16 @@ test('overlay glyphs and native badges shrink alike with distance', () => {
   assert.ok(Math.abs(markerScale(20_250) - 0.8) < 1e-9);
 });
 
-/** A photoreal scene: no globe, the rendered surface read by depth samples. */
+/** A photoreal scene: the globe hidden, the rendered surface read by depth samples. */
 function photoreal(h, heightAt = () => 172) {
   const scene = h.state.viewer.scene;
   h.state.viewer.camera.directionWC = Cesium.Cartesian3.UNIT_X;
   scene.globe.show = false;
   scene.sampleHeightSupported = true;
-  scene.primitives = { length: 0, get: () => null };
+  rendererOf(h.state.viewer).globe = {
+    isSettled: () => true,
+    isGlobeVisible: () => scene.globe.show,
+  };
   const sampled = [];
   scene.sampleHeight = (carto) => {
     sampled.push(carto);
@@ -268,12 +312,12 @@ function photoreal(h, heightAt = () => 172) {
 
 const anchorHeight = (h, id) =>
   Cesium.Cartographic.fromCartesian(
-    h.entities.getById(id).gevAlprCanvasPosition,
+    alprMarkers.read(h.carrier(id))?.canvasPosition,
   ).height;
 
 /** Run sampling frames until none is queued, waiting out the 250 ms look-again. */
-function settle(t, h) {
-  for (let i = 0; i < 400; i++) if (!h.frame()) t.mock.timers.tick(250);
+function settle(t, h, rounds = 400) {
+  for (let i = 0; i < rounds; i++) if (!h.frame()) t.mock.timers.tick(250);
 }
 
 test('a still view replaces floor anchors with the rendered surface, within the floor window', (t) => {
@@ -329,13 +373,12 @@ test('a paint never samples the surface; frames take one sample each', (t) => {
   assert.ok(h.draw.length > 0, 'anchored cameras paint on the overlay');
 });
 
-test('a terrain globe is read from its mesh, never depth-sampled', (t) => {
+test('a drawn globe is read from its terrain, never depth-sampled', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   const h = harness(t, 3, { floor: 150 });
   const sampled = photoreal(h);
   const scene = h.state.viewer.scene;
   scene.globe.show = true;
-  scene.globe.tilesLoaded = true;
   let reads = 0;
   scene.globe.getHeight = () => {
     reads++;
@@ -361,17 +404,19 @@ test('surface answers outlive rebuilt markers and a re-enable, until the map cha
   assert.equal(sampled.length, 4);
   const before = h.records.map((record) => anchorHeight(h, record.id));
 
-  // A refresh or a toggle removes the entities and builds new ones.
+  // Turning the layer off drops the markers; turning it on builds new ones.
   const rebuild = () => {
     h.overlay.clear();
-    h.entities.removeAll();
+    h.markers.clear();
     for (const record of h.records)
-      h.entities.add({
-        id: record.id,
-        billboard: { image: 'fallback', show: true },
-        polyline: { show: true },
-        polygon: { show: true },
+      Object.assign(alprMarkers.write(h.markers.add(record.id)), {
+        record,
+        position: Cesium.Cartesian3.fromDegrees(
+          record.longitude,
+          record.latitude,
+        ),
       });
+    h.markers.flush();
     h.overlay.sync(h.records);
     h.paint();
     settle(t, h);
@@ -396,4 +441,70 @@ test('surface answers outlive rebuilt markers and a re-enable, until the map cha
   h.paint();
   settle(t, h);
   assert.equal(sampled.length, 9, 'a new map surface is sampled afresh');
+});
+
+test('a bearing wedge is plain ECEF at the apex and its two far corners', () => {
+  const record = { latitude: 30.26, longitude: -97.74, directionDeg: 90 };
+  const wedge = directionWedgePositions(record, 150, (lat) =>
+    lat > 30.26 ? 160 : null,
+  );
+  assert.equal(wedge.length, 3);
+  const apex = Cesium.Cartesian3.fromDegrees(-97.74, 30.26, 150);
+  assert.deepEqual({ ...wedge[0] }, { x: apex.x, y: apex.y, z: apex.z });
+  const heights = wedge.map(
+    (p) =>
+      Cesium.Cartographic.fromCartesian(new Cesium.Cartesian3(p.x, p.y, p.z))
+        .height,
+  );
+  // The corner north of the apex takes the sampled height; the other falls back.
+  assert.ok(heights.some((h) => Math.abs(h - 160) < 1e-6));
+  assert.ok(heights.slice(1).some((h) => Math.abs(h - 150) < 1e-6));
+});
+
+test('anchors wait for the surface heights answer from: the globe’s terrain while shown, else the shown 3D tiles', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const h = harness(t, 1, { floor: 150 });
+  const scene = h.state.viewer.scene;
+  h.state.viewer.camera.directionWC = Cesium.Cartesian3.UNIT_X;
+  scene.sampleHeightSupported = true;
+  let samples = 0;
+  scene.sampleHeight = () => (samples++, 172);
+  // The renderer's own `surface` rule; a non-base tileset still streaming
+  // over a hidden globe leaves it unsettled.
+  let surface = false;
+  const asked = new Set();
+  rendererOf(h.state.viewer).globe = {
+    isSettled: (kind) => (asked.add(kind), kind === 'surface' ? surface : true),
+    isGlobeVisible: () => false,
+  };
+  h.overlay.sync(h.records);
+  h.paint();
+  settle(t, h, 8);
+  assert.equal(samples, 0, 'no samples while the surface streams');
+  assert.deepEqual([...asked], ['surface']);
+  surface = true;
+  settle(t, h);
+  assert.ok(samples > 0, 'sampled once it has loaded');
+});
+
+test('without height sampling no sample is spent, and the terrain anchors only while the globe is drawn', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  for (const shown of [true, false]) {
+    const h = harness(t, 1);
+    let samples = 0;
+    h.state.viewer.scene.sampleHeight = () => (samples++, 172);
+    const renderer = rendererOf(h.state.viewer);
+    renderer.capabilities = new Set();
+    renderer.globe = { isSettled: () => true, isGlobeVisible: () => shown };
+    h.overlay.sync(h.records);
+    h.paint();
+    settle(t, h);
+    h.paint();
+    assert.equal(samples, 0, 'nothing sampled without the capability');
+    assert.equal(
+      Boolean(alprMarkers.read(h.carrier('camera:0'))?.canvasPosition),
+      shown,
+      shown ? 'anchored on the terrain' : 'no terrain under hidden globe',
+    );
+  }
 });

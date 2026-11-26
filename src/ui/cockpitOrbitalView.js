@@ -1,20 +1,15 @@
 /** The orbital (satellite) view of the Cockpit controller: camera, zoom, look and HUD. */
-import * as Cesium from 'cesium';
+import { isFollowing } from '../data/followed.js';
+import { clone } from '../geo/vector.js';
+import { cameraOf, canvasOf, findGlobe } from '../render/rendererOf.js';
 import { formatNumber, msg, t } from '../i18n/index.js';
 import {
   ORBITAL_DEFAULT_ZOOM,
-  ORBITAL_PREFETCH_INTERVAL_MS,
-  centreLinesFirst,
-  ORBITAL_PREFETCH_MAX_TILES,
-  ORBITAL_PREFETCH_MIN_ZOOM,
   ORBITAL_SETTLE_BLUR_PX,
   ORBITAL_ZOOM_LADDER,
   ORBITAL_ZOOM_TRANSITION_MS,
-  cesiumFrustumFovRad,
   footprintWidthKm,
   fovForZoom,
-  groundTrackAhead,
-  imageryLevelForView,
   interpolateZoomFov,
   nadirOrientation,
   nextOrbitalZoom,
@@ -27,7 +22,6 @@ import {
   previousOrbitalZoom,
   sensorStripFraction,
   sensorSwathZoom,
-  tilesForPoints,
   wheelZoomStep,
   zoomSettleHolding,
   zoomTransitionState,
@@ -41,6 +35,10 @@ import {
 import { cockpitUiUpdateDue } from '../cockpitMath.js';
 import { createPlaceTracker, nearPlaceRadiusKm } from '../data/placeBelow.js';
 import { isPointerFree } from '../data/inputOwnership.js';
+import {
+  issNextMountView,
+  issPreviousMountView,
+} from '../layers/satellites/issMounts.js';
 import { zoomableSwathKm } from '../layers/satellites/sensors.js';
 import {
   easeOrbitalLook,
@@ -48,7 +46,10 @@ import {
   releaseOrbitalFocus,
   updateOrbitalFocus,
 } from './cockpitOrbitalFocus.js';
-import { orbitalEyePosition } from './cockpitOrbitalSatellites.js';
+import {
+  orbitalEyePosition,
+  switchOrbitalSatellite,
+} from './cockpitOrbitalSatellites.js';
 import {
   COCKPIT_CONTEXT_UPDATE_MS,
   COCKPIT_HUD_UPDATE_MS,
@@ -79,27 +80,27 @@ const IDLE_TRANSITION = Object.freeze({
 const NADIR_LOOK = Object.freeze({ yawDeg: 0, pitchDeg: 0 });
 
 /**
- * Start an orbital session's state. Keeps the camera's own field of view so
- * the exit can put it back exactly.
+ * Start an orbital session's state. The exit gives the field of view back
+ * to the renderer, as it was before the session.
  */
 export function beginOrbital() {
-  const frustum = this.viewer.camera?.frustum;
   const state = {
     imagery: acquireOrbitImagery(this.services),
     zoom: ORBITAL_DEFAULT_ZOOM,
     // Wheel scrolling summed toward the next zoom step (wheelZoomStep).
     wheel: null,
-    // Imagery pre-loaded ahead of the ground track from 16x: when it last
-    // looked ahead, and the tiles already asked for (oldest first).
-    prefetchMs: -Infinity,
-    prefetched: new Set(),
-    // The provider those tiles came from, and the requests still in flight.
-    prefetchProvider: null,
-    prefetchRequests: new Set(),
     // A zoom step in flight: the magnification it started from and when.
     transition: null,
     previousUp: null,
-    savedFov: Number.isFinite(frustum?.fov) ? frustum.fov : null,
+    // The station's view shown (its key and name) and the views on offer;
+    // null and none for any other satellite. The key is kept while the
+    // model is away, so the same view comes back with it.
+    mountKey: null,
+    mount: null,
+    mountViews: [],
+    // A view of a module with no catalog entry (the Cupola) carries the
+    // card shown in place of the entry it rides; null otherwise.
+    mountCard: null,
     altitudeM: null,
     verticalFov: null,
     lastBriefMs: 0,
@@ -129,11 +130,8 @@ export function endOrbital() {
   if (!state) return;
   this.orbital = null;
   state.placeTracker?.reset();
-  // Pre-loads still queued or in flight are for a view no longer shown.
-  for (const request of state.prefetchRequests) request.cancel?.();
-  state.prefetchRequests.clear();
-  const frustum = this.viewer.camera?.frustum;
-  if (frustum && state.savedFov !== null) frustum.fov = state.savedFov;
+  // The renderer's own field of view again, following the view's shape.
+  cameraOf(this.viewer).setFov(null);
   // Back to the map the operator had, unless they picked another meanwhile.
   state.imagery?.release?.()?.catch?.(() => {});
   this.publishOrbital(null);
@@ -150,10 +148,7 @@ function trackPlace(info, nowMs) {
   if (!state?.placeTracker) return;
   let nearKm = null;
   if (Number.isFinite(info.altitudeM)) {
-    const frustum = this.viewer.camera?.frustum;
-    const aspect = Number.isFinite(frustum?.aspectRatio)
-      ? frustum.aspectRatio
-      : canvasAspect(this.viewer);
+    const aspect = viewAspect(this.viewer);
     const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
     // The field of view is vertical: aspect 1 gives the ground height.
     nearKm = nearPlaceRadiusKm(
@@ -246,13 +241,7 @@ function applyFov(state, altitudeM, nowMs) {
     reading.transition = IDLE_TRANSITION;
   }
   state.verticalFov = reading.fov;
-  const frustum = this.viewer.camera?.frustum;
-  if (frustum && 'fov' in frustum) {
-    const aspect = Number.isFinite(frustum.aspectRatio)
-      ? frustum.aspectRatio
-      : canvasAspect(this.viewer);
-    frustum.fov = cesiumFrustumFovRad(reading.fov, aspect);
-  }
+  cameraOf(this.viewer).setFov({ vertical: reading.fov });
   return reading;
 }
 
@@ -261,23 +250,16 @@ function applyFov(state, altitudeM, nowMs) {
  * globe; with the globe hidden (Google 3D kept) there is nothing to wait for.
  */
 function tilesLoaded(viewer) {
-  const globe = viewer.scene?.globe;
-  return !globe?.show || globe.tilesLoaded !== false;
+  const globe = findGlobe(viewer);
+  if (!globe || globe.isGlobeVisible?.() === false) return true;
+  return globe.isSettled('imagery') !== false;
 }
 
 function canvasAspect(viewer) {
-  const canvas = viewer.scene?.canvas;
+  const canvas = canvasOf(viewer);
   const width = canvas?.clientWidth;
   const height = canvas?.clientHeight;
   return width > 0 && height > 0 ? width / height : 1;
-}
-
-/** Copy a plain vector into a Cesium scratch. */
-function intoCartesian(vector, result) {
-  result.x = vector.x;
-  result.y = vector.y;
-  result.z = vector.z;
-  return result;
 }
 
 /**
@@ -290,8 +272,8 @@ function intoCartesian(vector, result) {
  */
 export function updateOrbital(nowMs) {
   // Tracking anything from orbit (an aircraft, another satellite) ends the
-  // view and leaves Cesium tracking with that target.
-  if (this.viewer.trackedEntity?.position) {
+  // view and leaves the camera following that target.
+  if (isFollowing(this.viewer)) {
     this.exit({ restoreTracking: false });
     return;
   }
@@ -305,8 +287,49 @@ export function updateOrbital(nowMs) {
   );
   if (!position) return;
   const state = this.orbital;
+  // The station is ridden from a point on its 3D model, looking along it,
+  // in place of the straight-down picture (the satellites layer says where).
+  const mount =
+    this.services.satellitesLayer?.getCockpitMount?.(state.mountKey) ?? null;
+  if (mount?.key) state.mountKey = mount.key;
+  state.mountViews = mount?.views ?? [];
+  state.mountCard = mount?.card ?? null;
+  // Each view belongs to an entry of its own (Nauka, the ISS, Poisk, the
+  // docked vehicle). The Cockpit rides that entry, so the readout, the TLE
+  // and the signals describe the module the view is from, not the one first
+  // selected. The switch lands on the next frame; one that fails is not
+  // retried until the view changes.
+  if (
+    mount?.noradId !== null &&
+    mount?.noradId !== undefined &&
+    String(mount.noradId) !== String(this.subjectId) &&
+    state.mountSwitchFailed !== mount.key
+  ) {
+    if (switchOrbitalSatellite.call(this, mount.noradId)) return;
+    state.mountSwitchFailed = mount.key;
+  }
+  // The model can load after entry, and the picture then changes under the
+  // TRACK ACQUIRED line that named it: say which it is now.
+  const riding = mount !== null;
+  const changed = state.riding !== undefined && state.riding !== riding;
+  state.riding = riding;
+  if (changed) {
+    this.signalItems = (this.signalItems ?? []).filter(
+      (item) => item.key !== 'track',
+    );
+    this.signalSignatures?.delete('track');
+    this.pushCockpitSignal(
+      'track',
+      'track',
+      t('TRACK ACQUIRED'),
+      this.orbitalViewSignal(info),
+    );
+  }
+  state.mount = mount ? mount.label || '' : null;
   // On the satellite, or on the way to it after Previous/Next.
-  const eye = orbitalEyePosition(state, position, nowMs);
+  const eye = mount
+    ? clone(mount.position)
+    : orbitalEyePosition(state, position, nowMs);
   // Track-up: the ground track at the top, so the picture scrolls along it.
   // A geostationary satellite has no track and stays north-up.
   const nadir = nadirOrientation(eye, {
@@ -326,25 +349,42 @@ export function updateOrbital(nowMs) {
     this.lastSubjectInfo = info;
     goToZoom.call(this, maxZoom);
   }
-  // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js).
-  if (!updateOrbitalFocus.call(this, state, nadir, eye, nowMs))
+  // A ground focus aims the look itself (src/ui/cockpitOrbitalFocus.js),
+  // in the frame the arrows turn: from a station view, its own, from its
+  // camera point on the station. The same ±45° reach holds about it.
+  if (
+    !updateOrbitalFocus.call(
+      this,
+      state,
+      mount ?? nadir,
+      eye,
+      nowMs,
+      mount ? nadir : null,
+    )
+  )
     state.lookView = easeOrbitalLook(
       state,
       nowMs - (state.lookLastMs || nowMs),
       { immediate: prefersReducedMotion() },
     );
   state.lookLastMs = nowMs;
-  const view = offNadirOrientation(nadir, {
+  // The arrows tilt the view about its own frame: the nadir one, or the
+  // mount's.
+  const view = offNadirOrientation(mount ?? nadir, {
     northDeg: state.lookView.pitchDeg,
     eastDeg: state.lookView.yawDeg,
   });
   const zoomStepping = Boolean(state.transition);
   const reading = applyFov.call(this, state, info.altitudeM, nowMs);
-  this.viewer.camera.setView({
-    destination: eye,
+  cameraOf(this.viewer).setView({
+    destination: { x: eye.x, y: eye.y, z: eye.z },
     orientation: {
-      direction: intoCartesian(view.direction, this.scratchForward),
-      up: intoCartesian(view.up, this.scratchUp),
+      direction: {
+        x: view.direction.x,
+        y: view.direction.y,
+        z: view.direction.z,
+      },
+      up: { x: view.up.x, y: view.up.y, z: view.up.z },
     },
   });
   this.lastSubjectInfo = info;
@@ -366,169 +406,6 @@ export function updateOrbital(nowMs) {
     this.lastContextUpdateMs = nowMs;
     updateOrbitalContext.call(this, info, nowMs);
   }
-  prefetchImageryAhead.call(this, info, nowMs);
-}
-
-/** Tiles remembered as asked for in one orbital session. */
-const PREFETCH_MEMORY = 512;
-
-/** How far the shown time may be from now for the look-ahead to run, ms. */
-const PREFETCH_LIVE_TOLERANCE_MS = 60_000;
-
-/**
- * From 16x the view is 10 to 40 km wide while the ground track moves about
- * 7 km/s, so the imagery under it arrives late. Every
- * ORBITAL_PREFETCH_INTERVAL_MS ask the globe's base imagery for the tiles
- * the view will need 5 to 20 s ahead (`groundTrackAhead`), at the level
- * Cesium will draw there (`imageryLevelForView`), so the browser has them
- * cached when the view gets there. The requests are throttled at the
- * lowest priority: Cesium's request scheduler declines one while the
- * imagery server's slots are taken by the tiles on screen or the scheduler
- * is full, and a declined tile is asked again on a later look-ahead. At most
- * ORBITAL_PREFETCH_MAX_TILES a time; the last PREFETCH_MEMORY tiles asked
- * for are not asked again unless their request failed, and a new base map
- * starts the memory over. Exit cancels the requests still pending. Nothing
- * below 16x, while the view is tilted off nadir (it no longer looks at the
- * track), with the world clock away from now (paused, played back), after
- * the exit, or with the globe hidden (Google 3D tiles drawn instead).
- * @returns {number} The tiles asked for.
- */
-export function prefetchImageryAhead(info, nowMs) {
-  const state = this.orbital;
-  if (!state || !(state.zoom >= ORBITAL_PREFETCH_MIN_ZOOM)) return 0;
-  // Tilted, the view looks off the track the pre-load follows.
-  if (lookIsOffset(state.lookTarget, 0) || lookIsOffset(state.lookView, 0))
-    return 0;
-  if (nowMs - state.prefetchMs < ORBITAL_PREFETCH_INTERVAL_MS) return 0;
-  // The look-ahead runs at live speed: with the world clock paused, played
-  // back or moved, the view will not pass where it points.
-  if (
-    Number.isFinite(info.atMs) &&
-    Math.abs(info.atMs - Date.now()) > PREFETCH_LIVE_TOLERANCE_MS
-  )
-    return 0;
-  state.prefetchMs = nowMs;
-  try {
-    const globe = this.viewer.scene?.globe;
-    if (!globe || globe.show === false) return 0;
-    const provider = baseImageryProvider(this.viewer);
-    if (!provider) return 0;
-    // Another base map: its tiles have not been asked for.
-    // A fresh set, so a late failure from the old map's requests cannot
-    // drop a tile the new one has fetched.
-    if (provider !== state.prefetchProvider) {
-      for (const request of state.prefetchRequests) request.cancel?.();
-      state.prefetchRequests = new Set();
-      state.prefetched = new Set();
-      state.prefetchProvider = provider;
-    }
-    const fov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
-    const viewKm = footprintWidthKm(
-      info.altitudeM,
-      fov,
-      viewAspect(this.viewer),
-    );
-    // The ground one CSS pixel covers at the nadir point, as Cesium's
-    // screen-space error measures it: the vertical field of view over the
-    // canvas height, at the satellite's altitude.
-    const canvas = this.viewer.scene?.canvas;
-    const heightPx = canvas?.clientHeight || canvas?.height;
-    const terrain =
-      this.viewer.terrainProvider ?? this.viewer.scene?.globe?.terrainProvider;
-    const level = imageryLevelForView(provider.tilingScheme, {
-      metresPerPixel: (info.altitudeM * 2 * Math.tan(fov / 2)) / heightPx,
-      latitudeDeg: info.latitude,
-      geographic:
-        provider.tilingScheme.projection instanceof Cesium.GeographicProjection,
-      tileWidthPx: provider.tileWidth,
-      minimumLevel: provider.minimumLevel,
-      maximumLevel: provider.maximumLevel,
-      maximumScreenSpaceError: globe.maximumScreenSpaceError,
-      terrainLevelErrorM:
-        typeof terrain?.getLevelMaximumGeometricError === 'function'
-          ? (terrainLevel) =>
-              terrain.getLevelMaximumGeometricError(terrainLevel)
-          : undefined,
-    });
-    if (level === null) return 0;
-    const memory = state.prefetched;
-    const tiles = tilesForPoints(
-      provider.tilingScheme,
-      centreLinesFirst(groundTrackAhead(info, viewKm)),
-      level,
-      {
-        maxTiles: ORBITAL_PREFETCH_MAX_TILES,
-        skip: (key) => memory.has(key),
-      },
-    );
-    let asked = 0;
-    for (const tile of tiles) {
-      let pending;
-      let request;
-      try {
-        // The tiles on screen keep their slots: Cesium's scheduler declines
-        // this request while the imagery server's slots are taken (shared
-        // with the globe's own tile requests, throttleByServer) or the
-        // scheduler is full, and at the lowest priority it is the first
-        // dropped from the priority heap, never one the screen asked for.
-        pending = provider.requestImage(
-          tile.x,
-          tile.y,
-          tile.level,
-          (request = new Cesium.Request({
-            throttle: true,
-            throttleByServer: true,
-            priority: Number.MAX_VALUE,
-            type: Cesium.RequestType.IMAGERY,
-          })),
-        );
-      } catch {
-        continue;
-      }
-      // A provider that declines now (throttled) is asked again later.
-      if (!pending) continue;
-      const requests = state.prefetchRequests;
-      requests.add(request);
-      Promise.resolve(pending).then(
-        () => requests.delete(request),
-        (error) => {
-          requests.delete(request);
-          // Dropped by the scheduler (rejected with no error): asked again
-          // later. A tile that failed to load stays remembered, so one
-          // missing from the map is not asked for every look-ahead.
-          if (error === undefined) memory.delete(tile.key);
-        },
-      );
-      memory.add(tile.key);
-      if (memory.size > PREFETCH_MEMORY)
-        memory.delete(memory.values().next().value);
-      asked += 1;
-    }
-    return asked;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * The provider of the lowest shown imagery layer, the base map the globe
- * drapes, when it can be asked for a tile; else null.
- */
-function baseImageryProvider(viewer) {
-  const layers = viewer.imageryLayers ?? viewer.scene?.imageryLayers;
-  const count = Number.isInteger(layers?.length) ? layers.length : 0;
-  for (let i = 0; i < count; i += 1) {
-    const layer = layers.get(i);
-    if (!layer || layer.show === false || layer.alpha === 0) continue;
-    const provider = layer.imageryProvider;
-    if (
-      typeof provider?.requestImage === 'function' &&
-      typeof provider.tilingScheme?.positionToTileXY === 'function'
-    )
-      return provider;
-    return null;
-  }
-  return null;
 }
 
 /**
@@ -626,9 +503,7 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
   if (!state || !info) return;
   const focus = orbitalFocusReadout.call(this);
   const offset = Boolean(focus) || lookIsOffset(state.lookTarget, 0);
-  const aspect = Number.isFinite(this.viewer.camera?.frustum?.aspectRatio)
-    ? this.viewer.camera.frustum.aspectRatio
-    : canvasAspect(this.viewer);
+  const aspect = viewAspect(this.viewer);
   const settledFov = fovForZoom(orbitalBaseFovRad(info.altitudeM), state.zoom);
   const footprintKm = footprintWidthKm(info.altitudeM, settledFov, aspect);
   // The strip is drawn over the picture, so it follows the view as a step
@@ -666,9 +541,19 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
       northDeg: state.lookView?.pitchDeg ?? 0,
       eastDeg: state.lookView?.yawDeg ?? 0,
     });
+  // Riding the station from a mount on its model: the view's name, and no
+  // ground readings, which describe the nadir picture.
+  const mount = state.mount ?? null;
+  // A module with no catalog entry of its own shows its own card: its name,
+  // what it is and a few facts, in place of the entry's identity and TLE.
+  const card = mount !== null ? (state.mountCard ?? null) : null;
   this.publishOrbital({
-    name: info.name,
-    classLabel: info.classLabel || '',
+    name: card ? card.name : info.name,
+    mount,
+    facts: card ? card.facts.map((fact) => t(fact)) : null,
+    // How many views the station offers: the arrows show with two or more.
+    mountViews: mount === null ? 0 : (state.mountViews?.length ?? 0),
+    classLabel: card ? t(card.classLabel) : info.classLabel || '',
     altitudeM: info.altitudeM,
     velocityMps: Number.isFinite(info.velocityMps) ? info.velocityMps : null,
     latitude: info.latitude,
@@ -676,12 +561,12 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     zoom: state.zoom,
     zoomSteps: ORBITAL_ZOOM_LADDER.filter((step) => step <= maxZoom),
     maxZoom,
-    footprintKm: offset ? null : footprintKm,
+    footprintKm: offset || mount !== null ? null : footprintKm,
     // The imaging sensor's swath, drawn to scale; null without one. The
     // SENSOR step's zoom is null when the swath lies outside 1x..maxZoom.
     // Looking past the limb there is no ground for it to cover: no sensor.
     sensor:
-      swathKm === null || !seesEarth
+      swathKm === null || !seesEarth || mount !== null
         ? null
         : {
             label: info.sensor?.label ?? null,
@@ -699,18 +584,22 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     transition: { ...transition },
     look: {
       offset,
-      readout: focus
-        ? wordFocusOffNadir(focus)
-        : offset
-          ? wordOffNadir(state.lookTarget, { trackUp })
-          : '',
+      // From a mount the tilt is about the mount's frame, not the nadir.
+      readout:
+        mount !== null
+          ? ''
+          : focus
+            ? wordFocusOffNadir(focus)
+            : offset
+              ? wordOffNadir(state.lookTarget, { trackUp })
+              : '',
       // The mapped point the view is held on, or null.
       focus: focus ? { key: focus.key, label: focus.label } : null,
       // Off nadir, the ground width at the view's centre, approximated from
       // the nadir footprint (`offNadirSwathScale`); 1 and null at nadir.
       swathScale,
       swathKm:
-        offset && seesEarth && Number.isFinite(footprintKm)
+        mount === null && offset && seesEarth && Number.isFinite(footprintKm)
           ? footprintKm * swathScale
           : null,
     },
@@ -719,21 +608,43 @@ export function publishOrbitalView(info, transition = IDLE_TRANSITION) {
     trackUp,
     northDeg: trackUp ? (360 - info.groundTrackDeg) % 360 : 0,
     place: state.place,
-    noradId: info.noradId ?? null,
-    cosparId: info.cosparId ?? null,
-    tle: info.tle ?? null,
+    noradId: card ? null : (info.noradId ?? null),
+    cosparId: card ? null : (info.cosparId ?? null),
+    tle: card ? null : (info.tle ?? null),
     // Read on the HUD's cadence, so the age stays current without a timer.
     // The gap between the TLE's epoch and the time the satellite is shown
     // at (the world clock's), either side: SGP4 drifts both ways.
-    tleAgeMs: Number.isFinite(info.tle?.epochMs)
-      ? Math.abs(
-          (Number.isFinite(info.atMs) ? info.atMs : Date.now()) -
-            info.tle.epochMs,
-        )
-      : null,
-    owner: info.owner ?? null,
-    operator: info.operator ?? null,
+    tleAgeMs:
+      !card && Number.isFinite(info.tle?.epochMs)
+        ? Math.abs(
+            (Number.isFinite(info.atMs) ? info.atMs : Date.now()) -
+              info.tle.epochMs,
+          )
+        : null,
+    owner: card ? null : (info.owner ?? null),
+    operator: card ? t(card.operator) : (info.operator ?? null),
   });
+}
+
+/**
+ * The TRACK ACQUIRED line for a satellite subject: which picture it gets.
+ * The station is ridden from a mount on its 3D model (once that is loaded);
+ * every other satellite looks straight down.
+ * @param {object} info Satellite subject.
+ * @returns {string}
+ */
+export function orbitalViewSignal(info) {
+  // A running session knows; on entry, before its first frame, the layer does.
+  const riding =
+    this.orbital?.riding ??
+    Boolean(
+      this.services.satellitesLayer?.getCockpitMount?.(
+        this.orbital?.mountKey ?? null,
+      ),
+    );
+  return riding
+    ? t('{label} · STATION VIEW', { label: info.name })
+    : t('{label} · NADIR VIEW', { label: info.name });
 }
 
 /**
@@ -750,6 +661,38 @@ export function updateOrbitalHud(info, nowMs = performance.now()) {
   trackPlace.call(this, info, nowMs);
   publishOrbitalView.call(this, info);
   updateOrbitalContext.call(this, info, nowMs, true);
+}
+
+/**
+ * The station view's arrows: move to its next view (from Nauka, from Zarya,
+ * from Poisk, from the Cupola, from Kibo, from a docked vehicle) or the one
+ * before, wrapping round, looking the way that view looks.
+ * @param {number} [direction] 1 for the next view, -1 for the one before.
+ * @returns {boolean} True when the view changed.
+ */
+export function stepOrbitalMount(direction = 1) {
+  if (!this.active || this.subjectKind !== 'satellite' || !this.orbital)
+    return false;
+  const state = this.orbital;
+  const step = direction < 0 ? issPreviousMountView : issNextMountView;
+  const next =
+    state.mount === null ? null : step(state.mountViews, state.mountKey);
+  if (!next) return false;
+  state.mountKey = next.key;
+  state.mount = next.label || '';
+  state.mountCard = next.card ?? null;
+  state.mountSwitchFailed = null;
+  // A ground focus was aimed from the old view: it ends with it.
+  if (state.focus) {
+    state.focus = null;
+    state.focusReleasing = false;
+    this.refreshOrbitalSignals?.();
+  }
+  // Each view has its own way of looking: the look goes back to it.
+  state.lookTarget = { ...NADIR_LOOK };
+  state.lookView = { ...NADIR_LOOK };
+  presentNow.call(this);
+  return true;
 }
 
 /** Re-apply the field of view and publish after a zoom or look change. */
@@ -848,9 +791,8 @@ function orbitalMaxZoomFor(info) {
 }
 
 function viewAspect(viewer) {
-  return Number.isFinite(viewer.camera?.frustum?.aspectRatio)
-    ? viewer.camera.frustum.aspectRatio
-    : canvasAspect(viewer);
+  const aspect = cameraOf(viewer).pose().aspectRatio;
+  return Number.isFinite(aspect) && aspect > 0 ? aspect : canvasAspect(viewer);
 }
 
 /**

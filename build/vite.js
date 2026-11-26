@@ -55,7 +55,8 @@ function photonEndpointSetting(value) {
  * Content-Security-Policy for every document the dev/preview server serves.
  * No inline script is permitted, and the only foreign script origins are the
  * three that the Bhote Koshi event's embedded media needs (YouTube, Facebook
- * and X), which frame-src matches for their players and posts. 'unsafe-eval' is
+ * and X), which frame-src matches for their players and posts; the stations'
+ * LIVE video uses the same YouTube player, after the viewer presses Play. 'unsafe-eval' is
  * required: Knockout (bundled inside @cesium/widgets) resolves the global
  * object with `(0, eval)("this")` at module load, and without it the Cesium
  * widget never initializes (verified in headless Chrome). It also covers
@@ -66,9 +67,10 @@ function photonEndpointSetting(value) {
  */
 export const BROWSER_CSP = [
   "default-src 'self'",
-  // The Bhote Koshi event's embedded media: the YouTube player API, the
-  // Facebook video SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js);
-  // and the Maps JavaScript API that Street Level's Google Street View runs on.
+  // The Bhote Koshi event's embedded media: the YouTube player API (also the
+  // stations' LIVE video, src/data/youtubeLivePlayer.js), the Facebook video
+  // SDK and X's post widget (src/data/bhoteKoshiEmbeddedMedia.js); and the
+  // Maps JavaScript API that Street Level's Google Street View runs on.
   "script-src 'self' 'unsafe-eval' blob: https://www.youtube.com https://connect.facebook.net https://platform.twitter.com https://maps.googleapis.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
@@ -258,6 +260,12 @@ export function createBrowserViteConfig({
         mapillaryToken ?? '',
       ),
     },
-    build: { chunkSizeWarningLimit: 1500 },
+    build: {
+      chunkSizeWarningLimit: 1500,
+      // The places pack's tiles stay files, read only when a lookup touches
+      // them; inlined, the small ones would all load with the first lookup.
+      assetsInlineLimit: (file) =>
+        file.includes('/wikidata_places/') ? false : undefined,
+    },
   };
 }
