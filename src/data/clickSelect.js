@@ -10,7 +10,7 @@
  * user's again: a drag, pan or zoom moves the map, and the thing stays
  * selected with its card and track. Following is only ever asked for
  * explicitly: the card's Follow, a spoken "track", or a second click on the
- * selected aircraft or satellite (`followOnSecondClick`).
+ * selected aircraft, satellite or ship (`followOnSecondClick`).
  *
  * One thing is selected at a time across these layers. A layer that selects
  * says so (`claimSelection`); every other layer hears it

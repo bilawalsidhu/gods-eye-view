@@ -15,6 +15,7 @@ import { flyToWorldTarget } from '../../worldFocus.js';
 import { distance, fromDegrees, normalize, sub } from '../../geo/index.js';
 import { bindClickCamera, dragOnMap } from '../../testSupport/clickCamera.mjs';
 import { createSelection } from './selection.js';
+import { readShareFollowSubject } from '../../ui/shareFollow.js';
 
 const part = (named = {}) =>
   new Proxy(named, {
@@ -30,11 +31,21 @@ function vesselsLayer(t) {
   };
   const camera = bindClickCamera(viewer);
   const input = fakeInput(viewer);
+  let drawnHeightM = 0;
   const vessel = { id: 'v1', name: 'NORTHERN STAR', lat: 30.2, lon: -97.6 };
+  const other = { id: 'v2', name: 'SOUTHERN CROSS', lat: 29.9, lon: -97.1 };
   const state = {
     feed: { enabled: true },
-    records: { byId: new Map([[vessel.id, vessel]]) },
-    icons: { setId: 'vessels:icons', has: (id) => id === vessel.id },
+    records: {
+      byId: new Map([
+        [vessel.id, vessel],
+        [other.id, other],
+      ]),
+    },
+    icons: {
+      setId: 'vessels:icons',
+      has: (id) => id === vessel.id || id === other.id,
+    },
     selectedRecord: null,
     interactionKeyTarget: new EventTarget(),
   };
@@ -61,6 +72,10 @@ function vesselsLayer(t) {
       },
       rendering: part({
         iconPosition: (record) => fromDegrees(record.lon, record.lat, 0),
+        // Where the layer draws it now (its placement): read by the follow.
+        drawnPositionNow: (record) =>
+          fromDegrees(record.lon, record.lat, drawnHeightM),
+        getVisual: (record) => ({ iconId: record.id }),
       }),
       cards: part({ displayVesselName: (record) => record.name }),
       photos: part(),
@@ -78,7 +93,14 @@ function vesselsLayer(t) {
   return {
     state,
     vessel,
+    other,
+    selection,
+    viewer,
     camera,
+    /** Move where the layer draws the vessels (their placement). */
+    drawAt(heightM) {
+      drawnHeightM = heightM;
+    },
     input,
     focusRequests,
     click(id) {
@@ -113,10 +135,64 @@ test('a drag after the click keeps the vessel selected and the camera free', (t)
   assert.equal(app.state.selectedRecord, app.vessel);
   assert.equal(app.camera.followed, null);
   assert.equal(app.camera.flights.length, 1);
-  // A click on it again centres it again, once.
+});
+
+test('a second click on the selected vessel follows it where the layer draws it; a click on the followed one keeps the follow', (t) => {
+  const app = vesselsLayer(t);
   app.click('v1');
-  assert.equal(app.camera.flights.length, 2);
+  dragOnMap(app.input);
+  app.camera.drag({ dLon: 0.4 });
+  app.click('v1');
+  assert.equal(app.camera.flights.length, 1, 'not centred again');
+  const followed = app.camera.followed;
+  assert.equal(followed?.key, 'ais-live-vessels:v1');
+  assert.equal(app.camera.follows.length, 1);
+  assert.equal(app.state.selectedRecord, app.vessel, 'still selected');
+  assert.equal(currentSelection()?.id, 'v1');
+  // The camera reads the layer's own placement, as the icon is drawn, and
+  // the drawn item where the renderer moves the icons itself.
+  assert.deepEqual(followed.item, { set: 'vessels:icons', id: 'v1' });
+  app.drawAt(12);
+  assert.ok(
+    distance(followed.position(0), fromDegrees(-97.6, 30.2, 12)) < 1e-6,
+  );
+  // The share link names the followed vessel.
+  const subject = readShareFollowSubject({ viewer: app.viewer });
+  assert.equal(subject?.kind, 'vessel');
+  assert.equal(subject?.id, 'v1');
+  // A click on the followed vessel keeps the follow as it is.
+  app.click('v1');
+  assert.equal(app.camera.followed, followed);
+  assert.equal(app.camera.follows.length, 1, 'no fresh follow');
+});
+
+test('a click on another vessel or the map while following ends the follow', (t) => {
+  const app = vesselsLayer(t);
+  app.click('v1');
+  app.click('v1');
+  assert.equal(app.camera.followed?.key, 'ais-live-vessels:v1');
+  app.click('v2');
+  assert.equal(app.state.selectedRecord, app.other);
   assert.equal(app.camera.followed, null);
+  assert.equal(app.camera.flights.length, 2, 'centred once');
+  app.click('v2');
+  assert.equal(app.camera.followed?.key, 'ais-live-vessels:v2');
+  app.click(null);
+  assert.equal(app.state.selectedRecord, null);
+  assert.equal(app.camera.followed, null);
+});
+
+test('the followed vessel selected again stays followed; another layer’s follow lets it go', (t) => {
+  const app = vesselsLayer(t);
+  app.click('v1');
+  app.click('v1');
+  const followed = app.camera.followed;
+  // Found again in its feed, or picked again.
+  app.selection.selectVessel(app.vessel);
+  assert.equal(app.camera.followed, followed);
+  assert.equal(app.state.followTarget, followed);
+  app.camera.port.follow({ key: 'flights:abc123', position: () => null });
+  assert.equal(app.state.selectedRecord, null);
 });
 
 test('another layer’s selection lets the vessel go; the vessel’s takes it back', (t) => {

@@ -18,7 +18,7 @@ import { useLayerCountsStore } from './stores/layerCounts.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useSpaceMissionsStore } from './stores/spaceMissions.js';
-import { bindRenderer } from '../render/rendererOf.js';
+import { bindRenderer, findCamera } from '../render/rendererOf.js';
 import { fakeInput } from '../input/testDoubles.mjs';
 import {
   _resetSelectionForTest,
@@ -624,6 +624,87 @@ test('an explicit moving row takes over a pending place flight, is selected in i
   assert.deepEqual(tracked, [], 'a pick never follows, runner or not');
   assert.deepEqual(picks.length, 2);
   assert.deepEqual(flights, ['aircraft', 'aircraft']);
+});
+
+test('a vessel card offers Follow, which tracks it as for an aircraft, and says Following while the camera follows it', async (t) => {
+  const viewer = { scene: {} };
+  const input = fakeInput(viewer);
+  let followed = null;
+  const listeners = new Set();
+  const unbind = bindRenderer(viewer, {
+    camera: {
+      pose: () => ({ heading: 0 }),
+      on: (name, cb) => {
+        if (name !== 'followChanged') return () => {};
+        listeners.add(cb);
+        return () => listeners.delete(cb);
+      },
+      get followed() {
+        return followed;
+      },
+      follow(target) {
+        followed = target;
+        for (const cb of [...listeners]) cb();
+      },
+      flyToBounds: () => {},
+    },
+  });
+  const vessel = {
+    id: 'v1',
+    layerId: 'ais-live-vessels',
+    label: 'NORTHERN STAR',
+    latitude: 30,
+    longitude: -97,
+    properties: { vesselId: 'v1' },
+  };
+  const layer = {
+    id: 'ais-live-vessels',
+    enabled: true,
+    module: { getAnalystRecords: () => [vessel] },
+  };
+  const dm = {
+    layers: new Map([[layer.id, layer]]),
+    getAll: () => [layer],
+    isEnabled: () => true,
+  };
+  const pinia = createPinia();
+  const disconnect = installEntityContext({
+    viewer,
+    pinia,
+    getDataManager: () => dm,
+  });
+  const store = useEntityCardStore(pinia);
+  t.after(() => {
+    store.clear();
+    disconnect();
+    input.destroy();
+    unbind();
+  });
+  const tracked = [];
+  useOmnibarStore(pinia).connectRunner((name, args) =>
+    tracked.push([name, args.query, args.layerId]),
+  );
+  assert.ok(
+    store.select({
+      layerId: 'ais-live-vessels',
+      id: 'v1',
+      label: 'NORTHERN STAR',
+      lat: 30,
+      lon: -97,
+    }),
+  );
+  assert.equal(store.canFollow(), true, 'Follow is offered for a ship');
+  store.follow();
+  await setImmediate();
+  assert.deepEqual(tracked, [['track_entity', 'v1', 'ais-live-vessels']]);
+  assert.equal(Boolean(store.isFollowing()), false);
+  // The layer follows it with the key naming it.
+  findCamera(viewer).follow({
+    key: 'ais-live-vessels:v1',
+    position: () => null,
+  });
+  await setImmediate();
+  assert.equal(Boolean(store.isFollowing()), true, 'Following');
 });
 
 test('a row its layer cannot select now is still framed', (t) => {

@@ -51,7 +51,7 @@ best effort: until the entity is found, and if it is not found in time, the
 camera is where the link was made, looking at the entity's last-known fix,
 and the app says that the entity isn't reporting and when the fix was taken.
 The share button makes a thing view while the camera follows an aircraft,
-military aircraft or satellite. While the camera follows nothing and a vessel
+military aircraft, satellite or vessel. While the camera follows nothing and a vessel
 is selected, it makes a vessel thing view: the fix is the vessel's position
 as drawn (as of the world time while the vessel layer follows the world
 clock, else as of its latest position report), and the offset is the one whose derived camera is
@@ -61,8 +61,9 @@ The opened camera is then within the offset's whole metres and degrees of
 where the link was made, looking at the vessel. When no offset can carry the
 camera, because it is not above the vessel's local horizontal (it would look
 up at the vessel, or through the earth) or its range is outside 1 m to
-10⁸ m, the link is a place view as before. A vessel is selected, not
-followed, so the camera stays where the user puts it. Following an entity
+10⁸ m, the link is a place view as before. An opened vessel link selects
+the vessel and does not follow it, whether it was followed or only selected
+when the link was made, so the camera stays where the user puts it. Following an entity
 takes priority over a selected vessel, and a followed entity the format
 cannot name still makes a place view. Opening a vessel thing view with a
 world time waits for the vessel layer's snapshot at that time and selects the

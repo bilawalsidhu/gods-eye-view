@@ -554,6 +554,27 @@ export function createQueries({
     },
 
     /**
+     * Follow a vessel by id with the camera (the card's Follow, a spoken
+     * "track"): selected as a click selects it, then followed where the
+     * layer draws it. The one already followed stays followed.
+     * @param {string|number} id Vessel id.
+     * @returns {boolean} True if the camera follows the vessel.
+     */
+    trackById(id) {
+      if (id === null || id === undefined || !state.feed.enabled) return false;
+      const record = recordFor(String(id).trim());
+      if (!record) return false;
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return components.selection.followSelected();
+    },
+
+    /** Whether the camera follows the selected vessel now. */
+    isFollowed() {
+      return components.selection.isSelectedFollowed();
+    },
+
+    /**
      * Clear the current vessel selection and reset the HUD readout.
      * @returns {boolean} Always true.
      */

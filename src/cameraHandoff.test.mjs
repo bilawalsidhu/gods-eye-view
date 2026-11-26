@@ -404,9 +404,9 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   );
   ordered(vesselClick, [
     'clickCard?.(event)',
-    'selectAndFocusVessel(carded)',
+    'clickVessel(carded)',
     "isOwnedByOtherLayer('ais-live-vessels', pickedId)",
-    'selectAndFocusVessel(record)',
+    'clickVessel(record)',
   ], 'vessel card on top, then sibling ownership');
   const vesselFocus = body(
     vessels,

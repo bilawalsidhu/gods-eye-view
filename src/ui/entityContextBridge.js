@@ -40,9 +40,14 @@ const FRAME_RANGE = Object.freeze({
 const DEFAULT_RANGE = 8_000;
 /**
  * Items the camera can follow: their layers follow through the camera port
- * with a key naming the item (src/data/followed.js). A vessel is flown to.
+ * with a key naming the item (src/data/followed.js).
  */
-const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
+const FOLLOWABLE = new Set([
+  'flights',
+  'military',
+  'satellites',
+  'ais-live-vessels',
+]);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -218,14 +223,14 @@ export function installEntityContext({
 
   // An item back in its feed after it left it is selected again in its layer,
   // as the click that picked it: a vessel is highlighted with its trail, and
-  // an aircraft found again (`follow`) is followed.
+  // an aircraft or vessel found again (`follow`) is followed.
   function reselect(card, { follow: andFollow = false } = {}) {
     const layer = getDataManager()?.layers?.get?.(card?.layerId)?.module;
     const id = card?.identity?.id;
     if (!layer || !id) return;
     try {
-      if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
-      else if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      else if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
     } catch {
       // A layer going away meanwhile has nothing to select.
     }

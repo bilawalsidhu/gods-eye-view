@@ -48,6 +48,10 @@ import {
 import { createVesselIconBook } from '../layers/vessels/iconBook.js';
 import { bindRenderer } from '../render/rendererOf.js';
 import { entityFollowTarget } from '../data/followed.js';
+import {
+  _resetSelectionForTest,
+  claimSelection,
+} from './clickSelect.js';
 
 test('open feed with vessels is healthy (null)', () => {
   assert.equal(
@@ -1059,6 +1063,7 @@ function installWireHarness(
   const camera = {
     pose: () => null,
     followed: null,
+    cancelFlight() {},
     follow(target) {
       this.followed = target;
       followChanged.raise();
@@ -1102,6 +1107,10 @@ function installWireHarness(
     ...stateOverrides,
   });
   _bindVesselInteractionForTest(viewer, keyTarget);
+  // A vessel set selected is the one selection, as a click leaves it.
+  _resetSelectionForTest();
+  const selected = aisLiveVesselsLayer.getSelectedInfo();
+  if (selected?.id) claimSelection('ais-live-vessels', selected.id);
 
   return {
     handler,
@@ -1117,6 +1126,7 @@ function installWireHarness(
     cleanup() {
       stopReadout();
       aisLiveVesselsLayer.destroy();
+      _resetSelectionForTest();
       unbindRenderer();
       if (hadWindow) globalThis.window = priorWindow;
       else delete globalThis.window;
@@ -1125,6 +1135,27 @@ function installWireHarness(
     },
   };
 }
+
+test('trackById selects a vessel and has the camera follow it, keyed by the vessel; deselecting ends the follow', () => {
+  const harness = installWireHarness(undefined, { selectedRecord: null });
+  try {
+    const id = harness.record.id;
+    assert.equal(aisLiveVesselsLayer.isFollowed(), false);
+    assert.equal(aisLiveVesselsLayer.trackById(harness.record.mmsi), true);
+    assert.equal(aisLiveVesselsLayer.getSelectedInfo()?.id, id);
+    assert.equal(harness.camera.followed?.key, `ais-live-vessels:${id}`);
+    assert.equal(aisLiveVesselsLayer.isFollowed(), true);
+    // The one followed stays followed.
+    const followed = harness.camera.followed;
+    assert.equal(aisLiveVesselsLayer.trackById(id), true);
+    assert.equal(harness.camera.followed, followed);
+    aisLiveVesselsLayer.clearSelection();
+    assert.equal(harness.camera.followed, null);
+    assert.equal(aisLiveVesselsLayer.trackById('no-such-vessel'), false);
+  } finally {
+    harness.cleanup();
+  }
+});
 
 test('vessel interaction wire: trail pick does not deselect', () => {
   const harness = installWireHarness({ id: 'gev-trail:71' });
@@ -1940,7 +1971,7 @@ test('vessel interaction wire: clicking a card selects and transfers, like the s
   }
 });
 
-test('vessel interaction wire: clicking the selected vessel card refocuses exactly once', () => {
+test('vessel interaction wire: clicking the selected vessel card follows it, one camera command', () => {
   const harness = installWireHarness({
     primitive: {},
     content: {},
@@ -1957,8 +1988,12 @@ test('vessel interaction wire: clicking the selected vessel card refocuses exact
       aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
       harness.record.mmsi,
     );
-    assert.equal(requests.length, 1);
-    assert.equal(requests[0].id, harness.record.mmsi);
+    // A second click on the selected vessel follows it: no centring flight.
+    assert.equal(requests.length, 0);
+    assert.equal(
+      harness.camera.followed?.key,
+      `ais-live-vessels:${harness.record.id}`,
+    );
     assert.equal(harness.trail.clearCalls, 0);
   } finally {
     useVesselHost(null);
@@ -2032,7 +2067,12 @@ test('vessel interaction wire: the vessel card on top wins over a sibling-owned 
       aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
       harness.record.mmsi,
     );
-    assert.equal(requests.length, 1);
+    // The card's vessel, selected, is followed: one camera command.
+    assert.equal(requests.length, 0);
+    assert.equal(
+      harness.camera.followed?.key,
+      `ais-live-vessels:${harness.record.id}`,
+    );
   } finally {
     useVesselHost(null);
     harness.cleanup();
@@ -2172,7 +2212,12 @@ for (const card of ['live', 'stale', 'absent', 'covered']) {
         aisLiveVesselsLayer.getSelectedInfo()?.mmsi,
         harness.record.mmsi,
       );
-      assert.equal(requests.length, card === 'live' ? 1 : 0);
+      // The live card is the selected vessel's: the click follows it.
+      assert.equal(requests.length, 0);
+      assert.equal(
+        harness.camera.followed?.key ?? null,
+        card === 'live' ? `ais-live-vessels:${harness.record.id}` : null,
+      );
     } finally {
       useVesselHost(null);
       harness.cleanup();

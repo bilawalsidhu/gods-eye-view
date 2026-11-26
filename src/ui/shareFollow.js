@@ -173,8 +173,8 @@ function selectedVesselSubject(cameraPosition, vessel, nowMs) {
  * the entity the camera follows, with the camera's offset from it and its
  * displayed position as of `nowMs`; else, while the camera follows nothing,
  * the selected vessel (`readSelectedVessel()`, the vessel layer's
- * `getSelectedFix()`). A selected vessel is not followed (the camera stays
- * where the user puts it), so its offset is the one that derives the camera
+ * `getSelectedFix()`). A vessel selected but not followed leaves the camera
+ * where the user puts it, so its offset is the one that derives the camera
  * where it is now. Null when there is nothing a share link can name.
  */
 export function readShareFollowSubject({
