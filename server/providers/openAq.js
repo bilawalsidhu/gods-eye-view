@@ -17,6 +17,7 @@ import {
   PM_NOWCAST_HOURS,
 } from '../../src/layers/airQuality/nowcast.js';
 import {
+  AQI_MAX_SPREAD_MS,
   AQI_POLLUTANTS,
   aqiStations,
 } from '../../src/layers/airQuality/usAqi.js';
@@ -233,15 +234,24 @@ export function createOpenAqAcquisition({
    */
   async function aqiStationRows(get, station) {
     const rows = [];
-    for (const parameter of Object.keys(AQI_HOURLY))
+    for (const parameter of Object.keys(AQI_HOURLY)) {
+      // The first sensor with a current hour (within the last three, the
+      // NowCast's window) supplies the pollutant: one whose hours stopped
+      // (a replaced instrument) gives way to the next, and only when none
+      // is current do the freshest hours stand.
+      let best = null;
       for (const sensor of station.sensors
         .filter((s) => s.parameter === parameter)
         .slice(0, MAX_SENSORS)) {
         const hours = await hoursOf(get, sensor);
         if (!hours.length) continue;
-        rows.push(...openAqHourReadings(station, sensor, hours));
-        break;
+        if (!best || hours.at(-1).endMs > best.hours.at(-1).endMs)
+          best = { sensor, hours };
+        if (now() - hours.at(-1).endMs <= AQI_MAX_SPREAD_MS) break;
       }
+      if (best)
+        rows.push(...openAqHourReadings(station, best.sensor, best.hours));
+    }
     if (station.sensors.some((s) => AQI_LATEST.includes(s.parameter))) {
       const data = await get(
         `locations/${station.stationId}/latest?limit=1000&page=1`,
