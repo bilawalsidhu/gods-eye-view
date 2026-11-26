@@ -1,7 +1,7 @@
 import { test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { createCountMarkers } from './countMarkers.js';
-import { addCellCamera, createCameraCell } from '../../data/cctvCellCounts.js';
+import { addCellPoint, createCountCell } from '../../data/countCells.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { horizonFrom } from '../../geo/horizon.js';
 
@@ -31,9 +31,9 @@ const matrix = new Float64Array([
 ]);
 
 function cellAt(key, x, count, height = 0) {
-  const cell = createCameraCell(key);
+  const cell = createCountCell(key);
   for (let i = 0; i < count; i++)
-    addCellCamera(cell, { lon: lonFor(x), lat: 0, absoluteHeightM: height });
+    addCellPoint(cell, { lon: lonFor(x), lat: 0, absoluteHeightM: height });
   return cell;
 }
 

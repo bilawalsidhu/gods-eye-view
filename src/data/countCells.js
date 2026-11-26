@@ -1,7 +1,13 @@
 import { fromDegrees } from '../geo/ellipsoid.js';
 
+/**
+ * Ground cells and on-screen merging for count markers: map points (CCTV
+ * mounts, data centres) grouped into world-anchored cells, then merged into
+ * pills that never overlap on screen.
+ */
+
 /** Exact below 1,000, then K with one decimal below 10K. Uses Latin digits in every locale. */
-export function formatCameraCount(count) {
+export function formatCount(count) {
   if (count < 1000) return String(count);
   const thousands =
     count < 10000 ? Math.round(count / 100) / 10 : Math.round(count / 1000);
@@ -9,7 +15,7 @@ export function formatCameraCount(count) {
 }
 
 /** An empty cell and its on-screen picker candidate. */
-export function createCameraCell(key) {
+export function createCountCell(key) {
   return {
     key,
     count: 0,
@@ -27,9 +33,9 @@ export function createCameraCell(key) {
   };
 }
 
-/** Accumulate one horizon-visible mount in its ground cell. */
-export function addCellCamera(cell, camera) {
-  const { lat, lon, absoluteHeightM: height = 0 } = camera;
+/** Accumulate one horizon-visible point (`lat`, `lon`, `absoluteHeightM`) in its ground cell. */
+export function addCellPoint(cell, point) {
+  const { lat, lon, absoluteHeightM: height = 0 } = point;
   cell.count++;
   // Integer sums make the mean independent of catalog order, to about a centimetre.
   cell.latSum += Math.round(lat * 1e7);
@@ -43,9 +49,25 @@ export function addCellCamera(cell, camera) {
   cell.high = Math.max(cell.high, height);
 }
 
+/** The power-of-two level of a ground cell about `cellM` metres across. */
+export const cellLevel = (cellM) => Math.ceil(Math.log2(cellM));
+
+/**
+ * The key of the ground cell holding a point at a level: rows of 2^level
+ * metres, each split into columns of about that width at its middle latitude.
+ * Cells stay fixed to the ground, so a level pan keeps every key.
+ */
+export function groundCellKey(lat, lon, level) {
+  const latStep = 2 ** level / 111_320;
+  const row = Math.floor(lat / latStep);
+  const rowLat = ((row + 0.5) * latStep * Math.PI) / 180;
+  const lonStep = latStep / Math.max(0.05, Math.cos(rowLat));
+  return `${level}:${row}:${Math.floor(lon / lonStep)}`;
+}
+
 const wrapLongitude = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
 
-/** Mean longitude and latitude of a cell's mounts, in degrees. */
+/** Mean longitude and latitude of a cell's points, in degrees. */
 export function cellLonLat(cell) {
   return {
     lon: wrapLongitude(cell.lonSum / (1e7 * cell.count)),
@@ -54,10 +76,10 @@ export function cellLonLat(cell) {
 }
 
 /**
- * Geographic mean of the mounts. Its height is the drawn ground under it
- * when the cell carries one (`groundM`), since a camera nobody has looked at
+ * Geographic mean of the points. Its height is the drawn ground under it
+ * when the cell carries one (`groundM`), since a point nobody has looked at
  * yet may still hold a catalog height far from the terrain; otherwise the
- * mean mount height.
+ * mean point height.
  */
 export function cellCenter(cell) {
   const { lon, lat } = cellLonLat(cell);
@@ -70,7 +92,7 @@ export function cellCenter(cell) {
   );
 }
 
-/** Half the east-west and north-south ground extent of a cell's mounts, in metres. */
+/** Half the east-west and north-south ground extent of a cell's points, in metres. */
 export function cellHalfExtents(cell) {
   // The parallel nearest the equator bounds the width of every row.
   const parallel = (Math.max(0, cell.south, -cell.north) * Math.PI) / 180;
@@ -80,8 +102,8 @@ export function cellHalfExtents(cell) {
   };
 }
 
-/** A padded sphere over the rectangle and every mount, centred at groundM
- * when set, otherwise at the mid mount height. */
+/** A padded sphere over the rectangle and every point, centred at groundM
+ * when set, otherwise at the mid point height. */
 export function cellBounds(cell) {
   const lat = (cell.north + cell.south) / 2;
   const lon = wrapLongitude((cell.east + cell.west) / 2);
@@ -138,11 +160,11 @@ function visitNeighbors(marker, grid, gap, visit) {
 /**
  * Merge connected groups of overlapping horizontal pills. Each marker occupies
  * one grid bucket. Even the widest pill can only touch its eight neighbors.
- * A cell with one camera takes the footprint `sizeFor(1)` gives its icon and
- * joins the nearest count it touches. Lone cameras never join each other
+ * A cell with one point takes the footprint `sizeFor(1)` gives its icon and
+ * joins the nearest count it touches. Lone points never join each other
  * or bridge two counts. A spread icon's `offsetPx` shifts its footprint sideways.
  * A merged group lists its ground cells in `parts`.
- * Ground cells stay intact for the camera picker and individual-icon pass.
+ * Ground cells stay intact for the caller's picker and individual-icon pass.
  */
 export function mergeCountCells(cells, project, sizeFor, gap) {
   let columnWidth = 0;
@@ -184,7 +206,7 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
     });
   }
 
-  // Only counts were candidates for nearest. Now they can claim lone cameras.
+  // Only counts were candidates for nearest. Now they can claim lone points.
   for (const marker of markers)
     if (marker.cell.count === 1) marker.bucket?.add(marker);
 
@@ -204,7 +226,7 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
     if (members.length === 1) {
       seed.result = seed.cell;
     } else {
-      const group = createCameraCell(seed.cell.key);
+      const group = createCountCell(seed.cell.key);
       group.lone = [];
       group.parts = [];
       for (const { cell } of members) {
@@ -226,11 +248,11 @@ export function mergeCountCells(cells, project, sizeFor, gap) {
   return groups;
 }
 
-/** Rebuild a group's count under its original key, keeping only the lone cameras in `keep`. */
-export function withoutLoneCameras(group, keep = []) {
+/** Rebuild a group's count under its original key, keeping only the lone points in `keep`. */
+export function withoutLoneCells(group, keep = []) {
   const counts = (group.parts ?? []).filter((cell) => cell.count > 1);
   if (!counts.length) return null;
-  const core = createCameraCell(group.key);
+  const core = createCountCell(group.key);
   core.parts = [...counts, ...keep];
   if (keep.length) core.lone = [...keep];
   for (const cell of core.parts) addCell(core, cell);

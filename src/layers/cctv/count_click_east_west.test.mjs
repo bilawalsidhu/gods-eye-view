@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import {
-  addCellCamera,
-  createCameraCell,
+  addCellPoint,
+  createCountCell,
   mergeCountCells,
-} from '../../data/cctvCellCounts.js';
+} from '../../data/countCells.js';
 import { createNavigation } from './navigation.js';
 
 const M = 111_320;
@@ -31,10 +31,10 @@ test('a count click on an east-west group that fits keeps every member in the fr
   try {
     const members = [];
     const cells = [50_000, 80_000].map((start) => {
-      const cell = createCameraCell(String(start));
+      const cell = createCountCell(String(start));
       for (const eastM of [start, start + 10]) {
         const lon = eastM / M;
-        addCellCamera(cell, { lat: 0, lon, absoluteHeightM: 8 });
+        addCellPoint(cell, { lat: 0, lon, absoluteHeightM: 8 });
         members.push(lon);
       }
       return cell;

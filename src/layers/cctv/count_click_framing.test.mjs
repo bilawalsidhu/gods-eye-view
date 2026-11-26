@@ -4,10 +4,10 @@ import { bindRenderer } from '../../render/rendererOf.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
 import {
-  addCellCamera,
-  createCameraCell,
+  addCellPoint,
+  createCountCell,
   mergeCountCells,
-} from '../../data/cctvCellCounts.js';
+} from '../../data/countCells.js';
 import { createNavigation } from './navigation.js';
 
 // A count of four merged in a tilted view: two pairs 10 km and 40 km north of
@@ -28,10 +28,10 @@ test('a count click from a tilted view keeps the group members in the frame', ()
     const metresPerDegree = 111_320;
     const members = [];
     const cells = [10_000, 40_000].map((start) => {
-      const cell = createCameraCell(String(start));
+      const cell = createCountCell(String(start));
       for (const northM of [start, start + 10]) {
         const lat = northM / metresPerDegree;
-        addCellCamera(cell, { lat, lon: 0, absoluteHeightM: 8 });
+        addCellPoint(cell, { lat, lon: 0, absoluteHeightM: 8 });
         members.push(fromDegrees(0, lat, 8));
       }
       return cell;

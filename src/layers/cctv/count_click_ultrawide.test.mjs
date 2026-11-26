@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { bindRenderer } from '../../render/rendererOf.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import {
-  addCellCamera,
-  createCameraCell,
+  addCellPoint,
+  createCountCell,
   mergeCountCells,
-} from '../../data/cctvCellCounts.js';
+} from '../../data/countCells.js';
 import { createNavigation } from './navigation.js';
 
 const M = 111_320;
@@ -24,10 +24,10 @@ function run({ aspectRatio, fovy, eye, pairs, groundM }) {
   try {
     const members = [];
     const cells = pairs.map(({ eastM = 0, northM = 0, h }, i) => {
-      const cell = createCameraCell(String(i));
+      const cell = createCountCell(String(i));
       for (const d of [0, 10]) {
         const m = { lon: (eastM + d) / M, lat: northM / M, h };
-        addCellCamera(cell, { lat: m.lat, lon: m.lon, absoluteHeightM: h });
+        addCellPoint(cell, { lat: m.lat, lon: m.lon, absoluteHeightM: h });
         members.push(m);
       }
       cell.groundM = h;

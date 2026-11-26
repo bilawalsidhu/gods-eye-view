@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { CAMERA_GREEN, COUNT_CAMERA_ICON } from '../layers/cctv/policy.js';
 import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
-import { createCameraCell } from './cctvCellCounts.js';
+import { createCountCell } from './countCells.js';
 import { bindRenderer, findCamera } from '../render/rendererOf.js';
 import { DEFAULT_FOCUS_DEEMPHASIS_PARAMS } from './focusDeemphasis.js';
 import { fakeCameraPort } from '../testSupport/fakeCameraPort.mjs';
@@ -1111,7 +1111,7 @@ test('paint, HUD exclusions and hit rectangles use the count-scaled height', () 
   const counts = cctvLayer._cctvDrawnForTest().counts;
   let previous = 0;
   for (const count of [2, 10, 100, 1000, 3162, 3163, 7350, 1e8]) {
-    const cell = { ...createCameraCell('cell'), count };
+    const cell = { ...createCountCell('cell'), count };
     for (const lon of [0, 0.025]) {
       counts.update(
         [{ ...cell, lonSum: Math.round(lon * 1e7) * count }],

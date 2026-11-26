@@ -658,7 +658,7 @@
   "src/layers/cctv/health.js",
   "src/data/cctv.js",
   "src/data/cctvCatalogCap.test.mjs",
-  "src/data/cctvCellCounts.test.mjs",
+  "src/data/countCells.test.mjs",
   "src/data/cctvViewPass.test.mjs",
   "src/data/cctvViewThinning.test.mjs",
   "src/data/cctvDisplayCode.test.mjs",
