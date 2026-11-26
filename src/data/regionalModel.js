@@ -121,17 +121,29 @@ export function normalizeRegionalWeather(payload) {
   const current = payload?.current;
   if (!current || observedNumber(current.temperature_2m) == null) return null;
   const numberOrNull = observedNumber;
-  // Open-Meteo reports zone-naive timestamps ("2026-08-17T00:15") that are UTC,
-  // but JS parses zoneless date-times as LOCAL — pin them to UTC explicitly.
-  const observedRaw =
+  // Open-Meteo reports zone-naive timestamps ("2026-08-17T00:15") in the
+  // spot's own time zone, `utc_offset_seconds` from UTC (0 when asked for
+  // UTC), but JS parses zoneless date-times as LOCAL: read them as UTC, then
+  // take the offset off.
+  const offsetSeconds = numberOrNull(payload.utc_offset_seconds);
+  const zoneless =
     typeof current.time === 'string' &&
-    !/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(current.time)
-      ? `${current.time}Z`
-      : current.time;
+    !/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(current.time);
+  const observedMs = Date.parse(zoneless ? `${current.time}Z` : current.time);
+  const timeZone =
+    typeof payload.timezone === 'string' && payload.timezone.trim()
+      ? payload.timezone.trim()
+      : null;
   return {
-    observedAt: Number.isNaN(Date.parse(observedRaw))
+    observedAt: Number.isNaN(observedMs)
       ? null
-      : new Date(observedRaw).toISOString(),
+      : new Date(
+          observedMs - (zoneless ? (offsetSeconds ?? 0) * 1000 : 0),
+        ).toISOString(),
+    // The spot's time zone (IANA name) and its offset from UTC now, so the
+    // panel can show local time there.
+    timeZone,
+    utcOffsetSeconds: offsetSeconds,
     temperatureC: numberOrNull(current.temperature_2m),
     apparentTemperatureC: numberOrNull(current.apparent_temperature),
     precipitationMm: numberOrNull(current.precipitation),

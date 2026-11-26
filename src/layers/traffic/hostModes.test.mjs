@@ -220,13 +220,13 @@ test('live chips toggle each control without touching the other', async () => {
   );
 });
 
-test('hiding dots hides the point collection of an enabled layer', async () => {
+test('hiding dots hides the dots set of an enabled layer', async () => {
   const { createState } = await import('./state.js');
   const { createControls } = await import('./controls.js');
   const state = createState({ services: {}, source: {} });
   let demand = 0;
   state._enabled = true;
-  state._pointCollection = { show: true };
+  state._dotSet = { show: true };
   const controls = createControls({
     state,
     services: {},
@@ -234,9 +234,9 @@ test('hiding dots hides the point collection of an enabled layer', async () => {
     parts: { animation: { syncRenderDemand: () => demand++ } },
   }).methods;
   controls.setParams({ dots: false });
-  assert.equal(state._pointCollection.show, false);
+  assert.equal(state._dotSet.show, false);
   controls.setParams({ dots: true });
-  assert.equal(state._pointCollection.show, true);
+  assert.equal(state._dotSet.show, true);
   assert.equal(demand, 2);
 });
 
@@ -258,46 +258,51 @@ test('Lines and Dots persist in layer state and local storage', () => {
   assert.equal(stored.dots, false);
 });
 
-test('rebuilt lines keep the old ones drawn until the new geometry is ready', async () => {
+test('rebuilt lines replace the drawn ones in one set write', async () => {
   const { createRendering } = await import('./rendering.js');
-  const removed = [];
+  const writes = [];
+  const road = (level) => ({
+    flow: { level, closure: false },
+    segmentDist: [10],
+    waypoints: [
+      { x: 1, y: 2, z: 3 },
+      { x: 4, y: 5, z: 6 },
+    ],
+  });
   const state = {
-    _viewer: {
-      scene: { groundPrimitives: { remove: (p) => removed.push(p) } },
+    _viewer: {},
+    _liveMode: true,
+    _showLines: true,
+    _heatLineCount: 0,
+    _heatSet: {
+      set: (items) => writes.push(['set', items]),
+      clear: () => writes.push(['clear']),
     },
-    _liveMode: false,
-    _heatFreePrim: { ready: true, id: 'old' },
-    _heatRetired: [],
   };
   const parts = {
     style: { heatlineOn: () => true },
     animation: { syncRenderDemand() {} },
   };
   const rendering = createRendering({ state, services: {}, parts, source: {} });
-  // Nothing new to draw (not live): the old line goes at once.
-  rendering.rebuildHeatLines([]);
-  assert.deepEqual(
-    removed.map((p) => p.id),
-    ['old'],
-  );
-  // A pending successor holds the retired line until it is ready.
-  const next = { ready: false, id: 'new' };
-  state._heatRetired = [{ id: 'older' }];
-  state._heatJamPrim = next;
-  rendering.retireHeatLines();
-  assert.equal(state._heatRetired.length, 1);
-  next.ready = true;
-  rendering.retireHeatLines();
-  assert.deepEqual(state._heatRetired, []);
-  assert.deepEqual(
-    removed.map((p) => p.id),
-    ['old', 'older'],
-  );
+  // The set swaps its lines atomically: no old line outlives a rebuild and
+  // none is missing while the new geometry builds.
+  rendering.rebuildHeatLines([road(0.1), road(0.9)]);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][0], 'set');
+  assert.equal(writes[0][1].length, 2);
+  assert.ok(writes[0][1].every((item) => item.clampTo === 'both'));
+  // Steady flow lines never pulse.
+  assert.equal(rendering.heatPulsing(), false);
+  // Leaving live roads takes the lines away.
+  state._liveMode = false;
+  rendering.rebuildHeatLines([road(0.1)]);
+  assert.notEqual(writes.at(-1)[0], 'set');
 });
 
-test('lines hold frames only while building; hidden dots hold none', async () => {
+test('steady lines hold no frames with dots hidden; pulsing jam lines hold them', async () => {
   const { createAnimation } = await import('./animation.js');
   const calls = [];
+  let pulsing = false;
   const state = {
     _enabled: true,
     _dots: [{}],
@@ -313,14 +318,14 @@ test('lines hold frames only while building; hidden dots hold none', async () =>
         releaseContinuousRender: () => calls.push('release'),
       },
     },
-    parts: {},
+    parts: { rendering: { heatPulsing: () => pulsing } },
   });
   animation.syncRenderDemand();
   assert.deepEqual(calls, []);
-  state._heatFreePrim = { ready: false };
+  pulsing = true;
   animation.syncRenderDemand();
   assert.deepEqual(calls, ['hold']);
-  state._heatFreePrim.ready = true;
+  pulsing = false;
   animation.syncRenderDemand();
   assert.deepEqual(calls, ['hold', 'release']);
 });

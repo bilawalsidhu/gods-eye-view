@@ -9,6 +9,7 @@ import {
   filterTrailing24h,
   isLikelyCsv,
   parseFirmsCsv,
+  trailing24hWindow,
 } from 'gods-eye-view/sources/firms-csv';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -162,6 +163,50 @@ test('filterTrailing24h on the fixture keeps everything for a same-night now', (
   // 2026-07-17 02:00Z every detection is 4.5–16 h old — all inside 24 h.
   const kept = filterTrailing24h(records, Date.UTC(2026, 6, 17, 2, 0));
   assert.equal(kept.length, records.length);
+});
+
+test('trailing24hWindow spans the clock values that keep the same records', () => {
+  const now0 = Date.UTC(2026, 8, 11, 12);
+  const records = [
+    { acqDate: '2026-09-10', acqTime: '1205' },
+    { acqDate: '2026-09-10', acqTime: '1300' },
+    { acqDate: '2026-09-11', acqTime: '1100' },
+    { acqDate: '2026-09-11', acqTime: '1430' },
+    { acqDate: '2026-09-11', acqTime: '1600' },
+    { acqDate: 'bad-date', acqTime: '1006' },
+  ];
+  const edges = records
+    .map((r) => acquisitionMsUtc(r.acqDate, r.acqTime))
+    .filter(Number.isFinite)
+    .flatMap((ms) => [ms - 2 * 3600_000, ms + 24 * 3600_000]);
+  assert.equal(edges.length, 10);
+  const clocks = [now0, ...edges.flatMap((ms) => [ms - 1, ms, ms + 1])];
+  for (const now of clocks) {
+    const { kept, from, until } = trailing24hWindow(records, now);
+    assert.deepEqual(kept, filterTrailing24h(records, now));
+    assert.ok(from <= now && now <= until, 'the span holds its own clock');
+    for (const other of clocks) {
+      const then = filterTrailing24h(records, other);
+      const same =
+        then.length === kept.length && then.every((r, i) => r === kept[i]);
+      // Before the first record and after the last both keep nothing; the span covers one side.
+      const bothEmpty = then.length === 0 && kept.length === 0;
+      if (other >= from && other <= until)
+        assert.ok(same, `${other} is inside the span of ${now}`);
+      else
+        assert.ok(!same || bothEmpty, `${other} is outside the span of ${now}`);
+    }
+  }
+  assert.deepEqual(trailing24hWindow([], now0), {
+    kept: [],
+    from: -Infinity,
+    until: Infinity,
+  });
+  assert.deepEqual(trailing24hWindow(records, NaN), {
+    kept: [],
+    from: NaN,
+    until: NaN,
+  });
 });
 
 const contractCases = JSON.parse(

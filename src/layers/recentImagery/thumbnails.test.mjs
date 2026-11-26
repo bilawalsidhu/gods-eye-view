@@ -1,13 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createThumbnailLoader } from './thumbnails.js';
-import { BOX, response, settle } from './testDoubles.mjs';
-
-const candidate = (product, day) => ({
-  key: `${product}:${day}`,
-  product,
-  day,
-});
+import { createRecentImagerySource } from './source.js';
+import { nonCrossingBoxes } from './model.js';
+import { BOX, FIJI_BOX, candidate, response, settle } from './testDoubles.mjs';
 
 /** A fetch whose responses the test releases, in any order. */
 function fakeFetch() {
@@ -68,6 +64,8 @@ test('Data-Present decides the day: present with an object URL and sensing time,
     status: 'present',
     objectUrl: 'blob:1',
     acquisitionTime: '2026-09-18T17:12:00Z',
+    availableBoxes: [BOX],
+    emptyBoxes: [],
     loading: false,
   });
   assert.equal(loader.get('L30:2026-09-16').status, 'empty');
@@ -336,3 +334,162 @@ test('injected thumbnail acquisition owns requests while the loader releases obj
   loader.destroy();
   assert.deepEqual(revoked, ['blob:1']);
 });
+
+test('the loader proves a dateline day present from one half and hands that half on', async () => {
+  const day = candidate('VIIRS', '2026-11-04');
+  const time = day.day + 'T22:10:00Z';
+  const { loader } = fixture({
+    fetchImpl: async (url) => {
+      const east =
+        new URL(url).searchParams.get('BBOX').split(',')[1] === '-180';
+      return response({
+        headers: east
+          ? { 'Data-Present': 'true', 'Acquisition-Time': time }
+          : { 'Data-Present': 'false' },
+      });
+    },
+  });
+  loader.request(day, FIJI_BOX);
+  await settle();
+  const entry = loader.get(day.key);
+  assert.equal(entry.status, 'present');
+  assert.equal(entry.acquisitionTime, time);
+  assert.ok(entry.objectUrl);
+  assert.deepEqual(entry.availableBoxes, [nonCrossingBoxes(FIJI_BOX)[1]]);
+  loader.destroy();
+});
+
+test('a dateline day whose halves both hang is an error, not "checking" forever', async () => {
+  const source = createRecentImagerySource({
+    fetchImpl: () => new Promise(() => {}),
+    halfDeadlineMs: 20,
+  });
+  const loader = createThumbnailLoader({
+    requestThumbnail: source.getThumbnail,
+  });
+  const day = candidate('VIIRS', '2026-11-04');
+  const settled = new Promise((resolve) => loader.subscribe(resolve));
+  loader.request(day, FIJI_BOX);
+  await settled;
+  assert.equal(loader.get(day.key).status, 'error');
+  loader.destroy();
+});
+
+test('a re-probe of a present day drops a half only when it is confirmed empty', async () => {
+  const box = { west: 179, south: 0, east: -179, north: 1 };
+  const [west, east] = nonCrossingBoxes(box);
+  const answers = [
+    { presentBoxes: [west, east], emptyBoxes: [] },
+    { presentBoxes: [west, east], emptyBoxes: [] },
+    { presentBoxes: [west], emptyBoxes: [east] },
+  ];
+  const { loader } = fixture({
+    maxDecoded: 1,
+    requestThumbnail: async () =>
+      Object.assign(
+        response({ headers: { 'Data-Present': 'true' } }),
+        answers.shift(),
+      ),
+  });
+  const day1 = candidate('VIIRS', '2026-11-04');
+  const day2 = candidate('VIIRS', '2026-11-05');
+  loader.request(day1, box);
+  await settle();
+  loader.request(day2, box);
+  await settle();
+  assert.equal(loader.get(day1.key).objectUrl, null);
+  loader.request(day1, box);
+  await settle();
+  assert.deepEqual(loader.get(day1.key).availableBoxes, [west]);
+  loader.destroy();
+});
+
+test('retain aborts stale acquisition while allowing the current intent to start', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const current = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  loader.request(current, BOX, 1);
+  assert.equal(fetch.calls.length, 1);
+  assert.match(fetch.calls[0].url, /TIME=2026-09-10/);
+
+  loader.retain([current.key]);
+  assert.equal(fetch.calls[0].signal.aborted, true);
+  await settle();
+
+  assert.equal(
+    fetch.calls.length,
+    2,
+    'current intent starts after stale abort',
+  );
+  assert.match(fetch.calls[1].url, /TIME=2026-09-11/);
+  assert.equal(loader.get(stale.key).status, 'unknown');
+});
+
+test('a cancelled re-fetch of a known-present day keeps its status and is retryable', async () => {
+  const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+  const stale = candidate('S30', '2026-09-10');
+  const newer = candidate('S30', '2026-09-11');
+
+  loader.request(stale, BOX, 0);
+  fetch.respond(0);
+  await settle();
+  const acquisitionTime = loader.get(stale.key).acquisitionTime;
+
+  loader.request(newer, BOX, 0);
+  fetch.respond(1);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).objectUrl, null);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 3, 'an evicted known day re-fetches');
+  loader.retain([]);
+  assert.equal(fetch.calls[2].signal.aborted, true);
+
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+  assert.equal(loader.get(stale.key).acquisitionTime, acquisitionTime);
+
+  loader.request(stale, BOX, 0);
+  assert.equal(fetch.calls.length, 4, 'a cancelled re-fetch is retryable');
+  fetch.respond(3);
+  await settle();
+  assert.equal(loader.get(stale.key).status, 'present');
+});
+
+for (const cancelRenewed of [false, true]) {
+  test(`a known-present day requested during abort settlement ${cancelRenewed ? 'can be cancelled again' : 'restarts without another intent change'}`, async (t) => {
+    const { loader, fetch } = fixture({ maxInFlight: 1, maxDecoded: 1 });
+    t.after(() => loader.destroy());
+    const day = candidate('S30', '2026-09-10');
+    const other = candidate('S30', '2026-09-11');
+    loader.request(day, BOX);
+    fetch.respond(0);
+    await settle();
+    const acquisitionTime = loader.get(day.key).acquisitionTime;
+    loader.request(other, BOX);
+    fetch.respond(1);
+    await settle();
+    assert.equal(loader.get(day.key).objectUrl, null);
+
+    loader.request(day, BOX);
+    loader.retain([]);
+    assert.equal(fetch.calls[2].signal.aborted, true);
+    // Deliberately do not await: the old run still owns its in-flight slot.
+    loader.request(day, BOX);
+    loader.retain(cancelRenewed ? [] : [day.key]);
+    assert.equal(fetch.calls.length, 3, 'renewal respects the concurrency cap');
+    await settle();
+    assert.equal(loader.get(day.key).acquisitionTime, acquisitionTime);
+    assert.equal(fetch.calls.length, cancelRenewed ? 3 : 4);
+    if (!cancelRenewed) {
+      assert.equal(fetch.calls[3].signal.aborted, false);
+      fetch.respond(3);
+      await settle();
+      assert.ok(loader.get(day.key).objectUrl);
+      assert.equal(loader.get(day.key).loading, false);
+    }
+  });
+}

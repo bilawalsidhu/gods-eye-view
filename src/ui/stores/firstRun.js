@@ -8,7 +8,7 @@ import { markRaw, shallowRef } from 'vue';
  */
 export const useFirstRunStore = defineStore('gev-first-run', () => {
   /**
-   * `{removed, shown, visible, closing, state, busy, status, description,
+   * `{removed, shown, visible, closing, state, busy, status,
    * environmentalTitle, environmentalSub, scrollable}`, or null until the
    * launcher is initialized (the card stays hidden).
    */
@@ -19,7 +19,7 @@ export const useFirstRunStore = defineStore('gev-first-run', () => {
     launcher.value = next && markRaw(next);
   }
 
-  /** `{choose(choice), dismiss(), suppress(wanted) → boolean}`, or null. */
+  /** `{choose(choice), dismiss(), suppress(wanted) → boolean, refreshLayout()}`, or null. */
   const controls = shallowRef(null);
 
   /** @param {?object} next The launcher's controls, or null to disconnect. */

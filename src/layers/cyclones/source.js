@@ -45,22 +45,33 @@ const position = (value) => {
   };
 };
 
-function officialLink(value, outlook = false) {
+/** The agencies whose advisories the snapshot carries. */
+export const CYCLONE_AGENCIES = Object.freeze(['nhc', 'jtwc']);
+// Each agency's storm ids, advisory links and outlook links.
+const AGENCY_RULES = Object.freeze({
+  nhc: {
+    id: /^(?:al|ep|cp)\d{6}$/,
+    origin: 'https://www.nhc.noaa.gov',
+    advisory: /^\/text\/[A-Z0-9]+\.shtml$/,
+    outlook: /^\/gtwo\.php\?basin=(?:atlc|epac|cpac)&fdays=7$/,
+  },
+  jtwc: {
+    id: /^(?:wp|io|sh|ep|cp)\d{6}$/,
+    origin: 'https://www.metoc.navy.mil',
+    advisory: /^\/jtwc\/products\/[a-z]{2}\d{4}web\.txt$/,
+    outlook: /^\/jtwc\/products\/(?:abpw|abio)web\.txt$/,
+  },
+});
+
+function officialLink(value, rules, outlook = false) {
   if (value === null) return null;
   const url = new URL(text(value, 256));
-  if (
-    url.origin !== 'https://www.nhc.noaa.gov' ||
-    url.username ||
-    url.password ||
-    url.hash
-  )
+  if (url.origin !== rules.origin || url.username || url.password || url.hash)
     throw malformed();
   if (
     outlook
-      ? !/^\/gtwo\.php\?basin=(?:atlc|epac|cpac)&fdays=7$/.test(
-          url.pathname + url.search,
-        )
-      : url.search || !/^\/text\/[A-Z0-9]+\.shtml$/.test(url.pathname)
+      ? !rules.outlook.test(url.pathname + url.search)
+      : url.search || !rules.advisory.test(url.pathname)
   )
     throw malformed();
   return url.href;
@@ -122,8 +133,14 @@ export function validateCycloneSnapshot(value) {
   const seen = new Set(),
     budget = { coordinates: 0, points: 0 };
   const storms = value.storms.map((raw) => {
+    // A snapshot from before agencies carries NHC storms only.
+    const agency = raw?.agency === undefined ? 'nhc' : raw.agency;
+    const rules = Object.hasOwn(AGENCY_RULES, agency)
+      ? AGENCY_RULES[agency]
+      : null;
     if (
-      !/^(?:al|ep|cp)\d{6}$/.test(raw?.id) ||
+      !rules ||
+      !rules.id.test(raw?.id) ||
       seen.has(raw.id) ||
       !['current', 'pending', 'unavailable'].includes(raw.geometryStatus)
     )
@@ -158,20 +175,27 @@ export function validateCycloneSnapshot(value) {
       };
     });
     const track = geometry(raw.track, 'track', budget),
-      cone = geometry(raw.cone, 'cone', budget);
+      cone = geometry(raw.cone, 'cone', budget),
+      dangerArea = geometry(raw.dangerArea ?? null, 'cone', budget);
+    // NHC draws a cone of centre-track uncertainty; JTWC publishes none, but
+    // a 34-knot wind danger area, which is never a cone.
+    const area = agency === 'nhc' ? cone : dangerArea;
+    if ((agency === 'nhc' && dangerArea) || (agency === 'jtwc' && cone))
+      throw malformed();
     if (
       raw.geometryStatus !== 'current' &&
-      (track || cone || forecastPoints.length)
+      (track || area || forecastPoints.length)
     )
       throw malformed();
     if (
       raw.geometryStatus === 'current' &&
-      (!track || !cone || !forecastPoints.length)
+      (!track || !area || !forecastPoints.length)
     )
       throw malformed();
     if (raw.basin !== raw.id.slice(0, 2).toUpperCase()) throw malformed();
     return {
       id: raw.id,
+      agency,
       name: text(raw.name, 80),
       classification: text(raw.classification, 16),
       basin: raw.basin,
@@ -185,13 +209,14 @@ export function validateCycloneSnapshot(value) {
         directionDegrees: number(raw.movement?.directionDegrees, 0, 360),
         speedKt: number(raw.movement?.speedKt, 0, 200),
       },
-      advisoryUrl: officialLink(raw.advisoryUrl),
-      outlookUrl: officialLink(raw.outlookUrl, true),
+      advisoryUrl: officialLink(raw.advisoryUrl, rules),
+      outlookUrl: officialLink(raw.outlookUrl, rules, true),
       geometryStatus: raw.geometryStatus,
       geometryAdvisoryNumber,
       forecastPoints,
       track,
       cone,
+      dangerArea,
     };
   });
   if (value.unavailable && storms.length) throw malformed();

@@ -1,12 +1,15 @@
+import * as Cesium from 'cesium';
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
+import { nonCrossingBoxes } from '../layers/recentImagery/model.js';
 import { createRecentImageryLayer } from '../layers/recentImagery/index.js';
 import {
   BOX,
+  FIJI_BOX,
   fakeCatalog,
   fakeController,
   fakeRenderer,
@@ -15,6 +18,8 @@ import {
   response,
   settle,
 } from '../layers/recentImagery/testDoubles.mjs';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeGlobePort } from '../testSupport/fakeGlobePort.mjs';
 
 const S18 = 'S30:2026-09-18';
 const L16 = 'L30:2026-09-16';
@@ -128,6 +133,8 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     camera: {},
     scene: { canvas: { clientWidth: 1000 }, requestRender() {} },
   };
+  const globe = fakeGlobePort();
+  bindFakeCesiumCamera(viewer, { globe });
   layer.init(viewer);
   layer.attachMapStackController(controller);
   let active = false;
@@ -210,6 +217,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     ...dom,
     layer,
     viewer,
+    globe,
     renderer,
     thumbnails,
     catalog,
@@ -801,9 +809,7 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   const f = fixture();
   const flights = [];
   f.viewer.scene.canvas.clientHeight = 500;
-  f.viewer.scene.ellipsoid = {
-    cartographicToCartesian: (c) => ({ ...c }),
-  };
+  f.viewer.scene.ellipsoid = Cesium.Ellipsoid.WGS84;
   Object.assign(f.viewer.camera, {
     frustum: { fovy: 2 * Math.atan(Math.tan(Math.PI / 6) / 2) },
     flyTo: (options) => flights.push(options),
@@ -835,7 +841,9 @@ test('an oversized box offers ZOOM IN in a fixed slot at the end of the notice l
   assert.equal(flights.length, 1);
   assert.ok(
     Math.abs(
-      flights[0].destination.height - 400_000 / (2 * Math.tan(Math.PI / 6)),
+      Cesium.Ellipsoid.WGS84.cartesianToCartographic(flights[0].destination)
+        .height -
+        400_000 / (2 * Math.tan(Math.PI / 6)),
     ) < 1e-6,
   );
   // Another refusal has nothing to fit; a box that succeeds hides it again.
@@ -876,6 +884,9 @@ test('the divider exists only while a swipe is live, labelled A / B or IMAGE / B
   assert.equal(f.splits.length, 1);
   assert.deepEqual(labels(), ['IMAGE', 'BASEMAP']);
   assert.equal(f.splits[0].options.id, 'recent-imagery-split-line');
+  // The divider moves the globe's split, through the renderer's globe port.
+  f.splits[0].options.scene.splitPosition = 0.3;
+  assert.equal(f.globe.imagery.getSplit(), 0.3);
   assert.deepEqual(swapState(), [false, false, 'false', 'false']);
   assert.deepEqual(directions(), ['left', undefined]);
   // VS BASEMAP: SWAP puts the image right of the basemap, and back.
@@ -968,6 +979,29 @@ test('opacity drives both images; EXPORT downloads the pin or the preview and EX
   await settle();
   assert.equal(await f.readout.exportImage('a'), true);
   assert.match(f.fetches.at(-1), /WIDTH=1024&HEIGHT=512/);
+  // A dateline box is drawn on the map, but Worldview rejects a crossing BBOX.
+  const before = f.fetches.length;
+  f.layer.setBox({ west: 179, south: 0, east: -179, north: 1 });
+  f.catalog.resolveLast();
+  await settle();
+  assert.notEqual(
+    f.byId('ri-notice-text').textContent,
+    'Select one side of the dateline',
+    'the drawn box is not a warning until an export is tried',
+  );
+  const crossingExport = f.byAction('export-a');
+  assert.equal(crossingExport.disabled, true, 'EXPORT is off up front');
+  assert.equal(crossingExport.title, 'Select one side of the dateline');
+  assert.equal(await f.readout.exportImage('a'), false);
+  assert.equal(
+    f.byId('ri-notice-text').textContent,
+    'Export failed · A snapshot cannot cross the dateline',
+  );
+  assert.equal(
+    f.fetches.length,
+    before,
+    'export does not request a crossing BBOX',
+  );
   f.layer.setMode('ab');
   assert.deepEqual(
     [
@@ -1029,6 +1063,31 @@ test('DETAILS is a collapsed rail card holding every note, and the empty-days to
   assert.equal(toggle.textContent, 'HIDE EMPTY DAYS');
   header.click();
   assert.equal(article.dataset.open, 'false');
+});
+
+test('DETAILS shows partial coverage for a dateline day with one side empty, unknown when a side did not answer', async () => {
+  const f = fixture();
+  f.layer.enable();
+  f.layer.setBox(FIJI_BOX);
+  f.catalog.resolveLast();
+  await settle();
+  assert.match(f.byId('ri-details').textContent, /Coverage full/);
+  const get = f.thumbnails.get;
+  const [west, east] = nonCrossingBoxes(FIJI_BOX);
+  f.thumbnails.get = (key) => ({
+    ...get(key),
+    availableBoxes: [west],
+    emptyBoxes: [east],
+  });
+  f.thumbnails.probe(f.snap().focus.key, 'present');
+  assert.match(f.byId('ri-details').textContent, /Coverage partial/);
+  f.thumbnails.get = (key) => ({
+    ...get(key),
+    availableBoxes: [west],
+    emptyBoxes: [],
+  });
+  f.thumbnails.probe(f.snap().focus.key, 'present');
+  assert.match(f.byId('ri-details').textContent, /Coverage unknown/);
 });
 
 test('the body scroll position survives renders even when DOM mutations reset it', async () => {

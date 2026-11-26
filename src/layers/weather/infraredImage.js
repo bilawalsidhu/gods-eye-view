@@ -6,7 +6,7 @@ import {
   drawWeatherPixels,
   closeWeatherPixels,
 } from './source.js';
-import { infraredAlpha } from './infraredAlpha.js';
+import { applyInfraredAlpha } from './infraredAlpha.js';
 
 export const MAX_MOSAIC_BYTES = 4 * 1024 * 1024;
 
@@ -31,7 +31,8 @@ export function processInfraredImage(
 
 function applyInfraredTransfer(context, canvas, mode) {
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  pixels.data.set(infraredAlpha(pixels.data, mode));
+  // In place: a copy of a 4096×2048 image is 33 MB, made and written back.
+  applyInfraredAlpha(pixels.data, mode);
   context.putImageData(pixels, 0, 0);
 }
 

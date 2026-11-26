@@ -57,6 +57,34 @@ function install(options = {}, hook = 'configureServer') {
   };
 }
 
+test('the WFIGS query asks for the mapping and edit times, and rows keep both', async () => {
+  let url;
+  const request = install({
+    now: () => 1234,
+    fetchImpl: async (input) => {
+      url = new URL(input);
+      return Response.json({
+        features: [
+          {
+            ...feature('timed'),
+            properties: {
+              attr_UniqueFireIdentifier: 'timed',
+              poly_PolygonDateTime: 100,
+              poly_DateCurrent: 200,
+            },
+          },
+        ],
+      });
+    },
+  });
+  const res = await request();
+  const fields = url.searchParams.get('outFields').split(',');
+  assert.ok(fields.includes('poly_PolygonDateTime'));
+  assert.ok(fields.includes('poly_DateCurrent'));
+  assert.equal(res.body.rows[0].polygonTime, 100);
+  assert.equal(res.body.rows[0].updatedTime, 200);
+});
+
 for (const hook of ['configureServer', 'configurePreviewServer']) {
   test(`${hook}: paging stops at five pages and normalizes the combined snapshot`, async () => {
     const calls = [];

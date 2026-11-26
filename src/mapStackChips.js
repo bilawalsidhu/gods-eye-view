@@ -3,7 +3,8 @@
 // `MapStackController.getStacks()`; the dock renders them. The approved sources
 // below are the whole shipped set; keeping the allowlist explicit means a stack
 // added to `MAP_STACKS` for another purpose cannot reach the tray until someone
-// names it here.
+// names it here. A source registered beyond `MAP_STACKS` shows when its
+// descriptor says `presented: true`, after the approved ones.
 //
 // The chips are a control SURFACE only: selecting one calls
 // `createMapSourceControls().select()`, the path `_setMapStack()` uses, and the
@@ -67,13 +68,18 @@ export function mapStackChipModel(stack, activeId) {
  * @param {Array<object>} stacks - `MapStackController.getStacks()` output.
  * @param {string|null} activeId - Currently active stack id.
  * @returns {Array<object>} One chip model per approved presentation id, in
- *   `PRESENTED_MAP_STACK_IDS` order; unlisted stacks stay outside this presentation.
+ *   `PRESENTED_MAP_STACK_IDS` order, then one per stack marked `presented`, in
+ *   its order; other unlisted stacks stay outside this presentation.
  */
 export function mapStackChipModels(stacks, activeId) {
   const stacksById = new Map(
     (Array.isArray(stacks) ? stacks : []).map((stack) => [stack?.id, stack]),
   );
-  return PRESENTED_MAP_STACK_IDS.map((id) => stacksById.get(id))
+  const added = [...stacksById.values()].filter(
+    (stack) =>
+      stack?.presented === true && !PRESENTED_MAP_STACK_IDS.includes(stack.id),
+  );
+  return [...PRESENTED_MAP_STACK_IDS.map((id) => stacksById.get(id)), ...added]
     .filter(Boolean)
     .map((stack) => mapStackChipModel(stack, activeId));
 }

@@ -96,7 +96,7 @@ test('a sibling tracking layer keeps its own subject slot', () => {
 test('the per-poll refresh updates values without stealing the selection', () => {
   withWindow(() => {
     selectTrackedSubjectContext(flightSubject('aaa001'));
-    const other = registerEntityContext({ __gevContextId: 'dc-7' }, {
+    const other = registerEntityContext({}, {
       id: 'dc-7', layerId: 'local-datacenters', label: 'Datacenter 7',
     });
     selectEntityContext(other.entity);
@@ -130,7 +130,7 @@ test('deselecting a contact releases the shared slot', () => {
 
 test('clearing one tracking layer leaves another layer selection alone', () => {
   withWindow(() => {
-    const other = registerEntityContext({ __gevContextId: 'dam-3' }, {
+    const other = registerEntityContext({}, {
       id: 'dam-3', layerId: 'local-dams', label: 'Dam 3',
     });
     selectEntityContext(other.entity);

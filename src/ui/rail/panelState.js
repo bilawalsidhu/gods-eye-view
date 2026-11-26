@@ -4,8 +4,6 @@ import { usePanelChromeStore } from '../stores/panelChrome.js';
 /** The classes a panel's state draws on its root. */
 const CLASSES = Object.freeze({
   collapsed: (state) => state.collapsed,
-  'dock-pinned': (state) => state.pinned,
-  'dock-pinned-top': (state) => state.pinnedTop,
   'layout-auto-collapsed': (state) => state.auto === 'layout',
   'accordion-collapsed': (state) => state.auto === 'accordion',
 });
@@ -36,7 +34,7 @@ export function followPanelState(store, panelId, el) {
 }
 
 /**
- * `v-panel-state="'data-panel'"`: the panel root draws its open, pinned and
+ * `v-panel-state="'data-panel'"`: the panel root draws its open and
  * layout-collapsed state from the panel chrome store.
  */
 export const vPanelState = {
@@ -75,8 +73,6 @@ export function readPanelState(el) {
   const has = (name) => el.classList.contains(name);
   return {
     collapsed: has('collapsed'),
-    pinned: has('dock-pinned'),
-    pinnedTop: has('dock-pinned-top'),
     auto: has('layout-auto-collapsed')
       ? 'layout'
       : has('accordion-collapsed')

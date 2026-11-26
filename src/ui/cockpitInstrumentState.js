@@ -52,7 +52,7 @@ function createRimState(value) {
  */
 export function createInstrumentState() {
   return {
-    // 'aircraft' or 'vessel': which readouts the HUD labels and shows.
+    // 'aircraft', 'vessel' or 'subject': which readouts the HUD shows.
     kind: 'aircraft',
     layer: null,
     callsign: t('AIRCRAFT'),
@@ -76,6 +76,19 @@ export function createInstrumentState() {
     look: { offset: false, yawDeg: 0, readout: '' },
     clock: '--:--:--Z',
     position: '--° · --°',
+    // A provider subject's HUD (kind 'subject', cockpitSubjectProviders.js):
+    // its kicker, speed unit and tag, readouts, sources, banner, veil and
+    // progress line, all worded by the provider.
+    kicker: '',
+    speedUnit: '',
+    speedTag: '',
+    speedTone: 'normal',
+    readouts: [],
+    sources: [],
+    banner: null,
+    veil: null,
+    progress: null,
+    lookEnabled: false,
   };
 }
 
@@ -86,8 +99,10 @@ export function createInstrumentState() {
  */
 export function createRouteState() {
   return {
-    // A vessel's card shows only the free-text AIS destination.
+    // A vessel's card shows only the free-text AIS destination; a provider's
+    // subject's (kind 'subject') carries its own title.
     kind: 'aircraft',
+    title: '',
     visible: false,
     from: t('UNKNOWN'),
     to: t('UNKNOWN'),
