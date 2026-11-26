@@ -48,6 +48,7 @@ SUBJECTS = [
     ("helicopter0", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[0]),
     ("helicopter1", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[1]),
     ("helicopter2", "helicopters/generic_heli.glb", ROTOR_ANGLES_DEG[2]),
+    ("vehicle", "other/car.glb", None),
 ]
 
 # Cell pixels each subject is thickened by before its dark edge, so thin

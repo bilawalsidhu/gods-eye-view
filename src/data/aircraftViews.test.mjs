@@ -71,11 +71,10 @@ test('a helicopter draws the block of its rotor frame, the still frame by defaul
     assert.equal(aircraftViewRef('helicopter', frame).first, still, `${frame}`);
 });
 
-test('the TR-3B, airport vehicles, ground stations and unknown kinds have no views', () => {
+test('the TR-3B, ground stations and unknown kinds have no views', () => {
   for (const kind of [
     'tr3b',
     'tr3bHot',
-    'vehicle',
     'station',
     'jet',
     '',
@@ -145,6 +144,8 @@ test('each class is baked from the model it is drawn with up close', () => {
     );
   }
   // Airliner has no class model: each airliner type draws its own, so the
-  // sheet stands them all in with the A320, the most common.
-  assert.deepEqual(unmatched, ['airliner']);
+  // sheet stands them all in with the A320, the most common. An airport
+  // vehicle is a fire truck, tug, van or car by its callsign; the sheet
+  // draws them all as the car, the model a vehicle takes by default.
+  assert.deepEqual(unmatched, ['airliner', 'vehicle']);
 });
