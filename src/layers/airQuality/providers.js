@@ -242,8 +242,10 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
  *   last 8 hourly rows or on a 480-minute row. A PM, ozone or CO value
  *   without a stated period is not rated.
  * - NO2 and SO2 rate on 1-hour values (`averagingMinutes` 60 or unstated).
- *   A 24-hour SO2 row (1440) rates on the 24-hour rows from 305 ppb, and on
- *   its own where no usable 1-hour SO2 of its time is known.
+ *   A 24-hour SO2 row (1440) rates on the 24-hour rows from 305 ppb, also
+ *   on its own where no usable 1-hour SO2 of its time is known; below
+ *   305 ppb it does not rate alone, since the EPA's lower rows read the
+ *   day's highest 1-hour value.
  * - Ozone's newest hourly mean (on the 1-hour rows from 0.125 ppm) and the
  *   24-hour SO2 count beside the value they go with only within three hours
  *   of it (`AQI_MAX_SPREAD_MS`), as a station's pollutants do of each other.
