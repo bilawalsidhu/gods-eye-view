@@ -285,3 +285,43 @@ test('in the AQI view a site pools its networks’ pollutants, the freshest of e
   // A low-cost sensor kept on its own takes in nothing.
   assert.equal(mergeStationValues(sensor, [copy]), sensor);
 });
+
+test('one site matches across the antimeridian and near the poles', () => {
+  const pair = (a, b) =>
+    mergeObservations([
+      { provider: 'national', direct: true, readings: [a] },
+      { provider: 'openaq', direct: false, readings: [b] },
+    ]).map((kept) => kept.provider);
+  // 111 m apart across 180°: one site, the direct reading kept.
+  assert.deepEqual(
+    pair(
+      reading('national', '1', -16.5, 179.9995),
+      reading('openaq', '1', -16.5, -179.9995),
+    ),
+    ['national'],
+  );
+  // 0.6° of longitude apart near the pole is about 12 m, 30 grid columns.
+  assert.deepEqual(
+    pair(
+      reading('national', '2', 89.99, 0),
+      reading('openaq', '2', 89.99, 0.6),
+    ),
+    ['national'],
+  );
+  // Either side of the pole itself.
+  assert.deepEqual(
+    pair(
+      reading('national', '3', -89.9995, 10),
+      reading('openaq', '3', -89.9995, -170),
+    ),
+    ['national'],
+  );
+  // At 75° N, 0.03° of longitude is about 860 m: two sites.
+  assert.deepEqual(
+    pair(
+      reading('national', '4', 75, 20),
+      reading('openaq', '4', 75, 20.03),
+    ).sort(),
+    ['national', 'openaq'],
+  );
+});

@@ -17,18 +17,46 @@
  * again from them.
  */
 
-/** Grid cell edge in degrees: about 2.2 km, well above any dedupe distance. */
+/** Grid cell edge in degrees: about 2.2 km of latitude. */
 const CELL_DEG = 0.02;
-const METRES_PER_DEGREE = 111_320;
+/** Grid columns around the globe. */
+const COLUMNS = Math.round(360 / CELL_DEG);
+const EARTH_RADIUS_M = 6_371_008.8;
+const METRES_PER_DEGREE = (EARTH_RADIUS_M * Math.PI) / 180;
 
 const observedAt = (reading) =>
   Number.isFinite(reading?.observedMs) ? reading.observedMs : -Infinity;
 
-/** Planar distance in metres; exact enough below a kilometre. */
+const radians = (degrees) => (degrees * Math.PI) / 180;
+
+/**
+ * Great-circle distance in metres (haversine): exact across the
+ * antimeridian and near the poles, where longitude degrees shrink to
+ * nothing.
+ */
 function metres(a, b) {
-  return Math.hypot(
-    (a.lat - b.lat) * METRES_PER_DEGREE,
-    (a.lon - b.lon) * METRES_PER_DEGREE * Math.cos((a.lat * Math.PI) / 180),
+  const h =
+    Math.sin(radians(b.lat - a.lat) / 2) ** 2 +
+    Math.cos(radians(a.lat)) *
+      Math.cos(radians(b.lat)) *
+      Math.sin(radians(b.lon - a.lon) / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * The grid columns within `distance` metres of a point at `lat` in column
+ * `col`: enough of them to span the distance at the highest latitude the
+ * search reaches, wrapping at the antimeridian; every column near a pole.
+ */
+function columnsNear(col, lat, distance) {
+  const edge = Math.min(90, Math.abs(lat) + distance / METRES_PER_DEGREE);
+  const width = METRES_PER_DEGREE * CELL_DEG * Math.cos(radians(edge));
+  const span = width > 0 ? Math.ceil(distance / width) : COLUMNS;
+  if (2 * span + 1 >= COLUMNS)
+    return Array.from({ length: COLUMNS }, (_, c) => c);
+  return Array.from(
+    { length: 2 * span + 1 },
+    (_, i) => (((col - span + i) % COLUMNS) + COLUMNS) % COLUMNS,
   );
 }
 
@@ -168,7 +196,8 @@ export function mergeObservations(
     const { lat, lon } = candidate.reading;
     candidate.rank = rank;
     candidate.row = Math.floor(lat / CELL_DEG);
-    candidate.col = Math.floor(lon / CELL_DEG);
+    // Columns count from the antimeridian, so 180° is column 0 like -180°.
+    candidate.col = Math.floor((lon + 180) / CELL_DEG) % COLUMNS;
     candidate.members = new Map([[candidate.provider, candidate.reading]]);
     const key = `${candidate.row}:${candidate.col}`;
     if (!grid.has(key)) grid.set(key, new Map());
@@ -179,9 +208,11 @@ export function mergeObservations(
   // Every pair of readings of two providers closer than dedupeM, nearest
   // first; a provider's own readings are never compared.
   const pairs = [];
-  for (const a of ranked)
-    for (let r = a.row - 1; r <= a.row + 1; r++)
-      for (let c = a.col - 1; c <= a.col + 1; c++)
+  const rows = Math.ceil(dedupeM / (METRES_PER_DEGREE * CELL_DEG));
+  for (const a of ranked) {
+    const columns = columnsNear(a.col, a.reading.lat, dedupeM);
+    for (let r = a.row - rows; r <= a.row + rows; r++)
+      for (const c of columns)
         for (const [provider, bucket] of grid.get(`${r}:${c}`) ?? [])
           if (provider !== a.provider)
             for (const b of bucket)
@@ -189,6 +220,7 @@ export function mergeObservations(
                 const apart = metres(a.reading, b.reading);
                 if (apart < dedupeM) pairs.push({ a, b, apart });
               }
+  }
   pairs.sort(
     (x, y) => x.apart - y.apart || x.a.rank - y.a.rank || x.b.rank - y.b.rank,
   );
