@@ -105,9 +105,9 @@ test('a lone outlier does not reach 500', () => {
   assert.deepEqual(
     plausibility({
       pm25: 3001,
-      o3: 1001,
-      no2: 1501,
-      so2: 3001,
+      o3: 2401,
+      no2: 8001,
+      so2: 6001,
       co: 201,
     }).kept,
     {},
@@ -116,6 +116,28 @@ test('a lone outlier does not reach 500', () => {
     pm25: 3000,
     co: 100,
   });
+});
+
+test('a hazardous reading up to twice its table top is kept and runs past 500', () => {
+  // Table 6, note 4: the concentration each table puts at 500, in the
+  // layer's units (gases at 25 °C).
+  const tops = {
+    o3: 0.604 * 1000 * 1.963,
+    pm25: 325.4,
+    pm10: 604,
+    co: 50.4 * 1.1456,
+    so2: 1004 * 2.62,
+    no2: 2049 * 1.882,
+  };
+  for (const [key, top] of Object.entries(tops)) {
+    assert.deepEqual(plausibility({ [key]: 2 * top }).kept, {
+      [key]: 2 * top,
+    });
+    // A 1-hour SO2 value stops at 200: only a 24-hour one goes higher.
+    if (key !== 'so2') assert.ok(usAqi({ [key]: top * 1.01 }).index > 500, key);
+  }
+  // NO2 at 2,000 ppb (3,764 µg/m³) is hazardous, not a fault.
+  assert.equal(usAqi(plausibility({ no2: 3764 }).kept).index, 488);
 });
 
 test('the bands are the EPA categories and colours', () => {
@@ -167,7 +189,7 @@ test('one unit conversion serves the EEA comparison: 10 ppb of NO2 is rated', ()
 });
 
 test('plausibility names why each value is left out', () => {
-  assert.deepEqual(plausibility({ pm25: 308, pm10: 92, no2: 1600 }), {
+  assert.deepEqual(plausibility({ pm25: 308, pm10: 92, no2: 8100 }), {
     kept: { pm10: 92 },
     excluded: { pm25: 'above-pm10', no2: 'implausible' },
   });
@@ -502,7 +524,7 @@ test('the AQI view runs its values through plausibility()', async () => {
   );
   layer.destroy();
   // A value above its ceiling is left out: PM2.5 10 µg/m³ gives 53.
-  ({ layer, point } = injectedLayer([row('PM2.5', 10), row('NO2', 1600)]));
+  ({ layer, point } = injectedLayer([row('PM2.5', 10), row('NO2', 8100)]));
   await layer.update();
   assert.equal(point().meta.aqi.index, 53);
   assert.deepEqual(point().meta.aqiExcluded, { no2: 'implausible' });

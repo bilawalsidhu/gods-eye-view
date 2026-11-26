@@ -274,6 +274,7 @@ test('an implausible hourly value is unrated in a pollutant view, as in the AQI 
   // Carbon monoxide's ceiling is 200 mg/m³ in every view (175 ppm is 200.5).
   assert.equal(hourly('CO', 150, 'mg/m³').assessment.label, 'Extremely poor');
   assert.match(hourly('CO', 175, 'ppm').assessment.reason, /Implausibly high/);
-  assert.equal(hourly('NO2', 1500).assessment.label, 'Extremely poor');
-  assert.match(hourly('NO2', 1501).assessment.reason, /Implausibly high/);
+  // NO2's is 8,000 µg/m³, twice the 3,856 its US AQI table puts at 500.
+  assert.equal(hourly('NO2', 8000).assessment.label, 'Extremely poor');
+  assert.match(hourly('NO2', 8001).assessment.reason, /Implausibly high/);
 });

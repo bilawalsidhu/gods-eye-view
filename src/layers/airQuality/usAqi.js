@@ -72,13 +72,20 @@ export const AQI_PARAMETERS = Object.freeze(
   ),
 );
 
-/** Above these (µg/m³; CO mg/m³) a value is taken to be an instrument fault. */
+/**
+ * Above these (µg/m³; CO mg/m³) a value is taken to be an instrument fault.
+ * Each sits at least twice above the concentration its table puts at 500
+ * (Table 6, note 4: O3 1-hour 0.604 ppm = 1,186 µg/m³, PM2.5 325.4 and PM10
+ * 604 µg/m³, CO 50.4 ppm = 57.7 mg/m³, SO2 1,004 ppb = 2,630 µg/m³, NO2
+ * 2,049 ppb = 3,856 µg/m³), so a hazardous reading past the table's top
+ * keeps its index above 500; only values no outdoor air reaches are left out.
+ */
 export const AQI_CEILINGS = Object.freeze({
   pm25: 3000,
   pm10: 20_000,
-  o3: 1000,
-  no2: 1500,
-  so2: 3000,
+  o3: 2400,
+  no2: 8000,
+  so2: 6000,
   co: 200,
 });
 
