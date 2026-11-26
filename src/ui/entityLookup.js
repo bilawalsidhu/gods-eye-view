@@ -5,6 +5,8 @@
 // Context row picks it, and one it does not hold yet is centred on once and
 // picked when the layer's next load has it. It is never followed.
 
+import { isWorldTime } from '../time/worldClock.js';
+
 /** The kinds a lookup may answer with, and the layer each is shown in. */
 export const LOOKUP_LAYERS = Object.freeze({
   aircraft: 'flights',
@@ -28,9 +30,11 @@ const text = (value) => String(value ?? '').trim() || null;
  * else its kind's layer. A ship's MMSI is its `mmsi`, else an id of nine
  * digits. One the host marks `placed: false` (its layer will not draw it at
  * the time asked: no position then) is kept with or without a position,
- * which is then where it was last seen; its `detail` says why.
+ * which is then where it was last seen; its `detail` says why. An answer's
+ * `at` (epoch ms) is the world time its position is from, when the host
+ * placed it at another time than the one asked.
  * @param {unknown} answer What `entityLookup` resolved with.
- * @returns {Array<{kind: string, id: string, name: ?string, detail: ?string, lat: ?number, lon: ?number, layerId: string, mmsi: ?string, placed: boolean}>}
+ * @returns {Array<{kind: string, id: string, name: ?string, detail: ?string, lat: ?number, lon: ?number, layerId: string, mmsi: ?string, placed: boolean, at: ?number}>}
  */
 export function lookupMatches(answer) {
   if (!Array.isArray(answer)) return [];
@@ -64,6 +68,7 @@ export function lookupMatches(answer) {
           ? text(item.mmsi) || (/^\d{9}$/.test(id) ? id : null)
           : null,
       placed,
+      at: placed && isWorldTime(item.at) ? item.at : null,
     });
     if (matches.length === MAX_LOOKUP_MATCHES) break;
   }
@@ -145,7 +150,9 @@ export function waitForLoaded(
 }
 
 /**
- * Find a match in its layer. One the host marks `placed: false` is not
+ * Find a match in its layer. One placed at another time (`at`) moves the
+ * world clock there first (`seek`), so its layer draws it where the lookup
+ * placed it. One the host marks `placed: false` is not
  * looked for: the camera is centred where it was last seen, if the host
  * gave a position, and the answer is `{ok: false, reason: 'unplaced'}`.
  * Otherwise its layer is switched on if it is off
@@ -159,6 +166,7 @@ export function waitForLoaded(
  * @param {object} options.dataManager The layers.
  * @param {(id: string, enabled: boolean) => Promise<boolean>|boolean} options.setLayer
  * @param {(lat: number, lon: number) => unknown} options.centre
+ * @param {(ms: number) => unknown} [options.seek] Moves the world clock.
  * @param {AbortSignal} [options.signal]
  * @param {number} [options.timeoutMs]
  * @returns {Promise<{ok: boolean, identity?: object, picked?: boolean, reason?: string}>}
@@ -168,6 +176,7 @@ export async function findMatch({
   dataManager,
   setLayer,
   centre,
+  seek = null,
   signal = null,
   timeoutMs = LOOKUP_ARRIVAL_MS,
 }) {
@@ -182,6 +191,10 @@ export async function findMatch({
       centre(match.lat, match.lon);
     return { ok: false, reason: 'unplaced' };
   }
+  // Its position is from another time: the world clock goes there, so the
+  // layer's next load has it where the lookup placed it.
+  const moved = isWorldTime(match.at) && typeof seek === 'function';
+  if (moved) seek(match.at);
   if (!dataManager.isEnabled?.(layerId)) {
     const switched = await setLayer(layerId, true);
     if (signal?.aborted) return { ok: false, reason: 'cancelled' };
@@ -195,7 +208,9 @@ export async function findMatch({
     lat: match.lat,
     lon: match.lon,
   });
-  const now = loadedId(dataManager, match);
+  // A record the layer holds is where it is now; once the clock has moved,
+  // the camera goes where the lookup placed it and the record is picked by id.
+  const now = moved ? null : loadedId(dataManager, match);
   if (now) return { ok: true, identity: identity(now), picked: false };
   // Once, at the position the lookup gave: the layer loads around the view.
   centre(match.lat, match.lon);
