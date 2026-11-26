@@ -27,7 +27,6 @@ import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { createStubCamera } from './camera.js';
 import { motionPosition } from '../motion/iconMotion.js';
 import { computeViewRectangle } from './viewRectangle.js';
-import { loadVectorStyle } from '../vectorBase/index.js';
 import {
   add,
   dot,
@@ -1803,15 +1802,24 @@ export function createStubRenderer(options = {}) {
         settled: false,
       });
       if (destroyed) return superseded();
-      // The style is loaded, as a renderer drawing it loads it, so one that
-      // fails changes nothing; the stub paints none of it.
+      // The style document is fetched, as a renderer drawing it would, so
+      // one that fails changes nothing; the stub paints none of it.
       if (base.vector) {
         const load = new AbortController();
         baseLoad = load;
         try {
-          await loadVectorStyle(base.vector.styleUrl, undefined, {
+          const response = await fetch(base.vector.styleUrl, {
             signal: load.signal,
           });
+          if (!response.ok)
+            throw new Error(`The style answered ${response.status}`);
+          const style = await response.json();
+          if (
+            style?.version !== 8 ||
+            !Array.isArray(style.layers) ||
+            typeof style.sources !== 'object'
+          )
+            throw new TypeError('The document is not a MapLibre style');
         } catch (error) {
           if (!current()) return superseded();
           throw error;
