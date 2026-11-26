@@ -10270,13 +10270,18 @@ requires the operator's key.
 OpenAQ navigation reuses stable catalog regions and recent station observations.
 Each pass fetches at most one new catalog page and checks four nearby stations (hours or `/latest`);
 nearby enrichment waits eight seconds and yields capacity to new regions.
+A pass that brings no reading within 5° of the view centre doubles the wait
+before that view's next pass (8 s up to 2 minutes; `PASS_MS`, `MAX_PASS_MS`),
+and one view spends at most a quarter of the hourly budget (`VIEW_SHARE`,
+catalog pages included), so a view left open cannot drain it.
 Cancelling the last view consumer aborts upstream work. Cached observations survive
 view eviction and provider cooldowns. Provider remaining/reset and Retry-After
 headers govern automatic recovery; the card says when a network's request
 budget is reached. The viewport answer carries counts (checked, eligible,
 partial), not the station catalogue, and the browser's few-second discovery
-loop waits while the tab is hidden. A key OpenAQ refuses is not sent upstream
-again until it changes or ten minutes pass.
+loop waits while the tab is hidden. A key OpenAQ refuses (a 401, or a 403
+whose answer names the key or account) is not sent upstream again until it
+changes or ten minutes pass; any other 403 fails only that request.
 An unresolved camera never launches a global scan. All views share conservative
 45/minute and 1,800/hour process limits; a shared key's other clients still count.
 

@@ -5,7 +5,7 @@ const start = Date.parse('2026-10-20T12:00:00Z');
 const HOUR = 3600_000;
 const iso = (t) => new Date(t).toISOString();
 
-test('large viewport progress: a stationary 7,000-station view eventually checks every station', async () => {
+test('large viewport progress: a stationary 7,000-station view keeps checking stations within its hourly share', async () => {
   let clock = start;
   const N = 7000;
   // Spread over the globe, away from the focus at 0,0 so no nearby pause applies.
@@ -55,28 +55,34 @@ test('large viewport progress: a stationary 7,000-station view eventually checks
     fetchImpl,
   });
   const view = [-180, -90, 180, 90, 0, 0];
-  let best = 0,
-    everComplete = false;
-  const hourly = [];
+  // The most stations checked in each hour, and requests spent in it.
+  const checkedByHour = [];
+  const requestsByHour = [];
   let nextReport = start + HOUR;
+  let requestsAtReport = 0;
+  let checked = 0;
   while (clock < start + 10 * HOUR) {
     const snap = await source.getSnapshot({ view });
-    best = Math.max(best, snap.checked);
-    if (snap.eligible === N && snap.checked === N) everComplete = true;
+    checked = Math.max(checked, snap.checked);
     if (clock >= nextReport) {
-      hourly.push(`${snap.checked}/${snap.eligible}`);
+      checkedByHour.push(checked);
+      requestsByHour.push(requests - requestsAtReport);
+      requestsAtReport = requests;
       nextReport += HOUR;
     }
     clock = Math.max(clock + 1000, (snap.retryAt ?? clock + 60_000) + 1);
   }
-  console.log(
-    'hourly checked/eligible:',
-    hourly.join(' '),
-    'requests:',
-    requests,
-  );
+  // A view left open spends at most a quarter of the hourly budget (1800)...
   assert.ok(
-    everComplete,
-    `best checked ${best} of ${N}; hourly ${hourly.join(' ')}`,
+    requestsByHour.every((count) => count <= 450),
+    `requests by hour ${requestsByHour.join(' ')}`,
   );
+  // ...and still checks more of its stations every hour. Its far stations
+  // bring nothing near the centre, so its passes slow to one each 2 minutes.
+  for (let i = 1; i < checkedByHour.length; i++)
+    assert.ok(
+      checkedByHour[i] > checkedByHour[i - 1],
+      `checked by hour ${checkedByHour.join(' ')} requests ${requestsByHour.join(' ')}`,
+    );
+  assert.ok(checkedByHour.at(-1) >= 1000, `${checkedByHour.at(-1)}`);
 });

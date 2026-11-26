@@ -1,6 +1,8 @@
 import { parseRetryAfter } from './regional/nominatimGate.js';
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+/** Requests all views together may make in an hour. */
+export const OPENAQ_HOURLY_CALLS = 1800;
 
 /** OpenAQ supplies the seconds until its request window resets. */
 function resetTime(raw, now) {
@@ -22,7 +24,7 @@ export function createOpenAqBudget(now = Date.now) {
     const recent = calls.filter((at) => time - at < MINUTE);
     const retryAt = Math.max(
       blockedUntil,
-      calls.length >= 1800 ? calls[0] + HOUR : 0,
+      calls.length >= OPENAQ_HOURLY_CALLS ? calls[0] + HOUR : 0,
       recent.length >= 45 ? recent[0] + MINUTE : 0,
       remaining === 0 ? resetAt : 0,
     );
@@ -30,7 +32,7 @@ export function createOpenAqBudget(now = Date.now) {
       remaining: Math.max(
         0,
         Math.min(
-          1800 - calls.length,
+          OPENAQ_HOURLY_CALLS - calls.length,
           45 - recent.length,
           remaining ?? Infinity,
         ),

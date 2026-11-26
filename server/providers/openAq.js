@@ -1,6 +1,9 @@
 import { admitSameSite } from './common/same-site.js';
-import { readResponseJsonCapped } from './common/http.js';
-import { createOpenAqBudget } from './openAqBudget.js';
+import {
+  readCappedResponseText,
+  readResponseJsonCapped,
+} from './common/http.js';
+import { createOpenAqBudget, OPENAQ_HOURLY_CALLS } from './openAqBudget.js';
 import {
   normalizeOpenAqLocations,
   normalizeOpenAqLatest,
@@ -24,6 +27,23 @@ const BATCH = 4;
 const MAX_SENSORS = 3;
 /** Time before retrying a failed station check. */
 const STATION_RETRY_MS = 5 * 60_000;
+/**
+ * Requests one view may spend in an hour: a quarter of the hourly budget,
+ * so a view left open cannot drain what pans and other views need.
+ */
+const VIEW_SHARE = Math.floor(OPENAQ_HOURLY_CALLS / 4);
+/** Time between a view's station passes while they bring nearby readings. */
+const PASS_MS = 8000;
+/** The longest wait between passes that bring nothing near the view centre. */
+const MAX_PASS_MS = 2 * 60_000;
+/** Degrees from the view centre within which a reading counts as nearby. */
+const NEARBY_DEG = 5;
+/**
+ * Words of an OpenAQ refusal that is about the key or the account (a
+ * missing, invalid or blocked key), not about one resource.
+ */
+const KEY_REFUSAL =
+  /api[\s_-]?key|x-api-key|unauthori[sz]ed|authenticat|credential|blocked|suspended|banned/i;
 const ROOT = 'https://api.openaq.org/v3/';
 const HOUR = 3600_000;
 /**
@@ -125,6 +145,11 @@ function createViewState(view, time, previous) {
     readings: previous?.readings ?? new Map(),
     checked: previous?.checked ?? new Map(),
     failed: previous?.failed ?? new Map(),
+    // Requests this view spent in the last hour, its passes in a row that
+    // brought nothing near its centre, and when its next pass may start.
+    spent: previous?.spent ?? [],
+    idle: previous?.idle ?? 0,
+    nextPassAt: previous?.nextPassAt ?? 0,
     pages: [
       ...new Map(
         [...priority, ...boxes]
@@ -163,8 +188,10 @@ export function createOpenAqAcquisition({
 } = {}) {
   let keyAtCache = null;
   /**
-   * The key OpenAQ last refused (401 or 403), with its answer and when: it is
-   * not sent upstream again until it changes or `REFUSED_KEY_MS` pass.
+   * The key OpenAQ last refused, with its answer and when: it is not sent
+   * upstream again until it changes or `REFUSED_KEY_MS` pass. A refusal is a
+   * 401, or a 403 whose answer names the key or the account (`KEY_REFUSAL`);
+   * any other 403 is one resource refused, and fails only that request.
    */
   let refused = null;
   const budget = createOpenAqBudget(now);
@@ -233,11 +260,16 @@ export function createOpenAqAcquisition({
   const views = new Map(),
     viewCache = new Map(),
     viewPending = new Map();
-  async function acquireView(get, view, parameter, mode, signal, cancel) {
+  async function acquireView(upstream, view, parameter, mode, signal, cancel) {
     const id = viewId(view, parameter, mode);
     let state = views.get(id);
     if (!state || now() - state.at > HOUR)
       state = createViewState(view, now(), state);
+    // Every request of this view counts against its share.
+    const get = (path) => {
+      state.spent.push(now());
+      return upstream(path);
+    };
     views.delete(id);
     views.set(id, state);
     while (views.size > 8) {
@@ -284,6 +316,12 @@ export function createOpenAqAcquisition({
             p.bbox[3] >= page.bbox[3],
         );
       }
+      // Discovery keeps to the view's share of the hour too.
+      if (
+        !cachedPage &&
+        state.spent.filter((at) => now() - at < HOUR).length >= VIEW_SHARE
+      )
+        break;
       try {
         const data =
           cachedPage ||
@@ -319,7 +357,7 @@ export function createOpenAqAcquisition({
           break;
         }
         signal?.throwIfAborted();
-        if ([401, 403].includes(e.status)) throw e;
+        if (e.keyRefused) throw e;
         if (e.status === 429) limited = true;
         else catalogFailure = e.status || 503;
         retryAt = e.retryAt || null;
@@ -380,18 +418,23 @@ export function createOpenAqAcquisition({
       .slice(0, BATCH);
     const hasNearby = [...state.readings.values()]
       .flat()
-      .some((r) => distance(r) < 5);
+      .some((r) => distance(r) < NEARBY_DEG);
     const lastNearbyCheck = eligible.reduce(
       (latest, station) =>
-        distance(station) < 5
+        distance(station) < NEARBY_DEG
           ? Math.max(latest, state.checked.get(station.stationId) || 0)
           : latest,
       0,
     );
     const available = budget.state();
-    if (due.length && hasNearby && now() - lastNearbyCheck < 8000) {
+    state.spent = state.spent.filter((at) => now() - at < HOUR);
+    if (due.length && hasNearby && now() - lastNearbyCheck < PASS_MS) {
       due.length = 0;
-      retryAt = Math.max(retryAt || 0, lastNearbyCheck + 8000);
+      retryAt = Math.max(retryAt || 0, lastNearbyCheck + PASS_MS);
+    } else if (due.length && state.spent.length >= VIEW_SHARE) {
+      due.length = 0;
+    } else if (due.length && now() < state.nextPassAt) {
+      due.length = 0;
     } else if (due.length && hasNearby && available.remaining <= 16) {
       due.length = 0;
       retryAt = Math.max(
@@ -401,7 +444,15 @@ export function createOpenAqAcquisition({
     }
     // Two bounded workers shorten the time to first visible markers; all share
     // the same process request budget as other views.
-    for (let i = 0; i < due.length && !limited && !timedOut; i += 2) {
+    let arrivedNearby = false;
+    for (
+      let i = 0;
+      i < due.length &&
+      !limited &&
+      !timedOut &&
+      state.spent.length < VIEW_SHARE;
+      i += 2
+    ) {
       if (expired()) {
         timedOut = true;
         break;
@@ -437,6 +488,8 @@ export function createOpenAqAcquisition({
             if (previous && newest(previous.readings) > newest(rows))
               rows = previous.readings;
             state.readings.set(station.stationId, rows);
+            if (rows.length && distance(station) < NEARBY_DEG)
+              arrivedNearby = true;
             state.checked.set(station.stationId, now());
             state.failed.delete(station.stationId);
             succeeded++;
@@ -457,7 +510,7 @@ export function createOpenAqAcquisition({
               return;
             }
             signal?.throwIfAborted();
-            if ([401, 403].includes(e.status)) throw e;
+            if (e.keyRefused) throw e;
             if (e.status === 429) limited = true;
             else {
               stationFailure = 503;
@@ -469,6 +522,13 @@ export function createOpenAqAcquisition({
       );
       const rejected = results.find((r) => r.status === 'rejected');
       if (rejected) throw rejected.reason;
+    }
+    // A pass that brought nothing near the view centre doubles the wait
+    // before the next one (to MAX_PASS_MS); one that did starts it over.
+    if (due.length) {
+      state.idle = arrivedNearby ? 0 : state.idle + 1;
+      state.nextPassAt =
+        now() + Math.min(MAX_PASS_MS, PASS_MS * 2 ** state.idle);
     }
     const fresh = [...state.readings.values()]
       .flat()
@@ -517,6 +577,18 @@ export function createOpenAqAcquisition({
         ),
       });
     const catalogDone = state.pages.every((p) => p.done);
+    // When this view may ask again: once its oldest request of the hour
+    // leaves the hour when it spent its share, else at its next pass (later
+    // after passes that brought nothing near the centre); discovery goes on
+    // between passes.
+    const shareSpent = state.spent.length >= VIEW_SHARE;
+    const nextAsk = shareSpent
+      ? state.spent[0] + HOUR
+      : !catalogDone || timedOut
+        ? now() + PASS_MS
+        : ready
+          ? Math.max(now() + PASS_MS, state.nextPassAt)
+          : null;
     return {
       schemaVersion: 1,
       source: 'OpenAQ',
@@ -539,13 +611,7 @@ export function createOpenAqAcquisition({
         eligible.some((s) => !state.checked.has(s.stationId)),
       stale,
       failureStatus,
-      retryAt:
-        retryAt ||
-        (stale
-          ? now() + 60_000
-          : !catalogDone || ready || timedOut
-            ? now() + 8000
-            : null),
+      retryAt: retryAt || (stale ? now() + 60_000 : nextAsk),
     };
   }
   async function acquire(key, view, parameter, mode, consumerSignal) {
@@ -562,12 +628,28 @@ export function createOpenAqAcquisition({
         redirect: 'error',
       });
       budget.observe(res);
-      if (res.status === 401 || res.status === 403)
-        refused = { key, status: res.status, at: now() };
+      if (res.status === 401 || res.status === 403) {
+        // A 403 refuses the key only when its answer says so.
+        const keyRefused =
+          res.status === 401 ||
+          KEY_REFUSAL.test(
+            (await readCappedResponseText(res, 16 * 1024).catch(() => null))
+              ?.text ?? '',
+          );
+        if (keyRefused) {
+          refused = { key, status: res.status, at: now() };
+          throw Object.assign(error(res.status, 'OpenAQ key rejected'), {
+            keyRefused,
+          });
+        }
+        throw Object.assign(error(503, 'OpenAQ request unavailable'), {
+          upstreamStatus: 403,
+        });
+      }
       if (!res.ok) {
         throw Object.assign(
           error(
-            [401, 403, 404, 429].includes(res.status) ? res.status : 503,
+            [404, 429].includes(res.status) ? res.status : 503,
             'OpenAQ request unavailable',
           ),
           { retryAt: budget.state().retryAt },
