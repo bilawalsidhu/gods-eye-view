@@ -229,6 +229,7 @@ export function createWeatherClock({
               ? {
                   start: Date.parse(times[0]),
                   end: Date.parse(times.at(-1)),
+                  frames: times.map((time) => Date.parse(time)),
                 }
               : null;
           },

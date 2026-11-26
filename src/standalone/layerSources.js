@@ -26,6 +26,7 @@ import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
 import { createLocalAirQualityFieldSource } from '../layers/airQuality/fieldSource.js';
+import { withRecordedHistory } from '../proto/recordedFlights.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
@@ -45,7 +46,7 @@ export function createStandaloneLayerSources(
     ...createReferenceSources(),
     directions: createDirectionsSource(),
     'recent-imagery': createRecentImagerySource(),
-    flights: createFlightSource(),
+    flights: withRecordedHistory(createFlightSource()),
     military: createMilitarySource(),
     vessels: createVesselSource({
       apiUrl: import.meta.env?.VITE_AIS_LIVE_API_URL || '/api/vessels',

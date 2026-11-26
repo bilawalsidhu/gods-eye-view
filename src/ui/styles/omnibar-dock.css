@@ -337,7 +337,6 @@ body:not(.mobile-shell):not(.cockpit-mode):not(.scene-playback-mode):not(
 
   #world-timeline {
     bottom: var(--omnibar-dock-bottom);
-    width: var(--omnibar-dock-width);
   }
 
   /* Align the plain credits with Power Up. The line wraps at every width

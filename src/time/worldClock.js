@@ -470,6 +470,15 @@ export function createWorldClock({
         if (sources.delete(entry)) changed();
       };
     },
+    /** Each registered source's own span (prototype: the timeline's lanes). */
+    sources() {
+      const list = [];
+      for (const { source } of sources) {
+        const span = spanOf(source);
+        if (span) list.push({ id: source.id, ...span });
+      }
+      return list;
+    },
     /** A source's coverage changed (frames loaded, the layer paused). */
     coverageChanged: () => changed(),
     /** Whether a followed layer has time to show; see getState().supported. */

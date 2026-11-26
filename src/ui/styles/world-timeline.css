@@ -1,17 +1,14 @@
-/* ── World timeline ─────────────────────────── */
-/* Shown while a layer with time to show is on, centred along the bottom of
-   the screen; the command dock and what sits above it rise by its height. */
+/* ── World timeline (design prototype) ─────────────────────────── */
+/* One line along the bottom, under the command dock: the clock, the shuttle,
+   a track over a window of time, the window's length, the lanes and LIVE.
+   The dock above rises by --world-timeline-lift, which the component sets. */
 :root {
   --world-timeline-lift: 0px;
+  --wt-live: #00d4ff;
+  --wt-past: #ffb45a;
+  --wt-future: #b79cff;
 }
 
-/* The bar and the time's bubble over its handle. `.has-world-timeline` is a
-   page-root class (src/ui/rail/rootClass.js). */
-body:is(.has-world-timeline *, #world-timeline) {
-  --world-timeline-lift: 66px;
-}
-
-/* Clean view, recording and the cockpit put the dock away; the bar goes too. */
 body.ui-clean-view,
 body.recording-mode,
 body.cockpit-mode {
@@ -24,334 +21,759 @@ body.cockpit-mode #world-timeline {
   display: none;
 }
 
-/* Time runs left to right in every language, so the handle, the fill, the
-   ticks and the bubble agree under a right-to-left page too. */
-#world-timeline {
+#world-timeline.wt {
+  --wt-tense: var(--wt-live);
   direction: ltr;
   position: fixed;
-  /* The dock's floor (command-dock.css); the dock rises above the bar. */
   bottom: 74px;
   left: 50%;
   z-index: 146;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(820px, calc(100vw - 24px));
-  height: 42px;
+  flex-direction: column;
+  width: clamp(460px, calc(100vw - 720px), 1040px);
+  transition: width 0.18s ease;
   box-sizing: border-box;
-  padding: 4px 6px;
-  border: 1px solid var(--glass-border);
-  border-radius: 10px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
-  transform: translateX(-50%);
-}
-
-#world-timeline .world-timeline-play,
-#world-timeline .world-timeline-live {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 32px;
-  height: 32px;
-  padding: 0 8px;
-  border: 1px solid rgba(123, 189, 211, 0.28);
-  border-radius: 8px;
-  background: rgba(0, 212, 255, 0.08);
-  color: var(--text-primary);
-  font: inherit;
-  cursor: pointer;
-}
-
-#world-timeline .world-timeline-play:hover,
-#world-timeline .world-timeline-live:hover {
-  background: rgba(0, 212, 255, 0.18);
-}
-
-#world-timeline .world-timeline-live.is-live {
-  border-color: rgba(0, 212, 255, 0.6);
-  background: rgba(0, 212, 255, 0.2);
-  color: var(--accent);
-  cursor: default;
-}
-
-#world-timeline .world-timeline-live {
-  font-size: 11px;
+  border: 1px solid rgba(123, 189, 211, 0.16);
+  border-radius: 4px;
+  background: rgba(4, 8, 12, 0.72);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  color: rgba(214, 236, 244, 0.86);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+  transform: translateX(-50%);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-#world-timeline .world-timeline-speed {
-  flex: none;
+#world-timeline.wt.is-past {
+  --wt-tense: var(--wt-past);
 }
 
-/* The time rides over the handle. It slides across itself as the handle
-   crosses the track (its start at the handle at the track's start, its end at
-   the end), so however wide its date it stays within the track. */
-#world-timeline .world-timeline-time {
-  --inset: 0px;
+#world-timeline.wt.is-future {
+  --wt-tense: var(--wt-future);
+}
+
+/* The HUD's corner brackets, in the tense's colour. */
+#world-timeline.wt::before,
+#world-timeline.wt::after {
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: calc(var(--inset) + (100% - var(--inset)) * var(--at));
-  padding: 2px 8px;
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  border-radius: 6px;
-  background: var(--glass-bg);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  transform: translateX(calc(var(--at) * -100%));
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border: 1px solid var(--wt-tense);
+  border-top: 0;
+  content: '';
+  opacity: 0.9;
   pointer-events: none;
 }
 
-/* Playing, held while a layer loads the time's data: a spinner by the time. */
-#world-timeline .world-timeline-time.is-waiting {
+#world-timeline.wt::before {
+  left: -1px;
+  border-right: 0;
+}
+
+#world-timeline.wt::after {
+  right: -1px;
+  border-left: 0;
+}
+
+.wt button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.wt button:focus-visible,
+.wt-track:focus-visible {
+  outline: 1px solid var(--wt-tense);
+  outline-offset: 1px;
+}
+
+.wt-bar {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  grid-template-areas: 'clock shuttle track right';
+  align-items: stretch;
+  column-gap: 10px;
+  height: 40px;
+  padding: 0 8px 0 10px;
+}
+
+.wt-clock {
+  grid-area: clock;
+}
+
+.wt-shuttle {
+  grid-area: shuttle;
+}
+
+.wt-track {
+  grid-area: track;
+}
+
+.wt-right {
+  grid-area: right;
+}
+
+/* Engaged: the track takes a row of its own across the whole bar. */
+.is-engaged .wt-bar {
+  grid-template-areas:
+    'track track track track'
+    'clock shuttle gap right';
+  grid-template-rows: 40px 42px;
+  height: 82px;
+  padding: 0;
+}
+
+.is-engaged .wt-clock {
+  margin-left: 10px;
+}
+
+.is-engaged .wt-right {
+  margin-right: 8px;
+}
+
+.is-engaged .wt-track {
+  border-bottom: 1px solid rgba(123, 189, 211, 0.14);
+}
+
+/* At rest: the clock, rewind, and a strip of the last day. */
+#world-timeline.wt.is-rest {
+  width: 460px;
+  background: rgba(4, 8, 12, 0.5);
+}
+
+#world-timeline.is-rest .wt-speed,
+#world-timeline.is-rest .wt-key--play,
+#world-timeline.is-rest .wt-key--fwd,
+#world-timeline.is-rest .wt-right,
+#world-timeline.is-rest .wt-tick em,
+#world-timeline.is-rest .wt-now em {
+  display: none;
+}
+
+.is-rest .wt-bar {
+  grid-template-columns: auto auto 1fr;
+  grid-template-areas: 'clock shuttle track';
+  padding-right: 10px;
+}
+
+.is-rest .wt-strip {
+  bottom: 16px;
+}
+
+.is-rest .wt-journey {
+  bottom: 22px;
+}
+
+.is-rest .wt-journey-start {
+  display: none;
+}
+
+/* ── The clock ── */
+.wt .wt-clock {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 118px;
+  text-align: left;
+}
+
+.is-engaged .wt-clock {
+  width: 214px;
+}
+
+/* How far from now, beside the time: the one thing not to miss. */
+.wt-clock-ago {
+  margin-left: 10px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, var(--wt-tense) 60%, transparent);
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-shadow: none;
+  vertical-align: 3px;
+}
+
+.wt-clock-time {
+  color: var(--wt-tense);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--wt-tense) 45%, transparent);
+}
+
+.wt-clock-time i {
+  margin-left: 1px;
+  font-size: 11px;
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.wt-clock-sub {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  color: color-mix(in srgb, var(--wt-tense) 78%, white);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.1em;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-#world-timeline .world-timeline-spinner {
-  width: 10px;
-  height: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--accent);
+.wt-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  animation: world-timeline-spin 0.9s linear infinite;
+  background: currentColor;
 }
 
-@keyframes world-timeline-spin {
+.is-live .wt-dot {
+  box-shadow: 0 0 6px var(--wt-live);
+  animation: wt-blink 1.6s steps(2, start) infinite;
+}
+
+@keyframes wt-blink {
+  to {
+    opacity: 0.25;
+  }
+}
+
+/* ── The shuttle ── */
+.wt-shuttle,
+.wt-right {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.wt .wt-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 3px;
+  color: rgba(214, 236, 244, 0.7);
+  touch-action: none;
+}
+
+.wt .wt-key svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.wt .wt-key:hover:not(:disabled) {
+  background: rgba(123, 189, 211, 0.12);
+  color: #fff;
+}
+
+.wt .wt-key.is-on {
+  background: color-mix(in srgb, var(--wt-tense) 18%, transparent);
+  color: var(--wt-tense);
+}
+
+.wt .wt-key:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.wt .wt-key--play {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(123, 189, 211, 0.3);
+  border-radius: 50%;
+  color: #fff;
+}
+
+.wt .wt-speed {
+  width: 74px;
+  height: 22px;
+  margin-left: 4px;
+  border: 1px solid rgba(123, 189, 211, 0.18);
+  border-radius: 3px;
+  color: rgba(214, 236, 244, 0.72);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.is-running .wt-speed {
+  border-color: color-mix(in srgb, var(--wt-tense) 60%, transparent);
+  color: var(--wt-tense);
+}
+
+/* ── The track ── */
+.wt-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 120px;
+  overflow: hidden;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+/* Past now: what is predicted or forecast, not yet seen. */
+.wt-ahead {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 5px,
+    color-mix(in srgb, var(--wt-future) 9%, transparent) 5px 6px
+  );
+  pointer-events: none;
+}
+
+.wt-tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 5px;
+  background: rgba(160, 205, 222, 0.28);
+  pointer-events: none;
+}
+
+.wt-tick.is-major {
+  height: 9px;
+  background: rgba(160, 205, 222, 0.6);
+}
+
+.wt-tick.is-midnight {
+  height: 100%;
+  background: linear-gradient(rgba(160, 205, 222, 0.6), rgba(160, 205, 222, 0.08));
+}
+
+.wt-tick em {
+  position: absolute;
+  top: 9px;
+  left: 4px;
+  color: rgba(190, 220, 232, 0.62);
+  font-size: 9px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wt-tick.is-midnight em {
+  color: #e6f4f9;
+}
+
+/* Where there is data: solid where every layer on has it, hatched where only
+   some do, empty where none does. */
+.wt-strip {
+  position: absolute;
+  right: 0;
+  bottom: 5px;
+  left: 0;
+  height: 4px;
+  background: rgba(123, 189, 211, 0.08);
+  pointer-events: none;
+}
+
+.wt-strip-part {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(0, 212, 255, 0.5) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.wt-strip-part.is-all {
+  background: rgba(0, 212, 255, 0.72);
+}
+
+.wt-strip-part.is-future {
+  background: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--wt-future) 75%, transparent) 0 1px,
+    transparent 1px 4px
+  );
+}
+
+/* The thing selected: the stretch it was observed over. */
+.wt-journey {
+  position: absolute;
+  bottom: 12px;
+  height: 2px;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.wt-journey-start {
+  position: absolute;
+  bottom: 9px;
+  width: 1px;
+  height: 8px;
+  background: #fff;
+  pointer-events: none;
+}
+
+.wt-mark {
+  position: absolute;
+  bottom: 10px;
+  width: 5px;
+  height: 5px;
+  margin-left: -2.5px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(4, 8, 12, 0.9);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.wt-now {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--wt-live) 55%, transparent);
+  pointer-events: none;
+}
+
+.wt-now em {
+  position: absolute;
+  top: 20px;
+  right: 4px;
+  color: var(--wt-live);
+  font-size: 8px;
+  font-style: normal;
+}
+
+.is-live .wt-now em {
+  display: none;
+}
+
+.wt-hover {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.wt-hover em {
+  position: absolute;
+  top: 8px;
+  left: 5px;
+  padding: 1px 4px;
+  background: rgba(4, 8, 12, 0.92);
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.wt-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--wt-tense);
+  box-shadow: 0 0 8px var(--wt-tense);
+  pointer-events: none;
+}
+
+.wt-head i {
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 9px;
+  height: 7px;
+  background: var(--wt-tense);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.wt-wait {
+  position: absolute;
+  top: 12px;
+  width: 9px;
+  height: 9px;
+  margin-left: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--wt-tense);
+  border-radius: 50%;
+  animation: wt-spin 0.9s linear infinite;
+}
+
+@keyframes wt-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #world-timeline .world-timeline-spinner {
-    animation: none;
-    border-color: var(--accent);
-  }
+/* ── The right: the subject, the window, the lanes, live ── */
+.wt-right {
+  gap: 6px;
 }
 
-/* The track: ticks for each launch or strong earthquake, the elapsed fill, and a native
-   range input on top for dragging and the keyboard. */
-#world-timeline .world-timeline-track {
-  position: relative;
-  /* Two fingers pinch the track, not the page. */
-  touch-action: none;
-  flex: 1 1 auto;
-  cursor: pointer;
-  min-width: 80px;
+.wt-windows {
+  display: flex;
+  border: 1px solid rgba(123, 189, 211, 0.18);
+  border-radius: 3px;
+}
+
+.wt .wt-windows button {
+  height: 22px;
+  padding: 0 6px;
+  color: rgba(214, 236, 244, 0.55);
+  font-size: 9px;
+}
+
+.wt .wt-windows button:hover {
+  color: #fff;
+}
+
+.wt .wt-windows button.is-on {
+  background: rgba(123, 189, 211, 0.16);
+  color: #fff;
+}
+
+.wt-subject {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 6px;
+  border-right: 1px solid rgba(123, 189, 211, 0.18);
+}
+
+.wt-subject-name {
+  color: #fff;
+  font-size: 10px;
+}
+
+.wt .wt-subject button {
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  font-size: 9px;
+}
+
+.wt .wt-subject button:hover {
+  border-color: #fff;
+  color: #fff;
+}
+
+.wt .wt-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(0, 212, 255, 0.5);
+  border-radius: 3px;
+  color: var(--wt-live);
+  font-size: 10px;
 }
 
-/* Zoomed, the track's ends fade, as it goes on past them. */
-#world-timeline .world-timeline-track.is-zoomed::before {
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(123, 189, 211, 0.22) 12px,
-    rgba(123, 189, 211, 0.22) calc(100% - 12px),
-    transparent
-  );
+.wt .wt-live:not(.is-live) {
+  background: rgba(0, 212, 255, 0.14);
 }
 
-#world-timeline .world-timeline-track::before {
+.wt .wt-live:not(.is-live) .wt-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1px currentColor;
+  animation: none;
+}
+
+.wt .wt-live.is-live {
+  border-color: transparent;
+  cursor: default;
+}
+
+/* ── The lanes ── */
+.wt-lanes {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0 4px;
+  border-bottom: 1px solid rgba(123, 189, 211, 0.14);
+}
+
+.wt-lane {
+  position: relative;
+  height: 18px;
+}
+
+.wt-lane-track {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.wt-lane-track::before {
   position: absolute;
   top: 50%;
   right: 0;
   left: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(123, 189, 211, 0.22);
+  height: 1px;
+  background: rgba(123, 189, 211, 0.1);
   content: '';
-  transform: translateY(-50%);
 }
 
-#world-timeline .world-timeline-fill {
+/* The name and what the layer shows at the time ride over the lane's ends. */
+.wt-lane-name,
+.wt-lane-status {
+  position: absolute;
+  top: 3px;
+  padding: 0 6px;
+  background: rgba(4, 8, 12, 0.88);
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+}
+
+.wt-lane-name {
+  left: 4px;
+  color: rgba(226, 242, 248, 0.9);
+}
+
+.wt-lane-status {
+  right: 4px;
+  color: rgba(214, 236, 244, 0.6);
+  font-variant-numeric: tabular-nums;
+}
+
+.wt-lane-bar {
   position: absolute;
   top: 50%;
-  left: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--accent);
-  opacity: 0.7;
-  transform: translateY(-50%);
-  pointer-events: none;
+  height: 3px;
+  margin-top: -1.5px;
+  background: rgba(0, 212, 255, 0.72);
 }
 
-#world-timeline .world-timeline-tick {
+/* Computed, not observed: a dotted line. */
+.is-computed .wt-lane-bar {
+  height: 1px;
+  margin-top: -0.5px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(214, 236, 244, 0.8) 0 2px,
+    transparent 2px 5px
+  );
+}
+
+.is-frames .wt-lane-bar {
+  background: rgba(0, 212, 255, 0.32);
+}
+
+.wt-lane-frame {
   position: absolute;
   top: 50%;
   width: 2px;
-  height: 12px;
-  margin-left: -1px;
-  border-radius: 1px;
-  background: rgba(0, 212, 255, 0.75);
-  transform: translateY(-50%);
-  pointer-events: none;
+  height: 7px;
+  margin: -3.5px 0 0 -1px;
+  background: rgba(0, 212, 255, 0.95);
 }
 
-/* A tick's label, shown over the time's bubble while the pointer is on the
-   tick (or the handle rests on its mark). It slides across itself as the
-   bubble does, so it stays within the track, and is never wider than the
-   track: a long label ends in an ellipsis. */
-#world-timeline .world-timeline-mark-label {
+.wt-lane-mark {
   position: absolute;
-  box-sizing: border-box;
-  max-width: 100%;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -3px 0 0 -3px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  transform: rotate(45deg);
+}
+
+.wt-lane-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: color-mix(in srgb, var(--wt-tense) 70%, transparent);
+}
+
+.wt-lane.is-missing .wt-lane-name,
+.wt-lane.is-missing .wt-lane-status {
+  color: var(--wt-past);
+}
+
+/* ── The gap notice: a layer on has nothing at the time shown ── */
+.wt .wt-gap {
+  grid-area: gap;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
-  bottom: calc(100% + 30px);
-  left: calc(100% * var(--at));
-  z-index: 1;
-  padding: 2px 8px;
-  border: 1px solid rgba(0, 212, 255, 0.4);
-  border-radius: 6px;
-  background: var(--glass-bg);
-  color: var(--text-primary);
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: pre;
-  transform: translateX(calc(var(--at) * -100%));
-  pointer-events: none;
+  color: var(--wt-past);
+  font-size: 9px;
+  white-space: nowrap;
 }
 
-/* Zoomed, the track drags along. */
-#world-timeline .world-timeline-track.is-zoomed {
-  cursor: grab;
+.is-engaged .wt-gap {
+  display: flex;
 }
 
-#world-timeline .world-timeline-track.is-zoomed:active {
-  cursor: grabbing;
+.wt .wt-gap b {
+  padding: 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--wt-past) 55%, transparent);
+  border-radius: 3px;
+  color: #fff;
+  font-weight: 400;
 }
 
-/* Only the handle takes the pointer as a slider; the track around it takes
-   taps, drags and pinches itself. */
-#world-timeline .world-timeline-scrub {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  background: transparent;
-  appearance: none;
-  pointer-events: none;
+.wt .wt-gap:hover b {
+  background: color-mix(in srgb, var(--wt-past) 22%, transparent);
 }
 
-#world-timeline .world-timeline-scrub::-webkit-slider-thumb {
-  cursor: ew-resize;
-  pointer-events: auto;
+/* ── The HUD's stamp tells the tense ── */
+body[data-world-tense='past'] #intel-hud .hud-rec,
+body[data-world-tense='past'] #intel-hud #hud-timestamp {
+  color: var(--wt-past);
+  text-shadow: 0 0 10px rgba(255, 180, 90, 0.4);
 }
 
-#world-timeline .world-timeline-scrub::-moz-range-thumb {
-  cursor: ew-resize;
-  pointer-events: auto;
+body[data-world-tense='future'] #intel-hud .hud-rec,
+body[data-world-tense='future'] #intel-hud #hud-timestamp {
+  color: var(--wt-future);
 }
 
-/* The time dragged off the track: the handle waits at its edge, unseen. */
-#world-timeline .world-timeline-scrub.is-off-view::-webkit-slider-thumb {
-  opacity: 0;
-  pointer-events: none;
-}
-
-#world-timeline .world-timeline-scrub.is-off-view::-moz-range-thumb {
-  opacity: 0;
-  pointer-events: none;
-}
-
-#world-timeline .world-timeline-scrub::-webkit-slider-runnable-track {
-  height: 100%;
-  background: transparent;
-}
-
-#world-timeline .world-timeline-scrub::-moz-range-track {
-  background: transparent;
-}
-
-#world-timeline .world-timeline-scrub::-webkit-slider-thumb {
-  width: 14px;
-  height: 14px;
-  margin-top: 5px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  background: #031018;
-  box-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
-  appearance: none;
-}
-
-#world-timeline .world-timeline-scrub::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  background: #031018;
-}
-
-/* A finger needs a bigger handle. */
-@media (pointer: coarse) {
-  #world-timeline .world-timeline-scrub::-webkit-slider-thumb {
-    width: 22px;
-    height: 22px;
-    margin-top: 1px;
+@media (prefers-reduced-motion: reduce) {
+  .is-live .wt-dot,
+  .wt-wait {
+    animation: none;
   }
-
-  #world-timeline .world-timeline-scrub::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-#world-timeline .world-timeline-scrub:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 2px;
 }
 
 @media (max-width: 1199px) {
-  #world-timeline {
+  #world-timeline.wt {
     bottom: 2vh;
+    width: min(820px, calc(100vw - 24px));
   }
 }
 
-@media (max-width: 720px) {
-  #world-timeline {
-    bottom: 8px;
-  }
-}
-
-/* On phones the bar sits just above the tab bar, under the voice dock, with
-   the track and the speed on a row of their own beneath play and live. */
-body.mobile-shell:is(.has-world-timeline *, #world-timeline) {
-  --world-timeline-lift: 80px;
-}
-
-body.mobile-shell #world-timeline {
+body.mobile-shell #world-timeline.wt {
   bottom: calc(var(--mobile-tab-space) + 6px);
-  flex-wrap: wrap;
-  row-gap: 4px;
-  height: auto;
+  width: calc(100vw - 16px);
 }
 
-/* The bubble rises into the first row, clear of play on its left. */
-body.mobile-shell #world-timeline .world-timeline-time {
-  --inset: 48px;
-}
-
-/* The speed sits on the track's row, a full-size target beside it. */
-body.mobile-shell #world-timeline .world-timeline-track {
-  order: 1;
-  flex: 1 1 calc(100% - 96px);
-}
-
-body.mobile-shell #world-timeline .world-timeline-live {
-  margin-inline-start: auto;
-}
-
-body.mobile-shell #world-timeline .world-timeline-speed {
-  order: 2;
-  height: 32px;
+body.mobile-shell .wt-windows,
+body.mobile-shell .wt-speed,
+body.mobile-shell .wt-key--lanes {
+  display: none;
 }
