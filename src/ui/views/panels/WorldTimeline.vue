@@ -1525,10 +1525,25 @@ onBeforeUnmount(() => {
   delete body.dataset.worldTense;
   delete body.dataset.worldTimeline;
 });
-const speedLabel = computed(() =>
-  direction.value < 0 ? `◀ ${speed.value.label}` : speed.value.label,
+// The speed the world actually runs at, whoever set it (these keys, a story,
+// voice, an agent): the named speed when it is one, else the rate itself.
+const rateLabel = (rate) => {
+  const named = SPEEDS.find((each) => Math.abs(each.rate - rate) < 1e-6);
+  if (named) return named.label;
+  if (rate < 60) return `${Math.round(rate)}×`;
+  if (rate < 3600) return `${Math.round(rate / 60)} MIN/S`;
+  if (rate < 86400) return `${Math.round(rate / 3600)} H/S`;
+  return `${Math.round(rate / 86400)} D/S`;
+};
+const speedLabel = computed(() => {
+  void time.value.timeMs;
+  const running = time.value.playing && !time.value.live && direction.value >= 0;
+  const label = running ? rateLabel(worldClock.getRate()) : speed.value.label;
+  return direction.value < 0 ? `◀ ${label}` : label;
+});
+const playing = computed(
+  () => direction.value !== 0 || time.value.live || Boolean(time.value.playing),
 );
-const playing = computed(() => direction.value !== 0 || time.value.live);
 </script>
 
 <template>
@@ -1716,16 +1731,20 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11l7.5-5.5zM2.5 4.5v11L10 10z" /></svg>
             </button>
           </div>
+          <!-- The speed reads with the clock and the keys it modifies: what time
+               it is, whether it moves, and how fast, in one glance. -->
+          <button type="button" class="wt-chip wt-speed" :class="{ 'is-auto': !speedPinned }" :aria-expanded="menu === 'speed'" title="Speed" @click="openMenu('speed')">{{ speedLabel }}</button>
         </div>
         <div class="wt-dockroom" aria-hidden="true"></div>
         <div class="wt-right">
-          <button type="button" class="wt-chip wt-speed" :class="{ 'is-auto': !speedPinned }" :aria-expanded="menu === 'speed'" title="Speed" @click="openMenu('speed')">{{ speedLabel }}</button>
           <div class="wt-zoom" role="group" :aria-label="t('Time shown')">
             <button type="button" :aria-label="t('Show more time')" title="Show more time · −" :disabled="win.length >= maxLength * 0.999" @click="zoomBy(2)">−</button>
             <button type="button" class="wt-zoom-span" :aria-expanded="menu === 'range'" title="How much time the track shows" @click="openMenu('range')">{{ rangeLabel }}</button>
             <button type="button" :aria-label="t('Show less time')" title="Show less time · +" :disabled="win.length <= MIN_LENGTH" @click="zoomBy(0.5)">+</button>
           </div>
           <button type="button" class="wt-resting" title="Play it from the start" @click="replaySpan"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" /></svg>{{ restLabel }}</button>
+          <!-- How far from now, beside the way back to it. -->
+          <span v-if="tense !== 'live'" class="wt-tense wt-tense--side"><b>{{ tense === 'past' ? 'REPLAY' : 'PREDICTED' }}</b><span>{{ clock.ago }}</span></span>
           <button type="button" class="wt-live" :class="{ 'is-live': time.live }" :disabled="time.live && !engaged" :title="time.live ? 'Live' : 'Back to live · \\'" @click="goLive()"><b class="wt-dot"></b>{{ time.live && layout === 'phone' ? 'DONE' : 'LIVE' }}</button>
         </div>
       </div>

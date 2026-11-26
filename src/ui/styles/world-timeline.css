@@ -1553,3 +1553,18 @@ body[data-world-timeline='phone-sheet'] #command-dock {
   pointer-events: none;
   transition: opacity 160ms ease;
 }
+
+/* Where the bar has one control row (the deck, under the dock, a tablet's
+   open bar), how far from now sits beside LIVE, the way back to it; the clock
+   keeps only the time. A phone and a bar at rest keep it under the clock. */
+#world-timeline:not(.is-phone):not(.is-rest) .wt-clock .wt-tense {
+  display: none;
+}
+
+#world-timeline:is(.is-phone, .is-rest) .wt-tense--side {
+  display: none;
+}
+
+.wt-tense--side {
+  flex: none;
+}
