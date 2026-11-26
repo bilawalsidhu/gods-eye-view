@@ -72,8 +72,7 @@ export class DisplayBindings {
       },
       toggleOrbit: () => this._toggleOrbit(),
       toggleCleanView: () => this.toggleCleanView(),
-      toggleLayers: () =>
-        document.getElementById('data-panel').classList.toggle('active'),
+      toggleLayers: () => this._togglePanel('data-panel'),
       cycleDetection: () => {
         this.shareLinkManager?.claimRestoreLane?.('visual');
         this.claimDetection();
