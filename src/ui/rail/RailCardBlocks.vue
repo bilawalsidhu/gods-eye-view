@@ -4,6 +4,7 @@ import { isolate, t } from '../../i18n/index.js';
 import { formatScaleRange } from '../unitLabels.js';
 import UiButton from '../kit/UiButton.vue';
 import UiCloseButton from '../kit/UiCloseButton.vue';
+import UiSwitch from '../kit/UiSwitch.vue';
 import RailCardSetting from './RailCardSetting.vue';
 import RailChips from './RailChips.vue';
 import RailRowList from './RailRowList.vue';
@@ -247,14 +248,11 @@ function clearResult(block, event) {
         ><span class="rail-card-setting-label panel-title">{{
           block.label
         }}</span
-        ><UiButton
-          class="rail-card-switch"
-          role="switch"
-          :aria-checked="block.on ? 'true' : 'false'"
-          :aria-label="block.label"
+        ><UiSwitch
+          :checked="Boolean(block.on)"
+          :label="String(block.label ?? '')"
           :data-toggle-id="block.id"
-          @click="dispatch(block, block)"
-          ><i aria-hidden="true"></i></UiButton></template
+          @change="dispatch(block, block)" /></template
       ><template v-else
         ><div
           v-for="line in lines(block)"

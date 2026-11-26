@@ -40,8 +40,8 @@ one-panel rule too. Share links continue to record which panels are open.
 `UiButton`, `UiCloseButton`, `UiPanel`, `UiPanelToggle` (a panel's collapse
 button, which `UiPanel` and `PanelCollapseButton` draw), `UiPanelEdge` (a
 panel header's edge switch), `UiSegmented`, `UiSlider`, `UiChip`,
-`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiDialog`, `UiBadge` and
-`UiEmpty` so far, with more joining as the controls they serve are
+`UiSelect`, `UiSearchField`, `UiCheckbox`, `UiSwitch`, `UiDialog`,
+`UiBadge` and `UiEmpty` so far, with more joining as the controls they serve are
 converted. One component
 serves every use of a control, with props for the differences (`UiPanel`'s
 `sideways`, `glow`, `scroll`), rather than a copy per panel. The components
@@ -59,6 +59,7 @@ never copied:
 | `UiCloseButton` | a close, dismiss or clear button: a bare glyph (× with `glyph="times"`, the Material `close` symbol with `glyph="icon"`) with no padding, border or background of its own and a pointer; the site's feature class sets size, colour, hover and any surface, and `bare` leaves the look off for a skin that sets its own padding and border | `src/ui/styles/close-button.css` |
 | `UiSearchField` | a search field: the Material `search` glyph and a search input in a flex row, the input bare (no border or background, free to shrink); the site's feature classes set the frame's size, surface and focus ring and the input's type and outline, and the browser's own cancel button is left to each skin | `src/ui/styles/search-field.css` |
 | `UiCheckbox` | a checkbox: a label wrapping a native box and its words in a centred flex row; the box keeps each site's size, margin and accent colour, and the site's feature class sets the row's gap, direction and colour | `src/ui/styles/checkbox.css` |
+| `UiSwitch` | an on/off switch: a `role="switch"` button drawn as a 30 by 16 px pill track whose knob slides to the end and takes the accent while it is on (mirrored right to left); a disabled switch dims | `src/ui/styles/switch.css` |
 | `UiDialog` | none: a native modal `<dialog>`; the site's feature class or inline style draws it | — |
 | `UiChip` | the read-only chip (a pill of uppercase mono text); `selected` takes the accent | `src/ui/styles/chip.css` |
 | `UiEmpty` | the one-line empty state (dim mono text), its hint on a line below | `src/ui/styles/empty-state.css` |
@@ -87,7 +88,7 @@ adapter is gone.
 No view hand-writes a control the kit has: every button in an SFC outside
 the kit is a `UiButton`, `UiCloseButton` or another kit control, every
 Material Symbols glyph a `UiIcon`, every checkbox a `UiCheckbox`, every
-select a `UiSelect`, and every range a `UiSlider` except the radio
+on/off switch a `UiSwitch`, every select a `UiSelect`, and every range a `UiSlider` except the radio
 tuner's and the world timeline's, for the reasons given below. No module
 outside the kit, and no SFC's script, builds a button, select, field or
 Material glyph in script or writes one as markup in a string, apart from
@@ -361,6 +362,16 @@ preferences, the Data Library's filter and the welcome card's box are
 keeps its `fopt` class (`src/ui/kit/checkboxes.test.mjs` pins it). Its kit
 rule holds the centred row the checkbox-only labels drew, moved rather than
 copied.
+`UiSwitch` is a `role="switch"` button whose `aria-checked` shows
+`modelValue` (`v-model`) or `checked`, and `label` is its accessible name.
+A click emits `update:modelValue` and `change` with the state asked for,
+and the switch keeps showing the prop until its owner passes the new one, so
+a refused change never shows; `disabled` makes it a disabled button. The
+rail cards' toggle rows (the air-quality card's station switch) are
+`UiSwitch`es with `checked` and `change`, since the card applies the change
+through its params (`src/ui/kit/UiSwitch.test.mjs`; no view hand-writes
+`role="switch"`, which `src/ui/kit/viewControls.test.mjs` pins). Its kit
+rules hold the rail card's switch look, moved rather than copied.
 `UiDialog` is a native `<dialog>` its owner opens and closes with `open`:
 true opens it with `showModal()` (on mount, for one mounted open), false
 closes it, and unmounting closes it. Each change is applied once the content
