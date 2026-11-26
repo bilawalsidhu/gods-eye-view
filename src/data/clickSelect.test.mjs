@@ -10,6 +10,7 @@ import {
   claimSelection,
   clockRateFor,
   currentSelection,
+  followOnSecondClick,
   isCentredOnSelection,
   onSelectionChanged,
   releaseSelection,
@@ -312,4 +313,59 @@ test('the view a centring left counts as centred through a renderer’s small cl
       direction: options.orientation.direction,
     }),
   );
+});
+
+test('a second click on the selected thing follows it; on a followed one it keeps the follow', (t) => {
+  const { viewer, camera } = setup(t);
+  let following = false;
+  const follows = [];
+  const layer = {
+    isFollowed: () => following,
+    follow: () => {
+      follows.push('follow');
+      following = true;
+      return true;
+    },
+  };
+  // Not the selected thing: nothing is followed.
+  assert.equal(followOnSecondClick('flights', 'abc123', layer), false);
+  claimSelection('flights', 'abc123');
+  assert.equal(followOnSecondClick('flights', 'def456', layer), false);
+  assert.equal(followOnSecondClick('military', 'abc123', layer), false);
+  assert.equal(follows.length, 0);
+  // The selected thing: followed, and its centring flight gives way.
+  const cancelled = [];
+  const flyTo = camera.port.flyTo;
+  camera.port.flyTo = (...args) => {
+    flyTo(...args);
+    return { done: new Promise(() => {}), cancel: () => cancelled.push(1) };
+  };
+  centerOnClick(viewer, () => fromDegrees(-97.7, 30.3, 10_000));
+  assert.equal(followOnSecondClick('flights', 'abc123', layer), true);
+  assert.deepEqual(follows, ['follow']);
+  assert.equal(cancelled.length, 1);
+  assert.equal(currentSelection()?.id, 'abc123', 'still selected');
+  // Already followed: kept as it is, never toggled off nor started again.
+  assert.equal(followOnSecondClick('flights', 'abc123', layer), false);
+  assert.deepEqual(follows, ['follow']);
+});
+
+test('the Cockpit keeps the camera through a second click', (t) => {
+  setup(t);
+  const previous = globalThis.document;
+  globalThis.document = {
+    body: { classList: { contains: (name) => name === 'cockpit-mode' } },
+  };
+  t.after(() => {
+    if (previous === undefined) delete globalThis.document;
+    else globalThis.document = previous;
+  });
+  claimSelection('satellites', 25544);
+  let followed = false;
+  const started = followOnSecondClick('satellites', 25544, {
+    isFollowed: () => false,
+    follow: () => (followed = true),
+  });
+  assert.equal(started, false);
+  assert.equal(followed, false);
 });

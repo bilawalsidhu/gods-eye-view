@@ -2243,7 +2243,8 @@ with a 72 px floor, flies the station's usual attitude (modules along the
 velocity, the same side to the Earth) from its own per-frame SGP4 sample, sits
 on the follow camera's sample while tracked, loads only once the ISS is shown,
 and hides with the dot's own rules. A click on it selects the ISS and centres
-it, as a click does on any moving thing; its card's Follow rides along.
+it, as a click does on any moving thing; a second click on it, or its card's
+Follow, rides along.
 The station has several catalog entries that are one body: the ISS itself
 (listed as ISS (ZARYA)), ISS (NAUKA) and whatever vehicle is docked, each with
 a dot of its own, so a click on the station's dot can land on any of them.

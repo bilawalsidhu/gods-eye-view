@@ -9,7 +9,8 @@
  * is met where it will be then (`positionAt`). After that the camera is the
  * user's again: a drag, pan or zoom moves the map, and the thing stays
  * selected with its card and track. Following is only ever asked for
- * explicitly (the card's Follow, a spoken "track").
+ * explicitly: the card's Follow, a spoken "track", or a second click on the
+ * selected aircraft or satellite (`followOnSecondClick`).
  *
  * One thing is selected at a time across these layers. A layer that selects
  * says so (`claimSelection`); every other layer hears it
@@ -271,6 +272,32 @@ export function centerOnClick(
     cancelPendingSelection: false,
   });
   return flyKeepingView(camera, at, durationS);
+}
+
+/**
+ * A click on the thing that is already selected: the second click follows
+ * it, the same follow the card's Follow starts. A click on the thing the
+ * camera already follows keeps following it, as it was (no toggle, no
+ * fresh framing). The Cockpit keeps the camera: nothing changes there.
+ * @param {string} layerId The clicked thing's layer.
+ * @param {string|number} id The clicked thing's id in that layer.
+ * @param {{isFollowed: () => boolean, follow: () => unknown}} layer The
+ *   layer's own follow: whether the camera follows the thing now, and
+ *   following it.
+ * @returns {boolean} Whether a follow was started.
+ */
+export function followOnSecondClick(layerId, id, { isFollowed, follow }) {
+  if (
+    !current ||
+    current.layerId !== String(layerId) ||
+    current.id !== String(id) ||
+    cockpitHoldsCamera()
+  )
+    return false;
+  if (isFollowed()) return false;
+  // A centring flight still on its way gives way to the follow.
+  cancelCentring(current);
+  return Boolean(follow());
 }
 
 /** @type {Selection|null} */

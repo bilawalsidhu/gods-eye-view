@@ -1,7 +1,10 @@
 import { inputFor } from '../../input/dispatcher.js';
 import { modelHitNorad } from './stationModels.js';
 import { onFollowChanged } from '../../data/followed.js';
-import { yieldSelectionToOthers } from '../../data/clickSelect.js';
+import {
+  followOnSecondClick,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 
 export function createInteraction({
   state: layerState,
@@ -73,13 +76,19 @@ export function createInteraction({
       // under the finger's reach, where the exact pick found only the map.
       const hit = event.hit?.set ? event.hit : null;
 
-      // A click on the selected satellite (its tracked dot, or its
-      // station's model) centres it again, unless the camera follows it.
-      const recenter = () => {
-        if (!parts.tracking._trackedIsFollowed())
-          parts.tracking._centerTracked();
+      // A second click on the selected satellite (its tracked dot, or its
+      // station's model) follows it, as the card's Follow does; a click on
+      // the followed satellite keeps the follow (src/data/clickSelect.js).
+      const followSelected = () => {
+        followOnSecondClick('satellites', layerState._trackedNorad, {
+          isFollowed: parts.tracking._trackedIsFollowed,
+          follow: () => {
+            parts.tracking._cancelPendingTrackingRestore();
+            return parts.tracking._followTracked();
+          },
+        });
       };
-      if (parts.rendering._hitIsTracked(hit)) return recenter();
+      if (parts.rendering._hitIsTracked(hit)) return followSelected();
 
       // A satellite dot (its item id is the NORAD catalog number). A click
       // selects and centres it once; it does not follow it
@@ -98,7 +107,7 @@ export function createInteraction({
       // station's model selects that one.
       const modelNorad = modelHitNorad(parts, hit);
       if (modelNorad !== null) {
-        if (modelNorad === layerState._trackedNorad) return recenter();
+        if (modelNorad === layerState._trackedNorad) return followSelected();
         if (layerState._catalog.has(modelNorad)) {
           parts.tracking._cancelPendingTrackingRestore();
           parts.tracking._trackSatellite(modelNorad, {

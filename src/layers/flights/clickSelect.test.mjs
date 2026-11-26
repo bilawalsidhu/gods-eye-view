@@ -18,6 +18,7 @@ import {
 } from '../../data/clickSelect.js';
 import { distance, fromDegrees, normalize, sub } from '../../geo/index.js';
 import { bindClickCamera, dragOnMap } from '../../testSupport/clickCamera.mjs';
+import { readShareFollowSubject } from '../../ui/shareFollow.js';
 
 /** A part whose unnamed methods do nothing. */
 const part = (named = {}) =>
@@ -74,11 +75,13 @@ function fakeIcons() {
 const AIRCRAFT_LAYERS = [
   {
     layerId: 'flights',
+    shareKind: 'aircraft',
     createState: createCivilState,
     createTracking: createCivilTracking,
   },
   {
     layerId: 'military',
+    shareKind: 'military_aircraft',
     createState: createMilitaryState,
     createTracking: createMilitaryTracking,
   },
@@ -147,6 +150,7 @@ function aircraftLayer(t, { layerId, createState, createTracking }) {
     tracking,
     camera,
     input,
+    viewer,
     /** A click whose pick names `id`'s icon, or the map. */
     click(id) {
       picked = id ? { id: { set: 'icons', id } } : null;
@@ -198,19 +202,46 @@ for (const kind of AIRCRAFT_LAYERS) {
     assert.equal(currentSelection()?.id, 'abc123');
   });
 
-  test(`${kind.layerId}: a click on the selected aircraft centres it again; Follow follows it`, (t) => {
+  test(`${kind.layerId}: a second click on the selected aircraft follows it; a click on the followed one keeps the follow`, (t) => {
     const app = aircraftLayer(t, kind);
     app.click('abc123');
     app.camera.drag();
     app.click('abc123');
-    assert.equal(app.camera.flights.length, 2, 'centred again');
-    assert.equal(app.camera.followed, null);
-    // The card's Follow (through the layer's tracking API) follows it.
-    app.tracking._followTracked();
+    // The same follow the card's Follow starts: the layer's own target.
+    assert.equal(app.camera.flights.length, 1, 'not centred again');
     assert.equal(app.camera.followed, app.flightState._followTarget);
-    // A click on the followed aircraft leaves the follow as it is.
+    assert.equal(app.camera.follows.length, 1);
+    assert.equal(app.flightState._trackedIcao, 'abc123', 'still selected');
+    assert.equal(currentSelection()?.id, 'abc123');
+    // The share link names the followed aircraft.
+    const subject = readShareFollowSubject({ viewer: app.viewer });
+    assert.equal(subject?.kind, kind.shareKind);
+    assert.equal(subject?.id, 'abc123');
+    // A click on the followed aircraft keeps the follow as it is.
     app.click('abc123');
+    assert.equal(app.camera.followed, app.flightState._followTarget);
+    assert.equal(app.camera.follows.length, 1, 'no fresh follow');
+    assert.equal(app.camera.flights.length, 1);
+  });
+
+  test(`${kind.layerId}: a click on another aircraft while following selects and centres it; nothing is followed`, (t) => {
+    const app = aircraftLayer(t, kind);
+    app.click('abc123');
+    app.click('abc123');
+    assert.equal(app.camera.followed, app.flightState._followTarget);
+    app.click('def456');
+    assert.equal(app.flightState._trackedIcao, 'def456');
+    assert.equal(app.camera.followed, null);
     assert.equal(app.camera.flights.length, 2);
+  });
+
+  test(`${kind.layerId}: a drag between the clicks keeps the selection, and the second click still follows`, (t) => {
+    const app = aircraftLayer(t, kind);
+    app.click('abc123');
+    dragOnMap(app.input);
+    app.camera.drag({ dLon: 0.3 });
+    assert.equal(currentSelection()?.id, 'abc123');
+    app.click('abc123');
     assert.equal(app.camera.followed, app.flightState._followTarget);
   });
 

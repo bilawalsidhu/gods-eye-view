@@ -8,6 +8,7 @@ import {
 import {
   centerOnClick,
   claimSelection,
+  followOnSecondClick,
   releaseSelection,
   yieldSelectionToOthers,
 } from '../../data/clickSelect.js';
@@ -1304,14 +1305,23 @@ export function createTracking({
         // H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
         // Its billboard and models are draw-set items keyed by icao, like its icons.
-        // A click on the selected plane centres it again, unless the camera
-        // follows it (the follow already keeps it in the middle).
+        // A second click on the selected plane follows it, as the card's
+        // Follow does; a click on the followed plane keeps the follow
+        // (src/data/clickSelect.js).
         const pickedIcao = aircraftPickId(picked);
         if (
           flightState._trackedIcao &&
           pickedIcao === flightState._trackedIcao
         ) {
-          if (!_trackedIsFollowed()) _centerTracked();
+          followOnSecondClick('military', pickedIcao, {
+            isFollowed: _trackedIsFollowed,
+            follow: () => {
+              _cancelPendingTrackingRestore();
+              if (!_followTracked()) return false;
+              _publishTrackedSelection(pickedIcao, 'user');
+              return true;
+            },
+          });
           return;
         }
 

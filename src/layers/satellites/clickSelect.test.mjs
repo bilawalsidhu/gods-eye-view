@@ -27,6 +27,7 @@ import {
 import { installGlobeInViewRecovery } from '../../app/globeInViewRecovery.js';
 import { globeOutOfFrame } from '../../globeInView.js';
 import { worldClock } from '../../time/worldClock.js';
+import { readShareFollowSubject } from '../../ui/shareFollow.js';
 import { bindClickCamera, dragOnMap } from '../../testSupport/clickCamera.mjs';
 
 const part = (named = {}) =>
@@ -82,6 +83,8 @@ function satellitesLayer(t, { height = 20_000, pose = null } = {}) {
   state._enabled = true;
   state._viewer = viewer;
   state.now = () => NOW;
+  // The rendering part allocates the tracked sample's ECEF point.
+  state._trackedFrameCartesian = { x: 0, y: 0, z: 0 };
   for (const norad of [...Object.keys(STARTS).map(Number), GEO, GEO2]) {
     state._catalog.set(norad, { name: `SAT ${norad}`, satrec: { norad } });
     state._points.set(norad, {});
@@ -180,16 +183,36 @@ test('a drag after the click keeps the satellite selected and the camera free', 
   assert.equal(app.camera.flights.length, 1);
 });
 
-test('a click on the selected satellite centres it again; Follow follows it', (t) => {
+test('a second click on the selected satellite follows it; a click on the followed one keeps the follow', (t) => {
+  const app = satellitesLayer(t);
+  app.click(DOT(25544));
+  app.camera.drag();
+  app.click({ set: 'tracked', id: '25544' });
+  // The same follow the card's Follow starts: the layer's own target.
+  assert.equal(app.camera.flights.length, 1, 'not centred again');
+  assert.equal(app.camera.followed, app.state._followTarget);
+  assert.equal(app.camera.follows.length, 1);
+  assert.equal(app.state._trackedNorad, 25544, 'still selected');
+  // The share link names the followed satellite.
+  const subject = readShareFollowSubject({ viewer: app.viewer });
+  assert.equal(subject?.kind, 'satellite');
+  assert.equal(subject?.id, '25544');
+  // A click on the followed satellite keeps the follow as it is.
+  app.click({ set: 'tracked', id: '25544' });
+  assert.equal(app.camera.followed, app.state._followTarget);
+  assert.equal(app.camera.follows.length, 1, 'no fresh follow');
+  assert.equal(app.camera.flights.length, 1);
+});
+
+test('a click on another satellite while following selects and centres it; nothing is followed', (t) => {
   const app = satellitesLayer(t);
   app.click(DOT(25544));
   app.click({ set: 'tracked', id: '25544' });
-  assert.equal(app.camera.flights.length, 2);
-  assert.equal(app.camera.followed, null);
-  app.tracking._followTracked();
   assert.equal(app.camera.followed, app.state._followTarget);
-  app.click({ set: 'tracked', id: '25544' });
-  assert.equal(app.camera.flights.length, 2, 'a follow keeps it centred');
+  app.click(DOT(48274));
+  assert.equal(app.state._trackedNorad, 48274);
+  assert.equal(app.camera.followed, null);
+  assert.equal(app.camera.flights.length, 2);
 });
 
 test('another satellite selects that one; the map or another layer lets go', (t) => {
