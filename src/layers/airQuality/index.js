@@ -30,7 +30,11 @@ import {
 } from '../../data/trackingClickGesture.js';
 import { keyRequirementText } from '../../ui/keyGuidance.js';
 import { formatQuantity } from '../../ui/unitLabels.js';
-import { isRatedReading, mergeObservations } from './merge.js';
+import {
+  isRatedReading,
+  mergeObservations,
+  mergeStationValues,
+} from './merge.js';
 import {
   EEA_HOURLY_BANDS,
   EEA_HOURLY_LIMITS,
@@ -702,7 +706,18 @@ export function createAirQualityLayer({
           });
     const used = Object.entries(reading.aqiValues ?? {})
       .filter(([key, value]) => AQI_PARAMETERS[key] && Number.isFinite(value))
-      .map(([key, value]) => valueText(key, value))
+      .map(([key, value]) => {
+        // A value pooled from another network at the site names it.
+        const source = reading.valueSources?.[key];
+        return source && source.provider !== reading.provider
+          ? `${valueText(key, value)} (${
+              source.network ||
+              definitions.find((entry) => entry.id === source.provider)
+                ?.network ||
+              source.provider
+            })`
+          : valueText(key, value);
+      })
       .join(', ');
     const excluded = Object.entries(reading.aqiExcluded ?? {})
       .filter(
@@ -1297,7 +1312,20 @@ export function createAirQualityLayer({
       }),
     }));
     replacedBy = new Map();
-    _readings = mergeObservations(lists, { view, replaced: replacedBy });
+    _readings = mergeObservations(lists, {
+      view,
+      replaced: replacedBy,
+      // In the AQI view a site's networks pool their pollutants, each the
+      // freshest one, and its index is computed from them.
+      combine:
+        view === 'aqi'
+          ? (kept, others) => {
+              const station = present(mergeStationValues(kept, others));
+              owners.set(station, owners.get(kept));
+              return station;
+            }
+          : undefined,
+    });
     followSelection();
     layer._render();
     armAgeOut();

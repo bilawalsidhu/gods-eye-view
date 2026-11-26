@@ -404,6 +404,28 @@ test('a low-cost sensor has no US AQI and is marked a sensor in a pollutant view
   layer.destroy();
 });
 
+test('in the AQI view two networks at one site pool their pollutants into one index', async () => {
+  // The national monitor reports PM2.5 (56); OpenAQ's copy of the site,
+  // 10 m away, also reports NO2 at 400 µg/m³ (212 ppb, an index of 122).
+  const nearby = { ...CAPE_TOWN, lat: CAPE_TOWN.lat + 0.0001 };
+  const { layer } = cardHarness({
+    national: station('national', CAPE_TOWN, { 'PM2.5': 12 }),
+    openaq: station('openaq', nearby, { 'PM2.5': 12, NO2: 400 }),
+  });
+  await layer.update();
+  await flush();
+  const { list } = layer.getRowControls();
+  assert.equal(list.items.length, 1);
+  assert.equal(list.items[0].text, 'Cape Town');
+  assert.equal(list.items[0].lead, '122');
+  assert.equal(list.items[0].params.station, 'national:cape-town:aqi');
+  assert.match(
+    list.items[0].title,
+    /main pollutant NO2 · PM2\.5 12 µg\/m³, NO2 400 µg\/m³ \(OPENAQ\)/,
+  );
+  layer.destroy();
+});
+
 test('highest in view rows are one line: rank, band colour, value and name', async () => {
   const { layer } = cardHarness({
     national: [

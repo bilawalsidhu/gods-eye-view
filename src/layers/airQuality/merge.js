@@ -9,6 +9,12 @@
  * match one-to-one per provider pair, nearest pair first. Prefer a reference
  * monitor, then a rated reading, a direct provider and the newer observation.
  * Neighbouring stations from the same provider stay distinct.
+ *
+ * In the AQI view a site's readings are whole stations, each with several
+ * pollutants: there the kept station takes in, per pollutant, the freshest
+ * value any of the site's monitors used (`mergeStationValues`), so no
+ * network's pollutants are lost to another's, and its index is computed
+ * again from them.
  */
 
 /** Grid cell edge in degrees: about 2.2 km, well above any dedupe distance. */
@@ -44,15 +50,89 @@ const placed = (reading) =>
   Math.abs(reading.lat) <= 90 &&
   Math.abs(reading.lon) <= 180;
 
+/** Per-pollutant fields of an AQI-view station (`aqiStations`). */
+const VALUE_FIELDS = [
+  'valueTimes',
+  'valueAveraging',
+  'valueMethods',
+  'valueCoverage',
+  'hourValues',
+  'dayValues',
+];
+
+/**
+ * One AQI-view station from the readings of one site: `base`, the reading
+ * the merge kept, with each pollutant's freshest value among it and
+ * `others` (by `valueTimes`; at the same time the earlier reading's). A
+ * reading offers the values its own index used (`aqiValues`, else
+ * `values`); low-cost sensors (`monitor: false`) offer none to a monitor.
+ * Each value keeps its own times, averaging, method, coverage, 1-hour and
+ * 24-hour companions, and `valueSources` names the reading it came from
+ * (`{provider, id, network}`). A pollutant none of them has keeps the first
+ * exclusion reason given for it. The index is left for the caller.
+ */
+export function mergeStationValues(base, others = []) {
+  if (!base?.values || base.monitor === false) return base;
+  const members = [base, ...others].filter(
+    (reading) => reading?.values && reading.monitor !== false,
+  );
+  const offered = (reading) => reading.aqiValues ?? reading.values;
+  const time = (reading, key) =>
+    Number.isFinite(reading.valueTimes?.[key])
+      ? reading.valueTimes[key]
+      : -Infinity;
+  const merged = {
+    ...base,
+    values: {},
+    excluded: {},
+    valueSources: {},
+    ...Object.fromEntries(VALUE_FIELDS.map((field) => [field, {}])),
+  };
+  const keys = new Set(
+    members.flatMap((reading) => Object.keys(offered(reading))),
+  );
+  for (const key of keys) {
+    let best = null;
+    for (const reading of members)
+      if (
+        Number.isFinite(offered(reading)[key]) &&
+        (!best || time(reading, key) > time(best, key))
+      )
+        best = reading;
+    if (!best) continue;
+    merged.values[key] = offered(best)[key];
+    for (const field of VALUE_FIELDS)
+      if (best[field] && key in best[field])
+        merged[field][key] = best[field][key];
+    merged.valueSources[key] = {
+      provider: best.provider,
+      id: best.id,
+      network: best.network,
+    };
+  }
+  for (const reading of members)
+    for (const [key, reason] of Object.entries(
+      reading.aqiExcluded ?? reading.excluded ?? {},
+    ))
+      if (!(key in merged.values) && !(key in merged.excluded))
+        merged.excluded[key] = reason;
+  const times = Object.values(merged.valueTimes).filter(Number.isFinite);
+  if (times.length) merged.observedMs = Math.max(...times);
+  return merged;
+}
+
 /**
  * @param {Array<{provider: string, direct: boolean, readings: object[]}>} lists
- * @param {{dedupeM?: number, view?: string, replaced?: Map<object, object>}} [options] `view` is the scale
+ * @param {{dedupeM?: number, view?: string, replaced?: Map<object, object>,
+ *   combine?: (kept: object, others: object[]) => object}} [options] `view` is the scale
  *   readings are rated on (`isRatedReading`). The optional map records each dropped reading and its replacement.
+ *   `combine`, when given, makes the one reading of a site from the kept one and the others there, best first
+ *   (in the AQI view, `mergeStationValues` and the index computed again).
  * @returns {object[]} The kept readings, in input order.
  */
 export function mergeObservations(
   lists,
-  { dedupeM = 150, view, replaced } = {},
+  { dedupeM = 150, view, replaced, combine } = {},
 ) {
   const candidates = [];
   for (const list of Array.isArray(lists) ? lists : []) {
@@ -82,7 +162,9 @@ export function mergeObservations(
     );
   // Cells of CELL_DEG, each holding its readings by provider.
   const grid = new Map();
+  const rankOf = new Map();
   ranked.forEach((candidate, rank) => {
+    rankOf.set(candidate.reading, rank);
     const { lat, lon } = candidate.reading;
     candidate.rank = rank;
     candidate.row = Math.floor(lat / CELL_DEG);
@@ -130,7 +212,20 @@ export function mergeObservations(
       replaced?.set(reading, a.reading);
     }
   }
+  // A site's one reading, made from all of its readings where asked.
+  const combined = new Map();
+  if (combine)
+    for (const candidate of ranked)
+      if (!candidate.dropped && candidate.members.size > 1) {
+        const others = [...candidate.members.values()]
+          .filter((reading) => reading !== candidate.reading)
+          .sort((a, b) => rankOf.get(a) - rankOf.get(b));
+        combined.set(candidate.reading, combine(candidate.reading, others));
+      }
+  if (replaced)
+    for (const [dropped, kept] of replaced)
+      if (combined.has(kept)) replaced.set(dropped, combined.get(kept));
   return candidates
     .filter((candidate) => !candidate.dropped)
-    .map((candidate) => candidate.reading);
+    .map((candidate) => combined.get(candidate.reading) ?? candidate.reading);
 }

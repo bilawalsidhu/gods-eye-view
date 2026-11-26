@@ -10334,7 +10334,12 @@ retain their own grammatical forms.
 Of two readings of one site within 150 m from different providers
 (`merge.js`), a reference monitor wins over a low-cost sensor, then a rated
 reading, a network's own (direct) reading over an aggregator's copy and the
-newer one take priority; "rated" is `isRatedReading` in `merge.js`.
+newer one take priority; "rated" is `isRatedReading` in `merge.js`. In the
+AQI view, where each reading is a whole station, the kept station takes in
+each pollutant's freshest value from the site's monitors
+(`mergeStationValues`, its source named in `valueSources` and in the
+station's details) and its index is computed from them, so no network's
+pollutants are lost to another's.
 
 #### Air-quality model field
 

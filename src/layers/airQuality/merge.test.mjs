@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isRatedReading, mergeObservations } from './merge.js';
+import {
+  isRatedReading,
+  mergeObservations,
+  mergeStationValues,
+} from './merge.js';
 
 const reading = (provider, id, lat, lon, overrides = {}) => ({
   id: `${provider}:${id}`,
@@ -192,4 +196,92 @@ test('three providers at one site all resolve to the best reading', () => {
   assert.deepEqual(kept, [rows[0]]);
   assert.equal(replaced.get(rows[1]), rows[0]);
   assert.equal(replaced.get(rows[2]), rows[0]);
+});
+
+test('in the AQI view a site pools its networks’ pollutants, the freshest of each', () => {
+  const t0 = Date.parse('2026-11-23T10:00:00Z');
+  const station = (provider, extra) => ({
+    id: `${provider}:1:aqi`,
+    provider,
+    network: provider.toUpperCase(),
+    lat: 10,
+    lon: 10,
+    observedMs: t0,
+    aqi: { index: 50, leading: 'pm25' },
+    monitor: true,
+    ...extra,
+  });
+  const national = station('national', {
+    values: { pm25: 12, o3: 80 },
+    aqiValues: { pm25: 12, o3: 80 },
+    valueTimes: { pm25: t0 - 3600_000, o3: t0 },
+    valueMethods: { pm25: 'nowcast', o3: 'nowcast' },
+    hourValues: { o3: 90 },
+    aqiExcluded: { co: 'hours' },
+  });
+  const copy = station('openaq', {
+    lon: 10.0005,
+    values: { pm25: 30, no2: 40, so2: 999 },
+    // Its SO2 was left out of its own index (implausible): not offered.
+    aqiValues: { pm25: 30, no2: 40 },
+    valueTimes: { pm25: t0, no2: t0, so2: t0 },
+    valueAveraging: { no2: 60 },
+    aqiExcluded: { so2: 'implausible' },
+  });
+  const sensor = station('sensors', {
+    lon: 9.9995,
+    monitor: false,
+    values: { co: 1 },
+    valueTimes: { co: t0 },
+  });
+  const combineCalls = [];
+  const replaced = new Map();
+  const merged = mergeObservations(
+    [
+      { provider: 'national', direct: true, readings: [national] },
+      { provider: 'openaq', direct: false, readings: [copy] },
+      { provider: 'sensors', direct: false, readings: [sensor] },
+    ],
+    {
+      view: 'aqi',
+      replaced,
+      combine: (kept, others) => {
+        combineCalls.push([kept.id, others.map((r) => r.id)]);
+        return mergeStationValues(kept, others);
+      },
+    },
+  );
+  assert.equal(merged.length, 1);
+  // The monitor ranked best is kept; the rest come in best first.
+  assert.deepEqual(combineCalls, [
+    ['national:1:aqi', ['openaq:1:aqi', 'sensors:1:aqi']],
+  ]);
+  const [site] = merged;
+  assert.equal(site.id, 'national:1:aqi');
+  // PM2.5 from the copy (an hour newer), O3 kept, NO2 added; no sensor CO.
+  assert.deepEqual(site.values, { pm25: 30, o3: 80, no2: 40 });
+  assert.deepEqual(site.valueTimes, { pm25: t0, o3: t0, no2: t0 });
+  assert.deepEqual(site.valueMethods, { o3: 'nowcast' });
+  assert.deepEqual(site.valueAveraging, { no2: 60 });
+  assert.deepEqual(site.hourValues, { o3: 90 });
+  assert.deepEqual(site.valueSources, {
+    pm25: { provider: 'openaq', id: 'openaq:1:aqi', network: 'OPENAQ' },
+    o3: { provider: 'national', id: 'national:1:aqi', network: 'NATIONAL' },
+    no2: { provider: 'openaq', id: 'openaq:1:aqi', network: 'OPENAQ' },
+  });
+  assert.deepEqual(site.excluded, { co: 'hours', so2: 'implausible' });
+  // Every dropped reading points at the site's one reading.
+  assert.equal(replaced.get(copy), site);
+  assert.equal(replaced.get(sensor), site);
+  // Without `combine` the kept reading is unchanged.
+  const plain = mergeObservations(
+    [
+      { provider: 'national', direct: true, readings: [national] },
+      { provider: 'openaq', direct: false, readings: [copy] },
+    ],
+    { view: 'aqi' },
+  );
+  assert.deepEqual(plain, [national]);
+  // A low-cost sensor kept on its own takes in nothing.
+  assert.equal(mergeStationValues(sensor, [copy]), sensor);
 });
