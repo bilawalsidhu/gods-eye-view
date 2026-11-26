@@ -2,7 +2,7 @@
  * A model field a host supplies: a forecast of the six pollutants and the US
  * AQI on regular grids (such as CAMS: one global grid and a finer one over
  * Europe), read at a place, painted as images and placed in time. Pure and
- * portable: no network, scene or UI imports. Stand-alone Core has no field
+ * portable: no network, scene or UI imports. The stand-alone app has no field
  * unless one is configured (`fieldSource.js`).
  *
  * The host's `fieldSource`, passed to `createAirQualityLayer`:

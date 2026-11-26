@@ -1778,7 +1778,7 @@ test('a late answer for another time does not replace the live run', async () =>
 });
 
 /**
- * Core's local server holding run A (six hours old, to +27 h) until
+ * The local server holding run A (six hours old, to +27 h) until
  * `replace()` swaps in run B (now, to +21 h): grids of a run it no longer
  * holds answer 409. A's grids read AQI 30, B's 90.
  */

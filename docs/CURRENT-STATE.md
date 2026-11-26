@@ -10352,7 +10352,7 @@ A host may give the Air quality layer a model field: a forecast of the six
 pollutants and the US AQI on regular grids, one global and an optional finer
 Europe inset (`fieldSource`, `sources['air-quality-field']`; the contract is in
 `src/layers/airQuality/field.js`: `getManifest({ atMs? })` and `getStep(step)`,
-16-bit grids with a per-id scale and 65535 for no data). Stand-alone Core has
+16-bit grids with a per-id scale and 65535 for no data). The stand-alone app has
 none unless one is configured (below), and then shows stations only.
 
 With a field, every view (the US AQI or a pollutant)
