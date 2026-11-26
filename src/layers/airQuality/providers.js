@@ -21,7 +21,7 @@ function withQuery(endpoint, fields) {
  * snapshot holds: the layer folds them into one reading per station. A
  * national snapshot is reused for `reuseMs` across views. `atMs` asks a past
  * time instead of now (the route's `at`): a route that answers it says so
- * with `at` in its answer, and the coverage then carries `atMs`.
+ * with that time as `at` in its answer, and the coverage then carries `atMs`.
  * A snapshot holds at most 50,000 readings. Requests reject redirects.
  * Set keyed to false for a keyless route to report authorization failures as unavailable.
  * Account changes require a new source so cached answers and coverage belong to that account.
@@ -190,8 +190,8 @@ export function createAirQualitySnapshotSource({
         failureStatus: count(payload.failureStatus),
         retryAt: count(payload.retryAt),
         // The time answered for: the one asked, when the route says it
-        // answered for a time; null for now.
-        atMs: past && 'at' in payload ? atMs : null,
+        // answered for that time; null for now.
+        atMs: past && payload.at === atMs ? atMs : null,
       };
       return readings;
     },

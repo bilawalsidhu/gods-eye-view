@@ -211,3 +211,32 @@ test('a layer the clock does not follow stays at now', async () => {
   assert.ok(source.asked.every((r) => r.atMs === undefined));
   assert.equal(h.points().show, true);
 });
+
+test('a past hour shown arms no age-out on the wall clock', async (t) => {
+  const source = timedSource({
+    rows: ({ atMs }) =>
+      atMs === undefined ? capeTown() : capeTown(atMs - 2 * HOUR),
+  });
+  const h = harness({ clock: followed(), ...source });
+  await h.layer.update();
+  await settle();
+  h.clock.seek(hourAgo(30));
+  await settle();
+  assert.equal(h.points().show, true);
+  // Each age-out merges again: none is armed while the hour is shown.
+  const armed = [];
+  const real = globalThis.setTimeout;
+  t.mock.method(globalThis, 'setTimeout', (fn, ms, ...rest) => {
+    armed.push(ms);
+    return real(fn, ms, ...rest);
+  });
+  h.layer.setParams({ stations: false });
+  h.layer.setParams({ stations: true });
+  await h.layer.update();
+  await settle();
+  await new Promise((r) => real(r, 1200));
+  assert.ok(
+    armed.every((ms) => ms > 2000),
+    `armed ${JSON.stringify(armed)}`,
+  );
+});

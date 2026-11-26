@@ -108,7 +108,8 @@ test('a past time is asked with at, and its rows are aged against it', async () 
   const wall = Date.parse('2026-10-20T12:20:00Z');
   const at = Date.parse('2026-10-20T08:00:00Z');
   const urls = [];
-  let answersTime = true;
+  /** What the route says it answered for: the time asked, now (null), none. */
+  let answered = at;
   const source = portable.createAirQualitySource({
     providers: [
       {
@@ -132,7 +133,7 @@ test('a past time is asked with at, and its rows are aged against it', async () 
                 { ...rows[0], id: 'late', observedMs: at + HOUR_MS },
                 { ...rows[0], id: 'old', observedMs: at - 7 * HOUR_MS },
               ],
-              ...(answersTime ? { at } : {}),
+              ...(answered === undefined ? {} : { at: answered }),
             });
           },
         }),
@@ -154,10 +155,12 @@ test('a past time is asked with at, and its rows are aged against it', async () 
     ['national:1:PM2.5'],
   );
   assert.equal(source.getCoverage('openaq').atMs, at);
-  // A route that answers no time says nothing for it.
-  answersTime = false;
-  await source.getSnapshot({ provider: 'openaq', view, atMs: at });
-  assert.equal(source.getCoverage('openaq').atMs, null);
+  // A route that answers now, or names no time, did not answer for it.
+  for (const other of [null, undefined, at - HOUR_MS]) {
+    answered = other;
+    await source.getSnapshot({ provider: 'openaq', view, atMs: at });
+    assert.equal(source.getCoverage('openaq').atMs, null, String(other));
+  }
   // Now is asked without at.
   await source.getSnapshot({ provider: 'openaq', view });
   assert.equal(new URL(urls.at(-1), 'http://x').searchParams.has('at'), false);

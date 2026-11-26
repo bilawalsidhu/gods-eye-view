@@ -10328,9 +10328,10 @@ read from OpenAQ's hourly means up to that hour (`sensors/{id}/hours` with
 `datetime_to` at it): the US AQI view folds PM2.5, PM10, O3 and CO hours with
 `aqiStations` as at now, with NO2 and SO2 from their newest hour within six
 hours; a pollutant view shows that hour's means. Readings are aged against the
-hour, stations that began reporting after it are skipped, each station is
-checked once (a past hour's means are read once), and each hour asked is a
-view with its own `VIEW_SHARE` under the same process limits.
+hour, and stations that began reporting after it are skipped. An hour within
+three days of now is checked again hourly, as networks file hours late; an
+older hour's stations and means are read once. Each hour asked is a view with
+its own `VIEW_SHARE` under the same process limits.
 
 OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
 coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements

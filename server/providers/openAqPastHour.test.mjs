@@ -27,7 +27,7 @@ const SENSORS = [
  * every hour in the window asked, plus one past its end, as a loose upstream
  * might; the latest values are the newest hour's means.
  */
-function upstream(clock) {
+function upstream(clock, { filedAt = () => 0 } = {}) {
   const urls = [];
   const fetchImpl = async (raw) => {
     const url = new URL(raw);
@@ -64,7 +64,10 @@ function upstream(clock) {
         end <= to + HOUR;
         end += HOUR
       )
-        if (end <= Math.floor(clock() / HOUR) * HOUR)
+        if (
+          end <= Math.floor(clock() / HOUR) * HOUR &&
+          clock() >= filedAt(sensor.id, end)
+        )
           results.push({
             value: meanOf(sensor.id, end),
             parameter: sensor.parameter,
@@ -103,8 +106,8 @@ async function settle(source, ask, clock, step = 10_000) {
   return snapshot;
 }
 
-const acquisition = (clock) => {
-  const io = upstream(() => clock.t);
+const acquisition = (clock, options) => {
+  const io = upstream(() => clock.t, options);
   return {
     io,
     source: createOpenAqAcquisition({
@@ -171,26 +174,47 @@ test('a pollutant view of a past hour shows that hour’s means', async () => {
   );
 });
 
-test('a past hour is read once and kept apart from now', async () => {
+test('a recent past hour is read again for late hours, and kept apart from now', async () => {
   const clock = { t: wall };
-  const { io, source } = acquisition(clock);
-  const ask = { view, parameter: 'PM2.5', at: past };
-  await settle(source, ask, clock);
+  const at = Date.parse('2026-10-20T11:00:00Z');
+  // Station 1's PM2.5 hours from 10:00 on are filed three hours late.
+  const late = Date.parse('2026-10-20T10:00:00Z');
+  const { io, source } = acquisition(clock, {
+    filedAt: (sensor, end) =>
+      sensor === 11 && end >= late ? end + 3 * HOUR : 0,
+  });
+  const ask = { view, parameter: 'PM2.5', at };
+  const station1 = (answer) =>
+    answer.readings.find((r) => r.stationId === '1')?.observedMs;
+  const first = await settle(source, ask, clock);
+  assert.equal(station1(first), late - HOUR);
   const spent = io.urls.length;
+  // Within the recheck interval nothing is read again.
   clock.t += 30 * 60_000;
   const again = await source.getSnapshot(ask);
   assert.equal(again.partial, false);
   assert.equal(io.urls.length, spent);
-  assert.equal(again.retryAt, null);
-  // Hours later only the station catalog is read again, no station.
-  clock.t += 2 * HOUR;
+  // An hour on (13:35), the station is checked again: its 10:00 hour, filed
+  // at 13:00, shows.
+  clock.t += 45 * 60_000;
   const later = await settle(source, ask, clock);
-  assert.deepEqual(later.readings, again.readings);
-  assert.ok(io.urls.slice(spent).every((u) => u.pathname === '/v3/locations'));
+  assert.equal(station1(later), late);
   // Now has its own readings: the newest hour's, not the past one's.
   const now = await settle(source, { view, parameter: 'PM2.5' }, clock);
   assert.equal(now.at, null);
-  assert.ok(now.readings.every((r) => r.observedMs > past));
+  assert.ok(now.readings.some((r) => r.stationId === '2' && r.observedMs > at));
+});
+
+test('an hour more than three days back is read once', async () => {
+  const clock = { t: wall };
+  const { io, source } = acquisition(clock);
+  const ask = { view, parameter: 'PM2.5', at: wall - 4 * 24 * HOUR };
+  await settle(source, ask, clock);
+  const spent = io.urls.length;
+  clock.t += 3 * HOUR;
+  await settle(source, ask, clock);
+  // Only the station catalog is read again, no station.
+  assert.ok(io.urls.slice(spent).every((u) => u.pathname === '/v3/locations'));
 });
 
 test('a past hour needs a pollutant or the US AQI view', async () => {

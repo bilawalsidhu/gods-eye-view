@@ -1370,7 +1370,9 @@ export function createAirQualityLayer({
   const armAgeOut = () => {
     clearTimeout(ageTimer);
     ageTimer = null;
-    if (!_enabled) return;
+    // At a past hour readings are aged against the hour, not the wall
+    // clock: nothing ages out while it is shown.
+    if (!_enabled || stationsAt() !== null) return;
     let next = Infinity;
     for (const entry of asked())
       for (const raw of stateOf(entry).readings) {

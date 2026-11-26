@@ -74,6 +74,13 @@ const AQI_HOURLY = Object.freeze({
 const AQI_LATEST = Object.freeze(['NO2', 'SO2']);
 /** Sensors whose hourly means are kept; the least recently read go first. */
 const MAX_SENSOR_SERIES = 2000;
+/**
+ * A past hour within this of now may still gain hours networks file late
+ * (some hours after): its stations and hourly means are read again every
+ * PAST_RECHECK_MS. An older hour's are read once.
+ */
+const PAST_FINAL_MS = 3 * 24 * HOUR;
+const PAST_RECHECK_MS = HOUR;
 /** A refused key is tried upstream again after this long, unless it changes. */
 const REFUSED_KEY_MS = 10 * 60_000;
 const error = (status, message) =>
@@ -249,11 +256,20 @@ export function createOpenAqAcquisition({
     const cached = sensorSeries.get(id);
     const since = asOf - (keep + 1) * HOUR;
     const kept = (cached?.hours ?? []).filter((hour) => hour.endMs > since);
-    // A past hour's means are already in: they are read once.
-    if (cached && (at !== null || now() - cached.at < HOUR)) return kept;
+    // Now's means are read again hourly, for the hours since the newest
+    // (three back, for late ones); a recent past hour's every
+    // PAST_RECHECK_MS, all of them (a late network fills any); an older
+    // one's once.
+    const fresh =
+      at === null
+        ? now() - cached?.at < HOUR
+        : now() - at > PAST_FINAL_MS || now() - cached?.at < PAST_RECHECK_MS;
+    if (cached && fresh) return kept;
     const newest = kept.at(-1)?.endMs;
     const from =
-      newest === undefined ? since : Math.max(since, newest - 3 * HOUR);
+      newest === undefined || at !== null
+        ? since
+        : Math.max(since, newest - 3 * HOUR);
     const data = await get(
       `sensors/${sensor.id}/hours?limit=1000&page=1&datetime_from=${encodeURIComponent(new Date(from).toISOString())}&datetime_to=${encodeURIComponent(new Date(asOf).toISOString())}`,
     );
@@ -498,10 +514,17 @@ export function createOpenAqAcquisition({
     const backoff = (s) =>
       now() - (state.failed.get(s.stationId) ?? -Infinity) < STATION_RETRY_MS;
     // The AQI view's hourly means change once an hour: its stations are
-    // checked hourly, the pollutant views' every 20 minutes. A past hour's
-    // stations are checked once.
+    // checked hourly, the pollutant views' every 20 minutes. A recent past
+    // hour's stations are checked again every PAST_RECHECK_MS, for hours
+    // filed late; an older hour's once.
     const checkMs =
-      at !== null ? Infinity : mode === 'aqi' ? HOUR : 20 * 60_000;
+      at === null
+        ? mode === 'aqi'
+          ? HOUR
+          : 20 * 60_000
+        : now() - at > PAST_FINAL_MS
+          ? Infinity
+          : PAST_RECHECK_MS;
     const needsCheck = (s) =>
       now() - (state.checked.get(s.stationId) ?? -Infinity) >= checkMs;
     const newestOf = (list) =>
