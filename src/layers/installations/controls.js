@@ -213,11 +213,11 @@ export function createControls({
       if (!parts.selection.selectRecord(record.id)) return false;
       cameraOf(layerState.viewer).flyToBounds(
         {
-          center: {
-            lon: record.longitude,
-            lat: record.latitude,
-            height: parts.rendering.installationSurfaceHeightM(record),
-          },
+          center: fromDegrees(
+            record.longitude,
+            record.latitude,
+            parts.rendering.installationSurfaceHeightM(record),
+          ),
           radius: 18000,
         },
         { durationS: 1.4 },

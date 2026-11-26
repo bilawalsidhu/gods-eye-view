@@ -1,5 +1,5 @@
 import { plausibleSurfaceHeight, sampledSurfaceHeight } from './view.js';
-import { toRadians } from '../../geo/index.js';
+import { fromDegrees, toRadians } from '../../geo/index.js';
 import { cameraOf, findQuery } from '../../render/rendererOf.js';
 
 /** Fly the globe camera once to frame a photo after it opens. */
@@ -59,7 +59,7 @@ export function createCameraFraming({ state }) {
     };
     const started = cameraOf(state.viewer).flyToBounds(
       {
-        center: { lon: position.lon, lat: position.lat, height: ground + 2 },
+        center: fromDegrees(position.lon, position.lat, ground + 2),
         radius: 4,
       },
       {

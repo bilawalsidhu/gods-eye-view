@@ -1793,11 +1793,7 @@ export function createAnnotationEngine({
       const camera = cameraOf(viewer);
       camera.flyToBounds(
         {
-          center: {
-            lon: target.lon,
-            lat: target.lat,
-            height: anno.anchor.height || 0,
-          },
+          center: fromDegrees(target.lon, target.lat, anno.anchor.height || 0),
           radius: range,
         },
         {

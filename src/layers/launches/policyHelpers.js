@@ -1,3 +1,4 @@
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { PI_OVER_TWO } from '../../geo/vector.js';
 import { t } from '../../i18n/index.js';
 import { cameraOf } from '../../render/rendererOf.js';
@@ -230,7 +231,7 @@ export function createPolicyHelpers({
     const range = parts.panel.missionHoverPreviewRange(camera.pose().height);
     layerState._cameraReleased = false;
     camera.flyToBounds(
-      { center: { lon: launch.lon, lat: launch.lat }, radius: 0 },
+      { center: fromDegrees(launch.lon, launch.lat), radius: 0 },
       {
         offset: { heading: 0, pitch: -PI_OVER_TWO, range },
         durationS: 0.8,
