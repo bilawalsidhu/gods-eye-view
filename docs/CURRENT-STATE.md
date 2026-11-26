@@ -9848,15 +9848,16 @@ reception does not interrupt internet radio.
 - **Receiver.** Each page load starts with RTL-SDR selected. The selector is
   locked while connecting, receiving or switching modes. On HackRF One, a
   failed FM retune, mode switch or gain change reports the error and closes
-  the receiver. RTL-SDR reports those operation errors and keeps the receiver open.
+  the receiver. A HackRF USB control request that stalls times out after five
+  seconds. RTL-SDR reports operation errors and keeps the receiver open.
 - **FM seek.** Seeking wraps across 87.5–108 MHz, covers both band edges and
   skips the starting station. Spectra carry a decoder epoch, so a retune or mode
   change rejects earlier output. HackRF One seek subtracts the IQ mean before
   the FFT to suppress the centre spike. During FM reception, HackRF retunes
   write only the frequency, then discard buffered IQ before resetting the
-  decoder. A failed scan retune stops seeking. A station is reported as found
-  after its final retune succeeds. FM seek integrates Aditya's (@Rohilalala)
-  contribution in #1174.
+  decoder. Manual tuning and failed scan retunes stop seeking. A station is
+  reported as found after its final retune succeeds. FM seek integrates
+  Aditya's (@Rohilalala) contribution in #1174.
 - **Streaming and playback.** Four ordered USB reads keep input available while
   the page handles other work; control changes drain those reads before touching
   the receiver. The worker must finish loading before reads start. Decoder work

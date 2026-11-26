@@ -26,6 +26,19 @@ export function requestHackrfOne(webUsb) {
   return webUsb.requestDevice({ filters: [HACKRF_ONE_FILTER] });
 }
 
+/** Resolve with the USB operation's outcome, or reject once `ms` elapses. */
+export function withUsbDeadline(promise, ms, message) {
+  let timer = null;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message);
+      error.name = 'TimeoutError';
+      reject(error);
+    }, ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 function text(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }

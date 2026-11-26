@@ -20,6 +20,7 @@ import {
   sdrDeviceIdentity,
   sdrDeviceLabel,
   selectAuthorizedSdrDevice,
+  withUsbDeadline,
 } from './usbDevices.js';
 import { summarizeLocalAdsb } from '../sources/adsbRecords.js';
 import {
@@ -47,8 +48,7 @@ const READ_SAMPLE_COUNT = 32_768;
 // short of the configured rate; queued reads keep a transfer pending meanwhile.
 const READ_PIPELINE_DEPTH = 4;
 const RATE_WINDOW_MS = 1_000;
-// A bulk read that has not completed in this long is treated as a stalled
-// USB transfer: the session is torn down instead of waiting forever.
+// Bulk reads and HackRF control requests use the same USB stall deadline.
 const SDR_READ_STALL_MS = 5_000;
 // Decoder admission. Every block sent to the worker is numbered and must be
 // acknowledged; past these bounds the receiver stops with an overload error
@@ -271,19 +271,6 @@ function usbGateIdle(gate) {
   return new Promise((resolve) => gate.idle.push(resolve));
 }
 
-/** Resolve with the operation's outcome, or reject once `ms` elapses. */
-function withDeadline(promise, ms, message) {
-  let timer = null;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(message);
-      error.name = 'TimeoutError';
-      reject(error);
-    }, ms);
-  });
-  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
-}
-
 function publicAircraft(aircraft) {
   return Array.isArray(aircraft) ? aircraft.map((entry) => ({ ...entry })) : [];
 }
@@ -403,7 +390,7 @@ export class SdrController {
    *   Builds the RTL-SDR provider around the selecting WebUSB wrapper.
    * @param {Storage|null} [options.storage] Gain and device preferences.
    * @param {USB|null} [options.webUsb] WebUSB entry point.
-   * @param {number} [options.readStallMs] Deadline for one bulk sample read.
+   * @param {number} [options.readStallMs] Deadline for a bulk read or HackRF control request.
    * @param {number} [options.closeTimeoutMs] Deadline for a graceful close.
    */
   constructor({
@@ -547,11 +534,12 @@ export class SdrController {
         { onDevice: onUsbDevice, isFenced },
       );
       if (!hackrf) return createProvider(webusb);
+      const controlTimeoutMs = this._readStallMs;
       return {
         device: null,
         async get() {
           this.device = await requestHackrfOne(webusb);
-          return openHackrfOne(this.device);
+          return openHackrfOne(this.device, { controlTimeoutMs });
         },
       };
     };
@@ -1410,7 +1398,7 @@ export class SdrController {
   async _forceCloseUsbDevices(usbDevices) {
     await Promise.all(
       [...usbDevices].map((usbDevice) =>
-        withDeadline(
+        withUsbDeadline(
           forceCloseUsb(usbDevice),
           this._closeTimeoutMs,
           'RTL-SDR USB close timed out',
@@ -1499,7 +1487,7 @@ export class SdrController {
       if (!older.length) return;
       this._abandonAcquisitions();
       try {
-        await withDeadline(
+        await withUsbDeadline(
           Promise.all(older.map((acquisition) => acquisition.settled)),
           this._closeTimeoutMs * 3,
           'RTL-SDR acquisition did not settle',
@@ -1562,7 +1550,7 @@ export class SdrController {
       const graceful = queued
         ? this._queueUsb(() => device.close())
         : Promise.resolve().then(() => device?.close());
-      await withDeadline(
+      await withUsbDeadline(
         graceful,
         this._closeTimeoutMs,
         'RTL-SDR close timed out',
@@ -1576,7 +1564,7 @@ export class SdrController {
     if (!mayForceClose(usbDevice)) return;
     try {
       // Closing the raw USB device aborts any pending transfer.
-      await withDeadline(
+      await withUsbDeadline(
         forceCloseUsb(usbDevice),
         this._closeTimeoutMs,
         'RTL-SDR USB close timed out',
@@ -1653,7 +1641,7 @@ export class SdrController {
         // the deadline the session is torn down (stop() closes the raw USB
         // device, which aborts the transfer).
         while (gate.waiting === 0 && inflight.length < READ_PIPELINE_DEPTH) {
-          const read = withDeadline(
+          const read = withUsbDeadline(
             device.readSamples(READ_SAMPLE_COUNT),
             this._readStallMs,
             'SDR sample read stalled',
@@ -1863,6 +1851,11 @@ export class SdrController {
 
   async tuneFm(frequencyHz, { quiet = false } = {}) {
     const frequency = clampFmFrequency(frequencyHz);
+    if (!Number.isFinite(frequency)) return false;
+    if (!quiet) {
+      this.cancelSeek();
+      if (this.state.seekMessage) this._setState({ seekMessage: null });
+    }
     this._fmFrequencyHz = frequency;
     if (!this._device) {
       this._setState({
@@ -1888,7 +1881,7 @@ export class SdrController {
         const tuned = await device.setCenterFrequency(frequency);
         if (Number.isFinite(tuned)) actualFrequency = tuned;
         if (!this._owns(token, device)) return;
-        await withDeadline(
+        await withUsbDeadline(
           device.resetBuffer(),
           this._readStallMs,
           'SDR buffer reset stalled',

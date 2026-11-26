@@ -1,3 +1,5 @@
+import { withUsbDeadline } from './usbDevices.js';
+
 // USB requests and payloads follow Great Scott Gadgets' libhackrf.
 const REQUEST = {
   SET_MODE: 1,
@@ -42,15 +44,16 @@ function pairOfUint32(first, second) {
 }
 
 /** Open a selected WebUSB device for reception. Drain reads before reconfiguring. */
-export async function openHackrfOne(device) {
+export async function openHackrfOne(device, { controlTimeoutMs = 5_000 } = {}) {
   await claim(device);
   let receiving = false;
   let closing = null;
 
   async function write(request, { value = 0, index = 0, data } = {}) {
-    const result = await device.controlTransferOut(
-      vendorRequest(request, value, index),
-      data,
+    const result = await withUsbDeadline(
+      device.controlTransferOut(vendorRequest(request, value, index), data),
+      controlTimeoutMs,
+      `HackRF One USB request ${request} stalled`,
     );
     if (
       result.status !== 'ok' ||
@@ -60,9 +63,10 @@ export async function openHackrfOne(device) {
   }
 
   async function setGain(request, gain) {
-    const result = await device.controlTransferIn(
-      vendorRequest(request, 0, gain),
-      1,
+    const result = await withUsbDeadline(
+      device.controlTransferIn(vendorRequest(request, 0, gain), 1),
+      controlTimeoutMs,
+      `HackRF One gain request ${request} stalled`,
     );
     if (
       result.status !== 'ok' ||
