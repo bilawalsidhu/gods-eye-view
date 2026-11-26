@@ -555,7 +555,8 @@ function pollutantInput(key, hours, rows) {
  * take their newest 1-hour value (or one whose period is not stated). A
  * reading on the table's own period also counts: 24-hour PM and SO2,
  * 8-hour O3 and CO. Hours flagged by their source, in units that do not
- * convert or under 75 % covered count as missing. The newest basis decides.
+ * convert, under 75 % covered or above their fault ceiling (`AQI_CEILINGS`)
+ * count as missing. The newest basis decides.
  *
  * `values` holds each pollutant's value for the index, in the layer's units,
  * with `valueTimes`, `valueAveraging` (minutes, null for a NowCast or an
@@ -563,7 +564,8 @@ function pollutantInput(key, hours, rows) {
  * `valueCoverage` per value; `hourValues` holds each pollutant's newest
  * valid hourly mean (ozone's rates on the 1-hour rows) and `dayValues.so2`
  * a 24-hour SO2 average, where known; `excluded` names the pollutants left out: `'units'`, `'flagged'`,
- * `'incomplete'`, `'nowcast'` or `'hours'` (too few hours), `'averaging'` (no reading on a
+ * `'incomplete'`, `'implausible'` (a newest hour above its fault ceiling),
+ * `'nowcast'` or `'hours'` (too few hours), `'averaging'` (no reading on a
  * period the table rates). A network's own index, if a reading carries one,
  * is not kept. Stations reporting none of the index's pollutants are left
  * out. The station's time is its newest value's (its newest reading's when
@@ -628,14 +630,21 @@ export function aqiStations(readings) {
     };
     if (averaging === 60 && at !== null) {
       // Hourly means, one per hour: the newest decides an hour read twice.
+      // An hour under-covered or above its fault ceiling counts as missing,
+      // so it never enters a NowCast or 8-hour mean.
       const covered =
         !Number.isFinite(reading.coveragePercent) ||
         reading.coveragePercent >= HOUR_MIN_COVERAGE;
+      const fault = value !== null && value > AQI_CEILINGS[key];
       const hour = {
         ...candidate,
         endMs: at,
-        value: covered ? value : null,
-        reason: covered ? candidate.reason : 'incomplete',
+        value: covered && !fault ? value : null,
+        reason: !covered
+          ? 'incomplete'
+          : fault
+            ? 'implausible'
+            : candidate.reason,
       };
       const hours = (station.hours[key] ??= new Map());
       const slot = Math.round(at / HOUR_MS);

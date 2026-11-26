@@ -754,3 +754,36 @@ test('PM2.5 is dropped only when it exceeds PM10 by a real margin: 1.5 × PM10 +
     pm10: 100,
   });
 });
+
+const hourly = (parameter, value, observedMs, extra = {}) => ({
+  id: `x:1:${parameter}`,
+  provider: 'x',
+  stationId: '1',
+  parameter,
+  units: 'µg/m³',
+  value,
+  averagingMinutes: 60,
+  observedMs,
+  ...extra,
+});
+const H = 3600_000;
+
+test('an hour above its fault ceiling counts as missing in the NowCast', () => {
+  const T = 100 * H;
+  // 4,000 µg/m³ is no outdoor air: it is a missing hour, not an average's
+  // weight. Two of the last three hours remain, so the NowCast is 10.
+  const [station] = aqiStations([
+    hourly('PM2.5', 10, T - 2 * H),
+    hourly('PM2.5', 4000, T - H),
+    hourly('PM2.5', 10, T),
+  ]);
+  assert.equal(station.values.pm25, 10);
+  assert.equal(stationIndex(station).aqi.index, 53);
+  // A newest hour at fault with too few hours left says why.
+  const [alone] = aqiStations([
+    hourly('PM2.5', 10, T - H),
+    hourly('PM2.5', 4000, T),
+  ]);
+  assert.deepEqual(alone.values, {});
+  assert.equal(alone.excluded.pm25, 'implausible');
+});
