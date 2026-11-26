@@ -787,3 +787,34 @@ test('an hour above its fault ceiling counts as missing in the NowCast', () => {
   assert.deepEqual(alone.values, {});
   assert.equal(alone.excluded.pm25, 'implausible');
 });
+
+test('an old 1-hour ozone or 24-hour SO2 does not rate beside a current value', () => {
+  const T = 1000 * H;
+  const ppb = (parameter, value, observedMs, averagingMinutes) =>
+    hourly(parameter, value, observedMs, { units: 'ppb', averagingMinutes });
+  // A 500 ppb ozone hour three days old beside a current 40 ppb 8-hour value.
+  const [ozone] = aqiStations([
+    ppb('O3', 500, T - 72 * H, 60),
+    ppb('O3', 40, T, 480),
+  ]);
+  assert.equal(ozone.hourValues.o3, undefined);
+  assert.equal(stationIndex(ozone).aqi.index, 37);
+  // Within the spread the 1-hour rows still apply.
+  const [recent] = aqiStations([
+    ppb('O3', 500, T - H, 60),
+    ppb('O3', 40, T, 480),
+  ]);
+  assert.equal(stationIndex(recent).aqi.index, 396);
+  // A 605 ppb daily SO2 three days old beside a current 10 ppb hour.
+  const [so2] = aqiStations([
+    ppb('SO2', 605, T - 72 * H, 1440),
+    ppb('SO2', 10, T, 60),
+  ]);
+  assert.equal(so2.dayValues.so2, undefined);
+  assert.equal(stationIndex(so2).aqi.index, 14);
+  const [current] = aqiStations([
+    ppb('SO2', 605, T, 1440),
+    ppb('SO2', 400, T, 60),
+  ]);
+  assert.equal(stationIndex(current).aqi.index, 301);
+});

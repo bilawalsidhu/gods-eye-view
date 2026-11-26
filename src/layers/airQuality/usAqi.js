@@ -529,14 +529,20 @@ function pollutantInput(key, hours, rows) {
     const at = Math.max(...rows.map((row) => row.at));
     best = { at, value: null, reason: 'averaging' };
   }
+  // A companion value counts only beside a value of its own time: within
+  // AQI_MAX_SPREAD_MS of the one it goes with, as values are of each other.
+  const near = (other) =>
+    Number.isFinite(best.at) &&
+    Math.abs(other.at - best.at) <= AQI_MAX_SPREAD_MS;
   // The newest hourly mean, when valid: ozone's for the 1-hour rows, and
   // every pollutant's for its hourly reading beside the index.
-  if (anchor && anchor.value !== null) best = { ...best, hour: anchor.value };
+  if (anchor && anchor.value !== null && near(anchor))
+    best = { ...best, hour: anchor.value };
   if (key === 'so2') {
     const day = rows
       .filter((row) => row.averaging === 1440 && row.value !== null)
       .reduce((a, b) => (newer(b, a) ? b : a), null);
-    if (day) best = { ...best, day: day.value };
+    if (day && near(day)) best = { ...best, day: day.value };
   }
   return best;
 }
@@ -563,7 +569,8 @@ function pollutantInput(key, hours, rows) {
  * unstated period), `valueMethods` (`'nowcast'`) and (where given)
  * `valueCoverage` per value; `hourValues` holds each pollutant's newest
  * valid hourly mean (ozone's rates on the 1-hour rows) and `dayValues.so2`
- * a 24-hour SO2 average, where known; `excluded` names the pollutants left out: `'units'`, `'flagged'`,
+ * a 24-hour SO2 average, where known and within AQI_MAX_SPREAD_MS of the
+ * value they go with; `excluded` names the pollutants left out: `'units'`, `'flagged'`,
  * `'incomplete'`, `'implausible'` (a newest hour above its fault ceiling),
  * `'nowcast'` or `'hours'` (too few hours), `'averaging'` (no reading on a
  * period the table rates). A network's own index, if a reading carries one,
