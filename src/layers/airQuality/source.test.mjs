@@ -95,3 +95,10 @@ test('an already aborted request does not fetch', async () => {
     { name: 'AbortError' },
   );
 });
+
+test('the portable source exports the rating rules a server answering the OpenAQ route uses', async () => {
+  const usAqi = await import('./usAqi.js');
+  const interpretation = await import('./interpretation.js');
+  assert.equal(portable.aqiStations, usAqi.aqiStations);
+  assert.equal(portable.interpretHourly, interpretation.interpretHourly);
+});
