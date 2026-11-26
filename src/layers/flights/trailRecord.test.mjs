@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { createStubRenderer } from '../../render/stub/index.js';
 import { createMotion } from './motion.js';
 import { createFlightState } from './state.js';
 import { createTracking } from './tracking.js';
-import { RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
+import { FLEET_TINT, RENDER_DELAY_SEC, STALE_ALPHA } from './policy.js';
 
-// Between reports, a tracked trail is the path the icon was actually drawn
-// along: the real display position, recorded as the frames go by. These tests
+// A tracked trail is the aircraft's reports joined along the curve the icon
+// is drawn along between them, so the icon always sits on its trail and a
+// late report can never leave a kink. These tests
 // drive the real motion and display path frame by frame.
 
 const SEC = 1000;
@@ -48,6 +51,7 @@ function services(trail, ground) {
     focus: {
       nearFarScalarValueAtDistance: () => 1,
       clearFocusTarget() {},
+      publishFocusTargetAt() {},
       publishFocusTargetFromCachedPosition() {},
     },
     groundSnap: { createGroundSnap: () => ({ clear() {} }) },
@@ -68,8 +72,8 @@ function services(trail, ground) {
 
 /**
  * Real motion, real display position and real tracking over one contact.
- * `frame()` runs one rendered frame: the layer's preRender work, then the
- * head callback, as Cesium does.
+ * `frame()` runs one rendered frame: a frame of the stub renderer, whose
+ * preRender pass moves the trail on and then draws its head.
  */
 function harness({
   fixes,
@@ -79,22 +83,17 @@ function harness({
   envelopeM = null,
 }) {
   const segmentsCalls = [];
-  let inHead = false;
+  let headPositions = [];
   const trail = {
     createTrail: () => ({
       setSegments(segments) {
-        assert.ok(
-          !inHead,
-          'the trail body was rebuilt inside the head callback',
-        );
         segmentsCalls.push(segments.map((segment) => segment.slice()));
       },
       setPositions(positions) {
-        assert.ok(
-          !inHead,
-          'the trail body was rebuilt inside the head callback',
-        );
         segmentsCalls.push([positions.slice()]);
+      },
+      setHead(positions) {
+        headPositions = positions.slice();
       },
       setVisible() {},
       clear() {},
@@ -107,35 +106,21 @@ function harness({
     source: { label: 'Fixture aircraft' },
   });
   flightState.records.data.set(ICAO, info);
-  let frameNumber = 0;
-  const added = [];
-  let entityChanges = 0;
-  flightState._viewer = {
-    isDestroyed: () => false,
-    scene: {
-      frameState: {
-        get frameNumber() {
-          return frameNumber;
-        },
-      },
-    },
-    entities: {
-      add(definition) {
-        entityChanges += 1;
-        added.push(definition);
-        return definition;
-      },
-      remove() {
-        entityChanges += 1;
-      },
-    },
-  };
+  // The scene, on the stub renderer: each frame runs its preRender pass
+  // (the trail moves on, then its head is drawn) and counts as drawn.
+  const renderer = createStubRenderer();
+  flightState._viewer = {};
+  bindRenderer(flightState._viewer, renderer);
   flightState._trackedIcao = ICAO;
   let clock = nowMs;
   flightState.now = () => clock;
   flightState._positionHistory.set(ICAO, fixes);
   const parts = {
-    rendering: { _modelOwnsVisual: () => false, _modelSpec: () => ({}) },
+    rendering: {
+      _modelOwnsVisual: () => false,
+      _modelSpec: () => ({}),
+      _fleetBillboardColor: () => FLEET_TINT,
+    },
     queries: { _contactLabel: (id, info) => info?.callsign || id },
   };
   parts.motion = createMotion({ flightState, services: svc, parts });
@@ -154,32 +139,19 @@ function harness({
   parts.tracking = tracking;
   const realDateNow = Date.now;
   Date.now = () => clock;
-  const headEntity = () =>
-    added.find((definition) =>
-      String(definition.id).startsWith('gev-trail:fl-head-'),
-    );
-  const head = () => {
-    const before = entityChanges;
-    inHead = true;
-    try {
-      return headEntity().polyline.positions.getValue();
-    } finally {
-      inHead = false;
-      assert.equal(
-        entityChanges,
-        before,
-        'the head callback added or removed an entity',
-      );
-    }
-  };
+  // The live head the last frame drew (the trail's head, set each frame
+  // before it draws).
+  const head = () => headPositions;
   /** Drawn icon positions, one per frame. */
   const drawn = [];
-  const frame = ({ readHead = true } = {}) => {
-    frameNumber += 1;
-    tracking._trailTick();
+  // Where the frame draws the icon: read in the same frame as the head.
+  renderer.frame.on('preRender', () => {
     const icon = parts.motion._trackedDisplayPosition(ICAO);
     if (icon) drawn.push(Cesium.Cartesian3.clone(icon));
-    if (readHead) head();
+  });
+  const frame = () => {
+    renderer.frame.requestRender('test');
+    renderer.testing.tick();
   };
   const run = (toMs, { frameMs = 100, readHead = true } = {}) => {
     while (clock < toMs) {
@@ -200,6 +172,42 @@ function harness({
       Date.now = realDateNow;
     },
   };
+}
+
+/**
+ * The report a plane at `from` (speed and track as reported) gives at `toMs`
+ * after a constant turn at `rateDps` (negative left), with `trackDeg` its track.
+ */
+function turnedFix(from, toMs, rateDps, trackDeg) {
+  const seconds = (toMs - from.epochMs) / SEC;
+  const turned = (rateDps * seconds * Math.PI) / 180;
+  const r = from.velocity / Math.abs((rateDps * Math.PI) / 180);
+  const h = (from.track * Math.PI) / 180;
+  const fwd = [Math.sin(h), Math.cos(h)];
+  const side = Math.sign(rateDps);
+  // To the right of the heading for a right turn, the left for a left one.
+  const right = [Math.cos(h), -Math.sin(h)];
+  const along = r * Math.sin(Math.abs(turned));
+  const across = side * r * (1 - Math.cos(turned));
+  const enu = Cesium.Transforms.eastNorthUpToFixedFrame(from.position);
+  const p = Cesium.Matrix4.multiplyByPoint(
+    enu,
+    new Cesium.Cartesian3(
+      fwd[0] * along + right[0] * across,
+      fwd[1] * along + right[1] * across,
+      0,
+    ),
+    new Cesium.Cartesian3(),
+  );
+  const c = Cesium.Cartographic.fromCartesian(p);
+  return fix(
+    toMs,
+    Cesium.Math.toDegrees(c.latitude),
+    Cesium.Math.toDegrees(c.longitude),
+    Cesium.Cartographic.fromCartesian(from.position).height,
+    from.velocity,
+    trackDeg,
+  );
 }
 
 /** Distance from p to the nearest point of a polyline. */
@@ -248,6 +256,23 @@ function assertNoSpur(line, label) {
   }
 }
 
+/** No vertex of `line` turns it more than `maxDeg` (steps under 1 m skipped). */
+function assertSmooth(line, maxDeg, label) {
+  const u = new Cesium.Cartesian3();
+  const v = new Cesium.Cartesian3();
+  for (let i = 1; i < line.length - 1; i++) {
+    Cesium.Cartesian3.subtract(line[i], line[i - 1], u);
+    Cesium.Cartesian3.subtract(line[i + 1], line[i], v);
+    const lu = Cesium.Cartesian3.magnitude(u);
+    const lv = Cesium.Cartesian3.magnitude(v);
+    if (!(lu > 1 && lv > 1)) continue;
+    const deg =
+      (Math.acos(Math.min(1, Cesium.Cartesian3.dot(u, v) / (lu * lv))) * 180) /
+      Math.PI;
+    assert.ok(deg <= maxDeg, `${label}: ${deg.toFixed(1)}° at vertex ${i}`);
+  }
+}
+
 const indexOfPoint = (line, p) =>
   line.findIndex((q) => Cesium.Cartesian3.distance(p, q) < 0.01);
 
@@ -275,64 +300,40 @@ function departure() {
   return { fixes, info };
 }
 
-test('a report newer than the display time arrives mid-turn: the trail between the two reports stays on the drawn arc', () => {
+test('a report from a turn lands while the icon coasts: the trail runs report to report along their curve, with no kink, and the icon is on it', () => {
   const { fixes, info } = departure();
   const start = T0 + 90 * SEC + RENDER_DELAY_SEC * SEC;
   const h = harness({ fixes, info, nowMs: start });
   try {
     h.tracking._startTrail(ICAO);
-    // 40 s of turn with no new report: the icon flies the arc.
+    // 40 s with no new report: past it, the icon flies straight on.
     h.run(start + 40 * SEC);
-    const arc = h.drawn.slice();
     // The next report is where the plane really was 60 s after the last one,
-    // still ahead of the display time (normal 30 s delay, slow feed). The icon
-    // now interpolates the straight line between the two reports and is eased
-    // onto it.
-    const at60 = h.motion._deadReckon(
-      ICAO,
-      new Cesium.Cartesian3(),
-      Cesium.JulianDate.fromDate(new Date(T0 + 150 * SEC)),
-    );
-    const c = Cesium.Cartographic.fromCartesian(at60);
-    const report = fix(
-      T0 + 150 * SEC,
-      Cesium.Math.toDegrees(c.latitude),
-      Cesium.Math.toDegrees(c.longitude),
-      c.height,
-      112,
-      220,
-    );
+    // still ahead of the display time: through a 2°/s left turn, heading 220°.
+    const report = turnedFix(fixes[3], T0 + 150 * SEC, -2, 220);
     fixes.push(report);
     info.true_track = 220;
     h.tracking._appendTrailFix(
       Cesium.Cartesian3.clone(report.position),
       report.epochMs,
+      { track: 220 },
     );
     // The display passes the new report.
     h.run(start + 75 * SEC);
     const line = h.bodyPoints();
-    const from = indexOfPoint(line, fixes[3].position);
-    const to = indexOfPoint(line, report.position);
-    assert.ok(from >= 0 && to > from, 'both reports are on the trail');
-    const between = line.slice(from, to + 1);
-    // Every vertex between the reports is where the icon was drawn...
-    const drawnPath = [fixes[3].position, ...h.drawn, report.position];
-    for (const vertex of between) {
-      const off = distanceToPath(vertex, drawnPath);
-      assert.ok(
-        off < 50,
-        `trail vertex ${off.toFixed(0)} m off the drawn path`,
-      );
-    }
-    // ...and the arc the icon flew is still there: no straight chord. (The
-    // arc strays far from the chord, so a chord would fail this.)
+    const a = indexOfPoint(line, fixes[3].position);
+    const b = indexOfPoint(line, report.position);
+    assert.ok(a >= 0 && b > a, 'both reports are on the trail');
+    const between = line.slice(a, b + 1);
+    // A curve, not the chord, and smooth: no vertex turns more than 3°.
     const chord = [fixes[3].position, report.position];
-    assert.ok(Math.max(...arc.map((p) => distanceToPath(p, chord))) > 300);
-    // The last 10 s of the arc are exempt: the correction pulled the icon back
-    // over them, and keeping them would fold the line back on itself.
-    for (const point of arc.slice(0, -100)) {
-      const off = distanceToPath(point, between);
-      assert.ok(off < 50, `drawn arc point ${off.toFixed(0)} m from the trail`);
+    assert.ok(Math.max(...between.map((p) => distanceToPath(p, chord))) > 300);
+    assertSmooth(between, 3, 'trail');
+    // Eased onto the curve, the icon is drawn on its trail.
+    const trail = [...line, ...h.head()];
+    for (const p of h.drawn.slice(-100)) {
+      const off = distanceToPath(p, trail);
+      assert.ok(off < 3, `drawn ${off.toFixed(1)} m off the trail`);
     }
     assertNoSpur(line, 'trail');
     assertNoSpur(h.head(), 'head');
@@ -394,31 +395,30 @@ test('a fresh report after a hold resumes with no backward spur', () => {
   }
 });
 
-test('with the head hidden the body keeps advancing, and untracking clears the recording', () => {
+test('with the head hidden the body moves on as the display passes reports, and untracking clears the trail', () => {
   const { fixes, info } = departure();
-  const start = T0 + 90 * SEC + RENDER_DELAY_SEC * SEC;
+  // Drawn 30 s after the first report: the body holds the first two.
+  const start = T0 + 30 * SEC + RENDER_DELAY_SEC * SEC;
   const h = harness({ fixes, info, nowMs: start });
   try {
     h.tracking._startTrail(ICAO);
-    h.run(start + 5 * SEC);
-    const before = h.bodyPoints().at(-1);
-    // Cockpit view: the head is hidden and its callback never runs.
-    h.run(start + 30 * SEC, { readHead: false });
-    // The body's end keeps following the icon; straight stretches are thinned.
-    const end = h.bodyPoints().at(-1);
+    h.run(start + 1 * SEC);
     assert.ok(
-      Cesium.Cartesian3.distance(end, before) > 1_000,
+      Cesium.Cartesian3.distance(h.bodyPoints().at(-1), fixes[1].position) <
+        0.01,
+    );
+    // Cockpit view: the head is hidden, the body still moves on.
+    h.run(start + 61 * SEC, { readHead: false });
+    assert.ok(
+      Cesium.Cartesian3.distance(h.bodyPoints().at(-1), fixes[3].position) <
+        0.01,
       'the body stopped advancing',
     );
-    assert.ok(Cesium.Cartesian3.distance(end, h.drawn.at(-1)) < 300);
     h.tracking._clearTrail();
     assert.equal(h.flightState._trailFixes.length, 0);
-    // A new track of the same plane starts from reports only.
+    // A new track of the same plane starts from its reports.
     h.tracking._startTrail(ICAO);
-    assert.equal(
-      h.flightState._trailFixes.filter((entry) => entry.drawn).length,
-      0,
-    );
+    assert.equal(h.flightState._trailFixes.length, fixes.length);
   } finally {
     h.restore();
   }
@@ -485,7 +485,6 @@ test('a report the display already passed replaces the guess drawn after it, wit
   try {
     h.tracking._startTrail(ICAO);
     h.run(start + 40 * SEC);
-    const displayMs = T0 + 130 * SEC;
     // A report for 10 s before the display time, 400 m inside the drawn arc.
     const guess = h.motion._deadReckon(
       ICAO,
@@ -508,16 +507,11 @@ test('a report the display already passed replaces the guess drawn after it, wit
       report.epochMs,
     );
     h.run(start + 55 * SEC);
-    const recorded = h.flightState._trailFixes.filter((entry) => entry.drawn);
-    // Nothing recorded between the report and the end of the ease.
+    // Reports only: nothing drawn between them is kept.
     assert.deepEqual(
-      recorded
-        .filter(
-          (entry) =>
-            entry.timeMs > report.epochMs && entry.timeMs < displayMs + 900,
-        )
-        .map((entry) => entry.timeMs - T0),
-      [],
+      h.flightState._trailFixes.map((entry) => entry.timeMs),
+      fixes.map((f) => f.epochMs),
+      'the trail holds the reports and nothing else',
     );
     const line = h.bodyPoints();
     assert.ok(indexOfPoint(line, report.position) >= 0);
@@ -527,7 +521,7 @@ test('a report the display already passed replaces the guess drawn after it, wit
   }
 });
 
-test('a history report at an invented height is seeded with no position, and nothing is recorded next to it', () => {
+test('a history report at an invented height is seeded with no position, and the trail holds only reports', () => {
   const { fixes, info } = departure();
   fixes[3].inventedHeight = true;
   const start = T0 + 90 * SEC + RENDER_DELAY_SEC * SEC;
@@ -540,9 +534,10 @@ test('a history report at an invented height is seeded with no position, and not
     assert.equal(seeded.position, null);
     assert.equal(seeded.nullAltitude, true);
     h.run(start + 10 * SEC);
-    assert.equal(
-      h.flightState._trailFixes.filter((entry) => entry.drawn).length,
-      0,
+    assert.deepEqual(
+      h.flightState._trailFixes.map((entry) => entry.timeMs),
+      fixes.map((f) => f.epochMs),
+      'the trail holds the reports and nothing else',
     );
   } finally {
     h.restore();
@@ -586,7 +581,7 @@ test('a plane that stops reporting keeps moving dimmed as STALE from its first m
       text: '',
       dimmed: false,
     });
-    assert.equal(h.tracking._trackedIconColor().alpha, 1);
+    assert.equal(h.tracking._trackedIconColor()[3], 1);
     // The first missed update.
     h.flightState.records.missingPolls.set(ICAO, 1);
     assert.deepEqual(h.tracking._trackedStaleCue(ICAO), {
@@ -595,7 +590,7 @@ test('a plane that stops reporting keeps moving dimmed as STALE from its first m
     });
     assert.match(h.tracking._trackedLabelText(ICAO), /STALE/);
     // Drawn with the fleet's stale fade.
-    assert.equal(h.tracking._trackedIconColor().alpha, STALE_ALPHA);
+    assert.equal(h.tracking._trackedIconColor()[3], STALE_ALPHA);
     // Still moving well past 90 s.
     h.run(pastReport(200));
     assert.ok(
@@ -603,15 +598,14 @@ test('a plane that stops reporting keeps moving dimmed as STALE from its first m
     );
     // The coast ends 300 s past the report; the plane stops there.
     h.run(pastReport(310));
-    const recorded = h.flightState._trailFixes.filter((e) => e.drawn).length;
     h.run(pastReport(330));
     assert.ok(
       Cesium.Cartesian3.distance(h.drawn.at(-1), h.drawn.at(-50)) < 0.01,
     );
-    assert.equal(
-      h.flightState._trailFixes.filter((e) => e.drawn).length,
-      recorded,
-      'the trail kept recording a stopped plane',
+    assert.deepEqual(
+      h.flightState._trailFixes.map((entry) => entry.timeMs),
+      fixes.map((f) => f.epochMs),
+      'the trail holds the reports and nothing else',
     );
     // 330 s of display past the report is 330 s + the display delay of wall time.
     const minutes = Math.floor((330 + RENDER_DELAY_SEC) / 60);
@@ -651,7 +645,7 @@ test('a plane held at its last report shows SIGNAL LOST in seconds under a minut
   }
 });
 
-test('a report arriving 200 s into a coast: the plane eases onto it and the trail drops what was drawn after it', () => {
+test('a report arriving 200 s into a coast: the plane eases onto it with no jump, and the trail runs report to report', () => {
   const { fixes, info } = outOfCoverage();
   const h = harness({ fixes, info, nowMs: pastReport(-5) });
   try {
@@ -678,27 +672,29 @@ test('a report arriving 200 s into a coast: the plane eases onto it and the trai
     h.tracking._appendTrailFix(
       Cesium.Cartesian3.clone(report.position),
       report.epochMs,
+      { track: 90 },
     );
+    // Reports only: nothing the coast drew is kept.
     assert.deepEqual(
-      h.flightState._trailFixes.filter(
-        (e) => e.drawn && e.timeMs > report.epochMs,
-      ),
-      [],
+      h.flightState._trailFixes.map((e) => e.timeMs),
+      fixes.map((f) => f.epochMs),
     );
     const from = h.drawn.length;
-    h.run(pastReport(203));
+    h.run(pastReport(240));
     const after = h.drawn.slice(from - 1);
+    // Frames are 100 ms apart: 14 m at 140 m/s. The ease adds at most 30 %.
     for (let i = 1; i < after.length; i++)
       assert.ok(
-        Cesium.Cartesian3.distance(after[i], after[i - 1]) < 400,
+        Cesium.Cartesian3.distance(after[i], after[i - 1]) < 14 * 1.5,
         'the plane jumped instead of easing',
       );
-    // Eased onto the path from the report: 13 s on from it at 140 m/s.
+    // Eased onto the path from the report: 50 s on from it at 140 m/s.
     const off = Cesium.Cartesian3.distance(after.at(-1), report.position);
     assert.ok(
-      Math.abs(off - 140 * 13) < 150,
+      Math.abs(off - 140 * 50) < 150,
       `${off.toFixed(0)} m from the report`,
     );
+    assert.ok(indexOfPoint(h.bodyPoints(), report.position) >= 0);
   } finally {
     h.restore();
   }
@@ -784,7 +780,7 @@ test('a repeated old fix counts as a missed update for the tracked plane', () =>
       text: 'STALE',
       dimmed: true,
     });
-    assert.equal(h.tracking._trackedIconColor().alpha, STALE_ALPHA);
+    assert.equal(h.tracking._trackedIconColor()[3], STALE_ALPHA);
     assert.equal(h.flightState.records.missingPolls.has(ICAO), false);
   } finally {
     h.restore();
@@ -804,14 +800,19 @@ test('a stalled feed dims the tracked plane as STALE', () => {
       text: 'STALE',
       dimmed: true,
     });
-    assert.equal(h.tracking._trackedIconColor().alpha, STALE_ALPHA);
+    assert.equal(h.tracking._trackedIconColor()[3], STALE_ALPHA);
+    assert.deepEqual(
+      h.tracking._trackedIconColor().slice(0, 3),
+      FLEET_TINT.slice(0, 3),
+      'faded in its own colour, never recoloured',
+    );
     assert.equal(h.flightState.records.missingPolls.has(ICAO), false);
   } finally {
     h.restore();
   }
 });
 
-test('a report arriving after the plane has stopped: it eases in with no spur, and the trail keeps everything up to the stop', () => {
+test('a report arriving after the plane has stopped far back: it jumps onto the new path, and the trail runs report to report with no spur', () => {
   const { fixes, info } = outOfCoverage();
   info.lastContactEpochMs = fixes.at(-1).epochMs;
   const h = harness({ fixes, info, nowMs: pastReport(-5) });
@@ -820,14 +821,8 @@ test('a report arriving after the plane has stopped: it eases in with no spur, a
     h.run(pastReport(360));
     const stop = Cesium.Cartesian3.clone(h.drawn.at(-1));
     assert.ok(Cesium.Cartesian3.distance(stop, h.drawn.at(-100)) < 0.01);
-    const kept = h.flightState._trailFixes
-      .filter((e) => e.drawn)
-      .map((e) => Cesium.Cartesian3.clone(e.position));
-    // The thinned straight coast, recorded up to where the plane stopped.
-    assert.ok(kept.length >= 2);
-    assert.ok(Cesium.Cartesian3.distance(kept.at(-1), stop) < 300);
     // Heard again, for 20 s before the display time: the plane flew on, a
-    // little north of its old heading.
+    // little north of its old heading, 8 km past where it stopped.
     const at = T0 + 30 * SEC + 340 * SEC;
     const lonDeg =
       -108.05 + (140 * 340) / (111_320 * Math.cos((43 * Math.PI) / 180));
@@ -836,26 +831,13 @@ test('a report arriving after the plane has stopped: it eases in with no spur, a
     h.tracking._appendTrailFix(
       Cesium.Cartesian3.clone(report.position),
       report.epochMs,
-    );
-    // Nothing was recorded after the stop, so nothing is dropped.
-    const after = h.flightState._trailFixes
-      .filter((e) => e.drawn)
-      .map((e) => e.position);
-    assert.equal(after.length, kept.length);
-    kept.forEach((p, i) =>
-      assert.ok(Cesium.Cartesian3.distance(p, after[i]) < 0.01),
+      { track: 90 },
     );
     const from = h.drawn.length;
     h.run(pastReport(365));
-    const eased = h.drawn.slice(from - 1);
-    const jump = Cesium.Cartesian3.distance(eased[0], eased.at(-1));
-    for (let i = 1; i < eased.length; i++)
-      assert.ok(
-        Cesium.Cartesian3.distance(eased[i], eased[i - 1]) < jump / 2,
-        'the plane jumped instead of easing',
-      );
-    // On the path from the report: 25 s on from it at 140 m/s.
-    const off = Cesium.Cartesian3.distance(eased.at(-1), report.position);
+    const after = h.drawn.slice(from);
+    // On the path from the report at once: 25 s on from it at 140 m/s.
+    const off = Cesium.Cartesian3.distance(after.at(-1), report.position);
     assert.ok(Math.abs(off - 140 * 25) < 150, `${off.toFixed(0)} m`);
     assertNoSpur(h.bodyPoints(), 'trail');
     assertNoSpur(h.head(), 'head');

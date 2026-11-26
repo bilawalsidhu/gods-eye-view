@@ -4,6 +4,8 @@ import { canPresentDeferredStatusNotice } from '../loadingFeedback.js';
 import { t, msg, formatDate } from '../i18n/index.js';
 import { SHARE_VIEW_ENTITY_KINDS } from '../share/follow.js';
 import { UiLifetime } from './uiLifetime.js';
+import { followedOf } from '../data/followed.js';
+import { canvasOf } from '../render/rendererOf.js';
 import { isWorldTime, worldClock } from '../time/worldClock.js';
 
 // A link made away from live opens at its world time, paused. One without a
@@ -165,7 +167,10 @@ export class ShareRestoration {
     feedback,
     updateFeedback,
     applyFollowOffset = null,
+    startLayers = [],
   }) {
+    // The layers a bare address starts with; a link names its own.
+    this._startLayers = startLayers;
     Object.assign(this, {
       viewer,
       navigation,
@@ -259,14 +264,14 @@ export class ShareRestoration {
         this.navigation._stampNavigation(options),
       );
     };
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
       {
         passive: true,
       },
     );
-    this.viewer?.canvas?.addEventListener(
+    canvasOf(this.viewer)?.addEventListener(
       'wheel',
       this._initialShareGestureHandler,
       {
@@ -319,7 +324,16 @@ export class ShareRestoration {
       if (vessel) void this._restoreSharedVessel(vessel, current);
       // The token tells listeners whether anyone navigated after the
       // restore's flight landed (while the layers were still loading).
-      settle({ status: 'settled', share, layers, tracking, navigationToken });
+      // `thing` says the share is of a thing (a followed or selected one),
+      // not only a view.
+      settle({
+        status: 'settled',
+        share,
+        layers,
+        tracking,
+        navigationToken,
+        thing: state?.shareView?.kind === 'thing',
+      });
     } catch (error) {
       if (!current()) return;
       this.shareLinkManager.completeInitialRestore(state.restoreToken);
@@ -415,9 +429,11 @@ export class ShareRestoration {
       this._layerStateRestorePromise = this._layerStateCoordinator.start({
         shareLayerState: this._initialShareState?.layerState || null,
         shareCreatedAtMs: this._initialShareState?.sharedAtMs ?? null,
-        // Any valid camera/style share isolates recipient-local preferences,
-        // including legacy and malformed-v2 layer payloads.
-        allowLocalState: !this._initialShareState,
+        // A link restores what it carries; a bare address is a clean start
+        // with the default layers. Saved layer choices never come back on
+        // their own, so clearing the address always resets the view.
+        allowLocalState: false,
+        startLayerIds: this._initialShareState ? [] : this._startLayers,
       });
       if (this._initialShareSelectionSuperseded) {
         this._layerStateCoordinator.cancelPendingShareTracking(
@@ -439,9 +455,12 @@ export class ShareRestoration {
   }
 
   /**
-   * Select a shared vessel once the vessel feed has it. Vessels are selected,
-   * not followed: the camera is already at the shared view. If the vessel does
-   * not appear in time, the view stays where it was when the link was made.
+   * Select a shared vessel once the vessel feed has it, and follow it when
+   * the link was made following it (`followed`), from the shared offset; a
+   * vessel a link only selected (every link made before the format said
+   * so) is selected, the camera already at the shared view. If the vessel
+   * does not appear in time, the view stays where it was when the link was
+   * made.
    */
   async _restoreSharedVessel(view, current) {
     const generation = ++this._sharedVesselGeneration;
@@ -453,7 +472,15 @@ export class ShareRestoration {
     try {
       while (live()) {
         const vessels = this._dataManager?.layers?.get?.(layerId)?.module;
-        if (vessels?.hasContact?.(id) && vessels.selectById(id)) return true;
+        if (vessels?.hasContact?.(id)) {
+          if (
+            view.followed === true &&
+            typeof vessels.trackById === 'function' &&
+            this._followSharedVessel(vessels, view, layerId)
+          )
+            return true;
+          if (vessels.selectById(id)) return true;
+        }
         if (Date.now() >= deadline) break;
         await new Promise((resolve) =>
           this._lifetime.timeout(resolve, SHARED_VESSEL_POLL_MS),
@@ -473,6 +500,21 @@ export class ShareRestoration {
     return false;
   }
 
+  /** Follow a shared vessel and put the camera at the link's offset. */
+  _followSharedVessel(vessels, view, layerId) {
+    const { id } = view.entity;
+    if (!vessels.trackById(id)) return false;
+    const followed = followedOf(this.viewer);
+    if (
+      String(followed?.key || '').startsWith(`${layerId}:`) &&
+      view.lastKnown
+    ) {
+      this._stopFollowOffset?.();
+      this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
+    }
+    return true;
+  }
+
   /** The current share's thing view when `result` is about its entity. */
   _sharedThingFor(result) {
     const view = this._initialShareState?.shareView;
@@ -487,17 +529,16 @@ export class ShareRestoration {
   /** Frame a shared entity the camera now follows from the shared offset. */
   _applySharedFollowOffset(result) {
     const view = this._sharedThingFor(result);
-    const entity = this.viewer?.trackedEntity;
+    const followed = followedOf(this.viewer);
     // Only a link made while following carries a real offset (with the fix);
     // a long link's follow keeps the app's own framing.
     if (
       !view?.lastKnown ||
-      String(entity?.gevTrackedId || '') !==
-        `${result.layerId}:${result.targetId}`
+      String(followed?.key || '') !== `${result.layerId}:${result.targetId}`
     )
       return;
     this._stopFollowOffset?.();
-    this._stopFollowOffset = this.applyFollowOffset?.(entity, view.offset);
+    this._stopFollowOffset = this.applyFollowOffset?.(followed, view.offset);
   }
 
   cancelSelection() {
@@ -661,11 +702,11 @@ export class ShareRestoration {
       share: null,
       layers: [],
     });
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'pointerdown',
       this._initialShareGestureHandler,
     );
-    this.viewer?.canvas?.removeEventListener(
+    canvasOf(this.viewer)?.removeEventListener(
       'wheel',
       this._initialShareGestureHandler,
     );

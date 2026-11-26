@@ -1,7 +1,9 @@
+import { cameraOf, findFrame, frameOf } from '../../render/rendererOf.js';
 import {
   cableClassificationTypeForScene,
   cableClassificationTypeForStack,
 } from './surface.js';
+import { cableAnalystRecords } from './records.js';
 
 export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
   return {
@@ -14,15 +16,14 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
 
     init(viewer) {
       state._viewer = viewer;
-      state._classificationType = cableClassificationTypeForScene(
-        viewer?.scene,
-      );
+      state._clampTo = cableClassificationTypeForScene(viewer);
+      parts.rendering.attach(viewer);
       if (!state._mapStackListener && mapStackEventTarget?.addEventListener) {
         state._mapStackListener = (event) => {
           parts.rendering.applyCableClassification(
             event?.detail?.activeId
               ? cableClassificationTypeForStack(event.detail.activeId)
-              : cableClassificationTypeForScene(state._viewer?.scene),
+              : cableClassificationTypeForScene(state._viewer),
           );
         };
         mapStackEventTarget.addEventListener(
@@ -31,28 +32,32 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         );
       }
       parts.interaction.beginInteraction(viewer);
+      // The eye the sweep gate's motion probe reads, only when it probes.
+      const eye = {
+        get positionWC() {
+          return cameraOf(viewer).pose()?.position ?? null;
+        },
+      };
       if (!state._preRenderRemover) {
-        state._preRenderRemover = viewer.scene.preRender.addEventListener(
-          () => {
-            // The camera is handed to the gate so tracked/orbit cameras — which
-            // never emit moveEnd — reach the motion fallback. No render is
-            // requested for a fallback sweep: it only fires while the camera is
-            // already moving, so frames are flowing by construction.
-            if (
-              !state._enabled ||
-              !state._loaded ||
-              !state._referenceSweepGate.shouldRun(viewer.camera)
-            )
-              return;
-            parts.rendering.updateReferenceVisibility();
-          },
-        );
+        state._preRenderRemover = frameOf(viewer).on('preRender', () => {
+          // The camera is handed to the gate so tracked/orbit cameras — which
+          // never emit moveEnd — reach the motion fallback. No render is
+          // requested for a fallback sweep: it only fires while the camera is
+          // already moving, so frames are flowing by construction.
+          if (
+            !state._enabled ||
+            !state._loaded ||
+            !state._referenceSweepGate.shouldRun(eye)
+          )
+            return;
+          parts.rendering.updateReferenceVisibility();
+        });
       }
       if (!state._moveEndRemover) {
-        state._moveEndRemover = viewer.camera.moveEnd.addEventListener(() => {
+        state._moveEndRemover = cameraOf(viewer).on('moveEnd', () => {
           if (!state._enabled) return;
           state._referenceSweepGate.markDirty();
-          viewer.scene.requestRender?.();
+          findFrame(viewer)?.requestRender('submarine-cables');
         });
       }
     },
@@ -67,7 +72,7 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._referenceSweepGate.markDirty();
       // The gate is dirty-only; ask for the frame its sweep needs in case the
       // camera is parked and nothing else is rendering.
-      (viewer || state._viewer)?.scene?.requestRender?.();
+      findFrame(viewer || state._viewer)?.requestRender('submarine-cables');
       void parts.ingestion.load(viewer || state._viewer);
     },
 
@@ -80,19 +85,21 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
         state._loading = false;
         state._loadingLabel = '';
       }
-      // Free the entities rather than hide them; enable() rebuilds from the
+      // Free the items rather than hide them; enable() rebuilds from the
       // cached JSON. An in-flight load's own post-await ownership check
-      // removes whatever that stale generation adds later.
-      parts.rendering.releaseDataSources(state._viewer);
+      // keeps that stale generation from drawing anything later.
+      parts.rendering.releaseDrawing();
+      parts.rendering.updateVisibility();
     },
 
     update(viewer) {
       return parts.ingestion.load(viewer || state._viewer);
     },
 
-    destroy(viewer) {
+    destroy() {
       if (state._abort) state._abort.abort();
-      parts.rendering.releaseDataSources(viewer || state._viewer);
+      parts.rendering.releaseDrawing({ clearSets: false });
+      parts.rendering.detach();
       state._cachedCableJson = null;
       state._cachedLandingJson = null;
       // hide() clears every published host entry and goes invisible while
@@ -101,10 +108,8 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       // Pinned by the direct-destroy host test: removing this line leaves a
       // visible overlay source with orphan labels.
       state._overlayPublisher.hide();
-      if (state._clickHandler) {
-        state._clickHandler.destroy();
-        state._clickHandler = null;
-      }
+      state._clickSubscription?.();
+      state._clickSubscription = null;
       if (state._preRenderRemover) {
         state._preRenderRemover();
         state._preRenderRemover = null;
@@ -128,18 +133,17 @@ export function createLifecycle({ state, parts, source, mapStackEventTarget }) {
       state._error = null;
       state._lastUpdate = null;
       state._loadingLabel = '';
-      state._cableDataSource = null;
-      state._landingDataSource = null;
-      state._referenceDataSource = null;
       state._referenceRecords = [];
-      state._surfaceRecords = [];
-      state._pickByEntity = new WeakMap();
+      state._surfaceItems = [];
       state._referenceLabelCount = 0;
       state._publishScratch.length = 0;
-      state._markerBlendDone = false;
-      state._markerBlendInvariantWarned = false;
       parts.rendering.resetPublishSignature();
       state._referenceSweepGate.reset();
+    },
+
+    /** The cables and landing points drawn, as plain records (records.js). */
+    getAnalystRecords(maxCount = Infinity) {
+      return cableAnalystRecords(state, maxCount);
     },
 
     getStats() {

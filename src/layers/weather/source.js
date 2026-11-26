@@ -121,6 +121,10 @@ export function weatherTileUrl(product, time, { size } = {}) {
  * degrees) a detail window of it. `getFrameTile` returns one `size`-pixel tile
  * of the geographic tiling scheme, or null for a transparent tile. Rows run
  * top-down (north first), as an image does. Both honour `signal`.
+ * `frameMaximumLevel` names the deepest level of that scheme the feed's tiles
+ * of a product hold detail at (0–12), or null for the layer's own: with it,
+ * global clouds are drawn from the feed's tiles to that level instead of from
+ * one 2048 × 1024 image.
  * @typedef {object} WeatherFrameFeed
  * @property {(request: { product: string, time: string,
  *   size: { width: number, height: number },
@@ -129,19 +133,25 @@ export function weatherTileUrl(product, time, { size } = {}) {
  * @property {(request: { product: string, time: string, z: number, x: number,
  *   y: number, size: number, signal: AbortSignal })
  *   => Promise<WeatherPixels | null>} [getFrameTile]
+ * @property {(product: string) => number | null} [frameMaximumLevel]
  */
 
 /**
  * The frame source a feed provides, or null when it has neither method. A
  * missing method is left undefined, so that path keeps the routes.
  * @param {WeatherFrameFeed | undefined} feed
- * @returns {{ getImage?: Function, getTile?: Function } | null}
+ * @returns {{ getImage?: Function, getTile?: Function,
+ *   maximumLevel?: Function } | null}
  */
 export function weatherFrameSource(feed) {
   const image = typeof feed?.getFrameImage === 'function';
   const tile = typeof feed?.getFrameTile === 'function';
   if (!image && !tile) return null;
+  const level = typeof feed?.frameMaximumLevel === 'function';
   return {
+    maximumLevel: level
+      ? (product) => feed.frameMaximumLevel(product)
+      : undefined,
     getImage: image
       ? ({ product, time, size, bbox = null, signal }) =>
           feed.getFrameImage({ product, time, size, bbox, signal })

@@ -16,6 +16,8 @@ import {
 import { FIRE_ANCHOR_LIFT_M } from './fireAnchors.js';
 import { getLocale, setLocale } from '../i18n/index.js';
 import { reportMeshFloorCell, setMeshFloorPreferred } from './groundFloor.js';
+import { fakeInput } from '../input/testDoubles.mjs';
+import { bindFakeCesiumScene } from '../testSupport/fakeCesiumScene.mjs';
 
 const NOW = Date.UTC(2026, 6, 17, 4, 0);
 const H = 3600000;
@@ -232,6 +234,8 @@ test('real FIRMS lifecycle clears host entries on disable and destroy', async ()
       primitives: { contains() { return false; } },
     },
   };
+  bindFakeCesiumScene(viewer);
+  fakeInput(viewer);
   const layer = createFirmsHeatmapLayer({
     id: 'firms',
     name: 'FIRMS',
@@ -240,7 +244,6 @@ test('real FIRMS lifecycle clears host entries on disable and destroy', async ()
       setVisible: (...args) => calls.push(['visible', ...args]),
       clearSource: (...args) => calls.push(['clear', ...args]),
     },
-    screenSpaceEventHandlerFactory: () => ({ setInputAction() {}, destroy() {} }),
   });
   try {
     layer.init(viewer);

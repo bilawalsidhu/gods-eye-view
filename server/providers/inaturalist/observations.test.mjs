@@ -89,6 +89,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     assert.equal(result.status, 200);
     assert.equal(result.headers['Cache-Control'], 'no-store');
     assert.equal(result.body.rows[0].stableId, 'inat:1');
+    assert.equal(result.body.rows[0].cetacean, false);
     assert.equal(result.body.fetchedAt, NOW);
     assert.equal(result.body.scope, 'view');
     assert.deepEqual(result.body.box, {
@@ -104,6 +105,7 @@ for (const hook of ['configureServer', 'configurePreviewServer']) {
     );
     // Only the projected fields are requested, never user or identification data.
     assert.match(query.get('fields'), /^\(id:!t,uri:!t,.*photos:\(url:!t/);
+    assert.match(query.get('fields'), /taxon:\(id:!t,ancestor_ids:!t,/);
     assert.doesNotMatch(query.get('fields'), /user|identifications/);
     assert.equal(query.get('swlat'), '47.5');
     assert.equal(query.get('swlng'), '-122.5');

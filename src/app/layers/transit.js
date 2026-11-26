@@ -23,13 +23,15 @@ import {
  * `displayParams` reads the Flights layer's DISPLAY-rail 3D preference, under
  * which nearby vehicles are drawn as fleet models.
  *
- * @param {{surface: object, source?: object,
+ * `placement` is a host-supplied placement for its live vehicles, or null.
+ * @param {{surface: object, source?: object, placement?: object|null,
  *   displayParams?: () => object|null, resolveAsset?: (url: string) => string}} options
  * @returns {object}
  */
 export function createApplicationTransit({
   surface,
   source,
+  placement = null,
   displayParams = null,
   resolveAsset,
 }) {
@@ -43,6 +45,7 @@ export function createApplicationTransit({
       sprites,
       picking,
       overlays,
+      placement,
       credits: { registerDynamicCredit, transitFeedCredit },
       ground: {
         GROUND_FLOOR_LIFT_M: groundFloor.GROUND_FLOOR_LIFT_M,

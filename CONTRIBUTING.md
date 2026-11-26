@@ -75,8 +75,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
-`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
+same arguments. Some have an `npm run` alias, such as `qa:street-level`,
+`qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -139,6 +139,7 @@ The highest-leverage places to jump in:
 
 - **Vue 3 + Pinia for the interface,** [CesiumJS](https://cesium.com/platform/cesiumjs/) for the globe and [Vite](https://vitejs.dev/) to build. See [Building UI](#building-ui).
 - **Assembly lives in `src/app/`; standalone defaults live in `src/standalone/`.** UI controllers live in `src/ui/`, layer factories in `src/layers/`, portable sources in `src/sources/`, and application operations in `src/services/`. Existing `src/data/<layer>.js` entries retain compatibility; new code belongs with its focused owner.
+- **Reach the renderer through its contract** ([docs/RENDERER-CONTRACT.md](docs/RENDERER-CONTRACT.md#moving-code-onto-the-contract)): `findDraw`, `findCamera` and the other ports in `src/render/rendererOf.js`, not Cesium or the viewer's `scene`, `camera` or `entities`. Two ratchet tests hold this: only files on `src/render/cesiumAllowList.json` may import Cesium, and `src/render/viewerAccessAllowList.json` caps the viewer accesses each other file still makes. Neither list may grow; when you port code off them, shrink them (`node scripts/viewer-access-baseline.mjs` lowers the second).
 - Sources acquire records; renderers own Cesium resources. Import `gods-eye-view/layers/<family>/source` when only a source factory is needed. Common voice controls consume the session interface; protocol adapters own connection details.
 - **Secrets stay server-side.** Anything needing a private key goes through a local proxy under `server/providers/`. The browser only ever sees the Google Maps key (which you restrict) and ephemeral tokens.
 - `docs/CURRENT-STATE.md` is the authoritative runtime reference — read it first.
@@ -174,9 +175,9 @@ are existing ones when a change converts them:
   `npm run check:boundaries` enforces this.
 - **Reuse the kit first.** `src/ui/kit/` has one component per control:
   `UiButton` (including pressed toggles and pressable chips), `UiSelect`,
-  `UiSlider`, `UiSegmented`, `UiChip` (a label, not a control), `UiBadge`,
-  `UiEmpty`, `UiIcon`, `UiTooltip`, `UiPanel` and `UiRail`. Use these before
-  writing a control. When the kit lacks something, extend a kit component or
+  `UiSlider`, `UiSegmented`, `UiSwitch` (an on/off switch), `UiChip` (a
+  label, not a control), `UiBadge`, `UiEmpty`, `UiIcon`, `UiTooltip`,
+  `UiPanel` and `UiRail`. Use these before writing a control. When the kit lacks something, extend a kit component or
   add one that follows the kit's names, props, events and class names (see
   [Component kit](docs/VUE-MIGRATION.md#component-kit)), rather than
   building a one-off.
@@ -220,7 +221,8 @@ and package boundaries on Linux and Windows.
 Reusable package exports own their state and receive application operations
 through explicit callbacks. They must not import the standalone bootstrap or
 local Node services. Update `scripts/package-boundaries.json` and consumer tests
-when adding an export or expanding a component. See
+when adding an export or expanding a component; the fork-only
+`scripts/package-boundaries.local.json` is not used in this repository. See
 [formatting and component boundaries](docs/CODE-BOUNDARIES.md) for the current
 ownership and adoption process.
 

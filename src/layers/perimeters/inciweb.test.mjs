@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findInciwebLink,
+  findInciwebLinks,
   resolveInciwebNodeLink,
   createInciwebIndexSource,
   createInciwebPublicationSource,
@@ -142,6 +143,34 @@ test('ambiguous titles disambiguate by state, then newest id', () => {
   );
 });
 
+test('same-name pages list newest first, falling back to the complex', () => {
+  const rows = [
+    {
+      incident_id: '100',
+      tau: 'ORXXX Coyote Fire',
+      incident_title: 'Coyote Fire',
+    },
+    {
+      incident_id: '328922',
+      tau: 'OR95S Coyote Fire',
+      incident_title: 'Coyote Fire',
+    },
+    { incident_id: '5', tau: 'ORXXX', incident_title: 'Big Complex' },
+  ];
+  const incident = {
+    name: 'Coyote',
+    state: 'US-OR',
+    complexName: 'Big Complex',
+  };
+  assert.deepEqual(findInciwebLinks(rows, incident), [
+    'https://inciweb.wildfire.gov/node/328922',
+    'https://inciweb.wildfire.gov/node/100',
+  ]);
+  assert.deepEqual(findInciwebLinks(rows, { ...incident, name: 'Nope' }), [
+    'https://inciweb.wildfire.gov/node/5',
+  ]);
+});
+
 test('a complex member falls back to its complex page', () => {
   assert.equal(
     findInciwebLink(catalog, {
@@ -210,6 +239,14 @@ test('publication currency accepts pages created around or after discovery', () 
   assert.equal(
     isCurrentPublication(
       { createdMs: now - 900 * day, changedMs: now - 400 * day },
+      { discoveredTime: null, nowMs: now },
+    ),
+    false,
+  );
+  // An edit after the moment shown says nothing about the page then.
+  assert.equal(
+    isCurrentPublication(
+      { createdMs: now - 900 * day, changedMs: now + 10 * day },
       { discoveredTime: null, nowMs: now },
     ),
     false,

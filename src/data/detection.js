@@ -1,5 +1,4 @@
 import { paintTransitBracket } from './detectionDraw.js';
-import * as Cesium from 'cesium';
 import { governorRequestRender } from '../renderGovernor.js';
 import {
   DETECTION_ENABLE_FADE_MS,
@@ -52,7 +51,7 @@ import {
 import { detectionBracketOpacity } from './detectionPresentation.js';
 import { SurfaceOcclusion } from './detectionOcclusion.js';
 import { createDetectionPaintCache } from './detectionPaintCache.js';
-import { SceneOcclusionProbe } from './sceneOcclusionProbe.js';
+import { rendererOf } from '../render/rendererOf.js';
 import {
   createCyberSonarSampler,
   cyberSonarFrameDelay,
@@ -121,6 +120,17 @@ const BRACKET_ALPHA_STEPS = 4;
 const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
 const LAYER_CANDIDATE_CAP = 2600;
+/**
+ * Layers asked for every contact they draw, never a sample. Their feeds run to
+ * tens of thousands worldwide (vessels up to 50,000), and a layer samples its
+ * whole list before looking at what is in view, so under the cap only one
+ * contact in many on screen got a bracket, and rarely the selected one.
+ */
+const UNCAPPED_CANDIDATE_LAYERS = new Set([
+  'flights',
+  'military',
+  'ais-live-vessels',
+]);
 const LAYER_WEIGHTS = Object.freeze({
   military: 1.4,
   traffic: 1.15,
@@ -205,11 +215,9 @@ export function countFadingRenderEntries(renderEntries) {
   return count;
 }
 // ---------------------------------------------------------------------------
-// Module-level state — singleton lifecycle tied to the Cesium viewer
+// Module-level state — singleton lifecycle tied to the shared overlay host
 // ---------------------------------------------------------------------------
 
-/** @type {Cesium.Viewer|null} */
-let _viewer = null;
 /** @type {number} Current mode index into MODE_LABELS */
 let _mode = MODE_OFF;
 /** @type {HTMLCanvasElement|null} Shared host canvas used for QA diagnostics. */
@@ -281,13 +289,42 @@ let _lastNonOffMode = MODE_BALANCED;
 /** @type {LabelArbiter} Shared stable callout selector. */
 const _labelArbiter = new LabelArbiter();
 /**
+ * A probe that tests nothing: a renderer without an occlusion probe of its
+ * own draws every depth-tested contact's bracket and callout.
+ */
+const NO_OCCLUSION_PROBE = Object.freeze({
+  mode: 'off',
+  maxPerFrame: 0,
+  lastFrameMs: 0,
+  lastFrameTests: 0,
+  beginFrame() {},
+  add: () => false,
+  endFrame() {},
+  reset() {},
+  destroy() {},
+});
+/**
  * Hides the bracket and callout of a depth-tested contact (a street vehicle)
  * that the scene drew something in front of. `_occlusionProbe` asks the GPU
- * about each such contact without waiting for the answer; `_surfaceOcclusion`
- * remembers the answers and decides, every frame, who is drawn.
+ * about each such contact without waiting for the answer (the renderer's
+ * `query.occlusionTest()`, where it has the `occlusionTest` capability);
+ * `_surfaceOcclusion` remembers the answers and decides, every frame, who is
+ * drawn.
  */
-const _occlusionProbe = new SceneOcclusionProbe();
+let _occlusionProbe = NO_OCCLUSION_PROBE;
 const _surfaceOcclusion = new SurfaceOcclusion(_occlusionProbe);
+
+/** Use the occlusion probe of `viewer`'s renderer, or none. */
+function _useOcclusionProbe(viewer) {
+  _occlusionProbe.destroy();
+  const renderer = rendererOf(viewer);
+  _occlusionProbe =
+    (renderer?.capabilities?.has('occlusionTest') &&
+      renderer.query.occlusionTest?.()) ||
+    NO_OCCLUSION_PROBE;
+  _surfaceOcclusion.clear();
+  _surfaceOcclusion.probe = _occlusionProbe;
+}
 /**
  * Keys of callouts the label arbiter still holds for contacts last seen
  * hidden. A key stays here until its contact is seen drawn again or the
@@ -321,7 +358,9 @@ let _cockpitModeListener = null;
 /**
  * Initializes detection inside the shared world-overlay host and stores
  * references to data layers. The host owns the canvas and render listener.
- * @param {Cesium.Viewer} viewer - The active Cesium viewer instance.
+ * @param {object} viewer - The host the renderer is bound to. The
+ *   world-overlay host hands each paint its camera; the renderer's occlusion
+ *   probe, where it has one, tests depth-tested contacts.
  * @param {Array} layers - Data layer modules that may implement getDetectableObjects().
  * @param {Function} onModeChange - Callback invoked with the new mode label string on mode changes.
  */
@@ -334,9 +373,9 @@ export function initDetection(viewer, layers, onModeChange) {
   }
   _hostLane?.unregister?.();
   _calloutLane?.unregister?.();
-  _viewer = viewer;
   _layers = layers;
   _onModeChange = onModeChange;
+  _useOcclusionProbe(viewer);
   _debugBanner = detectionDebugRequested(
     typeof window !== 'undefined' ? window.location?.search : '',
   );
@@ -392,7 +431,6 @@ export function destroyDetection() {
   _paintCache.clear();
   _paintReuseCount = 0;
   _calloutCount = 0;
-  _viewer = null;
   _layers = [];
   _onModeChange = null;
   _hostCanvas = null;
@@ -404,7 +442,7 @@ export function destroyDetection() {
   _labelArbiter.clear();
   _surfaceOcclusion.clear();
   _surfaceSuppressedKeys.clear();
-  _occlusionProbe.destroy();
+  _useOcclusionProbe(null);
   _lastLabelSolveAt = 0;
   _labelSolveDirty = true;
   _lastDiagnostics = null;
@@ -872,7 +910,7 @@ function _collectDetectableObjects() {
     const layer = _layers[i];
     if (typeof layer.getDetectableObjects !== 'function') continue;
     try {
-      const maxCount = ['flights', 'military'].includes(layer.id)
+      const maxCount = UNCAPPED_CANDIDATE_LAYERS.has(layer.id)
         ? Number.POSITIVE_INFINITY
         : LAYER_CANDIDATE_CAP;
       const items = layer.getDetectableObjects({
@@ -1208,6 +1246,15 @@ function _plateScaleForBackdrop(skyFactor) {
   return 1 + (SKY_PLATE_SCALE - 1) * skyFactor;
 }
 
+/**
+ * The eye's height above the ellipsoid (m) for this paint, from the host
+ * frame (the camera port's pose); undefined when the pose has none.
+ */
+function _eyeHeight(frame) {
+  const height = frame.cameraHeight;
+  return Number.isFinite(height) ? height : undefined;
+}
+
 /** Materialize one bounded rich-callout candidate for the existing arbiter. */
 function _materializeCandidate(
   obj,
@@ -1372,9 +1419,7 @@ function _drawOverlay(frame) {
       profile: MODE_LABELS[_mode],
       densityPct: _densityPct,
       allocationStrategy: _allocationStrategy,
-      viewScale: viewScaleForAltitude(
-        _viewer?.camera?.positionCartographic?.height,
-      ),
+      viewScale: viewScaleForAltitude(_eyeHeight(frame)),
       candidateCount: 0,
       observationCount: 0,
       visibleCount: 0,
@@ -1420,7 +1465,7 @@ function _drawOverlay(frame) {
   const camZ = camPos.z;
   // Answers to the occlusion tests started on earlier frames land here.
   _surfaceOcclusion.beginFrame(now);
-  _occlusionProbe.beginFrame(_viewer?.scene, _surfaceOcclusion.now);
+  _occlusionProbe.beginFrame(_surfaceOcclusion.now);
   const keyhole = frame.keyhole;
   // Read the OUTSIDE setting ONCE per paint, from the same module state the
   // host's own keyhole alpha comes from, so a bracket and its callout can never
@@ -1534,7 +1579,6 @@ function _drawOverlay(frame) {
     let halfW;
     let halfH;
     if (obj.type === 'AIR') {
-      // Cartesian3.distance, without its two argument checks per object.
       const dx = camX - px;
       const dy = camY - py;
       const dz = camZ - pz;
@@ -1726,7 +1770,7 @@ function _drawOverlay(frame) {
     _paintCache.forget();
   }
 
-  const altitude = _viewer?.camera?.positionCartographic?.height ?? 1e9;
+  const altitude = _eyeHeight(frame) ?? 1e9;
   const collectiveBudget = labelBudgetFor(altitude, _densityPct);
   const ambientBudget = Math.max(
     0,

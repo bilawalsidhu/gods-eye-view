@@ -11,7 +11,11 @@ import {
   _routeInflightCountForTest,
   _setRouteUpstreamIntervalForTest,
 } from '../../server/providers/places/routes.js';
-import { ROUTE_STEPS_MAX } from '../../src/data/routeSteps.js';
+import {
+  ROUTE_STEPS_MAX,
+  normalizeOsrmSteps,
+} from '../../src/data/routeSteps.js';
+import * as placePayloads from '../../src/data/placeProviderPayloads.js';
 import {
   projectNearbyPlaces,
   projectTextSearchPlaces,
@@ -47,6 +51,11 @@ function install(register) {
     return res;
   };
 }
+
+const ROUTES = [
+  ['/api/google/nearby-places', '?lat=30&lon=-97'],
+  ['/api/google/text-search', '?q=museum&lat=30&lon=-97'],
+];
 
 test('nearby labels rank landmarks, deduplicate names/addresses and bound the projection', () => {
   const place = (name, types, longitude = 0) => ({
@@ -172,16 +181,70 @@ for (const preview of [false, true]) {
       JSON.parse(calls[1].options.body).locationBias.circle.radius,
       50,
     );
-    assert.equal((await request(search, '?lat=30&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '?lat=bad&lon=-97')).statusCode, 400);
-    assert.equal((await request(nearby, '', 'POST')).statusCode, 405);
+    for (const [route, query, method, statusCode] of [
+      [search, '?lat=30&lon=-97', 'GET', 400],
+      [nearby, '?lat=bad&lon=-97', 'GET', 400],
+      [nearby, '', 'POST', 405],
+    ]) {
+      const refused = await request(route, query, method);
+      assert.equal(refused.statusCode, statusCode, `${method} ${route}`);
+      assert.equal(
+        refused.headers['cache-control'],
+        'no-store',
+        `${method} ${route}`,
+      );
+    }
     t.mock.method(globalThis, 'fetch', async () =>
       Response.json({ error: { message: 'Denied' } }, { status: 403 }),
     );
-    assert.deepEqual((await request(search, '?q=museum&lat=30&lon=-97')).body, {
-      places: [],
-      error: 'Denied',
-    });
+    for (const [route, query] of ROUTES) {
+      const refused = await request(route, query);
+      assert.equal(refused.statusCode, 403, route);
+      assert.equal(refused.headers['cache-control'], 'no-store', route);
+      assert.deepEqual(refused.body, { places: [], error: 'Denied' }, route);
+    }
+  });
+}
+
+for (const [name, upstream, statusCode, cacheControl] of [
+  [
+    'unreadable 200',
+    () => new Response('<html>not json</html>', { status: 200 }),
+    502,
+    'no-store',
+  ],
+  [
+    'unreadable 429',
+    () => new Response('<html>Too Many Requests</html>', { status: 429 }),
+    429,
+    'no-store',
+  ],
+  [
+    'transport failure',
+    () => {
+      throw new TypeError('fetch failed');
+    },
+    502,
+    'no-store',
+  ],
+  // Google returns {} for a successful search with no places.
+  ['empty answer ({})', () => Response.json({}), 200, 'private, max-age=300'],
+]) {
+  test(`a Places ${name} is a ${statusCode} with Cache-Control ${cacheControl}`, async () => {
+    const request = install((middlewares) =>
+      googlePlacesContextProxy({
+        resolveApiKey: () => 'fixture-server-key',
+        fetchImpl: async () => upstream(),
+      }).configureServer({ middlewares }),
+    );
+    for (const [route, query] of ROUTES) {
+      const res = await request(route, query);
+      assert.equal(res.statusCode, statusCode, route);
+      assert.equal(res.headers['cache-control'], cacheControl, route);
+      assert.deepEqual(res.body.places, [], route);
+      if (statusCode === 200) assert.equal(res.body.error, null, route);
+      else assert.ok(res.body.error, route);
+    }
   });
 }
 
@@ -463,6 +526,10 @@ test('identical concurrent route requests make one upstream call', async (t) => 
     0,
     'the in-flight entry is released',
   );
+});
+
+test('the place payloads entry serves the same route steps the dev proxy does', () => {
+  assert.equal(placePayloads.normalizeOsrmSteps, normalizeOsrmSteps);
 });
 
 test('a pathological maneuver count is bounded before it reaches the browser', async (t) => {

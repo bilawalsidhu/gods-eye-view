@@ -135,8 +135,8 @@ test('the chip counts what is missing and the rows render from the status', asyn
   );
   assert.equal(field.type, 'password');
   assert.equal(field.placeholder, 'paste GOOGLE_MAPS_API_KEY');
-  assert.equal(google.querySelector('.key-setup-remove'), null);
-  assert.equal(google.querySelector('.key-setup-cloud-auth'), null);
+  assert.equal(google.querySelector('.key-setup-remove') === null, true);
+  assert.equal(google.querySelector('.key-setup-cloud-auth') === null, true);
 
   const openai = $('[data-key-id="openai"]');
   assert.equal(openai.dataset.managed, 'file');
@@ -159,7 +159,7 @@ test('the chip counts what is missing and the rows render from the status', asyn
     firms.querySelector('.key-setup-external').textContent,
     'configured externally',
   );
-  assert.equal(firms.querySelector('.key-setup-fields'), null);
+  assert.equal(firms.querySelector('.key-setup-fields') === null, true);
 });
 
 test('the chip opens the dialog onto its first field; closing fades it and restores the status line', async (t) => {
@@ -329,20 +329,16 @@ test('while the OAuth check runs, the toggle is busy and repeat presses are igno
   localStorage.removeItem(CLOUD_VOICE_AUTH_STORAGE_KEY);
 });
 
-test('Cyber moves the chip into the top toolbar and other themes return it to the corner', async (t) => {
+test('the chip stays first in the corner row whatever the HUD layout', async (t) => {
   const { $, toolbar } = await fixture(t);
   const corner = $('#corner-actions');
   assert.equal(corner.firstElementChild?.id, 'key-setup-chip');
+  // The removed Cyber skin no longer moves it into the top toolbar.
   document.documentElement.dataset.uiTheme = 'cyber';
   await wait();
   await nextTick();
-  assert.equal(toolbar.lastElementChild?.id, 'key-setup-chip');
-  assert.equal(corner.querySelector('#key-setup-chip'), null);
-  document.documentElement.dataset.uiTheme = 'tactical';
-  await wait();
-  await nextTick();
   assert.equal(corner.firstElementChild?.id, 'key-setup-chip');
-  assert.equal(toolbar.querySelector('#key-setup-chip'), null);
+  assert.equal(toolbar.querySelector('#key-setup-chip') === null, true);
   delete document.documentElement.dataset.uiTheme;
 });
 

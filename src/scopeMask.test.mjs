@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   scopeMaskGeometry,
   scopeMaskDevicePixelRatio,
+  scopeMaskHardEdgeRatio,
   scopeTerminusAlpha,
   quantizeScopeTerminusAlpha,
   updateScopeTerminusForHeight,
@@ -19,6 +20,8 @@ import {
   SCOPE_TERMINUS_MAX_PCT,
   SCOPE_FEATHER_RATIO_DEFAULT,
   getScopeMaskFeather,
+  setScopeMaskOpacity,
+  getScopeMaskOpacity,
   SCOPE_OUTSIDE_ALPHA,
   SCOPE_TERMINUS_ALPHA_NEAR,
   SCOPE_TERMINUS_FAR_M,
@@ -27,6 +30,7 @@ import {
   _resetScopeMaskForTest,
 } from './scopeMask.js';
 import { KEYHOLE_OUTER_RADIUS } from './celestialRing.js';
+import { bindFakeCesiumScene } from './testSupport/fakeCesiumScene.mjs';
 import { SCOPE_FEATHER_RATIO_MAX, clampScopeFeatherPct } from './scopeMaskPolicy.js';
 
 beforeEach(() => _resetScopeMaskForTest());
@@ -113,12 +117,40 @@ test('backing-store scale is clamped to 2x and survives junk input', () => {
   assert.equal(scopeMaskDevicePixelRatio(Number.NaN), 1);
 });
 
+test('backing-store scale is CSS pixels on a touch-only device', () => {
+  const had = Object.hasOwn(globalThis, 'window');
+  const previous = globalThis.window;
+  globalThis.window = {
+    devicePixelRatio: 3,
+    matchMedia: (query) => ({ matches: query === '(pointer: coarse)' }),
+  };
+  try {
+    assert.equal(scopeMaskDevicePixelRatio(), 1);
+    // A hard edge keeps the display's ratio (up to 2) on a phone too.
+    assert.equal(scopeMaskHardEdgeRatio(), 2);
+    // A tablet with a trackpad, mouse or pencil: its primary pointer is still coarse.
+    globalThis.window.matchMedia = (query) => ({
+      matches: query === '(pointer: coarse)' || query === '(any-pointer: fine)',
+    });
+    assert.equal(scopeMaskDevicePixelRatio(), 2);
+    // A desktop zoomed out (a ratio under 1) keeps its own ratio, as before.
+    globalThis.window.devicePixelRatio = 0.75;
+    globalThis.window.matchMedia = (query) => ({
+      matches: query === '(any-pointer: fine)',
+    });
+    assert.equal(scopeMaskDevicePixelRatio(), 0.75);
+  } finally {
+    if (had) globalThis.window = previous;
+    else delete globalThis.window;
+  }
+});
+
 /**
  * Minimal DOM/matchMedia surface for the install path. Returns the created
  * canvas plus a `setDpr` that fires a real `(resolution: Ndppx)` change the
  * way moving a window between a 1x and a 2x monitor does.
  */
-function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
+function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1, touchOnly = false } = {}) {
   const saved = { window: globalThis.window, document: globalThis.document, ResizeObserver: globalThis.ResizeObserver };
   // Records every fillStyle assignment and gradient stop so the paint's actual
   // colours (not just its call sequence) can be asserted.
@@ -147,14 +179,30 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
     }),
   };
   const listeners = new Set();
+  // The pointer queries (`(pointer: coarse)`, `(any-pointer: fine)`) answer as
+  // the device's pointers do and hold their own listeners.
+  const pointer = { touchOnly };
+  const pointerListeners = new Set();
   globalThis.window = {
     devicePixelRatio: dpr,
-    matchMedia: (query) => ({
-      media: query,
-      matches: true,
-      addEventListener: (type, fn) => listeners.add(fn),
-      removeEventListener: (type, fn) => listeners.delete(fn),
-    }),
+    matchMedia: (query) => {
+      if (query === '(pointer: coarse)' || query === '(any-pointer: fine)') {
+        return {
+          media: query,
+          get matches() {
+            return query === '(pointer: coarse)' ? true : !pointer.touchOnly;
+          },
+          addEventListener: (type, fn) => pointerListeners.add(fn),
+          removeEventListener: (type, fn) => pointerListeners.delete(fn),
+        };
+      }
+      return {
+        media: query,
+        matches: true,
+        addEventListener: (type, fn) => listeners.add(fn),
+        removeEventListener: (type, fn) => listeners.delete(fn),
+      };
+    },
   };
   const documentElement = { dataset: {} };
   globalThis.document = { documentElement, createElement: () => canvas };
@@ -174,6 +222,12 @@ function stubScopeMaskDom({ width = 1000, height = 800, dpr = 1 } = {}) {
       globalThis.window.devicePixelRatio = next;
       for (const fn of [...listeners]) fn();
     },
+    /** Attach (false) or take away (true) the tablet's fine pointer. */
+    setTouchOnly(next) {
+      pointer.touchOnly = next;
+      for (const fn of [...pointerListeners]) fn();
+    },
+    pointerListenerCount: () => pointerListeners.size,
     restore() {
       globalThis.window = saved.window;
       globalThis.document = saved.document;
@@ -199,6 +253,37 @@ test('scope appearance follows direct state changes and install/destroy lifecycl
     setScopeMaskEnabled(false);
     _resetScopeMaskForTest();
     assert.equal(dom.documentElement.dataset.scopeMask, undefined, 'test reset clears the marker');
+  } finally {
+    destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('scope opacity fades the painted mask without repainting it', () => {
+  const dom = stubScopeMaskDom();
+  try {
+    assert.equal(getScopeMaskOpacity(), 1, 'full by default');
+    setScopeMaskOpacity(0.4);
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.4', 'a choice made before install applies');
+    const paints = { ...dom.ops };
+    const terminus = getScopeTerminusAlpha();
+    setScopeMaskOpacity(0.25);
+    assert.equal(dom.canvas.style.opacity, '0.25');
+    assert.deepEqual(dom.ops, paints, 'the mask is not repainted');
+    assert.equal(getScopeTerminusAlpha(), terminus, 'the terminus is its own setting');
+    setScopeMaskOpacity(3);
+    assert.equal(getScopeMaskOpacity(), 1);
+    setScopeMaskOpacity(-1);
+    assert.equal(getScopeMaskOpacity(), 0);
+    setScopeMaskOpacity('soft');
+    assert.equal(getScopeMaskOpacity(), 1, 'not a number is full');
+    setScopeMaskOpacity(0.5);
+    destroyScopeMask();
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.style.opacity, '0.5', 'reinstall keeps it');
+    _resetScopeMaskForTest();
+    assert.equal(getScopeMaskOpacity(), 1, 'test reset restores full');
   } finally {
     destroyScopeMask();
     dom.restore();
@@ -412,7 +497,10 @@ test('one quantum is the smallest step that can repaint', () => {
 // ~8 Hz through the altitude band and draw() performed the full backing-store
 // resize + clear BEFORE checking whether the scope was even enabled.
 
-/** A viewer stub with the two camera signals the terminus sampler listens on. */
+/**
+ * A viewer stub with the two camera signals the terminus sampler listens on,
+ * read through the renderer's frame and camera ports as the app's are.
+ */
 function stubScopeViewer(container, heightM) {
   const preRenderListeners = new Set();
   const moveEndListeners = new Set();
@@ -421,12 +509,14 @@ function stubScopeViewer(container, heightM) {
     set.add(listener);
     return () => set.delete(listener);
   };
+  const viewer = {
+    container,
+    scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
+    camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
+  };
+  bindFakeCesiumScene(viewer);
   return {
-    viewer: {
-      container,
-      scene: { preRender: { addEventListener: addTo(preRenderListeners) } },
-      camera: { positionCartographic, moveEnd: { addEventListener: addTo(moveEndListeners) } },
-    },
+    viewer,
     setHeight(next) { positionCartographic.height = next; },
     raisePreRender(times = 1) {
       for (let i = 0; i < times; i += 1) for (const fn of [...preRenderListeners]) fn();
@@ -536,6 +626,37 @@ test('a pinned override is floored to the band at every entry point', () => {
     assert.equal(getScopeTerminusOverride(), 1, 'and the ceiling still holds');
   } finally {
     destroyScopeMask();
+    dom.restore();
+  }
+});
+
+test('a phone draws a feathered mask at CSS pixels and a hard edge at 2x', () => {
+  const dom = stubScopeMaskDom({ width: 390, height: 844, dpr: 3, touchOnly: true });
+  try {
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.width, 390, 'the soft gradient at CSS pixels');
+    setScopeMaskFeather(0); // hard crop: a 1x circle would stair-step
+    assert.equal(dom.canvas.width, 780);
+    assert.equal(dom.canvas.height, 1688);
+  } finally {
+    _resetScopeMaskForTest();
+    dom.restore();
+  }
+});
+
+test('a fine pointer attached or taken away redraws the mask at the new ratio', () => {
+  const dom = stubScopeMaskDom({ width: 390, height: 844, dpr: 3, touchOnly: true });
+  try {
+    installScopeMask({ container: dom.container });
+    assert.equal(dom.canvas.width, 390);
+    dom.setTouchOnly(false); // a trackpad attached: no resize, the ratio changes
+    assert.equal(dom.canvas.width, 780);
+    dom.setTouchOnly(true);
+    assert.equal(dom.canvas.width, 390);
+    destroyScopeMask();
+    assert.equal(dom.pointerListenerCount(), 0, 'destroy stops watching');
+  } finally {
+    _resetScopeMaskForTest();
     dom.restore();
   }
 });

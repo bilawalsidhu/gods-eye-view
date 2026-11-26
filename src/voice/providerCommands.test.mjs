@@ -1,4 +1,5 @@
 // Imports intentionally target the candidate, never the immutable reference.
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -177,22 +178,20 @@ function compositionFixture(
   const canvas = new EventTarget();
   Object.assign(canvas, { clientWidth: 800, clientHeight: 600 });
   const position = { x: 6379137, y: 0, z: 0 };
-  const viewer = {
+  const viewer = bindFakeCesiumCamera({
     clock: { onTick: { addEventListener: () => () => {} } },
     camera: {
       positionWC: position,
       positionCartographic: { height: state.height },
       moveEnd: { addEventListener() {} },
       cancelFlight() {},
-      zoomIn(metres) {
-        position.x -= metres;
-        state.height -= metres;
-        this.positionCartographic.height = state.height;
-        state.zooms++;
-      },
-      zoomOut(metres) {
-        position.x += metres;
-        state.height += metres;
+      // Looking straight down at the surface along -x.
+      directionWC: { x: -1, y: 0, z: 0 },
+      upWC: { x: 0, y: 0, z: 1 },
+      rightWC: { x: 0, y: 1, z: 0 },
+      setView({ destination }) {
+        state.height -= position.x - destination.x;
+        position.x = destination.x;
         this.positionCartographic.height = state.height;
         state.zooms++;
       },
@@ -203,7 +202,7 @@ function compositionFixture(
         state.renders++;
       },
     },
-  };
+  });
   const dataManager = { layers: new Map() };
   pointer = createPointerTracker({ element: null, now: () => 1000 });
   const referents = createReferentRegistry();
