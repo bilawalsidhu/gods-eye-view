@@ -3880,7 +3880,10 @@ each side's panels from the DOM; `PanelChrome` remains the disclosure owner.
 
 ## Phone layout
 
-At 720px and narrower, `src/ui/mobileShell.js` keeps the globe full screen and
+At 720px and narrower, and in short landscape up to 1023px wide and 520px
+high (`MOBILE_SHELL_MEDIA_QUERY` in `src/ui/panelRailGeometry.js`, the one
+gate the shell, both panel rails and the voice panels read),
+`src/ui/mobileShell.js` keeps the globe full screen and
 shows a bottom tab bar: Layers (Data Layers, with Authoring collapsed below),
 Cameras (CCTV and Street Level), Context (Global Context, plus Weather and
 Recent Imagery when shown) and More (Visual, with its presets and Map Source). A tab opens one bottom sheet; the same tab, the backdrop
@@ -3900,6 +3903,22 @@ is at least 44×44 px and the field's text is 16px, so focusing it does not
 zoom the page. While the on-screen keyboard is up, the shell writes its
 height to `--mobile-keyboard-inset` (from `visualViewport`) and the dock rises
 above it. An open sheet hides the dock.
+
+A phone held sideways (the gate's short arm, in landscape orientation) gets
+the same tabs and dock, sized for the height: the tab bar is 48px, sheets cap
+their height so some globe stays above them, and Data Layers keeps its full
+height in its sheet, which scrolls (shrunk to the room left by the collapsed
+panels under it, its list ran on beneath them). The dock keeps a desktop-like
+width, at most 560px, on the centre line, and Voice Settings opens at the
+dock's width above it; the corner buttons and the Stories entry step aside
+while a sheet is open, since the sheet rises to their height. The tab bar,
+sheets, dock, top bar, HUD readout, credits and view switcher take the left
+and right safe-area insets, so nothing sits under the notch on either side
+(start and end follow the reading direction). A short portrait viewport such
+as 390×500 keeps the portrait sizing. `node scripts/qa-phone-landscape.mjs`
+checks the gate's boundaries, the tab bar, every sheet, the dock and Voice
+Settings at phone, landscape, tablet and desktop sizes against a running
+preview, with simulated notches.
 
 The phone logo is 58px wide (about 39px high), aligned with the top controls.
 The shared contact picker preserves exact picks. For a coarse primary pointer
