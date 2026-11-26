@@ -28,11 +28,15 @@ export { START_VIEW };
  * to the Cockpit (src/cockpitSubjectProviders.js).
  * `entityLookup`, optional, finds aircraft, ships, cameras and satellites
  * anywhere for the search box, beside those already loaded:
- * `entityLookup({text, signal})` resolves with `[{kind: 'aircraft' |
+ * `entityLookup({text, at, signal})` resolves with `[{kind: 'aircraft' |
  * 'vessel' | 'camera' | 'satellite', id, name, detail?, lat, lon, layerId?,
- * mmsi?}]`, `id` being the id the item's layer holds it under (see
- * docs/CODE-BOUNDARIES.md, "Entity lookup provider"). Without it the search
- * box finds only what is already loaded.
+ * mmsi?, placed?}]`, `id` being the id the item's layer holds it under (see
+ * docs/CODE-BOUNDARIES.md, "Entity lookup provider"). `at` is the world
+ * time in epoch ms while the timeline is held away from live (absent while
+ * live): positions are then wanted as of that time. `placed: false` marks
+ * one its layer will not draw at that time (no position then), its `lat`
+ * and `lon` where it was last seen, if known, and its `detail` saying so.
+ * Without it the search box finds only what is already loaded.
  */
 export function createApplicationControls({
   scene: { viewer, mapStackController, operations, viewerDrawsEntity },

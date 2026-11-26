@@ -17,6 +17,7 @@ import { useGlobeActionsStore } from '../../stores/globeActions.js';
 import { useLocationStore } from '../../stores/location.js';
 import { useOmnibarStore } from '../../stores/omnibar.js';
 import { useVoiceStore } from '../../stores/voice.js';
+import { worldClock } from '../../../time/worldClock.js';
 import UiButton from '../../kit/UiButton.vue';
 import UiIcon from '../../kit/UiIcon.vue';
 import { vRootClass } from '../../rail/rootClass.js';
@@ -204,7 +205,9 @@ watch(query, (value) => {
     const controller = new AbortController();
     foundAbort = controller;
     try {
-      const answer = await controls.value.lookupEntities({ text, signal: controller.signal });
+      // A clock held in the past asks for things as they were then.
+      const at = worldClock.isLive() ? undefined : Math.round(worldClock.now());
+      const answer = await controls.value.lookupEntities({ text, at, signal: controller.signal });
       if (controller.signal.aborted) return;
       found.value = lookupMatches(answer);
       foundFor.value = text;
@@ -931,6 +934,11 @@ async function choose(item, { viaKey = false } = {}) {
       if (!controls.value?.findLookedUp) throw new Error();
       const found = await controls.value.findLookedUp(item.match, { signal });
       if (current !== generation || signal.aborted || found?.reason === 'cancelled') return;
+      // Nothing to pick at this time: the host's line says why, under the field.
+      if (found?.reason === 'unplaced' && item.match.detail) {
+        error.value = `${item.match.name || item.match.id} · ${item.match.detail}`;
+        return;
+      }
       if (!found?.ok) throw new Error();
       if (!entityCard.select(found.identity, { fly: !found.picked }) && !found.picked) throw new Error();
     }

@@ -252,3 +252,56 @@ test('a layer the app does not have, or that stays off, finds nothing', async ()
     'layer-off',
   );
 });
+
+test('one with no position at the time asked is kept, with or without where it was last seen', () => {
+  const matches = lookupMatches([
+    {
+      kind: 'vessel',
+      id: 'uuid-qm2',
+      name: 'QUEEN MARY 2',
+      detail: 'Last seen 24 Nov, 01:10',
+      lat: 21.4,
+      lon: -64.7,
+      placed: false,
+    },
+    {
+      kind: 'aircraft',
+      id: '3c4b23',
+      name: 'DLH572',
+      detail: 'No position at 14:00',
+      placed: false,
+    },
+    // A placed one still needs a position.
+    { kind: 'aircraft', id: 'abcdef', name: 'NOWHERE' },
+  ]);
+  assert.deepEqual(
+    matches.map(({ id, lat, lon, placed }) => [id, lat, lon, placed]),
+    [
+      ['uuid-qm2', 21.4, -64.7, false],
+      ['3c4b23', null, null, false],
+    ],
+  );
+});
+
+test('one with no position at the time asked is not waited for: the camera goes where it was last seen', async () => {
+  const { state, dataManager, setLayer } = layers();
+  const centred = [];
+  const found = await findMatch({
+    match: { ...ship, placed: false },
+    dataManager,
+    setLayer,
+    centre: (...at) => centred.push(at),
+  });
+  assert.deepEqual(found, { ok: false, reason: 'unplaced' });
+  assert.deepEqual(centred, [[30, 32]]);
+  assert.deepEqual(state.switched, []);
+  assert.deepEqual(state.picks, []);
+  const nowhere = [];
+  await findMatch({
+    match: { ...ship, lat: null, lon: null, placed: false },
+    dataManager,
+    setLayer,
+    centre: (...at) => nowhere.push(at),
+  });
+  assert.deepEqual(nowhere, []);
+});

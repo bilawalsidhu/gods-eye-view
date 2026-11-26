@@ -26,9 +26,11 @@ const text = (value) => String(value ?? '').trim() || null;
  * satellites with an id and a valid position, once each by layer and id, at
  * most MAX_LOOKUP_MATCHES, in the order given. `layerId` is the answer's,
  * else its kind's layer. A ship's MMSI is its `mmsi`, else an id of nine
- * digits.
+ * digits. One the host marks `placed: false` (its layer will not draw it at
+ * the time asked: no position then) is kept with or without a position,
+ * which is then where it was last seen; its `detail` says why.
  * @param {unknown} answer What `entityLookup` resolved with.
- * @returns {Array<{kind: string, id: string, name: ?string, detail: ?string, lat: number, lon: number, layerId: string, mmsi: ?string}>}
+ * @returns {Array<{kind: string, id: string, name: ?string, detail: ?string, lat: ?number, lon: ?number, layerId: string, mmsi: ?string, placed: boolean}>}
  */
 export function lookupMatches(answer) {
   if (!Array.isArray(answer)) return [];
@@ -39,30 +41,29 @@ export function lookupMatches(answer) {
     if (!Object.hasOwn(LOOKUP_LAYERS, kind)) continue;
     const id = text(item.id);
     const layerId = text(item.layerId) || LOOKUP_LAYERS[kind];
-    const lat = Number(item.lat);
-    const lon = Number(item.lon);
-    if (
-      !id ||
-      seen.has(`${layerId}:${id}`) ||
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lon) ||
-      Math.abs(lat) > 90 ||
-      Math.abs(lon) > 180
-    )
-      continue;
+    const placed = item.placed !== false;
+    const lat = item.lat == null ? NaN : Number(item.lat);
+    const lon = item.lon == null ? NaN : Number(item.lon);
+    const located =
+      Number.isFinite(lat) &&
+      Number.isFinite(lon) &&
+      Math.abs(lat) <= 90 &&
+      Math.abs(lon) <= 180;
+    if (!id || seen.has(`${layerId}:${id}`) || (placed && !located)) continue;
     seen.add(`${layerId}:${id}`);
     matches.push({
       kind,
       id,
       name: text(item.name),
       detail: text(item.detail),
-      lat,
-      lon,
+      lat: located ? lat : null,
+      lon: located ? lon : null,
       layerId,
       mmsi:
         kind === 'vessel'
           ? text(item.mmsi) || (/^\d{9}$/.test(id) ? id : null)
           : null,
+      placed,
     });
     if (matches.length === MAX_LOOKUP_MATCHES) break;
   }
@@ -144,14 +145,17 @@ export function waitForLoaded(
 }
 
 /**
- * Find a match in its layer. Its layer is switched on if it is off
+ * Find a match in its layer. One the host marks `placed: false` is not
+ * looked for: the camera is centred where it was last seen, if the host
+ * gave a position, and the answer is `{ok: false, reason: 'unplaced'}`.
+ * Otherwise its layer is switched on if it is off
  * (`setLayer`, as a click would). One the layer holds is answered at once
  * with `picked: false`, for the caller to pick as a Context row picks it;
  * one it does not hold yet is centred on once (`centre`, at the position the
  * lookup gave), then picked with the layer's `pickById` (`center: false`)
  * when its next load has it, and answered with `picked: true`.
  * @param {object} options
- * @param {{kind: string, id: string, name: ?string, lat: number, lon: number, layerId: string, mmsi?: ?string}} options.match
+ * @param {{kind: string, id: string, name: ?string, detail?: ?string, lat: ?number, lon: ?number, layerId: string, mmsi?: ?string, placed?: boolean}} options.match
  * @param {object} options.dataManager The layers.
  * @param {(id: string, enabled: boolean) => Promise<boolean>|boolean} options.setLayer
  * @param {(lat: number, lon: number) => unknown} options.centre
@@ -171,6 +175,13 @@ export async function findMatch({
   if (!dataManager?.layers?.has?.(layerId))
     return { ok: false, reason: 'no-layer' };
   if (signal?.aborted) return { ok: false, reason: 'cancelled' };
+  // One its layer will not draw at this time is not waited for: the camera
+  // goes where it was last seen, if anywhere, and the search box says why.
+  if (match.placed === false) {
+    if (Number.isFinite(match.lat) && Number.isFinite(match.lon))
+      centre(match.lat, match.lon);
+    return { ok: false, reason: 'unplaced' };
+  }
   if (!dataManager.isEnabled?.(layerId)) {
     const switched = await setLayer(layerId, true);
     if (signal?.aborted) return { ok: false, reason: 'cancelled' };
