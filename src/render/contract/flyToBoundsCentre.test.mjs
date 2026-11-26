@@ -7,12 +7,15 @@
  * for callers no test reaches.
  *
  * A centre is geodetic when the sphere given to `flyToBounds` has a
- * `center` that is an object literal with its own `lon` or `lat` key,
- * directly or through the plain local its name binds where it is written;
- * the sphere itself may be such a local too. The nearest binding wins, so a
- * parameter shadows an outer local. A spread (`{ ...fromDegrees(lon, lat) }`),
- * a call, a parameter or anything else is taken as ECEF, and comments are
- * not code.
+ * `center` that is an object literal with a `lon` or `lat` key, directly
+ * or through the plain local its name binds where it is written; the sphere
+ * itself may be such a local too. Keys are read in order, as JavaScript
+ * keeps them: the last one written wins, and a spread of a literal the scan
+ * can read stands for that literal's keys. The nearest binding wins, so a
+ * parameter shadows an outer local, and a `let` or `var` written to again
+ * holds what was last written, which is not followed. A spread, call,
+ * parameter or anything else the scan cannot read is taken as ECEF (so
+ * `{ ...fromDegrees(lon, lat) }` is), and comments are not code.
  */
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -56,17 +59,6 @@ function keyOf(property) {
   if (!property.computed) return key?.name ?? key?.value ?? null;
   return key?.type === 'StringLiteral' ? key.value : null;
 }
-
-/**
- * The object literal's own property `name`, not one from a spread: the
- * last one written, which is the one JavaScript keeps.
- */
-const ownProperty = (object, name) =>
-  object.properties.findLast(
-    (property) =>
-      (property.type === 'ObjectProperty' || property.type === 'Property') &&
-      keyOf(property) === name,
-  );
 
 /** The names a binding pattern declares. */
 function namesOf(pattern) {
@@ -180,9 +172,12 @@ function bindingOf(name, at, parents) {
   return null;
 }
 
-/** The names a file writes to after declaring them (`x = …`, `x++`). */
-function writtenNames(parents) {
-  const names = new Set();
+/**
+ * The declarators a file writes to again (`x = …`, `x++`), each write
+ * resolved to the binding it reaches where it is written.
+ */
+function writtenBindings(parents) {
+  const written = new Set();
   for (const node of parents.keys()) {
     const target =
       node.type === 'AssignmentExpression'
@@ -190,9 +185,12 @@ function writtenNames(parents) {
         : node.type === 'UpdateExpression'
           ? node.argument
           : null;
-    for (const name of namesOf(target)) names.add(name);
+    for (const name of namesOf(target)) {
+      const binding = bindingOf(name, node, parents);
+      if (binding && binding !== OPAQUE) written.add(binding);
+    }
   }
-  return names;
+  return written;
 }
 
 /**
@@ -221,7 +219,7 @@ function literalsOf(node, at, ctx, seen = new Set()) {
       if (!declarator || declarator === OPAQUE || seen.has(declarator))
         return [];
       const declaration = ctx.parents.get(declarator);
-      if (declaration?.kind !== 'const' && ctx.written.has(node.name))
+      if (declaration?.kind !== 'const' && ctx.written.has(declarator))
         return [];
       seen.add(declarator);
       return literalsOf(declarator.init, declarator, ctx, seen);
@@ -230,6 +228,44 @@ function literalsOf(node, at, ctx, seen = new Set()) {
       return [];
   }
 }
+
+/** A value the scan cannot read: it may be anything. */
+const UNREAD = Object.freeze({ value: null, at: null });
+
+/**
+ * The values key `name` of `object` may end up with, each with the node it
+ * is written at, read in order as JavaScript does: a later key or spread
+ * replaces an earlier one. A spread of literals the scan can read stands
+ * for their keys; one it cannot read may replace the key with anything
+ * (UNREAD). Empty when the key is never set.
+ */
+function valuesOfKey(object, name, ctx, seen = new Set()) {
+  if (seen.has(object)) return [UNREAD];
+  seen.add(object);
+  let values = [];
+  for (const property of object.properties) {
+    if (property.type === 'SpreadElement') {
+      const spread = literalsOf(property.argument, property, ctx);
+      values = spread.length
+        ? spread.flatMap((literal) => {
+            const own = valuesOfKey(literal, name, ctx, new Set(seen));
+            return own.length ? own : values;
+          })
+        : [UNREAD];
+    } else if (
+      (property.type === 'ObjectProperty' || property.type === 'Property') &&
+      keyOf(property) === name
+    )
+      values = [{ value: property.value, at: property }];
+  }
+  return values;
+}
+
+/** Whether an object literal ends up with a `lon` or `lat` key. */
+const isGeodetic = (literal, ctx) =>
+  ['lon', 'lat'].some((key) =>
+    valuesOfKey(literal, key, ctx).some((entry) => entry !== UNREAD),
+  );
 
 /**
  * The `flyToBounds` calls in `source` and the lines of those with a
@@ -241,7 +277,7 @@ function literalsOf(node, at, ctx, seen = new Set()) {
 export function geodeticCentres(source, lineOffset = 0) {
   const tree = parsers.babel.parse(source, {});
   const parents = new Map(nodesOf(tree.program));
-  const ctx = { parents, written: writtenNames(parents) };
+  const ctx = { parents, written: writtenBindings(parents) };
   let calls = 0;
   const geodetic = [];
   for (const node of parents.keys()) {
@@ -258,13 +294,15 @@ export function geodeticCentres(source, lineOffset = 0) {
       continue;
     calls += 1;
     const geodeticHere = literalsOf(node.arguments[0], node, ctx).some(
-      (sphere) => {
-        const center = ownProperty(sphere, 'center');
-        // Read where the sphere's literal says it, not where the call is.
-        return literalsOf(center?.value, center, ctx).some(
-          (value) => ownProperty(value, 'lon') || ownProperty(value, 'lat'),
-        );
-      },
+      (sphere) =>
+        valuesOfKey(sphere, 'center', ctx).some(
+          // Read where the sphere's literal says it, not where the call is.
+          ({ value, at }) =>
+            value &&
+            literalsOf(value, at, ctx).some((centre) =>
+              isGeodetic(centre, ctx),
+            ),
+        ),
     );
     if (geodeticHere) geodetic.push(node.loc.start.line + lineOffset);
   }
@@ -351,6 +389,32 @@ test('the scan finds a geodetic centre given inline, through a local, or in a lo
     ),
     1,
   );
+  // A spread that supplies the centre.
+  assert.equal(
+    found(
+      `const geodeticBounds = { center: { lon: 1, lat: 2 } };
+      camera.flyToBounds({ radius: 0, ...geodeticBounds });`,
+    ),
+    1,
+  );
+  assert.equal(
+    found(
+      `const place = { lon: 1, lat: 2 };
+      camera.flyToBounds({ center: { ...place, height: 0 } });`,
+    ),
+    1,
+  );
+  // Another function writing to its own `center` leaves this one's read.
+  assert.equal(
+    found(
+      `function fly(camera) {
+        let center = { lon: 1, lat: 2 };
+        camera.flyToBounds({ center });
+      }
+      function move(center) { center = fromDegrees(1, 2); }`,
+    ),
+    1,
+  );
   // The sphere holds the outer centre, whatever the calling function names.
   assert.equal(
     found(
@@ -412,6 +476,15 @@ test('the scan leaves ECEF centres, spreads, other scopes and comments alone', (
   );
   assert.equal(
     found('camera.flyToBounds({ center: { lon: 1 }, center: ecef });'),
+    0,
+  );
+  // A spread after the centre replaces it, or may.
+  assert.equal(
+    found(
+      `const ecefBounds = { center: fromDegrees(1, 2), radius: 5 };
+      camera.flyToBounds({ center: { lon: 1, lat: 2 }, ...ecefBounds });
+      camera.flyToBounds({ center: { lon: 1, lat: 2 }, ...options });`,
+    ),
     0,
   );
 });
