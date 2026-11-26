@@ -1,10 +1,11 @@
 - Air quality now reads every provider together as one station set, reviewed
-  by kvnloo. OpenAQ is the bundled station source, worldwide (khanmjk, #1291;
-  India's CPCB work by m3ayush, #1204, is folded in through it): it republishes
-  national networks such as India's CPCB and South Africa's SAAQIS, so they are
-  not read separately. Every station is rated from its concentrations: the
-  default view is a US AQI that GEV computes per station with the US EPA's
-  breakpoints (not an official reading), and one view per pollutant uses the
+  by kvnloo. OpenAQ is the bundled station source, worldwide (khanmjk, #1291).
+  m3ayush's CPCB feed (#1204) was dropped because OpenAQ carries those
+  stations: it republishes national networks such as India's CPCB and South
+  Africa's SAAQIS, so they are not read separately. Every station is rated
+  from its concentrations: the default view is a US AQI that GEV computes per
+  station with the US EPA's breakpoints (not an official reading), and one
+  view per pollutant uses the
   European Air Quality Index bands (carbon monoxide on WHO-based bands). The
   computed US AQI is the one index worldwide: Canada's AQHI is retired, as it
   covered Canada only, Canadian stations come through OpenAQ like every other
@@ -42,3 +43,24 @@
   source without provider definitions is read as one station network, and an
   empty list of them is refused. A layer's `requiresKeyId` may now be a string
   or an array of key ids, all of which the Layers row names.
+
+  The US AQI rates each pollutant on the EPA's averaging period: PM2.5 and
+  PM10 on the NowCast of their last 12 hourly means (two of the last three
+  needed), ozone on the EPA's ozone NowCast over two weeks of hours (its
+  surrogate when they are too few) and on the 1-hour rows from 0.125 ppm, CO
+  on its 8-hour mean (six of eight hours), NO2 and SO2 on their 1-hour
+  values, with SO2's 24-hour value above 304 ppb. A pollutant without its
+  period gets no sub-index, and the station's details say why. A host's rows
+  change meaning accordingly: one hourly PM row alone no longer gives an
+  index (send the last hours for a NowCast), rows stating `averagingMinutes`
+  1440 for PM or 480 for ozone and CO are rated as they are, and a PM, ozone
+  or CO value without a stated period is not rated. Low-cost sensors (OpenAQ's
+  `isMonitor` false, `monitor: false` on a host's rows) get no US AQI; the
+  pollutant views keep them, their rows and details marked as sensors. Where
+  two networks report one site, the AQI view pools their pollutants, each the
+  freshest value, and names the network a pooled value came from; matching
+  sites works across the antimeridian and near the poles. OpenAQ asks each
+  sensor's hourly means at most once an hour, one view spends at most a
+  quarter of the hourly request budget and asks less often while nothing near
+  its centre arrives, and only a refusal naming the key (a 401, or a 403 that
+  says so) stops the key being sent.
