@@ -30,17 +30,17 @@ export const useHudStore = defineStore('gev-hud', () => {
   function setDisplayed(next) {
     if (displayed.value === next) return;
     displayed.value = next;
-    owner.value?.setDisplayed(next);
+    owner.value?.setDisplayed?.(next);
   }
 
   /**
    * Tell `next` whether the view is on screen, now and on every change.
-   * @param {?{setDisplayed: (displayed: boolean) => void}} next IntelHUD, or
+   * @param {?{setDisplayed?: (displayed: boolean) => void}} next IntelHUD, or
    *   null to disconnect.
    */
   function connect(next) {
     owner.value = next && markRaw(next);
-    next?.setDisplayed(displayed.value);
+    next?.setDisplayed?.(displayed.value);
   }
 
   return { hud, publish, displayed, setDisplayed, owner, connect };

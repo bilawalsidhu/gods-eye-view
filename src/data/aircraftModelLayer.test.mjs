@@ -29,7 +29,7 @@ const SPEC = {
  * models layer over a fake draw port whose fleet set can be told to fail a
  * write. The eye sits at `eyeM`, by default 1 km above them (`EYE_M`).
  */
-function fleetFixture(positions, { eyeM = EYE_M } = {}) {
+function fleetFixture(positions, { eyeM = EYE_M, trackedRegime = false } = {}) {
   const base = fakeDrawPort();
   const removes = [];
   let failNextUpsert = false;
@@ -60,7 +60,7 @@ function fleetFixture(positions, { eyeM = EYE_M } = {}) {
       };
     },
   };
-  const eye = fromDegrees(-97.71, 30.21, eyeM);
+  let eye = fromDegrees(-97.71, 30.21, eyeM);
   const viewer = {};
   bindRenderer(viewer, {
     draw,
@@ -129,10 +129,20 @@ function fleetFixture(positions, { eyeM = EYE_M } = {}) {
         iconRecedeSyncs += 1;
       },
     },
-    motion: { _displayTimeAt: () => null },
+    motion: {
+      _displayTimeAt: () => null,
+      _trackedDisplayPosition: (id) => positions.get(id) ?? null,
+      _trackedDisplayCourse: () => 90,
+    },
     tracking: {
       _refreshCockpitNearContacts() {},
-      _trackedModelRegimeActive: () => false,
+      // Opted in: the layer's own rule (tracking.js), the fleet pass's
+      // eligibility under the fleet's regime.
+      _trackedModelRegimeActive: () =>
+        trackedRegime &&
+        Boolean(state._trackedIcao) &&
+        state._trackedModelEligible === true &&
+        models._modelRegimeActive(),
     },
   };
   const models = createAircraftModels({
@@ -165,7 +175,16 @@ function fleetFixture(positions, { eyeM = EYE_M } = {}) {
     iconRecedeSyncs: () => iconRecedeSyncs,
     /** The camera each fleet tick re-planned the icons with. */
     replanViews,
-    eye,
+    get eye() {
+      return eye;
+    },
+    /** Move the camera's eye, keeping where it looks. */
+    moveEye(position) {
+      eye = position;
+    },
+    /** The set the tracked model draws in. */
+    tracked: () => base.set(models._modelSetIds()[1]),
+    trackedId: () => models._modelSetIds()[1],
     /** Mark a contact as not there yet at the time drawn, or there again. */
     setUnseen(id, value) {
       if (value) unseenIds.add(id);
@@ -481,6 +500,35 @@ test('the selected contact keeps a loaded, hidden fleet model that takes it back
   f.models._handBackDeselected('a1');
   assert.equal(f.fleet().items.get('a1').show, true);
   assert.equal(f.shown.get('a1'), false);
+});
+
+test('a selected contact the camera leaves behind has its model hidden in the same frame, before it draws', () => {
+  const positions = new Map([['a1', north(2_000)]]);
+  const f = fleetFixture(positions, { trackedRegime: true });
+  f.state._trackedIcao = 'a1';
+  f.shown.set('a1', false);
+  // The fleet pass admits it; the tracked model loads and draws it.
+  f.tick();
+  assert.equal(f.state._trackedModelEligible, true);
+  f.models._updateTrackedModel();
+  f.draw.ready(f.trackedId(), 'a1');
+  f.models._updateTrackedModel();
+  assert.equal(f.tracked().items.get('a1').show, true, 'its model draws it');
+  assert.equal(f.models._modelOwnsVisual('a1'), true);
+
+  // The camera pulls out past the keep radius between two frames. The
+  // frame's fleet pass (preRender) takes the contact out of the model band:
+  // from then on its icon owns the visual (and is lifted onto the ground
+  // floor), so its model must not draw in this frame too.
+  f.moveEye(north(-4_000));
+  f.tick();
+  assert.equal(f.state._trackedModelEligible, false);
+  assert.equal(f.models._modelOwnsVisual('a1'), false, 'the icon owns it');
+  assert.equal(
+    f.tracked().items.get('a1').show,
+    false,
+    'its model is not drawn beside the icon that owns it',
+  );
 });
 
 test('the fleet tick re-plans the icons with the camera: its eye, and what it sees', () => {

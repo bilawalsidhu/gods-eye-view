@@ -199,3 +199,52 @@ test('the tracked icon keeps its contact\'s colour; only the alpha changes', () 
   assert.ok(Object.isFrozen(stale));
   assert.deepEqual(trackedIconColor(amber, 0), [1, 0.72, 0, 0]);
 });
+
+test('given a view-sheet image and a course, the tracked icon is drawn along its course with no near image', async () => {
+  const { aircraftViewRef } = await import('./aircraftViews.js');
+  const { viewer, draw, tick } = harness();
+  const icon = createTrackedAircraftIcon({
+    viewer: () => viewer,
+    setPrefix: 'flights',
+  });
+  let course = 45;
+  let rotations = 0;
+  icon.show({
+    id: 'abc123',
+    image: aircraftViewRef('airliner'),
+    sprite: SPRITE,
+    position: () => ({ x: 1, y: 2, z: 3 }),
+    rotation: () => {
+      rotations++;
+      return 0.5;
+    },
+    course: () => course,
+    color: () => [0, 1, 1, 1],
+  });
+  const set = draw.find('flights-tracked-icon:');
+  tick();
+  const item = set.items.get('abc123');
+  assert.equal(item.image, aircraftViewRef('airliner'));
+  assert.deepEqual(item.pickProxy.size, item.size);
+  assert.equal('imageLod' in item, false);
+  assert.equal(item.rotationMode, 'course');
+  assert.equal(item.course, 45);
+  assert.equal('rotation' in item, false);
+  assert.equal(rotations, 0, 'no screen rotation is projected');
+  assert.deepEqual(item.size, [28, 28]);
+  const writes = set.writes;
+  tick();
+  assert.equal(set.writes, writes, 'an unchanged frame writes nothing');
+  course = 50;
+  tick();
+  assert.equal(set.items.get('abc123').course, 50);
+  // A flat image (a TR-3B conversion, a ground station) turns on screen again.
+  icon.setImage('data:image/svg+xml;base64,AAA', { near: 'near', switchPx: 30 });
+  tick();
+  const flat = set.items.get('abc123');
+  assert.equal(flat.rotationMode, 'screen');
+  assert.equal(flat.rotation, 0.5);
+  assert.deepEqual(flat.imageLod, { near: 'near', switchPx: 30 });
+  assert.equal('course' in flat, false);
+  icon.dispose();
+});

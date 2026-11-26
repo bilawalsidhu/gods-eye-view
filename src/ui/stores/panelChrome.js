@@ -4,15 +4,13 @@ import { shallowRef } from 'vue';
 /**
  * @typedef {object} PanelChromeHandlers
  * @property {(panelId: string) => void} toggle A collapse button's click.
- * @property {(panelId: string) => void} pin A dock pin button's click.
+ * @property {(panelId: string) => void} reveal Bring a panel's phone sheet forward.
  */
 
 /**
  * @typedef {object} PanelState
  * @property {boolean} collapsed Whether the panel is closed, by the person or
  *   by its layout.
- * @property {boolean} pinned A dock tray kept open (`dock-pinned`).
- * @property {boolean} pinnedTop The pinned tray drawn on top.
  * @property {?('layout'|'accordion')} auto Why a layout closed the panel
  *   (`layout-auto-collapsed`, `accordion-collapsed`), or null when the
  *   person's own choice stands.
@@ -21,17 +19,14 @@ import { shallowRef } from 'vue';
 /** A panel's state before its owner has said otherwise. */
 const BLANK = Object.freeze({
   collapsed: false,
-  pinned: false,
-  pinnedTop: false,
   auto: null,
 });
 
 /**
  * Each panel's disclosure state, which its root (`vPanelState`) and its
- * collapse, dock and pin buttons render. PanelChrome owns the panels: it and
- * the layouts it runs publish here whenever a panel opens, closes or is
- * pinned, and it connects the buttons' clicks; the views only render and
- * forward clicks.
+ * collapse and rail buttons render. PanelChrome owns the panels: it and the
+ * layouts it runs publish here whenever a panel opens or closes, and it
+ * connects the buttons' clicks; the views only render and forward clicks.
  */
 export const usePanelChromeStore = defineStore('gev-panel-chrome', () => {
   /**

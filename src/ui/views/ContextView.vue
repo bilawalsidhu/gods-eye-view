@@ -7,6 +7,7 @@ import { vClassToggle } from '../rail/classToggle.js';
 import { useCockpitStore } from '../stores/cockpit.js';
 import { useBhoteKoshiPanelStore } from '../stores/bhoteKoshiPanel.js';
 import { useContextStore } from '../stores/context.js';
+import { useDisplayStore } from '../stores/display.js';
 import { usePanelChromeStore } from '../stores/panelChrome.js';
 import { useEntityCardStore } from '../stores/entityCard.js';
 import { useSceneStore } from '../stores/scenes.js';
@@ -30,6 +31,7 @@ import { closeContextSearch, contextSearchOpen, contextSearchText } from '../con
 // publishes them; until it does, the panel shows its initial markup.
 const { view: ctx, awareness } = storeToRefs(useContextStore());
 const { presence: cockpit } = storeToRefs(useCockpitStore());
+const { phoneShell } = storeToRefs(useDisplayStore());
 // The entry names the subject it would ride (cockpitEntryFace).
 const entry = computed(() =>
   cockpitEntryFace(cockpit.value?.entryKind, cockpit.value?.entryFace),
@@ -59,7 +61,7 @@ watch(
   ([layerId, id]) => {
     if (!['flights', 'military'].includes(layerId) || !id || contactsMatchCard.value) return;
     // Contacts has already picked whom to follow. Only update the Inspector.
-    entityCards.select({ layerId, id, label: awareness.value?.subjectLabel }, { follow: false });
+    entityCards.select({ layerId, id, label: awareness.value?.subjectLabel });
   },
 );
 
@@ -81,12 +83,27 @@ const setPane = (id) => (el) => {
 // Turning on Radio reveals the Inspector.
 const showView = () => (activeTab.value = 'view');
 onMounted(() => {
+  const body = globalThis.document?.body;
+  if (body && globalThis.MutationObserver) {
+    // Keep rail visibility current and undock when phone layout or Cockpit starts.
+    bodyWatch = new MutationObserver(() => {
+      railCovered.value = isRailCovered();
+      if (docked.value && (body.classList.contains('mobile-shell') || body.classList.contains('cockpit-mode'))) setDocked(false);
+    });
+    bodyWatch.observe(body, { attributeFilter: ['class', 'data-assistant-docked'] });
+    railCovered.value = isRailCovered();
+  }
+  globalThis.document?.addEventListener('visibilitychange', updatePageVisibility);
+  updatePageVisibility();
   globalThis.addEventListener?.('gev:context-show-view', showView);
   contextReady.value = true;
   readLayers();
   layerTimer = setInterval(readLayers, 1500);
 });
 onBeforeUnmount(() => {
+  bodyWatch?.disconnect();
+  globalThis.document?.removeEventListener('visibilitychange', updatePageVisibility);
+  entityCards.setViewContextShown(false, null);
   globalThis.removeEventListener?.('gev:context-show-view', showView);
   clearInterval(layerTimer);
   contextReady.value = false;
@@ -142,24 +159,73 @@ const searchHint = computed(() =>
 // panel closes.
 const docked = ref(false);
 const { panels: chromePanels } = storeToRefs(usePanelChromeStore());
-// The phone layout and Cockpit have no room for the column: either one
-// arriving lets it go.
 let bodyWatch = null;
 function setDocked(next) {
   docked.value = next;
   const body = globalThis.document?.body;
   body?.classList.toggle('context-docked', next);
-  bodyWatch?.disconnect();
-  bodyWatch = null;
-  if (next && body && globalThis.MutationObserver) {
-    bodyWatch = new MutationObserver(() => {
-      if (body.classList.contains('mobile-shell') || body.classList.contains('cockpit-mode')) setDocked(false);
-    });
-    bodyWatch.observe(body, { attributes: true, attributeFilter: ['class'] });
-  }
+}
+// These modes hide the rail or its Context panel without changing disclosure.
+function isRailCovered() {
+  const body = globalThis.document?.body;
+  return Boolean(
+    body?.classList.contains('ui-clean-view') ||
+    body?.classList.contains('recording-mode') ||
+    body?.classList.contains('stories-mode') ||
+    body?.classList.contains('ui-embed') ||
+    body?.dataset.assistantDocked === 'true',
+  );
+}
+const railCovered = ref(isRailCovered());
+const pageVisible = ref(globalThis.document?.visibilityState !== 'hidden');
+function updatePageVisibility() {
+  pageVisible.value = globalThis.document?.visibilityState !== 'hidden';
 }
 // Only an open panel reads what is picked and in view; closed, it does no work.
 const contextOpen = computed(() => chromePanels.value['global-context-panel']?.collapsed === false);
+const inspectorMount = ref(null);
+const viewContextPresent = computed(() => !entityCard.value);
+const inspectorShown = computed(() =>
+  inspectorMount.value !== null &&
+  contextOpen.value &&
+  viewContextPresent.value &&
+  activeTab.value === 'view' &&
+  pageVisible.value &&
+  !railCovered.value &&
+  !bhotePanel.value &&
+  (!phoneShell.value?.enabled || phoneShell.value.sheet === 'context') &&
+  !cockpit.value?.active,
+);
+const inspectorTab = ref(null);
+let keyboardOrigin = null;
+// A keyboard selection puts focus on the card's close button. Closing the
+// card returns focus to its row or the Inspector unless another card opened
+// or focus moved outside Context.
+async function focusKeyboardSelection(rowKey) {
+  const cardKey = entityCard.value?.key;
+  await nextTick();
+  const close = inspectorTab.value?.querySelector('.entity-card__close');
+  if (!cardKey || entityCard.value?.key !== cardKey || !close) return;
+  keyboardOrigin = { rowKey, cardKey };
+  close.focus();
+}
+watch(() => entityCard.value?.key, async (key, previous) => {
+  const origin = keyboardOrigin;
+  if (!origin || key === origin.cardKey) return;
+  keyboardOrigin = null;
+  if (key || previous !== origin.cardKey || !inspectorTab.value?.contains(document.activeElement)) return;
+  await nextTick();
+  if (!inspectorShown.value || entityCard.value) return;
+  const inspector = inspectorTab.value?.querySelector('.view-context');
+  const row = [...(inspector?.querySelectorAll('[data-row-key]') || [])]
+    .find((candidate) => candidate.dataset.rowKey === origin.rowKey);
+  (row || inspector)?.focus();
+});
+watch(
+  [inspectorShown, inspectorMount],
+  ([shown, mountId]) => entityCards.setViewContextShown(shown, mountId),
+  { immediate: true, flush: 'sync' },
+);
 watch(
   () => chromePanels.value['global-context-panel']?.collapsed,
   (collapsed) => {
@@ -239,11 +305,11 @@ watch(
           </div>
           <AwarenessPanel v-if="!contactsMatchCard" />
         </section>
-        <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
+        <div v-if="contextOpen" v-show="activeTab === 'view'" id="context-tab-view" ref="inspectorTab" role="tabpanel" aria-labelledby="context-tab-btn-view" :class="{ 'context-searching': contextSearchOpen && contextSearchText.trim() }">
           <EntityCard :with-contacts="contactsMatchCard">
             <AwarenessPanel v-if="contactsMatchCard" compact />
           </EntityCard>
-          <ViewContext v-if="!entityCard" />
+          <ViewContext v-if="viewContextPresent" @vue:mounted="inspectorMount = Symbol()" @vue:before-unmount="inspectorMount = null" @keyboard-selection="focusKeyboardSelection" />
         </div>
         </div>
     </RailPanel>

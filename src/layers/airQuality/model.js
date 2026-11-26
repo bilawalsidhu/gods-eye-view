@@ -4,53 +4,18 @@
  * Air-quality readings, normalized across networks. Pure — no Cesium, no
  * network.
  *
- * Air-quality indices are not interchangeable numbers. Canada's AQHI runs 1 to
- * 10+ on health risk; the US AQI runs 0 to 500 on concentration breakpoints;
- * Europe's EAQI is a five-step category. A reading is therefore carried as
- * `{ provider, scale, value, band }` — who measured it, which index it is, the
- * value on that index's own terms, and the band it falls in — so a second
- * network can be added without retrofitting a shared numeric meaning that does
- * not exist.
- *
- * Only ECCC's AQHI is implemented here; `AIR_QUALITY_PROVIDERS` is the seam a
- * later provider registers against.
+ * A reading is carried as `{ provider, scale, value, band }` — who measured
+ * it, what the value is on (a pollutant's concentration, or the US AQI the
+ * layer computes from concentrations, `usAqi.js`), the value itself and its
+ * band.
  */
-// A portable export (package.json): no i18n here. The labels stay English data;
-// the Weather card (index.js) shows them translated.
-const msg = (text) => text;
-
-/** Band identifiers shared across providers, in ascending severity. */
-export const AIR_QUALITY_BANDS = Object.freeze([
-  Object.freeze({
-    id: 'low',
-    label: msg('Low'),
-    risk: msg('Low health risk'),
-    color: '#4cc9f0',
-  }),
-  Object.freeze({
-    id: 'moderate',
-    label: msg('Moderate'),
-    risk: msg('Moderate health risk'),
-    color: '#ffd43b',
-  }),
-  Object.freeze({
-    id: 'high',
-    label: msg('High'),
-    risk: msg('High health risk'),
-    color: '#ff6b35',
-  }),
-  Object.freeze({
-    id: 'very-high',
-    label: msg('Very High'),
-    risk: msg('Very High health risk'),
-    color: '#c1121f',
-  }),
-]);
-
-const BAND_BY_ID = new Map(AIR_QUALITY_BANDS.map((band) => [band.id, band]));
+import { concentrationIn, layerUnits } from './units.js';
 
 /** Colour used when a station reports no usable reading. */
 export const AIR_QUALITY_UNKNOWN_COLOR = '#6b7785';
+
+/** The colour of a station no index rates. */
+export const AIR_QUALITY_UNRATED_COLOR = '#8cb4ce';
 
 export const AIR_QUALITY_OVERLAY_SOURCE_ID = 'air-quality';
 export const AIR_QUALITY_OVERLAY_COHORT_LIMIT = 48;
@@ -58,7 +23,7 @@ export const AIR_QUALITY_OVERLAY_COLLISION_CAPACITY = 32;
 
 /**
  * A reading this old is stale enough that displaying it would misinform.
- * AQHI publishes hourly, so six hours is five missed publications.
+ * Networks publish hourly, so six hours is five missed publications.
  */
 export const OBSERVATION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
@@ -68,9 +33,9 @@ export const OBSERVATION_MAX_AGE_MS = 6 * 60 * 60 * 1000;
  * This is deliberately separate from the age at which a reading is dropped.
  * `lastUpdate` records when we last *received* a response, which stays current
  * even when the network publishes nothing new; freshness has to be judged on
- * the source's own observation time instead. AQHI publishes hourly, so a newest
- * reading beyond two hours means at least one publication was missed and the
- * feed should not be described as live.
+ * the source's own observation time instead. Networks publish hourly, so a
+ * newest reading beyond two hours means at least one publication was missed and
+ * the feed should not be described as live.
  */
 export const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 
@@ -102,191 +67,6 @@ export function readingsAreStale(readings, now = Date.now()) {
   // unusable — is the stalest a feed can be, not a nominal one.
   if (newest === null) return true;
   return now - newest > STALE_AFTER_MS;
-}
-
-/**
- * Registered provider descriptors. `coverage` is stated plainly because the
- * layer is not global and the row must say so.
- */
-export const AIR_QUALITY_PROVIDERS = Object.freeze({
-  eccc: Object.freeze({
-    id: 'eccc',
-    scale: 'AQHI',
-    label: msg('Air quality'),
-    network: 'Environment and Climate Change Canada',
-    coverage: msg('Canada only · ECCC AQHI network'),
-    /** ECCC's published band thresholds, evaluated in order. */
-    bands: Object.freeze([
-      Object.freeze({ id: 'low', max: 3 }),
-      Object.freeze({ id: 'moderate', max: 6 }),
-      Object.freeze({ id: 'high', max: 10 }),
-      Object.freeze({ id: 'very-high', max: Infinity }),
-    ]),
-  }),
-});
-
-/** Band descriptor for an id, or null. */
-export function airQualityBandById(bandId) {
-  return BAND_BY_ID.get(String(bandId ?? '')) || null;
-}
-
-/** Accent colour for a band id, falling back to neutral grey. */
-export function airQualityColor(bandId) {
-  return airQualityBandById(bandId)?.color || AIR_QUALITY_UNKNOWN_COLOR;
-}
-
-/**
- * The published AQHI value for a raw ECCC reading: an integer from 1 up.
- *
- * ECCC reports whole numbers with a floor of 1 — there is no "AQHI 0" and no
- * "AQHI 1.08". A raw value below 1 is a legitimate low reading, not an error,
- * and is published as 1.
- *
- * @param {number|string|null|undefined} raw - Raw `aqhi` value from the API.
- * @returns {number|null} Published integer AQHI, or null when unusable.
- */
-export function aqhiDisplayValue(raw) {
-  // Guard the empty forms BEFORE coercing: Number(null) and Number('') are both
-  // 0, which would otherwise floor to a confident "AQHI 1" for a station that
-  // reported nothing at all.
-  if (raw === null || raw === undefined || raw === '') return null;
-  if (typeof raw !== 'number' && typeof raw !== 'string') return null;
-  if (typeof raw === 'string' && raw.trim() === '') return null;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) return null;
-  return Math.max(1, Math.round(value));
-}
-
-/**
- * The band id for a value on a provider's scale.
- * @param {string} providerId
- * @param {number|null} value - Already in the provider's published form.
- * @returns {string|null}
- */
-export function bandForValue(providerId, value) {
-  const provider = AIR_QUALITY_PROVIDERS[String(providerId ?? '')];
-  if (!provider || !Number.isFinite(value)) return null;
-  return provider.bands.find((band) => value <= band.max)?.id ?? null;
-}
-
-/**
- * Display text for a value on a provider's scale.
- * AQHI collapses everything above ten into the open-ended "10+".
- * @param {string} providerId
- * @param {number|null} value
- * @returns {string}
- */
-export function valueLabel(providerId, value) {
-  if (!Number.isFinite(value)) return '--';
-  if (providerId === 'eccc') return value > 10 ? '10+' : String(value);
-  return String(value);
-}
-
-/** Plain-language risk phrase for a band id. */
-export function bandRiskText(bandId) {
-  return airQualityBandById(bandId)?.risk ?? null;
-}
-
-/**
- * Validate a station FeatureCollection into an id-keyed catalog.
- *
- * Atomic: a structurally broken response returns null so the caller keeps its
- * last good catalog. A station missing coordinates is skipped, since one
- * unusable station is not evidence the catalog is broken.
- *
- * @param {object} geojson - GeoJSON FeatureCollection from `aqhi-stations`.
- * @returns {Map<string, object>|null} Stations by location_id, or null.
- */
-export function normalizeAqhiStations(geojson) {
-  if (!Array.isArray(geojson?.features)) return null;
-  const stations = new Map();
-  for (const feature of geojson.features) {
-    const properties = feature?.properties;
-    if (
-      !properties ||
-      typeof properties !== 'object' ||
-      Array.isArray(properties)
-    )
-      return null;
-    const coordinates = feature?.geometry?.coordinates;
-    if (!Array.isArray(coordinates) || coordinates.length < 2) continue;
-    const [lon, lat] = coordinates.map(Number);
-    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
-    const id = String(properties.location_id ?? feature.id ?? '').trim();
-    if (!id) continue;
-    stations.set(id, {
-      id,
-      name: String(properties.location_name_en || id).trim(),
-      // ECCC's administrative zone: atl, que, ont, pnr, pyr.
-      zone: String(properties['eccc_administrative-zone'] || '').trim(),
-      lat,
-      lon,
-    });
-  }
-  return stations;
-}
-
-/**
- * Join latest ECCC observations onto known stations into provider-shaped rows.
- *
- * The catalog is the only thing that supplies a reading its coordinates, so an
- * observation without a matching station cannot be placed and is dropped.
- * Readings older than OBSERVATION_MAX_AGE_MS are dropped too — a six-hour-old
- * air-quality number presented as current is worse than no number.
- *
- * @param {object} geojson - FeatureCollection from `aqhi-observations-realtime`.
- * @param {Map<string, object>} stations - Known stations by location_id.
- * @param {number} [now=Date.now()] - Clock seam for tests.
- * @returns {Array<object>|null} Normalized readings, or null when malformed.
- */
-export function normalizeAqhiObservations(geojson, stations, now = Date.now()) {
-  if (!Array.isArray(geojson?.features)) return null;
-  if (!(stations instanceof Map)) return null;
-  const provider = AIR_QUALITY_PROVIDERS.eccc;
-  const newest = new Map();
-  for (const feature of geojson.features) {
-    const properties = feature?.properties;
-    if (
-      !properties ||
-      typeof properties !== 'object' ||
-      Array.isArray(properties)
-    )
-      return null;
-    const stationId = String(properties.location_id ?? '').trim();
-    const station = stations.get(stationId);
-    if (!station) continue;
-
-    const value = aqhiDisplayValue(properties.aqhi);
-    if (value === null) continue;
-    const observedMs = Date.parse(properties.observation_datetime);
-    if (!Number.isFinite(observedMs)) continue;
-    if (now - observedMs > OBSERVATION_MAX_AGE_MS) continue;
-
-    const previous = newest.get(stationId);
-    if (previous && previous.observedMs >= observedMs) continue;
-    const band = bandForValue(provider.id, value);
-    newest.set(stationId, {
-      id: `${provider.id}:${stationId}`,
-      provider: provider.id,
-      scale: provider.scale,
-      value,
-      band,
-      stationId,
-      name: station.name,
-      zone: station.zone,
-      lat: station.lat,
-      lon: station.lon,
-      observedMs,
-      color: airQualityColor(band),
-      label: valueLabel(provider.id, value),
-      risk: bandRiskText(band),
-      note: String(properties.special_notes_en || '').trim() || null,
-    });
-  }
-  return [...newest.values()].sort(
-    (a, b) => b.value - a.value || a.stationId.localeCompare(b.stationId),
-  );
 }
 
 /**
@@ -340,6 +120,15 @@ export function selectAirQualityOverlayCohort(
     .slice(0, cap);
 }
 
+/** Whether a reading lies inside a lon/lat rectangle; a null rectangle holds everything. */
+export function isInRectangle(reading, rect) {
+  if (!rect) return true;
+  if (reading.lat < rect.south || reading.lat > rect.north) return false;
+  // A rectangle crossing the antimeridian has west > east.
+  return rect.west <= rect.east
+    ? reading.lon >= rect.west && reading.lon <= rect.east
+    : reading.lon >= rect.west || reading.lon <= rect.east;
+}
 /**
  * The worst readings inside a lon/lat rectangle, for the readout card.
  *
@@ -356,18 +145,14 @@ export function readingsInView(readings, rect, limit = 5) {
   if (!Array.isArray(readings)) return [];
   const cap = Math.max(0, Math.floor(Number(limit) || 0));
   if (cap === 0) return [];
-  const inside = !rect
-    ? readings
-    : readings.filter((reading) => {
-        if (reading.lat < rect.south || reading.lat > rect.north) return false;
-        // A rectangle crossing the antimeridian has west > east.
-        return rect.west <= rect.east
-          ? reading.lon >= rect.west && reading.lon <= rect.east
-          : reading.lon >= rect.west || reading.lon <= rect.east;
-      });
+  const inside = readings.filter((r) => isInRectangle(r, rect));
   return inside
     .slice()
-    .sort((a, b) => b.value - a.value || a.stationId.localeCompare(b.stationId))
+    .sort(
+      (a, b) =>
+        b.value - a.value ||
+        String(a.stationId ?? a.id).localeCompare(String(b.stationId ?? b.id)),
+    )
     .slice(0, cap);
 }
 
@@ -383,17 +168,64 @@ export function mapAnalystRecord(raw, index = 0) {
     const t = String(v ?? '').trim();
     return t || null;
   };
+  // Only comparable readings have a value in the layer's units.
+  const pollutant = raw?.kind === 'observation' && raw.parameter !== 'aqi';
+  const comparable = raw?.qualityFlagged !== true;
+  const converted =
+    pollutant && comparable
+      ? concentrationIn(raw.parameter, raw.value, raw.units)
+      : null;
   return {
     id: text(raw?.id) || `AIR-${String(index).padStart(4, '0')}`,
     provider: text(raw?.provider),
     scale: text(raw?.scale),
-    value: num(raw?.value),
+    value: pollutant ? converted : comparable ? num(raw?.value) : null,
     band: text(raw?.band),
     name: text(raw?.name),
     zone: text(raw?.zone),
-    risk: text(raw?.risk),
     lat: num(raw?.lat),
     lon: num(raw?.lon),
     observedMs: num(raw?.observedMs),
+    ...(raw?.kind === 'observation'
+      ? {
+          parameter: text(raw.parameter),
+          units:
+            converted !== null
+              ? layerUnits(raw.parameter)
+              : pollutant
+                ? null
+                : text(raw.units),
+          ...(pollutant
+            ? { reportedValue: num(raw.value), reportedUnits: text(raw.units) }
+            : {}),
+          averagingMinutes: num(raw.averagingMinutes),
+          kind: 'observation',
+          country: text(raw.country),
+          owner: text(raw.owner),
+          note: text(raw.note),
+          assessment: raw.assessment ?? null,
+          // The AQI view's computed index: its category, the pollutant
+          // leading it and the values it used (µg/m³; CO mg/m³).
+          ...(raw.parameter === 'aqi'
+            ? {
+                ...Object.fromEntries(
+                  Object.entries(raw.aqiValues ?? {}).filter(
+                    ([id, v]) =>
+                      ['pm25', 'pm10', 'o3', 'no2', 'so2', 'co'].includes(id) &&
+                      Number.isFinite(v),
+                  ),
+                ),
+                aqi: raw.aqi
+                  ? {
+                      index: num(raw.aqi.index),
+                      category: text(raw.aqi.category),
+                      leading: text(raw.aqi.leading),
+                      values: { ...(raw.aqiValues ?? {}) },
+                    }
+                  : null,
+              }
+            : {}),
+        }
+      : {}),
   };
 }

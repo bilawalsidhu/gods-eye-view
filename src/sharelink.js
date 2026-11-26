@@ -565,7 +565,7 @@ export class ShareLinkManager {
 
   /**
    * Install the source of the entity the camera follows, used for share links:
-   * `({ nowMs }) => ({ kind, id, offset, lastKnown }) | null`, in the share
+   * `({ nowMs }) => ({ kind, id, offset, lastKnown, followed? }) | null`, in the share
    * format's terms (src/share/follow.js), with the fix as of `nowMs`.
    */
   setFollowSubjectProvider(provider) {
@@ -708,6 +708,7 @@ export class ShareLinkManager {
         entity: { kind: subject.kind, id: subject.id },
         offset: subject.offset ?? null,
         lastKnown: subject.lastKnown ?? null,
+        followed: subject.followed === true,
       };
     }
     return shareLinkUrl(encodeShareView(state), window.location.href);

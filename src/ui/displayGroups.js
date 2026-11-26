@@ -18,3 +18,16 @@ import { useDisplayStore } from './stores/display.js';
 export function publishDisplayGroup(id, group) {
   useDisplayStore(applicationPinia()).publishGroup(id, group);
 }
+
+/**
+ * Show the map layer `id` under Map Source as `row` describes it, in place
+ * where it is shown already; null takes it away. A row is a choice over the
+ * map: `{id, label, value, options: [{value, label}], onChange(value)}`,
+ * answered by whoever added it. Publish it again whenever what it shows
+ * changes.
+ * @param {string} id
+ * @param {?object} row
+ */
+export function publishMapLayer(id, row) {
+  useDisplayStore(applicationPinia()).publishMapLayer(id, row);
+}

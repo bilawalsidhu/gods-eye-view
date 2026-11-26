@@ -8,12 +8,11 @@ const parameters = readFileSync(new URL('./ui/styleParameters.js', import.meta.u
 
 // Focused markup guards; actual computed names are checked in Chromium.
 // Native labels and hidden inputs must not be treated as missing aria-labels.
-test('HUD sliders and location search have descriptive explicit names', () => {
+test('HUD sliders have descriptive explicit names', () => {
   for (const [id, name] of [
     ['scope-feather-slider', 'Scope edge feather'],
     ['bloom-intensity-slider', 'Bloom intensity'],
     ['sharpen-intensity-slider', 'Sharpen intensity'],
-    ['location-search', 'Search location by name or coordinates'],
   ]) {
     const input = html.match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`))?.[0];
     assert.ok(input, `${id} exists`);

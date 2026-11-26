@@ -11,6 +11,7 @@ import {
 import { BHOTE_KOSHI_FLOOD_PATH } from './bhoteKoshiFloodPath.js';
 import * as Cesium from 'cesium';
 import { setLocale } from '../i18n/index.js';
+import { describeEntity } from './entityContext.js';
 import {
   registerPickOwner,
   setClickCardHitTest,
@@ -34,6 +35,19 @@ import {
   NEPAL_CONTEXT_PRESENTATION,
   revealLengthFraction,
 } from './bhoteKoshiLocator.js';
+
+function checkLocatorCardHeight(module, record, position) {
+  const id = 'bhote-koshi-locator';
+  const manager = { layers: new Map([[id, { id, module }]]) };
+  const card = describeEntity(manager, { layerId: id, id: record.id });
+  assert.equal(record.elevationM, undefined);
+  assert.equal(card.altitudeM, null);
+  assert.ok(
+    !card.facts.some(({ field }) => ['elevationM', 'pinHeightM'].includes(field)),
+  );
+  const drawn = Cesium.Cartographic.fromCartesian(position);
+  assert.ok(Math.abs(card.pinHeightM - drawn.height) < 1e-3);
+}
 
 /**
  * A viewer with a fake draw port bound; with `camera`, the Cesium camera
@@ -678,6 +692,15 @@ test('Bhote Koshi trigger-record presentation reveals sourced incident details',
   assert.equal(record.sourceAlpha(), 1);
   assert.equal(viewer._test.item('nepal-border-highlight'), undefined);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Trigger record');
+  const [initialReport, ...rest] = layer.getAnalystRecords();
+  assert.deepEqual(rest, []);
+  assert.equal(initialReport.id, 'us7000tbwb');
+  assert.equal(initialReport.name, record.title);
+  checkLocatorCardHeight(layer, initialReport, record.position);
+  assert.deepEqual([initialReport.lat, initialReport.lon], [28.271, 85.515]);
+  assert.equal(initialReport.source, 'USGS');
+  assert.match(initialReport.website, /^https:\/\/earthquake\.usgs\.gov\/.*\/us7000tbwb\//);
+  assert.deepEqual(layer.getAnalystRecords(0), []);
   assert.deepEqual(layer.getParams(), {
     presentation: BHOTE_KOSHI_TRIGGER_RECORD_PRESENTATION,
   });
@@ -905,9 +928,27 @@ test('Bhote Koshi locator keeps the regional context settled while nearby cities
   nowMs = 1300;
   assert.equal(dhulikhel.sourceAlpha(), 1);
   assert.equal(layer.getStats().coverage, 'Bhote Koshi · Nearby cities');
+  const cities = layer.getAnalystRecords();
+  assert.deepEqual(
+    cities.map(({ id, name }) => [id, name]),
+    [
+      ['kathmandu', 'Kathmandu'],
+      ['bhaktapur', 'Bhaktapur'],
+      ['dhulikhel', 'Dhulikhel'],
+    ],
+  );
+  assert.deepEqual(layer.getAnalystRecords(1), [cities[0]]);
+  checkLocatorCardHeight(layer, cities[0], kathmandu.position);
+  const point = Cesium.Cartographic.fromCartesian(kathmandu.position);
+  assert.ok(
+    Math.abs(Cesium.Math.toDegrees(point.latitude) - cities[0].lat) < 1e-6 &&
+      Math.abs(Cesium.Math.toDegrees(point.longitude) - cities[0].lon) < 1e-6,
+  );
   assert.deepEqual(layer.getParams(), {
     presentation: BHOTE_KOSHI_CITY_CONTEXT_PRESENTATION,
   });
+  layer.setParams({ presentation: BHOTE_KOSHI_REGIONAL_PRESENTATION });
+  assert.deepEqual(layer.getAnalystRecords(), []);
   await layer.destroy();
 });
 

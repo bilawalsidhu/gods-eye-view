@@ -2,13 +2,14 @@
 import { storeToRefs } from 'pinia';
 import { msg, t } from '../../../i18n/index.js';
 import UiButton from '../../kit/UiButton.vue';
+import UiSelect from '../../kit/UiSelect.js';
 import { useDisplayStore } from '../../stores/display.js';
 
 // The visual presets and map source at the top of the Visual panel. The same
 // choices the command dock's tray offers, through the same Display store
 // actions, so either surface stays in step with the other.
 const display = useDisplayStore();
-const { style, mapSource, mapSourceControls } = storeToRefs(display);
+const { style, mapSource, mapSourceControls, mapLayers } = storeToRefs(display);
 
 const STYLES = [
   {
@@ -99,5 +100,18 @@ function selectMapSource(chip) {
         >{{ chip.label }}<small v-if="chip.requirement">{{ chip.requirement }}</small></UiButton
       >
     </div>
+    <template v-for="layer in mapLayers" :key="layer.id">
+      <div class="visual-presets__heading visual-presets__heading--row">
+        <span>{{ layer.label }}</span>
+      </div>
+      <UiSelect
+        class="visual-presets__layer pp-select gev-field gev-field--compact"
+        :data-map-layer="layer.id"
+        :options="layer.options"
+        :model-value="layer.value"
+        :aria-label="layer.label"
+        @update:model-value="layer.onChange($event)"
+      />
+    </template>
   </section>
 </template>

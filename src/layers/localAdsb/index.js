@@ -1,5 +1,9 @@
 import { VEHICLE_TINT_CSS } from '../../data/aircraftClass.js';
 import { aircraftIcon } from '../../data/aircraftIcons.js';
+import {
+  aircraftViewRef,
+  registerAircraftViews,
+} from '../../data/aircraftViews.js';
 import { rotorFrame } from '../../data/rotorFrames.js';
 import { KNOT_MPS } from '../../data/units.js';
 import {
@@ -13,8 +17,15 @@ import {
   findCamera,
   findFrame,
   findQuery,
+  rendererOf,
 } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -148,12 +159,17 @@ export function createLocalAdsbLayer({
    * @type {{markers: object, rings: object}|null}
    */
   let sets = null;
+  /** Whether the renderer draws markers from the aircraft view sheet
+   *  (`aircraftViews.js`), set at `init`. */
+  let views = false;
   let enabled = false;
   let unsubscribe = null;
   let unsubscribeFeeds = null;
   let tickTimer = null;
   let syncTimer = null;
   let clickSubscription = null;
+  /** Off for the one-selection rule's listener, while clicks are heard. */
+  let offSelectionYield = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -355,31 +371,40 @@ export function createLocalAdsbLayer({
   /**
    * A marker's icon, where and how it now draws: a helicopter's rotor frame
    * at `at` (still on the ground), an airport vehicle in its own tint, a
-   * ground station's mast upright.
+   * ground station's mast upright. On a renderer that draws view sheets, a
+   * kind with rendered views is drawn from the sheet along its course;
+   * every other marker is its flat glyph turned on screen.
    */
   function markerItem(marker, basis, at) {
     const kind = marker.iconKind ?? 'airliner';
+    const frame =
+      kind === 'helicopter'
+        ? rotorFrame(marker.id, at, {
+            onGround: marker.onGround,
+            speedMps: Number.isFinite(marker.record?.groundSpeedKt)
+              ? marker.record.groundSpeedKt * KNOT_MPS
+              : null,
+          })
+        : undefined;
+    const view = views ? aircraftViewRef(kind, frame) : null;
     return {
       id: marker.id,
       pos: marker.position,
-      image: aircraftIcon(
-        kind,
-        undefined,
-        kind === 'helicopter'
-          ? rotorFrame(marker.id, at, {
-              onGround: marker.onGround,
-              speedMps: Number.isFinite(marker.record?.groundSpeedKt)
-                ? marker.record.groundSpeedKt * KNOT_MPS
-                : null,
-            })
-          : undefined,
-      ),
+      image: view ?? aircraftIcon(kind, undefined, frame),
       size: [MARKER_SPRITE.width, MARKER_SPRITE.height],
       scale: marker.iconScale ?? 1,
       color: kind === 'vehicle' ? vehicleColor : color,
       scaleByDistance: MARKER_SPRITE.scaleByDistance,
-      rotationMode: 'screen',
-      rotation: kind === 'station' ? 0 : markerRotation(marker, basis),
+      ...(view
+        ? {
+            rotationMode: 'course',
+            course: marker.courseDeg ?? 0,
+            pickProxy: { size: [MARKER_SPRITE.width, MARKER_SPRITE.height] },
+          }
+        : {
+            rotationMode: 'screen',
+            rotation: kind === 'station' ? 0 : markerRotation(marker, basis),
+          }),
       // The 3D model, once loaded and placed, is the visual instead.
       show: !marker.modelOwnsVisual,
       disableDepthTest: Number.POSITIVE_INFINITY,
@@ -525,6 +550,7 @@ export function createLocalAdsbLayer({
 
   function clearSelection({ evicted = false } = {}) {
     if (!selectedId) return;
+    releaseSelection(LAYER_ID, selectedId);
     selectedId = null;
     releaseTrail();
     clearSelectedEntityContextForLayer(LAYER_ID, { evicted });
@@ -630,6 +656,8 @@ export function createLocalAdsbLayer({
     if (!marker) return false;
     const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection(LAYER_ID, id);
     enrichment.request(marker.record, { selected: true });
     entityRecord(marker.carrier).labelModel = cardModel(marker, now());
     selectEntityContext(marker.carrier);
@@ -699,8 +727,52 @@ export function createLocalAdsbLayer({
     return trail ? 'trail' : null;
   }
 
+  /**
+   * Centre a clicked aircraft once, meeting it where it will be when the
+   * camera arrives; the camera does not follow it (src/data/clickSelect.js).
+   * Local reception is always live.
+   */
+  function centerMarker(marker) {
+    if (!marker || !viewer) return false;
+    return centerOnClick(viewer, (aheadMs) => {
+      const display = marker.motion?.displayAt(now() + aheadMs, {
+        slew: false,
+      });
+      return display ? fixPosition(marker, display) : marker.position;
+    });
+  }
+
+  /**
+   * The marker a card names: its marker id, or the ICAO hex or callsign of
+   * exactly one heard aircraft.
+   */
+  function markerIdFor(id) {
+    if (id === null || id === undefined) return null;
+    const name = String(id);
+    if (markers.has(name)) return name;
+    if (markers.has(`${ENTITY_PREFIX}${name.toLowerCase()}`))
+      return `${ENTITY_PREFIX}${name.toLowerCase()}`;
+    let found = null;
+    for (const [markerId, marker] of markers) {
+      if (marker.record?.callsign !== name) continue;
+      if (found !== null) return null;
+      found = markerId;
+    }
+    return found;
+  }
+
   function installInteraction() {
     if (clickSubscription || !viewer) return;
+    // One thing is selected at a time: another layer's selection lets go of
+    // this one's.
+    offSelectionYield = yieldSelectionToOthers(
+      LAYER_ID,
+      () => Boolean(selectedId),
+      () => {
+        clearSelection();
+        governorRequestRender('local-adsb-selection');
+      },
+    );
     clickSubscription = inputFor(viewer).onClick((event) => {
       if (!enabled) return;
       // Another layer's card or label painted on top takes the click: the item
@@ -712,6 +784,7 @@ export function createLocalAdsbLayer({
       // displaced, and a click on a marker must never read as "deselect".
       if (target && markers.has(target)) {
         selectMarker(target);
+        centerMarker(markers.get(target));
         return;
       }
       // A click on a trail line is not empty map.
@@ -726,6 +799,8 @@ export function createLocalAdsbLayer({
   function releaseInteraction() {
     clickSubscription?.();
     clickSubscription = null;
+    offSelectionYield?.();
+    offSelectionYield = null;
   }
 
   function installFrame() {
@@ -773,6 +848,11 @@ export function createLocalAdsbLayer({
     init(nextViewer) {
       viewer = nextViewer;
       const draw = drawOf(viewer);
+      views = registerAircraftViews(
+        draw,
+        rendererOf(viewer)?.capabilities ?? null,
+        resolveAsset,
+      );
       const prefix = `${LAYER_ID}:${++instances}`;
       sets = {
         markers: draw.icons({
@@ -872,6 +952,7 @@ export function createLocalAdsbLayer({
       models = null;
       if (sets) for (const set of Object.values(sets)) set.dispose();
       sets = null;
+      views = false;
       viewer = null;
       void receiver.destroy?.();
     },
@@ -913,6 +994,33 @@ export function createLocalAdsbLayer({
     },
 
     /**
+     * Select an aircraft by the id its card has (its marker id, ICAO hex
+     * or callsign), as a click on it does; `center: false` leaves the
+     * camera to the caller (a pick from a list frames it).
+     * @param {string} id
+     * @param {{center?: boolean}} [options]
+     */
+    pickById(id, { center = true } = {}) {
+      const markerId = markerIdFor(id);
+      if (!enabled || !markerId || !selectMarker(markerId)) return false;
+      if (center) centerMarker(markers.get(markerId));
+      return true;
+    },
+
+    /** Whether the aircraft a card names is the one selected. */
+    isSelected(id) {
+      const markerId = markerIdFor(id);
+      return markerId !== null && markerId === selectedId;
+    },
+
+    /** Deselect the selected aircraft, as a click on the map does. */
+    clearSelection() {
+      clearSelection();
+      governorRequestRender('local-adsb-selection');
+      return true;
+    },
+
+    /**
      * Snapshot loaded locally received aircraft as plain JSON-safe records for the analyst
      * query engine. On demand only (once per spoken query); [] while the
      * layer is off.
@@ -933,6 +1041,7 @@ export function createLocalAdsbLayer({
           id: record.callsign || record.icao,
           icao24: record.icao || null,
           callsign: record.callsign || null,
+          aircraftClass: marker.evidence ? marker.klass : null,
           lat,
           lon,
           altitudeM: Number.isFinite(record.altitudeFt)

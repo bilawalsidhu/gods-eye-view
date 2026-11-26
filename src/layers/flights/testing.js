@@ -104,7 +104,9 @@ export function createTesting({
     flightState._viewer = viewer;
     parts.rendering._disposeModelSets();
     if (draw) parts.rendering._createModelSets(viewer, { draw });
-    flightState._icons = createContactIcons();
+    parts.icons._disposeIcons();
+    if (draw) parts.icons._createIcons(viewer);
+    else flightState._icons = createContactIcons();
     flightState._icons.show = iconLayer?.show ?? true;
     flightState._grounded.clear();
     flightState._floorPinned.clear();

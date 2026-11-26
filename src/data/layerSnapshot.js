@@ -1,4 +1,3 @@
-import { layerFeedState } from './feedState.js';
 /**
  * Shared layer snapshot envelope for voice and HUD answers.
  *
@@ -10,6 +9,20 @@ import { layerFeedState } from './feedState.js';
  *
  * @module data/layerSnapshot
  */
+
+import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
+import { layerFeedState } from './feedState.js';
+
+/** English key guidance for a layer waiting on any of its keys. */
+function keyBlockedText(ids) {
+  const envVars = [ids]
+    .flat()
+    .map((id) => (id ? keySetupRequirementEnvVars(id) : null))
+    .filter(Boolean);
+  return envVars.length
+    ? `key required: add ${envVars.join(' or ')} in Provider Settings`
+    : 'key required: add a provider key in Provider Settings';
+}
 
 /** Feed states the Data Layers chips and voice/HUD provenance share. */
 export const LAYER_FEED_STATES = Object.freeze([
@@ -141,7 +154,17 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
   const lastUpdate = Number.isFinite(Number(stats.lastUpdate))
     ? Number(stats.lastUpdate)
     : null;
-  const feedState = enabled ? layerFeedState({ ...stats, source }) : 'off';
+  // A layer whose every network waits on a key has no feed yet: voice and
+  // the HUD say so instead of narrating zero records as nominal. A model
+  // field on the map (`fieldShown`) is a feed; the key guidance stays the
+  // error, for the stations.
+  const keyWaiting = stats.keyRequired === true && count === 0;
+  const keyBlocked = keyWaiting && stats.fieldShown !== true;
+  const feedState = !enabled
+    ? 'off'
+    : keyBlocked
+      ? 'unavailable'
+      : layerFeedState({ ...stats, source });
   return {
     id: layer.id || layer.layerKey || null,
     name: layer.name || layer.label || layer.id || layer.layerKey || null,
@@ -152,7 +175,9 @@ export function layerSnapshot(layer = {}, { now = Date.now() } = {}) {
     lastUpdate,
     ageSec: snapshotAgeSec(lastUpdate, now),
     ageLabel: snapshotAgeLabel(lastUpdate, now),
-    error: snapshotError(stats),
+    error:
+      snapshotError(stats) ??
+      (keyWaiting ? keyBlockedText(layer.requiresKeyId) : null),
   };
 }
 

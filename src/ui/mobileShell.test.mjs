@@ -94,8 +94,10 @@ function element(tag, document) {
     getBoundingClientRect: () => ({ top: 0, height: 0 }),
     getClientRects: () => (node.hidden ? [] : [{}]),
     matches: (selector) =>
-      selector === '.panel-collapse-btn' &&
-      node.className.split(' ').includes('panel-collapse-btn'),
+      (selector === '.panel-collapse-btn' &&
+        node.className.split(' ').includes('panel-collapse-btn')) ||
+      (selector.startsWith('input, textarea') &&
+        ['INPUT', 'TEXTAREA'].includes(node.tagName)),
     focus() {
       document.activeElement = node;
     },
@@ -109,7 +111,12 @@ function element(tag, document) {
 
 const PANEL_IDS = [...new Set(Object.values(MOBILE_SHEET_PANELS).flat())];
 
-function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
+function fixture({
+  mobile = true,
+  expanded = [],
+  afterPublish,
+  visualViewport = null,
+} = {}) {
   const document = new EventTarget();
   document.ids = new Map();
   document.createElement = (tag) => element(tag, document);
@@ -124,11 +131,12 @@ function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
         : null;
   document.body = element('body', document);
   document.activeElement = document.body;
-  const search = element('input', document);
-  search.id = 'location-search';
-  document.body.append(search);
+  // A field outside the sheets, such as the Omnibar's.
+  const field = element('input', document);
+  field.id = 'outside-field';
+  document.body.append(field);
   const rails = {};
-  for (const id of ['left-panel-stack', 'right-context-rail', 'command-dock']) {
+  for (const id of ['left-panel-stack', 'right-context-rail']) {
     rails[id] = element('div', document);
     rails[id].id = id;
     document.body.append(rails[id]);
@@ -144,12 +152,9 @@ function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
     const collapse = element('button', document);
     collapse.className = 'panel-collapse-btn';
     panel.append(toggle, collapse, element('button', document));
-    const root =
-      id === 'data-panel'
-        ? 'left-panel-stack'
-        : ['location-bar', 'control-panel'].includes(id)
-          ? 'command-dock'
-          : 'right-context-rail';
+    const root = ['data-panel', 'pp-toggles'].includes(id)
+      ? 'left-panel-stack'
+      : 'right-context-rail';
     rails[root].append(panel);
   }
 
@@ -203,6 +208,7 @@ function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
     documentRef: document,
     publish,
     afterPublish,
+    visualViewport,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
     ResizeObserverImpl: null,
@@ -250,7 +256,7 @@ function fixture({ mobile = true, expanded = [], afterPublish } = {}) {
     tab,
     resize,
     viewport,
-    search,
+    field,
     setBodyClass,
     collapsed,
   };
@@ -293,16 +299,16 @@ test('one sheet at a time, presented with aria-expanded and a backdrop', () => {
 });
 
 test('sheets borrow panels and put them back exactly as they were', () => {
-  // The user left Data Layers and Presets open on desktop.
-  const kept = ['data-panel', 'control-panel'];
+  // The user left Data Layers and Visual open on desktop.
+  const kept = ['data-panel', 'pp-toggles'];
   const { calls, press, collapsed } = fixture({ expanded: kept });
   press('cameras');
   assert.equal(collapsed('cctv-panel'), false);
   assert.equal(collapsed('street-level-panel'), false);
-  press('search');
+  press('context');
   assert.equal(collapsed('cctv-panel'), true, 'Cameras put back on switch');
-  assert.equal(collapsed('location-bar'), false);
-  press('search');
+  assert.equal(collapsed('global-context-panel'), false);
+  press('context');
   for (const id of PANEL_IDS)
     assert.equal(collapsed(id), !kept.includes(id), `${id} is back as it was`);
   // Nothing a sheet does is the user's choice, persisted or shared.
@@ -338,11 +344,12 @@ test('a panel the user changes inside a sheet stays as they left it', () => {
 });
 
 test('focus moves into the sheet and returns to the tab on close', () => {
-  const { document, press, search, tab } = fixture();
-  press('search');
-  assert.equal(document.activeElement, search);
-  press('search');
-  assert.equal(document.activeElement, tab('search'));
+  const { document, press, tab } = fixture();
+  press('more');
+  const visual = document.getElementById('pp-toggles');
+  assert.equal(document.activeElement, visual.children[2]);
+  press('more');
+  assert.equal(document.activeElement, tab('more'));
 
   press('layers');
   const dataPanel = document.getElementById('data-panel');
@@ -455,7 +462,7 @@ test('focus that moved before the tab bar renders stays where it went', () => {
   });
   tab('layers').focus();
   press('layers');
-  const elsewhere = document.getElementById('location-search');
+  const elsewhere = document.getElementById('outside-field');
   press('layers');
   elsewhere.focus();
   pending.splice(0).forEach((callback) => callback());
@@ -526,10 +533,10 @@ test('the shell publishes whether it is on and which sheet is open', () => {
     sheet: null,
     tabs: MOBILE_TABS,
   });
-  phone.press('search');
+  phone.press('cameras');
   assert.deepEqual(phone.views.at(-1), {
     enabled: true,
-    sheet: 'search',
+    sheet: 'cameras',
     tabs: MOBILE_TABS,
   });
   phone.resize(false);
@@ -587,11 +594,20 @@ test('the phone shell keeps the required attribution visible', () => {
   const idleCredit = rule(
     'body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view) #cesium-credits',
   );
-  const dock = rule('body.mobile-shell #command-dock');
-  const voice = rule('body.mobile-shell #command-dock #gev-voice-control');
-  const voiceHeightPx = Number(/height: ([\d.]+)rem/.exec(voice)[1]) * 16;
-  // Idle: the credit line clears the voice bar, which clears the tab bar.
-  assert.ok(lift(idleCredit) > lift(dock) + voiceHeightPx);
+  // The dock (omnibar-dock.css, 56px tall) floats over the tab bar, rising
+  // over the World Timeline as the credit line does.
+  const floor = Number(
+    /--omnibar-dock-bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px\);/.exec(
+      css,
+    )?.[1],
+  );
+  assert.match(
+    css,
+    /--omnibar-dock-raised: max\(calc\(var\(--omnibar-dock-bottom\) \+ var\(--world-timeline-lift, 0px\)\),/,
+  );
+  // Idle: the credit line clears the dock, which clears the tab bar.
+  assert.ok(floor > 0);
+  assert.ok(lift(idleCredit) >= floor + 56 + 6);
   // It must beat the dock's :has() placements, so the offset is !important.
   assert.match(idleCredit, /\) !important;/);
   assert.doesNotMatch(
@@ -616,11 +632,14 @@ test('the phone shell keeps the required attribution visible', () => {
     sheetCredit,
     /bottom: calc\(var\(--mobile-sheet-cover, 0px\) \+ 6px\) !important;/,
   );
-  const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
+  // An open sheet puts the dock away rather than covering or crowding it.
+  assert.match(
+    css,
+    /&\[data-mobile-sheet\] :is\(#command-dock, #gev-omnibar\) \{ display: none; \}/,
+  );
   const railSheet = rule(
     "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
   );
-  assert.ok(z(sheetCredit) > z(openDock));
   assert.ok(z(sheetCredit) > z(railSheet));
 });
 
@@ -730,7 +749,7 @@ test('native controls and custom sliders keep touch gestures', () => {
     if (tag === 'editable') control.setAttribute('contenteditable', 'true');
     const child = document.createElement('span');
     control.append(child);
-    document.getElementById('control-panel').append(control);
+    document.getElementById('pp-toggles').append(control);
     touchEvent(document, 'touchstart', child);
     assert.equal(
       touchEvent(document, 'touchmove', child, { y: 120 }).defaultPrevented,
@@ -849,4 +868,48 @@ test('on phones the News panel shows in the Context sheet only, like Weather', (
     css,
     /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
   );
+});
+
+test('a phone keyboard lifts the dock by the height it covers', () => {
+  const viewport = new EventTarget();
+  Object.assign(viewport, { height: 844, offsetTop: 0 });
+  const innerHeight = globalThis.innerHeight;
+  globalThis.innerHeight = 844;
+  try {
+    const { document, field, shell, resize, runFrames } = fixture({
+      visualViewport: viewport,
+    });
+    const inset = () =>
+      document.body.style.values.get('--mobile-keyboard-inset');
+    assert.equal(inset(), '0px');
+    field.focus();
+    document.dispatchEvent(new Event('focusin'));
+    viewport.height = 500;
+    viewport.dispatchEvent(new Event('resize'));
+    assert.equal(inset(), '344px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      true,
+    );
+    // The page scrolled under the keyboard: the cover is what is below.
+    viewport.offsetTop = 40;
+    viewport.dispatchEvent(new Event('scroll'));
+    assert.equal(inset(), '304px');
+    // Without a field in focus (a pinch zoom), nothing is covered.
+    field.blur();
+    document.dispatchEvent(new Event('focusout'));
+    runFrames();
+    assert.equal(inset(), '0px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      false,
+    );
+    resize(false);
+    assert.equal(inset(), undefined);
+    resize(true);
+    shell.destroy();
+    assert.equal(inset(), undefined);
+  } finally {
+    globalThis.innerHeight = innerHeight;
+  }
 });

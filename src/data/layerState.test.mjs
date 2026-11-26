@@ -2953,6 +2953,36 @@ test('explicit provider switches reach durable state without adopting unrelated 
   }
 });
 
+for (const view of ['aqi', 'PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+  test(`air-quality view round-trips through a share token: ${view}`, () => {
+    const state = normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: { 'air-quality': { view } },
+    });
+    assert.deepEqual(state.options['air-quality'], { view });
+    assert.deepEqual(
+      decodeLayerStateParams(new URLSearchParams(encode(state))),
+      state,
+    );
+  });
+}
+
+test('the plain token 4 opens the layer on the US AQI', () => {
+  const decoded = decodeLayerStateParams(new URLSearchParams('v=2&l=4'));
+  assert.deepEqual(decoded.enabledLayerIds, ['air-quality']);
+  assert.deepEqual(decoded.options['air-quality'], { view: 'aqi' });
+  // Retired selectors and unknown views fall back to the default view.
+  assert.deepEqual(
+    normalizeLayerState({
+      enabledLayerIds: ['air-quality'],
+      options: {
+        'air-quality': { provider: 'national', parameter: 'CO2', view: 'CO2' },
+      },
+    }).options['air-quality'],
+    { view: 'aqi' },
+  );
+});
+
 function enabledLayerParam(sink) {
   return new URLSearchParams(encode(sink.provider())).get('l');
 }

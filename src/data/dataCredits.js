@@ -259,11 +259,19 @@ export const DATA_CREDITS = [
   OSM_CREDIT,
   OPENMAPTILES_CREDIT,
   {
-    key: 'eccc-aqhi',
+    key: 'openaq',
+    html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. The originating network and its licence are named in each station’s details.',
+  },
+  {
+    key: 'eea-aqi-bands',
     html:
-      'Air quality (AQHI): Environment and Climate Change Canada — MSC GeoMet ' +
-      '(<a href="https://eccc-msc.github.io/open-data/" target="_blank" rel="noopener">eccc-msc.github.io/open-data</a>) ' +
-      '· <a href="https://eccc-msc.github.io/open-data/licence/readme_en/" target="_blank" rel="noopener">ECCC Data Servers End-use Licence</a>',
+      'Air quality. Pollutant bands: ' +
+      '<a href="https://airindex.eea.europa.eu/AQI/" target="_blank" rel="noopener">European Air Quality Index (EEA)</a> · CC BY 4.0 · colours adapted by GEV · ' +
+      'Carbon monoxide: WHO air quality guidelines',
+  },
+  {
+    key: 'us-aqi',
+    html: "US AQI: computed by GEV from station readings with the US EPA's breakpoints and colours; not an official reading.",
   },
   {
     key: 'overture-military-names',
@@ -921,4 +929,30 @@ export function registerDynamicCredit(viewer, credit) {
 export function registerDataCredits(viewer, credits = DATA_CREDITS) {
   if (!viewer) return;
   for (const credit of credits) addDataCredit(viewer, credit);
+}
+
+/** The credits registered under each replaceable key: viewer, markup, and their removers. */
+const _replaceableCredits = new WeakMap();
+/**
+ * Register `credit`, replacing what an earlier call registered under its
+ * key (a source whose wording changes, such as a model run's year).
+ * @returns {boolean} True when the credit is (now) registered.
+ */
+export function replaceDynamicCredit(viewer, credit) {
+  if (!viewer || !credit?.key || !credit?.html) return false;
+  const credits = findCredits(viewer);
+  if (!credits) return false;
+  let byKey = _replaceableCredits.get(viewer);
+  if (!byKey) {
+    byKey = new Map();
+    _replaceableCredits.set(viewer, byKey);
+  }
+  const held = byKey.get(credit.key);
+  if (held?.html === credit.html) return true;
+  if (held) for (const off of held.offs) off?.();
+  const offs = creditsFromMarkup(credit.html).map((one) =>
+    credits.addStatic(one),
+  );
+  byKey.set(credit.key, { html: credit.html, offs });
+  return true;
 }

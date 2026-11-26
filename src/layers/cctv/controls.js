@@ -5,6 +5,7 @@ import {
   DEFAULT_CAMERA_CALIBRATION,
   CALIBRATION_RANGE_FLOOR_M,
 } from './policy.js';
+import { CCTV_HELPER_PICK_ID } from './pickIds.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   const { holdContinuousRender, releaseContinuousRender } = services.render;
@@ -232,6 +233,33 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
+     * Maps a picked id to the camera it belongs to: a camera icon picks as the
+     * camera id, its coverage and projection geometry as
+     * `cctv-<cameraId>-<role>`.
+     * @param {string} pickId - Picked entity id.
+     * @param {object} [hit] - Draw-set identity distinguishes a helper from a camera with the same id.
+     * @returns {string|null} Camera id, or null when no loaded camera owns it.
+     */
+    recordIdForPick(pickId, hit) {
+      if (hit?.set) return parts.rendering.extractPickedCameraId(hit);
+      if (typeof pickId !== 'string') return null;
+      if (layerState._recordById.has(pickId)) return pickId;
+      const match = CCTV_HELPER_PICK_ID.exec(pickId);
+      return match && layerState._recordById.has(match[1]) ? match[1] : null;
+    },
+
+    /**
+     * Returns the camera's name and position for its card.
+     * @param {string} id - Camera id.
+     * @returns {{ name: string, latitude: number, longitude: number }|null}
+     */
+    findByQuery(id) {
+      const camera = layerState._recordById.get(id)?.camera;
+      if (!camera) return null;
+      return { name: camera.name, latitude: camera.lat, longitude: camera.lon };
+    },
+
+    /**
      * Returns basic layer statistics, including initial-load progress while
      * the staggered geometry queue is draining.
      * @returns {{ count: number, lastUpdate: number|null, error: string|null, loading: boolean, loadingLoaded: number, loadingTotal: number }}
@@ -299,6 +327,22 @@ export function createControls({ state: layerState, services, parts, source }) {
       if (options.focus) {
         parts.navigation.focusCamera(cameraId, options.durationSec || 1.8);
       }
+      return true;
+    },
+
+    /**
+     * Picks a camera as a click on it does: it becomes the active camera, its
+     * feed shown in the camera panel. `center: false` leaves the view to the
+     * caller (a pick from a list frames it); otherwise the view flies to it.
+     * @param {string} cameraId
+     * @param {{origin?: string, center?: boolean}} [options]
+     * @returns {boolean} True when the camera is loaded and now active.
+     */
+    pickById(cameraId, { center = true } = {}) {
+      if (!layerState._enabled || !cameraId) return false;
+      const result = parts.selection.setActiveCamera(String(cameraId));
+      if (result === CCTV_ACTIVATION_RESULT.NOT_FOUND) return false;
+      if (center) parts.navigation.focusCamera(String(cameraId), 1.8);
       return true;
     },
 

@@ -63,7 +63,6 @@ The `many` form is the `other` text with « de » (« d' » before a vowel) afte
 | contained / containment (wildfire)                           | circonscrit / part circonscrite (not « maîtrisé », which is controlled) |
 | advisory (NHC/CPHC cyclone)                                  | bulletin                                                                |
 | forecast / lead hours / valid / issued                       | prévision / échéances / valide / émise                                  |
-| AQHI (Canada)                                                | CQAS (cote air santé)                                                   |
 | radio station / tune                                         | station / régler                                                        |
 | bikeshare / transit                                          | vélos partagés / transports en commun                                   |
 | route (directions) / turn (maneuver)                         | itinéraire / manœuvre                                                   |

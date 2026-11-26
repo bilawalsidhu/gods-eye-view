@@ -271,7 +271,7 @@ test('deferred search releases only after its final authority check', () => {
   assert.match(ui, /begin: \(\) => this\._beginDeferredNavigation\('location'\)/);
   assert.match(ui, /beforeFly: \(generation\) => this\._reassertNavigationHandoff\(generation\)/);
   assert.match(ui, /isCurrent: \(generation\) =>\s*!this\._disposed && generation === this\._navigationGeneration/);
-  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation, \{\s*keepQuery: state\.status === 'missing' \|\| state\.status === 'failed',?\s*\}\)/);
+  assert.match(ui, /change\.type === 'settled'\)\s*this\._settleLocationSearchUi\(change\.generation\)/);
   assert.doesNotMatch(search.slice(0, search.indexOf('await this.search')), /_releaseFollowCamera/);
 });
 
@@ -363,7 +363,7 @@ test('teardown refuses deferred location work before geocoding begins', () => {
     'if (!query || this.destroyed) return;',
     'const authority = this.begin();',
     'if (authority === false)',
-    'this.input?.blur();',
+    'this.setSearching(false);',
     'this.onStart?.(authority);',
     'await this.search(query',
   ], 'disposed search refusal');
@@ -404,9 +404,9 @@ test('vessel and fire layers announce valid clicks and never fly cameras', () =>
   );
   ordered(vesselClick, [
     'clickCard?.(event)',
-    'selectAndFocusVessel(carded)',
+    'clickVessel(carded)',
     "isOwnedByOtherLayer('ais-live-vessels', pickedId)",
-    'selectAndFocusVessel(record)',
+    'clickVessel(record)',
   ], 'vessel card on top, then sibling ownership');
   const vesselFocus = body(
     vessels,

@@ -1065,6 +1065,15 @@ html:not([lang='en'])
   opacity: 0.85;
 }
 
+/* A row's colour dot (a reading's band), before its value. */
+.data-row-list-swatch {
+  flex: none;
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 .data-row-list-text {
   flex: 1 1 auto;
   overflow: hidden;
@@ -1380,4 +1389,23 @@ html:not([lang='en']) .data-row-list-text {
 }
 .sdr-feed-status[hidden] {
   display: none;
+}
+
+.data-row-list-item.unranked {
+  counter-increment: none;
+}
+.data-row-list-item.unranked::before {
+  content: '';
+}
+.data-row-list-note {
+  flex: none;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+/* A ranking reads one line a row in every language: a name is cut, not wrapped. */
+html:not([lang='en']) .data-row-list.is-single-line .data-row-list-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }

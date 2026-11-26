@@ -1,9 +1,17 @@
 import { cameraOf, findCamera, findFrame } from '../../render/rendererOf.js';
 import {
   entityFollowTarget,
+  followedOf,
   onFollowChanged,
   stopFollowing,
 } from '../../data/followed.js';
+import {
+  centerOnClick,
+  claimSelection,
+  followOnSecondClick,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { formatNumber, t } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 import { nextCockpitNearContacts } from '../../data/cockpitAirLod.js';
@@ -84,8 +92,7 @@ export function createTracking({
   const { createTrail } = services.trails;
   const { ensureGeoidReady, geoidHeight } = services.geoid;
   const { clearFocusTarget } = services.focus;
-  const { FOLLOW_MIN_RANGE_M, SELECTION_FOLLOW_TRANSITION_S, followViewFrom } =
-    services.camera;
+  const { FOLLOW_MIN_RANGE_M } = services.camera;
   const { resolvePickId, isOwnedByOtherLayer, isUnderOtherCard } =
     services.picking;
   /** The tracked contact's billboard (an icon set on the draw port). */
@@ -982,6 +989,7 @@ export function createTracking({
     // the previous aircraft's cached position.
     parts.motion._resetTrackedDisplay();
     _clearTrail();
+    releaseSelection('military', clearedIcao);
   }
 
   function _applyPendingTrackingRestore() {
@@ -1003,20 +1011,60 @@ export function createTracking({
     flightState._pendingTrackingRestore = null;
   }
 
+  /** Have the camera follow the tracked aircraft (an explicit follow). */
+  function _followTracked() {
+    if (!flightState._followTarget || !flightState._viewer) return false;
+    const camera = cameraOf(flightState._viewer);
+    // Cancel any in-progress camera flight first — otherwise the camera won't
+    // apply the follow target's viewFrom on the first frame, so
+    // voice-initiated tracking (which often fires mid-fly_to_location) would
+    // follow the plane without framing it.
+    camera.cancelFlight();
+    camera.follow(flightState._followTarget);
+    return true;
+  }
+
+  /** Whether the camera follows the tracked aircraft now. */
+  function _trackedIsFollowed() {
+    return (
+      Boolean(flightState._followTarget) &&
+      followedOf(flightState._viewer) === flightState._followTarget
+    );
+  }
+
+  /**
+   * Centre the tracked aircraft once, as a click does: the camera keeps its
+   * distance and angle and meets the plane where it will be on arrival.
+   */
+  function _centerTracked() {
+    const icao24 = flightState._trackedIcao;
+    const icons = flightState._icons;
+    if (!icao24 || !icons?.has(icao24)) return false;
+    return centerOnClick(
+      flightState._viewer,
+      (aheadMs) =>
+        icons.position(icao24, parts.icons._displayMs() + aheadMs, vec()),
+      { clockId: 'military' },
+    );
+  }
+
   /**
    * Begin tracking a specific aircraft. Clears any previous tracking, hides the
-   * icon, creates a new Entity with dead-reckoning CallbackProperties for
-   * smooth continuous motion, and sets the viewer's trackedEntity so the camera
-   * follows.
+   * icon and draws the tracked billboard with dead-reckoned motion, read by
+   * the selected-aircraft card and, when followed, the camera.
    * @param {string} icao24 - ICAO hex identifier of the aircraft to track
-   * @param {{origin?: string, keepView?: boolean}} [options] `keepView` (a
-   *   click on the plane): follow from the camera's own distance and angle,
-   *   the plane sliding to the centre, rather than the calibrated framing.
+   * @param {{origin?: string, follow?: boolean, center?: boolean}} [options] `follow: false`
+   *   (a click on the plane) selects it and centres it once, keeping the
+   *   camera's distance and angle, and follows nothing
+   *   (src/data/clickSelect.js); anything else (Follow, voice, a share link)
+   *   follows it from a calibrated framing.
+   *   `center: false` (a pick from a list, which the caller frames)
+   *   selects it without moving the camera.
    */
 
   function _trackFlight(
     icao24,
-    { origin = 'programmatic', keepView = false } = {},
+    { origin = 'programmatic', follow = true, center = true } = {},
   ) {
     _clearTracking(false, { origin }); // switching planes — the new follow-camera takes over
 
@@ -1087,6 +1135,9 @@ export function createTracking({
       // Its own colour (faded while stale) when the billboard is the visual (zoomed out, 3D off,
       // or model still loading); transparent once the tracked model is actually up (ready + shown).
       color: _trackedIconColor,
+      // The course a view-sheet image is drawn along (the same display
+      // course the screen rotation below is projected from).
+      course: () => parts.motion._trackedDisplayCourse(),
       // Screen-projected rotation, evaluated per frame on the camera's own
       // axes, so it stays exact through a tracked orbit. The tracked target
       // must never vanish into tile geometry — tracking a taxiing plane at
@@ -1120,12 +1171,11 @@ export function createTracking({
     entityRecord(flightState._trackedEntity).labelModel =
       trackedLabelModelFromText(_buildTrackedLabel(info, icao24), '#ffd166');
 
-    // A click on the plane follows it from where the camera is (`keepView`,
-    // below). A selection from elsewhere (a search, voice, a share link) has no
-    // view of the plane to keep: a billboard has a ~zero bounding sphere, so the
-    // renderer's default follow distance is far too tight. It gets a calibrated
-    // viewFrom — behind + above, distance scaled to altitude — for a readable
-    // initial frame with surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
+    // A follow (Follow, voice, a share link) has no view of the plane to
+    // keep: a billboard has a ~zero bounding sphere, so the renderer's default
+    // follow distance is far too tight. It gets a calibrated viewFrom — behind
+    // + above, distance scaled to altitude — for a readable initial frame with
+    // surrounding context. (ENU: east=+X, north=+Y, up=+Z.)
     const altM = info?.onGround
       ? 0
       : info?.altitudeFt
@@ -1134,9 +1184,6 @@ export function createTracking({
     const followRange = Math.min(Math.max(altM * 1.1 + 2500, 3000), 30000);
     const viewFrom = vec(0, -followRange * 0.8, followRange * 0.55);
 
-    // Cancel any in-progress camera flight first — otherwise the camera won't apply the follow
-    // target's viewFrom on the first frame, so voice-initiated tracking (which often fires
-    // mid-fly_to_location) would follow the plane WITHOUT centering it like a click does.
     // Cross-module HUD consumers (tracked-target readout) read the camera's settled position, not a
     // postRender recompute, so the label doesn't jitter against the now-stable plane (mirror of flights).
     entityRecord(flightState._trackedEntity).displayPosition =
@@ -1146,25 +1193,24 @@ export function createTracking({
     // can see reads the entity record's `visualPosition`.
     entityRecord(flightState._trackedEntity).visualPosition =
       parts.motion._trackedVisualCached;
-    refreshTrackedReadout(flightState._trackedEntity);
-    // The camera follows through its port: a target framed from viewFrom in
-    // ENU, never closer than the readable minimum, whose presentation (key,
-    // label, sprite, display position) reads the tracked entity's record.
-    const camera = cameraOf(flightState._viewer);
-    camera.cancelFlight();
-    const kept = keepView
-      ? followViewFrom(camera.pose(), getTrackedPosition())
-      : null;
+    // What the camera follows when it is asked to: a target framed from
+    // viewFrom in ENU, never closer than the readable minimum, whose
+    // presentation (key, label, sprite, display position) reads the tracked
+    // entity's record. It is also the selected-aircraft card's subject.
     flightState._followTarget = entityFollowTarget(flightState._trackedEntity, {
       position: getTrackedPosition,
       frame: 'enu',
-      viewFrom: kept ?? viewFrom,
+      viewFrom,
       minRange: FOLLOW_MIN_RANGE_M,
-      // A click keeps the camera's distance and angle: the plane slides to
-      // the centre from where the camera is, and is followed from there.
-      ...(kept ? { transitionS: SELECTION_FOLLOW_TRANSITION_S } : {}),
     });
-    camera.follow(flightState._followTarget);
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('military', icao24, {
+      subject: flightState._followTarget,
+      origin,
+    });
+    refreshTrackedReadout(flightState._trackedEntity);
+    if (follow) _followTracked();
+    else if (center) _centerTracked();
 
     // Track-history trail (PRD F2): seed from local history + async backfill.
     // Ground traffic draws NO trail — if the plane takes off while tracked, the
@@ -1208,21 +1254,33 @@ export function createTracking({
     // Cross-layer untrack (mirror of flights): if another layer grabs the follow-camera, drop our
     // tracking without touching the camera's follow (the new owner controls it).
     if (!flightState._trackedEntityChangedRemove) {
-      flightState._trackedEntityChangedRemove = onFollowChanged(
-        viewer,
-        (followed) => {
-          if (
-            flightState._trackedIcao &&
-            flightState._viewer &&
-            followed &&
-            followed !== flightState._followTarget
-          ) {
-            _clearTracking(true, {
-              origin: followed.selectionOrigin || 'programmatic',
-            });
-          }
-        },
+      const offFollow = onFollowChanged(viewer, (followed) => {
+        if (
+          flightState._trackedIcao &&
+          flightState._viewer &&
+          followed &&
+          followed !== flightState._followTarget
+        ) {
+          _clearTracking(true, {
+            origin: followed.selectionOrigin || 'programmatic',
+          });
+        }
+      });
+      // Another layer selected something (a click selects without
+      // following): let our plane go, and the camera with it only if it
+      // follows our plane.
+      const offSelection = yieldSelectionToOthers(
+        'military',
+        () => Boolean(flightState._trackedIcao),
+        (selection) =>
+          _clearTracking(!_trackedIsFollowed(), {
+            origin: selection.origin,
+          }),
       );
+      flightState._trackedEntityChangedRemove = () => {
+        offFollow();
+        offSelection();
+      };
     }
 
     flightState._clickSubscription = inputFor(viewer).onClick((event) => {
@@ -1247,13 +1305,31 @@ export function createTracking({
         // H1: the model used to have no pick id, so this fell through to
         // "empty space" and deselected the very plane being tracked.
         // Its billboard and models are draw-set items keyed by icao, like its icons.
+        // A second click on the selected plane follows it, as the card's
+        // Follow does; a click on the followed plane keeps the follow
+        // (src/data/clickSelect.js).
         const pickedIcao = aircraftPickId(picked);
-        if (flightState._trackedIcao && pickedIcao === flightState._trackedIcao)
+        if (
+          flightState._trackedIcao &&
+          pickedIcao === flightState._trackedIcao
+        ) {
+          followOnSecondClick('military', pickedIcao, {
+            isFollowed: _trackedIsFollowed,
+            follow: () => {
+              _cancelPendingTrackingRestore();
+              if (!_followTracked()) return false;
+              _publishTrackedSelection(pickedIcao, 'user');
+              return true;
+            },
+          });
           return;
+        }
 
+        // A click selects and centres the plane once; it does not follow it
+        // (src/data/clickSelect.js).
         if (pickedIcao && flightState._icons?.has(pickedIcao)) {
           _cancelPendingTrackingRestore();
-          _trackFlight(pickedIcao, { origin: 'user', keepView: true });
+          _trackFlight(pickedIcao, { origin: 'user', follow: false });
           return;
         }
       }
@@ -1317,6 +1393,9 @@ export function createTracking({
     _applyPendingTrackingRestore,
     _cancelPendingTrackingRestore,
     _trackFlight,
+    _followTracked,
+    _trackedIsFollowed,
+    _centerTracked,
     _onKeyDown,
     _installClickHandler,
   };

@@ -19,6 +19,7 @@ test('capabilities follow what the scene supports', () => {
     'columns',
     'motionSegments',
     'courseGlide',
+    'viewSheets',
     'cluster',
     'styles',
     'bloom',
@@ -33,7 +34,6 @@ test('capabilities follow what the scene supports', () => {
     'imageryDecoded',
     'surfaceIdentity',
     'surfaceShading',
-    'vectorBase',
   ];
   const globe = { show: true };
   const draw = [

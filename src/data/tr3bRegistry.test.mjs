@@ -251,10 +251,11 @@ test('both flight layers keep a converted contact 2D and visible (render invaria
     //    billboard) can silently revert a conversion. The tracked billboard's
     //    sites share one helper; the fleet's live in aircraftIconLayer.js.
     const code = stripComments(source);
+    assert.match(code, /const kind = rendering\._iconKind\(icao24, info\?\.klass\);/);
     const callSites = code.match(/aircraftIcon\(\s*[^;]*?\)/g) || [];
     assert.equal(callSites.length >= 1, true, `${name}: expected the known aircraftIcon call sites`);
     for (const call of callSites) {
-      assert.match(call, /aircraftIcon\(\s*\s*(?:(?:parts\.)?rendering\.)?_iconKind\(\s*/,
+      assert.match(call, /aircraftIcon\(\s*(?:kind\s*,|(?:(?:parts\.)?rendering\.)?_iconKind\()/,
         `${name}: ${call.replace(/\s+/g, ' ')} must resolve its sprite kind through _iconKind`);
     }
 

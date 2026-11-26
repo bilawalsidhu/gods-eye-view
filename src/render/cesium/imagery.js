@@ -24,7 +24,6 @@
  * source holds ahead, each tile the image the source answers for it.
  */
 import * as Cesium from 'cesium';
-import { vectorBaseProvider } from './vectorBase.js';
 import { creditMarkup } from './credits.js';
 import { listenerList } from './common.js';
 import {
@@ -109,6 +108,33 @@ function canvasProvider(spec) {
   };
 }
 
+/** One canvas spanning the entire single-image rectangle. */
+function imageProvider(spec) {
+  const { image } = spec;
+  const tilingScheme = new Cesium.GeographicTilingScheme({
+    rectangle: rectangleOf(spec.rectangle) ?? Cesium.Rectangle.MAX_VALUE,
+    numberOfLevelZeroTilesX: 1,
+    numberOfLevelZeroTilesY: 1,
+  });
+  return {
+    image,
+    tilingScheme,
+    tileWidth: image.width,
+    tileHeight: image.height,
+    minimumLevel: 0,
+    maximumLevel: 0,
+    rectangle: tilingScheme.rectangle,
+    credit: cesiumCredit(spec.credit),
+    errorEvent: new Cesium.Event(),
+    hasAlphaChannel: true,
+    tileDiscardPolicy: undefined,
+    proxy: undefined,
+    getTileCredits: () => undefined,
+    pickFeatures: () => undefined,
+    requestImage: () => Promise.resolve(image),
+  };
+}
+
 /**
  * The Cesium layer options a spec asks for: one hidden below its minimum
  * level is shown only from the globe level as fine as it (Cesium's globe
@@ -151,6 +177,7 @@ export function providerFor(spec, { worldDataToken } = {}) {
         ...common,
       });
     case 'single-image':
+      if (spec.image && !spec.url) return imageProvider(spec);
       return Cesium.SingleTileImageryProvider.fromUrl(resourceOf(spec), common);
     case 'world': {
       const accessToken = String(worldDataToken || '').trim();
@@ -165,9 +192,6 @@ export function providerFor(spec, { worldDataToken } = {}) {
         accessToken,
       );
     }
-    // The app's own: the vector base's tiles, painted from its style.
-    case 'vectorStyle':
-      return vectorBaseProvider(spec.style);
     case 'canvas':
       if (typeof spec.drawTile !== 'function')
         throw new TypeError('Canvas imagery needs drawTile');
@@ -512,6 +536,10 @@ export function createCesiumImagery(
       );
     if (spec.fetchTile && spec.kind !== 'xyz')
       throw new TypeError('fetchTile is supported for xyz imagery only');
+    if (spec.image !== undefined && spec.kind !== 'single-image')
+      throw new TypeError('image is supported for single-image imagery only');
+    if (spec.image !== undefined && spec.url)
+      throw new TypeError('single-image takes url or image, not both');
     const listeners = {
       tileError: listenerList(report),
       frameReady: listenerList(report),

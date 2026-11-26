@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
 
+function updatePreviewIds(ids, cameraId, shown) {
+  if (shown) return [...ids, cameraId];
+  const index = ids.indexOf(cameraId);
+  return index < 0 ? ids : ids.filter((_, i) => i !== index);
+}
+
 /**
  * The CCTV panel as its view renders it. CctvControls presents the buttons,
  * CAL chip, meta line and calibration readout (`presentCctvPanel()`), runs
@@ -20,10 +26,9 @@ export const useCctvStore = defineStore('gev-cctv', () => {
 
   /** The preview: requested and shown frame, loading and error state. */
   const frame = shallowRef(null);
-  /** Number of camera cards outside the panel showing its preview, including Context's card. */
-  const previewCards = shallowRef(0);
-  /** Number of open bigger views of a camera card (popups over the map). */
-  const previewPopups = shallowRef(0);
+  /** Camera IDs with a mounted card or an open bigger view. */
+  const previewCards = shallowRef([]);
+  const previewPopups = shallowRef([]);
   /** Whether the live video surface replaces the still frame. */
   const live = shallowRef(false);
   /** `{label, state}` for the source badge; null until first synced. */
@@ -53,14 +58,16 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     frame.value = markRaw(next);
   }
 
-  /** @param {boolean} shown */
-  function showPreviewCard(shown) {
-    previewCards.value = Math.max(0, previewCards.value + (shown ? 1 : -1));
+  function showPreviewCard(cameraId, shown) {
+    previewCards.value = updatePreviewIds(previewCards.value, cameraId, shown);
   }
 
-  /** @param {boolean} shown */
-  function showPreviewPopup(shown) {
-    previewPopups.value = Math.max(0, previewPopups.value + (shown ? 1 : -1));
+  function showPreviewPopup(cameraId, shown) {
+    previewPopups.value = updatePreviewIds(
+      previewPopups.value,
+      cameraId,
+      shown,
+    );
   }
 
   /** @param {boolean} on */

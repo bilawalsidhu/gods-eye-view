@@ -13,6 +13,7 @@
 // features (styles, HUD, compass, tilt, globe view, share, clear) have their
 // own. The walk works the same for all of them.
 
+import { isAircraftLayer } from '../data/aircraftLayerIds.js';
 import { h, render as renderVue } from 'vue';
 import { t } from '../i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from '../exclusiveSurfaces.js';
@@ -29,7 +30,6 @@ const MOBILE_PANELS = {
 const SEARCH_BUTTON = '#layer-finder-search-btn';
 const SEARCH_INPUT = '#layer-finder-input';
 const FILTER_BUTTON = '#data-panel .layer-finder__filter button';
-const AIRCRAFT_LAYERS = new Set(['flights', 'military', 'local-adsb']);
 /** Above this altitude (metres) the camera already shows the globe. */
 const GLOBE_ALTITUDE = 2_500_000;
 /**
@@ -164,7 +164,7 @@ export function layerSettingsGuide(layer) {
           ),
         )
       : []),
-    ...(AIRCRAFT_LAYERS.has(layer.id)
+    ...(isAircraftLayer(layer.id)
       ? propertiesSteps('aircraft', () =>
           t(
             '3D models: Proximity shows them up close only, All shows every aircraft as a model.',

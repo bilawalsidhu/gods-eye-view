@@ -1,7 +1,7 @@
 <script setup>
 import { computed, shallowRef, useTemplateRef, watch } from 'vue';
 import { formatDate, t, translateKnown } from '../../../i18n/index.js';
-import { photoCreator, formatAge } from '../../../layers/wildlifeSightings/photoText.js';
+import { photoCreator, formatAge, reportingProviderCredit } from '../../../layers/wildlifeSightings/photoText.js';
 import { ACARTIA_SITE, inatLicenceLabel, inatPhotoUrl, isOpenPhoto } from '../../../layers/wildlifeSightings/records.js';
 import UiCloseButton from '../../kit/UiCloseButton.vue';
 
@@ -44,11 +44,7 @@ const link = computed(() => {
     return url.protocol === 'https:' && !url.username && !url.password ? url.href : null;
   } catch { return null; }
 });
-const providerCredit = computed(() => {
-  if (!acartia.value) return '';
-  const { name = '', entity = '' } = props.sighting.provider || {};
-  return entity ? t('Reported by {name} ({entity})', { name, entity }) : t('Reported by {name}', { name });
-});
+const providerCredit = computed(() => acartia.value ? reportingProviderCredit(props.sighting.provider) : '');
 const actionLabel = computed(() => acartia.value ? t('Open {name} on Acartia', { name: name.value }) : t('Open {name} on iNaturalist', { name: name.value }));
 const photoImage = useTemplateRef('photoImage');
 const loaded = shallowRef(false);
@@ -91,8 +87,8 @@ watch([() => props.sighting.stableId, () => photo.value?.src], () => { loaded.va
         <p v-if="link" class="wildlife-sighting-card-source">{{ acartia ? t('Acartia') : t('iNaturalist') }} ↗</p>
       </div>
     </component>
-    <p v-if="acartia || taxa === 'whales'" class="wildlife-sighting-card-guidance">
-      <a href="https://www.bewhalewise.org" target="_blank" rel="noopener noreferrer">{{ t('Be Whale Wise') }}</a>
+    <p v-if="acartia || sighting.cetacean || taxa === 'whales'" class="wildlife-sighting-card-guidance">
+      <a href="https://www.bewhalewise.org" target="_blank" rel="noopener noreferrer">{{ t('Be Whale Wise') }} ↗</a>
     </p>
   </section>
 </template>

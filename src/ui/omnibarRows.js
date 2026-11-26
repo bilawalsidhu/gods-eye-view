@@ -772,6 +772,13 @@ export function stepLabel(step) {
 }
 
 /** A callsign (UAL2110, BAW15K, N123AB) or a hex transponder code (a12b2e). */
+/** The icon of a row the host's entity lookup found, by kind. */
+const LOOKUP_ICONS = {
+  aircraft: 'flight',
+  vessel: 'directions_boat',
+  camera: 'videocam',
+};
+
 export const CALLSIGN =
   /^(?:[a-z]{2,3}\d{1,4}[a-z]{0,2}|n\d{1,5}[a-z]{0,2}|[0-9a-f]{6})$/i;
 
@@ -1511,7 +1518,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
     const enterContext = { named: Boolean(exactCommand(line)) };
     const finish = (list) => {
       const ordered = orderForEnter(
-        withPlaceWord(list, line),
+        withLookup(withPlaceWord(list, line), line, context.found),
         line,
         parsed,
         enterContext,
@@ -1596,6 +1603,110 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
   }
 
   /**
+   * What may go to the host's entity lookup for a typed line, or null: a
+   * bare name, code or number ("Ever Given", "JL58", "353136000"), never a
+   * command, a layer switch, a question, a sentence or coordinates.
+   */
+  function lookupQuery(typed) {
+    const text = String(typed || '').trim();
+    const line = readLine(text);
+    if (
+      line.length < 3 ||
+      line.startsWith('>') ||
+      line.includes('?') ||
+      isRealQuestion(line) ||
+      exactCommand(line) ||
+      coordinateTarget(line) ||
+      switchRows(line, askRow(text))
+    )
+      return null;
+    const { parsed } = read(line);
+    if (parsed.question || parsed.sentence || placeCoordinates(text, parsed))
+      return null;
+    // The line read as one place and nothing else ("go to Hamburg" and
+    // "show vessels" are commands).
+    const [step, ...more] = parsed.steps;
+    const bare =
+      !step ||
+      (!more.length &&
+        step.kind === 'place' &&
+        String(step.place).trim().toLowerCase() === line.toLowerCase());
+    return bare ? line : null;
+  }
+
+  /**
+   * What the host's entity lookup found for the line (`context.found`, from
+   * lookupMatches in src/ui/entityLookup.js), added to a list. One the line
+   * names exactly (its name, id or MMSI, case, spaces and punctuation aside)
+   * leads the list; the others come after the loaded items listed before
+   * any place row, ahead of the places. One already listed as loaded (same
+   * layer, by id or MMSI) is not repeated: the loaded row leads in its place
+   * when the line names it exactly.
+   */
+  function withLookup(list, line, found) {
+    if (!found?.length || !lookupQuery(line)) return list;
+    const key = (value) =>
+      String(value ?? '')
+        .normalize('NFKD')
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]/gu, '');
+    const wanted = key(line);
+    const lead = [];
+    const others = [];
+    let rest = list;
+    for (const match of found) {
+      const exact = [match.name, match.id, match.mmsi].some(
+        (value) => value && key(value) === wanted,
+      );
+      const loaded = rest.find(
+        (item) =>
+          item.kind === 'entity' &&
+          item.identity?.layerId === match.layerId &&
+          [item.identity.id, item.identity.record?.mmsi].some(
+            (value) =>
+              value != null &&
+              [match.id, match.mmsi].some(
+                (wantedId) =>
+                  wantedId &&
+                  String(value).toLowerCase() === wantedId.toLowerCase(),
+              ),
+          ),
+      );
+      if (loaded) {
+        if (exact) {
+          rest = rest.filter((item) => item !== loaded);
+          lead.push(loaded);
+        }
+        continue;
+      }
+      const row = {
+        key: `found:${match.layerId}:${match.id}`,
+        kind: 'found',
+        icon: LOOKUP_ICONS[match.kind] || 'search',
+        match,
+        label: match.name || match.id,
+        hint:
+          match.detail ||
+          layers.find((layer) => layer.id === match.layerId)?.name ||
+          match.layerId,
+      };
+      (exact ? lead : others).push(row);
+    }
+    const place = rest.findIndex((item) => item.kind === 'place');
+    const lastEntity = rest.findLastIndex((item) => item.kind === 'entity');
+    const ask = rest.findIndex((item) => item.kind === 'ask');
+    const at =
+      place !== -1
+        ? place
+        : lastEntity !== -1
+          ? lastEntity + 1
+          : ask !== -1
+            ? ask
+            : rest.length;
+    return [...lead, ...rest.slice(0, at), ...others, ...rest.slice(at)];
+  }
+
+  /**
    * What may go to the place service (Photon) for a line, or null: the part
    * that names a place, or the whole line when it may be one name
    * ("Satellite Beach", "Home, Washington"). Never private text, a question,
@@ -1662,6 +1773,7 @@ export function createOmnibar({ layers = [], isEntity = () => false } = {}) {
   return {
     rows,
     placeQuery,
+    lookupQuery,
     countRequest,
     matchLayers,
     /** The line as read: for tests and diagnostics. */

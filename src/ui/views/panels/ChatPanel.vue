@@ -87,7 +87,8 @@ const quickPrompts = () => [t('Fly to Tokyo'), t('Show live flights')];
     <p id="gev-chat-status" role="status">{{ props.view.chat.status }}</p>
     <!-- Stays under the status for the whole conversation. -->
     <p v-if="props.view.chat.authNote" id="gev-chat-auth-note">{{ props.view.chat.authNote }}</p>
-    <div id="gev-chat-attachments" :aria-label="t('Attachments')" :hidden="!props.view.chat.attachments.length">
+    <div id="gev-chat-attachments" :aria-label="t('Attachments')" :hidden="!props.view.chat.attachments.length && !props.view.chat.draftReferenceName">
+      <span v-if="props.view.chat.draftReferenceName" class="chat-map-reference">{{ props.view.chat.draftReferenceName }}</span>
       <UiButton v-for="item in props.view.chat.attachments" :key="item.key" :disabled="props.view.chat.locked" :aria-label="`${t('Remove attachment')}: ${item.name}`" @click="emit('chat-attachment-remove', item.key)">{{ item.name }} ×</UiButton>
     </div>
     <div id="gev-chat-attach-menu" :hidden="!props.view.chat.attachMenuOpen" @keydown="emit('chat-attach-keydown', $event)">

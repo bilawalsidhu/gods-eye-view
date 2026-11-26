@@ -13,7 +13,11 @@ function safeNumber(value, fallback = NaN) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
-function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
+function frameUrlFor(
+  camera,
+  refreshMs = ACTIVE_FRAME_REFRESH_MS,
+  { snapshotOnly = false } = {},
+) {
   const cadenceMs = Math.max(
     1000,
     safeNumber(refreshMs, ACTIVE_FRAME_REFRESH_MS),
@@ -27,6 +31,7 @@ function frameUrlFor(camera, refreshMs = ACTIVE_FRAME_REFRESH_MS) {
     pitch: String(Math.round(camera.pitchDeg || -10)),
     ts: String(tick),
   });
+  if (snapshotOnly) params.set('snapshotOnly', '1');
   return `${FRAME_ENDPOINT}/${encodeURIComponent(camera.id)}?${params.toString()}`;
 }
 function mediaUrlFor(camera) {

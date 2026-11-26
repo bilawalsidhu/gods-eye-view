@@ -1424,6 +1424,27 @@ test('a layer option filed under a mirror layer is ignored', () => {
   ]);
 });
 
+test('air-quality compact links retain the view and open on the US AQI by default', () => {
+  const defaults = createDefaultLayerState();
+  defaults.enabledLayerIds = ['air-quality'];
+  assert.deepEqual(
+    decodeOk(encodeShareView({ layerState: defaults })).state.layerState
+      .options['air-quality'],
+    { view: 'aqi' },
+  );
+  for (const view of ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+    const layerState = createDefaultLayerState();
+    layerState.enabledLayerIds = ['air-quality'];
+    layerState.options['air-quality'] = { view };
+    assert.deepEqual(
+      decodeOk(assertRoundTrip({ layerState })).state.layerState.options[
+        'air-quality'
+      ],
+      { view },
+    );
+  }
+});
+
 test('the world time is written only away from live, and may lie ahead', () => {
   const at = (worldTime) =>
     decodeShareView(encodeShareView({ sharedAtMs: NOW_MS, worldTime }), {
@@ -1473,6 +1494,45 @@ function thingCode(write) {
   writer.bytesField(13, thing.finish());
   return hashOf(writer.finish());
 }
+
+test('a followed vessel says so (thing field 14); a selected one, and every older link, does not', () => {
+  assert.equal(SHARE_VIEW_THING_FIELDS.followed, 14);
+  for (const id of ['366999712', VESSEL_UUID]) {
+    const followedState = vesselView(id);
+    followedState.view.followed = true;
+    const followed = assertRoundTrip(followedState);
+    assert.equal(decodeOk(followed).state.view.followed, true, id);
+    const selected = assertRoundTrip(vesselView(id));
+    assert.equal(decodeOk(selected).state.view.followed, undefined, id);
+    // The follow costs two bytes: its tag and its value.
+    assert.equal(
+      payloadBytes(followed).length - payloadBytes(selected).length,
+      2,
+    );
+  }
+  // A link made before the field existed (this code is one) only selects
+  // its vessel.
+  const old = decodeShareView('AUCAw4sZahUYoPH_rgEoqBQwFDg7QLioJEi3snRz', {
+    nowMs: Date.UTC(2026, 10, 2),
+  });
+  assert.equal(old.ok, true);
+  assert.deepEqual(old.state.view.entity, { kind: 'vessel', id: '366999712' });
+  assert.equal(old.state.view.followed, undefined);
+  assert.equal(old.unknownFields, undefined);
+  // Only a vessel carries it: every other kind is always followed.
+  const aircraft = vesselView('a1b2c3');
+  aircraft.view.entity = { kind: 'aircraft', id: 'a1b2c3' };
+  aircraft.view.followed = true;
+  const code = encodeShareView(aircraft);
+  assert.equal(decodeOk(code).state.view.followed, undefined);
+  assert.equal(
+    code,
+    encodeShareView({
+      ...aircraft,
+      view: { ...aircraft.view, followed: false },
+    }),
+  );
+});
 
 test('a vessel id that is a UUID travels as its 16 bytes and round-trips', () => {
   assert.equal(SHARE_VIEW_THING_FIELDS.vesselUuid, 13);

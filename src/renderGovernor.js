@@ -35,10 +35,10 @@
  * rate as soon as one holder asked for none. Moving layers hold through
  * their pace (renderPace.js) at 15 to 30; a followed target counts as
  * FOLLOW_FRAME_RATE unless a pointer or the wheel is steering the camera.
- * While nothing holds it, the governor caps it at IDLE_FRAME_RATE,
- * because Cesium still ticks the clock, data sources and every
- * pre/post-update listener once per animation frame even when it skips the
- * draw. The frame port says when its first hold is taken and its last
+ * While nothing holds it, the loop ticks at the display's rate too, drawing
+ * only what is asked for. Every rate is capped by the frame rate the user
+ * sets in the Display panel (`setFrameRateCap`, DEFAULT_FRAME_RATE until
+ * then; 0, unlimited, leaves the display's). The frame port says when its first hold is taken and its last
  * released (`onHeldChange`), the renderer's own holds included (animated
  * visual styles), so those draw at the full rate too. Camera movement takes
  * a 'camera' hold from `moveStart` to `moveEnd`, so drags and flights run at
@@ -52,8 +52,11 @@ import { PACE_MAX_HZ } from './renderPace.js';
 /** @typedef {import('./render/contract/frame').FramePort} FramePort */
 /** @typedef {import('./render/contract/camera').CameraPort} CameraPort */
 
-/** Frames a second the loop ticks while nothing moves. */
-export const IDLE_FRAME_RATE = 60;
+/** The most frames a second drawn until the user sets their own (the Display
+ *  panel's Frame rate, ./viewFrameRate.js). */
+export const DEFAULT_FRAME_RATE = 60;
+/** The most frames a second drawn, whatever moves; 0: the display's rate. */
+let _frameRateCap = DEFAULT_FRAME_RATE;
 /**
  * Frames a second for a camera that only rides along with what it follows:
  * the most a moving layer draws (renderPace.js), leaving room in the frame
@@ -107,9 +110,33 @@ function heldRate() {
   return rate;
 }
 
-/** The loop's rate: the holders' while held, IDLE_FRAME_RATE while not. */
+/** `rate` under the user's cap (0 for either: no limit from it). */
+function capped(rate) {
+  if (!_frameRateCap) return rate;
+  return rate > 0 ? Math.min(rate, _frameRateCap) : _frameRateCap;
+}
+
+/** The loop's rate: the holders' while held, the display's while not, both
+ *  under the user's cap. */
 function applyRate(held = (_frame?.diagnostics().holds.length ?? 0) > 0) {
-  _frame?.setTargetFps(held ? heldRate() : IDLE_FRAME_RATE);
+  _frame?.setTargetFps(capped(held ? heldRate() : 0));
+}
+
+/**
+ * The most frames a second the loop draws, whatever moves: the Display
+ * panel's Frame rate. 0 (or less, or not a number) is unlimited: the
+ * display's own rate.
+ * @param {number} fps
+ */
+export function setFrameRateCap(fps) {
+  const value = Number(fps);
+  _frameRateCap = Number.isFinite(value) && value > 0 ? value : 0;
+  applyRate();
+}
+
+/** The cap `setFrameRateCap` set; 0 is unlimited. */
+export function frameRateCap() {
+  return _frameRateCap;
 }
 
 /** Change the steering inputs, and the rate if steering changed. */
@@ -402,6 +429,7 @@ export function uninstallRenderGovernor(frame) {
 
 /** Test seam: reset module state between unit tests. */
 export function _resetRenderGovernorForTest() {
+  _frameRateCap = DEFAULT_FRAME_RATE;
   _removeCameraListeners?.();
   _removeCameraListeners = null;
   _removeSteeringListeners?.();

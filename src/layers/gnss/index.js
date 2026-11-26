@@ -3,13 +3,14 @@ import { rectangleCenter } from '../../geo/rectangle.js';
 import { toDegrees, toRadians } from '../../geo/vector.js';
 import { drawOf, findCamera } from '../../render/rendererOf.js';
 import { hexColor } from '../../render/color.js';
-import { formatNumber, msg, t } from '../../i18n/index.js';
+import { formatNumber, msg, t, tn } from '../../i18n/index.js';
 import { translateFeedError } from '../../ui/statusText.js';
 import {
   GNSS_LEVEL_COLORS,
   GNSS_WINDOW_MS,
   accumulateGnssObservations,
   binGnssCells,
+  gnssCellKey,
   gnssCellRing,
   gnssProvenance,
   pruneGnssObservations,
@@ -223,10 +224,13 @@ export function createGnssIntegrityLayer({
       if (_viewer)
         throw new Error('GNSS integrity layer is already initialized');
       // The cells never take part in picks: ground geometry under them
-      // (another layer's polygons) stays pickable.
+      // (another layer's polygons) stays pickable. They are an overlay:
+      // drawn flat over the 3D tiles and terrain, never draped onto the
+      // tiles (where a cell hundreds of kilometres wide streaks through
+      // them) nor hidden under them, and hidden past the horizon.
       _fills = drawOf(viewer).shapes({
         id: `${GNSS_SET_PREFIX}:${++instances}`,
-        clampTo: 'both',
+        clampTo: 'overlay',
         pickable: false,
         show: false,
       });
@@ -399,6 +403,34 @@ export function createGnssIntegrityLayer({
               }
             : {}),
         })),
+      };
+    },
+
+    /**
+     * The navigation-accuracy score band and raw report counts for the
+     * already-binned cell under a point. Null while off or unsampled.
+     */
+    getValueAt(lat, lon) {
+      if (!_enabled || !_cells.length) return null;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      if (Math.abs(lat) > 90) return null;
+      let id;
+      try {
+        id = gnssCellKey(lat, lon);
+      } catch {
+        return null;
+      }
+      const cell = _cells.find((candidate) => candidate.id === id);
+      if (!cell) return null;
+      return {
+        value: t(LEVEL_LABELS[cell.level]),
+        detail: tn(
+          cell.aircraft,
+          '{degraded} of {count} aircraft reported low accuracy',
+          '{degraded} of {count} aircraft reported low accuracy',
+          { degraded: formatNumber(cell.degraded) },
+        ),
+        at: cell.observedAt,
       };
     },
 

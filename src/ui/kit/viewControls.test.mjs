@@ -1,14 +1,14 @@
 // The kit's every-control claims in docs/VUE-MIGRATION.md, read from every
 // SFC outside the kit: every button is a kit button, every select a
-// UiSelect, every checkbox a UiCheckbox, every range a UiSlider apart from
-// the two named below, and every Material Symbols glyph a UiIcon; every
-// pressed toggle is a UiButton with `pressed` (no template hand-writes
-// `aria-pressed` on any element, as an attribute or inside a `v-bind`
-// object, apart from the exceptions below), and every close, dismiss and
-// clear button a UiCloseButton. Outside the kit, no module (nor an SFC's
-// script) builds a button, select, field or Material glyph in script, or
-// writes one as markup in a string, apart from the globe panel's standalone
-// page named below.
+// UiSelect, every checkbox a UiCheckbox, every on/off switch a UiSwitch,
+// every range a UiSlider apart from the two named below, and every Material
+// Symbols glyph a UiIcon; every pressed toggle is a UiButton with `pressed`
+// (no template hand-writes `aria-pressed` on any element, as an attribute or
+// inside a `v-bind` object, apart from the exceptions below), and every
+// close, dismiss and clear button a UiCloseButton. Outside the kit, no
+// module (nor an SFC's script) builds a button, select, field or Material
+// glyph in script, or writes one as markup in a string, apart from the globe
+// panel's standalone page named below.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -142,6 +142,18 @@ function handWrittenPressed(source) {
 /** Hand-written close buttons in an SFC's template. */
 const handWrittenCloses = (source) =>
   [...template(source).matchAll(HAND_WRITTEN_CLOSE)].map((m) => tidy(m[0]));
+
+// A tag whose role, written or bound to a quoted literal, is `switch`.
+const SWITCH_ROLE =
+  /(?:^|\s)(?:(?::|v-bind:)role="\s*'switch'\s*"|role="switch"|role='switch')/i;
+
+/** Tags in an SFC's template that hand-write an on/off switch. */
+function handWrittenSwitches(source) {
+  const found = [];
+  for (const m of template(source).matchAll(ANY_TAG))
+    if (SWITCH_ROLE.test(m[1])) found.push(tidy(m[0]));
+  return found;
+}
 
 const views = sfcFiles().map((file) => ({
   file: path.relative(REPO_ROOT, file).split(path.sep).join('/'),
@@ -322,6 +334,29 @@ test('every checkbox in the views is a UiCheckbox', () => {
   const found = [];
   for (const { file, source } of views)
     for (const markup of nativeInputs(source, 'checkbox'))
+      found.push(`${file}: ${markup}`);
+  assert.deepEqual(found, []);
+});
+
+test('the scan finds each hand-written switch', () => {
+  for (const markup of [
+    '<template><button type="button" role="switch" :aria-checked="on">A</button></template>',
+    '<template><UiButton\n  class="x"\n  role="switch"\n>A</UiButton></template>',
+    `<template><div :role="'switch'" tabindex="0" /></template>`,
+  ])
+    assert.equal(handWrittenSwitches(markup).length, 1, markup);
+  for (const markup of [
+    '<template><UiSwitch :checked="on" :label="l" /></template>',
+    '<template><li role="option" :title="\'role=switch\'" /></template>',
+    '<template><!-- <button role="switch"> once sat here --><p /></template>',
+  ])
+    assert.equal(handWrittenSwitches(markup).length, 0, markup);
+});
+
+test('every on/off switch in the views is a UiSwitch', () => {
+  const found = [];
+  for (const { file, source } of views)
+    for (const markup of handWrittenSwitches(source))
       found.push(`${file}: ${markup}`);
   assert.deepEqual(found, []);
 });

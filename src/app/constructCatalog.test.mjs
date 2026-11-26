@@ -257,6 +257,57 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
     );
 });
 
+test("a host's air-quality field source reaches the layer; standalone asks its own server", async (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const airQuality = (field) => {
+    const sources = fixtureSources([], []);
+    sources['air-quality'] = { getSnapshot: async () => [] };
+    if (field !== undefined) sources['air-quality-field'] = field;
+    const layer = createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('air-quality');
+    const viewer = {};
+    bindFakeDraw(viewer);
+    layer.init(viewer);
+    t.after(() => layer.destroy());
+    return layer;
+  };
+  const asked = [];
+  const layer = airQuality({
+    getManifest: async (options) => {
+      asked.push(options);
+      throw Object.assign(new Error('none'), { code: 'not_configured' });
+    },
+    getStep: async () => assert.fail('no step without a run'),
+  });
+  layer.enable();
+  await flush();
+  assert.equal(asked.length, 1);
+  // The standalone default asks the local server's field route; removed,
+  // the layer has none to ask.
+  const fieldAsks = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).startsWith('/api/air-quality/field')) fieldAsks.push(url);
+    throw new Error('offline');
+  });
+  airQuality(undefined).enable();
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
+  airQuality(null).enable();
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
+  const standalone = createStandaloneLayerSources()['air-quality-field'];
+  assert.equal(typeof standalone.getManifest, 'function');
+  assert.equal(typeof standalone.getStep, 'function');
+  assert.throws(
+    () => airQuality({ getManifest: async () => ({}) }),
+    /getManifest and getStep/,
+  );
+});
+
 test('perimeterOptions reach Fire Perimeters: inciweb false never asks InciWeb', async (t) => {
   const lifetime = new AbortController();
   const { signal } = lifetime;

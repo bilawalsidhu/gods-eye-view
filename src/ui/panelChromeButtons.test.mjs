@@ -1,6 +1,6 @@
-// src/ui/panelChromeButtons.test.mjs — panel collapse, dock tray and pin
-// buttons render each panel's state from the panel chrome store, and their
-// clicks reach PanelChrome only while it presents the panels.
+// src/ui/panelChromeButtons.test.mjs — panel collapse buttons render each
+// panel's state from the panel chrome store, and their clicks reach
+// PanelChrome only while it presents the panels.
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,7 +16,6 @@ import UiPanel from './kit/UiPanel.vue';
 import { usePanelChromeStore } from './stores/panelChrome.js';
 import { useDisplayStore } from './stores/display.js';
 import { DisplayBindings } from './displayBindings.js';
-import CommandDockView from './views/CommandDockView.vue';
 
 function mount(t, component) {
   document.body.replaceChildren();
@@ -35,8 +34,6 @@ test('the store republishes a panel only when its state changes', () => {
   const first = store.panels;
   assert.deepEqual(store.panels['data-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: null,
   });
   store.publish(token, 'data-panel', { collapsed: true });
@@ -204,11 +201,8 @@ test('RailPanel follows the store, forwards clicks, and never restores a class i
   assert.equal(panel.classList.contains('collapsed'), false, 'written at once');
   await nextTick();
   assert.equal(toggle.textContent, '−');
-  // The re-render above left the class as written; pinning keeps it too.
-  store.publish(token, 'radio-panel', { pinned: true });
-  await nextTick();
+  // The re-render above left the class as written.
   assert.equal(panel.classList.contains('collapsed'), false);
-  assert.equal(panel.classList.contains('dock-pinned'), true);
   toggle.click();
   assert.deepEqual(toggled, ['radio-panel']);
 });
@@ -226,15 +220,11 @@ test('a panel whose class binding changes keeps the presented state', async (t) 
       }),
   });
   const panel = document.getElementById('cctv-panel');
-  store.publish(store.connect({}), 'cctv-panel', {
-    collapsed: false,
-    pinned: true,
-  });
+  store.publish(store.connect({}), 'cctv-panel', { collapsed: false });
   extra.value = 'two';
   await nextTick();
   assert.equal(panel.classList.contains('two'), true);
   assert.equal(panel.classList.contains('collapsed'), false);
-  assert.equal(panel.classList.contains('dock-pinned'), true);
 });
 
 test("Radio's collapse button keeps its own wording", async (t) => {
@@ -263,39 +253,8 @@ test("Radio's collapse button keeps its own wording", async (t) => {
   assert.equal(button.getAttribute('aria-label'), 'Collapse Radio section');
 });
 
-test('dock trays name their state and pins press without opening the tray', async (t) => {
-  const store = mount(t, CommandDockView);
-  const toggle = document.getElementById('location-bar-toggle');
-  const pin = document.querySelector(
-    '.dock-pin-btn[data-pin-target="location-bar"]',
-  );
-  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(toggle.getAttribute('aria-label'), 'Expand LOCATION');
-  assert.equal(pin.getAttribute('aria-pressed'), 'false');
-  assert.equal(pin.getAttribute('aria-label'), 'Pin location tray');
-  assert.equal(pin.title, 'Keep location tray open');
-
-  const pinned = [];
-  const token = store.connect({ pin: (id) => pinned.push(id) });
-  store.publish(token, 'location-bar', { collapsed: false, pinned: true });
-  await nextTick();
-  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
-  assert.equal(toggle.getAttribute('aria-label'), 'Collapse LOCATION');
-  assert.equal(toggle.title, 'Collapse LOCATION');
-  assert.equal(pin.getAttribute('aria-pressed'), 'true');
-
-  let reachedTray = false;
-  document
-    .getElementById('location-bar')
-    .addEventListener('click', () => (reachedTray = true));
-  pin.click();
-  assert.deepEqual(pinned, ['location-bar']);
-  assert.equal(reachedTray, false, 'the pin click stops at the pin');
-});
-
 function panelChrome(store) {
   return new PanelChrome({
-    elements: {},
     operations: { _showToast() {}, _syncCctvPanelViewport() {} },
     readHud: () => ({ visible: false, getVariant: () => null }),
     readCockpit: () => null,
@@ -307,14 +266,13 @@ function panelChrome(store) {
   });
 }
 
-test('PanelChrome takes clicks only once initialized, pins only dock trays, and detaches on destroy', () => {
+test('PanelChrome takes clicks only once initialized and detaches on destroy', () => {
   document.body.innerHTML = `
     <div id="data-panel" class="collapsed"><button class="panel-collapse-btn" data-collapse-target="data-panel"></button></div>
-    <div id="cctv-panel"></div>
-    <div id="control-panel" class="collapsed"></div>`;
+    <div id="cctv-panel"></div>`;
   const store = usePanelChromeStore(createPinia());
   const chrome = panelChrome(store);
-  for (const id of ['data-panel', 'cctv-panel', 'control-panel'])
+  for (const id of ['data-panel', 'cctv-panel'])
     followPanelState(store, id, document.getElementById(id));
   const calls = [];
   const setPanelCollapsed = chrome.setPanelCollapsed.bind(chrome);
@@ -324,26 +282,12 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   };
 
   store.act('toggle', 'data-panel');
-  store.act('pin', 'control-panel');
   assert.deepEqual(calls, [], 'no clicks before the chrome is initialized');
   chrome._disclosurePanelIds = new Set(['data-panel']);
   store.act('toggle', 'data-panel');
   store.act('toggle', 'cctv-panel');
   assert.deepEqual(calls, [['data-panel', false, { explicit: true }]]);
   assert.equal(store.panels['data-panel'].collapsed, false);
-
-  assert.equal(chrome._setCommandDockPanelPinState('data-panel'), undefined);
-  store.act('pin', 'control-panel');
-  assert.deepEqual(store.panels['control-panel'], {
-    collapsed: false,
-    pinned: true,
-    pinnedTop: true,
-    auto: null,
-  });
-  assert.equal(
-    document.getElementById('control-panel').classList.contains('dock-pinned'),
-    true,
-  );
 
   chrome.destroy();
   const before = calls.length;
@@ -357,22 +301,20 @@ test('PanelChrome takes clicks only once initialized, pins only dock trays, and 
   );
 });
 
-test('a remounted chrome starts from its own states, not a pin left behind', () => {
-  document.body.innerHTML = '<div id="location-bar" class="collapsed"></div>';
+test('a remounted chrome starts from its own states, not one left behind', () => {
+  document.body.innerHTML = '<div id="scene-panel"></div>';
   const store = usePanelChromeStore(createPinia());
   const first = panelChrome(store);
-  first._disclosurePanelIds = new Set();
-  store.act('pin', 'location-bar');
-  assert.equal(store.panels['location-bar'].pinned, true);
+  first._disclosurePanelIds = new Set(['scene-panel']);
+  first._presentPanel('scene-panel', { collapsed: false });
+  assert.equal(store.panels['scene-panel'].collapsed, false);
   first.destroy();
-  document.body.innerHTML = '<div id="location-bar" class="collapsed"></div>';
+  document.body.innerHTML = '<div id="scene-panel" class="collapsed"></div>';
   const second = panelChrome(store);
-  assert.equal(store.panels['location-bar'], undefined);
-  second._presentPanel('location-bar');
-  assert.deepEqual(store.panels['location-bar'], {
+  assert.equal(store.panels['scene-panel'], undefined);
+  second._presentPanel('scene-panel');
+  assert.deepEqual(store.panels['scene-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: null,
   });
   second.destroy();
@@ -408,9 +350,6 @@ test('a panel root draws its state at once, keeping classes others own', async (
   assert.equal(panel.classList.contains('accordion-collapsed'), false);
   assert.equal(panel.classList.contains('running'), true);
   assert.equal(panel.classList.contains('panel-collapsible'), true);
-  store.publish(token, 'scene-panel', { pinned: true, pinnedTop: true });
-  assert.ok(panel.classList.contains('dock-pinned'));
-  assert.ok(panel.classList.contains('dock-pinned-top'));
 });
 
 test('destroying the chrome inside Cockpit puts back the panels its entry closed', () => {
@@ -475,8 +414,6 @@ test('the accordion closes peers through the real store, and opens them again', 
   });
   assert.deepEqual(store.panels['data-panel'], {
     collapsed: true,
-    pinned: false,
-    pinnedTop: false,
     auto: 'accordion',
   });
   assert.equal(panels[0].className, 'collapsed accordion-collapsed');
@@ -506,7 +443,6 @@ test('F collapses Data Layers like its button and keeps its rail entry', (t) => 
   const bindings = new DisplayBindings({
     viewer: null,
     services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
-    elements: { _locationSearch: document.createElement('input') },
     operations: {
       _setScope() {},
       _togglePanel: (panelId) => chrome._togglePanel(panelId),
@@ -575,7 +511,6 @@ test('F that folds a focused peer hands the focus to a rail entry', (t) => {
   const bindings = new DisplayBindings({
     viewer: null,
     services: { isScopeMaskEnabled: () => false, cycleDetectionMode() {} },
-    elements: { _locationSearch: document.createElement('input') },
     operations: {
       _setScope() {},
       _togglePanel: (panelId) => chrome._togglePanel(panelId),

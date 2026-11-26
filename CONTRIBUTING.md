@@ -75,8 +75,8 @@ head -40 scripts/qa-radio.mjs  # what this runnable gate proves and how to run i
 Runnable gate entrypoints document what they assert and how to invoke them.
 Most need a dev server; some also need a specific provider key or port. Follow
 the entrypoint's header rather than assuming every matching file accepts the
-same arguments. Four have an `npm run` alias: `qa:map-source-tray`,
-`qa:street-level`, `qa:street-level:fixtures` and `qa:transit`.
+same arguments. Some have an `npm run` alias, such as `qa:street-level`,
+`qa:street-level:fixtures` and `qa:transit`.
 
 If you aren't sure which gate covers your change, search `docs/CURRENT-STATE.md`
 for the feature: it names the gate for many of them, and it's the authoritative
@@ -175,9 +175,9 @@ are existing ones when a change converts them:
   `npm run check:boundaries` enforces this.
 - **Reuse the kit first.** `src/ui/kit/` has one component per control:
   `UiButton` (including pressed toggles and pressable chips), `UiSelect`,
-  `UiSlider`, `UiSegmented`, `UiChip` (a label, not a control), `UiBadge`,
-  `UiEmpty`, `UiIcon`, `UiTooltip`, `UiPanel` and `UiRail`. Use these before
-  writing a control. When the kit lacks something, extend a kit component or
+  `UiSlider`, `UiSegmented`, `UiSwitch` (an on/off switch), `UiChip` (a
+  label, not a control), `UiBadge`, `UiEmpty`, `UiIcon`, `UiTooltip`,
+  `UiPanel` and `UiRail`. Use these before writing a control. When the kit lacks something, extend a kit component or
   add one that follows the kit's names, props, events and class names (see
   [Component kit](docs/VUE-MIGRATION.md#component-kit)), rather than
   building a one-off.
@@ -221,7 +221,8 @@ and package boundaries on Linux and Windows.
 Reusable package exports own their state and receive application operations
 through explicit callbacks. They must not import the standalone bootstrap or
 local Node services. Update `scripts/package-boundaries.json` and consumer tests
-when adding an export or expanding a component. See
+when adding an export or expanding a component; the fork-only
+`scripts/package-boundaries.local.json` is not used in this repository. See
 [formatting and component boundaries](docs/CODE-BOUNDARIES.md) for the current
 ownership and adoption process.
 

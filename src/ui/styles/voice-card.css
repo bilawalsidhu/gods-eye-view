@@ -32,7 +32,7 @@
   animation: gev-voice-card-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* The visible card must clear the dock trays' parent stacking contexts. */
+/* The visible card must clear its neighbours' stacking contexts. */
 #command-dock
   > #gev-voice-control:not([data-status='error']):has(
     .gev-voice-card:not([hidden])
@@ -49,10 +49,6 @@
 /* The card takes the tray slot; the hover hint yields to it. */
 #gev-voice-control:has(.gev-voice-card:not([hidden])) .gev-voice-help-tray {
   display: none;
-}
-
-#command-dock.dock-has-pinned-tray .gev-voice-card {
-  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height));
 }
 
 @keyframes gev-voice-card-in {
@@ -598,15 +594,6 @@ body.recording-mode .gev-pointer-reticle {
   bottom: min(
     calc(100% + 4.8rem + var(--gev-provider-lift)),
     calc(100dvh - 7.75rem)
-  );
-}
-
-#command-dock.dock-has-pinned-tray
-  #gev-voice-control:not([data-provider-choice='true'])
-  .gev-voice-panel {
-  bottom: min(
-    calc(100% + 1.7rem + var(--dock-pinned-stack-height)),
-    calc(100dvh - 18rem)
   );
 }
 @media (pointer: coarse) {

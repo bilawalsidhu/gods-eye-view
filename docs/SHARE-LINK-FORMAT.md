@@ -46,12 +46,13 @@ app starts as usual and says the link can't be opened.
 
 A thing view turns on its entity's layer and follows the entity by id, using
 the same restore as a long link's followed flight or satellite (and its
-expiry windows); a vessel is selected once the vessel feed has it. Opening is
+expiry windows); a vessel is selected once the vessel feed has it, and
+followed from the link's offset when the view says so (thing field 14). Opening is
 best effort: until the entity is found, and if it is not found in time, the
 camera is where the link was made, looking at the entity's last-known fix,
 and the app says that the entity isn't reporting and when the fix was taken.
 The share button makes a thing view while the camera follows an aircraft,
-military aircraft or satellite. While the camera follows nothing and a vessel
+military aircraft, satellite or vessel. While the camera follows nothing and a vessel
 is selected, it makes a vessel thing view: the fix is the vessel's position
 as drawn (as of the world time while the vessel layer follows the world
 clock, else as of its latest position report), and the offset is the one whose derived camera is
@@ -61,8 +62,11 @@ The opened camera is then within the offset's whole metres and degrees of
 where the link was made, looking at the vessel. When no offset can carry the
 camera, because it is not above the vessel's local horizontal (it would look
 up at the vessel, or through the earth) or its range is outside 1 m to
-10⁸ m, the link is a place view as before. A vessel is selected, not
-followed, so the camera stays where the user puts it. Following an entity
+10⁸ m, the link is a place view as before. A link made while the camera
+follows a vessel says so (thing field 14) and opens following it, from the
+link's offset; one made with the vessel only selected, and every link made
+before field 14, opens with the vessel selected and not followed, so the
+camera stays where the user puts it. Following an entity
 takes priority over a selected vessel, and a followed entity the format
 cannot name still makes a place view. Opening a vessel thing view with a
 world time waits for the vessel layer's snapshot at that time and selects the
@@ -288,6 +292,10 @@ reserved: a decoder ignores that entry, as for collapsed 0.
 | 10  | `param-slider-panel`   | `m`             | expanded            |
 | 11  | `space-missions-panel` | `n`             | collapsed           |
 
+Panels 0 and 1 were the command dock's Visual Presets and Location trays,
+which no layout shows any more. Their numbers and tokens stay reserved: links
+that carry them still decode, and the app has no panel to apply them to.
+
 ### Style parameters (field 27)
 
 Pairs of varints `(token index, value × 100)` for the parameters of the
@@ -318,6 +326,7 @@ sub-message:
 | 11  | fix age     | sint seconds the fix predates the created-at time        | 0       |
 | 12  | observed-at | epoch, when the fix was taken; only without a created-at | none    |
 | 13  | vessel id   | UUID, 16 bytes (LEN)                                     |         |
+| 14  | followed    | uint 1: the camera follows the vessel                    | absent  |
 
 The entity kind is the field that carries the id (its code in
 `SHARE_VIEW_ENTITY_KINDS`, or field 13 for a vessel), so it costs nothing;
@@ -334,6 +343,15 @@ lowercase dashed UUID. Field 13 of any other length is malformed. A decoder
 that predates field 13 skips it, finds no entity and opens the view as a
 place at its derived camera (`unknown-entity-kind`), as for a new entity kind,
 so the field needed no new version.
+
+Field 14 says a vessel view follows its vessel: the link was made while the
+camera followed it, and it opens following it. Absent, the vessel is only
+selected, as it was in every link made before the field existed, so those
+keep their meaning. Only a vessel view writes it; every other entity kind a
+thing view names is always followed, and a decoder ignores the field there.
+A value other than 1 reads as absent. It is written last, after field 13,
+and costs two bytes. A decoder that predates it skips it (reported in
+`unknownFields`) and opens the link selecting the vessel, as before.
 
 Fields 5–7 are the follow offset: the camera looks along (heading, pitch) at
 the entity from `range` metres away, heading clockwise from north, in the
@@ -411,8 +429,8 @@ the app that can open it.
    boolean takes the next flag bit instead, which costs nothing when it is at
    its default.
 6. **New view kinds and entity kinds** get the next code. A new entity kind's
-   id takes the next free thing field (14 onwards; 13 is a vessel id that is
-   a UUID), so older apps skip it and fall back to the camera. A thing that needs more than an id (for example a
+   id takes the next free thing field (15 onwards; 13 is a vessel id that is
+   a UUID and 14 a vessel's follow), so older apps skip it and fall back to the camera. A thing that needs more than an id (for example a
    CCTV camera, a radio station or a transit vehicle) adds further thing
    fields the same way.
 7. **A new layer option** needs an entry in `SHARE_VIEW_LAYER_OPTION_ABSENT`

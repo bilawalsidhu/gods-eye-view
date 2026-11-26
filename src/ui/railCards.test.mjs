@@ -1,9 +1,11 @@
 import '../testSupport/registerDom.mjs';
 import test from 'node:test';
+import { setLocale } from '../i18n/index.js';
 import assert from 'node:assert/strict';
 import { assertSameNode } from '../testSupport/domAssert.mjs';
 import { nextTick } from 'vue';
 import { createRailCards } from './railCards.js';
+import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 
 const legend = {
@@ -399,4 +401,379 @@ test('labelled rows, lists and results retain focus and dispatch current params'
   clear.click();
   storm.click();
   assert.equal(calls.length, before);
+});
+
+const tilesBlock = (active = 'aqi') => ({
+  id: 'tiles-index',
+  type: 'tiles',
+  title: 'Pollutants',
+  subtitle: 'nearest station · Cape Town',
+  tiles: [
+    {
+      id: 'aqi',
+      value: '56',
+      note: 'Moderate',
+      label: 'US AQI',
+      title: 'US AQI · Moderate',
+      accent: '#ffff00',
+      active: active === 'aqi',
+      params: { view: 'aqi' },
+    },
+    {
+      id: 'PM2.5',
+      value: '12',
+      label: 'PM2.5',
+      accent: '#6b7785',
+      active: active === 'PM2.5',
+      params: { view: 'PM2.5' },
+    },
+  ],
+});
+
+test('a tiles block draws one button per tile with its value, bracketed note and label', () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  const block = f.find((n) => n.dataset.blockId === 'tiles-index');
+  // The Globe view's worldwide tiles, two to a row.
+  assert.ok(block.classList.contains('view-context__world'));
+  assert.equal(block.querySelector('h4').firstChild.textContent, 'Pollutants');
+  assert.equal(
+    block.querySelector('.rail-card-tiles-sub').textContent,
+    'nearest station · Cape Town',
+  );
+  const tiles = [...block.querySelectorAll('button')];
+  assert.deepEqual(
+    tiles.map((tile) => tile.dataset.tileId),
+    ['aqi', 'PM2.5'],
+  );
+  assert.ok(
+    tiles.every((tile) => tile.classList.contains('view-context__world-tile')),
+  );
+  const [aqi, pm25] = tiles;
+  assert.equal(aqi.querySelector('strong').textContent, '56 (Moderate)');
+  assert.equal(aqi.querySelector('span').textContent, 'US AQI');
+  assert.equal(aqi.title, 'US AQI · Moderate');
+  // A band-colour bar stands where the Globe view tile has its icon.
+  assert.match(
+    aqi.querySelector('.rail-card-tile-swatch').style.background,
+    /^(#ffff00|rgb\(255, 255, 0\))$/,
+  );
+  assert.equal(pm25.querySelector('strong').textContent, '12');
+  assert.equal(aqi.getAttribute('aria-pressed'), 'true');
+  assert.ok(aqi.classList.contains('is-active'));
+  assert.equal(pm25.getAttribute('aria-pressed'), 'false');
+  f.writes();
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  assert.equal(f.writes(), 0);
+  view.destroy();
+});
+
+test('a group of one tile fills its row; a group of two shares it', async () => {
+  // The Index group holds one tile, the US AQI: it spans both columns.
+  const { readFileSync } = await import('node:fs');
+  const style = document.createElement('style');
+  style.textContent = readFileSync(
+    new URL('./styles/weather.css', import.meta.url),
+    'utf8',
+  );
+  document.head.appendChild(style);
+  try {
+    const f = railFixture();
+    const view = createRailCards(f);
+    const [aqi, pm25] = tilesBlock().tiles;
+    const span = () =>
+      [...f.container.querySelectorAll('[data-tile-id]')].map((tile) => [
+        tile.dataset.tileId,
+        getComputedStyle(tile).gridColumn,
+      ]);
+    view.update([{ ...card, blocks: [{ ...tilesBlock(), tiles: [aqi] }] }]);
+    assert.deepEqual(span(), [['aqi', '1 / -1']]);
+    view.update([{ ...card, blocks: [tilesBlock()] }]);
+    await nextTick();
+    assert.deepEqual(
+      span().map(([id, column]) => [id, column || 'auto']),
+      [
+        ['aqi', 'auto'],
+        [pm25.id, 'auto'],
+      ],
+    );
+    view.destroy();
+  } finally {
+    style.remove();
+  }
+});
+
+test('a tile click dispatches its params', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  view.update([{ ...card, blocks: [tilesBlock()] }]);
+  f.find((n) => n.dataset.tileId === 'PM2.5').click();
+  assert.deepEqual(calls, [['a', { view: 'PM2.5' }]]);
+  view.update([{ ...card, blocks: [tilesBlock('PM2.5')] }]);
+  assert.ok(
+    f.find((n) => n.dataset.tileId === 'PM2.5').classList.contains('is-active'),
+  );
+  view.destroy();
+});
+
+test('a toggle block flips aria-checked and dispatches its params', () => {
+  const f = railFixture();
+  const calls = [];
+  const view = createRailCards({
+    ...f,
+    onParams: (...args) => calls.push(args),
+  });
+  const toggle = (on) => ({
+    id: 'toggle-stations',
+    type: 'toggle',
+    label: 'STATIONS',
+    on,
+    params: { stations: !on },
+  });
+  view.update([{ ...card, blocks: [toggle(true)] }]);
+  const block = f.find((n) => n.dataset.blockId === 'toggle-stations');
+  assert.equal(block.textContent.trim(), 'STATIONS');
+  const button = block.querySelector('button');
+  assert.equal(button.getAttribute('role'), 'switch');
+  assert.equal(button.getAttribute('aria-checked'), 'true');
+  assert.equal(button.getAttribute('aria-label'), 'STATIONS');
+  button.click();
+  assert.deepEqual(calls, [['a', { stations: false }]]);
+  view.update([{ ...card, blocks: [toggle(false)] }]);
+  assertSameNode(block.querySelector('button'), button);
+  assert.equal(button.getAttribute('aria-checked'), 'false');
+  button.click();
+  assert.deepEqual(calls.at(-1), ['a', { stations: true }]);
+  view.destroy();
+});
+
+test('a lead result renders first', () => {
+  const f = railFixture();
+  const entry = (lead) => ({
+    id: 'air-quality',
+    icon: '◍',
+    summary: {
+      label: 'Air quality',
+      status: '2 stations reporting',
+      toggles: [{ id: 'stations', label: 'STATIONS', on: true, params: {} }],
+      result: {
+        id: 'station',
+        lead,
+        label: 'Cape Town',
+        clear: { label: 'Deselect station', params: { station: null } },
+        lines: [{ id: 'station-source', muted: true, text: 'Measured' }],
+      },
+    },
+    legend: [
+      { color: '#00e400', label: 'Good' },
+      { color: '#ffff00', label: 'Moderate' },
+    ],
+    legendCategorical: true,
+    sublists: [
+      { ...tilesBlock(), id: 'index' },
+      { id: 'empty', title: 'None', tiles: [] },
+    ],
+    list: {
+      title: 'HIGHEST IN VIEW',
+      ariaLabel: 'Observations in view',
+      items: [{ id: 'cape-town', lead: '56', text: 'Cape Town' }],
+    },
+  });
+  const panel = createWeatherPanel({ container: f.container });
+  const order = () =>
+    [
+      ...f.container.querySelectorAll(
+        '[data-card-id="air-quality"] [data-block-id]',
+      ),
+    ]
+      .map((node) => node.dataset.blockId)
+      .filter((id, index, all) => all.indexOf(id) === index);
+  panel.update([entry(true)]);
+  // The selected station heads the card; the tiles follow the details and
+  // legend; the ranked list, under its title, comes last.
+  assert.deepEqual(order(), [
+    'station',
+    'result-lines',
+    'details',
+    'toggle-stations',
+    'legend',
+    'tiles-index',
+    'list-title',
+    'list',
+  ]);
+  // The heading result is framed by its class, and its close button says
+  // what it lets go of.
+  const head = f.container.querySelector(
+    '[data-card-id="air-quality"] .rail-card-result',
+  );
+  assert.ok(head.classList.contains('is-lead'));
+  const close = head.querySelector('[data-action-id="clear"]');
+  assert.equal(close.getAttribute('aria-label'), 'Deselect station');
+  panel.update([entry(false)]);
+  assert.ok(
+    !f.container
+      .querySelector('[data-card-id="air-quality"] .rail-card-result')
+      .classList.contains('is-lead'),
+  );
+  assert.equal(order()[0], 'details');
+  assert.equal(order().at(-2), 'station');
+  panel.destroy();
+});
+
+test('a list row draws its colour dot before its value; a bad colour draws none', () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  const paint = (swatch) =>
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'list',
+            type: 'list',
+            list: {
+              ariaLabel: 'Highest in view',
+              items: [
+                {
+                  id: 'durban',
+                  swatch,
+                  lead: '112',
+                  text: 'Durban',
+                  title: 'Durban · details',
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+  paint('#ff7e00');
+  const row = f.container.querySelector('.data-row-list-item');
+  const [dot, lead, text] = row.children;
+  assert.ok(dot.classList.contains('data-row-list-swatch'));
+  assert.equal(dot.getAttribute('aria-hidden'), 'true');
+  assert.match(dot.style.background, /^(#ff7e00|rgb\(255, 126, 0\))$/);
+  assert.equal(lead.textContent, '112');
+  assert.equal(text.textContent, 'Durban');
+  // The details are the tooltip, not a second line.
+  assert.equal(row.title, 'Durban · details');
+  assert.equal(row.querySelector('.data-row-list-badge'), null);
+  paint('url(https://example.com)');
+  assert.equal(row.querySelector('.data-row-list-swatch'), null);
+  view.destroy();
+});
+
+test("a result's title is its header's tooltip", () => {
+  const f = railFixture();
+  const view = createRailCards(f);
+  const paint = (title) =>
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'station',
+            type: 'result',
+            lead: true,
+            label: 'Cape Town',
+            title,
+            lines: [{ id: 'station-source', muted: true, text: 'Measured' }],
+          },
+        ],
+      },
+    ]);
+  paint('NATIONAL · Licence: CC BY 4.0 (City of Cape Town)');
+  const label = f.container.querySelector(
+    '.rail-card-result-header .panel-title',
+  );
+  assert.equal(label.textContent, 'Cape Town');
+  assert.equal(
+    label.title,
+    'NATIONAL · Licence: CC BY 4.0 (City of Cape Town)',
+  );
+  paint(undefined);
+  assert.equal(label.getAttribute('title'), null);
+  view.destroy();
+});
+
+test('clearing a lead result keeps focus in the card', (t) => {
+  const f = railFixture(),
+    view = createRailCards(f);
+  t.after(() => view.destroy());
+  for (const [active, tile, selector] of [
+    [true, true, '.data-row-list-item.active'],
+    [false, true, '.rail-card-tile.is-active'],
+    [false, false, '.rail-card-header'],
+  ]) {
+    view.update([
+      {
+        ...card,
+        blocks: [
+          {
+            id: 'station',
+            type: 'result',
+            lead: true,
+            label: 'Station',
+            clear: { params: { station: null } },
+          },
+          tilesBlock(tile ? 'aqi' : ''),
+          {
+            id: 'list',
+            type: 'list',
+            list: {
+              items: [
+                { id: 's', text: 'Station', active, params: { station: 's' } },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+    const close = f.container.querySelector('[data-action-id="clear"]');
+    close.focus();
+    close.click();
+    assertSameNode(
+      close.ownerDocument.activeElement,
+      f.container.querySelector(selector),
+    );
+  }
+});
+test('in Arabic a tile value and a row lead are isolated', (t) => {
+  const f = railFixture(),
+    view = createRailCards(f);
+  t.after(() => view.destroy());
+  setLocale('ar');
+  try {
+    const tiles = tilesBlock();
+    tiles.tiles[0].value = '500+';
+    view.update([
+      {
+        ...card,
+        blocks: [
+          tiles,
+          {
+            id: 'list',
+            type: 'list',
+            list: { items: [{ id: 's', lead: '500+', text: 'Station' }] },
+          },
+        ],
+      },
+    ]);
+    assert.ok(
+      f.container
+        .querySelector('.rail-card-tile strong')
+        .textContent.startsWith('\u2068500+\u2069'),
+    );
+    assert.equal(
+      f.container.querySelector('.data-row-list-lead').textContent,
+      '\u2068500+\u2069',
+    );
+  } finally {
+    setLocale('en');
+  }
 });

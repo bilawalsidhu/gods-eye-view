@@ -17,6 +17,7 @@ export { readLayerLifecycleSummary } from './layerSummary.js';
 import { defaultGeospatial } from '../search/defaults.js';
 import { msg } from '../i18n/index.js';
 import { useProviderSettingsStore } from '../ui/stores/providerSettings.js';
+import { layerFinderFor } from '../ui/layerFinderFilter.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
 import {
   distance as chordM,
@@ -114,13 +115,11 @@ const PANEL_ALIASES = new Map([
   ['layers', 'data-panel'],
   ['layer menu', 'data-panel'],
   ['data layer menu', 'data-panel'],
-  ['locations', 'location-bar'],
-  ['location', 'location-bar'],
-  ['styles', 'control-panel'],
-  ['filters', 'control-panel'],
-  ['visual styles', 'control-panel'],
-  ['visual preset', 'control-panel'],
-  ['visual presets', 'control-panel'],
+  ['styles', 'pp-toggles'],
+  ['filters', 'pp-toggles'],
+  ['visual styles', 'pp-toggles'],
+  ['visual preset', 'pp-toggles'],
+  ['visual presets', 'pp-toggles'],
   ['provider settings', 'provider-settings'],
   ['cctv', 'cctv-panel'],
   ['cameras', 'cctv-panel'],
@@ -152,11 +151,11 @@ const PANEL_ALIASES = new Map([
   ['scene', 'scene-panel'],
   ['post processing', 'pp-toggles'],
   ['hud controls', 'pp-toggles'],
-  ['map stack', 'control-panel'],
-  ['stack', 'control-panel'],
-  ['basemap', 'control-panel'],
-  ['map sources', 'control-panel'],
-  ['sources', 'control-panel'],
+  ['map stack', 'pp-toggles'],
+  ['stack', 'pp-toggles'],
+  ['basemap', 'pp-toggles'],
+  ['map sources', 'pp-toggles'],
+  ['sources', 'pp-toggles'],
   ['weather', 'weather-panel'],
   ['weather panel', 'weather-panel'],
   ['recent imagery', 'recent-imagery-panel'],
@@ -165,8 +164,6 @@ const PANEL_ALIASES = new Map([
 
 const PANEL_IDS = new Set([
   'data-panel',
-  'location-bar',
-  'control-panel',
   'cctv-panel',
   'radio-panel',
   'global-context-panel',
@@ -3058,7 +3055,13 @@ async function trackEntity(
             : family.kind === 'satellite'
               ? found.noradId
               : found.icao24;
-        if (family.kind === 'vessel') {
+        if (
+          family.kind === 'vessel' &&
+          typeof module.trackById === 'function'
+        ) {
+          // Followed where the layer draws it, as an aircraft is.
+          trackedOk = !!module.trackById(id, { origin: 'voice' });
+        } else if (family.kind === 'vessel') {
           trackedOk = !!module.selectById?.(id);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,
@@ -3963,10 +3966,8 @@ function findDataLayerRow(layerId) {
 }
 
 function focusDataLayerRow(row, layerId) {
-  // A row the Data Layers finder hides could not be seen: show every row
-  // again (LAYER_FINDER_CLEAR_EVENT in LayerFinder.vue).
   if (row.classList.contains('is-filtered'))
-    document.dispatchEvent(new CustomEvent('gev:layer-finder-clear'));
+    layerFinderFor(row.parentElement)?.clearAll?.();
   row.scrollIntoView({ block: 'center', behavior: 'smooth' });
   row.classList.remove('gev-voice-focus');
   void row.offsetWidth;
@@ -4543,8 +4544,8 @@ async function flyToRequestedLocation(
   const query = String(args.query || '').trim();
   if (query) {
     // A query that names a curated preset POI ("the Texas State Capitol", "Golden Gate Bridge")
-    // flies to its hand-tuned camera pose — the same beautiful framing as clicking the LOCATIONS
-    // panel button — instead of generic geocode framing. An explicit rangeM still overrides distance.
+    // flies to its hand-tuned camera pose — the same framing as choosing its landmark chip in the
+    // Omnibar — instead of generic geocode framing. An explicit rangeM still overrides distance.
     const poiMatch = findPoiByName(query);
     if (poiMatch) {
       const result = immediate(() =>
@@ -4721,7 +4722,7 @@ function locateLayerEntity(dataManager, { layerId, id, lat, lon }) {
     const matches =
       dataManager?.layers
         ?.get(layerId)
-        ?.module?.getAnalystRecords?.()
+        ?.module?.getAnalystRecords?.(ANALYST_RECORD_CAP)
         .filter(
           (item) =>
             String(
@@ -6161,28 +6162,41 @@ function effectiveAnalystScopeKind(args, coverage) {
   return args.followUp ? 'anywhere' : 'view';
 }
 
+/** Scope kinds that count inside an outline, which may lie outside the view. */
+const AREA_SCOPE_KINDS = new Set(['region', 'area', 'drawn', 'annotation']);
+
+/**
+ * Whether a layer's count in this scope holds only what its viewport loaded:
+ * a radius or view count, or an area one for a layer that says so.
+ */
+function isViewportLimited(query, scopeKind) {
+  if (!query?.viewportLoaded) return false;
+  if (scopeKind === 'radius' || scopeKind === 'view') return true;
+  return query.viewportAreas === true && AREA_SCOPE_KINDS.has(scopeKind);
+}
+
 /** Add the viewport qualification without replacing retained provenance. */
-function withViewportCoverageNote(coverage) {
+function withViewportCoverageNote(coverage, scopeKind) {
   if (!coverage) return coverage;
   const current = typeof coverage.note === 'string' ? coverage.note : '';
-  if (current.includes(VIEWPORT_COVERAGE_NOTE)) return coverage;
-  const separator = current ? '; ' : '';
-  return {
-    ...coverage,
-    note: current
-      ? `${current}${separator}${VIEWPORT_COVERAGE_NOTE}`
-      : VIEWPORT_COVERAGE_NOTE,
-  };
+  const notes = new Set();
+  for (const { layerKey } of coverage.layersQueried || []) {
+    const query = voiceLayer(layerKey)?.query;
+    if (isViewportLimited(query, scopeKind)) {
+      const note = query.viewportNote || VIEWPORT_COVERAGE_NOTE;
+      if (!current.includes(note)) notes.add(note);
+    }
+  }
+  return notes.size
+    ? { ...coverage, note: [current, ...notes].filter(Boolean).join('; ') }
+    : coverage;
 }
 
 /** Whether this query counts records from a viewport-loaded layer. */
 function isViewportScopedAnalystResult(args, coverage) {
   const scopeKind = effectiveAnalystScopeKind(args, coverage);
-  return (
-    (scopeKind === 'radius' || scopeKind === 'view') &&
-    (coverage?.layersQueried || []).some(
-      (layer) => voiceLayer(layer.layerKey)?.query?.viewportLoaded,
-    )
+  return (coverage?.layersQueried || []).some((layer) =>
+    isViewportLimited(voiceLayer(layer.layerKey)?.query, scopeKind),
   );
 }
 
@@ -6220,7 +6234,10 @@ async function runAnalystQuery(
           projected?.memory &&
           isViewportScopedAnalystResult(args, projected.answer.coverage)
         ) {
-          const coverage = withViewportCoverageNote(projected.answer.coverage);
+          const coverage = withViewportCoverageNote(
+            projected.answer.coverage,
+            effectiveAnalystScopeKind(args, projected.answer.coverage),
+          );
           projected.answer.coverage = coverage;
           projected.memory.coverage = coverage;
         }
@@ -6256,15 +6273,38 @@ async function runAnalystQuery(
       ? `${note}; ${result.display.caveat}`
       : note;
   }
+  // A network still discovering the stations in view (the layer card's
+  // "loading stations, n of m"): counts and rankings are a floor until done.
+  const discovering = (result.coverage?.layersQueried || []).flatMap(
+    ({ layerKey }) => {
+      const stats = dataManager.layers?.get(layerKey)?.module?.getStats?.();
+      return Array.isArray(stats?.discovery) ? stats.discovery : [];
+    },
+  );
+  if (discovering.length) {
+    const note = discovering
+      .map(
+        ({ network, checked, eligible }) =>
+          `${network}: loading stations, ${checked.toLocaleString('en-US')} of ${eligible.toLocaleString('en-US')}`,
+      )
+      .join('; ');
+    result.display.caveat = result.display.caveat
+      ? `${note}; ${result.display.caveat}`
+      : note;
+  }
   // A radius/view count over a viewport-loaded layer counts what is LOADED, and
   // the flights layer reloads as the camera moves — so this number can sit well
-  // under the Contacts cohort without either being wrong.
+  // under the Contacts cohort without either being wrong. Air quality says the
+  // same of its region and area counts.
   const scopeKind = effectiveAnalystScopeKind(args, result.coverage);
   const viewportScoped = isViewportScopedAnalystResult(args, result.coverage);
   if (viewportScoped && result.coverage) {
     // The engine's follow-up memory retains this same object, so update its
     // note in place after deriving the qualified copy.
-    result.coverage.note = withViewportCoverageNote(result.coverage).note;
+    result.coverage.note = withViewportCoverageNote(
+      result.coverage,
+      scopeKind,
+    ).note;
   }
   // ENTITY-CENTRED NEARBY: answered by the SAME engine that fills the Contacts
   // panel, so the spoken number and the panel readout for one centre cannot
@@ -6305,8 +6345,9 @@ async function runAnalystQuery(
     ok: true,
     action: 'analyst_query',
     count: result.count,
-    // False when a layer was capped: the count is a floor ("at least").
-    complete: result.complete !== false,
+    // False when a layer was capped or is still discovering: the count is a
+    // floor ("at least").
+    complete: result.complete !== false && !discovering.length,
     ...(result.partial
       ? { partial: true, unanswered: result.unanswered || [] }
       : {}),

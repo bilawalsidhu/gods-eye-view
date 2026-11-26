@@ -32,7 +32,7 @@ const { style } = storeToRefs(useDisplayStore());
 const { loading, traffic, cctv, toast, fps } = storeToRefs(useStatusStore());
 // The safe frame a recording composes in, as RecordingControls publishes it.
 const { safeFrame } = storeToRefs(useRecordingStore());
-// The ORBIT indicator LocationControls offers with the location tray.
+// The ORBIT indicator LocationControls offers.
 const { view: location } = storeToRefs(useLocationStore());
 // The focusable mirror of the overlay cards the world overlay painted.
 const { actions: targets, controls: overlayControls } = storeToRefs(
