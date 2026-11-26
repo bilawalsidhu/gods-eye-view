@@ -536,3 +536,30 @@ export function createSnapshotTimeline({
     },
   };
 }
+
+/**
+ * What a layer of contacts offers the timeline about one of them, when its
+ * source's timeline can read one contact by its id at any time (see
+ * src/sources/live/contract.js): `journeyOf(id)` its observed track,
+ * `{start, end, path}` with path fixes `[seconds, lat, lon, altitude m,
+ * heading]`, or null; `focusOn(id)` keeps that contact in every snapshot at a
+ * time wherever the view is, and `focusOn(null)` lets it go. A source
+ * without them answers null and ignores focus.
+ * @param {() => object|null} getSource The layer's current source.
+ * @param {(id: string) => string|null} referenceOf A contact's track reference.
+ */
+export function subjectMethods(getSource, referenceOf) {
+  const timeline = () => getSource()?.timeline ?? null;
+  const reference = (id) => referenceOf(String(id)) ?? String(id);
+  return {
+    async journeyOf(id, options = {}) {
+      const read = timeline()?.journey;
+      if (typeof read !== 'function' || id == null) return null;
+      return (await read(reference(id), options)) ?? null;
+    },
+    focusOn(id) {
+      const focus = timeline()?.focus;
+      if (typeof focus === 'function') focus(id == null ? null : reference(id));
+    },
+  };
+}

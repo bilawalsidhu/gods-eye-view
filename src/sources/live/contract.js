@@ -31,6 +31,15 @@
  * src/time/timelineFixes.js). The layer places the contact on them at any
  * time they span, earlier ones too, so the clock can move within them,
  * forwards or back, without a new snapshot.
+ *
+ * A timeline that can read one contact by its track reference at any time
+ * may also declare `journey(reference, {signal})`, which answers that
+ * contact's observed track as `{start, end, path, title?}` (path fixes
+ * `[seconds, lat, lon, altitude m, heading]`) or null, and
+ * `focus(reference|null)`: while a contact is focused, every snapshot at a
+ * time holds it wherever the query's area is, so the timeline can follow a
+ * selected contact back along its route (see subjectMethods in
+ * src/time/snapshotTimeline.js).
  */
 // Messages are English data (AI tools read them too); the Layers panel shows
 // them translated by their shape (translateFeedError in src/ui/statusText.js),

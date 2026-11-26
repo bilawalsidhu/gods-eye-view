@@ -24,7 +24,12 @@ import { worldClock } from '../../../time/worldClock.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { vRootClass } from '../../rail/rootClass.js';
-import { recordedJourney, setRecordedSubject, viewJourneyAt } from '../../../proto/recordedFlights.js';
+import {
+  journeyMoments,
+  recordedJourney,
+  setRecordedSubject,
+  viewJourneyAt,
+} from '../../../proto/recordedFlights.js';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -839,8 +844,46 @@ const selected = computed(() => {
   const card = cards.card;
   if (!card) return null;
   const id = card.id ?? card.identity?.id ?? card.reference;
-  return id ? { id: String(id), title: card.title ?? card.name ?? String(id) } : null;
+  return id
+    ? {
+        id: String(id),
+        layerId: card.layerId ?? card.identity?.layerId ?? null,
+        title: card.title ?? card.name ?? String(id),
+      }
+    : null;
 });
+// The selected contact's layer, when its source can read that one contact at
+// any time (Hosted's archives): its journey, and a focus that keeps it in
+// every snapshot wherever the view is. Else the prototype's recording.
+let focused = null;
+function focusSubject(next) {
+  if (focused && focused.layer !== next?.layer) focused.layer.focusOn?.(null);
+  focused = next;
+  next?.layer.focusOn?.(next.id);
+}
+async function readJourney(pick) {
+  const layer = pick.layerId ? cards.layerModule(pick.layerId) : null;
+  if (typeof layer?.journeyOf === 'function') {
+    focusSubject({ layer, id: pick.id });
+    try {
+      const found = await layer.journeyOf(pick.id);
+      if (found && Number.isFinite(found.start) && found.path?.length) {
+        return {
+          start: found.start,
+          end: found.end,
+          callsign: found.title ?? '',
+          path: found.path,
+          moments: journeyMoments(found.path, found.start, found.end),
+        };
+      }
+    } catch (error) {
+      console.warn('Journey unavailable', error);
+    }
+    return null;
+  }
+  focusSubject(null);
+  return recordedJourney(pick.id);
+}
 let before = null;
 watch(
   () => selected.value?.id,
@@ -853,8 +896,11 @@ watch(
     journey.value = null;
     dismissed.value = null;
     setRecordedSubject(id);
-    if (!id) return;
-    const found = await recordedJourney(id);
+    if (!id) {
+      focusSubject(null);
+      return;
+    }
+    const found = await readJourney(selected.value);
     if (!found || selected.value?.id !== id) return;
     journey.value = { ...found, title: found.callsign || selected.value.title };
     // The track at rest is nobody's yet: it becomes the journey's.
@@ -1268,6 +1314,7 @@ onMounted(() => {
   window.__wt = { worldClock, cards, answer: setAnswer, layout, win };
 });
 onBeforeUnmount(() => {
+  focusSubject(null);
   window.removeEventListener('keydown', onKey);
   window.removeEventListener('resize', measure);
   document.removeEventListener('pointerdown', onOutside, true);

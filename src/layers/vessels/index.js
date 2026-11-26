@@ -15,6 +15,7 @@ import { followsClock } from './policy.js';
 import {
   createSnapshotTimeline,
   snapshotAnswer,
+  subjectMethods,
 } from '../../time/snapshotTimeline.js';
 import { worldClock } from '../../time/worldClock.js';
 /** Compose one vessel layer with application-owned scene services. */
@@ -88,6 +89,14 @@ export function createVesselLayer({ source, services, options = {} } = {}) {
     parts.queries.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
+  );
+  // The timeline asks about a selected contact through these.
+  Object.assign(
+    layer,
+    subjectMethods(
+      () => vesselState._source,
+      (id) => layer.referenceOf?.(id) ?? null,
+    ),
   );
   layer.source = source?.label || 'Vessels';
   Object.assign(layer, {

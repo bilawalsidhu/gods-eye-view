@@ -15,6 +15,7 @@ import { createClockFollow } from './clockFollow.js';
 import {
   createSnapshotTimeline,
   snapshotAnswer,
+  subjectMethods,
 } from '../../time/snapshotTimeline.js';
 import { worldClock } from '../../time/worldClock.js';
 /** Compose one civil-flight layer with application-owned scene services. */
@@ -92,6 +93,14 @@ export function createCivilFlightLayer({
     parts.queries.methods,
     parts.lifecycle.methods,
     parts.ingestion.methods,
+  );
+  // The timeline asks about a selected contact through these.
+  Object.assign(
+    layer,
+    subjectMethods(
+      () => flightState.feed._source,
+      (id) => layer.referenceOf?.(id) ?? null,
+    ),
   );
   Object.defineProperty(layer, 'testing', { value: parts.testing });
   return layer;
