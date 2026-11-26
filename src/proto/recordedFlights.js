@@ -1,11 +1,20 @@
 // PROTOTYPE ONLY. Gives the flights source a timeline backed by a local
 // recording of the live feed (a stand-in for Hosted's archive readers), so the
 // timeline design can be tried on real aircraft. Not for merging.
+import { Cartesian3, HeadingPitchRange, Matrix4 } from 'cesium';
 import { openSkySnapshot, normalizeAircraftTrack } from '../sources/live/aircraft.js';
 
 const BASE = '/proto-rec';
 const STEP_MS = 5 * 60_000;
 const SPAN_MS = 20 * 60_000;
+
+// The aircraft the timeline is about. A replay keeps it in every snapshot
+// wherever the camera is, as an archive reader asked for one aircraft by id
+// would, so the view can follow it back along its flight.
+let subject = null;
+export function setRecordedSubject(reference) {
+  subject = reference ? String(reference).toLowerCase() : null;
+}
 
 export function withRecordedHistory(source) {
   let span = null;
@@ -42,6 +51,7 @@ export function withRecordedHistory(source) {
         params.set('lat', query.latitude.toFixed(4));
         params.set('lon', query.longitude.toFixed(4));
       }
+      if (subject) params.set('keep', subject);
       const response = await fetch(`${BASE}/snapshot?${params}`, {
         signal: options.signal,
       });
@@ -82,6 +92,7 @@ export async function recordedJourney(reference) {
       end: payload.last,
       callsign: (payload.flight || '').trim(),
       moments: journeyMoments(payload.path ?? [], payload.first, payload.last),
+      path: payload.path ?? [],
     };
   } catch {
     return null;
@@ -124,4 +135,41 @@ export function journeyMoments(path, first, last) {
     moments.push({ time: turn.time, label: `TURNED ${Math.round(turn.swing)}°` });
   if (Date.now() - last > 3 * 60_000) moments.push({ time: last, label: 'LAST SEEN' });
   return moments.sort((a, b) => a.time - b.time);
+}
+
+/**
+ * Bring the view to where a recorded aircraft was at `ms`, keeping the
+ * camera's bearing and tilt. The flights layer asks for what is around the
+ * camera, so a replay that jumps far along a flight has to move the view there
+ * before the aircraft can be drawn; from then on the usual tracking holds it.
+ */
+export function viewJourneyAt(path, ms) {
+  const viewer = window.__godsEyeView?.viewer;
+  if (!viewer || path.length < 2) return false;
+  const t = ms / 1000;
+  let index = path.findIndex((fix) => fix[0] > t);
+  if (index === 0) return false;
+  if (index < 0) index = path.length;
+  const a = path[index - 1];
+  const b = path[index] ?? a;
+  const k = b[0] > a[0] ? Math.min(1, (t - a[0]) / (b[0] - a[0])) : 0;
+  const lat = a[1] + (b[1] - a[1]) * k;
+  const lon = a[2] + (b[2] - a[2]) * k;
+  const altitude = Number.isFinite(a[3]) ? a[3] : 0;
+  const camera = viewer.camera;
+  const here = camera.positionCartographic;
+  const km =
+    111 *
+    Math.hypot(
+      (here.latitude * 180) / Math.PI - lat,
+      ((here.longitude * 180) / Math.PI - lon) * Math.cos((lat * Math.PI) / 180),
+    );
+  // Near enough that the layer already has it: tracking does the rest.
+  if (km < 60) return false;
+  const target = Cartesian3.fromDegrees(lon, lat, altitude);
+  const range = Math.min(400_000, Math.max(18_000, here.height - altitude));
+  camera.lookAt(target, new HeadingPitchRange(camera.heading, Math.min(camera.pitch, -0.35), range));
+  camera.lookAtTransform(Matrix4.IDENTITY);
+  viewer.scene.requestRender?.();
+  return true;
 }

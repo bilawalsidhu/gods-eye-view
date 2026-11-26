@@ -24,7 +24,7 @@ import { worldClock } from '../../../time/worldClock.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { vRootClass } from '../../rail/rootClass.js';
-import { recordedJourney } from '../../../proto/recordedFlights.js';
+import { recordedJourney, setRecordedSubject, viewJourneyAt } from '../../../proto/recordedFlights.js';
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -193,7 +193,7 @@ function pinSpeed() {
 function setLength(length, anchorMs, share) {
   const next = Math.min(maxLength.value, Math.max(MIN_LENGTH, length));
   const end = anchorMs + (1 - share) * next;
-  win.value = { length: next, end: end >= nowMs() + next * 0.04 ? null : end };
+  win.value = { length: next, end: end >= nowMs() + next * 0.04 && !future.value ? null : end };
   pinSpeed();
 }
 function setRange(key) {
@@ -216,7 +216,9 @@ function keepInView(ms) {
   const length = win.value.length;
   if (ms >= start + length * 0.02 && ms <= end) return;
   const nextEnd = ms < start + length * 0.02 ? ms + length * 0.8 : ms + length * 0.2;
-  win.value = { length, end: nextEnd >= nowMs() ? null : nextEnd };
+  // Past now (what orbits and forecasts predict) the track follows the time there.
+  const ahead = ms > nowMs() + length * 0.04;
+  win.value = { length, end: nextEnd >= nowMs() && !ahead ? null : nextEnd };
 }
 function zoomAround(ms, factor) {
   const share = tape.value ? HEAD : (ms - view.value.start) / win.value.length;
@@ -249,9 +251,9 @@ const spanLabel = (length) => {
 const rangeLabel = computed(() => spanLabel(win.value.length));
 // At rest the bar says what its strip is, in words.
 const restLabel = computed(() => {
-  if (subject.value && before) return `${subject.value.title} · SEEN FOR ${spanLabel(nowMs() - subject.value.start)}`;
+  if (subject.value) return `REPLAY ${subject.value.title} · ${spanLabel(nowMs() - subject.value.start)}`;
   const preset = RANGES.find((each) => each.key === rangeLabel.value);
-  return preset ? `THE LAST ${preset.name.replace(/^An? /, '').toUpperCase()}` : `THE LAST ${rangeLabel.value}`;
+  return preset ? `REPLAY THE LAST ${preset.name.replace(/^An? /, '').toUpperCase()}` : `REPLAY THE LAST ${rangeLabel.value}`;
 });
 
 // ── Where there is data ─────────────────────────────────────────────────
@@ -407,7 +409,20 @@ const gap = computed(() => {
   const at = time.value.timeMs;
   const list = spans.value;
   const missing = list.filter((source) => at < source.start || at > source.end);
+  // The thing selected has a first sighting: before it there is nothing of it to show.
+  if (subject.value && at < subject.value.start - 30_000)
+    return {
+      text: `${subject.value.title} WAS NOT SEEN BEFORE ${stamp(subject.value.start)}`,
+      nearest: subject.value.start + 1000,
+      label: 'GO TO ITS FIRST SIGHTING',
+    };
   if (!missing.length) return null;
+  if (at > nowMs() + 5000)
+    return {
+      text: `${missing.map((source) => source.label).join(', ')}: OBSERVED ONLY, NOTHING OF IT PAST NOW`,
+      nearest: null,
+      label: '',
+    };
   const from = Math.max(...list.map((source) => source.start));
   const to = Math.min(...list.map((source) => source.end), nowMs());
   const nearest = from <= to ? Math.min(to, Math.max(from, at)) : null;
@@ -619,6 +634,23 @@ const nowPct = computed(() => place(nowMs()));
 let frame = null;
 let lastFrame = 0;
 let startedBeforeNow = false;
+// A replay that has caught up with the present is live again. A layer's last
+// frame can hold the cursor a little short of now, so it counts as arrived
+// once it stops moving within sight of it.
+let heldAt = 0;
+let heldSince = 0;
+function arrive() {
+  if (direction.value <= 0 || !startedBeforeNow || time.value.live) return;
+  const ms = worldClock.now();
+  if (ms !== heldAt) {
+    heldAt = ms;
+    heldSince = performance.now();
+    return;
+  }
+  const behind = nowMs() - ms;
+  const near = behind < MIN || (!time.value.buffering && behind < 15 * MIN);
+  if (near && performance.now() - heldSince > 1400) goLive(true);
+}
 // Rewind runs out where the loaded data of the observed layers does.
 const earliest = () =>
   observed.value.length
@@ -668,7 +700,10 @@ function run(next) {
     frame = requestAnimationFrame(rewindFrame);
     return;
   }
-  if (worldClock.isLive()) return still();
+  if (worldClock.isLive()) {
+    if (!hasFuture.value) return still();
+    worldClock.seek(nowMs() + 6000);
+  }
   startedBeforeNow = worldClock.now() < nowMs();
   applyRate();
   worldClock.play({ continuous: true });
@@ -704,6 +739,17 @@ function togglePlay() {
     worldClock.seek(nowMs() - 1000);
     return;
   }
+  run(1);
+}
+// Play what the track shows from its start: the last day's weather, or the
+// whole of a selected flight, in one press.
+function replaySpan() {
+  menu.value = null;
+  touched.value = true;
+  still();
+  const from = Math.max(view.value.start, subject.value ? subject.value.start : earliest()) + 1000;
+  if (from >= nowMs() - 5000) return;
+  worldClock.seek(from);
   run(1);
 }
 function goLive(stay = false) {
@@ -806,18 +852,40 @@ watch(
     before = null;
     journey.value = null;
     dismissed.value = null;
+    setRecordedSubject(id);
     if (!id) return;
     const found = await recordedJourney(id);
     if (!found || selected.value?.id !== id) return;
     journey.value = { ...found, title: found.callsign || selected.value.title };
     // The track at rest is nobody's yet: it becomes the journey's.
-    if (time.value.live && !touched.value) {
+    // At live the window is on nothing in particular, so it becomes the
+    // journey's, whether or not time was touched earlier; it comes back after.
+    if (time.value.live) {
+      const was = touched.value;
       before = win.value;
       setRange('FIT');
-      touched.value = false;
+      touched.value = was;
     }
   },
   { immediate: true },
+);
+// A replay with something selected is about that thing: the view goes to
+// where it was at the time shown, once the time settles.
+let followTimer = null;
+watch(
+  () => [time.value.live, Math.round(time.value.timeMs / 1000), journey.value],
+  () => {
+    clearTimeout(followTimer);
+    if (time.value.live || !journey.value?.path) return;
+    followTimer = setTimeout(
+      () => {
+        const at = worldClock.now();
+        if (!worldClock.isLive() && journey.value && at >= journey.value.start)
+          viewJourneyAt(journey.value.path, at);
+      },
+      time.value.playing ? 1200 : 250,
+    );
+  },
 );
 const subject = computed(() =>
   journey.value && dismissed.value !== selected.value?.id ? journey.value : null,
@@ -1020,8 +1088,12 @@ const jumps = computed(() => {
     { label: 'A week ago', ms: now - 7 * DAY },
     { label: 'A year ago', ms: now - 365 * DAY },
   ].filter((each) => each.ms >= floor.value);
+  if (subject.value)
+    list.push({ label: `First sighting of ${subject.value.title}`, ms: subject.value.start + 1000 });
   const loaded = earliest();
   if (now - loaded > MIN) list.push({ label: 'Start of what is loaded', ms: loaded + 1000 });
+  if (hasFuture.value)
+    list.push({ label: 'In an hour (predicted)', ms: now + HOUR }, { label: 'Tomorrow, this time (predicted)', ms: now + DAY });
   return list.map((each) => ({ ...each, when: stamp(each.ms) }));
 });
 function openMenu(name) {
@@ -1063,12 +1135,16 @@ function onKey(event) {
   else if (key === ']') toMark(1);
   else if (key === '-') zoomBy(2);
   else if (key === '=' || key === '+') zoomBy(0.5);
+  else if (key === 'r') replaySpan();
   else if (key === '\\') goLive();
   else return;
   event.preventDefault();
 }
 function onOutside(event) {
-  if (menu.value && !root.value?.contains(event.target)) menu.value = null;
+  const outside = !root.value?.contains(event.target);
+  if (menu.value && outside) menu.value = null;
+  else if (outside && coarse.value && layout.value !== 'phone' && time.value.live && direction.value === 0)
+    touched.value = false;
 }
 
 // ── At rest, and engaged ────────────────────────────────────────────────
@@ -1093,7 +1169,9 @@ let restTimer = null;
 function onLeave() {
   hover.value = null;
   clearTimeout(restTimer);
-  if (layout.value === 'phone') return;
+  // A finger leaves the bar every time it lifts, so touch never rests on a
+  // timer: it rests on LIVE, or on a touch anywhere else on the page.
+  if (layout.value === 'phone' || coarse.value) return;
   restTimer = setTimeout(() => {
     if (time.value.live && !menu.value && pointers.size === 0) touched.value = false;
   }, 6000);
@@ -1182,7 +1260,10 @@ onMounted(() => {
   document.addEventListener('pointerdown', onOutside, true);
   measure();
   // The dock mounts on its own time, and moves when the page's layout does.
-  dockTimer = setInterval(measure, 700);
+  dockTimer = setInterval(() => {
+    measure();
+    arrive();
+  }, 700);
   pinSpeed();
   window.__wt = { worldClock, cards, answer: setAnswer, layout, win };
 });
@@ -1218,6 +1299,7 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
       `is-${tense}`,
       `is-${layout}`,
       engaged ? 'is-engaged' : 'is-rest',
+      menu ? 'has-menu' : '',
       { 'is-open': lanesOpen, 'is-running': direction !== 0, 'is-tape': tape, 'is-coarse': coarse },
     ]"
     :style="rootStyle"
@@ -1243,7 +1325,7 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
       </button>
       <form class="wt-menu-date" @submit.prevent="jumpToInput">
         <label for="wt-jump-input">A date and time</label>
-        <span><input id="wt-jump-input" v-model="jumpInput" type="datetime-local" :max="inputValue(nowMs())" /><button type="submit">GO</button></span>
+        <span><input id="wt-jump-input" v-model="jumpInput" type="datetime-local" :max="hasFuture ? undefined : inputValue(nowMs())" /><button type="submit">GO</button></span>
       </form>
     </div>
     <div v-if="menu === 'speed'" class="wt-menu wt-menu--speed" role="menu" :aria-label="t('Speed')">
@@ -1255,6 +1337,7 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
       </button>
     </div>
     <div v-if="menu === 'range'" class="wt-menu wt-menu--range" role="menu" :aria-label="t('Time shown')">
+      <button type="button" role="menuitem" @click="replaySpan"><span>Replay this from its start</span><em>▶</em></button>
       <button v-if="subject" type="button" role="menuitem" @click="setRange('FIT')"><span>The whole flight</span><em>{{ subject.title }}</em></button>
       <button v-for="each in RANGES.filter((range) => range.length <= maxLength)" :key="each.key" type="button" role="menuitemradio" :aria-checked="rangeLabel === each.key" @click="setRange(each.key)">
         <span>{{ each.name }}</span><em>{{ each.key }}</em>
@@ -1384,7 +1467,7 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
               <svg v-if="playing" viewBox="0 0 20 20" aria-hidden="true"><path d="M5.5 4h3v12h-3zM11.5 4h3v12h-3z" /></svg>
               <svg v-else viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" /></svg>
             </button>
-            <button type="button" class="wt-key wt-key--fwd" :class="{ 'is-on': direction > 0 }" :disabled="time.live" :aria-label="t('Fast forward')" :aria-pressed="direction > 0" title="Forward · tap to run, hold to run while held · L" @pointerdown="holdStart(1, $event)" @pointerup="holdEnd" @pointercancel="holdEnd" @click="holdKey(1, $event)">
+            <button type="button" class="wt-key wt-key--fwd" :class="{ 'is-on': direction > 0 }" :disabled="time.live && !hasFuture" :aria-label="t('Fast forward')" :aria-pressed="direction > 0" title="Forward · tap to run, hold to run while held · L" @pointerdown="holdStart(1, $event)" @pointerup="holdEnd" @pointercancel="holdEnd" @click="holdKey(1, $event)">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4.5v11l7.5-5.5zM2.5 4.5v11L10 10z" /></svg>
             </button>
           </div>
@@ -1397,7 +1480,7 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
             <button type="button" class="wt-zoom-span" :aria-expanded="menu === 'range'" title="How much time the track shows" @click="openMenu('range')">{{ rangeLabel }}</button>
             <button type="button" :aria-label="t('Show less time')" title="Show less time · +" :disabled="win.length <= MIN_LENGTH" @click="zoomBy(0.5)">+</button>
           </div>
-          <button type="button" class="wt-resting" title="How much time the track shows" @click="openMenu('range')">{{ restLabel }}</button>
+          <button type="button" class="wt-resting" title="Play it from the start" @click="replaySpan"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4l10 6-10 6z" /></svg>{{ restLabel }}</button>
           <button type="button" class="wt-live" :class="{ 'is-live': time.live }" :disabled="time.live && !engaged" :title="time.live ? 'Live' : 'Back to live · \\'" @click="goLive()"><b class="wt-dot"></b>{{ time.live && layout === 'phone' ? 'DONE' : 'LIVE' }}</button>
         </div>
       </div>

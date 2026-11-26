@@ -418,7 +418,17 @@ body.cockpit-mode #world-timeline {
 }
 
 #world-timeline.is-rest:is(.is-flank, .is-under) .wt-resting {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(123, 189, 211, 0.22);
+  border-radius: 3px;
+}
+
+.wt-resting svg {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
 }
 
 #world-timeline.is-rest .wt-live,
@@ -436,6 +446,12 @@ body.cockpit-mode #world-timeline {
   display: flex;
   height: var(--wt-track);
   transition: height 0.16s ease;
+}
+
+/* A menu opens above the bar, so the bar takes its full height at once: the
+   menu's rows never move under a pointer on its way to one. */
+#world-timeline.has-menu .wt-trackrow {
+  transition: none;
 }
 
 .is-rest .wt-trackrow {
@@ -1357,6 +1373,7 @@ body:is([data-world-timeline='flank'], [data-world-timeline='stack'], [data-worl
   grid-template-areas:
     'clock live'
     'track track'
+    'replay replay'
     'shuttle speed'
     'zoom scope'
     'lanes lanes';
@@ -1395,6 +1412,28 @@ body:is([data-world-timeline='flank'], [data-world-timeline='stack'], [data-worl
   height: 64px;
   margin: 0 -10px;
   border-block: 1px solid var(--wt-line);
+}
+
+/* At live the sheet leads with the one thing most people came for: play the
+   span back from its start. It goes once time has left live. */
+#world-timeline.is-phone.is-engaged.is-live .wt-resting {
+  grid-area: replay;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--wt-control);
+  border: 1px solid rgba(123, 189, 211, 0.3);
+  border-radius: 3px;
+  color: var(--wt-ink);
+}
+
+#world-timeline.is-stack.is-engaged.is-live .wt-resting {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(123, 189, 211, 0.22);
+  border-radius: 3px;
 }
 
 .is-phone.is-engaged .wt-shuttle {
