@@ -22,7 +22,7 @@ import VisualPresets from './VisualPresets.vue';
 // and each publishes them; until they do, the panel shows its initial markup.
 // Draw and Import live in UTILITIES (LayerPanelsView).
 const display = useDisplayStore();
-const { view, models3d, parameters, cockpitPortal, groups, sky } = storeToRefs(display);
+const { view, models3d, parameters, cockpitPortal, groups, sky, frameRate } = storeToRefs(display);
 // Cockpit takes these controls first; otherwise, while a layer they act on is
 // on, they move into that layer's tab in Context.
 const inContext = (id) => availableTabs.value.some((tab) => tab.id === id);
@@ -31,6 +31,8 @@ const modelsTarget = computed(() => cockpitPortal.value?.models3d ?? (inContext(
 // A control's change goes to its owner (DisplayBindings).
 const act = (name, ...args) => display.act(name, ...args);
 const pct = (value) => `${value}%`;
+// The Frame rate row's value: the rate, or Unlimited at its last stop.
+const fpsText = (row) => (row.fps === 0 ? t('Unlimited') : t('{fps} fps', { fps: row.fps }));
 // The words of the on/off pill each card header draws (visual-panel.css), as
 // CSS strings.
 const pillWords = computed(() => ({
@@ -220,6 +222,14 @@ const allocationOptions = computed(() => [
       <span class="pp-slider-mini-label">{{ t('Milky Way') }}</span>
       <UiSlider class="pp-slider" id="sky-milkyway-slider" @update:model-value="act('setSkyMilkyWay', $event)" min="0" max="100" :model-value="sky.milkyWay" :aria-label="t('Milky Way')" />
       <span class="pp-slider-value">{{ pct(sky.milkyWay) }}</span>
+    </div>
+  </div>
+  <!-- Frame rate: the most frames a second the globe draws. -->
+  <div v-if="frameRate" class="pp-toggle-group" id="frame-rate-group">
+    <div class="pp-slider-row visible" id="frame-rate-row">
+      <span class="pp-slider-mini-label">{{ t('Frame rate') }}</span>
+      <UiSlider class="pp-slider" id="frame-rate-slider" @update:model-value="act('setFrameRate', $event)" :min="frameRate.min" :max="frameRate.max" :step="frameRate.step" :model-value="frameRate.stop" :aria-label="t('Frame rate')" :aria-valuetext="fpsText(frameRate)" :title="t('The most frames a second the globe draws; Unlimited draws at your display\'s rate')" />
+      <span class="pp-slider-value" id="frame-rate-value">{{ fpsText(frameRate) }}</span>
     </div>
   </div>
   <!-- Groups the application adds (store `publishGroup`). -->

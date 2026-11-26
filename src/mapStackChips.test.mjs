@@ -296,3 +296,19 @@ test('the Visual panel owns Map Source and the retired left panel is absent', as
     'component destruction releases its subscription',
   );
 });
+
+test('a registered source marked presented shows after the approved ones', () => {
+  const chips = mapStackChipModels(
+    [
+      { id: 'plain', label: 'Plain', available: true, presented: true },
+      ...CONTROLLER_STACKS,
+      { id: 'hidden', label: 'Hidden', available: true },
+    ],
+    'plain',
+  );
+  assert.deepEqual(
+    chips.map((chip) => chip.id),
+    ['photoreal', 'bing-aerial', 'bing-labels', 'esri-imagery', 'osm', 'plain'],
+  );
+  assert.equal(chips.at(-1).active, true);
+});

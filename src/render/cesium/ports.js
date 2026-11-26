@@ -53,8 +53,6 @@ const GLOBE_CAPABILITIES = [
   'imageryDecoded',
   'surfaceIdentity',
   'surfaceShading',
-  // A MapLibre style's vector tiles, painted as imagery (`vectorBase.js`).
-  'vectorBase',
   'globeVisibility',
 ];
 

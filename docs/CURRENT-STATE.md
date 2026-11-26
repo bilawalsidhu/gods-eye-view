@@ -39,13 +39,13 @@ spread over time (near ones about every second, far or off-screen ones about
 every four), a new report that moves a placed flight eases it there from
 where it is drawn, and a tracked aircraft's trail head ends where it is drawn
 in that frame.
-The render governor (`src/renderGovernor.js`) caps a parked scene at
-`IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
-Cesium still runs the clock, data sources and update listeners on every
-animation frame even when it skips the draw, and lifts the cap while anything
-does: the frame port tells it when the loop's first hold is taken and its last
-released, its own holds (animated visual styles) included. The viewer starts
-at that cap until the governor is installed. Through the idle
+The render governor (`src/renderGovernor.js`) sets the loop's rate: the
+holders' while anything holds it (the frame port tells it when the loop's
+first hold is taken and its last released, its own holds, animated visual
+styles, included), the display's while nothing does, both capped by the
+Display panel's Frame rate (`src/viewFrameRate.js`): 60 until the user sets
+it, 30 to 240 frames a second, or Unlimited, kept across visits. The viewer
+starts at that cap until the governor is installed. Through the idle
 render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
 `moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while
@@ -8394,7 +8394,8 @@ sit on the field's top edge. World Time appears immediately above the dock
 and hides while suggestions, chat, or voice settings are visible. `/`
 focuses search from outside a text field, as do Cmd+K on macOS and Ctrl+K
 elsewhere (Ctrl+K on macOS is left alone); none of them takes focus from an
-open modal dialog or from inside a dialog such as the guide. While voice is
+open modal dialog or from inside a dialog such as the guide; a modal dialog
+kept on the page inside a hidden container is closed and does not count. While voice is
 on, the suggestions give way to the waveform but an error stays shown. The map credits stay on the
 Power Up row in the ordinary desktop layout, and the Tactical bottom-right
 readout sits 8px above that row.
@@ -10042,7 +10043,12 @@ unless its plugin hands the application a map engine of its own
   terrain as `quantizedMesh` terrain at its URL (`src/maps/keylessTerrain.js`);
   while the keyless terrain does not answer, the ellipsoid stands in and the
   map stack tries it again behind it. A renderer without the `terrain`
-  capability keeps the ellipsoid.
+  capability keeps the ellipsoid. A `quantizedMesh` terrain source can supply
+  its tiles through `fetchTile`, like `xyz` imagery: Cesium still reads
+  `layer.json` at the source's URL, schedules, cancels and decodes the tiles,
+  and only each tile's bytes come from `fetchTile`; a `missing` tile draws its
+  parent's terrain, a `defer`red one is asked for again shortly
+  (`src/render/cesium/terrainTiles.js`).
 
 A viewer with no renderer bound gets the Cesium engine
 (`src/render/cesium/mapEngine.js`), with the other unbound ports, from the

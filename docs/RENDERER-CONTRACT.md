@@ -23,7 +23,6 @@ own `.d.ts`:
   `.../stub/harness`: the stub's camera, its view rectangle and its
   conformance harness;
 - `gods-eye-view/render/motion`: where a moving icon is drawn at a time;
-- `gods-eye-view/render/vectorBase`: the vector base painter;
 - `gods-eye-view/render/iconSegment`: icon motion segments;
 - `gods-eye-view/render/recession`: how a set that recedes shrinks and
   fades its items toward the limb;
@@ -570,88 +569,29 @@ and each capability member present without its capability.
 `contract.test.mjs` type-checks the contract under strict TypeScript, and
 fails when `PORTS` and the types disagree on a single member.
 
-### The vector base painter
+### The vector base
 
-`vectorBase` (`BaseSpec.vector = { styleUrl }`) draws a MapLibre style
-document's vector tiles as the globe's base. They are painted in shared,
-Cesium-free code, `src/render/vectorBase/`, which the renderer draws as
-imagery:
+`vectorBase` draws a MapLibre style document's vector map: as an imagery
+layer (`ImagerySpec` `{ kind: 'vector', styleUrl }`), draped as any imagery
+layer is, at its place among the layers, on the ellipsoid, terrain and
+photoreal tiles, with its labels drawn as text (with `overlay`, its lines
+and labels alone, no background or area fills, for a vector map over other
+imagery); or as the globe's base
+(`BaseSpec.vector = { styleUrl }`), under the base's other imagery. It is
+optional: a renderer without it refuses both (`imagery.add` and `setBase`
+throw, and nothing changes). The Cesium renderer does not have it;
+Cesium draws no vector tiles.
 
-- `loadVectorStyle(styleUrl, fetch)` fetches the style and the TileJSON its
-  vector sources name (a source's `url`; inline `tiles` are used as given,
-  resolved against the style), compiles every layer, and returns the
-  sources (tile templates, `minzoom`, `maxzoom`, `xyz` or `tms`), the layers
-  it draws, the background, the sources' attributions, and `skipped`: each
-  layer it does not draw, with why.
-- `paintVectorTile(style, z, x, y, { size, fetch, signal, canvas })` paints
-  one Web Mercator tile on a canvas at style zoom `z + log2(size / 512)` (at
-  least 0). A source past its `maxzoom` is drawn from its deepest tile,
-  overzoomed; below its `minzoom` it draws nothing. Decoded source tiles
-  (gzipped ones inflated) are kept per style, the last 128.
-
-What it draws of the style specification:
-
-- Layers: `background` (`background-color`, `background-opacity`); `fill`
-  (`fill-color`, `fill-opacity`, `fill-outline-color`); `line`
-  (`line-color`, `line-width`, `line-opacity`, `line-dasharray`,
-  `line-cap`, `line-join`, and `line-gap-width` drawn as one line the full
-  cased width); `circle` (`circle-radius`, `circle-color`,
-  `circle-opacity`, `circle-stroke-width`, `circle-stroke-color`,
-  `circle-stroke-opacity`); `symbol` text only (`text-field` as an
-  expression or with `{name}` tokens, `text-size`, `text-font` as the
-  system's sans-serif or serif in bold or italic as its name says,
-  `text-color`, `text-opacity`, `text-halo-color`, `text-halo-width`,
-  `text-transform`, `text-anchor`, `text-offset`, `text-max-width`).
-  Layer `minzoom`, `maxzoom`, `filter` and `visibility` hold.
-- Labels are painted into the tiles: top layer first (within a layer, its
-  features in their order in the tile), each clear of those placed before
-  it and wholly inside its tile (one across a tile edge is
-  left out). A point labels at itself, a line halfway along it (level, not
-  along the line), a polygon at its outer ring's bounding-box centre.
-- Filters in both syntaxes (legacy, with `$type` and `$id`, and
-  expressions). Legacy `{stops, base, property, type}` functions
-  (exponential, interval, categorical, identity; not zoom-and-property);
-  one without a `type` is exponential on a property that interpolates (a
-  number or colour) and interval on any other (`line-cap`, `line-join`,
-  `text-font`, `text-transform`, `text-anchor`, ...), as the specification
-  says. `has`, `get` and legacy filters see a feature's own properties only.
-- Expressions: `literal`, `get`, `has`, `id`, `geometry-type`, `zoom`,
-  `properties`, `!`, `all`, `any`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`,
-  `case`, `match`, `coalesce`, `step`, `interpolate` (`linear` and
-  `exponential`; `-hcl` and `-lab` blend in RGB), `to-string`,
-  `to-number`, `to-boolean`, `to-color`, `number`, `string`, `boolean`,
-  `rgb`, `rgba`, `concat`, `format` (its text), `upcase`, `downcase`,
-  `length`, `at`, and arithmetic (`+ - * / % ^`, `min`, `max`, `abs`,
-  `floor`, `ceil`, `round`, `sqrt`, `ln`, `log10`, `log2`).
-- Skipped whole: `fill-extrusion`, `raster`, `hillshade`, `heatmap` and
-  `sky` layers; layers on raster sources; layers setting a pattern
-  (`fill-pattern`, `line-pattern`, `background-pattern`), `line-offset`,
-  `line-gradient` or a translation; layers whose values use an expression
-  not listed (or are malformed). As MapLibre does, a paint or layout value
-  that cannot be evaluated for a feature (a type that does not fit, a
-  `step` or `interpolate` over what is not a number) or is not of the
-  property's kind (null; not a finite number, a string included, where a
-  number is needed; not a colour `parseColor` reads, which takes the CSS
-  colour names; not one of the property's keywords) is the property's
-  default; a legacy function's miss is its `default`, else the property's.
-  A feature whose filter cannot be evaluated is left out. Nothing
-  unsupported throws.
-- Ignored: icons (`icon-image`, sprites: a symbol layer draws its text
-  alone), text along lines (drawn level), `glyphs` (system fonts), and any
-  other paint or layout property not listed above.
-
-The Cesium port loads the style before the base changes (a style that fails
-leaves the base as it was; a later `setBase`, or disposal, aborts the load and
-the overtaken call changes nothing, resolving with `imagery: []` and
-`settled: false`; `settled` is whether, when the call resolves, its base is
-still the one drawn and has settled, so an earlier call that resolves while a
-later call's style is still loading, or after that style fails, is settled,
-and one that resolves after a later call changed the base is not), draws it as Web Mercator imagery under the
-base's other imagery (`src/render/cesium/vectorBase.js`, 256 px tiles to
-level 20, transparent where the style paints no opaque background; a tile
-whose request is cancelled, its layer removed, is not painted), and credits each source's attribution as plain text. The stub
-loads the style and paints nothing. The check `globe.base.vector` serves a
-style and a tile from data URLs and reads the drawn fill.
+With it, the style loads before the base changes: a style
+that fails leaves the base as it was, and a later `setBase`, or disposal,
+aborts the load and the overtaken call changes nothing, resolving with
+`imagery: []` and `settled: false`. `settled` is whether, when the call
+resolves, its base is still the one drawn and has settled. It credits each
+of the style's sources' attributions as plain text while the base is
+drawn. The stub fetches the style document and paints nothing. The check
+`globe.base.vector` serves a style and a tile from data URLs (the tile built
+with `src/render/conformance/vectorTileFixture.js`) and reads the drawn
+fill.
 
 ### What a renderer does, by role
 
@@ -910,4 +850,5 @@ its eased course. The stub keeps no drawn course. These checks still need
 scenes that capture an icon mid-turn or from an oblique angle. Height
 queries that count a set (`includeInHeightQueries`) are not checked either:
 the stub's heights are scripted, so it does not model them. Nor are video
-frames (a check needs a video) or `fetchTile` (the stub fetches nothing).
+frames (a check needs a video) or `fetchTile`, imagery's or terrain's (the
+stub fetches nothing).

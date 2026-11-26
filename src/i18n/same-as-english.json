@@ -501,7 +501,8 @@
     "{utc} UTC",
     "Manual",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{fps} fps"
   ],
   "fr": [
     "1 min/s",
@@ -998,7 +999,8 @@
     "KT",
     "{utc} UTC",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{fps} fps"
   ],
   "ja": [
     "1090 MHz",
@@ -1083,7 +1085,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "UTC"
+    "UTC",
+    "{fps} fps"
   ],
   "pt": [
     "1 min/s",

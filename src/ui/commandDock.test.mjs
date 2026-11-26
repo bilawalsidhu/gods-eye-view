@@ -1380,6 +1380,41 @@ test('the search shortcut leaves an open dialog its focus', async (t) => {
   assert.equal(document.activeElement, input);
 });
 
+test('a modal dialog kept in a hidden container does not hold the search shortcut', async (t) => {
+  const { input } = recordingOmnibar(t);
+  // A page may keep its sign-in dialog in the document and hide the section
+  // around it: the dialog is closed, so Cmd/Ctrl+K and "/" still focus the field.
+  const gate = document.body.appendChild(document.createElement('section'));
+  t.after(() => gate.remove());
+  gate.hidden = true;
+  const dialog = gate.appendChild(document.createElement('div'));
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
+  const commandK = () =>
+    new KeyboardEvent('keydown', {
+      key: 'k',
+      metaKey: isMac,
+      ctrlKey: !isMac,
+      bubbles: true,
+      cancelable: true,
+    });
+  const press = commandK();
+  document.body.dispatchEvent(press);
+  assert.ok(document.activeElement === input);
+  assert.equal(press.defaultPrevented, true);
+  input.blur();
+  document.body.dispatchEvent(
+    new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }),
+  );
+  assert.ok(document.activeElement === input);
+  // Shown again, the dialog keeps its keys.
+  input.blur();
+  gate.hidden = false;
+  document.body.dispatchEvent(commandK());
+  assert.ok(document.activeElement !== input);
+});
+
 // ── Enter-safety table ─────────────────────────────────────────────────
 // Every line below is typed into the mounted Omnibar and Enter pressed with
 // no row chosen; the table says exactly what runs. See src/ui/omnibarEnter.js

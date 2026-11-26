@@ -4671,5 +4671,9 @@
   "Older or unknown": "Старше или неизвестно",
   "Colour shows the age of each area.": "Цвет показывает возраст каждого участка.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Возраст — от картирования WFIGS, иначе от последней правки записи. Контуры упрощены до ~100 м.",
-  "Voice and search controls": "Голосовое управление и поиск"
+  "Voice and search controls": "Голосовое управление и поиск",
+  "Unlimited": "Без ограничений",
+  "Frame rate": "Частота кадров",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "Наибольшее число кадров в секунду, которое рисует глобус; «Без ограничений» — с частотой вашего экрана",
+  "{fps} fps": "{fps} кадр/с"
 }
