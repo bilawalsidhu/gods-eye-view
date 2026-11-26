@@ -123,6 +123,7 @@ export const SHARE_VIEW_ENUMS = Object.freeze({
 });
 
 const ENTITY_BY_KIND = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.kind, e]));
+const VESSEL_KIND = 'vessel';
 const ENTITY_BY_CODE = new Map(SHARE_VIEW_ENTITY_KINDS.map((e) => [e.code, e]));
 
 /**
@@ -431,6 +432,9 @@ export const SHARE_VIEW_THING_FIELDS = Object.freeze({
   ageS: 11, // sint, seconds the fix predates the created-at time (field 8)
   observedAt: 12, // epoch, when the fix was taken; only without a created-at
   vesselUuid: 13, // LEN, 16 bytes: a vessel id that is a UUID
+  // uint 1: the camera follows the vessel. Absent (every link before it):
+  // the vessel is selected, not followed. Other kinds are always followed.
+  followed: 14,
 });
 
 /**
@@ -673,12 +677,21 @@ function normalizeLastKnown(fix) {
   };
 }
 
-function thingView(kind, id, offset = null, lastKnown = null) {
+function thingView(
+  kind,
+  id,
+  offset = null,
+  lastKnown = null,
+  followed = false,
+) {
   return {
     kind: 'thing',
     entity: { kind, id },
     offset: normalizeFollowOffset(offset),
     lastKnown: normalizeLastKnown(lastKnown),
+    // A vessel is only selected unless the view says it is followed; every
+    // other kind a view names is followed.
+    ...(kind === VESSEL_KIND && followed === true && { followed: true }),
   };
 }
 
@@ -687,7 +700,13 @@ function normalizeView(view) {
   const entry = ENTITY_BY_KIND.get(view.entity?.kind);
   const id = entry ? normalizeEntityId(entry, view.entity?.id) : null;
   if (!id) return { kind: 'place' };
-  return thingView(entry.kind, id, view.offset, view.lastKnown);
+  return thingView(
+    entry.kind,
+    id,
+    view.offset,
+    view.lastKnown,
+    view.followed === true,
+  );
 }
 
 /** The camera fields of `state`, at the format's precision. */
@@ -1016,8 +1035,10 @@ function encodeThing(writer, view, state) {
     } else if (observed !== null)
       thing.sintField(f.observedAt, epochSeconds(observed));
   }
-  // Fields go in ascending order, so the UUID id (field 13) comes last.
+  // Fields go in ascending order, so the UUID id (field 13) comes after the
+  // rest, and a vessel's follow (field 14) after it.
   if (uuid) thing.bytesField(f.vesselUuid, uuidBytes(view.entity.id));
+  if (view.followed === true) thing.uintField(f.followed, 1);
   writer.bytesField(fieldNumber('thing'), thing.finish());
 }
 
@@ -1369,6 +1390,8 @@ function decodeThing(reader, createdAtS, unknown) {
     : null;
   const present = SHARE_VIEW_ENTITY_KINDS.filter((e) => fields.has(e.code));
   const uuid = fields.get(F.vesselUuid);
+  // Any value but 1 is read as absent: the vessel is selected.
+  const followed = fields.get(F.followed)?.varint === 1;
   if (present.length + (uuid ? 1 : 0) > 1)
     throw new ShareWireError('duplicate-field', 'thing entity id');
   if (uuid) {
@@ -1377,7 +1400,13 @@ function decodeThing(reader, createdAtS, unknown) {
       throw new ShareWireError('bad-length', 'thing vessel id');
     return {
       camera,
-      view: thingView(VESSEL_ENTRY.kind, uuidText(bytes), offset, lastKnown),
+      view: thingView(
+        VESSEL_ENTRY.kind,
+        uuidText(bytes),
+        offset,
+        lastKnown,
+        followed,
+      ),
     };
   }
   const entry = present[0];
@@ -1391,7 +1420,10 @@ function decodeThing(reader, createdAtS, unknown) {
   }
   const id = decodeEntityId(entry, fields.get(entry.code));
   if (!id) return { camera, fallback: 'invalid-entity-id' };
-  return { camera, view: thingView(entry.kind, id, offset, lastKnown) };
+  return {
+    camera,
+    view: thingView(entry.kind, id, offset, lastKnown, followed),
+  };
 }
 
 /**

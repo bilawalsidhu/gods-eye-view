@@ -6,7 +6,8 @@
   followed one keeps following. Ships can now be followed: the camera rides
   the ship where the vessel layer draws it, a ship's card offers Follow, a
   spoken "track" on a ship follows it, and a share link made while
-  following one names it. Picks from the Context panel and search select the
-  same way, and closing a card deselects its item. Following is a second
-  click, the card's Follow, a spoken "track" or a share link
-  (samehkhamis, #1938).
+  following one opens following it (a new thing field; links with a ship
+  only selected, and every older link, still open selecting it). Picks
+  from the Context panel and search select the same way, and closing a
+  card deselects its item. Following is a second click, the card's
+  Follow, a spoken "track" or a share link (samehkhamis, #1938).
