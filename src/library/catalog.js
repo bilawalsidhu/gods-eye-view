@@ -94,6 +94,7 @@ import pnoaMa from './entries/pnoa-ma.json' with { type: 'json' };
 import portlandMetroOr from './entries/portland-metro-or.json' with { type: 'json' };
 import ptDgtOrtos from './entries/pt-dgt-ortos.json' with { type: 'json' };
 import riStatewideImagery from './entries/ri-statewide-imagery.json' with { type: 'json' };
+import spcDay1ConvectiveOutlook from './entries/spc-day1-convective-outlook.json' with { type: 'json' };
 import swisstopoSwissimage from './entries/swisstopo-swissimage.json' with { type: 'json' };
 import txStatewideImagery from './entries/tx-statewide-imagery.json' with { type: 'json' };
 import unionCountyOh from './entries/union-county-oh.json' with { type: 'json' };
@@ -193,6 +194,7 @@ export const LIBRARY_MANIFESTS = Object.freeze([
   portlandMetroOr,
   ptDgtOrtos,
   riStatewideImagery,
+  spcDay1ConvectiveOutlook,
   swisstopoSwissimage,
   txStatewideImagery,
   unionCountyOh,
