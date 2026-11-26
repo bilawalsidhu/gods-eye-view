@@ -580,12 +580,15 @@ export function createControls({ state: layerState, services, parts, source }) {
     },
 
     /**
-     * Stop tracking the currently tracked satellite (no-op if none).
+     * Stop tracking the currently tracked satellite (no-op if none). With
+     * `globeView` (a person letting go of it), a camera that was following
+     * it flies to the globe view over its ground point.
+     * @param {{origin?: string, globeView?: boolean}} [options]
      * @returns {boolean} Always true.
      */
-    stopTracking({ origin = 'programmatic' } = {}) {
+    stopTracking({ origin = 'programmatic', globeView = false } = {}) {
       parts.tracking._cancelPendingTrackingRestore();
-      parts.tracking._clearTracking(false, { origin });
+      parts.tracking._clearTracking(false, { origin, globeView });
       return true;
     },
 

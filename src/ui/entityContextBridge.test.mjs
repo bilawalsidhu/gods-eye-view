@@ -782,6 +782,8 @@ test('closing the card deselects its item in its layer, followed or only selecte
       getAnalystRecords: () => [aircraft],
       stopTracking: (options) => {
         stops.push(options.origin);
+        // A person's letting go: a layer that knows the globe view uses it.
+        assert.equal(options.globeView, true);
         releaseSelection('flights', 'abc123');
       },
     },
