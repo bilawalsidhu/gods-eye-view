@@ -64,6 +64,59 @@ export function createQueries({
     return null;
   }
 
+  /** Each vessel's detection object, reused while its record is. */
+  const detectionObjects = new WeakMap();
+
+  /**
+   * A vessel's detection object where it is drawn now (its icon, or its
+   * model on the water), or null when it is not drawn: past the horizon, not
+   * there yet at the time drawn, or the ship the bridge camera rides with
+   * its icon hidden (drawn as its model, it still counts).
+   * @param {Object} record
+   * @returns {Object|null}
+   */
+  function detectableObject(record) {
+    const visual = components.rendering.getVisual(record);
+    if (!visual.visible) return null;
+    if (
+      state.cockpitSubjectId &&
+      record.id === state.cockpitSubjectId &&
+      !visual.modelOwnsVisual
+    )
+      return null;
+    components.rendering.readVesselNow(record);
+    const position = visual.position;
+    if (!position) return null;
+    let object = detectionObjects.get(record);
+    if (!object) {
+      object = {
+        sourceId: record.id,
+        type: 'SEA',
+        // Detection hides the callout while this card paints. A record
+        // keeps its card identity (an unkeyed one is rebuilt every poll).
+        cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
+        cardEntryId: components.cards.vesselOverlayEntryId(record),
+      };
+      detectionObjects.set(record, object);
+    }
+    object.position = position;
+    object.skipLabel = record === state.selectedRecord;
+    // Text is rebuilt only when what it shows changes in place.
+    const name = record.name || record.mmsi || 'VESSEL';
+    if (object.id !== name) object.id = name;
+    if (object._labelType !== record.type) {
+      object._labelType = record.type;
+      object.klass = record.type
+        ? String(record.type).toUpperCase().slice(0, 14)
+        : undefined;
+    }
+    if (object._labelSpeed !== record.speed) {
+      object._labelSpeed = record.speed;
+      object.metric = formatKnots(record.speed); // record.speed is knots
+    }
+    return object;
+  }
+
   /**
    * Seconds until the server's next reconnect attempt, or 0 when none is
    * scheduled. Mirrors the flights layer's `retryInSec` chip affordance.
@@ -711,9 +764,10 @@ export function createQueries({
     },
 
     /**
-     * Return a subset of vessels for the universal detection overlay.
-     * Deterministic stride sampling distributes selections evenly across the
-     * current record list while honoring the overlay's per-layer budget.
+     * Return the vessels drawn now, for the universal detection overlay: the
+     * selected vessel first, then the others in list order. A `maxCount`
+     * below the drawn count samples the list with a deterministic stride;
+     * the selected vessel is never the one left out.
      * @param {Object} [options={}] - Options from the detection system.
      * @param {number} [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number} [options.seed] - Seed offset for stride sampling.
@@ -734,38 +788,15 @@ export function createQueries({
 
       const selected = state.selectedRecord;
       const result = [];
+      const selectedObject = selected ? detectableObject(selected) : null;
+      if (selectedObject) result.push(selectedObject);
       for (let idx = 0; idx < records.length; idx += 1) {
+        if (result.length >= maxCount) break;
         if ((idx - start) % stride !== 0) continue;
         const record = records[idx];
-        const visual = components.rendering.getVisual(record);
-        // Horizon visibility: a vessel drawn as its model still counts.
-        if (!visual.visible) continue;
-        // The ship the bridge camera rides, its icon hidden, is no object in
-        // view (drawn as its model, it still counts).
-        if (
-          state.cockpitSubjectId &&
-          record.id === state.cockpitSubjectId &&
-          !visual.modelOwnsVisual
-        )
-          continue;
-        components.rendering.readVesselNow(record);
-        const position = visual.position;
-        if (!position) continue;
-        result.push({
-          position,
-          sourceId: record.id,
-          id: record.name || record.mmsi || 'VESSEL',
-          type: 'SEA',
-          skipLabel: record === selected,
-          // Detection hides the callout while this card paints.
-          cardSourceId: VESSEL_OVERLAY_SOURCE_ID,
-          cardEntryId: components.cards.vesselOverlayEntryId(record),
-          klass: record.type
-            ? String(record.type).toUpperCase().slice(0, 14)
-            : undefined,
-          metric: formatKnots(record.speed), // record.speed is knots
-        });
-        if (result.length >= maxCount) break;
+        if (record === selected) continue;
+        const object = detectableObject(record);
+        if (object) result.push(object);
       }
       return result;
     },

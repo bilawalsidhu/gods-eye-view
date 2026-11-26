@@ -5746,7 +5746,16 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `src/overlays/worldOverlay.js` owns one shared DPR-aware text/card canvas,
 >   one detection blend surface, and one world-overlay post-render
 >   scheduler. Both surfaces share the same sizing, clear, projection,
->   and teardown paths. The host includes bounded per-source/per-collision-domain
+>   and teardown paths. On a touch-only device (`(pointer: coarse)` and no
+>   `(any-pointer: fine)`, `src/overlays/canvasPixelRatio.js`; a tablet with
+>   a trackpad, mouse or pencil is not one) both are held at CSS pixels, as
+>   the globe is drawn; a fine pointer keeps the display's ratio, and
+>   attaching or removing one resizes them (`watchTouchOnly`). The scope
+>   mask (`src/scopeMask.js`) follows the same rule for its feathered
+>   gradient, but draws a hard edge (feather under a pixel) at up to 2x on
+>   every device. Both surfaces start 0x0; the detection surface holds a
+>   backing store only while a detection lane is active, and an idle host
+>   releases it without sizing the shared canvas. The host includes bounded per-source/per-collision-domain
 >   arbitration, horizon/viewport culling, shared keyhole fading, cached UI
 >   exclusions, cockpit source gating, pooled hit
 >   rectangles, and development diagnostics. **UI exclusion is a per-rectangle
@@ -5859,7 +5868,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   builds a camera matrix or UI inventory, observes layout, or attaches a
 >   render listener. The host creates and lifecycle-manages
 >   `#world-overlay-detection-surface`, DPR-sizes it through the same frame path
->   as `#world-overlay-canvas`, and invokes detection against its
+>   as `#world-overlay-canvas` (0x0 while no detection lane is active), and invokes detection against its
 >   plain source-over context. Detection writes the exact shipped theme
 >   `mixBlendMode` and `filter + drop-shadow(...)` strings to that provided
 >   element, preserving scene-level CRT/NVG/FLIR glow and once-per-layer
@@ -8060,7 +8069,7 @@ silently demoting every later lookup for the session.
   Mission world text has no native `LabelGraphics`: overview launch markers publish at most 48 ambient candidates for a 24-winner budget, while selecting a mission clears that overview source and publishes its launch-site callout, stage re-entry annotations, live/estimated payload-position readout, and orbit annotation as protected selected-lane entries. The source retains the exact former strings and colors. Static anchors reuse the Cartesian values used to build their mission geometry; the moving payload entry reads the layer's per-frame live-position cache; catalog-backed orbit annotation positions are cached in the same one-second matrix update that realigns the orbit primitive. Keyhole edge fade, horizon culling, final collision placement, and UI exclusion are owned by the shared host. Deselect restores the bounded overview, and refresh, disable, and destroy replace or clear both mission sources.
   A selected mission renders its orbit as four repeating tactical sectors, each containing one prominent cyan dot followed by one hundred thin translucent dashes. The bright dots act as orbit anchors while the subdued dash field remains depth-tested against the globe and is shown only for the selected mission.
   Close selected-pad views add one static 500 m-radius cyan launch-zone ring with a low-opacity translucent fill over the sampled photoreal launch-site surface. The single scene primitive is created only for the visible selected site and is otherwise dormant. It appears during Focus, sufficiently close manual zoom, and the replay countdown, but is suppressed above 120 km camera altitude, beyond 180 km direct camera-to-pad range, for unselected missions, and whenever Space Missions is inactive. Focus establishes a launch-site-centered camera transform once; subsequent manual heading and pitch changes remain centered on that site without an automated per-frame correction. Surface mission markers and labels use an additional conservative globe-limb margin before the exact ellipsoid occluder boundary, preventing near-horizon visibility from alternating between frames.
-- **AIS vessels**: hull sprites by vessel kind, tinted by type (see the map sprites entry below), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`; a vessel's callout fades by the painted opacity of its own ambient card, so a card dropped by budget, collisions or UI chrome, or faded at the keyhole rim, leaves the callout readable), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
+- **AIS vessels**: hull sprites by vessel kind, tinted by type (see the map sprites entry below), world-space headings, MMSI-keyed reconciliation (selection survives refreshes; pinned 3 refreshes with STALE marker when absent), detection-overlay integration (`type: 'SEA'`; like the aircraft layers, every drawn vessel is a candidate, never a stride sample of the worldwide list, with the selected vessel first, so each vessel on screen gets its bracket; a vessel's callout fades by the painted opacity of its own ambient card, so a card dropped by budget, collisions or UI chrome, or faded at the keyhole rim, leaves the callout readable), contextStore registration for voice Q&A. Empty-space clicks, id-less photorealistic-tile picks, and Escape dismiss the vessel card/HUD/context and clear its trail; picks owned by another layer (including `gev-trail:*`) and raw vessel-record picks without a live MMSI key are no-ops for vessel selection. Click and key handlers detach while the layer is disabled and reinstall on enable. Selecting another vessel replaces the selection and trail, and reconciliation clears a trail if its owning vessel is evicted.
 - **Track trails**: server accumulates per-MMSI ring buffers (`/api/vessels/track?mmsi=`, Float32+Uint32, 64 samples, 30s/25m thinning); aircraft backfill proxies `/api/flights/track` (OAuth, own credit bucket). Military aircraft keep only their locally accumulated trails: `/api/military/track` validates the hex, then answers `503 history_unavailable` without an upstream request.
 - Shared `src/data/pickRegistry.js` stops the two flight layers' click handlers from fighting over the camera.
 
@@ -9087,7 +9096,7 @@ at the view center as unknown.
 
 ### Panoptic Detection + Tracked Readout (June 2026)
 
-- `src/data/detection.js` samples enabled layers through each layer's `getDetectableObjects()` contract and renders bounding boxes/labels from the shared host's sole Cesium post-render callback so boxes align with the final camera frame.
+- `src/data/detection.js` samples enabled layers through each layer's `getDetectableObjects()` contract (Live Flights, Military Flights and vessels uncapped, `UNCAPPED_CANDIDATE_LAYERS`; other layers at most 2,600 candidates, `LAYER_CANDIDATE_CAP`) and renders bounding boxes/labels from the shared host's sole Cesium post-render callback so boxes align with the final camera frame.
 - Detection diagnostics count fading labels from the arbiter rows that are
   actually rendered. The label QA harness uses time-weighted label exposure for
   churn and requires conclusive solve/frame samples at both its 12,000-object
