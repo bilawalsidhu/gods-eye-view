@@ -61,6 +61,7 @@
   freshest value, and names the network a pooled value came from; matching
   sites works across the antimeridian and near the poles. OpenAQ asks each
   sensor's hourly means at most once an hour, one view spends at most a
-  quarter of the hourly request budget and asks less often while nothing near
-  its centre arrives, and only a refusal naming the key (a 401, or a 403 that
+  quarter of the hourly request budget and asks less often while nothing new
+  arrives in it, re-checking the stations it shows before their readings age
+  out so a wide view holds a stable set, and only a refusal naming the key (a 401, or a 403 that
   says so) stops the key being sent.

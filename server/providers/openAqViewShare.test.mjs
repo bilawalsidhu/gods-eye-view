@@ -53,15 +53,18 @@ function upstream(stations, { clock, answer = () => null } = {}) {
   return { paths, fetchImpl };
 }
 
-test('passes that bring nothing near the view centre come further apart', async () => {
+test('passes that bring nothing new come further apart', async () => {
   let clock = start;
-  // Forty stations, all far (more than 5°) from the centre at 0, 0.
+  // Forty stations, none answering a reading.
   const far = Array.from({ length: 40 }, (_, i) => ({
     id: i + 1,
     lat: 8 + (i % 5) * 0.1,
     lon: 8 + Math.floor(i / 5) * 0.1,
   }));
-  const { fetchImpl } = upstream(far, { clock: () => clock });
+  const { fetchImpl } = upstream(far, {
+    clock: () => clock,
+    answer: () => Response.json({ results: [] }),
+  });
   const source = createOpenAqAcquisition({
     getKey: () => 'fixture',
     now: () => clock,
@@ -75,25 +78,25 @@ test('passes that bring nothing near the view centre come further apart', async 
     clock = answer.retryAt + 1;
   }
   // The first answer waits 8 s for the rest of the catalog; after it, each
-  // pass that brings nothing near the centre doubles the wait, up to two
-  // minutes.
+  // pass that brings nothing new doubles the wait, up to two minutes.
   assert.deepEqual(
     waits,
     [8000, 16_000, 32_000, 64_000, 120_000, 120_000, 120_000],
   );
 });
 
-test('a pass that brings a reading near the centre starts the wait over', async () => {
+test('a pass that brings a new reading anywhere in the view starts the wait over', async () => {
   let clock = start;
-  // Near stations go quiet after the first pass; far ones keep answering.
-  let nearQuiet = false;
+  // Every station goes quiet after the first pass; then the far ones,
+  // more than 5° from the centre, answer again.
+  let quiet = false;
   const stations = [
     ...Array.from({ length: 4 }, (_, i) => ({
       id: i + 1,
       lat: 0.1 * i,
       lon: 0,
     })),
-    ...Array.from({ length: 12 }, (_, i) => ({
+    ...Array.from({ length: 20 }, (_, i) => ({
       id: i + 5,
       lat: 8,
       lon: 8 + 0.1 * i,
@@ -101,8 +104,7 @@ test('a pass that brings a reading near the centre starts the wait over', async 
   ];
   const { fetchImpl } = upstream(stations, {
     clock: () => clock,
-    answer: (id) =>
-      id <= 4 && nearQuiet ? Response.json({ results: [] }) : null,
+    answer: () => (quiet ? Response.json({ results: [] }) : null),
   });
   const source = createOpenAqAcquisition({
     getKey: () => 'fixture',
@@ -113,13 +115,18 @@ test('a pass that brings a reading near the centre starts the wait over', async 
   // The nearest four first: they arrive, so the next pass is 8 s on.
   let answer = await source.getSnapshot({ view });
   assert.equal(answer.retryAt - clock, 8000);
-  nearQuiet = true;
+  quiet = true;
   clock = answer.retryAt + 1;
   answer = await source.getSnapshot({ view });
   assert.equal(answer.retryAt - clock, 16_000);
   clock = answer.retryAt + 1;
   answer = await source.getSnapshot({ view });
   assert.equal(answer.retryAt - clock, 32_000);
+  // A far station's reading is progress too.
+  quiet = false;
+  clock = answer.retryAt + 1;
+  answer = await source.getSnapshot({ view });
+  assert.equal(answer.retryAt - clock, 8000);
 });
 
 test('one view spends at most a quarter of the hourly budget; others keep theirs', async () => {
@@ -323,4 +330,54 @@ test('a request the shared budget refuses locally does not count against the vie
   // The refused requests cost the view nothing: it still sends its whole
   // share (450) to OpenAQ.
   assert.ok(sent >= 448 && sent <= 450, `${sent} requests`);
+});
+
+test('a wide AQI view settles on a stable set and keeps it fresh within its share', async () => {
+  let clock = start;
+  // Three thousand stations over the world, nearly all far from the centre.
+  const world = Array.from({ length: 3000 }, (_, i) => ({
+    id: i + 1,
+    lat: -60 + ((i * 7) % 120) + 0.001 * (i % 89),
+    lon: -170 + ((i * 37) % 340) + 0.001 * (i % 97),
+  }));
+  const { paths, fetchImpl } = aqiUpstream(world, { clock: () => clock });
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl,
+  });
+  const view = [-180, -90, 180, 90, 0, 0];
+  const shownByHour = [];
+  const sentByHour = [];
+  let shown = new Set();
+  let sentAtReport = 0;
+  let nextReport = start + HOUR;
+  while (clock < start + 12 * HOUR) {
+    if (clock >= nextReport) {
+      shownByHour.push(shown);
+      sentByHour.push(paths.length - sentAtReport);
+      sentAtReport = paths.length;
+      nextReport += HOUR;
+    }
+    const answer = await source.getSnapshot({ view, mode: 'aqi' });
+    shown = new Set(answer.readings.map((r) => r.stationId));
+    clock = Math.max(clock + 1000, (answer.retryAt ?? clock + 60_000) + 1);
+  }
+  const counts = shownByHour.map((set) => set.size);
+  const report = `shown ${counts.join(' ')} sent ${sentByHour.join(' ')}`;
+  // Every hour keeps to the view's share (450 of 1,800)...
+  assert.ok(
+    sentByHour.every((n) => n <= 450),
+    report,
+  );
+  // ...the set grows past the stations near the centre, then holds: a
+  // station once shown stays shown, its readings checked before they age.
+  assert.ok(counts[3] > counts[0], report);
+  assert.ok(counts.at(-1) >= 250, report);
+  for (let h = 1; h < shownByHour.length; h++)
+    for (const id of shownByHour[h - 1])
+      assert.ok(
+        shownByHour[h].has(id),
+        `${id} dropped at hour ${h}; ${report}`,
+      );
 });

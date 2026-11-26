@@ -33,12 +33,24 @@ const STATION_RETRY_MS = 5 * 60_000;
  * so a view left open cannot drain what pans and other views need.
  */
 const VIEW_SHARE = Math.floor(OPENAQ_HOURLY_CALLS / 4);
-/** Time between a view's station passes while they bring nearby readings. */
+/** Time between a view's station passes while they bring new readings. */
 const PASS_MS = 8000;
-/** The longest wait between passes that bring nothing near the view centre. */
+/** The longest wait between passes that bring nothing new to the view. */
 const MAX_PASS_MS = 2 * 60_000;
-/** Degrees from the view centre within which a reading counts as nearby. */
+/**
+ * Degrees from the view centre within which a reading counts as nearby: a
+ * view with nearby readings paces its passes and keeps the budget's last
+ * requests for them.
+ */
 const NEARBY_DEG = 5;
+/** A reading older than this is no longer shown. */
+const FRESH_MS = 6 * 3600_000;
+/**
+ * A shown station is checked again first once its newest reading is within
+ * this of FRESH_MS: time for the view's share to come back (an hour) and
+ * for a late hour to arrive, so what a view shows stays shown.
+ */
+const AGE_MARGIN_MS = 2 * 3600_000;
 /**
  * Words of an OpenAQ refusal that is about the key or the account (a
  * missing, invalid or blocked key), not about one resource.
@@ -147,7 +159,7 @@ function createViewState(view, time, previous) {
     checked: previous?.checked ?? new Map(),
     failed: previous?.failed ?? new Map(),
     // Requests this view spent in the last hour, its passes in a row that
-    // brought nothing near its centre, and when its next pass may start.
+    // brought nothing new, and when its next pass may start.
     spent: previous?.spent ?? [],
     idle: previous?.idle ?? 0,
     nextPassAt: previous?.nextPassAt ?? 0,
@@ -385,7 +397,7 @@ export function createOpenAqAcquisition({
     }
     const eligible = [...state.stations.values()].filter(
       (s) =>
-        (!s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR) &&
+        (!s.lastObservedMs || now() - s.lastObservedMs <= FRESH_MS) &&
         (!parameter ||
           s.sensors.some((sensor) => sensor.parameter === parameter)) &&
         // The AQI view spends no request on a station it cannot rate: one
@@ -408,7 +420,7 @@ export function createOpenAqAcquisition({
         // A due refresh must not erase still-current observations during cooldown.
         state.readings.set(
           station.stationId,
-          previous.readings.filter((row) => now() - row.observedMs <= 6 * HOUR),
+          previous.readings.filter((row) => now() - row.observedMs <= FRESH_MS),
         );
         state.checked.set(station.stationId, previous.at);
       }
@@ -425,13 +437,35 @@ export function createOpenAqAcquisition({
     const checkMs = mode === 'aqi' ? HOUR : 20 * 60_000;
     const needsCheck = (s) =>
       now() - (state.checked.get(s.stationId) ?? -Infinity) >= checkMs;
+    const newestOf = (list) =>
+      (list ?? []).reduce((at, row) => Math.max(at, row.observedMs), -Infinity);
+    // When a station's shown readings age out; -Infinity when none is shown.
+    const shownUntil = (s) => {
+      const at = newestOf(state.readings.get(s.stationId)) + FRESH_MS;
+      return at > now() ? at : -Infinity;
+    };
+    // Which stations a pass checks first: shown ones about to age out (the
+    // soonest first), then those not shown (never checked first), then the
+    // other shown ones (the oldest reading first); nearest the centre first
+    // among equals. What a view shows stays shown, and what its share can
+    // keep fresh beyond that grows it, so a wide view settles on a stable set.
+    const tier = (s) => {
+      const until = shownUntil(s);
+      return until === -Infinity ? 1 : until - now() <= AGE_MARGIN_MS ? 0 : 2;
+    };
     const due = eligible
       .filter((s) => needsCheck(s) && !backoff(s))
+      .map((s) => ({ s, tier: tier(s), until: shownUntil(s) }))
       .sort(
         (a, b) =>
-          (state.checked.get(a.stationId) || 0) -
-            (state.checked.get(b.stationId) || 0) || distance(a) - distance(b),
+          a.tier - b.tier ||
+          (a.tier === 1
+            ? (state.checked.get(a.s.stationId) || 0) -
+              (state.checked.get(b.s.stationId) || 0)
+            : a.until - b.until) ||
+          distance(a.s) - distance(b.s),
       )
+      .map(({ s }) => s)
       // Leave capacity for subsequent camera moves and other active views.
       // A stationary view continues discovery on its next refresh.
       .slice(0, BATCH);
@@ -463,7 +497,7 @@ export function createOpenAqAcquisition({
     }
     // Two bounded workers shorten the time to first visible markers; all share
     // the same process request budget as other views.
-    let arrivedNearby = false;
+    let progress = false;
     for (
       let i = 0;
       i < due.length && !limited && !timedOut && spentInHour() < VIEW_SHARE;
@@ -499,13 +533,15 @@ export function createOpenAqAcquisition({
               }
             const key = `${station.stationId}:${parameter || mode || ''}`;
             const previous = viewLatest.get(key);
-            const newest = (list) =>
-              list.reduce((at, row) => Math.max(at, row.observedMs), -Infinity);
-            if (previous && newest(previous.readings) > newest(rows))
+            if (previous && newestOf(previous.readings) > newestOf(rows))
               rows = previous.readings;
+            // A station newly shown or with a newer reading is progress,
+            // wherever it is in the view.
+            if (
+              newestOf(rows) > newestOf(state.readings.get(station.stationId))
+            )
+              progress = true;
             state.readings.set(station.stationId, rows);
-            if (rows.length && distance(station) < NEARBY_DEG)
-              arrivedNearby = true;
             state.checked.set(station.stationId, now());
             state.failed.delete(station.stationId);
             succeeded++;
@@ -542,16 +578,16 @@ export function createOpenAqAcquisition({
       const rejected = results.find((r) => r.status === 'rejected');
       if (rejected) throw rejected.reason;
     }
-    // A pass that brought nothing near the view centre doubles the wait
-    // before the next one (to MAX_PASS_MS); one that did starts it over.
+    // A pass that brought nothing new to the view doubles the wait before
+    // the next one (to MAX_PASS_MS); one that did starts it over.
     if (due.length) {
-      state.idle = arrivedNearby ? 0 : state.idle + 1;
+      state.idle = progress ? 0 : state.idle + 1;
       state.nextPassAt =
         now() + Math.min(MAX_PASS_MS, PASS_MS * 2 ** state.idle);
     }
     const fresh = [...state.readings.values()]
       .flat()
-      .filter((r) => now() - r.observedMs <= 6 * HOUR);
+      .filter((r) => now() - r.observedMs <= FRESH_MS);
     // A failed station check makes the view stale only once no station of it
     // has a check younger than the check interval.
     const stale =
@@ -598,7 +634,7 @@ export function createOpenAqAcquisition({
     const catalogDone = state.pages.every((p) => p.done);
     // When this view may ask again: once its oldest request of the hour
     // leaves the hour when it spent its share, else at its next pass (later
-    // after passes that brought nothing near the centre); discovery goes on
+    // after passes that brought nothing new); discovery goes on
     // between passes.
     const shareSpent = spentInHour() >= VIEW_SHARE;
     const nextAsk = shareSpent

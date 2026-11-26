@@ -55,21 +55,21 @@ test('large viewport progress: a stationary 7,000-station view keeps checking st
     fetchImpl,
   });
   const view = [-180, -90, 180, 90, 0, 0];
-  // The most stations checked in each hour, and requests spent in it.
-  const checkedByHour = [];
+  // The stations shown at the end of each hour, and requests spent in it.
+  const shownByHour = [];
   const requestsByHour = [];
   let nextReport = start + HOUR;
   let requestsAtReport = 0;
-  let checked = 0;
+  let shown = 0;
   while (clock < start + 10 * HOUR) {
-    const snap = await source.getSnapshot({ view });
-    checked = Math.max(checked, snap.checked);
     if (clock >= nextReport) {
-      checkedByHour.push(checked);
+      shownByHour.push(shown);
       requestsByHour.push(requests - requestsAtReport);
       requestsAtReport = requests;
       nextReport += HOUR;
     }
+    const snap = await source.getSnapshot({ view });
+    shown = snap.readings.length;
     clock = Math.max(clock + 1000, (snap.retryAt ?? clock + 60_000) + 1);
   }
   // A view left open spends at most a quarter of the hourly budget (1800)...
@@ -77,12 +77,11 @@ test('large viewport progress: a stationary 7,000-station view keeps checking st
     requestsByHour.every((count) => count <= 450),
     `requests by hour ${requestsByHour.join(' ')}`,
   );
-  // ...and still checks more of its stations every hour. Its far stations
-  // bring nothing near the centre, so its passes slow to one each 2 minutes.
-  for (let i = 1; i < checkedByHour.length; i++)
-    assert.ok(
-      checkedByHour[i] > checkedByHour[i - 1],
-      `checked by hour ${checkedByHour.join(' ')} requests ${requestsByHour.join(' ')}`,
-    );
-  assert.ok(checkedByHour.at(-1) >= 1000, `${checkedByHour.at(-1)}`);
+  // ...and its far stations count as progress too: it shows more stations
+  // each hour until its share only keeps them fresh, and then keeps them.
+  const report = `shown by hour ${shownByHour.join(' ')} requests ${requestsByHour.join(' ')}`;
+  for (let i = 1; i < shownByHour.length; i++)
+    assert.ok(shownByHour[i] >= shownByHour[i - 1], report);
+  assert.ok(shownByHour[3] > shownByHour[0], report);
+  assert.ok(shownByHour.at(-1) >= 1500, report);
 });

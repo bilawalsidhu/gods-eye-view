@@ -789,9 +789,12 @@ GEV prioritizes station discovery and recent observations in the visible map are
 then continues pagination within process-wide budgets and bounded view caches.
 Stable catalog regions and recent station readings are reused across navigation;
 small progressive batches reserve capacity for the next region. One view
-spends at most a quarter of the hourly budget, and its station passes come
-further apart (8 s doubling to 2 minutes) while they bring nothing near the
-view's centre. Only a 401, or a 403 whose answer names the key or account,
+spends at most a quarter of the hourly budget, checked at every request, and
+its station passes come further apart (8 s doubling to 2 minutes) while they
+bring nothing new anywhere in the view. A view checks first the stations it
+shows whose readings would age out (6 hours) within 2 hours, then those it
+does not show yet, nearest the centre first among equals, so a wide view grows
+to the stations its share keeps fresh and then holds them. Only a 401, or a 403 whose answer names the key or account,
 counts as the key refused; any other 403 fails that one request. Provider reset
 headers schedule automatic retries, while cached observations remain available.
 Original data-provider terms still apply. No downloaded observation archive is
