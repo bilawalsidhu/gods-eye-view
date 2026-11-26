@@ -467,3 +467,44 @@ test('vessels in an area can be counted by destination with a speed summary', as
     speed_mps: { count: 2, min: 6.2, median: 6.2, mean: 6.2, max: 6.2 },
   });
 });
+
+test('vessels in an area leave out buoys and beacons', async () => {
+  const withAids = {
+    ...vessels(),
+    async getSnapshot() {
+      return {
+        records: [
+          ...records,
+          vessel('993672001', 37.8, -122.42, {
+            name: 'SF APPROACH N',
+            type: 'Cardinal Mark N',
+            speedMps: 0,
+            headingDeg: 135,
+          }),
+          vessel('993672002', 37.79, -122.43, { type: '' }),
+        ],
+        source: 'AISStream',
+        observedAtMs: Date.UTC(2026, 0, 1),
+        freshness: 'current',
+      };
+    },
+  };
+  const catalog = composeCatalog({
+    tools: coreTools,
+    services: { vessels: withAids },
+  });
+  const all = await catalog.call('vessels_in_area', {
+    area: bay,
+    group_by: 'type',
+  });
+  assert.equal(all.data.total, 2);
+  assert.equal(all.summary.split(' in ')[0], '2 vessels');
+  assert.deepEqual(all.data.rows.map((row) => row.mmsi).sort(), [
+    '366999712',
+    '538001234',
+  ]);
+  assert.equal(all.data.breakdown.unknown_count, 0);
+  assert.ok(
+    !all.data.breakdown.groups.some((group) => /mark/i.test(group.value)),
+  );
+});

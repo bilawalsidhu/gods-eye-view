@@ -1,0 +1,244 @@
+/* ── Context expanded ───────────────────────────────────────────────────
+   Expanded, Context becomes a full-height column over the right edge of the
+   screen. The globe and HUD stay where they are, under it. */
+:root {
+  --context-dock-width: clamp(360px, 30vw, 460px);
+}
+
+/* The column: edge to edge, top to bottom, no rail beside it. */
+body.context-docked #right-context-rail {
+  z-index: 170;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: var(--context-dock-width) !important;
+  max-height: none !important;
+  height: 100vh !important;
+}
+
+/* The map credits stay readable beside the column: their row ends short of
+   it. creditAttribution.test.mjs pins this. `.hud-minimal-active` is a
+   page-root class (src/ui/rail/rootClass.js). */
+body.context-docked:not(.ui-clean-view):not(.recording-mode) #cesium-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode) #gev-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
+    #intel-hud[data-variant='minimal'].active
+  )
+  #cesium-credits,
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
+    #intel-hud[data-variant='minimal'].active
+  )
+  #gev-credits {
+  max-width: calc(100vw - 3rem - var(--context-dock-width));
+}
+
+body.context-docked #right-context-rail > .gev-panel-rail {
+  display: none;
+}
+
+/* The Bhote Koshi panel stays beside the expanded column while open so its
+   evidence controls remain accessible. */
+body.context-docked
+  #right-context-rail:not(.bhote-event-active)
+  > :not(#global-context-panel):not(.gev-panel-rail) {
+  display: none !important;
+}
+
+body.context-docked #right-context-rail > #global-context-panel {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+}
+
+body.context-docked #global-context-panel .global-context-panel-inner {
+  height: 100%;
+  padding: 22px 24px 16px;
+  background: rgba(10, 11, 16, 0.94);
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
+}
+
+body.context-docked #global-context-panel .panel-glow {
+  display: none;
+}
+
+/* The expand button sits beside the collapse button in the header. */
+.context-dock-btn {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-inline-end: 6px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--btn-radius);
+  cursor: pointer;
+}
+
+.context-dock-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.context-dock-btn:hover,
+.context-dock-btn:focus-visible,
+.context-dock-btn[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+}
+
+/* Phones keep their sheets; the dock is a desktop layout. */
+body.mobile-shell .context-dock-btn {
+  display: none;
+}
+
+/* Context's own search field, under the header: narrows what the panel shows.
+   Sized and framed like the tab bar beneath it. */
+/* A UiSearchField (search-field.css). */
+.context-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: none;
+  box-sizing: border-box;
+  gap: 8px;
+  min-height: 34px;
+  margin: 0 0 0.5rem;
+  padding: 0 6px 0 10px;
+  color: rgba(199, 214, 222, 0.65);
+  background: rgba(16, 22, 28, 0.94);
+  border: 1px solid rgba(54, 220, 255, 0.35);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.context-search:focus-within {
+  color: #7af0ff;
+  border-color: rgba(54, 220, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(54, 220, 255, 0.1);
+}
+
+.context-search .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.context-search__input::placeholder {
+  color: rgba(199, 214, 222, 0.45);
+}
+
+.context-search__input {
+  flex: 1;
+  height: 100%;
+  padding: 0;
+  color: var(--text-primary, #e8eaed);
+  font: inherit;
+  font-size: 0.74rem;
+  line-height: 32px;
+  outline: 0;
+}
+
+.context-search__input::-webkit-search-cancel-button {
+  display: none;
+}
+
+/* A UiCloseButton (close-button.css). */
+.context-search__clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: rgba(199, 214, 222, 0.65);
+  border-radius: 50%;
+}
+
+.context-search__clear:hover,
+.context-search__clear:focus-visible {
+  color: var(--accent);
+}
+
+.entity-card__no-match {
+  margin: 0 0 0.7rem;
+  color: rgba(199, 214, 222, 0.6);
+  font-size: 0.66rem;
+}
+
+.context-search__input:focus,
+.context-search__input:focus-visible {
+  outline: 0;
+  box-shadow: none;
+}
+
+/* During a search, keep the radius and matching rows in view. A matching
+   globe group keeps its layer name and loaded total. The Data Layers pointer stays. */
+.context-searching
+  :is(
+    .spot-conditions__weather,
+    .spot-conditions__loading,
+    .spot-conditions__source,
+    .view-context__tiles,
+    .view-context__label,
+    .view-context__hint,
+    .view-context__problem,
+    .view-context__suggest,
+    .view-context__bar,
+    .view-context__bar-key,
+    .altitude-graph,
+    .entity-card__route,
+    .entity-card__route-stats,
+    .entity-card__route-places,
+    .entity-card__route-note,
+    .entity-card__links
+  ) {
+  display: none;
+}
+
+/* With the minimal HUD the credits sit at the bottom right, where the
+   column is: they move out to its left. */
+body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
+    #intel-hud[data-variant='minimal'].active
+  )
+  :is(#cesium-credits, #gev-credits) {
+  right: calc(36px + var(--context-dock-width));
+}
+
+/* Right to left, the rail sits on the left edge (rtl.css), and so does the
+   expanded column; the credits start past it. */
+html[dir='rtl']
+  body.context-docked:not(.ui-clean-view):not(.recording-mode)
+  :is(#cesium-credits, #gev-credits) {
+  left: calc(36px + var(--context-dock-width));
+}
+
+html[dir='rtl']
+  body.context-docked:not(.ui-clean-view):not(.recording-mode):is(
+    .hud-minimal-active *,
+    #intel-hud[data-variant='minimal'].active
+  )
+  :is(#cesium-credits, #gev-credits) {
+  right: 36px;
+  left: auto;
+}
+
+html[dir='rtl'] body.context-docked #right-context-rail {
+  right: auto !important;
+  left: 0 !important;
+}
+
+html[dir='rtl']
+  body.context-docked
+  #global-context-panel
+  .global-context-panel-inner {
+  border-left: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
+}

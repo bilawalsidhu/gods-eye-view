@@ -16,7 +16,9 @@ import { validateSceneDataPacks } from './packs/manifest.js';
 import { validateSceneCameras } from './cameraDocument.js';
 export { SCENE_DOCUMENT_LIMITS, SceneDocumentError } from './documentFields.js';
 import { validateSceneInteractions } from './interactions/document.js';
-export const SCENE_DOCUMENT_VERSION = 6;
+import { STORY_TAG_LIMIT, isStoryTagList } from '../scenes/storyTags.js';
+import { STORY_THUMB_MAX_LENGTH, isStoryThumb } from '../scenes/storyThumb.js';
+export const SCENE_DOCUMENT_VERSION = 7;
 
 function visual(value, path, legacy) {
   fields(value, path, [
@@ -34,7 +36,7 @@ function visual(value, path, legacy) {
   const specs = {
     bloom: { enabled: 'boolean', intensity: [-100, 10000], version: [1, 100] },
     sharpen: { enabled: 'boolean', intensity: [0, 100] },
-    hud: { visible: 'boolean', variant: 'string' },
+    hud: { visible: 'boolean', variant: 'string', sonar: 'boolean' },
     detection: {
       mode: 'string',
       density: [0, 100],
@@ -58,7 +60,12 @@ function visual(value, path, legacy) {
 
 /** Validate a parsed scene project without mutating it or applying any state. */
 export function validateSceneDocument(project) {
-  jsonTree(project, '$', { nodes: 0 });
+  jsonTree(project, '$', {
+    nodes: 0,
+    // A Stories card thumbnail is the one text allowed past the usual limit.
+    longText: (path) =>
+      /^\$\.scenes\.\d+\.storyThumb$/.test(path) ? STORY_THUMB_MAX_LENGTH : 0,
+  });
   fields(project, '$', [
     'version',
     'createdAt',
@@ -67,7 +74,11 @@ export function validateSceneDocument(project) {
     'scenes',
   ]);
   const version = Object.hasOwn(project, 'version') ? project.version : 1;
-  if (![1, 2, 3, 4, 5, 6].includes(version))
+  if (
+    !Number.isInteger(version) ||
+    version < 1 ||
+    version > SCENE_DOCUMENT_VERSION
+  )
     fail('$.version', 'unsupported scene project version');
   const legacy = version < 3;
   for (const key of ['createdAt', 'updatedAt'])
@@ -86,10 +97,31 @@ export function validateSceneDocument(project) {
       'shots',
       ...(version >= 4 ? ['anchors'] : []),
       ...(version >= 5 ? ['dataPacks'] : []),
+      // Early Stories builds wrote these in version 6 projects.
+      ...(version >= 6 ? ['stories', 'storyThumb', 'storyTags'] : []),
     ]);
     uniqueId(scene, path, sceneIds);
     optional(scene, 'title', path, (v, p) => string(v, p, 4096));
     optional(scene, 'releaseLayerIds', path, ids);
+    // Published to the Stories page; absent when it is not.
+    optional(scene, 'stories', path, (value, field) => {
+      if (value !== true) fail(field, 'expected true');
+    });
+    // The Stories card's thumbnail and tags; absent until the author sets them.
+    optional(scene, 'storyThumb', path, (value, field) => {
+      if (!isStoryThumb(value))
+        fail(
+          field,
+          `expected a JPEG or PNG data URL, at most ${STORY_THUMB_MAX_LENGTH} characters`,
+        );
+    });
+    optional(scene, 'storyTags', path, (value, field) => {
+      if (!isStoryTagList(value))
+        fail(
+          field,
+          `expected at most ${STORY_TAG_LIMIT} different Stories tags`,
+        );
+    });
     optional(scene, 'appliedShotPacks', path, (packs, field) => {
       array(packs, field);
       const packIds = new Set();

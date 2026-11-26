@@ -1,13 +1,18 @@
-import * as Cesium from 'cesium';
 import { createWindRendering } from './rendering.js';
 import { WIND_FIELDS } from './fields.js';
 import {
   formatWindReading,
   windReadingResult,
   windUnitChips,
+  windValueText,
 } from './presentation.js';
-import { inspectWindAtCenter, WIND_UNITS } from './inspection.js';
+import {
+  inspectWindAtCenter,
+  sampleWindReading,
+  WIND_UNITS,
+} from './inspection.js';
 import { createWindInspectionMarker } from './inspectionMarker.js';
+import { canvasOf, findQuery } from '../../render/rendererOf.js';
 import { t, msg, translateKnown } from '../../i18n/index.js';
 import { unitLabel } from '../../ui/unitLabels.js';
 
@@ -54,7 +59,6 @@ export function windStats(manifest) {
 export function createWindLayer({
   feed,
   clock,
-  cesium = Cesium,
   container,
   createRendering = createWindRendering,
 } = {}) {
@@ -81,7 +85,10 @@ export function createWindLayer({
     inspectionMarker?.clear();
   };
   const sample = (position) => {
-    reading = inspectWindAtCenter(manifest, viewer, cesium, {
+    const view = viewer
+      ? { query: findQuery(viewer), canvas: canvasOf(viewer) }
+      : {};
+    reading = inspectWindAtCenter(manifest, view, {
       position,
       units,
       overlay,
@@ -98,6 +105,11 @@ export function createWindLayer({
     sampledPosition = reading.position || position || null;
     inspectionMarker?.show(sampledPosition);
   };
+  const forecastDetail = (valid) =>
+    t('{model} forecast · {time}', {
+      model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
+      time: valid || t('Unavailable'),
+    });
   const requestedScalar = () =>
     ['temperature', 'pressure'].includes(overlay) ? overlay : 'none';
   let generation = 0;
@@ -113,14 +125,10 @@ export function createWindLayer({
     init(nextViewer) {
       viewer = nextViewer;
       rendering = createRendering({
-        cesium,
         container: container ?? nextViewer.container,
         getViewer: () => viewer,
-        getHost: () =>
-          imageryHost?.() ?? {
-            collection: viewer.imageryLayers ?? viewer.scene?.imageryLayers,
-            kind: 'globe',
-          },
+        // Without a host from the shell, the rendering drapes on the globe.
+        getHost: () => imageryHost?.(),
         onStatusChange: notify,
       });
       rendering.attach();
@@ -129,7 +137,6 @@ export function createWindLayer({
       inspectionMarker = createWindInspectionMarker({
         container: target,
         viewer,
-        cesium,
       });
     },
     attachShellServices(services) {
@@ -260,9 +267,27 @@ export function createWindLayer({
     getParams() {
       return { model, overlay, paused, units };
     },
+    /**
+     * The forecast surface wind at a point, from the field already loaded:
+     * `{value: "12,0 km/h from NW", detail, at}` in the active language,
+     * or null while the layer is off or has no field.
+     */
+    getValueAt(lat, lon) {
+      if (!enabled || !Number.isFinite(lat) || !Number.isFinite(lon))
+        return null;
+      const sample = sampleWindReading(manifest, lon, lat);
+      if (!sample) return null;
+      const valid = Date.parse(manifest.cycle?.validIso);
+      return {
+        value: windValueText(sample.speed, sample.from, units),
+        detail: forecastDetail(formatWindValidTime(manifest.cycle?.validIso)),
+        ...(Number.isFinite(valid) ? { at: valid } : {}),
+      };
+    },
     getRowControls() {
+      // A source that follows the timeline shows the wind at its time.
       const historyStatus =
-        clock?.getState().mode === 'history'
+        clock?.getState().mode === 'history' && !clock.follows?.('wind')
           ? t('Forecast · does not follow history')
           : null;
       const valid = formatWindValidTime(manifest?.cycle?.validIso);
@@ -317,10 +342,7 @@ export function createWindLayer({
           coverage: t('Global · 1° grid'),
           validTime: manifest?.cycle?.validIso,
           issuedTime: manifest?.cycle?.runIso,
-          detail: t('{model} forecast · {time}', {
-            model: model === 'ifs' ? 'ECMWF IFS' : 'GFS',
-            time: valid || t('Unavailable'),
-          }),
+          detail: forecastDetail(valid),
           status: loading
             ? t('Loading forecast')
             : preparing

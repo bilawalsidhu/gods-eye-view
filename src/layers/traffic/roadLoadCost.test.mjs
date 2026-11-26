@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
 import { createTrafficSource, outsideDetailTiles } from './source.js';
 import { createIngestion } from './ingestion.js';
 import { createModel } from './model.js';
@@ -208,7 +208,9 @@ function cellGround({ mesh = false, warm = () => true } = {}) {
       for (const character of cell)
         hash = (Math.imul(hash, 31) + character.charCodeAt(0)) | 0;
       // The mesh regime answers per point, not per cell.
-      return (hash % 4000) / 10 + (mesh ? lat - Math.floor(lat * 1000) / 1000 : 0);
+      return (
+        (hash % 4000) / 10 + (mesh ? lat - Math.floor(lat * 1000) / 1000 : 0)
+      );
     },
   };
   return ground;
@@ -296,7 +298,7 @@ test('parsing reads each floor cell once and builds the same waypoints', () => {
     roadSurfaceChunks(record.coordinates).map((coords) =>
       coords.map(([lon, lat]) => {
         const floor = direct.cachedGroundFloor(lat, lon);
-        return Cesium.Cartesian3.fromDegrees(
+        return fromDegrees(
           lon,
           lat,
           (floor ?? state._viewHeightEstimate) + DOT_HEIGHT_OFFSET,
@@ -421,7 +423,13 @@ test('the snapshot that ends a pass parses only the records it adds', async () =
       },
       flow: {
         warmFlow: () => Promise.resolve([]),
-        applyFlowThenRender: async (roads, box, generation, altitude, label) => {
+        applyFlowThenRender: async (
+          roads,
+          box,
+          generation,
+          altitude,
+          label,
+        ) => {
           if (label === 'Loaded full') painted.push(roads);
           return true;
         },

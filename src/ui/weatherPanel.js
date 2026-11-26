@@ -21,11 +21,12 @@ const utc = (time) =>
     ? `${formatUtcDayMonth(time)} ${utcClock(time)}`
     : t('Unavailable');
 const clockTime = (time) => utcClock(time) || t('Unavailable');
-const age = (time) => {
-  const minutes = Math.max(
-    0,
-    Math.floor((Date.now() - Date.parse(time)) / 60_000),
-  );
+// Ages are measured from `nowMs`: the world clock's time at a past time, the
+// wall clock while live.
+const minutesBefore = (time, nowMs = Date.now()) =>
+  Math.max(0, Math.floor((nowMs - Date.parse(time)) / 60_000));
+const age = (time, nowMs) => {
+  const minutes = minutesBefore(time, nowMs);
   return minutes >= 60
     ? t('{hours}h {minutes}m ago', {
         hours: Math.floor(minutes / 60),
@@ -33,12 +34,21 @@ const age = (time) => {
       })
     : t('{minutes}m ago', { minutes });
 };
-const historyTime = (time) =>
-  t('{time} · {minutes} min ago', {
-    time: clockTime(time),
-    minutes: Math.max(0, Math.floor((Date.now() - Date.parse(time)) / 60_000)),
-  });
-const dated = (time) => `${utc(time)} · ${age(time)}`;
+// A frame's time on the timeline: its age while live; at a past time, the
+// clock time alone, as the timeline time is the one it is measured from.
+const historyTime = (time, state) =>
+  state?.mode === 'history'
+    ? clockTime(time)
+    : t('{time} · {minutes} min ago', {
+        time: clockTime(time),
+        minutes: minutesBefore(time),
+      });
+const dated = (time, nowMs) => `${utc(time)} · ${age(time, nowMs)}`;
+/** The time the observed products show: the timeline time, or now while live. */
+const shownNow = (state) =>
+  state?.mode === 'history' && Number.isFinite(Date.parse(state.target))
+    ? Date.parse(state.target)
+    : Date.now();
 const set = (node, key, value) => {
   if (node[key] !== value) node[key] = value;
 };
@@ -75,6 +85,7 @@ export function createWeatherPanel({
   const count = panel?.querySelector('#weather-panel-count');
   let entries = [];
   let destroyed = false;
+  const selections = new Map();
   let previousIds = null;
   let hasAppeared = false;
   const page = panel || document;
@@ -88,13 +99,6 @@ export function createWeatherPanel({
       openPanels.set(page, id);
       render();
     },
-    transport: {
-      onCommit: (tick) => clock?.setTarget(tick),
-      onPreview: historyTime,
-      onStep: (direction) => clock?.step(direction),
-      onLatest: () => clock?.latest(),
-      onPlay: () => clock?.togglePlay(),
-    },
   };
   // The readout patches synchronously, so a newly opened card can be measured.
   const paint = (view) =>
@@ -103,14 +107,7 @@ export function createWeatherPanel({
     hidden: true,
     observed: false,
     scope: '',
-    timeline: {
-      ticks: [],
-      index: 0,
-      mode: 'latest',
-      playing: false,
-      readout: '',
-      disabled: true,
-    },
+    frameTime: '',
     cards: [],
     observedCards: [],
   });
@@ -125,35 +122,33 @@ export function createWeatherPanel({
       .filter(({ summary }) => summary)
       .sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
     const observed = active.filter(({ id }) => OBSERVED.has(id));
-    const showTimeline = observed.length > 0;
+    const showObserved = observed.length > 0;
     const names = {
       'weather-radar': t('Rain radar'),
       'weather-satellite': t('Satellite clouds'),
       'weather-lightning': t('Lightning density'),
     };
-    const index =
-      state.mode === 'latest'
-        ? state.timeline.length - 1
-        : Math.max(
-            0,
-            state.timeline.findLastIndex(
-              (tick) => Date.parse(tick) <= Date.parse(state.target),
-            ),
-          );
-    const timeline = {
-      ticks: state.timeline,
-      index,
-      mode: state.mode,
-      playing: Boolean(state.playing),
-      disabled: !showTimeline || state.timeline.length < 2,
-      readout:
-        state.mode === 'latest'
-          ? t('LATEST · newest per product')
-          : historyTime(state.target),
+    // While live, the newest frame and its age; at a past time, the timeline
+    // time alone. The world timeline moves the time. Live, each product's
+    // newest frame counts, suspended or not (reduced motion, a hidden page),
+    // as the timeline leaves those out.
+    const newest = () => {
+      const times = (state.products ?? [])
+        .map(({ selected }) => selected)
+        .filter((time) => Number.isFinite(Date.parse(time)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      return times.at(-1) ?? state.timeline.at(-1);
     };
+    const shownTime = state.mode === 'latest' ? newest() : state.target;
+    const frameTime =
+      showObserved && shownTime
+        ? state.mode === 'history'
+          ? clockTime(shownTime)
+          : historyTime(shownTime)
+        : '';
     const models = active.map((entry) => {
-      const { id, icon, summary, legend = [], list } = entry;
-      // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
+      const { id, icon, summary, legend = [], list, sublists = [] } = entry;
+      // Discrete classes (storm geometry) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);
@@ -167,7 +162,7 @@ export function createWeatherPanel({
               ? t('No frame within {gap} min of {time}', { gap, time })
               : t('No frame within {gap} h of {time}', { gap: gap / 60, time });
         } else if (shown) {
-          detail = dated(shown);
+          detail = dated(shown, shownNow(state));
           if (state.mode === 'history')
             detail =
               Date.parse(shown) === Date.parse(state.target)
@@ -179,7 +174,8 @@ export function createWeatherPanel({
           valid: utc(summary.validTime),
           issued: utc(summary.issuedTime),
         });
-        if (state.mode === 'history')
+        // Unless its source follows the timeline, wind stays at the live edge.
+        if (state.mode === 'history' && !clock?.follows?.(id))
           detail = t('{detail} · Does not follow history', { detail });
       }
       const lines = [
@@ -203,17 +199,61 @@ export function createWeatherPanel({
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
+      // A titled list says what it ranks in a muted line above it.
+      const listBlocks = list?.items?.length
+        ? [
+            ...(list.title
+              ? [
+                  {
+                    id: 'list-title',
+                    type: 'lines',
+                    lines: [
+                      { id: 'list-title', text: list.title, muted: true },
+                    ],
+                  },
+                ]
+              : []),
+            { id: 'list', type: 'list', list },
+          ]
+        : [];
+      // Groups of Globe-view tiles (each a choice with its value), and
+      // switches, each one row.
+      const tileBlocks = sublists
+        .filter((group) => group?.tiles?.length)
+        .map((group) => ({
+          id: `tiles-${group.id}`,
+          type: 'tiles',
+          title: group.title,
+          subtitle: group.subtitle,
+          tiles: group.tiles,
+        }));
+      const toggleBlocks = (summary.toggles || []).map((toggle) => ({
+        ...toggle,
+        id: `toggle-${toggle.id}`,
+        type: 'toggle',
+      }));
+      // A result marked `lead` (a selected station) heads the card.
+      const lead = summary.result?.lead === true;
+      const resultBlocks = summary.result
+        ? [{ ...summary.result, type: 'result' }]
+        : [];
       const blocks = [
-        ...(list?.items?.length ? [{ id: 'list', type: 'list', list }] : []),
+        ...(lead ? resultBlocks : []),
+        // A card with tiles reads top down: what it shows, its scale, the
+        // tiles, then what stands out in view.
+        ...(tileBlocks.length ? [] : listBlocks),
         { id: 'details', type: 'lines', lines },
+        ...toggleBlocks,
         ...(legend.length ? [legendBlock] : []),
+        ...tileBlocks,
+        ...(tileBlocks.length ? listBlocks : []),
         ...(summary.settings?.length
           ? [{ id: 'settings', type: 'settings', settings: summary.settings }]
           : []),
         ...(actions.length
           ? [{ id: 'actions', type: 'actions', actions }]
           : []),
-        ...(summary.result ? [{ ...summary.result, type: 'result' }] : []),
+        ...(lead ? [] : resultBlocks),
       ];
       return {
         id,
@@ -234,9 +274,9 @@ export function createWeatherPanel({
     const hidden = active.length === 0;
     paint({
       hidden,
-      observed: showTimeline,
+      observed: showObserved,
       scope: observed.map(({ id }) => names[id]).join(' · '),
-      timeline,
+      frameTime,
       cards: models.filter(({ id }) => !OBSERVED.has(id)),
       observedCards: models.filter(({ id }) => OBSERVED.has(id)),
     });
@@ -285,6 +325,19 @@ export function createWeatherPanel({
             )?.id) ||
           ordered[0]?.id ||
           null;
+      }
+      // A new selection on the map (a lead result) opens its card, even over
+      // another open one; refreshes of the same selection leave the open card.
+      for (const id of selections.keys())
+        if (!ids.has(id)) selections.delete(id);
+      for (const { id, summary } of entries) {
+        const result = summary.result?.lead === true ? summary.result : null;
+        const key = result ? String(result.key ?? result.label ?? '') : null;
+        if (key !== null && key !== (selections.get(id) ?? null)) {
+          openId = id;
+          openPanels.set(page, id);
+        }
+        selections.set(id, key);
       }
       if (ids.size) hasAppeared = true;
       previousIds = ids;

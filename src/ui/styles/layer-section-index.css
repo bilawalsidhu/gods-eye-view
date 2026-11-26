@@ -1,0 +1,107 @@
+/* ── Data Layers group index: ticks along the panel's right edge ─────── */
+#data-panel {
+  position: relative;
+}
+
+.layer-section-index {
+  position: absolute;
+  top: 64px;
+  inset-inline-end: 2px;
+  bottom: 24px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  width: 10px;
+}
+
+#data-panel.collapsed .layer-section-index {
+  display: none;
+}
+
+.layer-section-index__tick {
+  position: relative;
+  width: 10px;
+  height: 16px;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.layer-section-index__tick::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: rgba(199, 214, 222, 0.32);
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.layer-section-index__tick:hover::before,
+.layer-section-index__tick:focus-visible::before {
+  background: rgba(236, 244, 248, 0.85);
+  transform: scaleX(1.5);
+}
+
+.layer-section-index__tick.is-current::before {
+  background: #36dcff;
+  box-shadow: 0 0 6px rgba(54, 220, 255, 0.6);
+}
+
+.layer-section-index__tick:focus-visible {
+  outline: none;
+}
+
+/* The group's name, drawn on the page just outside the panel's edge while a
+   tick is pointed at or focused, so it covers none of the rows. */
+.layer-section-index__label {
+  position: fixed;
+  z-index: 30;
+  padding: 0.25rem 0.5rem;
+  color: rgba(236, 244, 248, 0.92);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.12rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: rgba(12, 12, 20, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  animation: layer-section-index-label 120ms ease both;
+}
+
+/* Drawn before the tick when there is no room after it. */
+.layer-section-index__label--before {
+  transform: translate(-100%, -50%);
+}
+
+@keyframes layer-section-index-label {
+  from {
+    opacity: 0;
+    translate: -4px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer-section-index__label {
+    animation: none;
+  }
+}
+
+body.mobile-shell .layer-section-index {
+  display: none;
+}

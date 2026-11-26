@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { drawOf } from '../../render/rendererOf.js';
 import { msg } from '../../i18n/marker.js';
 import { OSM_PLACES_LAYER_ID } from './model.js';
 import { createNominatimStatus } from '../../sources/nominatimStatus.js';
@@ -8,10 +9,15 @@ const OVERLAY_SOURCE_ID = OSM_PLACES_LAYER_ID;
 /** Named results that get a map label; the rest are points. */
 const LABEL_LIMIT = 48;
 const COLOR = '#7fe3ff';
+const OUTLINE = [0, 0, 0, 0.8];
+
+/** Each layer's draw set id is its own. */
+let instances = 0;
 
 /**
  * OSM Places: the results of the last voice OpenStreetMap search ("hospitals
- * in Kathmandu"), drawn as points with name labels and queryable by
+ * in Kathmandu"), drawn as points (a draw set on the viewer's renderer) with
+ * name labels and queryable by
  * analyst_query. It fetches nothing itself; `setResults` replaces the set.
  * The search runs only on an operator-configured Overpass, so without one
  * the layer stays empty. Session-only: never in share links or stored layer
@@ -25,7 +31,8 @@ export function createOsmPlacesLayer({
 } = {}) {
   if (!overlayHost) throw new TypeError('OSM Places requires an overlay host');
   let viewer = null;
-  let dataSource = null;
+  /** The places' points, or null before `init` and after `destroy`. */
+  let points = null;
   let enabled = false;
   let records = [];
   let meta = null;
@@ -34,30 +41,26 @@ export function createOsmPlacesLayer({
   let configured = null;
 
   function render() {
-    if (!dataSource) return;
-    dataSource.entities.removeAll();
-    const color = Cesium.Color.fromCssColorString(COLOR);
+    if (!points) return;
+    const items = [];
     const overlay = [];
     for (const record of records) {
-      const position = Cesium.Cartesian3.fromDegrees(record.lon, record.lat);
-      dataSource.entities.add({
+      items.push({
         id: `osm-place:${record.id}`,
-        position,
-        point: {
-          pixelSize: 9,
-          color,
-          outlineColor: Cesium.Color.BLACK.withAlpha(0.8),
-          outlineWidth: 2,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-          // On top only up close (as bikeshare stations): beyond that the
-          // depth test keeps far-side points from showing through the globe.
-          disableDepthTestDistance: 2500,
-        },
+        pos: { lon: record.lon, lat: record.lat },
+        height: 'clampGround',
+        pixelSize: 9,
+        color: COLOR,
+        outlineColor: OUTLINE,
+        outlineWidth: 2,
+        // On top only up close (as bikeshare stations): beyond that the
+        // depth test keeps far-side points from showing through the globe.
+        disableDepthTest: 2500,
       });
       if (record.name && overlay.length < LABEL_LIMIT)
         overlay.push({
           id: record.id,
-          position,
+          position: fromDegrees(record.lon, record.lat),
           variant: 'label',
           title: record.name.slice(0, 40),
           accent: COLOR,
@@ -73,6 +76,7 @@ export function createOsmPlacesLayer({
           placement: 'above',
         });
     }
+    points.set(items);
     if (enabled)
       overlayHost.setEntries(OVERLAY_SOURCE_ID, overlay, {
         cohortLimit: LABEL_LIMIT,
@@ -106,15 +110,17 @@ export function createOsmPlacesLayer({
           if (typeof answer === 'boolean') configured = answer;
         })
         .catch(() => {});
-      dataSource = new Cesium.CustomDataSource(OSM_PLACES_LAYER_ID);
-      dataSource.show = false;
-      viewer.dataSources.add(dataSource);
+      points?.dispose();
+      points = drawOf(viewer).points({
+        id: `${OSM_PLACES_LAYER_ID}:${++instances}:points`,
+        show: false,
+      });
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
     },
 
     enable() {
       enabled = true;
-      if (dataSource) dataSource.show = true;
+      if (points) points.show = true;
       overlayHost.setVisible(OVERLAY_SOURCE_ID, true);
       render();
       return true;
@@ -122,7 +128,7 @@ export function createOsmPlacesLayer({
 
     disable() {
       enabled = false;
-      if (dataSource) dataSource.show = false;
+      if (points) points.show = false;
       overlayHost.clearSource(OVERLAY_SOURCE_ID);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
       return true;
@@ -137,8 +143,8 @@ export function createOsmPlacesLayer({
       enabled = false;
       overlayHost.clearSource(OVERLAY_SOURCE_ID);
       overlayHost.setVisible(OVERLAY_SOURCE_ID, false);
-      if (dataSource && viewer) viewer.dataSources.remove(dataSource, true);
-      dataSource = null;
+      points?.dispose();
+      points = null;
       viewer = null;
       records = [];
       meta = null;

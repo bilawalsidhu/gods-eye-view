@@ -25,6 +25,7 @@ import { createDebugLogHandler } from '../../server/providers/openai/debug-log.j
 import { realtimeSessionTools } from '../../server/providers/openai/realtime.js';
 import { attachVoiceResult } from '../voice/speech.js';
 import { sanitizeDebugValue } from '../voice/realtimeDiagnostics.js';
+import { createApplicationRequestServices } from '../services/requests.js';
 import { standaloneVoiceTools } from '../../server/standalone/voiceTools.js';
 
 function install(plugin, preview = false) {
@@ -150,6 +151,7 @@ test('weather-only requests share upstream work and retain fresh and stale respo
     'INFLIGHT',
     'MISS',
   ]);
+  assert.equal(pair[0].json().weather.source, 'open-meteo');
   assert.equal(calls, 1);
   assert.equal(
     (await request(handler, query)).headers['x-weather-effects'],
@@ -160,6 +162,63 @@ test('weather-only requests share upstream work and retain fresh and stale respo
     (await request(handler, query)).headers['x-weather-effects'],
     'STALE',
   );
+});
+
+test('the Inspector weather service separates exact points across a zone border and rereads a repeated point', async (t) => {
+  const handler = install(weatherEffectsProxy()).get('/api/weather-effects');
+  const { weather } = createApplicationRequestServices({
+    fetchImpl: async (url) => {
+      const result = await request(handler, { url });
+      return Response.json(result.json(), { status: result.status });
+    },
+  });
+  const longitudes = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const lon = Number(new URL(url).searchParams.get('longitude'));
+    longitudes.push(lon);
+    return Response.json({
+      timezone: lon === -114.735 ? 'America/Phoenix' : 'America/Los_Angeles',
+      current: { temperature_2m: 21, weather_code: 0 },
+    });
+  });
+  for (const [lon, expected] of [
+    [-114.735, 'America/Phoenix'],
+    [-114.746, 'America/Los_Angeles'],
+    [-114.746, 'America/Los_Angeles'],
+  ]) {
+    const response = await weather.getConditions(36.015, lon, {
+      exactPoint: true,
+    });
+    assert.equal(response.weather.timeZone, expected);
+    assert.equal(response.coordinates.longitude, lon);
+  }
+  assert.deepEqual(longitudes, [-114.735, -114.746, -114.746]);
+});
+
+test('exact weather reads are not cached and do not evict coarse weather', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () =>
+    Response.json({ current: { temperature_2m: 20 } }),
+  );
+  const handler = install(weatherEffectsProxy()).get('/api/weather-effects');
+  const coarse = { url: '/?latitude=56.34&longitude=12.41' };
+  const exact = (index) => ({
+    url: `/?latitude=56.34&longitude=${(12.41 + index / 100_000).toFixed(5)}&exactPoint=1`,
+  });
+  const cacheStatus = async (query) => {
+    const response = await request(handler, {
+      ...query,
+      remoteAddress: '127.0.0.2',
+    });
+    assert.equal(response.status, 200);
+    return response.headers;
+  };
+  assert.equal((await cacheStatus(coarse))['x-weather-effects'], 'MISS');
+  for (const index of [0, 1, 0]) {
+    const headers = await cacheStatus(exact(index));
+    assert.equal(headers['x-weather-effects'], undefined);
+    assert.equal(headers['cache-control'], 'private, no-store');
+  }
+  assert.equal((await cacheStatus(coarse))['x-weather-effects'], 'HIT');
 });
 
 test('Realtime handler preserves tools and default instructions, isolates supplied annotation guidance, and keeps the upstream key server-side', async (t) => {

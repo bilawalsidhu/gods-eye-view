@@ -6,6 +6,7 @@ import { createWeatherLayer } from '../layers/weather/index.js';
 import { createApplicationCyclones } from './layers/cyclones.js';
 import { createWindLayer } from '../layers/wind/index.js';
 import { createLayerCatalog } from './catalog.js';
+import { layerPlacement } from '../data/placementProvider.js';
 import { LAYER_STATE_REGISTRY } from '../data/layerState.js';
 import { createMilitaryRegistry } from '../layers/aircraft/classification.js';
 import { createApplicationFlights } from './layers/flights.js';
@@ -63,6 +64,11 @@ export const APPLICATION_LAYER_METADATA = Object.freeze([
 /** Construct the current catalog without choosing any source provider.
  * Scene engines remain page-owned; layers and classification have this app's lifetime.
  * The manager owns layer destruction, while abort releases classification even if startup fails.
+ * `placement`, a host-supplied placement provider (../data/placementProvider.js),
+ * places live aircraft, vessels, transit and trains; without one each layer
+ * uses its own motion.
+ * `perimeterOptions: { inciweb: false }` leaves the Fire Perimeters cards
+ * without InciWeb links, and the layer never asks InciWeb.
  */
 export function createApplicationCatalog({
   surface,
@@ -71,9 +77,11 @@ export function createApplicationCatalog({
   metadata = APPLICATION_LAYER_METADATA,
   vesselOptions,
   newsOptions,
+  perimeterOptions,
   resolveAsset,
   nepalBoundaryResolver,
   streetLevelProviders,
+  placement = null,
 }) {
   if (!signal?.addEventListener)
     throw new TypeError('An application lifetime signal is required');
@@ -97,18 +105,23 @@ export function createApplicationCatalog({
     const flights = createApplicationFlights({
       surface,
       source: sources.flights,
+      placement: layerPlacement(placement, 'aircraft'),
       militaryRegistry,
       resolveAsset,
     });
     const military = createApplicationMilitary({
       surface,
       source: sources.military,
+      placement: layerPlacement(placement, 'military'),
       militaryRegistry,
       resolveAsset,
     });
     const vessels = createApplicationVessels({
       source: sources.vessels,
+      placement: layerPlacement(placement, 'vessels'),
       options: vesselOptions,
+      displayParams: () => flights.getParams(),
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const installations = createApplicationInstallations({
       surface,
@@ -116,6 +129,7 @@ export function createApplicationCatalog({
     });
     const satellites = createApplicationSatellites({
       source: sources.satellites,
+      ...(resolveAsset ? { resolveAsset } : {}),
     });
     const catalog = createLayerCatalog(
       [
@@ -132,8 +146,13 @@ export function createApplicationCatalog({
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
-        createApplicationAirQuality({ source: sources['air-quality'] }),
+        createApplicationAirQuality({
+          source: sources['air-quality'],
+          // Optional: a host's model field (src/layers/airQuality/field.js).
+          fieldSource: sources['air-quality-field'] ?? null,
+        }),
         createApplicationFirePerimeters({
+          ...perimeterOptions,
           source: sources['fire-perimeters'],
         }),
         createApplicationGnssIntegrity({
@@ -167,7 +186,13 @@ export function createApplicationCatalog({
         createApplicationTraffic({ source: sources.traffic, surface }),
         createApplicationCctv({ surface, source: sources.cctv }),
         createApplicationRadio({ surface, source: sources.radio }),
-        createApplicationTransit({ surface, source: sources.transit }),
+        createApplicationTransit({
+          surface,
+          source: sources.transit,
+          placement: layerPlacement(placement, 'transit'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationBikeshare({ source: sources.bikeshare }),
         createApplicationDirections({ source: sources.directions }),
         createApplicationRecentImagery({ source: sources['recent-imagery'] }),
@@ -200,7 +225,13 @@ export function createApplicationCatalog({
         ...createOsmOverlayLayers(),
         ...createInfrastructureLayers(localGeoJsonServices),
         createApplicationCables({ source: sources.cables }),
-        createApplicationRail({ surface, source: sources.rail }),
+        createApplicationRail({
+          surface,
+          source: sources.rail,
+          placement: layerPlacement(placement, 'rail'),
+          displayParams: () => flights.getParams(),
+          ...(resolveAsset ? { resolveAsset } : {}),
+        }),
         createApplicationFirms({
           surface,
           id: 'local-firms',

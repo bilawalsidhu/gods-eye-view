@@ -645,44 +645,34 @@ try {
     `owner=${afterClear.pointerOwner}`,
   );
 
-  // ── 8. A tool holding the pointer blocks placement, and says so. ─────────
+  // ── 8. Arming takes the pointer from a tool holding it, which is told. ──
   await page.evaluate(() => {
+    window.__gevQaDrawLost = 0;
     // A claim answers with a lease; the release takes that lease back.
-    window.__gevQaDrawLease = window.__gevQa.claimPointer('draw');
+    window.__gevQaDrawLease = window.__gevQa.claimPointer('draw', {
+      onLost: () => (window.__gevQaDrawLost += 1),
+    });
   });
   await clickChip('set-a');
-  const blocked = await layerState();
+  const taken = await layerState();
+  const lost = await page.evaluate(() => window.__gevQaDrawLost);
   check(
-    "another tool's pointer claim is never stolen",
-    blocked.pointerOwner === 'draw',
-    `owner=${blocked.pointerOwner}`,
+    'the newest claim takes over: Directions holds the pointer',
+    taken.pointerOwner === 'directions',
+    `owner=${taken.pointerOwner}`,
   );
+  check('the tool it replaced is told once', lost === 1, `told=${lost}`);
   check(
-    'nothing is armed, and the row says why the click would do nothing',
-    blocked.chips.find((chip) => chip.id === 'set-a')?.active === false &&
-      /Another map tool/.test(blocked.stats.error || ''),
-    blocked.stats.error,
+    'SET A is armed, and the row has nothing to complain of',
+    taken.chips.find((chip) => chip.id === 'set-a')?.active === true &&
+      !taken.stats.error,
+    taken.stats.error,
   );
-  // The row is not where the operator is looking after pressing a chip, so the
-  // refusal also has to reach the app's toast (owner field test).
-  const toast = await page.evaluate(() => {
-    const node = document.getElementById('toast');
-    return {
-      text: node?.textContent || '',
-      visible: !!node?.classList.contains('visible'),
-    };
-  });
-  check(
-    'the refusal reaches the app toast, naming the tool and how to leave it',
-    /Draw is active/.test(toast.text) && /then set A/.test(toast.text),
-    JSON.stringify(toast.text),
-  );
-  check('and that toast is actually on screen', toast.visible);
-  await shot(`05-${LABEL}-pointer-blocked-toast.jpg`);
-  const released = await page.evaluate(() =>
+  const staleReleased = await page.evaluate(() =>
     window.__gevQa.releasePointer(window.__gevQaDrawLease),
   );
-  check('and it gets the pointer back when it lets go', released);
+  check("the replaced tool's late release frees nothing", !staleReleased);
+  await clickChip('set-a');
 
   // ── 9. Denver: maneuver dots sit on the ground, not at sea level. ────────
   if (!SKIP.has('denver')) {

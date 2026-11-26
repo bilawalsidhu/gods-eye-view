@@ -9,7 +9,8 @@ async function fetchRegionalWeather(point) {
     longitude: point.longitude.toFixed(5),
     current:
       'temperature_2m,apparent_temperature,precipitation,weather_code,cloud_cover,wind_speed_10m,wind_direction_10m,visibility',
-    timezone: 'UTC',
+    // The spot's own time zone, so Context can show local time there.
+    timezone: 'auto',
   });
   try {
     const payload = await fetchRegionalJson(
@@ -18,7 +19,8 @@ async function fetchRegionalWeather(point) {
         maxBytes: WEATHER_EFFECTS_MAX_RESPONSE_BYTES,
       },
     );
-    return normalizeRegionalWeather(payload);
+    const weather = normalizeRegionalWeather(payload);
+    return weather && { ...weather, source: 'open-meteo' };
   } catch {
     return null;
   }

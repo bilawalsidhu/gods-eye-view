@@ -10,6 +10,7 @@ import { createQueries } from './queries.js';
 import { createControls } from './controls.js';
 import { createLifecycle } from './lifecycle.js';
 import { createTesting } from './testing.js';
+import { createTransitCockpitSubject } from './cockpitSubject.js';
 import { TRANSIT_POLL_MS } from './policy.js';
 
 /**
@@ -19,7 +20,7 @@ import { TRANSIT_POLL_MS } from './policy.js';
  * and height maps, the in-flight requests, the manager handle and the overlay
  * host all live on the instance this returns, and `destroy()` releases every
  * shared registration it took (sprite collection, pick owner, render hold,
- * camera sensitivity).
+ * camera listener).
  *
  * @param {{services: object}} options
  * @returns {object} The data-layer module the manager registers.
@@ -54,12 +55,35 @@ export function createTransitLayer({
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   parts.testing = createTesting(context);
+  parts.cockpit = createTransitCockpitSubject(context);
 
   return Object.assign(
     { updateInterval: TRANSIT_POLL_MS },
     parts.lifecycle.methods,
     parts.queries.methods,
     parts.controls.methods,
+    parts.cockpit.methods,
+    {
+      /**
+       * Select a vehicle by the id its card has, as a click on it does.
+       * @param {string} id
+       * @param {{center?: boolean}} [options]
+       */
+      pickById(id, options) {
+        return parts.selection.pickVehicle(id, options);
+      },
+      /** Whether the vehicle a card names is the one selected. */
+      isSelected(id) {
+        const key = parts.selection.vehicleKeyFor(id);
+        return key !== null && key === state._selectedKey;
+      },
+      /** Deselect the selected vehicle, as a click on the map does. */
+      clearSelection() {
+        parts.selection.clearSelection();
+        services.render.governorRequestRender?.('transit-selection');
+        return true;
+      },
+    },
     parts.testing,
   );
 }

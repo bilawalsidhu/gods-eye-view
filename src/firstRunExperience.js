@@ -23,13 +23,12 @@ import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 
 import { t, msg } from './i18n/index.js';
 import { EXCLUSIVE_SURFACE_CLASSES } from './exclusiveSurfaces.js';
-import { FIRST_RUN_TIP, environmentalLabel } from './firstRunCopy.js';
+import { environmentalLabel } from './firstRunCopy.js';
 import { useFirstRunStore } from './ui/stores/firstRun.js';
 import { applicationPinia } from './ui/vueRuntime.js';
 
 export {
   ENVIRONMENTAL_LABEL_CHOICE,
-  FIRST_RUN_TIP,
   environmentalLabel,
 } from './firstRunCopy.js';
 
@@ -53,11 +52,12 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *   TOUCHED, DURABLE      layer enables for the mission's OWN layers, at
  *                         `origin: 'user'` — identical to clicking those rows.
  *                         Choosing ENVIRONMENTAL *is* choosing those layers.
- *   TOUCHED, DURABLE      the Context panel reveal, but only for the two
- *                         Context missions, exactly as the visible Contacts /
- *                         Space Missions tabs do it. The globe missions open no
- *                         panel at all — nothing there needs explaining, and a
- *                         panel-collapse write is a pref nobody chose.
+ *   TOUCHED, DURABLE      the Space Missions panel, which opens as it does when
+ *                         its layer is switched on from its Data Layers row.
+ *                         No mission reveals the Context panel, and the globe
+ *                         missions open no panel at all — nothing there needs
+ *                         explaining, and a panel-collapse write is a pref
+ *                         nobody chose.
  *   TOUCHED, SESSION      the camera. Never persisted by anything.
  *   NOT TOUCHED           detection mode + density. The reasonable-defaults
  *                         landing owns the DENSE/75 start, and Contacts owns
@@ -66,8 +66,8 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *   NOT TOUCHED           `_detectionUserOverridden`. Setting it would mean "the
  *                         operator hand-edited detection" and would silently
  *                         kill the CRT/NVG/FLIR auto-preset contract for the
- *                         whole session. Missions run through setContextMode and
- *                         DataManager.setEnabled, neither of which writes it.
+ *                         whole session. Missions run through
+ *                         DataManager.setEnabled, which does not write it.
  *   NOT TOUCHED           detection allocation (`gev:detection-allocation:v1`),
  *                         3D aircraft models, scope feather. All are defaults or
  *                         separate durable prefs the visitor did not choose here.
@@ -75,21 +75,17 @@ export const FIRST_RUN_SESSION_KEY = 'gev:first-run-mission-session:v1';
  *                         `_setModels3dMode`, which default to origin 'user' and
  *                         would persist a 3D choice nobody made.
  *
- * The two Context missions deliberately reuse `styleManager.setContextMode`, the
- * same facade the visible tabs and voice use, so Contacts detection ownership,
- * layer isolation and rollback stay in exactly one place.
+ * Every mission is an ordinary layer choice, switched on like clicking its row,
+ * so no mission enters a Context mode.
  */
 
 /** @type {Readonly<Record<string, object>>} */
 export const FIRST_RUN_MISSIONS = Object.freeze({
-  contacts: Object.freeze({
-    kind: 'context',
-    contextMode: 'contacts',
-    busyKey: msg('Starting live contacts…'),
-  }),
   'space-missions': Object.freeze({
-    kind: 'context',
-    contextMode: 'space-missions',
+    // An ordinary layer with its own panel: no camera flight, and its panel
+    // opens as it does for a click on its Data Layers row.
+    kind: 'layer',
+    layerIds: Object.freeze(['rocket-launches']),
     busyKey: msg('Opening space missions…'),
   }),
   environmental: Object.freeze({
@@ -98,15 +94,10 @@ export const FIRST_RUN_MISSIONS = Object.freeze({
     // for the FULLY CONFIGURED experience (owner ruling, 2026-08-23): the tile
     // promises both, so it turns on both, and the subcopy in index.html says so.
     //
-    // Keyless, FIRMS is honest where it counts — its own layer row reads
-    // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", and the quakes half of
-    // the tile still delivers in full. What is NOT honest is the GLOBAL status
-    // chip, which has no key-required terminal state and folds that row into
-    // "LOAD FAILED". That aggregation is the defect, not this preset: fixing it
-    // means a KEY REQUIRED terminal state in src/loadingFeedback.js, a state
-    // machine shared by every layer and not a thing to refactor the night
-    // before a launch. LEDGERED post-launch. Until it lands, keyless visitors
-    // are judged on the layer row, which tells them the truth.
+    // Keyless, FIRMS says so: its layer row reads
+    // "UNAVAILABLE · NASA FIRMS · LIVE · KEY REQUIRED", the global status chip
+    // ends KEY REQUIRED (src/loadingFeedback.js), and the quakes half of the
+    // tile still delivers in full.
     layerIds: Object.freeze(['earthquakes', 'local-firms']),
     busyKey: msg('Scanning active events…'),
   }),
@@ -251,28 +242,27 @@ export function rememberFirstRunSessionDismissed(sessionStorageRef) {
  *
  * @param {string} choice Key of FIRST_RUN_MISSIONS.
  * @param {object} deps
- * @param {(mode: string) => Promise<object>} deps.setContextMode
  * @param {(layerId: string) => Promise<boolean>} deps.setLayerEnabled
  * @param {() => Promise<any>} deps.flyToGlobe
- * @returns {Promise<{ok: boolean, choice: string, result?: object, failedLayerIds?: string[]}>}
+ * @returns {Promise<{ok: boolean, choice: string, failedLayerIds?: string[]}>}
  */
 export async function runFirstRunChoice(
   choice,
-  { setContextMode, setLayerEnabled, flyToGlobe },
+  { setLayerEnabled, flyToGlobe },
 ) {
   const mission = FIRST_RUN_MISSIONS[choice];
   if (!mission) return { ok: false, choice };
   if (mission.kind === 'none') return { ok: true, choice };
-  if (mission.kind === 'context') {
-    const result = await setContextMode(mission.contextMode);
-    return { ok: Boolean(result?.ok), choice, result };
-  }
   // Globe missions: start the pull-out and the layer work together so the
   // camera is already moving while the feeds spin up. The flight is framing,
   // not the mission — a stalled or superseded flight never fails the tile.
-  const flight = Promise.resolve()
-    .then(() => flyToGlobe())
-    .catch(() => null);
+  // Layer missions keep the camera where it is.
+  const flight =
+    mission.kind === 'globe'
+      ? Promise.resolve()
+          .then(() => flyToGlobe())
+          .catch(() => null)
+      : null;
   const outcomes = await Promise.all(
     mission.layerIds.map(async (layerId) => {
       try {
@@ -341,15 +331,13 @@ export function initFirstRunExperience({
     closing: false,
     state: null,
     busy: null,
-    status: t(FIRST_RUN_TIP),
+    // Empty until a mission reports progress or an error.
+    status: '',
     // The tile name is owner-switchable from one constant, so paint it from
     // the module rather than trusting the markup to match.
     environmentalTitle: environmentalLabel().title,
     environmentalSub: t(
       'Live earthquakes and active fires, from USGS and NASA',
-    ),
-    description: t(
-      'It feels like a forbidden cockpit—then you realize the sources are public and the data is real.',
     ),
     scrollable: null,
   };
@@ -376,7 +364,6 @@ export function initFirstRunExperience({
   }
   present({});
 
-  const defaultStatus = view.status;
   // An error or refused save stays on the status line until the next choice.
   let stickyStatus = false;
   let busy = false;
@@ -436,10 +423,14 @@ export function initFirstRunExperience({
     globalThis.removeEventListener?.('resize', onViewportResize);
     surfaceObserver?.disconnect();
     const remove = () => {
+      root.removeEventListener('transitionend', onTransitionEnd);
       store.connect(null);
       present({ removed: true });
     };
-    root.addEventListener('transitionend', remove, { once: true });
+    const onTransitionEnd = (event) => {
+      if (event.target === root) remove();
+    };
+    root.addEventListener('transitionend', onTransitionEnd);
     // `transitionend` never fires under prefers-reduced-motion (no transition),
     // so a bounded fallback is what actually removes the node there.
     globalThis.setTimeout?.(remove, 400);
@@ -456,7 +447,7 @@ export function initFirstRunExperience({
     const patch = { state: next ? 'loading' : 'ready', busy: String(next) };
     if (next)
       patch.status = t(FIRST_RUN_MISSIONS[choice]?.busyKey || msg('Working…'));
-    else if (!stickyStatus) patch.status = defaultStatus;
+    else if (!stickyStatus) patch.status = '';
     present(patch);
   };
 
@@ -468,19 +459,6 @@ export function initFirstRunExperience({
     let outcome = null;
     try {
       outcome = await runFirstRunChoice(choice, {
-        setContextMode: async (mode) => {
-          const result = await styleManager.setContextMode(mode);
-          if (result?.ok) {
-            // setContextMode is also a voice/internal facade and deliberately
-            // does not decide panel chrome. This first-run click is an explicit
-            // visual choice, so reveal the result exactly as the visible
-            // Contacts / Space Missions tabs do.
-            styleManager.setPanelCollapsed?.('global-context-panel', false, {
-              explicit: true,
-            });
-          }
-          return result;
-        },
         // `origin: 'user'` on purpose: a mission tile is a real person choosing
         // these layers, so it persists exactly as clicking those rows would.
         setLayerEnabled: (layerId) =>
@@ -497,9 +475,7 @@ export function initFirstRunExperience({
       dismiss();
       return;
     }
-    const failed = outcome?.failedLayerIds?.length
-      ? outcome.failedLayerIds
-      : outcome?.result?.failedLayerIds;
+    const failed = outcome?.failedLayerIds;
     const detail =
       Array.isArray(failed) && failed.length ? ` (${failed.join(', ')})` : '';
     stickyStatus = true;
@@ -537,6 +513,9 @@ export function initFirstRunExperience({
     isActive: () => !closing && isTopmost(),
     onEscape: () => dismiss(),
     fallbackFocus: () => documentRef.body,
+    // The card sits beside a usable map: Tab from the search bar or any
+    // other control follows the page's order instead of jumping back in.
+    claimOutsideFocus: false,
   });
 
   store.connect({
@@ -544,6 +523,7 @@ export function initFirstRunExperience({
     // The same dismissal as ESC, for screens without a keyboard.
     dismiss: () => dismiss(),
     suppress: onSuppressChange,
+    refreshLayout: () => syncScrollAffordance(),
   });
   // Capture phase: the app binds its own global hotkeys (including bare letters
   // that cycle detection and styles), and the launcher owns the keyboard first.
@@ -569,7 +549,7 @@ export function initFirstRunExperience({
       present({ visible: true });
       syncScrollAffordance();
       root
-        .querySelector('[data-first-run-choice]')
+        .querySelector('[data-first-run-primary]')
         ?.focus?.({ preventScroll: true });
     });
   };

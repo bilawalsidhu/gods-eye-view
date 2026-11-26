@@ -13,8 +13,6 @@ export async function _selectContextMode(
   const generation = ++this._contextModeGeneration;
   const isCurrent = () =>
     !this.destroyed && generation === this._contextModeGeneration;
-  this._contextModeEntryIntent = null;
-  this._contextModeReplacementIntent = null;
   this._contextModeChanging = true;
   this._syncContextModeButtons();
   try {
@@ -47,9 +45,6 @@ export async function _selectContextMode(
     this._captureContextSessionSnapshot();
     this._contextMode = mode;
     this._syncContextModeButtons();
-    // Replay isolation must settle before Space Missions starts. Contacts
-    // keeps its non-dependency teardown in the background so slow source
-    // shutdown does not delay cockpit entry.
     try {
       await this._clearLayersOutsideContextMode(mode, {
         notificationToken,
@@ -82,13 +77,8 @@ export async function _selectContextMode(
     // Entry is one transaction: isolation succeeded above, so a failed mode
     // activation must roll the cleared layers back instead of stranding the
     // user in a half-entered mode with an orphaned snapshot.
-    const entryLayerId =
-      mode === 'flights' ? 'military-awareness' : 'rocket-launches';
-    if (mode === 'flights') {
-      this._dataManager.setLayerParams('military-awareness', {
-        passive: false,
-      });
-    }
+    const entryLayerId = 'military-awareness';
+    this._dataManager.setLayerParams(entryLayerId, { passive: false });
     let activated = false;
     let activationError = null;
     let activationIntent = null;
@@ -99,11 +89,6 @@ export async function _selectContextMode(
         true,
         { notificationToken, ...(signal ? { signal } : {}) },
       );
-      this._contextModeEntryIntent = {
-        generation,
-        layerId: entryLayerId,
-        intentEpoch: activationIntent.intentEpoch,
-      };
       activated = await activationIntent.promise;
       terminalIntentOutcome =
         await this._dataManager._waitForVisibilityIntent?.(
@@ -114,46 +99,6 @@ export async function _selectContextMode(
       activationError = error;
     }
     if (!isCurrent()) return false;
-    let replacementIntent =
-      mode === 'space-missions' &&
-      this._contextModeReplacementIntent?.generation === generation &&
-      this._contextModeReplacementIntent.layerId === entryLayerId
-        ? this._contextModeReplacementIntent
-        : null;
-    while (replacementIntent) {
-      const outcome = await this._dataManager._waitForVisibilityIntent?.(
-        entryLayerId,
-        replacementIntent.intentEpoch,
-      );
-      terminalIntentOutcome = outcome;
-      if (!isCurrent()) return false;
-      const replacementOwnsMode =
-        outcome?.intentEpoch === replacementIntent.intentEpoch &&
-        outcome.enabled === true &&
-        outcome.succeeded === true;
-      if (replacementOwnsMode) {
-        this._contextModeEntering = null;
-        this._contextModeEntryIntent = null;
-        this._contextModeReplacementIntent = null;
-        this._syncContextModeButtons();
-        return true;
-      }
-      const successorEpoch =
-        outcome?.cancellationReason === 'superseded' &&
-        outcome.successorEnabled === true &&
-        Number.isInteger(outcome.successorIntentEpoch) &&
-        outcome.successorIntentEpoch > replacementIntent.intentEpoch
-          ? outcome.successorIntentEpoch
-          : null;
-      replacementIntent =
-        successorEpoch === null
-          ? null
-          : {
-              generation,
-              layerId: entryLayerId,
-              intentEpoch: successorEpoch,
-            };
-    }
     if (
       activationError ||
       activated === false ||
@@ -182,8 +127,6 @@ export async function _selectContextMode(
         );
       }
       this._contextMode = null;
-      this._contextModeEntryIntent = null;
-      this._contextModeReplacementIntent = null;
       this._syncContextModeButtons();
       try {
         await this._restoreContextSession({
@@ -205,7 +148,6 @@ export async function _selectContextMode(
       // while callers still require literal `true` before expanding Context.
       return cancelledAndSettled ? null : false;
     }
-    this._contextModeEntryIntent = null;
     return true;
   } finally {
     if (isCurrent()) {
@@ -221,8 +163,6 @@ export async function _deactivateContextForLayerChange({
   this._contextModeGeneration += 1;
   this._contextModeChanging = true;
   this._contextMode = null;
-  this._contextModeEntryIntent = null;
-  this._contextModeReplacementIntent = null;
   // A layer turned off ends Contacts but not the Cockpit: the view ends only
   // when the layer it rides goes off (see _handleContextLayerChange).
   this._syncContextModeButtons();
@@ -240,25 +180,35 @@ export async function _clearLayersOutsideContextMode(
 ) {
   const allowed = contextAllowedLayerIds(mode);
   const pending = [];
-  for (const [layerId] of this._dataManager.layers || []) {
-    // Effective visibility: a disallowed layer still mid-ENABLING must be
-    // isolated too, or it settles ON inside the exclusive mode.
-    if (
-      !allowed.has(layerId) &&
-      this._dataManager.isEffectivelyEnabled(layerId)
-    ) {
-      pending.push({
-        layerId,
-        transition: this._dataManager.setEnabled(layerId, false, {
-          notificationToken,
-          ...(signal ? { signal } : {}),
-        }),
-      });
+  // Panels read this while their layer goes off (suspendsLayer): a layer
+  // isolation switches off is suspended, not switched off by the user.
+  const isolating = [];
+  let results;
+  try {
+    for (const [layerId] of this._dataManager.layers || []) {
+      // Effective visibility: a disallowed layer still mid-ENABLING must be
+      // isolated too, or it settles ON inside the exclusive mode.
+      if (
+        !allowed.has(layerId) &&
+        this._dataManager.isEffectivelyEnabled(layerId)
+      ) {
+        if (!this._isolatingLayerIds.has(layerId)) {
+          this._isolatingLayerIds.add(layerId);
+          isolating.push(layerId);
+        }
+        pending.push({
+          layerId,
+          transition: this._dataManager.setEnabled(layerId, false, {
+            notificationToken,
+            ...(signal ? { signal } : {}),
+          }),
+        });
+      }
     }
+    results = await Promise.all(pending.map(({ transition }) => transition));
+  } finally {
+    for (const layerId of isolating) this._isolatingLayerIds.delete(layerId);
   }
-  const results = await Promise.all(
-    pending.map(({ transition }) => transition),
-  );
   const failed = pending
     .filter(
       ({ layerId }, index) =>
