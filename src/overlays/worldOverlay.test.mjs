@@ -133,8 +133,9 @@ function installMockEnvironment({
       this._listeners = new Map();
       this._classes = new Set();
       this.hidden = false;
-      this.width = 0;
-      this.height = 0;
+      // A browser's new canvas is 300x150 until something sizes it.
+      this.width = this.tagName === 'CANVAS' ? 300 : 0;
+      this.height = this.tagName === 'CANVAS' ? 150 : 0;
       this.clientWidth = width;
       this.clientHeight = height;
       this._rect = { left: 0, top: 0, width, height };
@@ -651,9 +652,10 @@ test('a touch-only device holds the overlay canvases at CSS pixels', () => {
   assert.equal(canvas.height, 844);
   assert.equal(canvas.style.width, '390px');
   assert.ok(env.ctx.calls.some((call) => call[0] === 'setTransform' && call[1] === 1));
-  // The same screen with a mouse or trackpad keeps the display's ratio.
+  // The same tablet with a trackpad, mouse or pencil keeps the display's ratio:
+  // its primary pointer is still coarse.
   env.window.matchMedia = (query) => ({
-    matches: query === '(pointer: fine)',
+    matches: query === '(pointer: coarse)' || query === '(any-pointer: fine)',
   });
   env.window.dispatch('resize');
   env.postRender.raise();
@@ -805,6 +807,76 @@ test('a host dormant since init holds no canvas backing store', () => {
   env.postRender.raise();
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 0);
   env.cleanup();
+});
+
+test('a dormant host empties 300x150 surfaces without sizing them to the scene', () => {
+  const env = installMockEnvironment({ width: 1600, height: 900, dpr: 2 });
+  // Surfaces already in the page, as a browser makes them: 300x150.
+  const canvas = env.document.getElementById('world-overlay-canvas');
+  assert.equal(canvas.width, 300);
+  const detectionSurface = env.document.createElement('canvas');
+  detectionSurface.id = 'world-overlay-detection-surface';
+  env.viewer.container.appendChild(detectionSurface);
+  initWorldOverlay(env.viewer);
+  for (let frame = 0; frame < 3; frame++) {
+    env.advanceTime(120);
+    env.postRender.raise();
+  }
+  assert.equal(env.document.getElementById('world-overlay-detection-surface'), detectionSurface);
+  assert.equal(detectionSurface.width, 0);
+  assert.equal(detectionSurface.height, 0);
+  // Never sized to the scene (3200x1800) while nothing paints.
+  assert.equal(canvas.width, 0);
+  assert.equal(canvas.height, 0);
+  // A detection lane that paints and goes inactive gives back only its surface.
+  const lane = registerWorldOverlayPaintLane('detection', () => {}, {
+    id: 'dormant-detection',
+    active: true,
+    target: 'detection',
+  });
+  env.postRender.raise();
+  assert.equal(detectionSurface.width, 3200);
+  const sharedWidth = canvas.width;
+  lane.setActive(false);
+  env.postRender.raise();
+  assert.equal(detectionSurface.width, 0);
+  assert.equal(canvas.width, sharedWidth);
+  env.cleanup();
+});
+
+test('a fine pointer attached or taken away resizes the overlay at the new ratio', () => {
+  const env = installMockEnvironment({ width: 390, height: 844, dpr: 3 });
+  let anyFine = false;
+  const queries = new Map();
+  env.window.matchMedia = (query) => {
+    if (!queries.has(query)) {
+      const listeners = new Set();
+      queries.set(query, {
+        get matches() {
+          if (query === '(pointer: coarse)') return true;
+          if (query === '(any-pointer: fine)') return anyFine;
+          return false;
+        },
+        addEventListener: (_type, listener) => listeners.add(listener),
+        removeEventListener: (_type, listener) => listeners.delete(listener),
+        listeners,
+      });
+    }
+    return queries.get(query);
+  };
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('pointer', [selectedEntry('probe')]);
+  env.postRender.raise();
+  const canvas = env.document.getElementById('world-overlay-canvas');
+  assert.equal(canvas.width, 390);
+  // A trackpad attached to the tablet: no resize event, the ratio changes.
+  anyFine = true;
+  for (const listener of queries.get('(any-pointer: fine)').listeners) listener();
+  env.postRender.raise();
+  assert.equal(canvas.width, 1170);
+  assert.equal(canvas.height, 2532);
+  env.cleanup();
+  assert.equal(queries.get('(any-pointer: fine)').listeners.size, 0, 'teardown stops watching');
 });
 
 test('empty postRender stays inert through production mutation, resize, and clock noise', () => {

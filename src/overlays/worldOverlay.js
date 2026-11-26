@@ -24,7 +24,7 @@ import {
   truncateOverlayTitle,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
-import { overlayPixelRatio } from './canvasPixelRatio.js';
+import { overlayPixelRatio, watchTouchOnly } from './canvasPixelRatio.js';
 import { t } from '../i18n/index.js';
 import {
   canvasOf,
@@ -156,6 +156,8 @@ let _occluderRefreshTimer = null;
 let _sonarRenderTimer = null;
 let _cockpitModeHandler = null;
 let _windowResizeHandler = null;
+/** Stops watching for a fine pointer attached or taken away (`watchTouchOnly`). */
+let _stopTouchOnlyWatch = null;
 let _cockpitActive = false;
 /**
  * Set by `destroyWorldOverlay` when it actually tore a host down, and cleared
@@ -1319,6 +1321,12 @@ function ensureOverlayDom() {
   // on screen until something paints over them.
   _ctx = _canvas.getContext('2d', { alpha: true });
   _detectionCtx = _detectionSurface.getContext('2d', { alpha: true });
+  // A browser's canvas is 300x150 until sized, the page's or a new one: a new
+  // host holds no pixels until its first paint sizes them.
+  for (const surface of [_canvas, _detectionSurface]) {
+    if (surface.width !== 0) surface.width = 0;
+    if (surface.height !== 0) surface.height = 0;
+  }
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
@@ -1357,6 +1365,20 @@ function detectionSurfaceStale() {
     _canvasWidth > 0 &&
     _canvasHeight > 0;
   return sized !== wanted;
+}
+
+/**
+ * With no detection lane active, a detection surface holding pixels drops
+ * them (0x0); nothing else is sized. A browser canvas starts 300x150, so this
+ * also empties a surface that has never been sized.
+ */
+function releaseDetectionSurface() {
+  if (!_detectionSurface) return;
+  if (activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0) return;
+  if (_detectionSurface.width === 0 && _detectionSurface.height === 0) return;
+  _detectionSurface.width = 0;
+  _detectionSurface.height = 0;
+  _detectionSurfaceNeedsClear = false;
 }
 
 /**
@@ -1636,6 +1658,9 @@ function handleChromeMutations(records) {
 function installUiOccluderObservers() {
   _windowResizeHandler = markLayoutDirty;
   globalThis.window?.addEventListener?.('resize', _windowResizeHandler);
+  // A trackpad attached to a tablet changes the backing ratio, not the size.
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = watchTouchOnly(markLayoutDirty, globalThis.window);
   if (typeof MutationObserver === 'function' && document.body) {
     _mutationObserver = new MutationObserver(handleChromeMutations);
     // Body observation is childList discovery only, filtered in the callback;
@@ -2821,8 +2846,9 @@ function drawWorldOverlay() {
     resetFrameDiagnostics();
     _solveDirty = false;
     if (_canvasNeedsClear || _detectionSurfaceNeedsClear) clearCanvas();
-    // A detection lane that went inactive gives its backing store back.
-    if (detectionSurfaceStale()) ensureCanvasSize();
+    // A detection lane that went inactive gives its backing store back; the
+    // shared canvas is left as it is (a dormant host never sizes it).
+    releaseDetectionSurface();
     // Nothing is painted now, so nothing can be hit.
     _hitRectCount = 0;
     if (_accessibilitySignature) syncAccessibleActions();
@@ -2943,6 +2969,8 @@ export function destroyWorldOverlay() {
     window.removeEventListener('resize', _windowResizeHandler);
   }
   _windowResizeHandler = null;
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = null;
   _resizeObserver?.disconnect?.();
   _resizeObserver = null;
   _observedOccluderElements = new WeakSet();
