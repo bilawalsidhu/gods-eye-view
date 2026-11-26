@@ -910,4 +910,5 @@ its eased course. The stub keeps no drawn course. These checks still need
 scenes that capture an icon mid-turn or from an oblique angle. Height
 queries that count a set (`includeInHeightQueries`) are not checked either:
 the stub's heights are scripted, so it does not model them. Nor are video
-frames (a check needs a video) or `fetchTile` (the stub fetches nothing).
+frames (a check needs a video) or `fetchTile`, imagery's or terrain's (the
+stub fetches nothing).
