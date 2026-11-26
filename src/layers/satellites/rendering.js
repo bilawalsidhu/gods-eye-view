@@ -559,7 +559,9 @@ export function createRendering({
    * Show orbital path for a satellite: the ring over one orbit, baked once
    * in ECEF at the current GMST, bright in front of the globe and dimmed
    * behind it (`depthFail`), and turned with the Earth each
-   * `RING_ROTATION_MS` (`_updateOrbitPathRotations`).
+   * `RING_ROTATION_MS` (`_updateOrbitPathRotations`). Built shown only while
+   * the layer is on and its orbit toggle is (rings are not turned while it
+   * is off); the ISS's ring then follows its class too (`_syncIssOrbit`).
    */
 
   function _showOrbitPath(noradId, color) {
@@ -596,7 +598,9 @@ export function createRendering({
         kind: 'solid',
         color: withAlpha(pathColor, RING_BEHIND_ALPHA),
       },
-      show: true,
+      // The rule of controls.satelliteVisualsVisible, read from the state.
+      show:
+        Boolean(layerState._enabled) && Boolean(layerState._params?.showOrbits),
     };
     layerState._orbitPaths.set(noradId, path);
     sets?.rings.upsert([path.item]);
@@ -636,6 +640,11 @@ export function createRendering({
       if (Math.abs(nowDate.getTime() - path.bakeMs) > ORBIT_REBAKE_MS) {
         _hideOrbitPath(noradId);
         _showOrbitPath(noradId, path.color);
+        // The same ring where the orbit now runs: it keeps whether it is
+        // shown (its class, the close-up, the Cockpit) and the alpha it is
+        // drawn at, so a rebake never changes what is seen.
+        _setOrbitPathShown(noradId, path.item.show);
+        _setOrbitPathAlpha(noradId, path.alphaFactor);
         continue;
       }
       path.item.positions = _ringPositions(path, gmst);

@@ -184,6 +184,7 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
       _viewer: viewer,
       _trackedNorad: null,
       _enabled: false,
+      _params: { showPoints: true, showOrbits: true },
     };
     const path = [
       { x: 7e6, y: 0, z: 0 },
@@ -202,6 +203,10 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
       parts: {
         orbits: { computeOrbitPath: () => path },
         tracking: { _getTrackedFramePosition: () => sampleFrame() },
+        controls: {
+          satelliteVisualsVisible: (enabled, on) =>
+            Boolean(enabled) && Boolean(on),
+        },
       },
     });
     // The frame's own sample, taken after the tick's first part.
@@ -255,6 +260,7 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
     assert.equal(ring.widthPx, 2.5, 'the ISS ring is wider');
     assert.equal(ring.mode, 'geodesic');
     assert.deepEqual([...ring.positions.slice(0, 3)], [7e6, 0, 0]);
+    assert.equal(ring.show, false, 'built hidden while the layer is off');
     // Turned with the Earth: by minus the GMST elapsed since its bake.
     const path0 = state._orbitPaths.get(25544);
     const later = new Date(Date.now() + 600_000);
@@ -265,6 +271,15 @@ test('the rendering part draws the dots, the tracked dot and the rings through t
     assert.ok(Math.abs(turned[1] - 7e6 * Math.sin(angle)) < 1e-3);
     rendering._hideOrbitPath(25544);
     assert.equal(rings.items.size, 0);
+    // Built shown with the layer on and its orbit toggle on, not otherwise.
+    state._enabled = true;
+    rendering._showOrbitPath(25544, TRACKED_ORBIT_COLOR);
+    assert.equal(rings.items.get('25544').show, true);
+    rendering._hideOrbitPath(25544);
+    state._params.showOrbits = false;
+    rendering._showOrbitPath(25544, TRACKED_ORBIT_COLOR);
+    assert.equal(rings.items.get('25544').show, false);
+    rendering._hideOrbitPath(25544);
 
     // The tracked dot draws at the tracker's position, from the next frame.
     state._trackedNorad = 25544;

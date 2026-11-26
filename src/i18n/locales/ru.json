@@ -4562,6 +4562,7 @@
   "No signal · computed values": "Нет сигнала · расчётные значения",
   "Telemetry unavailable · last update {ago} ago · computed values": "Телеметрия недоступна · последнее обновление {ago} назад · расчётные значения",
   "Telemetry unavailable · computed values": "Телеметрия недоступна · расчётные значения",
+  "Telemetry incomplete · computed values": "Телеметрия неполная · расчётные значения",
   "Telemetry not enabled on this server · computed values": "Телеметрия не включена на этом сервере · расчётные значения",
   "No public telemetry · computed values": "Открытой телеметрии нет · расчётные значения",
   "Zoom to Tiangong": "Приблизить к «Тяньгун»",

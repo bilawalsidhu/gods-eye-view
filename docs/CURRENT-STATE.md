@@ -2254,9 +2254,13 @@ motion, over 100 m, off the camera's centre); its tracked dot and orbit ring
 leave the near range to the model, its card keeps clear of the model, and the
 command panel and the live video show as they do for the ISS. Such an entry
 draws no orbit ring of its own (its elements would put a second line beside
-the ISS's through the same station): when tracking judges it docked (both
-orbits at one instant within 5 km) the ISS's ring shows for it, even with the
-Stations class hidden.
+the ISS's through the same station): while tracking judges it docked (both
+orbits at one instant within 5 km, judged when tracking begins, once a second
+while tracked and after each catalog update; once docked it stays so until
+15 km apart, so a pair whose elements swing about 5 km does not flip) the
+ISS's ring shows for it, even with the Stations class hidden; a vehicle that
+undocks while tracked gets its own ring back, and one that docks hands its
+ring to the ISS's.
 In the Cockpit, a station entry is ridden from the station itself instead of
 the straight-down picture: the camera sits at a point on the model
 (`issMounts.js`), with the model drawn, and looks out, away from the station.
@@ -2315,8 +2319,9 @@ keys it belongs to; a layer names its selected subject's keys with
 `getLiveSubjectKeys` (the satellites layer answers `station:iss` for the ISS,
 Nauka and a docked vehicle, and `station:tiangong` for Tiangong's entries,
 which no stream is listed for yet), and the keys are read again every 2 s while
-something is selected, since a docked entry is judged so only once both
-orbits have been compared. The section shows the subject, the stream's name
+something is selected, since whether an entry is docked is judged from both
+orbits, once a second, and changes when a vehicle docks or undocks while
+selected. The section shows the subject, the stream's name
 with two arrows when there are several, a screen and a status line. It
 starts collapsed, and nothing loads on selection: the screen is a poster
 with Play, under the line "Video plays from YouTube, which sees your IP
@@ -2369,23 +2374,31 @@ a step per frame, to 260 m, and never moves along the view direction, which
 ran away when the camera was not looking at the station).
 Automatic (the default) leaves the joints to their rules and says where the
 angles come from: "Telemetry · updated 4 s ago" with a green dot while the
-relay's answer is fresh, "No signal since 12:04 · computed values" when the
-feed lost the station, "Telemetry unavailable · last update 3 min ago ·
-computed values" when the relay cannot be reached, "Telemetry not enabled on
-this server · computed values" when it is switched off, and a lit/shadow
-line. Manual pauses telemetry ("Manual · telemetry paused") and offers the
+last whole pose is under 20 s old, "Telemetry incomplete · computed values"
+with an amber dot while the relay has signal but its answers lack an array or
+radiator joint, "No signal since 12:04 · computed values" when the feed lost
+the station (the time of the last live answer), "Telemetry unavailable · last
+update 3 min ago · computed values" when the relay cannot be reached,
+"Connecting to telemetry…" while the relay reconnects or turns requests away
+as busy, "Telemetry not enabled on this server · computed values" when it is
+switched off, and a lit/shadow line. Manual pauses telemetry ("Manual · telemetry paused") and offers the
 controls: replace the Sun with a chosen position or a 40 s orbit, fold the
 arrays and radiators as a labelled demonstration, aim the dishes and pose
-Canadarm2 by joint. Automatic, a new selection, the Cockpit (the rail is
-hidden there, and the section with it) or turning the layer off hand every
-joint back. `issCommand.js` keeps the rules these share (the zoom's range and
+Canadarm2 by joint. A joint set by hand before the model is drawn takes its
+angle once the model is posed. Automatic, a new selection (also a selected
+vehicle undocking from the station), the Cockpit (the rail is hidden there,
+and the section with it) or turning the layer off hand every joint back. `issCommand.js` keeps the rules these share (the zoom's range and
 step, the fast orbit, the status wording).
 With `ISS_TELEMETRY_ENABLED=1` (off by default: the feed publishes no terms)
 `server/providers/space/issTelemetry.js` relays NASA's public ISSLive telemetry
 at `/api/iss-telemetry`. It speaks Lightstreamer's text protocol over `ws`,
 holds one connection for the whole server, opens it on the first request,
 closes it after two minutes without one, retries on a 5 s to 5 min ladder and
-recycles a socket that is silent for 30 s. The body is
+recycles a socket that is silent for 30 s. It admits 240 requests a minute per
+socket address (about 20 tabs, so a reverse proxy or the Docker bridge, where
+every browser shares one address, still fits) and 12,000 in all, counted in
+one-second buckets; a refusal is a 429 with `Retry-After`. The items' JSON is
+encoded again only when a value changes. The body is
 `{ configured, status, generatedAt, items }`: `status` is `live` only while the
 station clock ticked with signal in the last 20 s, and each item is
 `[value, epoch ms it was true at]`. On a socket loss the relay discards that
@@ -2401,9 +2414,12 @@ reports one dish and not which). The mapping was fitted on a recording of the
 feed: the dish direction stayed within 0.3° of a TDRS satellite across a
 hand-over, and the arrays sat 5° to 9° off the Sun; the radiator joints did not
 move in the recording, so their sign is not fitted. With no relay, no signal,
-an answer older than 20 s, Manual, or a Sun chosen by hand, the joints keep the
-computed rules, and the STATION section's status line and note say which
-holds. The arms still sway for illustration.
+no whole pose in the last 20 s (an answer short of a joint, or the relay
+reconnecting, keeps the last whole pose until then), Manual, or a Sun chosen
+by hand, the joints keep the computed rules, and the STATION section's status
+line and note say which holds. A 429 reads as busy: the next request waits for
+its `Retry-After` (at least one poll; 30 s without one) plus up to 5 s of
+jitter. The arms still sway for illustration.
 Tiangong is the second station, drawn the same way: `stationModel.js` is the
 station-independent model part (load on approach, placement from its own SGP4
 sample or the tracked entry's, dot and companion hand-over, ring hidden up
@@ -2413,8 +2429,9 @@ ISS's and `tiangongModel.js` Tiangong's (`CSS (TIANHE)`, NORAD 48274, with
 docked entries). `policy.js` lists both stations (`STATIONS`) and
 `stationModels.js` says which station a tracked entry belongs to, so the card,
 the detection marks, the LIVE keys, the Cockpit's mounts and the STATION
-section work per station rather than for the ISS alone (tracking records
-`_trackedDockedToStation`; the ISS's ring keeps its own rules). The model
+section work per station rather than for the ISS alone (tracking judges
+`_trackedDockedToStation` when tracking begins, once a second and after each
+catalog update; the ISS's ring keeps its own rules). The model
 (`public/models/tiangong.glb`, 382 KB, 26 k triangles) is the project's own,
 built from primitives with procedural textures, in meters and in the ISS
 file's frame, so it takes the ISS's flight-axes mapping: the station is

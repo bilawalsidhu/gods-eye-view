@@ -4770,6 +4770,7 @@
   "No signal · computed values": "لا إشارة · قيم محسوبة",
   "Telemetry unavailable · last update {ago} ago · computed values": "القياسات غير متاحة · آخر تحديث قبل {ago} · قيم محسوبة",
   "Telemetry unavailable · computed values": "القياسات غير متاحة · قيم محسوبة",
+  "Telemetry incomplete · computed values": "القياسات غير مكتملة · قيم محسوبة",
   "Telemetry not enabled on this server · computed values": "القياسات غير مفعّلة على هذا الخادم · قيم محسوبة",
   "No public telemetry · computed values": "لا توجد قياسات عامة · قيم محسوبة",
   "Zoom to Tiangong": "تقريب إلى تيانغونغ",

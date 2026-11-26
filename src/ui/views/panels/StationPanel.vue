@@ -46,6 +46,8 @@ const telemetryText = computed(() => {
       return Number.isFinite(status.poseAgeMs)
         ? t('Telemetry unavailable · last update {ago} ago · computed values', { ago: ago(status.poseAgeMs) })
         : t('Telemetry unavailable · computed values');
+    case 'partial':
+      return t('Telemetry incomplete · computed values');
     case 'disabled':
       return t('Telemetry not enabled on this server · computed values');
     case 'none':
@@ -59,7 +61,8 @@ const telemetryText = computed(() => {
 const telemetryTone = computed(() => {
   if (manual.value) return 'manual';
   const state = telemetry.value?.state;
-  return state === 'live' ? 'live' : state === 'no-signal' ? 'waiting' : state === 'pending' ? 'waiting' : 'off';
+  // Partial: the relay is up and some joints are missing, so amber, not off.
+  return state === 'live' ? 'live' : state === 'no-signal' || state === 'pending' || state === 'partial' ? 'waiting' : 'off';
 });
 const sunText = computed(() => {
   const sunlit = view.value?.sunlit;

@@ -4458,6 +4458,7 @@
   "No signal · computed values": "Sem sinal · valores calculados",
   "Telemetry unavailable · last update {ago} ago · computed values": "Telemetria indisponível · última atualização há {ago} · valores calculados",
   "Telemetry unavailable · computed values": "Telemetria indisponível · valores calculados",
+  "Telemetry incomplete · computed values": "Telemetria incompleta · valores calculados",
   "Telemetry not enabled on this server · computed values": "Telemetria não ativada neste servidor · valores calculados",
   "No public telemetry · computed values": "Sem telemetria pública · valores calculados",
   "Zoom to Tiangong": "Aproximar de Tiangong",

@@ -4250,6 +4250,7 @@
   "No signal · computed values": "無信號 · 計算值",
   "Telemetry unavailable · last update {ago} ago · computed values": "遙測不可用 · 最後更新於{ago}前 · 計算值",
   "Telemetry unavailable · computed values": "遙測不可用 · 計算值",
+  "Telemetry incomplete · computed values": "遙測不完整 · 計算值",
   "Telemetry not enabled on this server · computed values": "此服務器未啟用遙測 · 計算值",
   "No public telemetry · computed values": "無公開遙測 · 計算值",
   "Zoom to Tiangong": "拉近到天宮",

@@ -41,7 +41,7 @@ export const issFlightAxes = stationFlightAxes;
  * Whether the ISS model may be drawn (stationModelShouldShow with the ISS's
  * `hasIss` wording).
  * @param {{enabled: boolean, showPoints: boolean, hasIss: boolean,
- *   classVisible: boolean, tracked: boolean, cockpitHidden: boolean}} input
+ *   classVisible: boolean, tracked: boolean}} input
  * @returns {boolean}
  */
 export function issModelShouldShow({ hasIss, ...rest }) {
@@ -116,9 +116,6 @@ export function issModelSpec({ parts }) {
         views,
       };
     },
-    // The Cockpit rides the station from a mount on the model, so the model
-    // stays while it does.
-    hideInCockpit: false,
     syncOrbit: () => parts.controls._syncIssOrbit?.(),
   };
 }

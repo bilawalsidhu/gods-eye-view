@@ -4250,6 +4250,7 @@
   "No signal · computed values": "信号なし · 計算値",
   "Telemetry unavailable · last update {ago} ago · computed values": "テレメトリ利用不可 · 最終更新は{ago}前 · 計算値",
   "Telemetry unavailable · computed values": "テレメトリ利用不可 · 計算値",
+  "Telemetry incomplete · computed values": "テレメトリ不完全 · 計算値",
   "Telemetry not enabled on this server · computed values": "このサーバーではテレメトリが無効 · 計算値",
   "No public telemetry · computed values": "公開テレメトリなし · 計算値",
   "Zoom to Tiangong": "天宮にズーム",

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { twoline2satrec } from 'satellite.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
 import { createOrbits } from './orbits.js';
@@ -18,6 +19,8 @@ import {
 import { groundTrackBearingDeg } from './orbits.js';
 import { indexImagingSensors } from './sensors.js';
 import { ISS_NORAD, TRACKED_ORBIT_COLOR } from './policy.js';
+import { createStationPanel } from './stationPanel.js';
+import { trackedStation } from './stationModels.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { fakeInput } from '../../input/testDoubles.mjs';
@@ -29,20 +32,39 @@ import {
 
 const COMPANION = 25545;
 const GPS = 32711;
+const STARLINK = 44713;
 
-function tle(name, id, motion = '15.48899044', inclination = ' 51.6326') {
+/** The companion's mean anomaly: the ISS's own, so docked to it. */
+const DOCKED = ' 88.1156';
+/** A degree on along the same orbit, about 120 km: apart from the ISS. */
+const APART = ' 89.1156';
+
+function tle(
+  name,
+  id,
+  motion = '15.48899044',
+  inclination = ' 51.6326',
+  anomaly = DOCKED,
+) {
   // Owned synthetic element sets; never live requests. The station pair
   // share elements, so the companion is docked to the ISS.
-  return `${name}\n1 ${id}U 98067A   26289.78971908  .00007803  00000+0  15012-3 0  9995\n2 ${id} ${inclination}  58.3278 0006748 271.9059  88.1156 ${motion}590607`;
+  return `${name}\n1 ${id}U 98067A   26289.78971908  .00007803  00000+0  15012-3 0  9995\n2 ${id} ${inclination}  58.3278 0006748 271.9059 ${anomaly} ${motion}590607`;
 }
 
-const GROUP_TEXT = {
-  stations: [
-    tle('ISS (ZARYA)', ISS_NORAD),
-    tle('PROGRESS-MS 31', COMPANION),
-  ].join('\n'),
-  'gps-ops': tle('GPS FIXTURE', GPS, ' 2.00563000', ' 55.0000'),
-};
+/** Each group's elements, with the companion at `companionAnomaly`. */
+function groupText(group, companionAnomaly) {
+  if (group === 'stations')
+    return [
+      tle('ISS (ZARYA)', ISS_NORAD),
+      tle('PROGRESS-MS 31', COMPANION, undefined, undefined, companionAnomaly),
+    ].join('\n');
+  if (group === 'gps-ops')
+    return tle('GPS FIXTURE', GPS, ' 2.00563000', ' 55.0000');
+  // The dense catalog (the Starlink shell), once asked for.
+  if (group === 'starlink')
+    return tle('STARLINK FIXTURE', STARLINK, '15.05000000', ' 53.0000');
+  return '';
+}
 
 /** The layer's live draw set whose id ends with `suffix`. */
 function drawnSet(f, suffix) {
@@ -148,15 +170,23 @@ const SENSORS = indexImagingSensors({
 });
 
 /**
+ * The whole layer over a fake draw port. `companionAnomaly` places the
+ * companion on the ISS (DOCKED) or apart from it (APART); `refresh` brings
+ * it new elements with the layer's five-minute catalog update.
+ *
  * @param {object} t The test context.
- * @param {{realFocus?: boolean}} [options] `realFocus` publishes through the
- *   shared focus rectangle, with a query port that projects every point to
- *   the screen centre.
+ * @param {{companionAnomaly?: string, realFocus?: boolean}} [options]
+ *   `realFocus` publishes through the shared focus rectangle, with a query
+ *   port that projects every point to the screen centre.
  */
-async function fixture(t, { realFocus = false } = {}) {
+async function fixture(
+  t,
+  { companionAnomaly = DOCKED, realFocus = false } = {},
+) {
+  const elements = { companionAnomaly };
   const source = {
     async readGroup(group) {
-      const text = GROUP_TEXT[group] || '';
+      const text = groupText(group, elements.companionAnomaly);
       return { ok: true, status: 200, text, stale: false };
     },
     async readSatcat(group) {
@@ -271,6 +301,22 @@ async function fixture(t, { realFocus = false } = {}) {
     nextFrame() {
       frameNumber += 1;
       frame.step({ frame: frameNumber, time: Date.now() });
+    },
+    /** A frame on the docked scan's beat (once a second). */
+    nextScan() {
+      state._lastDockedScanMs = Number.NEGATIVE_INFINITY;
+      this.nextFrame();
+    },
+    /** The catalog update, with the companion at `anomaly`. */
+    async refresh(anomaly = elements.companionAnomaly) {
+      elements.companionAnomaly = anomaly;
+      const log = console.log;
+      console.log = noop;
+      try {
+        await parts.ingestion.methods.update(viewer);
+      } finally {
+        console.log = log;
+      }
     },
     ring: (id) => state._orbitPaths.get(id)?.item,
     detected: () =>
@@ -745,4 +791,241 @@ test('a satellite docked to the ISS draws no ring of its own: the ISS’s shows'
   assert.ok(f.ring(GPS));
   assert.equal(f.ring(GPS).show, true);
   assert.equal(f.ring(ISS_NORAD).show, false);
+});
+
+test('a vehicle that undocks while tracked draws its own ring and is no longer the station', async (t) => {
+  const f = await fixture(t);
+  f.track(COMPANION);
+  f.nextFrame();
+  assert.equal(f.state._trackedDockedToIss, true);
+  assert.equal(f.ring(COMPANION), undefined);
+  assert.deepEqual(f.methods.getLiveSubjectKeys(), ['station:iss']);
+  // The next elements have it a degree along the orbit: it has left.
+  await f.refresh(APART);
+  f.nextScan();
+  assert.equal(f.state._trackedNorad, COMPANION, 'still tracked');
+  assert.equal(f.state._trackedDockedToIss, false);
+  assert.equal(f.state._trackedDockedToStation, null);
+  assert.equal(f.ring(COMPANION)?.show, true, 'a ring of its own');
+  assert.deepEqual(f.methods.getLiveSubjectKeys(), []);
+  assert.equal(trackedStation(f.state, f.parts), null, 'no STATION section');
+  // The ISS's ring is back on its own rules: it goes with its class.
+  f.methods.setParams({ classes: { stations: false } });
+  assert.equal(f.ring(ISS_NORAD).show, false);
+});
+
+test('a vehicle that docks while tracked leaves its ring to the ISS’s and is the station', async (t) => {
+  const f = await fixture(t, { companionAnomaly: APART });
+  f.track(COMPANION);
+  f.nextFrame();
+  assert.equal(f.state._trackedDockedToIss, false);
+  assert.equal(f.ring(COMPANION)?.show, true, 'its own ring while apart');
+  assert.deepEqual(f.methods.getLiveSubjectKeys(), []);
+  await f.refresh(DOCKED);
+  f.nextScan();
+  assert.equal(f.state._trackedDockedToIss, true);
+  assert.equal(f.state._trackedDockedToStation, ISS_NORAD);
+  assert.equal(f.ring(COMPANION), undefined, 'no second ring');
+  assert.deepEqual(f.methods.getLiveSubjectKeys(), ['station:iss']);
+  // The ISS's ring stands for it, also with the stations class hidden.
+  f.methods.setParams({ classes: { stations: false } });
+  assert.equal(f.ring(ISS_NORAD).show, true);
+});
+
+test('docking is judged again once a second while tracked, between catalog updates', async (t) => {
+  const f = await fixture(t, { companionAnomaly: APART });
+  f.track(COMPANION);
+  f.nextScan();
+  assert.ok(f.ring(COMPANION));
+  // Its orbit now meets the station's, as a vehicle closing on it does.
+  const [, line1, line2] = tle('PROGRESS-MS 31', COMPANION).split('\n');
+  f.state._catalog.get(COMPANION).satrec = twoline2satrec(line1, line2);
+  // Between beats nothing is judged.
+  f.state._lastDockedScanMs = Number.POSITIVE_INFINITY;
+  f.nextFrame();
+  assert.equal(f.state._trackedDockedToIss, false);
+  f.nextScan();
+  assert.equal(f.state._trackedDockedToIss, true);
+  assert.equal(f.ring(COMPANION), undefined);
+  assert.equal(f.ring(ISS_NORAD).show, true);
+  // And it leaves again.
+  const [, apart1, apart2] = tle(
+    'PROGRESS-MS 31',
+    COMPANION,
+    undefined,
+    undefined,
+    APART,
+  ).split('\n');
+  f.state._catalog.get(COMPANION).satrec = twoline2satrec(apart1, apart2);
+  f.nextScan();
+  assert.equal(f.state._trackedDockedToIss, false);
+  assert.equal(f.ring(COMPANION)?.show, true);
+});
+
+test('a docked judgement holds out to three radii, so a pair near the radius does not flip', async (t) => {
+  const f = await fixture(t);
+  f.track(COMPANION);
+  f.nextScan();
+  assert.equal(f.state._trackedDockedToIss, true);
+  const at = (anomaly) => {
+    const [, line1, line2] = tle(
+      'PROGRESS-MS 31',
+      COMPANION,
+      undefined,
+      undefined,
+      anomaly,
+    ).split('\n');
+    f.state._catalog.get(COMPANION).satrec = twoline2satrec(line1, line2);
+    f.nextScan();
+    return f.state._trackedDockedToIss;
+  };
+  // About 8 km apart (0.068° along the orbit), past the 5 km radius: still
+  // docked, as a pair whose elements drift apart over an orbit is.
+  assert.equal(at(' 88.1836'), true);
+  assert.equal(f.ring(COMPANION), undefined);
+  // About 20 km apart, past three radii: undocked.
+  assert.equal(at(' 88.2856'), false);
+  assert.equal(f.ring(COMPANION)?.show, true);
+  // Back at 8 km it stays undocked: docking needs the radius itself.
+  assert.equal(at(' 88.1836'), false);
+  assert.equal(at(DOCKED), true);
+});
+
+test('a vehicle that undocks in Manual hands the station’s joints back to Automatic', async (t) => {
+  const f = await fixture(t);
+  const calls = [];
+  const articulation = {
+    isSunlit: () => true,
+    isLive: () => false,
+    setTelemetryAllowed: (allowed) => calls.push(['telemetry', allowed]),
+  };
+  // The STATION section over a stand-in ISS description; the layer's tick
+  // syncs it each frame, as index.js wires it.
+  f.parts.stationPanel = createStationPanel({
+    state: f.state,
+    parts: f.parts,
+    stations: [
+      {
+        key: 'iss',
+        title: 'ISS',
+        selected: () => trackedStation(f.state, f.parts)?.norad === ISS_NORAD,
+        subjectName: () => 'PROGRESS-MS 31',
+        articulation: () => articulation,
+        telemetry: () => null,
+        position: () => null,
+        zoomLabel: 'Zoom to the station',
+        notes: { computed: 'Computed.' },
+        groups: [],
+        automatic: () => calls.push(['automatic']),
+      },
+    ],
+  });
+  const views = [];
+  f.parts.stationPanel.methods.subscribeStationPanel((view) =>
+    views.push(view),
+  );
+  f.track(COMPANION);
+  f.nextFrame();
+  assert.equal(views.at(-1)?.key, 'iss');
+  f.parts.stationPanel.methods.getStationActions().setStationMode('manual');
+  assert.equal(views.at(-1).mode, 'manual');
+  await f.refresh(APART);
+  f.nextScan();
+  assert.equal(views.at(-1), null, 'the section goes');
+  assert.deepEqual(calls.at(-1), ['automatic']);
+});
+
+test('a catalog update keeps a tracked satellite’s ring, and its own dot hidden', async (t) => {
+  const f = await fixture(t);
+  f.track(GPS);
+  f.nextFrame();
+  assert.equal(f.ring(GPS)?.show, true);
+  assert.equal(
+    f.state._points.get(GPS).show,
+    false,
+    'the tracked dot draws it',
+  );
+  await f.refresh();
+  f.nextFrame();
+  assert.equal(f.state._trackedNorad, GPS, 'still tracked');
+  assert.equal(f.ring(GPS)?.show, true, 'its ring is drawn again');
+  assert.equal(
+    f.state._points.get(GPS).show,
+    false,
+    'its own dot stays hidden',
+  );
+  assert.equal(f.ring(ISS_NORAD).show, true, "the ISS's ring as before");
+});
+
+test('a tracked Starlink keeps its ring, and its own dot hidden, over a catalog update', async (t) => {
+  const log = console.log;
+  console.log = () => {};
+  t.after(() => (console.log = log));
+  const f = await fixture(t);
+  f.methods.setParams({ catalog: 'dense' });
+  await f.state._denseLoadPromise;
+  assert.equal(f.track(STARLINK), true);
+  f.nextFrame();
+  assert.equal(f.ring(STARLINK)?.show, true);
+  // The core rebuild drops the dense extras; the dense load brings them back.
+  await f.refresh();
+  await f.state._denseLoadPromise;
+  f.nextFrame();
+  assert.equal(f.state._trackedNorad, STARLINK, 'still tracked');
+  assert.equal(f.ring(STARLINK)?.show, true, 'its ring is drawn again');
+  assert.equal(f.state._points.get(STARLINK).show, false);
+});
+
+test('with Orbits off a tracked satellite’s ring is built hidden, as the ISS’s is', async (t) => {
+  const f = await fixture(t, { companionAnomaly: APART });
+  // Space Missions' Satellite params while it borrows the layer.
+  f.methods.setParams({ showPoints: false, showOrbits: false });
+  f.track(ISS_NORAD);
+  f.nextFrame();
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  f.track(GPS);
+  f.nextFrame();
+  assert.equal(f.ring(GPS).show, false);
+  f.track(COMPANION);
+  f.nextFrame();
+  assert.equal(f.ring(COMPANION).show, false);
+  // A catalog update builds it again, still hidden.
+  await f.refresh();
+  f.nextFrame();
+  assert.equal(f.ring(COMPANION).show, false);
+  // Orbits on: every ring shows.
+  f.methods.setParams({ showOrbits: true });
+  assert.equal(f.ring(COMPANION).show, true);
+  assert.equal(f.ring(ISS_NORAD).show, true);
+});
+
+test('a ring baked again keeps whether it shows and the alpha it is drawn at', async (t) => {
+  const f = await fixture(t);
+  f.track(GPS);
+  f.nextFrame();
+  // The world time has moved far from the bake: every ring is baked again.
+  const rebake = () => {
+    const before = new Map(f.state._orbitPaths);
+    f.parts.rendering._updateOrbitPathRotations(
+      new Date(f.state.now() + 31 * 60_000),
+    );
+    for (const [id, path] of before)
+      assert.notEqual(f.state._orbitPaths.get(id), path, `${id} baked again`);
+  };
+  // The ISS's ring hidden with its class; the tracked ring shown.
+  f.methods.setParams({ classes: { stations: false } });
+  assert.equal(f.ring(ISS_NORAD).show, false);
+  assert.equal(f.ring(GPS).show, true);
+  rebake();
+  assert.equal(f.ring(ISS_NORAD).show, false, 'still hidden with its class');
+  assert.equal(f.ring(GPS).show, true, 'still shown');
+  // Riding GPS in the Cockpit: its ring hidden, the ISS's dimmed.
+  f.methods.setParams({ classes: { stations: true } });
+  f.methods.setCockpitSubject(GPS);
+  const dimmed = ringColors(f, ISS_NORAD);
+  assert.equal(f.ring(GPS).show, false);
+  rebake();
+  assert.equal(f.ring(GPS).show, false, 'still hidden for the Cockpit');
+  assert.equal(f.ring(ISS_NORAD).show, true);
+  assert.deepEqual(ringColors(f, ISS_NORAD), dimmed, 'still dimmed');
 });

@@ -56,7 +56,7 @@ test('the selected station: itself, a docked companion by position, by orbit, or
       ?.key,
     'iss',
   );
-  // A Tianzhou judged docked by orbit when tracking began.
+  // A Tianzhou judged docked by orbit (tracking.js).
   assert.equal(
     select({ trackedNorad: 60001, trackedDockedToStation: TIANGONG_NORAD })
       ?.key,

@@ -4562,6 +4562,7 @@
   "No signal · computed values": "Немає сигналу · розрахункові значення",
   "Telemetry unavailable · last update {ago} ago · computed values": "Телеметрія недоступна · останнє оновлення {ago} тому · розрахункові значення",
   "Telemetry unavailable · computed values": "Телеметрія недоступна · розрахункові значення",
+  "Telemetry incomplete · computed values": "Телеметрія неповна · розрахункові значення",
   "Telemetry not enabled on this server · computed values": "Телеметрію не ввімкнено на цьому сервері · розрахункові значення",
   "No public telemetry · computed values": "Відкритої телеметрії немає · розрахункові значення",
   "Zoom to Tiangong": "Наблизити до «Тяньгун»",

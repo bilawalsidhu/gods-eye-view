@@ -379,6 +379,10 @@ export function createIngestion({
 
           parts.labels._syncIssOverlay();
         }
+        // Tracking carries on over the new catalog: the tracked satellite's
+        // dot stays hidden, and its ring is drawn again by whether it is
+        // docked, judged from the new elements.
+        parts.tracking._reconcileTrackedMarks();
 
         layerState._coreStale = coreStale;
         layerState._count = layerState._points.size;
