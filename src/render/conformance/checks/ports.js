@@ -5553,22 +5553,19 @@ export function portChecks() {
           g.fillRect(0, 0, 16, 16);
         }
         const before = r.globe.imagery.list().length;
+        // A layer a non-conforming renderer adds anyway is removed again, so
+        // a failing check leaves the scene as it found it.
+        const refused = (spec) => () => r.globe.imagery.add(spec)?.remove?.();
         throws(
-          () =>
-            r.globe.imagery.add({
-              kind: 'xyz',
-              url: 'https://a.invalid/{z}/{x}/{y}.png',
-              image,
-            }),
+          refused({
+            kind: 'xyz',
+            url: 'https://a.invalid/{z}/{x}/{y}.png',
+            image,
+          }),
           'an image on xyz imagery',
         );
         throws(
-          () =>
-            r.globe.imagery.add({
-              kind: 'single-image',
-              url: PIXEL_PNG,
-              image,
-            }),
+          refused({ kind: 'single-image', url: PIXEL_PNG, image }),
           'an image and a url',
         );
         equal(

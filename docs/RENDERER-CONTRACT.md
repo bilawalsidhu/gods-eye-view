@@ -456,16 +456,14 @@ its picture from `url` or, in place of it, from `image`: a canvas the
 application has painted, whose pixels stay unchanged while the layer uses it
 (a new picture is a new layer). It needs no capability: every renderer
 draws it. A spec that gives both, or gives `image` to any other kind, is
-refused with a `TypeError` and adds no layer. The Cesium port draws the canvas as one tile over the layer's
-rectangle (`src/render/cesium/imagery.js`), and the stub refuses the same
-specs. The check `globe.imagery.canvas` adds one and reads its colour where
+refused with a `TypeError` and adds no layer. The Cesium port draws the
+canvas as one tile over the layer's rectangle
+(`src/render/cesium/imagery.js`), and the stub refuses the same specs. The check `globe.imagery.canvas` adds one and reads its colour where
 the harness draws pixels. The air-quality model field is drawn this way on
 the globe (`src/layers/airQuality/fieldDrawing.js`), each step's picture added
 clear under the one shown and swapped in once `isSettled('imagery')`, and over
 photorealistic 3D tiles as a `rasterShell` field. The application does not
-test for it and has no other way to draw the field on the globe: on a
-renderer that leaves the canvas out, the field is missing there while the
-stations still draw.
+test for it, since every renderer draws it.
 
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
