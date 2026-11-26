@@ -49,7 +49,10 @@
   needed), ozone on the EPA's ozone NowCast over two weeks of hours (its
   surrogate when they are too few) and on the 1-hour rows from 0.125 ppm, CO
   on its 8-hour mean (six of eight hours), NO2 and SO2 on their 1-hour
-  values, with SO2's 24-hour value above 304 ppb. A pollutant without its
+  values, with SO2's 24-hour value above 304 ppb; a 24-hour SO2 rates on its
+  own where no 1-hour value of its time is usable. Ozone's 1-hour mean and
+  SO2's 24-hour value count only within three hours of the value they go
+  with, and an hour above its fault ceiling counts as missing. A pollutant without its
   period gets no sub-index, and the station's details say why. A host's rows
   change meaning accordingly: one hourly PM row alone no longer gives an
   index (send the last hours for a NowCast), rows stating `averagingMinutes`

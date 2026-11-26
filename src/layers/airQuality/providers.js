@@ -217,8 +217,46 @@ export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
     },
   ];
 }
-/** Compose explicit providers with separate coverage and cached national answers.
- * Create a new source when switching accounts. */
+/**
+ * Compose explicit providers with separate coverage and cached national answers.
+ * Create a new source when switching accounts.
+ *
+ * `options.providers` replaces the defaults: each definition has `id`,
+ * `title`, `label`, `network`, `parameters` and a `source` whose
+ * `getSnapshot({parameter, mode, signal, view})` returns readings, one row
+ * per station and pollutant:
+ *
+ * `{id, provider, stationId, name, lat, lon, observedMs, parameter, units,
+ * value, kind: 'observation', averagingMinutes, coveragePercent?,
+ * qualityFlagged?, monitor?}`
+ *
+ * The US AQI view (`mode: 'aqi'`) rates each pollutant only on its EPA
+ * averaging period, read from `averagingMinutes` (`usAqi.js`):
+ * - PM2.5 and PM10 rate on the NowCast of their hourly means: send the last
+ *   12 hours as rows with `averagingMinutes: 60`, `observedMs` each hour's
+ *   end (two of the last three must be valid). One hourly PM row alone no
+ *   longer gives an index; a row with `averagingMinutes: 1440` rates as a
+ *   24-hour average.
+ * - Ozone rates on its NowCast from hourly rows (up to two weeks of them)
+ *   or on a row with `averagingMinutes: 480`; CO on the mean of 6 of its
+ *   last 8 hourly rows or on a 480-minute row. A PM, ozone or CO value
+ *   without a stated period is not rated.
+ * - NO2 and SO2 rate on 1-hour values (`averagingMinutes` 60 or unstated).
+ *   A 24-hour SO2 row (1440) rates on the 24-hour rows from 305 ppb, and on
+ *   its own where no usable 1-hour SO2 of its time is known.
+ * - Ozone's newest hourly mean (on the 1-hour rows from 0.125 ppm) and the
+ *   24-hour SO2 count beside the value they go with only within three hours
+ *   of it (`AQI_MAX_SPREAD_MS`), as a station's pollutants do of each other.
+ * - Hours under 75 % `coveragePercent`, `qualityFlagged`, in units that do
+ *   not convert or above the fault ceilings (`AQI_CEILINGS`) count as
+ *   missing; the newest reading of a pollutant decides, so an unrated newest
+ *   one leaves the pollutant unrated.
+ * - A row with `monitor: false` (a low-cost sensor) gets no US AQI; the
+ *   pollutant views keep it, marked as a sensor.
+ * Rows older than six hours are not shown. A reading that already carries
+ * `values` passes through as one station, its values taken as on their
+ * tables' periods.
+ */
 export function createAirQualitySource(options = {}) {
   const definitions =
     options.providers ?? createDefaultAirQualityProviders(options);

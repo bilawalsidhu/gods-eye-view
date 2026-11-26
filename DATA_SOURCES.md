@@ -824,7 +824,11 @@ since its newest, and NO2 and SO2 from each location's latest values
 current hourly mean also rates on the 1-hour rows from 0.125 ppm and the higher
 index is kept; above 0.200 ppm, where the 8-hour rows end, only the 1-hour rows
 rate. A 1-hour SO2 value of 305 ppb or more gives 200 unless a 24-hour average
-a host supplies rates higher on the 24-hour rows. A pollutant with too few
+a host supplies rates higher on the 24-hour rows; a 24-hour average with no
+usable 1-hour value of its time rates on its own (the 24-hour rows from 305
+ppb, the 1-hour rows below). Ozone's 1-hour mean and the 24-hour SO2 count only
+within three hours of the value they go with, and an hourly mean above its
+fault ceiling counts as a missing hour. A pollutant with too few
 hours for its NowCast or 8-hour mean, or with only a value whose averaging
 period the table does not rate, gets no sub-index, and its details say so. The
 EPA's categories are defined for reference and equivalent monitors, so a
