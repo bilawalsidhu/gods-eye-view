@@ -6,6 +6,7 @@ import { bindFakeDraw } from './src/testSupport/fakeDrawPort.mjs';
 import { recordFacts } from './src/data/entityContext.js';
 import { layerSnapshot } from './src/data/layerSnapshot.js';
 import { setLocale } from './src/i18n/index.js';
+import { onAqiPeriods } from './src/testSupport/airQualityViewer.mjs';
 
 const ALL = ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'];
 const def = (id, extra = {}) => ({
@@ -35,10 +36,11 @@ function harness(answers, definitions) {
   const layer = createAirQualityLayer({
     source: {
       definitions,
-      async getSnapshot({ provider }) {
+      async getSnapshot({ provider, mode }) {
         const a = answers[provider];
         if (a instanceof Error) throw a;
-        return a ?? [];
+        // The AQI view rates PM on its NowCast: the hours before it too.
+        return mode === 'aqi' ? onAqiPeriods(a ?? []) : (a ?? []);
       },
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
