@@ -24,6 +24,7 @@ import {
   truncateOverlayTitle,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
+import { overlayPixelRatio } from './canvasPixelRatio.js';
 import { t } from '../i18n/index.js';
 import {
   canvasOf,
@@ -1337,6 +1338,28 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
 }
 
 /**
+ * The detection surface's CSS size: the scene's while a detection lane is
+ * active, else 0x0. Only detection paints on it, so with none active it holds
+ * no backing store rather than a hidden full-screen one.
+ */
+function detectionSurfaceSize(width, height) {
+  return activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0
+    ? { width, height }
+    : { width: 0, height: 0 };
+}
+
+/** Whether the detection surface's backing store no longer fits the lanes. */
+function detectionSurfaceStale() {
+  if (!_detectionSurface) return false;
+  const sized = _detectionSurface.width > 0 && _detectionSurface.height > 0;
+  const wanted =
+    activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0 &&
+    _canvasWidth > 0 &&
+    _canvasHeight > 0;
+  return sized !== wanted;
+}
+
+/**
  * Size the backing store to the live CSS box and DPR. A dormant host never
  * calls this, so a zero-source overlay keeps a 0x0 canvas instead of a
  * full-viewport buffer; `drawWorldOverlay` sizes lazily on the first frame
@@ -1348,18 +1371,27 @@ function ensureCanvasSize() {
   if (!_canvas || !sceneCanvas) return false;
   const width = Math.max(0, Math.round(Number(sceneCanvas.clientWidth) || 0));
   const height = Math.max(0, Math.round(Number(sceneCanvas.clientHeight) || 0));
-  const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  // CSS pixels on a touch-only device, as the globe is drawn; else the display's.
+  const dpr = overlayPixelRatio(globalThis.window);
+  const detection = detectionSurfaceSize(width, height);
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
     _canvas.height !== Math.round(height * dpr) ||
-    _detectionSurface?.width !== Math.round(width * dpr) ||
-    _detectionSurface?.height !== Math.round(height * dpr) ||
+    (_detectionSurface &&
+      (_detectionSurface.width !== Math.round(detection.width * dpr) ||
+        _detectionSurface.height !== Math.round(detection.height * dpr))) ||
     _canvasWidth !== width ||
     _canvasHeight !== height ||
     _canvasDpr !== dpr;
   _resizeDirty = false;
   if (!changed) return false;
-  sizeCanvasSurface(_detectionSurface, _detectionCtx, width, height, dpr);
+  sizeCanvasSurface(
+    _detectionSurface,
+    _detectionCtx,
+    detection.width,
+    detection.height,
+    dpr,
+  );
   sizeCanvasSurface(_canvas, _ctx, width, height, dpr);
   _canvasWidth = width;
   _canvasHeight = height;
@@ -2789,13 +2821,15 @@ function drawWorldOverlay() {
     resetFrameDiagnostics();
     _solveDirty = false;
     if (_canvasNeedsClear || _detectionSurfaceNeedsClear) clearCanvas();
+    // A detection lane that went inactive gives its backing store back.
+    if (detectionSurfaceStale()) ensureCanvasSize();
     // Nothing is painted now, so nothing can be hit.
     _hitRectCount = 0;
     if (_accessibilitySignature) syncAccessibleActions();
     syncPaintVisibility(false);
     return;
   }
-  if (_resizeDirty) ensureCanvasSize();
+  if (_resizeDirty || detectionSurfaceStale()) ensureCanvasSize();
   if (_canvasWidth <= 0 || _canvasHeight <= 0) return;
   _frameStamp++;
   refreshUiOccluders(

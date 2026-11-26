@@ -621,10 +621,66 @@ test('canvas backing store tracks CSS size and live DPR', () => {
   detectionSurface = env.document.getElementById('world-overlay-detection-surface');
   assert.equal(canvas.width, 750);
   assert.equal(canvas.height, 300);
+  // Cards alone never paint the detection surface, so it holds no pixels.
+  assert.equal(detectionSurface.width, 0);
+  assert.equal(detectionSurface.height, 0);
+  assert.ok(env.ctx.calls.some((call) => call[0] === 'setTransform' && call[1] === 1.5));
+  const lane = registerWorldOverlayPaintLane('detection', () => {}, {
+    id: 'dpr-detection',
+    active: true,
+    target: 'detection',
+  });
+  env.postRender.raise();
   assert.equal(detectionSurface.width, 750);
   assert.equal(detectionSurface.height, 300);
-  assert.ok(env.ctx.calls.some((call) => call[0] === 'setTransform' && call[1] === 1.5));
   assert.ok(env.detectionCtx.calls.some((call) => call[0] === 'setTransform' && call[1] === 1.5));
+  lane.unregister?.();
+  env.cleanup();
+});
+
+test('a touch-only device holds the overlay canvases at CSS pixels', () => {
+  const env = installMockEnvironment({ width: 390, height: 844, dpr: 3 });
+  env.window.matchMedia = (query) => ({
+    matches: query === '(pointer: coarse)',
+  });
+  initWorldOverlay(env.viewer);
+  setOverlayEntries('phone', [selectedEntry('probe')]);
+  env.postRender.raise();
+  const canvas = env.document.getElementById('world-overlay-canvas');
+  assert.equal(canvas.width, 390);
+  assert.equal(canvas.height, 844);
+  assert.equal(canvas.style.width, '390px');
+  assert.ok(env.ctx.calls.some((call) => call[0] === 'setTransform' && call[1] === 1));
+  // The same screen with a mouse or trackpad keeps the display's ratio.
+  env.window.matchMedia = (query) => ({
+    matches: query === '(pointer: fine)',
+  });
+  env.window.dispatch('resize');
+  env.postRender.raise();
+  assert.equal(canvas.width, 1170);
+  assert.equal(canvas.height, 2532);
+  env.cleanup();
+});
+
+test('the detection surface gives its backing store back when its lanes go inactive', () => {
+  const env = installMockEnvironment({ width: 400, height: 300, dpr: 2 });
+  initWorldOverlay(env.viewer);
+  const surface = env.document.getElementById('world-overlay-detection-surface');
+  const lane = registerWorldOverlayPaintLane('detection', () => {}, {
+    id: 'release-detection',
+    active: true,
+    target: 'detection',
+  });
+  env.postRender.raise();
+  assert.equal(surface.width, 800);
+  assert.equal(surface.height, 600);
+  lane.setActive(false);
+  env.postRender.raise();
+  assert.equal(surface.width, 0);
+  assert.equal(surface.height, 0);
+  lane.setActive(true);
+  env.postRender.raise();
+  assert.equal(surface.width, 800);
   env.cleanup();
 });
 
@@ -737,8 +793,9 @@ test('a host dormant since init holds no canvas backing store', () => {
   env.postRender.raise();
   assert.equal(canvas.width, 3200);
   assert.equal(canvas.height, 1800);
-  assert.equal(detectionSurface.width, 3200);
-  assert.equal(detectionSurface.height, 1800);
+  // No detection lane: the detection surface stays 0x0.
+  assert.equal(detectionSurface.width, 0);
+  assert.equal(detectionSurface.height, 0);
   assert.equal(getWorldOverlayDiagnostics().paintedCount, 1);
 
   // Emptying a source that already painted may keep the sized backing store;
