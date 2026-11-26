@@ -9,6 +9,16 @@ import {
 } from '../conformance/index.js';
 import { toEcef } from './math.js';
 
+test('only a single-image layer without a URL accepts a canvas', () => {
+  const { imagery } = createStubRenderer().globe;
+  const image = { width: 4, height: 2 };
+  assert.throws(() => imagery.add({ kind: 'xyz', image }), /single-image/);
+  assert.throws(
+    () => imagery.add({ kind: 'single-image', url: 'tile.png', image }),
+    /not both/,
+  );
+});
+
 test('the stub passes the conformance suite', async () => {
   const report = await runConformance(createStubHarness());
   const failed = report.results.filter((r) => r.status === 'fail');

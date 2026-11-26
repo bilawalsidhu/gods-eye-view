@@ -569,6 +569,16 @@ const CODE_WORDS = Object.freeze({
 export function codeWord(field, code) {
   return CODE_WORDS[field]?.[text(code)] || '';
 }
+/** The catalog context a station category translates in, by its scale (as the Weather card does). */
+const BAND_CONTEXTS = Object.freeze({
+  'US AQI': 'US AQI category',
+  'PM2.5': 'EEA hourly quality',
+  PM10: 'EEA hourly quality',
+  O3: 'EEA hourly quality',
+  NO2: 'EEA hourly quality',
+  SO2: 'EEA hourly quality',
+  CO: 'EEA hourly quality',
+});
 /** Code words whose English means something else elsewhere in the catalog. */
 const CODE_CONTEXTS = Object.freeze({ 'motion:stopped': 'vehicle motion' });
 
@@ -720,7 +730,17 @@ export function recordFacts(
     if (field.startsWith('__gev') || HIDDEN_FACTS.has(field) || seen.has(field))
       continue;
     seen.add(field);
-    const formatted = formatFact(field, record[field], { nowMs, kind });
+    // A US AQI reads as the Weather card shows it: above 500 it is "500+"
+    // (the record keeps the computed number).
+    const scale = text(record.scale);
+    const formatted =
+      field === 'value' && scale === 'US AQI' && Number(record.value) > 500
+        ? { value: '500+' }
+        : field === 'band' && BAND_CONTEXTS[scale] && text(record.band)
+          ? said(text(record.band), text(record.band), null, {
+              context: BAND_CONTEXTS[scale],
+            })
+          : formatFact(field, record[field], { nowMs, kind });
     if (!formatted) continue;
     if (formatted.age !== undefined) {
       observedAgeMs ??= formatted.age;
@@ -729,7 +749,7 @@ export function recordFacts(
     if (facts.length < MAX_FACTS)
       facts.push({
         field,
-        // An index goes by the scale it is on (AQHI, AQI).
+        // An index goes by the scale it is on (US AQI).
         label:
           (field === 'value' && text(record.scale)) ||
           FACT_LABELS[field] ||

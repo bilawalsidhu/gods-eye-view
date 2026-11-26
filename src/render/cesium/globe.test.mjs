@@ -361,6 +361,22 @@ test('layers sharing an admit wait for each other’s tiles, asking for no frame
   assert.deepEqual(renders, [], 'the holder’s settling is the later frame');
 });
 
+test('a single-image layer can take its canvas itself', async () => {
+  const { port, scene } = setup();
+  const { imagery } = port;
+  const image = { width: 4, height: 2 };
+  imagery.add({ kind: 'single-image', image });
+  const provider = scene.imageryLayers.get(0).imageryProvider;
+  assert.equal(await provider.requestImage(0, 0, 0), image);
+  assert.equal(provider.tileWidth, 4);
+  assert.equal(provider.tileHeight, 2);
+  assert.throws(() => imagery.add({ kind: 'xyz', image }), /single-image/);
+  assert.throws(
+    () => imagery.add({ kind: 'single-image', url: 'tile.png', image }),
+    /not both/,
+  );
+});
+
 test('fetchTile fetches in place of the provider, with the URL it would fetch', async (t) => {
   const asked = [];
   const answers = [{ defer: true }, { missing: true }];

@@ -341,6 +341,14 @@ function cachedFormatter(kind, Constructor, options) {
   return formatter;
 }
 
+/**
+ * Locale-aware list (Intl.ListFormat): "A, B and C" in English, "A, B и C"
+ * in Russian. A conjunction unless `options` say otherwise.
+ */
+export function formatList(items, options = { type: 'conjunction' }) {
+  return cachedFormatter('list', Intl.ListFormat, options).format(items);
+}
+
 /** Locale-aware number formatting (Intl.NumberFormat). */
 export function formatNumber(value, options) {
   return cachedFormatter('number', Intl.NumberFormat, options).format(value);

@@ -1,4 +1,7 @@
 import path from 'node:path';
+
+import { openAqProxy } from './openAq.js';
+import { airQualityFieldProxy } from './airQualityField.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
 import { issTelemetryProxy } from './space/issTelemetry.js';
@@ -91,6 +94,8 @@ function localProviderPlugins({
     windProxy(),
     weatherProxy(),
     cycloneProxy(),
+    openAqProxy(),
+    airQualityFieldProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),
     gnssIntegrityProxy(),

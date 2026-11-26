@@ -502,7 +502,8 @@
     "Manual",
     "{seconds} s",
     "UTC",
-    "{fps} fps"
+    "{fps} fps",
+    "{name} · sensor"
   ],
   "fr": [
     "1 min/s",
@@ -763,7 +764,9 @@
     "{seconds} s",
     "contact",
     "train",
-    "UTC"
+    "UTC",
+    "air quality monitors|STATIONS",
+    "{count} stations"
   ],
   "it": [
     "1 min/s",
@@ -1284,7 +1287,8 @@
     "{utc} UTC",
     "Manual",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{name} · sensor"
   ],
   "ru": [
     "1900–1945",
@@ -1526,7 +1530,9 @@
     "KT",
     "{utc} UTC",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{count} stations",
+    "{name} · sensor"
   ],
   "uk": [
     "1900–1945",

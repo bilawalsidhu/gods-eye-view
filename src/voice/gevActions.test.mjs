@@ -5902,7 +5902,10 @@ test('general satellite pass resolves once, refuses ambiguity, and preserves ISS
   assert.equal(iss.action, 'next_iss_pass');
 });
 
-function manifestRunner(modules, { enabled = Object.keys(modules) } = {}) {
+function manifestRunner(
+  modules,
+  { enabled = Object.keys(modules), areaOptions = null } = {},
+) {
   const viewer = {
     clock: { onTick: { addEventListener: () => () => {} } },
     scene: { canvas: { addEventListener() {}, removeEventListener() {} } },
@@ -5936,6 +5939,7 @@ function manifestRunner(modules, { enabled = Object.keys(modules) } = {}) {
         return true;
       },
     },
+    ...(areaOptions ? { areaOptions } : {}),
   });
   return { runner, toggles };
 }
@@ -9037,4 +9041,139 @@ test('a failed military voice entry switches off only the layer it switched on',
     );
     assert.equal(fixture.enabled.has('military'), militaryOn);
   }
+});
+
+test('a radius count over air quality describes its viewport coverage', async () => {
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 0, lastUpdate: Date.now() }),
+      getAnalystRecords: () => [],
+    },
+  });
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'radius', lat: 30, lon: -97, radiusKm: 20 },
+    operation: 'count',
+  });
+  assert.match(
+    result.coverage.note,
+    /air-quality loads OpenAQ stations by viewport/,
+  );
+  assert.doesNotMatch(result.coverage.note, /flights layer loads by viewport/);
+});
+
+test('region and area counts over air quality describe its viewport coverage', async () => {
+  const ring = [
+    [129, 31],
+    [146, 31],
+    [146, 46],
+    [129, 46],
+    [129, 31],
+  ];
+  const japan = {
+    kind: 'country',
+    name: 'Japan',
+    source: 'natural-earth',
+    polygons: [[ring]],
+  };
+  // The camera is over the central US: no station in Japan is loaded.
+  const { runner } = manifestRunner(
+    {
+      'air-quality': {
+        getStats: () => ({ count: 0, lastUpdate: Date.now() }),
+        getAnalystRecords: () => [],
+      },
+    },
+    {
+      areaOptions: {
+        findRegion: async () => null,
+        findAdminCandidates: async (q) => (/^japan$/i.test(q) ? [japan] : []),
+      },
+    },
+  );
+  const viewportNote = /air-quality loads OpenAQ stations by viewport/;
+  const region = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'region', name: 'Japan' },
+  });
+  assert.equal(region.ok, true, region.error);
+  assert.equal(region.scopeLabel, 'over Japan');
+  assert.match(region.coverage.note, viewportNote);
+  const followUp = await runner('analyst_query', {
+    layers: ['air-quality'],
+    followUp: true,
+    sortBy: 'pm25',
+  });
+  assert.equal(followUp.ok, true, followUp.error);
+  assert.match(followUp.coverage.note, viewportNote);
+  const area = await runner('resolve_area', { query: 'Japan' });
+  assert.equal(area.ok, true, area.error);
+  const inside = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'area', areaId: area.areaId },
+  });
+  assert.equal(inside.ok, true, inside.error);
+  assert.match(inside.coverage.note, viewportNote);
+});
+
+test('an air-quality count while OpenAQ is still finding stations is a floor naming its progress', async () => {
+  let discovery = [{ network: 'OpenAQ', checked: 4, eligible: 100 }];
+  const rows = [40, 30, 20, 10].map((pm25, i) => ({
+    id: String(i),
+    lat: 1,
+    lon: 2,
+    parameter: 'aqi',
+    pm25,
+  }));
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: rows.length, lastUpdate: Date.now(), discovery }),
+      getAnalystRecords: () => rows,
+    },
+  });
+  const progress = /^OpenAQ: loading stations, 4 of 100(;|$)/;
+  const counted = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(counted.count, 4);
+  assert.equal(counted.complete, false);
+  assert.match(counted.display.caveat, progress);
+  // A ranking of that set stays a floor until discovery completes.
+  const ranked = await runner('analyst_query', {
+    layers: ['air-quality'],
+    followUp: true,
+    sortBy: 'pm25',
+  });
+  assert.equal(ranked.complete, false);
+  assert.match(ranked.display.caveat, progress);
+  discovery = [];
+  const done = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+  });
+  assert.equal(done.complete, true);
+  assert.doesNotMatch(done.display.caveat || '', /loading stations/);
+});
+
+test('AQI station concentrations can be filtered by pollutant', async () => {
+  const rows = [40, 10].map((pm25, i) => ({
+    id: String(i),
+    lat: 1,
+    lon: 2,
+    parameter: 'aqi',
+    pm25,
+  }));
+  const { runner } = manifestRunner({
+    'air-quality': {
+      getStats: () => ({ count: 2, lastUpdate: Date.now() }),
+      getAnalystRecords: () => rows,
+    },
+  });
+  const result = await runner('analyst_query', {
+    layers: ['air-quality'],
+    scope: { kind: 'anywhere' },
+    filters: [{ field: 'pm25', op: 'gt', value: 35 }],
+  });
+  assert.equal(result.count, 1);
 });

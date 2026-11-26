@@ -42,7 +42,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // omit top-level anyOf (OpenAI rejects it). Contacts list routing preserves
     // requested radius and center authority in descriptions only.
     // Street Level and GNSS extend the manifest; tracked and analyst aircraft describe broadcasts.
-    // Air quality (ECCC AQHI) extends the manifest.
+    // Air quality includes each station's value, pollutant, averaging period, kind and method note.
     // Globe rotation adds one motion; visual keyhole fit and explicit
     // reset guidance/defaults update only move_camera and mode descriptions.
     // S2 GhostMaps extends the generated layer enums.
@@ -66,7 +66,7 @@ test('the complete Realtime tool payload pins the manifest-generated layer relea
     // Fire Perimeters queries add lastGrowthTime.
     // The dock's Location and Visual Presets trays leave set_panel_open's
     // targets; Visual (pp-toggles) takes the presets' and map sources' names.
-    '9d93ab6932218f6f47a258b949cdb10bb294cca1a41a3a9544f2605de45086f6',
+    '8df28dafaafde3e83e983528e2cc486dc68f282df99f6cde939325a2ee5461a0',
   );
 });
 

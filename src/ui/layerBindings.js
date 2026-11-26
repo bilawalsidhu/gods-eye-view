@@ -135,10 +135,13 @@ export class LayerBindings {
       'weather-satellite',
       'weather-lightning',
       'weather-cyclones',
+      'air-quality',
     ]) {
       const layer = this._dataManager?.layers?.get(id)?.module;
       if (typeof layer?.attachShellServices !== 'function') continue;
-      const noun = id === 'weather-cyclones' ? 'cyclone' : 'weather';
+      let noun = 'weather';
+      if (id === 'weather-cyclones') noun = 'cyclone';
+      if (id === 'air-quality') noun = 'air quality';
       layer.attachShellServices({
         runNavigation: (navigate) =>
           this.runImmediateNavigation(noun, navigate),

@@ -213,6 +213,35 @@ test('UiCheckbox owns the centred row the checkbox-only labels drew', () => {
   }
 });
 
+test('UiSwitch owns the switch look: its track and knob, on and off', () => {
+  const track = ruleWith('.ui-switch');
+  assert.deepEqual(track.selectors, ['.ui-switch']);
+  for (const declaration of [
+    /width:\s*30px;/,
+    /height:\s*16px;/,
+    /border-radius:\s*999px;/,
+  ])
+    assert.match(track.body, declaration);
+  assert.match(ruleWith('.ui-switch::before').body, /inset:\s*-6px -2px;/);
+  assert.match(ruleWith('.ui-switch__knob').body, /border-radius:\s*50%;/);
+  assert.match(
+    ruleWith(".ui-switch[aria-checked='true'] .ui-switch__knob").body,
+    /transform:\s*translateX\(14px\);/,
+  );
+  assert.match(
+    ruleWith("html[dir='rtl'] .ui-switch[aria-checked='true'] .ui-switch__knob")
+      .body,
+    /transform:\s*translateX\(-14px\);/,
+  );
+  // The look lives once, in the kit: the rail card's switch rules moved
+  // there rather than being copied.
+  assert.ok(
+    !all.some((rule) =>
+      rule.selectors.some((s) => s.includes('.rail-card-switch')),
+    ),
+  );
+});
+
 test('the kit’s skins load before the feature stylesheets that restyle them', () => {
   const at = (selector) => css.indexOf(selector);
   for (const [kit, feature] of [
@@ -238,6 +267,7 @@ test('the kit’s skins load before the feature stylesheets that restyle them', 
     ['.ui-checkbox {', '.gev-voice-preference {'],
     ['.ui-checkbox {', '.data-library-check {'],
     ['.ui-checkbox {', '.first-run-suppress {'],
+    ['.ui-switch {', '.rail-card-toggle {'],
   ]) {
     assert.ok(
       at(kit) >= 0 && at(feature) > at(kit),

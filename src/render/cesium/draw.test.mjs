@@ -1397,25 +1397,27 @@ test('the world annotation renderer draws, fades, hides and lets go of every kin
   );
 });
 
-test('the air quality layer draws its stations as ground fills on a viewer of its own', async () => {
+test('the air quality layer draws its stations as ground dots on a viewer of its own', async () => {
   const { createAirQualityLayer } =
     await import('../../layers/airQuality/index.js');
   const scene = fakeScene();
   const viewer = { scene };
+  /** A PM2.5 concentration at a station; the layer computes its US AQI. */
   const reading = (id, lon) => ({
-    id,
-    provider: 'eccc',
-    scale: 'AQHI',
-    value: 3,
-    band: 'low',
+    id: `regional:${id}:PM2.5`,
+    provider: 'regional',
+    stationId: id,
     name: id,
     lat: 45,
     lon,
-    observedMs: 0,
-    color: '#4cc9f0',
-    label: '3',
-    risk: 'Low health risk',
-    note: null,
+    parameter: 'PM2.5',
+    scale: 'PM2.5',
+    units: 'µg/m³',
+    value: 12,
+    kind: 'observation',
+    averagingMinutes: 60,
+    // Recent: a reading older than six hours is not drawn.
+    observedMs: Date.now() - 10 * 60_000,
   });
   const layer = createAirQualityLayer({
     source: { getSnapshot: async () => [reading('a', -75), reading('b', -60)] },
@@ -1424,18 +1426,23 @@ test('the air quality layer draws its stations as ground fills on a viewer of it
   layer.init(viewer);
   layer.enable(viewer);
   assert.equal(await layer.update(viewer), true);
-  const host = scene.added[0];
-  const grounds = [];
-  for (let i = 0; i < host.length; i++)
-    if (host.get(i) instanceof Cesium.GroundPrimitive)
-      grounds.push(host.get(i));
-  const instances = grounds.flatMap((ground) => ground.geometryInstances);
-  assert.deepEqual(instances.map((instance) => instance.id.id).sort(), [
-    'air-quality:a',
-    'air-quality:b',
+  const dots = [];
+  const collect = (primitive) => {
+    if (primitive instanceof Cesium.BillboardCollection)
+      for (let i = 0; i < primitive.length; i++) dots.push(primitive.get(i));
+    else if (typeof primitive?.get === 'function' && primitive.length)
+      for (let i = 0; i < primitive.length; i++) collect(primitive.get(i));
+  };
+  for (const primitive of scene.added) collect(primitive);
+  assert.deepEqual(dots.map((dot) => dot.id.id).sort(), [
+    'air-quality:regional:a:aqi',
+    'air-quality:regional:b:aqi',
   ]);
-  assert.ok(instances[0].geometry instanceof Cesium.EllipseGeometry);
-  assert.equal(grounds[0].classificationType, Cesium.ClassificationType.BOTH);
+  assert.ok(
+    dots.every(
+      (dot) => dot.heightReference === Cesium.HeightReference.CLAMP_TO_GROUND,
+    ),
+  );
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });

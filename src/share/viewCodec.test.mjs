@@ -1424,6 +1424,27 @@ test('a layer option filed under a mirror layer is ignored', () => {
   ]);
 });
 
+test('air-quality compact links retain the view and open on the US AQI by default', () => {
+  const defaults = createDefaultLayerState();
+  defaults.enabledLayerIds = ['air-quality'];
+  assert.deepEqual(
+    decodeOk(encodeShareView({ layerState: defaults })).state.layerState
+      .options['air-quality'],
+    { view: 'aqi' },
+  );
+  for (const view of ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO']) {
+    const layerState = createDefaultLayerState();
+    layerState.enabledLayerIds = ['air-quality'];
+    layerState.options['air-quality'] = { view };
+    assert.deepEqual(
+      decodeOk(assertRoundTrip({ layerState })).state.layerState.options[
+        'air-quality'
+      ],
+      { view },
+    );
+  }
+});
+
 test('the world time is written only away from live, and may lie ahead', () => {
   const at = (worldTime) =>
     decodeShareView(encodeShareView({ sharedAtMs: NOW_MS, worldTime }), {

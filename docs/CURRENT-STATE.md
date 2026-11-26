@@ -2538,11 +2538,10 @@ callout (`src/data/bhoteKoshiLocator.js`) opens its source on a click, as its
 keyboard action does, and ignores a drag; its evidence cards act only when
 they are the card on top.
 
-Air quality (`./layers/air-quality`) draws its station discs as one renderer
-draw set of ground-clamped fills and reads the view through the camera port; it
-no longer reaches Cesium, so a caller handing it a Cesium viewer,
-with no renderer bound, loads the `./render/cesium/unbound` export once
-first.
+Air quality (`./layers/air-quality`) draws stations and clusters as one renderer
+point set. It reads bounds and movement through the camera port and focus and
+horizon visibility through the query port. A caller supplying an unbound Cesium
+viewer first loads `./render/cesium/unbound`.
 
 Cockpit (`./ui/cockpit`) flies the camera through the camera port on the frame
 port's `preUpdate`, with the shared geo maths, and no longer loads the Cesium
@@ -6456,7 +6455,7 @@ its criteria cannot be silently ignored.
 | Live AIS Vessels 🚢                  | AISStream websocket                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `src/data/aisLiveVessels.js`                                                                                                                              | `/api/vessels`                                                                                                               | 60s (+800ms visibility pass)                                                                                                |
 | Mapped Installations ⌖               | OpenFreeMap military areas; optional configured Overpass names and Google Places search                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `src/data/militaryInstallations.js`                                                                                                                       | OpenFreeMap tiles, `/api/military-installations`, `/api/google/text-search`                                                  | viewport-driven; transient errors back off, missing capability switches to tiles                                            |
 | Earthquakes                          | USGS                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `src/data/earthquakes.js`                                                                                                                                 | —                                                                                                                            | 60s                                                                                                                         |
-| Air quality                          | ECCC MSC GeoMet OGC API (AQHI, Canada only)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | `src/layers/airQuality/`                                                                                                                                  | —                                                                                                                            | 20 min readings, 12 h station catalog                                                                                       |
+| Air quality            | US AQI computed per station (default view, the one index); EEA-band per-pollutant views (CO on WHO-based bands); OpenAQ observations (worldwide, optional key); optional host-supplied model field and forecast                                                                                                                                             | `src/layers/airQuality/`                              | `/api/air-quality/openaq`, optional `/api/air-quality/field`                                                        | OpenAQ per view                                                                   |
 | Satellites                           | CelesTrak TLE + SATCAT; bundled UCS pack (purpose)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `src/data/satellites.js`                                                                                                                                  | `/api/celestrak` + `/api/celestrak-satcat`                                                                                   | 120s                                                                                                                        |
 | Space Missions (30d)                 | Launch Library 2 + CelesTrak                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `src/data/rocketLaunches.js`                                                                                                                              | `/api/launches` + `/api/celestrak/active`                                                                                    | 5 min                                                                                                                       |
 | Traffic                              | Selectable TomTom / OpenStreetMap / Hybrid roads; optional TomTom flow (BYOK)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | `src/data/traffic.js`                                                                                                                                     | browser-direct OpenFreeMap tiles; `/api/tomtom` for flow                                                                     | viewport-driven; capped tile cache                                                                                          |
@@ -10216,6 +10215,213 @@ datacenters, dams and the Nepal locator retain that shared credit while displaye
 
 Military fragments stitch by source identity. Different mapped parcels merge only
 when their footprints touch or contain one another, never across a seam tolerance gap.
+
+### Air quality
+
+Weather → Air quality draws every observation provider together, de-duplicated,
+as one station set. The bundled provider is OpenAQ, worldwide; it republishes
+national networks (India's CPCB and South Africa's SAAQIS among them), which
+are not read separately. The US AQI that GEV computes from concentrations is the one
+index: Canada's AQHI (ECCC) is retired, as it covered Canada only, Canadian
+stations come through OpenAQ like every other country's. A network that
+needs its key or is switched off is guidance, not a failure: the layer turns on
+with its key lines (OpenAQ's, the worldwide network's, first), its Layers row
+says KEY REQUIRED and names the keys it lacks (the layer's key-required stat)
+instead of reading UNAVAILABLE, a network this server leaves off is not named as
+a source, and an update fails only when every network asked failed and no other
+view is on offer. Without the OpenAQ key (the stand-alone default) an install
+shows no stations, and the card names the key to add.
+Installs with keys are unaffected. A host's own provider returns pollutant
+concentrations, one row per station and pollutant. Include `id`, `stationId`,
+`provider`, `name`, `lat`, `lon`, `observedMs`, `parameter`, `units`,
+`value`, `averagingMinutes` and `kind: 'observation'`. Rows of the previous
+index contract (`scale`, `value` and `band`, without `parameter`) draw no
+stations. A host using the reference source needs the `/api/air-quality` routes
+or its own providers, or should withhold the layer.
+There is no provider picker: the card offers views only, the US AQI (the
+default) or one pollutant (PM2.5, PM10, NO2, O3, SO2, CO). Observations retain
+original units and channel timestamps; each view rates them on its own scale
+(below), and no network's own index is requested or shown. A view with no reporting station in sight is displayed as a coverage gap.
+Stations that would overlap on screen draw as one cluster dot at far zoom,
+coloured by the mean of its rated members. A click flies to where its stations
+come apart or selects its highest station when the flight would zoom out or the
+stations never separate. The card is a slim tile card: an Index group of one
+tile, the US AQI, across its row, and a Pollutants group of six. The tiles read
+the selected station, else the model at the view centre, else the nearest
+station in view, preferring rated stations.
+The card shows each provider's status and says when data
+is cached, when a key was rejected, and while OpenAQ is still discovering a
+view, how many of its stations it has checked. A US AQI above 500 reads "500+"
+(the computed value stays in the data), and a station adds at most 500 to its
+cluster's mean. Readings older than six hours are not drawn, judged at draw
+time, even when no fetch has succeeded since; in the AQI view such a value
+leaves the index ("too old"), and the remembered AQI-view values another view's
+tiles read obey the same age. A station's originating network and its licence
+are named in its row's tooltip and in a line under the selected station's name.
+Share links carry only the view; whether stations are shown and the selected
+station are session state.
+The deterministic real-app gates are `scripts/qa-air-quality.mjs` and
+`scripts/qa-openaq.mjs`, each against a dev server; `qa-air-quality.mjs`
+answers `/api/air-quality/openaq` (no key) itself, so its keyless checks hold
+whatever key the server has.
+
+Air quality accepts injected provider definitions through its source
+composition. The standalone default is worldwide OpenAQ (with its key).
+OpenAQ uses the existing Provider Settings registry
+(`OPENAQ_API_KEY`, server-only) and a fixed local proxy, with bounded
+progressive acquisition across all available countries/areas, explicit
+incomplete coverage and source attribution.
+Camera movement triggers debounced viewport discovery, starting near the
+map focus and continuing through the visible bounds (including dateline crossings).
+Loading and partial discovery are distinct from completed searches with no recent
+observations. The OpenAQ fixture gate is `scripts/qa-openaq.mjs`; live coverage
+requires the operator's key.
+OpenAQ navigation reuses stable catalog regions and recent station observations.
+Each pass fetches at most one new catalog page and checks four nearby stations (hours or `/latest`);
+nearby enrichment waits eight seconds and yields capacity to new regions.
+A pass that brings no reading within 5° of the view centre doubles the wait
+before that view's next pass (8 s up to 2 minutes; `PASS_MS`, `MAX_PASS_MS`),
+and one view spends at most a quarter of the hourly budget (`VIEW_SHARE`,
+catalog pages included), so a view left open cannot drain it.
+Cancelling the last view consumer aborts upstream work. Cached observations survive
+view eviction and provider cooldowns. Provider remaining/reset and Retry-After
+headers govern automatic recovery; the card says when a network's request
+budget is reached. The viewport answer carries counts (checked, eligible,
+partial), not the station catalogue, and the browser's few-second discovery
+loop waits while the tab is hidden. A key OpenAQ refuses (a 401, or a 403
+whose answer names the key or account) is not sent upstream again until it
+changes or ten minutes pass; any other 403 fails only that request.
+An unresolved camera never launches a global scan. All views share conservative
+45/minute and 1,800/hour process limits; a shared key's other clients still count.
+
+OpenAQ's selected pollutant uses explicit sensor hourly averages, with period,
+coverage and quality checks. Supported PM2.5, PM10, NO2, O3 and SO2 measurements
+receive a clearly labelled GEV comparison against the European Air Quality Index's
+(EEA) hourly pollutant bands: Good, Fair, Moderate, Poor, Very poor or Extremely
+poor. CO is not in the EEA index: its bands are WHO-based (4, 7, 10, 35 and
+100 mg/m³) and its assessment says so. This is a per-pollutant
+comparison, not an overall station AQI or a local official index. Unknown periods,
+incomplete or flagged hours, unsupported units and unclassified pollutants remain
+neutral and explain why. CO2 concentration is never described as emissions.
+The Weather card is the slim tile card: an Index group (the US AQI) and a
+Pollutants group of tiles coloured by band, a Stations switch, a ramp legend of
+the view's scale, a one-line HIGHEST IN VIEW list (rank, band colour, value,
+name; the station's method, observation age and provenance are its
+tooltip) and, for a selected station, a header with its name,
+who measures it and how old the reading is. It has no headline, status badge or
+activity guidance; the per-reading `general` and `sensitive` guidance texts
+exist only on the assessment in analyst records. Caches are pollutant-scoped. The list
+and counts exclude stations beyond the globe's
+horizon.
+Each view has one scale for colour, ranking and legend. The default US AQI view
+computes an index per station (`src/layers/airQuality/usAqi.js`): every
+observation provider is asked with `mode: 'aqi'` (OpenAQ from each sensor's
+hourly means for PM2.5, PM10, O3 and CO, asked at most once an hour, and each
+location's `/latest` for NO2 and SO2, within the same budget, cache and
+cancellation; a network with a national snapshot from that snapshot), each
+pollutant is put on its table's averaging period (`nowcast.js`: the PM NowCast,
+EPA's ozone NowCast, CO's 8-hour mean, NO2 and SO2 1-hour values; too few hours
+give no sub-index), a station's plausible values get a sub-index each on
+the EPA breakpoints (Technical Assistance Document, Table 6, PM2.5 as revised in
+2024; ozone's current hourly mean also on the 1-hour rows from 0.125 ppm, the
+higher kept) and the highest one sets its index, category, colour and time.
+Pollutant tiles in the AQI view show each pollutant's newest hourly mean on
+its EEA band. A low-cost sensor (`monitor: false`) gets no US AQI (OpenAQ asks
+nothing of one in that view); pollutant views keep it, its row and header
+marked as a sensor. Values more than three hours older than the
+station's newest value kept are left out, as are implausible ones (above a
+pollutant's ceiling, or PM2.5 more than 1.5 × PM10 + 10 µg/m³: smoke, where PM2.5
+nearly equals PM10, still counts); details name each value left out and why.
+The pollutant views leave a value above the same ceilings unrated (CO's at
+200 mg/m³, so its top band, above 100, stays reachable). Gas
+mixing ratios convert at 25 °C (`units.js`) for both the US AQI and the EEA
+comparison. A pollutant view rates every network's concentration on the
+EEA hourly bands, so every station is coloured, ranked and listed on one
+scale.
+Scale-specific translations: EEA hourly quality and US AQI categories are
+translated independently across legends, tiles, list rows and map labels.
+Source category values remain English data; Russian quality and US AQI wording
+retain their own grammatical forms.
+
+#### Merging providers
+
+Of two readings of one site within 150 m from different providers
+(`merge.js`), a reference monitor wins over a low-cost sensor, then a rated
+reading, a network's own (direct) reading over an aggregator's copy and the
+newer one take priority; "rated" is `isRatedReading` in `merge.js`. In the
+AQI view, where each reading is a whole station, the kept station takes in
+each pollutant's freshest value from the site's monitors
+(`mergeStationValues`, its source named in `valueSources` and in the
+station's details) and its index is computed from them, so no network's
+pollutants are lost to another's.
+
+#### Air-quality model field
+
+A host may give the Air quality layer a model field: a forecast of the six
+pollutants and the US AQI on regular grids, one global and an optional finer
+Europe inset (`fieldSource`, `sources['air-quality-field']`; the contract is in
+`src/layers/airQuality/field.js`: `getManifest({ atMs? })` and `getStep(step)`,
+16-bit grids with a per-id scale and 65535 for no data). The stand-alone app has
+none unless one is configured (below), and then shows stations only.
+
+With a field, every view (the US AQI or a pollutant)
+draws that view's field under the stations, in the same bands as the stations:
+each band's colour at its middle, opacity `min(0.82, 0.05 + 0.26 · p)` for scale
+position `p`. It is one `single-image` imagery layer per image on the globe (the
+weather imagery host) and a raised raster shell over photorealistic 3D tiles
+(`src/layers/airQuality/fieldDrawing.js`), in its own slot just under wind's
+(`WEATHER_IMAGERY_Z`, `WEATHER_SHELL_HEIGHTS`; above Active Fires' heat); a new
+step replaces the images without a gap or a moment of both (on the globe the new images load
+clear and take the old ones' place in one frame). Its strength follows the
+camera: 0.85 of the painted opacity from 600 km up, fading on a log scale to
+nothing at 60 km (`FIELD_FADE`); below that the map shows stations only and
+the card still reads the model. The Europe inset blends into the global field over `blendDeg`
+(default 3°) inside its edge with a smoothstep weight. Where the inset is drawn
+both images carry that blended value, the value the tiles read, so the map's
+colour is the tiles' value everywhere; over the blend band they cross-fade
+(the inset at its share `w` of its opacity, the global image under it at
+`(1 − w) / (1 − s · w · a)` with `s` the full strength 0.85), so neither has an
+edge to show. At full strength (600 km up) the pair is exactly as opaque as one
+image; the images are painted once a step, so while the field fades below
+600 km the band is up to 14 % (at 0.44 strength) more opaque than one image. The map shows
+only the step and view the card names: while a step loads, the field drawn
+stays only if it is of the same run and view, and a step that failed is not
+drawn. The forecast is on the timeline: the layer registers the run's first
+step to its last with the world clock, follows the clock while the field is on
+and draws the step nearest its time; playing, the clock waits for the next
+step for at most 20 s. A time outside the run held asks the host for the run
+covering it (`atMs`), once per three hours of time (a failed ask again after a
+minute); at now a run that no longer covers now is let go. Stations are
+readings of now and are hidden away from now (their labels, list and count
+too). The card's time line names the model by the manifest's `sourceShort`, else
+`source`: "updated {age}" at now, "forecast for {time}" ahead of it, the time
+behind it.
+Outside the run, with no run covering the time on its way, one muted line says
+"{source}: no forecast for this time". "Model field unavailable" shows only
+once a manifest has been read: before that a failure may only mean nobody
+configured a field, so the card says nothing.
+Switched off, the layer keeps no grids or images. A manifest's `credit`, when
+it has one, joins the data credits for the session once a run is read. New wording
+from the same source replaces it. CAMS specifies the wording the host supplies.
+
+Development and self-hosting option: `AIR_QUALITY_FIELD_DIR` names a local
+folder of baked grids. It holds `manifest.json` and `<region>/<step>/<id>.u16`,
+with three digits of forecast hours in the step (for example,
+`global/024/pm25.u16`). Each grid stores little-endian uint16 values in rows
+from north to south, as its manifest region describes. Bake each run into a
+new folder and swap it in. These are the files that
+the local server serves under `/api/air-quality/field/manifest` and
+`/api/air-quality/field/grid/<global|europe>/<step>/<id>.u16`
+(`server/providers/airQualityField.js`); standalone sources read it through
+`src/layers/airQuality/fieldSource.js`. Unset (the default), the manifest route
+answers `{ unavailable: true, code: 'not_configured' }` and the layer asks once
+and shows stations only; before a manifest was ever read, a page (a static host
+answering every path with its page), a server error or no answer counts the
+same. Only files already in the folder are served; nothing
+is downloaded. The browser gate `scripts/qa-air-quality.mjs` serves a small cut
+of such grids (`src/layers/airQuality/fixtures/field/`, CAMS, CC BY 4.0) to
+check that the field draws, the timeline spans its forecast and a later step
+changes the tiles.
 
 ### Shared native dropdowns and numeric fields
 

@@ -42,7 +42,11 @@ How to read this:
 | **The Space Devs — Launch Library 2 v2.3**                            | Recent launch, payload, stage, and recovery metadata for Space Missions (30d)                                                       | [The Space Devs terms of use](https://github.com/TheSpaceDevs/Tutorials/blob/main/faqs/faq_TSD.md#terms-of-use): data may be used and shared in any form; avoid forwarding it without added value; attribution is encouraged (not mandatory). [Official API limits](https://ll.thespacedevs.com/docs/): 15 unauthenticated calls/hour; optional token | "Launch Library 2 — The Space Devs" (courtesy attribution)                                                                                  |
 | **Esri World Imagery** (ArcGIS Online tile service)                   | The keyless satellite basemap — the default landing when no Google/ion credential is configured, and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms                 | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
 | **USGS**                                                              | Earthquakes                                                                                                                         | U.S. public domain                                                                                                                                                                                                                                                                                                                                    | "Data courtesy of the U.S. Geological Survey"                                                                                               |
-| **Environment and Climate Change Canada** (MSC GeoMet OGC API) | Air quality (AQHI) — Canadian station observations | [ECCC Data Servers End-use Licence](https://eccc-msc.github.io/open-data/licence/readme_en/) (open, attribution required, no endorsement implied) | "Contains information licensed under the Environment and Climate Change Canada Data Servers End-use Licence" |
+| **OpenAQ** (`api.openaq.org`, v3) | Air quality layer: worldwide station observations (hourly means per pollutant; for the US AQI, hourly means of PM2.5, PM10, O3 and CO and latest NO2 and SO2 values) aggregated from government and community networks, through a fixed local proxy with a private free-account key (`OPENAQ_API_KEY`); no observation archive is bundled | [OpenAQ terms](https://docs.openaq.org/about/terms); the originating network's licence applies to each station: the originating network and its licence are named in each station's details (the tooltip of its HIGHEST IN VIEW row and a line under the selected station's name) | "Air-quality observations: OpenAQ and originating networks. The originating network and its licence are named in each station's details." |
+| **European Air Quality Index** (European Environment Agency, `airindex.eea.europa.eu`) | Air quality layer: the revised hourly pollutant bands (PM2.5, PM10, NO2, O3, SO2) and their category names, used in GEV's own six colours; GEV applies them to station readings itself and reads nothing from the EEA at runtime. Carbon monoxide is not in the EEA index: its bands are WHO-based (4, 7, 10, 35 and 100 mg/m³: the WHO 24 h guideline and interim target, then the 8 h, 1 h and 15 min guidelines) | CC BY 4.0 (EEA content), which requires acknowledgement | "Bands: European Air Quality Index (EEA); colours adapted by GEV"; carbon monoxide: WHO air quality guidelines |
+| **US EPA AQI breakpoints** (Technical Assistance Document for the Reporting of Daily Air Quality) | Air quality layer default view: a US AQI that GEV computes per station from the pollutants it reports, with the EPA's breakpoints, category names and colours. Not an official reading anywhere; no data is read from the EPA | U.S. public domain (federal government publication) | "US AQI: computed by GEV from station readings with the US EPA's breakpoints and colours; not an official reading" |
+| **Host-supplied air-quality model field** (optional) | Air quality layer: when a host supplies a gridded model field with its forecast (the six pollutants and the US AQI on regular grids), it is drawn under the stations and put on the timeline. GEV ships none for use; the manifest's `credit` is shown in the data credits as written, once a run has been read, for the session. A test fixture holds a 10° cut of one CAMS run over northern Italy (`src/layers/airQuality/fixtures/field/`, read only by the tests, with its `NOTICE`), its manifest crediting it "Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains." | Set by the host's source. For CAMS (Copernicus Atmosphere Monitoring Service), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) with the required wording ([global](https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts) and [European](https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-forecasts) forecasts) | The manifest's `credit`; for CAMS: "Generated using Copernicus Atmosphere Monitoring Service information [year]. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains." (data that was changed, such as a cut: "Contains modified Copernicus Atmosphere Monitoring Service information [year]. …") |
+| **Local air-quality field folder** (`AIR_QUALITY_FIELD_DIR`) | Development and self-hosting: the local server serves a folder of baked grids (`manifest.json`, then `<region>/<step>/<id>.u16`) as the model field above. No external source of its own; only files already in the folder are served and nothing is downloaded | The licence of whatever the folder holds (its manifest's `credit` carries the required wording) | The manifest's `credit`; none when the folder gives none |
 | **NASA GIBS** (WMTS tiles + Worldview Snapshots) and **NASA CMR** (granule catalog) | Recent Imagery layer: HLS S30/L30 (Sentinel-2, Landsat 8/9) and VIIRS true-colour tiles draped on the map, per-day thumbnails and PNG exports; the HLS granule catalog (dates, cloud, footprints) for a selected box | U.S. public domain (NASA data); keyless, browser-direct (CORS `*`); no bulk use — one 30-day catalog query per box, tiles bounded to the box, six tile requests in flight | "We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS)." — [gibs.earthdata.nasa.gov](https://gibs.earthdata.nasa.gov), [HLS](https://lpdaac.usgs.gov/products/hlss30v002/) |
 | **NIFC WFIGS** (Wildland Fire Interagency Geospatial Services, ArcGIS feature service) | Fire Perimeters layer: current interagency wildfire incident perimeters, containment, and incident facts; perimeters are coloured by when they were mapped (`poly_PolygonDateTime`, else the record's last edit `poly_DateCurrent`, which also moves when only the incident's attributes are edited, so such a fire can look newly grown) | U.S. public domain (interagency wildland-fire data published through the [NIFC Open Data portal](https://data-nifc.opendata.arcgis.com/)); fetched keyless through `/api/fire-perimeters` (5-minute server cache) with `exceededTransferLimit` paging | "Wildfire perimeters: National Interagency Fire Center (WFIGS)" |
 | **S2 Underground GhostMaps** (`github.com/s2underground/GhostMaps`) | S2 GhostMaps layer: the current edition of S2's KMZ intel products (Common Intelligence Picture, 30-day kinetic pull, Border Crisis Map, Iran and Yemen products, newest incident drop). Keyless. `/api/ghostmaps` reads the branch head from git's ref advertisement every 15 s (`GHOSTMAPS_POLL_SECONDS`, minimum 5 s), lists the tree through the GitHub REST API only when the head changes (optional `GITHUB_TOKEN`), downloads files by commit-pinned raw URLs into `.gev-cache/ghostmaps/` and pushes new catalogs to browsers over server-sent events | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) (repository README: "S2 Underground © 2025 by S2A1"); non-commercial, attribution required; files are fetched at runtime, never stored in this repository | "S2 GhostMaps intel products: S2 Underground © by S2A1, CC BY-NC-SA 4.0" — shown in-app |
@@ -198,13 +202,7 @@ for eligible feeds and refresh rules.
 
 ### Notes on the live sources
 
-- **Air quality (ECCC AQHI).** Keyless. Read from the MSC GeoMet OGC API (`api.weather.gc.ca`): the `aqhi-stations` catalog plus `aqhi-observations-realtime`. **Coverage is Canada only** — ECCC is the single registered provider, and the layer row and readout card both say so. Roughly 134 stations across ECCC's five administrative zones (Atlantic, Quebec, Ontario, Prairies & North, Pacific & Yukon). AQHI publishes hourly, so readings poll every 20 minutes and the station catalog, which changes a few times a year, is refetched only every 12 hours. Observations are requested with `latest=true`; without it the collection returns the full history, roughly 2,000 rows nationally. Readings older than six hours are dropped rather than displayed as current.
-
-  Readings are stored as `{ provider, scale, value, band }` rather than a bare number, because air-quality indices are not interchangeable: AQHI runs 1-10+ on health risk, the US AQI runs 0-500 on concentration breakpoints, and Europe's EAQI is a five-step category. Naming the index a value belongs to is what lets another network be added later without inventing a shared numeric meaning that does not exist.
-
-  AQHI is reported by ECCC as an integer from 1 to 10 with an open-ended "10+" above that. The API returns the underlying decimal (1.08, 2.32); the layer rounds to the published form rather than displaying a precision the index does not claim.
-
-  **Quebec is thinly represented**, and that is upstream rather than a filter here: the province runs its own Info-Smog program, so only a handful of Quebec stations appear in ECCC's national feed. The reporting station count also varies hour to hour as stations report or fall silent.
+- **Air quality.** Every network is a station network, rated from the concentrations it reports: the US AQI that GEV computes (see "US AQI computed per station") or a pollutant's EEA hourly bands. No network's own index is read or shown. Canada's AQHI (Environment and Climate Change Canada, read from MSC GeoMet) is retired in favour of that one computed index, since it covered Canada only; Canadian stations reach the layer through OpenAQ, as every other country's do, and nothing is read from ECCC. OpenAQ, the bundled station source, is described below; it republishes national networks such as India's CPCB and South Africa's SAAQIS, so they are not read separately. A host may supply its own providers; where two networks report one site within 150 m, one reading is shown: a reference monitor over a low-cost sensor, then a rated reading over an unrated one, then a network's own reading over an aggregator's copy, then the newer one (`src/layers/airQuality/merge.js`); in the US AQI view that station takes in each pollutant's freshest value from the site's monitors, naming the network a pooled value came from, and its index is computed from them. Without the OpenAQ key, a stand-alone install shows no stations: the layer turns on and its card names the key to add.
 
 - **Via Lietuva / Eismoinfo (Lithuania).** Public road-camera catalogs and periodically updated still images from [Eismoinfo](https://eismoinfo.lt/), credited to Via Lietuva / eismoinfo.lt in the app. **Off by default.** The camera endpoints are the eismoinfo.lt website backend and are not among the services listed in Via Lietuva's [open-data statement](https://eismoinfo.lt/eismoinfo-backend/content?id=44), whose conditions are attribution and reuse on the same terms. Until the statement is confirmed to cover the camera photos, the pack loads only when an operator sets `CCTV_LITHUANIA_ENABLED=1`; with the flag unset, empty or any other value, the server makes no request to Eismoinfo. `eismoinfo-backend/camera-info-table` is joined by ID to `layer-static-features/VKR`. Without `lks=true`, the latter returns WGS84 `[latitude, longitude]`; the table's `x/y` instead use LKS-94 metres. Only the official HTTPS `/eismoinfo-backend/image-provider/camera/last?id=…` image endpoint is registered. Catalogs use the shared 15-minute cache; frames are fetched on demand and never bundled or archived. These are periodic snapshots, not continuous video. Camera headings are low-confidence estimates. No API key is required. `CCTV_LITHUANIA_MAX_SOURCES` defaults to 400.
 - **Freeway Bureau and Highway Bureau, MOTC (Taiwan).** National freeway cameras use the Freeway Bureau’s keyless [MOTC 2.0 CCTV table](https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml), refreshed daily and fetched at runtime (never bundled). Freeway Bureau data follows the [Open Government Data License, Taiwan v1.0](https://data.gov.tw/license); the app credits the Bureau, names the dataset and links the licence. If that catalog is unreachable and no last-good source list exists, the app falls back to the Highway Bureau’s free [provincial-road CCTV XML feed](https://thbapp.thb.gov.tw/opendata/), with attribution as requested by the Bureau. Its MJPEG streams are accepted only from cctv-ss01 through cctv-ss08.thb.gov.tw over HTTPS; the frame proxy extracts one bounded JPEG per request. This fallback covers provincial roads, not national freeways. Neither feed requires an API key. CCTV_TAIWAN_ENABLED=0 disables both; CCTV_TAIWAN_MAX_SOURCES defaults to 600 (bounded to 1–2000).
@@ -774,3 +772,80 @@ NOAA density imagery with the raw GLM product.
 ## In-app attribution
 
 The required Google Maps / Cesium credit renders on the on-globe credit line (`#cesium-credits`, bottom-left) and must stay visible — including in clean-view and recording modes (the whole line, logo + "Google Maps" + the "Data attribution" link, stays on screen; only the GEV panels/HUD fade). The layer-specific credits (adsb.lol, adsbdb, Planespotters.net, Open Vessel Photos, TeleGeography, OSM datacenters/dams/roads, NASA FIRMS, CelesTrak, USGS, City of Austin, Fintraffic, GBFS, Radio Browser, OpenSky, AISStream) are registered into the expandable **"Data attribution"** popover on that credit line via `viewer.creditDisplay.addStaticCredit(new Cesium.Credit(html, /* showOnScreen */ false))` — see `src/data/dataCredits.js`. When you add a new data source, add its license and attribution to this file **and** append an entry to `DATA_CREDITS` in `src/data/dataCredits.js` so it surfaces in the app.
+
+### OpenAQ worldwide observations
+
+Optional OpenAQ v3 access uses a private, free-account `OPENAQ_API_KEY` entered
+through Provider Settings. Global discovery has no country or city allowlist.
+Station coverage depends on contributing networks.
+Concentrations preserve source units, time, network and licence attribution;
+OpenAQ's own data carries no overall AQI (GEV computes one, below). For the selected
+pollutant, verified complete, unflagged hourly averages are compared with the
+[EEA hourly pollutant bands](https://airindex.eea.europa.eu/AQI/), with the result
+labelled as GEV-calculated. Unsupported pollutants or units and incomplete/flagged
+hours remain unrated. The scale is a health-context comparison, not regulatory
+compliance or a locally issued index. Standard access is rate-limited;
+GEV prioritizes station discovery and recent observations in the visible map area,
+then continues pagination within process-wide budgets and bounded view caches.
+Stable catalog regions and recent station readings are reused across navigation;
+small progressive batches reserve capacity for the next region. One view
+spends at most a quarter of the hourly budget, checked at every request, and
+its station passes come further apart (8 s doubling to 2 minutes) while they
+bring nothing new anywhere in the view. A view checks first the stations it
+shows whose readings would age out (6 hours) within 2 hours, then those it has
+never checked, then the other stations it shows (the oldest reading first),
+then those that had nothing current when last checked (the longest ago
+first), nearest the centre first among equals, so a wide view grows to the
+stations its share keeps fresh and then holds them. Only a 401, or a 403 whose
+answer names the key or account, counts as the key refused; any other 403 fails that one request. Provider reset
+headers schedule automatic retries, while cached observations remain available.
+Original data-provider terms still apply. No downloaded observation archive is
+bundled in the repository. References: [API](https://docs.openaq.org/),
+[terms](https://docs.openaq.org/about/terms),
+[limits](https://docs.openaq.org/using-the-api/rate-limits).
+
+### US AQI computed per station
+
+The Air quality layer's default view is a US AQI that GEV computes for each
+station from the pollutants it reports, each on its table's averaging period
+as the EPA's real-time reporting does it. The method is the US EPA's
+[Technical Assistance Document for the Reporting of Daily Air Quality](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf):
+Table 6 breakpoints (PM2.5 as revised in 2024), truncation, Equation 1 and the
+highest sub-index, with the EPA's category names and standard colours
+(`src/layers/airQuality/usAqi.js`), and its NowCast: PM2.5 and PM10 are rated
+on the NowCast of their last 12 hourly means (the weight factor at least 0.5;
+two of the last three hours must be valid), ozone on EPA's ozone NowCast
+([O3-NowCast](https://github.com/USEPA/O3-NowCast): a regression over the last
+two weeks of hourly means, or its surrogate, 0.85 × the latest hour + 4.5 ppb,
+without enough of them) on the 8-hour rows, CO on the mean of its last 8
+hourly means (6 of 8 valid), NO2 and SO2 on 1-hour values
+(`src/layers/airQuality/nowcast.js`). OpenAQ's hourly means come from
+`/v3/sensors/{id}/hours`, each sensor asked at most once an hour for the hours
+since its newest, and NO2 and SO2 from each location's latest values
+(`/v3/locations/{id}/latest`), all within the same request budget. Ozone's
+current hourly mean also rates on the 1-hour rows from 0.125 ppm and the higher
+index is kept; above 0.200 ppm, where the 8-hour rows end, only the 1-hour rows
+rate. A 1-hour SO2 value of 305 ppb or more gives 200 unless a 24-hour average
+a host supplies rates higher on the 24-hour rows; a 24-hour average with no
+usable 1-hour value of its time rates on its own (the 24-hour rows from 305
+ppb, the 1-hour rows below). Ozone's 1-hour mean and the 24-hour SO2 count only
+within three hours of the value they go with, and an hourly mean above its
+fault ceiling counts as a missing hour. A pollutant with too few
+hours for its NowCast or 8-hour mean, or with only a value whose averaging
+period the table does not rate, gets no sub-index, and its details say so. The
+EPA's categories are defined for reference and equivalent monitors, so a
+station its source marks as a low-cost sensor (OpenAQ's `isMonitor` false,
+`monitor: false` on a host's rows) gets no US AQI, and OpenAQ spends no
+request on one in that view; the pollutant views keep low-cost sensors,
+marked as sensors in their rows and details. The
+result is GEV's calculation, not an official reading, in the US or elsewhere. A value above its pollutant's plausibility ceiling, PM2.5 well above the
+same station's PM10 (more than 1.5 × PM10 + 10 µg/m³, so smoke, where PM2.5
+nearly equals PM10, still counts), a value more than three hours older than the station's
+newest value kept, and a value whose units do not convert are left out and
+named in the station's details; the station's time is that of the pollutant
+leading its index. Gas mixing ratios
+(ppb, ppm) convert to µg/m³ at 25 °C (`src/layers/airQuality/units.js`), the
+same conversion for the US AQI and for the EEA comparison of a pollutant view. Each view colours, ranks and builds its
+legend on one scale (the US AQI, or the pollutant's EEA hourly bands). It is the
+one index everywhere: no network's own index is used or shown, and Canada's
+AQHI is retired.

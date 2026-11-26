@@ -175,9 +175,9 @@ are existing ones when a change converts them:
   `npm run check:boundaries` enforces this.
 - **Reuse the kit first.** `src/ui/kit/` has one component per control:
   `UiButton` (including pressed toggles and pressable chips), `UiSelect`,
-  `UiSlider`, `UiSegmented`, `UiChip` (a label, not a control), `UiBadge`,
-  `UiEmpty`, `UiIcon`, `UiTooltip`, `UiPanel` and `UiRail`. Use these before
-  writing a control. When the kit lacks something, extend a kit component or
+  `UiSlider`, `UiSegmented`, `UiSwitch` (an on/off switch), `UiChip` (a
+  label, not a control), `UiBadge`, `UiEmpty`, `UiIcon`, `UiTooltip`,
+  `UiPanel` and `UiRail`. Use these before writing a control. When the kit lacks something, extend a kit component or
   add one that follows the kit's names, props, events and class names (see
   [Component kit](docs/VUE-MIGRATION.md#component-kit)), rather than
   building a one-off.

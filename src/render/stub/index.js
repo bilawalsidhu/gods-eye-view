@@ -1648,6 +1648,10 @@ export function createStubRenderer(options = {}) {
   let globeVisible = true;
 
   function addImagery(spec, index) {
+    if (spec.image !== undefined && spec.kind !== 'single-image')
+      throw new TypeError('image is supported for single-image imagery only');
+    if (spec.image !== undefined && spec.url)
+      throw new TypeError('single-image takes url or image, not both');
     if (
       !capabilities.has('imageHooks') &&
       (spec.tileTransform || spec.admit || spec.kind === 'canvas')

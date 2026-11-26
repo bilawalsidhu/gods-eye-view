@@ -9,7 +9,7 @@ import { layerFeedState } from '../data/feedState.js';
 import { FEED_STATE_LABEL_KEYS } from './layerRowState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
+import { keyGuidanceText, keysRequirementText } from './keyGuidance.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS as PANEL_LABELS,
@@ -143,7 +143,8 @@ function panelLabel(layer) {
  * The key registry already owns what each key is called and which environment
  * variables enable it, so a layer only declares WHICH key it needs
  * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
- * Naming the variable turns an unexplained dead control into a next step.
+ * Naming the variable turns an unexplained dead control into a next step. A
+ * layer reading several keyed networks may name each key it lacks (an array).
  *
  * An unnamed or unknown key returns '' rather than guessing: guidance naming
  * the wrong variable sends the operator to the wrong provider.
@@ -153,10 +154,13 @@ function panelLabel(layer) {
  */
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
-  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  const ids = [layer.requiresKeyId]
+    .flat()
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
   // A layer with several sources also names the ones it could use instead.
   return keyGuidanceText(
-    requiresKeyId ? keyRequirementText(requiresKeyId) : '',
+    keysRequirementText(ids),
     layer.stats.keyAlternatives || [],
   );
 }

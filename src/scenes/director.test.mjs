@@ -1789,6 +1789,32 @@ test('destroy drains cancelled LOAD work before its viewer can be discarded', as
   await director.destroy();
 });
 
+test("a captured shot keeps a layer's scene params, beyond its saved and shared ones", async () => {
+  const { styleManager, viewer, restore } = makeDirector();
+  const lifecycle = new LayerLifecycle(viewer);
+  lifecycle.register({
+    id: 'air-quality',
+    name: 'air-quality',
+    init() {},
+    enable() {},
+    disable() {},
+    update() {},
+    getParams: () => ({ view: 'aqi' }),
+    getSceneParams: () => ({ view: 'aqi', stations: false }),
+  });
+  const director = new SceneDirector(viewer, styleManager, lifecycle);
+  try {
+    assert.deepEqual(director._captureLayerStates()['air-quality'].params, {
+      view: 'aqi',
+      stations: false,
+    });
+    assert.deepEqual(lifecycle.getLayerParams('air-quality'), { view: 'aqi' });
+  } finally {
+    await director.destroy();
+    restore();
+  }
+});
+
 test('Scene snapshots are immutable and editing outcomes retain the affected shot and index', async () => {
   const { director, restore } = makeDirector();
   try {
