@@ -163,21 +163,31 @@ function layOut({ ui, name, minimize }) {
       panel.style.bottom = 'auto';
     } else {
       // Above the dock on its centre line, at the panel's own CSS size; phones
-      // get a full-width sheet above the tab bar. The bottom edge is the
-      // anchor, so height changes grow upward from the dock.
+      // get a sheet above the tab bar, full width in portrait and the dock's
+      // width on a phone held sideways, clear of the notch on either side.
+      // The bottom edge is the anchor, so height changes grow upward from the
+      // dock.
       const dockRect = doc
         .getElementById?.('command-dock')
         ?.getBoundingClientRect();
       panel.style.removeProperty('height');
-      if (mobile && !minimized) panel.style.width = `${w - 16}px`;
+      const phoneStyle = mobile ? view.getComputedStyle?.(doc.body) : null;
+      const leftInset =
+        parseFloat(phoneStyle?.getPropertyValue('--mobile-left-inset')) || 0;
+      const rightInset =
+        parseFloat(phoneStyle?.getPropertyValue('--mobile-right-inset')) || 0;
+      const sheetWidth = w - leftInset - rightInset - 16;
+      const landscape = mobile && w > h && dockRect?.width > 0;
+      if (mobile && !minimized)
+        panel.style.width = `${landscape ? Math.min(sheetWidth, dockRect.width) : sheetWidth}px`;
       else panel.style.removeProperty('width');
       const rect = panel.getBoundingClientRect();
       const centre = dockRect?.width
         ? dockRect.left + dockRect.width / 2
         : w / 2;
       const x = Math.max(
-        8,
-        Math.min(centre - rect.width / 2, w - rect.width - 8),
+        8 + leftInset,
+        Math.min(centre - rect.width / 2, w - rect.width - 8 - rightInset),
       );
       const replyRect = floatingReply?.getBoundingClientRect();
       const above = replyRect?.height

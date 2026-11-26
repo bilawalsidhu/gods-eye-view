@@ -17,6 +17,7 @@ import { createProviderCommands } from '../providerCommands.js';
 import { createVoicePanelHost } from './host.js';
 import { createTestVoiceUi } from '../../testSupport/voiceUi.mjs';
 import { mountVoiceView } from '../../testSupport/voiceView.mjs';
+import { MOBILE_SHELL_MEDIA_QUERY } from '../../ui/panelRailGeometry.js';
 
 const $ = (selector) => globalThis.document.querySelector(selector);
 const exists = (selector) => $(selector) !== null;
@@ -1525,3 +1526,61 @@ test('a slow voice selection never replaces a card clicked since it was asked', 
   });
   assert.equal(context.card.key, 'flights:a1b2c3');
 });
+
+function phoneViewport(t, width, height, phone) {
+  const view = globalThis.document.defaultView;
+  for (const [key, value] of [
+    ['innerWidth', width],
+    ['innerHeight', height],
+  ]) {
+    const descriptor = Object.getOwnPropertyDescriptor(view, key);
+    Object.defineProperty(view, key, { configurable: true, value });
+    t.after(() =>
+      descriptor
+        ? Object.defineProperty(view, key, descriptor)
+        : delete view[key],
+    );
+  }
+  t.mock.method(view, 'matchMedia', (query) => ({
+    matches: query === MOBILE_SHELL_MEDIA_QUERY && phone,
+  }));
+}
+
+const box = (left, top, width, height) => ({
+  left,
+  top,
+  right: left + width,
+  bottom: top + height,
+  width,
+  height,
+});
+
+for (const [width, height, phone, expected] of [
+  // Sideways: the dock's width on its centre line, inside both notches.
+  [844, 390, true, '560px'],
+  // Short but upright: the full-width portrait sheet.
+  [390, 500, true, `${390 - 88 - 16}px`],
+  // Desktop keeps the panel's own CSS size.
+  [1024, 768, false, ''],
+]) {
+  test(`Voice Settings fits the phone dock and its notches (${width}x${height})`, async (t) => {
+    const f = mounted(t, { view: true });
+    phoneViewport(t, width, height, phone);
+    await f.settle();
+    const root = $('#gev-voice-control');
+    const panel = $('#gev-voice-panel');
+    root.getBoundingClientRect = () =>
+      box(width / 2 - 280, height - 160, 560, 56);
+    panel.getBoundingClientRect = () => box(0, 0, 352, 166);
+    const dock = globalThis.document.body.firstElementChild;
+    dock.id = 'command-dock';
+    dock.getBoundingClientRect = () =>
+      box(width / 2 - 280, height - 160, 560, 56);
+    globalThis.document.body.style.setProperty('--mobile-left-inset', '44px');
+    globalThis.document.body.style.setProperty('--mobile-right-inset', '44px');
+    f.commands.voicePanel.select('settings');
+    await f.settle();
+    assert.equal(panel.style.width, expected);
+    assert.equal(f.commands.getVoicePanelState().settingsOpen, true);
+  });
+}
