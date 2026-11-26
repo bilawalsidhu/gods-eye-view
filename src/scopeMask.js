@@ -1,10 +1,7 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
 import { findCamera, findFrame } from './render/rendererOf.js';
-import {
-  overlayPixelRatio,
-  watchTouchOnly,
-} from './overlays/canvasPixelRatio.js';
+import { isTouchOnly, watchTouchOnly } from './overlays/canvasPixelRatio.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -275,14 +272,19 @@ export function getScopeTerminusRepaintCount() {
 }
 
 /**
- * Backing-store scale for a feathered mask: the display's ratio up to 2, and
+ * Backing-store scale for a feathered mask: the display's ratio up to 2 (a
+ * desktop zoomed out under 1 keeps its own), and
  * CSS pixels on a touch-only device, where the soft gradient loses nothing at
  * 1x (a phone's 3x screen would otherwise hold it at 2x). A hard edge (a
  * feather under a pixel) is drawn at `scopeMaskHardEdgeRatio` instead, so
  * its circle does not stair-step.
  */
 export function scopeMaskDevicePixelRatio(
-  ratio = typeof window !== 'undefined' ? overlayPixelRatio(window) : 1,
+  ratio = typeof window === 'undefined'
+    ? 1
+    : isTouchOnly(window)
+      ? 1
+      : window.devicePixelRatio,
 ) {
   return Math.min(2, Number(ratio) || 1);
 }

@@ -133,6 +133,12 @@ test('backing-store scale is CSS pixels on a touch-only device', () => {
       matches: query === '(pointer: coarse)' || query === '(any-pointer: fine)',
     });
     assert.equal(scopeMaskDevicePixelRatio(), 2);
+    // A desktop zoomed out (a ratio under 1) keeps its own ratio, as before.
+    globalThis.window.devicePixelRatio = 0.75;
+    globalThis.window.matchMedia = (query) => ({
+      matches: query === '(any-pointer: fine)',
+    });
+    assert.equal(scopeMaskDevicePixelRatio(), 0.75);
   } finally {
     if (had) globalThis.window = previous;
     else delete globalThis.window;
