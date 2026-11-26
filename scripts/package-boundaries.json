@@ -4299,6 +4299,7 @@
       "./application/data",
       "./application/tools",
       "./application/chrome",
+      "./application/opening",
       "./application/sources",
       "./application/services",
       "./application/requests",
