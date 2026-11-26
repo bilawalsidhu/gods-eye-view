@@ -1547,11 +1547,9 @@ body[data-world-timeline='phone-sheet'] :is(#command-dock, #gev-omnibar) {
 
 /* A phone's time sheet is a mode of its own: the search steps aside while it
    is open, and comes back with DONE or LIVE. */
+body[data-world-timeline='phone-sheet'] #gev-omnibar,
 body[data-world-timeline='phone-sheet'] #command-dock {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(16px);
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
+  transition: opacity 160ms ease;
 }

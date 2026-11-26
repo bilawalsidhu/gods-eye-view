@@ -1,4 +1,6 @@
 import { Cartesian3, Matrix4, Transforms } from 'cesium';
+// The bridge to the camera port needs its unbound factory loaded first.
+import '../render/cesium/camera.js';
 import { findCamera } from '../render/rendererOf.js';
 
 /**
