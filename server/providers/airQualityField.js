@@ -5,7 +5,9 @@
 // and puts its forecast on the timeline. Unset (the default), the manifest
 // route answers "not configured" and the layer shows stations only. Nothing is
 // downloaded: only files already in the folder are served. Bake each new run
-// into a separate folder and swap it in. Grids for another run receive 409.
+// into a separate folder and swap it in (a `current` symlink switched to the
+// new folder works: each grid request resolves the folder once and reads the
+// manifest and the grid from that one run). Grids for another run receive 409.
 import { createHash } from 'node:crypto';
 import { readFieldManifest } from '../../src/layers/airQuality/field.js';
 import { constants } from 'node:fs';
@@ -137,11 +139,14 @@ export function airQualityFieldProxy({
     }
     // Only the matched names reach the path: nothing outside the folder.
     const [, region, step, id] = grid;
-    const file = path.join(root, region, step, `${id}.u16`);
     const run = new URLSearchParams((req.url || '').split('?')[1]).get('run');
+    // The folder resolved once: a symlink switched to another run while this
+    // request reads still gives the manifest and the grid of one run.
+    let pinned;
     let manifest;
     try {
-      manifest = await readManifest(root);
+      pinned = await realpath(root);
+      manifest = await readManifest(pinned);
     } catch {
       return run === null
         ? send(404, { error: 'not_found' })
@@ -153,7 +158,11 @@ export function airQualityFieldProxy({
       return send(404, { error: 'not_found' });
     let bytes;
     try {
-      bytes = await readContained(root, file, MAX_GRID_BYTES);
+      bytes = await readContained(
+        pinned,
+        path.join(pinned, region, step, `${id}.u16`),
+        MAX_GRID_BYTES,
+      );
     } catch {
       return send(404, { error: 'not_found' });
     }

@@ -1753,6 +1753,7 @@
   "src/layers/airQuality/fieldDrawing.js",
   "server/providers/airQualityField.js",
   "server/providers/airQualityField.test.mjs",
+  "server/providers/airQualityFieldRunSwitch.test.mjs",
   "src/layers/weather/shellPlacement.js",
   "src/ui/inViewMemo.test.mjs",
   "src/layers/wind/valueAt.test.mjs",
