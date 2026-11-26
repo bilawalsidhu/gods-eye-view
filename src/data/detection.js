@@ -119,6 +119,17 @@ const BRACKET_ALPHA_STEPS = 4;
 const ECHO_ALPHA_STEPS = 8;
 /** Stable per-layer candidate safety cap; independent of density and camera bearing. */
 const LAYER_CANDIDATE_CAP = 2600;
+/**
+ * Layers asked for every contact they draw, never a sample. Their feeds run to
+ * tens of thousands worldwide (vessels up to 50,000), and a layer samples its
+ * whole list before looking at what is in view, so under the cap only one
+ * contact in many on screen got a bracket, and rarely the selected one.
+ */
+const UNCAPPED_CANDIDATE_LAYERS = new Set([
+  'flights',
+  'military',
+  'ais-live-vessels',
+]);
 const LAYER_WEIGHTS = Object.freeze({
   military: 1.4,
   traffic: 1.15,
@@ -885,7 +896,7 @@ function _collectDetectableObjects() {
     const layer = _layers[i];
     if (typeof layer.getDetectableObjects !== 'function') continue;
     try {
-      const maxCount = ['flights', 'military'].includes(layer.id)
+      const maxCount = UNCAPPED_CANDIDATE_LAYERS.has(layer.id)
         ? Number.POSITIVE_INFINITY
         : LAYER_CANDIDATE_CAP;
       const items = layer.getDetectableObjects({

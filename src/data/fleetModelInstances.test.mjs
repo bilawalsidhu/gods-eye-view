@@ -492,7 +492,7 @@ test('a vehicle drawn as its model keeps its card and its detection entry', () =
   );
   assert.match(
     read('src/layers/vessels/queries.js'),
-    /if \(!visual\.visible\) continue;/,
+    /if \(!visual\.visible\) return null;/,
   );
   assert.match(
     read('src/layers/transit/rendering.js'),

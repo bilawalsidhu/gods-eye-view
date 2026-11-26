@@ -2462,6 +2462,43 @@ test('detection objects name the vessel card their callout gives way to', () => 
   }
 });
 
+test('the selected vessel is a detection object first, even when a cap samples the list', () => {
+  const vessel = (mmsi, visible = true) => ({
+    name: `SHIP ${mmsi}`,
+    mmsi,
+    type: 'Cargo',
+    speed: 9.5,
+    course: 80,
+    heading: 80,
+    position: POS,
+    visible,
+  });
+  const records = Array.from({ length: 40 }, (_, i) =>
+    vessel(String(100 + i), i !== 3),
+  );
+  const selected = records[17];
+  _setVesselStateForTest({ viewer: {}, records, selectedRecord: selected });
+  try {
+    const all = aisLiveVesselsLayer.getDetectableObjects();
+    assert.equal(all.length, 39, 'every drawn vessel, none past the horizon');
+    assert.equal(all[0].sourceId, selected.id, 'the selected vessel first');
+    assert.equal(all[0].skipLabel, true);
+    assert.equal(
+      new Set(all.map((object) => object.sourceId)).size,
+      all.length,
+      'the selected vessel once',
+    );
+    // A stride of 4 from index 0 never lands on index 17.
+    const sampled = aisLiveVesselsLayer.getDetectableObjects({ maxCount: 10 });
+    assert.equal(sampled.length, 10);
+    assert.equal(sampled[0].sourceId, selected.id);
+    // The same vessel is the same object from paint to paint.
+    assert.equal(aisLiveVesselsLayer.getDetectableObjects()[0], all[0]);
+  } finally {
+    _setVesselStateForTest({ enabled: false });
+  }
+});
+
 test('an aid to navigation card shows its kind, never a speed or heading', () => {
   const aid = makeRecord({
     name: 'SF APPROACH N',

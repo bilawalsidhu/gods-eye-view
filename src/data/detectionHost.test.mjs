@@ -1255,6 +1255,40 @@ test('civilian and military AIR brackets cover front, left, and right at Sparse 
   }
 });
 
+test('vessels, like aircraft, are asked for every contact they draw', () => {
+  const env = installEnvironment({ width: 900, height: 600, dpr: 1 });
+  const asked = new Map();
+  const layer = (id) => ({
+    id,
+    getDetectableObjects(options) {
+      asked.set(id, options.maxCount);
+      return [];
+    },
+  });
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(
+      env.viewer,
+      ['flights', 'military', 'ais-live-vessels', 'traffic'].map(layer),
+      () => {},
+    );
+    setMode('DENSE');
+    settleFrame(env);
+    assert.equal(asked.get('flights'), Number.POSITIVE_INFINITY);
+    assert.equal(asked.get('military'), Number.POSITIVE_INFINITY);
+    assert.equal(
+      asked.get('ais-live-vessels'),
+      Number.POSITIVE_INFINITY,
+      'a sample of a worldwide vessel list leaves most ships in view unbracketed',
+    );
+    assert.ok(Number.isFinite(asked.get('traffic')), 'other layers keep the cap');
+  } finally {
+    destroyDetection();
+    destroyWorldOverlay();
+    env.cleanup();
+  }
+});
+
 /**
  * Two air contacts at the same screen radius, one with the planet behind it and
  * one with sky. The mock camera sits at (0, 0, 10 000 km) and projects through
