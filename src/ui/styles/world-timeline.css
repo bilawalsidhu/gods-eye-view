@@ -1529,7 +1529,7 @@ body:is([data-world-timeline='flank'], [data-world-timeline='stack'], [data-worl
 }
 
 /* The sheet takes the voice dock's place while it is up. */
-body[data-world-timeline='phone-sheet'] #command-dock {
+body[data-world-timeline='phone-sheet'] :is(#command-dock, #gev-omnibar) {
   display: none !important;
 }
 
@@ -1543,4 +1543,15 @@ body[data-world-timeline='phone-sheet'] #command-dock {
   .wt-body {
     transition: none;
   }
+}
+
+/* A phone's time sheet is a mode of its own: the search steps aside while it
+   is open, and comes back with DONE or LIVE. */
+body[data-world-timeline='phone-sheet'] #command-dock {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }

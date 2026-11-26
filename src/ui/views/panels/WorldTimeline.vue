@@ -25,6 +25,7 @@ import { useWorldTimeStore } from '../../stores/worldTime.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { vRootClass } from '../../rail/rootClass.js';
 import { journeyMoments } from '../../../time/journeyMoments.js';
+import { createSoftFollow } from '../../../time/softFollow.js';
 import {
   recordedJourney,
   setRecordedSubject,
@@ -1084,6 +1085,17 @@ const journeyGapBars = computed(() => {
 // follow camera holds it wherever it was at the time shown, picked up again
 // whenever it comes back into its feed; a replay running into a stretch with
 // no positions skips over it, and says so.
+// A contact the follow camera does not track (a vessel) is kept in frame by
+// moving the camera as it moves along its journey.
+const softFollow = createSoftFollow(() => globalThis.__godsEyeView?.viewer ?? null);
+watch(
+  // Two sources, each compared on its own: one array would be new every tick.
+  [() => subject.value, () => time.value.live],
+  ([current, live]) => {
+    const soft = current?.path && !live && !cards.canFollow();
+    softFollow.set(soft ? current.path : null, () => worldClock.now(), selected.value?.id);
+  },
+);
 const skipped = shallowRef(null);
 let skippedTimer = null;
 let followLoop = null;
@@ -1425,6 +1437,9 @@ const rootStyle = computed(() => {
 const lift = computed(() => {
   if (!time.value.span) return 0;
   if (layout.value === 'under') return rootHeight.value + 8;
+  // A phone's row at rest is 52 px. Its open sheet is a mode of its own, with
+  // the search put away while it is open (world-timeline.css), so the map
+  // above keeps what room there is.
   if (layout.value === 'phone') return 52;
   return 0;
 });
@@ -1489,10 +1504,11 @@ onMounted(() => {
     arrive();
   }, 700);
   pinSpeed();
-  window.__wt = { worldClock, cards, answer: setAnswer, layout, win };
+  window.__wt = { worldClock, cards, answer: setAnswer, layout, win, subject, softFollow };
 });
 onBeforeUnmount(() => {
   focusSubject(null);
+  softFollow.stop();
   clearInterval(followLoop);
   clearTimeout(skippedTimer);
   window.removeEventListener('keydown', onKey);
