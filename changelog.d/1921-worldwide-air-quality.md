@@ -1,5 +1,6 @@
 - Air quality now reads every provider together as one station set, reviewed
-  by kvnloo. OpenAQ is the bundled station source, worldwide: it republishes
+  by kvnloo. OpenAQ is the bundled station source, worldwide (khanmjk, #1291;
+  India's CPCB work by m3ayush, #1204, is folded in through it): it republishes
   national networks such as India's CPCB and South Africa's SAAQIS, so they are
   not read separately. Every station is rated from its concentrations: the
   default view is a US AQI that GEV computes per station with the US EPA's
