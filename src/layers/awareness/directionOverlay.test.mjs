@@ -11,22 +11,27 @@ import { useAwarenessDirectionStore } from '../../ui/stores/awarenessDirection.j
 import AwarenessDirection from '../../ui/views/panels/AwarenessDirection.vue';
 import { createState } from './state.js';
 import { createRendering } from './rendering.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeCameraPort } from '../../testSupport/fakeCameraPort.mjs';
 
 /** The rendering part over a subject with one military contact due east. */
 function overlay(screenAngle) {
   const state = createState({ services: {} });
   const container = document.body.appendChild(document.createElement('div'));
   const subject = Cesium.Cartesian3.fromDegrees(0, 0, 1000);
-  Object.assign(state, {
-    viewer: {
-      container,
-      scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
-      camera: {
-        heading: 0,
-        rightWC: new Cesium.Cartesian3(0, 1, 0),
-        upWC: new Cesium.Cartesian3(0, 0, 1),
-      },
+  const camera = fakeCameraPort({
+    pose: { heading: 0, right: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+  });
+  const viewer = {
+    container,
+    get canvas() {
+      return this.scene?.canvas;
     },
+    scene: { canvas: { clientWidth: 800, clientHeight: 600 } },
+  };
+  bindRenderer(viewer, { camera: camera.port });
+  Object.assign(state, {
+    viewer,
     enabled: true,
     subject: { position: subject, layerId: 'military' },
     results: {
@@ -65,7 +70,7 @@ function overlay(screenAngle) {
     },
     parts: {},
   });
-  return { state, container, rendering };
+  return { state, container, rendering, camera };
 }
 
 test('the overlay publishes the compass and the nearest contact bearings', () => {
@@ -108,14 +113,14 @@ test('an unstable frame keeps the last stable bearing, until the overlay is remo
     { angle: 2, opacity: 0.5, stable: false },
   ];
   const previous = [];
-  const { state, rendering } = overlay((x, y, last) => {
+  const { state, rendering, camera } = overlay((x, y, last) => {
     previous.push(last);
     return answers.shift() ?? { angle: last ?? 0, opacity: 1, stable: true };
   });
   rendering.updateDirectionOverlay();
   assert.equal(state.directionAngles[0], 1);
   // The heading turns, so the next frame recomputes the contact.
-  state.viewer.camera.heading = 0.1;
+  camera.setPose({ heading: 0.1 });
   rendering.updateDirectionOverlay();
   assert.equal(previous[1], 1, 'the unstable frame is given the last angle');
   assert.equal(state.directionAngles[0], 1, 'and does not replace it');

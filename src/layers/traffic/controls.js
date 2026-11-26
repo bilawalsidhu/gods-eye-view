@@ -9,6 +9,8 @@ import {
 } from '../../data/trafficPresetStyle.js';
 import { TRAFFIC_TIMING_ENABLED } from './policy.js';
 import { t, translateKnown } from '../../i18n/index.js';
+import { findFrame } from '../../render/rendererOf.js';
+import { trafficAnalystRecords } from './records.js';
 
 export function createControls({ state: layerState, services, parts, source }) {
   /** One status line: feed, drawn road source, then degraded-coverage notes. */
@@ -128,10 +130,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       ) {
         layerState._showDots = params.dots;
         // Hidden dots are kept, so showing them again is instant.
-        if (layerState._enabled && layerState._pointCollection)
-          layerState._pointCollection.show = params.dots;
+        if (layerState._enabled && layerState._dotSet)
+          layerState._dotSet.show = params.dots;
         parts.animation.syncRenderDemand();
-        layerState._viewer?.scene?.requestRender?.();
+        if (layerState._viewer)
+          findFrame(layerState._viewer)?.requestRender?.('traffic');
       }
       if (typeof params.densityScale === 'number') {
         layerState._densityScale = Math.max(
@@ -273,7 +276,7 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @param {Object}  [options]
      * @param {number}  [options.maxCount] - Maximum objects to return (defaults to all).
      * @param {number}  [options.seed]     - Integer seed to offset the sampling start.
-     * @returns {Array<{position:Cesium.Cartesian3, id:string, type:string}>}
+     * @returns {Array<{position:{x:number, y:number, z:number}, id:string, type:string}>}
      */
     getDetectableObjects(options = {}) {
       // Hidden dots are not on screen to detect.
@@ -293,7 +296,7 @@ export function createControls({ state: layerState, services, parts, source }) {
 
       const result = [];
       for (let i = start; i < layerState._dots.length; i += stride) {
-        const pos = layerState._dots[i].point.position;
+        const pos = layerState._dots[i].point.pos;
         if (!pos) continue;
         const entry = {
           position: pos,
@@ -367,6 +370,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       };
     },
 
+    /** The drawn road segments as plain records (records.js). */
+    getAnalystRecords(maxCount = Infinity) {
+      return trafficAnalystRecords(layerState, maxCount);
+    },
+
     getStats() {
       // Outstanding flow work counts as loading: the paint race can leave a
       // TomTom request in flight after the roads have settled, and the shared
@@ -405,6 +413,7 @@ export function createControls({ state: layerState, services, parts, source }) {
         motion: { ...layerState._motion },
         surfaceBudgetOmitted: layerState._surfaceBudgetOmitted || 0,
         lastUpdate: layerState._lastUpdate,
+        recordsRevision: layerState._flowRevision,
         loading,
         mode: feed.mode,
         // Cached proxy tiles (TomTom budget spent or upstream failing): the

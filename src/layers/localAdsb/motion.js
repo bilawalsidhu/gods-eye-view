@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   COURSE_HOLD_SPEED_MPS,
   TURN_MIN_SPEED_MPS,
@@ -21,6 +20,7 @@ import {
   COURSE_SLEW_DT_MAX_SEC,
   DR_CORRECTION_MS,
 } from '../flights/policy.js';
+import { fromDegreesInto } from '../../geo/ellipsoid.js';
 
 /** Heard positions kept per aircraft for its trail: 10 minutes, 600 fixes. */
 export const LOCAL_ADSB_HISTORY_MS = 10 * 60_000;
@@ -38,8 +38,8 @@ const COAST_MAXIMUM_SEC = 60;
 const KT_TO_MPS = 1852 / 3600;
 const EARTH_RADIUS_M = 6_371_008.8;
 const DEG = Math.PI / 180;
-const _chordFrom = new Cesium.Cartesian3();
-const _chordTo = new Cesium.Cartesian3();
+const _chordFrom = { x: 0, y: 0, z: 0 };
+const _chordTo = { x: 0, y: 0, z: 0 };
 
 function finite(value) {
   return Number.isFinite(value) ? value : null;
@@ -58,8 +58,8 @@ function telemetryTime(record) {
 }
 
 function chordCourse(from, to) {
-  Cesium.Cartesian3.fromDegrees(from.lon, from.lat, 0, undefined, _chordFrom);
-  Cesium.Cartesian3.fromDegrees(to.lon, to.lat, 0, undefined, _chordTo);
+  fromDegreesInto(from.lon, from.lat, 0, _chordFrom);
+  fromDegreesInto(to.lon, to.lat, 0, _chordTo);
   return courseBetweenCartesians(_chordFrom, _chordTo);
 }
 
@@ -371,8 +371,10 @@ export class LocalAdsbMotion {
   /**
    * Where to draw the aircraft now.
    * @param {number} nowMs Current epoch ms.
-   * @param {{slew?: boolean}} [options] `slew: false` reads without advancing
-   *   the rate-limited course.
+   * @param {{slew?: boolean}} [options] `slew: false` only reads: it
+   *   neither advances the rate-limited course nor ends the blend of a new
+   *   fix, so a read ahead of now (where the aircraft will be) leaves the
+   *   display as it was.
    * @returns {{lat:number, lon:number, altitudeFt:number|null,
    *   courseDeg:number|null}|null}
    */
@@ -382,8 +384,9 @@ export class LocalAdsbMotion {
     const correction = this.correction;
     if (correction) {
       const weight = 1 - (nowMs - correction.startAt) / DR_CORRECTION_MS;
-      if (weight <= 0) this.correction = null;
-      else {
+      if (weight <= 0) {
+        if (slew) this.correction = null;
+      } else {
         const w = Math.min(1, weight);
         raw.lat += (correction.north * w) / EARTH_RADIUS_M / DEG;
         raw.lon +=

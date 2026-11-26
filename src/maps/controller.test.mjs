@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
+// The controller switches stacks through the Cesium map engine.
+import { cesiumMapEngine } from '../render/cesium/mapEngine.js';
 import { createDefaultMapSources } from './defaultSources.js';
+import { bindRenderer } from '../render/rendererOf.js';
 
 function event() {
   const listeners = new Set();
@@ -28,16 +31,6 @@ function fixture(registry, options = {}) {
     scene: {
       globe: { show: true },
       requestRender() {},
-      frameState: {
-        creditDisplay: {
-          addStaticCredit(value) {
-            credits.add(value);
-          },
-          removeStaticCredit(value) {
-            credits.delete(value);
-          },
-        },
-      },
       primitives: {
         add(value) {
           primitives.push(value);
@@ -58,8 +51,17 @@ function fixture(registry, options = {}) {
       },
     },
   };
+  bindRenderer(viewer, {
+    credits: {
+      addStatic(credit) {
+        credits.add(credit);
+        return () => credits.delete(credit);
+      },
+    },
+  });
   const controller = new MapSourceController(viewer, {
     registry,
+    engine: cesiumMapEngine,
     createImageryLayer: (provider) => ({ provider }),
     onChange: (state) => changes.push(state),
     ...options,
@@ -135,6 +137,36 @@ test('an additional imagery source needs no controller branch and owns its cache
   assert.equal(env.imagery.length, 0);
   assert.equal(env.removed[0].destroy, true);
   assert.equal(destroys, 1);
+});
+
+test('a stack with no imagery (the plain globe) shows the globe with no imagery layer', async () => {
+  const terrain = {
+    id: 'keyless',
+    create: async () => ({ provider: { id: 'terrain' } }),
+  };
+  const registry = {
+    defaultId: 'sat',
+    sources: [
+      {
+        descriptor: descriptor('sat'),
+        imagery: async () => ({ id: 'sat' }),
+        terrain,
+      },
+      { descriptor: descriptor('none'), imagery: async () => null, terrain },
+    ],
+  };
+  const env = fixture(registry);
+  await env.controller.setStack('sat');
+  assert.equal(env.imagery.length, 1);
+  await env.controller.setStack('none');
+  assert.equal(env.controller.getActiveId(), 'none');
+  assert.equal(env.imagery.length, 0, 'the plain globe has no imagery layer');
+  assert.equal(env.viewer.scene.globe.show, true);
+  await env.controller.setStack('none');
+  assert.equal(env.imagery.length, 0);
+  await env.controller.setStack('sat');
+  assert.equal(env.imagery.length, 1);
+  env.controller.destroy();
 });
 
 test('repeated Esri shot handoffs retain imagery and keep tile fallback live', async () => {
@@ -274,7 +306,10 @@ test('Esri construction fallback reports and attributes the source actually rend
 test('one Esri tile failure stays put, two fall back, and stale errors cannot replace a selection', async () => {
   const env = publicFixture();
   await env.controller.setStack('esri-imagery');
-  assert.equal(env.credits.size, 1);
+  assert.deepEqual(
+    [...env.credits],
+    [{ text: 'Powered by Esri', href: 'https://www.esri.com', inline: true }],
+  );
   const errorEvent = env.providers.get('esri-imagery').errorEvent;
   errorEvent.raise();
   await settle();
@@ -451,12 +486,18 @@ test('imagery host tileset follows supplied, owned and globe map sources', async
   assert.equal(controller.getImageryHostTileset(), supplied);
   await controller.setStack('owned');
   assert.equal(controller.getImageryHostTileset(), owned);
+  assert.equal(controller.getDrapeSurface(), 'tileset');
   await controller.setStack('globe');
   assert.equal(controller.getImageryHostTileset(), null);
+  assert.equal(controller.getDrapeSurface(), 'globe');
   await controller.setStack('supplied');
   assert.equal(controller.getImageryHostTileset(), supplied);
+  assert.equal(controller.getDrapeSurface(), 'tileset');
+  supplied.show = false;
+  assert.equal(controller.getDrapeSurface(), 'none');
   controller.destroy();
   assert.equal(controller.getImageryHostTileset(), null);
+  assert.equal(controller.getDrapeSurface(), null);
 });
 
 function leaseFixture() {

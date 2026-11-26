@@ -1,0 +1,16 @@
+/* Core's search fields share their frame's row and their bare input: the
+ * kit's UiSearchField wears them as .ui-search-field and
+ * .ui-search-field__input. Each rule selects one class and loads before the
+ * feature stylesheets, so a feature rule still sets the frame's size,
+ * surface and focus ring and the input's type, colour, flex and outline. The
+ * browser's own cancel button is left to each skin. */
+.ui-search-field {
+  display: flex;
+  align-items: center;
+}
+
+.ui-search-field__input {
+  min-width: 0;
+  background: none;
+  border: 0;
+}

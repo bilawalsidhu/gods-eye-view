@@ -8,6 +8,8 @@ import {
   decodeBloomIntensity,
 } from '../bloom.js';
 import { RETIRED_STYLES } from '../visualStylePolicy.js';
+import { isStoryTagList } from './storyTags.js';
+import { isStoryThumb } from './storyThumb.js';
 
 /** @constant {number} Current schema version for project migration */
 export const PROJECT_VERSION = SCENE_DOCUMENT_VERSION;
@@ -285,6 +287,9 @@ export function normalizeShot(
       hud: {
         visible: typeof hud.visible === 'boolean' ? hud.visible : true,
         variant: typeof hud.variant === 'string' ? hud.variant : 'tactical',
+        // Sonar on beside a layout whose code cannot say so; absent is off
+        // unless the variant names the retired Cyber layout.
+        ...(hud.sonar === true ? { sonar: true } : {}),
       },
       detection: {
         ...(typeof detection.allocation === 'string'
@@ -359,6 +364,15 @@ export function normalizeProject(rawProject) {
         title: scene?.title || `Scene ${sceneIdx + 1}`,
         ...(scene?.dataPacks ? { dataPacks: deepClone(scene.dataPacks) } : {}),
         ...(scene?.anchors ? { anchors: deepClone(scene.anchors) } : {}),
+        // Published to the Stories page.
+        ...(scene?.stories === true ? { stories: true } : {}),
+        // The Stories card's thumbnail and tags.
+        ...(isStoryThumb(scene?.storyThumb)
+          ? { storyThumb: scene.storyThumb }
+          : {}),
+        ...(isStoryTagList(scene?.storyTags) && scene.storyTags.length
+          ? { storyTags: [...scene.storyTags] }
+          : {}),
         releaseLayerIds: [
           ...new Set(
             (Array.isArray(scene?.releaseLayerIds)

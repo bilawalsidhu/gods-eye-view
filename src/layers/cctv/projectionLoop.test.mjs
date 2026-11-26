@@ -182,30 +182,39 @@ test('refreshProjectionTextures reports whether it put a new image on the plane'
   const frames = createFrames({
     state: {},
     services: {},
-    parts: { model: { safeNumber: (value, fallback) => value ?? fallback } },
+    parts: {
+      model: { safeNumber: (value, fallback) => value ?? fallback },
+      projection: {
+        setPlaneSource(runtime, source) {
+          runtime.plane.source = source;
+        },
+      },
+    },
     source: {},
   });
   const runtime = {
     mode: 'image',
     canvas: {},
     canvasStamp: 1,
-    planeEntity: { show: true },
-    planeMaterial: { image: null },
+    plane: { show: true, source: null },
   };
   const record = { projection: runtime };
   assert.equal(frames.refreshProjectionTextures(record), true);
-  const first = runtime.planeMaterial.image;
+  const first = runtime.plane.source.canvas;
   assert.ok(first);
   // Unchanged canvas: nothing to render.
   runtime.lastTextureSwapAt -= PROJECTION_TEXTURE_SWAP_MS;
   assert.equal(frames.refreshProjectionTextures(record), false);
-  assert.equal(runtime.planeMaterial.image, first);
+  assert.equal(runtime.plane.source.canvas, first);
   runtime.canvasStamp = 2;
   assert.equal(frames.refreshProjectionTextures(record), true);
-  assert.notEqual(runtime.planeMaterial.image, first);
-  runtime.planeEntity.show = false;
+  assert.notEqual(runtime.plane.source.canvas, first);
+  runtime.plane.show = false;
   runtime.canvasStamp = 3;
   runtime.lastTextureSwapAt -= PROJECTION_TEXTURE_SWAP_MS;
   assert.equal(frames.refreshProjectionTextures(record), false);
-  assert.equal(frames.refreshProjectionTextures({ projection: { mode: 'video' } }), false);
+  assert.equal(
+    frames.refreshProjectionTextures({ projection: { mode: 'video' } }),
+    false,
+  );
 });

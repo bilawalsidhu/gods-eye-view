@@ -25,6 +25,7 @@ import { createNewsSource } from '../layers/news/source.js';
 import { createShipwrecksSource } from '../layers/shipwrecks/source.js';
 import { createMapillarySource } from '../layers/streetLevel/providers/mapillary/source.js';
 import { createReferenceSources } from '../sources/reference.js';
+import { createLocalAirQualityFieldSource } from '../layers/airQuality/fieldSource.js';
 export { createReferenceSources as createStandaloneReferenceSources } from '../sources/reference.js';
 
 /** Select standalone providers without starting their acquisition. */
@@ -75,6 +76,11 @@ export function createStandaloneLayerSources(
     mapillary: createMapillarySource({
       token: import.meta.env?.MAPILLARY_CLIENT_TOKEN || '',
     }),
+    // Same-origin /api/air-quality/field: a local folder of baked model
+    // grids when the server is given one (AIR_QUALITY_FIELD_DIR); without
+    // it the server answers "not configured" and the layer shows stations
+    // only, asking once.
+    'air-quality-field': createLocalAirQualityFieldSource(),
   };
   for (const name of Object.keys(overrides)) {
     if (!Object.hasOwn(defaults, name))

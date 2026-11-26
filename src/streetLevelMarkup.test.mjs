@@ -91,20 +91,6 @@ test('each radiogroup is one tab stop, on its checked button', () => {
   }
 });
 
-test('the Cyber theme frames the Street Level panel like its rail peers (P3)', () => {
-  const cyber = read('src/ui/styles/cyber.css');
-  const inner = (cyber.match(/\.recent-imagery-panel-inner,/g) || []).length;
-  const panel = (cyber.match(/#recent-imagery-panel,/g) || []).length;
-  assert.ok(inner > 0 && panel > 0);
-  assert.equal(
-    (cyber.match(/\.street-level-panel-inner,/g) || []).length,
-    inner,
-  );
-  assert.equal((cyber.match(/#street-level-panel,/g) || []).length, panel);
-  // A theme header rule must be able to outrank the panel's own.
-  assert.doesNotMatch(panelCss, /#street-level-panel \.panel-header/);
-});
-
 test('OPEN STREET VIEW keeps its width beside a long coverage line', () => {
   // .scene-btn grows and shrinks (flex: 1) and loads after this stylesheet:
   // only a more specific rule keeps the button from being squeezed.
