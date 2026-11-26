@@ -1,9 +1,12 @@
-/* ── World timeline (design prototype) ─────────────────────────── */
-/* One line along the bottom, under the command dock: the clock, the shuttle,
-   a track over a window of time, the window's length, the lanes and LIVE.
-   The dock above rises by --world-timeline-lift, which the component sets. */
+/* ── World timeline (design prototype, pass 2) ─────────────────── */
+/* The command dock never moves. Time stacks upward from it: the controls in
+   the dock's own row (either side of it, or a row above it where there is no
+   room), the track above them, the layers' lanes above that. The component
+   places itself from where the dock is and tells the page how tall it stands
+   (--world-timeline-top), so the HUD's corners clear it. */
 :root {
   --world-timeline-lift: 0px;
+  --world-timeline-top: 0px;
   --wt-live: #00d4ff;
   --wt-past: #ffb45a;
   --wt-future: #b79cff;
@@ -23,28 +26,37 @@ body.cockpit-mode #world-timeline {
 
 #world-timeline.wt {
   --wt-tense: var(--wt-live);
+  --wt-key: 30px;
+  --wt-control: 28px;
+  --wt-gutter: 150px;
+  --wt-track: 46px;
+  --wt-line: rgba(123, 189, 211, 0.16);
+  --wt-ink: rgba(222, 240, 247, 0.92);
+  --wt-dim: rgba(196, 222, 232, 0.7);
   direction: ltr;
   position: fixed;
   bottom: 74px;
   left: 50%;
   z-index: 146;
-  display: flex;
-  flex-direction: column;
-  width: clamp(460px, calc(100vw - 720px), 1040px);
-  transition: width 0.18s ease;
   box-sizing: border-box;
-  border: 1px solid rgba(123, 189, 211, 0.16);
-  border-radius: 4px;
-  background: rgba(4, 8, 12, 0.72);
-  backdrop-filter: blur(18px) saturate(1.3);
-  -webkit-backdrop-filter: blur(18px) saturate(1.3);
-  color: rgba(214, 236, 244, 0.86);
+  color: var(--wt-ink);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  letter-spacing: 0.06em;
   transform: translateX(-50%);
   user-select: none;
   -webkit-user-select: none;
+}
+
+#world-timeline.wt.is-coarse {
+  --wt-key: 44px;
+  --wt-control: 44px;
+  --wt-track: 56px;
+}
+
+#world-timeline.wt.is-stack,
+#world-timeline.wt.is-under {
+  --wt-gutter: 128px;
 }
 
 #world-timeline.wt.is-past {
@@ -55,9 +67,25 @@ body.cockpit-mode #world-timeline {
   --wt-tense: var(--wt-future);
 }
 
+.wt-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--wt-line);
+  border-radius: 4px;
+  background: rgba(4, 8, 12, 0.78);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  transition: background 0.2s ease;
+}
+
+.is-rest .wt-body {
+  background: rgba(4, 8, 12, 0.5);
+}
+
 /* The HUD's corner brackets, in the tense's colour. */
-#world-timeline.wt::before,
-#world-timeline.wt::after {
+.wt-body::before,
+.wt-body::after {
   position: absolute;
   bottom: -1px;
   width: 9px;
@@ -69,12 +97,12 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
-#world-timeline.wt::before {
+.wt-body::before {
   left: -1px;
   border-right: 0;
 }
 
-#world-timeline.wt::after {
+.wt-body::after {
   right: -1px;
   border-left: 0;
 }
@@ -91,118 +119,89 @@ body.cockpit-mode #world-timeline {
 }
 
 .wt button:focus-visible,
+.wt input:focus-visible,
 .wt-track:focus-visible {
-  outline: 1px solid var(--wt-tense);
-  outline-offset: 1px;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
-.wt-bar {
+.wt-gutter {
+  box-sizing: border-box;
+  flex: none;
+  width: var(--wt-gutter);
+  border-right: 1px solid var(--wt-line);
+}
+
+/* ── The controls: the dock's own row ── */
+.wt-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  height: calc(var(--wt-control) + 24px);
+  padding: 0 10px;
+  border-top: 1px solid var(--wt-line);
+}
+
+.is-flank .wt-controls {
   display: grid;
-  grid-template-columns: auto auto 1fr auto;
-  grid-template-areas: 'clock shuttle track right';
-  align-items: stretch;
-  column-gap: 10px;
-  height: 40px;
-  padding: 0 8px 0 10px;
+  grid-template-columns: 1fr var(--wt-dock-width) 1fr;
+  gap: 0;
+  height: var(--wt-row, 56px);
 }
 
-.wt-clock {
-  grid-area: clock;
+.wt-dockroom {
+  display: none;
 }
 
+.is-flank .wt-dockroom {
+  display: block;
+}
+
+.wt-left,
+.wt-right,
 .wt-shuttle {
-  grid-area: shuttle;
+  display: flex;
+  align-items: center;
 }
 
-.wt-track {
-  grid-area: track;
+.wt-left {
+  gap: 8px;
+  min-width: 0;
 }
 
 .wt-right {
-  grid-area: right;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-/* Engaged: the track takes a row of its own across the whole bar. */
-.is-engaged .wt-bar {
-  grid-template-areas:
-    'track track track track'
-    'clock shuttle gap right';
-  grid-template-rows: 40px 42px;
-  height: 82px;
-  padding: 0;
-}
-
-.is-engaged .wt-clock {
-  margin-left: 10px;
-}
-
-.is-engaged .wt-right {
-  margin-right: 8px;
-}
-
-.is-engaged .wt-track {
-  border-bottom: 1px solid rgba(123, 189, 211, 0.14);
-}
-
-/* At rest: the clock, rewind, and a strip of the last day. */
-#world-timeline.wt.is-rest {
-  width: 460px;
-  background: rgba(4, 8, 12, 0.5);
-}
-
-#world-timeline.is-rest .wt-speed,
-#world-timeline.is-rest .wt-key--play,
-#world-timeline.is-rest .wt-key--fwd,
-#world-timeline.is-rest .wt-right,
-#world-timeline.is-rest .wt-tick em,
-#world-timeline.is-rest .wt-now em {
-  display: none;
-}
-
-.is-rest .wt-bar {
-  grid-template-columns: auto auto 1fr;
-  grid-template-areas: 'clock shuttle track';
-  padding-right: 10px;
-}
-
-.is-rest .wt-strip {
-  bottom: 16px;
-}
-
-.is-rest .wt-journey {
-  bottom: 22px;
-}
-
-.is-rest .wt-journey-start {
-  display: none;
+.wt-shuttle {
+  flex: none;
+  gap: 2px;
 }
 
 /* ── The clock ── */
 .wt .wt-clock {
   display: flex;
   flex: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  width: 118px;
+  align-items: center;
+  gap: 10px;
+  height: calc(var(--wt-control) + 12px);
+  padding: 0 6px 0 2px;
+  border-radius: 3px;
   text-align: left;
 }
 
-.is-engaged .wt-clock {
-  width: 214px;
+.wt .wt-clock:hover,
+.wt .wt-clock[aria-expanded='true'] {
+  background: rgba(123, 189, 211, 0.1);
 }
 
-/* How far from now, beside the time: the one thing not to miss. */
-.wt-clock-ago {
-  margin-left: 10px;
-  padding: 2px 5px;
-  border: 1px solid color-mix(in srgb, var(--wt-tense) 60%, transparent);
-  border-radius: 2px;
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0.08em;
-  text-shadow: none;
-  vertical-align: 3px;
+.wt-clock-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .wt-clock-time {
@@ -212,32 +211,65 @@ body.cockpit-mode #world-timeline {
   font-weight: 500;
   letter-spacing: 0.04em;
   line-height: 1;
+  white-space: nowrap;
   text-shadow: 0 0 12px color-mix(in srgb, var(--wt-tense) 45%, transparent);
 }
 
 .wt-clock-time i {
-  margin-left: 1px;
+  margin-left: 5px;
   font-size: 11px;
   font-style: normal;
-  opacity: 0.7;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+  text-shadow: none;
 }
 
 .wt-clock-sub {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: color-mix(in srgb, var(--wt-tense) 78%, white);
-  font-size: 9px;
+  color: var(--wt-dim);
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.1em;
   line-height: 1;
   white-space: nowrap;
 }
 
+/* The tense, in a word: colour alone does not carry it. */
+.wt-tense {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-width: 62px;
+  padding: 4px 6px;
+  border: 1px solid color-mix(in srgb, var(--wt-tense) 60%, transparent);
+  border-radius: 2px;
+  color: var(--wt-tense);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.wt-tense b {
+  font-weight: 500;
+}
+
+.wt-tense span {
+  color: #fff;
+}
+
+.is-live .wt-tense {
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  border-color: transparent;
+}
+
 .wt-dot {
   display: inline-block;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: currentColor;
 }
@@ -254,28 +286,20 @@ body.cockpit-mode #world-timeline {
 }
 
 /* ── The shuttle ── */
-.wt-shuttle,
-.wt-right {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-}
-
 .wt .wt-key {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: var(--wt-key);
+  height: var(--wt-key);
   border-radius: 3px;
-  color: rgba(214, 236, 244, 0.7);
+  color: var(--wt-dim);
   touch-action: none;
 }
 
 .wt .wt-key svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   fill: currentColor;
 }
 
@@ -285,8 +309,9 @@ body.cockpit-mode #world-timeline {
 }
 
 .wt .wt-key.is-on {
-  background: color-mix(in srgb, var(--wt-tense) 18%, transparent);
-  color: var(--wt-tense);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  box-shadow: inset 0 -2px 0 var(--wt-tense);
 }
 
 .wt .wt-key:disabled {
@@ -295,38 +320,210 @@ body.cockpit-mode #world-timeline {
 }
 
 .wt .wt-key--play {
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(123, 189, 211, 0.3);
+  border: 1px solid rgba(123, 189, 211, 0.34);
   border-radius: 50%;
   color: #fff;
 }
 
-.wt .wt-speed {
-  width: 74px;
-  height: 22px;
-  margin-left: 4px;
-  border: 1px solid rgba(123, 189, 211, 0.18);
+.wt .wt-chip,
+.wt-zoom,
+.wt .wt-live {
+  box-sizing: border-box;
+  height: var(--wt-control);
+  border: 1px solid rgba(123, 189, 211, 0.22);
   border-radius: 3px;
-  color: rgba(214, 236, 244, 0.72);
-  font-size: 9px;
+}
+
+.wt .wt-chip {
+  min-width: 78px;
+  padding: 0 8px;
+  color: var(--wt-ink);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.wt .wt-chip:hover,
+.wt .wt-chip[aria-expanded='true'],
+.wt .wt-zoom button:hover:not(:disabled),
+.wt .wt-zoom button[aria-expanded='true'] {
+  background: rgba(123, 189, 211, 0.14);
+  color: #fff;
+}
+
 .is-running .wt-speed {
-  border-color: color-mix(in srgb, var(--wt-tense) 60%, transparent);
-  color: var(--wt-tense);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+.wt-zoom {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+}
+
+.wt .wt-zoom button {
+  min-width: var(--wt-control);
+  padding: 0 4px;
+  color: var(--wt-ink);
+  font-size: 13px;
+}
+
+.wt .wt-zoom button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.wt .wt-zoom .wt-zoom-span {
+  min-width: 46px;
+  border-inline: 1px solid rgba(123, 189, 211, 0.22);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.wt .wt-live {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-color: rgba(0, 212, 255, 0.5);
+  color: var(--wt-live);
+}
+
+.wt .wt-live:not(.is-live) {
+  background: rgba(0, 212, 255, 0.14);
+}
+
+.wt .wt-live:not(.is-live) .wt-dot {
+  background: none;
+  box-shadow: inset 0 0 0 1px currentColor;
+  animation: none;
+}
+
+.wt .wt-live.is-live:disabled {
+  border-color: transparent;
+  cursor: default;
+}
+
+.wt .wt-resting {
+  display: none;
+  height: var(--wt-control);
+  padding: 0 8px;
+  color: var(--wt-dim);
+  white-space: nowrap;
+}
+
+.wt .wt-resting:hover {
+  color: #fff;
+}
+
+#world-timeline.is-rest:is(.is-flank, .is-under) .wt-resting {
+  display: block;
+}
+
+#world-timeline.is-rest .wt-live,
+/* At rest the bar is the clock, a way back and a way to hold the moment. */
+#world-timeline.is-rest .wt-speed,
+#world-timeline.is-rest .wt-zoom,
+#world-timeline.is-rest .wt-key--fwd,
+#world-timeline.is-rest .wt-tick em,
+#world-timeline.is-rest .wt-now em {
+  display: none;
 }
 
 /* ── The track ── */
+.wt-trackrow {
+  display: flex;
+  height: var(--wt-track);
+  transition: height 0.16s ease;
+}
+
+.is-rest .wt-trackrow {
+  height: 24px;
+}
+
+.wt-scope {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 8px;
+  min-width: 0;
+}
+
+.wt .wt-scope-lanes {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 24px;
+  height: 100%;
+  color: var(--wt-dim);
+  white-space: nowrap;
+}
+
+.wt .wt-scope-lanes:hover,
+.wt .wt-scope-lanes[aria-pressed='true'] {
+  color: #fff;
+}
+
+.wt-scope-lanes svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-left: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.wt-scope-name {
+  overflow: hidden;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wt .wt-scope-name.is-subject {
+  max-width: 84px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 2px;
+}
+
+.wt .wt-scope-step,
+.wt .wt-scope-x {
+  flex: none;
+  width: 22px;
+  height: 100%;
+  max-height: var(--wt-control);
+  color: var(--wt-dim);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.is-coarse .wt-scope-step,
+.is-coarse .wt-scope-x {
+  width: 30px;
+}
+
+.wt .wt-scope-step:hover,
+.wt .wt-scope-x:hover {
+  color: #fff;
+}
+
 .wt-track {
   position: relative;
   flex: 1 1 auto;
-  min-width: 120px;
+  min-width: 0;
   overflow: hidden;
   cursor: ew-resize;
   touch-action: none;
+}
+
+.is-tape .wt-track {
+  cursor: grab;
 }
 
 /* Past now: what is predicted or forecast, not yet seen. */
@@ -338,7 +535,7 @@ body.cockpit-mode #world-timeline {
   background: repeating-linear-gradient(
     -45deg,
     transparent 0 5px,
-    color-mix(in srgb, var(--wt-future) 9%, transparent) 5px 6px
+    color-mix(in srgb, var(--wt-future) 10%, transparent) 5px 6px
   );
   pointer-events: none;
 }
@@ -348,37 +545,38 @@ body.cockpit-mode #world-timeline {
   top: 0;
   width: 1px;
   height: 5px;
-  background: rgba(160, 205, 222, 0.28);
+  background: rgba(160, 205, 222, 0.3);
   pointer-events: none;
 }
 
 .wt-tick.is-major {
   height: 9px;
-  background: rgba(160, 205, 222, 0.6);
+  background: rgba(160, 205, 222, 0.65);
 }
 
 .wt-tick.is-midnight {
   height: 100%;
-  background: linear-gradient(rgba(160, 205, 222, 0.6), rgba(160, 205, 222, 0.08));
+  background: linear-gradient(rgba(160, 205, 222, 0.65), rgba(160, 205, 222, 0.08));
 }
 
 .wt-tick em {
   position: absolute;
-  top: 9px;
-  left: 4px;
-  color: rgba(190, 220, 232, 0.62);
-  font-size: 9px;
+  top: 10px;
+  left: 5px;
+  color: var(--wt-dim);
+  font-size: 11px;
   font-style: normal;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
   white-space: nowrap;
 }
 
 .wt-tick.is-midnight em {
-  color: #e6f4f9;
+  color: #fff;
 }
 
 /* Where there is data: solid where every layer on has it, hatched where only
-   some do, empty where none does. */
+   some do, hollow where the hosted archive has it and this build does not. */
 .wt-strip {
   position: absolute;
   right: 0;
@@ -389,19 +587,23 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
+.is-rest .wt-strip {
+  bottom: 9px;
+}
+
 .wt-strip-part {
   position: absolute;
   top: 0;
   bottom: 0;
   background: repeating-linear-gradient(
     90deg,
-    rgba(0, 212, 255, 0.5) 0 2px,
+    rgba(0, 212, 255, 0.55) 0 2px,
     transparent 2px 5px
   );
 }
 
 .wt-strip-part.is-all {
-  background: rgba(0, 212, 255, 0.72);
+  background: rgba(0, 212, 255, 0.78);
 }
 
 .wt-strip-part.is-future {
@@ -410,6 +612,25 @@ body.cockpit-mode #world-timeline {
     color-mix(in srgb, var(--wt-future) 75%, transparent) 0 1px,
     transparent 1px 4px
   );
+}
+
+.wt-strip-archive,
+.wt-lane-hollow,
+.wt-reach-archive {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 212, 255, 0.75);
+  border-right: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent 0 3px,
+    rgba(0, 212, 255, 0.28) 3px 4px
+  );
+}
+
+.wt-strip-archive {
+  top: 0;
+  bottom: 0;
 }
 
 /* The thing selected: the stretch it was observed over. */
@@ -422,25 +643,87 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
-.wt-journey-start {
-  position: absolute;
-  bottom: 9px;
-  width: 1px;
-  height: 8px;
-  background: #fff;
-  pointer-events: none;
+.is-rest .wt-journey {
+  bottom: 15px;
 }
 
 .wt-mark {
   position: absolute;
-  bottom: 10px;
-  width: 5px;
-  height: 5px;
-  margin-left: -2.5px;
+  bottom: 11px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
   border: 1px solid rgba(255, 255, 255, 0.85);
   background: rgba(4, 8, 12, 0.9);
   transform: rotate(45deg);
   pointer-events: none;
+}
+
+/* The moments of the thing selected, or of an answer: numbered pins. */
+.wt-pin {
+  position: absolute;
+  top: 0;
+  bottom: 9px;
+  width: 1px;
+  background: linear-gradient(transparent 30%, rgba(255, 255, 255, 0.55));
+  pointer-events: none;
+}
+
+.wt-pin b {
+  position: absolute;
+  bottom: -2px;
+  left: -9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: rgba(4, 8, 12, 0.94);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.wt-pin.is-answer b {
+  background: #fff;
+  color: #05090d;
+}
+
+.wt-pin.is-active b {
+  box-shadow: 0 0 0 2px var(--wt-tense);
+}
+
+.is-rest .wt-pin b {
+  bottom: -6px;
+  width: 8px;
+  height: 8px;
+  left: -4px;
+  font-size: 0;
+}
+
+.wt-pins-off {
+  position: absolute;
+  bottom: 9px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 2px;
+  background: rgba(4, 8, 12, 0.94);
+  color: #fff;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.wt-pins-off.is-before {
+  left: 4px;
+}
+
+.wt-pins-off.is-after {
+  right: 4px;
 }
 
 .wt-now {
@@ -448,17 +731,18 @@ body.cockpit-mode #world-timeline {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: color-mix(in srgb, var(--wt-live) 55%, transparent);
+  background: color-mix(in srgb, var(--wt-live) 60%, transparent);
   pointer-events: none;
 }
 
 .wt-now em {
   position: absolute;
-  top: 20px;
+  top: 24px;
   right: 4px;
   color: var(--wt-live);
-  font-size: 8px;
+  font-size: 11px;
   font-style: normal;
+  line-height: 1;
 }
 
 .is-live .wt-now em {
@@ -470,27 +754,37 @@ body.cockpit-mode #world-timeline {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.4);
   pointer-events: none;
 }
 
-.wt-hover em {
+.wt-hover em,
+.wt-head em {
   position: absolute;
-  top: 8px;
-  left: 5px;
-  padding: 1px 4px;
-  background: rgba(4, 8, 12, 0.92);
+  top: 7px;
+  left: 6px;
+  padding: 2px 5px;
+  border-radius: 2px;
+  background: rgba(4, 8, 12, 0.94);
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
   font-style: normal;
+  line-height: 1.1;
   white-space: nowrap;
+}
+
+.wt-hover.is-late em,
+.wt-head.is-late em {
+  right: 6px;
+  left: auto;
 }
 
 .wt-head {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
+  width: 2px;
+  margin-left: -1px;
   background: var(--wt-tense);
   box-shadow: 0 0 8px var(--wt-tense);
   pointer-events: none;
@@ -500,15 +794,23 @@ body.cockpit-mode #world-timeline {
   position: absolute;
   top: 0;
   left: -4px;
-  width: 9px;
-  height: 7px;
+  width: 10px;
+  height: 8px;
   background: var(--wt-tense);
   clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
 
+.wt-head em {
+  border: 1px solid color-mix(in srgb, var(--wt-tense) 70%, transparent);
+}
+
+.is-rest .wt-head em {
+  display: none;
+}
+
 .wt-wait {
   position: absolute;
-  top: 12px;
+  top: 14px;
   width: 9px;
   height: 9px;
   margin-left: 6px;
@@ -524,102 +826,163 @@ body.cockpit-mode #world-timeline {
   }
 }
 
-/* ── The right: the subject, the window, the lanes, live ── */
-.wt-right {
-  gap: 6px;
-}
-
-.wt-windows {
+/* ── How far back ── */
+.wt-reach {
   display: flex;
-  border: 1px solid rgba(123, 189, 211, 0.18);
-  border-radius: 3px;
-}
-
-.wt .wt-windows button {
   height: 22px;
-  padding: 0 6px;
-  color: rgba(214, 236, 244, 0.55);
-  font-size: 9px;
+  border-bottom: 1px solid var(--wt-line);
 }
 
-.wt .wt-windows button:hover {
-  color: #fff;
-}
-
-.wt .wt-windows button.is-on {
-  background: rgba(123, 189, 211, 0.16);
-  color: #fff;
-}
-
-.wt-subject {
+.wt-reach-name {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding-right: 6px;
-  border-right: 1px solid rgba(123, 189, 211, 0.18);
+  padding-left: 8px;
+  color: var(--wt-dim);
+  white-space: nowrap;
 }
 
-.wt-subject-name {
-  color: #fff;
-  font-size: 10px;
+.wt-reach-track {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
 }
 
-.wt .wt-subject button {
-  height: 22px;
-  padding: 0 5px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  font-size: 9px;
+.wt-reach-loaded {
+  position: absolute;
+  right: 0;
+  bottom: 3px;
+  height: 3px;
+  background: rgba(0, 212, 255, 0.78);
 }
 
-.wt .wt-subject button:hover {
-  border-color: #fff;
-  color: #fff;
+.wt-reach-archive {
+  bottom: 3px;
+  height: 3px;
 }
 
-.wt .wt-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 8px;
-  border: 1px solid rgba(0, 212, 255, 0.5);
-  border-radius: 3px;
-  color: var(--wt-live);
-  font-size: 10px;
+.wt-reach-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(160, 205, 222, 0.22);
+  pointer-events: none;
 }
 
-.wt .wt-live:not(.is-live) {
-  background: rgba(0, 212, 255, 0.14);
+.wt-reach-tick em {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  color: var(--wt-dim);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1;
 }
 
-.wt .wt-live:not(.is-live) .wt-dot {
-  background: none;
-  box-shadow: inset 0 0 0 1px currentColor;
-  animation: none;
+.wt-reach-window {
+  position: absolute;
+  top: 2px;
+  bottom: 1px;
+  box-sizing: border-box;
+  min-width: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
 }
 
-.wt .wt-live.is-live {
-  border-color: transparent;
-  cursor: default;
+.wt-reach-head {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--wt-tense);
+  pointer-events: none;
 }
 
 /* ── The lanes ── */
 .wt-lanes {
   display: flex;
   flex-direction: column;
-  padding: 6px 0 4px;
-  border-bottom: 1px solid rgba(123, 189, 211, 0.14);
+  max-height: 176px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--wt-line);
 }
 
 .wt-lane {
-  position: relative;
-  height: 18px;
+  display: flex;
+  flex: none;
+  height: 22px;
+}
+
+.is-coarse .wt-lane {
+  height: 30px;
+}
+
+.wt .wt-lane-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 0 8px;
+  color: var(--wt-ink);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.wt .wt-lane-name:hover,
+.wt .wt-lane-name[aria-expanded='true'] {
+  background: rgba(123, 189, 211, 0.12);
+  color: #fff;
+}
+
+.wt-lane-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The name's glyph is the lane's own drawing: a bar, ticks, dots, a mark. */
+.wt-lane-name i {
+  flex: none;
+  width: 9px;
+  height: 3px;
+  background: rgba(0, 212, 255, 0.85);
+}
+
+.is-frames .wt-lane-name i {
+  width: 2px;
+  height: 8px;
+  box-shadow: 4px 0 0 rgba(0, 212, 255, 0.85);
+  margin-right: 5px;
+}
+
+.is-computed .wt-lane-name i {
+  height: 1px;
+  background: repeating-linear-gradient(90deg, #dcecf4 0 2px, transparent 2px 4px);
+}
+
+.is-events .wt-lane-name i {
+  width: 5px;
+  height: 5px;
+  margin: 0 2px;
+  border: 1px solid #fff;
+  background: none;
+  transform: rotate(45deg);
+}
+
+.wt-lane.is-missing .wt-lane-name span {
+  opacity: 0.55;
+}
+
+.wt-lane.is-missing .wt-lane-name i {
+  opacity: 0.35;
 }
 
 .wt-lane-track {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1 1 auto;
   overflow: hidden;
 }
 
@@ -633,35 +996,18 @@ body.cockpit-mode #world-timeline {
   content: '';
 }
 
-/* The name and what the layer shows at the time ride over the lane's ends. */
-.wt-lane-name,
-.wt-lane-status {
-  position: absolute;
-  top: 3px;
-  padding: 0 6px;
-  background: rgba(4, 8, 12, 0.88);
-  font-size: 9px;
-  line-height: 12px;
-  white-space: nowrap;
-}
-
-.wt-lane-name {
-  left: 4px;
-  color: rgba(226, 242, 248, 0.9);
-}
-
-.wt-lane-status {
-  right: 4px;
-  color: rgba(214, 236, 244, 0.6);
-  font-variant-numeric: tabular-nums;
-}
-
 .wt-lane-bar {
   position: absolute;
   top: 50%;
   height: 3px;
   margin-top: -1.5px;
-  background: rgba(0, 212, 255, 0.72);
+  background: rgba(0, 212, 255, 0.78);
+}
+
+.wt-lane-hollow {
+  top: 50%;
+  height: 5px;
+  margin-top: -2.5px;
 }
 
 /* Computed, not observed: a dotted line. */
@@ -670,7 +1016,7 @@ body.cockpit-mode #world-timeline {
   margin-top: -0.5px;
   background: repeating-linear-gradient(
     90deg,
-    rgba(214, 236, 244, 0.8) 0 2px,
+    rgba(214, 236, 244, 0.85) 0 2px,
     transparent 2px 5px
   );
 }
@@ -683,17 +1029,17 @@ body.cockpit-mode #world-timeline {
   position: absolute;
   top: 50%;
   width: 2px;
-  height: 7px;
-  margin: -3.5px 0 0 -1px;
+  height: 8px;
+  margin: -4px 0 0 -1px;
   background: rgba(0, 212, 255, 0.95);
 }
 
 .wt-lane-mark {
   position: absolute;
   top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -3px 0 0 -3px;
+  width: 6px;
+  height: 6px;
+  margin: -4px 0 0 -4px;
   border: 1px solid rgba(255, 255, 255, 0.85);
   transform: rotate(45deg);
 }
@@ -703,45 +1049,218 @@ body.cockpit-mode #world-timeline {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: color-mix(in srgb, var(--wt-tense) 70%, transparent);
+  background: color-mix(in srgb, var(--wt-tense) 75%, transparent);
 }
 
-.wt-lane.is-missing .wt-lane-name,
-.wt-lane.is-missing .wt-lane-status {
-  color: var(--wt-past);
+/* ── The notice: a layer on has nothing at the time shown ── */
+.wt-above {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  left: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px 10px;
+  pointer-events: none;
 }
 
-/* ── The gap notice: a layer on has nothing at the time shown ── */
-.wt .wt-gap {
-  grid-area: gap;
-  display: none;
+.wt-above > * {
+  pointer-events: auto;
+}
+
+.wt-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--wt-control);
+  box-sizing: border-box;
+  margin-right: auto;
+  padding: 0 10px 0 4px;
+  border-radius: 3px;
+  background: rgba(4, 8, 12, 0.9);
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.wt-caption b {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--wt-past);
-  font-size: 9px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: #fff;
+  color: #05090d;
+  font-weight: 500;
+}
+
+.wt-caption + .wt-notice {
+  margin-right: auto;
+}
+
+.wt .wt-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: var(--wt-control);
+  box-sizing: border-box;
+  padding: 5px 6px 5px 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.55);
+  border-radius: 3px;
+  background: rgba(4, 8, 12, 0.9);
+  color: #fff;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.wt .wt-notice b {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 2px;
+  background: #fff;
+  color: #05090d;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.is-engaged .wt-gap {
+/* ── Menus ── */
+.wt-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 2;
   display: flex;
+  flex-direction: column;
+  min-width: 264px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1px solid rgba(123, 189, 211, 0.3);
+  border-radius: 4px;
+  background: rgba(6, 12, 17, 0.97);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  letter-spacing: 0.03em;
 }
 
-.wt .wt-gap b {
-  padding: 3px 6px;
-  border: 1px solid color-mix(in srgb, var(--wt-past) 55%, transparent);
+.wt-menu--jump,
+.wt-menu--lane {
+  left: 0;
+}
+
+.wt-menu--speed,
+.wt-menu--range {
+  right: 0;
+}
+
+.wt .wt-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: calc(var(--wt-control) + 4px);
+  padding: 0 10px;
   border-radius: 3px;
+  color: var(--wt-ink);
+  text-align: left;
+}
+
+.wt .wt-menu button:hover:not(:disabled) {
+  background: rgba(123, 189, 211, 0.16);
   color: #fff;
-  font-weight: 400;
 }
 
-.wt .wt-gap:hover b {
-  background: color-mix(in srgb, var(--wt-past) 22%, transparent);
+.wt .wt-menu button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
-/* ── The HUD's stamp tells the tense ── */
+.wt .wt-menu button[aria-checked='true'] {
+  color: #fff;
+  box-shadow: inset 2px 0 0 #fff;
+}
+
+.wt-menu em {
+  color: var(--wt-dim);
+  font-size: 11px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.wt-menu-date {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 10px;
+  border-top: 1px solid var(--wt-line);
+}
+
+.wt-menu-date label {
+  color: var(--wt-dim);
+}
+
+.wt-menu-date span {
+  display: flex;
+  gap: 6px;
+}
+
+.wt-menu-date input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--wt-control);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid rgba(123, 189, 211, 0.3);
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  color-scheme: dark;
+  font: inherit;
+}
+
+.wt .wt-menu-date button {
+  justify-content: center;
+  min-width: 52px;
+  min-height: var(--wt-control);
+  background: #fff;
+  color: #05090d;
+  font-weight: 500;
+}
+
+.wt .wt-menu-date button:hover {
+  background: #d7f6ff;
+  color: #05090d;
+}
+
+.wt-menu--lane {
+  gap: 2px;
+  max-width: 340px;
+  padding: 10px;
+}
+
+.wt-menu--lane strong {
+  margin-bottom: 4px;
+  color: #fff;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.wt-menu--lane p {
+  margin: 0;
+  color: var(--wt-ink);
+  line-height: 1.5;
+}
+
+.wt .wt-menu--lane button {
+  margin: 8px -6px -6px;
+}
+
+/* ── The HUD's stamp tells the tense, and its corners clear the bar ── */
 body[data-world-tense='past'] #intel-hud .hud-rec,
 body[data-world-tense='past'] #intel-hud #hud-timestamp {
   color: var(--wt-past);
@@ -753,27 +1272,209 @@ body[data-world-tense='future'] #intel-hud #hud-timestamp {
   color: var(--wt-future);
 }
 
+body:is([data-world-timeline='flank'], [data-world-timeline='stack'], [data-world-timeline='under'])
+  #intel-hud
+  :is(.hud-bottom-left, .hud-bottom-right) {
+  bottom: calc(var(--world-timeline-top) + 16px) !important;
+  transition: bottom 0.16s ease;
+}
+
+/* ── Short windows (a phone on its side): the track keeps to its strip ── */
+@media (max-height: 520px) {
+  #world-timeline.wt:not(.is-phone) {
+    --wt-track: 34px;
+  }
+
+  #world-timeline.wt:not(.is-phone) .wt-reach {
+    display: none;
+  }
+}
+
+/* ── A phone: a row at rest, a sheet when time is touched ── */
+#world-timeline.wt.is-phone {
+  right: 8px;
+  bottom: calc(var(--mobile-tab-space) + 6px);
+  left: 8px;
+  width: auto;
+  transform: none;
+}
+
+.is-phone .wt-trackrow,
+.is-phone .wt-controls,
+.is-phone .wt-left,
+.is-phone .wt-right,
+.is-stack.is-rest .wt-trackrow,
+.is-stack.is-rest .wt-controls,
+.is-stack.is-rest .wt-left,
+.is-stack.is-rest .wt-right {
+  display: contents;
+}
+
+.is-phone .wt-reach,
+.is-phone .wt-dockroom {
+  display: none;
+}
+
+/* Where the controls have a row of their own, the bar at rest is one row:
+   the clock, a strip of the track, and the way back. */
+:is(.is-phone, .is-stack).is-rest .wt-body {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  column-gap: 8px;
+  height: 48px;
+  padding: 0 4px 0 10px;
+}
+
+:is(.is-phone, .is-stack).is-rest .wt-shuttle {
+  display: contents;
+}
+
+#world-timeline:is(.is-phone, .is-stack).is-rest :is(.wt-scope, .wt-clock-sub, .wt-resting),
+#world-timeline.is-phone.is-rest .wt-key--play {
+  display: none;
+}
+
+:is(.is-phone, .is-stack).is-rest .wt-clock-time {
+  font-size: 16px;
+}
+
+:is(.is-phone, .is-stack).is-rest .wt-track {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: stretch;
+}
+
+:is(.is-phone, .is-stack).is-rest .wt-clock {
+  grid-row: 1;
+  grid-column: 1;
+  padding: 0;
+}
+
+.is-phone.is-engaged .wt-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'clock live'
+    'track track'
+    'shuttle speed'
+    'zoom scope'
+    'lanes lanes';
+  align-items: center;
+  gap: 8px 10px;
+  padding: 10px 10px 12px;
+  background: rgba(4, 8, 12, 0.9);
+}
+
+.is-phone.is-engaged .wt-clock {
+  grid-area: clock;
+  justify-self: start;
+  padding: 0;
+}
+
+.is-phone.is-engaged .wt-clock-time {
+  font-size: 24px;
+}
+
+.is-phone.is-engaged .wt-live {
+  grid-area: live;
+  justify-self: end;
+}
+
+#world-timeline.is-phone.is-engaged .wt-key--play {
+  width: 48px;
+  height: 48px;
+}
+
+.is-phone.is-engaged :is(.wt-speed, .wt-scope) {
+  justify-self: end;
+}
+
+.is-phone.is-engaged .wt-track {
+  grid-area: track;
+  height: 64px;
+  margin: 0 -10px;
+  border-block: 1px solid var(--wt-line);
+}
+
+.is-phone.is-engaged .wt-shuttle {
+  grid-area: shuttle;
+  gap: 10px;
+}
+
+.is-phone.is-engaged .wt-key {
+  width: 52px;
+}
+
+.is-phone.is-engaged .wt-speed {
+  grid-area: speed;
+  min-width: 92px;
+}
+
+.is-phone.is-engaged .wt-zoom {
+  grid-area: zoom;
+  justify-self: start;
+}
+
+.is-phone.is-engaged .wt-zoom .wt-zoom-span {
+  min-width: 64px;
+}
+
+.is-phone.is-engaged .wt-scope {
+  grid-area: scope;
+  width: auto;
+  height: var(--wt-control);
+  padding: 0 8px;
+  border: 1px solid rgba(123, 189, 211, 0.22);
+  border-radius: 3px;
+}
+
+.is-phone.is-engaged .wt-lanes {
+  grid-area: lanes;
+  max-height: 34vh;
+  margin: 0 -10px -12px;
+  border-top: 1px solid var(--wt-line);
+  border-bottom: 0;
+}
+
+.is-phone .wt-lane {
+  flex-direction: column;
+  height: 38px;
+  padding: 0 10px;
+}
+
+.is-phone .wt .wt-lane-name,
+.is-phone .wt-lane-name {
+  width: auto;
+  height: 22px;
+  padding: 0;
+  border-right: 0;
+}
+
+.is-phone .wt-lane-track {
+  margin: 0 -10px;
+}
+
+.is-phone .wt-menu {
+  right: 0;
+  left: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* The sheet takes the voice dock's place while it is up. */
+body[data-world-timeline='phone-sheet'] #command-dock {
+  display: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .is-live .wt-dot,
   .wt-wait {
     animation: none;
   }
-}
 
-@media (max-width: 1199px) {
-  #world-timeline.wt {
-    bottom: 2vh;
-    width: min(820px, calc(100vw - 24px));
+  .wt-trackrow,
+  .wt-body {
+    transition: none;
   }
-}
-
-body.mobile-shell #world-timeline.wt {
-  bottom: calc(var(--mobile-tab-space) + 6px);
-  width: calc(100vw - 16px);
-}
-
-body.mobile-shell .wt-windows,
-body.mobile-shell .wt-speed,
-body.mobile-shell .wt-key--lanes {
-  display: none;
 }
