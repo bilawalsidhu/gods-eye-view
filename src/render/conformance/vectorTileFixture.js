@@ -1,7 +1,7 @@
 /**
- * @module render/vectorBase/encode
- * @description A small Mapbox Vector Tile encoder, for fixtures: the tests
- * and conformance checks build the tiles the painter reads with it.
+ * @module render/conformance/vectorTileFixture
+ * @description A small Mapbox Vector Tile encoder, for fixtures: the
+ * conformance checks build the vector tiles a renderer draws with it.
  */
 import { PbfWriter } from 'pbf';
 

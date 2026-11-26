@@ -112,6 +112,20 @@ export const useDisplayStore = defineStore('gev-display', () => {
     mapSource.value = next && markRaw(next);
   }
 
+  /** Rows added under Map Source, in the order first shown. */
+  const mapLayers = shallowRef([]);
+
+  /** @param {string} id @param {?object} row The row, or null to remove it. */
+  function publishMapLayer(id, row) {
+    const next = mapLayers.value.slice();
+    const at = next.findIndex((entry) => entry.id === id);
+    if (!row) {
+      if (at >= 0) next.splice(at, 1);
+    } else if (at >= 0) next[at] = markRaw({ ...row, id });
+    else next.push(markRaw({ ...row, id }));
+    mapLayers.value = next;
+  }
+
   /** The map source controls whose `select(id)` a chip calls. */
   const mapSourceControls = shallowRef(null);
 
@@ -182,6 +196,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishMapSource,
     mapSourceControls,
     connectMapSource,
+    mapLayers,
+    publishMapLayer,
     connect,
     detach,
     act,

@@ -346,9 +346,12 @@ export class MapSourceController {
       this._activeImageryProvider !== resolution.provider
     ) {
       this._removeImageryLayer();
-      this._imageryLayer = this._createImageryLayer(resolution.provider);
-      this._activeImageryProvider = resolution.provider;
-      this._engine.addImageryLayer(this.viewer, this._imageryLayer, 0);
+      // A stack with no imagery (the plain globe) adds no layer.
+      if (resolution.provider) {
+        this._imageryLayer = this._createImageryLayer(resolution.provider);
+        this._activeImageryProvider = resolution.provider;
+        this._engine.addImageryLayer(this.viewer, this._imageryLayer, 0);
+      }
     }
     const source = this._sources.get(resolution.effectiveStackId);
     this._credits.show(source?.credit || null);

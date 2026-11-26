@@ -26,7 +26,6 @@ const NEUTRAL = [
   './render/stub/viewRectangle',
   './render/stub/harness',
   './render/motion',
-  './render/vectorBase',
   './render/iconSegment',
   './render/recession',
   './render/modelParts',

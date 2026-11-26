@@ -85,9 +85,19 @@ export interface ImagerySpec {
   /**
    * `world`: the renderer's global imagery through
    * `CreateOptions.worldDataToken` (for the default renderer, Cesium ion's
-   * world imagery), in `worldStyle`. `canvas`: `imageHooks`.
+   * world imagery), in `worldStyle`. `canvas`: `imageHooks`. `vector`
+   * (`vectorBase`): a MapLibre style's vector map at `styleUrl`, draped as
+   * any imagery layer, its labels drawn as text.
    */
-  kind: 'xyz' | 'world' | 'single-image' | 'canvas';
+  kind: 'xyz' | 'world' | 'single-image' | 'canvas' | 'vector';
+  /** `vector`: the MapLibre style document drawn. */
+  styleUrl?: string;
+  /**
+   * `vector`: over other imagery, the style's lines and labels alone (roads,
+   * rail, borders, names), without its background and area fills, so what
+   * is under it shows.
+   */
+  overlay?: boolean;
   /** `world`: aerial (the default), or aerial with labels. */
   worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
