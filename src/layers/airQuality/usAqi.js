@@ -524,6 +524,24 @@ function pollutantInput(key, hours, rows) {
     )
       candidate.reason = anchor.reason;
   let best = candidates.reduce((a, b) => (newer(b, a) ? b : a), null);
+  const day =
+    key === 'so2'
+      ? rows
+          .filter((row) => row.averaging === 1440 && row.value !== null)
+          .reduce((a, b) => (newer(b, a) ? b : a), null)
+      : null;
+  // A 24-hour SO2 average rates on its own (from 305 ppb on its rows, below
+  // on the 1-hour rows) where no usable 1-hour value lies within
+  // AQI_MAX_SPREAD_MS of it, unless a 1-hour value further ahead of it is
+  // the newest reading: a flagged hour of its time does not discard it.
+  if (
+    day &&
+    (!best ||
+      (best.value === null
+        ? best.at <= day.at + AQI_MAX_SPREAD_MS
+        : best.at < day.at - AQI_MAX_SPREAD_MS))
+  )
+    best = day;
   if (!best) {
     // Readings, none on the table's averaging period.
     const at = Math.max(...rows.map((row) => row.at));
@@ -538,12 +556,7 @@ function pollutantInput(key, hours, rows) {
   // every pollutant's for its hourly reading beside the index.
   if (anchor && anchor.value !== null && near(anchor))
     best = { ...best, hour: anchor.value };
-  if (key === 'so2') {
-    const day = rows
-      .filter((row) => row.averaging === 1440 && row.value !== null)
-      .reduce((a, b) => (newer(b, a) ? b : a), null);
-    if (day && near(day)) best = { ...best, day: day.value };
-  }
+  if (day && near(day)) best = { ...best, day: day.value };
   return best;
 }
 
@@ -560,7 +573,9 @@ function pollutantInput(key, hours, rows) {
  * 1-hour rows, of CO its 8-hour mean (6 of the last 8 hours); NO2 and SO2
  * take their newest 1-hour value (or one whose period is not stated). A
  * reading on the table's own period also counts: 24-hour PM and SO2,
- * 8-hour O3 and CO. Hours flagged by their source, in units that do not
+ * 8-hour O3 and CO; a 24-hour SO2 average rates alone where no usable
+ * 1-hour SO2 value of its time is known (from 305 ppb on its rows, below on
+ * the 1-hour rows). Hours flagged by their source, in units that do not
  * convert, under 75 % covered or above their fault ceiling (`AQI_CEILINGS`)
  * count as missing. The newest basis decides.
  *

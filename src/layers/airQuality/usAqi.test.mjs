@@ -818,3 +818,33 @@ test('an old 1-hour ozone or 24-hour SO2 does not rate beside a current value', 
   ]);
   assert.equal(stationIndex(current).aqi.index, 301);
 });
+
+test('a 24-hour SO2 average rates on its own, and survives a flagged hour of its time (EPA)', () => {
+  const T = 1000 * H;
+  const ppb = (value, observedMs, averagingMinutes, extra = {}) =>
+    hourly('SO2', value, observedMs, {
+      units: 'ppb',
+      averagingMinutes,
+      ...extra,
+    });
+  const index = (rows) => stationIndex(aqiStations(rows)[0]).aqi?.index;
+  // A daily 605 ppb alone is 301 on the 24-hour rows; below 305 ppb a daily
+  // value rates on the 1-hour rows.
+  assert.equal(index([ppb(605, T, 1440)]), 301);
+  assert.equal(index([ppb(75, T, 1440)]), 100);
+  // A flagged hour of its time does not discard it.
+  assert.equal(
+    index([ppb(605, T - H, 1440), ppb(10, T, 60, { qualityFlagged: true })]),
+    301,
+  );
+  // A usable hour of its time rates, with the daily on the 24-hour rows.
+  assert.equal(index([ppb(200, T, 1440), ppb(10, T, 60)]), 14);
+  assert.equal(index([ppb(605, T, 1440), ppb(400, T, 60)]), 301);
+  // A flagged hour well after the daily is the newest reading: unrated.
+  const [late] = aqiStations([
+    ppb(605, T - 10 * H, 1440),
+    ppb(10, T, 60, { qualityFlagged: true }),
+  ]);
+  assert.equal(stationIndex(late).aqi, null);
+  assert.equal(late.excluded.so2, 'flagged');
+});
