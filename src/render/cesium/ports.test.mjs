@@ -34,7 +34,6 @@ test('capabilities follow what the scene supports', () => {
     'imageryDecoded',
     'surfaceIdentity',
     'surfaceShading',
-    'vectorBase',
   ];
   const globe = { show: true };
   const draw = [

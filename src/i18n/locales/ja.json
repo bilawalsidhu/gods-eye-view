@@ -4338,6 +4338,11 @@
   "Older or unknown": "それ以前または不明",
   "Colour shows the age of each area.": "色は各区域の経過時間を示します。",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "経過時間は WFIGS の測図時刻から、なければ記録の最終編集時刻から数えます。境界線は約 100 m に簡略化されています。",
+  "Voice and search controls": "音声と検索のコントロール",
+  "Unlimited": "無制限",
+  "Frame rate": "フレームレート",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "地球儀が1秒間に描画する最大フレーム数。無制限ではディスプレイのリフレッシュレートで描画します",
+  "{fps} fps": "{fps} fps",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "世界各地の大気質観測。無料アカウントのキーが必要です。対象範囲はデータを報告する観測所に依存します。",
   "Provider request budget reached. Cached data will refresh later.": "提供元へのリクエスト上限に達しました。キャッシュされたデータは後で更新されます。",
   "Air quality provider unavailable": "大気質データの提供元を利用できません",
@@ -4430,6 +4435,5 @@
   "Low-cost sensor": "低価格センサー",
   "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
-  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
-  "Voice and search controls": "音声と検索のコントロール"
+  "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください"
 }

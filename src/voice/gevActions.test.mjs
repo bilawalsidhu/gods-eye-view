@@ -1860,6 +1860,47 @@ test('tracked aircraft yields to strongest-fire and vessel voice flights before 
   }
 });
 
+test('track_entity on a vessel follows it through its layer instead of flying to it', async () => {
+  globalThis.window = globalThis.window || {
+    clearTimeout,
+    setTimeout,
+    requestIdleCallback: null,
+  };
+  const { order, viewer, styleManager } = createVoiceNavigationHarness();
+  const tracked = [];
+  const module = {
+    findByQuery: () => ({
+      id: 'v1',
+      mmsi: '123456789',
+      name: 'Test vessel',
+      latitude: 29.75,
+      longitude: -95.35,
+    }),
+    selectById(id) {
+      order.push(`select:${id}`);
+      return true;
+    },
+    trackById(id, options) {
+      tracked.push([id, options?.origin]);
+      return true;
+    },
+  };
+  const dataManager = {
+    layers: new Map([['ais-live-vessels', { module }]]),
+    isEnabled: (id) => id === 'ais-live-vessels',
+    getAll: () => [],
+  };
+  const runner = createGevActionRunner({ viewer, styleManager, dataManager });
+  const result = await runner('track_entity', {
+    query: 'Test vessel',
+    layerId: 'ais-live-vessels',
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(tracked, [['v1', 'voice']]);
+  assert.ok(!order.some((step) => step.startsWith('fly:')), 'no fly-to');
+  assert.ok(!order.includes('select:v1'));
+});
+
 test('move_camera and fly_route validate first, then use the shared camera authority seam', async () => {
   globalThis.window = globalThis.window || {
     clearTimeout,

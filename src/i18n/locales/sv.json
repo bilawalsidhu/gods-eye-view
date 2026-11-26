@@ -4442,6 +4442,11 @@
   "Older or unknown": "Äldre eller okänt",
   "Colour shows the age of each area.": "Färgen visar åldern på varje område.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Åldern räknas från WFIGS kartläggning, annars från postens senaste ändring. Brandgränser förenklade till ~100 m.",
+  "Voice and search controls": "Röst- och sökkontroller",
+  "Unlimited": "Obegränsad",
+  "Frame rate": "Bildfrekvens",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "Det högsta antalet bilder per sekund som jordgloben ritar; Obegränsad ritar i skärmens egen takt",
+  "{fps} fps": "{fps} b/s",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "Luftkvalitetsobservationer världen över. Gratis kontonyckel; täckningen beror på rapporterande stationer.",
   "Provider request budget reached. Cached data will refresh later.": "Leverantörens anropsgräns har nåtts. Cachade data uppdateras senare.",
   "Air quality provider unavailable": "Luftkvalitetsleverantören är inte tillgänglig",
@@ -4535,6 +4540,5 @@
   "Low-cost sensor": "Lågkostnadssensor",
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Referensinstrument",
-  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar",
-  "Voice and search controls": "Röst- och sökkontroller"
+  "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar"
 }

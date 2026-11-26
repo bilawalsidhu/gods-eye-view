@@ -1,4 +1,5 @@
-import { followedOf, isFollowing, onFollowChanged } from './followed.js';
+import { followedOf, onFollowChanged } from './followed.js';
+import { currentSelection, onSelectionChanged } from './clickSelect.js';
 import {
   clearOverlaySource,
   setOverlayEntries,
@@ -37,6 +38,7 @@ const DEFAULT_TRACKED_OVERLAY_HOST = Object.freeze({
 
 let _viewer = null;
 let _trackedEntityChangedRemove = null;
+let _selectionChangedRemove = null;
 let _selectedContext = null;
 let _contextSelectedHandler = null;
 let _contextClearedHandler = null;
@@ -126,8 +128,18 @@ function entryIdFor(entity) {
   return fallback ? `entity:${fallback}` : null;
 }
 
+/**
+ * The card's thing: what the camera follows, else what a click selected
+ * (src/data/clickSelect.js: a click selects without following), else a
+ * static layer's selection.
+ */
 function activeEntity() {
-  return followedOf(_viewer)?.entity || _selectedContext?.entity || null;
+  return (
+    followedOf(_viewer)?.entity ||
+    currentSelection()?.subject?.entity ||
+    _selectedContext?.entity ||
+    null
+  );
 }
 
 /**
@@ -240,6 +252,10 @@ export function initTrackedReadout(viewer) {
     if (followed) _selectedContext = null;
     syncActiveEntity();
   });
+  _selectionChangedRemove = onSelectionChanged((selection) => {
+    if (selection?.subject) _selectedContext = null;
+    syncActiveEntity();
+  });
   _contextSelectedHandler = (event) => {
     const record = event.detail;
     if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
@@ -263,7 +279,7 @@ export function initTrackedReadout(viewer) {
   };
   _aircraftSelectedHandler = () => {
     _selectedContext = null;
-    if (!isFollowing(_viewer)) clearTrackedSource();
+    syncActiveEntity();
   };
   window.addEventListener('gev:entity-selected', _contextSelectedHandler);
   window.addEventListener(
@@ -284,6 +300,8 @@ export function initTrackedReadout(viewer) {
 export function destroyTrackedReadout() {
   _trackedEntityChangedRemove?.();
   _trackedEntityChangedRemove = null;
+  _selectionChangedRemove?.();
+  _selectionChangedRemove = null;
   if (_contextSelectedHandler)
     window.removeEventListener('gev:entity-selected', _contextSelectedHandler);
   if (_contextClearedHandler)

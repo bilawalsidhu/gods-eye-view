@@ -4338,6 +4338,11 @@
   "Older or unknown": "更早或未知",
   "Colour shows the age of each area.": "顏色表示各區域在所示時刻的年齡。",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "時長從 WFIGS 測繪時間算起，否則從記錄的最後編輯時間算起。邊界已簡化至約 100 米。",
+  "Voice and search controls": "語音和搜索控件",
+  "Unlimited": "無限制",
+  "Frame rate": "幀率",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "地球每秒繪製的最多幀數；無限制則按顯示器的刷新率繪製",
+  "{fps} fps": "{fps} 幀/秒",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "全球空氣質量觀測。可使用免費賬戶密鑰；覆蓋範圍取決於上報數據的監測站。",
   "Provider request budget reached. Cached data will refresh later.": "已達到數據提供方的請求額度。緩存數據將在稍後刷新。",
   "Air quality provider unavailable": "空氣質量數據提供方不可用",
@@ -4430,6 +4435,5 @@
   "Low-cost sensor": "低成本傳感器",
   "{name} · sensor": "{name} · 傳感器",
   "Reference monitor": "參考監測儀",
-  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個",
-  "Voice and search controls": "語音和搜索控件"
+  "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，請在服務商設置中添加其中一個"
 }

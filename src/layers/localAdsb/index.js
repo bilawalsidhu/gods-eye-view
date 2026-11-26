@@ -20,6 +20,12 @@ import {
   rendererOf,
 } from '../../render/rendererOf.js';
 import { inputFor } from '../../input/dispatcher.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { pickRenderAltitudeM } from '../../data/renderAltitude.js';
 import { routePlausible } from '../../data/routePlausible.js';
 import {
@@ -162,6 +168,8 @@ export function createLocalAdsbLayer({
   let tickTimer = null;
   let syncTimer = null;
   let clickSubscription = null;
+  /** Off for the one-selection rule's listener, while clicks are heard. */
+  let offSelectionYield = null;
   let removePreRender = null;
   let renderHeld = false;
   let selectedId = null;
@@ -542,6 +550,7 @@ export function createLocalAdsbLayer({
 
   function clearSelection({ evicted = false } = {}) {
     if (!selectedId) return;
+    releaseSelection(LAYER_ID, selectedId);
     selectedId = null;
     releaseTrail();
     clearSelectedEntityContextForLayer(LAYER_ID, { evicted });
@@ -647,6 +656,8 @@ export function createLocalAdsbLayer({
     if (!marker) return false;
     const reselect = id === selectedId && selectedTrail?.id === id;
     selectedId = id;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection(LAYER_ID, id);
     enrichment.request(marker.record, { selected: true });
     entityRecord(marker.carrier).labelModel = cardModel(marker, now());
     selectEntityContext(marker.carrier);
@@ -716,8 +727,52 @@ export function createLocalAdsbLayer({
     return trail ? 'trail' : null;
   }
 
+  /**
+   * Centre a clicked aircraft once, meeting it where it will be when the
+   * camera arrives; the camera does not follow it (src/data/clickSelect.js).
+   * Local reception is always live.
+   */
+  function centerMarker(marker) {
+    if (!marker || !viewer) return false;
+    return centerOnClick(viewer, (aheadMs) => {
+      const display = marker.motion?.displayAt(now() + aheadMs, {
+        slew: false,
+      });
+      return display ? fixPosition(marker, display) : marker.position;
+    });
+  }
+
+  /**
+   * The marker a card names: its marker id, or the ICAO hex or callsign of
+   * exactly one heard aircraft.
+   */
+  function markerIdFor(id) {
+    if (id === null || id === undefined) return null;
+    const name = String(id);
+    if (markers.has(name)) return name;
+    if (markers.has(`${ENTITY_PREFIX}${name.toLowerCase()}`))
+      return `${ENTITY_PREFIX}${name.toLowerCase()}`;
+    let found = null;
+    for (const [markerId, marker] of markers) {
+      if (marker.record?.callsign !== name) continue;
+      if (found !== null) return null;
+      found = markerId;
+    }
+    return found;
+  }
+
   function installInteraction() {
     if (clickSubscription || !viewer) return;
+    // One thing is selected at a time: another layer's selection lets go of
+    // this one's.
+    offSelectionYield = yieldSelectionToOthers(
+      LAYER_ID,
+      () => Boolean(selectedId),
+      () => {
+        clearSelection();
+        governorRequestRender('local-adsb-selection');
+      },
+    );
     clickSubscription = inputFor(viewer).onClick((event) => {
       if (!enabled) return;
       // Another layer's card or label painted on top takes the click: the item
@@ -729,6 +784,7 @@ export function createLocalAdsbLayer({
       // displaced, and a click on a marker must never read as "deselect".
       if (target && markers.has(target)) {
         selectMarker(target);
+        centerMarker(markers.get(target));
         return;
       }
       // A click on a trail line is not empty map.
@@ -743,6 +799,8 @@ export function createLocalAdsbLayer({
   function releaseInteraction() {
     clickSubscription?.();
     clickSubscription = null;
+    offSelectionYield?.();
+    offSelectionYield = null;
   }
 
   function installFrame() {
@@ -933,6 +991,33 @@ export function createLocalAdsbLayer({
      */
     selectAircraft(icao) {
       return enabled && selectMarker(`${ENTITY_PREFIX}${icao}`);
+    },
+
+    /**
+     * Select an aircraft by the id its card has (its marker id, ICAO hex
+     * or callsign), as a click on it does; `center: false` leaves the
+     * camera to the caller (a pick from a list frames it).
+     * @param {string} id
+     * @param {{center?: boolean}} [options]
+     */
+    pickById(id, { center = true } = {}) {
+      const markerId = markerIdFor(id);
+      if (!enabled || !markerId || !selectMarker(markerId)) return false;
+      if (center) centerMarker(markers.get(markerId));
+      return true;
+    },
+
+    /** Whether the aircraft a card names is the one selected. */
+    isSelected(id) {
+      const markerId = markerIdFor(id);
+      return markerId !== null && markerId === selectedId;
+    },
+
+    /** Deselect the selected aircraft, as a click on the map does. */
+    clearSelection() {
+      clearSelection();
+      governorRequestRender('local-adsb-selection');
+      return true;
     },
 
     /**

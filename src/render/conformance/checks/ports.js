@@ -13,7 +13,7 @@ import {
 import { AUSTIN, SCRIPT_VIEWPORT } from '../cameraScripts.js';
 import { deepEqual, equal, near, nearVec, ok, throws } from '../expect.js';
 import { iconPosition } from '../../motion/iconMotion.js';
-import { encodeVectorTile } from '../../vectorBase/encode.js';
+import { encodeVectorTile } from '../vectorTileFixture.js';
 import { partsModelGlb } from '../partsModel.js';
 
 /** 1 × 1 PNGs (red, green, blue), so imagery checks load nothing from the network. */

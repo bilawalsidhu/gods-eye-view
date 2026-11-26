@@ -4650,6 +4650,11 @@
   "Older or unknown": "Старше или неизвестно",
   "Colour shows the age of each area.": "Цвет показывает возраст каждого участка.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Возраст — от картирования WFIGS, иначе от последней правки записи. Контуры упрощены до ~100 м.",
+  "Voice and search controls": "Голосовое управление и поиск",
+  "Unlimited": "Без ограничений",
+  "Frame rate": "Частота кадров",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "Наибольшее число кадров в секунду, которое рисует глобус; «Без ограничений» — с частотой вашего экрана",
+  "{fps} fps": "{fps} кадр/с",
   "Unknown air quality provider": "Неизвестный поставщик данных о качестве воздуха",
   "Good": "Хорошо",
   "Index unavailable": "Индекс недоступен",
@@ -4745,6 +4750,5 @@
   "Low-cost sensor": "Недорогой датчик",
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Эталонный прибор",
-  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»",
-  "Voice and search controls": "Голосовое управление и поиск"
+  "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»"
 }

@@ -7,6 +7,7 @@ import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
+import { currentSelection } from '../data/clickSelect.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -39,9 +40,14 @@ const FRAME_RANGE = Object.freeze({
 const DEFAULT_RANGE = 8_000;
 /**
  * Items the camera can follow: their layers follow through the camera port
- * with a key naming the item (src/data/followed.js). A vessel is flown to.
+ * with a key naming the item (src/data/followed.js).
  */
-const FOLLOWABLE = new Set(['flights', 'military', 'satellites']);
+const FOLLOWABLE = new Set([
+  'flights',
+  'military',
+  'satellites',
+  'ais-live-vessels',
+]);
 
 /**
  * Connects the Context panel's entity card to the globe: a click on anything a
@@ -104,10 +110,14 @@ export function installEntityContext({
       button.click();
   }
 
-  function flyTo(card, { fromSelection = false } = {}) {
+  /**
+   * The flight that frames `card`'s item at its kind's range, or null when
+   * there is no camera or the card has no place.
+   */
+  function framingFlight(card) {
     const port = camera();
     if (!port || !Number.isFinite(card?.lat) || !Number.isFinite(card?.lon))
-      return;
+      return null;
     const height = card.pinHeightM ?? card.altitudeM ?? 0;
     const framing = card.obscured ? WORLD_FOCUS_FRAMING['sighting-area'] : null;
     const pitchDeg =
@@ -132,6 +142,12 @@ export function installEntityContext({
           durationS: 2,
         },
       );
+    return fly;
+  }
+
+  function flyTo(card, { fromSelection = false } = {}) {
+    const fly = framingFlight(card);
+    if (!fly) return;
     if (fromSelection) return navigateToSelection(fly);
     return fly();
   }
@@ -147,15 +163,59 @@ export function installEntityContext({
     ).catch(() => {});
   }
 
-  // Closing the card lets go of the camera, when the camera follows the
-  // card's own item and nothing else took it over since.
+  /** Whether `card`'s item is the one selection (src/data/clickSelect.js). */
+  // A layer whose cards name an item otherwise than its selection does (a
+  // vehicle's label, a callsign) answers for it (`isSelected`); never a
+  // different item of the same layer.
+  const selectsCard = (card, selection = currentSelection()) => {
+    if (!card || !selection || selection.layerId !== card.layerId) return false;
+    const id = card.identity?.id;
+    const module = getDataManager()?.layers?.get?.(card.layerId)?.module;
+    if (typeof module?.isSelected === 'function') {
+      try {
+        return module.isSelected(id) === true;
+      } catch {
+        return false;
+      }
+    }
+    return selection.id === String(id);
+  };
+
+  // A pick from a Context row or a search selects the item in its layer, as
+  // a click does (track, trail or orbit shown, the one selection), without
+  // following it; the camera frames it at its kind's range, as it always
+  // has for a pick, wherever it is. An item its layer cannot select now
+  // (gone from its feed, its layer off) is framed all the same. True when
+  // its layer can take picks.
+  function pick(card) {
+    const module = getDataManager()?.layers?.get?.(card?.layerId)?.module;
+    const id = card?.identity?.id;
+    if (typeof module?.pickById !== 'function' || !id) return false;
+    const fly = framingFlight(card);
+    navigateToSelection(() => {
+      try {
+        module.pickById(id, { origin: 'user', center: false });
+      } catch {
+        // A layer going away meanwhile has nothing to select.
+      }
+      return fly?.();
+    });
+    return true;
+  }
+
+  // Closing the card lets go of its item: the layer deselects it (and lets
+  // go of the camera, when the camera follows it), unless something else
+  // took over since.
   function letGo(card) {
-    if (!followsCard(card)) return;
+    if (!followsCard(card) && !selectsCard(card)) return;
     // Only the card's own layer lets go, as the person's own action; other
     // layers' selections stay as they are.
     const layer = getDataManager()?.layers?.get?.(card.layerId);
     try {
-      layer?.module?.stopTracking?.({ origin: 'user' });
+      const module = layer?.module;
+      if (typeof module?.stopTracking === 'function')
+        module.stopTracking({ origin: 'user' });
+      else module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.
     }
@@ -163,14 +223,14 @@ export function installEntityContext({
 
   // An item back in its feed after it left it is selected again in its layer,
   // as the click that picked it: a vessel is highlighted with its trail, and
-  // an aircraft found again (`follow`) is followed.
+  // an aircraft or vessel found again (`follow`) is followed.
   function reselect(card, { follow: andFollow = false } = {}) {
     const layer = getDataManager()?.layers?.get?.(card?.layerId)?.module;
     const id = card?.identity?.id;
     if (!layer || !id) return;
     try {
-      if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
-      else if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      if (andFollow && FOLLOWABLE.has(card.layerId)) follow(card);
+      else if (card.layerId === 'ais-live-vessels') layer.selectById?.(id);
     } catch {
       // A layer going away meanwhile has nothing to select.
     }
@@ -279,6 +339,7 @@ export function installEntityContext({
     dataManager: getDataManager,
     openPanel,
     flyTo,
+    pick,
     follow,
     letGo,
     reselect,
@@ -304,8 +365,7 @@ export function installEntityContext({
     cockpit,
     canCockpit: (card) =>
       Boolean(omnibar.runner) && COCKPIT_LAYERS.has(card?.layerId),
-    canFollow: (card, { auto = false } = {}) =>
-      FOLLOWABLE.has(card?.layerId) && (!auto || Boolean(omnibar.runner)),
+    canFollow: (card) => FOLLOWABLE.has(card?.layerId),
     // Where the camera is, so a search prefers what is close by.
     here: () => {
       const pose = camera()?.pose();
@@ -529,9 +589,6 @@ export function installEntityContext({
     metadataReady.value = true;
   }
 
-  /** Layers whose own map click already follows what was clicked. */
-  const CLICK_FOLLOWS = new Set(['flights', 'military', 'satellites']);
-
   // Keep the card's "following" in step with the camera: it says Following
   // while the camera follows the card's own item (the follow's key names
   // it) and not otherwise, whoever started or ended the follow. A layer
@@ -568,14 +625,13 @@ export function installEntityContext({
       dataManager: getDataManager(),
     });
     if (identity) {
-      // These layers start following on their own click; following again
-      // from here would fight them (the flights layer reads a second track
-      // of the same plane as a click on empty map and lets go).
+      // The layer's own click selects and centres it; the card only opens
+      // (src/data/clickSelect.js).
       const picked =
         identity.layerId === 'ais-live-vessels'
           ? { ...identity, vesselId: identity.id }
           : identity;
-      store.select(picked, { follow: !CLICK_FOLLOWS.has(identity.layerId) });
+      store.select(picked);
       return;
     }
     // A click on open ground, sea or sky lets go of what was selected. A

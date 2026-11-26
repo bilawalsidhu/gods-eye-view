@@ -217,3 +217,17 @@ test('without a reported track the course follows the heard path', () => {
   const course = motion.displayAt(10_000).courseDeg;
   assert.ok(Math.abs(course - 90) < 0.5, `${course}`);
 });
+
+test('a read ahead without slewing leaves the display as it was', () => {
+  const motion = new LocalAdsbMotion();
+  motion.observe(fix(0, 0, { altitudeFt: 1_000, groundSpeedKt: 120 }), 0);
+  motion.observe(
+    fix(5_000, 0.01, { altitudeFt: 1_500, groundSpeedKt: 120 }),
+    5_000,
+  );
+  const before = motion.displayAt(5_100, { slew: false });
+  assert.ok(motion.correction, 'the new fix is blended in');
+  // Where it will be long after the blend ends: a read, not a step.
+  motion.displayAt(5_100 + 3_600_000, { slew: false });
+  assert.deepEqual(motion.displayAt(5_100, { slew: false }), before);
+});

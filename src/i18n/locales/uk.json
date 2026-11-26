@@ -4650,6 +4650,11 @@
   "Older or unknown": "Старше або невідомо",
   "Colour shows the age of each area.": "Колір показує вік кожної ділянки.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Вік — від картування WFIGS, інакше від останнього редагування запису. Контури спрощено до ~100 м.",
+  "Voice and search controls": "Голосове керування та пошук",
+  "Unlimited": "Без обмежень",
+  "Frame rate": "Частота кадрів",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "Найбільша кількість кадрів на секунду, яку малює глобус; «Без обмежень» — з частотою вашого екрана",
+  "{fps} fps": "{fps} кадр/с",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "Спостереження за якістю повітря у світі. Безкоштовний ключ облікового запису; покриття залежить від станцій, що передають дані.",
   "Provider request budget reached. Cached data will refresh later.": "Досягнуто ліміту запитів постачальника. Кешовані дані оновляться пізніше.",
   "Air quality provider unavailable": "Постачальник даних про якість повітря недоступний",
@@ -4745,6 +4750,5 @@
   "Low-cost sensor": "Недорогий датчик",
   "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Еталонний прилад",
-  "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»",
-  "Voice and search controls": "Голосове керування та пошук"
+  "Needs {envVars} — add one in Provider Settings": "Потрібен {envVars} — додайте будь-який із них у «Налаштуваннях постачальників»"
 }

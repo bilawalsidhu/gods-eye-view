@@ -121,7 +121,6 @@ export const CESIUM_CHECKS = new Set([
   'frame.renderOnce',
   'frame.suspend',
   'frame.time',
-  'globe.base.vector',
   'globe.imagery',
   'globe.imagery.canvas',
   'globe.imagery.decoded',

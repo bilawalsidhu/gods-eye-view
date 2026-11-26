@@ -16,6 +16,7 @@ import {
 import { entityRecord, readEntityRecord, withEntityRecord } from './entityRecords.js';
 import { entityFollowTarget } from './followed.js';
 import { bindRenderer } from '../render/rendererOf.js';
+import { _resetSelectionForTest, claimSelection, releaseSelection } from './clickSelect.js';
 
 function makeCesiumEvent() {
   const listeners = new Set();
@@ -300,5 +301,31 @@ test('civilian and military trail heads use the lower-centre model anchor', asyn
       (/const\s*head\s*=\s*(?:parts\.motion\.)?_trackedTrailCached\(\s*,?\s*\)\s*\|\|\s*(?:parts\.motion\.)?_trackedDisplayPosition\(\s*(?:flightState\.)?_trackedIcao,?\s*\);/).test(source),
       `${name} trail head uses the dedicated lower-centre model anchor`,
     );
+  }
+});
+
+test('a clicked selection shows its card with nothing followed, and takes it away when released', () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = new EventTarget();
+  _resetSelectionForTest();
+  const changed = makeCesiumEvent();
+  const display = { x: 1, y: 2, z: 3 };
+  const entity = withEntityRecord({ id: 'generated' }, { trackedId: 'ais-live-vessels:v1', displayPosition: () => display, labelModel: { title: 'NORTHERN STAR', details: [] } });
+  const { viewer } = followingViewer(null, changed);
+  const recorder = makeHostRecorder();
+  _setTrackedOverlayHostForTest(recorder.host);
+  try {
+    initTrackedReadout(viewer);
+    assert.equal(getActiveTrackedReadoutId(), null);
+    claimSelection('satellites', '25544', { subject: entityFollowTarget(entity, {}) });
+    assert.equal(getActiveTrackedReadoutId(), 'ais-live-vessels:v1', 'the card shows without a follow');
+    releaseSelection('satellites', '25544');
+    assert.equal(getActiveTrackedReadoutId(), null);
+    assert.equal(recorder.calls.at(-1).op, 'clear');
+  } finally {
+    destroyTrackedReadout();
+    _setTrackedOverlayHostForTest();
+    _resetSelectionForTest();
+    globalThis.window = originalWindow;
   }
 });

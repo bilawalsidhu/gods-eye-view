@@ -4546,6 +4546,11 @@
   "Older or unknown": "Mais antigo ou desconhecido",
   "Colour shows the age of each area.": "A cor indica a idade de cada área.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Idade a partir do mapeamento do WFIGS ou, na falta dele, da última edição do registro. Perímetros simplificados a ~100 m.",
+  "Voice and search controls": "Controles de voz e pesquisa",
+  "Unlimited": "Ilimitado",
+  "Frame rate": "Taxa de quadros",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "O máximo de quadros por segundo que o globo desenha; Ilimitado desenha na taxa da sua tela",
+  "{fps} fps": "{fps} qps",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "Observações da qualidade do ar no mundo. Chave de conta gratuita; a cobertura depende das estações que enviam dados.",
   "Provider request budget reached. Cached data will refresh later.": "Limite de solicitações do provedor atingido. Os dados em cache serão atualizados mais tarde.",
   "Air quality provider unavailable": "Provedor de qualidade do ar indisponível",
@@ -4640,6 +4645,5 @@
   "Low-cost sensor": "Sensor de baixo custo",
   "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Monitor de referência",
-  "Needs {envVars} — add one in Provider Settings": "Requer {envVars} — adicione uma em \"Configurações de provedores\"",
-  "Voice and search controls": "Controles de voz e pesquisa"
+  "Needs {envVars} — add one in Provider Settings": "Requer {envVars} — adicione uma em \"Configurações de provedores\""
 }

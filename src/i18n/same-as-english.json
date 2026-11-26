@@ -502,6 +502,7 @@
     "Manual",
     "{seconds} s",
     "UTC",
+    "{fps} fps",
     "{name} · sensor"
   ],
   "fr": [
@@ -646,7 +647,6 @@
     "STARLINK ✕",
     "STATION",
     "STATIONS",
-    "air quality monitors|STATIONS",
     "STD",
     "Sahel",
     "San Francisco",
@@ -760,12 +760,13 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s",
-    "{count} stations",
     "{utc} UTC",
+    "{seconds} s",
     "contact",
     "train",
-    "UTC"
+    "UTC",
+    "air quality monitors|STATIONS",
+    "{count} stations"
   ],
   "it": [
     "1 min/s",
@@ -1001,7 +1002,8 @@
     "KT",
     "{utc} UTC",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{fps} fps"
   ],
   "ja": [
     "1090 MHz",
@@ -1086,7 +1088,8 @@
     "{n} mm",
     "3D",
     "KT",
-    "UTC"
+    "UTC",
+    "{fps} fps"
   ],
   "pt": [
     "1 min/s",
@@ -1525,10 +1528,10 @@
     "{n} mm",
     "3D",
     "KT",
-    "{seconds} s",
-    "{count} stations",
     "{utc} UTC",
+    "{seconds} s",
     "UTC",
+    "{count} stations",
     "{name} · sensor"
   ],
   "uk": [

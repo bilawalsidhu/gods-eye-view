@@ -4,16 +4,12 @@
 // hides its marker and card, keeps it selected and ends when it goes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  RAIL_POLL_MS,
-  STOP_REFRESH_MS,
-  railTrainFollowable,
-  railTrainKey,
-} from './policy.js';
+import { RAIL_POLL_MS, STOP_REFRESH_MS, railTrainKey } from './policy.js';
 import {
   BOSTON,
   railLayerHarness as harness,
   railTrain as train,
+  railTrainMoving,
 } from '../../testSupport/railLayerHarness.mjs';
 import { RAIL_SELECTED_OVERLAY_SOURCE_ID } from './policy.js';
 import { publicRailCatalog } from '../../data/railFeeds.js';
@@ -365,12 +361,12 @@ test('a held train stays the copy drawn when another feed’s copy outranks it, 
   await app.enable();
   const a = railTrainKey('renfe-cercanias', 'A1');
   const b = railTrainKey('renfe-larga-distancia', 'B1');
-  for (let i = 0; i < 12 && !railTrainFollowable(app.entry(a)); i += 1) {
+  for (let i = 0; i < 12 && !railTrainMoving(app.entry(a)); i += 1) {
     step += 1;
     app.run(RAIL_POLL_MS);
     await app.poll();
   }
-  assert.ok(railTrainFollowable(app.entry(a)), 'the train is moving');
+  assert.ok(railTrainMoving(app.entry(a)), 'the train is moving');
   assert.equal(app.layer.setCockpitSubject(a), true);
 
   gpsCopy = true;
@@ -478,7 +474,7 @@ test('a ride let go with restore does not focus a train its category hides', asy
   app.layer.setCockpitSubject(null);
   assert.equal(app.layer.focusTrain(T1), false, 'not drawn');
   assert.equal(app.state()._selectedKey, null, 'not selected');
-  assert.equal(app.parts().follow.stats(), null, 'not followed');
+  assert.equal(app.camera.followed, null, 'not followed');
   assert.equal(app.viewer.trackedEntity, undefined);
   assert.equal(app.focusRequests.length, 0, 'not flown to');
   assert.equal(app.entry(T1).marker.show, false);
@@ -487,7 +483,8 @@ test('a ride let go with restore does not focus a train its category hides', asy
   app.layer.setParams({ regional: true });
   assert.equal(app.layer.focusTrain(T1), true);
   assert.equal(app.state()._selectedKey, T1);
-  assert.ok(app.parts().follow.isFollowing(T1), 'the camera is handed to it');
+  assert.equal(app.focusRequests.at(-1)?.id, T1, 'the camera centres it');
+  assert.equal(app.camera.followed, null, 'and does not follow it');
 });
 
 test('a held train that goes takes the hold with it; focusTrain selects', async (t) => {

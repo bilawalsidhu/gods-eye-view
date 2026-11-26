@@ -4858,6 +4858,11 @@
   "Older or unknown": "أقدم أو غير معروف",
   "Colour shows the age of each area.": "يبيّن اللون عمر كل منطقة.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م.",
+  "Voice and search controls": "عناصر التحكم في الصوت والبحث",
+  "Unlimited": "غير محدود",
+  "Frame rate": "معدل الإطارات",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "أقصى عدد من الإطارات في الثانية يرسمه الكوكب؛ غير محدود يرسم بمعدل شاشتك",
+  "{fps} fps": "{fps} إطار/ث",
   "Air-quality observations worldwide. Free account key; coverage depends on reporting stations.": "رصد جودة الهواء حول العالم. مفتاح حساب مجاني؛ تعتمد التغطية على المحطات المُبلِّغة.",
   "Provider request budget reached. Cached data will refresh later.": "تم بلوغ حد طلبات المزوِّد. ستُحدَّث البيانات المخزنة مؤقتًا لاحقًا.",
   "Air quality provider unavailable": "مزوِّد بيانات جودة الهواء غير متاح",
@@ -4955,6 +4960,5 @@
   "Low-cost sensor": "مستشعر منخفض التكلفة",
   "{name} · sensor": "{name} · مستشعر",
   "Reference monitor": "جهاز رصد مرجعي",
-  "Needs {envVars} — add one in Provider Settings": "يحتاج إلى {envVars} — أضف أحدها في إعدادات المزوّدين",
-  "Voice and search controls": "عناصر التحكم في الصوت والبحث"
+  "Needs {envVars} — add one in Provider Settings": "يحتاج إلى {envVars} — أضف أحدها في إعدادات المزوّدين"
 }
