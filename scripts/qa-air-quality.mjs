@@ -1,15 +1,15 @@
 /**
  * qa-air-quality.mjs — headless proof for the Air quality layer.
  *
- * Checks what unit tests cannot, in the real app with no provider keys (the
- * stand-alone default): the layer turns on, its Layers
- * row is not UNAVAILABLE, says KEY REQUIRED and names the keys it needs
- * (OpenAQ's first), and the Weather card offers the US AQI as its one index
- * (its tile across the row), six pollutant tiles, the US AQI ramp and a line
- * for each key to add. No index of a network's own (Canada's AQHI is retired)
- * is offered anywhere. The script answers the air-quality routes itself
- * (/api/air-quality/openaq and /india: 428, no key), so it gives the same
- * answers whatever keys the server has, and reads nothing upstream.
+ * Checks what unit tests cannot, in the real app with no provider key (the
+ * stand-alone default): the layer turns on, its Layers row is not
+ * UNAVAILABLE, says KEY REQUIRED and names the OpenAQ key it needs, and the
+ * Weather card offers the US AQI as its one index (its tile across the row),
+ * six pollutant tiles, the US AQI ramp and a line for the key to add. No index
+ * of a network's own (Canada's AQHI is retired) is offered anywhere. The
+ * script answers the air-quality station route itself
+ * (/api/air-quality/openaq: 428, no key), so it gives the same answers
+ * whatever key the server has, and reads nothing upstream.
  *
  * The model field a host may give the layer is checked against a small cut of
  * baked grids (src/layers/airQuality/fixtures/field: a 10° box over northern
@@ -78,12 +78,10 @@ async function main() {
       patterns: [
         { urlPattern: '*/api/air-quality/field/*' },
         { urlPattern: '*/api/air-quality/openaq*' },
-        { urlPattern: '*/api/air-quality/india*' },
       ],
     });
     const STATION_ROUTES = Object.freeze({
       '/api/air-quality/openaq': [428, { error: 'no_key' }],
-      '/api/air-quality/india': [428, { error: 'no_key' }],
     });
     cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
       const path = new URL(request.url).pathname;
@@ -142,10 +140,10 @@ async function main() {
         /Failed to load resource.*404/i.test(m.text())
       )
         return;
-      // Without a key the OpenAQ and India routes answer 428 by design (the
-      // layer says the provider needs a key); this run answers them so.
+      // Without a key the OpenAQ route answers 428 by design (the layer says
+      // the provider needs a key); this run answers it so.
       if (
-        /\/api\/air-quality\/(openaq|india)(\?|$)/.test(sourceUrl) &&
+        /\/api\/air-quality\/openaq(\?|$)/.test(sourceUrl) &&
         /Failed to load resource.*428/i.test(m.text())
       )
         return;
@@ -196,14 +194,14 @@ async function main() {
       keyless.stats?.keyRequired === true &&
       keyless.stats?.loadingLabel === 'KEY REQUIRED';
     record(
-      'keyless, the layer turns on and reports its keys as required, not as an error',
+      'keyless, the layer turns on and reports its key as required, not as an error',
       turnedOn,
       `enabled=${keyless.enabled} settled=${keyless.settled} error=${keyless.stats?.error} keyRequired=${keyless.stats?.keyRequired} label=${keyless.stats?.loadingLabel} source="${keyless.rowSource}" states=${JSON.stringify(keyless.states)}`,
     );
     if (!turnedOn) exitCode = 1;
 
     // The Layers row: not UNAVAILABLE, says KEY REQUIRED, and its title names
-    // both keys, OpenAQ's first.
+    // the OpenAQ key.
     let toggle = null;
     for (let i = 0; i < 20 && !/KEY REQUIRED/.test(toggle?.meta ?? ''); i++) {
       await sleep(250);
@@ -223,11 +221,10 @@ async function main() {
       toggle !== null &&
       toggle.state !== 'unavailable' &&
       /KEY REQUIRED/.test(toggle.meta) &&
-      /OPENAQ_API_KEY.*DATA_GOV_IN_API_KEY/.test(toggle.title) &&
-      JSON.stringify(keyless.requiresKeyId) ===
-        JSON.stringify(['openaq', 'data-gov-in']);
+      /OPENAQ_API_KEY/.test(toggle.title) &&
+      JSON.stringify(keyless.requiresKeyId) === JSON.stringify(['openaq']);
     record(
-      'the Layers row is not UNAVAILABLE, says KEY REQUIRED and names the missing keys',
+      'the Layers row is not UNAVAILABLE, says KEY REQUIRED and names the missing key',
       rowOk,
       toggle
         ? `state=${toggle.state} meta="${toggle.meta}" title="${toggle.title}" requiresKeyId=${JSON.stringify(keyless.requiresKeyId)}`
@@ -254,14 +251,11 @@ async function main() {
       JSON.stringify(controls.legend?.map((band) => band.label)) ===
         JSON.stringify(['0', '50', '100', '150', '200', '300+']) &&
       JSON.stringify(controls.summary?.lines?.map((line) => line.text)) ===
-        JSON.stringify([
-          'OpenAQ: add a key in Provider Settings',
-          'CPCB: add a key in Provider Settings',
-        ]) &&
+        JSON.stringify(['OpenAQ: add a key in Provider Settings']) &&
       controls.summary?.compact === 'OpenAQ: add a key in Provider Settings' &&
       !/AQHI|Canada/.test(JSON.stringify(controls));
     record(
-      'the card offers the US AQI as its one index, the six pollutants, the US AQI ramp and the keys to add',
+      'the card offers the US AQI as its one index, the six pollutants, the US AQI ramp and the key to add',
       cardOk,
       controls
         ? `index=${indexTiles.map((tile) => tile.id).join('/')} bands=${controls.legend?.map((band) => band.label).join('/')} lines=${JSON.stringify(controls.summary?.lines?.map((line) => line.text))}`

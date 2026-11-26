@@ -8,7 +8,7 @@ import {
   applyPinokioEnvironment,
 } from '../scripts/pinokio-environment.mjs';
 
-const NEW_KEYS = ['OPENAQ_API_KEY', 'DATA_GOV_IN_API_KEY'];
+const NEW_KEYS = ['OPENAQ_API_KEY'];
 
 test('Pinokio app scope owns the air-quality keys', () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'aq-pinokio-'));
@@ -16,11 +16,8 @@ test('Pinokio app scope owns the air-quality keys', () => {
     const filepath = path.join(dir, 'ENVIRONMENT');
     // The app's own value is blank (Pinokio drops blank entries, so a
     // Pinokio-global value would otherwise reach the child).
-    writeFileSync(filepath, 'OPENAQ_API_KEY=\nDATA_GOV_IN_API_KEY=\n');
-    const environment = {
-      OPENAQ_API_KEY: 'global-placeholder',
-      DATA_GOV_IN_API_KEY: 'global-placeholder',
-    };
+    writeFileSync(filepath, 'OPENAQ_API_KEY=\n');
+    const environment = { OPENAQ_API_KEY: 'global-placeholder' };
     applyPinokioEnvironment({ environment, filepath });
     for (const name of NEW_KEYS) {
       assert.ok(PINOKIO_CONFIG_FIELDS.includes(name), `${name} app-scoped`);

@@ -165,7 +165,6 @@ test('injected viewport travels through the fixed snapshot route without exposin
   );
   assert.equal(request.options.headers, undefined);
   assert.ok(source.definitions.find((p) => p.id === 'openaq').viewDriven);
-  assert.ok(!source.definitions.find((p) => p.id === 'cpcb').viewDriven);
 });
 
 test('snapshot adapter carries cooldown metadata and tolerates malformed rate-limit responses', async () => {

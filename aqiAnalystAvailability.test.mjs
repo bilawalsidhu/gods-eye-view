@@ -70,9 +70,8 @@ const noKey = () =>
   Object.assign(new Error('Provider API key required'), { code: 'no_key' });
 
 test('analyst provider availability', async () => {
-  const layer = harness({ openaq: noKey(), cpcb: noKey() }, [
+  const layer = harness({ openaq: noKey() }, [
     def('openaq', { requiresKeyId: 'openaq', direct: false }),
-    def('cpcb', { requiresKeyId: 'data-gov-in' }),
   ]);
   await layer.update();
   await flush();

@@ -1,7 +1,6 @@
 import { msg } from '../../i18n/marker.js';
 import { interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
-import { CPCB_POLLUTANTS } from './cpcb.js';
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
 /** Maximum readings accepted in one snapshot before filtering by view. */
@@ -187,7 +186,8 @@ export function createAirQualitySnapshotSource({
 }
 
 /**
- * Standalone-compatible defaults. Hosts can replace the entire provider list.
+ * Standalone-compatible defaults: OpenAQ, worldwide. Hosts can replace the
+ * entire provider list.
  *
  * Every provider is a station network, drawn together with the others in
  * one de-duplicated set; `direct: true` marks a network publishing its own
@@ -196,26 +196,6 @@ export function createAirQualitySnapshotSource({
  */
 export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
   return [
-    {
-      id: 'cpcb',
-      publishedTimes: true,
-      title: msg('India'),
-      label: msg('Air quality'),
-      network: 'CPCB',
-      sourceLabel: 'CPCB · data.gov.in',
-      direct: true,
-      parameters: CPCB_POLLUTANTS,
-      requiresKeyId: 'data-gov-in',
-      // The feed leaves its units and averaging period unconfirmed.
-      source: createAirQualitySnapshotSource({
-        endpoint: '/api/air-quality/india',
-        hourly: true,
-        // The India route refreshes its national snapshot every 20 minutes.
-        reuseMs: 1_200_000,
-        fetchImpl,
-        now,
-      }),
-    },
     {
       id: 'openaq',
       viewDriven: true,

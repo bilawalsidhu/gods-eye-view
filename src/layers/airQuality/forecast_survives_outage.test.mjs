@@ -147,7 +147,7 @@ test('a forecast on the map keeps the shared snapshot available while station ke
   const h = harness({
     fieldSource: host.source,
     definitions: [
-      { ...NATIONAL, id: 'cpcb', network: 'CPCB', requiresKeyId: 'data-gov-in' },
+      { ...NATIONAL, id: 'openaq', network: 'OpenAQ', requiresKeyId: 'openaq' },
     ],
     getSnapshot: async () => {
       throw Object.assign(new Error('no key'), { code: 'no_key' });
@@ -166,5 +166,5 @@ test('a forecast on the map keeps the shared snapshot available while station ke
     requiresKeyId: h.layer.requiresKeyId,
   });
   assert.notEqual(snapshot.feedState, 'unavailable');
-  assert.match(snapshot.error, /DATA_GOV_IN_API_KEY/);
+  assert.match(snapshot.error, /OPENAQ_API_KEY/);
 });

@@ -1,5 +1,5 @@
 /** Real-app OpenAQ gate. Runs with explicit synthetic data; never writes keys.
- * Start the dev server with OPENAQ_API_KEY and DATA_GOV_IN_API_KEY empty, then
+ * Start the dev server with OPENAQ_API_KEY empty, then
  * point QA_BASE_URL at it: QA_BASE_URL=<the dev server> node scripts/qa-openaq.mjs
  */
 import assert from 'node:assert/strict';

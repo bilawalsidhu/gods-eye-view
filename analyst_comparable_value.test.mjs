@@ -2,17 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mapAnalystRecord } from './src/layers/airQuality/model.js';
 
-test('an unverified CPCB average is not exported as a comparable analyst value', () => {
-  const cpcb = mapAnalystRecord({
+test('a value without units is not exported as a comparable analyst value', () => {
+  const unitless = mapAnalystRecord({
     kind: 'observation',
-    provider: 'cpcb',
+    provider: 'national',
     parameter: 'PM2.5',
     value: 123,
     units: null,
-    rated: false,
   });
-  // Now: value 123 with units null, sorted and thresholded beside µg/m³ values.
-  assert.equal(cpcb.value, null);
+  // Not sorted or thresholded beside µg/m³ values.
+  assert.equal(unitless.value, null);
 });
 
 test('a flagged hourly value is not exported as a comparable analyst value', () => {

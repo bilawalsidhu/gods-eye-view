@@ -17,7 +17,6 @@ import {
   createDefaultAirQualityProviders,
 } from './providers.js';
 import { createAirQualityLayer } from './index.js';
-import { normalizeCpcbRecords } from './cpcb.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 test('breakpoints match the EPA table', () => {
@@ -257,23 +256,24 @@ test('per-pollutant readings become one station with every pollutant', () => {
   assert.equal(aqiStations([ready])[0], ready);
 });
 
-test('a station its provider leaves unrated keeps no values and stays unrated', () => {
+test('a station whose only reading its source flagged keeps no values', () => {
   const [station] = aqiStations([
     {
-      id: 'cpcb:1:PM2.5',
-      provider: 'cpcb',
+      id: 'national:1:PM2.5',
+      provider: 'national',
       stationId: '1',
       parameter: 'PM2.5',
       value: 123,
-      units: null,
-      rated: false,
+      units: 'µg/m³',
+      qualityFlagged: true,
       aqi: null,
       observedMs: 1000,
     },
   ]);
-  assert.equal(station.rated, false);
   assert.deepEqual(station.values, {});
+  assert.deepEqual(station.excluded, { pm25: 'flagged' });
   assert.equal(station.aqi, null);
+  assert.equal(station.observedMs, 1000);
 });
 
 // ── The AQI and pollutant views in the layer ───────────────────────────────
@@ -304,24 +304,20 @@ const site = (provider, stationId, lat, extra = {}) => ({
   label: '10.00 µg/m³',
   ...extra,
 });
-const ogdStamp = (ms) => {
-  const ist = new Date(ms + 330 * 60_000).toISOString();
-  return `${ist.slice(8, 10)}-${ist.slice(5, 7)}-${ist.slice(0, 4)} ${ist.slice(11, 19)}`;
-};
 
 /**
  * A network publishing its own monitors, read as one national snapshot from
- * `/api/air-quality/national`: a fixture beside the default providers.
+ * `/api/air-quality/<id>`: a fixture beside the default providers.
  */
-const nationalProvider = (fetchImpl) => ({
-  id: 'national',
-  title: 'National',
-  label: 'Air quality · National',
-  network: 'NATIONAL',
+const nationalProvider = (fetchImpl, id = 'national') => ({
+  id,
+  title: id,
+  label: `Air quality · ${id}`,
+  network: id.toUpperCase(),
   direct: true,
   parameters: ['PM2.5', 'PM10', 'NO2', 'O3', 'SO2', 'CO'],
   source: createAirQualitySnapshotSource({
-    endpoint: '/api/air-quality/national',
+    endpoint: `/api/air-quality/${id}`,
     keyed: false,
     hourly: true,
     reuseMs: 60_000,
@@ -342,6 +338,7 @@ function stationLayer(routes) {
   const source = createAirQualitySource({
     providers: [
       nationalProvider(fetchImpl),
+      nationalProvider(fetchImpl, 'regional'),
       ...createDefaultAirQualityProviders({ fetchImpl }),
     ],
   });
@@ -402,26 +399,14 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
         value: 10,
       }),
     ]),
-    '/api/air-quality/india': snapshotOf(
-      normalizeCpcbRecords(
-        {
-          records: [
-            {
-              country: 'India',
-              state: 'S',
-              city: 'C',
-              station: 'India',
-              latitude: '-26.5',
-              longitude: '28',
-              pollutant_id: 'PM2.5',
-              avg_value: '300',
-              last_update: ogdStamp(minutesAgo(10)),
-            },
-          ],
-        },
-        { now: Date.now() },
-      ).readings,
-    ),
+    // A station whose only value its source flagged: no index.
+    '/api/air-quality/regional': snapshotOf([
+      site('regional', '3', -26.5, {
+        value: 300,
+        qualityFlagged: true,
+        observedMs: minutesAgo(10),
+      }),
+    ]),
   });
   assert.equal(layer.getParams().view, 'aqi');
   assert.equal(await layer.update(), true);
@@ -435,9 +420,9 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
   // The national network: PM2.5 5 gives 28, NO2 10 ppb gives 9; one station from two rows.
   assert.equal(points.get('national').meta.aqi.index, 28);
   assert.equal(points.get('national').color, '#00e400');
-  // India stays unrated: no index from a reading marked rated: false.
-  assert.equal(points.get('cpcb').meta.aqi, null);
-  assert.equal(points.get('cpcb').color, '#8cb4ce');
+  // The flagged station stays unrated.
+  assert.equal(points.get('regional').meta.aqi, null);
+  assert.equal(points.get('regional').color, '#8cb4ce');
   assert.equal(layer.getStats().count, 3);
 
   const card = layer.getRowControls();
@@ -573,7 +558,7 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
         value: 10,
       }),
     ]),
-    '/api/air-quality/india': snapshotOf(),
+    '/api/air-quality/regional': snapshotOf(),
   });
   layer.setParams({ view: 'PM2.5' });
   await layer.update();

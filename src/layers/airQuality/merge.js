@@ -30,12 +30,10 @@ function metres(a, b) {
  * Whether a reading is rated on the scale of `view`: in the US AQI view
  * (`'aqi'`) a computed index (`aqi.index`), in any other view a category
  * from the layer's interpretation (`assessment.label`). A network's own
- * index (`rating`) alone does not count, and a reading its provider marks
- * `rated: false` is never rated. The one definition of "rated" for the merge
- * and the card.
+ * index (`rating`) alone does not count. The one definition of "rated" for
+ * the merge and the card.
  */
 export function isRatedReading(reading, view) {
-  if (reading?.rated === false) return false;
   if (view === 'aqi') return Number.isFinite(reading?.aqi?.index);
   return Boolean(reading?.assessment?.label);
 }

@@ -402,24 +402,9 @@ test('OpenAQ uses the existing free server-side credential registry', () => {
   assert.equal(entry.getUrl, 'https://explore.openaq.org/register');
 });
 
-test('the data.gov.in key is listed in Provider Settings like the OpenAQ key', () => {
-  const empty = keySetupStatus({});
-  const configured = keySetupStatus({ DATA_GOV_IN_API_KEY: 'private-test-value' });
-  assert.equal(configured.total, empty.total);
-  assert.equal(configured.setCount, empty.setCount + 1);
-  const india = configured.keys.find((key) => key.id === 'data-gov-in');
-  assert.equal(india.set, true);
-  assert.equal(india.tier, 'free');
-  assert.notEqual(india.clientExposed, true);
-  assert.deepEqual(india.envVars, ['DATA_GOV_IN_API_KEY']);
-  assert.ok(!JSON.stringify(configured).includes('private-test-value'));
-});
-
-test('the air-quality keys sit among the free optional keys, after NASA FIRMS', () => {
+test('the air-quality key sits among the free optional keys, after NASA FIRMS', () => {
   const ids = KEY_SETUP_KEYS.map((key) => key.id);
   // Most magic per minute first: the 3D planet leads.
   assert.equal(ids[0], 'google-maps');
   assert.ok(ids.indexOf('openaq') > ids.indexOf('firms'));
-  assert.ok(ids.indexOf('data-gov-in') > ids.indexOf('firms'));
-  assert.equal(ids.indexOf('data-gov-in'), ids.indexOf('openaq') + 1);
 });

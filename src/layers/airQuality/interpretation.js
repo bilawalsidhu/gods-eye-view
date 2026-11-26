@@ -88,12 +88,7 @@ export const HOURLY_MIN_COVERAGE = 75;
 export function interpretHourly(reading) {
   const limits = EEA_HOURLY_LIMITS[reading.parameter];
   let reason = null;
-  // A provider that cannot vouch for its units or averaging period says so.
-  if (reading.rated === false)
-    reason = msg(
-      'The units or averaging period of this network are not confirmed; no health category is assigned.',
-    );
-  else if (!limits)
+  if (!limits)
     reason = msg('This pollutant has no category on the EEA hourly scale.');
   else if (reading.averagingMinutes !== 60)
     reason = msg('A verified one-hour average is needed to rate this reading.');

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const NEW_KEYS = ['OPENAQ_API_KEY', 'DATA_GOV_IN_API_KEY'];
+const NEW_KEYS = ['OPENAQ_API_KEY'];
 
 test('dev-fresh reports shell-supplied air-quality keys as external', () => {
   const script = readFileSync(

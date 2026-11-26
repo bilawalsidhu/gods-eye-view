@@ -37,36 +37,37 @@ test('a rated copy beats an unrated direct reading, and then the newer one loses
     reading(provider, '1', 28.6, 77.2, overrides);
   const rated = { assessment: { label: 'Poor', severity: 3 } };
   const older = { observedMs: Date.parse('2026-11-23T09:00:00Z') };
-  const unrated = { rated: false, assessment: { reason: 'not confirmed' } };
-  const merge = (cpcb, openaq) =>
+  const unrated = {
+    assessment: { reason: 'A verified one-hour average is needed.' },
+  };
+  const merge = (national, openaq) =>
     mergeObservations([
-      { provider: 'cpcb', direct: true, readings: [site('cpcb', cpcb)] },
+      {
+        provider: 'national',
+        direct: true,
+        readings: [site('national', national)],
+      },
       { provider: 'openaq', direct: false, readings: [site('openaq', openaq)] },
     ]).map((kept) => kept.provider);
   assert.deepEqual(merge({ ...unrated, ...older }, rated), ['openaq']);
-  assert.deepEqual(merge(unrated, { ...rated, monitor: false }), ['cpcb']);
+  assert.deepEqual(merge(unrated, { ...rated, monitor: false }), ['national']);
   // Neither rated: the direct reading wins even when it is older.
-  assert.deepEqual(merge({ ...unrated, ...older }, {}), ['cpcb']);
-  assert.deepEqual(merge({ ...rated, ...older }, rated), ['cpcb']);
+  assert.deepEqual(merge({ ...unrated, ...older }, {}), ['national']);
+  assert.deepEqual(merge({ ...rated, ...older }, rated), ['national']);
 });
 
-test("rated means a category on the view's scale, never a reading marked rated: false", () => {
+test("rated means a category on the view's scale", () => {
   assert.equal(isRatedReading({ assessment: { label: 'Good' } }), true);
   assert.equal(isRatedReading({ assessment: { label: 'Good' } }, 'NO2'), true);
   // A network's own index alone is not the view's scale.
   assert.equal(isRatedReading({ rating: { label: 'Good', score: 2 } }), false);
   assert.equal(isRatedReading({ assessment: { reason: 'No usable' } }), false);
   assert.equal(isRatedReading({ rating: null }), false);
-  assert.equal(
-    isRatedReading({ rated: false, assessment: { label: 'Good' } }),
-    false,
-  );
   // The AQI view rates on the computed US AQI only.
   const aqi = { aqi: { index: 57, leading: 'pm25' } };
   assert.equal(isRatedReading(aqi, 'aqi'), true);
   assert.equal(isRatedReading({ aqi: null }, 'aqi'), false);
   assert.equal(isRatedReading({ assessment: { label: 'Good' } }, 'aqi'), false);
-  assert.equal(isRatedReading({ ...aqi, rated: false }, 'aqi'), false);
   assert.equal(isRatedReading(aqi, 'PM2.5'), false);
 });
 
@@ -127,10 +128,10 @@ test('ties keep the newer reading', () => {
       ],
     },
     {
-      provider: 'cpcb',
+      provider: 'regional',
       direct: true,
       readings: [
-        reading('cpcb', '1', -33.925, 18.4242, {
+        reading('regional', '1', -33.925, 18.4242, {
           observedMs: Date.parse('2026-11-23T11:00:00Z'),
         }),
       ],

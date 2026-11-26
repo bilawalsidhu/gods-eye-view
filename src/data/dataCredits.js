@@ -263,12 +263,6 @@ export const DATA_CREDITS = [
     html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. The originating network and its licence are named in each station’s details.',
   },
   {
-    key: 'cpcb-ogd',
-    html:
-      'Indian air-quality observations: Central Pollution Control Board, Real time Air Quality Index, via ' +
-      '<a href="https://www.data.gov.in/catalog/real-time-air-quality-index" target="_blank" rel="noopener">Open Government Data Platform India</a> · Government Open Data License – India',
-  },
-  {
     key: 'eea-aqi-bands',
     html:
       'Air quality. Pollutant bands: ' +

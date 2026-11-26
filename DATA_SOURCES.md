@@ -43,7 +43,6 @@ How to read this:
 | **Esri World Imagery** (ArcGIS Online tile service)                   | The keyless satellite basemap — the default landing when no Google/ion credential is configured, and the "Esri Satellite" map stack | [Esri Master Agreement](https://www.esri.com/en-us/legal/terms/full-master-agreement): the public World Imagery service is usable in public-facing apps with attribution; no key is required for this classic endpoint, but Esri governs and can change access — an app at scale should review current ArcGIS Location Platform terms                 | "Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community" (provider carries the service's own credit line) |
 | **USGS**                                                              | Earthquakes                                                                                                                         | U.S. public domain                                                                                                                                                                                                                                                                                                                                    | "Data courtesy of the U.S. Geological Survey"                                                                                               |
 | **OpenAQ** (`api.openaq.org`, v3) | Air quality layer: worldwide station observations (hourly means per pollutant, latest values for the US AQI) aggregated from government and community networks, through a fixed local proxy with a private free-account key (`OPENAQ_API_KEY`); no observation archive is bundled | [OpenAQ terms](https://docs.openaq.org/about/terms); the originating network's licence applies to each station: the originating network and its licence are named in each station's details (the tooltip of its HIGHEST IN VIEW row and a line under the selected station's name) | "Air-quality observations: OpenAQ and originating networks. The originating network and its licence are named in each station's details." |
-| **CPCB via the OGD Platform India** (`data.gov.in`, Real time Air Quality Index) | Air quality layer: India's CPCB station observations, read with a personal `DATA_GOV_IN_API_KEY` through the server proxy; shown as reported pollutant averages and unrated until the units and averaging period are verified | Government Open Data License – India (stated on the catalog page); no government endorsement implied. Details in "India air-quality observations" below | "Indian air-quality observations: Central Pollution Control Board, Real time Air Quality Index, via Open Government Data Platform India · Government Open Data License – India" |
 | **European Air Quality Index** (European Environment Agency, `airindex.eea.europa.eu`) | Air quality layer: the revised hourly pollutant bands (PM2.5, PM10, NO2, O3, SO2) and their category names, used in GEV's own six colours; GEV applies them to station readings itself and reads nothing from the EEA at runtime. Carbon monoxide is not in the EEA index: its bands are WHO-based (4, 7, 10, 35 and 100 mg/m³: the WHO 24 h guideline and interim target, then the 8 h, 1 h and 15 min guidelines) | CC BY 4.0 (EEA content), which requires acknowledgement | "Bands: European Air Quality Index (EEA); colours adapted by GEV"; carbon monoxide: WHO air quality guidelines |
 | **US EPA AQI breakpoints** (Technical Assistance Document for the Reporting of Daily Air Quality) | Air quality layer default view: a US AQI that GEV computes per station from the pollutants it reports, with the EPA's breakpoints, category names and colours. Not an official reading anywhere; no data is read from the EPA | U.S. public domain (federal government publication) | "US AQI: computed by GEV from station readings with the US EPA's breakpoints and colours; not an official reading" |
 | **Host-supplied air-quality model field** (optional) | Air quality layer: when a host supplies a gridded model field with its forecast (the six pollutants and the US AQI on regular grids), it is drawn under the stations and put on the timeline. Core ships none for use; the manifest's `credit` is shown in the data credits as written, once a run has been read, for the session. A test fixture holds a 10° cut of one CAMS run over northern Italy (`src/layers/airQuality/fixtures/field/`, read only by the tests, with its `NOTICE`), its manifest crediting it "Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains." | Set by the host's source. For CAMS (Copernicus Atmosphere Monitoring Service), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) with the required wording ([global](https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts) and [European](https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-forecasts) forecasts) | The manifest's `credit`; for CAMS: "Generated using Copernicus Atmosphere Monitoring Service information [year]. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains." (data that was changed, such as a cut: "Contains modified Copernicus Atmosphere Monitoring Service information [year]. …") |
@@ -191,49 +190,6 @@ How to read this:
 | **OpenSnowMap** (`www.opensnowmap.org`) | Ski Pistes layer: raster overlay of ski runs and lifts (#10) | Tiles CC BY-SA; data ODbL 1.0 via OpenStreetMap; bulk tile download forbidden without prior agreement | "Ski pistes © www.opensnowmap.org (CC BY-SA) · Data © OpenStreetMap contributors (ODbL)" |
 | **OSRM on the FOSSGIS routing servers** (`routing.openstreetmap.de`) | Street-following routes for the Directions layer and voice route annotations, via `/api/route` | [FOSSGIS routing usage policy](https://routing.openstreetmap.de/about.html): "Display the required attribution and display a link to 'fix the map'", "Use a valid user agent and, if applicable, a correct referrer", "One request per second max", "No scraping, no heavy usage". The full policy is the German [FOSSGIS Nutzungsbedingungen](https://www.fossgis.de/arbeitsgruppen/osm-server/nutzungsbedingungen/); FOSSGIS also states that the server may be embedded in your own pages but "eine gewerbliche Nutzung ist nur mit Einschränkungen erlaubt" (commercial use only with restrictions). Route data derives from OpenStreetMap (ODbL 1.0) | "Routing: OSRM on the FOSSGIS servers" + a "fix the map" link — shown in the Data attribution popover |
 
-### India air-quality observations (CPCB / OGD)
-
-India's CPCB stations are one more observation provider of the Air quality
-layer: they are drawn in the same station set as OpenAQ, in the AQI
-view and in the PM2.5, PM10, NO2, SO2, CO and O3 (OGD `OZONE`) views; OGD's NH3
-has no view and is not read. Where OpenAQ carries a copy of a CPCB station
-within 150 m, one reading is shown: a rated one over an unrated one, then the
-CPCB reading over OpenAQ's, then the newer one. Its source is CPCB's
-[Real time Air Quality Index catalog](https://www.data.gov.in/catalog/real-time-air-quality-index),
-OGD resource `3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69`.
-The portal identifies published data as licensed under the Government Open Data
-License – India. Credit CPCB and OGD Platform India; no government endorsement
-is implied. Data is fetched at runtime, not bundled in this repository.
-
-Add a personal OGD key in **Provider Settings** (`DATA_GOV_IN_API_KEY`, listed
-like OpenAQ's key), or set it in the ignored `.env` and restart the server. This
-private key stays in the server proxy. Without it the route answers 428 and the
-layer reports that India needs a key while the other providers keep drawing; a
-key OGD rejects (401/403) is answered with the same status, which the layer
-shows as a rejected key.
-
-**Value semantics:** each pollutant's `avg_value` (or legacy `pollutant_avg`)
-is kept as a reported average. India's readings stay unrated until the units and
-averaging period are confirmed. They contribute nothing to the US AQI. The OGD
-catalog title alone is insufficient to establish those field semantics. Markers
-are neutral station symbols, not interpolated pollution coverage.
-
-`last_update` is interpreted as an IST publication timestamp, not as the
-sampling time. Missing, invalid, more-than-six-hour-old and implausibly future
-records are omitted. A successful response can still contain old source data:
-the two-hour freshness threshold applies. The proxy caches complete
-snapshots for 20 minutes, coalesces requests, caps pagination/response sizes,
-and pauses retries for one minute on failure. Cached fallback is explicitly
-labeled and expires after six hours. The route answers the shared air-quality
-snapshot (`schemaVersion: 1`, station catalog and readings), normalized by
-`src/layers/airQuality/cpcb.js`.
-
-The schema and failure paths have fixture coverage. An authenticated live
-response verified on 18 October 2026 uses `avg_value`, `min_value`, and
-`max_value`; legacy `pollutant_*` fields remain supported. Field-unit and
-averaging-period verification are still required before adding AQI colors. The unauthenticated
-endpoint responds with `Authorization field missing`.
-
 ### Local receiver input (not fetched from a service)
 
 The optional Local ADS-B layer and the broadcast-FM receiver use radio you receive yourself: a USB RTL-SDR opened in the browser through WebUSB, or the `aircraft.json` of a decoder you run on your own machine or network (`LOCAL_RECEIVER_FEEDS`). Radio samples, audio and the optional receiver location stay in the browser. Decoder feeds are read by your local GEV server and relayed only to your browser, with about a second of in-memory caching. When you select a local aircraft, its ICAO address (and an airline-style callsign) is looked up, and aircraft that qualify for a 3D model are looked up by ICAO address, through the same adsbdb proxy the public flight layers use; your server caches those answers on disk and treats them as fresh for 24 hours. Received radio data is not stored or redistributed. ADS-B is an unauthenticated public broadcast and may be incomplete, delayed, spoofed or decoded in error; it is not suitable for navigation or operational use.
@@ -246,7 +202,7 @@ for eligible feeds and refresh rules.
 
 ### Notes on the live sources
 
-- **Air quality.** Every network is a station network, rated from the concentrations it reports: the US AQI that GEV computes (see "US AQI computed per station") or a pollutant's EEA hourly bands. No network's own index is read or shown. Canada's AQHI (Environment and Climate Change Canada, read from MSC GeoMet) is retired in favour of that one computed index, since it covered Canada only; Canadian stations reach the layer through OpenAQ, as every other country's do, and nothing is read from ECCC. OpenAQ and CPCB (India) are described below. Without the OpenAQ and data.gov.in keys, a stand-alone install shows no stations: the layer turns on and its card names the keys to add.
+- **Air quality.** Every network is a station network, rated from the concentrations it reports: the US AQI that GEV computes (see "US AQI computed per station") or a pollutant's EEA hourly bands. No network's own index is read or shown. Canada's AQHI (Environment and Climate Change Canada, read from MSC GeoMet) is retired in favour of that one computed index, since it covered Canada only; Canadian stations reach the layer through OpenAQ, as every other country's do, and nothing is read from ECCC. OpenAQ, the bundled station source, is described below; it republishes national networks such as India's CPCB and South Africa's SAAQIS, so they are not read separately. A host may supply its own providers; where two networks report one site within 150 m, one reading is shown: a reference monitor over a low-cost sensor, then a rated reading over an unrated one, then a network's own reading over an aggregator's copy, then the newer one (`src/layers/airQuality/merge.js`). Without the OpenAQ key, a stand-alone install shows no stations: the layer turns on and its card names the key to add.
 
 - **Via Lietuva / Eismoinfo (Lithuania).** Public road-camera catalogs and periodically updated still images from [Eismoinfo](https://eismoinfo.lt/), credited to Via Lietuva / eismoinfo.lt in the app. **Off by default.** The camera endpoints are the eismoinfo.lt website backend and are not among the services listed in Via Lietuva's [open-data statement](https://eismoinfo.lt/eismoinfo-backend/content?id=44), whose conditions are attribution and reuse on the same terms. Until the statement is confirmed to cover the camera photos, the pack loads only when an operator sets `CCTV_LITHUANIA_ENABLED=1`; with the flag unset, empty or any other value, the server makes no request to Eismoinfo. `eismoinfo-backend/camera-info-table` is joined by ID to `layer-static-features/VKR`. Without `lks=true`, the latter returns WGS84 `[latitude, longitude]`; the table's `x/y` instead use LKS-94 metres. Only the official HTTPS `/eismoinfo-backend/image-provider/camera/last?id=…` image endpoint is registered. Catalogs use the shared 15-minute cache; frames are fetched on demand and never bundled or archived. These are periodic snapshots, not continuous video. Camera headings are low-confidence estimates. No API key is required. `CCTV_LITHUANIA_MAX_SOURCES` defaults to 400.
 - **Freeway Bureau and Highway Bureau, MOTC (Taiwan).** National freeway cameras use the Freeway Bureau’s keyless [MOTC 2.0 CCTV table](https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml), refreshed daily and fetched at runtime (never bundled). Freeway Bureau data follows the [Open Government Data License, Taiwan v1.0](https://data.gov.tw/license); the app credits the Bureau, names the dataset and links the licence. If that catalog is unreachable and no last-good source list exists, the app falls back to the Highway Bureau’s free [provincial-road CCTV XML feed](https://thbapp.thb.gov.tw/opendata/), with attribution as requested by the Bureau. Its MJPEG streams are accepted only from cctv-ss01 through cctv-ss08.thb.gov.tw over HTTPS; the frame proxy extracts one bounded JPEG per request. This fallback covers provincial roads, not national freeways. Neither feed requires an API key. CCTV_TAIWAN_ENABLED=0 disables both; CCTV_TAIWAN_MAX_SOURCES defaults to 600 (bounded to 1–2000).
@@ -843,8 +799,7 @@ bundled in the repository. References: [API](https://docs.openaq.org/),
 
 The Air quality layer's default view is a US AQI that GEV computes for each
 station from the pollutants it reports: OpenAQ from each location's latest
-values (`/v3/locations/{id}/latest`, within the same request budget), CPCB
-from its national snapshot. The method is the US EPA's
+values (`/v3/locations/{id}/latest`, within the same request budget). The method is the US EPA's
 [Technical Assistance Document for the Reporting of Daily Air Quality](https://document.airnow.gov/technical-assistance-document-for-the-reporting-of-daily-air-quailty.pdf):
 Table 6 breakpoints (PM2.5 as revised in 2024), truncation, Equation 1 and the
 highest sub-index, with the EPA's category names and standard colours
@@ -857,8 +812,7 @@ same station's PM10 (more than 1.5 × PM10 + 10 µg/m³, so smoke, where PM2.5
 nearly equals PM10, still counts), a value more than three hours older than the station's
 newest value kept, and a value whose units do not convert are left out and
 named in the station's details; the station's time is that of the pollutant
-leading its index. A reading its provider leaves unrated (India's, until its
-units and averaging period are confirmed) gives no index. Gas mixing ratios
+leading its index. Gas mixing ratios
 (ppb, ppm) convert to µg/m³ at 25 °C (`src/layers/airQuality/units.js`), the
 same conversion for the US AQI and for the EEA comparison of a pollutant view. Each view colours, ranks and builds its
 legend on one scale (the US AQI, or the pollutant's EEA hourly bands). It is the

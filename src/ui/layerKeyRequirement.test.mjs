@@ -161,19 +161,19 @@ test('a key-gated layer with another source ready says how to use it', () => {
 
 test('a layer reading several keyed networks names each key it lacks, in one list', () => {
   const several = {
-    requiresKeyId: ['openaq', 'data-gov-in', 'openaq', 'not-a-provider'],
+    requiresKeyId: ['openaq', 'firms', 'openaq', 'not-a-provider'],
     stats: { keyRequired: true },
   };
   assert.equal(
     layerKeyRequirementTooltip(several),
-    'Needs OPENAQ_API_KEY or DATA_GOV_IN_API_KEY — add one in Provider Settings',
+    'Needs OPENAQ_API_KEY or FIRMS_MAP_KEY — add one in Provider Settings',
   );
   // The list follows the UI language.
   setLocale('ru');
   try {
     assert.match(
       layerKeyRequirementTooltip(several),
-      /OPENAQ_API_KEY или DATA_GOV_IN_API_KEY/,
+      /OPENAQ_API_KEY или FIRMS_MAP_KEY/,
     );
   } finally {
     setLocale('en');

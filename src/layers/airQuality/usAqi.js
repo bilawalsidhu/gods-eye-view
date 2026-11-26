@@ -355,10 +355,8 @@ const POLLUTANT_FIELDS = [
  * value; `excluded` names the
  * readings left out (`'units'` when their units do not convert, `'flagged'`
  * when their source flagged them). A network's own index, if a reading
- * carries one, is not kept. A reading its provider leaves unrated
- * (`rated: false`) gives no value, and a station with no rated reading stays
- * `rated: false`. Stations reporting none of the index's pollutants are left
- * out. The station's time is its newest value's (its newest reading's when
+ * carries one, is not kept. Stations reporting none of the index's
+ * pollutants are left out. The station's time is its newest value's (its newest reading's when
  * it has none); `aqi` is left for the layer (`stationIndex`).
  */
 export function aqiStations(readings) {
@@ -390,7 +388,6 @@ export function aqiStations(readings) {
         excluded: {},
         observedMs: null,
         reportedMs: -Infinity,
-        anyRated: false,
         aqi: null,
         color: AIR_QUALITY_UNRATED_COLOR,
         label: '',
@@ -401,8 +398,6 @@ export function aqiStations(readings) {
     }
     const at = Number.isFinite(reading.observedMs) ? reading.observedMs : null;
     if (at !== null) station.reportedMs = Math.max(station.reportedMs, at);
-    if (reading.rated === false) continue;
-    station.anyRated = true;
     // One reading per pollutant: the newest.
     const previous = station.valueTimes[key];
     if (Number.isFinite(previous) && (at === null || at <= previous)) continue;
@@ -421,9 +416,8 @@ export function aqiStations(readings) {
       station.valueCoverage[key] = reading.coveragePercent;
   }
   for (const station of stations.values()) {
-    const { reportedMs, anyRated } = station;
+    const { reportedMs } = station;
     delete station.reportedMs;
-    delete station.anyRated;
     const times = Object.values(station.valueTimes).filter(Number.isFinite);
     station.observedMs = times.length
       ? Math.max(...times)
@@ -432,7 +426,6 @@ export function aqiStations(readings) {
         : null;
     const averaging = new Set(Object.values(station.valueAveraging));
     station.averagingMinutes = averaging.size === 1 ? [...averaging][0] : null;
-    if (!anyRated) station.rated = false;
   }
   return out;
 }

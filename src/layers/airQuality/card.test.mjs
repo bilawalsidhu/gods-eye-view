@@ -765,7 +765,7 @@ test('an unrated station at the view centre beats a rated one out of view', asyn
     national: [
       ...station('national', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
         ...row,
-        rated: false,
+        qualityFlagged: true,
       })),
       ...station('national', DURBAN, { 'PM2.5': 40 }),
     ],
@@ -1060,18 +1060,13 @@ const NO_KEY_ROUTE = { status: 428, body: { error: 'no_key' } };
 test('with no keys the layer still turns on, its key lines shown', async () => {
   const { layer } = routedLayer({
     '/api/air-quality/openaq': NO_KEY_ROUTE,
-    '/api/air-quality/india': NO_KEY_ROUTE,
   });
   assert.equal(await layer.update(), true);
   await flush();
   const controls = layer.getRowControls();
   assert.deepEqual(
     controls.summary.lines.map((line) => [line.id, line.text]),
-    // The worldwide network's line first.
-    [
-      ['provider-openaq', 'OpenAQ: add a key in Provider Settings'],
-      ['provider-cpcb', 'CPCB: add a key in Provider Settings'],
-    ],
+    [['provider-openaq', 'OpenAQ: add a key in Provider Settings']],
   );
   // The US AQI is the one index tile; the pollutants stay a click away.
   assert.deepEqual(
@@ -1369,7 +1364,6 @@ test('a rejected key says so and points to Provider Settings', async () => {
       status: 401,
       body: { error: 'OpenAQ unavailable' },
     },
-    '/api/air-quality/india': { status: 403, body: { error: 'key_rejected' } },
   });
   await layer.update();
   await flush();
@@ -1377,10 +1371,6 @@ test('a rejected key says so and points to Provider Settings', async () => {
   assert.equal(
     lineText(controls, 'provider-openaq'),
     'OpenAQ: key rejected — check Provider Settings',
-  );
-  assert.equal(
-    lineText(controls, 'provider-cpcb'),
-    'CPCB: key rejected — check Provider Settings',
   );
   layer.destroy();
 });
@@ -1481,10 +1471,9 @@ test("a network's own index is never shown, in the AQI view or a pollutant view"
   );
 });
 
-test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, not UNAVAILABLE, and names the missing keys', async () => {
+test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, not UNAVAILABLE, and names the missing key', async () => {
   const { layer } = routedLayer({
     '/api/air-quality/openaq': NO_KEY_ROUTE,
-    '/api/air-quality/india': NO_KEY_ROUTE,
   });
   assert.equal(await layer.update(), true);
   await flush();
@@ -1493,7 +1482,7 @@ test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, n
   assert.equal(stats.error, null);
   assert.equal(stats.keyRequired, true);
   assert.equal(stats.loadingLabel, 'KEY REQUIRED');
-  assert.equal(stats.source, 'CPCB · data.gov.in · OpenAQ · Worldwide');
+  assert.equal(stats.source, 'OpenAQ · Worldwide');
   assert.equal(layer.source, stats.source);
   // The row as the layer manager publishes it (DataLayerManager.getAll).
   const row = {
@@ -1506,22 +1495,18 @@ test('keyless by default the layer turns on; its Layers row says KEY REQUIRED, n
   assert.notEqual(presentLayerToggle(row).feedState, 'unavailable');
   assert.equal(
     LayerPanel.prototype._buildMetaText(row),
-    'CPCB · data.gov.in · OpenAQ · Worldwide · KEY REQUIRED',
+    'OpenAQ · Worldwide · KEY REQUIRED',
   );
-  // The worldwide network's key first, the keys in one list.
-  assert.deepEqual(row.requiresKeyId, ['openaq', 'data-gov-in']);
+  assert.deepEqual(row.requiresKeyId, ['openaq']);
   assert.equal(
     layerKeyRequirementTooltip(row),
-    'Needs OPENAQ_API_KEY or DATA_GOV_IN_API_KEY — add one in Provider Settings',
+    'Needs OPENAQ_API_KEY — add it in Provider Settings',
   );
-  // The card names the keys to add, OpenAQ's first, also collapsed.
+  // The card names the key to add, also collapsed.
   const { summary } = layer.getRowControls();
   assert.deepEqual(
     summary.lines.map((line) => line.text),
-    [
-      'OpenAQ: add a key in Provider Settings',
-      'CPCB: add a key in Provider Settings',
-    ],
+    ['OpenAQ: add a key in Provider Settings'],
   );
   assert.equal(summary.compact, 'OpenAQ: add a key in Provider Settings');
   layer.destroy();
@@ -1548,11 +1533,11 @@ test("a reading's band is its category on the view's scale, for voice queries an
   await flush();
   [record] = layer.getAnalystRecords();
   assert.equal(record.band, 'Fair');
-  // A reading no index rates has no band.
+  // A reading no index rates (its source flagged it) has no band.
   const unrated = cardHarness({
     national: station('national', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
       ...row,
-      rated: false,
+      qualityFlagged: true,
     })),
   });
   await unrated.layer.update();
@@ -1587,7 +1572,7 @@ test('a rated station chosen over a nearer unrated one is named the nearest rate
     national: [
       ...station('national', CAPE_TOWN, { 'PM2.5': 12 }).map((row) => ({
         ...row,
-        rated: false,
+        qualityFlagged: true,
       })),
       ...station('national', DURBAN, { 'PM2.5': 40 }),
     ],
@@ -1600,37 +1585,6 @@ test('a rated station chosen over a nearer unrated one is named the nearest rate
     'nearest rated station · Durban',
   );
   assert.equal(tile(controls, 'index', 'aqi').value, '112');
-});
-test('a reading without confirmed units shows its reported number on the tile and row', async () => {
-  const { layer } = cardHarness(
-    {
-      national: [
-        pollutant('national', CAPE_TOWN, 'PM2.5', 123, {
-          rated: false,
-          units: null,
-          averagingMinutes: null,
-        }),
-        pollutant('national', DURBAN, 'PM2.5', 40),
-      ].map(interpretHourly),
-    },
-    { view: 'PM2.5' },
-  );
-  await layer.update();
-  await flush();
-  layer.setParams({ station: 'national:cape-town:PM2.5' });
-  const controls = layer.getRowControls(),
-    reading = tile(controls, 'pollutants', 'PM2.5');
-  assert.deepEqual(
-    [reading.value, reading.note, reading.accent],
-    ['123', 'unrated units', '#8cb4ce'],
-  );
-  assert.deepEqual(
-    controls.list.items.map((row) => [row.lead, row.text]),
-    [
-      ['40', 'Durban'],
-      ['123', 'Cape Town · unrated units'],
-    ],
-  );
 });
 test('a selection follows the copy kept by the next merge', async () => {
   let rows = [];

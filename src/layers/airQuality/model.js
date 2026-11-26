@@ -170,7 +170,7 @@ export function mapAnalystRecord(raw, index = 0) {
   };
   // Only comparable readings have a value in the layer's units.
   const pollutant = raw?.kind === 'observation' && raw.parameter !== 'aqi';
-  const comparable = raw?.rated !== false && raw?.qualityFlagged !== true;
+  const comparable = raw?.qualityFlagged !== true;
   const converted =
     pollutant && comparable
       ? concentrationIn(raw.parameter, raw.value, raw.units)

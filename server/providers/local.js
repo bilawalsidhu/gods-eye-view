@@ -1,7 +1,6 @@
 import path from 'node:path';
 
 import { openAqProxy } from './openAq.js';
-import { cpcbProxy } from './cpcb.js';
 import { airQualityFieldProxy } from './airQualityField.js';
 import { openSkyProxy } from './aircraft/opensky.js';
 import { celestrakProxy, rocketLaunchesProxy } from './space.js';
@@ -96,7 +95,6 @@ function localProviderPlugins({
     weatherProxy(),
     cycloneProxy(),
     openAqProxy(),
-    cpcbProxy(),
     airQualityFieldProxy(),
     mapillaryProxy(),
     firePerimetersProxy(),

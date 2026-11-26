@@ -625,8 +625,8 @@ export function createAirQualityLayer({
   };
   /**
    * One reading as the current view presents it. In the AQI view a station
-   * gets its index from its plausible, recent values (`stationIndex`), unless
-   * its provider leaves it unrated; its time is then that of the pollutant
+   * gets its index from its plausible, recent values (`stationIndex`); its
+   * time is then that of the pollutant
    * leading the index, and its averaging that of the values used. In every
    * view `band` is the reading's category on the view's scale (the US AQI
    * category, or the pollutant's EEA band), null when unrated.
@@ -637,11 +637,10 @@ export function createAirQualityLayer({
         ...reading,
         band: isRatedReading(reading, view) ? reading.assessment.label : null,
       };
-    const result =
-      reading.rated === false ? null : stationIndex(currentValuesOf(reading));
-    const aqi = result?.aqi ?? null;
+    const result = stationIndex(currentValuesOf(reading));
+    const aqi = result.aqi ?? null;
     const band = usAqiBand(aqi?.index);
-    const used = result?.used ?? {};
+    const used = result.used ?? {};
     const averaging = new Set(
       Object.keys(used).map((key) => reading.valueAveraging?.[key] ?? null),
     );
@@ -649,8 +648,8 @@ export function createAirQualityLayer({
       ...reading,
       aqi: aqi ? { ...aqi, category: band.label } : null,
       aqiValues: used,
-      aqiExcluded: result?.excluded ?? {},
-      observedMs: result?.observedMs ?? reading.observedMs,
+      aqiExcluded: result.excluded ?? {},
+      observedMs: result.observedMs ?? reading.observedMs,
       averagingMinutes:
         reading.valueAveraging && averaging.size
           ? averaging.size === 1
@@ -679,11 +678,7 @@ export function createAirQualityLayer({
       ? t('Calculated US AQI · main pollutant {pollutant}', {
           pollutant: AQI_PARAMETERS[reading.aqi.leading],
         })
-      : reading.rated === false
-        ? t(
-            'The units or averaging period of this network are not confirmed; no health category is assigned.',
-          )
-        : t('Index unavailable');
+      : t('Index unavailable');
     const used = Object.entries(reading.aqiValues ?? {})
       .filter(([key, value]) => AQI_PARAMETERS[key] && Number.isFinite(value))
       .map(([key, value]) => valueText(key, value))
@@ -768,16 +763,6 @@ export function createAirQualityLayer({
     );
   };
   /**
-   * Whether a pollutant-view reading carries a number its network gives no
-   * units for (`rated: false`, `units: null`): shown as reported, never
-   * converted, banded, ranked or part of an index.
-   */
-  const unconfirmedUnits = (reading) =>
-    view !== 'aqi' &&
-    reading?.rated === false &&
-    reading.units == null &&
-    Number.isFinite(reading.value);
-  /**
    * A reading's number on the view's scale as text; unrated, its value in
    * the view's unit when that converts, else a dash.
    */
@@ -789,10 +774,7 @@ export function createAirQualityLayer({
       view === 'aqi'
         ? null
         : concentrationIn(view, reading.value, reading.units);
-    if (converted !== null) return concentrationText(view, converted);
-    return unconfirmedUnits(reading)
-      ? concentrationText(view, reading.value)
-      : NO_VALUE;
+    return converted !== null ? concentrationText(view, converted) : NO_VALUE;
   };
   /**
    * A reading's value on its map label: in a pollutant view in the view's
@@ -800,11 +782,7 @@ export function createAirQualityLayer({
    * units do not convert, its own label.
    */
   const mapLabelValue = (reading) => {
-    if (
-      !AIR_QUALITY_POLLUTANT_VIEWS.includes(view) ||
-      unconfirmedUnits(reading)
-    )
-      return reading.label;
+    if (!AIR_QUALITY_POLLUTANT_VIEWS.includes(view)) return reading.label;
     const text = scaleText(reading);
     return text === NO_VALUE ? reading.label : `${text} ${layerUnits(view)}`;
   };
@@ -889,14 +867,14 @@ export function createAirQualityLayer({
     const station = rememberedStations().find(
       (item) => stationKey(item) === key,
     );
-    if (!station || station.rated === false) return null;
+    if (!station) return null;
     const result = stationIndex(currentValuesOf(station));
     return { station, aqi: result.aqi?.index ?? null, used: result.used };
   };
   /**
    * A pollutant value's EEA hourly band by the map's own rule
-   * (`interpretHourly`): only a one-hour average, complete, unflagged and
-   * from a network that vouches for it; otherwise null.
+   * (`interpretHourly`): only a one-hour average, complete and unflagged;
+   * otherwise null.
    */
   const tileBand = (parameter, value, facts) => {
     const { assessment } = interpretHourly({
@@ -906,7 +884,6 @@ export function createAirQualityLayer({
       averagingMinutes: facts.averagingMinutes ?? null,
       coveragePercent: facts.coveragePercent,
       qualityFlagged: facts.qualityFlagged === true,
-      rated: facts.rated,
     });
     return assessment?.label ? EEA_HOURLY_BANDS[assessment.severity] : null;
   };
@@ -923,23 +900,17 @@ export function createAirQualityLayer({
         value: live.aqiValues[key],
         averagingMinutes: live.valueAveraging?.[key],
         coveragePercent: live.valueCoverage?.[key],
-        rated: live.rated,
       };
     if (live && live.parameter === id) {
       // The view's own reading decides its tile, as it decides its row: a
-      // flagged value, or one its network gives no units for, shows unbanded.
-      const unconfirmed = unconfirmedUnits(live);
-      const value = unconfirmed
-        ? live.value
-        : concentrationIn(id, live.value, live.units);
+      // flagged value shows unbanded.
+      const value = concentrationIn(id, live.value, live.units);
       if (value === null) return null;
       return {
         value,
         averagingMinutes: live.averagingMinutes,
         coveragePercent: live.coveragePercent,
         qualityFlagged: live.qualityFlagged === true,
-        rated: live.rated,
-        unconfirmed,
       };
     }
     const value = remembered?.used?.[key];
@@ -948,7 +919,6 @@ export function createAirQualityLayer({
       value,
       averagingMinutes: remembered.station.valueAveraging?.[key],
       coveragePercent: remembered.station.valueCoverage?.[key],
-      rated: remembered.station.rated,
     };
   };
   /**
@@ -973,29 +943,13 @@ export function createAirQualityLayer({
     }
     const live = station && _readings.includes(station) ? station : null;
     const remembered = rememberedStation(station);
-    const tile = (
-      id,
-      label,
-      value,
-      band,
-      context,
-      text,
-      unconfirmed = false,
-    ) => {
-      const category = band
-        ? bandLabel(band.label, context)
-        : unconfirmed
-          ? t('unrated units')
-          : '';
+    const tile = (id, label, value, band, context, text) => {
+      const category = band ? bandLabel(band.label, context) : '';
       return {
         id,
         value: value === null ? NO_VALUE : text(value),
         // The band in words rides beside the value; long names shortened.
-        note: band
-          ? bandLabel(band.short ?? band.label, context)
-          : unconfirmed
-            ? t('unrated units')
-            : '',
+        note: band ? bandLabel(band.short ?? band.label, context) : '',
         label,
         title: category ? `${label} · ${category}` : label,
         accent:
@@ -1042,7 +996,6 @@ export function createAirQualityLayer({
         at ? tileBand(id, at.value, at) : null,
         'EEA hourly quality',
         text,
-        at?.unconfirmed === true,
       );
     });
     return [
@@ -1140,7 +1093,6 @@ export function createAirQualityLayer({
             stationId: reading.stationId,
             name: reading.name,
             parameter: reading.parameter,
-            rated: reading.rated,
             aqi: reading.aqi,
             assessment: reading.assessment,
           },
@@ -2694,10 +2646,6 @@ export function createAirQualityLayer({
             )
           : '';
       };
-      const published =
-        selected &&
-        definitions.find((d) => d.id === selected.provider)?.publishedTimes ===
-          true;
       const licence = licenceText(selected);
       return {
         readout: true,
@@ -2760,19 +2708,12 @@ export function createAirQualityLayer({
                   {
                     id: 'station-source',
                     muted: true,
-                    text:
-                      published && Number.isFinite(selected.observedMs)
-                        ? selectedNetwork +
-                          ' · ' +
-                          t('updated {age}', {
-                            age: shortAgo(selected.observedMs),
-                          })
-                        : t('Measured · {provider} · {age}', {
-                            provider: selectedNetwork,
-                            age: Number.isFinite(selected.observedMs)
-                              ? shortAgo(selected.observedMs)
-                              : t('Unavailable'),
-                          }),
+                    text: t('Measured · {provider} · {age}', {
+                      provider: selectedNetwork,
+                      age: Number.isFinite(selected.observedMs)
+                        ? shortAgo(selected.observedMs)
+                        : t('Unavailable'),
+                    }),
                   },
                   ...(licence
                     ? [
@@ -2815,9 +2756,7 @@ export function createAirQualityLayer({
               note: rowCategory(reading),
               swatch: reading.color,
               lead: scaleText(reading),
-              text: unconfirmedUnits(reading)
-                ? reading.name + ' · ' + t('unrated units')
-                : reading.name,
+              text: reading.name,
               title: `${category ? category + ' · ' : ''}${reading.name} · ${reading.zone} · ${reading.owner || owner.network}${reading.monitor === false ? ' · ' + t('Low-cost sensor') : reading.monitor === true ? ' · ' + t('Reference monitor') : ''} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
               accent: reading.color,
               active: reading.id === selectedStation,

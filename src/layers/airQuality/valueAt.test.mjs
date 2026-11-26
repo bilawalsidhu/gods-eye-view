@@ -163,7 +163,7 @@ test('getValueAt marks an observation older than two hours as stale', async (t) 
 test('getValueAt shows an unrated station without a band', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: NOW });
   const layer = layerWith([
-    pollutant(CAPE_TOWN, 'PM2.5', 12, { rated: false }),
+    pollutant(CAPE_TOWN, 'PM2.5', 12, { qualityFlagged: true }),
   ]);
   layer.enable();
   await layer.update();

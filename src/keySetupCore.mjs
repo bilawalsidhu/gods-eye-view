@@ -100,14 +100,6 @@ export const KEY_SETUP_KEYS = Object.freeze([
     tier: 'free',
   }),
   Object.freeze({
-    id: 'data-gov-in',
-    title: 'DATA.GOV.IN', // i18n-ignore: provider product name
-    unlocks: msg('Indian air-quality station observations'),
-    getUrl: 'https://www.data.gov.in/',
-    envVars: Object.freeze(['DATA_GOV_IN_API_KEY']),
-    tier: 'free',
-  }),
-  Object.freeze({
     id: 'liveuamap',
     title: 'LIVEUAMAP', // i18n-ignore: provider product name
     unlocks: msg(

@@ -15,12 +15,12 @@ test('the public reference air-quality source answers an unqualified getSnapshot
   });
   globalThis.fetch = async (url) => {
     const u = String(url);
-    if (u.includes('india'))
+    if (u.includes('openaq'))
       return json({
         schemaVersion: 1,
         readings: [
           {
-            id: 'cpcb:delhi:PM2.5',
+            id: 'openaq:delhi:PM2.5',
             name: 'Delhi',
             parameter: 'PM2.5',
             value: 50,
@@ -33,5 +33,5 @@ test('the public reference air-quality source answers an unqualified getSnapshot
   const source = createReferenceSources()['air-quality'];
   const readings = await source.getSnapshot({});
   assert.equal(readings.length, 1);
-  assert.equal((await source.getSnapshot({ provider: 'cpcb' })).length, 1);
+  assert.equal((await source.getSnapshot({ provider: 'openaq' })).length, 1);
 });

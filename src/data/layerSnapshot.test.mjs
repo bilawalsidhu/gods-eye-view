@@ -315,11 +315,11 @@ test('a layer waiting on its keys with no records is unavailable and names the k
     layerSnapshot({
       id: 'air-quality',
       enabled: true,
-      requiresKeyId: ['openaq', 'data-gov-in'],
+      requiresKeyId: ['openaq', 'firms'],
       stats: { keyRequired: true, count },
     });
   assert.equal(snapshot(0).feedState, 'unavailable');
-  assert.match(snapshot(0).error, /OPENAQ_API_KEY or DATA_GOV_IN_API_KEY/);
+  assert.match(snapshot(0).error, /OPENAQ_API_KEY or FIRMS_MAP_KEY/);
   assert.equal(snapshot(3).feedState, 'nominal');
 });
 
@@ -327,10 +327,10 @@ test('a model field on the map keeps a layer available while its stations wait o
   const snapshot = layerSnapshot({
     id: 'air-quality',
     enabled: true,
-    requiresKeyId: ['openaq', 'data-gov-in'],
+    requiresKeyId: ['openaq', 'firms'],
     stats: { keyRequired: true, count: 0, fieldShown: true },
   });
   assert.notEqual(snapshot.feedState, 'unavailable');
   // The key guidance stays, for the stations.
-  assert.match(snapshot.error, /OPENAQ_API_KEY or DATA_GOV_IN_API_KEY/);
+  assert.match(snapshot.error, /OPENAQ_API_KEY or FIRMS_MAP_KEY/);
 });
