@@ -18,6 +18,7 @@ import {
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
 import { createNewsPanel } from './newsPanel.js';
+import { watchDisplayed } from './displayWatch.js';
 import {
   translateFeedError,
   translateStatusLine,
@@ -309,6 +310,11 @@ export class LayerPanel {
     this._rowViews = new Map();
     this._finderRows = [];
     this._pending = new Set();
+    /** @type {Map<HTMLElement, ReturnType<typeof watchDisplayed>>} */
+    this._displayWatches = new Map();
+    /** @type {Map<HTMLElement, string | null>} the rows each list shows */
+    this._paintedRows = new Map();
+    this._rowsOwed = false;
   }
   mount(container) {
     if (this._destroyed) return;
@@ -331,6 +337,7 @@ export class LayerPanel {
       if (!element._vnode) element.replaceChildren();
       this._groupContainers.set(containerId, element);
     }
+    this._watchRowLists();
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -366,8 +373,37 @@ export class LayerPanel {
     if (container && this._recentImageryFactory)
       this._recentImageryPanel = this._recentImageryFactory(container) || null;
   }
+  /**
+   * A refresh skips a row list its panel does not display (collapsed or
+   * hidden) and repaints it once when it is displayed again.
+   */
+  _watchRowLists() {
+    this._unwatchRowLists();
+    for (const element of [
+      this._toggleContainer,
+      ...this._groupContainers.values(),
+    ]) {
+      if (!element || this._displayWatches.has(element)) continue;
+      this._displayWatches.set(
+        element,
+        watchDisplayed(element, () => {
+          if (this._rowsOwed && !this._destroyed)
+            this._paint({ whileShown: true });
+        }),
+      );
+    }
+  }
+  _unwatchRowLists() {
+    for (const watch of this._displayWatches.values()) watch.disconnect();
+    this._displayWatches = new Map();
+  }
+  _isDisplayed(element) {
+    return this._displayWatches.get(element)?.shown() ?? true;
+  }
   _releaseBindings() {
     this._generation++;
+    // New bindings render every list again.
+    this._paintedRows = new Map();
     this._cancelRowControlsRefresh?.();
     this._cancelRowControlsRefresh = null;
     for (const remove of this._removers.splice(0)) remove();
@@ -376,6 +412,8 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._destroyed = true;
     this._releaseBindings();
+    this._unwatchRowLists();
+    this._rowsOwed = false;
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
     this._newsPanel?.destroy();
@@ -447,14 +485,29 @@ export class LayerPanel {
       }),
     );
     this._paint();
-    this._removers.push(this.finder.onInputs(() => this._paintFinder()));
+    this._removers.push(this.finder.onInputs(() => this._onFinderInputs()));
     this._refreshWeatherPanel();
     this._refreshNewsPanel();
   }
 
-  /** Present every row from the layers' current state and render them. */
-  _paint() {
+  /**
+   * Present every row from the layers' current state and render them. A list
+   * whose rows are the ones it already shows is not rendered again. With
+   * `whileShown`, a list that is not displayed is left as it is and owed a
+   * repaint for when it is displayed again.
+   */
+  _paint({ whileShown = false } = {}) {
     if (this._destroyed || !this._toggleContainer) return;
+    if (
+      whileShown &&
+      ![this._toggleContainer, ...this._groupContainers.values()].some(
+        (element) => this._isDisplayed(element),
+      )
+    ) {
+      this._rowsOwed = true;
+      return;
+    }
+    this._rowsOwed = false;
     const layers = new Map(this.getAll().map((layer) => [layer.id, layer]));
     // Each list renders its own rows: Data Layers, and any group's own list.
     const lists = new Map([[null, []]]);
@@ -470,9 +523,48 @@ export class LayerPanel {
       if (item) lists.get(row.container ?? null).push(item);
     }
     this._finderRows = lists.get(null);
-    this._paintFinder();
-    for (const [id, container] of this._groupContainers)
-      this._renderRows(container, lists.get(id));
+    if (
+      this._listNeedsRender(this._toggleContainer, this._finderRows, whileShown)
+    )
+      this._paintFinder();
+    for (const [id, container] of this._groupContainers) {
+      const items = lists.get(id);
+      if (this._listNeedsRender(container, items, whileShown))
+        this._renderRows(container, items);
+    }
+  }
+
+  /**
+   * Whether a list must be rendered: not while it is not displayed (with
+   * `whileShown`), which leaves it owed a repaint, nor when it already shows
+   * these rows. Row handlers re-read the live descriptor, so only the
+   * presented values, never their functions, are compared.
+   */
+  _listNeedsRender(container, items, whileShown) {
+    if (whileShown && !this._isDisplayed(container)) {
+      this._rowsOwed = true;
+      return false;
+    }
+    let rows = null;
+    try {
+      rows = JSON.stringify(items);
+    } catch {
+      // Rows that cannot be compared are always rendered.
+    }
+    if (rows !== null && this._paintedRows.get(container) === rows)
+      return false;
+    this._paintedRows.set(container, rows);
+    return true;
+  }
+
+  /**
+   * Filter the rows anew. Rows a refresh left owed are presented anew first,
+   * and the Data Layers list renders even when its rows are unchanged.
+   */
+  _onFinderInputs() {
+    if (!this._rowsOwed) return this._paintFinder();
+    this._paintedRows.delete(this._toggleContainer);
+    this._paint();
   }
 
   /** Finder input changes only visibility, not the layer state or controls. */
@@ -725,7 +817,8 @@ export class LayerPanel {
       this.onHiddenRefresh();
       return;
     }
-    this._paint();
+    // A collapsed panel's rows repaint when it opens.
+    this._paint({ whileShown: true });
     this._refreshWeatherPanel();
     this._refreshNewsPanel();
   }

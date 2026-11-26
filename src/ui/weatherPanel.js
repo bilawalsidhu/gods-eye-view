@@ -2,6 +2,7 @@ import { h, render as renderVue } from 'vue';
 import { formatUtcDayMonth, t } from '../i18n/index.js';
 import { utcClock } from './rail/utcClock.js';
 import WeatherReadout from './weather/WeatherReadout.vue';
+import { watchDisplayed } from './displayWatch.js';
 
 // Remounting controls must not reopen a panel the user already collapsed.
 // Keyed by the page's Weather panel, which outlives remounted controls.
@@ -110,6 +111,12 @@ export function createWeatherPanel({
     frameTime: '',
     cards: [],
     observedCards: [],
+  });
+  // The readout is not repainted while its body is not displayed (the panel
+  // collapsed or hidden); it repaints once when the body is displayed again.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
   });
   const render = () => {
     if (destroyed) return;
@@ -272,20 +279,24 @@ export function createWeatherPanel({
       };
     });
     const hidden = active.length === 0;
-    paint({
-      hidden,
-      observed: showObserved,
-      scope: observed.map(({ id }) => names[id]).join(' · '),
-      frameTime,
-      cards: models.filter(({ id }) => !OBSERVED.has(id)),
-      observedCards: models.filter(({ id }) => OBSERVED.has(id)),
-    });
-    // Only a change of open card moves the scroll position; refreshes leave it.
-    if (shownOpenId !== null && openId !== shownOpenId) {
-      const open = [
-        ...container.querySelectorAll('.weather-cards > [data-card-id]'),
-      ].find((node) => node.dataset.cardId === openId);
-      revealCard(container, open);
+    owed = !body.shown();
+    if (!owed) {
+      paint({
+        hidden,
+        observed: showObserved,
+        scope: observed.map(({ id }) => names[id]).join(' · '),
+        frameTime,
+        cards: models.filter(({ id }) => !OBSERVED.has(id)),
+        observedCards: models.filter(({ id }) => OBSERVED.has(id)),
+      });
+      // Only a change of open card moves the scroll position; refreshes
+      // leave it.
+      if (shownOpenId !== null && openId !== shownOpenId) {
+        const open = [
+          ...container.querySelectorAll('.weather-cards > [data-card-id]'),
+        ].find((node) => node.dataset.cardId === openId);
+        revealCard(container, open);
+      }
     }
     shownOpenId = active.length ? openId : null;
     if (count) set(count, 'textContent', String(active.length));
@@ -346,6 +357,7 @@ export function createWeatherPanel({
     destroy() {
       destroyed = true;
       unsubscribe?.();
+      body.disconnect();
       renderVue(null, container);
       if (panel) set(panel, 'hidden', true);
       if (count) set(count, 'textContent', '0');

@@ -3567,6 +3567,13 @@ Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
 are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
+A refresh (a layer's status or row controls, such as every step of a scene
+whose time advances) skips a row list whose panel is not displayed (collapsed
+or hidden) and repaints it once, with its current rows, when a ResizeObserver
+reports it displayed again, before it is drawn; the Weather and News rail
+readouts do the same for their bodies, while the panels still appear, count and
+open as before. A list whose presented rows equal the ones it shows is not
+rendered again.
 The clear control presents busy state while its existing action owns the transaction.
 The Wildlife group follows Events and precedes Weather; Wildlife Sightings
 provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.

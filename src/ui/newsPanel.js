@@ -1,5 +1,6 @@
 import { h, render as renderVue } from 'vue';
 import NewsFeed from './news/NewsFeed.vue';
+import { watchDisplayed } from './displayWatch.js';
 
 const LAYER_ID = 'news';
 const LOAD_MORE_MARGIN_PX = 160;
@@ -27,10 +28,17 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
   let destroyed = false;
   let requestedAt = -1;
   let shownFilters = '';
+  // The feed is not repainted while its body is not displayed (the panel
+  // collapsed or hidden); it repaints once when the body is displayed again.
+  let owed = false;
+  const body = watchDisplayed(container, () => {
+    if (owed) render();
+  });
 
   function render() {
     if (destroyed) return;
-    renderVue(h(NewsFeed, { view, onParams }), container);
+    owed = !body.shown();
+    if (!owed) renderVue(h(NewsFeed, { view, onParams }), container);
     const hidden = !view;
     if (panel) set(panel, 'hidden', hidden);
     // The count is the shown section's: Local's list, else the feed.
@@ -80,6 +88,7 @@ export function createNewsPanel({ container, setLayerParams = () => {} } = {}) {
     },
     destroy() {
       destroyed = true;
+      body.disconnect();
       container.removeEventListener?.('scroll', onScroll);
       renderVue(null, container);
       if (panel) set(panel, 'hidden', true);
