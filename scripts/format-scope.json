@@ -1731,6 +1731,7 @@
   "src/layers/airQuality/airQualityLocale.test.mjs",
   "src/layers/airQuality/providers.js",
   "src/layers/airQuality/openAq.test.mjs",
+  "src/layers/airQuality/openAqViewport.test.mjs",
   "server/providers/openAq.test.mjs",
   "scripts/qa-openaq.mjs",
   "src/layers/airQuality/interpretation.js",
