@@ -320,20 +320,21 @@ test('the real decoder computes spectra only when requested, with audio unchange
     const bytes = new Uint8Array(32_768 * 2);
     for (let n = 0; n < 32_768; n += 1) {
       const phase = (2 * Math.PI * 100_000 * n) / 2_048_000;
-      bytes[2 * n] = Math.round(127.5 + 60 * Math.cos(phase));
-      bytes[2 * n + 1] = Math.round(127.5 + 60 * Math.sin(phase));
+      bytes[2 * n] = Math.round(147.5 + 60 * Math.cos(phase));
+      bytes[2 * n + 1] = Math.round(111.5 + 60 * Math.sin(phase));
     }
     return bytes.buffer;
   };
-  const run = async (spectrum, firstId) => {
-    // A reset starts each run at block 0 with identical decoder state.
-    thread.postMessage({ type: 'reset', tune: 1 });
+  const run = async (spectrum, firstId, removeSpectrumDc = false) => {
     thread.postMessage({
       type: 'configure',
       mode: 'fm',
       sampleRate: 2_048_000,
       tune: 1,
+      removeSpectrumDc,
     });
+    // Retuning resets the decoder without dropping the HackRF correction.
+    thread.postMessage({ type: 'reset', tune: 2 });
     for (let index = 0; index < 6; index += 1) {
       const buffer = tone();
       thread.postMessage(
@@ -350,6 +351,13 @@ test('the real decoder computes spectra only when requested, with audio unchange
   };
   const listening = await run(false, 0);
   const seeking = await run(true, 100);
+  const corrected = await run(true, 200, true);
+  const uncorrectedBins = seeking[5].bins;
+  const correctedBins = corrected[5].bins;
+  const center = correctedBins.length / 2;
+  assert.ok(uncorrectedBins[center] - correctedBins[center] > 40);
+  assert.equal(corrected[5].tune, 2);
+  assert.deepEqual(corrected[5].samples, seeking[5].samples);
   assert.ok(
     listening.every((m) => m.bins === null),
     'no FFT while listening',

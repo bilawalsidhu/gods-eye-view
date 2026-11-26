@@ -948,6 +948,7 @@ export class SdrController {
       mode: this.state.mode,
       sampleRate: this.state.sampleRate,
       location: this.state.receiverLocation,
+      removeSpectrumDc: this.state.receiverKind === 'hackrf',
     });
   }
 
@@ -1902,6 +1903,16 @@ export class SdrController {
     const seekDirection = direction < 0 ? -1 : 1;
     const origin = this.state.frequencyHz;
     const token = ++this._seekToken;
+    const tuneWhileSeeking = async (frequency) => {
+      const tuned = await this.tuneFm(frequency, { quiet: true });
+      if (token !== this._seekToken) return false;
+      if (!tuned)
+        this._setState({
+          seeking: false,
+          seekMessage: () => t('Seek stopped'),
+        });
+      return tuned;
+    };
     this._setState({
       seeking: true,
       seekMessage: () =>
@@ -1919,15 +1930,7 @@ export class SdrController {
           FM_SEEK_LAP_START_HZ +
           positiveModulo(rawCenter - FM_SEEK_LAP_START_HZ, FM_SEEK_LAP_HZ);
         const center = clampFmFrequency(position);
-        // tuneFm reports the failure; no spectrum is valid for this frame.
-        if (!(await this.tuneFm(center, { quiet: true }))) {
-          if (token === this._seekToken)
-            this._setState({
-              seeking: false,
-              seekMessage: () => t('Seek stopped'),
-            });
-          return null;
-        }
+        if (!(await tuneWhileSeeking(center))) return null;
         const sequence = this._spectrumSequence;
         this._setState({
           seekMessage: () =>
@@ -1949,7 +1952,7 @@ export class SdrController {
           { skipFrequency: origin },
         );
         if (!peak) continue;
-        await this.tuneFm(peak.frequency, { quiet: true });
+        if (!(await tuneWhileSeeking(peak.frequency))) return null;
         this._setState({
           seeking: false,
           seekMessage: () =>
@@ -1964,8 +1967,7 @@ export class SdrController {
         });
         return peak;
       }
-      if (token === this._seekToken) {
-        await this.tuneFm(origin, { quiet: true });
+      if (token === this._seekToken && (await tuneWhileSeeking(origin))) {
         this._setState({
           seeking: false,
           seekMessage: () => t('No FM signal found'),

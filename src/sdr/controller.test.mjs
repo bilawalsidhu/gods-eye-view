@@ -1217,6 +1217,53 @@ test('FM seek stops when a retune fails instead of reading the old frame', async
   assert.equal(tuned.length, 1, 'no frame is tuned after the failure');
 });
 
+test('FM seek preserves the error when tuning the found station or restoring the origin fails', async () => {
+  const origin = 98_500_000;
+  const station = 98_800_000;
+  for (const [stations, target, failOn] of [
+    [[station], station, 1],
+    [[], origin, 2],
+  ]) {
+    const { peak, state } = await seekFrom(
+      origin,
+      1,
+      stations,
+      (controller) => {
+        const device = controller._device;
+        const setCenterFrequency = device.setCenterFrequency;
+        let attempts = 0;
+        device.setCenterFrequency = async (frequency) => {
+          if (frequency === target && ++attempts === failOn)
+            throw new Error('transfer error');
+          return setCenterFrequency(frequency);
+        };
+      },
+    );
+    assert.equal(peak, null);
+    assert.equal(state.seeking, false);
+    assert.equal(state.seekMessage, 'Seek stopped');
+    assert.equal(state.status, 'error');
+    assert.equal(state.message, 'transfer error');
+  }
+});
+
+test('cancelling an FM seek during the final tune suppresses its result', async () => {
+  const origin = 98_500_000;
+  const station = 98_800_000;
+  const { peak, state } = await seekFrom(origin, 1, [station], (controller) => {
+    const device = controller._device;
+    const setCenterFrequency = device.setCenterFrequency;
+    device.setCenterFrequency = async (frequency) => {
+      if (frequency === station) controller.cancelSeek();
+      return setCenterFrequency(frequency);
+    };
+  });
+  assert.equal(peak, null);
+  assert.equal(state.seeking, false);
+  assert.equal(state.seekMessage, 'Seek stopped');
+  assert.doesNotMatch(state.message, /FM signal found/);
+});
+
 test('a retune that fails part-way drops spectra until a retune succeeds', async () => {
   const resets = [];
   const controller = new SdrController({
@@ -1292,6 +1339,7 @@ test('HackRF applies saved and live gain settings through the controller', async
   const frequencyWrites = [];
   const modes = [];
   const gainWrites = [];
+  const configurations = [];
   let closeCount = 0;
   let sampleBlock;
   const received = new Promise((resolve) => {
@@ -1303,6 +1351,7 @@ test('HackRF applies saved and live gain settings through the controller', async
       class extends FakeWorker {
         postMessage(message) {
           super.postMessage(message);
+          if (message.type === 'configure') configurations.push(message);
           if (message.type === 'samples') sampleBlock(message.buffer);
         }
       },
@@ -1360,6 +1409,7 @@ test('HackRF applies saved and live gain settings through the controller', async
   assert.equal(state.deviceLabel, 'HackRF One');
   assert.equal(state.sampleRate, 2_000_000);
   assert.deepEqual(frequencyWrites, [1090]);
+  assert.equal(configurations[0].removeSpectrumDc, true);
   assert.equal(new Uint8Array(await received)[0], 128);
   assert.deepEqual(gainWrites, [
     ['amp', 1],

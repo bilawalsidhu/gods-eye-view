@@ -14,6 +14,7 @@ let sampleRate = 2_048_000;
 let receiverLocation = null;
 let demodulator = null;
 let blockCount = 0;
+let removeSpectrumDc = false;
 let tune = 0;
 // True while handling a block the controller stamped for diagnostics.
 let timedBlock = false;
@@ -130,6 +131,7 @@ function absoluteNow() {
 
 function handleMessage(message) {
   if (message.type === 'configure') {
+    removeSpectrumDc = message.removeSpectrumDc === true;
     if (Number.isSafeInteger(message.tune)) tune = message.tune;
     configure(message.mode, message.sampleRate, message.location);
     return;
@@ -157,7 +159,7 @@ function handleMessage(message) {
     // Only seek reads spectra: skip the FFT and its transfer otherwise.
     const bins =
       message.spectrum === true && blockCount % 3 === 0
-        ? analyzeSpectrum(message.buffer)
+        ? analyzeSpectrum(message.buffer, { removeDc: removeSpectrumDc })
         : null;
     const { i, q, iqLevelDbfs } = normalizedIq(message.buffer);
     const decoded = demodulator.demodulate(i, q, 0);
