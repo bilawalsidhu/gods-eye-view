@@ -1,6 +1,9 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { defaultGeospatial } from '../search/defaults.js';
-import * as Cesium from 'cesium';
+import { cameraOf, findCamera, findQuery } from '../render/rendererOf.js';
+import { fromDegrees } from '../geo/ellipsoid.js';
+import { sphereFromPoints } from '../geo/sphere.js';
+import { distance, toRadians } from '../geo/vector.js';
 import { greatCircleMeters } from '../geoDistance.js';
 import {
   holdContinuousRender,
@@ -19,11 +22,6 @@ import {
   recordWorkSlice,
 } from '../sources/phaseTiming.js';
 import { formatDistanceText } from '../data/distanceFormat.js';
-
-// Dev convenience: expose the app's Cesium instance for console/preview probing
-// (single shared module instance — avoids dual-Cesium state bugs when testing).
-if (typeof window !== 'undefined' && !window.__CESIUM__)
-  window.__CESIUM__ = Cesium;
 
 /**
  * Annotation engine — the voice agent's "whiteboard" over the 3D world.
@@ -1717,18 +1715,20 @@ export function createAnnotationEngine({
         frameAnnotation(marks[0]);
         return;
       }
-      const cart = points.map((p) =>
-        Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0),
+      const cart = points.map((p) => fromDegrees(p.lon, p.lat, p.height || 0));
+      const sphere = sphereFromPoints(cart);
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
+        { center: sphere.center, radius: sphere.radius },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: toRadians(-35),
+            range: Math.max(900, sphere.radius * 2.6),
+          },
+          durationS: 1.6,
+        },
       );
-      const sphere = Cesium.BoundingSphere.fromPoints(cart);
-      viewer.camera.flyToBoundingSphere(sphere, {
-        offset: new Cesium.HeadingPitchRange(
-          viewer.camera.heading,
-          Cesium.Math.toRadians(-35),
-          Math.max(900, sphere.radius * 2.6),
-        ),
-        duration: 1.6,
-      });
     } catch {
       /* camera assist is best-effort */
     }
@@ -1738,23 +1738,35 @@ export function createAnnotationEngine({
    *  globe. On any API hiccup, report visible — bad data must never move the camera. */
   function isPointOnScreen(p) {
     try {
-      const camera = viewer.camera;
-      const pos = Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.height || 0);
-      const cv = camera.frustum.computeCullingVolume(
-        camera.position,
-        camera.direction,
-        camera.up,
-      );
-      if (
-        cv.computeVisibility(new Cesium.BoundingSphere(pos, 1)) ===
-        Cesium.Intersect.OUTSIDE
-      )
-        return false;
-      const occluder = new Cesium.EllipsoidalOccluder(
-        Cesium.Ellipsoid.WGS84,
-        camera.position,
-      );
-      return occluder.isPointVisible(pos);
+      const camera = findCamera(viewer);
+      const query = findQuery(viewer);
+      if (!camera || !query) return true;
+      const pos = fromDegrees(p.lon, p.lat, p.height || 0);
+      // Inside the view frustum: a 1 m sphere at the point is not wholly
+      // outside any of its six planes, read off the view-projection (depth
+      // runs -1..1). An invalid matrix measures no distance and reads as
+      // visible.
+      const { view, projection } = camera.matrices();
+      const m = new Float64Array(16);
+      for (let col = 0; col < 4; col++)
+        for (let row = 0; row < 4; row++) {
+          let sum = 0;
+          for (let k = 0; k < 4; k++)
+            sum += projection[k * 4 + row] * view[col * 4 + k];
+          m[col * 4 + row] = sum;
+        }
+      const at = (row, col) => m[col * 4 + row];
+      for (const [axis, sign] of FRUSTUM_PLANES) {
+        const a = at(3, 0) + sign * at(axis, 0);
+        const b = at(3, 1) + sign * at(axis, 1);
+        const c = at(3, 2) + sign * at(axis, 2);
+        const d = at(3, 3) + sign * at(axis, 3);
+        const distanceM =
+          (a * pos.x + b * pos.y + c * pos.z + d) / Math.hypot(a, b, c);
+        if (distanceM < -1) return false;
+      }
+      // On the near side of the globe.
+      return !query.isOccluded(pos);
     } catch {
       return true;
     }
@@ -1778,22 +1790,23 @@ export function createAnnotationEngine({
               : anno.ring,
           )
         : viewportRange(anno.viewport) || 600;
-      viewer.camera.flyToBoundingSphere(
-        new Cesium.BoundingSphere(
-          Cesium.Cartesian3.fromDegrees(
-            target.lon,
-            target.lat,
-            anno.anchor.height || 0,
-          ),
-          range,
-        ),
+      const camera = cameraOf(viewer);
+      camera.flyToBounds(
         {
-          offset: new Cesium.HeadingPitchRange(
-            viewer.camera.heading,
-            Cesium.Math.toRadians(-35),
-            range * 2.4,
-          ),
-          duration: 1.8,
+          center: {
+            lon: target.lon,
+            lat: target.lat,
+            height: anno.anchor.height || 0,
+          },
+          radius: range,
+        },
+        {
+          offset: {
+            heading: camera.pose().heading,
+            pitch: toRadians(-35),
+            range: range * 2.4,
+          },
+          durationS: 1.8,
         },
       );
     } catch {
@@ -2005,15 +2018,17 @@ export function createAnnotationEngine({
   }) {
     if (destroyed) return;
     try {
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-        orientation: {
-          heading: Cesium.Math.toRadians(heading),
-          pitch: Cesium.Math.toRadians(pitch),
-          roll: 0,
+      cameraOf(viewer).flyTo(
+        { lon, lat, height },
+        {
+          orientation: {
+            heading: toRadians(heading),
+            pitch: toRadians(pitch),
+            roll: 0,
+          },
+          durationS: duration,
         },
-        duration,
-      });
+      );
     } catch {
       /* camera flight best-effort */
     }
@@ -2175,13 +2190,23 @@ function pendingAnimation(anno, now) {
 // fly_to_location natural-region heuristic uses (owner field test 2026-07-23).
 const VIEWPORT_ASSIST_RANGE_CAP_M = 120000;
 
+/** The view frustum's planes as `row 3 ± row axis` of the view-projection. */
+const FRUSTUM_PLANES = [
+  [0, 1],
+  [0, -1],
+  [1, 1],
+  [1, -1],
+  [2, 1],
+  [2, -1],
+];
+
 /** flyTo range from a Places viewport box (low/high lat-lng corners), or null. */
 function viewportRange(vp) {
   if (!vp?.low || !vp?.high) return null;
   try {
-    const span = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(vp.low.longitude, vp.low.latitude),
-      Cesium.Cartesian3.fromDegrees(vp.high.longitude, vp.high.latitude),
+    const span = distance(
+      fromDegrees(vp.low.longitude, vp.low.latitude),
+      fromDegrees(vp.high.longitude, vp.high.latitude),
     );
     return Number.isFinite(span) && span > 0
       ? Math.max(300, Math.min(span * 0.7, VIEWPORT_ASSIST_RANGE_CAP_M))
@@ -2206,9 +2231,9 @@ function ringRange(ring) {
     if (lon < minLon) minLon = lon;
     if (lon > maxLon) maxLon = lon;
   }
-  const span = Cesium.Cartesian3.distance(
-    Cesium.Cartesian3.fromDegrees(minLon, minLat),
-    Cesium.Cartesian3.fromDegrees(maxLon, maxLat),
+  const span = distance(
+    fromDegrees(minLon, minLat),
+    fromDegrees(maxLon, maxLat),
   );
   return Math.max(300, span * 0.7);
 }

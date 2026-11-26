@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { StyleManager } from './applicationShell.js';
-import { ContextControls } from './contextControls.js';
 import {
   MOBILE_SHEET_PANELS,
   MOBILE_TABS,
@@ -95,8 +94,10 @@ function element(tag, document) {
     getBoundingClientRect: () => ({ top: 0, height: 0 }),
     getClientRects: () => (node.hidden ? [] : [{}]),
     matches: (selector) =>
-      selector === '.panel-collapse-btn' &&
-      node.className.split(' ').includes('panel-collapse-btn'),
+      (selector === '.panel-collapse-btn' &&
+        node.className.split(' ').includes('panel-collapse-btn')) ||
+      (selector.startsWith('input, textarea') &&
+        ['INPUT', 'TEXTAREA'].includes(node.tagName)),
     focus() {
       document.activeElement = node;
     },
@@ -113,8 +114,8 @@ const PANEL_IDS = [...new Set(Object.values(MOBILE_SHEET_PANELS).flat())];
 function fixture({
   mobile = true,
   expanded = [],
-  onTabOpened = () => {},
   afterPublish,
+  visualViewport = null,
 } = {}) {
   const document = new EventTarget();
   document.ids = new Map();
@@ -130,11 +131,12 @@ function fixture({
         : null;
   document.body = element('body', document);
   document.activeElement = document.body;
-  const search = element('input', document);
-  search.id = 'location-search';
-  document.body.append(search);
+  // A field outside the sheets, such as the Omnibar's.
+  const field = element('input', document);
+  field.id = 'outside-field';
+  document.body.append(field);
   const rails = {};
-  for (const id of ['left-panel-stack', 'right-context-rail', 'command-dock']) {
+  for (const id of ['left-panel-stack', 'right-context-rail']) {
     rails[id] = element('div', document);
     rails[id].id = id;
     document.body.append(rails[id]);
@@ -150,12 +152,9 @@ function fixture({
     const collapse = element('button', document);
     collapse.className = 'panel-collapse-btn';
     panel.append(toggle, collapse, element('button', document));
-    const root =
-      id === 'data-panel'
-        ? 'left-panel-stack'
-        : ['location-bar', 'control-panel'].includes(id)
-          ? 'command-dock'
-          : 'right-context-rail';
+    const root = ['data-panel', 'pp-toggles'].includes(id)
+      ? 'left-panel-stack'
+      : 'right-context-rail';
     rails[root].append(panel);
   }
 
@@ -207,9 +206,9 @@ function fixture({
   }
   const shell = initMobileShell({
     documentRef: document,
-    onTabOpened,
     publish,
     afterPublish,
+    visualViewport,
     matchMedia: () => media,
     MutationObserverImpl: FakeMutationObserver,
     ResizeObserverImpl: null,
@@ -257,7 +256,7 @@ function fixture({
     tab,
     resize,
     viewport,
-    search,
+    field,
     setBodyClass,
     collapsed,
   };
@@ -300,16 +299,16 @@ test('one sheet at a time, presented with aria-expanded and a backdrop', () => {
 });
 
 test('sheets borrow panels and put them back exactly as they were', () => {
-  // The user left Data Layers and Presets open on desktop.
-  const kept = ['data-panel', 'control-panel'];
+  // The user left Data Layers and Visual open on desktop.
+  const kept = ['data-panel', 'pp-toggles'];
   const { calls, press, collapsed } = fixture({ expanded: kept });
   press('cameras');
   assert.equal(collapsed('cctv-panel'), false);
   assert.equal(collapsed('street-level-panel'), false);
-  press('search');
+  press('context');
   assert.equal(collapsed('cctv-panel'), true, 'Cameras put back on switch');
-  assert.equal(collapsed('location-bar'), false);
-  press('search');
+  assert.equal(collapsed('global-context-panel'), false);
+  press('context');
   for (const id of PANEL_IDS)
     assert.equal(collapsed(id), !kept.includes(id), `${id} is back as it was`);
   // Nothing a sheet does is the user's choice, persisted or shared.
@@ -345,11 +344,12 @@ test('a panel the user changes inside a sheet stays as they left it', () => {
 });
 
 test('focus moves into the sheet and returns to the tab on close', () => {
-  const { document, press, search, tab } = fixture();
-  press('search');
-  assert.equal(document.activeElement, search);
-  press('search');
-  assert.equal(document.activeElement, tab('search'));
+  const { document, press, tab } = fixture();
+  press('more');
+  const visual = document.getElementById('pp-toggles');
+  assert.equal(document.activeElement, visual.children[2]);
+  press('more');
+  assert.equal(document.activeElement, tab('more'));
 
   press('layers');
   const dataPanel = document.getElementById('data-panel');
@@ -462,7 +462,7 @@ test('focus that moved before the tab bar renders stays where it went', () => {
   });
   tab('layers').focus();
   press('layers');
-  const elsewhere = document.getElementById('location-search');
+  const elsewhere = document.getElementById('outside-field');
   press('layers');
   elsewhere.focus();
   pending.splice(0).forEach((callback) => callback());
@@ -533,10 +533,10 @@ test('the shell publishes whether it is on and which sheet is open', () => {
     sheet: null,
     tabs: MOBILE_TABS,
   });
-  phone.press('search');
+  phone.press('cameras');
   assert.deepEqual(phone.views.at(-1), {
     enabled: true,
-    sheet: 'search',
+    sheet: 'cameras',
     tabs: MOBILE_TABS,
   });
   phone.resize(false);
@@ -586,17 +586,28 @@ test('the phone shell keeps the required attribution visible', () => {
   };
   const lift = (block) =>
     Number(
-      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(block)?.[1],
+      /bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px \+ var\(--world-timeline-lift, 0px\)\)/.exec(
+        block,
+      )?.[1],
     );
   const z = (block) => Number(/z-index: (\d+);/.exec(block)?.[1]);
   const idleCredit = rule(
     'body.mobile-shell:not(.recording-mode):not(.cockpit-mode):not(.ui-clean-view) #cesium-credits',
   );
-  const dock = rule('body.mobile-shell #command-dock');
-  const voice = rule('body.mobile-shell #command-dock #gev-voice-control');
-  const voiceHeightPx = Number(/height: ([\d.]+)rem/.exec(voice)[1]) * 16;
-  // Idle: the credit line clears the voice bar, which clears the tab bar.
-  assert.ok(lift(idleCredit) > lift(dock) + voiceHeightPx);
+  // The dock (omnibar-dock.css, 56px tall) floats over the tab bar, rising
+  // over the World Timeline as the credit line does.
+  const floor = Number(
+    /--omnibar-dock-bottom: calc\(var\(--mobile-tab-space\) \+ (\d+)px\);/.exec(
+      css,
+    )?.[1],
+  );
+  assert.match(
+    css,
+    /--omnibar-dock-raised: max\(calc\(var\(--omnibar-dock-bottom\) \+ var\(--world-timeline-lift, 0px\)\),/,
+  );
+  // Idle: the credit line clears the dock, which clears the tab bar.
+  assert.ok(floor > 0);
+  assert.ok(lift(idleCredit) >= floor + 56 + 6);
   // It must beat the dock's :has() placements, so the offset is !important.
   assert.match(idleCredit, /\) !important;/);
   assert.doesNotMatch(
@@ -621,11 +632,14 @@ test('the phone shell keeps the required attribution visible', () => {
     sheetCredit,
     /bottom: calc\(var\(--mobile-sheet-cover, 0px\) \+ 6px\) !important;/,
   );
-  const openDock = rule('body.mobile-shell[data-mobile-sheet] #command-dock');
-  const railSheet = rule(
-    "body.mobile-shell[data-mobile-sheet='more'] #right-context-rail",
+  // An open sheet puts the dock away rather than covering or crowding it.
+  assert.match(
+    css,
+    /&\[data-mobile-sheet\] :is\(#command-dock, #gev-omnibar\) \{ display: none; \}/,
   );
-  assert.ok(z(sheetCredit) > z(openDock));
+  const railSheet = rule(
+    "body.mobile-shell[data-mobile-sheet='more'] #left-panel-stack",
+  );
   assert.ok(z(sheetCredit) > z(railSheet));
 });
 
@@ -735,7 +749,7 @@ test('native controls and custom sliders keep touch gestures', () => {
     if (tag === 'editable') control.setAttribute('contenteditable', 'true');
     const child = document.createElement('span');
     control.append(child);
-    document.getElementById('control-panel').append(control);
+    document.getElementById('pp-toggles').append(control);
     touchEvent(document, 'touchstart', child);
     assert.equal(
       touchEvent(document, 'touchmove', child, { y: 120 }).defaultPrevented,
@@ -802,156 +816,17 @@ test('touches outside the active sheet and destroyed listeners cannot dismiss or
   assert.equal(shell.getSheet(), null);
 });
 
-test('the tab-open callback reports only a successful manual opening', () => {
-  const opened = [];
-  const phone = fixture({ onTabOpened: (sheet) => opened.push(sheet) });
-  phone.shell.setSheet('context');
-  assert.deepEqual(opened, []);
+test('opening the Context tab only presents its panel and starts no Context mode', () => {
+  const phone = fixture();
   phone.press('context');
-  assert.deepEqual(opened, [], 'closing is not a new context request');
-  phone.press('context');
-  assert.deepEqual(opened, ['context']);
-  phone.setBodyClass('cockpit-mode');
-  phone.press('context');
+  assert.equal(phone.shell.getSheet(), 'context');
   assert.deepEqual(
-    opened,
-    ['context'],
-    'blocked sheets cannot activate a mode',
+    phone.calls.map(({ panelId, collapsed }) => ({ panelId, collapsed })),
+    [{ panelId: 'global-context-panel', collapsed: false }],
   );
+  // The application shell no longer starts Contacts when the tab opens.
+  assert.equal(StyleManager.prototype._onMobileTabOpened, undefined);
   phone.shell.destroy();
-});
-
-test('manual Context opens the existing transaction without disabling the tracked aircraft', async () => {
-  const calls = [];
-  const tracked = { layerId: 'flights', icao24: 'abc123', callsign: 'EJA225' };
-  const viewer = { trackedEntity: { gevTrackedId: 'flights:abc123' } };
-  const entity = viewer.trackedEntity;
-  const enabled = new Set(['flights', 'weather']);
-  const controls = new ContextControls({
-    elements: {},
-    installations: {},
-    actions: {
-      getCockpit: () => null,
-      claimVisualAuthority: () => calls.push('claim'),
-      syncDetection() {},
-      scheduleLayout() {},
-      showToast() {},
-    },
-  });
-  controls.connect({
-    layers: new Map(
-      ['flights', 'weather', 'military-awareness'].map((id) => [id, {}]),
-    ),
-    getEnabledLayerIds: () => [...enabled],
-    getLayerParams: () => ({}),
-    isEffectivelyEnabled: (id) => enabled.has(id),
-    isEnabled: (id) => enabled.has(id),
-    setLayerParams: (id, params) => calls.push({ id, params }),
-    setEnabled: async (id, value) => {
-      calls.push({ id, value });
-      if (!value) enabled.delete(id);
-      if (id === 'flights' && !value) viewer.trackedEntity = null;
-      return true;
-    },
-    _setEnabledWithIntent: (id, value) => {
-      calls.push({ id, value });
-      enabled.add(id);
-      return { intentEpoch: 1, promise: Promise.resolve(true) };
-    },
-  });
-  const shell = {
-    cockpitView: {
-      readAircraftInfo: () => (viewer.trackedEntity ? tracked : null),
-    },
-    getAircraftTrackingTarget: StyleManager.prototype.getAircraftTrackingTarget,
-    getContextModeState: () => controls.getContextModeState(),
-    setContextMode: (mode) => controls.setContextMode(mode),
-    _showToast: () => assert.fail('successful entry must not report a failure'),
-  };
-  try {
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      true,
-    );
-    assert.equal(controls.getContextModeState().mode, 'flights');
-    assert.equal(viewer.trackedEntity, entity);
-    assert.deepEqual(shell.getAircraftTrackingTarget(), {
-      layerId: 'flights',
-      id: 'abc123',
-    });
-    assert.ok(enabled.has('flights'));
-    assert.ok(
-      calls.some(
-        (call) => call.id === 'military-awareness' && call.value === true,
-      ),
-    );
-    assert.ok(!calls.some((call) => call.id === 'flights'));
-    const count = calls.length;
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      false,
-    );
-    assert.equal(
-      calls.length,
-      count,
-      'an already active Contacts session is not restarted',
-    );
-  } finally {
-    controls.stop();
-    controls.disconnect();
-  }
-});
-
-test('manual Context respects Space Missions, busy transitions, missing tracks and disposal', async () => {
-  for (const state of [
-    { mode: 'space-missions' },
-    { mode: 'flights' },
-    { changing: true },
-    { entering: 'space-missions' },
-    { noTrack: true },
-    { disposed: true },
-    { sheet: 'layers' },
-  ]) {
-    const shell = {
-      _disposed: state.disposed,
-      getContextModeState: () => state,
-      getAircraftTrackingTarget: () =>
-        state.noTrack ? null : { layerId: 'flights', id: 'abc123' },
-      setContextMode: () =>
-        assert.fail('guarded tab must not mutate Context or tracking'),
-    };
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(
-        shell,
-        state.sheet || 'context',
-      ),
-      false,
-    );
-  }
-});
-
-test('failed mobile Contacts entry uses the existing notice and cancelled/disposed entries stay quiet', async () => {
-  for (const outcome of ['failure', 'throw', 'cancelled', 'disposed']) {
-    const notices = [];
-    const shell = {
-      getContextModeState: () => ({ mode: null }),
-      getAircraftTrackingTarget: () => ({ layerId: 'flights', id: 'abc123' }),
-      setContextMode: async () => {
-        if (outcome === 'throw') throw new Error('source unavailable');
-        if (outcome === 'disposed') shell._disposed = true;
-        return { ok: false, cancelled: outcome === 'cancelled' };
-      },
-      _showToast: (message) => notices.push(message),
-    };
-    assert.equal(
-      await StyleManager.prototype._onMobileTabOpened.call(shell, 'context'),
-      false,
-    );
-    assert.equal(
-      notices.length,
-      ['failure', 'throw'].includes(outcome) ? 1 : 0,
-    );
-  }
 });
 
 test('a slow downward pull is claimed before Android native scroll takes ownership', () => {
@@ -993,4 +868,48 @@ test('on phones the News panel shows in the Context sheet only, like Weather', (
     css,
     /body\.mobile-shell\[data-mobile-sheet='context'\]\s+#right-context-rail\s+> #news-panel:not\(\[hidden\]\),/,
   );
+});
+
+test('a phone keyboard lifts the dock by the height it covers', () => {
+  const viewport = new EventTarget();
+  Object.assign(viewport, { height: 844, offsetTop: 0 });
+  const innerHeight = globalThis.innerHeight;
+  globalThis.innerHeight = 844;
+  try {
+    const { document, field, shell, resize, runFrames } = fixture({
+      visualViewport: viewport,
+    });
+    const inset = () =>
+      document.body.style.values.get('--mobile-keyboard-inset');
+    assert.equal(inset(), '0px');
+    field.focus();
+    document.dispatchEvent(new Event('focusin'));
+    viewport.height = 500;
+    viewport.dispatchEvent(new Event('resize'));
+    assert.equal(inset(), '344px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      true,
+    );
+    // The page scrolled under the keyboard: the cover is what is below.
+    viewport.offsetTop = 40;
+    viewport.dispatchEvent(new Event('scroll'));
+    assert.equal(inset(), '304px');
+    // Without a field in focus (a pinch zoom), nothing is covered.
+    field.blur();
+    document.dispatchEvent(new Event('focusout'));
+    runFrames();
+    assert.equal(inset(), '0px');
+    assert.equal(
+      document.body.classList.contains('mobile-keyboard-open'),
+      false,
+    );
+    resize(false);
+    assert.equal(inset(), undefined);
+    resize(true);
+    shell.destroy();
+    assert.equal(inset(), undefined);
+  } finally {
+    globalThis.innerHeight = innerHeight;
+  }
 });

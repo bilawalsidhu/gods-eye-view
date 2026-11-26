@@ -94,11 +94,6 @@
     width: 100%;
   }
 }
-:root[data-ui-theme='cyber'] .news-panel-inner {
-  border-radius: 0;
-  clip-path: var(--cyber-panel-frame);
-  box-shadow: var(--cyber-panel-shadow);
-}
 
 .news-readout {
   display: flex;
@@ -167,16 +162,6 @@
 }
 .news-readout__list.is-stale {
   opacity: 0.5;
-}
-.news-readout__status,
-.news-readout__empty {
-  color: var(--text-dim);
-  font: 10px var(--font-mono);
-}
-/* A missing key's next step, under what it holds back. */
-.news-readout__empty .ui-empty__hint {
-  display: block;
-  margin-top: 2px;
 }
 .news-readout__footer {
   display: flex;
@@ -332,22 +317,8 @@
   flex-wrap: wrap;
   gap: 4px;
 }
-/* GEV's read-only badge (status-badge.css), neutral unless attested. */
-.news-chip {
-  padding: 2px 7px;
-  border: 1px solid var(--glass-border-hover);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  font: 8px var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.news-chip--official,
-.news-chip--confirmed {
-  border-color: rgba(0, 212, 255, 0.32);
-  background: rgba(0, 212, 255, 0.09);
-  color: #9defff;
-}
+/* A report's chips wear the shared chip (chip.css), neutral unless attested;
+   a claim is dashed. */
 .news-chip--claimed {
   border-style: dashed;
 }

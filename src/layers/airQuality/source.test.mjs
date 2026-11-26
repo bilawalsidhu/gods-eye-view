@@ -1,197 +1,104 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createEcccAirQualitySource } from './source.js';
+import * as portable from './source.js';
+import * as layerModule from './index.js';
 
-const NOW = Date.parse('2026-09-24T18:30:00Z');
-const HOUR = 60 * 60 * 1000;
-const station = (id) => ({
-  type: 'Feature',
-  geometry: { type: 'Point', coordinates: [-79.38, 43.65] },
-  properties: { location_id: id, location_name_en: id },
+test('the portable source composes the station providers; Canada has no AQHI source of its own', () => {
+  assert.equal(typeof portable.createAirQualitySource, 'function');
+  assert.equal(typeof portable.createAirQualitySnapshotSource, 'function');
+  assert.deepEqual(
+    portable.createDefaultAirQualityProviders().map((entry) => entry.id),
+    ['openaq'],
+  );
+  // Canada's stations come from OpenAQ like every other country's.
+  assert.equal('createEcccAirQualitySource' in portable, false);
+  assert.equal('createEcccAirQualitySource' in layerModule, false);
 });
-const observation = (id, at = NOW, aqhi = 3) => ({
-  type: 'Feature',
-  properties: {
-    location_id: id,
-    aqhi,
-    observation_datetime: new Date(at - 10 * 60_000).toISOString(),
-  },
-});
-const json = (body, init) =>
-  new Response(JSON.stringify(body), {
-    headers: { 'content-type': 'application/json' },
-    ...init,
-  });
 
-/** A fetch that serves the station catalog and observations from mutable state. */
-function feed() {
-  const state = {
-    clock: NOW,
-    stations: [station('A')],
-    stationIds: null,
-    urls: [],
-  };
-  state.source = createEcccAirQualitySource({
-    now: () => state.clock,
+test("the layer's model has no AQHI scale left", () => {
+  for (const name of [
+    'AIR_QUALITY_BANDS',
+    'AIR_QUALITY_PROVIDERS',
+    'airQualityBandById',
+    'airQualityColor',
+    'aqhiDisplayValue',
+    'bandForValue',
+    'bandRiskText',
+    'normalizeAqhiObservations',
+    'normalizeAqhiStations',
+    'valueLabel',
+  ])
+    assert.equal(name in layerModule, false, name);
+});
+
+/** One recent hourly PM2.5 and NO2 reading at a station, as a route answers. */
+const snapshotRows = (now) =>
+  ['PM2.5', 'NO2'].map((parameter) => ({
+    id: `national:1:${parameter}`,
+    provider: 'national',
+    stationId: '1',
+    name: 'Station',
+    lat: 28.6,
+    lon: 77.2,
+    parameter,
+    units: 'µg/m³',
+    value: 40,
+    kind: 'observation',
+    averagingMinutes: 60,
+    observedMs: now - 10 * 60_000,
+  }));
+
+test('a national snapshot keeps its stale status; a stale one is asked again, a fresh one reused', async () => {
+  let clock = Date.now(),
+    stale = true;
+  const urls = [];
+  const source = portable.createAirQualitySnapshotSource({
+    endpoint: '/api/air-quality/national',
+    hourly: true,
+    reuseMs: 1_200_000,
+    now: () => clock,
     fetchImpl: async (url) => {
-      state.urls.push(url);
-      return json({
-        type: 'FeatureCollection',
-        // Every known station reports ten minutes before the current clock.
-        features: url.includes('aqhi-stations')
-          ? state.stations
-          : (state.stationIds || ['A']).map((id) =>
-              observation(id, state.clock),
-            ),
+      urls.push(url);
+      return Response.json({
+        schemaVersion: 1,
+        stations: [],
+        readings: snapshotRows(clock),
+        stale,
       });
     },
   });
-  state.stationRequests = () =>
-    state.urls.filter((url) => url.includes('aqhi-stations')).length;
-  return state;
-}
-
-test('the station catalog is cached for twelve hours, then refetched', async () => {
-  const state = feed();
-  await state.source.getSnapshot();
-  state.clock = NOW + 12 * HOUR;
-  await state.source.getSnapshot();
-  assert.equal(state.stationRequests(), 1, 'within the TTL the cache serves');
-  state.clock = NOW + 12 * HOUR + 1;
-  await state.source.getSnapshot();
-  assert.equal(
-    state.stationRequests(),
-    2,
-    'past the TTL the catalog refreshes',
-  );
-});
-
-test('an empty catalog refresh keeps the previous catalog', async () => {
-  const state = feed();
-  await state.source.getSnapshot();
-  state.stations = [];
-  state.clock = NOW + 13 * HOUR;
-  const readings = await state.source.getSnapshot();
+  const ask = (parameter = 'PM2.5') => source.getSnapshot({ parameter });
+  const readings = await ask('NO2');
+  assert.deepEqual(urls, ['/api/air-quality/national']);
   assert.deepEqual(
-    readings.map((reading) => reading.stationId),
-    ['A'],
+    readings.map((reading) => [reading.parameter, reading.value]),
+    [['NO2', 40]],
   );
-  // The empty refresh did not count as fresh, so the next call retries it.
-  await state.source.getSnapshot();
-  assert.equal(state.stationRequests(), 3);
+  assert.equal(source.getCoverage().stale, true);
+  // The route has recovered by the next layer refresh.
+  stale = false;
+  clock += 60_000;
+  await ask();
+  assert.equal(urls.length, 2);
+  assert.equal(source.getCoverage().stale, false);
+  clock += 60_000;
+  await ask();
+  assert.equal(urls.length, 2, 'a fresh national snapshot is reused');
 });
 
-test('an empty first catalog is an error, not an empty layer', async () => {
-  const state = feed();
-  state.stations = [];
-  await assert.rejects(state.source.getSnapshot(), /No AQHI stations/);
-});
-
-test('requests ask for JSON, the latest observations only, and a bounded page', async () => {
-  const state = feed();
-  await state.source.getSnapshot();
-  const [stations, observations] = state.urls.map((url) => new URL(url));
-  assert.equal(stations.pathname, '/collections/aqhi-stations/items');
-  assert.equal(stations.searchParams.get('f'), 'json');
-  assert.equal(stations.searchParams.get('limit'), '500');
-  assert.equal(
-    observations.pathname,
-    '/collections/aqhi-observations-realtime/items',
-  );
-  // Without latest=true the collection returns the full history (~2,000 rows).
-  assert.equal(observations.searchParams.get('latest'), 'true');
-  assert.equal(observations.searchParams.get('limit'), '500');
-});
-
-test('rows past the requested limit are ignored', async () => {
-  const state = feed();
-  state.stations = Array.from({ length: 600 }, (_, index) =>
-    station(`S${String(index).padStart(3, '0')}`),
-  );
-  state.stationIds = state.stations.map((row) => row.properties.location_id);
-  const readings = await state.source.getSnapshot();
-  assert.equal(readings.length, 500);
-});
-
-test('a malformed catalog and HTTP errors reject', async () => {
-  await assert.rejects(
-    createEcccAirQualitySource({
-      fetchImpl: async () => json({ features: 'no' }),
-    }).getSnapshot(),
-    /Malformed AQHI station/,
-  );
-  await assert.rejects(
-    createEcccAirQualitySource({
-      fetchImpl: async () => json({}, { status: 503 }),
-    }).getSnapshot(),
-    /ECCC HTTP 503/,
-  );
-});
-
-test('an oversized response is refused before it is parsed', async () => {
-  const big = 'x'.repeat(4 * 1024 * 1024 + 1);
-  await assert.rejects(
-    createEcccAirQualitySource({
-      fetchImpl: async () =>
-        new Response(new Blob([big]).stream(), {
-          headers: { 'content-type': 'application/json' },
-        }),
-    }).getSnapshot(),
-    (error) => error.code === 'RESPONSE_TOO_LARGE',
-  );
-  await assert.rejects(
-    createEcccAirQualitySource({
-      fetchImpl: async () =>
-        json({}, { headers: { 'content-length': String(5 * 1024 * 1024) } }),
-    }).getSnapshot(),
-    (error) => error.code === 'RESPONSE_TOO_LARGE',
-  );
-});
-
-test('a caller abort cancels the request and detaches its listener', async () => {
-  const caller = new AbortController();
-  let requestSignal = null;
-  const source = createEcccAirQualitySource({
-    fetchImpl: (_url, { signal }) => {
-      requestSignal = signal;
-      return new Promise((_resolve, reject) =>
-        signal.addEventListener('abort', () => reject(signal.reason), {
-          once: true,
-        }),
-      );
-    },
+test('an already aborted request does not fetch', async () => {
+  const source = portable.createAirQualitySource({
+    fetchImpl: () => assert.fail('unexpected fetch'),
   });
-  const pending = source.getSnapshot({ signal: caller.signal });
-  caller.abort(new Error('layer disabled'));
-  await assert.rejects(pending, /layer disabled/);
-  assert.equal(requestSignal.aborted, true);
-  const already = new AbortController();
-  already.abort(new Error('before start'));
-  let calls = 0;
   await assert.rejects(
-    createEcccAirQualitySource({
-      fetchImpl: async () => {
-        calls += 1;
-        return json({ features: [] });
-      },
-    }).getSnapshot({ signal: already.signal }),
-    /before start/,
+    source.getSnapshot({ provider: 'openaq', signal: AbortSignal.abort() }),
+    { name: 'AbortError' },
   );
-  assert.equal(calls, 0);
 });
 
-test('a request that outlives its deadline is aborted', async (t) => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
-  const source = createEcccAirQualitySource({
-    timeoutMs: 1_000,
-    fetchImpl: (_url, { signal }) =>
-      new Promise((_resolve, reject) =>
-        signal.addEventListener('abort', () => reject(signal.reason), {
-          once: true,
-        }),
-      ),
-  });
-  const pending = source.getSnapshot();
-  t.mock.timers.tick(1_000);
-  await assert.rejects(pending, /ECCC request timed out/);
+test('the portable source exports the rating rules a server answering the OpenAQ route uses', async () => {
+  const usAqi = await import('./usAqi.js');
+  const interpretation = await import('./interpretation.js');
+  assert.equal(portable.aqiStations, usAqi.aqiStations);
+  assert.equal(portable.interpretHourly, interpretation.interpretHourly);
 });

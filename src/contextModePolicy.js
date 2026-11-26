@@ -1,5 +1,3 @@
-import { msg } from './i18n/marker.js';
-
 const CONTEXT_DEPENDENCIES = Object.freeze({
   flights: new Set([
     'military-awareness',
@@ -8,15 +6,18 @@ const CONTEXT_DEPENDENCIES = Object.freeze({
     'ais-live-vessels',
     'military-installations',
   ]),
-  'space-missions': new Set(['rocket-launches', 'satellites']),
 });
 const CONTEXT_COMPANIONS = new Set(['radio']);
-/** The Space Missions refusal, with the blocked layer's name as {layer}. */
-export const SPACE_MISSIONS_LAYER_BLOCK_REASON = msg(
-  'Space Missions isolates replay data. Exit the mode to enable {layer}.',
-);
-const [BLOCK_REASON_PREFIX, BLOCK_REASON_SUFFIX] =
-  SPACE_MISSIONS_LAYER_BLOCK_REASON.split('{layer}');
+/**
+ * Layers Context never touches: Space Missions and the Satellites layer it
+ * depends on. Contacts neither switches them off on entry nor restores them
+ * on exit, so they run beside it in either order and keep their own state
+ * (the mission controller owns the Satellites dependency).
+ */
+export const CONTEXT_INDEPENDENT_LAYER_IDS = Object.freeze([
+  'rocket-launches',
+  'satellites',
+]);
 /** Return whether an origin represents a direct user choice on this route. */
 export function isExplicitUserIntentOrigin(origin, layerId = null) {
   return origin === 'user' || origin === 'voice';
@@ -27,7 +28,8 @@ export function recordContextRestoreExplicitChange({ restoreState, change }) {
   if (
     !restoreState?.enabledLayerIds ||
     change?.type !== 'visibility' ||
-    !isExplicitUserIntentOrigin(change.origin, change.layerId)
+    !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   )
     return false;
   if (!restoreState.explicitLayerStates)
@@ -121,10 +123,7 @@ export async function settleUserFacingContextAction({
  * one into `userAdded` makes exit restoration re-enable the mode layer the
  * user just turned off.
  */
-export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze([
-  'military-awareness',
-  'rocket-launches',
-]);
+export const CONTEXT_ENTRY_LAYER_IDS = Object.freeze(['military-awareness']);
 
 /**
  * Leave a Context transaction: publish the settled coordination flag, then
@@ -193,7 +192,8 @@ export function shouldExitContextForLayerChange({
     change?.type !== 'visibility' ||
     !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
     change.layerId === 'military-awareness' ||
-    CONTEXT_COMPANIONS.has(change.layerId)
+    CONTEXT_COMPANIONS.has(change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   ) {
     return false;
   }
@@ -215,6 +215,7 @@ export function contextAllowedLayerIds(contextMode) {
   return new Set([
     ...(CONTEXT_DEPENDENCIES[contextMode] || ['military-awareness']),
     ...CONTEXT_COMPANIONS,
+    ...CONTEXT_INDEPENDENT_LAYER_IDS,
   ]);
 }
 
@@ -232,21 +233,6 @@ export function shouldCaptureContextSession(change) {
     isExplicitUserIntentOrigin(change.origin, change.layerId) &&
     change.enabled &&
     CONTEXT_ENTRY_LAYER_IDS.includes(change.layerId),
-  );
-}
-
-/**
- * Return whether one explicit mission intent superseded an in-flight Clear All
- * reservation and therefore needs deferred Context adoption.
- */
-export function shouldDeferContextEntryDuringClear({ change, clearInFlight }) {
-  return Boolean(
-    clearInFlight &&
-    change?.type === 'visibility-requested' &&
-    change.layerId === 'rocket-launches' &&
-    change.enabled === true &&
-    isExplicitUserIntentOrigin(change.origin, change.layerId) &&
-    Number.isInteger(change.intentEpoch),
   );
 }
 
@@ -273,7 +259,8 @@ export function recordContextSessionUserChange({
   if (
     !snapshot?.userAdded ||
     change?.type !== 'visibility' ||
-    !isExplicitUserIntentOrigin(change.origin, change.layerId)
+    !isExplicitUserIntentOrigin(change.origin, change.layerId) ||
+    CONTEXT_INDEPENDENT_LAYER_IDS.includes(change.layerId)
   ) {
     return false;
   }
@@ -319,81 +306,8 @@ export function contextSnapshotLayerIds(
 ) {
   const snapshot = new Set(restoringLayerIds || currentEnabledLayerIds || []);
   for (const layerId of excludeLayerIds || []) snapshot.delete(layerId);
+  for (const layerId of CONTEXT_INDEPENDENT_LAYER_IDS) snapshot.delete(layerId);
   return snapshot;
-}
-
-/**
- * Block layers that would mix unrelated live/current data into Space Missions.
- * The manager calls this before lifecycle work so a refused layer never starts.
- * @param {object} input Current mode and requested visibility transition.
- * @param {string|null} input.contextMode Active Context mode.
- * @param {object|null} input.change Requested visibility transition.
- * @param {string|null} [input.layerName] User-facing layer name.
- * @returns {string|null} Honest user-facing refusal reason, or null when allowed.
- */
-export function contextLayerEnableBlockReason({
-  contextMode,
-  change,
-  layerName = null,
-}) {
-  if (
-    contextMode !== 'space-missions' ||
-    change?.enabled !== true ||
-    contextAllowedLayerIds('space-missions').has(change.layerId)
-  ) {
-    return null;
-  }
-  const label = String(layerName || change.layerId || 'that layer');
-  return SPACE_MISSIONS_LAYER_BLOCK_REASON.replace('{layer}', label);
-}
-
-/**
- * The layer name from a Space Missions refusal, so the UI can rebuild the
- * sentence in its language.
- * @param {string} reason
- * @returns {{layer: string}|null} The blocked layer's name, or null when the
- *   reason is not a Space Missions refusal.
- */
-export function parseContextLayerBlockReason(reason) {
-  if (
-    typeof reason !== 'string' ||
-    !reason.startsWith(BLOCK_REASON_PREFIX) ||
-    !reason.endsWith(BLOCK_REASON_SUFFIX) ||
-    reason.length <= BLOCK_REASON_PREFIX.length + BLOCK_REASON_SUFFIX.length
-  )
-    return null;
-  return {
-    layer: reason.slice(
-      BLOCK_REASON_PREFIX.length,
-      reason.length - BLOCK_REASON_SUFFIX.length,
-    ),
-  };
-}
-
-/**
- * Resolve who owns a cancelled direct Space Missions entry. A newer ON keeps
- * the entry shell reserved for its replacement transaction; every other
- * cancellation must roll back the isolated pre-entry session.
- *
- * @param {object} input Cancellation and current manager intent state.
- * @param {object|null} input.change Manager visibility notification.
- * @returns {'ignore'|'replacement'|'restore'} Cancellation disposition.
- */
-export function spaceMissionEntryCancellationDisposition({ change }) {
-  if (
-    change?.type !== 'visibility-cancelled' ||
-    change.layerId !== 'rocket-launches' ||
-    change.enabled !== true
-  )
-    return 'ignore';
-  if (
-    change.cancellationReason === 'superseded' &&
-    Number.isInteger(change.successorIntentEpoch) &&
-    change.successorIntentEpoch > change.intentEpoch &&
-    change.successorEnabled === true
-  )
-    return 'replacement';
-  return 'restore';
 }
 
 /**
@@ -482,6 +396,24 @@ export function orbitEntryAllowed({
 }
 
 /**
+ * Whether an application subject provider's candidate can be ridden. Like the
+ * bridge and orbit it needs only its own layer on, and waits out a Context
+ * change in flight; the provider then has its own say (`isEntryAllowed`).
+ * @param {{layerEnabled: boolean, contextModeChanging: boolean,
+ *   providerAllows: boolean}} state
+ * @returns {boolean}
+ */
+export function subjectEntryAllowed({
+  layerEnabled,
+  contextModeChanging,
+  providerAllows,
+}) {
+  return (
+    Boolean(layerEnabled) && !contextModeChanging && providerAllows === true
+  );
+}
+
+/**
  * Internal context-mode id → the word the voice tools accept for it.
  *
  * `set_context_mode` takes 'contacts'; the mode's internal id is 'flights'.
@@ -492,7 +424,6 @@ export function orbitEntryAllowed({
  */
 export const CONTEXT_MODE_VOICE_NAMES = Object.freeze({
   flights: 'contacts',
-  'space-missions': 'space-missions',
 });
 
 /**

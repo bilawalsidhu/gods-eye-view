@@ -1,0 +1,11 @@
+A 10° cut over northern Italy of one CAMS forecast run (the global
+atmospheric composition forecast and the European air quality forecast),
+used only by the tests.
+
+Contains modified Copernicus Atmosphere Monitoring Service information 2026.
+Neither the European Commission nor ECMWF is responsible for any use that
+may be made of the information it contains.
+
+Licence: CC BY 4.0, https://creativecommons.org/licenses/by/4.0/
+Datasets: https://ads.atmosphere.copernicus.eu/datasets/cams-global-atmospheric-composition-forecasts
+          https://ads.atmosphere.copernicus.eu/datasets/cams-europe-air-quality-forecasts

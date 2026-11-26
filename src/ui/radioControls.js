@@ -91,10 +91,7 @@ export class RadioControls {
    */
   async _revealRadioControlsAfterExplicitEnable(trigger) {
     const contextPanel = document.getElementById('global-context-panel');
-    const scroller =
-      (document.documentElement?.dataset.uiTheme === 'cyber' &&
-        contextPanel?.querySelector('.cyber-panel-body')) ||
-      contextPanel?.querySelector('.global-context-panel-inner');
+    const scroller = contextPanel?.querySelector('.global-context-panel-inner');
     const directory = this._radioPanel?.querySelector('.radio-directory-row');
     const transport = this._radioPanel?.querySelector('.radio-transport');
     if (

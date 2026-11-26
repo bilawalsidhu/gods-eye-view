@@ -1,3 +1,4 @@
+import { transitModeFor } from '../data/transitFeeds.js';
 import { validTransitIdentifier } from './transitHistory.js';
 export { validTransitIdentifier } from './transitHistory.js';
 /** Bounded, process-local operator position history. No upstream or scene access. */
@@ -328,12 +329,12 @@ export function createTransitHistory({
           t > now + 10000
         )
           continue;
-        const byVehicle = feed.vehicleMode?.(record.id);
-        const mode =
-          (byVehicle !== 'unknown' && byVehicle) ||
-          feed.routeMode?.(record.routeId) ||
-          feed.defaultMode ||
-          'unknown';
+        const mode = transitModeFor(
+          feed,
+          record.routeId,
+          record.id,
+          record.routeType,
+        );
         const context = contextOf(record, mode);
         if (!context) continue;
         const key = `${feed.id}\u0000${record.id}`;

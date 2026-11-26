@@ -18,7 +18,15 @@ function canvas() {
       output.image = image;
       output.drawnWith = output.transforms?.at(-1) ?? null;
     },
-    getImageData: () => ({ data: new Uint8ClampedArray([194, 0, 0, 200]) }),
+    getImageData: () => {
+      const data = new Uint8ClampedArray([194, 0, 0, 200]);
+      Object.defineProperty(data, 'set', {
+        value: () => {
+          throw new Error('the canvas pixels were overwritten from a copy');
+        },
+      });
+      return { data };
+    },
     putImageData: (pixels) => {
       output.pixels = pixels.data;
     },

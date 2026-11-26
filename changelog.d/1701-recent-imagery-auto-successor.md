@@ -1,0 +1,5 @@
+- Recent Imagery: when the automatic day probes empty, the next ranked day now
+  drapes once its probe says present. Focus stayed on the empty day, or moved
+  to the nearest card rather than the next ranked day, so the successor never
+  reached the map. A day picked while the automatic one was still being probed
+  is no longer replaced by that hand-over (gekh, #1701).

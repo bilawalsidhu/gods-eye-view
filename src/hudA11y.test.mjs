@@ -8,12 +8,11 @@ const parameters = readFileSync(new URL('./ui/styleParameters.js', import.meta.u
 
 // Focused markup guards; actual computed names are checked in Chromium.
 // Native labels and hidden inputs must not be treated as missing aria-labels.
-test('HUD sliders and location search have descriptive explicit names', () => {
+test('HUD sliders have descriptive explicit names', () => {
   for (const [id, name] of [
     ['scope-feather-slider', 'Scope edge feather'],
     ['bloom-intensity-slider', 'Bloom intensity'],
     ['sharpen-intensity-slider', 'Sharpen intensity'],
-    ['location-search', 'Search location by name or coordinates'],
   ]) {
     const input = html.match(new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`))?.[0];
     assert.ok(input, `${id} exists`);
@@ -24,7 +23,8 @@ test('HUD sliders and location search have descriptive explicit names', () => {
 test('the first-run checkbox keeps its native visible label', () => {
   // The span may carry a data-i18n extraction attribute; the native wrapping
   // label contract is what this guards.
-  assert.match(html, /<label\b[^>]*class="first-run-suppress"[^>]*>\s*<input type="checkbox" data-first-run-suppress\s*\/?>\s*<span\b[^>]*>Don't show this again<\/span>\s*<\/label>/);
+  // UiCheckbox leaves Vue's placeholder comment where its unused slot would be.
+  assert.match(html, /<label\b[^>]*class="ui-checkbox first-run-suppress"[^>]*>(?:\s*<!--v-if-->)?\s*<input type="checkbox" class="ui-checkbox__input" data-first-run-suppress\s*\/?>\s*<span\b[^>]*>Don't show this again<\/span>(?:\s*<!--v-if-->)?\s*<\/label>/);
 });
 
 test('generated style sliders use the visible parameter label as their name', () => {

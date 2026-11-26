@@ -230,3 +230,69 @@ test('source deadline cancels request and removes timer on completion', async (t
   await rejected;
   assert.equal(signal.aborted, true);
 });
+
+/** The current advisory as a JTWC warning with its 34-knot danger area. */
+function jtwc() {
+  const value = current(),
+    storm = value.storms[0];
+  Object.assign(storm, {
+    id: 'sh042027',
+    agency: 'jtwc',
+    basin: 'SH',
+    classification: 'TC',
+    advisoryUrl: 'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+    outlookUrl: 'https://www.metoc.navy.mil/jtwc/products/abpwweb.txt',
+    dangerArea: storm.cone,
+    cone: null,
+  });
+  return value;
+}
+
+test('a JTWC warning is accepted with its danger area and its own links, never with a cone', () => {
+  const [storm] = validateCycloneSnapshot(jtwc()).storms;
+  assert.equal(storm.agency, 'jtwc');
+  assert.equal(storm.cone, null);
+  assert.equal(storm.dangerArea.type, 'MultiPolygon');
+  assert.equal(
+    storm.advisoryUrl,
+    'https://www.metoc.navy.mil/jtwc/products/sh0427web.txt',
+  );
+  // A snapshot from before agencies is NHC's.
+  assert.equal(validateCycloneSnapshot(current()).storms[0].agency, 'nhc');
+  for (const change of [
+    (s) => (s.cone = s.dangerArea),
+    (s) => (s.dangerArea = null),
+    (s) => (s.agency = 'jma'),
+    (s) => (s.id = 'al042027'),
+    (s) => (s.basin = 'WP'),
+    (s) => (s.advisoryUrl = 'https://www.nhc.noaa.gov/text/MIATCMEP5.shtml'),
+    (s) => (s.advisoryUrl = 'https://www.metoc.navy.mil/jtwc/other.txt'),
+    (s) =>
+      (s.outlookUrl = 'https://www.nhc.noaa.gov/gtwo.php?basin=epac&fdays=7'),
+  ]) {
+    const value = jtwc();
+    change(value.storms[0]);
+    assert.throws(() => validateCycloneSnapshot(value), /Malformed/);
+  }
+  // NHC keeps its cone and never carries a danger area; its ids stay its own.
+  const nhc = current();
+  nhc.storms[0].dangerArea = nhc.storms[0].cone;
+  assert.throws(() => validateCycloneSnapshot(nhc), /Malformed/);
+  const western = current();
+  western.storms[0].id = 'wp012026';
+  western.storms[0].basin = 'WP';
+  assert.throws(() => validateCycloneSnapshot(western), /Malformed/);
+  // A pending JTWC warning carries no geometry.
+  const pending = jtwc();
+  Object.assign(pending.storms[0], {
+    geometryStatus: 'pending',
+    geometryAdvisoryNumber: null,
+    forecastPoints: [],
+    track: null,
+    dangerArea: null,
+  });
+  assert.equal(
+    validateCycloneSnapshot(pending).storms[0].geometryStatus,
+    'pending',
+  );
+});

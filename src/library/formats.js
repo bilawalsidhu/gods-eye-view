@@ -156,10 +156,15 @@ function rankCandidates(features, rank) {
 /**
  * Bound and present a list of candidate features.
  * @param {unknown[]} candidates
- * @param {{ maxFeatures: number, display?: object }} options
+ * @param {{ maxFeatures: number, display?: object, fromProxy?: boolean }} options
+ * @param {boolean} [options.fromProxy] The proxy moved Feature.id into
+ * __gevSourceId. Only trust that property on a proxied response.
  * @returns {{ features: object[], dropped: number, truncated: boolean }}
  */
-export function boundLibraryFeatures(candidates, { maxFeatures, display }) {
+export function boundLibraryFeatures(
+  candidates,
+  { maxFeatures, display, fromProxy = false },
+) {
   const valid = [];
   let dropped = 0;
   for (const candidate of candidates) {
@@ -173,6 +178,15 @@ export function boundLibraryFeatures(candidates, { maxFeatures, display }) {
   const scored = kept.filter(({ value }) => value !== null).length;
   const features = kept.map(({ feature, value }, position) => {
     const properties = presentLibraryProperties(feature.properties, display);
+    // Keep the feed id separate from the drawn identity so duplicate ids draw separately.
+    const id =
+      feature.id ??
+      (fromProxy && Object.hasOwn(properties, '__gevSourceId')
+        ? properties.__gevSourceId
+        : null);
+    delete properties.__gevSourceId;
+    if ((typeof id === 'string' && id.trim()) || Number.isFinite(id))
+      properties.__gevSourceId = String(id);
     // Importance for the map's level of detail: the top feature earns the
     // most, the least important ranked feature none.
     if (display?.rank)

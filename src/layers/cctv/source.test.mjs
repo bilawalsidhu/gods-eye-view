@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCctvSource, createCctvLayer } from './index.js';
+import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const camera = {
   id: 'pack/camera ?x',
@@ -81,8 +82,8 @@ test('frame and media URLs preserve registered camera identity and encoded metad
   );
   assert.equal(frame.searchParams.get('label'), camera.name);
   assert.equal(frame.searchParams.get('city'), camera.city);
-  assert.equal(frame.searchParams.get('lat'), '30.267000');
-  assert.equal(frame.searchParams.get('lon'), '-97.744000');
+  assert.equal(frame.searchParams.has('lat'), false);
+  assert.equal(frame.searchParams.has('lon'), false);
   assert.equal(frame.searchParams.get('heading'), '45');
   assert.equal(frame.searchParams.get('pitch'), '-12');
   assert.deepEqual([...media.searchParams.keys()], ['ts']);
@@ -110,7 +111,7 @@ test('camera construction is inert and destruction cancels a pending catalog and
       setOverlayEntries: noop,
       setOverlaySourceVisible: noop,
     },
-    sprites: { registerSpriteCollection: noop },
+    sprites: {},
     activation: {},
     locations: {},
     picking: { unregisterPickOwner: noop },
@@ -134,9 +135,9 @@ test('camera construction is inert and destruction cancels a pending catalog and
   const a = createCctvLayer({ services, source });
   const b = createCctvLayer({ services, source });
   assert.equal(listeners.size, 0);
-  const viewer = {
-    scene: { primitives: { add: (value) => value, remove: () => true } },
-  };
+  const viewer = {};
+  const { unbind } = bindFakeDraw(viewer);
+  t.after(unbind);
   const initializing = a.init(viewer);
   assert.equal(listeners.size, 1);
   assert.equal(signal.aborted, false);

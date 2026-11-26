@@ -1,5 +1,6 @@
 import { createTransitLayer } from '../../layers/transit/index.js';
 import * as render from '../../renderGovernor.js';
+import { fleetModelServices } from './fleetModels.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
@@ -19,10 +20,21 @@ import {
  * own mesh floors. An earlier cut imported the legacy module-level singleton
  * instead and could not see either.
  *
- * @param {{surface: object}} options
+ * `displayParams` reads the Flights layer's DISPLAY-rail 3D preference, under
+ * which nearby vehicles are drawn as fleet models.
+ *
+ * `placement` is a host-supplied placement for its live vehicles, or null.
+ * @param {{surface: object, source?: object, placement?: object|null,
+ *   displayParams?: () => object|null, resolveAsset?: (url: string) => string}} options
  * @returns {object}
  */
-export function createApplicationTransit({ surface, source }) {
+export function createApplicationTransit({
+  surface,
+  source,
+  placement = null,
+  displayParams = null,
+  resolveAsset,
+}) {
   if (!surface?.groundFloor || !surface?.meshFloor)
     throw new TypeError('Transit needs the application surface services');
   const { groundFloor, meshFloor } = surface;
@@ -33,6 +45,7 @@ export function createApplicationTransit({ surface, source }) {
       sprites,
       picking,
       overlays,
+      placement,
       credits: { registerDynamicCredit, transitFeedCredit },
       ground: {
         GROUND_FLOOR_LIFT_M: groundFloor.GROUND_FLOOR_LIFT_M,
@@ -44,6 +57,10 @@ export function createApplicationTransit({ surface, source }) {
         allocateCorridorCells: groundFloor.allocateCorridorCells,
       },
       mesh: { sampleMeshFloorCells: meshFloor.sampleMeshFloorCells },
+      fleet: fleetModelServices({
+        display: displayParams,
+        ...(resolveAsset ? { resolveAsset } : {}),
+      }),
     },
   });
 }
