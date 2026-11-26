@@ -829,9 +829,10 @@ test('a 24-hour SO2 average rates on its own, and survives a flagged hour of its
     });
   const index = (rows) => stationIndex(aqiStations(rows)[0]).aqi?.index;
   // A daily 605 ppb alone is 301 on the 24-hour rows; below 305 ppb a daily
-  // value rates on the 1-hour rows.
+  // mean alone does not rate: the EPA's lower rows read the day's highest
+  // 1-hour value, which a mean cannot stand in for.
   assert.equal(index([ppb(605, T, 1440)]), 301);
-  assert.equal(index([ppb(75, T, 1440)]), 100);
+  assert.equal(index([ppb(75, T, 1440)]), undefined);
   // A flagged hour of its time does not discard it.
   assert.equal(
     index([ppb(605, T - H, 1440), ppb(10, T, 60, { qualityFlagged: true })]),

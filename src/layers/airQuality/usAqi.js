@@ -536,12 +536,15 @@ function pollutantInput(key, hours, rows) {
           .filter((row) => row.averaging === 1440 && row.value !== null)
           .reduce((a, b) => (newer(b, a) ? b : a), null)
       : null;
-  // A 24-hour SO2 average rates on its own (from 305 ppb on its rows, below
-  // on the 1-hour rows) where no usable 1-hour value lies within
-  // AQI_MAX_SPREAD_MS of it, unless a 1-hour value further ahead of it is
-  // the newest reading: a flagged hour of its time does not discard it.
+  // A 24-hour SO2 average rates on its own only from 305 ppb, where the
+  // EPA's daily SO2 rows use it; below that the daily index comes from the
+  // day's highest 1-hour value, which a mean cannot stand in for. It does so
+  // where no usable 1-hour value lies within AQI_MAX_SPREAD_MS of it, unless
+  // a 1-hour value further ahead of it is the newest reading: a flagged hour
+  // of its time does not discard it.
   if (
     day &&
+    tableConcentration('so2', day.value) >= 305 &&
     (!best ||
       (best.value === null
         ? best.at <= day.at + AQI_MAX_SPREAD_MS
