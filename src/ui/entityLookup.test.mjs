@@ -187,7 +187,9 @@ test('one a layer loads without saying so is picked too', async (t) => {
   const found = await finding;
   assert.equal(found.ok, true);
   assert.equal(found.picked, true);
-  assert.deepEqual(state.picks, [['uuid-1', { origin: 'user', center: false }]]);
+  assert.deepEqual(state.picks, [
+    ['uuid-1', { origin: 'user', center: false }],
+  ]);
 });
 
 test('a record that only shares its name is never taken for it', async () => {
@@ -304,4 +306,59 @@ test('one with no position at the time asked is not waited for: the camera goes 
     centre: (...at) => nowhere.push(at),
   });
   assert.deepEqual(nowhere, []);
+});
+
+test('one placed at another time keeps that time, and only a real one', () => {
+  const at = Date.UTC(2026, 10, 25, 21, 5);
+  const [kept, none, unplaced] = lookupMatches([
+    { ...ship, at },
+    { ...ship, id: 'uuid-2', at: 'soon' },
+    { ...ship, id: 'uuid-3', placed: false, at },
+  ]);
+  assert.equal(kept.at, at);
+  assert.equal(none.at, null);
+  // One with no position is never moved to.
+  assert.equal(unplaced.at, null);
+});
+
+test('one placed at another time moves the world clock there, then is centred and picked by id', async () => {
+  const at = Date.UTC(2026, 10, 25, 21, 5);
+  // The layer holds the ship now, where it is now: that record is not where the lookup placed it.
+  const { state, dataManager, setLayer } = layers({
+    enabled: true,
+    records: [{ id: 'uuid-1', mmsi: '353136000', name: 'EVER GIVEN' }],
+  });
+  const seeks = [];
+  const centred = [];
+  const found = await findMatch({
+    match: { ...ship, at },
+    dataManager,
+    setLayer,
+    centre: (...where) => centred.push(where),
+    seek: (ms) => seeks.push(ms),
+  });
+  assert.deepEqual(seeks, [at]);
+  assert.deepEqual(centred, [[30, 32]]);
+  assert.equal(found.ok, true);
+  assert.equal(found.picked, true);
+  assert.deepEqual(state.picks, [
+    ['uuid-1', { origin: 'user', center: false }],
+  ]);
+});
+
+test('one placed at the time asked never moves the world clock', async () => {
+  const { dataManager, setLayer } = layers({
+    enabled: true,
+    records: [{ id: 'uuid-1', mmsi: '353136000', name: 'EVER GIVEN' }],
+  });
+  const seeks = [];
+  const found = await findMatch({
+    match: ship,
+    dataManager,
+    setLayer,
+    centre: () => {},
+    seek: (ms) => seeks.push(ms),
+  });
+  assert.equal(found.picked, false);
+  assert.deepEqual(seeks, []);
 });
