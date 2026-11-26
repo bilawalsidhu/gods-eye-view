@@ -1,6 +1,6 @@
 export const LAYER_ID = 'local-adsb';
 export const LAYER_NAME = 'Local ADS-B';
-export const LAYER_SOURCE = 'RTL-SDR · WebUSB';
+export const LAYER_SOURCE = 'Browser SDR · WebUSB';
 /** Distinct from the public Flights palette so both can be drawn together. */
 export const LOCAL_ADSB_COLOR = '#ff4fd8';
 /** Ring drawn around 978 MHz UAT aircraft: same magenta family, lighter. */

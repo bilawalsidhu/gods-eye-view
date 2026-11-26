@@ -29,7 +29,11 @@ test('en: the local ADS-B card keeps its English wording', () => {
   ]);
   assert.equal(
     localAdsbSourceText(record),
-    'Your RTL-SDR receiver and decoder feed',
+    'Your SDR receiver and decoder feed',
+  );
+  assert.equal(
+    localAdsbSourceText({ ...record, sources: ['webusb'] }),
+    'Your SDR receiver',
   );
 });
 
@@ -40,6 +44,7 @@ for (const locale of ['es', 'ru']) {
       const text = [
         ...localAdsbCardModel(record, 5000).details,
         localAdsbSourceText(record),
+        localAdsbSourceText({ ...record, sources: ['webusb'] }),
       ].join(' | ');
       for (const english of [
         'NO CALLSIGN',
@@ -50,7 +55,8 @@ for (const locale of ['es', 'ru']) {
         'Heard by',
         'browser SDR',
         'decoder feed',
-        'Your RTL-SDR',
+        'Your SDR receiver',
+        'RTL-SDR',
         '12,500',
       ])
         assert.ok(

@@ -10,7 +10,7 @@ import { markDetectionSourcesChanged } from '../../data/detection.js';
 import { refreshTrackedReadout } from '../../data/trackedReadout.js';
 
 /**
- * Construct the Local ADS-B layer, the browser RTL-SDR session it shares with
+ * Construct the Local ADS-B layer, the browser SDR session it shares with
  * the Radio panel, and the decoder-feed session. Construction opens no device
  * and makes no request; the SDR starts only from an explicit Connect and the
  * feeds are polled only while the layer is enabled.

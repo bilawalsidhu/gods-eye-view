@@ -91,9 +91,9 @@ function sourceLabel(source) {
 export function localAdsbSourceText(record) {
   const sources = recordSources(record);
   if (sources.includes('webusb') && sources.includes('feed'))
-    return t('Your RTL-SDR receiver and decoder feed');
+    return t('Your SDR receiver and decoder feed');
   if (sources.includes('feed')) return t('Your decoder feed');
-  return t('Your RTL-SDR receiver');
+  return t('Your SDR receiver');
 }
 
 /**

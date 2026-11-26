@@ -1,5 +1,6 @@
 /**
- * Tuner gain settings for the local RTL-SDR, remembered per receiver mode.
+ * Local SDR gain settings. RTL-SDR remembers tuner gain per mode. HackRF One
+ * shares its LNA, VGA and AMP settings across FM and ADS-B.
  *
  * `'auto'` hands gain to the tuner's AGC. Manual values are the R820T gain
  * steps librtlsdr and dump1090 expose, in dB. Receivers with an onboard LNA
@@ -51,29 +52,43 @@ export function normalizeHackrfGain(stage, value) {
   return HACKRF_GAIN_STEPS_DB[stage].includes(gain) ? gain : null;
 }
 
-export function readHackrfGainSettings(storage) {
-  let stored;
+function readSettings(storage, key, defaults, normalize) {
+  let stored = null;
   try {
-    stored = JSON.parse(storage?.getItem?.(HACKRF_GAIN_STORAGE_KEY) || 'null');
+    stored = JSON.parse(storage?.getItem?.(key) || 'null');
   } catch {
     /* Ignore unavailable storage or invalid JSON. */
   }
+  return Object.fromEntries(
+    Object.entries(defaults).map(([name, fallback]) => [
+      name,
+      normalize(name, stored?.[name]) ?? fallback,
+    ]),
+  );
+}
+
+function writeSettings(storage, key, value) {
+  try {
+    storage?.setItem?.(key, JSON.stringify(value));
+    return Boolean(storage?.setItem);
+  } catch {
+    return false;
+  }
+}
+
+export function readHackrfGainSettings(storage) {
   return Object.freeze(
-    Object.fromEntries(
-      Object.entries(HACKRF_GAIN_DEFAULTS).map(([stage, fallback]) => [
-        stage,
-        normalizeHackrfGain(stage, stored?.[stage]) ?? fallback,
-      ]),
+    readSettings(
+      storage,
+      HACKRF_GAIN_STORAGE_KEY,
+      HACKRF_GAIN_DEFAULTS,
+      normalizeHackrfGain,
     ),
   );
 }
 
 export function writeHackrfGainSettings(storage, settings) {
-  try {
-    storage?.setItem?.(HACKRF_GAIN_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    /* Gain remains available for this session. */
-  }
+  writeSettings(storage, HACKRF_GAIN_STORAGE_KEY, settings);
 }
 
 /**
@@ -101,17 +116,11 @@ export function normalizeSdrGain(value) {
  * @returns {{fm:'auto'|number, adsb:'auto'|number}}
  */
 export function readSdrGainSettings(storage) {
-  let stored = null;
-  try {
-    stored = JSON.parse(storage?.getItem?.(SDR_GAIN_STORAGE_KEY) || 'null');
-  } catch {
-    stored = null;
-  }
-  return Object.fromEntries(
-    Object.entries(SDR_GAIN_DEFAULTS).map(([mode, fallback]) => [
-      mode,
-      normalizeSdrGain(stored?.[mode]) ?? fallback,
-    ]),
+  return readSettings(
+    storage,
+    SDR_GAIN_STORAGE_KEY,
+    SDR_GAIN_DEFAULTS,
+    (_, value) => normalizeSdrGain(value),
   );
 }
 
@@ -122,15 +131,11 @@ export function readSdrGainSettings(storage) {
  * @returns {boolean} Whether the write succeeded.
  */
 export function writeSdrGainSettings(storage, settings) {
-  try {
-    storage?.setItem?.(
-      SDR_GAIN_STORAGE_KEY,
-      JSON.stringify({ fm: settings.fm, adsb: settings.adsb }),
-    );
-    return Boolean(storage?.setItem);
-  } catch {
-    return false;
-  }
+  if (settings == null) return false;
+  return writeSettings(storage, SDR_GAIN_STORAGE_KEY, {
+    fm: settings.fm,
+    adsb: settings.adsb,
+  });
 }
 
 /**

@@ -17,7 +17,7 @@ test('Local ADS-B guidance hint is translated in the layer row', async () => {
       lifecycleState: 'enabled',
       stats: { count: 0, lastUpdate: null, ...english },
     }),
-    'RTL-SDR · WebUSB · connect a receiver in Radio',
+    'Browser SDR · WebUSB · connect a receiver in Radio',
   );
   for (const locale of ['es', 'ru']) {
     setLocale(locale);
@@ -41,6 +41,8 @@ test('Local ADS-B guidance hint is translated in the layer row', async () => {
         stats.statusMessage,
         `${locale}: no catalog entry for "${stats.statusMessage}"`,
       );
+      assert.notEqual(t(stats.source), stats.source);
+      assert.ok(text.startsWith(t(stats.source)), text);
       assert.ok(
         !text.includes(stats.statusMessage),
         `${locale}: row shows English hint: ${text}`,
