@@ -48,11 +48,14 @@ test('without matchMedia the display ratio is kept, at least 1 and up to the cap
   assert.equal(isTouchOnly(undefined), false);
 });
 
-test('watchTouchOnly calls back when either pointer query changes, until stopped', () => {
+test('watchTouchOnly calls back when the touch-only answer changes, until stopped', () => {
   const listeners = new Map();
+  let anyFine = false;
   const win = {
     matchMedia: (query) => ({
-      matches: false,
+      matches:
+        query === '(pointer: coarse)' ||
+        (query === '(any-pointer: fine)' && anyFine),
       addEventListener: (_type, fn) => listeners.set(query, fn),
       removeEventListener: (_type, fn) => {
         if (listeners.get(query) === fn) listeners.delete(query);
@@ -65,8 +68,13 @@ test('watchTouchOnly calls back when either pointer query changes, until stopped
     '(any-pointer: fine)',
     '(pointer: coarse)',
   ]);
-  listeners.get('(any-pointer: fine)')();
+  // A change event that leaves the answer as it was calls nothing.
   listeners.get('(pointer: coarse)')();
+  assert.equal(calls, 0);
+  anyFine = true; // a trackpad attached
+  listeners.get('(any-pointer: fine)')();
+  anyFine = false; // and taken away
+  listeners.get('(any-pointer: fine)')();
   assert.equal(calls, 2);
   stop();
   assert.equal(listeners.size, 0);

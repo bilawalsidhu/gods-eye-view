@@ -44,8 +44,9 @@ export function overlayPixelRatio(win = globalThis.window, max = Infinity) {
 }
 
 /**
- * Call `onChange` whenever `isTouchOnly`'s answer may have changed: a
- * trackpad, mouse or pencil attached to a tablet or taken away.
+ * Call `onChange` whenever `isTouchOnly`'s answer changes: a trackpad,
+ * mouse or pencil attached to a tablet or taken away. A change event that
+ * leaves the answer as it was calls nothing.
  * @param {(() => void)} onChange
  * @param {{matchMedia?: Function}} [win]
  * @returns {() => void} Stops watching.
@@ -53,6 +54,13 @@ export function overlayPixelRatio(win = globalThis.window, max = Infinity) {
 export function watchTouchOnly(onChange, win = globalThis.window) {
   if (typeof win?.matchMedia !== 'function') return () => {};
   const stops = [];
+  let touchOnly = isTouchOnly(win);
+  const listener = () => {
+    const next = isTouchOnly(win);
+    if (next === touchOnly) return;
+    touchOnly = next;
+    onChange();
+  };
   for (const text of POINTER_QUERIES) {
     let query;
     try {
@@ -60,7 +68,6 @@ export function watchTouchOnly(onChange, win = globalThis.window) {
     } catch {
       continue;
     }
-    const listener = () => onChange();
     if (typeof query?.addEventListener === 'function') {
       query.addEventListener('change', listener);
       stops.push(() => query.removeEventListener('change', listener));
