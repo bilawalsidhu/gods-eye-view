@@ -278,6 +278,52 @@ test('per-pollutant readings become one station with every pollutant', () => {
   assert.equal(aqiStations([ready])[0], ready);
 });
 
+test('the newest reading decides a pollutant, in any order', () => {
+  const row = (value, observedMs, extra = {}) => ({
+    id: 'x:1:PM2.5',
+    provider: 'x',
+    stationId: '1',
+    parameter: 'PM2.5',
+    units: 'µg/m³',
+    value,
+    averagingMinutes: 60,
+    observedMs,
+    ...extra,
+  });
+  const older = row(12, 1000);
+  const flagged = row(80, 2000, { qualityFlagged: true });
+  const unconvertible = row(80, 2000, { units: 'ppb' });
+  for (const newest of [flagged, unconvertible])
+    for (const rows of [
+      [older, newest],
+      [newest, older],
+    ]) {
+      // A newer flagged or unconvertible reading leaves the pollutant out:
+      // the older value does not stand in while it is reported excluded.
+      const [station] = aqiStations(rows);
+      assert.deepEqual(station.values, {});
+      assert.deepEqual(station.excluded, {
+        pm25: newest === flagged ? 'flagged' : 'units',
+      });
+      assert.equal(station.observedMs, 2000);
+    }
+  // A newer usable value wins over an older flagged one, in any order.
+  for (const rows of [
+    [row(80, 1000, { qualityFlagged: true }), row(12, 2000)],
+    [row(12, 2000), row(80, 1000, { qualityFlagged: true })],
+  ]) {
+    const [station] = aqiStations(rows);
+    assert.deepEqual(station.values, { pm25: 12 });
+    assert.deepEqual(station.excluded, {});
+  }
+  // At the same time a usable value wins, then the higher one.
+  for (const rows of [
+    [row(12, 2000), row(30, 2000), flagged],
+    [flagged, row(30, 2000), row(12, 2000)],
+  ])
+    assert.deepEqual(aqiStations(rows)[0].values, { pm25: 30 });
+});
+
 test('a station whose only reading its source flagged keeps no values', () => {
   const [station] = aqiStations([
     {

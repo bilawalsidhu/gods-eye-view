@@ -353,6 +353,18 @@ const POLLUTANT_FIELDS = [
 ];
 
 /**
+ * Whether `a` replaces `b` as a pollutant's reading: the newer one; at the
+ * same time a usable value before an unusable one, then the higher value
+ * (or a flag before a unit problem), so the input order never decides.
+ */
+function newer(a, b) {
+  if (!b || a.at !== b.at) return !b || a.at > b.at;
+  if ((a.value === null) !== (b.value === null)) return a.value !== null;
+  if (a.value !== null) return a.value > b.value;
+  return a.reason === 'flagged' && b.reason !== 'flagged';
+}
+
+/**
  * One reading per station for the AQI view. Per-pollutant readings of a
  * station (one `provider` and `stationId`) are folded together; a reading
  * that already carries `values` passes through.
@@ -395,6 +407,7 @@ export function aqiStations(readings) {
         excluded: {},
         observedMs: null,
         reportedMs: -Infinity,
+        newest: {},
         aqi: null,
         color: AIR_QUALITY_UNRATED_COLOR,
         label: '',
@@ -405,22 +418,35 @@ export function aqiStations(readings) {
     }
     const at = Number.isFinite(reading.observedMs) ? reading.observedMs : null;
     if (at !== null) station.reportedMs = Math.max(station.reportedMs, at);
-    // One reading per pollutant: the newest.
-    const previous = station.valueTimes[key];
-    if (Number.isFinite(previous) && (at === null || at <= previous)) continue;
     const value = reading.qualityFlagged
       ? null
       : concentrationIn(reading.parameter, reading.value, reading.units);
-    if (value === null) {
-      station.excluded[key] = reading.qualityFlagged ? 'flagged' : 'units';
-      continue;
+    const candidate = {
+      at: at ?? -Infinity,
+      value,
+      reason: reading.qualityFlagged ? 'flagged' : 'units',
+      reading,
+    };
+    if (newer(candidate, station.newest[key])) station.newest[key] = candidate;
+  }
+  // One reading per pollutant: the newest, whatever order they came in. A
+  // newest one flagged or in units that do not convert leaves the pollutant
+  // out, and no older value stands in for it.
+  for (const station of stations.values()) {
+    for (const [key, { at, value, reason, reading }] of Object.entries(
+      station.newest,
+    )) {
+      if (value === null) {
+        station.excluded[key] = reason;
+        continue;
+      }
+      station.values[key] = value;
+      station.valueTimes[key] = Number.isFinite(at) ? at : null;
+      station.valueAveraging[key] = reading.averagingMinutes ?? null;
+      if (reading.coveragePercent !== undefined)
+        station.valueCoverage[key] = reading.coveragePercent;
     }
-    delete station.excluded[key];
-    station.values[key] = value;
-    station.valueTimes[key] = at;
-    station.valueAveraging[key] = reading.averagingMinutes ?? null;
-    if (reading.coveragePercent !== undefined)
-      station.valueCoverage[key] = reading.coveragePercent;
+    delete station.newest;
   }
   for (const station of stations.values()) {
     const { reportedMs } = station;
