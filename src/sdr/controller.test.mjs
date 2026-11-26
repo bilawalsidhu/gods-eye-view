@@ -1486,7 +1486,7 @@ function hackrfFailureSession(t, webUsbOverrides = {}) {
     async transferIn(endpoint, length) {
       reads += 1;
       await pause(2);
-      return transfer('read', endpoint, {
+      return transfer('read', length === 128 * 1024 ? 'discard' : endpoint, {
         status: 'ok',
         data: new DataView(new ArrayBuffer(length)),
       });
@@ -1519,6 +1519,91 @@ function hackrfFailureSession(t, webUsbOverrides = {}) {
     closes: () => closes,
   };
 }
+
+test(
+  'HackRF FM retune writes only frequency and drains stale IQ before resetting the worker',
+  { timeout: 3_000 },
+  async (t) => {
+    const { controller, device } = hackrfFailureSession(t);
+    const events = [];
+    const postMessage = FakeWorker.prototype.postMessage;
+    const firstBlock = gate();
+    const firstFreshBlock = gate();
+    const drainStarted = gate();
+    const releaseDrain = gate();
+    t.after(releaseDrain.open);
+    let retuned = false;
+
+    t.mock.method(FakeWorker.prototype, 'postMessage', function (message) {
+      postMessage.call(this, message);
+      if (message.type === 'reset') events.push(['reset']);
+      if (message.type !== 'samples') return;
+      const value = new Uint8Array(message.buffer)[0];
+      events.push(['samples', value]);
+      firstBlock.open();
+      if (value === 130) firstFreshBlock.open();
+    });
+    const write = device.controlTransferOut.bind(device);
+    t.mock.method(device, 'controlTransferOut', async (setup, data) => {
+      events.push(['out', setup.request]);
+      if (setup.request === 16 && data.getUint32(0, true) === 99) {
+        assert.equal(data.getUint32(4, true), 500_000);
+        retuned = true;
+      }
+      return write(setup, data);
+    });
+    const readGain = device.controlTransferIn.bind(device);
+    t.mock.method(device, 'controlTransferIn', (setup) => {
+      events.push(['in', setup.request]);
+      return readGain(setup);
+    });
+    t.mock.method(device, 'transferIn', async (endpoint, length) => {
+      assert.equal(endpoint, 1);
+      const discarding = length === 128 * 1024;
+      const data = new Uint8Array(length);
+      data[0] = discarding ? 1 : retuned ? 2 : 0;
+      if (discarding) {
+        events.push(['discard']);
+        drainStarted.open();
+        await releaseDrain.promise;
+      } else {
+        await pause(2);
+      }
+      return { status: 'ok', data: new DataView(data.buffer) };
+    });
+
+    assert.equal(await controller.connect('fm'), true);
+    await firstBlock.promise;
+    const previousFrequency = controller.getState().frequencyHz;
+    events.length = 0;
+    const tuning = controller.tuneFm(99_500_000);
+    await drainStarted.promise;
+    const frequencyDuringDrain = controller.getState().frequencyHz;
+    const eventsDuringDrain = events.slice();
+    releaseDrain.open();
+
+    assert.equal(await tuning, true);
+    await firstFreshBlock.promise;
+    const frequencyWrite = events.findIndex(([type]) => type === 'out');
+    assert.equal(frequencyDuringDrain, previousFrequency);
+    assert.deepEqual(eventsDuringDrain.slice(frequencyWrite), [
+      ['out', 16],
+      ['discard'],
+    ]);
+    assert.deepEqual(events.slice(frequencyWrite, frequencyWrite + 4), [
+      ['out', 16],
+      ['discard'],
+      ['reset'],
+      ['samples', 130],
+    ]);
+    assert.deepEqual(
+      events.filter(([type]) => type === 'in' || type === 'out'),
+      [['out', 16]],
+    );
+    assert.equal(controller.getState().frequencyHz, 99_500_000);
+    assert.equal(controller.getState().sampleRate, 2_048_000);
+  },
+);
 
 test('a cancelled HackRF picker has its own message and locks receiver selection while pending', async (t) => {
   const picker = gate();
@@ -1601,6 +1686,17 @@ test('HackRF USB failures during reception report the issue, close and allow reo
       initialMode: 'fm',
       change: (controller) => controller.tuneFm(101_100_000),
       transfer: ['out', 16, { status: 'stall', bytesWritten: 0 }],
+      message: 'HackRF One connection failed',
+    },
+    {
+      name: 'short IQ transfer while discarding pre-retune samples',
+      initialMode: 'fm',
+      change: (controller) => controller.tuneFm(101_100_000),
+      transfer: [
+        'read',
+        'discard',
+        { status: 'ok', data: new DataView(new ArrayBuffer(8)) },
+      ],
       message: 'HackRF One connection failed',
     },
     {

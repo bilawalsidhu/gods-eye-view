@@ -1,5 +1,3 @@
-import { HACKRF_GAIN_DEFAULTS, normalizeHackrfGain } from './gain.js';
-
 // USB requests and payloads follow Great Scott Gadgets' libhackrf.
 const REQUEST = {
   SET_MODE: 1,
@@ -15,6 +13,9 @@ const MODE_OFF = 0;
 const MODE_RX = 1;
 // The narrowest analog baseband filter on HackRF One.
 const RX_BANDWIDTH_HZ = 1_750_000;
+// The HackRF One firmware can buffer 64 KiB across its two RX buffers.
+// Discard twice that to also cover samples captured while the tuner settles.
+const RETUNE_DISCARD_BYTES = 128 * 1024;
 
 function vendorRequest(request, value = 0, index = 0) {
   return { requestType: 'vendor', recipient: 'device', request, value, index };
@@ -71,10 +72,18 @@ export async function openHackrfOne(device) {
       throw new Error(`HackRF One gain request ${request} failed`);
   }
 
-  async function setRxGain(stage, value) {
+  function setCenterFrequency(frequencyHz) {
     if (closing) throw new Error('HackRF One is closed');
-    const gain = normalizeHackrfGain(stage, value);
-    if (gain === null) throw new RangeError('Invalid HackRF One gain setting');
+    return write(REQUEST.SET_FREQUENCY, {
+      data: pairOfUint32(
+        Math.floor(frequencyHz / 1_000_000),
+        frequencyHz % 1_000_000,
+      ),
+    });
+  }
+
+  async function setRxGain(stage, gain) {
+    if (closing) throw new Error('HackRF One is closed');
     if (stage === 'amp') {
       await write(REQUEST.SET_AMP, { value: Number(gain) });
     } else {
@@ -91,19 +100,17 @@ export async function openHackrfOne(device) {
     receiving = false;
   }
 
-  return {
-    async configure({ sampleRate, frequencyHz, gain = HACKRF_GAIN_DEFAULTS }) {
-      if (closing) throw new Error('HackRF One is closed');
-      // Match the sample rates of the existing ADS-B and FM decoders.
-      if (sampleRate !== 2_000_000 && sampleRate !== 2_048_000)
-        throw new RangeError('Unsupported HackRF One sample rate');
-      if (
-        !Number.isSafeInteger(frequencyHz) ||
-        frequencyHz < 0 ||
-        frequencyHz > 6_000_000_000
-      )
-        throw new RangeError('Invalid HackRF One frequency');
+  async function readIq(byteLength) {
+    if (closing || !receiving) throw new Error('HackRF One is not receiving');
+    const result = await device.transferIn(RX_ENDPOINT, byteLength);
+    if (result.status !== 'ok' || result.data?.byteLength !== byteLength)
+      throw new Error('HackRF One IQ transfer failed');
+    return result.data;
+  }
 
+  return {
+    async configure({ sampleRate, frequencyHz, gain }) {
+      if (closing) throw new Error('HackRF One is closed');
       await stopRx();
       await write(REQUEST.SET_SAMPLE_RATE, {
         data: pairOfUint32(sampleRate, 1),
@@ -112,12 +119,7 @@ export async function openHackrfOne(device) {
         value: RX_BANDWIDTH_HZ & 0xffff,
         index: RX_BANDWIDTH_HZ >>> 16,
       });
-      await write(REQUEST.SET_FREQUENCY, {
-        data: pairOfUint32(
-          Math.floor(frequencyHz / 1_000_000),
-          frequencyHz % 1_000_000,
-        ),
-      });
+      await setCenterFrequency(frequencyHz);
       await setRxGain('amp', gain.amp);
       await setRxGain('lna', gain.lna);
       await setRxGain('vga', gain.vga);
@@ -132,22 +134,16 @@ export async function openHackrfOne(device) {
       }
     },
 
+    setCenterFrequency,
     setRxGain,
 
-    async readSamples(sampleCount) {
-      if (closing || !receiving) throw new Error('HackRF One is not receiving');
-      if (
-        !Number.isSafeInteger(sampleCount) ||
-        sampleCount <= 0 ||
-        sampleCount > 131_072
-      )
-        throw new RangeError('Invalid HackRF One sample block size');
-      const byteLength = sampleCount * 2;
-      const result = await device.transferIn(RX_ENDPOINT, byteLength);
-      if (result.status !== 'ok' || result.data?.byteLength !== byteLength)
-        throw new Error('HackRF One IQ transfer failed');
+    async resetBuffer() {
+      await readIq(RETUNE_DISCARD_BYTES);
+    },
 
-      const { buffer, byteOffset } = result.data;
+    async readSamples(sampleCount) {
+      const byteLength = sampleCount * 2;
+      const { buffer, byteOffset } = await readIq(byteLength);
       const view = new Uint8Array(buffer, byteOffset, byteLength);
       const samples =
         byteOffset === 0 && buffer.byteLength === byteLength

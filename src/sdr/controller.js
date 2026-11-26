@@ -1885,21 +1885,20 @@ export class SdrController {
       let actualFrequency = frequency;
       await this._queueUsb(async () => {
         if (!this._owns(token, device)) return;
-        if (receiverKind === 'hackrf') {
-          await device.configure({
-            sampleRate: FM_SAMPLE_RATE,
-            frequencyHz: frequency,
-            gain: this.state.hackrfGain,
-          });
-        } else {
-          const tuned = await device.setCenterFrequency(frequency);
-          if (Number.isFinite(tuned)) actualFrequency = tuned;
-          if (this._owns(token, device)) await device.resetBuffer();
-        }
+        const tuned = await device.setCenterFrequency(frequency);
+        if (Number.isFinite(tuned)) actualFrequency = tuned;
+        if (!this._owns(token, device)) return;
+        await withDeadline(
+          device.resetBuffer(),
+          this._readStallMs,
+          'SDR buffer reset stalled',
+        );
+        if (!this._owns(token, device)) return;
+        // Reset the decoder before the USB queue releases the next reads.
+        this._worker?.postMessage({ type: 'reset', tune });
+        this._audioNode?.port.postMessage({ type: 'clear' });
       });
       if (!this._owns(token, device)) return false;
-      this._worker?.postMessage({ type: 'reset', tune });
-      this._audioNode?.port.postMessage({ type: 'clear' });
       this._setState({
         frequencyHz: actualFrequency,
         status: 'streaming',

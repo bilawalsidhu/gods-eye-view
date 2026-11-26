@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openHackrfOne } from './hackrfOne.js';
+import { HACKRF_GAIN_DEFAULTS } from './gain.js';
 
 test('HackRF releases USB if claiming its interface fails', async () => {
   let closed = false;
@@ -49,7 +50,11 @@ test('HackRF configures the wire protocol and returns transferable unsigned IQ',
   };
   const rx = await openHackrfOne(device);
   await assert.rejects(rx.readSamples(2), /not receiving/);
-  await rx.configure({ sampleRate: 2_048_000, frequencyHz: 98_500_000 });
+  await rx.configure({
+    sampleRate: 2_048_000,
+    frequencyHz: 98_500_000,
+    gain: HACKRF_GAIN_DEFAULTS,
+  });
   const { data } = await rx.readSamples(2);
   assert.deepEqual(Array.from(new Uint8Array(data)), [0, 127, 128, 255]);
   assert.deepEqual(calls, [
@@ -64,7 +69,11 @@ test('HackRF configures the wire protocol and returns transferable unsigned IQ',
     [1, 1, 0, null],
   ]);
 
-  await rx.configure({ sampleRate: 2_000_000, frequencyHz: 1_090_000_000 });
+  await rx.configure({
+    sampleRate: 2_000_000,
+    frequencyHz: 1_090_000_000,
+    gain: HACKRF_GAIN_DEFAULTS,
+  });
   assert.deepEqual(
     calls[9],
     [1, 0, 0, null],
