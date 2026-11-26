@@ -461,9 +461,15 @@ const SINGLE_PERIODS = Object.freeze({
 /**
  * One pollutant's value for the index from its readings: `hours` (its
  * hourly means as `{endMs, value, reason, coverage}`) and `rows` (its other
- * readings, newest decides per averaging period). The newest usable basis
- * wins: the NowCast or 8-hour mean as of the newest hourly mean, or a
- * reading on the table's own period.
+ * readings, the newest kept per averaging period). The newest reading
+ * decides, whether or not it can be rated: of the NowCast or 8-hour mean as
+ * of the newest hourly mean and the readings on the table's own period, the
+ * one with the latest time is taken (at the same time a usable value first,
+ * then the higher). A newest reading that cannot be rated (flagged, in
+ * units that do not convert, or a NowCast or 8-hour mean short of hours)
+ * leaves the pollutant unrated with its reason; an older value does not
+ * stand in. The one exception is SO2's 24-hour average, which a flagged
+ * 1-hour value of its time does not discard.
  * @returns {{at, value, reason, averaging, method, coverage, hour, day}}
  */
 function pollutantInput(key, hours, rows) {
