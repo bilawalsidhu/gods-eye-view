@@ -39,13 +39,13 @@ spread over time (near ones about every second, far or off-screen ones about
 every four), a new report that moves a placed flight eases it there from
 where it is drawn, and a tracked aircraft's trail head ends where it is drawn
 in that frame.
-The render governor (`src/renderGovernor.js`) caps a parked scene at
-`IDLE_FRAME_RATE` (60) ticks a second while nothing holds the loop, because
-Cesium still runs the clock, data sources and update listeners on every
-animation frame even when it skips the draw, and lifts the cap while anything
-does: the frame port tells it when the loop's first hold is taken and its last
-released, its own holds (animated visual styles) included. The viewer starts
-at that cap until the governor is installed. Through the idle
+The render governor (`src/renderGovernor.js`) sets the loop's rate: the
+holders' while anything holds it (the frame port tells it when the loop's
+first hold is taken and its last released, its own holds, animated visual
+styles, included), the display's while nothing does, both capped by the
+Display panel's Frame rate (`src/viewFrameRate.js`): 60 until the user sets
+it, 30 to 240 frames a second, or Unlimited, kept across visits. The viewer
+starts at that cap until the governor is installed. Through the idle
 render governor, the camera port holds continuous render from `moveStart` to `moveEnd`, and samples its
 pose every 250 ms in between, so a camera drifting by rounding errors (no
 `moveEnd`) is released after half a second at rest and held again if it moves. The world clock holds continuous render while

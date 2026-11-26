@@ -6,10 +6,11 @@ import { rendererOf } from '../rendererOf.js';
 import {
   _resetRenderGovernorForTest,
   holdContinuousRender,
-  IDLE_FRAME_RATE,
+  DEFAULT_FRAME_RATE,
   installRenderGovernor,
   releaseContinuousRender,
   uninstallRenderGovernor,
+  setFrameRateCap,
 } from '../../renderGovernor.js';
 import {
   ReadonlySet,
@@ -181,14 +182,14 @@ test('the plugin wraps the viewer it is given, behind the accessor only', async 
   assert.deepEqual(log, ['resize', 'destroy'], 'destroying twice is safe');
 });
 
-test('with the governor installed, the loop ticks at the idle rate while nothing moves, and at the display’s while anything does, the renderer’s own holds included', async (t) => {
+test('with the governor installed, the loop ticks at the user’s frame rate, unlimited being the display’s, the renderer’s own holds included', async (t) => {
   withDocument(t, fakeDocument());
   let viewer;
   const plugin = createCesiumRendererPlugin({
     createViewer() {
       viewer = fakeViewer([]);
       // The viewer starts at the idle rate (createApplicationViewer).
-      viewer.targetFrameRate = IDLE_FRAME_RATE;
+      viewer.targetFrameRate = DEFAULT_FRAME_RATE;
       return viewer;
     },
   });
@@ -198,16 +199,25 @@ test('with the governor installed, the loop ticks at the idle rate while nothing
   });
   installRenderGovernor(renderer.frame);
   t.after(() => _resetRenderGovernorForTest());
-  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE, 'idle');
+  assert.equal(viewer.targetFrameRate, DEFAULT_FRAME_RATE, 'idle');
   holdContinuousRender('flights');
-  assert.equal(viewer.targetFrameRate, undefined, 'a layer moving');
+  assert.equal(
+    viewer.targetFrameRate,
+    DEFAULT_FRAME_RATE,
+    'a layer moving, capped',
+  );
+  setFrameRateCap(0);
+  assert.equal(viewer.targetFrameRate, undefined, 'unlimited');
+  setFrameRateCap(DEFAULT_FRAME_RATE);
   releaseContinuousRender('flights');
-  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  assert.equal(viewer.targetFrameRate, DEFAULT_FRAME_RATE);
   // As animated visual styles hold it (effects.js).
+  setFrameRateCap(0);
   const release = renderer.frame.holdContinuous('effects:animated');
   assert.equal(viewer.targetFrameRate, undefined, 'the renderer’s own hold');
+  setFrameRateCap(DEFAULT_FRAME_RATE);
   release();
-  assert.equal(viewer.targetFrameRate, IDLE_FRAME_RATE);
+  assert.equal(viewer.targetFrameRate, DEFAULT_FRAME_RATE);
   uninstallRenderGovernor(renderer.frame);
   renderer.destroy();
 });

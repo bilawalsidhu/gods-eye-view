@@ -4881,5 +4881,9 @@
   "Older or unknown": "أقدم أو غير معروف",
   "Colour shows the age of each area.": "يبيّن اللون عمر كل منطقة.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "يُحسب العمر من وقت رسم WFIGS للحدود، وإلا فمن آخر تعديل للسجل. الحدود مبسّطة إلى نحو 100 م.",
-  "Voice and search controls": "عناصر التحكم في الصوت والبحث"
+  "Voice and search controls": "عناصر التحكم في الصوت والبحث",
+  "Unlimited": "غير محدود",
+  "Frame rate": "معدل الإطارات",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "أقصى عدد من الإطارات في الثانية يرسمه الكوكب؛ غير محدود يرسم بمعدل شاشتك",
+  "{fps} fps": "{fps} إطار/ث"
 }

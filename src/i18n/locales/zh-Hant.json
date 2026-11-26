@@ -4356,5 +4356,9 @@
   "Older or unknown": "更早或未知",
   "Colour shows the age of each area.": "顏色表示各區域在所示時刻的年齡。",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "時長從 WFIGS 測繪時間算起，否則從記錄的最後編輯時間算起。邊界已簡化至約 100 米。",
-  "Voice and search controls": "語音和搜索控件"
+  "Voice and search controls": "語音和搜索控件",
+  "Unlimited": "無限制",
+  "Frame rate": "幀率",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "地球每秒繪製的最多幀數；無限制則按顯示器的刷新率繪製",
+  "{fps} fps": "{fps} 幀/秒"
 }

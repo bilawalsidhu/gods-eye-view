@@ -4461,5 +4461,9 @@
   "Older or unknown": "Älter oder unbekannt",
   "Colour shows the age of each area.": "Die Farbe zeigt das Alter jeder Fläche.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Alter ab der Kartierung durch WFIGS, sonst ab der letzten Änderung des Datensatzes. Brandgrenzen auf ca. 100 m vereinfacht.",
-  "Voice and search controls": "Sprach- und Suchsteuerung"
+  "Voice and search controls": "Sprach- und Suchsteuerung",
+  "Unlimited": "Unbegrenzt",
+  "Frame rate": "Bildrate",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "Die meisten Bilder pro Sekunde, die der Globus zeichnet; Unbegrenzt zeichnet mit der Bildrate deines Bildschirms",
+  "{fps} fps": "{fps} B/s"
 }
