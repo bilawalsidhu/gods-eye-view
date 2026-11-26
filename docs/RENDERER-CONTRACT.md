@@ -451,6 +451,22 @@ once the model is ready, and again only when its numbers change. The check
 `draw.models.nodes` moves the harness model's node off the screen's centre
 and back.
 
+Imagery layers (`globe.imagery`) are required. A `single-image` layer takes
+its picture from `url` or, in place of it, from `image`: a canvas the
+application has painted, whose pixels stay unchanged while the layer uses it
+(a new picture is a new layer). It needs no capability: every renderer
+draws it. A spec that gives both, or gives `image` to any other kind, is
+refused with a `TypeError` and adds no layer. The Cesium port draws the canvas as one tile over the layer's
+rectangle (`src/render/cesium/imagery.js`), and the stub refuses the same
+specs. The check `globe.imagery.canvas` adds one and reads its colour where
+the harness draws pixels. The air-quality model field is drawn this way on
+the globe (`src/layers/airQuality/fieldDrawing.js`), each step's picture added
+clear under the one shown and swapped in once `isSettled('imagery')`, and over
+photorealistic 3D tiles as a `rasterShell` field. The application does not
+test for it and has no other way to draw the field on the globe: on a
+renderer that leaves the canvas out, the field is missing there while the
+stations still draw.
+
 The Cesium port draws timed imagery (`imageryFrames`): a layer given a timed
 source hides its own imagery and draws each frame its clock shows as a Cesium
 imagery layer just above it (in `blend` mode the later frame over the earlier
@@ -829,7 +845,8 @@ There are two layers of checks.
 - draw-set bookkeeping, picks and the `meta` round-trip;
 - projection, rays and heights;
 - leases and click picks;
-- imagery order, sky, styles, credits and quality knobs;
+- imagery order, single-image canvases, sky, styles, credits and quality
+  knobs;
 - the camera traces.
 
 **Camera traces.** `cameraScripts.js` lists camera scripts in the contract's

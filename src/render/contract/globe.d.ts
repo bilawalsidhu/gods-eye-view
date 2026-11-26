@@ -75,7 +75,11 @@ export interface ImagerySpec {
   worldStyle?: 'aerial' | 'aerialLabels';
   /** URL or URL template (`{x}`, `{y}`, `{z}`, `{s}`, `{time}`). */
   url?: string;
-  /** A single-image canvas. Its pixels must stay unchanged while the layer uses it. */
+  /**
+   * `single-image`: the picture itself, in place of `url` (one or the
+   * other). Its pixels must stay unchanged while the layer uses it. A spec
+   * with both, or with `image` on another kind, throws a `TypeError`.
+   */
   image?: HTMLCanvasElement;
   /** `'canvas'` (`imageHooks`): draws one tile. */
   drawTile?: (tile: TileRequest, canvas: HTMLCanvasElement) => void;
