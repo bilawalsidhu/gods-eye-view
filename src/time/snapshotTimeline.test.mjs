@@ -675,7 +675,9 @@ test('with fixes past each snapshot, a fast play asks for steps well ahead of th
   const newest = loads(h.calls).at(-1).atMs;
   const time = h.clock.now();
   assert.ok(newest - time >= ahead, 'steps asked for ahead of the time');
-  assert.ok(newest - time < ahead + STEP, 'and no further');
+  // Fast play strides as far as its prefetch reaches, never a stride beyond.
+  const stride = Math.max(STEP, Math.floor(ahead / STEP) * STEP);
+  assert.ok(newest - time < ahead + stride, 'and no further');
   assert.ok(
     loads(h.calls).every((call, k) => k === 0 || call.replace === false),
     'each in step with the last, moving contacts on',

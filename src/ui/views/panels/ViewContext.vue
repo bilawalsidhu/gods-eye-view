@@ -225,8 +225,14 @@ const valueTiles = computed(() => {
     // A reason (a coverage limit, a map-only product) in place of a value;
     // "No value" only for a real empty reading.
     const observed = layer.id === 'air-quality' || layer.id === 'gnss-integrity';
+    // A reading's age is told from the time shown: in a replay, how long
+    // before that moment it was observed, never how long before now.
     const age = observed && Number.isFinite(found?.at)
-      ? t('Updated {age}', { age: contextAgeText(Date.now() - found.at) })
+      ? shownLive.value
+        ? t('Updated {age}', { age: contextAgeText(Date.now() - found.at) })
+        : found.at <= shownNow.value
+          ? t('Observed {age} before', { age: contextAgeText(shownNow.value - found.at) })
+          : ''
       : '';
     const tone = found?.stale && layer.tone === 'nominal' ? 'stale' : layer.tone;
     return [{ ...layer, tone, toneText: inspectorFeedLabel(tone), value: found?.value || '—', detail: found?.reason || found?.detail || (found?.value ? '' : t('No value at the centre of the view')), age }];
@@ -264,7 +270,8 @@ function layerKind(layerId) {
 // how fresh its picture is.
 function stateText(layer) {
   if (layer.tone === 'loading') return '…';
-  if (layer.updatedAt) return t('Updated {age}', { age: contextAgeText(Date.now() - layer.updatedAt) });
+  // When the picture was fetched means nothing in a replay: it shows the time shown.
+  if (layer.updatedAt && shownLive.value) return t('Updated {age}', { age: contextAgeText(Date.now() - layer.updatedAt) });
   return layer.toneText;
 }
 
@@ -475,9 +482,13 @@ const weatherAge = computed(() => {
   const age = inspectorNow.value - at;
   return age > WEATHER_STALE_MS ? t('Updated {age}', { age: contextAgeText(age) }) : '';
 });
-const roundOf = (n) => (Number.isFinite(n) ? Math.round(n) : null);
+// A whole number, never "-0": −0.3 °C reads 0 °C.
+const roundOf = (n) => (Number.isFinite(n) ? Math.round(n) + 0 : null);
 const weatherNow = computed(() => {
   const now = weather.value;
+  // The reading is today's: a replay of another day leaves it out rather than
+  // fill the panel with weather that was not there at the time shown.
+  if (!shownLive.value) return null;
   if (!Number.isFinite(now?.temperatureC)) return null;
   return {
     temperature: t('{n} °C', { n: formatNumber(roundOf(now.temperatureC)) }),
@@ -524,7 +535,7 @@ const emptyFacts = computed(() => {
   facts.push({
     label: t('Weather'),
     value: Number.isFinite(now?.temperatureC)
-      ? t('{n} °C', { n: formatNumber(Math.round(now.temperatureC)) })
+      ? t('{n} °C', { n: formatNumber(Math.round(now.temperatureC) + 0) })
       : failure || '…',
     title: failure || (now ? t(look.value.label) : ''),
     failure,
@@ -610,7 +621,7 @@ function openSuggested() {
     <template v-else>
       <!-- The weather where the view looks, from the reading that also gives
            the local time. -->
-      <div v-if="!globeView" class="spot-conditions__weather view-context__weather" :aria-busy="String(!weatherNow && !weatherFailed)">
+      <div v-if="!globeView && shownLive" class="spot-conditions__weather view-context__weather" :aria-busy="String(!weatherNow && !weatherFailed)">
         <template v-if="weatherNow">
           <UiIcon class="spot-conditions__weather-icon" :name="look.icon" :size="null" />
           <div class="spot-conditions__weather-now">

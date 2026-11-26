@@ -374,13 +374,19 @@ export function createSnapshotTimeline({
       return;
     }
     const step = timeline.stepMs;
-    if (lead - timeMs >= prefetchMs(state)) {
+    const ahead = prefetchMs(state);
+    if (lead - timeMs >= ahead) {
       setGate(hold);
       return;
     }
+    // Fast play steps as far as the loaded fixes carry it rather than a step
+    // at a time: at an hour a second, one snapshot every step would be sixty
+    // reads a second; one each stretch of fixes is a few. Slow play still
+    // asks every step.
+    const stride = Math.max(step, Math.floor(ahead / step) * step);
     const next = Math.min(
       covered.end,
-      Math.max(lead + step, stepAtOrBefore(timeMs) + step),
+      Math.max(lead + stride, stepAtOrBefore(timeMs) + step),
     );
     if (next <= lead) {
       setGate(null);

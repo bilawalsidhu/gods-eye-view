@@ -437,7 +437,16 @@ const gap = computed(() => {
   if (time.value.live) return null;
   const at = time.value.timeMs;
   const list = spans.value;
-  const missing = list.filter((source) => at < source.start || at > source.end);
+  // A computed layer (satellites, on by default) out of its reach is not worth
+  // stopping someone looking at observed data: it is named only when nothing
+  // observed is on, or when every observed layer has nothing here too.
+  const lacking = (source) => at < source.start || at > source.end;
+  const observedOn = list.filter((source) => source.kind !== 'computed');
+  const missing = list.filter(
+    (source) =>
+      lacking(source) &&
+      (source.kind !== 'computed' || observedOn.length === 0 || observedOn.every(lacking)),
+  );
   // The thing selected has a first sighting: before it there is nothing of it to show.
   if (subject.value && at < subject.value.start - 30_000)
     return {
@@ -1081,6 +1090,18 @@ const journeyGapBars = computed(() => {
       };
     });
 });
+// Played fast, the track widens to hold about half a minute of play, so the
+// time shown moves across it instead of paging it several times a second.
+watch(
+  () => [time.value.playing, time.value.live, worldClock.getRate()],
+  ([playingNow, live, rate]) => {
+    if (!playingNow || live || !(rate > 0) || pointers.size > 0) return;
+    const wanted = rate * 30_000;
+    if (win.value.length >= wanted / 4) return;
+    const at = time.value.timeMs;
+    setLength(Math.min(maxLength.value, wanted), at, 0.25);
+  },
+);
 // A replay with something selected keeps the camera on it: the layer's own
 // follow camera holds it wherever it was at the time shown, picked up again
 // whenever it comes back into its feed; a replay running into a stretch with
