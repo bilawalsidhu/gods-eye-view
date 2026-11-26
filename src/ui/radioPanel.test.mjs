@@ -228,7 +228,7 @@ function sdrReceiver() {
     webUsbSupported: true,
     connected: false,
     status: 'idle',
-    message: 'Connect an RTL-SDR to begin.',
+    message: 'Connect an SDR receiver to begin.',
     mode: 'fm',
     frequencyHz: 98_500_000,
     volume: 0.8,

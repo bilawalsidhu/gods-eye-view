@@ -301,6 +301,12 @@ function publicAircraft(aircraft) {
   return Array.isArray(aircraft) ? aircraft.map((entry) => ({ ...entry })) : [];
 }
 
+function idleReceiverMessage(webUsbSupported) {
+  return webUsbSupported
+    ? t('Connect an SDR receiver to begin.')
+    : t('WebUSB is unavailable in this browser');
+}
+
 function clampFmFrequency(value) {
   return Math.max(
     FM_MIN_HZ,
@@ -438,9 +444,7 @@ export class SdrController {
       audioLevelDbfs: null,
     };
     this._wording = {
-      message: webUsbSupported
-        ? () => t('Connect an RTL-SDR to begin.')
-        : () => t('WebUSB is unavailable in this browser'),
+      message: () => idleReceiverMessage(webUsbSupported),
       seekMessage: null,
     };
     this.state.message = this._wording.message();
@@ -554,11 +558,7 @@ export class SdrController {
       deviceLabel: null,
       status: this.state.webUsbSupported ? 'idle' : 'unsupported',
       errorText: null,
-      message: !this.state.webUsbSupported
-        ? () => t('WebUSB is unavailable in this browser')
-        : receiverKind === 'hackrf'
-          ? () => t('Connect a HackRF One to begin.')
-          : () => t('Connect an RTL-SDR to begin.'),
+      message: () => idleReceiverMessage(this.state.webUsbSupported),
     });
   }
 

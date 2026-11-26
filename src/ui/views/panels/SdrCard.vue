@@ -92,7 +92,7 @@ const AircraftAtcChannels = defineAsyncComponent(() => import('./AircraftAtcChan
     <UiSlider id="sdr-volume" hold @update:model-value="act('setSdrVolume', $event)" min="0" max="100" :aria-label="t('Local SDR volume')" :disabled="sdr?.volumeDisabled" :model-value="sdr ? sdr.volume : 80" />
     <output id="sdr-volume-value" class="gev-slider-value" for="sdr-volume">{{ sdr ? sdr.volumeText : '80%' }}</output>
   </label>
-  <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an RTL-SDR to begin.') }}</div>
+  <div id="sdr-status" class="radio-playback-state" :class="{ error: sdr?.statusError }" role="status" aria-live="polite">{{ sdr ? sdr.statusText : t('Connect an SDR receiver to begin.') }}</div>
   <div id="sdr-feed-status" class="sdr-feed-status" role="status" aria-live="off" :hidden="sdr ? sdr.feedLine === null : true">{{ sdr?.feedLine ?? '' }}</div>
   <AircraftAtcChannels v-if="sdr?.atcActive" />
 </div>

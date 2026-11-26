@@ -1375,7 +1375,15 @@ test('HackRF applies saved and live gain settings through the controller', async
     storage,
   });
   t.after(() => controller.destroy());
+  assert.equal(
+    controller.getState().message,
+    'Connect an SDR receiver to begin.',
+  );
   controller.selectReceiver('hackrf');
+  assert.equal(
+    controller.getState().message,
+    'Connect an SDR receiver to begin.',
+  );
   assert.equal(await controller.setHackrfGain('lna', '24'), true);
   assert.equal(await controller.setHackrfGain('amp', true), true);
   assert.equal(await controller.setHackrfGain('lna', '25'), false);
