@@ -4356,5 +4356,9 @@
   "Older or unknown": "それ以前または不明",
   "Colour shows the age of each area.": "色は各区域の経過時間を示します。",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "経過時間は WFIGS の測図時刻から、なければ記録の最終編集時刻から数えます。境界線は約 100 m に簡略化されています。",
-  "Voice and search controls": "音声と検索のコントロール"
+  "Voice and search controls": "音声と検索のコントロール",
+  "Unlimited": "無制限",
+  "Frame rate": "フレームレート",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "地球儀が1秒間に描画する最大フレーム数。無制限ではディスプレイのリフレッシュレートで描画します",
+  "{fps} fps": "{fps} fps"
 }

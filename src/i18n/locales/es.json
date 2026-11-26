@@ -4566,5 +4566,9 @@
   "Older or unknown": "Más antiguo o desconocido",
   "Colour shows the age of each area.": "El color indica la antigüedad de cada zona.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "Antigüedad desde el mapeo de WFIGS o, si falta, desde la última edición del registro. Perímetros simplificados a ~100 m.",
-  "Voice and search controls": "Controles de voz y búsqueda"
+  "Voice and search controls": "Controles de voz y búsqueda",
+  "Unlimited": "Ilimitado",
+  "Frame rate": "Velocidad de fotogramas",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "El máximo de fotogramas por segundo que dibuja el globo; Ilimitado dibuja a la frecuencia de tu pantalla",
+  "{fps} fps": "{fps} fps"
 }

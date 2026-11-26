@@ -5698,6 +5698,7 @@
       "src/ui/stores/dataLibrary.js",
       "src/data/openVesselPhoto.js",
       "src/layers/vessels/photos.js",
+      "src/viewFrameRate.js",
       "src/viewSky.js",
       "src/render/weather.js",
       "src/layers/flights/placed.js",

@@ -4566,5 +4566,9 @@
   "Older or unknown": "ישן יותר או לא ידוע",
   "Colour shows the age of each area.": "הצבע מציין את הגיל של כל שטח.",
   "Age counts from WFIGS mapping time, else the record's last edit. Perimeters simplified to ~100 m.": "הגיל נספר ממועד המיפוי של WFIGS, או מהעריכה האחרונה של הרשומה. קווי המתאר מפושטים לכ־100 מ׳.",
-  "Voice and search controls": "פקדי קול וחיפוש"
+  "Voice and search controls": "פקדי קול וחיפוש",
+  "Unlimited": "ללא הגבלה",
+  "Frame rate": "קצב פריימים",
+  "The most frames a second the globe draws; Unlimited draws at your display's rate": "המספר המרבי של פריימים בשנייה שהגלובוס מצייר; ללא הגבלה מצייר בקצב של המסך שלך",
+  "{fps} fps": "{fps} פריימים/ש׳"
 }

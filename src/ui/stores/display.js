@@ -68,6 +68,18 @@ export const useDisplayStore = defineStore('gev-display', () => {
     sky.value = next && markRaw(next);
   }
 
+  /**
+   * The Frame rate row, `{fps, stop, min, max, step}`: the rate (0 for
+   * unlimited) and the slider's stop for it, the last stop being unlimited;
+   * null until the controls first present it.
+   */
+  const frameRate = shallowRef(null);
+
+  /** @param {?object} next A fresh presentation of the Frame rate row. */
+  function publishFrameRate(next) {
+    frameRate.value = next && markRaw(next);
+  }
+
   /** The Draw controls; null until the draw tool first renders. */
   const draw = shallowRef(null);
 
@@ -152,6 +164,8 @@ export const useDisplayStore = defineStore('gev-display', () => {
     publishGroup,
     sky,
     publishSky,
+    frameRate,
+    publishFrameRate,
     draw,
     publishDraw,
     geoImport,
