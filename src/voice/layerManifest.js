@@ -306,7 +306,7 @@ const layers = [
       // A region or area count outside the view holds only what is loaded.
       viewportAreas: true,
       viewportNote:
-        'air-quality loads OpenAQ stations by viewport; CPCB and SAAQIS stations are national',
+        'air-quality loads OpenAQ stations by viewport; CPCB stations are national',
       timeField: 'observedMs',
     },
   },

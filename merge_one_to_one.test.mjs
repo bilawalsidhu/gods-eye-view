@@ -17,9 +17,9 @@ test('a direct station suppresses only its own aggregator copy, not a second mon
   const kept = mergeObservations(
     [
       {
-        provider: 'saaqis',
+        provider: 'national',
         direct: true,
-        readings: [at('saaqis', 'direct', 0)],
+        readings: [at('national', 'direct', 0)],
       },
       {
         provider: 'openaq',

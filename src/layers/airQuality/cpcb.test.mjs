@@ -212,7 +212,6 @@ test('India readings are drawn as one more observation provider', async () => {
     '/api/air-quality/openaq': snapshot({
       readings: [openAqCopy(28.6 + 50 / 111_320, 77.2)],
     }),
-    '/api/air-quality/south-africa': snapshot(),
   });
   assert.equal(await layer.update(), true);
   await airQualitySettled(layer);
@@ -238,7 +237,6 @@ test('unverified India readings are unrated and leave the AQI alone', async () =
   const { layer, points } = indiaLayer({
     '/api/air-quality/india': indiaSnapshot([row({ last_update: recent() })]),
     '/api/air-quality/openaq': snapshot(),
-    '/api/air-quality/south-africa': snapshot(),
   });
   assert.equal(layer.getParams().view, 'aqi');
   await layer.update();
@@ -266,7 +264,6 @@ test('a rejected data.gov.in key is reported as a key problem', async () => {
     '/api/air-quality/india': () =>
       Response.json({ error: 'key_rejected' }, { status: 403 }),
     '/api/air-quality/openaq': snapshot(),
-    '/api/air-quality/south-africa': snapshot(),
   });
   await layer.update();
   const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
@@ -282,7 +279,6 @@ test('without a data.gov.in key India asks for it and the others still draw', as
     '/api/air-quality/openaq': snapshot({
       readings: [openAqCopy(28.6, 77.2)],
     }),
-    '/api/air-quality/south-africa': snapshot(),
   });
   assert.equal(await layer.update(), true);
   const india = layer.getProviderStates().find((state) => state.id === 'cpcb');
@@ -370,10 +366,20 @@ test('an already aborted India request does not fetch', async () => {
  * Default provider definitions with a hand-driven snapshot per provider:
  * rows, `'hold'`, or a function of the request returning either.
  */
+/** A network publishing its own monitors, beside the default providers. */
+const NATIONAL = {
+  id: 'national',
+  title: 'National',
+  label: 'Air quality · National',
+  network: 'NATIONAL',
+  direct: true,
+  parameters: ['PM2.5', 'PM10', 'NO2', 'O3', 'SO2', 'CO'],
+};
+
 function heldLayer(answers) {
   const pending = new Map();
   const source = {
-    definitions: createAirQualitySource().definitions,
+    definitions: [NATIONAL, ...createAirQualitySource().definitions],
     getSnapshot: (request) => {
       const { provider } = request;
       const answer =
@@ -433,12 +439,12 @@ const indiaRows = () =>
     { records: [row({ last_update: recent() })] },
     { now: Date.now() },
   ).readings;
-/** A South African station's PM2.5, rated. */
-const southAfricaRows = () => [
+/** A national network's station PM2.5, rated. */
+const nationalRows = () => [
   {
     ...indiaRows()[0],
-    id: 'saaqis:test-station:PM2.5',
-    provider: 'saaqis',
+    id: 'national:test-station:PM2.5',
+    provider: 'national',
     rated: undefined,
   },
 ];
@@ -448,14 +454,14 @@ const pm25Only = (rows) => (request) =>
 
 test('switching view clears old markers and a late answer for the old view cannot replace India', async () => {
   const { layer, release } = heldLayer({
-    saaqis: (request) => (request.mode === 'aqi' ? 'hold' : []),
+    national: (request) => (request.mode === 'aqi' ? 'hold' : []),
     cpcb: pm25Only(indiaRows()),
   });
   layer.enable();
   const pending = layer.update();
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
-  release('saaqis', southAfricaRows());
+  release('national', nationalRows());
   await pending;
   assert.deepEqual(
     layer.getAnalystRecords().map((record) => record.provider),
@@ -469,7 +475,7 @@ test('switching view clears old markers and a late answer for the old view canno
 test('a late India response after the view changes is dropped', async () => {
   const { layer, release } = heldLayer({
     cpcb: (request) => (request.parameter === 'PM2.5' ? 'hold' : []),
-    saaqis: (request) => (request.mode === 'aqi' ? southAfricaRows() : []),
+    national: (request) => (request.mode === 'aqi' ? nationalRows() : []),
   });
   layer.setParams({ view: 'PM2.5' });
   layer.enable();
@@ -482,7 +488,7 @@ test('a late India response after the view changes is dropped', async () => {
   assert.equal(layer.getStats().count, 1);
   assert.deepEqual(
     layer.getAnalystRecords().map((record) => record.provider),
-    ['saaqis'],
+    ['national'],
   );
   assert.equal(layer.getRowControls().legend.length, 6);
   layer.destroy();

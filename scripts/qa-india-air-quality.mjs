@@ -4,8 +4,7 @@
  * empty (the key chip must exist):
  * node scripts/qa-india-air-quality.mjs --url http://localhost:4173
  * Synthetic observations exercise presentation, not live CPCB availability.
- * The other station providers answer empty snapshots, so India is alone
- * (South Africa as a switched-on network: the server needs no SAAQIS_ENABLED).
+ * OpenAQ answers an empty snapshot, so India is alone.
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
@@ -34,10 +33,7 @@ try {
   await page.setRequestInterception(true);
   page.on('request', (request) => {
     const path = new URL(request.url()).pathname;
-    if (
-      path === '/api/air-quality/openaq' ||
-      path === '/api/air-quality/south-africa'
-    )
+    if (path === '/api/air-quality/openaq')
       return void request.respond({
         status: 200,
         contentType: 'application/json',

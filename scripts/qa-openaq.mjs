@@ -1,8 +1,6 @@
 /** Real-app OpenAQ gate. Runs with explicit synthetic data; never writes keys.
  * Start the dev server with OPENAQ_API_KEY and DATA_GOV_IN_API_KEY empty, then
  * point QA_BASE_URL at it: QA_BASE_URL=<the dev server> node scripts/qa-openaq.mjs
- * South Africa's route is answered here as a switched-on, empty network, so the
- * server needs no SAAQIS_ENABLED.
  */
 import assert from 'node:assert/strict';
 import puppeteer from 'puppeteer';
@@ -72,34 +70,9 @@ try {
   const requestedKinds = [];
   const requestedViews = [];
   await cdp.send('Fetch.enable', {
-    patterns: [
-      { urlPattern: '*/api/air-quality/openaq*' },
-      { urlPattern: '*/api/air-quality/south-africa*' },
-    ],
+    patterns: [{ urlPattern: '*/api/air-quality/openaq*' }],
   });
   cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
-    // South Africa's source answers empty, so only the fixtures are drawn.
-    if (new URL(request.url).pathname.endsWith('/south-africa')) {
-      await cdp
-        .send('Fetch.fulfillRequest', {
-          requestId,
-          responseCode: 200,
-          responseHeaders: [
-            { name: 'Content-Type', value: 'application/json' },
-          ],
-          body: Buffer.from(
-            JSON.stringify({
-              schemaVersion: 1,
-              stations: [],
-              readings: [],
-              fetchedAt: Date.now(),
-              stale: false,
-            }),
-          ).toString('base64'),
-        })
-        .catch(() => {});
-      return;
-    }
     const query = new URL(request.url).searchParams;
     const kind = query.get('mode') === 'aqi' ? 'aqi' : query.get('parameter');
     requestedKinds.push(kind);

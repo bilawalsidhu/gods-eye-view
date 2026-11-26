@@ -263,10 +263,6 @@ export const DATA_CREDITS = [
     html: 'Air-quality observations: <a href="https://openaq.org/" target="_blank" rel="noopener">OpenAQ</a> and originating networks. The originating network and its licence are named in each station’s details.',
   },
   {
-    key: 'saaqis',
-    html: 'South African air quality: <a href="https://saaqis.environment.gov.za/" target="_blank" rel="noopener">SAAQIS</a> and originating monitoring networks. Provisional observations.',
-  },
-  {
     key: 'cpcb-ogd',
     html:
       'Indian air-quality observations: Central Pollution Control Board, Real time Air Quality Index, via ' +

@@ -1,16 +1,15 @@
 /**
  * qa-air-quality.mjs — headless proof for the Air quality layer.
  *
- * Checks what unit tests cannot, in the real app with no provider keys and
- * South Africa off (the stand-alone default): the layer turns on, its Layers
+ * Checks what unit tests cannot, in the real app with no provider keys (the
+ * stand-alone default): the layer turns on, its Layers
  * row is not UNAVAILABLE, says KEY REQUIRED and names the keys it needs
  * (OpenAQ's first), and the Weather card offers the US AQI as its one index
  * (its tile across the row), six pollutant tiles, the US AQI ramp and a line
  * for each key to add. No index of a network's own (Canada's AQHI is retired)
  * is offered anywhere. The script answers the air-quality routes itself
- * (/api/air-quality/openaq and /india: 428, no key; /south-africa: not
- * configured), so it gives the same answers whatever keys or SAAQIS_ENABLED
- * the server has, and reads nothing upstream.
+ * (/api/air-quality/openaq and /india: 428, no key), so it gives the same
+ * answers whatever keys the server has, and reads nothing upstream.
  *
  * The model field a host may give the layer is checked against a small cut of
  * baked grids (src/layers/airQuality/fixtures/field: a 10° box over northern
@@ -73,23 +72,18 @@ async function main() {
     });
     page.on('pageerror', (e) => consoleErrors.push(String(e).slice(0, 160)));
     // The model field: the fixture's grids, its run moved to now. The
-    // station routes: a stand-alone server with no keys and South Africa off.
+    // station routes: a stand-alone server with no keys.
     const cdp = await page.createCDPSession();
     await cdp.send('Fetch.enable', {
       patterns: [
         { urlPattern: '*/api/air-quality/field/*' },
         { urlPattern: '*/api/air-quality/openaq*' },
         { urlPattern: '*/api/air-quality/india*' },
-        { urlPattern: '*/api/air-quality/south-africa*' },
       ],
     });
     const STATION_ROUTES = Object.freeze({
       '/api/air-quality/openaq': [428, { error: 'no_key' }],
       '/api/air-quality/india': [428, { error: 'no_key' }],
-      '/api/air-quality/south-africa': [
-        200,
-        { unavailable: true, code: 'not_configured' },
-      ],
     });
     cdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
       const path = new URL(request.url).pathname;
@@ -200,8 +194,7 @@ async function main() {
       keyless.settled === true &&
       keyless.stats?.error === null &&
       keyless.stats?.keyRequired === true &&
-      keyless.stats?.loadingLabel === 'KEY REQUIRED' &&
-      !/SAAQIS/.test(keyless.rowSource);
+      keyless.stats?.loadingLabel === 'KEY REQUIRED';
     record(
       'keyless, the layer turns on and reports its keys as required, not as an error',
       turnedOn,
@@ -230,7 +223,6 @@ async function main() {
       toggle !== null &&
       toggle.state !== 'unavailable' &&
       /KEY REQUIRED/.test(toggle.meta) &&
-      !/SAAQIS/.test(toggle.meta) &&
       /OPENAQ_API_KEY.*DATA_GOV_IN_API_KEY/.test(toggle.title) &&
       JSON.stringify(keyless.requiresKeyId) ===
         JSON.stringify(['openaq', 'data-gov-in']);

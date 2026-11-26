@@ -543,12 +543,12 @@ test('a wrapping grid with a float32-derived step is one whole row of the globe'
 // ── the layer with a field ─────────────────────────────────────────────────
 
 const ALL = ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'];
-const SAAQIS = {
-  id: 'saaqis',
-  title: 'South Africa',
-  label: 'Air quality · South Africa',
-  network: 'SAAQIS',
-  coverage: 'South Africa',
+const NATIONAL = {
+  id: 'national',
+  title: 'National',
+  label: 'Air quality · National',
+  network: 'NATIONAL',
+  coverage: 'National',
   observation: true,
   direct: true,
   parameters: ALL,
@@ -557,8 +557,8 @@ const CAPE_TOWN = { lat: -33.92, lon: 18.42 };
 const VALUES = { 'PM2.5': 12, PM10: 30, O3: 80, NO2: 20, SO2: 5, CO: 0.4 };
 const capeTown = () =>
   Object.entries(VALUES).map(([parameter, value]) => ({
-    id: `saaqis:cape-town:${parameter}`,
-    provider: 'saaqis',
+    id: `national:cape-town:${parameter}`,
+    provider: 'national',
     stationId: 'cape-town',
     name: 'Cape Town',
     zone: 'Western Cape',
@@ -687,7 +687,7 @@ function fakeDocument(t) {
 }
 
 /**
- * A layer over Cape Town with a SAAQIS station there and `fieldSource`, a
+ * A layer over Cape Town with a national network's station there and `fieldSource`, a
  * globe whose imagery is recorded (`imagery`, `events`), a camera whose
  * height `moveTo` changes.
  */
@@ -695,7 +695,7 @@ function fieldHarness({
   fieldSource = null,
   clock = createWorldClock(),
   renderer = {},
-  definitions = [SAAQIS],
+  definitions = [NATIONAL],
   frames = null,
   registerCredit,
 } = {}) {
@@ -889,7 +889,7 @@ test('without a field the layer registers nothing', async () => {
     // The card is the stations' card: the nearest station, no model line.
     const controls = layer.getRowControls();
     assert.equal(controls.sublists[0].subtitle, 'nearest station · Cape Town');
-    assert.match(controls.summary.detail, /^SAAQIS · updated /);
+    assert.match(controls.summary.detail, /^NATIONAL · updated /);
     assert.equal(
       controls.summary.lines.some((line) => /Model field/.test(line.text)),
       false,
@@ -916,7 +916,7 @@ test('away from now stations are hidden', async () => {
   await settle();
   assert.equal(points().show, false);
   // A station selected away from now does not head the card.
-  layer.setParams({ station: 'saaqis:cape-town:aqi' });
+  layer.setParams({ station: 'national:cape-town:aqi' });
   clock.seek(host.run + 24 * HOUR);
   await settle();
   controls = layer.getRowControls();
@@ -967,7 +967,7 @@ test('with a field the tiles read the model at the view centre, and the time lin
   // A selected station at now: its own measured values.
   clock.goLive();
   await settle();
-  layer.setParams({ station: 'saaqis:cape-town:aqi' });
+  layer.setParams({ station: 'national:cape-town:aqi' });
   controls = layer.getRowControls();
   assert.equal(controls.sublists[0].subtitle, 'calculated from the station');
   assert.equal(tileOf(controls, 'pollutants', 'PM2.5').value, '12');

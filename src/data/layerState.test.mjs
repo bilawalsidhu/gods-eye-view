@@ -2976,7 +2976,7 @@ test('the plain token 4 opens the layer on the US AQI', () => {
     normalizeLayerState({
       enabledLayerIds: ['air-quality'],
       options: {
-        'air-quality': { provider: 'saaqis', parameter: 'CO2', view: 'CO2' },
+        'air-quality': { provider: 'national', parameter: 'CO2', view: 'CO2' },
       },
     }).options['air-quality'],
     { view: 'aqi' },

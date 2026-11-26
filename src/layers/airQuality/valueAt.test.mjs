@@ -7,11 +7,11 @@ import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 
 const ALL = ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'];
 const DEFINITION = {
-  id: 'saaqis',
-  title: 'saaqis',
-  label: 'Air quality · saaqis',
-  network: 'SAAQIS',
-  coverage: 'saaqis coverage',
+  id: 'national',
+  title: 'national',
+  label: 'Air quality · national',
+  network: 'NATIONAL',
+  coverage: 'national coverage',
   observation: true,
   direct: true,
   parameters: ALL,
@@ -22,8 +22,8 @@ const NOW = 1_700_000_000_000;
 
 /** One pollutant reading at a station, as a provider answers it. */
 const pollutant = (place, parameter, value, extra = {}) => ({
-  id: `saaqis:${place.name.toLowerCase().replace(' ', '-')}:${parameter}`,
-  provider: 'saaqis',
+  id: `national:${place.name.toLowerCase().replace(' ', '-')}:${parameter}`,
+  provider: 'national',
   stationId: place.name.toLowerCase().replace(' ', '-'),
   name: place.name,
   zone: 'Region',

@@ -687,12 +687,15 @@ test("a result's title is its header's tooltip", () => {
         ],
       },
     ]);
-  paint('SAAQIS · Licence: CC BY 4.0 (City of Cape Town)');
+  paint('NATIONAL · Licence: CC BY 4.0 (City of Cape Town)');
   const label = f.container.querySelector(
     '.rail-card-result-header .panel-title',
   );
   assert.equal(label.textContent, 'Cape Town');
-  assert.equal(label.title, 'SAAQIS · Licence: CC BY 4.0 (City of Cape Town)');
+  assert.equal(
+    label.title,
+    'NATIONAL · Licence: CC BY 4.0 (City of Cape Town)',
+  );
   paint(undefined);
   assert.equal(label.getAttribute('title'), null);
   view.destroy();

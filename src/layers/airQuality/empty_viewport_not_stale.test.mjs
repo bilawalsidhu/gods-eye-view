@@ -79,7 +79,7 @@ const CAPE_TOWN_VALUES = {
 function cardHarness(
   answers,
   {
-    definitions = [OPENAQ, definition('saaqis')],
+    definitions = [OPENAQ, definition('national')],
     coverage = {},
     view = null,
   } = {},

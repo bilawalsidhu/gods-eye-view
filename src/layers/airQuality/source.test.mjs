@@ -8,7 +8,7 @@ test('the portable source composes the station providers; Canada has no AQHI sou
   assert.equal(typeof portable.createAirQualitySnapshotSource, 'function');
   assert.deepEqual(
     portable.createDefaultAirQualityProviders().map((entry) => entry.id),
-    ['saaqis', 'cpcb', 'openaq'],
+    ['cpcb', 'openaq'],
   );
   // Canada's stations come from OpenAQ like every other country's.
   assert.equal('createEcccAirQualitySource' in portable, false);

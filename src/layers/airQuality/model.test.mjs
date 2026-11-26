@@ -99,8 +99,8 @@ test('the overlay cohort is capped and deterministic', () => {
 test('analyst records are JSON-safe and name the provider and scale', () => {
   const record = mapAnalystRecord(
     {
-      id: 'saaqis:1:PM2.5',
-      provider: 'saaqis',
+      id: 'national:1:PM2.5',
+      provider: 'national',
       kind: 'observation',
       parameter: 'PM2.5',
       scale: 'PM2.5',
@@ -114,7 +114,7 @@ test('analyst records are JSON-safe and name the provider and scale', () => {
     0,
   );
   assert.deepEqual(JSON.parse(JSON.stringify(record)), record);
-  assert.equal(record.provider, 'saaqis');
+  assert.equal(record.provider, 'national');
   assert.equal(record.scale, 'PM2.5');
   const empty = mapAnalystRecord(undefined, 7);
   assert.equal(empty.id, 'AIR-0007');
@@ -126,8 +126,8 @@ test('analyst records are JSON-safe and name the provider and scale', () => {
 test("an analyst record gives a pollutant's value in the layer's units, as the card does", () => {
   const observation = (parameter, value, units) =>
     mapAnalystRecord({
-      id: `saaqis:1:${parameter}`,
-      provider: 'saaqis',
+      id: `national:1:${parameter}`,
+      provider: 'national',
       kind: 'observation',
       parameter,
       scale: parameter,

@@ -8,16 +8,16 @@ test('a removed env-file key is unset on restart and a shell key is kept', () =>
   delete globalThis[key];
   try {
     const env = { SHELL_ONLY: 'shell' };
-    let files = { SAAQIS_ENABLED: '1', SHELL_ONLY: 'file' };
+    let files = { FILE_ONLY: '1', SHELL_ONLY: 'file' };
     const read = () => ({ ...files, ...env });
     applyEnvFiles(read, env);
-    assert.deepEqual(env, { SHELL_ONLY: 'shell', SAAQIS_ENABLED: '1' });
+    assert.deepEqual(env, { SHELL_ONLY: 'shell', FILE_ONLY: '1' });
     files = { SHELL_ONLY: 'file' };
     applyEnvFiles(read, env);
     assert.deepEqual(env, { SHELL_ONLY: 'shell' });
-    files = { SAAQIS_ENABLED: '0' };
+    files = { FILE_ONLY: '0' };
     applyEnvFiles(read, env);
-    assert.equal(env.SAAQIS_ENABLED, '0');
+    assert.equal(env.FILE_ONLY, '0');
   } finally {
     if (original === undefined) delete globalThis[key];
     else globalThis[key] = original;

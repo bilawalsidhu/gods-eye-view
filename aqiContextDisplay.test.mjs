@@ -70,8 +70,8 @@ const noKey = () =>
   Object.assign(new Error('Provider API key required'), { code: 'no_key' });
 
 test('Context AQI display', async () => {
-  const layer = harness({ saaqis: [reading('saaqis', 'PM2.5', 400)] }, [
-    def('saaqis'),
+  const layer = harness({ national: [reading('national', 'PM2.5', 400)] }, [
+    def('national'),
   ]);
   await layer.update();
   await flush();

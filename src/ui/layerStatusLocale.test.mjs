@@ -66,7 +66,7 @@ const cases = [
     {
       count: 0,
       error: 'Air quality provider unavailable',
-      source: 'SAAQIS · South Africa',
+      source: 'National network',
       lastUpdate: now,
     },
     'provider unavailable',

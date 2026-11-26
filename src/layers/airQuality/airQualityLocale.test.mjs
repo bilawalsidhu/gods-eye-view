@@ -21,14 +21,15 @@ function inLocale(locale, run) {
   }
 }
 
-/** South Africa's default provider definition. */
-const SAAQIS = createDefaultAirQualityProviders().find(
-  (entry) => entry.id === 'saaqis',
-);
+/** OpenAQ's default provider definition, read as one national answer. */
+const OPENAQ = {
+  ...createDefaultAirQualityProviders().find((entry) => entry.id === 'openaq'),
+  viewDriven: false,
+};
 
 function harness(source) {
   const layer = createAirQualityLayer({
-    source: { definitions: [SAAQIS], ...source },
+    source: { definitions: [OPENAQ], ...source },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
   const viewer = {};
@@ -39,8 +40,8 @@ function harness(source) {
 }
 
 const reading = {
-  id: 'saaqis:A:PM2.5',
-  provider: 'saaqis',
+  id: 'openaq:A:PM2.5',
+  provider: 'openaq',
   stationId: 'A',
   name: 'Toronto',
   zone: 'ont',
@@ -71,7 +72,7 @@ for (const locale of ['es', 'ru']) {
   test(`${locale}: the Weather card of Air quality is translated`, async () => {
     const layer = harness({ getSnapshot: async () => [reading] });
     await layer.update();
-    layer.setParams({ station: 'saaqis:A:aqi' });
+    layer.setParams({ station: 'openaq:A:aqi' });
     const controls = inLocale(locale, () => layer.getRowControls());
     const english = [
       ...controls.summary.toggles.map((t) => t.label),
@@ -85,7 +86,7 @@ for (const locale of ['es', 'ru']) {
       ...controls.legend.map((entry) => entry.label),
       ...controls.list.items.map((item) => item.text),
     ].filter((text) =>
-      /\b(Air quality|South Africa|stations?|STATIONS|HIGHEST IN VIEW|Good|Fair|Moderate|Poor|Unhealthy|Hazardous)\b/.test(
+      /\b(Air quality|Worldwide|stations?|STATIONS|HIGHEST IN VIEW|Good|Fair|Moderate|Poor|Unhealthy|Hazardous)\b/.test(
         text,
       ),
     );
@@ -101,7 +102,7 @@ for (const locale of ['es', 'ru']) {
         stats: {
           count: 0,
           error: 'Air quality request failed',
-          source: 'SAAQIS · South Africa',
+          source: 'OpenAQ · Worldwide',
           lastUpdate: null,
         },
       }),
@@ -123,11 +124,11 @@ for (const locale of ['en', 'es', 'ru']) {
       () =>
         layer
           .getRowControls()
-          .summary.lines.find((item) => item.id === 'provider-saaqis').text,
+          .summary.lines.find((item) => item.id === 'provider-openaq').text,
     );
     assert.equal(
       line,
-      inLocale(locale, () => t('{network} unavailable', { network: 'SAAQIS' })),
+      inLocale(locale, () => t('{network} unavailable', { network: 'OpenAQ' })),
     );
     // The failure itself stays the layer's error, for the Layers row.
     assert.equal(layer.getStats().error, 'Air quality provider unavailable');
@@ -145,8 +146,6 @@ const eeaRussian = [
 ];
 const russianScales = {
   openaq: { view: 'PM2.5', labels: eeaRussian },
-  // SAAQIS stations are rated on the EEA bands too.
-  saaqis: { view: 'PM2.5', labels: eeaRussian },
   'US AQI': {
     provider: 'openaq',
     view: 'aqi',

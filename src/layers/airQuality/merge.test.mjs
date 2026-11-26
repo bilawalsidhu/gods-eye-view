@@ -23,13 +23,13 @@ test('a direct reading replaces an OpenAQ copy within 150 m', () => {
       readings: [reading('openaq', '1', -33.9249, 18.4241)],
     },
     {
-      provider: 'saaqis',
+      provider: 'national',
       direct: true,
-      readings: [reading('saaqis', '1', -33.925, 18.4242)],
+      readings: [reading('national', '1', -33.925, 18.4242)],
     },
   ]);
   assert.equal(merged.length, 1);
-  assert.equal(merged[0].provider, 'saaqis');
+  assert.equal(merged[0].provider, 'national');
 });
 
 test('a rated copy beats an unrated direct reading, and then the newer one loses to direct', () => {
@@ -81,9 +81,9 @@ test('the merge ranks on the view it is given', () => {
   const kept = mergeObservations(
     [
       {
-        provider: 'saaqis',
+        provider: 'national',
         direct: true,
-        readings: [at('saaqis', { aqi: null })],
+        readings: [at('national', { aqi: null })],
       },
       {
         provider: 'openaq',
@@ -107,9 +107,9 @@ test('readings 200 m apart both stay', () => {
       readings: [reading('openaq', '1', -33.9249, 18.4241)],
     },
     {
-      provider: 'saaqis',
+      provider: 'national',
       direct: true,
-      readings: [reading('saaqis', '1', -33.9249 + 0.0018, 18.4241)],
+      readings: [reading('national', '1', -33.9249 + 0.0018, 18.4241)],
     },
   ]);
   assert.equal(merged.length, 2);
@@ -118,10 +118,10 @@ test('readings 200 m apart both stay', () => {
 test('ties keep the newer reading', () => {
   const merged = mergeObservations([
     {
-      provider: 'saaqis',
+      provider: 'national',
       direct: true,
       readings: [
-        reading('saaqis', '1', -33.925, 18.4242, {
+        reading('national', '1', -33.925, 18.4242, {
           observedMs: Date.parse('2026-11-23T10:00:00Z'),
         }),
       ],
@@ -163,14 +163,14 @@ test('neighbouring grid cells are checked, and the dedupe distance is an option'
       readings: [reading('openaq', '1', 10.0399, 20.0399)],
     },
     {
-      provider: 'saaqis',
+      provider: 'national',
       direct: true,
-      readings: [reading('saaqis', '1', 10.0401, 20.0401)],
+      readings: [reading('national', '1', 10.0401, 20.0401)],
     },
   ];
   assert.deepEqual(
     mergeObservations(lists).map((row) => row.provider),
-    ['saaqis'],
+    ['national'],
   );
   assert.equal(mergeObservations(lists, { dedupeM: 10 }).length, 2);
 });

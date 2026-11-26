@@ -33,18 +33,18 @@ const gridsOf = (region, valueAt) =>
 const settle = async () => {
   for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
 };
-const SAAQIS = {
-  id: 'saaqis',
-  title: 'South Africa',
-  label: 'Air quality · South Africa',
-  network: 'SAAQIS',
+const NATIONAL = {
+  id: 'national',
+  title: 'National',
+  label: 'Air quality · National',
+  network: 'NATIONAL',
   direct: true,
   parameters: ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'],
 };
 const capeTown = () => [
   {
-    id: 'saaqis:cape-town:PM2.5',
-    provider: 'saaqis',
+    id: 'national:cape-town:PM2.5',
+    provider: 'national',
     stationId: 'cape-town',
     name: 'Cape Town',
     zone: 'WC',
@@ -64,7 +64,7 @@ const capeTown = () => [
 function harness({
   fieldSource = null,
   clock = createWorldClock(),
-  definitions = [SAAQIS],
+  definitions = [NATIONAL],
   getSnapshot = async () => capeTown(),
 } = {}) {
   const viewer = { canvas: { clientWidth: 800, clientHeight: 600 } };
@@ -130,15 +130,15 @@ const MANIFEST = {
 };
 
 test('a malformed row from one provider does not stop another being drawn', async () => {
-  const OTHER = { ...SAAQIS, id: 'other', network: 'Other', direct: false };
+  const OTHER = { ...NATIONAL, id: 'other', network: 'Other', direct: false };
   const h = harness({
-    definitions: [SAAQIS, OTHER],
+    definitions: [NATIONAL, OTHER],
     getSnapshot: async ({ provider }) =>
-      provider === 'saaqis'
+      provider === 'national'
         ? [
             {
               id: 'bad',
-              provider: 'saaqis',
+              provider: 'national',
               stationId: 'bad',
               name: 'Bad',
               lat: -33,

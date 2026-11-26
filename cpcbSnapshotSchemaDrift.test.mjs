@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cpcbProxy } from './server/providers/cpcb.js';
 import { openAqProxy } from './server/providers/openAq.js';
-import { createSaAcquisition } from './server/providers/southAfricaAirQuality.js';
 import { normalizeCpcbRecords } from './src/layers/airQuality/cpcb.js';
 
 const NOW = Date.parse('2026-10-18T06:30:00Z');

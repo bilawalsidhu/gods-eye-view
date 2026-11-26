@@ -15,8 +15,6 @@ test('the public reference air-quality source answers an unqualified getSnapshot
   });
   globalThis.fetch = async (url) => {
     const u = String(url);
-    if (u.includes('south-africa'))
-      return json({ unavailable: true, code: 'not_configured' });
     if (u.includes('india'))
       return json({
         schemaVersion: 1,
@@ -33,7 +31,6 @@ test('the public reference air-quality source answers an unqualified getSnapshot
     return json({}, 428);
   };
   const source = createReferenceSources()['air-quality'];
-  // Now: rejects with code 'not_configured' (SAAQIS, the first registered provider).
   const readings = await source.getSnapshot({});
   assert.equal(readings.length, 1);
   assert.equal((await source.getSnapshot({ provider: 'cpcb' })).length, 1);

@@ -1,5 +1,4 @@
 import { msg } from '../../i18n/marker.js';
-import { SA_POLLUTANTS } from './southAfrica.js';
 import { interpretHourly } from './interpretation.js';
 import { OPENAQ_POLLUTANTS } from './openAq.js';
 import { CPCB_POLLUTANTS } from './cpcb.js';
@@ -197,24 +196,6 @@ export function createAirQualitySnapshotSource({
  */
 export function createDefaultAirQualityProviders({ fetchImpl, now } = {}) {
   return [
-    {
-      id: 'saaqis',
-      title: msg('South Africa'),
-      label: msg('Air quality · South Africa'),
-      network: 'SAAQIS',
-      sourceLabel: 'SAAQIS · South Africa',
-      direct: true,
-      parameters: SA_POLLUTANTS,
-      source: createAirQualitySnapshotSource({
-        endpoint: '/api/air-quality/south-africa',
-        keyed: false,
-        hourly: true,
-        // One layer refresh: a view switch does not ask again.
-        reuseMs: 60_000,
-        fetchImpl,
-        now,
-      }),
-    },
     {
       id: 'cpcb',
       publishedTimes: true,

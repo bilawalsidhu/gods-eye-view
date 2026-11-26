@@ -524,7 +524,7 @@ function multiProvider(answers) {
   const { layer, draw } = harness({
     definitions: [
       definition('openaq', { direct: false, requiresKeyId: 'openaq' }),
-      definition('saaqis'),
+      definition('national'),
       definition('regional', { parameters: ['PM2.5'] }),
     ],
     getSnapshot: (request) => {
@@ -555,23 +555,23 @@ test('every observation provider is asked in parallel and drawn as one de-duplic
       observed('openaq', 'copy', -33.9249, 18.4241),
       observed('openaq', 'paris', 48.85, 2.35),
     ],
-    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    national: [observed('national', 'cape-town', -33.925, 18.4242)],
     regional: [observed('regional', 'durban', -29.86, 31.03)],
   });
   assert.equal(layer.getParams().view, 'aqi');
   const pending = layer.update();
   assert.deepEqual(
     calls.map((call) => call.provider),
-    ['openaq', 'saaqis', 'regional'],
+    ['openaq', 'national', 'regional'],
     'all asked before any answers',
   );
   settle();
   assert.equal(await pending, true);
   // The AQI view draws one reading per station.
   assert.deepEqual([...drawn('points').items.keys()].sort(), [
+    'air-quality:national:cape-town:aqi',
     'air-quality:openaq:paris:aqi',
     'air-quality:regional:durban:aqi',
-    'air-quality:saaqis:cape-town:aqi',
   ]);
   assert.equal(layer.getStats().count, 3);
   // PM2.5 12 µg/m³ is a US AQI of 56, Moderate, on its own scale.
@@ -590,7 +590,7 @@ test('a provider without its key, or failing, does not blank the others', async 
     openaq: Object.assign(new Error('Provider API key required'), {
       code: 'no_key',
     }),
-    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    national: [observed('national', 'cape-town', -33.925, 18.4242)],
     regional: new Error('Air quality provider unavailable'),
   });
   const pending = layer.update();
@@ -603,8 +603,8 @@ test('a provider without its key, or failing, does not blank the others', async 
   );
   assert.equal(states.openaq.status, 'no-key');
   assert.match(states.openaq.error, /Provider Settings/);
-  assert.equal(states.saaqis.status, 'ok');
-  assert.equal(states.saaqis.count, 1);
+  assert.equal(states.national.status, 'ok');
+  assert.equal(states.national.count, 1);
   assert.equal(states.regional.status, 'failed');
   assert.equal(layer.getRowControls().summary.status, '1 station');
 });
@@ -613,7 +613,7 @@ test('when every provider fails the layer reports the error', async () => {
   const failure = new Error('Air quality provider unavailable');
   const { layer, settle } = multiProvider({
     openaq: failure,
-    saaqis: failure,
+    national: failure,
     regional: failure,
   });
   const pending = layer.update();
@@ -626,7 +626,7 @@ test('when every provider fails the layer reports the error', async () => {
 test('a pollutant view asks only the networks measuring it', async () => {
   const { layer, calls, settle, drawn } = multiProvider({
     openaq: [observed('openaq', 'paris', 48.85, 2.35)],
-    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    national: [observed('national', 'cape-town', -33.925, 18.4242)],
   });
 
   layer.setParams({ view: 'NO2' });
@@ -636,7 +636,7 @@ test('a pollutant view asks only the networks measuring it', async () => {
     calls.map((call) => [call.provider, call.parameter]),
     [
       ['openaq', 'NO2'],
-      ['saaqis', 'NO2'],
+      ['national', 'NO2'],
     ],
   );
   assert.equal(drawn('points').items.size, 2);
@@ -647,7 +647,7 @@ test('a pollutant view asks only the networks measuring it', async () => {
 
 test('the stations switch hides and shows the station markers', async () => {
   const { layer, settle, drawn } = multiProvider({
-    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    national: [observed('national', 'cape-town', -33.925, 18.4242)],
   });
   const pending = layer.update();
   settle();
@@ -661,7 +661,7 @@ test('the stations switch hides and shows the station markers', async () => {
 
 test('a scene shot keeps the stations switch; saved and shared params keep only the view', async () => {
   const { layer, settle, drawn } = multiProvider({
-    saaqis: [observed('saaqis', 'cape-town', -33.925, 18.4242)],
+    national: [observed('national', 'cape-town', -33.925, 18.4242)],
   });
   const pending = layer.update();
   settle();
@@ -680,8 +680,8 @@ test('a scene shot keeps the stations switch; saved and shared params keep only 
 
 const pm25 = (id, lat, lon, concentration) =>
   reading(id, concentration, {
-    id: `saaqis:${id}`,
-    provider: 'saaqis',
+    id: `national:${id}`,
+    provider: 'national',
     scale: 'PM2.5',
     parameter: 'PM2.5',
     kind: 'observation',
@@ -733,7 +733,7 @@ async function zoomHarness(
   });
   const layer = createAirQualityLayer({
     source: {
-      definitions: [definition('saaqis', { parameters: ['PM2.5'] })],
+      definitions: [definition('national', { parameters: ['PM2.5'] })],
       getSnapshot: async () => rows,
     },
     overlayHost: {
@@ -807,16 +807,16 @@ test('a dense view draws groups, a close view draws singles', async () => {
   // The mean, 35 µg/m³, is Moderate on the EEA hourly bands; no member is.
   assert.equal(bubble.color, '#f2d45c');
   assert.ok(Math.abs(bubble.pos.lat - 48.85) < 1e-9);
-  const single = points().items.get('air-quality:saaqis:cape-town');
+  const single = points().items.get('air-quality:national:cape-town');
   assert.equal(single.pixelSize, 7);
   assert.equal(single.meta.name, 'cape-town');
   // Close in, the camera's move draws every station on its own.
   zoomTo(0.0001);
   assert.deepEqual([...points().items.keys()].sort(), [
-    'air-quality:saaqis:cape-town',
-    'air-quality:saaqis:paris-1',
-    'air-quality:saaqis:paris-2',
-    'air-quality:saaqis:paris-3',
+    'air-quality:national:cape-town',
+    'air-quality:national:paris-1',
+    'air-quality:national:paris-2',
+    'air-quality:national:paris-3',
   ]);
   assert.ok([...points().items.values()].every((item) => item.pixelSize === 7));
   zoomTo(0.5);
@@ -837,8 +837,8 @@ test('unrated stations group in the neutral colour; the AQI view colours by the 
   assert.equal(grey.bubbles()[0].color, '#8cb4ce');
   // PM2.5 12 µg/m³ is a US AQI of 56 at each station: Moderate.
   const aqi = await zoomHarness([
-    observed('saaqis', 'a', 48.85, 2.35),
-    observed('saaqis', 'b', 48.9, 2.4),
+    observed('national', 'a', 48.85, 2.35),
+    observed('national', 'b', 48.9, 2.4),
   ]);
   const [aqiBubble] = aqi.bubbles();
   assert.equal(aqiBubble.pixelSize, Math.round(12 + 6 * Math.log10(2)));
@@ -849,11 +849,11 @@ test('only single and selected stations keep their labels', async () => {
   const { layer, labels, zoomTo } = await zoomHarness(parisAndCapeTown(), {
     view: 'PM2.5',
   });
-  assert.deepEqual(labels.at(-1), ['saaqis:cape-town']);
-  layer.setParams({ station: 'saaqis:paris-2' });
+  assert.deepEqual(labels.at(-1), ['national:cape-town']);
+  layer.setParams({ station: 'national:paris-2' });
   assert.deepEqual(labels.at(-1).sort(), [
-    'saaqis:cape-town',
-    'saaqis:paris-2',
+    'national:cape-town',
+    'national:paris-2',
   ]);
   zoomTo(0.0001);
   assert.equal(labels.at(-1).length, 4);
@@ -881,12 +881,12 @@ test('a group click keeps a station already selected', async () => {
     parisAndCapeTown(),
     { view: 'PM2.5' },
   );
-  layer.setParams({ station: 'saaqis:cape-town' });
+  layer.setParams({ station: 'national:cape-town' });
   click(bubbles()[0].id);
   assert.equal(flights.length, 1);
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:cape-town',
+    'national:cape-town',
   );
 });
 
@@ -900,7 +900,7 @@ test('stations that cannot come apart: a click selects the higher and the camera
   assert.equal(flights.length, 0);
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:high',
+    'national:high',
   );
 });
 
@@ -916,7 +916,7 @@ test('a group larger than the view is not flown out to', async () => {
   assert.equal(flights.length, 0);
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:paris-2',
+    'national:paris-2',
   );
 });
 
@@ -925,23 +925,29 @@ test('a click on a station selects it, drawn large and never grouped', async () 
     parisAndCapeTown(),
     { view: 'PM2.5' },
   );
-  click('air-quality:saaqis:cape-town');
+  click('air-quality:national:cape-town');
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:cape-town',
+    'national:cape-town',
   );
   assert.equal(flights.length, 0);
-  const selected = points().items.get('air-quality:saaqis:cape-town');
+  const selected = points().items.get('air-quality:national:cape-town');
   assert.equal(selected.pixelSize, 13);
   // Not a group's white ring: the UI accent.
   assert.equal(selected.outlineColor, '#36dcff');
   assert.equal(selected.outlineWidth, 2);
   // A Paris station selected close in stays apart from its neighbours when
   // the camera goes back out.
-  layer.setParams({ station: 'saaqis:paris-2' });
+  layer.setParams({ station: 'national:paris-2' });
   zoomTo(0.5);
-  assert.equal(points().items.get('air-quality:saaqis:paris-2').pixelSize, 13);
-  assert.equal(points().items.get('air-quality:saaqis:cape-town').pixelSize, 7);
+  assert.equal(
+    points().items.get('air-quality:national:paris-2').pixelSize,
+    13,
+  );
+  assert.equal(
+    points().items.get('air-quality:national:cape-town').pixelSize,
+    7,
+  );
   assert.equal(bubbles()[0].pixelSize, Math.round(12 + 6 * Math.log10(2)));
   // Empty map lets go of it.
   click(null);
@@ -957,7 +963,7 @@ test('a click a few pixels off a station still selects it', async () => {
   click(null, { screenPosition: { x: 403, y: 300 } });
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:paris-1',
+    'national:paris-1',
   );
   // 30 px away is open map.
   click(null, { screenPosition: { x: 430, y: 300 } });
@@ -965,7 +971,7 @@ test('a click a few pixels off a station still selects it', async () => {
 });
 
 test('a click is ignored while disabled, with stations hidden, under a card, or with the pointer held', async () => {
-  const id = 'air-quality:saaqis:cape-town';
+  const id = 'air-quality:national:cape-town';
   const card = { over: false };
   const pointer = { free: true, isPointerFree: () => pointer.free };
   const { layer, click } = await zoomHarness(parisAndCapeTown(), {
@@ -998,7 +1004,7 @@ test('a click is ignored while disabled, with stations hidden, under a card, or 
   click(id);
   assert.equal(
     layer.getRowControls().summary.result?.key ?? null,
-    'saaqis:cape-town',
+    'national:cape-town',
   );
 });
 
@@ -1016,7 +1022,7 @@ test('stations and groups are air quality picks: other layers leave them alone, 
     view: 'PM2.5',
     picking,
   });
-  const station = 'air-quality:saaqis:cape-town';
+  const station = 'air-quality:national:cape-town';
   const group = bubbles()[0].id;
   assert.equal(picking.isOwnedByOtherLayer('flights', station), true);
   assert.equal(picking.isOwnedByOtherLayer('flights', group), true);
@@ -1041,7 +1047,7 @@ test('stations and groups are air quality picks: other layers leave them alone, 
 
 /** A station reporting PM2.5 at `value` µg/m³, for the AQI view. */
 const aqiSite = (id, lat, lon, value) => ({
-  ...observed('saaqis', id, lat, lon),
+  ...observed('national', id, lat, lon),
   value,
 });
 
@@ -1059,7 +1065,7 @@ test('an index above 500 reads 500+ and adds at most 500 to its group mean', asy
   assert.equal(bubble.pixelSize, Math.round(12 + 6 * Math.log10(11)));
   assert.equal(bubble.color, '#ffff00');
   zoomTo(0.0001);
-  const stuck = points().items.get('air-quality:saaqis:stuck:aqi');
+  const stuck = points().items.get('air-quality:national:stuck:aqi');
   // The computed value stays in the data; what is shown reads 500+.
   assert.equal(stuck.meta.aqi.index, 1842);
   assert.equal(stuck.meta.value, 1842);
@@ -1067,7 +1073,7 @@ test('an index above 500 reads 500+ and adds at most 500 to its group mean', asy
   const [row] = layer.getRowControls().list.items;
   assert.equal(row.text, 'stuck');
   assert.equal(row.lead, '500+');
-  layer.setParams({ station: 'saaqis:stuck:aqi' });
+  layer.setParams({ station: 'national:stuck:aqi' });
   const index = layer
     .getRowControls()
     .sublists.find((group) => group.id === 'index')

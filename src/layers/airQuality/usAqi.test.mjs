@@ -11,7 +11,11 @@ import {
 } from './usAqi.js';
 import { concentrationFactor, concentrationIn } from './units.js';
 import { interpretHourly } from './interpretation.js';
-import { createAirQualitySource } from './providers.js';
+import {
+  createAirQualitySnapshotSource,
+  createAirQualitySource,
+  createDefaultAirQualityProviders,
+} from './providers.js';
 import { createAirQualityLayer } from './index.js';
 import { normalizeCpcbRecords } from './cpcb.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
@@ -305,17 +309,41 @@ const ogdStamp = (ms) => {
   return `${ist.slice(8, 10)}-${ist.slice(5, 7)}-${ist.slice(0, 4)} ${ist.slice(11, 19)}`;
 };
 
+/**
+ * A network publishing its own monitors, read as one national snapshot from
+ * `/api/air-quality/national`: a fixture beside the default providers.
+ */
+const nationalProvider = (fetchImpl) => ({
+  id: 'national',
+  title: 'National',
+  label: 'Air quality · National',
+  network: 'NATIONAL',
+  direct: true,
+  parameters: ['PM2.5', 'PM10', 'NO2', 'O3', 'SO2', 'CO'],
+  source: createAirQualitySnapshotSource({
+    endpoint: '/api/air-quality/national',
+    keyed: false,
+    hourly: true,
+    reuseMs: 60_000,
+    fetchImpl,
+  }),
+});
+
 function stationLayer(routes) {
   const requests = [];
+  const fetchImpl = async (url) => {
+    requests.push(String(url));
+    const answer = routes[String(url).split('?')[0]];
+    if (!answer) throw new Error(`unexpected request ${url}`);
+    return Response.json(
+      typeof answer === 'function' ? answer(String(url)) : answer,
+    );
+  };
   const source = createAirQualitySource({
-    fetchImpl: async (url) => {
-      requests.push(String(url));
-      const answer = routes[String(url).split('?')[0]];
-      if (!answer) throw new Error(`unexpected request ${url}`);
-      return Response.json(
-        typeof answer === 'function' ? answer(String(url)) : answer,
-      );
-    },
+    providers: [
+      nationalProvider(fetchImpl),
+      ...createDefaultAirQualityProviders({ fetchImpl }),
+    ],
   });
   const viewer = {};
   const { draw } = bindFakeDraw(viewer, {
@@ -360,15 +388,15 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
             ]
           : [],
       ),
-    // SAAQIS keeps one row per pollutant: PM2.5 5 µg/m³ and NO2 10 ppb. A
+    // The national network keeps one row per pollutant: PM2.5 5 µg/m³ and NO2 10 ppb. A
     // network's own index, if a row carried one, is not used or shown.
-    '/api/air-quality/south-africa': snapshotOf([
-      site('saaqis', '2', -25.5, {
+    '/api/air-quality/national': snapshotOf([
+      site('national', '2', -25.5, {
         value: 5,
-        rating: { score: 4, label: 'Moderate', method: 'SAAQIS index' },
+        rating: { score: 4, label: 'Moderate', method: 'NATIONAL index' },
       }),
-      site('saaqis', '2', -25.5, {
-        id: 'saaqis:2:NO2',
+      site('national', '2', -25.5, {
+        id: 'national:2:NO2',
         parameter: 'NO2',
         units: 'ppb',
         value: 10,
@@ -404,9 +432,9 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
   assert.equal(points.get('openaq').meta.aqi.index, 154);
   assert.equal(points.get('openaq').meta.aqi.leading, 'pm25');
   assert.equal(points.get('openaq').color, '#ff0000');
-  // SAAQIS: PM2.5 5 gives 28, NO2 10 ppb gives 9; one station from two rows.
-  assert.equal(points.get('saaqis').meta.aqi.index, 28);
-  assert.equal(points.get('saaqis').color, '#00e400');
+  // The national network: PM2.5 5 gives 28, NO2 10 ppb gives 9; one station from two rows.
+  assert.equal(points.get('national').meta.aqi.index, 28);
+  assert.equal(points.get('national').color, '#00e400');
   // India stays unrated: no index from a reading marked rated: false.
   assert.equal(points.get('cpcb').meta.aqi, null);
   assert.equal(points.get('cpcb').color, '#8cb4ce');
@@ -431,7 +459,7 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
   assert.match(card.list.items[0].title, /PM2\.5/);
   assert.equal(card.summary.status, '3 stations');
   // The computed US AQI is the one index: no network's own index.
-  assert.doesNotMatch(card.list.items[1].title, /SAAQIS index|4\/10/);
+  assert.doesNotMatch(card.list.items[1].title, /NATIONAL index|4\/10/);
   const record = layer
     .getAnalystRecords()
     .find((row) => row.provider === 'openaq');
@@ -447,9 +475,7 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
 
 /** A layer on one injected observation provider answering `rows`. */
 function injectedLayer(rows) {
-  const definition = createAirQualitySource().definitions.find(
-    (entry) => entry.id === 'saaqis',
-  );
+  const definition = nationalProvider();
   const viewer = {};
   const { draw } = bindFakeDraw(viewer, {
     camera: {
@@ -472,8 +498,8 @@ function injectedLayer(rows) {
   return { layer, point };
 }
 const row = (parameter, value, extra = {}) =>
-  site('saaqis', '2', -25.5, {
-    id: `saaqis:2:${parameter}`,
+  site('national', '2', -25.5, {
+    id: `national:2:${parameter}`,
     parameter,
     value,
     ...extra,
@@ -532,16 +558,16 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
             ]
           : [],
       ),
-    // A row carrying SAAQIS's own index ("Moderate", 4/10), which is not
+    // A row carrying the network's own index ("Moderate", 4/10), which is not
     // shown; NO2 as a mixing ratio.
-    '/api/air-quality/south-africa': snapshotOf([
-      site('saaqis', '2', -25.5, {
+    '/api/air-quality/national': snapshotOf([
+      site('national', '2', -25.5, {
         value: 10,
-        rating: { score: 4, label: 'Moderate', method: 'SAAQIS index' },
+        rating: { score: 4, label: 'Moderate', method: 'NATIONAL index' },
         color: '#F7FF00',
       }),
-      site('saaqis', '2', -25.5, {
-        id: 'saaqis:2:NO2',
+      site('national', '2', -25.5, {
+        id: 'national:2:NO2',
         parameter: 'NO2',
         units: 'ppb',
         value: 10,
@@ -552,11 +578,11 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
   layer.setParams({ view: 'PM2.5' });
   await layer.update();
   const points = drawn();
-  assert.equal(points.get('saaqis').meta.assessment.label, 'Fair');
-  assert.equal(points.get('saaqis').color, '#a3cf62');
+  assert.equal(points.get('national').meta.assessment.label, 'Fair');
+  assert.equal(points.get('national').color, '#a3cf62');
   assert.equal(points.get('openaq').meta.assessment.label, 'Extremely poor');
   const card = layer.getRowControls();
-  // One scale: the EEA PM2.5 bands as a ramp, nothing from SAAQIS.
+  // One scale: the EEA PM2.5 bands as a ramp, nothing from the national network.
   assert.deepEqual(
     card.legend.map((band) => band.color),
     ['#50c9b5', '#a3cf62', '#f2d45c', '#f29457', '#e96070', '#bb6bbd'],
@@ -566,15 +592,15 @@ test('a pollutant view rates every network on the EEA hourly bands', async () =>
     card.list.items.map((item) => item.swatch),
     ['#bb6bbd', '#a3cf62'],
   );
-  assert.doesNotMatch(card.list.items[1].title, /SAAQIS index|4\/10/);
+  assert.doesNotMatch(card.list.items[1].title, /NATIONAL index|4\/10/);
   // 10 ppb of NO2 is 18.82 µg/m³ at 25 °C: "Fair" on the EEA NO2 bands.
   const national = () =>
-    requests.filter((url) => url.startsWith('/api/air-quality/south-africa'))
+    requests.filter((url) => url.startsWith('/api/air-quality/national'))
       .length;
   const asked = national();
   layer.setParams({ view: 'NO2' });
   await layer.update();
-  const no2 = drawn().get('saaqis').meta;
+  const no2 = drawn().get('national').meta;
   assert.equal(no2.assessment.label, 'Fair');
   assert.equal(no2.assessment.concentration, 18.82);
   // The national snapshot serves the next view without asking again.
