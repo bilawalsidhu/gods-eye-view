@@ -5,6 +5,7 @@ import { createAirQualitySource } from './providers.js';
 import { interpretHourly } from './interpretation.js';
 import { fromDegrees, toLonLatH } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 import {
   LayerPanel,
   layerKeyRequirementTooltip,
@@ -120,7 +121,9 @@ function cardHarness(
         const answer =
           typeof entry === 'function' ? await entry(request) : entry;
         if (answer instanceof Error) throw answer;
-        return answer ?? [];
+        return request.mode === 'aqi'
+          ? onAqiPeriods(answer ?? [])
+          : (answer ?? []);
       },
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
@@ -307,7 +310,7 @@ test('a selected station heads the card and the tiles read it', async () => {
     lead: true,
     label: 'Durban',
     title:
-      'Calculated US AQI · main pollutant PM2.5 · PM2.5 40 µg/m³, NO2 30 µg/m³ · NATIONAL · Licence: CC BY 4.0 (Licence holder)',
+      'Calculated US AQI (NowCast) · main pollutant PM2.5 · PM2.5 40 µg/m³, NO2 30 µg/m³ · NATIONAL · Licence: CC BY 4.0 (Licence holder)',
     clear: { label: 'Deselect station', params: { station: null } },
     lines: [
       {
@@ -386,7 +389,7 @@ test('highest in view rows are one line: rank, band colour, value and name', asy
   // The station's details stay a row's tooltip, never a second line.
   assert.match(
     list.items[1].title,
-    /Calculated US AQI · main pollutant PM2\.5/,
+    /NowCast of recent hourly means · .* · Calculated US AQI \(NowCast\) · main pollutant PM2\.5/,
   );
   layer.setParams({ station: 'national:durban:aqi' });
   assert.equal(layer.getRowControls().list.items[0].active, true);

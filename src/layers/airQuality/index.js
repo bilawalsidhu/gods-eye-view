@@ -187,7 +187,22 @@ const EXCLUSION_REASONS = Object.freeze({
   implausible: msg('implausible'),
   'above-pm10': msg('above PM10'),
   'too-old': msg('too old'),
+  nowcast: msg('too few hours for a NowCast'),
+  hours: msg('too few hours for an 8-hour average'),
+  incomplete: msg('incomplete hour'),
+  averaging: msg('averaging period not rated'),
 });
+/**
+ * What a station's value stands for: the NowCast of its recent hourly
+ * means, or its averaging period in minutes.
+ */
+function averagingText(method, minutes) {
+  if (method === 'nowcast') return t('NowCast of recent hourly means');
+  if (minutes === 60) return t('Hourly average');
+  if (minutes === 480) return t('8-hour average');
+  if (minutes === 1440) return t('24-hour average');
+  return t('Source averaging period unspecified');
+}
 /** A concentration in the layer's units as a number, without its unit. */
 function concentrationText(parameter, value) {
   const onLimit = EEA_HOURLY_LIMITS[parameter]?.some(
@@ -674,11 +689,16 @@ export function createAirQualityLayer({
    * values it used, and the values left out and why.
    */
   const aqiDetails = (reading) => {
-    const index = reading.aqi
-      ? t('Calculated US AQI · main pollutant {pollutant}', {
-          pollutant: AQI_PARAMETERS[reading.aqi.leading],
-        })
-      : t('Index unavailable');
+    const leading = reading.aqi?.leading;
+    const index = !reading.aqi
+      ? t('Index unavailable')
+      : reading.valueMethods?.[leading] === 'nowcast'
+        ? t('Calculated US AQI (NowCast) · main pollutant {pollutant}', {
+            pollutant: AQI_PARAMETERS[leading],
+          })
+        : t('Calculated US AQI · main pollutant {pollutant}', {
+            pollutant: AQI_PARAMETERS[leading],
+          });
     const used = Object.entries(reading.aqiValues ?? {})
       .filter(([key, value]) => AQI_PARAMETERS[key] && Number.isFinite(value))
       .map(([key, value]) => valueText(key, value))
@@ -895,6 +915,18 @@ export function createAirQualityLayer({
    */
   const pollutantAt = (id, live, remembered) => {
     const key = AQI_POLLUTANTS[id];
+    // A pollutant's tile reads its newest hourly mean, as its own view
+    // does, where the index used one of its values; the index itself may
+    // rest on a NowCast or a longer average.
+    if (
+      live?.aqiValues &&
+      Number.isFinite(live.aqiValues[key]) &&
+      Number.isFinite(live.hourValues?.[key])
+    )
+      return {
+        value: live.hourValues[key],
+        averagingMinutes: 60,
+      };
     if (live?.aqiValues && Number.isFinite(live.aqiValues[key]))
       return {
         value: live.aqiValues[key],
@@ -915,6 +947,8 @@ export function createAirQualityLayer({
     }
     const value = remembered?.used?.[key];
     if (!Number.isFinite(value)) return null;
+    const hour = remembered.station.hourValues?.[key];
+    if (Number.isFinite(hour)) return { value: hour, averagingMinutes: 60 };
     return {
       value,
       averagingMinutes: remembered.station.valueAveraging?.[key],
@@ -2757,7 +2791,7 @@ export function createAirQualityLayer({
               swatch: reading.color,
               lead: scaleText(reading),
               text: reading.name,
-              title: `${category ? category + ' · ' : ''}${reading.name} · ${reading.zone} · ${reading.owner || owner.network}${reading.monitor === false ? ' · ' + t('Low-cost sensor') : reading.monitor === true ? ' · ' + t('Reference monitor') : ''} · ${t(reading.averagingMinutes === 60 ? msg('Hourly average') : msg('Source averaging period unspecified'))} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
+              title: `${category ? category + ' · ' : ''}${reading.name} · ${reading.zone} · ${reading.owner || owner.network}${reading.monitor === false ? ' · ' + t('Low-cost sensor') : reading.monitor === true ? ' · ' + t('Reference monitor') : ''} · ${view === 'aqi' && reading.aqi ? averagingText(reading.valueMethods?.[reading.aqi.leading], reading.valueAveraging?.[reading.aqi.leading]) : averagingText(null, reading.averagingMinutes)} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
               accent: reading.color,
               active: reading.id === selectedStation,
               params: { station: reading.id },

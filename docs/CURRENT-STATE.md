@@ -10301,12 +10301,18 @@ and counts exclude stations beyond the globe's
 horizon.
 Each view has one scale for colour, ranking and legend. The default US AQI view
 computes an index per station (`src/layers/airQuality/usAqi.js`): every
-observation provider is asked with `mode: 'aqi'` (OpenAQ from each location's
-`/latest`, within the same budget, cache and cancellation; a network with a
-national snapshot from that snapshot), a station's plausible values get a sub-index each on
+observation provider is asked with `mode: 'aqi'` (OpenAQ from each sensor's
+hourly means for PM2.5, PM10, O3 and CO, asked at most once an hour, and each
+location's `/latest` for NO2 and SO2, within the same budget, cache and
+cancellation; a network with a national snapshot from that snapshot), each
+pollutant is put on its table's averaging period (`nowcast.js`: the PM NowCast,
+EPA's ozone NowCast, CO's 8-hour mean, NO2 and SO2 1-hour values; too few hours
+give no sub-index), a station's plausible values get a sub-index each on
 the EPA breakpoints (Technical Assistance Document, Table 6, PM2.5 as revised in
-2024; ozone the higher of its 8-hour and 1-hour rows) and the highest one sets its
-index, category, colour and time. Values more than three hours older than the
+2024; ozone's current hourly mean also on the 1-hour rows from 0.125 ppm, the
+higher kept) and the highest one sets its index, category, colour and time.
+Pollutant tiles in the AQI view show each pollutant's newest hourly mean on
+its EEA band. Values more than three hours older than the
 station's newest value kept are left out, as are implausible ones (above a
 pollutant's ceiling, or PM2.5 more than 1.5 × PM10 + 10 µg/m³: smoke, where PM2.5
 nearly equals PM10, still counts); details name each value left out and why.

@@ -12,19 +12,33 @@
  * is the highest sub-index, rounded. Above the table's top row an index runs
  * on past 500 in the hazardous row, as the document asks.
  *
- * The table is defined on 24-hour (PM, SO2 above 200), 8-hour (O3, CO) and
- * 1-hour (NO2, SO2 up to 200) averages; a station's latest values stand in
- * for them. Where the document gives 1-hour rules they are followed: ozone
- * takes the higher of its 8-hour rows (held at 300 above 0.200 ppm, where
- * they end) and its 1-hour rows (from 0.125 ppm), so its index never falls as
- * the concentration rises; a 1-hour SO2 value of 305 ppb or more gives
- * exactly 200.
+ * Each row of the table is for one averaging period, and a value is rated
+ * only on its own (`aqiStations`), as the document's real-time reporting does
+ * it: PM2.5 and PM10 on their NowCast (or a 24-hour average), ozone on its
+ * NowCast (or an 8-hour average) on the 8-hour rows, CO on an 8-hour
+ * average, NO2 and SO2 on 1-hour values (`nowcast.js`). Where the document
+ * gives 1-hour rules they are followed: ozone's 1-hour rows apply to the
+ * current hour's mean from 0.125 ppm and the higher index is kept (Table 6,
+ * note 1); above 0.200 ppm, where the 8-hour rows end, only the 1-hour rows
+ * rate (note 2), and without a 1-hour value the index holds at 300. A
+ * 1-hour SO2 value of 305 ppb or more gives exactly 200 unless a 24-hour
+ * average of 305 ppb or more rates on the 24-hour rows (note 3 and
+ * "Calculating AQI values for SO2").
  *
  * Values are in µg/m³, CO in mg/m³: the layer's units (`units.js`). Gases
  * convert back to ppb (CO to ppm) at 25 °C, the EPA's reference conditions.
  */
 import { AIR_QUALITY_UNRATED_COLOR } from './model.js';
 import { EPA_GAS_FACTORS, concentrationIn } from './units.js';
+import {
+  HOUR_MS,
+  OZONE_SERIES_HOURS,
+  PM_NOWCAST_HOURS,
+  eightHourMean,
+  hourlySeries,
+  ozoneNowCast,
+  pmNowCast,
+} from './nowcast.js';
 
 /** The five upper limits between the six categories. */
 export const US_AQI_LIMITS = Object.freeze([50, 100, 150, 200, 300]);
@@ -142,7 +156,7 @@ const TABLE = Object.freeze({
       [1250, 2049, 301, 500],
     ],
   },
-  // 1-hour rows; from 305 ppb the table is on 24-hour values (`subIndex`).
+  // 1-hour rows; from 305 ppb the table is on 24-hour values (`SO2_DAILY`).
   so2: {
     digits: 0,
     rows: [
@@ -172,6 +186,12 @@ const OZONE_HOURLY = Object.freeze([
   [0.405, 0.604, 301, 500],
 ]);
 
+/** Table 6's 24-hour SO2 rows, in ppb (only from 305 ppb). */
+const SO2_DAILY = Object.freeze([
+  [305, 604, 201, 300],
+  [605, 1004, 301, 500],
+]);
+
 /** Truncate to `digits` decimals; a tolerance absorbs unit-conversion error. */
 const truncate = (value, digits) => {
   const scale = 10 ** digits;
@@ -193,20 +213,28 @@ function tableConcentration(key, value) {
   return truncate(native, TABLE[key].digits);
 }
 
-/** One pollutant's sub-index before rounding. */
-function subIndex(key, value) {
+/**
+ * One pollutant's sub-index before rounding. `hour` is ozone's 1-hour mean
+ * and `day` SO2's 24-hour average, where known.
+ */
+function subIndex(key, value, { hour, day } = {}) {
   const c = tableConcentration(key, value);
   if (key === 'o3') {
-    // The higher of the 8-hour rows, held at 300 above 0.200 ppm where they
-    // end, and the 1-hour rows from 0.125 ppm: the index never falls as the
-    // concentration rises.
+    // The 8-hour rows end at 0.200 ppm: above, only the 1-hour rows rate,
+    // and without a 1-hour value the index holds at 300.
     const eightHour = c <= 0.2 ? onRows(c, TABLE.o3.rows) : 300;
-    return c >= OZONE_HOURLY[0][0]
-      ? Math.max(eightHour, onRows(c, OZONE_HOURLY))
+    const h = usable(hour) ? tableConcentration('o3', hour) : null;
+    return h !== null && h >= OZONE_HOURLY[0][0]
+      ? Math.max(eightHour, onRows(h, OZONE_HOURLY))
       : eightHour;
   }
-  // 1-hour SO2 values do not define 200 and above: fixed at 200.
-  if (key === 'so2' && c >= 305) return 200;
+  if (key === 'so2') {
+    const d = usable(day) ? tableConcentration('so2', day) : null;
+    const daily = d !== null && d >= SO2_DAILY[0][0] ? onRows(d, SO2_DAILY) : 0;
+    // 1-hour SO2 values do not define 200 and above: fixed at 200, unless
+    // a 24-hour average rates higher.
+    return Math.max(c >= 305 ? 200 : onRows(c, TABLE.so2.rows), daily);
+  }
   return onRows(c, TABLE[key].rows);
 }
 
@@ -215,15 +243,23 @@ const usable = (value) => Number.isFinite(value) && value >= 0;
 /**
  * The US AQI of one station's values, or null when none can be rated.
  * @param {{pm25?: number, pm10?: number, o3?: number, no2?: number, so2?: number, co?: number}} values
- *   µg/m³, CO in mg/m³.
+ *   µg/m³, CO in mg/m³, each on its table's averaging period: PM NowCast or
+ *   24-hour, O3 NowCast or 8-hour, CO 8-hour, NO2 and SO2 1-hour.
+ * @param {{hourValues?: {o3?: number}, dayValues?: {so2?: number}}} [extra]
+ *   Ozone's 1-hour mean and SO2's 24-hour average, for their rows.
  * @returns {{index: number, leading: string} | null} The rounded index and
  *   the key of the pollutant that sets it.
  */
-export function usAqi(values) {
+export function usAqi(values, { hourValues = {}, dayValues = {} } = {}) {
   let best = null;
   for (const key of Object.keys(TABLE)) {
     if (!usable(values?.[key])) continue;
-    const index = Math.round(subIndex(key, values[key]));
+    const index = Math.round(
+      subIndex(key, values[key], {
+        hour: hourValues?.[key],
+        day: dayValues?.[key],
+      }),
+    );
     if (!best || index > best.index) best = { index, leading: key };
   }
   return best;
@@ -291,18 +327,37 @@ export function plausibility(values) {
   return result;
 }
 
+/** The values of `extra` within their ceilings, for the keys in `used`. */
+function extraWithin(extra, used) {
+  const kept = {};
+  for (const [key, value] of Object.entries(extra ?? {}))
+    if (key in used && usable(value) && value <= AQI_CEILINGS[key])
+      kept[key] = value;
+  return kept;
+}
+
 /**
  * A station's index from the values it reports (`aqiStations`). The values
  * kept are within their ceilings and within AQI_MAX_SPREAD_MS of the newest.
  * PM2.5 is checked against the PM10 still kept; one left out does not count
- * as the newest.
+ * as the newest. Ozone's 1-hour mean (`hourValues`) and SO2's 24-hour
+ * average (`dayValues`) count with the value they go with.
  * @returns {{aqi: {index: number, leading: string} | null,
  *   used: object, excluded: Object<string, string>, observedMs: number|null}}
  *   `excluded` gives each value left out its reason: `'units'` or
- *   `'flagged'` (from the station), `'implausible'`, `'above-pm10'` or
+ *   `'flagged'` (from the station), `'incomplete'` (an hour under 75 %
+ *   covered), `'nowcast'` or `'hours'` (too few hours for its NowCast or
+ *   8-hour average), `'averaging'` (not on its
+ *   table's averaging period), `'implausible'`, `'above-pm10'` or
  *   `'too-old'`.
  */
-export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
+export function stationIndex({
+  values,
+  valueTimes = {},
+  excluded = {},
+  hourValues,
+  dayValues,
+} = {}) {
   const { kept, excluded: implausible } = withinCeilings(values);
   const reasons = { ...excluded, ...implausible };
   let spread = withinSpread(kept, valueTimes);
@@ -312,7 +367,10 @@ export function stationIndex({ values, valueTimes = {}, excluded = {} } = {}) {
   }
   const { fresh, old, newest } = spread;
   for (const key of old) reasons[key] = 'too-old';
-  const aqi = usAqi(fresh);
+  const aqi = usAqi(fresh, {
+    hourValues: extraWithin(hourValues, fresh),
+    dayValues: extraWithin(dayValues, fresh),
+  });
   const leadingTime = aqi ? valueTimes[aqi.leading] : undefined;
   return {
     aqi,
@@ -364,18 +422,133 @@ function newer(a, b) {
   return a.reason === 'flagged' && b.reason !== 'flagged';
 }
 
+/** An hourly mean below this data coverage (45 minutes) counts as missing. */
+const HOUR_MIN_COVERAGE = 75;
+
+/**
+ * The averaging periods, in minutes, each pollutant's table is rated on
+ * from a single reading; `null` is a value whose period its source does not
+ * state, taken as a 1-hour value for NO2 and SO2 only. Hourly means (60)
+ * of particles, ozone and CO go through `nowcast.js` instead.
+ */
+const SINGLE_PERIODS = Object.freeze({
+  pm25: [1440],
+  pm10: [1440],
+  o3: [480],
+  co: [480],
+  no2: [60, null],
+  so2: [60, null],
+});
+
+/**
+ * One pollutant's value for the index from its readings: `hours` (its
+ * hourly means as `{endMs, value, reason, coverage}`) and `rows` (its other
+ * readings, newest decides per averaging period). The newest usable basis
+ * wins: the NowCast or 8-hour mean as of the newest hourly mean, or a
+ * reading on the table's own period.
+ * @returns {{at, value, reason, averaging, method, coverage, hour, day}}
+ */
+function pollutantInput(key, hours, rows) {
+  const candidates = [];
+  let anchor = null;
+  if (hours.length) {
+    anchor = hours.reduce((a, b) => (newer(b, a) ? b : a));
+    const valid = hours.filter((h) => h.value !== null);
+    const at = anchor.at;
+    if (key === 'pm25' || key === 'pm10') {
+      const value = pmNowCast(hourlySeries(valid, at, PM_NOWCAST_HOURS));
+      candidates.push({
+        at,
+        value,
+        reason: 'nowcast',
+        averaging: null,
+        method: 'nowcast',
+      });
+    } else if (key === 'o3') {
+      // The method runs in ppb: the layer's µg/m³ convert at 25 °C.
+      const factor = EPA_GAS_FACTORS.O3;
+      const ppb = ozoneNowCast(
+        hourlySeries(
+          valid.map((h) => ({ endMs: h.endMs, value: h.value / factor })),
+          at,
+          OZONE_SERIES_HOURS,
+        ),
+      );
+      candidates.push({
+        at,
+        value: ppb === null ? null : ppb * factor,
+        reason: 'nowcast',
+        averaging: null,
+        method: 'nowcast',
+      });
+    } else if (key === 'co') {
+      candidates.push({
+        at,
+        value: eightHourMean(hourlySeries(valid, at, 8)),
+        reason: 'hours',
+        averaging: 480,
+      });
+    } else
+      candidates.push({
+        ...anchor,
+        averaging: 60,
+      });
+  }
+  for (const row of rows)
+    if (SINGLE_PERIODS[key].includes(row.averaging)) candidates.push(row);
+  // A NowCast or mean that fails on a newest hour unusable in itself says
+  // why that hour is.
+  for (const candidate of candidates)
+    if (
+      candidate.value === null &&
+      anchor?.value === null &&
+      candidate.at === anchor.at
+    )
+      candidate.reason = anchor.reason;
+  let best = candidates.reduce((a, b) => (newer(b, a) ? b : a), null);
+  if (!best) {
+    // Readings, none on the table's averaging period.
+    const at = Math.max(...rows.map((row) => row.at));
+    best = { at, value: null, reason: 'averaging' };
+  }
+  // The newest hourly mean, when valid: ozone's for the 1-hour rows, and
+  // every pollutant's for its hourly reading beside the index.
+  if (anchor && anchor.value !== null) best = { ...best, hour: anchor.value };
+  if (key === 'so2') {
+    const day = rows
+      .filter((row) => row.averaging === 1440 && row.value !== null)
+      .reduce((a, b) => (newer(b, a) ? b : a), null);
+    if (day) best = { ...best, day: day.value };
+  }
+  return best;
+}
+
 /**
  * One reading per station for the AQI view. Per-pollutant readings of a
  * station (one `provider` and `stationId`) are folded together; a reading
- * that already carries `values` passes through.
+ * that already carries `values` passes through, its values taken as on
+ * their tables' averaging periods.
  *
- * `values` holds every pollutant the station reports, in the layer's units,
- * with `valueTimes`, `valueAveraging` and (where given) `valueCoverage` per
- * value; `excluded` names the
- * readings left out (`'units'` when their units do not convert, `'flagged'`
- * when their source flagged them). A network's own index, if a reading
- * carries one, is not kept. Stations reporting none of the index's
- * pollutants are left out. The station's time is its newest value's (its newest reading's when
+ * Each pollutant is rated on its table's averaging period, from its readings
+ * by `averagingMinutes`: hourly means (60) of PM2.5 and PM10 give their
+ * NowCast as of the newest hour (two of the last three hours valid), of
+ * ozone its NowCast (up to the last 338 hours) and that hour's mean for the
+ * 1-hour rows, of CO its 8-hour mean (6 of the last 8 hours); NO2 and SO2
+ * take their newest 1-hour value (or one whose period is not stated). A
+ * reading on the table's own period also counts: 24-hour PM and SO2,
+ * 8-hour O3 and CO. Hours flagged by their source, in units that do not
+ * convert or under 75 % covered count as missing. The newest basis decides.
+ *
+ * `values` holds each pollutant's value for the index, in the layer's units,
+ * with `valueTimes`, `valueAveraging` (minutes, null for a NowCast or an
+ * unstated period), `valueMethods` (`'nowcast'`) and (where given)
+ * `valueCoverage` per value; `hourValues` holds each pollutant's newest
+ * valid hourly mean (ozone's rates on the 1-hour rows) and `dayValues.so2`
+ * a 24-hour SO2 average, where known; `excluded` names the pollutants left out: `'units'`, `'flagged'`,
+ * `'incomplete'`, `'nowcast'` or `'hours'` (too few hours), `'averaging'` (no reading on a
+ * period the table rates). A network's own index, if a reading carries one,
+ * is not kept. Stations reporting none of the index's pollutants are left
+ * out. The station's time is its newest value's (its newest reading's when
  * it has none); `aqi` is left for the layer (`stationIndex`).
  */
 export function aqiStations(readings) {
@@ -403,21 +576,28 @@ export function aqiStations(readings) {
         values: {},
         valueTimes: {},
         valueAveraging: {},
+        valueMethods: {},
         valueCoverage: {},
+        hourValues: {},
+        dayValues: {},
         excluded: {},
         observedMs: null,
         reportedMs: -Infinity,
-        newest: {},
+        hours: {},
+        rows: {},
         aqi: null,
         color: AIR_QUALITY_UNRATED_COLOR,
         label: '',
-        note: 'US AQI computed from the latest value of each pollutant; not an official reading.',
+        note: 'US AQI computed per pollutant on its EPA averaging period (NowCast for particles and ozone); not an official reading.',
       };
       stations.set(stationKey, station);
       out.push(station);
     }
     const at = Number.isFinite(reading.observedMs) ? reading.observedMs : null;
     if (at !== null) station.reportedMs = Math.max(station.reportedMs, at);
+    const averaging = Number.isFinite(reading.averagingMinutes)
+      ? reading.averagingMinutes
+      : null;
     const value = reading.qualityFlagged
       ? null
       : concentrationIn(reading.parameter, reading.value, reading.units);
@@ -425,30 +605,55 @@ export function aqiStations(readings) {
       at: at ?? -Infinity,
       value,
       reason: reading.qualityFlagged ? 'flagged' : 'units',
-      reading,
+      averaging,
+      coverage: reading.coveragePercent,
     };
-    if (newer(candidate, station.newest[key])) station.newest[key] = candidate;
+    if (averaging === 60 && at !== null) {
+      // Hourly means, one per hour: the newest decides an hour read twice.
+      const covered =
+        !Number.isFinite(reading.coveragePercent) ||
+        reading.coveragePercent >= HOUR_MIN_COVERAGE;
+      const hour = {
+        ...candidate,
+        endMs: at,
+        value: covered ? value : null,
+        reason: covered ? candidate.reason : 'incomplete',
+      };
+      const hours = (station.hours[key] ??= new Map());
+      const slot = Math.round(at / HOUR_MS);
+      if (newer(hour, hours.get(slot))) hours.set(slot, hour);
+      continue;
+    }
+    const rows = (station.rows[key] ??= new Map());
+    if (newer(candidate, rows.get(averaging))) rows.set(averaging, candidate);
   }
-  // One reading per pollutant: the newest, whatever order they came in. A
-  // newest one flagged or in units that do not convert leaves the pollutant
-  // out, and no older value stands in for it.
   for (const station of stations.values()) {
-    for (const [key, { at, value, reason, reading }] of Object.entries(
-      station.newest,
-    )) {
-      if (value === null) {
-        station.excluded[key] = reason;
+    const keys = new Set([
+      ...Object.keys(station.hours),
+      ...Object.keys(station.rows),
+    ]);
+    for (const key of keys) {
+      const input = pollutantInput(
+        key,
+        [...(station.hours[key]?.values() ?? [])],
+        [...(station.rows[key]?.values() ?? [])],
+      );
+      if (input.value === null) {
+        station.excluded[key] = input.reason;
         continue;
       }
-      station.values[key] = value;
-      station.valueTimes[key] = Number.isFinite(at) ? at : null;
-      station.valueAveraging[key] = reading.averagingMinutes ?? null;
-      if (reading.coveragePercent !== undefined)
-        station.valueCoverage[key] = reading.coveragePercent;
+      station.values[key] = input.value;
+      station.valueTimes[key] = Number.isFinite(input.at) ? input.at : null;
+      station.valueAveraging[key] = input.averaging ?? null;
+      if (input.method) station.valueMethods[key] = input.method;
+      // Coverage describes one averaging period, not a NowCast.
+      if (input.coverage !== undefined && input.averaging !== null)
+        station.valueCoverage[key] = input.coverage;
+      if (input.hour !== undefined) station.hourValues[key] = input.hour;
+      if (input.day !== undefined) station.dayValues[key] = input.day;
     }
-    delete station.newest;
-  }
-  for (const station of stations.values()) {
+    delete station.hours;
+    delete station.rows;
     const { reportedMs } = station;
     delete station.reportedMs;
     const times = Object.values(station.valueTimes).filter(Number.isFinite);

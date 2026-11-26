@@ -4,6 +4,7 @@ import { createAirQualityLayer } from './index.js';
 import { layerFeedState } from '../../data/feedState.js';
 import { STALE_AFTER_MS } from './model.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 
 /** One station network measuring PM2.5, the provider of these readings. */
 const NETWORK = Object.freeze({
@@ -56,7 +57,11 @@ const reading = (id, value, overrides = {}) => ({
   ...overrides,
 });
 
-const staticSource = (rows) => ({ getSnapshot: async () => rows });
+/** Rows in the AQI view on its averaging periods (`onAqiPeriods`). */
+const staticSource = (rows) => ({
+  getSnapshot: async (request) =>
+    request?.mode === 'aqi' ? onAqiPeriods(rows) : rows,
+});
 
 test('a layer requires both a snapshot source and an overlay host', () => {
   assert.throws(() => createAirQualityLayer(), /snapshot source/);
@@ -533,7 +538,11 @@ function multiProvider(answers) {
         pending.set(request.provider, () =>
           answers[request.provider] instanceof Error
             ? reject(answers[request.provider])
-            : resolve(answers[request.provider] ?? []),
+            : resolve(
+                request.mode === 'aqi'
+                  ? onAqiPeriods(answers[request.provider] ?? [])
+                  : (answers[request.provider] ?? []),
+              ),
         ),
       );
     },
@@ -734,7 +743,8 @@ async function zoomHarness(
   const layer = createAirQualityLayer({
     source: {
       definitions: [definition('national', { parameters: ['PM2.5'] })],
-      getSnapshot: async () => rows,
+      getSnapshot: async (request) =>
+        request?.mode === 'aqi' ? onAqiPeriods(rows) : rows,
     },
     overlayHost: {
       setEntries(source, entries) {

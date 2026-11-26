@@ -18,6 +18,7 @@ import {
 } from './providers.js';
 import { createAirQualityLayer } from './index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 
 test('breakpoints match the EPA table', () => {
   assert.equal(usAqi({ pm25: 9.0 }).index, 50);
@@ -57,31 +58,56 @@ test('above the table the index runs on past 500 in the hazardous row (EPA)', ()
   assert.equal(usAqiBand(699).id, 'hazardous');
 });
 
-test('the ozone index never falls as the concentration rises', () => {
-  const at = (ppb) => usAqi({ o3: ppb * 1.963 }).index;
-  // Every step of 0.001 ppm from 0.100 to 0.700 ppm.
+test('ozone rates its 8-hour value, and its 1-hour mean only where the 1-hour rows apply (EPA)', () => {
+  const o3 = (eightHour, hour) =>
+    usAqi(
+      { o3: eightHour * 1.963 },
+      hour === undefined ? {} : { hourValues: { o3: hour * 1.963 } },
+    );
+  // EPA: a 1-hour value of 0.162 ppm and an 8-hour value of 0.078 ppm are
+  // both rated and the higher kept, ozone leading. The document prints 148
+  // for the 1-hour part, but its own Equation 1 gives
+  // 49 / 0.039 × 0.037 + 101 = 147.49, which rounds to 147.
+  assert.deepEqual(o3(78, 162), { index: 147, leading: 'o3' });
+  assert.equal(o3(78).index, 126);
+  // EPA: a 1-hour value of 0.104 ppm is below the 1-hour rows: 126.
+  assert.equal(o3(78, 104).index, 126);
+  // One value is not put through both tables: 0.162 ppm as an 8-hour value
+  // alone is 260 on the 8-hour rows.
+  assert.equal(o3(162).index, 260);
+  // The 8-hour rows end at 0.200 ppm (300); above, only the 1-hour rows
+  // define the index (note 2), and without one it holds at 300.
+  assert.equal(o3(200).index, 300);
+  assert.equal(o3(300).index, 300);
+  assert.equal(o3(210, 405).index, 301);
+  assert.equal(o3(210, 604).index, 500);
+  assert.equal(usAqiBand(o3(210, 604).index).id, 'hazardous');
+  // The index never falls as the 1-hour mean rises.
   let previous = -Infinity;
   for (let ppb = 100; ppb <= 700; ppb++) {
-    assert.ok(at(ppb) >= previous, `${ppb} ppb: ${at(ppb)} < ${previous}`);
-    previous = at(ppb);
+    const index = o3(78, ppb).index;
+    assert.ok(index >= previous, `${ppb} ppb: ${index} < ${previous}`);
+    previous = index;
   }
-  // Below 0.125 ppm only the 8-hour rows; to 0.200 ppm the higher of both.
-  assert.equal(at(100), 187);
-  assert.equal(at(162), 260);
-  assert.equal(at(200), 300);
-  // Above 0.200 ppm the 8-hour part holds at 300 until the 1-hour rows pass it.
-  assert.equal(at(201), 300);
-  assert.equal(at(300), 300);
-  assert.equal(at(404), 300);
-  assert.equal(usAqiBand(at(300)).id, 'very-unhealthy');
-  assert.equal(at(405), 301);
-  assert.equal(at(604), 500);
 });
 
-test('a 1-hour SO2 value at or above 305 ppb is fixed at 200 (EPA)', () => {
-  assert.equal(usAqi({ so2: 304 * 2.62 }).index, 200);
-  assert.equal(usAqi({ so2: 305 * 2.62 }).index, 200);
-  assert.equal(usAqi({ so2: 900 * 2.62 }).index, 200);
+test('SO2 rates 1-hour values to 304 ppb, and above them a 24-hour average (EPA)', () => {
+  const so2 = (hour, day) =>
+    usAqi(
+      { so2: hour * 2.62 },
+      day === undefined ? {} : { dayValues: { so2: day * 2.62 } },
+    ).index;
+  assert.equal(so2(304), 200);
+  // A 1-hour value of 305 ppb or more without a 24-hour average of 305 ppb
+  // or more is fixed at 200 exactly.
+  assert.equal(so2(305), 200);
+  assert.equal(so2(900), 200);
+  assert.equal(so2(900, 200), 200);
+  // With one, the 24-hour rows rate: 305 ppb is 201, 1004 ppb 500.
+  assert.equal(so2(900, 305), 201);
+  assert.equal(so2(1200, 1004), 500);
+  // A 1-hour value below 305 ppb uses the 1-hour rows.
+  assert.equal(so2(75), 100);
 });
 
 test('no rated value gives null', () => {
@@ -133,8 +159,13 @@ test('a hazardous reading up to twice its table top is kept and runs past 500', 
     assert.deepEqual(plausibility({ [key]: 2 * top }).kept, {
       [key]: 2 * top,
     });
-    // A 1-hour SO2 value stops at 200: only a 24-hour one goes higher.
-    if (key !== 'so2') assert.ok(usAqi({ [key]: top * 1.01 }).index > 500, key);
+    // A 1-hour SO2 value stops at 200 and an 8-hour ozone one at 300: past
+    // them a 24-hour SO2 average and a 1-hour ozone mean rate.
+    const extra = {
+      hourValues: { o3: top * 1.01 },
+      dayValues: { so2: top * 1.01 },
+    };
+    assert.ok(usAqi({ [key]: top * 1.01 }, extra).index > 500, key);
   }
   // NO2 at 2,000 ppb (3,764 µg/m³) is hazardous, not a fault.
   assert.equal(usAqi(plausibility({ no2: 3764 }).kept).index, 488);
@@ -211,11 +242,13 @@ test("a station's time is its leading value's, and discarded values do not count
     observedMs,
   });
   // PM2.5 at t0, NO2 at +5e6 ms, O3 in units that do not convert at +9e6 ms.
-  const [probe] = aqiStations([
-    row('PM2.5', 40, 'µg/m³', t0),
-    row('NO2', 10, 'µg/m³', t0 + 5e6),
-    row('O3', 30, 'furlongs', t0 + 9e6),
-  ]);
+  const [probe] = aqiStations(
+    onAqiPeriods([
+      row('PM2.5', 40, 'µg/m³', t0),
+      row('NO2', 10, 'µg/m³', t0 + 5e6),
+      row('O3', 30, 'furlongs', t0 + 9e6),
+    ]),
+  );
   assert.equal(probe.observedMs, t0 + 5e6, 'the newest value kept');
   assert.deepEqual(probe.excluded, { o3: 'units' });
   const result = stationIndex(probe);
@@ -223,10 +256,12 @@ test("a station's time is its leading value's, and discarded values do not count
   assert.equal(result.observedMs, t0, 'the leading pollutant');
   assert.deepEqual(result.excluded, { o3: 'units' });
   // A stalled PM2.5 four hours behind NO2 is dropped; NO2 leads.
-  const [stalled] = aqiStations([
-    row('PM2.5', 100, 'µg/m³', t0),
-    row('NO2', 50, 'µg/m³', t0 + 4 * 3600_000),
-  ]);
+  const [stalled] = aqiStations(
+    onAqiPeriods([
+      row('PM2.5', 100, 'µg/m³', t0),
+      row('NO2', 50, 'µg/m³', t0 + 4 * 3600_000),
+    ]),
+  );
   const fresh = stationIndex(stalled);
   assert.deepEqual(fresh.aqi, { index: 25, leading: 'no2' });
   assert.deepEqual(fresh.used, { no2: 50 });
@@ -253,6 +288,9 @@ test('per-pollutant readings become one station with every pollutant', () => {
     ...extra,
   });
   const [station, ...rest] = aqiStations([
+    // Three hourly means of PM2.5: its NowCast is 12.
+    row('PM2.5', 12, 'µg/m³', { observedMs: 1000 - 7_200_000 }),
+    row('PM2.5', 12, 'µg/m³', { observedMs: 1000 - 3_600_000 }),
     row('PM2.5', 12, 'µg/m³'),
     row('NO2', 10, 'ppb', { observedMs: 2000 }),
     row('CO2', 420, 'ppm'),
@@ -269,7 +307,10 @@ test('per-pollutant readings become one station with every pollutant', () => {
   assert.deepEqual(station.valueTimes, { pm25: 1000, no2: 2000 });
   assert.deepEqual(station.excluded, { so2: 'flagged' });
   assert.equal(station.observedMs, 2000);
-  assert.equal(station.averagingMinutes, 60);
+  assert.deepEqual(station.valueMethods, { pm25: 'nowcast' });
+  assert.deepEqual(station.valueAveraging, { pm25: null, no2: 60 });
+  assert.deepEqual(station.hourValues, { pm25: 12, no2: 18.82 });
+  assert.equal(station.averagingMinutes, null);
   assert.equal(station.aqi, null);
   assert.equal(station.units, undefined);
   assert.equal(rest[0].id, 'x:2:aqi');
@@ -286,7 +327,7 @@ test('the newest reading decides a pollutant, in any order', () => {
     parameter: 'PM2.5',
     units: 'µg/m³',
     value,
-    averagingMinutes: 60,
+    averagingMinutes: 1440,
     observedMs,
     ...extra,
   });
@@ -334,6 +375,7 @@ test('a station whose only reading its source flagged keeps no values', () => {
       value: 123,
       units: 'µg/m³',
       qualityFlagged: true,
+      averagingMinutes: 1440,
       aqi: null,
       observedMs: 1000,
     },
@@ -455,18 +497,20 @@ test('the AQI view colours, ranks and lists stations on the US AQI', async () =>
       ),
     // The national network keeps one row per pollutant: PM2.5 5 µg/m³ and NO2 10 ppb. A
     // network's own index, if a row carried one, is not used or shown.
-    '/api/air-quality/national': snapshotOf([
-      site('national', '2', -25.5, {
-        value: 5,
-        rating: { score: 4, label: 'Moderate', method: 'NATIONAL index' },
-      }),
-      site('national', '2', -25.5, {
-        id: 'national:2:NO2',
-        parameter: 'NO2',
-        units: 'ppb',
-        value: 10,
-      }),
-    ]),
+    '/api/air-quality/national': snapshotOf(
+      onAqiPeriods([
+        site('national', '2', -25.5, {
+          value: 5,
+          rating: { score: 4, label: 'Moderate', method: 'NATIONAL index' },
+        }),
+        site('national', '2', -25.5, {
+          id: 'national:2:NO2',
+          parameter: 'NO2',
+          units: 'ppb',
+          value: 10,
+        }),
+      ]),
+    ),
     // A station whose only value its source flagged: no index.
     '/api/air-quality/regional': snapshotOf([
       site('regional', '3', -26.5, {
@@ -537,7 +581,11 @@ function injectedLayer(rows) {
     },
   });
   const layer = createAirQualityLayer({
-    source: { definitions: [definition], getSnapshot: async () => rows },
+    source: {
+      definitions: [definition],
+      getSnapshot: async (request) =>
+        request.mode === 'aqi' ? onAqiPeriods(rows) : rows,
+    },
     overlayHost: { setEntries() {}, clearSource() {}, setVisible() {} },
   });
   layer.init(viewer);

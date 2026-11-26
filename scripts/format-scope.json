@@ -1732,6 +1732,8 @@
   "src/layers/airQuality/providers.js",
   "src/layers/airQuality/openAq.test.mjs",
   "src/layers/airQuality/openAqViewport.test.mjs",
+  "src/layers/airQuality/nowcast.js",
+  "src/layers/airQuality/nowcast.test.mjs",
   "server/providers/openAq.test.mjs",
   "scripts/qa-openaq.mjs",
   "src/layers/airQuality/interpretation.js",

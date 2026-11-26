@@ -26,6 +26,7 @@ import { formatUtcDayMonth } from '../../i18n/index.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import { WEATHER_IMAGERY_Z } from '../weather/imageryOrder.js';
 import { WEATHER_SHELL_HEIGHTS } from '../weather/shellPlacement.js';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 
 const HOUR = 3600_000;
 const SCALE = Object.freeze({
@@ -759,7 +760,8 @@ function fieldHarness({
   const layer = createAirQualityLayer({
     source: {
       definitions,
-      getSnapshot: async () => capeTown(),
+      getSnapshot: async (request) =>
+        request?.mode === 'aqi' ? onAqiPeriods(capeTown()) : capeTown(),
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
     fieldSource,

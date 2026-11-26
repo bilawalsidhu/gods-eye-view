@@ -183,3 +183,69 @@ export function normalizeOpenAqHours(
     }),
   );
 }
+
+/**
+ * An explicit sensor's valid hourly means as `{endMs, value, flagged,
+ * coverage}`, oldest first, value in the sensor's units: the series the US
+ * AQI's NowCast and 8-hour means read (`usAqi.js`). Never inferred from a
+ * latest-value timestamp.
+ */
+export function normalizeOpenAqHourSeries(sensor, results, now = Date.now()) {
+  const hours = new Map();
+  for (const row of Array.isArray(results) ? results : []) {
+    const from = Date.parse(row?.period?.datetimeFrom?.utc);
+    const to = Date.parse(row?.period?.datetimeTo?.utc);
+    if (
+      typeof row.value !== 'number' ||
+      !Number.isFinite(row.value) ||
+      row.value < 0 ||
+      row.period?.interval !== '01:00:00' ||
+      to - from !== 3600_000 ||
+      to > now ||
+      OPENAQ_PARAMETER_NAMES[row.parameter?.name] !== sensor.parameter ||
+      row.parameter?.units !== sensor.units
+    )
+      continue;
+    const coverage = row.coverage?.percentCoverage;
+    hours.set(to, {
+      endMs: to,
+      value: row.value,
+      flagged: row.flagInfo?.hasFlags !== false,
+      coverage: Number.isFinite(coverage) ? coverage : null,
+    });
+  }
+  return [...hours.values()].sort((a, b) => a.endMs - b.endMs);
+}
+
+/**
+ * A sensor's hourly means as readings of its station, one per hour
+ * (`averagingMinutes: 60`), for the AQI view to fold (`aqiStations`).
+ */
+export function openAqHourReadings(station, sensor, hours) {
+  return hours.map((hour) => ({
+    stationId: station.stationId,
+    name: station.name,
+    lat: station.lat,
+    lon: station.lon,
+    country: station.country,
+    zone: station.zone,
+    owner: station.owner,
+    network: station.network,
+    licenses: station.licenses,
+    monitor: station.monitor,
+    id: `openaq:${station.stationId}:${sensor.parameter}`,
+    provider: 'openaq',
+    sensorId: sensor.id,
+    parameter: sensor.parameter,
+    scale: sensor.parameter,
+    units: sensor.units,
+    value: hour.value,
+    observedMs: hour.endMs,
+    kind: 'observation',
+    averagingMinutes: 60,
+    qualityFlagged: hour.flagged,
+    ...(hour.coverage === null ? {} : { coveragePercent: hour.coverage }),
+    color: AIR_QUALITY_UNRATED_COLOR,
+    label: '',
+  }));
+}

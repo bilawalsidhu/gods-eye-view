@@ -5751,6 +5751,7 @@
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
+      "src/layers/airQuality/nowcast.js",
       "src/layers/airQuality/units.js",
       "src/data/aircraftViews.js",
       "src/data/aircraftViews.json",
@@ -6627,6 +6628,7 @@
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
+      "src/layers/airQuality/nowcast.js",
       "src/layers/airQuality/units.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
@@ -7401,6 +7403,7 @@
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
+      "src/layers/airQuality/nowcast.js",
       "src/layers/airQuality/units.js"
     ],
     "external": []
@@ -8508,6 +8511,7 @@
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
+      "src/layers/airQuality/nowcast.js",
       "src/layers/airQuality/units.js",
       "src/ui/keyGuidance.js",
       "src/keySetupCore.mjs",
@@ -8528,6 +8532,7 @@
       "src/layers/airQuality/interpretation.js",
       "src/layers/airQuality/openAq.js",
       "src/layers/airQuality/usAqi.js",
+      "src/layers/airQuality/nowcast.js",
       "src/layers/airQuality/units.js"
     ],
     "external": []

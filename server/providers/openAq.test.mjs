@@ -16,6 +16,23 @@ const locations = countries.map((country, i) => ({
   coordinates: { latitude: 0, longitude: 20 },
   sensors: [{ id: 100 + i, parameter: { name: 'pm25', units: 'µg/m³' } }],
 }));
+/** OpenAQ hourly means of one pollutant ending at `end`, oldest first. */
+const hourRows = (name, units, values, end = start) =>
+  values.map((value, i) => ({
+    value,
+    parameter: { name, units },
+    flagInfo: { hasFlags: false },
+    coverage: { percentCoverage: 100 },
+    period: {
+      interval: '01:00:00',
+      datetimeFrom: {
+        utc: new Date(end - (values.length - i) * 3600_000).toISOString(),
+      },
+      datetimeTo: {
+        utc: new Date(end - (values.length - 1 - i) * 3600_000).toISOString(),
+      },
+    },
+  }));
 function fixture({
   now = () => start,
   getKey = () => 'test-private-key',
@@ -35,6 +52,13 @@ function fixture({
       if (url.includes('/locations?'))
         return Response.json({
           results: locations.filter((l) => l.country.code !== 'FR'),
+        });
+      // The AQI view's hourly means: three hours of PM2.5, the sensor's
+      // station id in µg/m³.
+      const sensor = url.match(/sensors\/(\d+)\/hours/);
+      if (sensor)
+        return Response.json({
+          results: hourRows('pm25', 'µg/m³', new Array(3).fill(sensor[1] - 99)),
         });
       const id = Number(url.match(/locations\/(\d+)/)[1]);
       return Response.json({
@@ -427,7 +451,7 @@ test('parameter-scoped views acquire hourly means with independent caches and no
   );
 });
 
-test('the AQI view asks latest per location and returns every pollutant', async () => {
+test('the AQI view reads hourly means for PM, ozone and CO and latest values for NO2 and SO2', async () => {
   const paths = [];
   const source = createOpenAqAcquisition({
     getKey: () => 'fixture',
@@ -454,6 +478,22 @@ test('the AQI view asks latest per location and returns every pollutant', async 
             },
           ],
         });
+      if (url.pathname === '/v3/sensors/100/hours') {
+        // Twelve hours ending at the current hour.
+        const from = Date.parse(url.searchParams.get('datetime_from'));
+        assert.ok(from <= start - 12 * 3600_000);
+        return Response.json({
+          results: hourRows(
+            'pm25',
+            'µg/m³',
+            [50, 80, 75, 90, 82, 53, 64, 74, 21, 10, 16, 13],
+          ),
+        });
+      }
+      if (url.pathname === '/v3/sensors/102/hours')
+        return Response.json({
+          results: hourRows('co', 'ppm', new Array(8).fill(0.4)),
+        });
       const at = { utc: new Date(start - 600_000).toISOString() };
       return Response.json({
         results: [
@@ -466,13 +506,25 @@ test('the AQI view asks latest per location and returns every pollutant', async 
   });
   const view = [10, -10, 30, 10, 20, 0];
   const snapshot = await source.getSnapshot({ view, mode: 'aqi' });
-  assert.deepEqual(paths, ['/v3/locations', '/v3/locations/1/latest']);
+  assert.deepEqual(paths, [
+    '/v3/locations',
+    '/v3/sensors/100/hours',
+    '/v3/sensors/102/hours',
+    '/v3/locations/1/latest',
+  ]);
   assert.equal(snapshot.readings.length, 1);
   const [station] = snapshot.readings;
   assert.equal(station.id, 'openaq:1:aqi');
   assert.equal(station.provider, 'openaq');
-  assert.deepEqual(station.values, { pm25: 8, no2: 20, co: 0.4 * 1.1456 });
-  assert.equal(station.observedMs, start - 600_000);
+  // PM2.5 on its NowCast (17.4), CO on its 8-hour mean, NO2 on the latest
+  // value; the latest PM2.5 and CO values are not used.
+  assert.ok(Math.abs(station.values.pm25 - 17.4139) < 1e-3);
+  assert.equal(station.valueMethods.pm25, 'nowcast');
+  assert.equal(station.hourValues.pm25, 13);
+  assert.ok(Math.abs(station.values.co - 0.4 * 1.1456) < 1e-9);
+  assert.equal(station.valueAveraging.co, 480);
+  assert.equal(station.values.no2, 20);
+  assert.equal(station.observedMs, start);
   assert.equal(snapshot.eligible, 1);
   // The AQI view keeps its own cache beside the pollutant views.
   assert.equal(await source.getSnapshot({ view, mode: 'aqi' }), snapshot);
@@ -484,6 +536,51 @@ test('the AQI view asks latest per location and returns every pollutant', async 
     source.getSnapshot({ view, mode: 'other' }),
     (e) => e.status === 400,
   );
+});
+
+test("a sensor's hourly means are asked at most once an hour, for the hours since its newest", async () => {
+  let clock = start;
+  const asked = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      if (url.pathname === '/v3/locations')
+        return Response.json({
+          results: [
+            {
+              ...locations[0],
+              datetimeLast: { utc: new Date(clock).toISOString() },
+              sensors: [{ id: 300, parameter: { name: 'o3', units: 'ppm' } }],
+            },
+          ],
+        });
+      asked.push({
+        from: Date.parse(url.searchParams.get('datetime_from')),
+        at: clock,
+      });
+      return Response.json({
+        results: hourRows('o3', 'ppm', [0.04, 0.05], clock),
+      });
+    },
+  });
+  const view = [10, -10, 30, 10, 20, 0];
+  const first = await source.getSnapshot({ view, mode: 'aqi' });
+  // Ozone's NowCast reads up to two weeks and two hours back.
+  assert.equal(asked.length, 1);
+  assert.ok(asked[0].from <= start - 338 * 3600_000);
+  assert.equal(first.readings[0].valueMethods.o3, 'nowcast');
+  assert.ok(Math.abs(first.readings[0].hourValues.o3 - 98.15) < 1e-9);
+  // Within the hour nothing new is asked, even once the view's cache ends.
+  clock += 30 * 60_000;
+  await source.getSnapshot({ view: [10, -10, 30, 10, 20, 1], mode: 'aqi' });
+  assert.equal(asked.length, 1);
+  // An hour on, only the hours since the newest one held, three back.
+  clock = start + 61 * 60_000;
+  await source.getSnapshot({ view: [10, -10, 30, 10, 20, 2], mode: 'aqi' });
+  assert.equal(asked.length, 2);
+  assert.equal(asked[1].from, start - 3 * 3600_000);
 });
 
 test('the AQI mode travels through the fixed route', async () => {
@@ -529,8 +626,9 @@ test('small pans reuse rounded catalog regions and hourly results', async () => 
   assert.equal(calls.length, 4);
 });
 
-test('AQI-mode pans reuse catalog regions and latest results within the per-pass cap', async () => {
-  // Small pans: one catalog page and one /latest per station, then reuse.
+test('AQI-mode pans reuse catalog regions and hourly results within the per-pass cap', async () => {
+  // Small pans: one catalog page and one hourly-means request per sensor,
+  // then reuse.
   const { source, calls } = fixture();
   for (let i = 0; i < 10; i++) {
     const offset = i / 100;
@@ -542,7 +640,8 @@ test('AQI-mode pans reuse catalog regions and latest results within the per-pass
     assert.ok(result.readings.every((row) => row.id.endsWith(':aqi')));
   }
   assert.equal(calls.filter((c) => c.url.includes('/locations?')).length, 1);
-  assert.equal(calls.filter((c) => c.url.includes('/latest?')).length, 3);
+  assert.equal(calls.filter((c) => c.url.includes('/hours?')).length, 3);
+  assert.equal(calls.filter((c) => c.url.includes('/latest?')).length, 0);
   // Returning to a view within a minute answers from its cache.
   const view = [19.1, -0.9, 20.1, 0.9, 20, 0];
   const before = calls.length;
@@ -573,7 +672,7 @@ test('AQI-mode pans reuse catalog regions and latest results within the per-pass
     mode: 'aqi',
   });
   assert.equal(latest.length, 4);
-  assert.ok(latest.every((path) => path.endsWith('/latest')));
+  assert.ok(latest.every((path) => path.endsWith('/hours')));
   assert.equal(first.partial, true);
   assert.equal(first.eligible, 6);
 

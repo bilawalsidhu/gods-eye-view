@@ -4,6 +4,7 @@ import { AIR_QUALITY_VALUE_RADIUS_KM, createAirQualityLayer } from './index.js';
 import { interpretHourly } from './interpretation.js';
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 
 const ALL = ['PM2.5', 'PM10', 'O3', 'NO2', 'SO2', 'CO'];
 const DEFINITION = {
@@ -68,7 +69,7 @@ function layerWith(rows) {
       getCoverage: () => null,
       async getSnapshot(request) {
         return request.mode === 'aqi'
-          ? rows
+          ? onAqiPeriods(rows)
           : rows
               .filter((row) => row.parameter === request.parameter)
               .map(interpretHourly);

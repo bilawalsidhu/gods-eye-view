@@ -7,6 +7,7 @@ import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -745,10 +746,11 @@ test('air-quality readout renders the US AQI ramp, its coverage, one index tile 
           parameters: ['PM2.5'],
         },
       ],
-      getSnapshot: async () => [
-        reading('B', 60, 'Hamilton', 43.25),
-        reading('A', 2, 'Toronto', 43.65),
-      ],
+      getSnapshot: async () =>
+        onAqiPeriods([
+          reading('B', 60, 'Hamilton', 43.25),
+          reading('A', 2, 'Toronto', 43.65),
+        ]),
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
@@ -798,7 +800,7 @@ test('air-quality readout renders the US AQI ramp, its coverage, one index tile 
   // One line a row; the station's details are the tooltip.
   assert.match(
     list.children[0].children[0].title,
-    /^Unhealthy · Hamilton · on · Ontario network · Hourly average · /,
+    /^Unhealthy · Hamilton · on · Ontario network · NowCast of recent hourly means · /,
   );
   view.destroy();
   layer.destroy();

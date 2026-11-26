@@ -11,6 +11,7 @@ import { createAirQualityLayer } from './index.js';
 import { createDefaultAirQualityProviders } from './providers.js';
 import { interpretHourly, hourlyLegend } from './interpretation.js';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../../testSupport/airQualityViewer.mjs';
 
 function inLocale(locale, run) {
   setLocale(locale);
@@ -70,7 +71,10 @@ for (const locale of ['es', 'ru']) {
   });
 
   test(`${locale}: the Weather card of Air quality is translated`, async () => {
-    const layer = harness({ getSnapshot: async () => [reading] });
+    const layer = harness({
+      getSnapshot: async (request) =>
+        request?.mode === 'aqi' ? onAqiPeriods([reading]) : [reading],
+    });
     await layer.update();
     layer.setParams({ station: 'openaq:A:aqi' });
     const controls = inLocale(locale, () => layer.getRowControls());
@@ -172,7 +176,8 @@ for (const [scale, { provider = scale, view, labels }] of Object.entries(
       source: {
         // Reusing the definition under another id must retain its scale context.
         definitions: [{ ...definition, id: 'injected', viewDriven: false }],
-        getSnapshot: async () => rows,
+        getSnapshot: async (request) =>
+          request?.mode === 'aqi' ? onAqiPeriods(rows) : rows,
       },
       overlayHost: {
         setEntries(_id, entries) {
