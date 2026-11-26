@@ -3,6 +3,8 @@
 // Pure function — no viewer/DOM needed; imported directly.
 import { after, afterEach, before, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { followedOf } from './followed.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
 import * as Cesium from 'cesium';
 import flightsLayer, {
   _addFlightTrackingCandidateForTest,
@@ -14,6 +16,8 @@ import flightsLayer, {
   _setTrackedFlightRefreshStateForTest,
   _floorGroundedDisplayPositionForTest,
   _clearDisplayFloorStateForTest,
+  _iconForTest,
+  _floorGroundedIconsForTest,
   _resetEnrichmentForTest,
   mapAnalystRecord,
 } from './flights.js';
@@ -35,6 +39,7 @@ import {
   destroyTrackedReadout,
   initTrackedReadout,
 } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 // Unit tests never reach the network. A test that tracks a plane queues its
 // enrichment (type, route, photo), so every test ends on an empty queue, and a
@@ -86,6 +91,8 @@ const FULL_INFO = {
   verticalRate: -4.5,
   onGround: false,
   klass: 'airliner',
+  typeCode: 'B738',
+  category: 'A3',
   originCountry: 'United States',
   airline: 'Southwest Airlines',
   route: { origin: { code: 'AUS' }, destination: { code: 'LAX' } },
@@ -109,6 +116,8 @@ test('flights analyst record: full record maps every contract field', () => {
     onGround: false,
     military: false,
     aircraftClass: 'airliner',
+    typeCode: 'B738',
+    category: 'A3',
     originCountry: 'United States',
     operator: 'Southwest Airlines',
     squawk: null,
@@ -119,6 +128,9 @@ test('flights analyst record: full record maps every contract field', () => {
     lastContactAtMs: null,
     routeOrigin: 'AUS',
     routeDestination: 'LAX',
+    routeFrom: null,
+    routeTo: null,
+    routeScheduled: null,
   });
 });
 
@@ -216,9 +228,12 @@ test('flights first update forwards caller cancellation into the feed request', 
 test('nonempty OpenSky payload with zero usable rows cannot prove share target absence', async () => {
   _setTrackedFlightRefreshStateForTest({
     icao24: 'abc123',
-    entity: { gevLabelModel: { title: 'WARM', details: [] } },
-    billboard: { show: false },
-    billboardCollection: { show: true, remove() {} },
+    entity: withEntityRecord(
+      {},
+      { labelModel: { title: 'WARM', details: [] } },
+    ),
+    icon: { show: false },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     meta: { rawLat: 30.2, rawLon: -97.7, onGround: false },
   });
@@ -256,27 +271,18 @@ test('nonempty OpenSky payload with zero usable rows cannot prove share target a
 test('a newly seen aircraft appears at its delayed position, not ahead of it', async () => {
   // The fleet renders RENDER_DELAY_SEC behind real time, so a fresh contact's
   // first displayed position is its fix projected back to that delayed time.
-  // Creating the billboard at the raw fix drew it ahead until the next fleet
+  // Creating the icon at the raw fix drew it ahead until the next fleet
   // tick, which then jumped it back about one delay of travel.
-  const added = [];
-  const billboardCollection = {
-    show: false,
-    add(options) {
-      const billboard = { ...options };
-      added.push(billboard);
-      return billboard;
-    },
-    remove() {},
-  };
+  const iconLayer = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection,
+    iconLayer,
     viewer,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
     tracked: false,
@@ -324,9 +330,9 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
   };
   try {
     await flightsLayer.update(viewer);
-    const billboard = added.find((entry) => entry.id === icao24);
-    assert.ok(billboard, 'the new contact gets a billboard');
-    const shown = Cesium.Cartographic.fromCartesian(billboard.position);
+    const icon = _iconForTest(icao24);
+    assert.ok(icon, 'the new contact gets an icon');
+    const shown = Cesium.Cartographic.fromCartesian(icon.position);
     const fix = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 10_700);
     const behindM = Cesium.Cartesian3.distance(
       Cesium.Cartesian3.fromRadians(shown.longitude, shown.latitude, 10_700),
@@ -349,19 +355,22 @@ test('a newly seen aircraft appears at its delayed position, not ahead of it', a
 
 test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STALE', async () => {
   const icao24 = 'a1b2c3';
-  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const entity = withEntityRecord(
+    {},
+    { labelModel: { title: 'OLD', details: [] } },
+  );
   const billboard = {
     position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 9_000),
     color: Cesium.Color.WHITE,
     show: false,
   };
-  const billboardCollection = { show: false, remove() {} };
+  const iconLayer = { show: false, remove() {} };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24,
     entity,
-    billboard,
-    billboardCollection,
+    icon: billboard,
+    iconLayer,
     viewer,
     meta: {
       callsign: 'OLD1',
@@ -420,13 +429,22 @@ test('flights poll refreshes tracked callsign/FL/kts and marks a missed poll STA
 
   try {
     await flightsLayer.update(viewer);
-    assert.equal(entity.gevLabelModel.title, 'DAL123');
-    assert.match(entity.gevLabelModel.details.join(' · '), /FL350/);
-    assert.match(entity.gevLabelModel.details.join(' · '), /486 kts/);
+    assert.equal(readEntityRecord(entity)?.labelModel.title, 'DAL123');
+    assert.match(
+      readEntityRecord(entity)?.labelModel.details.join(' · '),
+      /FL350/,
+    );
+    assert.match(
+      readEntityRecord(entity)?.labelModel.details.join(' · '),
+      /486 kts/,
+    );
 
     await flightsLayer.update(viewer);
     assert.match(
-      [entity.gevLabelModel.title, ...entity.gevLabelModel.details].join(' · '),
+      [
+        readEntityRecord(entity)?.labelModel.title,
+        ...readEntityRecord(entity)?.labelModel.details,
+      ].join(' · '),
       /STALE/,
     );
   } finally {
@@ -703,6 +721,7 @@ test('real civil track path creates no native label and publishes every cached h
     },
   });
   viewer.scene.camera = viewer.camera;
+  bindFakeCesiumCamera(viewer);
   const billboard = {
     position,
     rotation: 0.3,
@@ -737,8 +756,8 @@ test('real civil track path creates no native label and publishes every cached h
     _setTrackedFlightRefreshStateForTest({
       icao24,
       entity: null,
-      billboard,
-      billboardCollection: { show: true, remove() {} },
+      icon: billboard,
+      iconLayer: { show: true, remove() {} },
       viewer,
       tracked: false,
       history: [
@@ -776,16 +795,27 @@ test('real civil track path creates no native label and publishes every cached h
       flightsLayer.trackById(icao24, { origin: 'programmatic' }),
       true,
     );
-    const entity = viewer.trackedEntity;
+    const entity = followedOf(viewer)?.entity;
     assert.ok(
-      entity instanceof Cesium.Entity,
-      'trackById must create the real Cesium entity',
+      readEntityRecord(entity)?.trackedId,
+      'trackById must record the tracked contact',
     );
+    assert.ok(
+      !(entity instanceof Cesium.Entity),
+      'tracking draws through the draw port, not a viewer entity',
+    );
+    assert.ok(entity.position, 'Cockpit sees a contact it can fly');
+    assert.equal(readEntityRecord(entity).drawn(), true);
+    assert.ok(
+      Array.isArray(readEntityRecord(entity).groundSets()),
+      'Cockpit asks which draw sets its ground probe sees through',
+    );
+    assert.equal(entity.show, true);
     assert.equal(entity.label, undefined);
     assert.ok(
       entities.values.every((candidate) => candidate.label === undefined),
     );
-    assert.deepEqual(entity.gevLabelModel, {
+    assert.deepEqual(readEntityRecord(entity)?.labelModel, {
       title: 'N12345 · FL350 · 486 kts',
       details: ['TEST AIR · A320', 'AUS → LAX'],
       accent: '#39d0ff',
@@ -804,7 +834,7 @@ test('real civil track path creates no native label and publishes every cached h
       'user',
       'same-target selection upgrades durable authority',
     );
-    assert.equal(entity.gevSelectionOrigin, 'user');
+    assert.equal(readEntityRecord(entity)?.selectionOrigin, 'user');
     assert.equal(flightsLayer.refocusTrackedById('different-flight'), false);
     assert.equal(
       flightsLayer.refocusTrackedById(icao24, { origin: 'voice' }),
@@ -818,7 +848,7 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(flightsLayer.refocusTrackedById(icao24), true);
     viewer.scene.preUpdate.raiseEvent();
     assert.equal(
-      viewer.trackedEntity,
+      followedOf(viewer)?.entity,
       entity,
       'refocus must retain the exact tracked entity',
     );
@@ -837,11 +867,14 @@ test('real civil track path creates no native label and publishes every cached h
     const entry = publication.entries[0];
     assert.equal(entry.protected, true);
     assert.equal(entry.paintLane, 'tracked');
-    assert.equal(entry.title, entity.gevLabelModel.title);
-    assert.deepEqual(entry.details, entity.gevLabelModel.details);
+    assert.equal(entry.title, readEntityRecord(entity)?.labelModel.title);
+    assert.deepEqual(
+      entry.details,
+      readEntityRecord(entity)?.labelModel.details,
+    );
 
-    const display = entity.position.getValue(now);
-    assert.ok(display, 'tracked position callback must seed its frame cache');
+    const display = followedOf(viewer)?.position(Date.now());
+    assert.ok(display, 'the follow target must seed the frame cache');
     assert.equal(
       entry.position(),
       display,
@@ -861,7 +894,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late001',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.5, 30.4, 9_000),
       },
@@ -885,7 +918,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late002',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.4, 30.5, 8_000),
       },
@@ -908,7 +941,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late003',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.3, 30.6, 7_000),
       },
@@ -925,7 +958,7 @@ test('real civil track path creates no native label and publishes every cached h
     assert.equal(_pendingFlightTrackingRestoreForTest(), 'late004');
     _addFlightTrackingCandidateForTest({
       icao24: 'late004',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.2, 30.7, 6_000),
       },
@@ -950,7 +983,7 @@ test('real civil track path creates no native label and publishes every cached h
     );
     _addFlightTrackingCandidateForTest({
       icao24: 'late005',
-      billboard: {
+      icon: {
         ...billboard,
         position: Cesium.Cartesian3.fromDegrees(-97.1, 30.8, 5_000),
       },
@@ -996,12 +1029,12 @@ function seedLabelContact({
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
     entity: null,
-    billboard: {
+    icon: {
       position: LABEL_POSITION,
       color: Cesium.Color.WHITE,
       show: true,
     },
-    billboardCollection: { show: true, remove() {} },
+    iconLayer: { show: true, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     tracked,
     meta: {
@@ -1199,17 +1232,20 @@ test('civil label chain: the awareness selection EVENT uses the canonical chain'
 });
 
 test('civil tracked readout: a callsign-less enriched contact reads as its registration', async () => {
-  const entity = { gevLabelModel: { title: 'OLD', details: [] } };
+  const entity = withEntityRecord(
+    {},
+    { labelModel: { title: 'OLD', details: [] } },
+  );
   seedLabelContact({ callsign: '  ', registration: ' N123AB ', tracked: true });
   _setTrackedFlightRefreshStateForTest({
     icao24: LABEL_ICAO,
     entity,
-    billboard: {
+    icon: {
       position: LABEL_POSITION,
       color: Cesium.Color.WHITE,
       show: false,
     },
-    billboardCollection: { show: false, remove() {} },
+    iconLayer: { show: false, remove() {} },
     viewer: { camera: { positionCartographic: null }, scene: {} },
     meta: {
       callsign: '  ',
@@ -1239,9 +1275,12 @@ test('civil tracked readout: a callsign-less enriched contact reads as its regis
       camera: { positionCartographic: null },
       scene: {},
     });
-    assert.match(entity.gevLabelModel.title, /^N123AB\b/);
+    assert.match(readEntityRecord(entity)?.labelModel.title, /^N123AB\b/);
     assert.doesNotMatch(
-      [entity.gevLabelModel.title, ...entity.gevLabelModel.details].join(' · '),
+      [
+        readEntityRecord(entity)?.labelModel.title,
+        ...readEntityRecord(entity)?.labelModel.details,
+      ].join(' · '),
       /ae1fa4/,
     );
   } finally {
@@ -1323,30 +1362,21 @@ const _floorCarto = (pos) =>
 
 test('a newly seen taxiing aircraft starts on the floor under its delayed position', async () => {
   // A grounded contact is drawn at its delayed position lifted onto the floor
-  // under it. Creating the billboard without that lift started it on the
+  // under it. Creating the icon without that lift started it on the
   // floor of its reported fix, then the next fleet tick raised it.
   _clearDisplayFloorStateForTest();
   _clearMeshFloorCellsForTest();
   setMeshFloorPreferred(true);
-  const added = [];
-  const billboardCollection = {
-    show: false,
-    add(options) {
-      const billboard = { ...options };
-      added.push(billboard);
-      return billboard;
-    },
-    remove() {},
-  };
+  const iconLayer = { show: false };
   const viewer = { camera: { positionCartographic: null }, scene: {} };
   _setTrackedFlightRefreshStateForTest({
     icao24: 'seed00',
     entity: null,
-    billboard: {
+    icon: {
       show: false,
       position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
     },
-    billboardCollection,
+    iconLayer,
     viewer,
     meta: { rawLat: 0, rawLon: 0, onGround: false },
     tracked: false,
@@ -1399,9 +1429,9 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
   };
   try {
     await flightsLayer.update(viewer);
-    const billboard = added.find((entry) => entry.id === icao24);
-    assert.ok(billboard, 'the new contact gets a billboard');
-    const shown = _floorCarto(billboard.position);
+    const icon = _iconForTest(icao24);
+    assert.ok(icon, 'the new contact gets an icon');
+    const shown = _floorCarto(icon.position);
     assert.ok(
       Cesium.Math.toDegrees(shown.longitude) < fixLon,
       'drawn behind the fix',
@@ -1410,6 +1440,99 @@ test('a newly seen taxiing aircraft starts on the floor under its delayed positi
       Math.abs(shown.height - (131.5 + GROUND_FLOOR_LIFT_M)) < 0.05,
       `height ${shown.height} should be the delayed position's floor, 131.5 + lift`,
     );
+  } finally {
+    globalThis.fetch = realFetch;
+    _clearMeshFloorCellsForTest();
+    _clearDisplayFloorStateForTest();
+  }
+});
+
+test('far grounded contacts take turns on the floor; near ones refloor every tick', async () => {
+  // The floor pass is the fleet tick's only per-contact CPU work. Past
+  // FLOOR_NEAR_M a contact is refloored once per FLOOR_FAR_EVERY_TICKS.
+  _clearDisplayFloorStateForTest();
+  _clearMeshFloorCellsForTest();
+  setMeshFloorPreferred(true);
+  const viewer = { camera: { positionCartographic: null }, scene: {} };
+  _setTrackedFlightRefreshStateForTest({
+    icao24: 'seed00',
+    entity: null,
+    icon: {
+      show: false,
+      position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+    },
+    iconLayer: { show: false },
+    viewer,
+    meta: { rawLat: 0, rawLon: 0, onGround: false },
+    tracked: false,
+  });
+  const icao24 = 'taxi02';
+  const fixLon = -97.66;
+  const fixLat = 30.2;
+  for (let k = -40; k <= 40; k += 1) {
+    reportMeshFloorCell(fixLat, fixLon + k * 0.0001, 131.5);
+  }
+  const nowSec = Math.floor(Date.now() / 1000);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (!String(url).startsWith('/api/flights')) {
+      return { ok: true, status: 200, json: async () => ({ ac: [] }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        time: nowSec,
+        states: [
+          [
+            icao24,
+            'TAXI02 ',
+            'United States',
+            nowSec - 2,
+            nowSec - 2,
+            fixLon,
+            fixLat,
+            null,
+            true,
+            10,
+            90,
+            0,
+            null,
+            null,
+            null,
+            null,
+            null,
+            5,
+          ],
+        ],
+      }),
+    };
+  };
+  try {
+    await flightsLayer.update(viewer);
+    // A grounded report holds once its time is past, so the ticks run in
+    // the 40 s before it, while the contact still taxis toward its fix.
+    const start = Cesium.JulianDate.fromDate(
+      new Date((nowSec - 2 - 40) * 1000),
+    );
+    const at = (s) =>
+      Cesium.JulianDate.addSeconds(start, s, new Cesium.JulianDate());
+    const far = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 3_000_000);
+    const near = Cesium.Cartesian3.fromDegrees(fixLon, fixLat, 10_000);
+    let last = _iconForTest(icao24).position;
+    const moves = (camera, from, to) => {
+      let count = 0;
+      for (let tick = from; tick <= to; tick += 1) {
+        _floorGroundedIconsForTest(at(tick), camera);
+        const now = _iconForTest(icao24).position;
+        if (Cesium.Cartesian3.distance(now, last) > 1) count += 1;
+        last = now;
+      }
+      return count;
+    };
+    assert.equal(moves(far, 1, 24), 2, 'far: once per 12 ticks');
+    assert.equal(moves(near, 25, 30), 6, 'near: every tick');
   } finally {
     globalThis.fetch = realFetch;
     _clearMeshFloorCellsForTest();

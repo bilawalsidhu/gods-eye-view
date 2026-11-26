@@ -1,0 +1,46 @@
+{
+  "source": "CAMS forecast (Copernicus Atmosphere Monitoring Service)",
+  "sourceShort": "CAMS",
+  "credit": "Contains modified Copernicus Atmosphere Monitoring Service information 2026. Neither the European Commission nor ECMWF is responsible for any use that may be made of the information it contains.",
+  "run": "2026-11-20T00:00:00Z",
+  "scale": {
+    "pm25": 20,
+    "pm10": 10,
+    "o3": 50,
+    "no2": 50,
+    "so2": 20,
+    "co": 500,
+    "aqi": 10
+  },
+  "global": {
+    "width": 26,
+    "height": 26,
+    "lon0": 6,
+    "lat0": 50,
+    "step": 0.4000000000000057,
+    "wrap": false,
+    "steps": [
+      0,
+      24
+    ]
+  },
+  "europe": {
+    "width": 50,
+    "height": 50,
+    "lon0": 8.049484,
+    "lat0": 47.950363,
+    "step": 0.09999847412109375,
+    "wrap": false,
+    "steps": [
+      0,
+      24
+    ],
+    "rectangle": {
+      "west": 7.999485,
+      "east": 12.999408,
+      "north": 48.000362,
+      "south": 43.000439
+    },
+    "blendDeg": 1
+  }
+}

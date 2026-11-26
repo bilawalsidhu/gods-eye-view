@@ -509,3 +509,25 @@ test('a layer with no feed in view says why instead of "never"', async () => {
     setLocale('en');
   }
 });
+
+test('a chip count is shortened like the row count', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const panel = Object.create(LayerPanel.prototype);
+  panel._rowControlsFor = () => ({
+    chips: [
+      { id: 'a', label: 'A', active: true, swatch: '#fff', count: 10700 },
+      { id: 'b', label: 'B', active: true, swatch: '#fff', count: 42 },
+      { id: 'c', label: 'C', active: false },
+    ],
+  });
+  const { chips, hidden } = panel._presentControls(
+    {},
+    { id: 'x', enabled: true },
+  );
+  assert.equal(hidden, false);
+  assert.deepEqual(
+    chips.map((chip) => chip.countText),
+    ['10.7K', '42', undefined],
+  );
+  assert.equal(chips[0].swatch, '#fff', 'the rest of the chip passes through');
+});

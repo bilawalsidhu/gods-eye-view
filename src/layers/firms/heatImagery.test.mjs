@@ -7,27 +7,25 @@ import { HEAT_RASTER } from './policy.js';
 function harness() {
   const layers = [];
   const removed = [];
-  const collection = {
-    addImageryProvider(provider) {
-      const layer = { provider, show: true, alpha: 1 };
-      layers.push(layer);
-      return layer;
-    },
-    remove(layer, destroy) {
-      layers.splice(layers.indexOf(layer), 1);
-      removed.push({ layer, destroy });
-    },
-    raiseToTop() {},
-  };
-  let host = { collection, kind: 'globe' };
-  const cesium = {
-    Rectangle: { MAX_VALUE: { max: true } },
-    SingleTileImageryProvider: class {
-      constructor(options) {
-        this.options = options;
-      }
+  // The renderer's globe port, reduced to its imagery.
+  const globe = {
+    imagery: {
+      add(spec) {
+        const layer = {
+          spec,
+          show: true,
+          alpha: 1,
+          remove() {
+            layers.splice(layers.indexOf(layer), 1);
+            removed.push(layer);
+          },
+        };
+        layers.push(layer);
+        return layer;
+      },
     },
   };
+  let host = { globe, kind: 'globe' };
   const createCanvas = (w, h) => ({
     width: w,
     height: h,
@@ -40,11 +38,16 @@ function harness() {
     toDataURL: () => 'data:image/png;base64,AAAA',
   });
   const imagery = createHeatImagery({
-    cesium,
     getHost: () => host,
     createCanvas,
   });
-  return { imagery, layers, removed, collection, setHost: (h) => (host = h) };
+  return {
+    imagery,
+    layers,
+    removed,
+    globe,
+    setHost: (h) => (host = h),
+  };
 }
 
 const raster = { width: 4, height: 2, rgba: new Uint8ClampedArray(32) };
@@ -53,11 +56,19 @@ test('setRaster drapes one full-globe tile and replaces it on the next build', (
   const h = harness();
   h.imagery.setRaster(raster);
   assert.equal(h.layers.length, 1);
-  assert.deepEqual(h.layers[0].provider.options.rectangle, { max: true });
-  assert.equal(h.layers[0].provider.options.tileWidth, 4);
+  assert.equal(h.layers[0].spec.kind, 'single-image');
+  assert.deepEqual(h.layers[0].spec.rectangle, {
+    west: -180,
+    south: -90,
+    east: 180,
+    north: 90,
+  });
+  assert.equal(h.layers[0].spec.url, 'data:image/png;base64,AAAA');
+  assert.equal(h.layers[0].spec.zOrder, 0.5, 'over the other imagery');
+  const first = h.layers[0];
   h.imagery.setRaster(raster);
   assert.equal(h.layers.length, 1, 'never two heat layers');
-  assert.equal(h.removed[0].destroy, true);
+  assert.deepEqual(h.removed, [first]);
 });
 
 test('setShow toggles without rebuilding', () => {
@@ -89,12 +100,21 @@ test('setOpacity fades the same layer and survives a rebuild', () => {
 
 test('no imagery host keeps nothing draped; rehome brings it back', () => {
   const h = harness();
-  h.setHost({ collection: null, kind: 'none' });
+  h.setHost({ globe: h.globe, kind: 'none' });
   h.imagery.setRaster(raster);
   assert.equal(h.layers.length, 0);
-  h.setHost({ collection: h.collection, kind: 'globe' });
+  h.setHost({ globe: h.globe, kind: 'globe' });
   h.imagery.rehome();
   assert.equal(h.layers.length, 1);
+  // The same surface: nothing is draped again.
+  const kept = h.layers[0];
+  h.imagery.rehome();
+  assert.equal(h.layers[0], kept);
+  // The map stack moves to 3D tiles: draped again, once.
+  h.setHost({ globe: h.globe, kind: 'tileset' });
+  h.imagery.rehome();
+  assert.equal(h.layers.length, 1);
+  assert.notEqual(h.layers[0], kept);
 });
 
 test('destroy removes the layer', () => {

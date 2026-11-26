@@ -53,6 +53,7 @@ Abbreviated units and codes do not change: «{count} MEDD.».
 | aircraft / flight / military flights           | luftfartyg (short labels: flygplan) / flygning / militärflyg    |
 | vessel, ship                                   | fartyg                                                          |
 | satellite / shell (Starlink)                   | satellit / skal                                                 |
+| CONFIRMED (sightings chip; a landing)          | BEKRÄFTADE / BEKRÄFTAD                                          |
 | launch (rocket) / launch site / space mission  | uppskjutning / uppskjutningsplats / rymduppdrag                 |
 | contact / tracking                             | kontakt / följning                                              |
 | installation / site                            | anläggning / plats                                              |

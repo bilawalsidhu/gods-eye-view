@@ -6,14 +6,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPinia } from 'pinia';
 import { createApp, h, nextTick } from 'vue';
-import { useContextStore } from './stores/context.js';
+import { useSpaceMissionsStore } from './stores/spaceMissions.js';
 import MissionDetail from './views/panels/MissionDetail.vue';
 import MissionRoster from './views/panels/MissionRoster.vue';
 
 function fixture(t) {
   document.body.replaceChildren();
   const scroller = document.body.appendChild(document.createElement('div'));
-  scroller.className = 'global-context-panel-inner';
+  scroller.className = 'space-missions-panel-inner';
   const host = scroller.appendChild(document.createElement('div'));
   const pinia = createPinia();
   const app = createApp({
@@ -21,13 +21,13 @@ function fixture(t) {
   }).use(pinia);
   app.mount(host);
   t.after(() => app.unmount());
-  const store = useContextStore(pinia);
+  const store = useSpaceMissionsStore(pinia);
   const calls = [];
   const record =
     (name) =>
     (...args) =>
       calls.push([name, ...args]);
-  store.connectMissions({
+  store.connect({
     selectMissionAt: record('select'),
     selectPreviousMission: record('previous'),
     selectNextMission: record('next'),
@@ -44,7 +44,7 @@ function fixture(t) {
   });
   const $ = (selector) => document.querySelector(selector);
   const publish = async (view) => {
-    store.publishMissions(view);
+    store.publish(view);
     await nextTick();
     await nextTick();
   };
@@ -325,7 +325,7 @@ test('the replay controls follow the layer and call its commands', async (t) => 
   ]);
 });
 
-test('each newly presented selection returns the Context panel to the top', async (t) => {
+test('each newly presented selection returns the Space Missions panel to the top', async (t) => {
   const { publish, scroller } = fixture(t);
   scroller.scrollTop = 120;
   await publish({ roster: null, mission: mission({ scrollRequest: 4 }) });

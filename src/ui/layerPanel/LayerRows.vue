@@ -5,6 +5,7 @@ import RowRange from './RowRange.vue';
 import RowSlider from './RowSlider.vue';
 import RowSwitch from './RowSwitch.vue';
 import RowText from './RowText.vue';
+import UiButton from '../kit/UiButton.vue';
 import { vClassToggle } from '../rail/classToggle.js';
 
 // The data layer rows under their group headings. LayerPanel presents every
@@ -12,6 +13,7 @@ import { vClassToggle } from '../rail/classToggle.js';
 // descriptor before acting.
 defineProps({
   items: { type: Array, required: true },
+  filtered: Set,
   onToggle: { type: Function, default: () => {} },
   onChip: { type: Function, default: () => {} },
   onListItem: { type: Function, default: () => {} },
@@ -22,14 +24,18 @@ defineProps({
 
 <template>
   <template v-for="item in items" :key="item.key"
-    ><h3 v-if="item.heading" class="data-layer-group-heading">{{
-      item.heading
-    }}</h3
+    ><h3
+      v-if="item.heading"
+      class="data-layer-group-heading"
+      v-class-toggle="{ 'is-filtered': filtered?.has(item.key) }"
+      :data-group="item.key"
+      >{{ item.heading }}</h3
     ><div
       v-else
       class="data-toggle-row"
       v-class-toggle="{
         'data-toggle-row--count-line': item.count?.countLine,
+        'is-filtered': filtered?.has(item.key),
       }"
       :data-layer-id="item.id"
       :data-layer-name="item.englishName"
@@ -43,8 +49,7 @@ defineProps({
             v-if="item.count"
             :class="['data-count', { 'data-count-empty': item.count.empty }]"
             :text="item.count.text"
-          /><button
-            type="button"
+          /><UiButton
             :class="['data-toggle-btn', item.toggle.classes]"
             :data-feed-state="item.toggle.feedState"
             :aria-disabled="String(item.toggle.ariaDisabled)"
@@ -52,7 +57,7 @@ defineProps({
             :title="item.toggle.title"
             :aria-label="item.toggle.ariaLabel"
             @click="onToggle(item.id)"
-            >{{ item.toggle.text }}</button
+            >{{ item.toggle.text }}</UiButton
           ></div
         ></div
       ><RowText tag="div" class="data-toggle-meta" :text="item.meta" /><template

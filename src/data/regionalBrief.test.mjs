@@ -57,6 +57,20 @@ test('zone-naive Open-Meteo timestamps are pinned to UTC, zoned ones pass throug
   assert.equal(invalid.observedAt, null);
 });
 
+test('a reading in the spot’s own time zone keeps the zone and reads its time back to UTC', () => {
+  const local = normalizeRegionalWeather({
+    timezone: 'America/Chicago',
+    utc_offset_seconds: -18000,
+    current: { time: '2026-08-17T10:15', temperature_2m: 20 },
+  });
+  assert.equal(local.observedAt, '2026-08-17T15:15:00.000Z');
+  assert.equal(local.timeZone, 'America/Chicago');
+  assert.equal(local.utcOffsetSeconds, -18000);
+  const bare = normalizeRegionalWeather({ current: { time: '2026-08-17T10:15', temperature_2m: 20 } });
+  assert.equal(bare.timeZone, null);
+  assert.equal(bare.utcOffsetSeconds, null);
+});
+
 test('regional distance handles nearby movement and missing positions', () => {
   const distance = regionalDistanceM(
     { latitude: 38.5, longitude: -121.7 },

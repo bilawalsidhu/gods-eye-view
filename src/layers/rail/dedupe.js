@@ -25,9 +25,13 @@ import { greatCircleKm } from '../../geoDistance.js';
  *  2. the line: a copy bound to its operator's shape (a built pack), then
  *     one without.
  * The copy drawn stays drawn until another scores strictly higher, so equal
- * copies never trade places. A losing copy keeps its playback and is only
- * hidden; when a feed leaves the viewport its copies' partners come back.
- * The comparison runs once per poll, never per frame.
+ * copies never trade places. A copy a first-person view holds
+ * (cockpitSubject.js) stays drawn whatever the scores until the view lets
+ * go: the view knows the train by that copy's key and rides it where that
+ * copy's feed puts it, tens of kilometres from another feed's copy at
+ * times. A losing copy keeps its playback and is only hidden; when a feed
+ * leaves the viewport its copies' partners come back. The comparison runs
+ * once per poll, never per frame.
  */
 
 /**
@@ -288,10 +292,12 @@ function better(a, b) {
  * scores strictly higher.
  * @param {object[][]} groups From matchCopies.
  * @param {Map<string, string>} [previous] copy key → key drawn last time.
+ * @param {string|null} [held] A copy drawn whatever the scores: the train a
+ *   first-person view holds.
  * @returns {{winners: Map<string, string>, hidden: Set<string>}}
  *   `winners`: every grouped copy's key → the key drawn for its train.
  */
-export function chooseCopies(groups, previous = new Map()) {
+export function chooseCopies(groups, previous = new Map(), held = null) {
   const winners = new Map();
   const hidden = new Set();
   for (const group of groups) {
@@ -305,6 +311,7 @@ export function chooseCopies(groups, previous = new Map()) {
       scored.reduce((a, b) => (better(b.score, a.score) ? b : a));
     for (const candidate of scored)
       if (better(candidate.score, best.score)) best = candidate;
+    best = scored.find(({ copy }) => copy.key === held) ?? best;
     for (const { copy } of scored) {
       winners.set(copy.key, best.copy.key);
       if (copy.key !== best.copy.key) hidden.add(copy.key);
@@ -318,7 +325,8 @@ export function chooseCopies(groups, previous = new Map()) {
  * loaded feed carries, marks the copies not drawn (`entry.duplicate`), and
  * moves a selection that sat on a copy now hidden to the copy drawn, so the
  * card follows the same physical train (its feed line names the new
- * source).
+ * source). A held copy is never the one hidden, so the hold and the
+ * selection stay on it.
  * @param {{state: object, parts: object,
  *   defer?: (fn: Function) => unknown}} context
  */
@@ -355,6 +363,7 @@ export function createDuplicateFilter({
     const { winners, hidden } = chooseCopies(
       matchCopies(entries.map(copyOf)),
       previous,
+      state._cockpitSubjectKey ?? null,
     );
     previous = winners;
     for (const entry of entries) {

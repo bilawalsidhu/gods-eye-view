@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { hexColor } from '../../render/color.js';
 import { msg } from '../../i18n/index.js';
 import { WINDOW_DAYS } from './policy.js';
 
@@ -140,30 +140,33 @@ export function createModel({ state: layerState, services, parts, source }) {
    * Select a stable marker color from the mission operator and payload name.
    * Labels stay cyan so the layer remains visually coherent.
    * @param {object} launch Normalized launch record.
-   * @returns {Cesium.Color}
+   * @returns {string} `#rrggbb`.
    */
 
-  function missionMarkerColor(launch) {
+  function missionMarkerHex(launch) {
     const identity =
       `${launch.provider || ''} ${launch.name || ''} ${launch.missionName || ''}`.toLowerCase();
-    if (/nasa|national aeronautics/.test(identity))
-      return Cesium.Color.fromCssColorString('#ff9f43');
-    if (/starlink|spacex|space exploration/.test(identity))
-      return Cesium.Color.fromCssColorString('#4cc9f0');
-    if (/rocket lab/.test(identity))
-      return Cesium.Color.fromCssColorString('#7bed9f');
-    if (/isro|indian space/.test(identity))
-      return Cesium.Color.fromCssColorString('#ff66c4');
-    if (/cnsa|china national|long march/.test(identity))
-      return Cesium.Color.fromCssColorString('#ffd166');
-    if (/blue origin/.test(identity))
-      return Cesium.Color.fromCssColorString('#a78bfa');
-    if (/ula|united launch alliance/.test(identity))
-      return Cesium.Color.fromCssColorString('#f97316');
-    if (/arianespace|esa|european space/.test(identity))
-      return Cesium.Color.fromCssColorString('#60a5fa');
-    if (launch.provider) return Cesium.Color.fromCssColorString('#c084fc');
-    return Cesium.Color.fromCssColorString('#22e6e6');
+    if (/nasa|national aeronautics/.test(identity)) return '#ff9f43';
+    if (/starlink|spacex|space exploration/.test(identity)) return '#4cc9f0';
+    if (/rocket lab/.test(identity)) return '#7bed9f';
+    if (/isro|indian space/.test(identity)) return '#ff66c4';
+    if (/cnsa|china national|long march/.test(identity)) return '#ffd166';
+    if (/blue origin/.test(identity)) return '#a78bfa';
+    if (/ula|united launch alliance/.test(identity)) return '#f97316';
+    if (/arianespace|esa|european space/.test(identity)) return '#60a5fa';
+    if (launch.provider) return '#c084fc';
+    return '#22e6e6';
+  }
+
+  /** The marker colour as a renderer colour, `[r, g, b, a]`. */
+  function missionMarkerColor(launch) {
+    return hexColor(missionMarkerHex(launch));
+  }
+
+  /** The marker colour as CSS, `rgb(r,g,b)`, for the mission panel. */
+  function missionMarkerCss(launch) {
+    const n = Number.parseInt(missionMarkerHex(launch).slice(1), 16);
+    return `rgb(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255})`;
   }
 
   /**
@@ -242,6 +245,7 @@ export function createModel({ state: layerState, services, parts, source }) {
     normalizeLanding,
     normalizeRecoveryStages,
     missionMarkerColor,
+    missionMarkerCss,
     normalizeRocketLaunches,
   };
 }

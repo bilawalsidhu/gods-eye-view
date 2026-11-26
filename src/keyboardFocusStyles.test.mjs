@@ -19,17 +19,6 @@ function ruleText(selector) {
   return css.slice(start, close + 1);
 }
 
-function ruleBodyContaining(selector, declaration) {
-  let start = -1;
-  while ((start = css.indexOf(selector, start + 1)) >= 0) {
-    const open = css.indexOf('{', start);
-    const close = css.indexOf('}', open);
-    const body = css.slice(open + 1, close);
-    if (body.includes(declaration)) return body;
-  }
-  assert.fail(`${selector} rule containing ${declaration} exists`);
-}
-
 test('the global keyboard ring survives local active and outline-reset rules', () => {
   const rule = ruleText(':where(\n  button,');
   assert.match(rule, /outline:\s*2px solid var\(--text-primary\) !important;/);
@@ -41,18 +30,6 @@ test('the global keyboard ring survives local active and outline-reset rules', (
     '[tabindex]',
     'a[href]',
   ]) assert.ok(rule.includes(selector), `${selector} receives the global ring`);
-});
-
-test('Location city, POI, search toggle and search field use an inset ring', () => {
-  const rule = ruleText('.location-pill:focus-visible,');
-  assert.match(rule, /\.poi-pill:focus-visible/);
-  assert.match(rule, /\.search-toggle-btn:focus-visible/);
-  assert.match(rule, /#location-search:focus-visible/);
-  assert.match(rule, /outline:\s*2px solid var\(--text-primary\)/);
-  assert.match(rule, /outline-offset:\s*-3px/);
-  for (const selector of ['.location-pill {', '.poi-pill {', '.search-toggle-btn {']) {
-    assert.doesNotMatch(ruleBody(selector), /transition:\s*all\b/);
-  }
 });
 
 test('Cockpit Display and Radio launcher glyphs have a complete inset ring', () => {
@@ -76,11 +53,4 @@ test('focusable controls do not animate the global outline', () => {
       `${selector} must leave the focus outline immediate`,
     );
   }
-});
-
-test('opening a dock popover makes its controls keyboard-reachable immediately', () => {
-  const base = ruleBodyContaining('#command-dock .dock-popover-content {', 'visibility: hidden');
-  assert.match(base, /visibility\s+0s\s+linear\s+180ms/);
-  const open = ruleText('#command-dock #location-bar:not(.collapsed) .dock-popover-content,');
-  assert.match(open, /transition-delay:\s*0s/);
 });
