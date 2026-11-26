@@ -255,6 +255,10 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
   let _cctvSourceCache = [];
   /** @type {number} Epoch-ms when the source cache was last refreshed. */
   let _cctvSourceCacheAt = 0;
+  /** @type {number} Epoch-ms when the cached list was last built afresh. A
+   * failed or empty refresh moves `_cctvSourceCacheAt` (the retry clock) but
+   * not this. */
+  let _cctvSourceBuiltAt = 0;
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
    * callers so a post-TTL burst launches ONE refetch, not one per request. */
   let _cctvSourceInflight = null;
@@ -402,6 +406,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     if (capped.length > 0 || _cctvSourceCache.length === 0) {
       _cctvSourceCache = capped;
       _cctvTrimmedPacks.set(capped, trimmedPacks);
+      _cctvSourceBuiltAt = Date.now();
     } else {
       // Every source came back empty (all live packs timed out / upstream outage)
       // but a good catalog is already cached — serve it stale rather than blanking
@@ -420,5 +425,10 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
    * step while a background refresh swaps the catalog. */
   getCctvSources.trimmedPacks = (sources = _cctvSourceCache) =>
     _cctvTrimmedPacks.get(sources) ?? [];
+  /** The catalog's size and when it was last built, or null before the first build (never builds it). */
+  getCctvSources.cachedCount = () =>
+    _cctvSourceCache.length
+      ? { count: _cctvSourceCache.length, at: _cctvSourceBuiltAt }
+      : null;
   return getCctvSources;
 }

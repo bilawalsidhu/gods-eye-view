@@ -97,23 +97,18 @@ test('tile cap degrades zoom to preserve complete coverage and oversized direct 
 });
 
 test('grid camera viewport supports globe and antimeridian without detail-query degree limits', () => {
-  const radians = (value) => (value * Math.PI) / 180;
-  const viewer = {
-    camera: {
-      computeViewRectangle: () => ({
-        south: radians(-80),
-        west: radians(120),
-        north: radians(80),
-        east: radians(-120),
-      }),
-    },
-  };
-  const boxes = wildlifeGridViewportBoxes(viewer);
+  // The camera port's view rectangle, in degrees.
+  const boxes = wildlifeGridViewportBoxes({
+    south: -80,
+    west: 120,
+    north: 80,
+    east: -120,
+  });
   assert.equal(boxes.length, 2);
   assert.ok(Math.abs(boxes[0].west - 120) < 1e-8);
   assert.equal(boxes[0].east, 180);
   assert.equal(boxes[1].west, -180);
-  assert.deepEqual(wildlifeGridViewportBoxes({}), []);
+  assert.deepEqual(wildlifeGridViewportBoxes(null), []);
 });
 
 test('logical cell ids and bounds share geographic coverage and wrap antimeridian', () => {

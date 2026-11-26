@@ -160,7 +160,8 @@ test('thermal controls wait for activation and use the real generated parameter 
   };
   // A swallowed click resolves normally; the helper must notice no activation.
   page.$eval = async (selector, fn, ...args) => {
-    if (selector.startsWith('.style-btn')) return fn(new Element(), ...args);
+    if (selector.startsWith('.visual-presets__style'))
+      return fn(new Element(), ...args);
     const label = selector.match(/aria-label="([^"]+)"/)[1];
     const slider = container.querySelector(`[aria-label="${label}"]`);
     assert.ok(slider);
@@ -397,6 +398,28 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
       }),
     }),
   };
+  // The marker record (fresh with each state read, as the fixture's
+  // wrappers are), and the billboard the draw port drew for the latest one
+  // in the layer's still set.
+  let marker = null;
+  const billboard = {
+    id: { set: 'transit:1:still', id: 'bus' },
+    show: true,
+    color: { alpha: 1 },
+    rotation: 0,
+    get position() {
+      return marker.position;
+    },
+  };
+  scene.primitives = {
+    length: 1,
+    get: () => ({
+      drawSetId: 'transit:1:still',
+      show: true,
+      length: 1,
+      get: () => billboard,
+    }),
+  };
   globalThis.window = {
     __godsEyeView: {
       viewer: { scene },
@@ -406,22 +429,22 @@ test('sensor sampler waits for postRender and reads framebuffer pixels; stopped 
             'transit',
             {
               module: {
-                _transitStateForTest: () => ({
-                  _vehicles: new Map([
-                    [
-                      'bus',
-                      {
-                        key: 'bus',
-                        mode: 'bus',
-                        marker: {
-                          show: true,
-                          image: 'raster',
-                          position: { x: 0, y: 0, z: 0 },
-                        },
-                      },
-                    ],
-                  ]),
-                }),
+                _transitSetIdsForTest: () => [
+                  'transit:1:still',
+                  'transit:1:moving',
+                ],
+                _transitStateForTest: () => {
+                  marker = {
+                    show: true,
+                    image: 'raster',
+                    position: { x: 0, y: 0, z: 0 },
+                  };
+                  return {
+                    _vehicles: new Map([
+                      ['bus', { key: 'bus', mode: 'bus', marker }],
+                    ]),
+                  };
+                },
               },
             },
           ],
@@ -603,8 +626,30 @@ test('preset baseline clears a previous city selection before comparing fleet si
     _selectedKey: entry.key,
     _vehicles: new Map([[entry.key, entry]]),
   };
+  // The billboard the draw port drew for the marker, styled as it is.
+  const billboard = {
+    id: { set: 'transit:1:still', id: entry.key },
+    get width() {
+      return entry.marker.width;
+    },
+    get color() {
+      return entry.marker.color;
+    },
+  };
   globalThis.window = {
     __godsEyeView: {
+      viewer: {
+        scene: {
+          primitives: {
+            length: 1,
+            get: () => ({
+              drawSetId: 'transit:1:still',
+              length: 1,
+              get: () => billboard,
+            }),
+          },
+        },
+      },
       dataManager: {
         layers: new Map([
           [
@@ -612,6 +657,7 @@ test('preset baseline clears a previous city selection before comparing fleet si
             {
               module: {
                 _transitStateForTest: () => state,
+                _transitSetIdsForTest: () => ['transit:1:still'],
                 _transitPartsForTest: () => ({
                   selection: {
                     clearSelection() {
@@ -698,7 +744,7 @@ test('public transit documentation uses courtesy attribution and the approved gr
   );
   assert.ok(
     readme.includes(
-      'Twenty-three layers and map sources. **Twenty-one have a keyless path.**',
+      'Twenty-three layers and map sources. **Twenty-one have a keyless path, twenty of them with no configuration at all.**',
     ),
   );
   assert.ok(

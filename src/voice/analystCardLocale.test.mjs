@@ -84,6 +84,24 @@ test('analyst scope, window and caveats in ru', () => {
   }
 });
 
+test('a station-discovery caveat shows in the UI language, as on the layer card', () => {
+  const discovering = {
+    ...radius,
+    display: { caveat: 'OpenAQ: loading stations, 1,204 of 3,000' },
+  };
+  setLocale('ru');
+  try {
+    const { view } = cardFor('analyst_query', discovering);
+    assert.doesNotMatch(JSON.stringify(view.result.notes), /loading stations/);
+    assert.ok(
+      view.result.notes.some((note) => note.startsWith('OpenAQ: загрузка станций')),
+      JSON.stringify(view.result.notes),
+    );
+  } finally {
+    setLocale('en');
+  }
+});
+
 test('en: the card keeps its English text and names layers', () => {
   const { shaped, view } = cardFor('analyst_query', analyst);
   assert.equal(view.result.title, '3 aircraft anywhere in the loaded data');

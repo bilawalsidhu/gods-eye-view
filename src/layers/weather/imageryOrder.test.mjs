@@ -1,72 +1,57 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { orderWeatherImagery } from './imageryOrder.js';
+import { WEATHER_IMAGERY_Z } from './imageryOrder.js';
+import { fakeGlobePort } from '../../testSupport/fakeGlobePort.mjs';
+import { HEAT_IMAGERY_Z } from '../firms/heatImagery.js';
 
-test('weather compositing remains consistent when scalar, observation and history arrive out of order', () => {
-  const base = { name: 'basemap' },
-    radar = { name: 'radar' },
-    cloud = { name: 'cloud' },
-    wind = { name: 'wind' },
-    lightning = { name: 'lightning' };
-  const items = [base];
-  const collection = {
-    get length() {
-      return items.length;
-    },
-    get: (i) => items[i],
-    raiseToTop(layer) {
-      items.push(...items.splice(items.indexOf(layer), 1));
-    },
-  };
-  for (const [layer, priority] of [
-    [radar, 2],
-    [cloud, 1],
-    [lightning, 3],
-    [wind, 0],
-  ]) {
-    items.push(layer);
-    orderWeatherImagery(collection, layer, priority);
-  }
-  assert.deepEqual(items, [base, wind, cloud, radar, lightning]);
-  const next = { name: 'new radar history frame' };
-  items.push(next);
-  orderWeatherImagery(collection, next, 2);
-  assert.deepEqual(items, [base, wind, cloud, radar, next, lightning]);
+test('an air-quality field and its inset, wind, infrared, radar, then lightning, above zOrder 0, whatever the enable order', () => {
+  const globe = fakeGlobePort();
+  const add = (name) =>
+    globe.imagery.add({
+      kind: 'xyz',
+      url: `https://${name}.invalid/{z}/{x}/{y}`,
+      zOrder: WEATHER_IMAGERY_Z[name],
+    });
+  const lightning = add('lightning');
+  const overlay = globe.imagery.add({ kind: 'xyz', url: 'https://o.invalid' });
+  const radar = add('radar');
+  const wind = add('wind');
+  const clouds = add('clouds');
+  const regional = add('clouds-regional');
+  const inset = add('air-quality-inset');
+  const field = add('air-quality');
+  assert.deepEqual(globe.layers, [
+    overlay,
+    field,
+    inset,
+    wind,
+    clouds,
+    regional,
+    radar,
+    lightning,
+  ]);
 });
 
-test('tileset imagery collection preserves scalar, infrared, radar and lightning order', async () => {
-  const { ImageryLayerCollection, ImageryLayer } = await import('cesium');
-  const tileset = { imageryLayers: new ImageryLayerCollection() };
-  const layers = Array.from({ length: 4 }, () => new ImageryLayer());
-  for (const priority of [3, 2, 0, 1]) {
-    tileset.imageryLayers.add(layers[priority]);
-    orderWeatherImagery(tileset.imageryLayers, layers[priority], priority);
-  }
-  assert.deepEqual(
-    layers.map((_, i) => tileset.imageryLayers.get(i)),
-    layers,
-  );
-  tileset.imageryLayers.destroy();
-});
-
-test('already ordered imagery adds and repeated ordering cause no collection churn', () => {
-  const items = [];
-  let raises = 0;
-  const collection = {
-    get length() {
-      return items.length;
-    },
-    get: (i) => items[i],
-    raiseToTop(layer) {
-      raises++;
-      items.push(...items.splice(items.indexOf(layer), 1));
-    },
-  };
-  for (const priority of [0, 1, 1, 2, 3]) {
-    const layer = {};
-    items.push(layer);
-    orderWeatherImagery(collection, layer, priority);
-    orderWeatherImagery(collection, layer, priority);
-  }
-  assert.equal(raises, 0);
+test('Active Fires heat, then an air-quality field and its Europe inset, then wind: never a tie', () => {
+  const order = [
+    HEAT_IMAGERY_Z,
+    WEATHER_IMAGERY_Z['air-quality'],
+    WEATHER_IMAGERY_Z['air-quality-inset'],
+    WEATHER_IMAGERY_Z.wind,
+  ];
+  for (let i = 1; i < order.length; i++)
+    assert.ok(order[i - 1] < order[i], String(order));
+  // Whatever the enable order, the port stacks them so.
+  const globe = fakeGlobePort();
+  const add = (zOrder) =>
+    globe.imagery.add({
+      kind: 'xyz',
+      url: `https://${zOrder}.invalid`,
+      zOrder,
+    });
+  const wind = add(WEATHER_IMAGERY_Z.wind);
+  const inset = add(WEATHER_IMAGERY_Z['air-quality-inset']);
+  const field = add(WEATHER_IMAGERY_Z['air-quality']);
+  const heat = add(HEAT_IMAGERY_Z);
+  assert.deepEqual(globe.layers, [heat, field, inset, wind]);
 });

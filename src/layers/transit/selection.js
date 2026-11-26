@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   SELECTED_CARD_REFRESH_MS,
   TRANSIT_SELECTED_OVERLAY_SOURCE_ID,
@@ -7,16 +6,27 @@ import {
   createTransitSelectedOverlayEntry,
 } from './policy.js';
 import { getRegisteredTransitFeed } from '../../data/transitFeeds.js';
-import { isPointerFree } from '../../data/inputOwnership.js';
+import { inputFor } from '../../input/dispatcher.js';
+import { isUnderOtherCard } from '../../data/pickRegistry.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+  yieldSelectionToOthers,
+} from '../../data/clickSelect.js';
 import { t } from '../../i18n/index.js';
 
 /**
- * Click-to-select one vehicle and a card that follows it.
+ * Click-to-select one vehicle and a card that follows it. A click selects
+ * and centres the vehicle once; the camera does not follow it
+ * (src/data/clickSelect.js).
  * @param {object} context
  * @returns {object}
  */
 export function createSelection({ state, services, parts }) {
   const { governorRequestRender } = services.render;
+  /** Off for the one-selection rule's listener, while clicks are heard. */
+  let offSelectionYield = null;
 
   /**
    * The card's anchor: the selected marker's CURRENT position, read by the
@@ -27,7 +37,7 @@ export function createSelection({ state, services, parts }) {
    * anchor to: a hidden or removed marker draws no card, unless the vehicle's
    * 3D model is drawing it in the marker's place.
    * @param {object} entry
-   * @returns {() => Cesium.Cartesian3|null}
+   * @returns {() => {x: number, y: number, z: number}|null} ECEF
    */
   function anchorFor(entry) {
     return () => {
@@ -48,6 +58,12 @@ export function createSelection({ state, services, parts }) {
       ? state._vehicles.get(state._selectedKey)
       : null;
     if (!entry) return;
+    // A vehicle a first-person view rides shows no card.
+    if (entry.key === state._cockpitSubjectKey) {
+      state._selectedCardText = null;
+      state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
+      return;
+    }
     const now = Date.now();
     if (!force && now - state._selectedCardAt < SELECTED_CARD_REFRESH_MS)
       return;
@@ -92,7 +108,9 @@ export function createSelection({ state, services, parts }) {
       ? state._vehicles.get(state._selectedKey)
       : null;
     parts.trails.clear();
+    if (state._selectedKey) releaseSelection('transit', state._selectedKey);
     state._selectedKey = null;
+    state._selectedAtMs = null;
     state._selectedCardText = null;
     state._detectRevision += 1;
     // Cleared first: the styling path reads the selection from state.
@@ -100,11 +118,20 @@ export function createSelection({ state, services, parts }) {
     state._overlayHost.clearSource(TRANSIT_SELECTED_OVERLAY_SOURCE_ID);
   }
 
-  function selectVehicle(key) {
+  /**
+   * Select a vehicle. `byUser` marks a selection the user made (a click, or
+   * focusVehicle), even of the selected vehicle again: its time is the
+   * snapshot's `selectedAtMs` (cockpitSubject.js). A first-person view's hold
+   * selects without it.
+   */
+  function selectVehicle(key, { byUser = false } = {}) {
     clearSelection();
     const entry = state._vehicles.get(key);
     if (!entry?.marker) return;
     state._selectedKey = key;
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('transit', key);
+    if (byUser) state._selectedAtMs = Date.now();
     state._detectRevision += 1;
     parts.rendering.paintSelected(entry, true);
     parts.trails.select(entry);
@@ -113,99 +140,106 @@ export function createSelection({ state, services, parts }) {
   }
 
   function onKeyDown(event) {
+    // While a first-person view rides the vehicle, Escape is the view's.
+    if (state._cockpitSubjectKey) return;
     if (event.key === 'Escape' && state._selectedKey) clearSelection();
   }
 
   function installClickHandler(viewer) {
-    if (state._clickHandler) return;
-    state._clickHandler = new Cesium.ScreenSpaceEventHandler(
-      viewer.scene.canvas,
-    );
-    state._clickHandler.setInputAction((click) => {
-      // Ambient selection never competes for a pointer a tool has claimed:
-      // placing a draw vertex on top of a bus must not also select the bus.
-      if (!isPointerFree()) return;
-      const scene = viewer.scene;
-      // Pick buffers precede post-processing. Map a sensor pixel back through
-      // the active shader's barrel distortion and quantization before picking.
-      const position = Cesium.Cartesian2.clone(click.position);
-      const style = state._stylePreset;
-      const stage = scene.postProcessStages?.getStageByName?.(
-        `godsEyeView_${style}`,
-      );
-      if (stage?.enabled && (style === 'thermal' || style === 'surveillance')) {
-        const intensity = stage.uniforms.intensity;
-        const canvas = scene.canvas,
-          w = canvas.clientWidth,
-          h = canvas.clientHeight;
-        let u = position.x / w,
-          v = 1 - position.y / h;
-        if (style === 'surveillance') {
-          const x = u * 2 - 1,
-            y = v * 2 - 1,
-            r2 = x * x + y * y;
-          const d = 1 + r2 * intensity * 0.25 + r2 * r2 * intensity * 0.075;
-          u = (x * d + 1) / 2;
-          v = (y * d + 1) / 2;
-        }
-        const grid = 1 + (stage.uniforms.pixelation - 1) * intensity;
-        u +=
-          ((Math.floor((u * canvas.width) / grid) * grid) / canvas.width - u) *
-          intensity;
-        v +=
-          ((Math.floor((v * canvas.height) / grid) * grid) / canvas.height -
-            v) *
-          intensity;
-        position.x = u * w;
-        position.y = (1 - v) * h;
-      }
-      const picked = scene.pick(position);
+    if (state._clickSubscription) return;
+    // The dispatcher maps a sensor-style click back into the pick buffer
+    // (src/input/sensorPick.js) and skips it while a tool holds the pointer.
+    state._clickSubscription = inputFor(viewer).onClick((event) => {
+      // A held vehicle keeps the selection until its view lets it go.
+      if (state._cockpitSubjectKey) return;
+      const position = event.position;
+      // A marker is an item of one of this layer's two sets, by its key.
+      const hit = event.drawHit;
+      const set = parts.rendering.setNameOf(hit?.set);
+      const key = set && state._vehicles.has(hit.id) ? hit.id : null;
       state._lastPickForTest = {
-        id: typeof picked?.id === 'string' ? picked.id : null,
-        primitiveId:
-          typeof picked?.primitive?.id === 'string'
-            ? picked.primitive.id
-            : null,
+        id: key,
+        set: hit?.set ?? null,
         x: position.x,
         y: position.y,
         collection:
-          picked?.primitive?._billboardCollection === state._animatedMarkers
-            ? 'animated'
-            : picked?.primitive?._billboardCollection === state._markers
-              ? 'stationary'
-              : null,
+          set === 'moving' ? 'animated' : set === 'still' ? 'stationary' : null,
       };
-      if (picked) {
-        const primitiveId = picked.primitive?.id;
-        if (
-          typeof primitiveId === 'string' &&
-          state._vehicles.has(primitiveId)
-        ) {
-          selectVehicle(primitiveId);
-          return;
-        }
-        if (typeof picked.id === 'string' && state._vehicles.has(picked.id)) {
-          selectVehicle(picked.id);
-          return;
-        }
+      // Another layer's card or label painted on top takes the click: the item
+      // under it does not act, and the click is not empty space either.
+      if (isUnderOtherCard(event)) return;
+      if (key) {
+        selectVehicle(key, { byUser: true });
+        const entry = state._vehicles.get(key);
+        // Its marker is where the vehicle is drawn; a bus or a tram barely
+        // moves in the second the camera takes.
+        centerOnClick(viewer, () => anchorFor(entry)(), { clockId: 'transit' });
+        return;
       }
       if (state._selectedKey) clearSelection();
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
     document.addEventListener('keydown', onKeyDown);
+    // Another layer selected something: let our vehicle go, unless a
+    // first-person view holds it.
+    offSelectionYield ??= yieldSelectionToOthers(
+      'transit',
+      () => Boolean(state._selectedKey) && !state._cockpitSubjectKey,
+      () => clearSelection(),
+    );
   }
 
   function removeClickHandler() {
-    if (state._clickHandler) {
-      state._clickHandler.destroy();
-      state._clickHandler = null;
-    }
+    offSelectionYield?.();
+    offSelectionYield = null;
+    state._clickSubscription?.();
+    state._clickSubscription = null;
     document.removeEventListener('keydown', onKeyDown);
+  }
+
+  /**
+   * The key of the vehicle a card names: its key, or its label or feed id
+   * when exactly one vehicle has it (a route's buses can share a label).
+   * @param {string|number} id
+   * @returns {string|null}
+   */
+  function vehicleKeyFor(id) {
+    if (id === null || id === undefined) return null;
+    const name = String(id);
+    if (state._vehicles.has(name)) return name;
+    let found = null;
+    for (const entry of state._vehicles.values()) {
+      const record = entry.record || {};
+      if (record.label !== name && String(record.id ?? '') !== name) continue;
+      if (found !== null) return null;
+      found = entry.key;
+    }
+    return found;
+  }
+
+  /**
+   * Select the vehicle a card names, as a click on it does; `center: false`
+   * leaves the camera to the caller (a pick from a list frames it).
+   * @returns {boolean} Whether it was selected.
+   */
+  function pickVehicle(id, { center = true } = {}) {
+    const key = vehicleKeyFor(id);
+    const entry = key ? state._vehicles.get(key) : null;
+    if (!entry?.marker) return false;
+    selectVehicle(key, { byUser: true });
+    if (center && state._viewer)
+      centerOnClick(state._viewer, () => anchorFor(entry)(), {
+        clockId: 'transit',
+      });
+    governorRequestRender('transit-selection');
+    return true;
   }
 
   return {
     refreshSelectedCard,
     clearSelection,
     selectVehicle,
+    vehicleKeyFor,
+    pickVehicle,
     onKeyDown,
     installClickHandler,
     removeClickHandler,

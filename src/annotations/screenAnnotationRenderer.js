@@ -1,4 +1,4 @@
-import * as Cesium from 'cesium';
+import { followedOf } from '../data/followed.js';
 import { getOverlayPaintRect } from '../overlays/worldOverlay.js';
 import {
   getActiveTrackedReadoutId,
@@ -8,6 +8,16 @@ import { t } from '../i18n/index.js';
 import { nextTick } from 'vue';
 import { useScreenAnnotationsStore } from '../ui/stores/screenAnnotations.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
+import { heightsOf } from '../queries/heights.js';
+import { fromDegrees, toLonLatH } from '../geo/ellipsoid.js';
+import { viewPlanes } from '../geo/frustum.js';
+import { distance, dot } from '../geo/vector.js';
+import {
+  canvasOf as sceneCanvasOf,
+  findCamera,
+  findFrame,
+  findQuery,
+} from '../render/rendererOf.js';
 
 /** A label whose detailed outline could not be resolved. */
 function outlineUnavailableLabel(label) {
@@ -78,11 +88,14 @@ export function createScreenAnnotationRenderer(
   const arrowMarkers = new Map();
   let viewBox = null;
 
-  const scene = viewer.scene;
-  const occluder = new Cesium.EllipsoidalOccluder(
-    Cesium.Ellipsoid.WGS84,
-    scene.camera.positionWC,
-  );
+  // Read the camera pose, query port, canvas and view-frustum planes once
+  // per projection pass.
+  let pose = null;
+  let passQuery = null;
+  let passCanvas = null;
+  let cullingPlanes = null;
+  // The renderer's canvas; a viewer with no renderer bound, its own.
+  const canvasOf = () => sceneCanvasOf(viewer);
   const records = new Map(); // anno.id -> { key, anno, group, parts }
   const leaving = new Map(); // key -> a removed mark's record while it fades out
   const byKey = new Map(); // key -> record, live or fading
@@ -91,8 +104,6 @@ export function createScreenAnnotationRenderer(
   let published = '';
   // Only the renderer whose board the store shows may change or remove it.
   const shown = () => store.board?.owner === owner;
-  const scratch = new Cesium.Cartesian2();
-  const scratchDir = new Cesium.Cartesian3();
   // Per-point ground height cache. Marks must sit on the real surface, not at
   // sea level — otherwise in elevated cities (Austin ~150 m) they project
   // underground and parallax sinks them at oblique angles. Sampled once the
@@ -100,6 +111,18 @@ export function createScreenAnnotationRenderer(
   const heightCache = new Map();
   const HEIGHT_CACHE_SOFT = 600; // target size; over this we evict keys not used this frame
   const HEIGHT_CACHE_HARD = 8000; // absolute ceiling (one big ring + others) — never exceeded
+  // Accepted surface-height range; samples outside it are treated as misses.
+  const MIN_SURFACE_HEIGHT = -430;
+  const MAX_SURFACE_HEIGHT = 9000;
+  const HEIGHT_SAMPLE_BUDGET = 32; // clampNow calls per projection pass
+  const HEIGHT_RETRY_MS = 1000; // minimum interval between misses per anchor
+  // Fair sampling: keys refused by an exhausted budget queue in arrival order,
+  // and each pass reserves budget for the oldest queued keys first, so a fixed
+  // iteration order cannot starve anchors beyond the first budget's worth.
+  const heightQueue = new Set();
+  const heightReserved = new Set(); // queued keys this pass serves first
+  const heightRefused = new Set(); // keys refused during this pass
+  let heightBudget = HEIGHT_SAMPLE_BUDGET; // unreserved slots left this pass
   let projGen = 0; // bumped each projection frame; entries used this frame are "hot"
   function trimHeightCache() {
     if (heightCache.size <= HEIGHT_CACHE_SOFT) return;
@@ -121,18 +144,26 @@ export function createScreenAnnotationRenderer(
   // Re-project every annotation each rendered frame so marks stay glued to the
   // world. postRender runs after the camera/tiles update, so positions are exact.
   const onPostRender = () => projectAll();
-  scene.postRender.addEventListener(onPostRender);
+  const removePostRender = findFrame(viewer)?.on('postRender', onPostRender);
 
   function color(anno) {
     return PALETTE[anno.color] || PALETTE.primary;
   }
 
-  // Best-effort surface height under a coordinate (clamps onto the 3D tiles).
-  // Returns 0 until the tile loads, then caches the validated height.
-  function groundHeight(lon, lat) {
-    const key = `${lon.toFixed(5)},${lat.toFixed(5)}`;
-    const cached = heightCache.get(key);
-    if (cached && cached.settled) {
+  function clearHeights() {
+    heightCache.clear();
+    heightQueue.clear();
+  }
+
+  function heightKey(lon, lat) {
+    return `${lon.toFixed(5)},${lat.toFixed(5)}`;
+  }
+
+  // Best-effort surface height under a coordinate (clamps onto the 3D tiles):
+  // the validated height once the tile loads, null until then.
+  // `key` and `cached` are the caller's cache lookup for this coordinate.
+  function groundHeight(lon, lat, key, cached) {
+    if (cached?.settled) {
       // Mark hot for this frame + bump to most-recently-used so heights for live
       // marks survive eviction while places we've navigated away from age out.
       cached.gen = projGen;
@@ -140,17 +171,31 @@ export function createScreenAnnotationRenderer(
       heightCache.set(key, cached);
       return cached.h;
     }
+    const now = Date.now();
+    if (cached && now < cached.nextAttempt) {
+      cached.gen = projGen;
+      return null;
+    }
+    if (heightReserved.has(key)) {
+      heightReserved.delete(key);
+    } else if (heightBudget > 0) {
+      heightBudget--;
+    } else {
+      heightRefused.add(key);
+      return null;
+    }
     try {
-      if (
-        scene.clampToHeightSupported &&
-        typeof scene.clampToHeight === 'function'
-      ) {
-        const c = scene.clampToHeight(
-          Cesium.Cartesian3.fromDegrees(lon, lat, 0),
-        );
+      const heights = heightsOf(viewer);
+      if (heights.supported().clamp) {
+        // A miss is tiles not ready.
+        const c = heights.clampNow(fromDegrees(lon, lat, 0));
         if (c) {
-          const h = Cesium.Cartographic.fromCartesian(c).height;
-          if (Number.isFinite(h) && h > -430 && h < 9000) {
+          const h = toLonLatH(c)?.height;
+          if (
+            Number.isFinite(h) &&
+            h > MIN_SURFACE_HEIGHT &&
+            h < MAX_SURFACE_HEIGHT
+          ) {
             heightCache.set(key, { h, settled: true, gen: projGen });
             trimHeightCache();
             return h;
@@ -160,10 +205,13 @@ export function createScreenAnnotationRenderer(
     } catch {
       /* tiles not ready */
     }
-    const fallback = cached ? cached.h : 0;
-    heightCache.set(key, { h: fallback, settled: false, gen: projGen });
+    heightCache.set(key, {
+      settled: false,
+      gen: projGen,
+      nextAttempt: now + HEIGHT_RETRY_MS,
+    });
     trimHeightCache();
-    return fallback;
+    return null;
   }
 
   function add(anno) {
@@ -278,7 +326,7 @@ export function createScreenAnnotationRenderer(
     }
 
     // Record the mark BEFORE it reaches the board, then unwind on any throw
-    // from here down (projectAll reaches into Cesium and can fail on a lost
+    // from here down (projectAll reaches into the renderer and can fail on a lost
     // context). Previously a throw past the insert left an ORPHANED mark: the
     // engine's rollback only deletes its own map entry, so the next annotate
     // of the same geometry stacked a fresh mark on top of the corpse.
@@ -307,7 +355,7 @@ export function createScreenAnnotationRenderer(
       } catch {
         /* the board is unreachable */
       }
-      if (records.size === 0) heightCache.clear();
+      if (records.size === 0) clearHeights();
       throw error;
     }
   }
@@ -359,36 +407,77 @@ export function createScreenAnnotationRenderer(
     // Area-type updates route through the hybrid proxy only.
   }
 
-  function project(lon, lat, allowOffscreen = false) {
+  // The window position of a point at its surface height (0 m until that is
+  // sampled), or null when it is not in view. A point of an arrow, route or
+  // area (`connector`) is sampled even outside the view, so the part of the
+  // mark that is in view runs to the real height of the part that is not.
+  function project(lon, lat, allowOffscreen = false, connector = false) {
+    if (!pose) return null;
     // Anchor at the real surface height (cached + validated), so marks sit on
     // the ground/building instead of at sea level. The settle-once cache keeps
     // it stable (no per-frame jitter that earlier broke nearby projections).
-    const world = Cesium.Cartesian3.fromDegrees(
-      lon,
-      lat,
-      groundHeight(lon, lat),
-    );
+    const key = heightKey(lon, lat);
+    const cached = heightCache.get(key);
+    let sample = true;
+    if (!cached?.settled) {
+      // Unsettled: before sampling, cull only if the whole height range is hidden.
+      const low = fromDegrees(lon, lat, MIN_SURFACE_HEIGHT);
+      const high = fromDegrees(lon, lat, MAX_SURFACE_HEIGHT);
+      if (heightRangeHidden(low, high)) return null;
+      // A lone point outside the view is not sampled; the entry keeps its
+      // retry time.
+      sample = connector || !rangeOutsideView(low, high);
+      if (!sample && cached) cached.gen = projGen;
+    }
+    const height = sample ? groundHeight(lon, lat, key, cached) : null;
+    const world = fromDegrees(lon, lat, height ?? 0);
     // Reject points behind the camera (they produce wrapped/extreme coords).
-    Cesium.Cartesian3.subtract(world, scene.camera.positionWC, scratchDir);
-    if (Cesium.Cartesian3.dot(scratchDir, scene.camera.directionWC) <= 0)
-      return null;
+    if (behindEye(world)) return null;
     // Reject points beyond the globe horizon.
-    if (!occluder.isPointVisible(world)) return null;
-    const win = Cesium.SceneTransforms.worldToWindowCoordinates(
-      scene,
-      world,
-      scratch,
-    );
+    const query = passQuery;
+    if (!query || query.isOccluded(world)) return null;
+    const win = query.project(world);
     if (!win || !Number.isFinite(win.x) || !Number.isFinite(win.y)) return null;
     // Reject absurd off-screen projections (anchor not in view).
-    const w = scene.canvas.clientWidth || scene.canvas.width;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
+    const canvas = passCanvas;
+    const w = canvas.clientWidth || canvas.width;
+    const h = canvas.clientHeight || canvas.height;
     if (
       !allowOffscreen &&
       (win.x < -w || win.x > 2 * w || win.y < -h || win.y > 2 * h)
     )
       return null;
     return { x: win.x, y: win.y };
+  }
+
+  // Points along one surface normal are linear in height, and each rejection
+  // region (behind the camera plane; the occluder's cone beyond the horizon
+  // plane) is convex. So when both height-range endpoints fail the SAME test,
+  // every intermediate height fails it too. Mixed failures prove nothing.
+  function heightRangeHidden(low, high) {
+    if (behindEye(low) && behindEye(high)) return true;
+    return Boolean(passQuery?.isOccluded(low) && passQuery.isOccluded(high));
+  }
+
+  // Whether the height range lies wholly outside one view-frustum plane, so
+  // no accepted height under the point is in view.
+  function rangeOutsideView(low, high) {
+    if (!cullingPlanes) return false;
+    for (const { normal, w } of cullingPlanes)
+      if (dot(normal, low) + w < 0 && dot(normal, high) + w < 0) return true;
+    return false;
+  }
+
+  // Whether `point` is on or behind the camera plane (needs a pose).
+  function behindEye(point) {
+    const eye = pose.position;
+    const look = pose.direction;
+    return (
+      (point.x - eye.x) * look.x +
+        (point.y - eye.y) * look.y +
+        (point.z - eye.z) * look.z <=
+      0
+    );
   }
 
   // Tracked-entity z-order: the tracked aircraft is a Cesium billboard in the
@@ -399,9 +488,13 @@ export function createScreenAnnotationRenderer(
   // from the host's ACTUAL painted rectangle after final layout; the billboard extent
   // is unioned for aircraft/satellites that also own a native tracked graphic.
   const TRACKED_BBOX_MARGIN = 8; // px buffer added around the footprint
-  const TRACKED_FADE_EASE = 0.22; // per-frame ease toward hidden(0) / visible(1)
+  // Ease toward hidden(0) / visible(1): this share of the gap closes in one
+  // 60 Hz frame (about 200 ms to settle), scaled by elapsed time so the fade
+  // takes as long at any refresh rate.
+  const TRACKED_FADE_EASE = 0.22;
+  const TRACKED_FADE_FRAME_MS = 1000 / 60;
+  let trackedFadeAtMs = -Infinity;
   const TRACKED_HYSTERESIS_PX = 18; // dead-band so the overlap test can't flip-flop
-  const _scratchTrackedWin = new Cesium.Cartesian2();
 
   // Evaluate a NearFarScalar (billboard scaleByDistance) at a camera distance.
   function nearFarValue(nfs, dist) {
@@ -422,32 +515,23 @@ export function createScreenAnnotationRenderer(
     let top = painted?.y;
     let bottom = painted ? painted.y + painted.h : undefined;
 
-    const ent = viewer.trackedEntity;
-    const now = Cesium.JulianDate.now();
+    const followed = followedOf(viewer);
+    const displayPosition = followed?.displayPosition;
     const world =
-      typeof ent?.gevDisplayPosition === 'function'
-        ? ent.gevDisplayPosition()
-        : null;
-    const win = world
-      ? Cesium.SceneTransforms.worldToWindowCoordinates(
-          scene,
-          world,
-          _scratchTrackedWin,
-        )
-      : null;
+      typeof displayPosition === 'function' ? displayPosition() : null;
+    const win = world ? (passQuery?.project(world) ?? null) : null;
 
-    // Billboard box — centered on the anchor, magnified by scaleByDistance.
-    const bb = ent?.billboard;
-    if (bb && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
-      const baseW = bb.width?.getValue?.(now) ?? 28;
-      const baseH = bb.height?.getValue?.(now) ?? 28;
+    // Billboard box — centered on the anchor, magnified by scaleByDistance, from
+    // the size the tracking layer recorded for its sprite.
+    const sprite = followed?.sprite;
+    if (sprite && win && Number.isFinite(win.x) && Number.isFinite(win.y)) {
+      const baseW = sprite.width ?? 28;
+      const baseH = sprite.height ?? 28;
       let scale = 1;
-      const sbd = bb.scaleByDistance?.getValue?.(now);
-      if (sbd)
-        scale = nearFarValue(
-          sbd,
-          Cesium.Cartesian3.distance(scene.camera.positionWC, world),
-        );
+      const sbd = sprite.scaleByDistance;
+      // No eye to measure from: the sprite's own size.
+      if (sbd && pose)
+        scale = nearFarValue(sbd, distance(pose.position, world));
       const hw = (baseW * scale) / 2;
       const hh = (baseH * scale) / 2;
       const bbLeft = win.x - hw;
@@ -475,15 +559,26 @@ export function createScreenAnnotationRenderer(
       publish();
       return;
     }
+    heightReserved.clear();
+    for (const key of heightQueue) {
+      if (heightReserved.size >= HEIGHT_SAMPLE_BUDGET) break;
+      heightReserved.add(key);
+    }
+    heightBudget = HEIGHT_SAMPLE_BUDGET - heightReserved.size;
+    heightRefused.clear();
     projGen += 1; // new frame: entries touched below are "hot" and survive trimming
+    pose = findCamera(viewer)?.pose() ?? null;
+    cullingPlanes = viewPlanes(pose);
+    passQuery = findQuery(viewer);
+    passCanvas = canvasOf();
     const trackedRect = trackedEntityRect();
-    occluder.cameraPosition = scene.camera.positionWC;
-    const h = scene.canvas.clientHeight || scene.canvas.height;
-    const w = scene.canvas.clientWidth || scene.canvas.width;
+    const canvas = passCanvas;
+    const h = canvas.clientHeight || canvas.height;
+    const w = canvas.clientWidth || canvas.width;
     viewBox = `0 0 ${w} ${h}`;
     // Shrink point-marker geometry as the camera pulls back (declutter the blob).
     const mScale = markScale(
-      viewer.camera.positionCartographic?.height ?? 1000,
+      Number.isFinite(pose?.height) ? pose.height : 1000,
     );
 
     for (const rec of records.values()) {
@@ -510,7 +605,9 @@ export function createScreenAnnotationRenderer(
         const polygons = anno.polygons?.length ? anno.polygons : [[anno.ring]];
         for (const polygon of polygons) {
           const projectedRings = polygon.map((ring) =>
-            ring.map(([lon, lat]) => project(lon, lat, polygon.length > 1)),
+            ring.map(([lon, lat]) =>
+              project(lon, lat, polygon.length > 1, true),
+            ),
           );
           // Keep the historical visible-outer projection, but never fill over
           // an unprojectable hole or hide another independently visible part.
@@ -544,8 +641,8 @@ export function createScreenAnnotationRenderer(
           group.display = 'none';
         }
       } else if (anno.type === 'arrow' && parts.path) {
-        const a = project(anno.anchor.lon, anno.anchor.lat);
-        const b = project(anno.to.lon, anno.to.lat);
+        const a = project(anno.anchor.lon, anno.anchor.lat, false, true);
+        const b = project(anno.to.lon, anno.to.lat, false, true);
         if (a && b) {
           // gentle arc so the connector reads as a drawn gesture, not a ruler line
           const mx = (a.x + b.x) / 2;
@@ -570,7 +667,9 @@ export function createScreenAnnotationRenderer(
           group.display = 'none';
         }
       } else if (anno.type === 'route' && parts.poly) {
-        const projected = anno.path.map((pt) => project(pt.lon, pt.lat));
+        const projected = anno.path.map((pt) =>
+          project(pt.lon, pt.lat, false, true),
+        );
         const pts = [];
         for (const p of projected) {
           if (p) pts.push(`${p.x.toFixed(1)},${p.y.toFixed(1)}`);
@@ -632,6 +731,11 @@ export function createScreenAnnotationRenderer(
         }
       }
     }
+    // Still-refused queued keys keep their place; new refusals join the back.
+    // Keys no longer requesting a sample (settled, culled, removed) drop out.
+    for (const key of heightQueue)
+      if (!heightRefused.has(key)) heightQueue.delete(key);
+    for (const key of heightRefused) heightQueue.add(key);
 
     // Keep clustered callouts readable.
     const placed = [];
@@ -677,6 +781,14 @@ export function createScreenAnnotationRenderer(
   // safe and not jarring.
   function fadeTracked(trackedRect) {
     if (!shown()) return;
+    const nowMs = performance.now();
+    // A gap longer than a slow frame means the fade was not running (nothing
+    // followed): it starts again as from one 60 Hz frame.
+    const gapMs = nowMs - trackedFadeAtMs;
+    const stepMs = gapMs >= 0 && gapMs <= 100 ? gapMs : TRACKED_FADE_FRAME_MS;
+    trackedFadeAtMs = nowMs;
+    const ease =
+      1 - Math.pow(1 - TRACKED_FADE_EASE, stepMs / TRACKED_FADE_FRAME_MS);
     let changed = false;
     for (const rec of records.values()) {
       const { anno, group } = rec;
@@ -705,10 +817,10 @@ export function createScreenAnnotationRenderer(
         }
       }
       const target = overlapping ? 0 : 1;
-      const next = cur + (target - cur) * TRACKED_FADE_EASE;
+      const next = cur + (target - cur) * ease;
       rec._trackedFade = Math.abs(next - target) < 0.02 ? target : next;
       // The base alpha applies unless faded. (The CSS `transition: opacity` was
-      // removed from .gev-anno so this per-frame JS ease is the ONLY easing —
+      // removed from .gev-anno so this JS ease is the ONLY easing —
       // previously the two fought and produced an opacity oscillation.)
       const opacity = String(
         (anno.alpha ?? 1) * (rec._trackedFade !== 1 ? rec._trackedFade : 1),
@@ -811,7 +923,7 @@ export function createScreenAnnotationRenderer(
     records.delete(anno.id);
     publish();
     // Board emptied → drop accumulated height samples (natural reset point).
-    if (records.size === 0) heightCache.clear();
+    if (records.size === 0) clearHeights();
   }
 
   function sync() {
@@ -821,7 +933,7 @@ export function createScreenAnnotationRenderer(
 
   function destroy() {
     try {
-      scene.postRender.removeEventListener(onPostRender);
+      removePostRender?.();
     } catch {
       /* torn down */
     }
@@ -834,7 +946,7 @@ export function createScreenAnnotationRenderer(
     records.clear();
     leaving.clear();
     byKey.clear();
-    heightCache.clear();
+    clearHeights();
   }
 
   // Claim the board; from here on only this renderer's own board changes.

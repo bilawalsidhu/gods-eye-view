@@ -1,8 +1,11 @@
+// The click dispatcher's input port over a viewer double: the Cesium adapter's.
+import '../../render/cesium/input.js';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { EventEmitter, once } from 'node:events';
 import test from 'node:test';
 import * as Cesium from 'cesium';
+import { worldClock } from '../../time/worldClock.js';
 import { createSatelliteSource } from './source.js';
 import { createState } from './state.js';
 import { createControls } from './controls.js';
@@ -10,6 +13,9 @@ import { createOrbits } from './orbits.js';
 import { createLabels } from './labels.js';
 import { createTracking } from './tracking.js';
 import { createRendering } from './rendering.js';
+import { bindRenderer } from '../../render/rendererOf.js';
+import { fakeSceneFrame } from '../../testSupport/fakeCesiumScene.mjs';
+import { fakeDrawPort } from '../../testSupport/fakeDrawPort.mjs';
 import { createCatalog } from './catalog.js';
 import { createLifecycle } from './lifecycle.js';
 import { createInteraction } from './interaction.js';
@@ -72,7 +78,7 @@ async function fixture(t) {
     fetchImpl: (path, options) =>
       fetch(`http://127.0.0.1:${server.address().port}${path}`, options),
   });
-  // Application host services and native EventTargets; actual Cesium collections,
+  // Application host services and native EventTargets; a fake draw port,
   // input handler, events, SGP4, ingestion and lifecycle run without a WebGL scene.
   const noop = () => {};
   const services = {
@@ -84,7 +90,7 @@ async function fixture(t) {
     layerState: { isExplicitLayerStateOrigin: () => false },
     focus: {
       clearFocusTarget: noop,
-      publishFocusTargetFromCachedPosition: noop,
+      publishFocusTargetAt: noop,
       getFocusTarget: () => null,
     },
     context: {
@@ -123,9 +129,14 @@ async function fixture(t) {
     },
     trackedEntityChanged: new Cesium.Event(),
   };
+  const unbind = bindRenderer(viewer, {
+    frame: fakeSceneFrame(viewer),
+    draw: fakeDrawPort(),
+  });
   await parts.lifecycle.methods.init(viewer);
   t.after(async () => {
-    if (state._pointCollection) parts.lifecycle.methods.destroy(viewer);
+    unbind();
+    if (state._sets) parts.lifecycle.methods.destroy(viewer);
     viewer.scene.primitives.destroy();
     if (previousDocument === undefined) delete globalThis.document;
     else globalThis.document = previousDocument;
@@ -298,4 +309,29 @@ test('destroy aborts an in-flight response and initialization starts with new ow
   await f.update();
   assert.equal(f.stats().count, CORE.length);
   assert.equal(f.feed(), 'nominal');
+});
+
+test('destroy takes the layer off the world clock, and init puts it back', async (t) => {
+  // Each registration the layer makes, while it stands.
+  const register = worldClock.register;
+  const standing = new Set();
+  worldClock.register = (source) => {
+    standing.add(source);
+    const off = register.call(worldClock, source);
+    return () => {
+      standing.delete(source);
+      off();
+    };
+  };
+  t.after(() => {
+    worldClock.register = register;
+  });
+  const f = await fixture(t);
+  const mine = () =>
+    [...standing].filter(({ id }) => id === 'satellites').length;
+  assert.equal(mine(), 1);
+  f.parts.lifecycle.methods.destroy(f.viewer);
+  assert.equal(mine(), 0);
+  await f.parts.lifecycle.methods.init(f.viewer);
+  assert.equal(mine(), 1);
 });

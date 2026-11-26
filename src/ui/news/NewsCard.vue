@@ -49,6 +49,11 @@ const meta = () =>
   ]
     .filter(Boolean)
     .join(' · ');
+// The card's face is the slot of a UiButton, which renders inside the
+// button: a new item alone would reach it only on a later tick, but the panel
+// patches synchronously. A slot given under a condition (`redrawWithView`,
+// always true) is redrawn whenever this card is, so it keeps up.
+const redrawWithView = true;
 </script>
 
 <template>
@@ -58,60 +63,62 @@ const meta = () =>
     :data-report-id="item.id"
     :style="{ '--news-color': item.color }"
   >
-    <button
-      type="button"
-      class="news-card__main ui-focus"
+    <UiButton
+      class="news-card__main"
       :aria-expanded="open ? 'true' : 'false'"
       @click="onChoose(item)"
+      ><template v-if="redrawWithView" #default>
+        <span v-if="item.picture && !pictureFailed" class="news-card__thumb"
+          ><img
+            :src="item.picture.url"
+            alt=""
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+            v-on="{ error: dropPicture }"
+          /><span
+            v-if="item.picture.video && !clipFailed"
+            class="news-card__play"
+            role="img"
+            :aria-label="t('Video')"
+            >▶</span
+          ><span v-if="item.picture.credit" class="news-card__credit">{{
+            item.picture.credit
+          }}</span></span
+        >
+        <span class="news-card__title">{{ item.title }}</span>
+        <span v-if="item.original" class="news-card__note">{{
+          t('English headline by the model')
+        }}</span>
+        <span class="news-card__meta ui-mono"
+          ><span
+            class="news-card__marker"
+            :class="{ solid: item.solid }"
+            role="img"
+            :aria-label="item.severityLabel"
+            :title="item.severityLabel"
+            ><svg viewBox="0 0 16 16" aria-hidden="true">
+              <path :d="item.icon" /></svg></span
+          ><span v-if="item.severity >= 2" class="news-card__severity">{{
+            item.severityLabel
+          }}</span
+          >{{ item.severity >= 2 ? ` · ${meta()}` : meta() }}</span
+        >
+        <span v-if="item.sides" class="news-card__sides">{{ item.sides }}</span>
+        <span v-if="item.chips.length" class="news-card__chips"
+          ><span
+            v-for="chip in item.chips"
+            :key="`${chip.kind}:${chip.label}`"
+            class="news-chip"
+            :class="`news-chip--${chip.kind}`"
+            >{{ chip.label }}</span
+          ></span
+        >
+        <span v-if="item.via" class="news-card__via ui-mono">{{
+          item.via
+        }}</span>
+      </template></UiButton
     >
-      <span v-if="item.picture && !pictureFailed" class="news-card__thumb"
-        ><img
-          :src="item.picture.url"
-          alt=""
-          loading="lazy"
-          decoding="async"
-          referrerpolicy="no-referrer"
-          v-on="{ error: dropPicture }"
-        /><span
-          v-if="item.picture.video && !clipFailed"
-          class="news-card__play"
-          role="img"
-          :aria-label="t('Video')"
-          >▶</span
-        ><span v-if="item.picture.credit" class="news-card__credit">{{
-          item.picture.credit
-        }}</span></span
-      >
-      <span class="news-card__title">{{ item.title }}</span>
-      <span v-if="item.original" class="news-card__note">{{
-        t('English headline by the model')
-      }}</span>
-      <span class="news-card__meta ui-mono"
-        ><span
-          class="news-card__marker"
-          :class="{ solid: item.solid }"
-          role="img"
-          :aria-label="item.severityLabel"
-          :title="item.severityLabel"
-          ><svg viewBox="0 0 16 16" aria-hidden="true">
-            <path :d="item.icon" /></svg></span
-        ><span v-if="item.severity >= 2" class="news-card__severity">{{
-          item.severityLabel
-        }}</span
-        >{{ item.severity >= 2 ? ` · ${meta()}` : meta() }}</span
-      >
-      <span v-if="item.sides" class="news-card__sides">{{ item.sides }}</span>
-      <span v-if="item.chips.length" class="news-card__chips"
-        ><span
-          v-for="chip in item.chips"
-          :key="`${chip.kind}:${chip.label}`"
-          class="news-chip"
-          :class="`news-chip--${chip.kind}`"
-          >{{ chip.label }}</span
-        ></span
-      >
-      <span v-if="item.via" class="news-card__via ui-mono">{{ item.via }}</span>
-    </button>
     <div v-if="open" class="news-card__open">
       <video
         v-if="item.picture?.video && !clipFailed"

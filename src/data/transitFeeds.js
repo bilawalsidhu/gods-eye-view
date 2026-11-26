@@ -29,12 +29,21 @@ import { RIO_ROUTE_NAMES } from './rioRouteNames.js';
  * node:test. No Cesium, no Node built-ins.
  */
 
-/** Transit modes the layer colors. `routeMode` hints refine a feed's default. */
+/**
+ * Transit modes the layer colors: the GTFS basic route types, by name. A
+ * vehicle's GTFS `route_type` settles its mode when its record carries one;
+ * otherwise `routeMode` hints refine a feed's default.
+ */
 export const TRANSIT_MODES = Object.freeze([
   'bus',
+  'trolleybus',
   'tram',
+  'cable_tram',
   'subway',
+  'monorail',
   'rail',
+  'funicular',
+  'aerial_lift',
   'ferry',
   'unknown',
 ]);
@@ -42,12 +51,80 @@ export const TRANSIT_MODES = Object.freeze([
 /** Per-mode icon used in labels and the selection card. */
 export const TRANSIT_MODE_ICON = Object.freeze({
   bus: '🚌',
+  trolleybus: '🚎',
   tram: '🚊',
+  cable_tram: '🚋',
   subway: '🚇',
+  monorail: '🚝',
   rail: '🚆',
+  funicular: '🚞',
+  aerial_lift: '🚡',
   ferry: '⛴️',
   unknown: '🚏',
 });
+
+/** The basic GTFS route types (0–7, 11, 12) by mode. */
+const BASIC_ROUTE_TYPE_MODES = Object.freeze({
+  0: 'tram',
+  1: 'subway',
+  2: 'rail',
+  3: 'bus',
+  4: 'ferry',
+  5: 'cable_tram',
+  6: 'aerial_lift',
+  7: 'funicular',
+  11: 'trolleybus',
+  12: 'monorail',
+});
+
+/**
+ * A GTFS `route_type` as an integer: a basic type (0–12) or an extended one
+ * (100–1799), as a number or its decimal text. Null for anything else.
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function transitRouteType(value) {
+  const n =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /^\d{1,4}$/.test(value.trim())
+        ? Number(value.trim())
+        : NaN;
+  return Number.isInteger(n) && n >= 0 && n < 1800 ? n : null;
+}
+
+/**
+ * The mode of a GTFS `route_type`: the basic types, and the extended ones
+ * mapped to the basic mode they are a kind of (a coach, 200, is a bus; a
+ * high-speed train, 101, is rail; 405 is a monorail). Air, taxi and other
+ * services, and a value GTFS does not define, are `unknown`.
+ * @param {unknown} routeType
+ * @returns {string} One of TRANSIT_MODES.
+ */
+export function transitModeOfRouteType(routeType) {
+  const n = transitRouteType(routeType);
+  if (n === null) return 'unknown';
+  if (n < 100) return BASIC_ROUTE_TYPE_MODES[n] ?? 'unknown';
+  if (n === 405) return 'monorail';
+  const family = Math.floor(n / 100);
+  return (
+    {
+      1: 'rail', // railway
+      2: 'bus', // coach
+      3: 'rail', // suburban railway
+      4: 'subway', // urban railway
+      5: 'subway', // metro
+      6: 'subway', // underground
+      7: 'bus',
+      8: 'trolleybus',
+      9: 'tram',
+      10: 'ferry', // water transport
+      12: 'ferry', // ferry
+      13: 'aerial_lift',
+      14: 'funicular',
+    }[family] ?? 'unknown'
+  );
+}
 
 /**
  * MBTA route ids are human-readable and mode-typed: rapid-transit lines carry
@@ -378,6 +455,66 @@ function burlingtonRouteLabel(routeId) {
 }
 
 /**
+ * TransLink route ids are `<route>-<version>`. Rail lines pair two station
+ * codes (`BRBN`), ferries are `F<n>` and `SMBI`, light rail is `L1`. Buses,
+ * the `SHUT` rail-replacement bus included, stay on the feed default, which
+ * movement plausibility treats as a guess.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function translinkRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  const route = routeId.replace(/-\d+$/, '');
+  if (/^F\d+$/.test(route) || route === 'SMBI') return 'ferry';
+  if (route === 'L1') return 'tram';
+  if (/^[A-Z]{4}$/.test(route) && route !== 'SHUT') return 'rail';
+  return 'unknown';
+}
+
+/**
+ * The route a rider would say: `200-4` → `200`, `L1-32` → `L1`, and Cairns
+ * `C123-33` → `123`. Only Cairns has `C<digits>` routes; rail codes such as
+ * `CLSH` are letters only.
+ * @param {string|null} routeId
+ * @returns {string|null}
+ */
+function translinkRouteLabel(routeId) {
+  const route = routeId.replace(/-\d+$/, '');
+  const cairns = /^C(\d+)$/.exec(route);
+  return cairns ? cairns[1] : route;
+}
+
+/** Adelaide Metro train and tram route ids, from its static routes.txt. */
+const ADELAIDE_RAIL_ROUTES = new Set([
+  'BEL',
+  'FLNDRS',
+  'GAW',
+  'GAWC',
+  'GRNG',
+  'NOAR',
+  'OSBORN',
+  'OUTHA',
+  'PTDOCK',
+  'SALIS',
+  'SEAFRD',
+]);
+const ADELAIDE_TRAM_ROUTES = new Set(['BTANIC', 'FESTVL', 'GLNELG']);
+
+/**
+ * Adelaide Metro route ids are the line codes; all-letter bus routes exist
+ * (`INDSTA`), so trains and trams are listed rather than pattern-matched.
+ * @param {string|null} routeId
+ * @returns {string}
+ */
+function adelaideMetroRouteMode(routeId) {
+  if (!routeId) return 'unknown';
+  if (ADELAIDE_RAIL_ROUTES.has(routeId)) return 'rail';
+  if (ADELAIDE_TRAM_ROUTES.has(routeId)) return 'tram';
+  if (routeId === 'SEALNK') return 'ferry';
+  return 'unknown';
+}
+
+/**
  * Rio route key to the line a rider would say. One SMTR `routes.txt` covers
  * both feeds (see rioRouteNames.js).
  * @param {string|null} routeId
@@ -443,7 +580,7 @@ const liaRouteLabel = routeIdPattern(/^8-0*(\w.*)$/);
 function liaRouteMode(routeId) {
   if (!routeId) return 'unknown';
   const line = liaRouteLabel(routeId);
-  if (line === 'FUNI') return 'rail';
+  if (line === 'FUNI') return 'funicular';
   return /^[AB]$/.test(line) ? 'tram' : 'bus';
 }
 
@@ -470,10 +607,14 @@ function astuceRouteLabel(routeId) {
   return ASTUCE_ROUTES[routeId ?? '']?.label ?? astuceNetworkLabel(routeId);
 }
 
+/** PID trolleybus lines: route_type 11 in PID's routes.txt (checked 2026-11-14). */
+const PID_TROLLEYBUS_LINES = new Set([51, 52, 53, 58, 59, 232, 275]);
+
 /**
  * Prague PID route ids are `L` plus a number whose range says what runs it,
  * per PID's GTFS routes.txt (data.pid.cz, checked 2026-11-09): 1–99 trams
  * (50–59 trolleybuses, 49 the Petřín funicular `LD`), 100–990 buses (the
+ * trolleybus routes 232 and 275 among them, GTFS route type 11; the
  * 800s are the X replacement lines, `L803` is X3), 991–993 metro A–C,
  * 1000s and 1100s the S and R trains (`L1004` is S4, `L1109` R9), the rest
  * of 1200–1399 other trains, 1700s town buses, 1800s the P ferries, and from
@@ -487,7 +628,9 @@ function pidRoute(routeId) {
   if (!match) return { mode: 'unknown', label: routeId };
   const n = Number(match[1]);
   // i18n-ignore: line code, as signed
-  if (n === 49) return { mode: 'rail', label: 'LD' };
+  if (n === 49) return { mode: 'funicular', label: 'LD' };
+  if (PID_TROLLEYBUS_LINES.has(n))
+    return { mode: 'trolleybus', label: String(n) };
   if (n >= 50 && n <= 59) return { mode: 'bus', label: String(n) };
   if (n < 100) return { mode: 'tram', label: String(n) };
   if (n >= 800 && n < 900) return { mode: 'bus', label: `X${n - 800}` };
@@ -511,6 +654,102 @@ function pidRouteMode(routeId) {
 function pidRouteLabel(routeId) {
   return pidRoute(routeId).label;
 }
+
+/**
+ * A feed's route hint from its static GTFS routes.txt: the route ids of
+ * every mode but `bus`, which is everything else.
+ * @param {Record<string, string[]>} idsByMode
+ * @returns {(routeId: string|null) => string}
+ */
+function routeModeTable(idsByMode) {
+  const modes = new Map(
+    Object.entries(idsByMode).flatMap(([mode, ids]) =>
+      ids.map((id) => [id, mode]),
+    ),
+  );
+  return (routeId) => (routeId ? (modes.get(routeId) ?? 'bus') : 'unknown');
+}
+
+/**
+ * Bucharest TPBI by route id, from its routes.txt (checked 2026-11-14): the
+ * trams (route type 0), metro lines M1–M5 (1) and trolleybuses (11); every
+ * other route is a bus. Realtime route ids are the static ones.
+ */
+const tpbiRouteMode = routeModeTable({
+  tram: [
+    '54',
+    '55',
+    '57',
+    '61',
+    '63',
+    '65',
+    '66',
+    '67',
+    '68',
+    '69',
+    '70',
+    '814',
+    '915',
+    '1013',
+  ],
+  subway: ['968', '969', '970', '971', '999'],
+  trolleybus: [
+    '72',
+    '73',
+    '74',
+    '75',
+    '76',
+    '78',
+    '81',
+    '83',
+    '84',
+    '85',
+    '86',
+    '87',
+    '247',
+    '910',
+    '916',
+    '924',
+    '925',
+  ],
+});
+
+/**
+ * Cluj-Napoca CTP by route id, from its routes.txt (checked 2026-11-14): the
+ * trams 100–102L (route type 0) and the trolleybuses (11).
+ */
+const ctpClujRouteMode = routeModeTable({
+  tram: ['2', '3', '4', '5'],
+  trolleybus: [
+    '1',
+    '10',
+    '14',
+    '15',
+    '22',
+    '36',
+    '49',
+    '53',
+    '54',
+    '55',
+    '117',
+    '119',
+    '120',
+    '153',
+    '166',
+    '187',
+  ],
+});
+
+/**
+ * Turin GTT by route id, from its routes.txt (checked 2026-11-14): the trams
+ * (route type 0), metro M1, and the Sassi–Superga rack tramway `79U`, which
+ * the file types as a funicular (7).
+ */
+const gttRouteMode = routeModeTable({
+  tram: ['3U', '4U', '7U', '9U', '10U', '13U', '15U', '16CDU', '16CSU'],
+  subway: ['METROU'],
+  funicular: ['79U'],
+});
 
 /**
  * Bordeaux TBM tram and boat lines by route id, from TBM's static GTFS
@@ -571,6 +810,7 @@ function transitFeed(fields) {
  *   url: string, headers?: Record<string, string>,
  *   license: string, licenseUrl: string, attribution: string,
  *   defaultMode: string, routeMode?: (routeId: string|null) => string,
+ *   routeCorrections?: Readonly<Record<string, string>>,
  *   speedUnit?: 'km/h', refreshMs?: number, sourceUrl?: string,
  *   creditDated?: boolean,
  * }>>}
@@ -579,6 +819,9 @@ function transitFeed(fields) {
  * stretches the proxy's cache for an upstream that rate-limits below one
  * request per 15 s TTL. `sourceUrl` and `creditDated` add a link and a date
  * to the credit for licences that ask for them (`transitFeedCredit`).
+ * `routeCorrections` names the routes whose `route_type` the operator's own
+ * routes.txt gets wrong, `route_id` to the mode they really are; a correction
+ * outranks the route type, which would otherwise outrank the route hint.
  */
 export const TRANSIT_FEED_REGISTRY = Object.freeze([
   Object.freeze({
@@ -715,7 +958,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     url: 'https://gtfsrt.api.translink.com.au/api/realtime/seq/VehiclePositions',
     license: 'CC BY 4.0',
     licenseUrl: 'https://translink.com.au/about-translink/open-data',
-    attribution: 'TransLink — Queensland Government (CC BY 4.0)',
+    attribution: 'Translink, Department of Transport and Main Roads',
     defaultEnabled: true,
     terms: Object.freeze({
       quote:
@@ -723,6 +966,28 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'No key, no stated rate limit, no caching rule. Logos and network imagery need separate approval, so the credit is text only.',
     }),
     defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+    routeLabel: translinkRouteLabel,
+  }),
+  transitFeed({
+    id: 'translink-cairns',
+    name: 'TransLink',
+    operator: 'TransLink (Queensland Government)',
+    region: 'Cairns, Australia',
+    center: { lat: -16.9186, lon: 145.7781 },
+    loadRadiusKm: 60,
+    url: 'https://gtfsrt.api.translink.com.au/api/realtime/CNS/VehiclePositions',
+    license: 'CC BY 4.0',
+    licenseUrl: 'https://translink.com.au/about-translink/open-data',
+    attribution: 'Translink, Department of Transport and Main Roads',
+    terms: {
+      quote:
+        'Our data is licensed under a Creative Commons Attribution 4.0 International License. Authentication is not required to use the feed.',
+      note: 'The same open-data page lists Cairns (CNS) vehicle positions beside South East Queensland; same terms, text-only credit.',
+    },
+    defaultMode: 'bus',
+    routeMode: translinkRouteMode,
+    routeLabel: translinkRouteLabel,
   }),
   Object.freeze({
     id: 'ttc-toronto',
@@ -1264,6 +1529,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'Keyless public endpoint from the metropolitan transport authority; no licence found. Same basis as Metro Transit and OVapi.',
     },
     defaultMode: 'bus',
+    routeMode: tpbiRouteMode,
   }),
   transitFeed({
     id: 'roma-mobilita',
@@ -1296,6 +1562,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'Official keyless endpoint; no licence found. Same basis as Metro Transit and OVapi. Route ids append `U` for urban lines.',
     },
     defaultMode: 'bus',
+    routeMode: gttRouteMode,
     routeLabel: gttRouteLabel,
   }),
   transitFeed({
@@ -1350,6 +1617,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'Official keyless endpoint; the state catalogue page refused automated reads, so no licence is quoted. Same basis as Metro Transit and OVapi. Speeds are m/s. The server picks its encoding from Accept, hence the override.',
     },
     defaultMode: 'bus',
+    routeMode: adelaideMetroRouteMode,
   }),
   transitFeed({
     id: 'marta-atlanta',
@@ -1401,6 +1669,7 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
       note: 'Keyless; no licence found. Same basis as Metro Transit and OVapi.',
     },
     defaultMode: 'bus',
+    routeMode: ctpClujRouteMode,
   }),
   transitFeed({
     id: 'ctp-iasi',
@@ -1567,6 +1836,8 @@ export const TRANSIT_FEED_REGISTRY = Object.freeze([
     defaultMode: 'bus',
     routeLabel: liaRouteLabel,
     routeMode: liaRouteMode,
+    // LiA's routes.txt types the funicular (`8-FUNI`) as a bus (3).
+    routeCorrections: Object.freeze({ '8-FUNI': 'funicular' }),
   }),
   transitFeed({
     id: 'filbleu-tours',
@@ -1664,52 +1935,87 @@ export function transitFeedsInRange(lat, lon, slackKm = 0) {
 }
 
 /**
- * The feed's own hint for a vehicle: its fleet number when the feed maps
- * those (`vehicleMode`), else its route (`routeMode`). Null when neither knows.
+ * What settles a vehicle's mode, most specific first: the feed's fleet hint
+ * (`vehicleMode`, which knows a bus standing in on a tram route), else the
+ * feed's correction for a route its routes.txt mistypes (`routeCorrections`),
+ * else the GTFS `route_type` of its route when the record carries one, else
+ * the feed's route hint (`routeMode`). Null when none of them knows.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId
  * @param {string|null} vehicleId
+ * @param {unknown} routeType GTFS `route_type`, when the record has one.
  * @returns {string|null}
  */
-function hintedMode(feed, routeId, vehicleId) {
+function hintedMode(feed, routeId, vehicleId, routeType) {
   const byVehicle =
     typeof feed?.vehicleMode === 'function'
       ? feed.vehicleMode(vehicleId)
       : null;
   if (byVehicle && byVehicle !== 'unknown') return byVehicle;
+  const corrections = feed?.routeCorrections;
+  if (routeId && corrections && Object.hasOwn(corrections, routeId))
+    return corrections[routeId];
+  const byType = transitModeOfRouteType(routeType);
+  if (byType !== 'unknown') return byType;
   return typeof feed?.routeMode === 'function' ? feed.routeMode(routeId) : null;
 }
 
 /**
- * Mode for a vehicle: the feed's fleet or route hint when it has one, else
- * its default.
+ * Mode for a vehicle: its fleet hint, route type or route hint when one
+ * knows ({@link hintedMode}), else its feed's default.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId GTFS route_id from the vehicle's trip.
  * @param {string|null} [vehicleId] GTFS-RT vehicle id.
+ * @param {unknown} [routeType] GTFS `route_type` of the route, when known.
  * @returns {string} One of TRANSIT_MODES.
  */
-export function transitModeFor(feed, routeId, vehicleId = null) {
-  const hinted = hintedMode(feed, routeId, vehicleId);
+export function transitModeFor(
+  feed,
+  routeId,
+  vehicleId = null,
+  routeType = null,
+) {
+  const hinted = hintedMode(feed, routeId, vehicleId, routeType);
   const mode =
     hinted && hinted !== 'unknown' ? hinted : feed?.defaultMode || 'unknown';
   return TRANSIT_MODES.includes(mode) ? mode : 'unknown';
 }
 
 /**
- * Whether the mode came from the route id rather than the feed's default. A
- * default is a guess about a fleet — TransLink's is "bus" while it publishes
- * rail in the same feed — so a consumer judging physical plausibility must
- * not hold a defaulted vehicle to a bus's limits.
+ * Whether the mode came from the vehicle, its route type or its route id
+ * rather than the feed's default. A default is a guess about a fleet —
+ * TransLink's is "bus" while it publishes rail in the same feed — so a
+ * consumer judging physical plausibility must not hold a defaulted vehicle
+ * to a bus's limits.
  * @param {object} feed Registry entry.
  * @param {string|null} routeId
  * @param {string|null} [vehicleId]
+ * @param {unknown} [routeType]
  * @returns {boolean}
  */
-export function transitModeResolved(feed, routeId, vehicleId = null) {
-  const hinted = hintedMode(feed, routeId, vehicleId);
+export function transitModeResolved(
+  feed,
+  routeId,
+  vehicleId = null,
+  routeType = null,
+) {
+  const hinted = hintedMode(feed, routeId, vehicleId, routeType);
   return (
     Boolean(hinted) && hinted !== 'unknown' && TRANSIT_MODES.includes(hinted)
   );
+}
+
+/**
+ * The route type a vehicle's model is chosen by: its record's, when that type
+ * is a kind of the mode it was given. A fleet hint can overrule the route (a
+ * bus on a tram route), and then the route's type does not describe it.
+ * @param {string} mode The vehicle's mode ({@link transitModeFor}).
+ * @param {unknown} routeType
+ * @returns {number|null}
+ */
+export function transitModelRouteType(mode, routeType) {
+  const n = transitRouteType(routeType);
+  return n !== null && transitModeOfRouteType(n) === mode ? n : null;
 }
 
 /**

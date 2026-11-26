@@ -78,6 +78,8 @@
   --cockpit-side-panel-width: min(340px, 28vw);
   /* HUD bottom offset + tallest scaled telemetry block + 20px clear border. */
   --cockpit-bottom-rail-safe: calc(clamp(84px, 11vh, 118px) + 100px);
+  /* The phone Display/Radio row shares the visor inset with the roll arc. */
+  --cockpit-visor-top: clamp(62px, 9vh, 90px);
   position: fixed;
   inset: 0;
   z-index: 145;
@@ -95,7 +97,7 @@
 }
 .cockpit-visor-shell {
   position: absolute;
-  inset: clamp(62px, 9vh, 90px) clamp(18px, 3vw, 48px) clamp(38px, 5vh, 56px);
+  inset: var(--cockpit-visor-top) clamp(18px, 3vw, 48px) clamp(38px, 5vh, 56px);
   transform-style: preserve-3d;
   perspective: 880px;
 }
@@ -162,7 +164,12 @@
   text-align: left;
   transform: rotateY(-24deg) translateZ(-18px);
 }
-body.cockpit-mode:has(#left-panel-stack > .panel-collapsible:not(.collapsed))
+/* `.left-panel-open`: a panel in the left stack is open, a page-root class
+   (src/ui/rail/rootClass.js). */
+body.cockpit-mode:is(
+    .left-panel-open *,
+    #left-panel-stack > .panel-collapsible:not(.collapsed)
+  )
   .cockpit-pitch-rail-left {
   opacity: 0;
   transition: opacity 0.25s;
@@ -703,7 +710,9 @@ html:not([lang='en']) .cockpit-roll-token.is-separator {
   color: var(--cockpit-accent);
   font-size: 12px;
 }
-.cockpit-heading-caret {
+/* Inside the compass, so it outranks the kit icon's own display and
+   line height. */
+.cockpit-compass .cockpit-heading-caret {
   display: block;
   height: 20px;
   color: var(--cockpit-accent);
@@ -1952,6 +1961,61 @@ html:not([lang='en']) .cockpit-brief-tabs button {
   color: #fff;
   outline: none;
 }
+/* The LIVE tab is in the markup whether or not a stream is on offer. */
+.cockpit-brief-tabs button[hidden] {
+  display: none;
+}
+
+/* The briefing's LIVE page: the LIVE section's parts (live.css) in the
+   card's measure. */
+.cockpit-live-subject {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: #fff;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.cockpit-live-subject strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-live-subject .live-badge {
+  flex: none;
+  font-size: 7px;
+}
+.cockpit-live-pick {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 6px;
+}
+.cockpit-live-pick .live-stream-title {
+  font-size: 8px;
+}
+.cockpit-live-pick .live-step .material-symbols-outlined {
+  font-size: 14px;
+}
+.cockpit-live-status {
+  margin: 5px 0 0;
+  color: rgba(244, 251, 255, 0.7);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cockpit-live-credit {
+  margin: 4px 0 0;
+  color: rgba(182, 226, 241, 0.72);
+  font: 600 7px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cockpit-live-credit a {
+  color: inherit;
+}
 .cockpit-signal-window[data-layout-mode='rail-right-constrained'] {
   gap: 5px;
 }
@@ -2023,6 +2087,11 @@ body.cockpit-mode
     #reset-globe-view
   ) {
   display: none !important;
+}
+/* The first-visit Stories announcement waits, unread, until Cockpit closes:
+   on a phone it would cover the Display/Radio row. */
+body.cockpit-mode #gev-stories #hPop {
+  display: none;
 }
 body.cockpit-mode #left-panel-stack {
   z-index: 147;
@@ -2120,10 +2189,31 @@ body.cockpit-mode #intel-hud .hud-right-edge {
     top: auto;
     right: 12px;
     bottom: 152px;
+    flex-direction: row;
     max-width: calc(100vw - 24px);
   }
-  body.cockpit-mode .cockpit-utility-controls {
-    flex-direction: row;
+  /* Phone flight and bridge views: one row centred on the Reset/Exit axis,
+     10px below the roll arc (.cockpit-roll-arc: 2px + 96px into the visor).
+     Shorter screens reserve 36px around the 46% centre of .cockpit-reticle
+     (about 25px tall on phones), plus an 8px gap below the 42px row.
+     The row stops at 72px, below the vision controls. Windows under 240px
+     tall, and narrow ones under 450px tall, keep the right-aligned row above
+     Reset/Exit, clear of Reset, LOOK AHEAD and the Stories button, as do
+     satellite and provider views. */
+  @media (min-width: 390px) and (min-height: 240px), (min-height: 450px) {
+    body.cockpit-mode.mobile-shell
+      #cockpit-hud:not([data-generic]):not([data-subject='satellite'])
+      .cockpit-utility-controls {
+      top: clamp(
+        72px,
+        calc(46% - 68px),
+        calc(var(--cockpit-visor-top) + 108px)
+      );
+      bottom: auto;
+      left: 12px;
+      width: max-content;
+      margin-inline: auto;
+    }
   }
   body.cockpit-mode .cockpit-utility-launcher {
     width: min(150px, calc((100vw - 31px) / 2));

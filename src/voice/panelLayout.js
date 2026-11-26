@@ -28,7 +28,7 @@ export function bindLayoutDock(ui) {
     } catch {
       /* Storage is optional. */
     }
-    ui.update('layout', { docked, trayDocked: false });
+    ui.update('layout', { docked });
   });
 }
 
@@ -38,11 +38,11 @@ export function bindLayoutDock(ui) {
  * panel renders on the next tick; session and presentation ownership stay
  * with the caller.
  */
-export function bindAssistantPanelLayout({ ui, name, minimize, restore }) {
+export function bindAssistantPanelLayout({ ui, name, minimize }) {
   let cancelled = false;
   let teardown = () => {};
   void nextTick(() => {
-    if (!cancelled) teardown = layOut({ ui, name, minimize, restore });
+    if (!cancelled) teardown = layOut({ ui, name, minimize });
   });
   return () => {
     cancelled = true;
@@ -50,7 +50,7 @@ export function bindAssistantPanelLayout({ ui, name, minimize, restore }) {
   };
 }
 
-function layOut({ ui, name, minimize, restore }) {
+function layOut({ ui, name, minimize }) {
   const panel = ui.element(name);
   const root = ui.element('root');
   if (!panel || !root?.getBoundingClientRect) return () => {};
@@ -78,69 +78,7 @@ function layOut({ ui, name, minimize, restore }) {
     else delete body.dataset.assistantDocked;
   };
   const floatingReply = panel.querySelector('#gev-chat-mini-reply');
-  // The dock's Location and Visual Presets wings open trays above the dock.
-  // They are looked up on use, since the dock can mount or re-render after
-  // this binds; each new wing is watched as it is found. Trays open, close
-  // and pin through the wings' classes.
-  const trayChanges = new MutationObserver(() => {
-    schedule();
-    release();
-  });
-  const leaveWing = () => {
-    release();
-    schedule();
-  };
-  const watchedWings = new WeakSet();
-  const wings = () => {
-    const found = ['location-bar', 'control-panel']
-      .map((id) => doc.getElementById?.(id))
-      .filter(Boolean);
-    for (const wing of found) {
-      if (watchedWings.has(wing)) continue;
-      watchedWings.add(wing);
-      trayChanges.observe(wing, {
-        attributes: true,
-        attributeFilter: ['class'],
-      });
-      listen(wing, 'pointerleave', leaveWing);
-    }
-    return found;
-  };
-  const openTrays = () =>
-    wings()
-      .filter((wing) => !wing.classList.contains('collapsed'))
-      .map((wing) => wing.querySelector('.dock-popover-content'))
-      .filter((tray) => tray && shown(tray));
-  const trayOpen = () =>
-    wings().some(
-      (wing) => !wing.classList.contains('collapsed') && shown(wing),
-    );
-  // A centred panel yields to the trays as its minimized bar. The yield
-  // passes to the other panel on a switch, and ends with an expand, or once
-  // the trays close and the pointer leaves the wings. A dock taken for a
-  // tray ends then too.
-  const yieldToTrays = () => {
-    ui.update('layout', { yielded: name });
-    minimize();
-  };
-  // Touch screens can keep :hover on the last wing tapped.
-  const hovered = (wing) =>
-    view.matchMedia?.('(hover: hover)').matches && wing.matches?.(':hover');
-  const release = () => {
-    if (trayOpen() || wings().some(hovered)) return;
-    // Either panel's layout may end the dock; the other re-places on its own
-    // schedule.
-    if (ui.state.layout.trayDocked) {
-      ui.update('layout', { docked: false, trayDocked: false });
-      place();
-    }
-    if (ui.state.layout.yielded !== name) return;
-    ui.update('layout', { yielded: null });
-    if (shown(panel) && panel.dataset.minimized) restore();
-  };
   let frame = 0;
-  let seen = false;
-  let wasMinimized = false;
   let wasShown = false;
   let lastHeight = 0;
   let animateNext = false;
@@ -191,31 +129,8 @@ function layOut({ ui, name, minimize, restore }) {
     if (lifetime.signal.aborted) return;
     if (panel.hidden || !shown(panel)) {
       wasShown = false;
-      seen = false;
-      wasMinimized = false;
       return;
     }
-    const appearing = !seen;
-    const expanding = !appearing && wasMinimized && !minimized;
-    seen = true;
-    wasMinimized = minimized;
-    if (!isDocked() && !mobile) {
-      // A panel opened or switched to while the trays hold the centre
-      // starts as its bar.
-      if (appearing && !minimized && (ui.state.layout.yielded || trayOpen())) {
-        yieldToTrays();
-        return;
-      }
-      // Expanding over an open tray takes the right lane instead of covering
-      // it. Only the layout state changes; the saved dock choice stays.
-      if (expanding && trayOpen()) {
-        ui.update('layout', { docked: true, trayDocked: true, yielded: null });
-        void nextTick(place);
-        return;
-      }
-    }
-    if (expanding && ui.state.layout.yielded === name)
-      ui.update('layout', { yielded: null });
     // Offsets are from the root's padding box, inside its border.
     const box = root.getBoundingClientRect();
     const anchor = {
@@ -267,13 +182,8 @@ function layOut({ ui, name, minimize, restore }) {
       const above = replyRect?.height
         ? Math.max(0, rect.top - replyRect.top)
         : 0;
-      // The voice control rises above the dock; keep the gap from its top,
-      // and rest above any open tray under the panel.
-      const trayTop = openTrays()
-        .map((tray) => tray.getBoundingClientRect())
-        .filter((tray) => tray.left < x + rect.width && tray.right > x)
-        .reduce((top, tray) => Math.min(top, tray.top), Infinity);
-      const base = Math.min(dockRect?.top ?? Infinity, box.top, trayTop);
+      // The voice control rises above the dock; keep the gap from its top.
+      const base = Math.min(dockRect?.top ?? Infinity, box.top);
       const ceiling = base - rect.height - 16;
       const y = Math.max(8 + above, Math.min(ceiling, h - rect.height - 8));
       panel.style.left = `${x - anchor.left}px`;
@@ -310,20 +220,7 @@ function layOut({ ui, name, minimize, restore }) {
     frame = requestAnimationFrame(place);
   };
   // The dock choice toggles first (bindLayoutDock), then each panel places.
-  // Undocking while a tray is open brings the panel back as its bar.
-  const offDock = ui.on('layout-dock', () =>
-    nextTick(() => {
-      if (
-        !isDocked() &&
-        !isMobile() &&
-        trayOpen() &&
-        shown(panel) &&
-        !panel.dataset.minimized
-      )
-        yieldToTrays();
-      place();
-    }),
-  );
+  const offDock = ui.on('layout-dock', () => nextTick(place));
   listen(view, 'resize', schedule);
   // The dock slides into place; observers report size changes, not moves.
   const commandDock = doc.getElementById?.('command-dock');
@@ -375,22 +272,6 @@ function layOut({ ui, name, minimize, restore }) {
     railChanges.observe(rail, { childList: true });
     watchRailPanels();
   }
-  // Reaching for a wing's button steps a centred panel down to its bar,
-  // which then rests above the tray.
-  const reachWing = ({ target }) => {
-    if (
-      target?.closest?.('.dock-tray-toggle') &&
-      wings().some((wing) => wing.contains(target)) &&
-      panel.dataset.placement === 'compact' &&
-      !isMobile() &&
-      shown(panel) &&
-      !panel.dataset.minimized
-    )
-      yieldToTrays();
-  };
-  for (const event of ['pointerover', 'pointerdown'])
-    listen(doc, event, reachWing);
-  wings();
   const resize = new ResizeObserver(schedule);
   resize.observe(panel);
   resize.observe(root);
@@ -418,7 +299,6 @@ function layOut({ ui, name, minimize, restore }) {
     resize.disconnect();
     changes.disconnect();
     railChanges.disconnect();
-    trayChanges.disconnect();
     heightAnimation?.cancel();
     offDock();
     delete panel.dataset.assistantPanel;

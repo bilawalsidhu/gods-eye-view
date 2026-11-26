@@ -12,17 +12,6 @@
     width: 176px;
   }
 
-  .button-grid {
-    flex-wrap: nowrap;
-  }
-
-  #control-panel {
-    left: 16px;
-    right: 16px;
-    transform: none;
-    max-width: none;
-  }
-
   #title-bar {
     top: 20px;
     inset-inline-start: 20px;
@@ -63,14 +52,6 @@
 
   #title-bar:has(.frame-rate-readout:not([hidden])) .subtitle {
     visibility: hidden;
-  }
-
-  #location-bar {
-    left: 16px;
-    right: 16px;
-    transform: none;
-    max-width: none;
-    bottom: 120px;
   }
 
   #gev-voice-control {
