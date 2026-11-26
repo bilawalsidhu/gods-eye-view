@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import { createState } from './state.js';
 import { createTracking } from './tracking.js';
 import { createInteraction } from './interaction.js';
+import { DESELECT_GLOBE_VIEW } from './policy.js';
+import { GLOBE_VIEW } from '../../locations.js';
 import { fakeInput } from '../../input/testDoubles.mjs';
 // Registers the trails' pick ids, as the app does on load.
 import '../../data/trailRenderer.js';
@@ -378,4 +380,100 @@ test('with the world paused, a satellite is centred where it is; at 60x where it
     centred()(NOW + 60 * CLICK_CENTER_S * 1000) < 1e-9,
     'at 60x: a minute on',
   );
+});
+
+test('the globe view letting go flies to is the zoom-to-globe preset', () => {
+  assert.equal(DESELECT_GLOBE_VIEW.heightM, GLOBE_VIEW.heightM);
+  assert.equal(DESELECT_GLOBE_VIEW.durationS, GLOBE_VIEW.durationS);
+  assert.equal(GLOBE_VIEW.pitchDeg, -90);
+});
+
+/** The globe view letting go of a followed satellite flies to. */
+function assertGlobeViewOver(flight, norad, height) {
+  const p = geoAt(norad, NOW);
+  assert.deepEqual(flight.destination, {
+    lon: p.longitude,
+    lat: p.latitude,
+    height,
+  });
+  assert.equal(flight.options.orientation.heading, 0, 'north up');
+  assert.ok(
+    Math.abs(flight.options.orientation.pitch + Math.PI / 2) < 1e-12,
+    'straight down',
+  );
+  assert.equal(flight.options.orientation.roll, 0, 'level');
+  assert.equal(flight.options.endFrame, 'world');
+  assert.ok(flight.options.durationS > 0, 'a flight, not a jump');
+}
+
+/** Select `norad`, then follow it as a second click does. */
+function follow(app, norad) {
+  app.click(DOT(norad));
+  app.click({ set: 'tracked', id: String(norad) });
+  assert.equal(app.camera.followed, app.state._followTarget);
+  return app.camera.flights.length;
+}
+
+test('a map click letting go of a followed satellite flies to the globe view over its ground point', (t) => {
+  const app = satellitesLayer(t);
+  const before = follow(app, 25544);
+  app.click(null);
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.followed, null, 'the follow ends');
+  assert.equal(app.camera.flights.length, before + 1, 'one flight');
+  assertGlobeViewOver(app.camera.flights.at(-1), 25544, 18_000_000);
+});
+
+test('Escape letting go of a followed satellite flies to the globe view too', (t) => {
+  const app = satellitesLayer(t);
+  const before = follow(app, 25544);
+  globalThis.document.dispatchEvent(
+    Object.assign(new Event('keydown'), { key: 'Escape' }),
+  );
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.flights.length, before + 1);
+  assertGlobeViewOver(app.camera.flights.at(-1), 25544, 18_000_000);
+});
+
+test('an eye farther out than the globe view keeps its height', (t) => {
+  const app = satellitesLayer(t, { height: 60_000_000 });
+  const before = follow(app, GEO);
+  app.click(null);
+  assert.equal(app.camera.flights.length, before + 1);
+  assertGlobeViewOver(app.camera.flights.at(-1), GEO, 60_000_000);
+});
+
+test('letting go of a satellite the camera does not follow leaves the camera where it is', (t) => {
+  const app = satellitesLayer(t);
+  app.click(DOT(25544));
+  const before = app.camera.flights.length;
+  app.click(null);
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.flights.length, before, 'no flight');
+});
+
+test('only a person letting go flies: another layer, another follow or a programmatic stop leave the camera', (t) => {
+  const app = satellitesLayer(t);
+  // Another layer's selection takes over.
+  let before = follow(app, 25544);
+  claimSelection('flights', 'abc123');
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.flights.length, before);
+  // Another follow takes the camera.
+  before = follow(app, 25544);
+  app.camera.port.follow({ key: 'flights:abc123' });
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.flights.length, before);
+  // A stop with no person behind it (a reset, a voice release, the layer
+  // turned off) leaves the camera to whatever stopped it.
+  before = follow(app, 25544);
+  app.tracking._clearTracking(false, { origin: 'tool' });
+  assert.equal(app.state._trackedNorad, null);
+  assert.equal(app.camera.followed, null);
+  assert.equal(app.camera.flights.length, before);
+  // A person's stop (the card closed) flies.
+  before = follow(app, 25544);
+  app.tracking._clearTracking(false, { origin: 'user', globeView: true });
+  assert.equal(app.camera.flights.length, before + 1);
+  assertGlobeViewOver(app.camera.flights.at(-1), 25544, 18_000_000);
 });

@@ -209,12 +209,13 @@ export function installEntityContext({
   function letGo(card) {
     if (!followsCard(card) && !selectsCard(card)) return;
     // Only the card's own layer lets go, as the person's own action; other
-    // layers' selections stay as they are.
+    // layers' selections stay as they are. A layer that takes `globeView`
+    // (satellites) brings a camera that followed the item back to the globe.
     const layer = getDataManager()?.layers?.get?.(card.layerId);
     try {
       const module = layer?.module;
       if (typeof module?.stopTracking === 'function')
-        module.stopTracking({ origin: 'user' });
+        module.stopTracking({ origin: 'user', globeView: true });
       else module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.

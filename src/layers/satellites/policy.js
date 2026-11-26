@@ -268,6 +268,18 @@ export const TRACKED_ORBIT_COLOR = Object.freeze([1, 1, 0, 1]);
 
 export const HIGH_ORBIT_ALTITUDE_M = 2000000;
 
+/**
+ * Where letting go of a followed satellite takes the camera: the globe view,
+ * straight down over the satellite's ground point. The height and flight time
+ * are the zoom-to-globe preset's (`GLOBE_VIEW` in `src/locations.js`, which
+ * this layer may not import), 18,000 km, where the whole Earth fills most of
+ * the view; an eye already farther out keeps its own height.
+ */
+export const DESELECT_GLOBE_VIEW = Object.freeze({
+  heightM: 18_000_000,
+  durationS: 2.8,
+});
+
 export const TRACK_VIEW_FROM_HIGH_SCALE = 4;
 // ≈ 2900 km back for MEO/GEO
 
