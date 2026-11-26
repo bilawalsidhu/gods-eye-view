@@ -885,3 +885,142 @@ test('a kind of place written before its name keeps the plan', () => {
     );
   }
 });
+
+test("what the host's entity lookup found is listed, one named exactly first", () => {
+  const omnibar = createOmnibar({ layers: layers() });
+  const jal = {
+    kind: 'aircraft',
+    id: '86d3f0',
+    name: 'JAL58',
+    detail: 'Japan Airlines',
+    lat: 50,
+    lon: -120,
+    layerId: 'flights',
+    mmsi: null,
+  };
+  const ship = {
+    kind: 'vessel',
+    id: 'uuid-1',
+    name: 'EVER GIVEN',
+    lat: 30,
+    lon: 32,
+    layerId: 'ais-live-vessels',
+    mmsi: '353136000',
+  };
+  const camera = {
+    kind: 'camera',
+    id: 'tfl:1',
+    name: 'London Rd / Staines Av',
+    lat: 51.4,
+    lon: -0.5,
+    layerId: 'cctv',
+    mmsi: null,
+  };
+  // Named exactly (case, spaces and punctuation aside): first, and Enter
+  // picks it, over a place found by a like name.
+  const places = [
+    {
+      name: 'Ever Given memorial',
+      detail: 'Suez',
+      latitude: 30,
+      longitude: 32.5,
+    },
+  ];
+  for (const [text, found, key] of [
+    ['JAL58', [jal], 'found:flights:86d3f0'],
+    ['ever given', [ship], 'found:ais-live-vessels:uuid-1'],
+    ['london rd staines av', [camera], 'found:cctv:tfl:1'],
+  ]) {
+    const { rows, defaultIndex } = omnibar.rows(text, {
+      found,
+      places,
+      entities: () => [],
+    });
+    assert.equal(rows[0].key, key, text);
+    assert.equal(rows[0].kind, 'found', text);
+    assert.equal(defaultIndex, 0, text);
+    assert.deepEqual(rows[0].match, found[0], text);
+  }
+  assert.equal(
+    omnibar.rows('JAL58', { found: [jal] }).rows[0].hint,
+    'Japan Airlines',
+  );
+  // Not named exactly: after the loaded items, before the places.
+  const loaded = () => [
+    {
+      key: 'l1',
+      icon: 'flight',
+      identity: { layerId: 'flights', id: 'abc123' },
+      title: 'JAL581',
+      layerName: 'Flights',
+    },
+  ];
+  const loose = omnibar.rows('JL58', { found: [jal], entities: loaded });
+  const kinds = loose.rows.map((row) => row.kind);
+  assert.ok(
+    kinds.indexOf('found') > kinds.indexOf('entity') ||
+      !kinds.includes('entity'),
+  );
+  assert.ok(
+    kinds.includes('place')
+      ? kinds.indexOf('found') < kinds.indexOf('place')
+      : true,
+  );
+  const city = omnibar.rows('Hamburg', {
+    found: [{ ...ship, id: 'uuid-2', name: 'HAMBURG EXPRESS', mmsi: null }],
+    places: [
+      { name: 'Hamburg', detail: 'Germany', latitude: 53.55, longitude: 10 },
+    ],
+  });
+  assert.equal(city.rows[0].kind, 'found');
+  assert.equal(city.rows[1].kind, 'place');
+  // An MMSI is a number the privacy check keeps from the place service, but
+  // the host's answer for it is listed.
+  const mmsi = omnibar.rows('353136000', { found: [ship], entities: () => [] });
+  assert.equal(mmsi.rows[0].key, 'found:ais-live-vessels:uuid-1');
+  assert.equal(mmsi.defaultIndex, 0);
+  // Already loaded in its layer (by id or MMSI): listed once, as loaded.
+  const twice = omnibar.rows('Ever Given', {
+    found: [ship],
+    entities: () => [
+      {
+        key: 'v',
+        icon: 'directions_boat',
+        identity: {
+          layerId: 'ais-live-vessels',
+          id: 'other',
+          record: { mmsi: '353136000' },
+        },
+        title: 'EVER GIVEN',
+        layerName: 'Vessels',
+      },
+    ],
+  });
+  assert.ok(!twice.rows.some((row) => row.kind === 'found'));
+  assert.equal(twice.rows[0].kind, 'entity');
+  // A command, a switch, a question or coordinates is never looked up.
+  for (const text of [
+    'zoom in',
+    'show flights',
+    'where is JAL58?',
+    '30.2672, -97.7431',
+    'go to Hamburg',
+  ]) {
+    assert.equal(omnibar.lookupQuery(text), null, text);
+    assert.ok(
+      !omnibar
+        .rows(text, { found: [jal] })
+        .rows.some((row) => row.kind === 'found'),
+      text,
+    );
+  }
+  for (const text of [
+    'JAL58',
+    'JL58',
+    'Ever Given',
+    '353136000',
+    'ISS',
+    '25544',
+  ])
+    assert.equal(omnibar.lookupQuery(text), text, text);
+});

@@ -8588,6 +8588,25 @@ code puts them first, and otherwise the place row keeps the top, so
 stays in search. Questions can be sent through Ask GEV, which uses the
 existing typed chat.
 
+A host that passes `entityLookup` to `createApplicationControls`
+(docs/CODE-BOUNDARIES.md, "Entity lookup provider") also has aircraft,
+ships, cameras and satellites anywhere offered for a bare name, code or
+number once typing pauses (`lookupQuery` in `src/ui/omnibarRows.js`: never a
+command, a layer switch, a question, a sentence or coordinates, and never
+while voice has the field). One whose name, id or MMSI is the line (case,
+spaces and punctuation aside) leads the rows and Enter picks it; the others
+come after the loaded items listed before any place row, ahead of the
+places. A line the privacy check keeps from the place service (an MMSI is a
+long number) still lists the host's answers, and is not said to be kept
+back. One already loaded in its layer is listed once, as loaded. Choosing
+one switches its layer on if it is off; one the layer holds is picked as a
+Context row picks it, and one it does not hold yet is centred on once and
+picked with the layer's `pickById` when its next load has it (by id, then by
+MMSI, never by a name; `src/ui/entityLookup.js`). Editing or closing the
+line, picking another row or voice taking the field aborts the request and
+any pick still waiting. The CCTV layer's `pickById` makes a camera the
+active one, its feed shown in the camera panel.
+
 Han, Hangul and Kana names are looked up from two characters (東京), others
 from three.
 

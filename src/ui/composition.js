@@ -6,6 +6,7 @@ import {
   GLOBE_VIEW,
   flyToGlobeView,
   flyToPresetLocation,
+  flyToLandmark,
   flyToPOI,
   searchAndFlyTo,
 } from '../locations.js';
@@ -86,6 +87,7 @@ export class StyleManager extends ApplicationShell {
         flyToGlobeView,
         flyToPresetLocation,
         flyToPOI,
+        flyToLandmark,
         searchAndFlyTo,
         interruptCameraMotion,
         interruptGlobeRotation,
