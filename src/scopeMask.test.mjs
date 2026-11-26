@@ -116,6 +116,23 @@ test('backing-store scale is clamped to 2x and survives junk input', () => {
   assert.equal(scopeMaskDevicePixelRatio(Number.NaN), 1);
 });
 
+test('backing-store scale is CSS pixels on a touch-only device', () => {
+  const had = Object.hasOwn(globalThis, 'window');
+  const previous = globalThis.window;
+  globalThis.window = {
+    devicePixelRatio: 3,
+    matchMedia: (query) => ({ matches: query === '(pointer: coarse)' }),
+  };
+  try {
+    assert.equal(scopeMaskDevicePixelRatio(), 1);
+    globalThis.window.matchMedia = (query) => ({ matches: query === '(pointer: fine)' });
+    assert.equal(scopeMaskDevicePixelRatio(), 2);
+  } finally {
+    if (had) globalThis.window = previous;
+    else delete globalThis.window;
+  }
+});
+
 /**
  * Minimal DOM/matchMedia surface for the install path. Returns the created
  * canvas plus a `setDpr` that fires a real `(resolution: Ndppx)` change the

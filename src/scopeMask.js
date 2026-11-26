@@ -1,6 +1,7 @@
 import { getKeyholeGeometry } from './celestialRing.js';
 import { SCOPE_FEATHER_RATIO_MAX } from './scopeMaskPolicy.js';
 import { findCamera, findFrame } from './render/rendererOf.js';
+import { overlayPixelRatio } from './overlays/canvasPixelRatio.js';
 
 /**
  * Scope mask — the app's signature circular viewport treatment, made real.
@@ -268,9 +269,13 @@ export function getScopeTerminusRepaintCount() {
   return _terminusRepaints;
 }
 
-/** Backing-store scale actually used by the last draw(). */
+/**
+ * Backing-store scale actually used by the last draw(): the display's ratio
+ * up to 2, and CSS pixels on a touch-only device (the mask is a soft
+ * gradient; a phone's 3x screen would otherwise hold it at 2x).
+ */
 export function scopeMaskDevicePixelRatio(
-  ratio = typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+  ratio = typeof window !== 'undefined' ? overlayPixelRatio(window) : 1,
 ) {
   return Math.min(2, Number(ratio) || 1);
 }
