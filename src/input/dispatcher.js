@@ -135,6 +135,23 @@ function topHitOf(hit, foreign) {
   return other.set ? other : { set: '', id: other.id, surface: false };
 }
 
+/** Whether `hit` is a trail line (src/data/trailRenderer.js). */
+function isTrailHit(hit) {
+  return Boolean(hit?.set) && findPickOwner(hit.id) === 'trails';
+}
+
+/**
+ * The first item drawn under a click that is not a trail. A trail is drawn
+ * up to the thing it follows, its line over that thing's icon: a click
+ * there is on the thing. Over nothing else, the trail stays the hit, so a
+ * click on a trail is still never one on empty ground.
+ * @param {Hit[]} hits Nearest first.
+ * @returns {Hit|null}
+ */
+function pastTrails(hits) {
+  return hits.find((hit) => hit && !hit.surface && !isTrailHit(hit)) ?? null;
+}
+
 /**
  * @typedef {object} ClickGesture
  * @property {number} travelPx Pointer travel during the press, summed per
@@ -508,7 +525,8 @@ function createClickEvent(viewer, queryOf, at, gesture) {
         // The adapter's own pick of this click is the renderer's pass, held
         // now: read later, it would be another, of a scene drawn since.
         void native()?.native.pick;
-        return topHitOf(hit, () => native()?.foreign() ?? null);
+        const top = topHitOf(hit, () => native()?.foreign() ?? null);
+        return isTrailHit(top) ? (pastTrails(this.drill()) ?? top) : top;
       });
     },
     get drawHit() {

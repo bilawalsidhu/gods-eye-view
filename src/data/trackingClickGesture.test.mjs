@@ -109,7 +109,7 @@ test('civilian and military click handlers apply duration only at the deselect b
   );
 });
 
-test('a click on an aircraft follows it keeping the camera’s view; other selections frame it', () => {
+test('a click on an aircraft selects and centres it without following it', () => {
   const sources = [
     readLayerSource(new URL('./flights.js', import.meta.url)),
     readLayerSource(new URL('./militaryFlights.js', import.meta.url)),
@@ -117,12 +117,9 @@ test('a click on an aircraft follows it keeping the camera’s view; other selec
   for (const source of sources) {
     assert.match(
       source,
-      /_trackFlight\(pickedIcao, \{ origin: 'user', keepView: true \}\)/,
+      /_trackFlight\(pickedIcao, \{ origin: 'user', follow: false \}\)/,
     );
-    assert.match(
-      source,
-      /keepView\s*\?\s*followViewFrom\(camera\.pose\(\), getTrackedPosition\(\)\)/,
-    );
-    assert.match(source, /transitionS: SELECTION_FOLLOW_TRANSITION_S/);
+    assert.match(source, /if \(follow\) _followTracked\(\);\s*else if \(center\) _centerTracked\(\);/);
+    assert.doesNotMatch(source, /keepView/);
   }
 });

@@ -520,6 +520,24 @@ export function createQueries({
     },
 
     /**
+     * Select a vessel by id as a click on it does: selected with its trail
+     * and card, and centred once (src/data/clickSelect.js).
+     * @param {string|number} id Vessel id.
+     * @param {{center?: boolean}} [options] `center: false` selects it and
+     *   leaves the camera to the caller (a pick from a list frames it).
+     * @returns {boolean} True if a matching vessel was selected.
+     */
+    pickById(id, { center = true } = {}) {
+      if (id === null || id === undefined) return false;
+      const record = recordFor(String(id).trim());
+      if (!record || !state.feed.enabled) return false;
+      if (center) return components.selection.selectAndFocusVessel(record);
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return true;
+    },
+
+    /**
      * Select a vessel by id via the same path as a map click
      * (highlight + HUD update). An AIS feed's vessels are keyed by MMSI.
      * @param {string|number} id Vessel id.
@@ -533,6 +551,27 @@ export function createQueries({
       if (!record) return false;
       components.selection.selectVessel(record);
       return true;
+    },
+
+    /**
+     * Follow a vessel by id with the camera (the card's Follow, a spoken
+     * "track"): selected as a click selects it, then followed where the
+     * layer draws it. The one already followed stays followed.
+     * @param {string|number} id Vessel id.
+     * @returns {boolean} True if the camera follows the vessel.
+     */
+    trackById(id) {
+      if (id === null || id === undefined || !state.feed.enabled) return false;
+      const record = recordFor(String(id).trim());
+      if (!record) return false;
+      if (state.selectedRecord?.id !== record.id)
+        components.selection.selectVessel(record);
+      return components.selection.followSelected();
+    },
+
+    /** Whether the camera follows the selected vessel now. */
+    isFollowed() {
+      return components.selection.isSelectedFollowed();
     },
 
     /**

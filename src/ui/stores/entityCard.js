@@ -764,22 +764,19 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   let generation = 0;
   const selectionGeneration = () => generation;
 
-  /** Things that move are followed as soon as they are picked. */
-  const AUTO_FOLLOW = new Set(['flights', 'military', 'satellites']);
   /**
    * The key of the item the camera follows, if any. The shell sets it from
    * the camera's own follow, so it is never claimed before the camera does.
    */
   const following = ref(null);
-  /** The item a follow was last asked for, so it is asked once per item. */
-  let asked = null;
 
   /**
+   * Picking an item never follows it, whatever it is: the card's Follow
+   * does (src/data/clickSelect.js).
    * @param {object} identity
-   * @param {{fly?: boolean, follow?: boolean}} [options] `follow: false`
-   *   keeps the camera where it is even for an aircraft.
+   * @param {{fly?: boolean}} [options]
    */
-  function select(identity, { fly = false, follow: autoFollow = true } = {}) {
+  function select(identity, { fly = false } = {}) {
     if (!read(identity)) return false;
     generation++;
     stopLocating();
@@ -791,30 +788,20 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
     timer = setInterval(refresh, REFRESH_MS);
     shell.value?.openPanel?.();
     const current = card.value;
-    const followNow =
-      autoFollow &&
-      AUTO_FOLLOW.has(current?.layerId) &&
-      shell.value?.canFollow?.(current, { auto: true });
-    if (followNow) {
-      // Tracking can announce the craft again; following what is already
-      // followed would loop, so it only starts once per item.
-      if (following.value !== current.key && asked !== current.key) {
-        asked = current.key;
-        shell.value?.follow?.(current);
-      }
-    } else {
-      asked = null;
-      if (fly) shell.value?.flyTo?.(current, { fromSelection: true });
-    }
+    // An explicit pick (a row, a search) is a click on the item: its layer
+    // selects and centres it when it can, else the camera flies to it.
+    if (fly && !shell.value?.pick?.(current))
+      shell.value?.flyTo?.(current, { fromSelection: true });
     requestRoute(current?.identity);
     return true;
   }
 
   function clear() {
     generation++;
-    if (following.value) shell.value?.letGo?.(card.value);
+    // Closing the card deselects its item in its layer (the shell checks
+    // the item is still the one selected or followed).
+    if (card.value) shell.value?.letGo?.(card.value);
     following.value = null;
-    asked = null;
     clearInterval(timer);
     timer = null;
     card.value = null;
@@ -832,7 +819,6 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
   const flyTo = () => currentActionCard() && shell.value?.flyTo?.(card.value);
   const follow = () => {
     if (!card.value) return;
-    asked = card.value.key;
     shell.value?.follow?.(card.value);
   };
   const isFollowing = () =>
@@ -924,10 +910,10 @@ export const useEntityCardStore = defineStore('gev-entity-card', () => {
  * on it does (`src/ui/entityContextBridge.js` selects the same way): its card
  * opens, and the panel with it. The app hands it to voice, which reads
  * `generation()` when a selection is asked and passes it back as `since`.
- * The action has already selected or followed the item in its own layer, so
- * the card does not follow it again (a click on a flight does not either). A
- * card picked or cleared since the action was asked stays, and nothing opens
- * in Cockpit, where Context is hidden.
+ * The action has already selected or followed the item in its own layer;
+ * opening the card does not move the camera. A card picked or cleared since
+ * the action was asked stays, and nothing opens in Cockpit, where Context is
+ * hidden.
  * @param {import('pinia').Pinia} pinia
  * @returns {{generation: () => number, show: (identity: {layerId: string, id: string|number, label?: string, lat?: number, lon?: number}, options?: {since?: number|null, cockpitActive?: boolean}) => boolean}}
  */
@@ -941,10 +927,7 @@ export function createContextCardOpener(pinia) {
       if (cockpitActive) return false;
       if (since !== null && store().selectionGeneration() !== since)
         return false;
-      return store().select(
-        { ...identity, id: String(identity.id) },
-        { follow: false },
-      );
+      return store().select({ ...identity, id: String(identity.id) });
     },
   };
 }

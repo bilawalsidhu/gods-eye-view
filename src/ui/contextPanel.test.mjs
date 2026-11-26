@@ -127,6 +127,8 @@ function fixture(
   );
   const followed = [];
   const flown = [];
+  const picked = [];
+  const letGone = [];
   const asked = [];
   // The data manager's change listeners: a test announces a layer change.
   const layerListeners = new Set();
@@ -193,6 +195,11 @@ function fixture(
         ['flights', 'military', 'satellites'].includes(card?.layerId),
       follow: (card) => followed.push(card.key),
       flyTo: (card) => flown.push(card.key),
+      // As the app answers it: a layer that selects by id takes the pick.
+      pick: (card) =>
+        typeof manager.layers.get(card.layerId)?.module?.pickById ===
+          'function' && Boolean(picked.push(card.key)),
+      letGo: (card) => letGone.push(card.key),
       ask: (card, title) => asked.push({ key: card.key, title }),
     });
     cards.publishInspectorRows(manager.getAll());
@@ -208,6 +215,8 @@ function fixture(
     pinia,
     followed,
     flown,
+    picked,
+    letGone,
     asked,
     close,
     notifyLayers,
@@ -393,9 +402,15 @@ test('with Context closed, the collapsible sections are already in the page for 
 
 const NEAREST = '.nearby-lists__row--nearest button';
 
-test('nothing picked: one list per layer that is on, nearest first; its first row selects and follows', async (t) => {
-  const { $, cards, followed } = fixture(t, [
-    flightsOn([flight('far01', 30.9, -97.74), flight('near01', 30.31, -97.74)]),
+test('nothing picked: one list per layer that is on, nearest first; its first row is picked as a click picks it', async (t) => {
+  const { $, cards, followed, flown, picked, letGone } = fixture(t, [
+    {
+      ...flightsOn([
+        flight('far01', 30.9, -97.74),
+        flight('near01', 30.31, -97.74),
+      ]),
+      module: { pickById: () => true },
+    },
     // A closer vessel on a layer that is off never counts.
     {
       id: 'ais-live-vessels',
@@ -435,7 +450,17 @@ test('nothing picked: one list per layer that is on, nearest first; its first ro
   nearest.click();
   await nextTick();
   assert.equal(cards.card?.identity.id, 'near01');
-  assert.deepEqual(followed, [cards.card.key], 'one tap selects and follows');
+  assert.deepEqual(followed, [], 'a tap does not follow');
+  assert.deepEqual(
+    picked,
+    [cards.card.key],
+    'its layer selects and centres it, as a click on it does',
+  );
+  assert.deepEqual(flown, [], 'no framing flight besides');
+  // Closing the card lets the selection go, though nothing follows it.
+  const key = cards.card.key;
+  cards.clear();
+  assert.deepEqual(letGone, [key]);
 });
 
 test('selected flight route rounds a 999.6 metre leg to one kilometre', async (t) => {

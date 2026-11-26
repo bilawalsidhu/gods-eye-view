@@ -968,7 +968,7 @@
   "src/tooling/buildRailPathsRoutes.test.mjs",
   "scripts/build-rail-paths.mjs",
   "src/tooling/buildRailPathsUnlocated.test.mjs",
-  "src/layers/rail/follow.test.mjs",
+  "src/layers/rail/focus.test.mjs",
   "src/layers/rail/groundHeight.test.mjs",
   "src/layers/rail/liveOnly.test.mjs",
   "src/testSupport/railLayerHarness.mjs",
@@ -1741,5 +1741,11 @@
   "src/layers/rail/analystRecords.test.mjs",
   "src/layers/awareness/analystRecords.test.mjs",
   "src/ui/aircraftCardModel.test.mjs",
-  "src/ui/contextPanel.test.mjs"
+  "src/ui/contextPanel.test.mjs",
+  "src/testSupport/clickCamera.mjs",
+  "src/data/clickSelect.test.mjs",
+  "src/layers/flights/clickSelect.test.mjs",
+  "src/layers/satellites/clickSelect.test.mjs",
+  "src/layers/vessels/clickSelect.test.mjs",
+  "src/layers/transit/clickSelect.test.mjs"
 ]

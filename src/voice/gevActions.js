@@ -3055,7 +3055,13 @@ async function trackEntity(
             : family.kind === 'satellite'
               ? found.noradId
               : found.icao24;
-        if (family.kind === 'vessel') {
+        if (
+          family.kind === 'vessel' &&
+          typeof module.trackById === 'function'
+        ) {
+          // Followed where the layer draws it, as an aircraft is.
+          trackedOk = !!module.trackById(id, { origin: 'voice' });
+        } else if (family.kind === 'vessel') {
           trackedOk = !!module.selectById?.(id);
           flyToLandmark(viewer, found.latitude, found.longitude, {
             range: 6000,

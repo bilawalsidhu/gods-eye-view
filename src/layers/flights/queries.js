@@ -1,5 +1,4 @@
-import { cameraOf, findFrame } from '../../render/rendererOf.js';
-import { followedOf } from '../../data/followed.js';
+import { findFrame } from '../../render/rendererOf.js';
 import { approxDistanceKm as _approxDistanceKm } from './recordPolicy.js';
 import { displayedKinematics } from '../../data/motionModel.js';
 import { toLonLatH } from '../../geo/ellipsoid.js';
@@ -834,6 +833,32 @@ export function createQueries({
     },
 
     /**
+     * Select an aircraft by ICAO24 address as a click on it does: selected
+     * with its trail and card, centred once, not followed
+     * (src/data/clickSelect.js). A click on the selected one centres it
+     * again, unless the camera follows it.
+     * @param {string} icao24
+     * @param {{origin?: string, center?: boolean}} [options] `center: false`
+     *   selects it and leaves the camera to the caller (a pick from a list
+     *   frames it).
+     * @returns {boolean} True if the aircraft exists and was selected.
+     */
+    pickById(icao24, { origin = 'user', center = true } = {}) {
+      if (!icao24) return false;
+      let id = String(icao24).trim();
+      if (!flightState._icons?.has(id)) id = id.toLowerCase();
+      if (!flightState._icons?.has(id)) return false;
+      parts.tracking._cancelPendingTrackingRestore();
+      if (flightState._trackedIcao === id) {
+        if (center && !parts.tracking._trackedIsFollowed())
+          parts.tracking._centerTracked();
+        return true;
+      }
+      parts.tracking._trackFlight(id, { origin, follow: false, center });
+      return flightState._trackedIcao === id;
+    },
+
+    /**
      * Start camera-tracking an aircraft by ICAO24 address.
      * @param {string} icao24 - ICAO 24-bit transponder address.
      * @returns {boolean} True if the aircraft exists and tracking started.
@@ -845,8 +870,13 @@ export function createQueries({
       if (!flightState._icons?.has(id)) return false;
       if (parts.tracking._isExplicitTrackingOrigin(origin))
         parts.tracking._cancelPendingTrackingRestore();
-      if (flightState._trackedIcao === id)
+      if (flightState._trackedIcao === id) {
+        // Selected by a click, which does not follow: following is asked
+        // for now.
+        if (!parts.tracking._trackedIsFollowed())
+          parts.tracking._followTracked();
         return parts.tracking._publishTrackedSelection(id, origin);
+      }
       parts.tracking._trackFlight(id, { origin });
       return true;
     },
@@ -913,15 +943,11 @@ export function createQueries({
         return false;
       let id = String(icao24).trim();
       if (!flightState._icons?.has(id)) id = id.toLowerCase();
-      if (
-        id !== flightState._trackedIcao ||
-        followedOf(flightState._viewer) !== flightState._followTarget
-      )
+      if (id !== flightState._trackedIcao || !flightState._followTarget)
         return false;
-      // Following the same target again frames it afresh.
-      const camera = cameraOf(flightState._viewer);
-      camera.cancelFlight();
-      camera.follow(flightState._followTarget);
+      // Following the same target again frames it afresh; one a click
+      // selected (not followed) is followed from here.
+      parts.tracking._followTracked();
       parts.tracking._publishTrackedSelection(id, origin);
       return true;
     },

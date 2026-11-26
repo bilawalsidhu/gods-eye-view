@@ -10,6 +10,11 @@ import {
   isFreeGlobeCamera,
 } from '../globeInView.js';
 import { canvasOf, findCamera, findFrame } from '../render/rendererOf.js';
+import {
+  currentSelection,
+  isCentredOnSelection,
+  onSelectionChanged,
+} from '../data/clickSelect.js';
 
 /** Whether two vectors agree to `tolerance` in every component. */
 const within = (a, b, tolerance) =>
@@ -34,7 +39,9 @@ const SETTLE_GIVE_UP_MS = 5 * 60_000;
  * catches a saved or shared view that looked away, or any other move that ends
  * looking away from the planet.
  * Heading and position are kept. Following cameras, locked ones (a target's
- * frame), a camera flight in progress, a pointer held down on the canvas
+ * frame), a view a click left centred on what is still selected (a
+ * satellite far out in space, src/data/clickSelect.js), a camera flight in
+ * progress, a pointer held down on the canvas
  * (a drag held still), and any time `paused`
  * returns true (an authored scene playing) are left alone; a check they defer
  * runs once they end, however long they last.
@@ -105,6 +112,7 @@ export function installGlobeInViewRecovery(
     if (camera.flying || paused() || heldPointers.size > 0) return false;
     const pose = camera.pose();
     if (
+      isCentredOnSelection(pose) ||
       !(pose.height > minHeight) ||
       !globeOutOfFrame(pose, { keyholeRadius: keyholeRadius() })
     )
@@ -166,6 +174,20 @@ export function installGlobeInViewRecovery(
     else if (settleTimer === null) startSettling();
   });
   const removeMoveStart = camera.on('moveStart', startSettling);
+  // A view held for a selection is checked once it is let go: the camera
+  // has no move to end then, and may be looking at nothing but space.
+  // A switch lets go of one thing and selects the next in the same turn:
+  // only a selection still empty once the turn is over is let go.
+  let releaseQueued = false;
+  const removeSelectionChanged = onSelectionChanged((selection) => {
+    if (selection || releaseQueued) return;
+    releaseQueued = true;
+    queueMicrotask(() => {
+      releaseQueued = false;
+      if (!active || currentSelection()) return;
+      if (!recover() && settleTimer === null) startSettling();
+    });
+  });
 
   let active = true;
   return () => {
@@ -174,6 +196,7 @@ export function installGlobeInViewRecovery(
     stopSettling();
     removeMoveEnd();
     removeMoveStart();
+    removeSelectionChanged();
     for (const [target, type, listener] of listeners)
       target?.removeEventListener?.(type, listener);
     heldPointers.clear();

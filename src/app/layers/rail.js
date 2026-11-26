@@ -4,7 +4,7 @@ import { fleetModelServices } from './fleetModels.js';
 import * as sprites from '../../data/spriteOrder.js';
 import * as picking from '../../data/pickRegistry.js';
 import * as overlays from '../../overlays/worldOverlay.js';
-import { WORLD_FOCUS_FRAMING, requestWorldFocus } from '../../worldFocus.js';
+import { requestWorldFocus } from '../../worldFocus.js';
 import {
   railFeedCredit,
   registerDynamicCredit,
@@ -46,15 +46,9 @@ export function createApplicationRail({
         neighborFloorM: groundFloor.neighborFloorM,
         coarseFloorCoord: groundFloor.coarseFloorCoord,
       },
-      // A selected train is followed as a tracked aircraft is, or flown to
-      // once as a vessel is (src/layers/rail/follow.js).
-      camera: {
-        framing: WORLD_FOCUS_FRAMING.train,
-        requestWorldFocus,
-        isCockpitActive: () =>
-          globalThis.document?.body?.classList?.contains('cockpit-mode') ===
-          true,
-      },
+      // A clicked train is centred once, keeping the view, as a vessel is;
+      // the camera does not follow it (src/layers/rail/focus.js).
+      camera: { requestWorldFocus },
       fleet: fleetModelServices({
         display: displayParams,
         ...(resolveAsset ? { resolveAsset } : {}),

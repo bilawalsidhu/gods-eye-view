@@ -964,9 +964,10 @@ layer can identify (`src/ui/entityContextBridge.js`, through
 `src/ui/views/panels/EntityCard.vue`): the item's facts from its record, a
 route with progress for a flight, an altitude graph, the weather and local
 time where it is, and the flights, vessels, hazards and warnings
-within the radius the panel sets (25 to 1,000 km). Aircraft, satellites and
-vessels are followed as they are picked; the card says Following only while
-the camera follows the card's own item, and closing the card lets go.
+within the radius the panel sets (25 to 1,000 km). A pick selects its item as
+a click on it does; the card's Follow (or a second click on the selected
+item) follows an aircraft, satellite or vessel, the card says Following only
+while the camera follows the card's own item, and closing the card lets go.
 Aircraft and satellites offer Enter Cockpit and Enter orbital view; transit
 vehicles show their motion and fleet. A camera's card shows its latest still
 when available, while live video plays in the CCTV panel. Clicking the
@@ -2242,7 +2243,9 @@ so exactly one draws (the tracked dot too). The model is at its real 109 m span
 with a 72 px floor, flies the station's usual attitude (modules along the
 velocity, the same side to the Earth) from its own per-frame SGP4 sample, sits
 on the follow camera's sample while tracked, loads only once the ISS is shown,
-and hides with the dot's own rules. A click on it tracks the ISS.
+and hides with the dot's own rules. A click on it selects the ISS and centres
+it, as a click does on any moving thing; a second click on it, or its card's
+Follow, rides along.
 The station has several catalog entries that are one body: the ISS itself
 (listed as ISS (ZARYA)), ISS (NAUKA) and whatever vehicle is docked, each with
 a dot of its own, so a click on the station's dot can land on any of them.

@@ -63,6 +63,27 @@ export function createTransitLayer({
     parts.queries.methods,
     parts.controls.methods,
     parts.cockpit.methods,
+    {
+      /**
+       * Select a vehicle by the id its card has, as a click on it does.
+       * @param {string} id
+       * @param {{center?: boolean}} [options]
+       */
+      pickById(id, options) {
+        return parts.selection.pickVehicle(id, options);
+      },
+      /** Whether the vehicle a card names is the one selected. */
+      isSelected(id) {
+        const key = parts.selection.vehicleKeyFor(id);
+        return key !== null && key === state._selectedKey;
+      },
+      /** Deselect the selected vehicle, as a click on the map does. */
+      clearSelection() {
+        parts.selection.clearSelection();
+        services.render.governorRequestRender?.('transit-selection');
+        return true;
+      },
+    },
     parts.testing,
   );
 }
