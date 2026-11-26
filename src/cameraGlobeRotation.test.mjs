@@ -800,7 +800,6 @@ test('new UI navigation intent stops globe motion before its destination and sta
     interruptGlobeRotation,
     isCockpitActive: () => false,
     cancelOrientation() {},
-    clearLocation() {},
     cancelShareSelection: () => false,
     getDataManager: () => null,
     stopOrbit() {},

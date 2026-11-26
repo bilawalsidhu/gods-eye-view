@@ -8,11 +8,12 @@ import {
 } from './policy.js';
 
 /** The military layer's contacts as one icon set (`createAircraftIcons`). */
-export function createIcons({ flightState, services, parts }) {
+export function createIcons({ flightState, services, parts, resolveAsset }) {
   return createAircraftIcons({
     state: flightState,
     services,
     parts,
+    resolveAsset,
     layerId: 'military',
     displayDelay: flightState._displayDelay,
     followsClock: () => followsClock(flightState),

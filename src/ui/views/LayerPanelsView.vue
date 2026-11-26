@@ -1,4 +1,6 @@
 <script setup>
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useLayerFinderStore } from '../stores/layerFinder.js';
 import { storeToRefs } from 'pinia';
 import { t } from '../../i18n/index.js';
 import UiButton from '../kit/UiButton.vue';
@@ -6,7 +8,6 @@ import RailPanel from '../rail/RailPanel.vue';
 import { useSceneSharingStore } from '../stores/sceneSharing.js';
 import { useSceneStore } from '../stores/scenes.js';
 import { STORY_TAG_LIMIT, STORY_TAGS } from '../../scenes/storyTags.js';
-import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { vClassToggle } from '../rail/classToggle.js';
 import { followRootClass } from '../rail/rootClass.js';
 import SceneDialog from './panels/SceneDialog.vue';
@@ -21,6 +22,14 @@ import UiSelect from '../kit/UiSelect.js';
 import LayerSectionIndex from './panels/LayerSectionIndex.vue';
 import LayerFinder from './panels/LayerFinder.vue';
 import DataLibraryBrowse from './panels/DataLibraryBrowse.vue';
+
+const finder = useLayerFinderStore();
+const toggleList = ref(null);
+let detachFinderControls;
+onMounted(() => {
+  detachFinderControls = finder.attachControls(toggleList.value);
+});
+onBeforeUnmount(() => detachFinderControls?.());
 
 // Scene sharing (src/scenes/sharing.js) offers its authoring bar and presents
 // its dialog through this store; without this view, neither is drawn.
@@ -81,7 +90,7 @@ onBeforeUnmount(() => stopOpenClass?.());
   <RailPanel id="data-panel" start-collapsed class="active" :title="t('DATA LAYERS')">
     <template #actions><LayerFinder part="buttons" /></template>
     <LayerFinder part="bar" />
-    <div id="data-toggles" class="data-toggle-list ui-scroll"></div>
+    <div id="data-toggles" ref="toggleList" class="data-toggle-list ui-scroll"></div>
     <LayerSectionIndex />
     <!-- Data Library: Browse and its dialog (src/ui/libraryBrowser.js). -->
     <DataLibraryBrowse />

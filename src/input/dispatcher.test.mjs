@@ -855,3 +855,34 @@ test('point-and-ask: nothing but the map is no hit; a failing pick is none', (t)
   assert.equal(pickAt(viewer, 0, 0), null);
   assert.equal(pickAt(null, 0, 0), null);
 });
+
+test('a trail drawn over its contact never hides it: the click is the contact', (t) => {
+  registerPickOwner('trails', (id) => String(id).startsWith('gev-trail:'));
+  registerPickOwner('test-owner', (id) => id === 'a2b45b');
+  t.after(() => {
+    unregisterPickOwner('trails');
+    unregisterPickOwner('test-owner');
+  });
+  const trail = { id: { set: 'trail:1', id: 'gev-trail:1:head' } };
+  const plane = { id: { set: 'flights:icons', id: 'a2b45b' } };
+  const h = harness({ pick: () => trail, drillPick: () => [trail, plane] });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) =>
+    seen.push([event.id, event.ownerId, event.drawHit?.set]),
+  );
+  h.click();
+  assert.deepEqual(seen, [['a2b45b', 'test-owner', 'flights:icons']]);
+});
+
+test('a trail over open ground is still the trail', (t) => {
+  registerPickOwner('trails', (id) => String(id).startsWith('gev-trail:'));
+  t.after(() => unregisterPickOwner('trails'));
+  const trail = { id: { set: 'trail:1', id: 'gev-trail:1' } };
+  const h = harness({ pick: () => trail, drillPick: () => [trail] });
+  t.after(() => h.input.destroy());
+  const seen = [];
+  h.input.onClick((event) => seen.push([event.id, event.surface]));
+  h.click();
+  assert.deepEqual(seen, [['gev-trail:1', false]]);
+});

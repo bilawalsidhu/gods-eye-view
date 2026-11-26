@@ -501,9 +501,10 @@ async function main() {
           const octx = off.getContext('2d');
           // The detection pass (banner included) paints on the host-owned
           // blend-isolation surface beneath the shared canvas — composite
-          // both so the sample sees whichever surface carries the banner.
+          // both so the sample sees whichever surface carries the banner. An idle
+          // surface is released to 0x0, which drawImage refuses.
           const detSurface = document.getElementById('world-overlay-detection-surface');
-          if (detSurface) octx.drawImage(detSurface, 0, 0);
+          if (detSurface && detSurface.width > 0 && detSurface.height > 0) octx.drawImage(detSurface, 0, 0);
           octx.drawImage(canvas, 0, 0);
           const dpr = window.devicePixelRatio || 1;
           const bw = Math.min(w, Math.round(260 * dpr));

@@ -193,6 +193,21 @@ test('holding writes first writes a view change still waiting for its debounce',
   manager.destroy();
 });
 
+test('each owner releases only its own hold on writes', (t) => {
+  installTab(t, SHARE_A);
+  const timers = installManualTimers(t);
+  const manager = new ShareLinkManager(bindFakeCesiumCamera(fakeViewer()));
+  manager.completeInitialRestore(manager.parseInitialHash().restoreToken);
+  manager.holdWrites(true, 'opening');
+  manager.holdWrites(true);
+  manager.holdWrites(false, 'opening');
+  manager._scheduleUpdate();
+  assert.equal(timers.size, 0, 'Stories still holds them');
+  manager.holdWrites(false);
+  assert.equal(timers.size, 1, 'written again once none holds');
+  manager.destroy();
+});
+
 test('a hash write keeps the state another owner stored on the entry', (t) => {
   installTab(t, SHARE_A);
   const written = [];

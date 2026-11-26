@@ -30,9 +30,10 @@ const _aisStreamTrackPending = new Map();
  * object without an MMSI proves nothing about the feed.
  *
  * @param {Object} envelope Parsed, non-error AIS envelope.
+ * @param {boolean} worldwide Whether the active socket subscribed to the worldwide box.
  * @returns {boolean} True when an AIS record was recognised.
  */
-export function ingestAisStreamEnvelope(envelope) {
+export function ingestAisStreamEnvelope(envelope, worldwide = false) {
   // Single shared recognition rule (also used by the adapter's tests), so the
   // liveness predicate that ships is the one under test. An envelope carrying
   // only an MMSI is not proof the feed works.
@@ -45,6 +46,9 @@ export function ingestAisStreamEnvelope(envelope) {
     metadata.MMSI ?? message.UserID ?? message.UserId ?? message.Mmsi,
   );
   if (!mmsi) return false;
+  // Heard again after the retention window: start afresh, as after a prune.
+  const known = _aisStreamVessels.get(mmsi);
+  if (known && known._updatedAt < aisExpiryCutoffMs()) dropAisVessel(mmsi);
 
   if (messageType === 'ShipStaticData' || messageType === 'StaticDataReport') {
     const previous = _aisStreamStatic.get(mmsi) || {};
@@ -117,6 +121,9 @@ export function ingestAisStreamEnvelope(envelope) {
 
   const staticData = _aisStreamStatic.get(mmsi) || {};
   const aidReport = messageType === 'AidsToNavigationReport';
+  // Delete then set: a Map keeps insertion order, so the cap evicts the least
+  // recently updated vessel first.
+  _aisStreamVessels.delete(mmsi);
   _aisStreamVessels.set(mmsi, {
     lat,
     lon,
@@ -147,6 +154,7 @@ export function ingestAisStreamEnvelope(envelope) {
     // row carries the field, so ship rows stay their size.
     ...(aidReport && message.VirtualAtoN === true && { virtual: true }),
     _updatedAt: Date.now(),
+    _worldwide: worldwide,
   });
 
   appendAisTrackSample(
@@ -156,8 +164,27 @@ export function ingestAisStreamEnvelope(envelope) {
     aisEpochSeconds(metadata.time_utc ?? metadata.TimeUtc),
   );
 
-  pruneAisStreamCache();
+  while (_aisStreamVessels.size > AISSTREAM_CACHE_MAX)
+    evictAisVessel(_aisStreamVessels.keys().next().value);
   return true;
+}
+
+/** Drop a vessel and everything kept for it. */
+function dropAisVessel(mmsi) {
+  evictAisVessel(mmsi);
+  _aisStreamStatic.delete(mmsi);
+}
+
+/** Drop a vessel's row and track, keeping its static entry for its return. */
+function evictAisVessel(mmsi) {
+  _aisStreamVessels.delete(mmsi);
+  _aisStreamTracks.delete(mmsi);
+  _aisStreamTrackPending.delete(mmsi);
+}
+
+/** Rows last updated before this moment have expired. */
+function aisExpiryCutoffMs() {
+  return Date.now() - AISSTREAM_STALE_MS;
 }
 
 /**
@@ -181,7 +208,9 @@ function appendAisTrackSample(mmsi, lat, lon, epochSec) {
   let track = _aisStreamTracks.get(mmsi);
   if (!track) {
     const pending = _aisStreamTrackPending.get(mmsi);
-    if (!pending) {
+    // A first fix older than the retention window must not seed a track.
+    const pendingCutoffSec = Math.floor(aisExpiryCutoffMs() / 1000);
+    if (!pending || pending.epochSec < pendingCutoffSec) {
       _aisStreamTrackPending.set(mmsi, { lat, lon, epochSec });
       return;
     }
@@ -231,6 +260,9 @@ function writeAisTrackSample(track, lat, lon, epochSec) {
 export function readAisTrack(mmsi) {
   const track = _aisStreamTracks.get(mmsi);
   if (!track || !track.len) return [];
+  // Hide an expired vessel's track, as aisStreamRows hides its row.
+  const row = _aisStreamVessels.get(mmsi);
+  if (!row || row._updatedAt < aisExpiryCutoffMs()) return [];
   const samples = [];
   const start =
     (track.head - track.len + AIS_TRACK_SAMPLES) % AIS_TRACK_SAMPLES;
@@ -310,11 +342,29 @@ function vesselTypeFromAis(message, staticData = {}) {
 }
 
 /**
+ * Fresh vessels received under the worldwide subscription and the latest
+ * receive time. Excludes aids to navigation. Null when there are none.
+ * @returns {?{count: number, at: number}}
+ */
+export function aisStreamVesselCount() {
+  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+  let count = 0;
+  let at = 0;
+  for (const row of _aisStreamVessels.values()) {
+    if (!row._worldwide || row._updatedAt < cutoff || isAidToNavigation(row))
+      continue;
+    count++;
+    if (row._updatedAt > at) at = row._updatedAt;
+  }
+  return count ? { count, at } : null;
+}
+
+/**
  * The current rows, newest first, with every vessel ahead of every aid to
  * navigation: a capped request never gives up a ship for a buoy.
  */
 export function aisStreamRows(maxRows) {
-  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+  const cutoff = aisExpiryCutoffMs();
   const vessels = [];
   const aids = [];
   for (const row of _aisStreamVessels.values()) {
@@ -327,36 +377,35 @@ export function aisStreamRows(maxRows) {
   return vessels
     .concat(aids)
     .slice(0, maxRows)
-    .map(({ _updatedAt, ...row }) => row);
+    .map(({ _updatedAt, _worldwide, ...row }) => row);
 }
 
-function pruneAisStreamCache() {
-  const cutoff = Date.now() - AISSTREAM_STALE_MS;
+/**
+ * Drop expired vessels, then trim static entries without a vessel row to the
+ * cap. This walks every row, so it runs on the AIS watchdog tick (ais-live.js)
+ * rather than per message, and it is the only bound on those static entries.
+ */
+export function pruneAisStreamCache() {
+  const cutoff = aisExpiryCutoffMs();
   for (const [mmsi, row] of _aisStreamVessels) {
-    if (row._updatedAt < cutoff) {
-      _aisStreamVessels.delete(mmsi);
-      _aisStreamTracks.delete(mmsi);
-      _aisStreamTrackPending.delete(mmsi);
-    }
+    if (row._updatedAt < cutoff) dropAisVessel(mmsi);
   }
-  // Pending single-fix entries for vessels never seen again must not leak
-  const pendingCutoffSec = Math.floor(cutoff / 1000);
-  for (const [mmsi, pending] of _aisStreamTrackPending) {
-    if (pending.epochSec < pendingCutoffSec)
-      _aisStreamTrackPending.delete(mmsi);
+  // Static data ahead of a first position, or kept for a vessel the cap
+  // evicted, waits for a position, up to the cap, in order of first arrival.
+  for (const mmsi of _aisStreamStatic.keys()) {
+    if (_aisStreamStatic.size <= AISSTREAM_CACHE_MAX) break;
+    if (!_aisStreamVessels.has(mmsi)) _aisStreamStatic.delete(mmsi);
   }
-  if (_aisStreamVessels.size <= AISSTREAM_CACHE_MAX) return;
-  const ordered = [..._aisStreamVessels.entries()].sort(
-    (a, b) => a[1]._updatedAt - b[1]._updatedAt,
-  );
-  for (const [mmsi] of ordered.slice(
-    0,
-    _aisStreamVessels.size - AISSTREAM_CACHE_MAX,
-  )) {
-    _aisStreamVessels.delete(mmsi);
-    _aisStreamTracks.delete(mmsi);
-    _aisStreamTrackPending.delete(mmsi);
-  }
+}
+
+/** Map sizes, for tests. */
+export function aisStreamCacheStats() {
+  return {
+    vessels: _aisStreamVessels.size,
+    statics: _aisStreamStatic.size,
+    tracks: _aisStreamTracks.size,
+    pendingTracks: _aisStreamTrackPending.size,
+  };
 }
 
 export function newestAisPositionAt(rows) {

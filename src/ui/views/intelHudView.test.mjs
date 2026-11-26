@@ -414,6 +414,26 @@ test('a view unmounted leaves the HUD at rest until a mounted view says', async 
   assert.equal(hud._displayed, true);
 });
 
+test('the HUD store accepts a supplied HUD without visibility notifications', () => {
+  const store = useHudStore(createPinia());
+  const originalHud = {};
+  store.connect(originalHud);
+  store.setDisplayed(false);
+  assert.equal(store.owner, originalHud);
+  assert.equal(store.displayed, false);
+
+  const nextHud = {
+    seen: [],
+    setDisplayed(displayed) {
+      this.seen.push(displayed);
+    },
+  };
+  store.connect(nextHud);
+  store.setDisplayed(true);
+  store.setDisplayed(true);
+  assert.deepEqual(nextHud.seen, [false, true]);
+});
+
 test('the view reports whether #intel-hud is displayed, and IntelHUD follows', async (t) => {
   // happy-dom lays nothing out: a stand-in observer reports the box, and
   // getClientRects() answers as the stylesheet would.

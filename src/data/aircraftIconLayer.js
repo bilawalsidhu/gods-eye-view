@@ -34,6 +34,7 @@ import {
 } from './aircraftIcons.js';
 import { cockpitContactDotImage } from './cockpitContactDot.js';
 import { rotorFrame, rotorTurns } from './rotorFrames.js';
+import { aircraftViewRef, registerAircraftViews } from './aircraftViews.js';
 import { aircraftRecedeSpec } from './aircraftRecession.js';
 import { TIMELINE_UNSEEN_MS } from '../time/timelineFixes.js';
 
@@ -461,6 +462,8 @@ function fixedDelay(ms) {
  *   Where a host-supplied placement draws a live contact at a wall time,
  *   written into `out` (`placeAircraftAt`), or null when it does not place
  *   it; none without a placement.
+ * @param {(url: string) => string} [options.resolveAsset] The layer's asset
+ *   URL resolver, for the aircraft view sheet's image.
  */
 export function createAircraftIcons({
   state,
@@ -478,10 +481,14 @@ export function createAircraftIcons({
   afterSettle = () => {},
   onForget = () => {},
   placeAt = null,
+  resolveAsset = (url) => url,
 }) {
   const { focusPassIsNeeded } = services.focus;
   // The near-image switch the rows were last written with (CSS px).
   let switchPx = nearImageSwitchPx(1);
+  /** Whether the renderer draws icons along their course from the aircraft
+   *  view sheet (`aircraftViews.js`), set when the draw set is made. */
+  let views = false;
   /**
    * Airborne helicopters drawn as their glyph, whose rotor turns: the rotor
    * frame each was last drawn at, and the frame it was last judged at
@@ -572,9 +579,9 @@ export function createAircraftIcons({
     sceneClock = followsClock();
     sentDelayMs = sceneClock ? NaN : displayDelay.currentMs;
     switchPx = _imageSwitchPx(viewer);
-    state._icons = createContactIcons(set, {
-      capabilities: rendererOf(viewer)?.capabilities ?? null,
-    });
+    const capabilities = rendererOf(viewer)?.capabilities ?? null;
+    views = registerAircraftViews(drawOf(viewer), capabilities, resolveAsset);
+    state._icons = createContactIcons(set, { capabilities });
     return set.id;
   }
 
@@ -583,6 +590,7 @@ export function createAircraftIcons({
     state._icons?.dispose();
     state._icons = null;
     liveSet = null;
+    views = false;
     rotors.clear();
     planFrom.clear();
     easeEnds.clear();
@@ -1069,10 +1077,14 @@ export function createAircraftIcons({
    * How a contact's icon is drawn outside Cockpit: its image (and the sharper
    * one it switches to up close), size, scale and scale by distance. The
    * tracked contact's own icon is drawn with this too, so selecting a contact
-   * changes its colour and nothing else.
+   * changes only its alpha. On a renderer with view sheets, a kind with
+   * rendered views draws from the aircraft sheet with no near image.
+   * Otherwise it draws the flat glyph.
    * @param {string} icao24
    * @param {object} [info] Its record.
-   * @returns {{image: string, imageLod: {near: string, switchPx: number},
+   * @param {number} [frame] A helicopter's rotor frame.
+   * @returns {{image: string|{views: string, first: number, fallback: string},
+   *   imageLod: {near: string, switchPx: number}|undefined,
    *   size: [number, number], scale: number, scaleByDistance: object}}
    */
   function _fleetLook(
@@ -1081,21 +1093,16 @@ export function createAircraftIcons({
     frame = _rotorFrameOf(icao24, info, Date.now()),
   ) {
     const rendering = parts.rendering;
+    const kind = rendering._iconKind(icao24, info?.klass);
+    const size = [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX];
+    const view = views ? aircraftViewRef(kind, frame) : null;
     return {
-      image: aircraftIcon(
-        rendering._iconKind(icao24, info?.klass),
-        FLEET_ICON_PX,
-        frame,
-      ),
-      imageLod: {
-        near: aircraftIcon(
-          rendering._iconKind(icao24, info?.klass),
-          TRACKED_ICON_PX,
-          frame,
-        ),
-        switchPx,
-      },
-      size: [FLEET_ICON_SIZE_PX, FLEET_ICON_SIZE_PX],
+      image: view ?? aircraftIcon(kind, FLEET_ICON_PX, frame),
+      imageLod: view
+        ? undefined
+        : { near: aircraftIcon(kind, TRACKED_ICON_PX, frame), switchPx },
+      pickProxy: view ? { size } : undefined,
+      size,
       scale: rendering._fleetBillboardScale(icao24),
       scaleByDistance: NORMAL_SCALE_BY_DISTANCE,
     };
@@ -1172,6 +1179,11 @@ export function createAircraftIcons({
     const rendering = parts.rendering;
     const info = state.records.data.get(icao24);
     const tracked = icao24 === state._trackedIcao;
+    // A helicopter's rotor frame, chosen once for its look and its rotor.
+    const heliFrame = _rotorFrameOf(icao24, info, Date.now());
+    // A ground station's mast stands upright; every other glyph turns
+    // along its course.
+    const station = info?.klass === 'station';
     const cockpitDot =
       state._cockpitContactMode &&
       !tracked &&
@@ -1179,6 +1191,7 @@ export function createAircraftIcons({
     const look = cockpitDot
       ? {
           image: cockpitDotImage(),
+          pickProxy: undefined,
           imageLod: undefined,
           size: [cockpitContactSizePx, cockpitContactSizePx],
           scale: 1,
@@ -1187,21 +1200,18 @@ export function createAircraftIcons({
           rotationMode: 'screen',
         }
       : {
-          ..._fleetLook(icao24, info),
+          ..._fleetLook(icao24, info, heliFrame),
           color: rgba(rendering._fleetBillboardColor(icao24, info)),
           rotationMode: 'course',
         };
-    // A ground station's mast stands upright.
-    if (!cockpitDot && info?.klass === 'station') {
+    if (!cockpitDot && station) {
       look.rotationMode = 'screen';
       look.rotation = 0;
     }
     look.alpha = state.records.missingPolls.get(icao24) ? staleAlpha : 1;
     icons.update(icao24, look);
     // An airborne helicopter drawn as its glyph turns its rotor.
-    const frame = cockpitDot
-      ? undefined
-      : _rotorFrameOf(icao24, info, Date.now());
+    const frame = cockpitDot ? undefined : heliFrame;
     if (frame === undefined || !rotorTurns(_rotorState(info))) {
       // A tracked helicopter that lands shows the still frame at once.
       if (rotors.delete(icao24) && tracked)

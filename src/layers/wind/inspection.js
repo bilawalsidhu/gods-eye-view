@@ -42,6 +42,19 @@ export function formatWindSpeed(speed, units = 'km/h') {
   return `${(speed * WIND_UNITS[unit]).toFixed(1)} ${unit}`;
 }
 
+/** Sample the forecast vector at a supplied longitude and latitude. */
+export function sampleWindReading(snapshot, lon, lat) {
+  if (!snapshot?.grid || !snapshot.u || !snapshot.v || snapshot.unavailable)
+    return null;
+  const { u, v } = sampleWind(
+    { ...snapshot.grid, u: snapshot.u, v: snapshot.v },
+    lon,
+    lat,
+  );
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+  return { speed: windSpeed(u, v), from: windFrom(u, v) };
+}
+
 /**
  * A deliberate snapshot at the map center; does not own pointer input. The
  * center is where `view.query` (a renderer query port) meets the ellipsoid
@@ -56,8 +69,10 @@ export function inspectWindAtCenter(
     position ||
     (canvas &&
       query?.pickEllipsoid(canvas.clientWidth / 2, canvas.clientHeight / 2));
-  const location = point && snapshot?.u && snapshot?.v && toLonLatH(point);
-  if (!location)
+  const location = point && toLonLatH(point);
+  const reading =
+    location && sampleWindReading(snapshot, location.lon, location.lat);
+  if (!reading)
     return {
       coordinates: msg('No surface reading'),
       wind: msg('Aim the map center at Earth'),
@@ -69,13 +84,7 @@ export function inspectWindAtCenter(
       ),
     };
   const { lon, lat } = location;
-  const vector = sampleWind(
-    { ...snapshot.grid, u: snapshot.u, v: snapshot.v },
-    lon,
-    lat,
-  );
-  const speed = windSpeed(vector.u, vector.v);
-  const from = windFrom(vector.u, vector.v);
+  const { speed, from } = reading;
   const scalar = ['temperature', 'pressure'].includes(overlay)
     ? sampleScalar(snapshot, lon, lat, overlay)
     : null;

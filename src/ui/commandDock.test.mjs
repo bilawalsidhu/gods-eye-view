@@ -7,6 +7,7 @@ import { createPinia } from 'pinia';
 import { createApp, h, nextTick } from 'vue';
 import { setLocale } from '../i18n/index.js';
 import { useDisplayStore } from './stores/display.js';
+import { useEntityCardStore } from './stores/entityCard.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
 import { useVoiceStore } from './stores/voice.js';
@@ -36,135 +37,42 @@ function fixture(t) {
     activeStyle: 'normal',
   });
   const $ = (selector) => document.querySelector(selector);
-  const active = () =>
-    [...document.querySelectorAll('.style-btn.active')].map(
-      (button) => button.dataset.style,
-    );
-  return { $, settings, active, pinia };
+  return { $, settings, pinia };
 }
 
-test('before VisualSettings publishes, the dock shows NORMAL', (t) => {
-  const { $, active } = fixture(t);
-  assert.deepEqual(active(), ['normal']);
-  assert.equal($('#style-mini-value').textContent, 'NORMAL');
+test('before VisualSettings publishes, the corner shows NORMAL', (t) => {
+  const { $ } = fixture(t);
   assert.equal($('#active-style-name').textContent, 'NORMAL');
 });
 
-test('the active style marks its button and labels the dock and the corner', async (t) => {
-  const { $, settings, active } = fixture(t);
+test('the corner labels the active style', async (t) => {
+  const { $, settings } = fixture(t);
   settings._publishActiveStyle('thermal');
   await nextTick();
-  assert.deepEqual(active(), ['thermal']);
-  assert.equal($('#style-mini-value').textContent, 'FLIR');
   assert.equal($('#active-style-name').textContent, 'FLIR');
   settings.activeStyle = 'unlisted';
   settings._publishActiveStyle();
   await nextTick();
-  assert.deepEqual(active(), []);
-  assert.equal($('#style-mini-value').textContent, 'UNLISTED');
-  settings._publishActiveStyle('normal');
-  await nextTick();
-  assert.deepEqual(active(), ['normal']);
+  assert.equal($('#active-style-name').textContent, 'UNLISTED');
 });
 
-test('the style buttons keep classes other code sets', async (t) => {
-  const { $, settings } = fixture(t);
-  const noir = $('.style-btn[data-style="noir"]');
-  noir.classList.add('voice-highlight');
-  settings._publishActiveStyle('noir');
-  await nextTick();
-  assert.equal(noir.classList.contains('voice-highlight'), true);
-  assert.equal(noir.classList.contains('active'), true);
-});
-
-test('the dock and the corner label the style in the UI language', async (t) => {
+test('the corner labels the style in the UI language', async (t) => {
   t.after(() => setLocale('en'));
   setLocale('ru');
   const { $, settings } = fixture(t);
-  assert.equal($('#style-mini-value').textContent, 'ОБЫЧНЫЙ');
   assert.equal($('#active-style-name').textContent, 'ОБЫЧНЫЙ');
   settings._publishActiveStyle('noir');
   await nextTick();
-  assert.equal($('#style-mini-value').textContent, 'НУАР');
   assert.equal($('#active-style-name').textContent, 'НУАР');
 });
 
-const chipView = (activeId, { warn = false, text = 'OSM' } = {}) => ({
-  chips: [
-    {
-      id: 'bing-aerial',
-      label: 'Bing',
-      available: false,
-      active: false,
-      requirement: 'ION',
-      title: 'Needs a key',
-      ariaLabel: 'Bing unavailable: Needs a key',
-    },
-    ...['esri-imagery', 'osm'].map((id) => ({
-      id,
-      label: id.toUpperCase(),
-      available: true,
-      active: id === activeId,
-      requirement: '',
-      title: id.toUpperCase(),
-      ariaLabel: null,
-    })),
-  ],
-  status: { text, warn },
-});
-
-test('the map source row renders the published chips and selects through the controls', async (t) => {
-  const { $, pinia } = fixture(t);
-  assert.equal($('#map-stack-status').textContent, '3D');
-  assert.equal(document.querySelectorAll('.map-stack-chip').length, 0);
-  const store = useDisplayStore(pinia);
-  const selected = [];
-  store.connectMapSource({
-    select: async (id) => selected.push(id),
-  });
-  store.publishMapSource(chipView('osm'));
-  await nextTick();
-  const chips = [
-    ...document.querySelectorAll('#map-stack-chips .map-stack-chip'),
-  ];
-  assert.deepEqual(
-    chips.map((chip) => chip.dataset.stackId),
-    ['bing-aerial', 'esri-imagery', 'osm'],
-  );
-  const [bing, esri, osm] = chips;
-  assert.equal(bing.classList.contains('unavailable'), true);
-  assert.equal(
-    bing.disabled,
-    false,
-    'unavailable chips stay keyboard-reachable',
-  );
-  assert.equal(bing.getAttribute('aria-disabled'), 'true');
-  assert.equal(
-    bing.getAttribute('aria-label'),
-    'Bing unavailable: Needs a key',
-  );
-  assert.equal(bing.title, 'Needs a key');
-  assert.equal(bing.querySelector('.map-stack-chip-req').textContent, 'ION');
-  assert.equal(osm.classList.contains('active'), true);
-  assert.equal(osm.getAttribute('aria-pressed'), 'true');
-  assert.equal(osm.hasAttribute('aria-label'), false);
-  assert.equal(esri.querySelector('.map-stack-chip-req') === null, true);
-  bing.click();
-  esri.click();
-  assert.deepEqual(selected, ['esri-imagery']);
-  esri.classList.add('voice-highlight');
-  store.publishMapSource(chipView('esri-imagery', { text: '...', warn: true }));
-  await nextTick();
-  assert.equal(esri.classList.contains('active'), true);
-  assert.equal(esri.classList.contains('voice-highlight'), true);
-  assert.equal(osm.classList.contains('active'), false);
-  assert.equal($('#map-stack-status').textContent, '...');
-  assert.equal($('#map-stack-status').classList.contains('warn'), true);
-  store.publishMapSource(null);
-  await nextTick();
-  assert.equal($('#map-stack-status').textContent, '3D');
-  assert.equal($('#map-stack-status').classList.contains('warn'), false);
-  assert.equal(document.querySelectorAll('.map-stack-chip').length, 0);
+test('the dock holds the voice control only', (t) => {
+  const { $ } = fixture(t);
+  const dock = $('#command-dock');
+  assert.ok(dock);
+  assert.equal(dock.getAttribute('aria-label'), 'Voice and search controls');
+  assert.equal($('#location-bar'), null);
+  assert.equal($('#control-panel'), null);
 });
 
 test('the ORBIT indicator sits on the body while offered and lights while orbiting', async (t) => {
@@ -172,9 +80,6 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
   assert.equal($('#orbit-indicator'), null);
   const store = useLocationStore(pinia);
   const controls = new LocationControls({
-    elements: {
-      search: $('#location-search'),
-    },
     cities: {},
     getExpandedCity: () => null,
     onCity() {},
@@ -182,8 +87,6 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
     onSearch() {},
     onReset() {},
     publish: (view) => store.publish(view),
-    requestFrame() {},
-    cancelFrame() {},
   });
   controls.showOrbit(false);
   await nextTick();
@@ -202,102 +105,6 @@ test('the ORBIT indicator sits on the body while offered and lights while orbiti
   controls.destroy();
   await nextTick();
   assert.equal($('#orbit-indicator'), null);
-});
-
-test('the location tray renders what LocationControls publishes', async (t) => {
-  const { $, pinia } = fixture(t);
-  assert.equal($('#location-mini-city').textContent, '📍 Location: --');
-  assert.equal($('#location-mini-poi').textContent, 'Landmark: --');
-  const store = useLocationStore(pinia);
-  const calls = [];
-  const frames = [];
-  const controls = new LocationControls({
-    elements: {
-      search: $('#location-search'),
-    },
-    cities: {
-      paris: { name: 'Paris', pois: [{ name: 'Louvre' }, { name: 'Eiffel' }] },
-      rome: { name: 'Rome', pois: [{ name: 'Colosseum' }] },
-    },
-    getExpandedCity: () => null,
-    onCity: (id) => calls.push(['city', id]),
-    onPoi: (id, index) => calls.push(['poi', id, index]),
-    onSearch() {},
-    onReset() {},
-    publish: (view) => store.publish(view),
-    requestFrame: (fn) => frames.push(fn),
-    cancelFrame() {},
-  });
-  t.after(() => controls.destroy());
-  store.connect(controls);
-  await nextTick();
-  const pills = [
-    ...document.querySelectorAll('#location-pills .location-pill'),
-  ];
-  assert.deepEqual(
-    pills.map((pill) => `${pill.dataset.locationId}:${pill.textContent}`),
-    ['paris:Paris', 'rome:Rome'],
-  );
-  pills[1].click();
-  assert.deepEqual(calls, [['city', 'rome']]);
-  pills[1].classList.add('voice-highlight');
-  controls.highlightCity('rome');
-  controls.showPois('paris');
-  await nextTick();
-  assert.equal(pills[1].classList.contains('active'), true);
-  assert.equal(pills[1].classList.contains('voice-highlight'), true);
-  const row = $('#poi-row');
-  const pois = [...row.querySelectorAll('.poi-pill')];
-  assert.deepEqual(
-    pois.map((poi) => poi.textContent),
-    ['QLouvre', 'WEiffel'],
-  );
-  assert.equal(row.classList.contains('expanded'), false);
-  frames.shift()();
-  await nextTick();
-  assert.equal(row.classList.contains('expanded'), true);
-  assert.equal($('#location-bar-divider').classList.contains('visible'), true);
-  controls.highlightPoi(1);
-  await nextTick();
-  assert.equal(pois[1].classList.contains('active'), true);
-  pois[1].click();
-  assert.deepEqual(calls.at(-1), ['poi', 'paris', 1]);
-  // Switching cities while the row is open swaps its pills and keeps it open.
-  controls.showPois('rome');
-  await nextTick();
-  assert.equal(row.classList.contains('expanded'), true);
-  const romePois = [...row.querySelectorAll('.poi-pill')];
-  assert.deepEqual(
-    romePois.map((poi) => poi.textContent),
-    ['QColosseum'],
-  );
-  assert.equal(romePois[0].classList.contains('active'), false);
-  romePois[0].click();
-  assert.deepEqual(calls.at(-1), ['poi', 'rome', 0]);
-  frames.shift()();
-  controls.renderStatus({
-    city: { name: 'Paris' },
-    currentPoi: { name: 'Eiffel' },
-  });
-  controls.setSearchError('No match');
-  await nextTick();
-  assert.match($('#location-mini-city').textContent, /Paris/);
-  assert.match($('#location-mini-poi').textContent, /Eiffel/);
-  assert.equal($('#location-search-error').textContent, 'No match');
-  const search = $('#location-search');
-  assert.equal(search.getAttribute('aria-invalid'), 'true');
-  assert.equal(
-    search.getAttribute('aria-describedby'),
-    'location-search-error',
-  );
-  controls.setSearchError(null);
-  controls.hidePois();
-  await nextTick();
-  assert.equal(search.hasAttribute('aria-invalid'), false);
-  assert.equal(search.hasAttribute('aria-describedby'), false);
-  assert.equal($('#location-search-error').textContent, '');
-  assert.equal(row.classList.contains('expanded'), false);
-  assert.equal($('#location-bar-divider').classList.contains('visible'), false);
 });
 
 // These compare nodes by identity in a boolean: a failing assertion on a
@@ -329,13 +136,12 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
       'layers:layers:Layers',
       'cameras:videocam:Cameras',
       'context:radar:Context',
-      'search:search:Search',
       'more:more_horiz:More',
     ],
   );
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false', 'false'],
+    ['false', 'false', 'false', 'false'],
   );
   store.publishPhoneShell({
     enabled: true,
@@ -346,7 +152,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, false);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'true', 'false', 'false'],
+    ['false', 'false', 'true', 'false'],
   );
   store.publishPhoneShell({ enabled: false, sheet: null, tabs: MOBILE_TABS });
   await nextTick();
@@ -354,7 +160,7 @@ test('the phone tab bar joins the end of the page while the shell publishes', as
   assert.equal(backdrop.hidden, true);
   assert.deepEqual(
     tabs.map((tab) => tab.getAttribute('aria-expanded')),
-    ['false', 'false', 'false', 'false', 'false'],
+    ['false', 'false', 'false', 'false'],
   );
   store.publishPhoneShell(null);
   await nextTick();
@@ -383,6 +189,10 @@ test('the phone tabs are labelled in the UI language', async (t) => {
 test('closing a sheet returns focus to its tab once the tab bar shows it closed', async (t) => {
   const { $, pinia } = fixture(t);
   const store = useDisplayStore(pinia);
+  // The Cameras sheet's first panel, with its first control.
+  const cctv = document.body.appendChild(document.createElement('section'));
+  cctv.id = 'cctv-panel';
+  cctv.appendChild(document.createElement('button')).id = 'cctv-first';
   const init = () =>
     initMobileShell({
       documentRef: document,
@@ -398,12 +208,12 @@ test('closing a sheet returns focus to its tab once the tab bar shows it closed'
   let shell = init();
   t.after(() => shell.destroy());
   await nextTick();
-  const tab = $('#mobile-tab-bar [data-mobile-sheet="search"]');
+  const tab = $('#mobile-tab-bar [data-mobile-sheet="cameras"]');
   tab.focus();
   tab.click();
   await nextTick();
   assert.equal(tab.getAttribute('aria-expanded'), 'true');
-  assert.equal(document.activeElement?.id, 'location-search');
+  assert.equal(document.activeElement?.id, 'cctv-first');
   let expandedAtFocus = null;
   tab.addEventListener('focus', () => {
     expandedAtFocus = tab.getAttribute('aria-expanded');
@@ -460,45 +270,11 @@ test('closing a sheet returns focus to its tab once the tab bar shows it closed'
   assert.equal($('#mobile-sheet-backdrop').hidden, false);
 });
 
-test('the search toggle opens the field, and a lookup marks it', async (t) => {
-  const { $, pinia } = fixture(t);
-  const store = useLocationStore(pinia);
-  const controls = new LocationControls({
-    elements: { search: $('#location-search') },
-    cities: {},
-    getExpandedCity: () => null,
-    onCity() {},
-    onPoi() {},
-    onSearch() {},
-    onReset() {},
-    publish: (view) => store.publish(view),
-    requestFrame() {},
-    cancelFrame() {},
-  });
-  t.after(() => controls.destroy());
-  store.connect(controls);
-  await nextTick();
-  const field = $('#location-search');
-  assert.equal(field.classList.contains('expanded'), false);
-  $('#search-toggle').click();
-  await nextTick();
-  assert.equal(field.classList.contains('expanded'), true);
-  assert.equal(document.activeElement, field);
-  controls.setSearching(true);
-  await nextTick();
-  assert.equal(field.classList.contains('searching'), true);
-  controls.settleSearch();
-  await nextTick();
-  assert.equal(field.classList.contains('searching'), false);
-  assert.equal(field.classList.contains('expanded'), false);
-});
-
 function omnibarFixture(t, onSearch = () => {}) {
   const mounted = fixture(t);
   const { $, pinia } = mounted;
   const location = useLocationStore(pinia);
   const controls = new LocationControls({
-    elements: { search: $('#location-search') },
     cities: {},
     getExpandedCity: () => null,
     onCity() {},
@@ -510,8 +286,6 @@ function omnibarFixture(t, onSearch = () => {}) {
     },
     onSearchEdit: () => controls.setSearchError(null),
     publish: (view) => location.publish(view),
-    requestFrame() {},
-    cancelFrame() {},
   });
   t.after(() => controls.destroy());
   location.connect(controls);
@@ -572,6 +346,66 @@ function omnibarFixture(t, onSearch = () => {}) {
     option,
   };
 }
+
+test('omnibar uses loaded records when one viewport point snapshot throws', async (t) => {
+  const { $, pinia, input } = omnibarFixture(t);
+  const point = (id, name, lon) => ({ id, name, lat: 0, lon });
+  const rows = [
+    {
+      id: 'local-dams',
+      name: 'Dams',
+      enabled: true,
+      module: {
+        getNearbyContextPoints() {
+          throw new Error('point snapshot unavailable');
+        },
+        getAnalystRecords: () => [point('dam', 'Dam from loaded records', 0)],
+      },
+    },
+    {
+      id: 'local-firms',
+      name: 'FIRMS',
+      enabled: true,
+      module: {
+        getNearbyContextPoints: () => ({
+          points: [
+            point('fire-in', 'Fire from live snapshot', 0.4),
+            point('fire-out', 'Fire beyond viewport', 5),
+          ],
+          recordForPoint: (record) => record,
+        }),
+        getAnalystRecords: () => [
+          point('ordinary', 'Capped fire records', 0.5),
+        ],
+      },
+    },
+  ];
+  const prompts = [];
+  const cards = useEntityCardStore(pinia);
+  const manager = {
+    getAll: () => rows,
+    layers: new Map(rows.map((row) => [row.id, row])),
+    isEnabled: (id) => rows.some((row) => row.id === id),
+  };
+  cards.connect({
+    dataManager: () => manager,
+    askText: (prompt) => prompts.push(prompt),
+  });
+  cards.setView({
+    center: { lat: 0, lon: 0 },
+    heightM: 20_000_000,
+    rect: { west: -1, east: 1, south: -1, north: 1 },
+  });
+  input.focus();
+  await nextTick();
+  const chips = [...document.querySelectorAll('.omnibar-strip__chip')];
+  assert.equal(chips.length, 2, 'the fallback dam and the in-viewport fire');
+  assert.match(chips[0].textContent, /Dam from loaded records/);
+  assert.match(chips[1].textContent, /Fire from live snapshot/);
+  $('.omnibar-item--view-ask').click();
+  assert.equal(prompts.length, 1);
+  assert.match(prompts[0], /showing 1 Dams, 1 FIRMS/);
+});
 
 test('omnibar preserves ambiguous and disambiguated place queries, including IME input', async (t) => {
   const searched = [];
@@ -684,13 +518,12 @@ test('omnibar uses the existing microphone and typed chat controls', async (t) =
   ]);
 });
 
-test('a replacement omnibar search keeps newer input and leaves the dock draft alone', async (t) => {
+test('a replacement omnibar search keeps newer input', async (t) => {
   const pending = [];
-  const { $, type, key, input, option, mutations } = omnibarFixture(
+  const { type, key, input, option, mutations } = omnibarFixture(
     t,
     (query) => new Promise((resolve) => pending.push({ query, resolve })),
   );
-  $('#location-search').value = 'unfinished dock query';
   await type('Paris');
   await key('Enter');
   await type('Paris, Texas');
@@ -713,7 +546,6 @@ test('a replacement omnibar search keeps newer input and leaves the dock draft a
   );
   pending[1].resolve();
   await nextTick();
-  assert.equal($('#location-search').value, 'unfinished dock query');
 });
 
 test('a superseded compound command does not run steps after its flight', async (t) => {
@@ -749,12 +581,11 @@ test('a cancelled flight stops the remaining steps in an omnibar command', async
   assert.deepEqual(mutations, []);
 });
 
-test('failed omnibar searches keep focus and clear their error on edit without changing the dock', async (t) => {
+test('failed omnibar searches keep focus and clear their error on edit', async (t) => {
   const { $, controls, input, type, key } = omnibarFixture(t, () => {
     controls.setSearchError('No match');
-    controls.settleSearch({ keepQuery: true });
+    controls.settleSearch();
   });
-  $('#location-search').value = 'unfinished dock query';
   await type('missing place');
   const results = $('.omnibar-results');
   results.scrollTop = 20;
@@ -762,7 +593,6 @@ test('failed omnibar searches keep focus and clear their error on edit without c
   await key('Enter');
   assert.equal(document.activeElement, input);
   assert.equal(results.scrollTop, 0);
-  assert.equal($('#location-search').value, 'unfinished dock query');
   assert.ok($('#gev-omnibar [role="alert"]'));
   await type('corrected place');
   assert.equal($('#gev-omnibar [role="alert"]').textContent.trim(), '');
@@ -771,108 +601,82 @@ test('failed omnibar searches keep focus and clear their error on edit without c
   assert.equal(input.getAttribute('aria-expanded'), 'false');
 });
 
-for (const firstOrigin of ['omnibar', 'dock']) {
-  test(`a pending ${firstOrigin} search yields to the other field without settling its draft`, async (t) => {
-    const requests = [];
-    let lookup;
-    const { $, controls, input, type, key } = omnibarFixture(t, (query) =>
-      lookup.run(query),
-    );
-    controls.onSearch = (query) => lookup.run(query);
-    const navigation = new NavigationController({
-      viewer: {},
-      tracking: {
-        flightsLayer: {},
-        militaryFlightsLayer: {},
-        satellitesLayer: {},
-      },
-      clearLocation() {},
-      cancelShareSelection() {},
-      getDataManager: () => null,
-      settleSearch: (options) => controls.settleSearch(options),
-    });
-    const owner = {
-      _disposed: false,
-      get _activeLocationSearchGeneration() {
-        return navigation._activeLocationSearchGeneration;
-      },
-      set _activeLocationSearchGeneration(value) {
-        navigation._activeLocationSearchGeneration = value;
-      },
-      _locationControls: controls,
-      _setLocationSearchError:
-        LocationNavigation.prototype._setLocationSearchError,
-      _settleLocationSearchUi:
-        navigation._settleLocationSearchUi.bind(navigation),
-    };
-    lookup = new LocationSearch({
-      input: $('#location-search'),
-      begin: () => navigation._stampNavigation(),
-      isCurrent: (generation) =>
-        generation === navigation._navigationGeneration,
-      setSearching: (value) => controls.setSearching(value),
-      search: (query, options) =>
-        new Promise((resolve, reject) =>
-          requests.push({ query, options, resolve, reject }),
-        ),
-    });
-    lookup.subscribe(({ state, change }) =>
-      LocationNavigation.prototype._handleLocationSearchState.call(
-        owner,
-        state,
-        change,
-      ),
-    );
-    t.after(() => lookup.destroy());
-    const dock = $('#location-search');
-    async function submit(origin, text) {
-      if (origin === 'omnibar') {
-        await type(text);
-        await key('Enter');
-      } else {
-        dock.value = text;
-        dock.focus();
-        dock.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-        );
-        await nextTick();
-      }
-    }
-    const lastOrigin = firstOrigin === 'omnibar' ? 'dock' : 'omnibar';
-    await submit(firstOrigin, 'Old place');
-    if (firstOrigin === 'omnibar') {
-      await submit('dock', '   ');
-      assert.equal(requests.length, 1);
-      assert.equal(controls.searchOrigin, 'omnibar');
-      assert.equal(requests[0].options.signal.aborted, false);
-    }
-    await submit(lastOrigin, 'New place');
-    assert.deepEqual(
-      requests.map(({ query }) => query),
-      ['Old place', 'New place'],
-    );
-    assert.equal(requests[0].options.signal.aborted, true);
-    const latestInput = lastOrigin === 'dock' ? dock : input;
-    assert.equal(latestInput.value, 'New place');
-    assert.equal(document.activeElement, latestInput);
-    requests[0].reject(new Error('obsolete provider failure'));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(controls.searching, true);
-    assert.equal(controls.searchError, null);
-    assert.equal(latestInput.value, 'New place');
-    assert.equal(document.activeElement, latestInput);
-    requests[1].resolve(null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(controls.searching, false);
-    assert.equal(controls.searchOrigin, lastOrigin);
-    assert.equal(latestInput.value, 'New place');
-    assert.equal(document.activeElement, latestInput);
-    const omnibarError = $('#gev-omnibar [role="alert"]').textContent.trim();
-    const dockError = $('#location-search-error').textContent.trim();
-    assert.equal(Boolean(omnibarError), lastOrigin === 'omnibar');
-    assert.equal(Boolean(dockError), lastOrigin === 'dock');
+test('a pending omnibar search yields to a newer one without settling its draft', async (t) => {
+  const requests = [];
+  let lookup;
+  const { $, controls, input, type, key } = omnibarFixture(t, (query) =>
+    lookup.run(query),
+  );
+  controls.onSearch = (query) => lookup.run(query);
+  const navigation = new NavigationController({
+    viewer: {},
+    tracking: {
+      flightsLayer: {},
+      militaryFlightsLayer: {},
+      satellitesLayer: {},
+    },
+    cancelShareSelection() {},
+    getDataManager: () => null,
+    settleSearch: () => controls.settleSearch(),
   });
-}
+  const owner = {
+    _disposed: false,
+    get _activeLocationSearchGeneration() {
+      return navigation._activeLocationSearchGeneration;
+    },
+    set _activeLocationSearchGeneration(value) {
+      navigation._activeLocationSearchGeneration = value;
+    },
+    _locationControls: controls,
+    _setLocationSearchError:
+      LocationNavigation.prototype._setLocationSearchError,
+    _settleLocationSearchUi:
+      navigation._settleLocationSearchUi.bind(navigation),
+  };
+  lookup = new LocationSearch({
+    begin: () => navigation._stampNavigation(),
+    isCurrent: (generation) => generation === navigation._navigationGeneration,
+    setSearching: (value) => controls.setSearching(value),
+    search: (query, options) =>
+      new Promise((resolve, reject) =>
+        requests.push({ query, options, resolve, reject }),
+      ),
+  });
+  lookup.subscribe(({ state, change }) =>
+    LocationNavigation.prototype._handleLocationSearchState.call(
+      owner,
+      state,
+      change,
+    ),
+  );
+  t.after(() => lookup.destroy());
+  async function submit(text) {
+    await type(text);
+    await key('Enter');
+  }
+  await submit('Old place');
+  await submit('New place');
+  assert.deepEqual(
+    requests.map(({ query }) => query),
+    ['Old place', 'New place'],
+  );
+  assert.equal(requests[0].options.signal.aborted, true);
+  assert.equal(input.value, 'New place');
+  assert.equal(document.activeElement, input);
+  requests[0].reject(new Error('obsolete provider failure'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(controls.searching, true);
+  assert.equal(controls.searchError, null);
+  assert.equal(input.value, 'New place');
+  assert.equal(document.activeElement, input);
+  requests[1].resolve(null);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(controls.searching, false);
+  assert.equal(controls.searchOrigin, 'omnibar');
+  assert.equal(input.value, 'New place');
+  assert.equal(document.activeElement, input);
+  assert.ok($('#gev-omnibar [role="alert"]').textContent.trim());
+});
 
 /** The suggestion rows as `kind: label`, top first. */
 function omnibarRows() {
@@ -1574,6 +1378,41 @@ test('the search shortcut leaves an open dialog its focus', async (t) => {
     new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }),
   );
   assert.equal(document.activeElement, input);
+});
+
+test('a modal dialog kept in a hidden container does not hold the search shortcut', async (t) => {
+  const { input } = recordingOmnibar(t);
+  // A page may keep its sign-in dialog in the document and hide the section
+  // around it: the dialog is closed, so Cmd/Ctrl+K and "/" still focus the field.
+  const gate = document.body.appendChild(document.createElement('section'));
+  t.after(() => gate.remove());
+  gate.hidden = true;
+  const dialog = gate.appendChild(document.createElement('div'));
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  const isMac = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform || '');
+  const commandK = () =>
+    new KeyboardEvent('keydown', {
+      key: 'k',
+      metaKey: isMac,
+      ctrlKey: !isMac,
+      bubbles: true,
+      cancelable: true,
+    });
+  const press = commandK();
+  document.body.dispatchEvent(press);
+  assert.ok(document.activeElement === input);
+  assert.equal(press.defaultPrevented, true);
+  input.blur();
+  document.body.dispatchEvent(
+    new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true }),
+  );
+  assert.ok(document.activeElement === input);
+  // Shown again, the dialog keeps its keys.
+  input.blur();
+  gate.hidden = false;
+  document.body.dispatchEvent(commandK());
+  assert.ok(document.activeElement !== input);
 });
 
 // ── Enter-safety table ─────────────────────────────────────────────────

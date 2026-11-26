@@ -396,7 +396,8 @@ async function runArbitrationSection(page, { shots, consoleErrors }) {
       observer.observe(document, { childList: true, subtree: true });
     });
     try {
-      await page.goto(`${APP_URL}/?welcome=1`, { waitUntil: 'domcontentloaded' });
+      // Disable the opening so only the cockpit holds the launcher back.
+      await page.goto(`${APP_URL}/?welcome=1&intro=0`, { waitUntil: 'domcontentloaded' });
     } finally {
       await page.removeScriptToEvaluateOnNewDocument(earlyCockpitBlocker.identifier);
     }

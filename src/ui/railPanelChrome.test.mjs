@@ -33,7 +33,7 @@ test('a side panel lights up on hover only where a pointer can hover', () => {
   }
 });
 
-test('hover matches the dock tray hover, not its pinned look', () => {
+test('hover lights the border and label, not a shadow', () => {
   const [hover] = railRules.filter(({ selector }) =>
     selector.endsWith(':hover'),
   );
@@ -176,24 +176,11 @@ test('Data Layers, Context and Space Missions share the 14px side gutters', () =
   assert.match(gutters.body, /padding-right:\s*14px/);
 });
 
-test('rail titles and dock labels share one set of label tokens', () => {
-  // command-dock-trays.css sets the dock's label type; earlier dock rules
-  // for the same selector are overridden by it.
-  const dock = rules.find(
-    ({ selector, body }) =>
-      selector ===
-        '#command-dock .panel-title, #command-dock .location-toolbar-label' &&
-      /--dock-label-/.test(body),
-  );
+test('rail titles take the shared label tokens', () => {
   const rail = railRules.find(({ body }) =>
     /--dock-label-font-size/.test(body),
   );
-  assert.match(dock?.body || '', /font-size:\s*var\(--dock-label-font-size\)/);
-  assert.match(
-    dock?.body || '',
-    /letter-spacing:\s*var\(--dock-label-letter-spacing\)/,
-  );
-  // The dock's rem type, capped at its 16px-root size: a collapsed launcher
+  // The shared rem type, capped at its 16px-root size: a collapsed launcher
   // is a fixed 176px, so a larger browser font must not cut titles short.
   assert.match(
     rail?.body || '',

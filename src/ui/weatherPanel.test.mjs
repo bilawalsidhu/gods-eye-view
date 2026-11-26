@@ -7,6 +7,7 @@ import { createWeatherPanel } from './weatherPanel.js';
 import { railDocumentFixture as railFixture } from './railTestFixture.mjs';
 import { createAirQualityLayer } from '../layers/airQuality/index.js';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { onAqiPeriods } from '../testSupport/airQualityViewer.mjs';
 const ticks = ['2026-09-22T01:00:00Z', '2026-09-22T01:05:00Z'];
 const wind = {
   id: 'wind',
@@ -712,31 +713,44 @@ test('history time keeps the hour whatever the length of the localized date', ()
   }
 });
 
-test('air-quality readout renders its band legend, Canada coverage and worst-first list', async () => {
+test('air-quality readout renders the US AQI ramp, its coverage, one index tile and a worst-first list', async () => {
   const observedMs = Date.now() - 10 * 60_000;
-  const reading = (stationId, value, band, name) => ({
-    id: `eccc:${stationId}`,
-    provider: 'eccc',
-    scale: 'AQHI',
-    value,
-    band,
+  /** A PM2.5 concentration (µg/m³) at a station. */
+  const reading = (stationId, value, name, lat) => ({
+    id: `regional:${stationId}:PM2.5`,
+    provider: 'regional',
     stationId,
     name,
     zone: 'on',
-    lat: 43.65,
+    lat,
     lon: -79.38,
+    parameter: 'PM2.5',
+    scale: 'PM2.5',
+    units: 'µg/m³',
+    value,
+    kind: 'observation',
+    averagingMinutes: 60,
     observedMs,
-    color: '#4cc9f0',
+    color: '#8cb4ce',
     label: String(value),
-    risk: `${band} risk`,
     note: null,
   });
   const layer = createAirQualityLayer({
     source: {
-      getSnapshot: async () => [
-        reading('B', 8, 'high', 'Hamilton'),
-        reading('A', 2, 'low', 'Toronto'),
+      definitions: [
+        {
+          id: 'regional',
+          title: 'Ontario',
+          label: 'Air quality · Ontario',
+          network: 'Ontario network',
+          parameters: ['PM2.5'],
+        },
       ],
+      getSnapshot: async () =>
+        onAqiPeriods([
+          reading('B', 60, 'Hamilton', 43.25),
+          reading('A', 2, 'Toronto', 43.65),
+        ]),
     },
     overlayHost: { setEntries() {}, setVisible() {}, clearSource() {} },
   });
@@ -753,29 +767,87 @@ test('air-quality readout renders its band legend, Canada coverage and worst-fir
   assert.equal(aq.dataset.open, 'true');
   assert.match(
     f.find((n) => n.classList?.contains?.('rail-card-badge'), aq).textContent,
-    /Canada only/,
+    /^Ontario$/,
   );
   assert.match(line(f, 'air-quality', 'status').textContent, /2 stations/);
-  const entries = f.find((n) => n.className === 'rail-card-legend-entries', aq);
-  assert.equal(entries.hidden, false);
-  assert.deepEqual(
-    [...entries.children].map((entry) => entry.children[1].textContent),
-    ['Low', 'Moderate', 'High', 'Very High'],
-  );
+  // The US AQI as a ramp, never a band list.
   assert.equal(
     f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
+    false,
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-legend-entries', aq).hidden,
     true,
+  );
+  // The index group holds one tile, the US AQI.
+  const index = f.find((n) => n.dataset.blockId === 'tiles-index', aq);
+  assert.deepEqual(
+    [...index.querySelectorAll('button')].map((tile) => tile.dataset.tileId),
+    ['aqi'],
   );
   const list = f.find((n) => n.dataset.blockId === 'list', aq);
   assert.equal(list.hidden, false);
+  // PM2.5 60 µg/m³ is a US AQI of 154; 2 µg/m³ of 11.
   assert.deepEqual(
     [...list.children].map((item) =>
-      [...item.children[0].children].map((part) => part.textContent).join(' '),
+      [...item.children[0].children]
+        .map((part) => part.textContent)
+        .filter(Boolean)
+        .join(' '),
     ),
-    ['AQHI 8 Hamilton · high risk', 'AQHI 2 Toronto · low risk'],
+    ['154 Hamilton Unhealthy', '11 Toronto Good'],
+  );
+  // One line a row; the station's details are the tooltip.
+  assert.match(
+    list.children[0].children[0].title,
+    /^Unhealthy · Hamilton · on · Ontario network · NowCast of recent hourly means · /,
   );
   view.destroy();
   layer.destroy();
+});
+
+test('a scale without units shows its ramp and range as given', () => {
+  const f = fixture();
+  const view = createWeatherPanel(f);
+  view.update([
+    {
+      id: 'air-quality',
+      icon: '◍',
+      summary: {
+        label: 'Air quality',
+        coverage: 'Global',
+        status: '3 stations',
+        units: '',
+        unitsVerbatim: true,
+      },
+      legend: ['0', '50', '100', '150', '200', '300+'].map((label, i) => ({
+        label,
+        color: [
+          '#00e400',
+          '#ffff00',
+          '#ff7e00',
+          '#ff0000',
+          '#8f3f97',
+          '#7e0023',
+        ][i],
+      })),
+      legendCategorical: false,
+    },
+  ]);
+  const aq = card(f, 'air-quality');
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-ramp', aq).hidden,
+    false,
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-scale', aq).textContent,
+    '0 — 300+',
+  );
+  assert.equal(
+    f.find((n) => n.className === 'rail-card-legend-entries', aq).hidden,
+    true,
+  );
+  view.destroy();
 });
 test('source-supplied legend units are shown as given; catalog units are translated', () => {
   setLocale('ru');
@@ -840,4 +912,26 @@ test('the wind card notes it stays live only while its source does not follow th
     /Does not follow history/,
   );
   view.destroy();
+});
+
+test('selecting a station opens its card and refreshing that selection keeps the open card', () => {
+  const f = fixture(),
+    panel = createWeatherPanel(f);
+  const station = (key) => ({
+    ...cyclone,
+    id: 'air-quality',
+    summary: {
+      ...cyclone.summary,
+      result: key ? { id: 'station', lead: true, key, label: 'Station' } : null,
+    },
+  });
+  panel.update([station(null), wind]);
+  clickHeader(f, wind.id);
+  panel.update([station('a'), wind]);
+  assert.equal(card(f, 'air-quality').dataset.open, 'true');
+  clickHeader(f, wind.id);
+  panel.update([station('a'), wind]);
+  assert.deepEqual(opened(f), [wind.id]);
+  panel.update([station('b'), wind]);
+  assert.equal(card(f, 'air-quality').dataset.open, 'true');
 });

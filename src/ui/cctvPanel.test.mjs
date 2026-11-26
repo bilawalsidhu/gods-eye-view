@@ -705,11 +705,18 @@ test('a camera picked while the panel is collapsed shows its own still on expand
   controls._renderCctvState(stillState('a1.jpg'));
   assert.equal(requests.length, 1);
   assert.equal(requests[0].src, 'a1.jpg');
+  const completeOldRequest = requests[0].onload;
   panelElement.classList.add('collapsed');
   await settle();
   controls._renderCctvState(stillState('b1.jpg', 'b'));
   assert.equal(requests.length, 1);
-  requests[0].onload();
+  assert.equal(requests[0].onload, null, 'the previous camera is released');
+  completeOldRequest();
+  assert.equal(
+    controls.store.frame.cameraId,
+    '',
+    'queued completion is ignored',
+  );
   panelElement.classList.remove('collapsed');
   await settle();
   await nextTick();

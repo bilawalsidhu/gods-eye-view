@@ -85,6 +85,7 @@ export function createWeatherPanel({
   const count = panel?.querySelector('#weather-panel-count');
   let entries = [];
   let destroyed = false;
+  const selections = new Map();
   let previousIds = null;
   let hasAppeared = false;
   const page = panel || document;
@@ -146,8 +147,8 @@ export function createWeatherPanel({
           : historyTime(shownTime)
         : '';
     const models = active.map((entry) => {
-      const { id, icon, summary, legend = [], list } = entry;
-      // Discrete classes (storm geometry, AQHI bands) list swatches, not a ramp.
+      const { id, icon, summary, legend = [], list, sublists = [] } = entry;
+      // Discrete classes (storm geometry) list swatches, not a ramp.
       const categorical = entry.legendCategorical === true;
       let detail = summary.detail;
       const product = state.products.find((item) => item.id === id);
@@ -198,17 +199,61 @@ export function createWeatherPanel({
           zeroIndex: legend.findIndex(({ label }) => label === '0'),
         },
       };
+      // A titled list says what it ranks in a muted line above it.
+      const listBlocks = list?.items?.length
+        ? [
+            ...(list.title
+              ? [
+                  {
+                    id: 'list-title',
+                    type: 'lines',
+                    lines: [
+                      { id: 'list-title', text: list.title, muted: true },
+                    ],
+                  },
+                ]
+              : []),
+            { id: 'list', type: 'list', list },
+          ]
+        : [];
+      // Groups of Globe-view tiles (each a choice with its value), and
+      // switches, each one row.
+      const tileBlocks = sublists
+        .filter((group) => group?.tiles?.length)
+        .map((group) => ({
+          id: `tiles-${group.id}`,
+          type: 'tiles',
+          title: group.title,
+          subtitle: group.subtitle,
+          tiles: group.tiles,
+        }));
+      const toggleBlocks = (summary.toggles || []).map((toggle) => ({
+        ...toggle,
+        id: `toggle-${toggle.id}`,
+        type: 'toggle',
+      }));
+      // A result marked `lead` (a selected station) heads the card.
+      const lead = summary.result?.lead === true;
+      const resultBlocks = summary.result
+        ? [{ ...summary.result, type: 'result' }]
+        : [];
       const blocks = [
-        ...(list?.items?.length ? [{ id: 'list', type: 'list', list }] : []),
+        ...(lead ? resultBlocks : []),
+        // A card with tiles reads top down: what it shows, its scale, the
+        // tiles, then what stands out in view.
+        ...(tileBlocks.length ? [] : listBlocks),
         { id: 'details', type: 'lines', lines },
+        ...toggleBlocks,
         ...(legend.length ? [legendBlock] : []),
+        ...tileBlocks,
+        ...(tileBlocks.length ? listBlocks : []),
         ...(summary.settings?.length
           ? [{ id: 'settings', type: 'settings', settings: summary.settings }]
           : []),
         ...(actions.length
           ? [{ id: 'actions', type: 'actions', actions }]
           : []),
-        ...(summary.result ? [{ ...summary.result, type: 'result' }] : []),
+        ...(lead ? [] : resultBlocks),
       ];
       return {
         id,
@@ -280,6 +325,19 @@ export function createWeatherPanel({
             )?.id) ||
           ordered[0]?.id ||
           null;
+      }
+      // A new selection on the map (a lead result) opens its card, even over
+      // another open one; refreshes of the same selection leave the open card.
+      for (const id of selections.keys())
+        if (!ids.has(id)) selections.delete(id);
+      for (const { id, summary } of entries) {
+        const result = summary.result?.lead === true ? summary.result : null;
+        const key = result ? String(result.key ?? result.label ?? '') : null;
+        if (key !== null && key !== (selections.get(id) ?? null)) {
+          openId = id;
+          openPanels.set(page, id);
+        }
+        selections.set(id, key);
       }
       if (ids.size) hasAppeared = true;
       previousIds = ids;

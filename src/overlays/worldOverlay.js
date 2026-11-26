@@ -24,6 +24,7 @@ import {
   truncateOverlayTitle,
 } from './worldOverlayDraw.js';
 import { WORLD_OVERLAY_STYLE } from './worldOverlayTokens.js';
+import { overlayPixelRatio, watchTouchOnly } from './canvasPixelRatio.js';
 import { t } from '../i18n/index.js';
 import {
   canvasOf,
@@ -155,6 +156,8 @@ let _occluderRefreshTimer = null;
 let _sonarRenderTimer = null;
 let _cockpitModeHandler = null;
 let _windowResizeHandler = null;
+/** Stops watching for a fine pointer attached or taken away (`watchTouchOnly`). */
+let _stopTouchOnlyWatch = null;
 let _cockpitActive = false;
 /**
  * Set by `destroyWorldOverlay` when it actually tore a host down, and cleared
@@ -1318,6 +1321,12 @@ function ensureOverlayDom() {
   // on screen until something paints over them.
   _ctx = _canvas.getContext('2d', { alpha: true });
   _detectionCtx = _detectionSurface.getContext('2d', { alpha: true });
+  // A browser's canvas is 300x150 until sized, the page's or a new one: a new
+  // host holds no pixels until its first paint sizes them.
+  for (const surface of [_canvas, _detectionSurface]) {
+    if (surface.width !== 0) surface.width = 0;
+    if (surface.height !== 0) surface.height = 0;
+  }
 }
 
 function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
@@ -1337,6 +1346,42 @@ function sizeCanvasSurface(canvas, ctx, width, height, dpr) {
 }
 
 /**
+ * The detection surface's CSS size: the scene's while a detection lane is
+ * active, else 0x0. Only detection paints on it, so with none active it holds
+ * no backing store rather than a hidden full-screen one.
+ */
+function detectionSurfaceSize(width, height) {
+  return activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0
+    ? { width, height }
+    : { width: 0, height: 0 };
+}
+
+/** Whether the detection surface's backing store no longer fits the lanes. */
+function detectionSurfaceStale() {
+  if (!_detectionSurface) return false;
+  const sized = _detectionSurface.width > 0 && _detectionSurface.height > 0;
+  const wanted =
+    activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0 &&
+    _canvasWidth > 0 &&
+    _canvasHeight > 0;
+  return sized !== wanted;
+}
+
+/**
+ * With no detection lane active, a detection surface holding pixels drops
+ * them (0x0); nothing else is sized. A browser canvas starts 300x150, so this
+ * also empties a surface that has never been sized.
+ */
+function releaseDetectionSurface() {
+  if (!_detectionSurface) return;
+  if (activeCustomPaintLaneCount(PAINT_TARGET_DETECTION) > 0) return;
+  if (_detectionSurface.width === 0 && _detectionSurface.height === 0) return;
+  _detectionSurface.width = 0;
+  _detectionSurface.height = 0;
+  _detectionSurfaceNeedsClear = false;
+}
+
+/**
  * Size the backing store to the live CSS box and DPR. A dormant host never
  * calls this, so a zero-source overlay keeps a 0x0 canvas instead of a
  * full-viewport buffer; `drawWorldOverlay` sizes lazily on the first frame
@@ -1348,18 +1393,27 @@ function ensureCanvasSize() {
   if (!_canvas || !sceneCanvas) return false;
   const width = Math.max(0, Math.round(Number(sceneCanvas.clientWidth) || 0));
   const height = Math.max(0, Math.round(Number(sceneCanvas.clientHeight) || 0));
-  const dpr = Math.max(1, Number(globalThis.window?.devicePixelRatio) || 1);
+  // CSS pixels on a touch-only device, as the globe is drawn; else the display's.
+  const dpr = overlayPixelRatio(globalThis.window);
+  const detection = detectionSurfaceSize(width, height);
   const changed =
     _canvas.width !== Math.round(width * dpr) ||
     _canvas.height !== Math.round(height * dpr) ||
-    _detectionSurface?.width !== Math.round(width * dpr) ||
-    _detectionSurface?.height !== Math.round(height * dpr) ||
+    (_detectionSurface &&
+      (_detectionSurface.width !== Math.round(detection.width * dpr) ||
+        _detectionSurface.height !== Math.round(detection.height * dpr))) ||
     _canvasWidth !== width ||
     _canvasHeight !== height ||
     _canvasDpr !== dpr;
   _resizeDirty = false;
   if (!changed) return false;
-  sizeCanvasSurface(_detectionSurface, _detectionCtx, width, height, dpr);
+  sizeCanvasSurface(
+    _detectionSurface,
+    _detectionCtx,
+    detection.width,
+    detection.height,
+    dpr,
+  );
   sizeCanvasSurface(_canvas, _ctx, width, height, dpr);
   _canvasWidth = width;
   _canvasHeight = height;
@@ -1604,6 +1658,9 @@ function handleChromeMutations(records) {
 function installUiOccluderObservers() {
   _windowResizeHandler = markLayoutDirty;
   globalThis.window?.addEventListener?.('resize', _windowResizeHandler);
+  // A trackpad attached to a tablet changes the backing ratio, not the size.
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = watchTouchOnly(markLayoutDirty, globalThis.window);
   if (typeof MutationObserver === 'function' && document.body) {
     _mutationObserver = new MutationObserver(handleChromeMutations);
     // Body observation is childList discovery only, filtered in the callback;
@@ -2789,13 +2846,16 @@ function drawWorldOverlay() {
     resetFrameDiagnostics();
     _solveDirty = false;
     if (_canvasNeedsClear || _detectionSurfaceNeedsClear) clearCanvas();
+    // A detection lane that went inactive gives its backing store back; the
+    // shared canvas is left as it is (a dormant host never sizes it).
+    releaseDetectionSurface();
     // Nothing is painted now, so nothing can be hit.
     _hitRectCount = 0;
     if (_accessibilitySignature) syncAccessibleActions();
     syncPaintVisibility(false);
     return;
   }
-  if (_resizeDirty) ensureCanvasSize();
+  if (_resizeDirty || detectionSurfaceStale()) ensureCanvasSize();
   if (_canvasWidth <= 0 || _canvasHeight <= 0) return;
   _frameStamp++;
   refreshUiOccluders(
@@ -2909,6 +2969,8 @@ export function destroyWorldOverlay() {
     window.removeEventListener('resize', _windowResizeHandler);
   }
   _windowResizeHandler = null;
+  _stopTouchOnlyWatch?.();
+  _stopTouchOnlyWatch = null;
   _resizeObserver?.disconnect?.();
   _resizeObserver = null;
   _observedOccluderElements = new WeakSet();

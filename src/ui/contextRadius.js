@@ -1,4 +1,5 @@
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { formatNumber, t } from '../i18n/index.js';
 
 // How far out Context looks for what is "nearby": one distance for every
 // nearby block (flights, vessels, hazards, alerts, other loaded items). The
@@ -8,7 +9,7 @@ const KEY = 'gev.contextRadiusKm';
 
 /** The distances the control steps through, in km. */
 export const CONTEXT_RADIUS_STEPS = Object.freeze([
-  25, 50, 100, 250, 500, 1000, 2500,
+  25, 50, 100, 250, 500, 1000,
 ]);
 export const DEFAULT_CONTEXT_RADIUS_KM = 250;
 
@@ -43,3 +44,12 @@ export function setContextRadiusKm(km) {
     // Without storage the choice lasts for this visit.
   }
 }
+
+export const contextRadiusText = computed(() =>
+  t('{n} km', { n: formatNumber(contextRadiusKm.value) }),
+);
+export const contextRadiusIndex = computed(() =>
+  Math.max(0, CONTEXT_RADIUS_STEPS.indexOf(contextRadiusKm.value)),
+);
+export const pickContextRadius = (index) =>
+  setContextRadiusKm(CONTEXT_RADIUS_STEPS[index]);

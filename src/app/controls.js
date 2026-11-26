@@ -3,6 +3,7 @@ import { StyleManager } from '../ui/composition.js';
 import { applyStartView, START_VIEW } from '../camera.js';
 import { initCockpitCloudEffects } from '../cockpitCloudEffects.js';
 import { createViewSky } from '../viewSky.js';
+import { createViewFrameRate } from '../viewFrameRate.js';
 import { findGlobe } from '../render/rendererOf.js';
 import { useDisplayStore } from '../ui/stores/display.js';
 import { applicationPinia } from '../ui/vueRuntime.js';
@@ -31,6 +32,7 @@ export function createApplicationControls({
   loaderStatus,
   Controls = StyleManager,
   services,
+  spotWeatherService = operations.requests.weather,
   catalog,
   placeSearch,
   defer,
@@ -45,6 +47,7 @@ export function createApplicationControls({
   // Initialize the style manager (post-processing, HUD, locations, share links)
   const styleManager = new Controls(viewer, {
     services: {
+      fetchSpotWeather: (...args) => spotWeatherService.getConditions(...args),
       ...services,
       ...operations.surface.controlServices,
       searchAndFlyTo: operations.searchAndFlyTo,
@@ -84,6 +87,11 @@ export function createApplicationControls({
     store: useDisplayStore(applicationPinia()),
   });
   defer(() => viewSky.destroy());
+  // The most frames a second the globe draws, as the user sets it.
+  const viewFrameRate = createViewFrameRate({
+    store: useDisplayStore(applicationPinia()),
+  });
+  defer(() => viewFrameRate.destroy());
 
   loaderStatus.textContent = styleManager.hasShareState
     ? t('Restoring shared view...')

@@ -325,6 +325,12 @@ export class LayerLifecycle {
       return false;
     const refreshEpoch = ++entry.refreshEpoch;
     entry.refreshing = true;
+    // The update's own cancellation: the caller's, or a newer refresh that
+    // supersedes this one (`refreshLayer`'s `supersede`).
+    const controller = new AbortController();
+    const forward = () => controller.abort(signal.reason);
+    signal?.addEventListener?.('abort', forward, { once: true });
+    entry.refreshController = controller;
     this._publishActivity({ type: 'status' });
     this._notifyListeners({
       type: 'refresh-transition',
@@ -336,7 +342,9 @@ export class LayerLifecycle {
     let result;
     let failure = null;
     try {
-      result = await entry.module.update(this.viewer, { signal });
+      result = await entry.module.update(this.viewer, {
+        signal: controller.signal,
+      });
       // Even a rejected/partial update may have changed the data exposed by
       // the layer. Publish before classifying its result so observers see it.
       this._publishActivity({ type: 'data-updated', layerId });
@@ -349,9 +357,13 @@ export class LayerLifecycle {
         );
     } catch (error) {
       failure = error;
+    } finally {
+      signal?.removeEventListener?.('abort', forward);
+      if (entry.refreshController === controller)
+        entry.refreshController = null;
     }
 
-    if (signal?.aborted) {
+    if (controller.signal.aborted) {
       if (
         this.layers.get(layerId) === entry &&
         !entry.destroying &&
@@ -407,16 +419,18 @@ export class LayerLifecycle {
   }
 
   /**
-   * Request one fresh update for an already-enabled layer. If the periodic
-   * loop currently owns a refresh, wait for it to settle and then run a new
-   * update so viewport-dependent callers do not reuse work started for the
-   * prior camera location.
+   * Request one fresh update for an already-enabled layer. If a refresh is
+   * in flight, wait for it to settle and then run a new update so
+   * viewport-dependent callers do not reuse work started for the prior
+   * camera location; with `supersede`, cancel it instead (its update's
+   * signal aborts and it settles `false`) and start the new one at once.
    * @param {string} layerId Registered layer id.
    * @param {object} [options] Refresh authority.
    * @param {AbortSignal|null} [options.signal] Caller cancellation authority.
+   * @param {boolean} [options.supersede] Cancel a refresh in flight rather than wait for it.
    * @returns {Promise<boolean>} True only when the requested fresh update settles successfully.
    */
-  async refreshLayer(layerId, { signal = null } = {}) {
+  async refreshLayer(layerId, { signal = null, supersede = false } = {}) {
     const entry = this.layers.get(layerId);
     if (
       !entry ||
@@ -427,7 +441,14 @@ export class LayerLifecycle {
     )
       return false;
 
-    if (entry.refreshing) {
+    // Another caller may start a refresh while this one waits: wait again.
+    while (entry.refreshing) {
+      if (supersede) {
+        const controller = entry.refreshController;
+        this._invalidateRefresh(layerId, entry, 'superseded');
+        controller?.abort(new DOMException('Refresh superseded', 'AbortError'));
+        break;
+      }
       const settled = await new Promise((resolve) => {
         let done = false;
         const finish = (value) => {
@@ -2214,18 +2235,24 @@ export class LayerLifecycle {
   }
 
   /**
-   * Read runtime parameters from a layer if it exposes `getParams()`.
+   * Read runtime parameters from a layer if it exposes `getParams()`. With
+   * `scene`, its `getSceneParams()` when it has one: what a scene shot keeps
+   * beyond the saved and shared params.
    */
-  getLayerParams(layerId) {
+  getLayerParams(layerId, { scene = false } = {}) {
     const entry = this.layers.get(layerId);
-    if (!entry || !entry.module || typeof entry.module.getParams !== 'function')
+    const read =
+      scene && typeof entry?.module?.getSceneParams === 'function'
+        ? 'getSceneParams'
+        : 'getParams';
+    if (!entry || !entry.module || typeof entry.module[read] !== 'function')
       return null;
     try {
-      const params = entry.module.getParams();
+      const params = entry.module[read]();
       if (!params || typeof params !== 'object') return null;
       return cloneLayerParams(params);
     } catch (error) {
-      console.warn(`[Data] ${layerId} getParams error:`, error);
+      console.warn(`[Data] ${layerId} ${read} error:`, error);
       return null;
     }
   }
@@ -2347,8 +2374,10 @@ export class LayerLifecycle {
         source: entry.module.source,
         showInTogglePanel: entry.module.showInTogglePanel !== false,
         // Registry id of the provider key this layer needs, if any (mirrors
-        // showInTogglePanel). The layer reports stats.keyRequired while that
-        // key is absent; the panel builds the guidance text from the pair.
+        // showInTogglePanel), or an array of ids when a layer reads several
+        // keyed networks (Air quality names those it lacks). The layer reports
+        // stats.keyRequired while a key is absent; the panel builds the
+        // guidance text from the pair.
         requiresKeyId: entry.module.requiresKeyId || null,
         // Data Library entry id; the panel groups these under Library.
         libraryEntryId: this._libraryLayerIds.has(id)

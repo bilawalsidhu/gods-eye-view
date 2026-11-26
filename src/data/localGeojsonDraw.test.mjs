@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createPinia } from 'pinia';
 import {
   createLocalGeoJsonLayer,
   localGeojsonParts,
 } from './localGeojsonCore.js';
 import { localGeoJsonServices } from '../app/localGeojsonServices.js';
 import { getContextStore } from './contextStore.js';
+import { findRecord, nearbyForLayer } from './entityContext.js';
+import { resolvePickedContext } from './pickedContext.js';
+import { useEntityCardStore } from '../ui/stores/entityCard.js';
 import { setClickCardHitTest } from './pickRegistry.js';
 import { readEntityRecord } from './entityRecords.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
@@ -178,6 +182,77 @@ test("another layer's card over a drawn part keeps the click", async (t) => {
   top = null;
   env.click({ screenPosition: at, drawHit: { set: fills.spec.id, id: 'p' } });
   assert.equal(env.fake.flights.length, 1);
+});
+
+test('a rendered GeoJSON ID with trailing space stays exact through card refresh', async (t) => {
+  const padded = feature(
+    'hall ',
+    { type: 'Point', coordinates: [0, 0] },
+    { name: 'North Hall', operator: 'North operator' },
+  );
+  const plain = feature(
+    'hall',
+    { type: 'Point', coordinates: [0.01, 0] },
+    { name: 'South Hall', operator: 'South operator' },
+  );
+  const env = await enabledLayer(t, [padded, plain]);
+  const row = { id: env.layer.id, enabled: true, module: env.layer };
+  const dataManager = {
+    layers: new Map([[row.id, row]]),
+    isEnabled: (id) => id === row.id,
+  };
+  const cards = useEntityCardStore(createPinia());
+  cards.connect({ dataManager: () => dataManager });
+  t.after(() => cards.connect(null));
+
+  const pins = env.fake.set('pins');
+  const hit = {
+    set: pins.spec.id,
+    id: padded.id,
+    meta: pins.items.get(padded.id).meta,
+  };
+  env.click({ drawHit: hit });
+  assert.equal(getContextStore().selectedEntityId, 'local-dams:hall ');
+  const identity = resolvePickedContext(hit, { dataManager });
+  assert.equal(identity.id, 'local-dams:hall ');
+  cards.select(identity);
+  const pickTitle = cards.card.title;
+
+  const nearby = nearbyForLayer(dataManager, row, { lat: 0, lon: 0 });
+  const north = nearby.items.find(({ title }) => title === 'North Hall');
+  cards.select(north.identity);
+  const stable = { ...cards.card.identity };
+  const updated = {
+    ...padded,
+    properties: { ...padded.properties, operator: 'New north operator' },
+  };
+  await env.layer.replaceFeatures(env.viewer, [plain, updated]);
+  cards.refresh();
+  assert.deepEqual(
+    {
+      pickTitle,
+      title: cards.card.title,
+      operator: cards.card.operator,
+      lost: cards.lost,
+    },
+    {
+      pickTitle: 'North Hall',
+      title: 'North Hall',
+      operator: 'New north operator',
+      lost: false,
+    },
+  );
+
+  await env.layer.replaceFeatures(env.viewer, [plain]);
+  assert.equal(
+    findRecord(dataManager, identity),
+    null,
+    'the removed draw ID cannot retarget',
+  );
+  cards.select(stable);
+  cards.refresh();
+  assert.equal(cards.card.identity.id, stable.id);
+  assert.equal(cards.card.basis, 'identity', 'the removed ID cannot retarget');
 });
 
 test('a click on a drawn part selects its feature and flies above it', async (t) => {

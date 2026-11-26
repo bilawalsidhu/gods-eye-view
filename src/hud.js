@@ -30,7 +30,11 @@ import { worldTimeFor } from './time/worldClock.js';
 const hudTime = worldTimeFor('hud');
 const skyTime = worldTimeFor('sky');
 import { composeLocalityTag } from './hudLocality.js';
-import { hudQuantity, LOCALIZED_LOCALITY } from './hudLocalityFormat.js';
+import {
+  hudAltitude,
+  hudQuantity,
+  LOCALIZED_LOCALITY,
+} from './hudLocalityFormat.js';
 import {
   ellipsoidalToMslDisplayM,
   ensureGeoidReady,
@@ -61,6 +65,7 @@ import {
 import { isRtlLocale } from './i18n/locale.js';
 import { localizeLayerName } from './ui/layerPanel.js';
 import { isEmbeddedInline } from './app/embed.js';
+import { openingPlaying } from './app/openingIntro.js';
 import { subscribeSelectedVessel } from './hudReadouts.js';
 
 /** Color palettes keyed by shader mode; applied as CSS custom properties. */
@@ -387,7 +392,13 @@ export class IntelHUD {
     }
     // First settled view: request the AI summary now rather than waiting for
     // the periodic tick (saves up to ~15s of "Awaiting telemetry...").
-    if (!this._firstSummaryKicked && this._visible && this._latestMetrics) {
+    // The opening's frames are not that view: it lands with a moveEnd.
+    if (
+      !this._firstSummaryKicked &&
+      !openingPlaying() &&
+      this._visible &&
+      this._latestMetrics
+    ) {
       this._firstSummaryKicked = true;
       void this._updateSummary(true, true);
     }
@@ -615,7 +626,7 @@ export class IntelHUD {
     const altMslM = ellipsoidalToMslDisplayM(altM, geoidN);
     const sunEl = this._estimateSunElevation(latDeg, lonDeg);
     // i18n-ignore: sensor codes
-    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${sunEl.toFixed(1)}° EL`;
+    readouts.alt = `ALT: ${Math.round(altMslM)}m   SUN: ${(Number(sunEl.toFixed(1)) + 0).toFixed(1)}° EL`;
 
     // Collection timestamp
     const now = new Date(hudTime());
@@ -860,10 +871,7 @@ export class IntelHUD {
     const altDisplayM = Number.isFinite(m.altMslM) ? m.altMslM : m.altM;
     // Display only: the AI summary request carries its own context, so this
     // line is built in the active language.
-    const altTag =
-      altDisplayM >= 1000
-        ? hudQuantity(altDisplayM / 1000, 'km', 1)
-        : hudQuantity(Math.round(altDisplayM), 'm');
+    const altTag = hudAltitude(altDisplayM);
     const winTag = window
       ? `${hudQuantity(Math.max(1, Math.round(window.widthKm)), '')}x${hudQuantity(Math.max(1, Math.round(window.heightKm)), 'km')}`
       : t('N/A');
@@ -888,7 +896,7 @@ export class IntelHUD {
         region: REGION_LABELS[region] ? t(REGION_LABELS[region]) : region,
         alt: altTag,
         window: winTag,
-        sun: formatNumber(Math.round(m.sunEl)),
+        sun: formatNumber(Math.round(m.sunEl) + 0), // + 0: never "-0"
         ona: formatNumber(Math.round(m.ona)),
         zone: localTag,
       },

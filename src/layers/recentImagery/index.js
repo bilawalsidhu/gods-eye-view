@@ -21,7 +21,11 @@ import {
   boxCentre,
   boxFromPin,
   boxFromDegrees,
+  pointBoxMatches,
+  boxKey,
   boxSideKm,
+  candidateAtPoint,
+  dayTime,
   dequantizeBox,
   fitViewHeightM,
   formatCandidateReadout,
@@ -813,19 +817,18 @@ export function createRecentImageryLayer({
     return _catalogError;
   }
 
+  function catalogNote(error) {
+    return t('{label} catalog unavailable · {detail}', {
+      label: PRODUCTS[error.product]?.label || error.product,
+      detail: error.message,
+    });
+  }
+
   function notes() {
     const out = [];
     if (_truncated)
       out.push(t('Catalog truncated · a newer clear day may exist'));
-    for (const error of _catalogErrors) {
-      const label = PRODUCTS[error.product]?.label || error.product;
-      out.push(
-        t('{label} catalog unavailable · {detail}', {
-          label,
-          detail: error.message,
-        }),
-      );
-    }
+    for (const error of _catalogErrors) out.push(catalogNote(error));
     const today = utcDay(now());
     const viirsToday = candidateFor(`VIIRS:${today}`);
     if (viirsToday?.availability === 'unknown' && _sources.viirs)
@@ -1520,14 +1523,100 @@ export function createRecentImageryLayer({
       };
     },
 
+    /**
+     * The latest Sentinel-2 or Landsat day whose footprints cover the point,
+     * using the loaded catalog. A daily overview is an area result: its
+     * thumbnail can show pixels without verifying coverage at the point.
+     * Before an area is chosen or outside it, {value: null, reason} explains
+     * the missing reading. Returns null while off or with no day at the point.
+     */
+    getValueAt(lat, lon) {
+      if (!_enabled) return null;
+      // Imagery is searched inside the chosen area only: outside it there is
+      // nothing to read, which is not the same as no pass.
+      if (!_box) return { value: null, reason: t('No area chosen') };
+      const points = pointBoxMatches(_box, lon, lat);
+      if (!points.length)
+        return { value: null, reason: t('Outside the chosen area') };
+      const crossesDateline = _box.west > _box.east;
+      const hasPointBox = (boxes, key) =>
+        boxes?.some((box) => boxKey(box) === key);
+      const usable = (candidate) =>
+        sourceOn(candidate) &&
+        PRODUCTS[candidate.product] &&
+        availability(candidate) !== 'empty';
+      const newest = (list) =>
+        list.reduce(
+          (best, candidate) =>
+            !best || candidate.day > best.day ? candidate : best,
+          null,
+        );
+      const hls = newest(
+        _candidates
+          .filter(
+            (candidate) =>
+              usable(candidate) && !PRODUCTS[candidate.product].overview,
+          )
+          .map((candidate) => {
+            const empty = thumbnails.get(candidate.key)?.emptyBoxes;
+            for (const point of points) {
+              if (hasPointBox(empty, point.key)) continue;
+              const match = candidateAtPoint(candidate, point.lon, lat);
+              if (match) return match;
+            }
+            return null;
+          })
+          .filter(Boolean),
+      );
+      const found =
+        hls ||
+        newest(
+          _candidates.filter((candidate) => {
+            if (
+              !sourceOn(candidate) ||
+              !PRODUCTS[candidate.product]?.overview ||
+              availability(candidate) !== 'present'
+            )
+              return false;
+            if (!crossesDateline) return true;
+            const present = thumbnails.get(candidate.key)?.availableBoxes;
+            return points.some((point) => hasPointBox(present, point.key));
+          }),
+        );
+      if (!found) return null;
+      const product = PRODUCTS[found.product];
+      const end = Date.parse(found.timeRange?.end);
+      const at = Number.isFinite(end) ? end : dayTime(found.day);
+      return {
+        value: READOUT_WORDS.date(found.day),
+        detail: [
+          t(product.name),
+          displayMetres(product.resolutionM),
+          product.overview
+            ? t('Area imagery · point coverage unknown')
+            : READOUT_WORDS.cloud(found.cloud),
+        ].join(' · '),
+        ...(Number.isFinite(at) ? { at } : {}),
+      };
+    },
+
     getStats() {
       // Without a controller subscription the stats poll is the only steady
       // heartbeat, so it doubles as the map-stack watch.
       if (!_unsubscribeMap) followMap();
+      const failures = _searching ? [] : _catalogErrors.filter(sourceOn);
+      // Both HLS collections can fail while the result still lists
+      // unprobed VIIRS days. Only proven coverage can keep the feed usable.
+      const unavailable =
+        ['S30', 'L30'].every((product) =>
+          failures.some((error) => error.product === product),
+        ) && !_candidates.some(drapable);
       return {
         count: _candidates.length,
+        loading: _searching,
         lastUpdate: _lastUpdate,
-        error: guidance(),
+        error: guidance() || failures.map(catalogNote).join(' · ') || null,
+        ...(unavailable ? { status: 'unavailable' } : {}),
       };
     },
 

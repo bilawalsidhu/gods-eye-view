@@ -37,7 +37,8 @@ import { alongLength } from '../../geo/polyline.js';
 import { clusterScreenPoints } from '../../geo/screenCluster.js';
 import { provideUnboundDraw } from '../rendererOf.js';
 import { blobUrl, listenerList, toCartesian, uncaught } from './common.js';
-import { createGpuIcons, GPU_ICON_CAPABILITIES } from './gpuIcons.js';
+import { blockFits, createGpuIcons, gpuIconCapabilities } from './gpuIcons.js';
+import { isViewRef, viewLayout } from '../../data/viewSheet.js';
 import { blendHost } from './setBlend.js';
 import { createModelSets } from './drawModels.js';
 import { materialTexture } from './internals.js';
@@ -105,6 +106,205 @@ export function heightReferenceOf(height, clampTo = 'both') {
     );
   return H.NONE;
 }
+
+/** The eye's height (metres) up to which `OVERLAY_HORIZON` takes `k` from
+ *  it rather than from the eye's position. */
+const OVERLAY_HEIGHT_K = 100_000;
+
+/**
+ * Whether a fragment of an overlay (shapes clamped `'overlay'`, and draped
+ * lines drawn over the surface) is past the ellipsoid's horizon from the eye,
+ * given its position less the eye's (`rte`, world metres): then it is dropped,
+ * so nothing beyond the Earth's limb shows through it. The test is the
+ * ellipsoid's alone, made at the surface point over the fragment, since the
+ * flat triangles of a fill and the straight pieces of a line pass under the
+ * ellipsoid (metres, for a shape tens of kilometres wide), and the point drawn
+ * would be lost up close and near the horizon. In the ellipsoid's unit sphere,
+ * with `e` the eye, `v` the fragment less the eye and `n` the direction of
+ * `e + v`, the surface point `n` is in view while the eye is on its side of
+ * the plane tangent there: `dot(n, e) >= 1`. Squared, with `k = |e|^2 - 1`
+ * and `a = dot(e, v)`, that is `1 + k + a >= 0` and `|v|^2 <= k + (k + a)^2`,
+ * where no term is the difference of two numbers near 1, so it holds in
+ * float32 for an eye a metre up (`|e + v| - 1` would be lost there). Up to
+ * `OVERLAY_HEIGHT_K` (100 km), where `|e|^2 - 1` is too small for float32,
+ * `k` comes from the eye's height, which Cesium works out in doubles, as
+ * `2h|g| + h^2|N/r|^2` with `N` the surface normal there, `g` the foot of
+ * the eye over the radii squared and `r` the radii; above it, from `e`
+ * itself, since that form takes the normal at the eye rather than at its
+ * foot and drifts by hundreds of metres at the horizon at geostationary
+ * height. The eye counts as at least a metre up: one under the ellipsoid
+ * (low ground where the geoid is below it) would otherwise see no overlay.
+ */
+const OVERLAY_HORIZON = `
+bool overlayPastHorizon(vec3 rte)
+{
+    if (czm_sceneMode != czm_sceneMode3D) return false;
+    vec3 inverse = czm_ellipsoidInverseRadii;
+    vec3 eye = czm_viewerPositionWC;
+    vec3 e = eye * inverse;
+    float h = max(czm_eyeHeight, 1.0);
+    float k = dot(e, e) - 1.0;
+    if (h <= ${OVERLAY_HEIGHT_K.toFixed(1)}) {
+        vec3 normal = normalize(eye * inverse * inverse);
+        vec3 foot = (eye - h * normal) * inverse * inverse;
+        vec3 normalScaled = normal * inverse;
+        k = 2.0 * h * length(foot) + h * h * dot(normalScaled, normalScaled);
+    }
+    vec3 v = rte * inverse;
+    float ka = k + dot(e, v);
+    return 1.0 + ka < 0.0 || dot(v, v) > k + ka * ka;
+}
+`;
+
+/** `OVERLAY_HORIZON`'s test, for checks: whether an overlay's point
+ *  `position` (world metres) is drawn from `eye`. With `float32`, each step
+ *  is rounded to float32 as in the shader, from what the shader is given:
+ *  the point less the eye, the eye, and the eye's height (at least 1 m). */
+export function overlayInView(position, eye, { float32 = false } = {}) {
+  const f = float32 ? Math.fround : (x) => x;
+  const vec = (c) => [f(c.x), f(c.y), f(c.z)];
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = vec(ellipsoid.oneOverRadii);
+  const e = vec(eye);
+  const h = f(Math.max(ellipsoid.cartesianToCartographic(eye).height, 1));
+  const scaled = mul(e, inverse);
+  const v = mul(
+    vec(Cesium.Cartesian3.subtract(position, eye, new Cesium.Cartesian3())),
+    inverse,
+  );
+  const k =
+    h <= OVERLAY_HEIGHT_K
+      ? heightK(e, h, inverse, f)
+      : f(dot(scaled, scaled) - 1);
+  const ka = f(k + dot(scaled, v));
+  return f(1 + ka) >= 0 && dot(v, v) <= f(k + f(ka * ka));
+}
+
+/** `OVERLAY_HORIZON`'s `k` near the surface, from the eye's height `h`. */
+function heightK(e, h, inverse, f) {
+  const mul = (x, y) => x.map((c, i) => f(c * y[i]));
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const over = mul(mul(e, inverse), inverse);
+  const length = f(Math.sqrt(dot(over, over)));
+  const normal = over.map((c) => f(c / length));
+  const foot = mul(
+    mul(
+      e.map((c, i) => f(c - f(h * normal[i]))),
+      inverse,
+    ),
+    inverse,
+  );
+  const normalScaled = mul(normal, inverse);
+  return f(
+    f(f(2 * h) * f(Math.sqrt(dot(foot, foot)))) +
+      f(f(h * h) * dot(normalScaled, normalScaled)),
+  );
+}
+
+/**
+ * Fills clamped as an overlay (`clampTo: 'overlay'`): on the ellipsoid, drawn
+ * over the tiles and terrain with no depth test, so neither hides them, and
+ * hidden past the ellipsoid's horizon fragment by fragment
+ * (`OVERLAY_HORIZON`).
+ */
+const OVERLAY_FILL_VS = `in vec3 position3DHigh;
+in vec3 position3DLow;
+in vec4 color;
+in float batchId;
+
+out vec4 v_color;
+out vec3 v_overlayRte;
+
+void main()
+{
+    vec4 p = czm_computePosition();
+    v_color = color;
+    v_overlayRte = p.xyz;
+    gl_Position = czm_modelViewProjectionRelativeToEye * p;
+}
+`;
+const OVERLAY_FILL_FS = `in vec4 v_color;
+in vec3 v_overlayRte;
+${OVERLAY_HORIZON}
+void main()
+{
+    if (overlayPastHorizon(v_overlayRte))
+        discard;
+    out_FragColor = czm_gammaCorrect(v_color);
+}
+`;
+
+/**
+ * A line's appearance, drawn over the surface as an overlay: Cesium's
+ * polyline material appearance, its fragments past the horizon dropped
+ * (`OVERLAY_HORIZON`), for its colour and its colour where the surface hides
+ * it alike, so the part of a line behind the Earth never shows. Each vertex
+ * hands on the point its corner is drawn from: where Cesium moves a segment's
+ * end onto the near plane, that point, cut as Cesium cuts it, so the
+ * fragments are tested along the segment drawn.
+ */
+let overlayLineShaders;
+function overlayLineAppearance(material) {
+  if (!overlayLineShaders) {
+    const plain = new Cesium.PolylineMaterialAppearance();
+    const vs = plain.vertexShaderSource;
+    const fs = plain.fragmentShaderSource;
+    const main = /void main\(\)\s*\{/g;
+    const lastMain = (source) => {
+      let at = -1;
+      for (const m of source.matchAll(main)) at = m.index;
+      if (at < 0) throw new Error('Cesium polyline shader has no main');
+      return at;
+    };
+    const vsAt = lastMain(vs);
+    const vsBody = vs.slice(vsAt).replace(
+      /(vec4 positionWC = getPolylineWindowCoordinates\(p, prev, next, expandDir, width, usePrev, angle\);)/,
+      `$1
+    {
+        vec4 fromEC = czm_modelViewRelativeToEye * p;
+        vec4 toEC = czm_modelViewRelativeToEye * (usePrev ? prev : next);
+        vec4 clippedWC, clippedEC;
+        bool clipped, culled;
+        clipLineSegmentToNearPlane(fromEC.xyz, toEC.xyz, clippedWC, clipped, culled, clippedEC);
+        v_overlayRte = mat3(czm_inverseView) * clippedEC.xyz;
+    }`,
+    );
+    if (vsBody === vs.slice(vsAt))
+      throw new Error('Cesium polyline shader no longer places its corners');
+    const fsAt = lastMain(fs);
+    overlayLineShaders = {
+      vertexShaderSource: `${vs.slice(0, vsAt)}out vec3 v_overlayRte;\n${vsBody}`,
+      fragmentShaderSource: `${fs.slice(0, fsAt)}in vec3 v_overlayRte;\n${OVERLAY_HORIZON}\n${fs
+        .slice(fsAt)
+        .replace(
+          main,
+          'void main()\n{\n    if (overlayPastHorizon(v_overlayRte)) discard;',
+        )}`,
+    };
+  }
+  return new Cesium.PolylineMaterialAppearance({
+    material,
+    ...overlayLineShaders,
+  });
+}
+
+/** The longest straight step of an overlay fill's edges and triangles, in
+ *  radians: a tenth of a degree, so a cell's edges follow the curve and
+ *  its triangles sag at most a few metres under the ellipsoid. */
+export const OVERLAY_GRANULARITY = Cesium.Math.RADIANS_PER_DEGREE / 10;
+
+/** The appearance overlay fills draw with: their colour, unlit, alpha
+ *  blended, no depth test or depth writes, culled at the horizon. */
+export const overlayFillAppearance = () =>
+  new Cesium.PerInstanceColorAppearance({
+    flat: true,
+    translucent: true,
+    vertexShaderSource: OVERLAY_FILL_VS,
+    fragmentShaderSource: OVERLAY_FILL_FS,
+    renderState: { depthTest: { enabled: false }, depthMask: false },
+  });
 
 /** Cesium's classification for what clamped lines and fills drape onto. */
 const classificationOf = (clampTo = 'both') =>
@@ -714,7 +914,7 @@ const animating = (record) => record.gpu?.animating();
 export function createCesiumDraw({
   scene,
   report,
-  capabilities = new Set(GPU_ICON_CAPABILITIES),
+  capabilities = new Set(gpuIconCapabilities(scene)),
   requestRender: requestFrame = null,
   date = null,
   now = () => performance.now(),
@@ -845,14 +1045,14 @@ export function createCesiumDraw({
       },
       upsert(list) {
         checkPulses(list);
+        // Icons drawn already, with the images they are drawn with, each
+        // changed where it is.
+        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         if (onGpu(record, list)) {
           for (const item of list) items.set(item.id, item);
           record.gpu.write(list);
           return patched();
         }
-        // Icons drawn already, with the images they are drawn with, each
-        // changed where it is.
-        if (patchDrawnIcons(record, list)) return iconsPatched(ICONS_KEPT);
         // Points restyled, moved or added keep the pick ids they had, so
         // only points added change what height queries see through.
         const points = patchPoints(record, list);
@@ -1135,6 +1335,7 @@ export function createCesiumDraw({
     toColor,
     imageOf: (record, image) => iconImage(record, image),
     peekImage: (image) => atlases.get(image.atlas)?.[image.slot],
+    viewsOf: (id) => viewSheets.get(id),
     requestRender: (reason) => {
       if (!live()) return;
       if (requestFrame) requestFrame(reason);
@@ -1151,10 +1352,16 @@ export function createCesiumDraw({
    */
   function onGpu(record, list, replacing = false, force = false) {
     if (record.kind !== 'icons') return false;
-    if (!record.gpu && !force && !gpu.wants(list, record.spec)) return false;
-    gpu.check(list, record.spec);
+    if (
+      !record.gpu &&
+      !force &&
+      !record.spec.recede &&
+      !list.some((item) => gpu.wants(item, item.image))
+    )
+      return false;
+    gpu.check(list, record.spec, record);
     if (record.gpu) return true;
-    if (!replacing) gpu.check(record.items.values(), record.spec);
+    if (!replacing) gpu.check(record.items.values(), record.spec, record);
     record.gpu = gpu.attach(record);
     record.billboards = null;
     record.billboardHost = null;
@@ -1362,8 +1569,10 @@ export function createCesiumDraw({
   }
 
   /**
-   * Draped lines drawn over the surface (where the scene cannot drape) show
-   * while any of their ends or middle is this side of the horizon.
+   * Lines drawn over the surface (draped ones where the scene cannot drape,
+   * overlays, overlay outlines) are left out of the frame while all their
+   * ends and middle are past the horizon; of one in view, the parts past the
+   * horizon are dropped fragment by fragment (`overlayLineAppearance`).
    */
   function cullOverlayLines() {
     let horizon;
@@ -1676,6 +1885,9 @@ export function createCesiumDraw({
   // when its icon is drawn, and registering an atlas again swaps the images
   // of the icons that drew from it.
   const atlases = new Map();
+  // Registered view sheets by id: image and checked layout. A new object on
+  // each registration lets sets notice the change.
+  const viewSheets = new Map();
   /** The blob each material or quad draws, held while it lives (`holdImage`). */
   const heldBlobs = new WeakMap();
 
@@ -2032,7 +2244,12 @@ export function createCesiumDraw({
         ok = false;
         break;
       }
-      const image = iconImage(record, list[i].image);
+      const ref = list[i].image;
+      if (gpu.wants(list[i], ref)) {
+        ok = false;
+        break;
+      }
+      const image = iconImage(record, ref);
       if (
         image === undefined ||
         imageKeyOf(image) !== entry.image ||
@@ -2929,6 +3146,12 @@ export function createCesiumDraw({
       : undefined;
     const age = ageOf(item, positions);
     const material = lineMaterial(record, item.style, reveal, age);
+    // A line drawn over the surface drops what is past the horizon, in both
+    // its looks (`overlayLineAppearance`).
+    const look = (m) =>
+      item.overlaid
+        ? overlayLineAppearance(m)
+        : new Cesium.PolylineMaterialAppearance({ material: m });
     const primitive = new Cesium.Primitive({
       geometryInstances: new Cesium.GeometryInstance({
         geometry: new Cesium.PolylineGeometry({
@@ -2944,11 +3167,9 @@ export function createCesiumDraw({
         }),
         id,
       }),
-      appearance: new Cesium.PolylineMaterialAppearance({ material }),
+      appearance: look(material),
       depthFailAppearance: item.depthFail
-        ? new Cesium.PolylineMaterialAppearance({
-            material: lineMaterial(record, item.depthFail, reveal, age),
-          })
+        ? look(lineMaterial(record, item.depthFail, reveal, age))
         : undefined,
       show: item.show !== false,
       asynchronous: false,
@@ -3343,6 +3564,16 @@ export function createCesiumDraw({
   const drapes = () => scene.frameState?.context?.depthTexture !== false;
 
   /**
+   * A line as drawn: a draped one clamped as an overlay, or any draped one
+   * where the scene cannot drape, is drawn over the surface (`overlayLine`).
+   */
+  const overlaidLine = (record, item) =>
+    item.mode === 'draped' &&
+    (!drapes() || (item.clampTo ?? record.spec.clampTo) === 'overlay')
+      ? overlayLine(item)
+      : item;
+
+  /**
    * A draped line as drawn where the scene cannot drape: undraped along its
    * positions, in its colour where the surface hides it (so it draws over
    * the surface), as one colour where it had segments of its own. One with
@@ -3487,14 +3718,14 @@ export function createCesiumDraw({
           'the Cesium renderer draws solid and dashed lines behind the surface only',
         );
 
-    // Where the scene cannot drape at all, draped lines draw over the
-    // surface instead (`overlay`): undraped, in their own colour where the
-    // surface hides them, and hidden past the horizon (`cullOverlayLines`).
-    const overlay = !drapes();
-    const items = overlay
-      ? [...record.items.values()].map(overlayLine)
-      : [...record.items.values()];
-    record.overlayLines = overlay ? [] : null;
+    // Draped lines clamped as an overlay, and every draped line where the
+    // scene cannot drape at all, draw over the surface instead (`overlay`):
+    // undraped, in their own colour where the surface hides them, and
+    // hidden past the horizon (`cullOverlayLines`).
+    const items = [...record.items.values()].map((item) =>
+      overlaidLine(record, item),
+    );
+    record.overlayLines = [];
     const polylines = new Cesium.PolylineCollection();
     // Lines in the inertial frame, turned with the sky each frame.
     let inertial = null;
@@ -3983,10 +4214,10 @@ export function createCesiumDraw({
   function patchLines(record, list) {
     const parts = record.lineParts;
     if (record.kind !== 'lines' || !parts) return false;
-    // Where the scene cannot drape, draped lines are patched as the lines
-    // drawn over the surface for them, each built anew alone where it
-    // changes (as any line with a depth-fail colour is).
-    if (record.overlayLines) list = list.map(overlayLine);
+    // Draped lines drawn over the surface (`overlaidLine`) are patched as
+    // those lines, each built anew alone where it changes (as any line with
+    // a depth-fail colour is).
+    list = list.map((item) => overlaidLine(record, item));
     // Each draped line's positions, flattened once for both passes.
     const flats = new Map();
     // Each item's look, in order: an item sent twice is changed twice.
@@ -4774,8 +5005,17 @@ export function createCesiumDraw({
    * ellipse with an image fill is cut finely, so a round image's edge runs
    * round.
    */
-  function groundGeometry(item, imageFill = false) {
+  function groundGeometry(item, imageFill = false, overlay = false) {
     const g = item.geometry;
+    // An overlay fill is drawn where it is built, on the ellipsoid, finely
+    // cut so it follows the curve; it carries positions alone.
+    const onEllipsoid = overlay
+      ? {
+          height: 0,
+          granularity: OVERLAY_GRANULARITY,
+          vertexFormat: Cesium.PerInstanceColorAppearance.FLAT_VERTEX_FORMAT,
+        }
+      : {};
     switch (g.kind) {
       case 'polygon': {
         const [outer, ...holes] = g.rings.map((ring) => ring.map(toCartesian));
@@ -4784,6 +5024,7 @@ export function createCesiumDraw({
             outer,
             holes.map((h) => new Cesium.PolygonHierarchy(h)),
           ),
+          ...onEllipsoid,
         });
       }
       case 'ellipse': {
@@ -4804,7 +5045,7 @@ export function createCesiumDraw({
                   Cesium.MaterialAppearance.MaterialSupport.TEXTURED
                     .vertexFormat,
               }
-            : {}),
+            : onEllipsoid),
         });
       }
       case 'rectangle':
@@ -4817,6 +5058,7 @@ export function createCesiumDraw({
           ),
           rotation: g.rotation ?? 0,
           stRotation: g.rotation ?? 0,
+          ...onEllipsoid,
         });
       default:
         throw new Error(`the Cesium renderer cannot clamp ${g.kind} shapes`);
@@ -4986,8 +5228,11 @@ export function createCesiumDraw({
    * ground batches are: a fill goes in the first batch it overlaps nothing
    * in, so overlapping translucent fills blend over each other.
    */
-  function groundFills(record, items) {
+  function groundFills(record, items, host) {
     const batches = [];
+    // Outlines of overlay shapes, drawn over the surface and hidden past
+    // the horizon as overlay lines are (`cullOverlayLines`).
+    record.overlayLines = [];
     // Each clamped item as drawn, for upserts that only show or hide it;
     // the set keeps them once every one is built.
     const parts = new Map();
@@ -5016,6 +5261,12 @@ export function createCesiumDraw({
       const imageFill = objectFill;
       if (imageFill && !imageFill.image)
         throw new Error('the Cesium renderer fills shapes with colours only');
+      const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      const overlay = clampTo === 'overlay';
+      if (imageFill && overlay)
+        throw new Error(
+          'the Cesium renderer fills overlay shapes with colours only',
+        );
       // Refused before anything is made, so nothing is left half built.
       const image = imageFill ? imageAt(imageFill.image) : null;
       // Hidden colour fills are built too, hidden, so showing them is a
@@ -5025,7 +5276,7 @@ export function createCesiumDraw({
       // load when they show.
       let geometry;
       try {
-        geometry = groundGeometry(item, Boolean(imageFill));
+        geometry = groundGeometry(item, Boolean(imageFill), overlay);
       } catch (error) {
         if (item.show === false) continue;
         throw error;
@@ -5053,7 +5304,18 @@ export function createCesiumDraw({
             },
         id: part.id,
       });
-      const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+      if (overlay) {
+        // Overlay fills blend over each other in one primitive: they are
+        // not draped, so they need no batches apart.
+        let batch = batches.find((b) => b.overlay);
+        if (!batch) {
+          batch = { clampTo, overlay: true, instances: [], parts: [] };
+          batches.push(batch);
+        }
+        batch.instances.push(instance);
+        batch.parts.push(part);
+        continue;
+      }
       if (imageFill) {
         // An image fill is a ground primitive of its own, with its material.
         // (Cesium turns its texture wrongly across the antimeridian: its
@@ -5092,6 +5354,15 @@ export function createCesiumDraw({
       ? Cesium.GroundPrimitive
       : UnpickableGroundPrimitive;
     const grounds = batches.map((batch) => {
+      if (batch.overlay) {
+        const fill = new Cesium.Primitive({
+          geometryInstances: batch.instances,
+          appearance: overlayFillAppearance(),
+          allowPicking: pickable,
+        });
+        for (const part of batch.parts) part.ground = fill;
+        return fill;
+      }
       const material = batch.imageFill
         ? holdImage(
             imageMaterial(batch.image, batch.imageFill.repeat),
@@ -5133,6 +5404,10 @@ export function createCesiumDraw({
       const part = parts.get(item.id);
       // Picked as its shape.
       part.id ??= pickId(record, item);
+      if ((item.clampTo ?? record.spec.clampTo) === 'overlay') {
+        part.outlineOverlay = overlayOutline(record, item, part, rings, host);
+        continue;
+      }
       // A pulsing outline's rings share one colour, its material's.
       const pulsing = Boolean(part.pulse);
       const outline = new Cesium.GroundPolylinePrimitive({
@@ -5173,6 +5448,49 @@ export function createCesiumDraw({
     }
     record.shapeParts = parts;
     return grounds;
+  }
+
+  /**
+   * An overlay shape's outline: each ring a line on the ellipsoid along the
+   * surface's curve, drawn in its colour where the surface hides it too (so
+   * over the tiles and terrain), and hidden past the horizon fragment by
+   * fragment (`overlayLineAppearance`), as a draped line is drawn where the scene
+   * cannot drape (`overlayLine`). Its primitives, drawn in `host`.
+   */
+  function overlayOutline(record, item, part, rings, host) {
+    const style = { kind: 'solid', color: item.outline };
+    const shown = item.show !== false;
+    const drawn = [];
+    for (const ring of rings) {
+      const positions = ring.map((p) =>
+        Cesium.Ellipsoid.WGS84.scaleToGeodeticSurface(
+          p,
+          new Cesium.Cartesian3(),
+        ),
+      );
+      const line = depthFailLine(
+        record,
+        {
+          positions,
+          widthPx: item.outlineWidth ?? 1,
+          mode: '3d',
+          overlaid: true,
+          style,
+          depthFail: style,
+          show: shown,
+        },
+        part.id,
+      );
+      if (!line) continue;
+      host.add(line);
+      drawn.push(line);
+      record.overlayLines.push({
+        part: { deep: line },
+        shown,
+        ends: overlayEnds(positions),
+      });
+    }
+    return drawn;
   }
 
   /**
@@ -5248,7 +5566,7 @@ export function createCesiumDraw({
         continue;
       }
       const was = parts?.get(item.id);
-      if (!was || was.outlineGround) return false;
+      if (!was || was.outlineGround || was.outlineOverlay) return false;
       if (was.ground?.isDestroyed() || was.batch?.isDestroyed()) return false;
       if (sameLook(was, item)) {
         moves.push(false);
@@ -5542,6 +5860,17 @@ export function createCesiumDraw({
                 ),
               );
           }
+          // An overlay outline pulses through its lines' materials.
+          for (const line of part.outlineOverlay ?? []) {
+            if (line.isDestroyed() || !part.look.outline) continue;
+            pulsing = true;
+            const colour = baseColour(part, part.look.outline).withAlpha(
+              pulseAlpha(part.pulse, now),
+            );
+            styleMaterial(line.appearance.material).uniforms.color = colour;
+            styleMaterial(line.depthFailAppearance.material).uniforms.color =
+              colour;
+          }
           // A clamped outline pulses through its material's colour.
           const outline = part.outlineGround;
           if (outline && !outline.isDestroyed() && part.look.outline) {
@@ -5611,8 +5940,10 @@ export function createCesiumDraw({
    */
   function moveShape(record, part, item) {
     const host = record.host;
+    const clampTo = item.clampTo ?? record.spec.clampTo ?? 'both';
+    const overlay = clampTo === 'overlay';
     // Built first: geometry it cannot build leaves the part as it was.
-    const geometry = groundGeometry(item);
+    const geometry = groundGeometry(item, false, overlay);
     if (part.solo) {
       if (part.ground && !part.ground.isDestroyed()) host.remove(part.ground);
     } else {
@@ -5631,28 +5962,36 @@ export function createCesiumDraw({
     part.pendingColour = undefined;
     part.id.meta = item.meta;
     const pickable = record.spec.pickable !== false;
-    const Ground = pickable
-      ? Cesium.GroundPrimitive
-      : UnpickableGroundPrimitive;
-    part.ground = new Ground({
-      geometryInstances: [
-        new Cesium.GeometryInstance({
-          geometry,
-          attributes: {
-            color: Cesium.ColorGeometryInstanceAttribute.fromColor(
-              toColor(item.fill),
-            ),
-            show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
-          },
-          id: part.id,
-        }),
-      ],
-      classificationType: classificationOf(
-        item.clampTo ?? record.spec.clampTo ?? 'both',
-      ),
-      allowPicking: pickable,
-      asynchronous: false,
-    });
+    const geometryInstances = [
+      new Cesium.GeometryInstance({
+        geometry,
+        attributes: {
+          color: Cesium.ColorGeometryInstanceAttribute.fromColor(
+            toColor(item.fill),
+          ),
+          show: new Cesium.ShowGeometryInstanceAttribute(item.show !== false),
+        },
+        id: part.id,
+      }),
+    ];
+    if (overlay)
+      part.ground = new Cesium.Primitive({
+        geometryInstances,
+        appearance: overlayFillAppearance(),
+        allowPicking: pickable,
+        asynchronous: false,
+      });
+    else {
+      const Ground = pickable
+        ? Cesium.GroundPrimitive
+        : UnpickableGroundPrimitive;
+      part.ground = new Ground({
+        geometryInstances,
+        classificationType: classificationOf(clampTo),
+        allowPicking: pickable,
+        asynchronous: false,
+      });
+    }
     host.add(part.ground);
   }
 
@@ -5895,7 +6234,7 @@ export function createCesiumDraw({
           );
     }
     host.add(outlines);
-    const ground = groundFills(record, clamped);
+    const ground = groundFills(record, clamped, host);
     record.solidParts = solids;
     if (!ground.length) return replaceHost(record, host);
     replaceHost(
@@ -6030,6 +6369,29 @@ export function createCesiumDraw({
         }
       if (changed) scene.requestRender();
     },
+    ...(capabilities.has('viewSheets')
+      ? {
+          views(id, sheet) {
+            const layout = viewLayout(sheet);
+            if (viewSheets.has(id)) {
+              for (const record of sets.values()) {
+                if (record.kind !== 'icons') continue;
+                for (const item of record.items.values())
+                  if (
+                    isViewRef(item.image) &&
+                    item.image.views === id &&
+                    !blockFits(item.image.first, layout)
+                  )
+                    throw new RangeError(
+                      `a live view's frames run past the new layout of sheet '${id}'`,
+                    );
+              }
+            }
+            viewSheets.set(id, Object.freeze({ image: sheet.image, layout }));
+            scene.requestRender();
+          },
+        }
+      : {}),
   };
 
   return {
@@ -6154,7 +6516,11 @@ provideUnboundDraw((viewer) => {
   const part = createCesiumDraw({
     scene,
     report: uncaught,
-    capabilities: new Set([...GPU_ICON_CAPABILITIES, 'fields', 'modelParts']),
+    capabilities: new Set([
+      ...gpuIconCapabilities(scene),
+      'fields',
+      'modelParts',
+    ]),
   });
   unboundParts.set(part.port, part);
   const offs = [

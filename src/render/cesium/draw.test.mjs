@@ -7,6 +7,8 @@ import {
   FEW_LOOSE_LINES,
   LONG_SETTLE_MS,
   MOVING_SHAPES,
+  OVERLAY_GRANULARITY,
+  overlayInView,
   revealUniform,
   SETTLE_MS,
   unboundDrawPart,
@@ -1395,25 +1397,27 @@ test('the world annotation renderer draws, fades, hides and lets go of every kin
   );
 });
 
-test('the air quality layer draws its stations as ground fills on a viewer of its own', async () => {
+test('the air quality layer draws its stations as ground dots on a viewer of its own', async () => {
   const { createAirQualityLayer } =
     await import('../../layers/airQuality/index.js');
   const scene = fakeScene();
   const viewer = { scene };
+  /** A PM2.5 concentration at a station; the layer computes its US AQI. */
   const reading = (id, lon) => ({
-    id,
-    provider: 'eccc',
-    scale: 'AQHI',
-    value: 3,
-    band: 'low',
+    id: `regional:${id}:PM2.5`,
+    provider: 'regional',
+    stationId: id,
     name: id,
     lat: 45,
     lon,
-    observedMs: 0,
-    color: '#4cc9f0',
-    label: '3',
-    risk: 'Low health risk',
-    note: null,
+    parameter: 'PM2.5',
+    scale: 'PM2.5',
+    units: 'µg/m³',
+    value: 12,
+    kind: 'observation',
+    averagingMinutes: 60,
+    // Recent: a reading older than six hours is not drawn.
+    observedMs: Date.now() - 10 * 60_000,
   });
   const layer = createAirQualityLayer({
     source: { getSnapshot: async () => [reading('a', -75), reading('b', -60)] },
@@ -1422,18 +1426,23 @@ test('the air quality layer draws its stations as ground fills on a viewer of it
   layer.init(viewer);
   layer.enable(viewer);
   assert.equal(await layer.update(viewer), true);
-  const host = scene.added[0];
-  const grounds = [];
-  for (let i = 0; i < host.length; i++)
-    if (host.get(i) instanceof Cesium.GroundPrimitive)
-      grounds.push(host.get(i));
-  const instances = grounds.flatMap((ground) => ground.geometryInstances);
-  assert.deepEqual(instances.map((instance) => instance.id.id).sort(), [
-    'air-quality:a',
-    'air-quality:b',
+  const dots = [];
+  const collect = (primitive) => {
+    if (primitive instanceof Cesium.BillboardCollection)
+      for (let i = 0; i < primitive.length; i++) dots.push(primitive.get(i));
+    else if (typeof primitive?.get === 'function' && primitive.length)
+      for (let i = 0; i < primitive.length; i++) collect(primitive.get(i));
+  };
+  for (const primitive of scene.added) collect(primitive);
+  assert.deepEqual(dots.map((dot) => dot.id.id).sort(), [
+    'air-quality:regional:a:aqi',
+    'air-quality:regional:b:aqi',
   ]);
-  assert.ok(instances[0].geometry instanceof Cesium.EllipseGeometry);
-  assert.equal(grounds[0].classificationType, Cesium.ClassificationType.BOTH);
+  assert.ok(
+    dots.every(
+      (dot) => dot.heightReference === Cesium.HeightReference.CLAMP_TO_GROUND,
+    ),
+  );
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
@@ -2353,7 +2362,7 @@ test('the fire perimeters layer draws holed ground fills and draped outlines on 
   assert.equal(scene.added.length, 0);
 });
 
-test('the GNSS layer draws its cells as ground fills that stay out of the pick pass', async (t) => {
+test('the GNSS layer draws its cells as an overlay over the 3D tiles, out of the pick pass', async () => {
   const { createGnssIntegrityLayer } =
     await import('../../layers/gnss/index.js');
   const scene = fakeScene();
@@ -2380,27 +2389,35 @@ test('the GNSS layer draws its cells as ground fills that stay out of the pick p
   layer.enable();
   assert.equal(await layer.update(), true);
   const host = scene.added[0];
-  const grounds = [];
-  for (let i = 0; i < host.length; i++)
-    if (host.get(i) instanceof Cesium.GroundPrimitive)
-      grounds.push(host.get(i));
-  assert.equal(grounds.length, 1);
-  const [fill] = grounds;
+  const kids = [];
+  for (let i = 0; i < host.length; i++) kids.push(host.get(i));
+  // Never draped: a ground primitive classifies the 3D tiles, and a cell
+  // hundreds of kilometres wide streaks through them.
+  assert.equal(
+    kids.filter((p) => p instanceof Cesium.GroundPrimitive).length,
+    0,
+  );
+  const fills = kids.filter(
+    (p) => p instanceof Cesium.Primitive && p.geometryInstances?.length,
+  );
+  assert.equal(fills.length, 1, 'one overlay primitive for every cell');
+  const [fill] = fills;
   assert.equal(fill.allowPicking, false);
-  assert.equal(fill.classificationType, Cesium.ClassificationType.BOTH);
+  const { renderState } = fill.appearance;
+  assert.equal(renderState.depthTest.enabled, false, 'over the tiles');
+  assert.equal(renderState.depthMask, false);
+  assert.ok(fill.appearance.translucent, 'drawn after the opaque tiles');
+  assert.match(
+    fill.appearance.fragmentShaderSource,
+    /czm_ellipsoidInverseRadii[\s\S]*discard/,
+    'hidden past the horizon by the ellipsoid alone',
+  );
   const [instance] = fill.geometryInstances;
-  // An H3 hexagon, drawn as a polygon.
+  // An H3 hexagon, drawn as a polygon on the ellipsoid, finely cut.
   assert.ok(instance.geometry instanceof Cesium.PolygonGeometry);
+  assert.equal(instance.geometry._height, 0);
+  assert.equal(instance.geometry._granularity, OVERLAY_GRANULARITY);
   assert.equal(instance.id.id, 'gnss-integrity:841e631ffffffff');
-  // A ground primitive draws its stencil in the pick pass even unpickable,
-  // erasing picks of ground geometry under it; these skip that pass.
-  let updates = 0;
-  t.mock.method(Cesium.GroundPrimitive.prototype, 'update', () => updates++);
-  fill.update({ passes: { pick: true } });
-  assert.equal(updates, 0);
-  fill.update({ passes: { render: true, pick: false } });
-  assert.equal(updates, 1);
-  t.mock.restoreAll();
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
@@ -5913,6 +5930,371 @@ test('where the scene cannot drape, draped lines draw over the surface and hide 
     assert.equal(scene.added.length, 0);
   }));
 
+test('a draped line clamped as an overlay draws over the surface and hides past the horizon, where the scene drapes', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    assert.equal(draw.clampState(), 'draped');
+    const set = draw.lines({ id: 'over', clampTo: 'overlay' });
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    set.set([
+      {
+        id: 'edge',
+        positions: [at(0), at(0.01)],
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: [0, 1, 0, 1] },
+      },
+      // One of its own clamped to the tiles still drapes.
+      {
+        id: 'draped',
+        positions: [at(0), at(0.01)],
+        widthPx: 2,
+        mode: 'draped',
+        clampTo: 'tiles',
+        style: { kind: 'solid', color: [0, 0, 1, 1] },
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    const grounds = all.filter(
+      (p) => p instanceof Cesium.GroundPolylinePrimitive,
+    );
+    assert.equal(grounds.length, 1, 'only the line clamped to the tiles');
+    assert.equal(
+      grounds[0].classificationType,
+      Cesium.ClassificationType.CESIUM_3D_TILE,
+    );
+    const line = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(line, 'drawn where the surface hides it too');
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    assert.equal(line.show, true);
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(line.show, false, 'past the horizon');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('an overlay shape draws its fill on the ellipsoid over everything, and its outline over the surface culled at the horizon', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    const set = draw.shapes({ id: 'cells', clampTo: 'overlay' });
+    const ring = [
+      { lon: 0, lat: 0 },
+      { lon: 2, lat: 0 },
+      { lon: 2, lat: 2 },
+      { lon: 0, lat: 2 },
+    ];
+    set.set([
+      {
+        id: 'cell',
+        geometry: { kind: 'polygon', rings: [ring] },
+        fill: [1, 0, 0, 0.5],
+        outline: '#ffffff',
+        outlineWidth: 2,
+        height: 'clampGround',
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    assert.ok(
+      !all.some(
+        (p) =>
+          p instanceof Cesium.GroundPrimitive ||
+          p instanceof Cesium.GroundPolylinePrimitive,
+      ),
+      'nothing drapes onto the tiles',
+    );
+    const fill = all.find(
+      (p) =>
+        p instanceof Cesium.Primitive &&
+        p.appearance instanceof Cesium.PerInstanceColorAppearance,
+    );
+    assert.ok(fill, 'the fill');
+    assert.equal(fill.appearance.renderState.depthTest.enabled, false);
+    assert.equal(fill.geometryInstances[0].geometry._height, 0);
+    const outline = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    assert.ok(outline, 'the outline, drawn where the surface hides it too');
+    // Both its looks drop what is past the horizon, fragment by fragment: a
+    // ring crossing the limb shows only its near part.
+    for (const look of [outline.appearance, outline.depthFailAppearance])
+      assert.match(
+        look.fragmentShaderSource,
+        /overlayPastHorizon\(v_overlayRte\)\) discard/,
+      );
+    assert.match(
+      outline.appearance.vertexShaderSource,
+      /v_overlayRte = mat3\(czm_inverseView\) \* clippedEC\.xyz/,
+    );
+    // On the ellipsoid, along the surface's curve.
+    const [first] = outline.geometryInstances.geometry._positions;
+    assert.ok(Math.abs(Cesium.Cartographic.fromCartesian(first).height) < 1e-3);
+    scene.camera.positionWC = new Cesium.Cartesian3(2e7, 0, 0);
+    frame();
+    assert.equal(outline.show, true);
+    scene.camera.positionWC = new Cesium.Cartesian3(-2e7, 0, 0);
+    frame();
+    assert.equal(outline.show, false, 'past the horizon');
+    set.dispose();
+    assert.equal(scene.added.length, 0);
+  }));
+
+test('an overlay line crossing the horizon keeps its near part and drops its far part', () =>
+  withImageClasses(() => {
+    const scene = fakeScene();
+    const { draw, frame } = drawOver(scene);
+    const set = draw.lines({ id: 'over', clampTo: 'overlay' });
+    // Along the equator, from under the eye to the far side of the Earth.
+    const at = (lon) => Cesium.Cartesian3.fromDegrees(lon, 0, 0);
+    set.set([
+      {
+        id: 'across',
+        positions: [at(0), at(60), at(120), at(170)],
+        widthPx: 2,
+        mode: 'draped',
+        style: { kind: 'solid', color: [0, 1, 0, 1] },
+      },
+    ]);
+    const all = [];
+    const walk = (p) => {
+      all.push(p);
+      if (typeof p?.get === 'function' && Number.isFinite(p.length))
+        for (let i = 0; i < p.length; i++) walk(p.get(i));
+    };
+    walk(scene.added[0]);
+    const line = all.find(
+      (p) => p instanceof Cesium.Primitive && p.depthFailAppearance,
+    );
+    // Its near end is in view, so the line is in the frame...
+    const eye = Cesium.Cartesian3.fromDegrees(0, 0, 5e6);
+    scene.camera.positionWC = eye;
+    frame();
+    assert.equal(line.show, true);
+    // ...and its colour where the surface hides it, which would draw it
+    // through the Earth, drops the far part fragment by fragment.
+    for (const look of [line.appearance, line.depthFailAppearance]) {
+      assert.match(
+        look.fragmentShaderSource,
+        /overlayPastHorizon\(v_overlayRte\)\) discard/,
+      );
+      // Each corner hands on its segment's end as Cesium draws it: cut at
+      // the near plane, turned back from the eye's frame.
+      assert.match(
+        look.vertexShaderSource,
+        /getPolylineWindowCoordinates\(p, prev, next, expandDir, width, usePrev, angle\);\s*\{[^}]*clipLineSegmentToNearPlane\(fromEC\.xyz, toEC\.xyz, clippedWC, clipped, culled, clippedEC\);\s*v_overlayRte = mat3\(czm_inverseView\) \* clippedEC\.xyz;/,
+      );
+    }
+    // The test the shader makes: from 5,000 km up over 0°, the horizon is
+    // about 56° away.
+    for (const [lon, seen] of [
+      [0, true],
+      [30, true],
+      [50, true],
+      [60, false],
+      [120, false],
+      [170, false],
+    ])
+      assert.equal(overlayInView(at(lon), eye), seen, `${lon}°`);
+    set.dispose();
+  }));
+
+test('an overlay is tested at the surface over it: a flat triangle sagging under the ellipsoid stays in view from just above', () => {
+  // The middle of the chord between two points 0.4° apart sags about 39 m
+  // under the ellipsoid; seen from 1 m over the surface point above it.
+  const a = Cesium.Cartesian3.fromDegrees(-0.2, 0, 0);
+  const b = Cesium.Cartesian3.fromDegrees(0.2, 0, 0);
+  const middle = Cesium.Cartesian3.midpoint(a, b, new Cesium.Cartesian3());
+  const under = Cesium.Cartographic.fromCartesian(middle);
+  assert.ok(under.height < -30, 'under the ellipsoid');
+  const eye = Cesium.Cartesian3.fromRadians(under.longitude, under.latitude, 1);
+  assert.equal(overlayInView(middle, eye), true);
+  // Not so a point truly past the horizon of that eye (about 3.6 km).
+  assert.equal(
+    overlayInView(Cesium.Cartesian3.fromDegrees(0.2, 0, 0), eye),
+    false,
+  );
+});
+
+test('an overlay is tested in float32 as the GPU tests it: a fragment a few kilometres from an eye a metre up stays', () => {
+  const R = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const eye = Cesium.Cartesian3.fromDegrees(0, 0, 1);
+  // A fill's fragment 2 m under the ellipsoid, 2.8 km away: in view, the
+  // horizon being about 3.57 km off. Rebuilding the point and taking
+  // |p| - 1 in float32 loses it.
+  const near = Cesium.Cartesian3.fromRadians(2800 / R, 0, -2);
+  assert.equal(overlayInView(near, eye), true);
+  assert.equal(overlayInView(near, eye, { float32: true }), true);
+  const f = Math.fround;
+  const inverse = Cesium.Ellipsoid.WGS84.oneOverRadii;
+  const v = ['x', 'y', 'z'].map((c) => f(f(near[c] - eye[c]) * f(inverse[c])));
+  const p = ['x', 'y', 'z'].map((c, i) =>
+    f(f(f(eye[c]) * f(inverse[c])) + v[i]),
+  );
+  const dot = (x, y) => f(f(f(x[0] * y[0]) + f(x[1] * y[1])) + f(x[2] * y[2]));
+  const r = f(Math.sqrt(dot(p, p)));
+  const along = dot(
+    p.map((c) => f(c / r)),
+    v,
+  );
+  assert.ok(along > f(r - 1), 'the old form drops it in float32');
+  // Past the horizon, it goes all the same.
+  const far = Cesium.Cartesian3.fromRadians(4000 / R, 0, -2);
+  assert.equal(overlayInView(far, eye, { float32: true }), false);
+  // From the ground to geostationary height, float32 agrees with doubles a
+  // tenth inside and outside the horizon.
+  for (const [lat, height] of [
+    [0, 1],
+    [45, 10],
+    [-60, 300],
+    [30, 10_000],
+    [70, 500_000],
+    [0, 36_000_000],
+  ]) {
+    const at = Cesium.Cartesian3.fromDegrees(10, lat, height);
+    const horizon = Math.acos(R / (R + height));
+    for (const [scale, seen] of [
+      [0.9, true],
+      [1.1, false],
+    ]) {
+      const point = Cesium.Cartesian3.fromRadians(
+        Cesium.Math.toRadians(10) +
+          (scale * horizon) / Math.cos(Cesium.Math.toRadians(lat)),
+        Cesium.Math.toRadians(lat),
+        0,
+      );
+      for (const float32 of [false, true])
+        assert.equal(
+          overlayInView(point, at, { float32 }),
+          seen,
+          `${height} m at ${lat}°, ${scale} of the horizon, float32 ${float32}`,
+        );
+    }
+  }
+});
+
+test('an overlay is shown from an eye under the ellipsoid, as from one a metre up', () => {
+  // Low ground where the geoid is under the ellipsoid: an eye 50 m below it.
+  const eye = Cesium.Cartesian3.fromDegrees(80, 8, -50);
+  const R = Cesium.Ellipsoid.WGS84.maximumRadius;
+  const cell = Cesium.Cartesian3.fromRadians(
+    Cesium.Math.toRadians(80) + 500 / (R * Math.cos(Cesium.Math.toRadians(8))),
+    Cesium.Math.toRadians(8),
+    0,
+  );
+  for (const float32 of [false, true])
+    assert.equal(
+      overlayInView(cell, eye, { float32 }),
+      true,
+      `float32 ${float32}`,
+    );
+  // Past a metre-high eye's horizon, it still goes.
+  const far = Cesium.Cartesian3.fromDegrees(80, 8 + 0.5, 0);
+  for (const float32 of [false, true])
+    assert.equal(
+      overlayInView(far, eye, { float32 }),
+      false,
+      `float32 ${float32}`,
+    );
+});
+
+test('an overlay is hidden at the true horizon from any height: within metres in float32, either side of the 100 km switch', () => {
+  const ellipsoid = Cesium.Ellipsoid.WGS84;
+  const inverse = ellipsoid.oneOverRadii;
+  const at = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  // The surface point P is in view while the eye is on its side of the plane
+  // tangent there: dot(P, eye) >= 1 in the ellipsoid's unit sphere.
+  const truly = (point, eye) =>
+    Cesium.Cartesian3.dot(
+      Cesium.Cartesian3.multiplyComponents(
+        point,
+        inverse,
+        new Cesium.Cartesian3(),
+      ),
+      Cesium.Cartesian3.multiplyComponents(
+        eye,
+        inverse,
+        new Cesium.Cartesian3(),
+      ),
+    ) >= 1;
+  // From geostationary height over 45°N, a point about 808 m past the
+  // horizon was kept when k came from the eye's height.
+  const geo = Cesium.Cartesian3.fromDegrees(0, 45, 35_786_000);
+  assert.equal(truly(at(134.1995, 45), geo), false);
+  for (const float32 of [false, true])
+    assert.equal(overlayInView(at(134.1995, 45), geo, { float32 }), false);
+  // Where the horizon falls along the eye's parallel, by halving.
+  const edge = (inView, eye) => {
+    let near = 0;
+    let far = 179.9;
+    for (let i = 0; i < 80; i++) {
+      const middle = (near + far) / 2;
+      if (inView(at(middle, eye.lat), eye.at)) near = middle;
+      else far = middle;
+    }
+    return near;
+  };
+  for (const lat of [0, 45, 70])
+    for (const height of [
+      1, 1000, 50_000, 99_000, 100_000, 101_000, 1e6, 35_786_000,
+    ]) {
+      const eye = { lat, at: Cesium.Cartesian3.fromDegrees(0, lat, height) };
+      const horizon = edge(truly, eye);
+      const metresPerDegree =
+        Cesium.Cartesian3.distance(at(horizon, lat), at(horizon + 1e-3, lat)) /
+        1e-3;
+      for (const [float32, within] of [
+        [false, 1],
+        [true, 10],
+      ]) {
+        const off =
+          (edge((p, e) => overlayInView(p, e, { float32 }), eye) - horizon) *
+          metresPerDegree;
+        assert.ok(
+          Math.abs(off) < within,
+          `${height} m over ${lat}°, float32 ${float32}: ${off.toFixed(2)} m off`,
+        );
+      }
+    }
+});
+
+test('an overlay shape refuses an image fill', () =>
+  withImageClasses(() => {
+    const { draw } = drawOver();
+    const set = draw.shapes({ id: 'cells', clampTo: 'overlay' });
+    assert.throws(
+      () =>
+        set.set([
+          {
+            id: 'pic',
+            geometry: {
+              kind: 'rectangle',
+              rect: { west: 0, south: 0, east: 1, north: 1 },
+            },
+            fill: { image: 'data:image/png;base64,AA==' },
+            height: 'clampGround',
+          },
+        ]),
+      /overlay shapes with colours only/,
+    );
+  }));
+
 test('where the scene cannot drape, an overlay line is culled by its whole arc, and patched by what its positions hold', () =>
   withImageClasses(() => {
     const scene = fakeScene();
@@ -8882,4 +9264,38 @@ test('a disposed set, and every set once the port is disposed, does nothing on l
   } finally {
     restore();
   }
+});
+
+test('a draw port registers view sheets only with viewSheets, each port its own', async () => {
+  const { PORTS } = await import('../contract/index.js');
+  const { AIRCRAFT_VIEWS } = await import('../../data/aircraftViews.js');
+  assert.equal(PORTS.draw.views, 'viewSheets', 'an optional port method');
+  const report = (error) => assert.fail(error);
+  const without = createCesiumDraw({
+    scene: fakeScene(),
+    report,
+    capabilities: new Set(['motionSegments']),
+  });
+  assert.equal(typeof without.port.views, 'undefined');
+  // Two viewers: a sheet registered on one is not drawn by the other.
+  const one = createCesiumDraw({ scene: fakeScene(), report });
+  const two = createCesiumDraw({ scene: fakeScene(), report });
+  assert.equal(typeof one.port.views, 'function');
+  const view = {
+    id: 'a',
+    pos: { ...Cesium.Cartesian3.fromDegrees(4, 52, 1000) },
+    image: { views: AIRCRAFT_VIEWS.id, first: AIRCRAFT_VIEWS.subjects.uav },
+    size: [20, 20],
+    rotationMode: 'course',
+    course: 0,
+  };
+  const setOne = one.port.icons({ id: 'views:one' });
+  const setTwo = two.port.icons({ id: 'views:two' });
+  one.port.views(AIRCRAFT_VIEWS.id, AIRCRAFT_VIEWS.sheet);
+  setOne.set([view]);
+  assert.throws(() => setTwo.set([view]), /call views\(\) first/);
+  const rowsOne = one.sets.get('views:one').gpu.set;
+  assert.equal(rowsOne.imageFar(rowsOne.row('a')), AIRCRAFT_VIEWS.subjects.uav);
+  setOne.dispose();
+  setTwo.dispose();
 });

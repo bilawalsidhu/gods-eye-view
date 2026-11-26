@@ -371,8 +371,10 @@ export class LocalAdsbMotion {
   /**
    * Where to draw the aircraft now.
    * @param {number} nowMs Current epoch ms.
-   * @param {{slew?: boolean}} [options] `slew: false` reads without advancing
-   *   the rate-limited course.
+   * @param {{slew?: boolean}} [options] `slew: false` only reads: it
+   *   neither advances the rate-limited course nor ends the blend of a new
+   *   fix, so a read ahead of now (where the aircraft will be) leaves the
+   *   display as it was.
    * @returns {{lat:number, lon:number, altitudeFt:number|null,
    *   courseDeg:number|null}|null}
    */
@@ -382,8 +384,9 @@ export class LocalAdsbMotion {
     const correction = this.correction;
     if (correction) {
       const weight = 1 - (nowMs - correction.startAt) / DR_CORRECTION_MS;
-      if (weight <= 0) this.correction = null;
-      else {
+      if (weight <= 0) {
+        if (slew) this.correction = null;
+      } else {
         const w = Math.min(1, weight);
         raw.lat += (correction.north * w) / EARTH_RADIUS_M / DEG;
         raw.lon +=

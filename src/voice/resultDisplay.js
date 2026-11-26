@@ -378,6 +378,16 @@ const NOTE_PATTERNS = [
       }),
   ],
   [
+    // The layer card's line, for a network still discovering its stations.
+    /^(.+): loading stations, ([\d,]+) of ([\d,]+)$/,
+    ([, network, n, m]) =>
+      t('{network}: loading stations, {n} of {m}', {
+        network,
+        n: formatNumber(countOf(n)),
+        m: formatNumber(countOf(m)),
+      }),
+  ],
+  [
     /^(.+) just turned on — still loading, counts will rise$/,
     ([, layers]) =>
       t('{layers} just turned on — still loading, counts will rise', {

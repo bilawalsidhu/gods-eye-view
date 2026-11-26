@@ -1,5 +1,8 @@
 import { t } from '../../i18n/index.js';
-import { RAIL_CATEGORIES } from '../../data/railFeeds.js';
+import {
+  RAIL_CATEGORIES,
+  getRegisteredRailFeed,
+} from '../../data/railFeeds.js';
 import { aggregateTransitFeedHealth } from '../transit/policy.js';
 import {
   ACTIVATION_ALTITUDE_M,
@@ -7,6 +10,7 @@ import {
   RAIL_CATEGORY_COLORS,
   RAIL_CATEGORY_LABELS,
   normalizeRailCategories,
+  trainReportTimeMs,
 } from './policy.js';
 
 /**
@@ -133,14 +137,57 @@ export function createControls({ state, parts, timetable }) {
       }));
       return { chips, legend };
     },
-    /** Route-line, stop, schedule and camera-follow state, for QA probes. */
+    /** Route-line, stop and schedule state, for QA probes. */
     getRouteDisplayStats() {
       return {
         ...parts.routes.stats(),
         timetable: timetable.stats(),
-        follow: parts.follow.stats(),
         heldFeed: state._heldFeedId,
       };
+    },
+    /**
+     * The trains the layer holds, as plain records for the analyst and the
+     * Context panel: one per train the map counts (a shown category, not
+     * another feed's copy). Its position is where the operator last reported
+     * it, not the playback point the icon glides along. [] while off.
+     * @param {number} [maxCount]
+     * @returns {Array<object>}
+     */
+    getAnalystRecords(maxCount = Infinity) {
+      if (!state._enabled) return [];
+      const num = (value) => (Number.isFinite(value) ? value : null);
+      const word = (value) =>
+        typeof value === 'string' && value.trim() ? value.trim() : null;
+      const result = [];
+      for (const entry of state._trains.values()) {
+        if (result.length >= maxCount) break;
+        if (!parts.rendering.categoryShown(entry)) continue;
+        const record = entry.record || {};
+        if (!Number.isFinite(record.lat) || !Number.isFinite(record.lon))
+          continue;
+        const feed =
+          state._activeFeeds.get(entry.feedId) ||
+          getRegisteredRailFeed(entry.feedId) ||
+          null;
+        result.push({
+          // The layer's own key: a train number repeats across operators.
+          id: entry.key,
+          name: word(record.label) || word(record.id) || null,
+          route: word(record.routeId),
+          headsign: word(record.headsign),
+          category: entry.category || null,
+          mode: entry.railMode || null,
+          lat: record.lat,
+          lon: record.lon,
+          speedMps: num(record.speedMps),
+          courseDeg: num(entry.courseDeg ?? record.bearing),
+          operator: feed?.name || null,
+          region: feed?.region || null,
+          positionSource: word(record.positionSource),
+          observedMs: trainReportTimeMs(record, entry.fetchedAt),
+        });
+      }
+      return result;
     },
     getStats() {
       const active = [...state._activeFeeds.values()];

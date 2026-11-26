@@ -1,5 +1,14 @@
 import { cameraOf } from '../../render/rendererOf.js';
-import { entityFollowTarget, stopFollowing } from '../../data/followed.js';
+import {
+  entityFollowTarget,
+  followedOf,
+  stopFollowing,
+} from '../../data/followed.js';
+import {
+  centerOnClick,
+  claimSelection,
+  releaseSelection,
+} from '../../data/clickSelect.js';
 import { satelliteClassText } from '../../data/satelliteClass.js';
 import { fromDegrees, fromDegreesInto } from '../../geo/ellipsoid.js';
 import { clone, distance, scale } from '../../geo/vector.js';
@@ -137,6 +146,50 @@ export function createTracking({ state: layerState, services, parts, source }) {
       id: clearedNorad,
       origin,
     });
+    releaseSelection('satellites', clearedNorad);
+  }
+
+  /** Have the camera follow the tracked satellite (an explicit follow). */
+  function _followTracked() {
+    if (!layerState._followTarget || !layerState._viewer) return false;
+    const camera = cameraOf(layerState._viewer);
+    camera.cancelFlight();
+    camera.follow(layerState._followTarget);
+    return true;
+  }
+
+  /** Whether the camera follows the tracked satellite now. */
+  function _trackedIsFollowed() {
+    return (
+      Boolean(layerState._followTarget) &&
+      followedOf(layerState._viewer) === layerState._followTarget
+    );
+  }
+
+  /**
+   * Centre the tracked satellite once, as a click does: the camera keeps its
+   * distance and angle and meets the satellite where its orbit has it on
+   * arrival.
+   */
+  function _centerTracked() {
+    const noradId = layerState._trackedNorad;
+    const sat = noradId ? layerState._catalog.get(noradId) : null;
+    if (!sat) return false;
+    return centerOnClick(
+      layerState._viewer,
+      (aheadMs) => {
+        const p = sat.satrec
+          ? parts.orbits.propagatePosition(
+              sat.satrec,
+              new Date(layerState.now() + aheadMs),
+            )
+          : null;
+        return p
+          ? fromDegrees(p.longitude, p.latitude, p.altitude)
+          : parts.rendering._pointPosition(noradId);
+      },
+      { clockId: 'satellites' },
+    );
   }
 
   /**
@@ -451,7 +504,20 @@ export function createTracking({ state: layerState, services, parts, source }) {
     return null;
   }
 
-  function _trackSatellite(noradId, { origin = 'programmatic' } = {}) {
+  /**
+   * Select a satellite: its tracked dot, orbit ring and card.
+   * @param {number} noradId
+   * @param {{origin?: string, follow?: boolean, center?: boolean}} [options] `follow: false`
+   *   (a click on it) centres it once, keeping the camera's distance and
+   *   angle, and follows nothing (src/data/clickSelect.js); anything else
+   *   (Follow, voice, a share link) follows it.
+   *   `center: false` (a pick from a list, which the caller frames)
+   *   selects it without moving the camera.
+   */
+  function _trackSatellite(
+    noradId,
+    { origin = 'programmatic', follow = true, center = true } = {},
+  ) {
     _clearTracking(false, { origin });
 
     const sat = layerState._catalog.get(noradId);
@@ -531,15 +597,22 @@ export function createTracking({ state: layerState, services, parts, source }) {
     selectTrackedSubjectContext(_contextSubjectMetadata(noradId, initialPos));
     layerState._contextRefreshedAtMs = Date.now();
 
-    // The renderer's own frame for a fast mover (autodetect), as the tracked
-    // entity had; no close-range rules at orbital distances. The carrier is
-    // what the tracked card reads (its entity record).
+    // What the camera follows when asked to: the renderer's own frame for a
+    // fast mover (autodetect), as the tracked entity had; no close-range
+    // rules at orbital distances. The carrier is what the tracked card reads
+    // (its entity record).
     layerState._followTarget = entityFollowTarget(layerState._trackedEntity, {
       position: trackedPosition,
       frame: 'autodetect',
       viewFrom,
     });
-    cameraOf(layerState._viewer).follow(layerState._followTarget);
+    // The one selection: any other layer's selected thing lets go.
+    claimSelection('satellites', noradId, {
+      subject: layerState._followTarget,
+      origin,
+    });
+    if (follow) _followTracked();
+    else if (center) _centerTracked();
     console.log(`[Data:Satellites] Tracking ${name} (NORAD ${noradId})`);
   }
   return {
@@ -555,5 +628,8 @@ export function createTracking({ state: layerState, services, parts, source }) {
     _refreshTrackedSubjectContext,
     _updateTrackedSatelliteLabelModel,
     _trackSatellite,
+    _followTracked,
+    _trackedIsFollowed,
+    _centerTracked,
   };
 }

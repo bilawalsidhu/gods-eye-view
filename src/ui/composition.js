@@ -65,12 +65,18 @@ import {
 } from '../scopeMask.js';
 import {
   fetchRegionalBrief,
+  fetchSpotWeather,
   regionalDistanceM,
   weatherCodeLabel,
 } from '../data/regionalBrief.js';
 
 export class StyleManager extends ApplicationShell {
   constructor(viewer, options = {}) {
+    const weather = options.requestServices?.weather;
+    // When a host replaces the brief, its view centre should only reach a
+    // weather service that the host explicitly supplied.
+    const hasRegionalOverride =
+      typeof options.services?.fetchRegionalBrief === 'function';
     super(viewer, {
       ...options,
       services: {
@@ -125,6 +131,9 @@ export class StyleManager extends ApplicationShell {
         regionalDistanceM,
         weatherCodeLabel,
         LocationSearch,
+        fetchSpotWeather:
+          weather?.getConditions?.bind(weather) ??
+          (hasRegionalOverride ? undefined : fetchSpotWeather),
         ...options.services,
       },
     });

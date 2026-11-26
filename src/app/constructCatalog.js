@@ -146,7 +146,11 @@ export function createApplicationCatalog({
           ...(resolveAsset ? { resolveAsset } : {}),
         }),
         createApplicationEarthquakes({ source: sources.earthquakes }),
-        createApplicationAirQuality({ source: sources['air-quality'] }),
+        createApplicationAirQuality({
+          source: sources['air-quality'],
+          // Optional: a host's model field (src/layers/airQuality/field.js).
+          fieldSource: sources['air-quality-field'] ?? null,
+        }),
         createApplicationFirePerimeters({
           ...perimeterOptions,
           source: sources['fire-perimeters'],

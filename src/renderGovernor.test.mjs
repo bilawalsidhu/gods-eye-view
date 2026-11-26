@@ -8,8 +8,10 @@ import {
   getRenderGovernorDiagnostics,
   _resetRenderGovernorForTest,
   uninstallRenderGovernor,
-  IDLE_FRAME_RATE,
+  DEFAULT_FRAME_RATE,
   FOLLOW_FRAME_RATE,
+  setFrameRateCap,
+  frameRateCap,
 } from './renderGovernor.js';
 import { framePortFor } from './testSupport/fakeFramePort.mjs';
 
@@ -161,26 +163,32 @@ function makeCamera({ position = null, direction = null } = {}) {
   return camera;
 }
 
-test('idle, the loop ticks at the idle rate; held, at the display rate', () => {
+test('unlimited, the loop ticks at the display rate, idle or held', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const { viewer, scene } = makeViewer();
   installRenderGovernor(framePortFor(viewer.scene));
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE, 'idle at install');
+  assert.equal(scene.targetFps, 0, 'idle at install');
   holdContinuousRender('flights');
   assert.equal(scene.targetFps, 0, 'held: the display rate');
   releaseContinuousRender('flights');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
 });
 
 test('a hold already out at install draws at the display rate', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   holdContinuousRender('boot');
   const { viewer, scene } = makeViewer();
   installRenderGovernor(framePortFor(viewer.scene));
   assert.equal(scene.targetFps, 0);
   releaseContinuousRender('boot');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
 });
 
 test('the renderer holding the loop itself (animated visual styles) also draws at the display rate', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const { viewer, scene } = makeViewer();
   const frame = framePortFor(viewer.scene);
   installRenderGovernor(frame);
@@ -190,11 +198,11 @@ test('the renderer holding the loop itself (animated visual styles) also draws a
   release();
   assert.equal(scene.targetFps, 0, 'still held by flights');
   releaseContinuousRender('flights');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
   // Uninstalled, the governor no longer sets the rate.
   uninstallRenderGovernor(frame);
   frame.holdContinuous('effects:animated');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
 });
 
 test('a camera move holds continuous render from moveStart to moveEnd', () => {
@@ -296,6 +304,8 @@ test('installing again drops a camera hold the old listeners can no longer relea
 });
 
 test('a hold may cap the rate: the highest asked wins, an uncapped hold is the display rate', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const { viewer, scene } = makeViewer();
   const frame = framePortFor(viewer.scene);
   installRenderGovernor(frame);
@@ -312,10 +322,12 @@ test('a hold may cap the rate: the highest asked wins, an uncapped hold is the d
   releaseContinuousRender('flights');
   assert.equal(scene.targetFps, 15);
   releaseContinuousRender('satellites');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
 });
 
 test('the renderer holding the loop itself asks for no rate: the display rate', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const { viewer, scene } = makeViewer();
   const frame = framePortFor(viewer.scene);
   installRenderGovernor(frame);
@@ -328,10 +340,12 @@ test('the renderer holding the loop itself asks for no rate: the display rate', 
   assert.equal(scene.targetFps, 0, 'and as soon as it holds again');
   again();
   releaseContinuousRender('satellites');
-  assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+  assert.equal(scene.targetFps, 0);
 });
 
 test('a camera carried by a followed target draws at the follow rate unless a pointer steers it', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const previousWindow = globalThis.window;
   const page = new EventTarget();
   globalThis.window = page;
@@ -351,7 +365,7 @@ test('a camera carried by a followed target draws at the follow rate unless a po
     releaseContinuousRender('tracked-entity');
     assert.equal(scene.targetFps, 0, 'the camera moving on its own');
     camera.raise('moveEnd');
-    assert.equal(scene.targetFps, IDLE_FRAME_RATE);
+    assert.equal(scene.targetFps, 0);
   } finally {
     _resetRenderGovernorForTest();
     if (previousWindow === undefined) delete globalThis.window;
@@ -360,6 +374,8 @@ test('a camera carried by a followed target draws at the follow rate unless a po
 });
 
 test('steering ends when the page loses focus, and a wheel moment ending never ends a drag', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const previousWindow = globalThis.window;
   const page = new EventTarget();
   globalThis.window = page;
@@ -393,6 +409,8 @@ test('steering ends when the page loses focus, and a wheel moment ending never e
 });
 
 test('a pinch steers until its last finger lifts; an element losing focus is not the page losing it', () => {
+  // Unlimited: the rates the holds ask for, uncapped by the user's.
+  setFrameRateCap(0);
   const previousWindow = globalThis.window;
   const page = new EventTarget();
   globalThis.window = page;
@@ -421,4 +439,28 @@ test('a pinch steers until its last finger lifts; an element losing focus is not
     if (previousWindow === undefined) delete globalThis.window;
     else globalThis.window = previousWindow;
   }
+});
+
+test("the user's frame rate caps every rate, idle or held, 60 until set", () => {
+  const { viewer, scene } = makeViewer();
+  installRenderGovernor(framePortFor(viewer.scene));
+  assert.equal(frameRateCap(), DEFAULT_FRAME_RATE);
+  assert.equal(DEFAULT_FRAME_RATE, 60);
+  assert.equal(scene.targetFps, 60, 'idle');
+  holdContinuousRender('camera');
+  assert.equal(scene.targetFps, 60, 'a hold asking the display rate');
+  holdContinuousRender('satellites', { maxFps: 15 });
+  assert.equal(scene.targetFps, 60);
+  releaseContinuousRender('camera');
+  assert.equal(scene.targetFps, 15, 'a rate under the cap is kept');
+  setFrameRateCap(10);
+  assert.equal(scene.targetFps, 10, 'a rate over it is capped');
+  setFrameRateCap(144);
+  assert.equal(scene.targetFps, 15);
+  releaseContinuousRender('satellites');
+  assert.equal(scene.targetFps, 144, 'idle at the cap');
+  setFrameRateCap(0);
+  assert.equal(scene.targetFps, 0, 'unlimited: the display rate');
+  setFrameRateCap(Number.NaN);
+  assert.equal(frameRateCap(), 0, 'not a rate: unlimited');
 });

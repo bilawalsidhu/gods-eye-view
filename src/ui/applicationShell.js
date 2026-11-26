@@ -1,6 +1,6 @@
-import { followedOf } from '../data/followed.js';
 import { readEntityRecord } from '../data/entityRecords.js';
 import { nextTick, watch } from 'vue';
+import { getConfiguredLayerCounts } from '../services/application.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -50,8 +50,6 @@ import {
   readShareFollowSubject,
 } from './shareFollow.js';
 
-import { runCctvLayerEnableTransition } from '../cctvFocusPolicy.js';
-
 import {
   getLocale,
   onLocaleChange,
@@ -78,7 +76,10 @@ import { useDisplayStore } from './stores/display.js';
 import { useLocaleStore } from './stores/locale.js';
 import { useLocationStore } from './stores/location.js';
 import { useOmnibarStore } from './stores/omnibar.js';
+import { useEntityCardStore } from './stores/entityCard.js';
+import { useLayerCountsStore } from './stores/layerCounts.js';
 import { installEntityContext } from './entityContextBridge.js';
+import { createLayerCounts } from './layerCounts.js';
 import { installRailEdgeScroll } from './railEdgeScroll.js';
 import { useCockpitStore } from './stores/cockpit.js';
 import { useGlobeActionsStore } from './stores/globeActions.js';
@@ -102,7 +103,7 @@ import { preloadOwnerFlags } from './ownerFlag.js';
  * - Collapsible rail panels with their collapsed state kept in localStorage.
  * - CCTV panel: camera selection, coverage toggle, projection, calibration
  *   sliders, auto-hop, and summary typewriter effect.
- * - Location bar with city/POI preset pills, QWERTY key navigation,
+ * - Preset cities and landmarks (the Omnibar's chips), QWERTY landmark keys,
  *   geocoding search, and inter-city world-jump transitions.
  * - Orbit controller integration for POI fly-around.
  * - Recording mode with safe-frame overlay and HUD mode switching.
@@ -176,10 +177,10 @@ export class StyleManager extends ShellFacade {
         _rightPanelStack: this._rightPanelStack,
       },
       operations: {
-        _closeLocationSearch: () => this._locationNavigation?.closeSearch(),
         _syncCctvPanelViewport: (...args) =>
           this._syncCctvPanelViewport(...args),
         _showToast: (...args) => this._showToast(...args),
+        _revealPanel: (panelId) => this.revealPanel(panelId),
       },
       readHud: () => this.hud,
       readCockpit: () => this.cockpitView,
@@ -220,12 +221,25 @@ export class StyleManager extends ShellFacade {
     );
     this.viewer = viewer;
     // A click on anything a layer can identify opens its card in Context.
+    const pinia = applicationPinia();
+    const cards = useEntityCardStore(pinia);
+    const layerCounts = useLayerCountsStore(pinia);
     this._removeEntityContext = installEntityContext({
       viewer,
+      navigateToSelection: (fly) => this.runImmediateNavigation('target', fly),
       getDataManager: () => this._dataManager,
-      pinia: applicationPinia(),
+      pinia,
       pickWorld: services.pickWorldFromScreen,
       regionalBrief: services.fetchRegionalBrief,
+      spotWeather: services.fetchSpotWeather,
+      inspector: {
+        counts: createLayerCounts({
+          getCounts: getConfiguredLayerCounts,
+          readState: () => layerCounts.state,
+          writeState: layerCounts.publish,
+          readShown: () => cards.inspector.shown,
+        }),
+      },
     });
     this.mapStackController = mapStackController;
     this.placeSearch = placeSearch;
@@ -240,12 +254,10 @@ export class StyleManager extends ShellFacade {
         militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
       },
-      settleSearch: (options) =>
-        this._locationNavigation?.settleSearch(options),
+      settleSearch: () => this._locationNavigation?.settleSearch(),
       interruptCameraMotion: services.interruptCameraMotion,
       interruptGlobeRotation: services.interruptGlobeRotation,
       isCockpitActive: () => !!this.cockpitView?.active,
-      clearLocation: () => this.clearSearchedLocation(),
       cancelShareSelection: () => this._shareRestoration.cancelSelection(),
       getDataManager: () => this._dataManager,
       stopOrbit: () => this._stopOrbit(),
@@ -341,6 +353,7 @@ export class StyleManager extends ShellFacade {
         _streetLevelControls: this._streetLevelControls,
       }),
       operations: {
+        _syncContextDataManager: cards.syncDataManager,
         _updateTrafficSyncChip: (...args) =>
           this._updateTrafficSyncChip(...args),
         _updateGlobalLoadingFeedback: (...args) =>
@@ -392,9 +405,6 @@ export class StyleManager extends ShellFacade {
         aisLiveVesselsLayer: services.aisLiveVesselsLayer,
         militaryAwarenessLayer: services.militaryAwarenessLayer,
         rocketLaunchesLayer: services.rocketLaunchesLayer,
-      },
-      elements: {
-        _locationSearch: this._locationSearch,
       },
       operations: {
         _publishLocation: (view) =>
@@ -639,12 +649,7 @@ export class StyleManager extends ShellFacade {
         holdContinuousRender: services.holdContinuousRender,
         releaseContinuousRender: services.releaseContinuousRender,
       },
-      elements: {
-        _locationSearch: this._locationSearch,
-      },
       operations: {
-        _closeLocationSearch: (options) =>
-          this._locationNavigation?.closeSearch(options),
         setStyle: (...args) => this.setStyle(...args),
         _updateHudButtonState: (...args) => this._updateHudButtonState(...args),
         _syncShareState: (...args) => this._syncShareState(...args),
@@ -708,7 +713,7 @@ export class StyleManager extends ShellFacade {
     this._initWildlifeSightingCard();
     this._initGlobalContextPanel();
     this._initSpaceMissionsPanel();
-    this._initLocationBar();
+    this._initLocationControls();
     this._initMobileShell();
     this._initShareButton();
     this._initCameraOrientationControls();
@@ -721,7 +726,6 @@ export class StyleManager extends ShellFacade {
     this._startAnimationLoop();
     this._startTrafficChipTicker();
     this._publishActiveStyle();
-    this._updateLocationMiniStatus();
 
     this._shareRestoration.start();
 
@@ -745,10 +749,7 @@ export class StyleManager extends ShellFacade {
   // Compatibility reads for existing controls, scene snapshots and Cockpit.
 
   /** Advance camera authority and settle any older search UI immediately. */
-  _stampNavigation({
-    cancelPendingSelection = true,
-    clearSearchedLocation = true,
-  } = {}) {
+  _stampNavigation({ cancelPendingSelection = true } = {}) {
     return this._navigation._stampNavigation(...arguments);
   }
 
@@ -994,24 +995,6 @@ export class StyleManager extends ShellFacade {
     { restore = false, persist = true, syncShare = true } = {},
   ) {
     return this._panelChrome._setCommandDockPanelPinState(...arguments);
-  }
-
-  /**
-   * Configures intentional hover-expand / leave-collapse behavior on a panel.
-   * Uses separate open/close timers to prevent accidental flicker from fast
-   * mouse passes. Wheel events cancel pending opens to avoid surprise expansion
-   * during scroll-through.
-   * @param {string} panelId - DOM id of the panel element.
-   * @param {object} [options]
-   * @param {number} [options.openDelayMs=850] - Hover dwell time before auto-expanding.
-   * @param {number} [options.closeDelayMs=1000] - Delay after pointer leaves before collapsing.
-   * @returns {void}
-   */
-  _initAutoHoverPanel(
-    panelId,
-    { openDelayMs = 850, closeDelayMs = 1000 } = {},
-  ) {
-    return this._panelChrome._initAutoHoverPanel(...arguments);
   }
 
   _initGlobalContextPanel() {
@@ -1316,13 +1299,11 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Toggles the CCTV layer enabled state. When enabling and no camera is active,
-   * auto-focuses on the nearest camera.
+   * Toggles the CCTV layer without moving the globe.
    * @param {boolean} [forceState] - Explicit on/off. Omit to toggle.
-   * @returns {Promise<boolean>} True if the layer is now in the requested state.
+   * @returns {Promise<boolean>} False if the shell is disposed or the layer is unavailable.
    */
   async _toggleCctvEnabled(forceState) {
-    const { cctvLayer } = this.services;
     if (this._disposed) return false;
     if (!this._dataManager || !this._dataManager.layers?.has('cctv')) {
       this._showToast(t('CCTV layer unavailable'));
@@ -1331,25 +1312,7 @@ export class StyleManager extends ShellFacade {
     const enabled = this._dataManager.isEnabled('cctv');
     const target = typeof forceState === 'boolean' ? forceState : !enabled;
     if (target === enabled) return true;
-    await runCctvLayerEnableTransition({
-      target,
-      setEnabled: (next) =>
-        this._dataManager.setEnabled('cctv', next, { origin: 'user' }),
-      readOwnership: () => ({
-        followed: followedOf(this.viewer),
-        cockpitActive: !!this.cockpitView?.active,
-      }),
-      shouldFocus: () =>
-        !this._disposed &&
-        this._dataManager.isEnabled('cctv') &&
-        !this._cctvControls?.getState()?.activeCameraId,
-      activate: () => cctvLayer.focusNearest({ focus: false }),
-      fly: (cameraId) =>
-        this._runExplicitCctvFocus(
-          () => cameraId,
-          (selectedId) => cctvLayer.focusCamera(selectedId, 1.6),
-        ),
-    });
+    await this._dataManager.setEnabled('cctv', target, { origin: 'user' });
     return true;
   }
 

@@ -33,9 +33,9 @@ hardware-rendered overlay scenes.
 | Median | 604.849 ms | 1,855.836 ms | 439.5 ms | 60 / 60 FPS | 105.1 MiB |
 
 These frame rates were measured when the globe was capped at 60 FPS. It now
-draws at the display's refresh rate while anything moves and ticks at most 60
-times a second when parked (the render governor's idle rate,
-`IDLE_FRAME_RATE` in `src/renderGovernor.js`).
+draws at most at the Display panel's Frame rate, 60 until it is set (30 to 240
+frames a second, or Unlimited, the display's own rate), moving or parked
+(`setFrameRateCap` in `src/renderGovernor.js`, `src/viewFrameRate.js`).
 
 The initial-settle measurement is the more useful launch reference because it
 includes the first visual and data settling window. All three samples reached
@@ -140,6 +140,14 @@ Use the same controls before attributing a difference to the application:
    browser ([#365](https://github.com/bilawalsidhu/gods-eye-view/issues/365)).
    Do not compare embedded-view and external-browser measurements directly;
    compare the reported GPU renderer and matched scene settings first.
+
+## Google 3D tile memory
+
+The baseline above uses the desktop Google 3D tile cache (1536 MiB, with up
+to 1024 MiB over it). Phones, tablets without a fine pointer and devices
+reporting 4 GB of memory or less use 384 MiB and 128 MiB instead, so a
+capture on one of them measures a smaller cache; see
+[Google 3D tile memory on phones](CURRENT-STATE.md#google-3d-tile-memory-on-phones).
 
 ## What is not established yet
 

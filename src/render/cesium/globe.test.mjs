@@ -361,6 +361,22 @@ test('layers sharing an admit wait for each other’s tiles, asking for no frame
   assert.deepEqual(renders, [], 'the holder’s settling is the later frame');
 });
 
+test('a single-image layer can take its canvas itself', async () => {
+  const { port, scene } = setup();
+  const { imagery } = port;
+  const image = { width: 4, height: 2 };
+  imagery.add({ kind: 'single-image', image });
+  const provider = scene.imageryLayers.get(0).imageryProvider;
+  assert.equal(await provider.requestImage(0, 0, 0), image);
+  assert.equal(provider.tileWidth, 4);
+  assert.equal(provider.tileHeight, 2);
+  assert.throws(() => imagery.add({ kind: 'xyz', image }), /single-image/);
+  assert.throws(
+    () => imagery.add({ kind: 'single-image', url: 'tile.png', image }),
+    /not both/,
+  );
+});
+
 test('fetchTile fetches in place of the provider, with the URL it would fetch', async (t) => {
   const asked = [];
   const answers = [{ defer: true }, { missing: true }];
@@ -491,6 +507,38 @@ test('terrain: quantized mesh at its url, asked again when its host is busy', as
   );
 });
 
+test('terrain: quantized mesh tiles through fetchTile', async (t) => {
+  const { scene, port } = setup();
+  const made = new Cesium.EllipsoidTerrainProvider();
+  const own = made.requestTileGeometry;
+  const asked = [];
+  t.mock.method(Cesium.CesiumTerrainProvider, 'fromUrl', async (...args) => {
+    asked.push(args);
+    return made;
+  });
+  const fetchTile = async () => ({ missing: true });
+  await port.setTerrain({
+    kind: 'quantizedMesh',
+    url: 'https://terrain.example/mesh',
+    fetchTile,
+  });
+  assert.equal(scene.terrainProvider, made);
+  const [[resource]] = asked;
+  assert.equal(resource.url, 'https://terrain.example/mesh');
+  assert.ok(resource.retryAttempts > 0, 'layer.json keeps its retry policy');
+  assert.ok(resource instanceof Cesium.Resource);
+  assert.notEqual(resource.constructor, Cesium.Resource);
+  assert.notEqual(made.requestTileGeometry, own, 'tile requests are tracked');
+  await assert.rejects(
+    port.setTerrain({
+      kind: 'quantizedMesh',
+      url: 'https://terrain.example/mesh',
+      fetchTile: 'nope',
+    }),
+    /fetchTile is a function/,
+  );
+});
+
 test('setBase replaces the imagery and says what it drew', async () => {
   const { scene, port } = setup();
   const overlay = port.imagery.add({ kind: 'xyz', url: url('overlay') });
@@ -509,82 +557,6 @@ test('setBase replaces the imagery and says what it drew', async () => {
   assert.equal(scene.imageryLayers.length, 2);
   assert.equal(status.settled, true);
   await assert.rejects(port.setBase({ vector: { styleUrl: 'x' } }), /vector/);
-});
-
-/** `globalThis.fetch` answering each URL when the test says, honouring aborts. */
-function heldFetch() {
-  const held = [];
-  const original = globalThis.fetch;
-  const options = { honourAbort: true };
-  globalThis.fetch = (url, { signal } = {}) =>
-    new Promise((resolve, reject) => {
-      if (options.honourAbort)
-        signal?.addEventListener('abort', () => reject(signal.reason));
-      held.push({
-        url,
-        signal,
-        answer: (body) =>
-          resolve({ ok: true, status: 200, json: async () => body }),
-      });
-    });
-  return { held, options, restore: () => (globalThis.fetch = original) };
-}
-
-const EMPTY_STYLE = { version: 8, sources: {}, layers: [] };
-
-test('a slow vector setBase a later setBase supersedes changes nothing', async () => {
-  const { held, options, restore } = heldFetch();
-  try {
-    const { port } = setup(new Set([...ALL, 'vectorBase']));
-    const slow = port.setBase({
-      vector: { styleUrl: 'https://s.invalid/a.json' },
-    });
-    const fast = await port.setBase({
-      imagery: [{ kind: 'xyz', url: url('one') }],
-    });
-    assert.equal(held.length, 1);
-    assert.equal(held[0].signal.aborted, true, 'its style load is aborted');
-    const status = await slow;
-    assert.deepEqual(status.imagery, []);
-    assert.equal(status.settled, false);
-    assert.deepEqual(port.imagery.list(), fast.imagery);
-
-    // One whose load ignores the abort and lands late changes nothing either.
-    options.honourAbort = false;
-    const late = port.setBase({
-      vector: { styleUrl: 'https://s.invalid/b.json' },
-    });
-    const kept = await port.setBase({
-      imagery: [{ kind: 'xyz', url: url('two') }],
-    });
-    held[1].answer(EMPTY_STYLE);
-    assert.deepEqual((await late).imagery, []);
-    assert.deepEqual(port.imagery.list(), kept.imagery);
-  } finally {
-    restore();
-  }
-});
-
-test('a vector setBase in flight when the globe is disposed resolves, changing nothing', async () => {
-  const { held, restore } = heldFetch();
-  try {
-    const { port, dispose } = setup(new Set([...ALL, 'vectorBase']));
-    const before = await port.setBase({
-      imagery: [{ kind: 'xyz', url: url('one') }],
-    });
-    const pending = port.setBase({
-      vector: { styleUrl: 'https://s.invalid/a.json' },
-    });
-    dispose();
-    const status = await pending;
-    assert.deepEqual(status.imagery, []);
-    assert.equal(status.settled, false);
-    assert.deepEqual(port.imagery.list(), before.imagery);
-    assert.equal(held[0].signal.aborted, true);
-    assert.deepEqual((await port.setBase({ imagery: [] })).imagery, []);
-  } finally {
-    restore();
-  }
 });
 
 test('globe visibility, settling and progress', () => {

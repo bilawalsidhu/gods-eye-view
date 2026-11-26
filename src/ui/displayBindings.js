@@ -13,7 +13,6 @@ export class DisplayBindings {
   constructor({
     viewer,
     services,
-    elements,
     operations,
     readState,
     claimDetection,
@@ -22,7 +21,6 @@ export class DisplayBindings {
     Object.assign(
       this,
       { viewer, services, readState, claimDetection, displayStore },
-      elements,
       operations,
     );
   }

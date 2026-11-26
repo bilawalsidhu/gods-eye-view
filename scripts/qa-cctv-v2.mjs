@@ -627,26 +627,24 @@ async function main() {
     // 2026-07-04: every click on the monitor plane picks its own camera, and
     // re-running activation rewrote the plane entity → visible flash). No new
     // probe, no geometry rewrite.
-    const geomBeforeReselect = await page.evaluate(`(() => {
+    // Keep the snapshots and selection in one browser task so a pending DEM
+    // result from the original activation cannot land between them.
+    const reselection = await page.evaluate(`(() => {
       ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
-    })()`);
-    await page.evaluate((id) => {
-      window.__godsEyeView.dataManager.layers
-        .get('cctv')
-        .module.setParams({ selectedCameraId: id });
-    }, activeId);
-    await sleep(400);
-    const cAfterReselect = await readCounters();
-    const geomAfterReselect = await page.evaluate(`(() => {
-      ${SERIALIZE_GEOM_SRC}
-      return JSON.stringify(serializeGeom(${JSON.stringify(activeId)}));
+      const cameraId = ${JSON.stringify(activeId)};
+      const before = JSON.stringify(serializeGeom(cameraId));
+      const probesBefore = window.__qaCounters.pickFromRay;
+      window.__godsEyeView.dataManager.layers.get('cctv').module
+        .setParams({ selectedCameraId: cameraId });
+      return {
+        probeDelta: window.__qaCounters.pickFromRay - probesBefore,
+        geometryChanged: JSON.stringify(serializeGeom(cameraId)) !== before,
+      };
     })()`);
     record(
       're-selecting the active camera is a no-op (no probe, no geometry rewrite)',
-      cAfterReselect.pickFromRay - cAfterActivate.pickFromRay === 0 &&
-        geomBeforeReselect === geomAfterReselect,
-      `probeΔ=${cAfterReselect.pickFromRay - cAfterActivate.pickFromRay}, geometryChanged=${geomBeforeReselect !== geomAfterReselect}`,
+      reselection.probeDelta === 0 && !reselection.geometryChanged,
+      `probeΔ=${reselection.probeDelta}, geometryChanged=${reselection.geometryChanged}`,
     );
 
     // -----------------------------------------------------------------------
@@ -1257,18 +1255,67 @@ async function main() {
       `status=${frameFetch.status} content-type=${frameFetch.contentType} url=${frameFetch.url}`,
     );
 
-    // Panel <img> src and the plane's frame fetch share the same
-    // /api/cctv/frame/<id> URL family (same endpoint + camera id segment).
-    const panelImgSrc = await page.evaluate(
-      () => document.getElementById('cctv-frame')?.getAttribute('src') || null,
-    );
+    // A live camera uses the panel's video canvas. Exercise the image contract
+    // on an image-backed camera with the panel open, even if focusNearest picked HLS.
+    const still = await page.evaluate(() => {
+      const { dataManager, styleManager } = window.__godsEyeView;
+      const layer = dataManager.layers.get('cctv').module;
+      const ui = layer.getUIState();
+      const isStill = (cam) =>
+        cam?.feedType === 'image' && !cam.sourceKind?.startsWith('quebec-');
+      const camera = isStill(ui.activeCamera)
+        ? ui.activeCamera
+        : ui.cameras.find(isStill);
+      const collapsed = document
+        .getElementById('cctv-panel')
+        .classList.contains('collapsed');
+      if (camera) {
+        layer.selectCamera(camera.id);
+        styleManager.setPanelCollapsed('cctv-panel', false, {
+          persist: false,
+          syncShare: false,
+        });
+      }
+      return { id: camera?.id, collapsed };
+    });
     const sameFamily =
-      !!panelImgSrc &&
-      panelImgSrc.includes(`/api/cctv/frame/${encodeURIComponent(activeId)}`);
+      Boolean(still.id) &&
+      (await waitForPredicate(
+        page,
+        (id) => {
+          const layer =
+            window.__godsEyeView.dataManager.layers.get('cctv').module;
+          const camera = layer.getUIState().activeCamera;
+          const image = document.getElementById('cctv-frame');
+          const plane = layer._cctvDrawnForTest().planes[`cctv-${id}-plane`];
+          const path = `/api/cctv/frame/${encodeURIComponent(id)}`;
+          return (
+            camera?.id === id &&
+            plane?.source?.canvas &&
+            image?.naturalWidth > 0 &&
+            !image.hidden &&
+            new URL(image.currentSrc).pathname === path &&
+            new URL(camera.frameUrl, location.origin).pathname === path
+          );
+        },
+        { timeoutMs: 30000, args: [still.id] },
+      ));
     record(
       'panel <img> and plane share the same /api/cctv/frame/<id> URL family',
       sameFamily,
-      `panelSrc=${panelImgSrc}`,
+      `image camera=${still.id || 'none'}`,
+    );
+    await page.evaluate(
+      ({ activeId, collapsed }) => {
+        const { dataManager, styleManager } = window.__godsEyeView;
+        dataManager.layers.get('cctv').module.selectCamera(activeId);
+        if (collapsed)
+          styleManager.setPanelCollapsed('cctv-panel', true, {
+            persist: false,
+            syncShare: false,
+          });
+      },
+      { activeId, collapsed: still.collapsed },
     );
 
     // =========================================================================

@@ -52,6 +52,7 @@ function isolateDisk(t) {
   });
   t.mock.method(fsp, 'mkdir', async () => {});
   t.mock.method(fsp, 'writeFile', async () => {});
+  t.mock.method(fsp, 'rename', async () => {});
 }
 
 /** A response that streams 1 MiB chunks of `text` well past every cap, then ends. */
@@ -317,7 +318,8 @@ test('SATCAT is proxied per core group for a day, separately from TLEs, and serv
     return new Response(csv);
   });
   const written = [];
-  t.mock.method(fsp, 'writeFile', async (file) => {
+  t.mock.method(fsp, 'rename', async (temporary, file) => {
+    assert.ok(temporary.startsWith(file + '.') && temporary.endsWith('.tmp'));
     written.push(String(file).split(/[\\/]/).pop());
   });
   const request = install(celestrakProxy());

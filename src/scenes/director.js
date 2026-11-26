@@ -711,13 +711,14 @@ export class SceneDirector {
   }
 
   /**
-   * Snapshot the current enabled/params state of every registered data layer.
+   * Snapshot the current enabled/params state of every registered data layer,
+   * with the params a layer keeps for scene shots.
    * @returns {Object.<string, { enabled: boolean, params?: Object }>}
    */
   _captureLayerStates() {
     const layers = {};
     for (const layer of this.dataManager.getAll()) {
-      const params = this.dataManager.getLayerParams(layer.id);
+      const params = this.dataManager.getLayerParams(layer.id, { scene: true });
       layers[layer.id] = {
         enabled: !!layer.enabled,
         ...(params ? { params } : {}),
@@ -1968,7 +1969,6 @@ export class SceneDirector {
   _setCameraView(cameraState) {
     const camera = findCamera(this.viewer);
     if (!cameraState || !camera) return false;
-    this.styleManager?.clearSearchedLocation?.();
     camera.cancelFlight();
     camera.setView({
       destination: {
@@ -2858,11 +2858,6 @@ export class SceneDirector {
    */
   async _flyCamera(cameraState, durationSec, token) {
     if (!cameraState || token.cancelled) return;
-
-    // Scene playback drives the camera itself rather than through the shared
-    // navigation seam, so the LOCATION readout would otherwise keep reporting
-    // a free-text search the shot has already flown away from.
-    this.styleManager?.clearSearchedLocation?.();
 
     const duration = Math.max(
       0.2,

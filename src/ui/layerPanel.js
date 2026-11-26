@@ -1,13 +1,19 @@
 import { h, render as renderVue } from 'vue';
+import {
+  createLayerFinder,
+  filterLayerRows,
+  layerFinderFor,
+} from './layerFinderFilter.js';
 import LayerRows from './layerPanel/LayerRows.vue';
 import { layerFeedState } from '../data/feedState.js';
+import { FEED_STATE_LABEL_KEYS } from './layerRowState.js';
 export { layerFeedState } from '../data/feedState.js';
 import { GUIDANCE_STATUSES } from '../loadingFeedback.js';
-import { keyGuidanceText, keyRequirementText } from './keyGuidance.js';
+import { keyGuidanceText, keysRequirementText } from './keyGuidance.js';
 import {
   LAYER_NAME_KEYS,
   PANEL_LABEL_KEYS as PANEL_LABELS,
-  sourceLabel,
+  layerSourceText,
 } from './layerNames.js';
 export { localizeLayerName } from './layerNames.js';
 import { createWeatherPanel } from './weatherPanel.js';
@@ -24,18 +30,6 @@ import {
   onLocaleChange,
   t,
 } from '../i18n/index.js';
-
-// Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
-// label translates.
-const FEED_STATE_LABEL_KEYS = Object.freeze({
-  nominal: msg('ON'),
-  loading: msg('LOADING'),
-  degraded: msg('DEGRADED'),
-  stale: msg('STALE'),
-  partial: msg('PARTIAL'),
-  fallback: msg('FALLBACK'),
-  unavailable: msg('UNAVAILABLE'),
-});
 
 function lifecycleStateLabel(lifecycleState) {
   return t(lifecycleState === 'enabling' ? msg('ENABLING') : msg('DISABLING'));
@@ -149,7 +143,8 @@ function panelLabel(layer) {
  * The key registry already owns what each key is called and which environment
  * variables enable it, so a layer only declares WHICH key it needs
  * (`requiresKeyId`) and reports `stats.keyRequired` while that key is absent.
- * Naming the variable turns an unexplained dead control into a next step.
+ * Naming the variable turns an unexplained dead control into a next step. A
+ * layer reading several keyed networks may name each key it lacks (an array).
  *
  * An unnamed or unknown key returns '' rather than guessing: guidance naming
  * the wrong variable sends the operator to the wrong provider.
@@ -159,10 +154,13 @@ function panelLabel(layer) {
  */
 export function layerKeyRequirementTooltip(layer = {}) {
   if (layer?.stats?.keyRequired !== true) return '';
-  const requiresKeyId = String(layer.requiresKeyId || '').trim();
+  const ids = [layer.requiresKeyId]
+    .flat()
+    .map((id) => String(id || '').trim())
+    .filter(Boolean);
   // A layer with several sources also names the ones it could use instead.
   return keyGuidanceText(
-    requiresKeyId ? keyRequirementText(requiresKeyId) : '',
+    keysRequirementText(ids),
     layer.stats.keyAlternatives || [],
   );
 }
@@ -271,7 +269,10 @@ export function presentLayerToggle(layer) {
   };
 }
 
-/** Layer row presentation over supplied state and actions; no layer imports. */
+/**
+ * Layer rows over supplied state and actions. The standard row container's Finder
+ * takes precedence over an explicit Finder or the private default.
+ */
 export class LayerPanel {
   constructor({
     getLayers,
@@ -283,7 +284,10 @@ export class LayerPanel {
     subscribeRowControls,
     onHiddenRefresh = () => {},
     weatherClock,
+    finder,
   }) {
+    this._ownFinder = finder ?? createLayerFinder();
+    this.finder = this._ownFinder;
     this.weatherClock = weatherClock;
     this.getAll = getLayers;
     this.isEnabled = isEnabled;
@@ -303,6 +307,7 @@ export class LayerPanel {
     this._recentImageryPanel = null;
     this._rows = [];
     this._rowViews = new Map();
+    this._finderRows = [];
     this._pending = new Set();
   }
   mount(container) {
@@ -315,6 +320,7 @@ export class LayerPanel {
     // The rows replace whatever the container held before.
     if (container && !container._vnode) container.replaceChildren();
     this._toggleContainer = container;
+    this.finder = layerFinderFor(container) ?? this._ownFinder;
     // A group with a list of its own (Directions in Utilities) renders there;
     // without that list it stays in Data Layers under its heading.
     this._groupContainers = new Map();
@@ -382,6 +388,7 @@ export class LayerPanel {
       renderVue(null, element);
     this._groupContainers = new Map();
     this._toggleContainer = null;
+    this._finderRows = [];
   }
   /** Rebuild the rows after the layer set changed (a Data Library add/remove). */
   rerender() {
@@ -440,6 +447,7 @@ export class LayerPanel {
       }),
     );
     this._paint();
+    this._removers.push(this.finder.onInputs(() => this._paintFinder()));
     this._refreshWeatherPanel();
     this._refreshNewsPanel();
   }
@@ -461,23 +469,41 @@ export class LayerPanel {
       }
       if (item) lists.get(row.container ?? null).push(item);
     }
+    this._finderRows = lists.get(null);
+    this._paintFinder();
+    for (const [id, container] of this._groupContainers)
+      this._renderRows(container, lists.get(id));
+  }
+
+  /** Finder input changes only visibility, not the layer state or controls. */
+  _paintFinder() {
+    if (this._destroyed || !this._toggleContainer) return;
+    const { filtered, groups, shown } = filterLayerRows(
+      this._finderRows,
+      this.finder.inputs(),
+    );
+    this.finder.publish(groups, shown);
+    this._renderRows(this._toggleContainer, this._finderRows, filtered);
+  }
+
+  _renderRows(container, items, filtered) {
     const generation = this._generation;
-    for (const [id, items] of lists)
-      renderVue(
-        h(LayerRows, {
-          items,
-          onToggle: (layerId) => this._toggle(layerId, generation),
-          onChip: (layerId, chipId) =>
-            this._selectChip(layerId, chipId, generation),
-          onListItem: (layerId, itemId) =>
-            this._selectListItem(layerId, itemId, generation),
-          onSlider: (layerId, sliderId, value) =>
-            this._moveSlider(layerId, sliderId, value, generation),
-          onRange: (layerId, rangeId, end, value) =>
-            this._pickRangeEnd(layerId, rangeId, end, value, generation),
-        }),
-        id === null ? this._toggleContainer : this._groupContainers.get(id),
-      );
+    renderVue(
+      h(LayerRows, {
+        items,
+        filtered,
+        onToggle: (layerId) => this._toggle(layerId, generation),
+        onChip: (layerId, chipId) =>
+          this._selectChip(layerId, chipId, generation),
+        onListItem: (layerId, itemId) =>
+          this._selectListItem(layerId, itemId, generation),
+        onSlider: (layerId, sliderId, value) =>
+          this._moveSlider(layerId, sliderId, value, generation),
+        onRange: (layerId, rangeId, end, value) =>
+          this._pickRangeEnd(layerId, rangeId, end, value, generation),
+      }),
+      container,
+    );
   }
 
   _presentRow(row, layer) {
@@ -717,10 +743,7 @@ export class LayerPanel {
     const feedState = layerFeedState(stats);
     const stateLabel = t(FEED_STATE_LABEL_KEYS[feedState]);
     // A layer marks source text that is data rather than a catalog name.
-    const source =
-      stats.sourceVerbatim === true && stats.source
-        ? stats.source
-        : sourceLabel(stats.source || layer.source);
+    const source = layerSourceText(layer);
     const lifecycleState =
       layer.lifecycleState || (layer.enabled ? 'enabled' : 'disabled');
     if (lifecycleState === 'enabling' || lifecycleState === 'disabling') {
