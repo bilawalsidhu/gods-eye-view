@@ -8,9 +8,17 @@
  * anywhere with a fine pointer they keep the display's ratio.
  */
 
+/** The queries whose answers decide `isTouchOnly`. */
+const POINTER_QUERIES = Object.freeze([
+  '(pointer: coarse)',
+  '(any-pointer: fine)',
+]);
+
 /**
- * Whether the only pointer is a finger: `(pointer: coarse)` and not
- * `(pointer: fine)`. A browser without `matchMedia` is not touch only.
+ * Whether the only pointer is a finger: `(pointer: coarse)` and no
+ * `(any-pointer: fine)`, as the renderers' `touchOnly` fact. A tablet with a
+ * trackpad, mouse or pencil attached has a fine pointer, so is not touch
+ * only. A browser without `matchMedia` is not touch only.
  * @param {{matchMedia?: (query: string) => {matches: boolean}}} [win]
  * @returns {boolean}
  */
@@ -18,7 +26,7 @@ export function isTouchOnly(win = globalThis.window) {
   if (typeof win?.matchMedia !== 'function') return false;
   return (
     win.matchMedia('(pointer: coarse)').matches === true &&
-    win.matchMedia('(pointer: fine)').matches !== true
+    win.matchMedia('(any-pointer: fine)').matches !== true
   );
 }
 
@@ -33,4 +41,35 @@ export function isTouchOnly(win = globalThis.window) {
 export function overlayPixelRatio(win = globalThis.window, max = Infinity) {
   if (isTouchOnly(win)) return 1;
   return Math.min(max, Math.max(1, Number(win?.devicePixelRatio) || 1));
+}
+
+/**
+ * Call `onChange` whenever `isTouchOnly`'s answer may have changed: a
+ * trackpad, mouse or pencil attached to a tablet or taken away.
+ * @param {(() => void)} onChange
+ * @param {{matchMedia?: Function}} [win]
+ * @returns {() => void} Stops watching.
+ */
+export function watchTouchOnly(onChange, win = globalThis.window) {
+  if (typeof win?.matchMedia !== 'function') return () => {};
+  const stops = [];
+  for (const text of POINTER_QUERIES) {
+    let query;
+    try {
+      query = win.matchMedia(text);
+    } catch {
+      continue;
+    }
+    const listener = () => onChange();
+    if (typeof query?.addEventListener === 'function') {
+      query.addEventListener('change', listener);
+      stops.push(() => query.removeEventListener('change', listener));
+    } else if (typeof query?.addListener === 'function') {
+      query.addListener(listener);
+      stops.push(() => query.removeListener(listener));
+    }
+  }
+  return () => {
+    for (const stop of stops.splice(0)) stop();
+  };
 }
