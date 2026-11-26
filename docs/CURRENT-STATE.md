@@ -5746,7 +5746,11 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   `src/overlays/worldOverlay.js` owns one shared DPR-aware text/card canvas,
 >   one detection blend surface, and one world-overlay post-render
 >   scheduler. Both surfaces share the same sizing, clear, projection,
->   and teardown paths. The host includes bounded per-source/per-collision-domain
+>   and teardown paths. On a touch-only device (`(pointer: coarse)` and not
+>   `(pointer: fine)`, `src/overlays/canvasPixelRatio.js`) both are held at
+>   CSS pixels, as the globe is drawn; a fine pointer keeps the display's
+>   ratio. The detection surface holds a backing store only while a
+>   detection lane is active and is 0x0 otherwise. The host includes bounded per-source/per-collision-domain
 >   arbitration, horizon/viewport culling, shared keyhole fading, cached UI
 >   exclusions, cockpit source gating, pooled hit
 >   rectangles, and development diagnostics. **UI exclusion is a per-rectangle
@@ -5859,7 +5863,7 @@ down | auth-failed` (plus the unchanged `missing-key`/`unsupported`) with
 >   builds a camera matrix or UI inventory, observes layout, or attaches a
 >   render listener. The host creates and lifecycle-manages
 >   `#world-overlay-detection-surface`, DPR-sizes it through the same frame path
->   as `#world-overlay-canvas`, and invokes detection against its
+>   as `#world-overlay-canvas` (0x0 while no detection lane is active), and invokes detection against its
 >   plain source-over context. Detection writes the exact shipped theme
 >   `mixBlendMode` and `filter + drop-shadow(...)` strings to that provided
 >   element, preserving scene-level CRT/NVG/FLIR glow and once-per-layer
