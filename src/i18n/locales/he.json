@@ -4586,6 +4586,7 @@
   "too few hours for an 8-hour average": "אין מספיק שעות לממוצע של 8 שעות",
   "incomplete hour": "שעה חלקית",
   "averaging period not rated": "תקופת המיצוע אינה מדורגת",
+  "low-cost sensor": "חיישן בעלות נמוכה",
   "Fair": "סביר",
   "Poor": "גרוע",
   "Very poor": "גרוע מאוד",
@@ -4616,6 +4617,7 @@
   "{network} unavailable": "{network} אינו זמין",
   "{network}: request budget reached; cached data will refresh later": "{network}: מכסת הבקשות נוצלה; הנתונים השמורים יעודכנו מאוחר יותר",
   "Measured · {provider} · {age}": "נמדד · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "חיישן בעלות נמוכה · {provider} · {age}",
   "HIGHEST IN VIEW": "הגבוהים בתצוגה",
   "EEA hourly quality|Extreme": "קיצונית",
   "air quality monitors|STATIONS": "תחנות",
@@ -4636,6 +4638,7 @@
   "nearest rated station · {name}": "התחנה המדורגת הקרובה ביותר · {name}",
   "calculated from the station": "מחושב מנתוני התחנה",
   "Low-cost sensor": "חיישן בעלות נמוכה",
+  "{name} · sensor": "{name} · חיישן",
   "Reference monitor": "מכשיר ניטור ייחוס",
   "Needs {envVars} — add one in Provider Settings": "דורש {envVars} — הוסף אחד מהם בהגדרות הספקים",
   "Voice and search controls": "פקדי קול וחיפוש"

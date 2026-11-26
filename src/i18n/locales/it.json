@@ -4609,6 +4609,7 @@
   "too few hours for an 8-hour average": "troppe poche ore per una media di 8 ore",
   "incomplete hour": "ora incompleta",
   "averaging period not rated": "periodo di media non valutato",
+  "low-cost sensor": "sensore a basso costo",
   "model at view centre": "modello al centro della vista",
   "nearest station · {name}": "stazione più vicina · {name}",
   "Pollutants": "Inquinanti",
@@ -4616,6 +4617,7 @@
   "{network} unavailable": "{network} non disponibile",
   "{network}: request budget reached; cached data will refresh later": "{network}: limite di richieste raggiunto; i dati in cache saranno aggiornati più tardi",
   "Measured · {provider} · {age}": "Misurato · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "Sensore a basso costo · {provider} · {age}",
   "HIGHEST IN VIEW": "PIÙ ALTI NELLA VISTA",
   "EEA hourly quality|Extreme": "Estrema",
   "air quality monitors|STATIONS": "STAZIONI",
@@ -4636,6 +4638,7 @@
   "nearest rated station · {name}": "stazione classificata più vicina · {name}",
   "calculated from the station": "calcolato dai dati della stazione",
   "Low-cost sensor": "Sensore a basso costo",
+  "{name} · sensor": "{name} · sensore",
   "Reference monitor": "Strumento di riferimento",
   "Needs {envVars} — add one in Provider Settings": "Richiede {envVars}: aggiungine una in Impostazioni provider",
   "Voice and search controls": "Controlli vocali e di ricerca"

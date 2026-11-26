@@ -14,6 +14,7 @@ const locations = countries.map((country, i) => ({
   country,
   datetimeLast: { utc: new Date(start).toISOString() },
   coordinates: { latitude: 0, longitude: 20 },
+  isMonitor: true,
   sensors: [{ id: 100 + i, parameter: { name: 'pm25', units: 'µg/m³' } }],
 }));
 /** OpenAQ hourly means of one pollutant ending at `end`, oldest first. */
@@ -581,6 +582,33 @@ test("a sensor's hourly means are asked at most once an hour, for the hours sinc
   await source.getSnapshot({ view: [10, -10, 30, 10, 20, 2], mode: 'aqi' });
   assert.equal(asked.length, 2);
   assert.equal(asked[1].from, start - 3 * 3600_000);
+});
+
+test('the AQI view asks nothing of a low-cost sensor; a pollutant view keeps it', async () => {
+  const paths = [];
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => start,
+    fetchImpl: async (raw) => {
+      const url = new URL(raw);
+      paths.push(url.pathname);
+      if (url.pathname === '/v3/locations')
+        return Response.json({
+          results: [{ ...locations[0], isMonitor: false }],
+        });
+      return Response.json({
+        results: hourRows('pm25', 'µg/m³', [12, 12, 12]),
+      });
+    },
+  });
+  const view = [10, -10, 30, 10, 20, 0];
+  const aqi = await source.getSnapshot({ view, mode: 'aqi' });
+  assert.deepEqual(paths, ['/v3/locations']);
+  assert.deepEqual(aqi.readings, []);
+  assert.equal(aqi.eligible, 0);
+  const pm = await source.getSnapshot({ view, parameter: 'PM2.5' });
+  assert.equal(pm.readings.length, 1);
+  assert.equal(pm.readings[0].monitor, false);
 });
 
 test('the AQI mode travels through the fixed route', async () => {

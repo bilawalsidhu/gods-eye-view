@@ -10,6 +10,7 @@ const loc = (id, lon, lat, last, sensors) => ({
   country: { code: 'XX', name: 'X' },
   datetimeLast: { utc: iso(last) },
   coordinates: { latitude: lat, longitude: lon },
+  isMonitor: true,
   sensors: sensors ?? [
     { id: id * 10, parameter: { name: 'pm25', units: 'µg/m³' } },
   ],

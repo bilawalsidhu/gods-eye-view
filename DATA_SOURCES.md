@@ -820,6 +820,11 @@ rate. A 1-hour SO2 value of 305 ppb or more gives 200 unless a 24-hour average
 a host supplies rates higher on the 24-hour rows. A pollutant with too few
 hours for its NowCast or 8-hour mean, or with only a value whose averaging
 period the table does not rate, gets no sub-index, and its details say so. The
+EPA's categories are defined for reference and equivalent monitors, so a
+station its source marks as a low-cost sensor (OpenAQ's `isMonitor` false,
+`monitor: false` on a host's rows) gets no US AQI, and OpenAQ spends no
+request on one in that view; the pollutant views keep low-cost sensors,
+marked as sensors in their rows and details. The
 result is GEV's calculation, not an official reading, in the US or elsewhere. A value above its pollutant's plausibility ceiling, PM2.5 well above the
 same station's PM10 (more than 1.5 × PM10 + 10 µg/m³, so smoke, where PM2.5
 nearly equals PM10, still counts), a value more than three hours older than the station's

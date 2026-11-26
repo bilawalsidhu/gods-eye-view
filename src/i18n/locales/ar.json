@@ -4898,6 +4898,7 @@
   "too few hours for an 8-hour average": "ساعات غير كافية لمتوسط 8 ساعات",
   "incomplete hour": "ساعة غير مكتملة",
   "averaging period not rated": "فترة المتوسط غير مصنفة",
+  "low-cost sensor": "مستشعر منخفض التكلفة",
   "Fair": "مقبول",
   "Poor": "سيئ",
   "Very poor": "سيئ جدًا",
@@ -4928,6 +4929,7 @@
   "{network} unavailable": "{network} غير متاح",
   "{network}: request budget reached; cached data will refresh later": "{network}: تم بلوغ حد الطلبات؛ ستُحدَّث البيانات المخزنة مؤقتًا لاحقًا",
   "Measured · {provider} · {age}": "مقيسة · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "مستشعر منخفض التكلفة · {provider} · {age}",
   "HIGHEST IN VIEW": "الأعلى في العرض",
   "EEA hourly quality|Extreme": "سيئة للغاية",
   "air quality monitors|STATIONS": "المحطات",
@@ -4951,6 +4953,7 @@
   "nearest rated station · {name}": "أقرب محطة مصنّفة · {name}",
   "calculated from the station": "محسوب من بيانات المحطة",
   "Low-cost sensor": "مستشعر منخفض التكلفة",
+  "{name} · sensor": "{name} · مستشعر",
   "Reference monitor": "جهاز رصد مرجعي",
   "Needs {envVars} — add one in Provider Settings": "يحتاج إلى {envVars} — أضف أحدها في إعدادات المزوّدين",
   "Voice and search controls": "عناصر التحكم في الصوت والبحث"

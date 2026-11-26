@@ -341,14 +341,17 @@ function extraWithin(extra, used) {
  * kept are within their ceilings and within AQI_MAX_SPREAD_MS of the newest.
  * PM2.5 is checked against the PM10 still kept; one left out does not count
  * as the newest. Ozone's 1-hour mean (`hourValues`) and SO2's 24-hour
- * average (`dayValues`) count with the value they go with.
+ * average (`dayValues`) count with the value they go with. A station marked
+ * `monitor: false` (a low-cost sensor) gets no index: the categories are
+ * defined for reference and equivalent monitors.
  * @returns {{aqi: {index: number, leading: string} | null,
  *   used: object, excluded: Object<string, string>, observedMs: number|null}}
  *   `excluded` gives each value left out its reason: `'units'` or
  *   `'flagged'` (from the station), `'incomplete'` (an hour under 75 %
  *   covered), `'nowcast'` or `'hours'` (too few hours for its NowCast or
  *   8-hour average), `'averaging'` (not on its
- *   table's averaging period), `'implausible'`, `'above-pm10'` or
+ *   table's averaging period), `'sensor'` (a low-cost sensor),
+ *   `'implausible'`, `'above-pm10'` or
  *   `'too-old'`.
  */
 export function stationIndex({
@@ -357,7 +360,22 @@ export function stationIndex({
   excluded = {},
   hourValues,
   dayValues,
+  monitor,
 } = {}) {
+  // The EPA's categories are for reference and equivalent monitors: a
+  // station its source marks as a low-cost sensor gets no index.
+  if (monitor === false) {
+    const reasons = { ...excluded };
+    for (const key of Object.keys(values ?? {}))
+      if (AQI_PARAMETERS[key]) reasons[key] = 'sensor';
+    const times = Object.values(valueTimes ?? {}).filter(Number.isFinite);
+    return {
+      aqi: null,
+      used: {},
+      excluded: reasons,
+      observedMs: times.length ? Math.max(...times) : null,
+    };
+  }
   const { kept, excluded: implausible } = withinCeilings(values);
   const reasons = { ...excluded, ...implausible };
   let spread = withinSpread(kept, valueTimes);

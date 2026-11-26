@@ -4713,6 +4713,7 @@
   "too few hours for an 8-hour average": "мало часов для 8-часового среднего",
   "incomplete hour": "неполный час",
   "averaging period not rated": "период усреднения не оценивается",
+  "low-cost sensor": "недорогой датчик",
   "model at view centre": "модель в центре карты",
   "nearest station · {name}": "ближайшая станция · {name}",
   "Pollutants": "Загрязняющие вещества",
@@ -4720,6 +4721,7 @@
   "{network} unavailable": "{network} недоступен",
   "{network}: request budget reached; cached data will refresh later": "{network}: лимит запросов достигнут; кэшированные данные обновятся позже",
   "Measured · {provider} · {age}": "Измерено · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "Недорогой датчик · {provider} · {age}",
   "HIGHEST IN VIEW": "САМЫЕ ВЫСОКИЕ В ОБЛАСТИ",
   "EEA hourly quality|Extreme": "Крайне плохое",
   "air quality monitors|STATIONS": "СТАНЦИИ",
@@ -4741,6 +4743,7 @@
   "nearest rated station · {name}": "ближайшая станция с оценкой · {name}",
   "calculated from the station": "рассчитано по данным станции",
   "Low-cost sensor": "Недорогой датчик",
+  "{name} · sensor": "{name} · датчик",
   "Reference monitor": "Эталонный прибор",
   "Needs {envVars} — add one in Provider Settings": "Нужен {envVars} — добавьте любой из них в «Настройках провайдеров»",
   "Voice and search controls": "Голосовое управление и поиск"

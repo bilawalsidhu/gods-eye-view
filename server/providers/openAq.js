@@ -331,9 +331,12 @@ export function createOpenAqAcquisition({
         (!s.lastObservedMs || now() - s.lastObservedMs <= 6 * HOUR) &&
         (!parameter ||
           s.sensors.some((sensor) => sensor.parameter === parameter)) &&
-        // The AQI view spends no request on a station it cannot rate.
+        // The AQI view spends no request on a station it cannot rate: one
+        // without the index's pollutants, or a low-cost sensor (the EPA's
+        // categories are for reference monitors).
         (mode !== 'aqi' ||
-          s.sensors.some((sensor) => AQI_POLLUTANTS[sensor.parameter])),
+          (s.monitor !== false &&
+            s.sensors.some((sensor) => AQI_POLLUTANTS[sensor.parameter]))),
     );
     // Overlapping pans/zooms reuse recent station checks without spending the
     // shared request budget again. Only stations discovered in this view join.

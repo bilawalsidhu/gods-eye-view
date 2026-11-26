@@ -4482,6 +4482,7 @@
   "too few hours for an 8-hour average": "för få timmar för ett 8-timmarsmedelvärde",
   "incomplete hour": "ofullständig timme",
   "averaging period not rated": "medelvärdesperioden bedöms inte",
+  "low-cost sensor": "lågkostnadssensor",
   "Fair": "Acceptabel",
   "Poor": "Dålig",
   "Very poor": "Mycket dålig",
@@ -4512,6 +4513,7 @@
   "{network} unavailable": "{network} är inte tillgänglig",
   "{network}: request budget reached; cached data will refresh later": "{network}: anropsgränsen har nåtts; cachade data uppdateras senare",
   "Measured · {provider} · {age}": "Uppmätt · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "Lågkostnadssensor · {provider} · {age}",
   "HIGHEST IN VIEW": "HÖGSTA I VYN",
   "EEA hourly quality|Extreme": "Extrem",
   "air quality monitors|STATIONS": "STATIONER",
@@ -4531,6 +4533,7 @@
   "nearest rated station · {name}": "närmaste klassificerade station · {name}",
   "calculated from the station": "beräknat från stationens data",
   "Low-cost sensor": "Lågkostnadssensor",
+  "{name} · sensor": "{name} · sensor",
   "Reference monitor": "Referensinstrument",
   "Needs {envVars} — add one in Provider Settings": "Kräver {envVars} – lägg till en av dem i Leverantörsinställningar",
   "Voice and search controls": "Röst- och sökkontroller"

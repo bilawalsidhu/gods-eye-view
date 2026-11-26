@@ -501,7 +501,8 @@
     "{utc} UTC",
     "Manual",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{name} · sensor"
   ],
   "fr": [
     "1 min/s",
@@ -1283,7 +1284,8 @@
     "{utc} UTC",
     "Manual",
     "{seconds} s",
-    "UTC"
+    "UTC",
+    "{name} · sensor"
   ],
   "ru": [
     "1900–1945",
@@ -1526,7 +1528,8 @@
     "{seconds} s",
     "{count} stations",
     "{utc} UTC",
-    "UTC"
+    "UTC",
+    "{name} · sensor"
   ],
   "uk": [
     "1900–1945",

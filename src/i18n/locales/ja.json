@@ -4401,6 +4401,7 @@
   "too few hours for an 8-hour average": "8時間平均に必要な時間数が不足",
   "incomplete hour": "不完全な1時間値",
   "averaging period not rated": "評価対象外の平均化期間",
+  "low-cost sensor": "低価格センサー",
   "model at view centre": "表示中心のモデル値",
   "nearest station · {name}": "最寄りの測定局 · {name}",
   "Pollutants": "汚染物質",
@@ -4408,6 +4409,7 @@
   "{network} unavailable": "{network}を利用できません",
   "{network}: request budget reached; cached data will refresh later": "{network}：リクエスト上限に達しました。キャッシュされたデータは後で更新されます",
   "Measured · {provider} · {age}": "実測 · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "低価格センサー · {provider} · {age}",
   "HIGHEST IN VIEW": "表示範囲内の上位",
   "EEA hourly quality|Extreme": "極めて不良",
   "air quality monitors|STATIONS": "測定局",
@@ -4426,6 +4428,7 @@
   "nearest rated station · {name}": "最寄りの評価済み観測局 · {name}",
   "calculated from the station": "観測局のデータから算出",
   "Low-cost sensor": "低価格センサー",
+  "{name} · sensor": "{name} · センサー",
   "Reference monitor": "基準測定器",
   "Needs {envVars} — add one in Provider Settings": "{envVars}のいずれかが必要です。プロバイダー設定で追加してください",
   "Voice and search controls": "音声と検索のコントロール"

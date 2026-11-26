@@ -350,6 +350,60 @@ test('a selected station heads the card and the tiles read it', async () => {
   );
 });
 
+test('a low-cost sensor has no US AQI and is marked a sensor in a pollutant view', async () => {
+  const sensorAt = (place, values) =>
+    station('national', place, values).map((row) => ({
+      ...row,
+      monitor: false,
+    }));
+  const { layer } = cardHarness({
+    national: (request) => {
+      const rows = [
+        ...station('national', CAPE_TOWN, { 'PM2.5': 12 }),
+        ...sensorAt(DURBAN, { 'PM2.5': 40 }),
+      ];
+      return request.mode === 'aqi'
+        ? rows
+        : rows
+            .filter((row) => row.parameter === request.parameter)
+            .map(interpretHourly);
+    },
+  });
+  await layer.update();
+  await flush();
+  let { list } = layer.getRowControls();
+  // The AQI view: the sensor is unrated, and its details say why.
+  assert.deepEqual(
+    list.items.map((item) => [item.lead, item.text, item.unranked]),
+    [
+      ['56', 'Cape Town', false],
+      ['—', 'Durban · sensor', true],
+    ],
+  );
+  assert.match(
+    list.items[1].title,
+    /Low-cost sensor · .*Index unavailable · Not used: PM2\.5 \(low-cost sensor\)/,
+  );
+  layer.setParams({ view: 'PM2.5' });
+  await layer.update();
+  await flush();
+  ({ list } = layer.getRowControls());
+  // A pollutant view keeps it, rated on its bands, marked a sensor.
+  assert.deepEqual(
+    list.items.map((item) => [item.text, item.note]),
+    [
+      ['Durban · sensor', 'Moderate'],
+      ['Cape Town', 'Fair'],
+    ],
+  );
+  layer.setParams({ station: 'national:durban:PM2.5' });
+  assert.match(
+    layer.getRowControls().summary.result.lines[0].text,
+    /^Low-cost sensor · NATIONAL · /,
+  );
+  layer.destroy();
+});
+
 test('highest in view rows are one line: rank, band colour, value and name', async () => {
   const { layer } = cardHarness({
     national: [

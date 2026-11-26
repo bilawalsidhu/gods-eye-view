@@ -171,6 +171,23 @@ test('a hazardous reading up to twice its table top is kept and runs past 500', 
   assert.equal(usAqi(plausibility({ no2: 3764 }).kept).index, 488);
 });
 
+test('a low-cost sensor gets no US AQI; its values say why', () => {
+  const station = {
+    values: { pm25: 60, no2: 20 },
+    valueTimes: { pm25: 1000, no2: 2000 },
+    excluded: { o3: 'flagged' },
+  };
+  assert.equal(stationIndex(station).aqi.index, 154);
+  // Unmarked stations count as monitors; only `monitor: false` is a sensor.
+  assert.equal(stationIndex({ ...station, monitor: true }).aqi.index, 154);
+  assert.deepEqual(stationIndex({ ...station, monitor: false }), {
+    aqi: null,
+    used: {},
+    excluded: { o3: 'flagged', pm25: 'sensor', no2: 'sensor' },
+    observedMs: 2000,
+  });
+});
+
 test('the bands are the EPA categories and colours', () => {
   assert.deepEqual(US_AQI_LIMITS, [50, 100, 150, 200, 300]);
   assert.deepEqual(

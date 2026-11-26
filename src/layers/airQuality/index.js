@@ -191,6 +191,7 @@ const EXCLUSION_REASONS = Object.freeze({
   hours: msg('too few hours for an 8-hour average'),
   incomplete: msg('incomplete hour'),
   averaging: msg('averaging period not rated'),
+  sensor: msg('low-cost sensor'),
 });
 /**
  * What a station's value stands for: the NowCast of its recent hourly
@@ -2742,12 +2743,18 @@ export function createAirQualityLayer({
                   {
                     id: 'station-source',
                     muted: true,
-                    text: t('Measured · {provider} · {age}', {
-                      provider: selectedNetwork,
-                      age: Number.isFinite(selected.observedMs)
-                        ? shortAgo(selected.observedMs)
-                        : t('Unavailable'),
-                    }),
+                    // A low-cost sensor says so: it has no US AQI.
+                    text: t(
+                      selected.monitor === false
+                        ? msg('Low-cost sensor · {provider} · {age}')
+                        : msg('Measured · {provider} · {age}'),
+                      {
+                        provider: selectedNetwork,
+                        age: Number.isFinite(selected.observedMs)
+                          ? shortAgo(selected.observedMs)
+                          : t('Unavailable'),
+                      },
+                    ),
                   },
                   ...(licence
                     ? [
@@ -2790,7 +2797,11 @@ export function createAirQualityLayer({
               note: rowCategory(reading),
               swatch: reading.color,
               lead: scaleText(reading),
-              text: reading.name,
+              // A low-cost sensor is marked in its row, beside monitors.
+              text:
+                reading.monitor === false
+                  ? t('{name} · sensor', { name: reading.name })
+                  : reading.name,
               title: `${category ? category + ' · ' : ''}${reading.name} · ${reading.zone} · ${reading.owner || owner.network}${reading.monitor === false ? ' · ' + t('Low-cost sensor') : reading.monitor === true ? ' · ' + t('Reference monitor') : ''} · ${view === 'aqi' && reading.aqi ? averagingText(reading.valueMethods?.[reading.aqi.leading], reading.valueAveraging?.[reading.aqi.leading]) : averagingText(null, reading.averagingMinutes)} · ${observed} · ${view === 'aqi' ? aqiDetails(reading) : pollutantDetails(reading)} · ${older ? `${t('Older observation')} · ` : ''}${t('Provisional data')} · ${originText(reading, reading.network || owner.network)}`,
               accent: reading.color,
               active: reading.id === selectedStation,

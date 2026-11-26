@@ -4401,6 +4401,7 @@
   "too few hours for an 8-hour average": "小时数不足以计算 8 小时平均值",
   "incomplete hour": "不完整的小时",
   "averaging period not rated": "该平均时段不予评级",
+  "low-cost sensor": "低成本传感器",
   "model at view centre": "视野中心的模型值",
   "nearest station · {name}": "最近的监测站 · {name}",
   "Pollutants": "污染物",
@@ -4408,6 +4409,7 @@
   "{network} unavailable": "{network} 不可用",
   "{network}: request budget reached; cached data will refresh later": "{network}：已达到请求额度，缓存数据将在稍后刷新",
   "Measured · {provider} · {age}": "实测 · {provider} · {age}",
+  "Low-cost sensor · {provider} · {age}": "低成本传感器 · {provider} · {age}",
   "HIGHEST IN VIEW": "视野内最高值",
   "EEA hourly quality|Extreme": "极差",
   "air quality monitors|STATIONS": "监测站",
@@ -4426,6 +4428,7 @@
   "nearest rated station · {name}": "最近的已评级站点 · {name}",
   "calculated from the station": "根据站点数据计算",
   "Low-cost sensor": "低成本传感器",
+  "{name} · sensor": "{name} · 传感器",
   "Reference monitor": "参考监测仪",
   "Needs {envVars} — add one in Provider Settings": "需要 {envVars}，请在服务商设置中添加其中一个",
   "Voice and search controls": "语音和搜索控件"

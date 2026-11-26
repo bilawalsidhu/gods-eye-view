@@ -10312,7 +10312,9 @@ the EPA breakpoints (Technical Assistance Document, Table 6, PM2.5 as revised in
 2024; ozone's current hourly mean also on the 1-hour rows from 0.125 ppm, the
 higher kept) and the highest one sets its index, category, colour and time.
 Pollutant tiles in the AQI view show each pollutant's newest hourly mean on
-its EEA band. Values more than three hours older than the
+its EEA band. A low-cost sensor (`monitor: false`) gets no US AQI (OpenAQ asks
+nothing of one in that view); pollutant views keep it, its row and header
+marked as a sensor. Values more than three hours older than the
 station's newest value kept are left out, as are implausible ones (above a
 pollutant's ceiling, or PM2.5 more than 1.5 × PM10 + 10 µg/m³: smoke, where PM2.5
 nearly equals PM10, still counts); details name each value left out and why.
