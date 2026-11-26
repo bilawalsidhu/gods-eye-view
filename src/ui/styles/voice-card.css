@@ -32,7 +32,7 @@
   animation: gev-voice-card-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* The visible card must clear the dock trays' parent stacking contexts. */
+/* The visible card must clear its neighbours' stacking contexts. */
 #command-dock
   > #gev-voice-control:not([data-status='error']):has(
     .gev-voice-card:not([hidden])
@@ -49,10 +49,6 @@
 /* The card takes the tray slot; the hover hint yields to it. */
 #gev-voice-control:has(.gev-voice-card:not([hidden])) .gev-voice-help-tray {
   display: none;
-}
-
-#command-dock.dock-has-pinned-tray .gev-voice-card {
-  bottom: calc(100% + 1.7rem + var(--dock-pinned-stack-height));
 }
 
 @keyframes gev-voice-card-in {
@@ -94,18 +90,17 @@
   color: #ffc46b;
 }
 
+/* A UiCloseButton (close-button.css). */
 .gev-voice-card-dismiss {
   margin-inline-start: auto;
   width: 1.1rem;
   height: 1.1rem;
-  padding: 0;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(54, 220, 255, 0.24);
   border-radius: 0.2rem;
   font-size: 0.72rem;
   line-height: 1;
-  cursor: pointer;
   transition:
     color var(--transition-fast),
     border-color var(--transition-fast);
@@ -240,11 +235,14 @@
   gap: 0.25rem;
 }
 
+/* A UiChip in the card's own type: the card's line height and weight, not
+   the shared chip's (chip.css). */
 .gev-voice-card-chip {
   padding: 0.08rem 0.3rem;
   color: var(--text-secondary);
   border: 1px solid rgba(54, 220, 255, 0.3);
   border-radius: 0.18rem;
+  font: inherit;
   font-family: var(--font-mono);
   font-size: 0.44rem;
   letter-spacing: 0.06rem;
@@ -418,12 +416,7 @@ body.recording-mode .gev-pointer-reticle {
   text-align: start;
   transform: translateX(-50%);
 }
-:root[data-ui-theme='cyber'] #gev-voice-control .gev-voice-panel {
-  background-color: var(--cyber-panel-surface);
-  background-image: var(--cyber-panel-surface-detail);
-  border-color: var(--glass-border);
-  box-shadow: var(--cyber-panel-shadow);
-}
+
 #gev-voice-control .gev-voice-panel[hidden],
 #gev-voice-control .gev-voice-panel [hidden] {
   display: none;
@@ -601,15 +594,6 @@ body.recording-mode .gev-pointer-reticle {
   bottom: min(
     calc(100% + 4.8rem + var(--gev-provider-lift)),
     calc(100dvh - 7.75rem)
-  );
-}
-
-#command-dock.dock-has-pinned-tray
-  #gev-voice-control:not([data-provider-choice='true'])
-  .gev-voice-panel {
-  bottom: min(
-    calc(100% + 1.7rem + var(--dock-pinned-stack-height)),
-    calc(100dvh - 18rem)
   );
 }
 @media (pointer: coarse) {

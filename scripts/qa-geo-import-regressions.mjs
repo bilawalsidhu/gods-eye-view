@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Import regressions through the real UI controller and Cesium loaders.
+/** Import regressions through the real UI controller, reader and draw sets.
  * Run against dev and preview: QA_BASE_URL=http://localhost:4173 node scripts/qa-geo-import-regressions.mjs
  */
 import puppeteer from 'puppeteer';
@@ -129,13 +129,13 @@ try {
           ? JSON.stringify(value)
           : value;
       const [outcome] = await tool.importFiles([new File([content], name)]);
-      return {
-        outcome,
-        source: outcome.ok
-          ? viewer.dataSources.get(viewer.dataSources.length - 1)
-          : null,
-      };
+      // What the file drew: its draw sets' items, by kind.
+      return { outcome, drawn: outcome.ok ? tool.drawn(outcome.id) : null };
     };
+    const items = (r) =>
+      r.drawn ? [...r.drawn.icons, ...r.drawn.lines, ...r.drawn.shapes] : [];
+    const cartesian = (p) => new C.Cartesian3(p.x, p.y, p.z);
+    const heightOf = (p) => C.Cartographic.fromCartesian(cartesian(p)).height;
     const remove = (r) => {
       if (r.outcome.ok) tool.remove(r.outcome.id);
     };
@@ -171,26 +171,19 @@ try {
       },
       'xyz.geojson',
     );
-    const pin = (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.billboard,
-      ),
-      polygon = (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.polygon,
-      );
+    const pin = r.drawn?.icons[0],
+      polygon = r.drawn?.shapes.find((s) => s.geometry.kind === 'polygon');
     check(
       'XYZ ground footprint and isolated entity IDs',
       r.outcome.ok &&
         pin.id !== 'kartaview-owned' &&
-        Math.abs(
-          C.Cartographic.fromCartesian(pin.position.getValue(now)).height,
-        ) < 0.01 &&
-        polygon.polygon.perPositionHeight?.getValue(now) !== true,
+        Math.abs(pin.pos.height) < 0.01 &&
+        polygon.geometry.perPositionHeight !== true,
+      { pin: pin?.pos, polygon: polygon?.geometry.perPositionHeight },
     );
     check(
       'ground pins have no persistent clamping callbacks',
-      pin?.billboard.heightReference?.getValue(now) ===
-        C.HeightReference.NONE &&
-        pin.billboard.disableDepthTestDistance.getValue(now) === Infinity,
+      pin?.height === 'absolute' && pin.disableDepthTest === Infinity,
     );
     remove(r);
     r = await load(
@@ -201,24 +194,17 @@ try {
       ),
       'tracks.kml',
     );
-    const find = (name) =>
-      (r.source?.importedEntities || r.source?.entities.values).find(
-        (e) => e.name === name,
-      );
+    const find = (name) => r.drawn?.lines.find((l) => l.meta?.name === name);
     check(
       'ground tracks and untessellated authored lines clamp',
-      find('ground')?.polyline.clampToGround?.getValue(now) &&
-        find('line')?.polyline.clampToGround?.getValue(now),
+      find('ground')?.mode === 'draped' && find('line')?.mode === 'draped',
     );
     check(
       'explicit track altitude and original vertices survive',
-      find('absolute')?.polyline.positions.getValue(now).length === 2 &&
-        find('absolute')
-          .polyline.positions.getValue(now)
-          .every(
-            (p) =>
-              Math.abs(C.Cartographic.fromCartesian(p).height - 10000) < 0.01,
-          ),
+      find('absolute')?.positions.length === 2 &&
+        find('absolute').positions.every(
+          (p) => Math.abs(heightOf(p) - 10000) < 0.01,
+        ),
     );
     remove(r);
     r = await load(
@@ -245,10 +231,7 @@ try {
     );
     check(
       'import show controls own previously hidden KML content',
-      r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values).every(
-          (e) => e.isShowing,
-        ),
+      r.outcome.ok && r.drawn.show && r.drawn.icons.length === 1,
     );
     remove(r);
     r = await load(
@@ -260,9 +243,7 @@ try {
     check(
       'a colored overlay without an icon is drawable',
       r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values).some(
-          (e) => e.rectangle,
-        ),
+        r.drawn.shapes.some((s) => s.geometry.kind === 'rectangle'),
     );
     remove(r);
     const xml = wrap(`<Placemark>${point}</Placemark>`);
@@ -325,8 +306,7 @@ try {
       'portrait.geojson',
     );
     await new Promise((resolve) => setTimeout(resolve, 2300));
-    const positions = (r.source?.importedEntities ||
-      r.source?.entities.values)[0].polyline.positions.getValue(now);
+    const positions = r.drawn?.lines[0]?.positions.map(cartesian);
     const screen = positions?.map((p) =>
       C.SceneTransforms.worldToWindowCoordinates(viewer.scene, p),
     );
@@ -349,11 +329,9 @@ try {
       'intercontinental.geojson',
     );
     await new Promise((resolve) => setTimeout(resolve, 2300));
-    const intercontinental = (
-      r.source?.importedEntities || r.source?.entities.values
-    )
-      .filter((e) => e.position)
-      .map((e) => e.position.getValue(now));
+    const intercontinental = r.drawn?.icons.map(({ pos }) =>
+      C.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.height),
+    );
     const occluder = new C.EllipsoidalOccluder(
       C.Ellipsoid.WGS84,
       viewer.camera.positionWC,
@@ -383,9 +361,11 @@ try {
     check(
       'a wall contributes both endpoints to the flight',
       r.outcome.ok &&
-        (r.source.importedEntities || r.source.entities.values)
-          .find((e) => e.wall)
-          ?.wall.positions.getValue(now)
+        r.drawn.shapes
+          .find((s) => s.geometry.kind === 'wall')
+          ?.geometry.positions.map(({ lon, lat, height }) =>
+            C.Cartesian3.fromDegrees(lon, lat, height),
+          )
           .every((p) => {
             const s = C.SceneTransforms.worldToWindowCoordinates(
               viewer.scene,
@@ -447,11 +427,11 @@ try {
       { type: 'Point', coordinates: [-122.5, 37.7, 0] },
       'mesh-point.geojson',
     );
-    const meshPoint = (r.source?.importedEntities || r.source?.entities.values)
-      .find((e) => e.billboard)
-      ?.position.getValue(now);
-    const meshHeight =
-      meshPoint && C.Cartographic.fromCartesian(meshPoint).height;
+    const meshPin = r.drawn?.icons[0]?.pos;
+    const meshPoint =
+      meshPin &&
+      C.Cartesian3.fromDegrees(meshPin.lon, meshPin.lat, meshPin.height);
+    const meshHeight = meshPin?.height;
     check(
       'native 3D Tiles ground sampling keeps pins on the rendered mesh',
       r.outcome.ok && Math.abs(meshHeight - 2000) < 2,
@@ -480,7 +460,7 @@ try {
         meshHeight,
       },
     );
-    const groundSource = r.source;
+    const groundFile = r.outcome.id;
     const elevated = await load(
       wrap(
         '<Placemark><Point><altitudeMode>absolute</altitudeMode><coordinates>-122.5,37.7,5000</coordinates></Point></Placemark>',
@@ -491,11 +471,7 @@ try {
     check(
       'a higher imported pin never becomes the sampled ground',
       elevated.outcome.ok &&
-        Math.abs(
-          C.Cartographic.fromCartesian(
-            groundSource.importedBillboards.get(0).position,
-          ).height - 2000,
-        ) < 2,
+        Math.abs(tool.drawn(groundFile).icons[0].pos.height - 2000) < 2,
     );
     remove(elevated);
     remove(r);

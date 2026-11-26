@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import {
   FLOOR_REREAD_ATTEMPTS,
   FLOOR_REREAD_MS,
@@ -14,6 +13,7 @@ import {
   TERRAIN_SETTLE_MS,
   withinViewBounds,
 } from './policy.js';
+import { heightsOf } from '../../queries/heights.js';
 
 /** Surface preparation off the render path, shared by markers and history. */
 export function createHeight({ state, services, parts }) {
@@ -25,24 +25,6 @@ export function createHeight({ state, services, parts }) {
     coarseFloorCoord,
     GROUND_FLOOR_LIFT_M,
   } = services.ground;
-  // The application's rendered-mesh sampler. Optional so a layer built on a
-  // bare floor stub still runs; the application always supplies it.
-  const sampleMeshFloorCells = services.mesh?.sampleMeshFloorCells || null;
-
-  /** The camera's subpoint in degrees, for the sampler's proximity gate. */
-  function viewerSubpoint() {
-    const carto = state._viewer?.camera?.positionCartographic;
-    if (!carto) return { viewerLat: undefined, viewerLon: undefined };
-    return {
-      viewerLat: (carto.latitude * 180) / Math.PI,
-      viewerLon: (carto.longitude * 180) / Math.PI,
-    };
-  }
-
-  function cameraAltitude() {
-    const carto = state._viewer?.camera?.positionCartographic;
-    return carto && Number.isFinite(carto.height) ? carto.height : Infinity;
-  }
 
   /**
    * Whether ground matters at this camera. Above the gate a few metres of
@@ -51,14 +33,15 @@ export function createHeight({ state, services, parts }) {
    * @returns {boolean}
    */
   function nearGround() {
-    return cameraAltitude() <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
+    return parts.rendering.cameraHeightM() <= HEIGHT_SAMPLE_MAX_ALTITUDE_M;
   }
 
   // --- Loaded-terrain heights ---
-  // `globe.getHeight` casts a ray against the mesh of the tile drawn under the
+  // A terrain height casts a ray against the mesh of the tile drawn under the
   // point. The fleet asks for every fix of every trail on each reread, so the
   // answers are kept per point and re-read on a time budget; see policy.js.
-  const terrainPoint = new Cesium.Cartographic();
+  const terrainPoint = { lon: 0, lat: 0 };
+  const AGAINST_TERRAIN = Object.freeze({ against: 'terrain' });
   /** Point key → `{ h, at }`: the height read there and when. */
   const terrainHeights = new Map();
   /** Floor-cell key → the last height read anywhere in that cell. */
@@ -78,9 +61,8 @@ export function createHeight({ state, services, parts }) {
     cameraLat = NaN,
     cameraHeight = NaN;
   const terrainStats = { reads: 0, reused: 0, deferred: 0, borrowed: 0 };
-  /** The globe and terrain provider the kept heights were read from. */
-  let terrainGlobeRead = null,
-    terrainProviderRead = null;
+  /** The globe's `surfaceVersion` the kept heights were read from. */
+  let terrainSurfaceRead = null;
 
   /** A number unique to a point on a `scale`-per-degree grid. */
   function gridKey(lat, lon, scale) {
@@ -116,7 +98,7 @@ export function createHeight({ state, services, parts }) {
    * every pass, so re-reads go to the longest-held points first: otherwise
    * the first few would be re-read forever and the rest never.
    */
-  function terrainHeight(globe, lat, lon, need) {
+  function terrainHeight(lat, lon, need) {
     const now = performance.now();
     if (now - terrainWindowAt >= TERRAIN_READ_WINDOW_MS) {
       for (let i = 0; i < terrainDeferredAt.length; i++) {
@@ -127,16 +109,16 @@ export function createHeight({ state, services, parts }) {
       terrainReadMs = terrainRefreshMs = 0;
       // The globe redraws a point from another tile only after the camera
       // moves or a tile arrives.
-      const camera = state._viewer?.camera?.positionCartographic;
+      const camera = parts.rendering.cameraPose();
       if (
-        globe.tilesLoaded === false ||
-        camera?.longitude !== cameraLon ||
-        camera?.latitude !== cameraLat ||
+        !parts.rendering.terrainSettled() ||
+        camera?.lon !== cameraLon ||
+        camera?.lat !== cameraLat ||
         camera?.height !== cameraHeight
       ) {
         terrainChangedAt = now;
-        cameraLon = camera?.longitude;
-        cameraLat = camera?.latitude;
+        cameraLon = camera?.lon;
+        cameraLat = camera?.lat;
         cameraHeight = camera?.height;
       }
     }
@@ -178,14 +160,18 @@ export function createHeight({ state, services, parts }) {
       terrainWaiting++;
       return undefined;
     }
-    Cesium.Cartographic.fromDegrees(lon, lat, 0, terrainPoint);
-    const rendered = globe.getHeight(terrainPoint);
+    terrainPoint.lon = lon;
+    terrainPoint.lat = lat;
+    const rendered = heightsOf(state._viewer).now(
+      terrainPoint,
+      AGAINST_TERRAIN,
+    );
     const spent = performance.now() - now;
     terrainReadMs += spent;
     if (held) terrainRefreshMs += spent;
     terrainStats.reads++;
     // A tile that left the globe keeps the height it gave.
-    if (!Number.isFinite(rendered)) return held?.h;
+    if (rendered === null) return held?.h;
     if (held) {
       held.h = rendered;
       held.at = now;
@@ -221,21 +207,19 @@ export function createHeight({ state, services, parts }) {
       return { cell, height: fixtureFloor, prior: null };
     // On a terrain globe, use the loaded surface under the marker. This reads
     // tiles already loaded and does not launch a terrain request.
-    const globe = state._viewer?.scene?.globe;
-    const provider = state._viewer?.terrainProvider;
-    // A height belongs to the terrain it was read from. Checked before the
-    // flat-globe answer, so terrain → flat → terrain starts afresh too.
-    if (globe !== terrainGlobeRead || provider !== terrainProviderRead) {
-      clearTerrainHeights();
-      terrainGlobeRead = globe;
-      terrainProviderRead = provider;
-    }
-    if (globe?.show === true) {
-      if (provider instanceof Cesium.EllipsoidTerrainProvider)
+    const globe = parts.rendering.globeSurface();
+    if (globe !== 'none') {
+      // A height belongs to the surface it was read from; the version moves
+      // on every terrain swap and globe show or hide. Checked before the
+      // flat-globe answer, so terrain → flat → terrain starts afresh too.
+      const surface = parts.rendering.surfaceVersion();
+      if (surface !== terrainSurfaceRead) {
+        clearTerrainHeights();
+        terrainSurfaceRead = surface;
+      }
+      if (globe === 'flat')
         return { cell, height: GROUND_FLOOR_LIFT_M, prior: null };
-      const rendered = globe.getHeight
-        ? terrainHeight(globe, lat, lon, need)
-        : undefined;
+      const rendered = terrainHeight(lat, lon, need);
       if (Number.isFinite(rendered))
         return { cell, height: rendered + GROUND_FLOOR_LIFT_M, prior: null };
     }
@@ -389,14 +373,9 @@ export function createHeight({ state, services, parts }) {
       if (admitted && cell.entry) cellCursors.set(cell.entry, cell.next);
     }
     meshUsed += mesh.length;
-    const markers = entries.map((entry) => entry.marker).filter(Boolean);
     for (let i = 0; i < dem.length; i += 8)
       warmGroundFloor(dem.slice(i, i + 8));
-    for (let i = 0; i < mesh.length; i += 8)
-      sampleMeshFloorCells?.(state._viewer?.scene, mesh.slice(i, i + 8), {
-        excludeObjects: markers,
-        ...viewerSubpoint(),
-      });
+    parts.rendering.sampleMeshFloors(mesh);
     // Cached completions can be adopted now; asynchronous completions are
     // adopted by the next bounded reread.
     for (const entry of entries) parts.trails.prepareEntry(entry);

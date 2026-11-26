@@ -5,6 +5,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Cesium from 'cesium';
 import { getBasemapLabelContext } from './gevActions.js';
+import { bindFakeCesiumCamera } from '../testSupport/fakeCameraPort.mjs';
+import { fakeSceneQuery } from '../testSupport/fakeCesiumScene.mjs';
 import {
   hudViewportSamples,
   placeLookupView,
@@ -25,7 +27,12 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
   const camera = {
     heading: 0,
     pitch: -Math.PI / 2,
-    frustum: { fov: Math.PI / 3, aspectRatio: 1.5 },
+    // Cesium's `fov` is the wider angle; `fovy` the vertical one.
+    frustum: {
+      fov: Math.PI / 3,
+      fovy: 2 * Math.atan(Math.tan(Math.PI / 6) / 1.5),
+      aspectRatio: 1.5,
+    },
     pickEllipsoid(point) {
       return Cesium.Cartesian3.fromDegrees(
         state.longitude +
@@ -63,7 +70,9 @@ function createViewer({ latitude, longitude, heightM, groundM = 0 }) {
         state.groundM,
       ),
   };
-  return { viewer: { camera, scene }, state, degreesPerPixel };
+  const viewer = { camera, scene };
+  bindFakeCesiumCamera(viewer, { query: fakeSceneQuery(viewer) });
+  return { viewer, state, degreesPerPixel };
 }
 
 /** Answers every lookup with a label naming the point it was asked about. */

@@ -1,9 +1,12 @@
+import { followedOf, onFollowChanged } from './followed.js';
+import { currentSelection, onSelectionChanged } from './clickSelect.js';
 import {
   clearOverlaySource,
   setOverlayEntries,
   setOverlaySourceVisible,
 } from '../overlays/worldOverlay.js';
 import { WORLD_OVERLAY_STYLE } from '../overlays/worldOverlayTokens.js';
+import { readEntityRecord } from './entityRecords.js';
 
 /**
  * @module trackedReadout
@@ -35,6 +38,7 @@ const DEFAULT_TRACKED_OVERLAY_HOST = Object.freeze({
 
 let _viewer = null;
 let _trackedEntityChangedRemove = null;
+let _selectionChangedRemove = null;
 let _selectedContext = null;
 let _contextSelectedHandler = null;
 let _contextClearedHandler = null;
@@ -79,9 +83,10 @@ export function trackedLabelModelFromText(
  * @returns {Object|null}
  */
 export function cachedTrackedDisplayPosition(entity) {
-  if (!entity || typeof entity.gevDisplayPosition !== 'function') return null;
+  const displayPosition = readEntityRecord(entity)?.displayPosition;
+  if (typeof displayPosition !== 'function') return null;
   try {
-    return entity.gevDisplayPosition() || null;
+    return displayPosition() || null;
   } catch {
     return null;
   }
@@ -91,22 +96,23 @@ export function cachedTrackedDisplayPosition(entity) {
  * Anchor for the tracked CARD: the position the target is visually at.
  *
  * A layer that renders its tracked contact as a 3D model publishes
- * `gevVisualPosition`, which returns the translation that model is actually rendering
+ * the entity record's `visualPosition`, which returns the translation that model is actually rendering
  * with. For a grounded aircraft that differs from the display position by the full
  * ground-snap offset (~100 m at an inland airport), so a card anchored to the display
  * position sits below the aircraft and climbs slowly as the coarse floor cell warms.
  *
  * Falls back to the display position, so layers without a 3D visual (and any layer
  * before its model is ready) are unchanged. This deliberately does NOT repurpose
- * `gevDisplayPosition`: that accessor carries the follow-camera anti-jitter contract
+ * the entity record's `displayPosition`: that accessor carries the follow-camera anti-jitter contract
  * and must keep returning the value the camera settled on.
  * @param {Object|null} entity Tracked or selected presentation entity.
  * @returns {Object|null}
  */
 export function cachedTrackedVisualPosition(entity) {
-  if (entity && typeof entity.gevVisualPosition === 'function') {
+  const visualPosition = readEntityRecord(entity)?.visualPosition;
+  if (typeof visualPosition === 'function') {
     try {
-      const visual = entity.gevVisualPosition();
+      const visual = visualPosition();
       if (visual) return visual;
     } catch {
       /* fall through to the display position */
@@ -116,14 +122,24 @@ export function cachedTrackedVisualPosition(entity) {
 }
 
 function entryIdFor(entity) {
-  const explicit = String(entity?.gevTrackedId || '').trim();
+  const explicit = String(readEntityRecord(entity)?.trackedId || '').trim();
   if (explicit) return explicit;
   const fallback = String(entity?.id || '').trim();
   return fallback ? `entity:${fallback}` : null;
 }
 
+/**
+ * The card's thing: what the camera follows, else what a click selected
+ * (src/data/clickSelect.js: a click selects without following), else a
+ * static layer's selection.
+ */
 function activeEntity() {
-  return _viewer?.trackedEntity || _selectedContext?.entity || null;
+  return (
+    followedOf(_viewer)?.entity ||
+    currentSelection()?.subject?.entity ||
+    _selectedContext?.entity ||
+    null
+  );
 }
 
 /**
@@ -132,9 +148,10 @@ function activeEntity() {
  * @returns {Object|null}
  */
 export function createTrackedOverlayEntry(entity) {
-  const model = entity?.gevLabelModel;
+  const record = readEntityRecord(entity);
+  const model = record?.labelModel;
   const id = entryIdFor(entity);
-  if (!id || !model || typeof entity.gevDisplayPosition !== 'function') {
+  if (!id || !model || typeof record.displayPosition !== 'function') {
     return null;
   }
   const title = String(model.title || '').trim();
@@ -204,7 +221,7 @@ function syncActiveEntity() {
 }
 
 /**
- * Republish a layer's newly assigned `gevLabelModel` when that entity owns the
+ * Republish an entity record's newly assigned `labelModel` when that entity owns the
  * active tracked readout. Layers call this only when presentation text changes;
  * position remains the live frame-cache getter already registered with host.
  * @param {Object} entity Entity whose model changed.
@@ -231,11 +248,14 @@ export function initTrackedReadout(viewer) {
   if (_viewer) destroyTrackedReadout();
   _viewer = viewer;
   _overlayHost.setVisible(TRACKED_OVERLAY_SOURCE_ID, true);
-  _trackedEntityChangedRemove =
-    viewer.trackedEntityChanged?.addEventListener?.(() => {
-      if (viewer.trackedEntity) _selectedContext = null;
-      syncActiveEntity();
-    }) || null;
+  _trackedEntityChangedRemove = onFollowChanged(viewer, (followed) => {
+    if (followed) _selectedContext = null;
+    syncActiveEntity();
+  });
+  _selectionChangedRemove = onSelectionChanged((selection) => {
+    if (selection?.subject) _selectedContext = null;
+    syncActiveEntity();
+  });
   _contextSelectedHandler = (event) => {
     const record = event.detail;
     if (READOUT_CONTEXT_LAYERS.has(record?.layerId)) {
@@ -259,7 +279,7 @@ export function initTrackedReadout(viewer) {
   };
   _aircraftSelectedHandler = () => {
     _selectedContext = null;
-    if (!_viewer?.trackedEntity) clearTrackedSource();
+    syncActiveEntity();
   };
   window.addEventListener('gev:entity-selected', _contextSelectedHandler);
   window.addEventListener(
@@ -280,6 +300,8 @@ export function initTrackedReadout(viewer) {
 export function destroyTrackedReadout() {
   _trackedEntityChangedRemove?.();
   _trackedEntityChangedRemove = null;
+  _selectionChangedRemove?.();
+  _selectionChangedRemove = null;
   if (_contextSelectedHandler)
     window.removeEventListener('gev:entity-selected', _contextSelectedHandler);
   if (_contextClearedHandler)

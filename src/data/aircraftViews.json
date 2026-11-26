@@ -1,0 +1,89 @@
+{
+ "image": "aircraft-views.webp",
+ "cellPx": 64,
+ "columns": 64,
+ "rows": 57,
+ "ringStepDeg": 7.5,
+ "rings": [
+  1,
+  4,
+  7,
+  10,
+  13,
+  16,
+  18,
+  20,
+  22,
+  23,
+  24,
+  25,
+  25,
+  25,
+  24,
+  23,
+  22
+ ],
+ "fill": 0.92,
+ "subjects": {
+  "airliner": {
+   "first": 0,
+   "model": "aircraft/a320.glb",
+   "radiusM": 18.883
+  },
+  "widebody": {
+   "first": 302,
+   "model": "aircraft/b789.glb",
+   "radiusM": 32.121
+  },
+  "quadjet": {
+   "first": 604,
+   "model": "aircraft/b744.glb",
+   "radiusM": 37.959
+  },
+  "turboprop": {
+   "first": 906,
+   "model": "aircraft/at72.glb",
+   "radiusM": 14.14
+  },
+  "light": {
+   "first": 1208,
+   "model": "aircraft/c172.glb",
+   "radiusM": 5.825
+  },
+  "glider": {
+   "first": 1510,
+   "model": "aircraft/glider.glb",
+   "radiusM": 7.506
+  },
+  "fastjet": {
+   "first": 1812,
+   "model": "aircraft/t38.glb",
+   "radiusM": 7.408
+  },
+  "bizjet": {
+   "first": 2114,
+   "model": "aircraft/c56x.glb",
+   "radiusM": 8.741
+  },
+  "uav": {
+   "first": 2416,
+   "model": "aircraft/mq9.glb",
+   "radiusM": 9.811
+  },
+  "helicopter0": {
+   "first": 2718,
+   "model": "helicopters/generic_heli.glb",
+   "radiusM": 7.556
+  },
+  "helicopter1": {
+   "first": 3020,
+   "model": "helicopters/generic_heli.glb",
+   "radiusM": 7.556
+  },
+  "helicopter2": {
+   "first": 3322,
+   "model": "helicopters/generic_heli.glb",
+   "radiusM": 7.556
+  }
+ }
+}

@@ -1,0 +1,61 @@
+/* The kit's on/off switch, UiSwitch: a pill track 30 by 16 px whose knob
+ * slides to the end and takes the accent while it is on. The rules select
+ * the kit's classes and load before the feature stylesheets, so a feature
+ * rule still places the switch in its row. */
+.ui-switch {
+  position: relative;
+  flex: none;
+  width: 30px;
+  min-width: 0;
+  height: 16px;
+  padding: 0;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.ui-switch::before {
+  /* A hit target 26 px tall around the 16 px track. */
+  position: absolute;
+  inset: -6px -2px;
+  content: '';
+}
+
+.ui-switch__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  background: rgba(199, 214, 222, 0.6);
+  border-radius: 50%;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+
+.ui-switch[aria-checked='true'] {
+  background: rgba(54, 220, 255, 0.22);
+  border-color: rgba(54, 220, 255, 0.7);
+}
+
+.ui-switch[aria-checked='true'] .ui-switch__knob {
+  background: #36dcff;
+  transform: translateX(14px);
+}
+
+.ui-switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* Right to left, the knob starts on the right and moves left. */
+html[dir='rtl'] .ui-switch__knob {
+  right: 2px;
+  left: auto;
+}
+
+html[dir='rtl'] .ui-switch[aria-checked='true'] .ui-switch__knob {
+  transform: translateX(-14px);
+}

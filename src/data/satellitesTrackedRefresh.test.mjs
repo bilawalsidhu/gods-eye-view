@@ -16,13 +16,33 @@ import {
   _trackIssForTest,
   createIssOverlayEntry,
 } from './satellites.js';
+import { followedOf } from './followed.js';
+import { bindRenderer } from '../render/rendererOf.js';
+import { fakeDrawPort } from '../testSupport/fakeDrawPort.mjs';
 import satellitesLayer from './satellites.js';
 import { createTrackedOverlayEntry } from './trackedReadout.js';
+import { readEntityRecord, withEntityRecord } from './entityRecords.js';
 
 const L1 =
   '1 25544U 98067A   08264.51782528 -.00002182  00000-0 -11606-4 0  2927';
 const L2 =
   '2 25544  51.6416 247.4627 0006703 130.5360 325.0288 15.72125391563537';
+
+
+/** A camera port that only follows, for viewers without a Cesium camera. */
+function followingPort() {
+  let followed = null;
+  return {
+    on: () => () => {},
+    get followed() {
+      return followed;
+    },
+    follow(target) {
+      followed = target;
+    },
+    cancelFlight() {},
+  };
+}
 
 test('partial and dense catalogs do not make an early false missing decision', async () => {
   _setSatelliteTrackingRefreshOutcomeForTest({
@@ -89,24 +109,19 @@ test('satellite first update aborts every parallel catalog request', async () =>
   }
 });
 
-test('selected satellite params survive delayed arrival and yield to newer explicit intent', () => {
+test('selected satellite params survive delayed arrival and yield to newer explicit intent', (t) => {
   const point = {
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
+    pos: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
     show: true,
     pixelSize: 12,
-    color: Cesium.Color.RED,
-    outlineColor: Cesium.Color.WHITE,
+    color: [1, 0, 0, 1],
+    outlineColor: [1, 1, 1, 1],
     outlineWidth: 2,
-    disableDepthTestDistance: 0,
+    disableDepthTest: 0,
   };
-  const viewer = {
-    entities: new Cesium.EntityCollection(),
-    trackedEntity: undefined,
-    scene: {
-      frameState: { frameNumber: 1 },
-      primitives: { remove() {} },
-    },
-  };
+  const viewer = {};
+  const draw = fakeDrawPort();
+  t.after(bindRenderer(viewer, { camera: followingPort(), draw }));
   _setSatelliteLabelLifecycleStateForTest({
     viewer,
     satrec: twoline2satrec(L1, L2),
@@ -117,7 +132,7 @@ test('selected satellite params survive delayed arrival and yield to newer expli
       satellitesLayer.setParams({ selectedSatTrackingId: 25544 }),
     );
     assert.equal(satellitesLayer.getParams().selectedSatTrackingId, 25544);
-    assert.equal(viewer.trackedEntity?.gevTrackedId, 'satellites:25544');
+    assert.equal(followedOf(viewer)?.key, 'satellites:25544');
 
     satellitesLayer.stopTracking();
     _removeSatelliteTrackingCandidateForTest(25544);
@@ -194,14 +209,14 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // so their ambient labels stack underneath the tracked card. Owner ruling:
   // consolidate them as secondary info on that card, and suppress only those
   // members — never unrelated satellites that merely happen to be nearby.
-  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
-  const point = { position: new Cesium.Cartesian3() };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: ['? km'] } });
+  const point = { pos: new Cesium.Cartesian3() };
   const viewer = { camera: null, scene: { frameState: { frameNumber: 1 } } };
   let nowMs = Date.UTC(2008, 8, 20, 12, 30);
   // The tracked satellite moves ~7.6 km/s, so neighbours are defined RELATIVE to
   // wherever it is at scan time rather than pinned to a stale sample.
   const near = (metres) => ({
-    get position() {
+    get pos() {
       const tracked = _trackedFrameCartesianForTest();
       return new Cesium.Cartesian3(tracked.x + metres, tracked.y, tracked.z);
     },
@@ -226,10 +241,9 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   // The cluster scan is throttled, so advance past its interval before the frame
   // that must observe the cluster.
   nowMs += 2000;
-  viewer.scene.frameState.frameNumber = 2;
   _runSatellitePreRenderForTest();
 
-  const details = entity.gevLabelModel.details;
+  const details = readEntityRecord(entity)?.labelModel.details;
   // Class leads the detail block; the altitude line follows it, and the
   // consolidated companions stay last.
   assert.equal(
@@ -252,8 +266,8 @@ test('a tracked docked cluster consolidates its companions onto one card', () =>
   assert.doesNotMatch(details[2], /\+2/);
 });
 test('satellite pre-render refreshes the tracked altitude on each propagated frame', () => {
-  const entity = { gevLabelModel: { title: 'OLD', details: ['? km'] } };
-  const point = { position: new Cesium.Cartesian3() };
+  const entity = withEntityRecord({}, { labelModel: { title: 'OLD', details: ['? km'] } });
+  const point = { pos: new Cesium.Cartesian3() };
   const viewer = {
     camera: null,
     scene: { frameState: { frameNumber: 1 } },
@@ -271,23 +285,22 @@ test('satellite pre-render refreshes the tracked altitude on each propagated fra
   });
 
   _runSatellitePreRenderForTest();
-  assert.equal(entity.gevLabelModel.title, 'ISS (ZARYA)');
-  assert.equal(entity.gevLabelModel.details[0], 'STATION · ISS');
+  assert.equal(readEntityRecord(entity)?.labelModel.title, 'ISS (ZARYA)');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[0], 'STATION · ISS');
   // formatQuantity keeps the number and its unit together with a no-break space.
-  assert.equal(entity.gevLabelModel.details[1], '353\u00a0km · NORAD 25544');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[1], '353\u00a0km · NORAD 25544');
 
   epochIndex = 1;
-  viewer.scene.frameState.frameNumber = 2;
   _runSatellitePreRenderForTest();
-  assert.equal(entity.gevLabelModel.details[1], '366\u00a0km · NORAD 25544');
+  assert.equal(readEntityRecord(entity)?.labelModel.details[1], '366\u00a0km · NORAD 25544');
   assert.equal(
-    entity.gevLabelModel.details[0],
+    readEntityRecord(entity)?.labelModel.details[0],
     'STATION · ISS',
     'the class line survives an altitude-only republish',
   );
 });
 
-test('ISS ambient and tracked lifecycle uses cached host entries with no native labels or duplicate text', () => {
+test('ISS ambient and tracked lifecycle uses cached host entries with no native labels or duplicate text', (t) => {
   const calls = [];
   const overlayHost = {
     setEntries: (...args) => calls.push(['entries', ...args]),
@@ -295,22 +308,17 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
     clearSource: (...args) => calls.push(['clear', ...args]),
   };
   const point = {
-    position: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
+    pos: Cesium.Cartesian3.fromDegrees(-97.7, 30.2, 420_000),
     show: true,
     pixelSize: 12,
-    color: Cesium.Color.RED,
-    outlineColor: Cesium.Color.WHITE,
+    color: [1, 0, 0, 1],
+    outlineColor: [1, 1, 1, 1],
     outlineWidth: 2,
-    disableDepthTestDistance: 0,
+    disableDepthTest: 0,
   };
-  const viewer = {
-    entities: new Cesium.EntityCollection(),
-    trackedEntity: undefined,
-    scene: {
-      frameState: { frameNumber: 1 },
-      primitives: { remove() {} },
-    },
-  };
+  const viewer = {};
+  const draw = fakeDrawPort();
+  t.after(bindRenderer(viewer, { camera: followingPort(), draw }));
   let cleaned = false;
   _setSatelliteLabelLifecycleStateForTest({
     viewer,
@@ -327,7 +335,7 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
     assert.equal(ambient.title, 'ISS');
     assert.equal(
       ambient.position(),
-      point.position,
+      point.pos,
       'ISS getter reads the existing point cache',
     );
     assert.equal(
@@ -338,16 +346,17 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
 
     const trackedEntity = _trackIssForTest();
     assert.ok(trackedEntity);
+    const tracked = [...draw.sets.values()].find(
+      (set) => !set.disposed && /^satellites:\d+:tracked$/.test(set.spec.id),
+    );
+    assert.ok(tracked, 'the tracked dot has a set of its own');
+    _runSatellitePreRenderForTest();
     assert.equal(
-      viewer.entities.values.length,
-      1,
-      'runtime guard requires a real tracked entity',
+      tracked.items.get('25544')?.pixelSize,
+      14,
+      'the tracked dot draws, as the follow camera frames it',
     );
     assert.equal(trackedEntity.label, undefined);
-    assert.ok(
-      trackedEntity.point,
-      'tracked dot remains on the entity for camera framing',
-    );
     const trackedEntry = createTrackedOverlayEntry(trackedEntity);
     assert.ok(trackedEntry);
     assert.equal(trackedEntry.id, 'satellites:25544');
@@ -372,7 +381,8 @@ test('ISS ambient and tracked lifecycle uses cached host entries with no native 
 
     _clearSatelliteLabelLifecycleForTest();
     cleaned = true;
-    assert.equal(viewer.entities.values.length, 0);
+    assert.equal(tracked.items.size, 0);
+    assert.ok(tracked.disposed);
     assert.equal(
       calls.filter(
         ([type, sourceId]) =>

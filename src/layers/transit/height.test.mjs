@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
 import { createHeight } from './height.js';
+import { bindRenderer } from '../../render/rendererOf.js';
 import {
   FLOOR_REREAD_ATTEMPTS,
   FLOOR_REREAD_MS,
@@ -19,23 +19,34 @@ const LIFT = 1.5;
 /**
  * A height part over a terrain globe whose every read costs `costMs` of a
  * clock the test owns. `surface(lat, lon)` is the terrain; `reads` lists the
- * points actually read.
+ * points actually read. `globe` is what the rendering part says of the
+ * globe: what it draws, its surface version, whether its terrain tiles have
+ * loaded, and the camera's pose.
  */
-function terrain(t, { costMs = 0, surface = () => 100, provider = {} } = {}) {
+function terrain(t, { costMs = 0, surface = () => 100, drawn = 'terrain' } = {}) {
   const clock = { now: 1_000_000 };
   t.mock.method(performance, 'now', () => clock.now);
   const reads = [];
   const world = { surface, costMs };
   const globe = {
-    show: true,
-    getHeight(point) {
-      const lat = Cesium.Math.toDegrees(point.latitude);
-      const lon = Cesium.Math.toDegrees(point.longitude);
-      reads.push(`${lat.toFixed(5)},${lon.toFixed(5)}`);
-      clock.now += world.costMs;
-      return world.surface(lat, lon);
-    },
+    drawn,
+    version: 1,
+    settled: true,
+    camera: { lon: 0, lat: 0, height: 500 },
   };
+  const viewer = {};
+  t.after(
+    bindRenderer(viewer, {
+      query: {
+        sampleHeightNow({ lon, lat }, { against }) {
+          assert.equal(against, 'terrain');
+          reads.push(`${lat.toFixed(5)},${lon.toFixed(5)}`);
+          clock.now += world.costMs;
+          return world.surface(lat, lon);
+        },
+      },
+    }),
+  );
   const state = {
     _enabled: true,
     _selectedKey: null,
@@ -45,15 +56,19 @@ function terrain(t, { costMs = 0, surface = () => 100, provider = {} } = {}) {
     _floorAttempts: 0,
     _floorTimer: null,
     _heightDirty: new Set(),
-    _viewer: {
-      camera: { positionCartographic: { height: 500 } },
-      scene: { globe },
-      terrainProvider: provider,
-    },
+    _viewer: viewer,
   };
   const parts = {
     trails: { prepareEntry() {} },
-    rendering: { requestVisibility() {} },
+    rendering: {
+      requestVisibility() {},
+      sampleMeshFloors() {},
+      cameraPose: () => globe.camera,
+      cameraHeightM: () => globe.camera.height,
+      globeSurface: () => globe.drawn,
+      surfaceVersion: () => globe.version,
+      terrainSettled: () => globe.settled,
+    },
   };
   const height = createHeight({
     state,
@@ -226,7 +241,7 @@ test('held points keep their last height while re-reads are over budget, and the
 });
 
 test('once the camera and the tiles have settled a height is kept until either changes', (t) => {
-  const { height, state, globe, reads, clock, world } = terrain(t, { surface: () => 10 });
+  const { height, globe, reads, clock, world } = terrain(t, { surface: () => 10 });
   const read = () => height.requestHeight(42.36, -71.06).height;
   assert.equal(read(), 10 + LIFT);
   // Still settling: the point falls due and is read again.
@@ -243,7 +258,7 @@ test('once the camera and the tiles have settled a height is kept until either c
   assert.equal(reads.length, 2);
 
   // The camera moves: the globe may draw the point from a finer tile.
-  state._viewer.camera.positionCartographic = { longitude: 0, latitude: 0, height: 250 };
+  globe.camera = { lon: 0, lat: 0, height: 250 };
   clock.now += TERRAIN_READ_WINDOW_MS;
   assert.equal(read(), 99 + LIFT);
   assert.equal(reads.length, 3);
@@ -256,15 +271,14 @@ test('once the camera and the tiles have settled a height is kept until either c
   assert.equal(read(), 101 + LIFT);
   assert.equal(reads.length, 4);
   world.surface = () => 105;
-  globe.tilesLoaded = false;
+  globe.settled = false;
   clock.now += TERRAIN_READ_WINDOW_MS;
   assert.equal(read(), 105 + LIFT);
   assert.equal(reads.length, 5);
 });
 
-test('another terrain provider or globe is read afresh, however settled the old heights were', (t) => {
-  const { height, state, globe, world, clock, reads } = terrain(t);
-  const viewer = state._viewer;
+test('another surface is read afresh, however settled the old heights were', (t) => {
+  const { height, globe, world, clock, reads } = terrain(t);
   const at = () => height.requestHeight(42.36, -71.06).height;
   // Read once the camera and tiles have long settled: kept indefinitely.
   height.requestHeight(10, 10);
@@ -276,30 +290,35 @@ test('another terrain provider or globe is read afresh, however settled the old 
   assert.equal(at(), 100 + LIFT, 'same terrain: the kept height stands');
   assert.equal(reads.length, 1);
 
-  viewer.terrainProvider = {};
-  assert.equal(at(), 250 + LIFT, 'a new provider is a new surface');
+  globe.version = 2;
+  assert.equal(at(), 250 + LIFT, 'a new terrain is a new surface');
   assert.equal(reads.length, 2);
 
-  world.surface = () => 400;
-  viewer.scene.globe = { show: true, getHeight: globe.getHeight };
-  assert.equal(at(), 400 + LIFT, 'and so is a new globe');
-  assert.equal(reads.length, 3);
-
-  // Terrain → flat → the same terrain provider: nothing asks the terrain
-  // while the globe is flat, yet the old heights must not come back.
-  const real = viewer.terrainProvider;
-  viewer.terrainProvider = new Cesium.EllipsoidTerrainProvider();
+  // Terrain → flat → the same terrain: nothing asks the terrain while the
+  // globe is flat, yet the old heights must not come back.
+  globe.drawn = 'flat';
+  globe.version = 3;
   assert.equal(at(), LIFT);
   world.surface = () => 30;
-  viewer.terrainProvider = real;
+  globe.drawn = 'terrain';
+  globe.version = 4;
   assert.equal(at(), 30 + LIFT);
+  assert.equal(reads.length, 3);
+
+  // Hidden and shown again: the globe's version moves, and so the heights
+  // are read again.
+  world.surface = () => 40;
+  globe.drawn = 'none';
+  globe.version = 5;
+  assert.equal(at(), null);
+  globe.drawn = 'terrain';
+  globe.version = 6;
+  assert.equal(at(), 40 + LIFT);
   assert.equal(reads.length, 4);
 });
 
 test('a flat globe answers without reading terrain', (t) => {
-  const { height, reads } = terrain(t, {
-    provider: new Cesium.EllipsoidTerrainProvider(),
-  });
+  const { height, reads } = terrain(t, { drawn: 'flat' });
   assert.deepEqual(height.requestHeight(42.36, -71.06), {
     cell: '42.36,-71.06',
     height: LIFT,
@@ -315,7 +334,7 @@ test('a hidden globe reads no terrain and clear() forgets what was read', (t) =>
   assert.equal(height.terrainStats().held, 0);
   height.requestHeight(42.36, -71.06);
   assert.equal(reads.length, 2, 'a cleared layer reads again');
-  globe.show = false;
+  globe.drawn = 'none';
   assert.equal(height.requestHeight(42.5, -71.5).height, null);
   assert.equal(reads.length, 2);
 });

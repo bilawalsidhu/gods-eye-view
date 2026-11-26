@@ -19,7 +19,6 @@ function navigation() {
     tracking,
     interruptCameraMotion() {},
     isCockpitActive: () => false,
-    clearLocation() {},
     cancelShareSelection: () => false,
     getDataManager: () => null,
     stopOrbit() {},
@@ -117,6 +116,19 @@ test('visual teardown restores owned fog and aircraft sensor state once', async 
   });
   const calls = [];
   const viewer = { scene: { fog: { enabled: false } } };
+  // The fog is the globe port's sky, which writes the scene's, as the
+  // renderer's does.
+  const { bindRenderer } = await import('../render/rendererOf.js');
+  bindRenderer(viewer, {
+    globe: {
+      sky: {
+        get: () => ({ fog: viewer.scene.fog.enabled }),
+        set(settings) {
+          if ('fog' in settings) viewer.scene.fog.enabled = settings.fog;
+        },
+      },
+    },
+  });
   const owner = new VisualSettings({
     viewer,
     elements: {},

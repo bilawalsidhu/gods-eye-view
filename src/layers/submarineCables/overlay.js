@@ -1,4 +1,5 @@
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { clone, distance } from '../../geo/vector.js';
 import {
   CABLE_REFERENCE_LABEL_WINNER_CAP,
   CABLE_REFERENCE_LABEL_MAX_DISTANCE_M,
@@ -41,7 +42,7 @@ export function selectCableReferenceLabelWinners(
     .sort(
       (a, b) =>
         a.distanceM - b.distanceM ||
-        String(a.entity?.id || '').localeCompare(String(b.entity?.id || '')),
+        String(a.id || '').localeCompare(String(b.id || '')),
     )
     .slice(0, cap);
 }
@@ -191,9 +192,9 @@ export function createCableReferenceSweepGate({
   motionEpsilonM = CABLE_SWEEP_MOTION_EPSILON_M,
 } = {}) {
   const motionEpsilonSq = motionEpsilonM ** 2;
-  // Preallocated: the probe clones into it, so a moving camera allocates
+  // Preallocated: the probe copies into it, so a moving camera allocates
   // nothing per frame.
-  const lastSweptPosition = new Cesium.Cartesian3();
+  const lastSweptPosition = { x: 0, y: 0, z: 0 };
   let hasSweptPosition = false;
   let dirty = true;
   let lastProbeAt = -Infinity;
@@ -203,7 +204,7 @@ export function createCableReferenceSweepGate({
     lastProbeAt = time;
     const position = camera?.positionWC;
     hasSweptPosition = Boolean(position);
-    if (position) Cesium.Cartesian3.clone(position, lastSweptPosition);
+    if (position) copyInto(position, lastSweptPosition);
     return true;
   }
 
@@ -212,7 +213,8 @@ export function createCableReferenceSweepGate({
       dirty = true;
     },
     /**
-     * @param {Cesium.Camera} [camera] Live camera; omit to disable the motion
+     * @param {{positionWC?: {x: number, y: number, z: number}}} [camera]
+     *   Live camera (its ECEF eye as `positionWC`); omit to disable the motion
      *   fallback entirely (pure dirty-only gate).
      * @returns {boolean}
      */
@@ -232,8 +234,7 @@ export function createCableReferenceSweepGate({
       if (!position) return false;
       if (
         hasSweptPosition &&
-        Cesium.Cartesian3.distanceSquared(position, lastSweptPosition) <=
-          motionEpsilonSq
+        distanceSquared(position, lastSweptPosition) <= motionEpsilonSq
       ) {
         return false;
       }
@@ -248,16 +249,17 @@ export function createCableReferenceSweepGate({
 }
 
 /**
- * Recompute one staticized stem on the sweep cadence. Replaces the former
- * per-frame `CallbackProperty` pair: constant properties are redefined only
- * when the camera-scaled tip moved beyond the settle epsilon, and the two
- * preallocated position buffers alternate so each real change raises exactly
- * one geometry notification (the localGeojson double-buffer pattern).
- * @param {object} record Reference record with entity/base/tip/nextTip/buffers.
- * @param {Cesium.Cartesian3} cameraPositionWC
+ * Recompute one stem on the sweep cadence: its tip rises with the camera's
+ * distance so the stem keeps about `STEM_TARGET_PX` on screen. The tip is
+ * moved in place (the overlay entry anchors to the same object) only when it
+ * moved beyond the settle epsilon, so the caller redraws only stems that
+ * really changed.
+ * @param {object} record Reference record with base/tip/reference.
+ * @param {{x: number, y: number, z: number}} cameraPositionWC ECEF eye.
  * @param {number} canvasHeight CSS-pixel canvas height.
- * @param {number} fov Camera frustum field of view (radians).
- * @returns {boolean} True when the stem geometry was redefined.
+ * @param {number} fov Camera field of view (radians): horizontal on a wide
+ *   canvas, vertical on a tall one.
+ * @returns {boolean} True when the tip moved.
  */
 
 export function updateCableReferenceStem(
@@ -266,8 +268,8 @@ export function updateCableReferenceStem(
   canvasHeight,
   fov,
 ) {
-  const distance = Cesium.Cartesian3.distance(cameraPositionWC, record.base);
-  const effectiveDistance = Math.max(distance, 5000);
+  const range = distance(cameraPositionWC, record.base);
+  const effectiveDistance = Math.max(range, 5000);
   const height = canvasHeight || 1080;
   const fieldOfView = fov || Math.PI / 3;
   const metersPerPixelFactor = (2 * Math.tan(fieldOfView / 2)) / height;
@@ -275,29 +277,20 @@ export function updateCableReferenceStem(
     700,
     Math.min(85000, effectiveDistance * metersPerPixelFactor * STEM_TARGET_PX),
   );
-  Cesium.Cartesian3.fromDegrees(
+  const nextTip = fromDegrees(
     record.reference.lon,
     record.reference.lat,
     tipHeight,
-    Cesium.Ellipsoid.WGS84,
-    record.nextTip,
   );
-  if (
-    Cesium.Cartesian3.distanceSquared(record.tip, record.nextTip) <=
-    CABLE_STEM_TIP_EPSILON_SQ
-  ) {
+  if (distanceSquared(record.tip, nextTip) <= CABLE_STEM_TIP_EPSILON_SQ) {
     return false;
   }
-  Cesium.Cartesian3.clone(record.nextTip, record.tip);
-  record.stemPositionBufferIndex = 1 - record.stemPositionBufferIndex;
-  const stemPositions =
-    record.stemPositionBuffers[record.stemPositionBufferIndex];
-  stemPositions[0] = record.base;
-  stemPositions[1] = record.tip;
-  record.entity.position.setValue(record.tip);
-  record.entity.polyline.positions.setValue(stemPositions);
+  copyInto(nextTip, record.tip);
   return true;
 }
+
+const distanceSquared = (a, b) => distance(a, b) ** 2;
+const copyInto = (from, to) => Object.assign(to, clone(from));
 
 export function clampLabel(value, maxLength = 34) {
   const text = String(value || '')

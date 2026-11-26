@@ -101,7 +101,10 @@ test('the subject says whether its track is the heading or the course', () => {
 test('a vessel without identity or position is not a subject', () => {
   assert.equal(vesselCockpitInfo(null), null);
   assert.equal(vesselCockpitInfo({ lat: 1, lon: 1 }), null);
-  assert.equal(vesselCockpitInfo({ id: '1', mmsi: '1', lat: 'x', lon: 1 }), null);
+  assert.equal(
+    vesselCockpitInfo({ id: '1', mmsi: '1', lat: 'x', lon: 1 }),
+    null,
+  );
 });
 
 test('a vessel missing from recent refreshes reads as stale', () => {

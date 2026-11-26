@@ -1,17 +1,9 @@
-import { applyCyberSonarThemePhase } from './cyberSonar.js';
-import { syncRadioPanelPlacement } from './ui/radioPanelPlacement.js';
-import { HUD_LAYOUTS } from './hudLayoutPolicy.js';
-export { HUD_LAYOUTS } from './hudLayoutPolicy.js';
+import { HUD_LAYOUTS, LEGACY_SONAR_HUD_LAYOUTS } from './hudLayoutPolicy.js';
+export { HUD_LAYOUTS, LEGACY_SONAR_HUD_LAYOUTS } from './hudLayoutPolicy.js';
 
 /** Canonical HUD layouts shared by the UI, voice schema and HUD renderer. */
 
 export const DEFAULT_HUD_LAYOUT = 'tactical';
-
-/** Visual treatment applied only when an operator explicitly enters Cyber. */
-export const CYBER_VISUAL_DEFAULTS = Object.freeze({
-  style: 'thermal',
-  ironbow: 0.42,
-});
 
 const HUD_LAYOUT_SET = new Set(HUD_LAYOUTS);
 
@@ -27,38 +19,9 @@ export function normalizeHudLayout(value) {
 }
 
 /**
- * Resolve the opt-in visual defaults for an explicit layout transition.
- * Restores and repeated Cyber selections return null so they never overwrite
- * a shared link or a user's subsequent FLIR tuning.
+ * Whether a layout name is a removed layout that now means "Sonar on".
+ * @param {unknown} value
  */
-export function cyberVisualDefaultsForHudTransition(
-  previousLayout,
-  nextLayout,
-  { explicit = false } = {},
-) {
-  if (!explicit) return null;
-  if (normalizeHudLayout(previousLayout) === 'cyber') return null;
-  if (normalizeHudLayout(nextLayout) !== 'cyber') return null;
-  return CYBER_VISUAL_DEFAULTS;
-}
-
-/**
- * Keep the global shell skin derived from the selected HUD layout. The data
- * attribute lives on <html> so theme tokens are available to every UI surface.
- * @param {HTMLElement|{dataset?: Record<string, string>}|null|undefined} root
- * @param {unknown} layout
- * @returns {'cyber'|null}
- */
-export function applyHudUiTheme(root, layout) {
-  if (!root?.dataset) return null;
-  if (normalizeHudLayout(layout) === 'cyber') {
-    root.dataset.uiTheme = 'cyber';
-    applyCyberSonarThemePhase(root, true);
-    syncRadioPanelPlacement(root.ownerDocument);
-    return 'cyber';
-  }
-  delete root.dataset.uiTheme;
-  applyCyberSonarThemePhase(root, false);
-  syncRadioPanelPlacement(root.ownerDocument);
-  return null;
+export function isLegacySonarHudLayout(value) {
+  return LEGACY_SONAR_HUD_LAYOUTS.includes(String(value ?? '').toLowerCase());
 }

@@ -318,21 +318,54 @@ body.recording-mode .gev-panel-rail {
   height: 100%;
   box-sizing: border-box;
 }
-#right-context-rail #context-missions-view:not([hidden]),
-#right-context-rail #space-mission-panel-host,
-#right-context-rail .space-mission-roster {
+/* Keep the mission cycler directly beneath its Data Layers entry. */
+[data-layer-id='rocket-launches'] .data-toggle-controls:not([hidden]) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 5px;
+}
+
+[data-layer-id='rocket-launches'] .data-toggle-controls-info {
+  grid-column: 2;
+  grid-row: 1;
+  padding-top: 0;
+  text-align: center;
+}
+
+[data-layer-id='rocket-launches'] [data-chip-id='next-mission'] {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+:root[dir='rtl']
+  [data-layer-id='rocket-launches']
+  .chip-icon
+  .material-symbols-outlined {
+  transform: scaleX(-1);
+}
+
+#space-missions-panel {
+  width: min(100%, 330px);
   min-height: 0;
+  max-height: var(--right-panel-allocated-height, 100%);
+  pointer-events: auto;
 }
-#right-context-rail.layout-focus #context-missions-view:not([hidden]),
-#right-context-rail.layout-focus #space-mission-panel-host,
-#right-context-rail.layout-focus .space-mission-roster {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
+
+#space-missions-panel[hidden] {
+  display: none;
 }
-#right-context-rail.layout-focus .space-mission-roster-list {
-  flex: 1 1 auto;
-  max-height: none;
+
+.space-missions-panel-inner {
+  max-height: inherit;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+#space-missions-panel.collapsed #space-mission-panel-host {
+  display: none;
 }
 /* Synchronous intrinsic measurement, independent of focus and allocation.
    This attribute is not observed by the rail's layout scheduler. */
@@ -379,8 +412,6 @@ body.recording-mode .gev-panel-rail {
   margin-top: 8px;
   pointer-events: auto;
 }
-#space-mission-panel-host:has(#space-mission-panel:not([hidden]))
-  > .context-mode-standby,
 #space-mission-panel-host:has(#space-mission-panel:not([hidden]))
   > .space-mission-roster {
   display: none;
@@ -1003,7 +1034,8 @@ body.recording-mode .gev-panel-rail {
 #global-context-panel .panel-glow {
   display: none;
 }
-.global-context-panel-inner {
+.global-context-panel-inner,
+.space-missions-panel-inner {
   position: relative;
   display: flex;
   min-height: 0;
@@ -1019,11 +1051,15 @@ body.recording-mode .gev-panel-rail {
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
 }
 
-/* Data Layers and Context share the 14px side padding of the other default
-   theme panels, so every title and toggle sits 19px from its edge. Cyber
-   keeps its own gutters. */
-:root:not([data-ui-theme='cyber'])
-  :is(.data-panel-inner, .global-context-panel-inner) {
+/* Data Layers, Context and Space Missions share the 14px side padding of the
+   other default theme panels, so every title and toggle sits 19px from its
+   edge. */
+:root
+  :is(
+    .data-panel-inner,
+    .global-context-panel-inner,
+    .space-missions-panel-inner
+  ) {
   padding-right: 14px;
   padding-left: 14px;
 }
@@ -1328,7 +1364,7 @@ body.recording-mode #right-context-rail > [data-panel-id] {
 }
 
 /* Draw marks its on state with an accent edge, like an active DISPLAY
-   button; Cyber swaps in its red edge (cyber.css). */
+   button. */
 #utilities-panel
   .utilities-tools
   .pp-toggle-btn:is([aria-pressed='true'], .active) {

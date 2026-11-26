@@ -1,5 +1,9 @@
 import { isUnavailableCapability } from '../sources/capability.js';
 import { createOverpassFeatureSource } from '../sources/overpassFeatures.js';
+import { readResponseJsonCapped } from '../sources/httpBody.js';
+
+const LAYER_COUNTS_MAX_BYTES = 16 * 1024;
+
 /** Parse bounded retry information from a service response. */
 function retryAfterMs(value) {
   if (value == null || String(value).trim() === '') return null;
@@ -23,10 +27,11 @@ export function createApplicationRequestServices({
     terrain: '/api/terrain/heights',
     regional: '/api/regional-brief',
     weather: '/api/weather-effects',
+    layerCounts: '/api/layer-counts',
     summary: '/api/openai/hud-summary',
     ...endpoints,
   };
-  async function request(endpoint, { signal, ...init } = {}) {
+  async function request(endpoint, { signal, maxJsonBytes, ...init } = {}) {
     signal = AbortSignal.any([lifetime, signal].filter(Boolean));
     signal.throwIfAborted();
     const response = await fetchImpl(endpoint, {
@@ -37,9 +42,14 @@ export function createApplicationRequestServices({
     signal.throwIfAborted();
     let data = null;
     try {
-      data = await response.json();
-    } catch {
-      /* Status remains authoritative for non-JSON errors. */
+      if (maxJsonBytes === undefined) data = await response.json();
+      else if (response.ok)
+        data = await readResponseJsonCapped(response, maxJsonBytes, signal);
+      else void response.body?.cancel().catch(() => {});
+    } catch (error) {
+      if (maxJsonBytes !== undefined && error?.code === 'RESPONSE_TOO_LARGE')
+        throw error;
+      // A non-JSON reply still carries its HTTP status.
     }
     signal.throwIfAborted();
     return {
@@ -181,11 +191,26 @@ export function createApplicationRequestServices({
       },
     },
     weather: {
-      async getConditions(latitude, longitude, options) {
+      async getConditions(
+        latitude,
+        longitude,
+        { exactPoint = false, ...options } = {},
+      ) {
+        const url = pointUrl(urls.weather, latitude, longitude);
         return requireOk(
-          await request(pointUrl(urls.weather, latitude, longitude), options),
+          await request(exactPoint ? url + '&exactPoint=1' : url, options),
           'Weather',
         );
+      },
+    },
+    layerCounts: {
+      async getCounts(options) {
+        const response = await request(urls.layerCounts, {
+          ...options,
+          headers: { Accept: 'application/json' },
+          maxJsonBytes: LAYER_COUNTS_MAX_BYTES,
+        });
+        return requireOk(response, 'Layer counts');
       },
     },
     summary: {

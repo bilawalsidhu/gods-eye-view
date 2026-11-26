@@ -1,4 +1,3 @@
-import * as Cesium from 'cesium';
 import { requestWithDeadline } from '../../sources/requestDeadline.js';
 import {
   normalizeRoadMode,
@@ -8,6 +7,7 @@ import {
 } from './roadModes.js';
 import { phaseTiming } from '../../sources/phaseTiming.js';
 import { RoadRequestError, roadRequestError } from './source.js';
+import { viewerRoadSurface } from './surface.js';
 import {
   isUnavailableCapability,
   sourceResponseError,
@@ -275,20 +275,13 @@ export function createIngestion({
     layerState._viewHeightEstimate = 0;
     const centerLat = (clamped.south + clamped.north) / 2;
     const centerLon = (clamped.west + clamped.east) / 2;
-    const scene = layerState._viewer?.scene;
-    const location = Cesium.Cartographic.fromDegrees(centerLon, centerLat);
     let estimated = services.ground?.cachedGroundFloor?.(centerLat, centerLon);
-    if (!Number.isFinite(estimated)) {
-      try {
-        estimated = scene?.globe?.show
-          ? scene.globe.getHeight?.(location)
-          : scene?.sampleHeightSupported
-            ? scene.sampleHeight(location, [layerState._pointCollection])
-            : undefined;
-      } catch {
-        /* the local mesh can still be loading */
-      }
-    }
+    // A miss is the local mesh still loading.
+    if (!Number.isFinite(estimated))
+      estimated = viewerRoadSurface(layerState._viewer).loadedHeight({
+        lon: centerLon,
+        lat: centerLat,
+      });
     if (Number.isFinite(estimated) && Math.abs(estimated) <= 9000)
       layerState._viewHeightEstimate = estimated;
 

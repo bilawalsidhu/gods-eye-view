@@ -35,9 +35,6 @@ export function readShellElements(document = globalThis.document) {
     _globalContextFlightsBtn: document.getElementById(
       'global-context-flights-btn',
     ),
-    _globalContextMissionsBtn: document.getElementById(
-      'global-context-missions-btn',
-    ),
     _installationsSearchBtn: document.getElementById(
       'installations-search-btn',
     ),
@@ -62,7 +59,6 @@ export function readShellElements(document = globalThis.document) {
     _cctvSourceBadge: document.getElementById('cctv-source-badge'),
     _cctvMeta: document.getElementById('cctv-meta'),
     _cctvSummary: document.getElementById('cctv-summary'),
-    _locationSearch: document.getElementById('location-search'),
     _detectionBtn: document.getElementById('detection-toggle'),
     _models3dBtn: document.getElementById('models3d-toggle'),
   };

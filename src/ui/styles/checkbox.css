@@ -1,0 +1,9 @@
+/* Core's checkboxes are a label wrapping the box and its words, laid out in
+ * a centred flex row: the kit's UiCheckbox wears it as .ui-checkbox. The rule
+ * selects one class and loads before the feature stylesheets, so a feature
+ * rule still sets the row's gap, direction, size and colour. The box,
+ * .ui-checkbox__input, keeps each skin's size, margin and accent colour. */
+.ui-checkbox {
+  display: flex;
+  align-items: center;
+}
