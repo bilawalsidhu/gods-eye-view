@@ -265,10 +265,22 @@ export function createOpenAqAcquisition({
     let state = views.get(id);
     if (!state || now() - state.at > HOUR)
       state = createViewState(view, now(), state);
-    // Every request of this view counts against its share.
+    // Requests this view sent to OpenAQ in the last hour.
+    const spentInHour = () => {
+      state.spent = state.spent.filter((at) => now() - at < HOUR);
+      return state.spent.length;
+    };
+    // The share is checked before every request, and a request counts
+    // against it only once it is sent: one refused locally (the shared
+    // budget spent, or the view aborted) costs this view nothing.
     const get = (path) => {
-      state.spent.push(now());
-      return upstream(path);
+      if (spentInHour() >= VIEW_SHARE)
+        return Promise.reject(
+          Object.assign(error(429, 'OpenAQ view share spent'), {
+            shareSpent: true,
+          }),
+        );
+      return upstream(path, () => state.spent.push(now()));
     };
     views.delete(id);
     views.set(id, state);
@@ -317,11 +329,7 @@ export function createOpenAqAcquisition({
         );
       }
       // Discovery keeps to the view's share of the hour too.
-      if (
-        !cachedPage &&
-        state.spent.filter((at) => now() - at < HOUR).length >= VIEW_SHARE
-      )
-        break;
+      if (!cachedPage && spentInHour() >= VIEW_SHARE) break;
       try {
         const data =
           cachedPage ||
@@ -358,6 +366,7 @@ export function createOpenAqAcquisition({
         }
         signal?.throwIfAborted();
         if (e.keyRefused) throw e;
+        if (e.shareSpent) break;
         if (e.status === 429) limited = true;
         else catalogFailure = e.status || 503;
         retryAt = e.retryAt || null;
@@ -427,7 +436,7 @@ export function createOpenAqAcquisition({
       0,
     );
     const available = budget.state();
-    state.spent = state.spent.filter((at) => now() - at < HOUR);
+    spentInHour();
     if (due.length && hasNearby && now() - lastNearbyCheck < PASS_MS) {
       due.length = 0;
       retryAt = Math.max(retryAt || 0, lastNearbyCheck + PASS_MS);
@@ -447,10 +456,7 @@ export function createOpenAqAcquisition({
     let arrivedNearby = false;
     for (
       let i = 0;
-      i < due.length &&
-      !limited &&
-      !timedOut &&
-      state.spent.length < VIEW_SHARE;
+      i < due.length && !limited && !timedOut && spentInHour() < VIEW_SHARE;
       i += 2
     ) {
       if (expired()) {
@@ -511,6 +517,9 @@ export function createOpenAqAcquisition({
             }
             signal?.throwIfAborted();
             if (e.keyRefused) throw e;
+            // The share ran out within this station: it is asked again
+            // once the share allows, not counted as failed.
+            if (e.shareSpent) return;
             if (e.status === 429) limited = true;
             else {
               stationFailure = 503;
@@ -581,7 +590,7 @@ export function createOpenAqAcquisition({
     // leaves the hour when it spent its share, else at its next pass (later
     // after passes that brought nothing near the centre); discovery goes on
     // between passes.
-    const shareSpent = state.spent.length >= VIEW_SHARE;
+    const shareSpent = spentInHour() >= VIEW_SHARE;
     const nextAsk = shareSpent
       ? state.spent[0] + HOUR
       : !catalogDone || timedOut
@@ -619,9 +628,10 @@ export function createOpenAqAcquisition({
       AbortSignal.timeout(40_000),
       ...(consumerSignal ? [consumerSignal] : []),
     ]);
-    async function get(path) {
+    async function get(path, sent) {
       signal.throwIfAborted();
       budget.take();
+      sent?.();
       const res = await fetchImpl(ROOT + path, {
         headers: { 'X-API-Key': key, Accept: 'application/json' },
         signal,

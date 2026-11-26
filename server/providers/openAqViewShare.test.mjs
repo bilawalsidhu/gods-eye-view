@@ -188,3 +188,139 @@ test('a 403 on one station fails that station; only a refusal naming the key ref
   );
   assert.equal(paths.length, sent);
 });
+
+/**
+ * An OpenAQ stand-in for the AQI view: `stations` ({id, lat, lon}) each with
+ * PM2.5, PM10, ozone, CO and NO2 sensors, every one answering hourly means
+ * to the current hour (and NO2 a latest value). `paths` records what was
+ * sent.
+ */
+function aqiUpstream(stations, { clock }) {
+  const paths = [];
+  const kinds = [
+    ['pm25', 'µg/m³'],
+    ['pm10', 'µg/m³'],
+    ['o3', 'ppm'],
+    ['co', 'ppm'],
+    ['no2', 'ppb'],
+  ];
+  const fetchImpl = async (raw) => {
+    const url = new URL(raw);
+    paths.push(url.pathname + url.search);
+    if (url.pathname === '/v3/locations') {
+      const [w, so, e, n] = url.searchParams.get('bbox').split(',').map(Number);
+      const page = Number(url.searchParams.get('page'));
+      return Response.json({
+        results: stations
+          .filter((s) => s.lon >= w && s.lon <= e && s.lat >= so && s.lat <= n)
+          .slice((page - 1) * 1000, page * 1000)
+          .map((s) => ({
+            id: s.id,
+            name: `S${s.id}`,
+            country: { code: 'XX', name: 'X' },
+            datetimeLast: { utc: iso(clock()) },
+            coordinates: { latitude: s.lat, longitude: s.lon },
+            isMonitor: true,
+            sensors: kinds.map(([name, units], k) => ({
+              id: s.id * 10 + k,
+              parameter: { name, units },
+            })),
+          })),
+      });
+    }
+    const sensor = url.pathname.match(/sensors\/(\d+)\/hours/);
+    if (sensor) {
+      const [name, units] = kinds[Number(sensor[1]) % 10];
+      const end = Math.floor(clock() / HOUR) * HOUR;
+      return Response.json({
+        results: Array.from({ length: 3 }, (_, i) => ({
+          value: name === 'o3' ? 0.03 : name === 'co' ? 0.3 : 5,
+          parameter: { name, units },
+          flagInfo: { hasFlags: false },
+          coverage: { percentCoverage: 100 },
+          period: {
+            interval: '01:00:00',
+            datetimeFrom: { utc: iso(end - (3 - i) * HOUR) },
+            datetimeTo: { utc: iso(end - (2 - i) * HOUR) },
+          },
+        })),
+      });
+    }
+    const id = Number(url.pathname.split('/')[3]);
+    return Response.json({
+      results: [
+        {
+          locationsId: id,
+          sensorsId: id * 10 + 4,
+          value: 10,
+          datetime: { utc: iso(clock()) },
+        },
+      ],
+    });
+  };
+  return { paths, fetchImpl };
+}
+
+test('an AQI view keeps to its share at every request, not only between stations', async () => {
+  let clock = start;
+  const near = Array.from({ length: 2000 }, (_, i) => ({
+    id: i + 1,
+    lat: (i % 40) * 0.05,
+    lon: Math.floor(i / 40) * 0.05,
+  }));
+  const { paths, fetchImpl } = aqiUpstream(near, { clock: () => clock });
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl,
+  });
+  const view = [-5, -5, 5, 5, 1, 1];
+  while (clock < start + HOUR) {
+    const answer = await source.getSnapshot({ view, mode: 'aqi' });
+    clock = Math.max(clock + 1000, answer.retryAt + 1);
+  }
+  // Five requests a station: the share (450) is never passed.
+  assert.ok(paths.length <= 450, `${paths.length} requests`);
+  assert.ok(paths.length >= 440, `${paths.length} requests`);
+});
+
+test('a request the shared budget refuses locally does not count against the view', async () => {
+  let clock = start;
+  const near = Array.from({ length: 2000 }, (_, i) => ({
+    id: i + 1,
+    lat: (i % 40) * 0.05,
+    lon: Math.floor(i / 40) * 0.05,
+  }));
+  const inner = upstream(near, { clock: () => clock });
+  let sent = 0;
+  // Every 50th answer says OpenAQ's window has no request left for 30 s:
+  // the view's next request is refused here, before it is sent.
+  const fetchImpl = async (raw, options) => {
+    const res = await inner.fetchImpl(raw, options);
+    if (++sent % 50) return res;
+    return new Response(await res.text(), {
+      status: res.status,
+      headers: {
+        'content-type': 'application/json',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': '30',
+      },
+    });
+  };
+  const source = createOpenAqAcquisition({
+    getKey: () => 'fixture',
+    now: () => clock,
+    fetchImpl,
+  });
+  const view = [-5, -5, 5, 5, 1, 1];
+  let refusals = 0;
+  while (clock < start + HOUR) {
+    const answer = await source.getSnapshot({ view });
+    if (answer.stale) refusals++;
+    clock = Math.max(clock + 1000, answer.retryAt + 1);
+  }
+  assert.ok(refusals >= 5, `${refusals} refusals`);
+  // The refused requests cost the view nothing: it still sends its whole
+  // share (450) to OpenAQ.
+  assert.ok(sent >= 448 && sent <= 450, `${sent} requests`);
+});
