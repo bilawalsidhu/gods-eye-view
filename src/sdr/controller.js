@@ -282,9 +282,14 @@ function clampFmFrequency(value) {
   );
 }
 
+function idleReceiverMessage(webUsbSupported) {
+  return webUsbSupported
+    ? t('Connect an SDR receiver to begin.')
+    : t('WebUSB is unavailable in this browser');
+}
+
 const RECEIVER_MESSAGES = {
   rtl: {
-    connectPrompt: msg('Connect an RTL-SDR to begin.'),
     waiting: msg('Waiting for an RTL-SDR device…'),
     noDevice: msg('No RTL-SDR device selected'),
     accessFailed: msg(
@@ -296,7 +301,6 @@ const RECEIVER_MESSAGES = {
     disconnected: msg('RTL-SDR disconnected'),
   },
   hackrf: {
-    connectPrompt: msg('Connect a HackRF One to begin.'),
     waiting: msg('Waiting for a HackRF One…'),
     noDevice: msg('No HackRF One device selected'),
     accessFailed: msg(
@@ -443,9 +447,7 @@ export class SdrController {
       audioLevelDbfs: null,
     };
     this._wording = {
-      message: webUsbSupported
-        ? () => t(RECEIVER_MESSAGES.rtl.connectPrompt)
-        : () => t('WebUSB is unavailable in this browser'),
+      message: () => idleReceiverMessage(webUsbSupported),
       seekMessage: null,
     };
     this.state.message = this._wording.message();
@@ -564,9 +566,7 @@ export class SdrController {
       deviceLabel: null,
       status: this.state.webUsbSupported ? 'idle' : 'unsupported',
       errorText: null,
-      message: !this.state.webUsbSupported
-        ? () => t('WebUSB is unavailable in this browser')
-        : () => t(RECEIVER_MESSAGES[receiverKind].connectPrompt),
+      message: () => idleReceiverMessage(this.state.webUsbSupported),
     });
   }
 
