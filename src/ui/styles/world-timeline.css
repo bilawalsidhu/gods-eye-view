@@ -1568,3 +1568,41 @@ body[data-world-timeline='phone-sheet'] #command-dock {
 .wt-tense--side {
   flex: none;
 }
+
+/* How much there was, as time passed: the busiest observed layer's count,
+   drawn under the ticks across the track. */
+.wt-activity {
+  position: absolute;
+  right: 0;
+  bottom: 9px;
+  left: 0;
+  width: 100%;
+  height: 18px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.wt-activity-area {
+  fill: color-mix(in srgb, var(--wt-tense) 16%, transparent);
+}
+
+.wt-activity-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--wt-tense) 80%, white);
+  stroke-width: 1.25px;
+  stroke-linejoin: round;
+}
+
+.wt-activity-label {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font: 500 9px/1 var(--wt-mono, ui-monospace, monospace);
+  letter-spacing: 0.08em;
+  color: var(--wt-dim, rgba(219, 232, 239, 0.55));
+  pointer-events: none;
+}
+
+.is-rest :is(.wt-activity, .wt-activity-label) {
+  display: none;
+}

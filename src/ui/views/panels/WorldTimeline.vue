@@ -1090,6 +1090,79 @@ const journeyGapBars = computed(() => {
       };
     });
 });
+// ── Activity: how much there was, as time passes ────────────────────────
+// Each observed layer's count is kept for the times the clock passes through
+// (playing or dragged), and the track draws the busiest layer's as a line, so
+// a ground stop shows as a cliff once it has been played through, and a
+// click on the line goes there. Counts are what the layer held at that time,
+// by the bucket of the track they fell in.
+const ACTIVITY_LAYERS = ['flights', 'military', 'ais-live-vessels', 'local-firms', 'firms'];
+const ACTIVITY_BUCKETS = 240;
+const activity = shallowRef(new Map());
+let activityTick = 0;
+function recordActivity() {
+  if (time.value.live) return;
+  const now = performance.now();
+  if (now - activityTick < 200) return;
+  activityTick = now;
+  const at = time.value.timeMs;
+  let changed = false;
+  const next = new Map(activity.value);
+  for (const id of ACTIVITY_LAYERS) {
+    const layer = cards.layerModule(id);
+    const count = layer?.getStats?.()?.count;
+    if (!Number.isFinite(count) || count <= 0) continue;
+    const series = new Map(next.get(id) ?? []);
+    series.set(Math.round(at / MIN) * MIN, count);
+    next.set(id, series);
+    changed = true;
+  }
+  if (changed) activity.value = next;
+}
+watch(() => time.value.timeMs, recordActivity);
+// The busiest layer's counts across the track, as a line and an area under
+// it, in percent of the track's width and height.
+const activityLine = computed(() => {
+  const { start, end } = view.value;
+  let best = null;
+  for (const [id, series] of activity.value) {
+    let peak = 0;
+    let inView = 0;
+    for (const [ms, count] of series)
+      if (ms >= start && ms <= end) {
+        inView += 1;
+        peak = Math.max(peak, count);
+      }
+    if (inView >= 3 && (!best || peak > best.peak)) best = { id, series, peak };
+  }
+  if (!best) return null;
+  const width = (end - start) / ACTIVITY_BUCKETS;
+  const buckets = new Map();
+  for (const [ms, count] of best.series) {
+    if (ms < start || ms > end) continue;
+    const k = Math.floor((ms - start) / width);
+    buckets.set(k, Math.max(buckets.get(k) ?? 0, count));
+  }
+  const points = [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([k, count]) => [((k + 0.5) / ACTIVITY_BUCKETS) * 100, 100 - (count / best.peak) * 100]);
+  // A stretch not yet played through is a gap in the line, not a fall to zero.
+  const runs = [];
+  for (const point of points) {
+    const run = runs.at(-1);
+    if (run && point[0] - run.at(-1)[0] <= (100 / ACTIVITY_BUCKETS) * 8) run.push(point);
+    else runs.push([point]);
+  }
+  const fmt = (n) => n.toFixed(2);
+  return {
+    label: `${laneOf(best.id).label} · PEAK ${best.peak.toLocaleString()}`,
+    line: runs.map((run) => `M${run.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join('L')}`).join(''),
+    area: runs
+      .filter((run) => run.length > 1)
+      .map((run) => `M${fmt(run[0][0])},100L${run.map(([x, y]) => `${fmt(x)},${fmt(y)}`).join('L')}L${fmt(run.at(-1)[0])},100Z`)
+      .join(''),
+  };
+});
 // Played fast, the track widens to hold about half a minute of play, so the
 // time shown moves across it instead of paging it several times a second.
 watch(
@@ -1704,6 +1777,12 @@ const playing = computed(
           <span v-for="tick in ruler" :key="tick.ms" class="wt-tick" :class="{ 'is-major': tick.major, 'is-midnight': tick.midnight }" :style="{ left: `${tick.left}%` }"
             ><em v-if="tick.label">{{ tick.label }}</em></span
           >
+          <svg v-if="activityLine" class="wt-activity" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <title>{{ activityLine.label }}</title>
+            <path class="wt-activity-area" :d="activityLine.area" />
+            <path class="wt-activity-line" :d="activityLine.line" vector-effect="non-scaling-stroke" />
+          </svg>
+          <span v-if="activityLine" class="wt-activity-label">{{ activityLine.label }}</span>
           <span class="wt-strip">
             <span v-if="stripArchive" class="wt-strip-archive" :style="{ left: `${stripArchive.left}%`, width: `${stripArchive.width}%` }"></span>
             <span v-for="(part, index) in strip" :key="index" class="wt-strip-part" :class="{ 'is-all': part.all, 'is-future': part.future }" :style="{ left: `${part.left}%`, width: `${part.width}%` }"></span>
