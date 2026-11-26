@@ -2,7 +2,12 @@
 // lookup, and how one picked is found in its layer.
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findMatch, lookupMatches, loadedId } from './entityLookup.js';
+import {
+  findMatch,
+  LOOKUP_RECHECK_MS,
+  lookupMatches,
+  loadedId,
+} from './entityLookup.js';
 
 test('a lookup answer keeps aircraft, ships, cameras and satellites with a position, once each', () => {
   const matches = lookupMatches([
@@ -162,6 +167,27 @@ test('its layer is switched on, the camera centred once, and it is picked when t
     ['353136000', { origin: 'user', center: false }],
   ]);
   assert.deepEqual(centred, [[30, 32]]);
+});
+
+test('one a layer loads without saying so is picked too', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const { state, dataManager, setLayer } = layers();
+  const finding = findMatch({
+    match: ship,
+    dataManager,
+    setLayer,
+    centre: () => {},
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  // Records land with no activity published, as a feed polled outside the
+  // manager's refresh does.
+  state.records.push({ id: 'uuid-1', mmsi: '353136000', name: 'EVER GIVEN' });
+  t.mock.timers.tick(LOOKUP_RECHECK_MS);
+  const found = await finding;
+  assert.equal(found.ok, true);
+  assert.equal(found.picked, true);
+  assert.deepEqual(state.picks, [['uuid-1', { origin: 'user', center: false }]]);
 });
 
 test('a record that only shares its name is never taken for it', async () => {

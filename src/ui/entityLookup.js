@@ -16,6 +16,8 @@ export const LOOKUP_LAYERS = Object.freeze({
 export const MAX_LOOKUP_MATCHES = 8;
 /** How long a picked match may take to arrive in its layer, in ms. */
 export const LOOKUP_ARRIVAL_MS = 20_000;
+/** How often the layer is asked again while a picked match is on its way, in ms. */
+export const LOOKUP_RECHECK_MS = 500;
 
 const text = (value) => String(value ?? '').trim() || null;
 
@@ -102,7 +104,7 @@ export function loadedId(dataManager, match) {
 
 /**
  * The id the layer holds a match under (see loadedId) once it has it: now,
- * or after one of its loads, within `timeoutMs`. Null when it never arrives,
+ * or after one of its loads (or a recheck), within `timeoutMs`. Null when it never arrives,
  * the layer goes off, or `signal` aborts.
  */
 export function waitForLoaded(
@@ -112,26 +114,32 @@ export function waitForLoaded(
 ) {
   const now = loadedId(dataManager, match);
   if (now || signal?.aborted) return Promise.resolve(now);
-  if (typeof dataManager?.subscribeActivity !== 'function')
-    return Promise.resolve(null);
   return new Promise((resolve) => {
     let off = null;
     const timer = setTimeout(() => done(null), timeoutMs);
+    // A layer may load outside the manager's refresh and say nothing, so the
+    // layer is also asked again every LOOKUP_RECHECK_MS.
+    const recheck = setInterval(check, LOOKUP_RECHECK_MS);
     const onAbort = () => done(null);
     function done(value) {
       clearTimeout(timer);
+      clearInterval(recheck);
       signal?.removeEventListener?.('abort', onAbort);
       off?.();
       off = null;
       resolve(value);
     }
-    signal?.addEventListener?.('abort', onAbort, { once: true });
-    off = dataManager.subscribeActivity((change) => {
+    function check() {
       if (!dataManager.isEnabled?.(match.layerId)) return done(null);
-      if (change?.layerId && change.layerId !== match.layerId) return;
       const found = loadedId(dataManager, match);
       if (found) done(found);
-    });
+    }
+    signal?.addEventListener?.('abort', onAbort, { once: true });
+    if (typeof dataManager?.subscribeActivity === 'function')
+      off = dataManager.subscribeActivity((change) => {
+        if (change?.layerId && change.layerId !== match.layerId) return;
+        check();
+      });
   });
 }
 
