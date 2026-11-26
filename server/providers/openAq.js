@@ -445,13 +445,15 @@ export function createOpenAqAcquisition({
       return at > now() ? at : -Infinity;
     };
     // Which stations a pass checks first: shown ones about to age out (the
-    // soonest first), then those not shown (never checked first), then the
-    // other shown ones (the oldest reading first); nearest the centre first
-    // among equals. What a view shows stays shown, and what its share can
+    // soonest first), then those never checked, then the other shown ones
+    // (the oldest reading first), then those checked before that had nothing
+    // current (the longest ago first); nearest the centre first among equals.
+    // What a view shows stays shown and refreshed, and what its share can
     // keep fresh beyond that grows it, so a wide view settles on a stable set.
     const tier = (s) => {
       const until = shownUntil(s);
-      return until === -Infinity ? 1 : until - now() <= AGE_MARGIN_MS ? 0 : 2;
+      if (until === -Infinity) return state.checked.has(s.stationId) ? 3 : 1;
+      return until - now() <= AGE_MARGIN_MS ? 0 : 2;
     };
     const due = eligible
       .filter((s) => needsCheck(s) && !backoff(s))
@@ -459,7 +461,7 @@ export function createOpenAqAcquisition({
       .sort(
         (a, b) =>
           a.tier - b.tier ||
-          (a.tier === 1
+          (a.tier === 1 || a.tier === 3
             ? (state.checked.get(a.s.stationId) || 0) -
               (state.checked.get(b.s.stationId) || 0)
             : a.until - b.until) ||
@@ -535,9 +537,11 @@ export function createOpenAqAcquisition({
             const previous = viewLatest.get(key);
             if (previous && newestOf(previous.readings) > newestOf(rows))
               rows = previous.readings;
-            // A station newly shown or with a newer reading is progress,
-            // wherever it is in the view.
+            // A station newly shown or with a newer current reading is
+            // progress, wherever it is in the view; rows older than the view
+            // keeps are not.
             if (
+              newestOf(rows) > now() - FRESH_MS &&
               newestOf(rows) > newestOf(state.readings.get(station.stationId))
             )
               progress = true;
