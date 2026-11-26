@@ -6,6 +6,7 @@ import { storeToRefs } from 'pinia';
 import { t } from '../../../i18n/index.js';
 import { factFigure, factLabel, factValue, sayWords, useEntityCardStore } from '../../stores/entityCard.js';
 import { contextAgeText } from '../../contextTime.js';
+import { worldClock } from '../../../time/worldClock.js';
 import { distanceText } from '../../distanceText.js';
 import AircraftModelHero from './AircraftModelHero.vue';
 import SatelliteGroundView from './SatelliteGroundView.vue';
@@ -64,11 +65,14 @@ const status = computed(() => {
   if (current.observedAgeMs !== null)
     return {
       tone: current.moving && current.observedAgeMs < 120_000 ? 'live' : 'aged',
+      // Away from live it is a replay: what was heard by the time shown.
       text: current.moving
-        ? t('Live · {age}', { age: contextAgeText(current.observedAgeMs) })
+        ? worldClock.isLive()
+          ? t('Live · {age}', { age: contextAgeText(current.observedAgeMs) })
+          : t('Replay · {age}', { age: contextAgeText(current.observedAgeMs) })
         : contextAgeText(current.observedAgeMs),
     };
-  if (current.moving) return { tone: 'live', text: t('Live') };
+  if (current.moving) return { tone: 'live', text: worldClock.isLive() ? t('Live') : t('Replay') };
   return null;
 });
 

@@ -289,7 +289,10 @@ export function createWeatherLayer({
     if (!enabled || suspended() || !clockState().advancing) return;
     // The world plays on past the newest frame, never round to the first.
     const times = manifest?.times ?? [];
-    const next = times[times.indexOf(time) + 1];
+    // The frame play gets to next: a stride ahead when it steps over frames.
+    const step = Math.max(1, clockState().stride ?? 1);
+    const next = times[Math.min(times.length - 1, times.indexOf(time) + step)];
+    if (next === time) return;
     if (!next) return;
     try {
       await rendering.prefetch?.(manifest, next, { infrared });

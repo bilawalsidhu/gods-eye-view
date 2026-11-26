@@ -659,6 +659,33 @@ body.cockpit-mode #world-timeline {
   pointer-events: none;
 }
 
+.wt-journey.is-computed {
+  background: repeating-linear-gradient(90deg, #fff 0 2px, transparent 2px 5px);
+  box-shadow: none;
+}
+
+.wt-journey-gap {
+  position: absolute;
+  bottom: 11px;
+  height: 4px;
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(4, 8, 12, 0.95) 0 3px,
+    rgba(255, 255, 255, 0.45) 3px 5px
+  );
+  pointer-events: none;
+}
+
+.wt-journey-gap.is-parked {
+  height: 2px;
+  bottom: 12px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.is-rest .wt-journey-gap {
+  bottom: 14px;
+}
+
 .is-rest .wt-journey {
   bottom: 15px;
 }

@@ -29,6 +29,7 @@ import { FEED_STATE_LABEL_KEYS, inspectorHasLayers } from '../../layerRowState.j
 import { COUNT_TILE_LAYERS } from '../../layerCounts.js';
 import { useLayerCountsStore } from '../../stores/layerCounts.js';
 import { useSpaceMissionsStore } from '../../stores/spaceMissions.js';
+import { useWorldTimeStore } from '../../stores/worldTime.js';
 
 // The Inspector refreshes after the camera settles and while it is visible.
 // Data Layers owns layer switches.
@@ -47,6 +48,11 @@ const inspectorNow = computed(() => {
   void store.inspector.shown;
   return Date.now();
 });
+// The time the globe shows: the place's clock reads it, so a replay of last
+// Tuesday says last Tuesday's local time there.
+const worldTime = useWorldTimeStore();
+const shownLive = computed(() => worldTime.time.live !== false);
+const shownNow = computed(() => (shownLive.value ? inspectorNow.value : worldTime.time.timeMs));
 const doc = globalThis.document;
 const visible = () => doc?.visibilityState !== 'hidden';
 let timer = null;
@@ -105,7 +111,7 @@ const viewZone = computed(() => {
   return point && zone?.point === point ? zone : null;
 });
 const clock = computed(() => {
-  const now = inspectorNow.value;
+  const now = shownNow.value;
   const point = weatherPoint(view.value?.center);
   if (globeView.value || !point) return clockLine(null, now);
   const observation = viewWeather.value;
@@ -477,7 +483,8 @@ const weatherNow = computed(() => {
     temperature: t('{n} °C', { n: formatNumber(roundOf(now.temperatureC)) }),
     conditions: [t(look.value.label), Number.isFinite(now.apparentTemperatureC) ? t('feels {n}°', { n: formatNumber(roundOf(now.apparentTemperatureC)) }) : null].filter(Boolean).join(' · '),
     facts: weatherFacts(now),
-    stale: weatherAge.value,
+    // Away from live the reading is still today's: it says so.
+    stale: shownLive.value ? weatherAge.value : t('Conditions now, not at the time shown'),
   };
 });
 // Display-only counts from the server cache.
@@ -508,7 +515,7 @@ function dayLength(minutes, display) {
   return hours ? `${unit(hours, 'hour')} ${unit(rest, 'minute')}` : unit(rest, 'minute');
 }
 const emptyFacts = computed(() => {
-  const time = inspectorNow.value;
+  const time = shownNow.value;
   if (globeView.value)
     return [{ label: t('UTC'), value: utcClock(time) }];
   const facts = [];

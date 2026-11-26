@@ -12,6 +12,7 @@ import {
   linePointWithinRadius,
 } from './contextGeometry.js';
 import { msg } from '../i18n/marker.js';
+import { worldClock } from '../time/worldClock.js';
 import { AIRCRAFT_CLASS_LABELS } from './aircraftClass.js';
 import { aircraftEmergency } from './aircraftEmergency.js';
 import { fireDetectionKey } from './firmsLabels.js';
@@ -1217,7 +1218,9 @@ function cardPhoto(dataManager, layerId, record) {
 export function describeEntity(
   dataManager,
   identity,
-  { nowMs = Date.now() } = {},
+  // Ages are told from the time shown: a replay's contact was heard moments
+  // before it, not a day before now.
+  { nowMs = worldClock.now() } = {},
 ) {
   if (!identity?.layerId) return null;
   const { layerId } = identity;

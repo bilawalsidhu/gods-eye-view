@@ -1,4 +1,5 @@
 import { installationFeedback } from './data/installationFeedback.js';
+import { worldClock } from './time/worldClock.js';
 
 export const LOADING_REVEAL_DELAY_MS = 160;
 export const LOADING_TERMINAL_DWELL_MS = 2200;
@@ -478,8 +479,16 @@ export function presentLoadingFeedback(state, summary, nowMs) {
       detail: 'OpenStreetMap · Overpass',
     };
   }
+  // A replay playing reads each layer's next frames as it goes: the timeline
+  // shows when play waits on them, so the shell says nothing of it, and never
+  // calls past data live.
+  const replay = !worldClock.isLive();
+  if (replay && worldClock.isPlaying() && summary.refresh && !summary.disabling)
+    return null;
   const elapsed = Math.max(0, nowMs - state.startedAt);
-  const label = summary.disabling
+  const label = replay && !summary.disabling
+    ? 'LOADING THE TIME SHOWN'
+    : summary.disabling
     ? 'TURNING OFF LIVE DATA'
     : summary.refresh
       ? 'REFRESHING LIVE DATA'

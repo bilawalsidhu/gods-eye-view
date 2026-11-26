@@ -98,6 +98,24 @@ export function createWeatherClock({
   let waiting = null;
   let waitTimer = null;
   let deferred = false;
+  // How long a frame takes to show while playing (a running mean), so play
+  // at a pace frames cannot keep up with steps over some rather than stop at
+  // each: as a video drops frames on a slow link, it shows every frame it can
+  // load in time, each at its own time.
+  let loadMs = null;
+  let transitionStarted = null;
+  const stride = (state = world.getState()) => {
+    if (!worldPlaysOn(state) || !(loadMs > 0)) return 1;
+    const times = getTimeline().map((time) => Date.parse(time));
+    const at = Math.floor(state.timeMs);
+    const index = times.findIndex((time) => time > at);
+    if (index < 0 || index + 1 >= times.length) return 1;
+    const spacing = times[index + 1] - times[index];
+    if (!(spacing > 0)) return 1;
+    // Real ms between frames at this rate, against the time one takes.
+    const realSpacing = spacing / Math.max(1e-6, state.rate || 1);
+    return Math.max(1, Math.min(12, Math.ceil((loadMs * 1.15) / realSpacing)));
+  };
   const stopWaiting = () => {
     const release = waiting;
     waiting = null;
@@ -152,6 +170,9 @@ export function createWeatherClock({
     // Frames come on one after another as the world plays on through them,
     // so the next is worth loading ahead.
     advancing: worldPlaysOn(),
+    // How many frames on play gets to next: more than one where frames load
+    // slower than play reaches them, which is the one worth loading ahead.
+    stride: stride(),
     timeline: getTimeline(),
     products: [...registry.values()].map(({ product }) => ({
       id: product.id,
@@ -173,6 +194,8 @@ export function createWeatherClock({
     applied = selections();
     deferred = false;
     stopWaiting();
+    const started = performance.now();
+    transitionStarted = worldPlaysOn() ? started : null;
     for (const entry of registry.values()) entry.controller?.abort();
     // Start all products together; a rejection must not skip the settle barrier.
     const tasks = [...registry.values()].map((entry) => {
@@ -186,6 +209,10 @@ export function createWeatherClock({
     });
     const result = Promise.allSettled(tasks).then(() => {
       if (destroyed || owner !== generation) return false;
+      if (transitionStarted === started) {
+        const took = performance.now() - started;
+        loadMs = loadMs === null ? took : loadMs * 0.6 + took * 0.4;
+      }
       stopWaiting();
       pending = null;
       notify();
@@ -335,7 +362,10 @@ export function createWeatherClock({
     // world holds here until that one shows.
     if (!modeChanged && pending && playsOn) {
       deferred = true;
-      startWaiting();
+      // Frames that load slower than play reaches them are stepped over:
+      // play runs on to the gate a stride ahead, and the newest frame is
+      // loaded once this one shows.
+      if (stride(state) === 1) startWaiting();
       notify();
       return;
     }
@@ -346,11 +376,13 @@ export function createWeatherClock({
   let gated = null;
   let playedOn = false;
   function gateNext(state) {
-    const next = worldPlaysOn(state)
-      ? (getTimeline()
-          .map((time) => Date.parse(time))
-          .find((time) => time > Math.floor(state.timeMs)) ?? null)
-      : null;
+    let next = null;
+    if (worldPlaysOn(state)) {
+      const times = getTimeline().map((time) => Date.parse(time));
+      const index = times.findIndex((time) => time > Math.floor(state.timeMs));
+      if (index >= 0)
+        next = times[Math.min(times.length - 1, index + stride(state) - 1)];
+    }
     if (next === gated) return;
     gated = next;
     world.gate(holdId, next);

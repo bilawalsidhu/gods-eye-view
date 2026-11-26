@@ -24,8 +24,8 @@ import { worldClock } from '../../../time/worldClock.js';
 import { useWorldTimeStore } from '../../stores/worldTime.js';
 import { useEntityCardStore } from '../../stores/entityCard.js';
 import { vRootClass } from '../../rail/rootClass.js';
+import { journeyMoments } from '../../../time/journeyMoments.js';
 import {
-  journeyMoments,
   recordedJourney,
   setRecordedSubject,
   viewJourneyAt,
@@ -39,7 +39,9 @@ const store = useWorldTimeStore();
 const { time } = storeToRefs(store);
 const cards = useEntityCardStore();
 
-const query = new URLSearchParams(window.location.search);
+// Rendered on a server too (Core's tests): no window there.
+const win0 = globalThis.window;
+const query = new URLSearchParams(win0?.location?.search ?? '');
 const variant = ['deck', 'under', 'tape'].includes(query.get('tl'))
   ? query.get('tl')
   : 'deck';
@@ -56,6 +58,12 @@ const LANES = {
   'weather-lightning': { label: 'LIGHTNING', kind: 'frames', order: 6, source: 'Lightning mapper' },
   satellites: { label: 'SATELLITES', kind: 'computed', order: 7, source: 'Orbital elements' },
   earthquakes: { label: 'QUAKES', kind: 'events', order: 8, source: 'Seismic catalogue' },
+  'gnss-integrity': { label: 'GPS JAMMING', kind: 'frames', order: 6.5, source: 'Aircraft navigation integrity, 6-hour windows' },
+  'local-firms': { label: 'FIRES', kind: 'frames', order: 6.6, source: 'Satellite fire detections, hourly' },
+  firms: { label: 'FIRES', kind: 'frames', order: 6.6, source: 'Satellite fire detections, hourly' },
+  wind: { label: 'WIND', kind: 'frames', order: 6.7, source: 'Model runs, hourly steps' },
+  'weather-cyclones': { label: 'CYCLONES', kind: 'events', order: 6.8, source: 'Advisories' },
+  'ais-live-vessels': { label: 'VESSELS', kind: 'observed', order: 3, source: 'AIS positions' },
   'rocket-launches': { label: 'LAUNCHES', kind: 'events', order: 9, source: 'Launch schedule' },
 };
 const KINDS = {
@@ -81,7 +89,9 @@ const ARCHIVE = {
   'weather-satellite': Date.UTC(2026, 7, 9),
   'weather-lightning': () => Date.now() - 21 * DAY,
 };
-const showArchive = query.get('archive') !== '0';
+// The planned archive depths were the prototype's stand-in; a host reports real
+// coverage, so they show only when asked for (`?archive=1`).
+const showArchive = query.get('archive') === '1';
 const archiveOf = (id) => {
   if (!showArchive) return null;
   const from = ARCHIVE[id];
@@ -91,6 +101,9 @@ const archiveOf = (id) => {
 // ── Speeds, in world time per real second ───────────────────────────────
 const SPEEDS = [
   { rate: 1, label: '1×', name: 'Real time' },
+  // Watching one aircraft land or one ship berth: fast enough to get there,
+  // slow enough to see it happen.
+  { rate: 10, label: '10×', name: 'Ten times real time' },
   { rate: 60, label: '1 MIN/S', name: '1 minute a second' },
   { rate: 300, label: '5 MIN/S', name: '5 minutes a second' },
   { rate: 900, label: '15 MIN/S', name: '15 minutes a second' },
@@ -142,17 +155,18 @@ const future = computed(() => !time.value.live && time.value.timeMs > nowMs() + 
 const tense = computed(() => (future.value ? 'future' : past.value ? 'past' : 'live'));
 
 // ── The page: where the dock is, how much room there is ─────────────────
-const vw = ref(window.innerWidth);
-const vh = ref(window.innerHeight);
-const coarse = ref(window.matchMedia('(pointer: coarse)').matches);
-const phone = ref(window.matchMedia('(max-width: 720px)').matches);
+const media = (q) => Boolean(win0?.matchMedia?.(q).matches);
+const vw = ref(win0?.innerWidth ?? 1440);
+const vh = ref(win0?.innerHeight ?? 900);
+const coarse = ref(media('(pointer: coarse)'));
+const phone = ref(media('(max-width: 720px)'));
 const dock = shallowRef(null);
 function measure() {
   vw.value = window.innerWidth;
   vh.value = window.innerHeight;
   coarse.value = window.matchMedia('(pointer: coarse)').matches;
   phone.value = window.matchMedia('(max-width: 720px)').matches;
-  const el = document.getElementById('command-dock');
+  const el = globalThis.document?.getElementById('command-dock');
   const box = el?.getBoundingClientRect();
   dock.value =
     box && box.width > 0
@@ -206,11 +220,20 @@ function setRange(key) {
   touched.value = true;
   let length = RANGES.find((each) => each.key === key)?.length;
   if (key === 'ALL') length = maxLength.value;
-  if (key === 'FIT' && journey.value)
-    length = Math.max(20 * MIN, (nowMs() - journey.value.start) * 1.2);
   const at = time.value.timeMs;
+  if (key === 'FIT' && journey.value) {
+    // The flight around the time shown (an airframe's day holds several),
+    // with a margin either side; pinned to now while it is still flying.
+    const leg = legAt(time.value.live ? nowMs() : at);
+    const span = Math.max(20 * MIN, leg.to - leg.from);
+    length = Math.min(maxLength.value, span * 1.25);
+    const end = leg.to + span * 0.1;
+    win.value = { length, end: end >= nowMs() - MIN ? null : end };
+    pinSpeed();
+    return;
+  }
   // Pinned to now while the time shown is within the window's reach of now.
-  const pinned = key === 'FIT' || time.value.live || nowMs() - at < length * 0.9;
+  const pinned = time.value.live || nowMs() - at < length * 0.9;
   win.value = { length, end: pinned ? null : at + length * 0.3 };
   pinSpeed();
 }
@@ -420,6 +443,19 @@ const gap = computed(() => {
       text: `${subject.value.title} WAS NOT SEEN BEFORE ${stamp(subject.value.start)}`,
       nearest: subject.value.start + 1000,
       label: 'GO TO ITS FIRST SIGHTING',
+    };
+  const dark = subjectGapAt(at);
+  if (dark?.parked)
+    return {
+      text: `${subject.value.title} ON THE GROUND ${stamp(dark.from)} – ${stamp(dark.to)}, NOT TRANSMITTING`,
+      nearest: direction.value < 0 ? dark.from - 1000 : dark.to + 1000,
+      label: direction.value < 0 ? 'BACK TO WHEN IT LANDED' : 'SKIP TO ITS NEXT FLIGHT',
+    };
+  if (dark)
+    return {
+      text: `${subject.value.title}: NO POSITIONS ${stamp(dark.from)} – ${stamp(dark.to)}, OUT OF RECEIVER RANGE`,
+      nearest: direction.value < 0 ? dark.from - 1000 : dark.to + 1000,
+      label: direction.value < 0 ? 'BACK TO ITS LAST POSITION' : 'SKIP TO WHERE IT IS SEEN AGAIN',
     };
   if (!missing.length) return null;
   if (at > nowMs() + 5000)
@@ -773,7 +809,9 @@ watch(
   () => time.value.timeMs,
   (ms) => {
     if (direction.value > 0 && startedBeforeNow && ms >= nowMs() - 500) goLive(true);
-    if (direction.value !== 0 && pointers.size === 0) keepInView(ms);
+    // Whatever moved it (play, a date jump, a link, a search answer), the
+    // time shown stays on the track, unless a finger or the pointer holds it.
+    if (pointers.size === 0) keepInView(ms);
     if (direction.value > 0 && !time.value.playing && !time.value.live) direction.value = 0;
   },
 );
@@ -855,25 +893,86 @@ const selected = computed(() => {
 // The selected contact's layer, when its source can read that one contact at
 // any time (Hosted's archives): its journey, and a focus that keeps it in
 // every snapshot wherever the view is. Else the prototype's recording.
+// Stretches of a journey with no position: an aircraft past receiver range
+// over an ocean, a vessel out of AIS reach. The timeline names them instead
+// of showing an empty sky, and a replay steps over them.
+const GAP_MS = { vessels: 3 * HOUR, 'ais-live-vessels': 3 * HOUR };
+// An aircraft quiet on the ground (parked at a gate between flights) is not
+// out of range: it is told apart by the fixes either side being on the ground.
+const grounded = (fix) => !Number.isFinite(fix[3]) || fix[3] <= 30;
+function journeyGaps(path, layerId) {
+  const limit = GAP_MS[layerId] ?? 10 * MIN;
+  const vessel = /vessel/.test(layerId ?? '');
+  const gaps = [];
+  for (let index = 1; index < path.length; index += 1) {
+    const from = path[index - 1][0] * 1000;
+    const to = path[index][0] * 1000;
+    if (to - from > limit)
+      gaps.push({
+        from,
+        to,
+        parked: !vessel && grounded(path[index - 1]) && grounded(path[index]),
+      });
+  }
+  return gaps;
+}
 let focused = null;
 function focusSubject(next) {
   if (focused && focused.layer !== next?.layer) focused.layer.focusOn?.(null);
   focused = next;
   next?.layer.focusOn?.(next.id);
 }
+// A satellite is computed at any time from its orbit: its journey is the
+// timeline's reach either side of now, and its flight is one orbit around the
+// time shown, worked out from its height (a circular orbit's period).
+const EARTH_MU = 3.986004418e14;
+const EARTH_R = 6_371_000;
+function orbitJourney(pick, layer) {
+  const info = layer?.getTrackedInfo?.();
+  const height = Number(info?.altitudeM ?? cards.card?.altitudeM);
+  const radius = EARTH_R + (Number.isFinite(height) && height > 0 ? height : 500_000);
+  const period = Math.min(DAY, 2 * Math.PI * Math.sqrt(radius ** 3 / EARTH_MU) * 1000);
+  const now = nowMs();
+  return {
+    start: now - 14 * DAY,
+    end: now + 14 * DAY,
+    readFrom: now - 14 * DAY,
+    readTo: now + 14 * DAY,
+    callsign: '',
+    period,
+    computed: true,
+    path: null,
+    gaps: [],
+    moments: [],
+  };
+}
 async function readJourney(pick) {
   const layer = pick.layerId ? cards.layerModule(pick.layerId) : null;
+  if (pick.layerId === 'satellites') {
+    focusSubject(null);
+    return orbitJourney(pick, layer);
+  }
   if (typeof layer?.journeyOf === 'function') {
     focusSubject({ layer, id: pick.id });
     try {
-      const found = await layer.journeyOf(pick.id);
+      // Around the time shown: a plane picked while looking at last week
+      // has last week's journey.
+      const found = await layer.journeyOf(pick.id, {
+        atMs: time.value.live ? undefined : worldClock.now(),
+      });
       if (found && Number.isFinite(found.start) && found.path?.length) {
         return {
           start: found.start,
           end: found.end,
           callsign: found.title ?? '',
+          readFrom: found.readFrom ?? found.start,
+          readTo: found.readTo ?? found.end,
           path: found.path,
-          moments: journeyMoments(found.path, found.start, found.end),
+          gaps: journeyGaps(found.path, pick.layerId),
+          moments: journeyMoments(found.path, {
+            kind: /vessel/.test(pick.layerId) ? 'vessel' : 'aircraft',
+            nowMs: worldClock.wallNow(),
+          }),
         };
       }
     } catch (error) {
@@ -906,31 +1005,32 @@ watch(
     // The track at rest is nobody's yet: it becomes the journey's.
     // At live the window is on nothing in particular, so it becomes the
     // journey's, whether or not time was touched earlier; it comes back after.
-    if (time.value.live) {
-      const was = touched.value;
-      before = win.value;
-      setRange('FIT');
-      touched.value = was;
-    }
+    // Selecting it makes the track its flight's, at live or in the past;
+    // the window comes back when it is let go.
+    const was = touched.value;
+    before = win.value;
+    setRange('FIT');
+    touched.value = time.value.live ? was : true;
   },
   { immediate: true },
 );
-// A replay with something selected is about that thing: the view goes to
-// where it was at the time shown, once the time settles.
-let followTimer = null;
+// The time moved to a stretch the journey was not read over (a date jump,
+// a long rewind): it is read again around the time shown.
+let rereading = null;
 watch(
-  () => [time.value.live, Math.round(time.value.timeMs / 1000), journey.value],
+  () => [Math.round(time.value.timeMs / MIN), time.value.playing, time.value.live],
   () => {
-    clearTimeout(followTimer);
-    if (time.value.live || !journey.value?.path) return;
-    followTimer = setTimeout(
-      () => {
-        const at = worldClock.now();
-        if (!worldClock.isLive() && journey.value && at >= journey.value.start)
-          viewJourneyAt(journey.value.path, at);
-      },
-      time.value.playing ? 1200 : 250,
-    );
+    const current = journey.value;
+    const pick = selected.value;
+    if (!current?.readFrom || !pick || time.value.live || rereading) return;
+    const at = worldClock.now();
+    if (at >= current.readFrom && at <= current.readTo) return;
+    rereading = readJourney(pick)
+      .then((found) => {
+        if (found && selected.value?.id === pick.id)
+          journey.value = { ...found, title: found.callsign || pick.title };
+      })
+      .finally(() => (rereading = null));
   },
 );
 const subject = computed(() =>
@@ -943,6 +1043,83 @@ const journeyBar = computed(() => {
   const to = Math.min(Math.max(subject.value.end, nowMs()), end);
   return to > from ? { left: place(from), width: Math.max(0.4, place(to) - place(from)) } : null;
 });
+// The flight of the journey that holds `ms`: from the takeoff before it to the
+// landing after it, within the journey; the whole journey if it is on none.
+function legAt(ms) {
+  const current = journey.value;
+  if (!current) return { from: ms - HOUR, to: ms };
+  if (current.period) return { from: ms - current.period / 2, to: ms + current.period / 2 };
+  const moments = current.moments ?? [];
+  const off = moments.filter((m) => m.kind === 'departed' && m.time <= ms).at(-1);
+  const down = moments.find((m) => m.kind === 'landed' && m.time >= ms);
+  const landedBefore = moments.filter((m) => m.kind === 'landed' && m.time <= ms).at(-1);
+  // On the ground between two flights: the day around it.
+  if (landedBefore && (!off || landedBefore.time > off.time))
+    return { from: current.start, to: Math.max(current.end, ms) };
+  return {
+    from: off ? off.time : current.start,
+    to: down ? down.time : Math.max(current.end, Math.min(ms, nowMs())),
+  };
+}
+function subjectGapAt(ms) {
+  return subject.value?.gaps?.find((gap) => ms > gap.from && ms < gap.to) ?? null;
+}
+const journeyGapBars = computed(() => {
+  if (!subject.value?.gaps?.length) return [];
+  const { start, end } = view.value;
+  return subject.value.gaps
+    .filter((gap) => gap.to > start && gap.from < end)
+    .map((gap) => {
+      const from = Math.max(gap.from, start);
+      const to = Math.min(gap.to, end);
+      return {
+        key: gap.from,
+        parked: gap.parked,
+        left: place(from),
+        width: Math.max(0.4, place(to) - place(from)),
+      };
+    });
+});
+// A replay with something selected keeps the camera on it: the layer's own
+// follow camera holds it wherever it was at the time shown, picked up again
+// whenever it comes back into its feed; a replay running into a stretch with
+// no positions skips over it, and says so.
+const skipped = shallowRef(null);
+let skippedTimer = null;
+let followLoop = null;
+function keepOnSubject() {
+  if (!subject.value || time.value.live) return;
+  const at = worldClock.now();
+  const dark = subjectGapAt(at);
+  if (dark && direction.value !== 0 && pointers.size === 0) {
+    const to = direction.value > 0 ? dark.to + 1000 : dark.from - 1000;
+    worldClock.seek(to);
+    skipped.value = {
+      length: dark.to - dark.from,
+      title: subject.value.title,
+      parked: dark.parked,
+    };
+    clearTimeout(skippedTimer);
+    skippedTimer = setTimeout(() => (skipped.value = null), 4000);
+    return;
+  }
+  if (dark || at < subject.value.start) return;
+  if (!cards.lost && !cards.isFollowing() && cards.canFollow()) {
+    cards.follow();
+    return;
+  }
+  // Not in its layer at this time yet (its track still loading): bring the
+  // view to where its journey puts it, so it is drawn there when it lands.
+  if (cards.lost && subject.value.path) viewJourneyAt(subject.value.path, at);
+}
+watch(
+  () => Boolean(subject.value) && !time.value.live,
+  (on) => {
+    clearInterval(followLoop);
+    followLoop = on ? setInterval(keepOnSubject, 400) : null;
+  },
+  { immediate: true },
+);
 const pinList = computed(() => answer.value?.pins ?? subject.value?.moments ?? []);
 const pins = computed(() => {
   const { start, end } = view.value;
@@ -1260,7 +1437,7 @@ const top = computed(() => {
         ? (dock.value?.bottom ?? 74)
         : (dock.value ? dock.value.bottom + dock.value.height + 8 : 16);
   // The caption and the notice stand above the bar; the corners clear them too.
-  const above = engaged.value && (answer.value || gap.value) ? 40 : 0;
+  const above = engaged.value && (answer.value || gap.value || skipped.value) ? 40 : 0;
   return bottom + rootHeight.value + above;
 });
 // The HUD's stamp says what the picture is: a recording being made (REC) is
@@ -1278,7 +1455,8 @@ function stampHud() {
 watch(
   [lift, top, tense, layout, engaged, () => Boolean(time.value.span)],
   () => {
-    const body = document.body;
+    const body = globalThis.document?.body;
+    if (!body) return;
     body.style.setProperty('--world-timeline-lift', `${lift.value}px`);
     body.style.setProperty('--world-timeline-top', `${top.value}px`);
     body.dataset.worldTense = time.value.span ? tense.value : 'live';
@@ -1315,6 +1493,8 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   focusSubject(null);
+  clearInterval(followLoop);
+  clearTimeout(skippedTimer);
   window.removeEventListener('keydown', onKey);
   window.removeEventListener('resize', measure);
   document.removeEventListener('pointerdown', onOutside, true);
@@ -1357,8 +1537,9 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
   >
     <!-- Above the bar: what an answer's pins are, and a layer on that has
          nothing at the time shown, with the way out. -->
-    <div v-if="engaged && !menu && (answer || gap)" class="wt-above">
+    <div v-if="engaged && !menu && (answer || gap || skipped)" class="wt-above">
       <span v-if="answer" class="wt-caption"><b>{{ pins.length }}</b>{{ answer.title }}</span>
+      <p v-if="skipped && !gap" class="wt-notice is-skip"><span>{{ skipped.parked ? `SKIPPED ${spanLabel(skipped.length)} ON THE GROUND` : `SKIPPED ${spanLabel(skipped.length)} WITH NO POSITIONS OF ${skipped.title}` }}</span></p>
       <button v-if="gap" type="button" class="wt-notice" :disabled="gap.nearest === null" @click="seekTo(gap.nearest)">
         <span>{{ gap.text }}</span><b v-if="gap.label">{{ gap.label }} ›</b>
       </button>
@@ -1475,7 +1656,8 @@ const playing = computed(() => direction.value !== 0 || time.value.live);
             <span v-if="stripArchive" class="wt-strip-archive" :style="{ left: `${stripArchive.left}%`, width: `${stripArchive.width}%` }"></span>
             <span v-for="(part, index) in strip" :key="index" class="wt-strip-part" :class="{ 'is-all': part.all, 'is-future': part.future }" :style="{ left: `${part.left}%`, width: `${part.width}%` }"></span>
           </span>
-          <span v-if="journeyBar" class="wt-journey" :style="{ left: `${journeyBar.left}%`, width: `${journeyBar.width}%` }"></span>
+          <span v-if="journeyBar" class="wt-journey" :class="{ 'is-computed': subject?.computed }" :style="{ left: `${journeyBar.left}%`, width: `${journeyBar.width}%` }"></span>
+          <span v-for="dark in journeyGapBars" :key="`g${dark.key}`" class="wt-journey-gap" :class="{ 'is-parked': dark.parked }" :style="{ left: `${dark.left}%`, width: `${dark.width}%` }"></span>
           <span v-for="mark in marks" :key="`${mark.time}${mark.label}`" class="wt-mark" :style="{ left: `${mark.left}%` }"></span>
           <span v-if="nowPct >= 0 && nowPct <= 100" class="wt-now" :style="{ left: `${nowPct}%` }"><em>NOW</em></span>
           <template v-for="pin in pins" :key="`p${pin.n}`">

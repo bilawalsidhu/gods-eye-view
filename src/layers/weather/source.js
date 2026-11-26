@@ -1,5 +1,9 @@
 import { readResponseJsonCapped } from '../../sources/httpBody.js';
 
+/** Most frames a manifest lists: a host's past manifest reaches further
+ * ahead than the live one's 13, so play within it never waits on the next. */
+export const MAX_MANIFEST_FRAMES = 25;
+
 // Shared with the AI tools, so no i18n import: failures stay English here and
 // the weather layer translates them where it shows them (t / translateKnown).
 const msg = (text) => text;
@@ -30,7 +34,7 @@ export function validateWeatherSnapshot(value, product) {
     bounds.south >= bounds.north ||
     !Array.isArray(times) ||
     times.length < 1 ||
-    times.length > 13 ||
+    times.length > MAX_MANIFEST_FRAMES ||
     times.some(
       (time, i) =>
         typeof time !== 'string' ||

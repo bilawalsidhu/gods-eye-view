@@ -44,6 +44,7 @@ const STATUS_LABEL_KEYS = Object.freeze({
   ),
   'TURNING OFF LIVE DATA': msg('TURNING OFF LIVE DATA'),
   'REFRESHING LIVE DATA': msg('REFRESHING LIVE DATA'),
+  'LOADING THE TIME SHOWN': msg('LOADING THE TIME SHOWN'),
   'syncing road network': msg('syncing road network'),
 });
 
