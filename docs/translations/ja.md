@@ -61,7 +61,7 @@ Translation source: abiyeenzo (#913).
 | scene / shot                              | シーン / ショット                       |
 | briefing / panel / dock                   | ブリーフィング / パネル / ドック        |
 | preset / visual preset                    | プリセット / ビジュアルプリセット       |
-| Tactical / Minimal / Cyber                | タクティカル / ミニマル / サイバー      |
+| Tactical / Minimal                        | タクティカル / ミニマル                 |
 | Scope (circular viewport mask) / keyhole  | スコープ / キーホール                   |
 | Clean UI                                  | クリーンUI                              |
 | cockpit                                   | コックピット                            |

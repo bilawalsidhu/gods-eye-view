@@ -56,7 +56,6 @@ In short: the MIT grant does not extend to any third-party data. See
 DATA_SOURCES.md for the full per-source license + attribution summary, and
 remove any dataset whose terms don't fit your use.
 
-The 3D models under public/models/ are also third-party works and are NOT
-licensed under MIT. They remain under their individual licenses. See
-public/models/README.md for the author, source, license, modification notice,
-and attribution covering each model file.
+The 3D models under public/models/ are the project's procedural fleet
+models, generated from code by the project maintainers, and are covered by
+the MIT license above like the source code. See public/models/README.md.

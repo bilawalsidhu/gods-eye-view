@@ -1,5 +1,6 @@
 import { sampleWind, windSpeed } from './model.js';
 import { sampleScalar } from './fields.js';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 
 // The reading stays English: AI tools read it too. Text is marked for i18n
 // extraction and translated where the WEATHER card shows it (presentation.js).
@@ -41,24 +42,37 @@ export function formatWindSpeed(speed, units = 'km/h') {
   return `${(speed * WIND_UNITS[unit]).toFixed(1)} ${unit}`;
 }
 
-/** A deliberate snapshot at the map center; does not own pointer input. */
+/** Sample the forecast vector at a supplied longitude and latitude. */
+export function sampleWindReading(snapshot, lon, lat) {
+  if (!snapshot?.grid || !snapshot.u || !snapshot.v || snapshot.unavailable)
+    return null;
+  const { u, v } = sampleWind(
+    { ...snapshot.grid, u: snapshot.u, v: snapshot.v },
+    lon,
+    lat,
+  );
+  if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+  return { speed: windSpeed(u, v), from: windFrom(u, v) };
+}
+
+/**
+ * A deliberate snapshot at the map center; does not own pointer input. The
+ * center is where `view.query` (a renderer query port) meets the ellipsoid
+ * under the middle of `view.canvas`, unless `position` (ECEF) is given.
+ */
 export function inspectWindAtCenter(
   snapshot,
-  viewer,
-  cesium,
+  { query, canvas } = {},
   { units, overlay, model, validTime, status, position } = {},
 ) {
-  const scene = viewer?.scene;
-  const canvas = scene?.canvas;
-  const ellipsoid = scene?.globe?.ellipsoid || cesium.Ellipsoid?.WGS84;
   const point =
     position ||
     (canvas &&
-      viewer.camera?.pickEllipsoid?.(
-        new cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2),
-        ellipsoid,
-      ));
-  if (!point || !snapshot?.u || !snapshot?.v)
+      query?.pickEllipsoid(canvas.clientWidth / 2, canvas.clientHeight / 2));
+  const location = point && toLonLatH(point);
+  const reading =
+    location && sampleWindReading(snapshot, location.lon, location.lat);
+  if (!reading)
     return {
       coordinates: msg('No surface reading'),
       wind: msg('Aim the map center at Earth'),
@@ -69,16 +83,8 @@ export function inspectWindAtCenter(
         'A location reading needs a loaded forecast and the Earth at the center of the view.',
       ),
     };
-  const location = cesium.Cartographic.fromCartesian(point, ellipsoid);
-  const lon = cesium.Math.toDegrees(location.longitude);
-  const lat = cesium.Math.toDegrees(location.latitude);
-  const vector = sampleWind(
-    { ...snapshot.grid, u: snapshot.u, v: snapshot.v },
-    lon,
-    lat,
-  );
-  const speed = windSpeed(vector.u, vector.v);
-  const from = windFrom(vector.u, vector.v);
+  const { lon, lat } = location;
+  const { speed, from } = reading;
   const scalar = ['temperature', 'pressure'].includes(overlay)
     ? sampleScalar(snapshot, lon, lat, overlay)
     : null;

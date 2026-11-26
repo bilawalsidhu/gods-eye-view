@@ -6,6 +6,13 @@ import { createStandaloneLayerSources } from '../standalone/layerSources.js';
 import { catalogControlServices } from './catalog.js';
 import { LayerLifecycle } from '../data/lifecycle.js';
 import { fakeStreetLevelProvider } from '../testSupport/streetLevelFakes.mjs';
+import { worldClock } from '../time/worldClock.js';
+import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+import { fakeInput } from '../input/testDoubles.mjs';
+
+const flush = async () => {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+};
 
 function fixtureSources(ids, calls) {
   const sources = createStandaloneLayerSources();
@@ -27,6 +34,7 @@ test('catalogs construct distinct layers and classification from their supplied 
   t.after(() => {
     a.abort();
     b.abort();
+    worldClock.goLive();
   });
   const callsA = [];
   const callsB = [];
@@ -53,7 +61,10 @@ test('catalogs construct distinct layers and classification from their supplied 
     'the hardware-local layer is never serialized into links',
   );
   assert.notEqual(first.weatherClock, second.weatherClock);
-  await first.weatherClock.setTarget('2026-09-21T12:00:00.000Z');
+  // Time moves on the world clock, which the catalog's weather clock follows.
+  assert.equal(first.weatherClock.world, worldClock);
+  worldClock.seek(Date.parse('2026-09-21T12:00:00.000Z'));
+  await flush();
   assert.match(
     first.get('wind').getRowControls().info,
     /Forecast · does not follow history/,
@@ -111,9 +122,16 @@ test('catalogs construct distinct layers and classification from their supplied 
   assert.equal(first.militaryRegistry.isMilitaryIcao('def456'), false);
   assert.equal(second.militaryRegistry.isMilitaryIcao('def456'), true);
   a.abort();
+  worldClock.seek(Date.parse('2026-09-21T13:00:00.000Z'));
+  await flush();
   assert.equal(
-    await first.weatherClock.setTarget('2026-09-21T13:00:00.000Z'),
-    false,
+    first.weatherClock.getState().target,
+    '2026-09-21T12:00:00.000Z',
+    'an aborted catalog no longer follows the world clock',
+  );
+  assert.equal(
+    second.weatherClock.getState().target,
+    '2026-09-21T13:00:00.000Z',
   );
   assert.equal(callsA[0].aborted, true);
   assert.equal(first.militaryRegistry.isMilitaryIcao('abc123'), false);
@@ -218,9 +236,8 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
   };
   const shows = (layer, minutes) => {
     assert.equal(layer.provenance.window.minutes, minutes);
-    const { info, legend } = layer.getRowControls();
+    const { info } = layer.getRowControls();
     assert.match(info, new RegExp(`visited views over ${minutes} min`));
-    assert.match(legend[0].blurb, new RegExp(`over ${minutes} minutes`));
   };
   shows(gnssLayer({ windowMs: 65 * 60_000 }), 65);
   shows(gnssLayer({}), 30);
@@ -238,4 +255,100 @@ test('a GNSS integrity source can set the layer evidence window', (t) => {
       30,
       `${String(windowMs)} falls back to the default`,
     );
+});
+
+test("a host's air-quality field source reaches the layer; standalone asks its own server", async (t) => {
+  const lifetime = new AbortController();
+  t.after(() => lifetime.abort());
+  const airQuality = (field) => {
+    const sources = fixtureSources([], []);
+    sources['air-quality'] = { getSnapshot: async () => [] };
+    if (field !== undefined) sources['air-quality-field'] = field;
+    const layer = createApplicationCatalog({
+      sources,
+      signal: lifetime.signal,
+      surface: fixtureSurface(lifetime.signal),
+    }).get('air-quality');
+    const viewer = {};
+    bindFakeDraw(viewer);
+    layer.init(viewer);
+    t.after(() => layer.destroy());
+    return layer;
+  };
+  const asked = [];
+  const layer = airQuality({
+    getManifest: async (options) => {
+      asked.push(options);
+      throw Object.assign(new Error('none'), { code: 'not_configured' });
+    },
+    getStep: async () => assert.fail('no step without a run'),
+  });
+  layer.enable();
+  await flush();
+  assert.equal(asked.length, 1);
+  // The standalone default asks the local server's field route; removed,
+  // the layer has none to ask.
+  const fieldAsks = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    if (String(url).startsWith('/api/air-quality/field')) fieldAsks.push(url);
+    throw new Error('offline');
+  });
+  airQuality(undefined).enable();
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
+  airQuality(null).enable();
+  await flush();
+  assert.deepEqual(fieldAsks, ['/api/air-quality/field/manifest']);
+  const standalone = createStandaloneLayerSources()['air-quality-field'];
+  assert.equal(typeof standalone.getManifest, 'function');
+  assert.equal(typeof standalone.getStep, 'function');
+  assert.throws(
+    () => airQuality({ getManifest: async () => ({}) }),
+    /getManifest and getStep/,
+  );
+});
+
+test('perimeterOptions reach Fire Perimeters: inciweb false never asks InciWeb', async (t) => {
+  const lifetime = new AbortController();
+  const { signal } = lifetime;
+  const sources = fixtureSources([], []);
+  sources['fire-perimeters'] = {
+    getSnapshot: async () => ({
+      at: null,
+      fetchedAt: null,
+      stale: false,
+      revision: 'r',
+      note: null,
+      fires: [],
+      pieces: [],
+    }),
+  };
+  const requested = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    requested.push(String(url));
+    return Response.json([]);
+  });
+  const viewer = { scene: { pick: () => null } };
+  bindFakeDraw(viewer);
+  const input = fakeInput(viewer);
+  const layer = createApplicationCatalog({
+    sources,
+    signal,
+    surface: fixtureSurface(signal),
+    perimeterOptions: { inciweb: false, inputFor: () => input.input },
+  }).get('fire-perimeters');
+  t.after(() => {
+    layer.destroy();
+    input.destroy();
+    lifetime.abort();
+    worldClock.goLive();
+  });
+  layer.init(viewer);
+  layer.enable(viewer);
+  assert.equal(await layer.update(viewer), true);
+  await new Promise(setImmediate);
+  assert.deepEqual(
+    requested.filter((url) => url.includes('inciweb')),
+    [],
+  );
 });

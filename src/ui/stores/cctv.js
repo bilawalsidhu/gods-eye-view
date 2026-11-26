@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia';
 import { markRaw, shallowRef } from 'vue';
 
+function updatePreviewIds(ids, cameraId, shown) {
+  if (shown) return [...ids, cameraId];
+  const index = ids.indexOf(cameraId);
+  return index < 0 ? ids : ids.filter((_, i) => i !== index);
+}
+
 /**
  * The CCTV panel as its view renders it. CctvControls presents the buttons,
  * CAL chip, meta line and calibration readout (`presentCctvPanel()`), runs
@@ -20,6 +26,9 @@ export const useCctvStore = defineStore('gev-cctv', () => {
 
   /** The preview: requested and shown frame, loading and error state. */
   const frame = shallowRef(null);
+  /** Camera IDs with a mounted card or an open bigger view. */
+  const previewCards = shallowRef([]);
+  const previewPopups = shallowRef([]);
   /** Whether the live video surface replaces the still frame. */
   const live = shallowRef(false);
   /** `{label, state}` for the source badge; null until first synced. */
@@ -49,6 +58,18 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     frame.value = markRaw(next);
   }
 
+  function showPreviewCard(cameraId, shown) {
+    previewCards.value = updatePreviewIds(previewCards.value, cameraId, shown);
+  }
+
+  function showPreviewPopup(cameraId, shown) {
+    previewPopups.value = updatePreviewIds(
+      previewPopups.value,
+      cameraId,
+      shown,
+    );
+  }
+
   /** @param {boolean} on */
   function setLive(on) {
     live.value = Boolean(on);
@@ -73,6 +94,8 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     view,
     calEdit,
     frame,
+    previewCards,
+    previewPopups,
     live,
     sourceBadge,
     summary,
@@ -80,6 +103,8 @@ export const useCctvStore = defineStore('gev-cctv', () => {
     publish,
     setCalEdit,
     setFrame,
+    showPreviewCard,
+    showPreviewPopup,
     setLive,
     setSourceBadge,
     setSummary,

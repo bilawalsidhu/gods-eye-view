@@ -1,9 +1,14 @@
-import * as Cesium from 'cesium';
+import { fromDegrees, fromRadians } from '../../geo/ellipsoid.js';
+import { horizonFrom } from '../../geo/horizon.js';
+import { densifyRhumb } from '../../geo/rhumb.js';
+import { distance, toRadians } from '../../geo/vector.js';
+import { cssColor } from '../../render/color.js';
 import {
-  probeTranslucentMarkerBlend,
-  commitTranslucentMarkerBlend,
-} from './surface.js';
-import { CABLE_LANDING_REVEALS_PER_FRAME } from './policy.js';
+  cameraOf,
+  canvasOf,
+  drawOf,
+  findFrame,
+} from '../../render/rendererOf.js';
 import {
   clampLabel,
   createCableOverlayEntry,
@@ -11,8 +16,150 @@ import {
   selectCableReferenceLabelWinners,
   cableReferencePriority,
 } from './overlay.js';
+import { featureLabel, featureReference, geometryParts } from './geometry.js';
+import { cablePinImage } from './pin.js';
+import {
+  CABLE_LANDING_REVEALS_PER_FRAME,
+  CABLE_LINE_GRANULARITY_M,
+  CABLE_PIN_SIZE_PX,
+  CABLE_PIN_SIZES,
+} from './policy.js';
+
+/**
+ * The layer's draw sets start with this; each layer has its own
+ * (`submarine-cables:1:lines`, …), so several can share a renderer. Picks
+ * name them as `Hit.set`.
+ */
+export const CABLE_SET_PREFIX = 'submarine-cables';
+let layers = 0;
+
+const BLACK_OUTLINE = [0, 0, 0, 0.65];
+
+/** A polygon's edges are placed along rhumb lines a degree apart at most. */
+const POLYGON_GRANULARITY_M = (6378137 * Math.PI) / 180;
+
+/** A renderer colour with its alpha replaced. */
+const withAlpha = (color, alpha) => [color[0], color[1], color[2], alpha];
+
+/** A feature's CSS colour property, or null when absent or unreadable. */
+const propColor = (value) =>
+  value === undefined || value === null ? null : cssColor(String(value));
+
+/** Whether a GeoJSON property is set, as the GeoJSON loader asked. */
+const given = (value) => value !== undefined && value !== null;
+
+/**
+ * How a line draws. A cable with a reference takes the cable's own colour
+ * (or the base colour) and one width, whatever the feature asks; every other
+ * line keeps the GeoJSON styling it always had: the source's colour,
+ * overridable by the feature's simplestyle `stroke`, `stroke-opacity` and
+ * `stroke-width`, draped on every surface.
+ */
+function lineStyle(props, cable, styled, baseColor) {
+  if (cable && styled) {
+    const color = propColor(props.color) ?? baseColor;
+    return {
+      widthPx: 2.5,
+      style: { kind: 'solid', color: withAlpha(color, 0.92) },
+    };
+  }
+  return {
+    widthPx: props['stroke-width'] ?? 2,
+    clampTo: 'both',
+    style: { kind: 'solid', color: strokeColor(props, cable, baseColor) },
+  };
+}
+
+/** A line's or raised polygon's simplestyle stroke colour. */
+function strokeColor(props, cable, baseColor) {
+  let color = given(props.stroke) ? propColor(props.stroke) : null;
+  const opacity = props['stroke-opacity'];
+  if (given(opacity) && opacity !== 1)
+    color = withAlpha(
+      color ?? withAlpha(baseColor, cable ? 0.95 : 0.9),
+      opacity,
+    );
+  return color ?? withAlpha(baseColor, cable ? 0.95 : 0.9);
+}
+
+/**
+ * A polygon's fill, as GeoJSON polygons were filled: simplestyle `fill`
+ * takes the source's fill alpha, and `fill-opacity` replaces it.
+ */
+function polygonFill(props, cable, baseColor) {
+  const alpha = cable ? 0.18 : 0.35;
+  let color = given(props.fill) ? propColor(props.fill) : null;
+  if (color) color = withAlpha(color, alpha);
+  const opacity = props['fill-opacity'];
+  if (given(opacity) && opacity !== alpha)
+    color = withAlpha(color ?? withAlpha(baseColor, alpha), opacity);
+  return color ?? withAlpha(baseColor, alpha);
+}
+
+/** A finite `[lon, lat, height?]`, or null. */
+function lonLat(coordinate) {
+  if (!Array.isArray(coordinate) || coordinate.length < 2) return null;
+  const lon = Number(coordinate[0]);
+  const lat = Number(coordinate[1]);
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+  return { lon: toRadians(lon), lat: toRadians(lat) };
+}
+
+/** A path's points along rhumb lines, as ECEF, the way GeoJSON drew them. */
+function rhumbPath(coordinates, granularity = CABLE_LINE_GRANULARITY_M) {
+  const points = [];
+  for (const coordinate of coordinates ?? []) {
+    const point = lonLat(coordinate);
+    if (point) points.push(point);
+  }
+  return densifyRhumb(points, granularity).map((p) =>
+    fromRadians(p.lon, p.lat),
+  );
+}
 
 export function createRendering({ state }) {
+  /** Make the layer's draw sets on the viewer's renderer (once). */
+  function attach(viewer) {
+    if (state._sets || !viewer) return;
+    const draw = drawOf(viewer);
+    const prefix = `${CABLE_SET_PREFIX}:${++layers}`;
+    const show = state._enabled;
+    state._sets = {
+      lines: draw.lines({
+        id: `${prefix}:lines`,
+        clampTo: state._clampTo,
+        show,
+      }),
+      fills: draw.shapes({ id: `${prefix}:fills`, clampTo: 'both', show }),
+      // Pins cull past the horizon each frame, as the sweep culled them;
+      // the globe hides them there anyway.
+      pins: draw.icons({
+        id: `${prefix}:pins`,
+        clampTo: 'both',
+        blend: 'translucent',
+        horizonCull: true,
+        show,
+      }),
+      stems: draw.lines({ id: `${prefix}:stems`, show }),
+      references: draw.points({
+        id: `${prefix}:references`,
+        blend: 'translucent',
+        show,
+      }),
+    };
+    state._setIds = new Set(Object.values(state._sets).map((set) => set.id));
+    state._picks = new Map([...state._setIds].map((id) => [id, new Map()]));
+  }
+
+  /** Dispose the draw sets (destroy); `attach` makes new ones. */
+  function detach() {
+    if (!state._sets) return;
+    for (const set of Object.values(state._sets)) set.dispose();
+    state._sets = null;
+    state._setIds = new Set();
+    state._picks = new Map();
+  }
+
   function resetPublishSignature() {
     state._lastPublishedIds.length = 0;
     state._lastPublishedPriorities.length = 0;
@@ -20,242 +167,341 @@ export function createRendering({ state }) {
   }
 
   /**
-   * Remove the three data sources from the viewer and forget the built
-   * entities. Hiding them (`show = false`) is NOT enough: Cesium's
-   * DataSourceDisplay still walks every visualizer of a hidden source on
-   * every frame, and the thousands of hidden polylines/billboards keep
-   * costing CPU and GC pressure long after the user toggled the layer off —
-   * that is the "everything gets sluggish after I turn layers off" report.
-   * The fetched JSON stays cached, so the next enable rebuilds without a
-   * network round trip or a re-parse.
+   * Clear the draw sets and forget the built items. Hiding them is NOT
+   * enough: thousands of hidden lines and markers keep costing memory long
+   * after the user toggled the layer off — that is the "everything gets
+   * sluggish after I turn layers off" report. The fetched JSON stays
+   * cached, so the next enable rebuilds without a network round trip or a
+   * re-parse.
    */
 
-  function releaseDataSources(viewer) {
-    const sources = [
-      state._cableDataSource,
-      state._landingDataSource,
-      state._referenceDataSource,
-    ];
-    state._cableDataSource = null;
-    state._landingDataSource = null;
-    state._referenceDataSource = null;
+  /**
+   * Forget what was drawn; `clearSets: false` (destroy, where `detach`
+   * disposes the sets next) leaves the sets alone.
+   */
+  function releaseDrawing({ clearSets = true } = {}) {
     state._referenceRecords = [];
-    state._surfaceRecords = [];
-    state._pendingLandingReveals.length = 0;
-    state._pickByEntity = new WeakMap();
+    state._surfaceItems = [];
+    state._pendingLandingReveals = [];
     state._referenceLabelCount = 0;
     state._publishScratch.length = 0;
-    // The blend pass targets the collections being dropped; the rebuilt
-    // sources need their own pass.
-    state._markerBlendDone = false;
     state._loaded = false;
     state._referenceSweepGate.reset();
-    for (const source of sources) {
-      if (!source) continue;
-      try {
-        viewer?.dataSources?.remove(source, true);
-      } catch {
-        /* collection gone */
-      }
-    }
+    if (!state._sets) return;
+    if (clearSets) for (const set of Object.values(state._sets)) set.clear();
+    for (const picks of state._picks.values()) picks.clear();
   }
 
   function updateVisibility() {
-    if (state._cableDataSource) state._cableDataSource.show = state._enabled;
-    if (state._landingDataSource)
-      state._landingDataSource.show = state._enabled;
-    if (state._referenceDataSource)
-      state._referenceDataSource.show = state._enabled;
-  }
-
-  function styleCableEntity(entity, feature) {
-    if (!entity?.polyline) return;
-    const color = feature?.properties?.color
-      ? Cesium.Color.fromCssColorString(String(feature.properties.color))
-      : state.cableColor;
-    entity.polyline.material = color.withAlpha(0.92);
-    entity.polyline.width = 2.5;
-    entity.polyline.clampToGround = true;
-    entity.polyline.classificationType = state._classificationType;
-    entity.show = true;
+    if (!state._sets) return;
+    for (const set of Object.values(state._sets)) set.show = state._enabled;
   }
 
   /**
-   * Apply the single translucent blend pass to the landing-billboard and
-   * reference-point collections. Landing entities carry only billboards and
-   * reference entities only points, so completion is one applied collection
-   * per source; a failed shape probe disables the optimization permanently
-   * for this session and says so loudly in dev builds.
-   * Both sources are probed BEFORE either is committed, so the helper's
-   * "defaults untouched on shape drift" fallback holds across the pair too —
-   * a reference-source failure can never leave the landing source already
-   * forced to TRANSLUCENT.
-   */
-
-  function applyMarkerBlendOnce() {
-    const landing = probeTranslucentMarkerBlend(state._landingDataSource);
-    const reference = probeTranslucentMarkerBlend(state._referenceDataSource);
-    if (landing.invariantFailed || reference.invariantFailed) {
-      state._markerBlendDone = true;
-      if (!state._markerBlendInvariantWarned && import.meta.env?.DEV === true) {
-        state._markerBlendInvariantWarned = true;
-        console.error(
-          '[Data:telegeography-submarine-cables] EntityCluster marker-collection ' +
-            'shape changed — single-pass translucent blend skipped; markers fall ' +
-            "back to Cesium's default two-pass blend.",
-        );
-      }
-      return;
-    }
-    const landingBlend = commitTranslucentMarkerBlend(landing);
-    const referenceBlend = commitTranslucentMarkerBlend(reference);
-    if (landingBlend.applied > 0 && referenceBlend.applied > 0)
-      state._markerBlendDone = true;
-  }
-
-  /**
-   * Re-classify every cable ground line for the active surface. One batched
-   * ground-primitive rebuild per stack switch — never per frame.
-   * @param {Cesium.ClassificationType} next
+   * Re-drape every cable ground line for the active surface. One ground
+   * rebuild per stack switch — never per frame.
+   * @param {'tiles'|'terrain'|'both'} next
    */
 
   function applyCableClassification(next) {
-    if (next === undefined || next === state._classificationType) return;
-    state._classificationType = next;
-    if (!state._cableDataSource) return;
-    const entities = state._cableDataSource.entities.values;
-    for (let i = 0; i < entities.length; i++) {
-      const polyline = entities[i].polyline;
-      if (polyline) polyline.classificationType = next;
-    }
-    state._viewer?.scene?.requestRender?.();
-  }
-
-  function styleLandingEntity(entity, feature) {
-    if (!entity?.point) return;
-    entity.point.color = state.landingColor.withAlpha(0.92);
-    entity.point.pixelSize = feature?.properties?.is_tbd ? 6 : 7;
-    entity.point.outlineColor = state.cableOutline;
-    entity.point.outlineWidth = 1;
-    entity.point.disableDepthTestDistance = 0;
-    entity.show = true;
-  }
-
-  function addReferenceStem({ reference, label, kind, color, feature }) {
-    if (!state._referenceDataSource || !reference) return;
-
-    const base = Cesium.Cartesian3.fromDegrees(reference.lon, reference.lat, 0);
-    const tip = Cesium.Cartesian3.fromDegrees(
-      reference.lon,
-      reference.lat,
-      2500,
-    );
-    const info = {
-      kind,
-      reference,
-      label,
-      featureId: feature?.id || feature?.properties?.id || null,
-    };
-    const pointColor = color.withAlpha(kind === 'cable' ? 0.84 : 0.94);
-    const stemColor = color.withAlpha(kind === 'cable' ? 0.58 : 0.68);
-    // Constant properties on the sweep cadence, never per-frame callbacks:
-    // the sweep redefines them through the alternating buffers below.
-    const stemPositionBuffers = [
-      [base, tip],
-      [base, tip],
-    ];
-
-    const entity = state._referenceDataSource.entities.add({
-      id: `${kind}-reference-${state._referenceRecords.length}-${info.featureId || 'feature'}`,
-      position: tip,
-      polyline: {
-        positions: stemPositionBuffers[0],
-        width: kind === 'cable' ? 2 : 2.4,
-        material: new Cesium.ColorMaterialProperty(stemColor),
-      },
-      point: {
-        pixelSize: kind === 'cable' ? 7 : 8,
-        color: pointColor,
-        outlineColor: Cesium.Color.BLACK.withAlpha(0.65),
-        outlineWidth: 1,
-        disableDepthTestDistance: 0,
-      },
-    });
-
-    entity.__gevTeleGeography = info;
-    state._pickByEntity.set(entity, info);
-    const record = {
-      id: entity.id,
-      entity,
-      base,
-      tip,
-      nextTip: Cesium.Cartesian3.clone(tip),
-      stemPositionBuffers,
-      stemPositionBufferIndex: 0,
-      reference,
-      kind,
-      label: clampLabel(label),
-      visible: false,
-      distanceM: Infinity,
-      entry: null,
-    };
-    record.entry = createCableOverlayEntry(record);
-    state._referenceRecords.push(record);
+    if (next === undefined || next === state._clampTo) return;
+    state._clampTo = next;
+    state._sets?.lines.setOptions({ clampTo: next });
   }
 
   /**
-   * Show the next few landing markers the last sweep found visible, and ask
-   * for another frame while any are left. Called from the sweep and then once
-   * per rendered frame, so a parked camera costs nothing once the list is
-   * empty.
+   * The items one source's features draw, by set: lines, fills and pins,
+   * each culled by its feature's reference, and a reference stem and point
+   * per feature. `kind` is `cable` or `landing-point`.
    */
+  function buildFeatures(features, kind, out) {
+    const cable = kind === 'cable';
+    const baseColor = cssColor(cable ? state.cableColor : state.landingColor);
+    features.forEach((feature, index) => {
+      // A feature with no reference still draws, as the GeoJSON loader drew
+      // it: unstyled, not picked and never culled.
+      const reference = featureReference(feature);
+      const label = featureLabel(feature);
+      const info = reference && {
+        kind,
+        reference,
+        label,
+        featureId: feature?.id || feature?.properties?.id || null,
+      };
+      const base = reference && fromDegrees(reference.lon, reference.lat, 0);
+      const keep = (set, item) => {
+        if (!reference) return;
+        out.picks[set].set(item.id, info);
+        if (set !== 'pins') out.surface.push({ set, item, base });
+      };
+      const props = feature?.properties || {};
+      const parts = geometryParts(feature.geometry);
+      const key = `${kind}:${index}`;
+      parts.lines.forEach((coordinates, part) => {
+        const positions = rhumbPath(coordinates);
+        if (positions.length < 2) return;
+        const item = {
+          id: `${key}:line:${part}`,
+          positions,
+          mode: 'draped',
+          ...lineStyle(props, cable, Boolean(reference), baseColor),
+          show: true,
+        };
+        out.lines.push(item);
+        keep('lines', item);
+      });
+      parts.polygons.forEach((rings, part) => {
+        const fill = polygonFill(props, cable, baseColor);
+        // Polygons with heights stand at them, outlined, as the GeoJSON
+        // loader drew them; flat ones lie on the surface, edges along
+        // rhumb lines.
+        const raised = rings[0]?.[0]?.length > 2;
+        const drawn = rings
+          .map((ring) =>
+            raised
+              ? ring
+                  .filter((coordinate) => lonLat(coordinate))
+                  .map(([lon, lat, height]) =>
+                    fromDegrees(Number(lon), Number(lat), Number(height) || 0),
+                  )
+              : rhumbPath(ring, POLYGON_GRANULARITY_M).map((p) => ({
+                  x: p.x,
+                  y: p.y,
+                  z: p.z,
+                })),
+          )
+          .filter((ring) => ring.length >= 3);
+        if (!drawn.length) return;
+        const item = {
+          id: `${key}:fill:${part}`,
+          geometry: raised
+            ? { kind: 'polygon', rings: drawn, perPositionHeight: true }
+            : { kind: 'polygon', rings: drawn },
+          fill,
+          ...(raised
+            ? {
+                height: 'absolute',
+                // WebGL draws the loader's outline one pixel wide.
+                outline: strokeColor(props, cable, baseColor),
+                outlineWidth: 1,
+                // The loader's entities drew a raised polygon lit by the sun.
+                lit: true,
+              }
+            : { height: 'clampGround' }),
+          show: true,
+        };
+        out.fills.push(item);
+        keep('fills', item);
+      });
+      parts.points.forEach((coordinate, part) => {
+        const point = lonLat(coordinate);
+        if (!point) return;
+        const color =
+          (given(props['marker-color']) && cssColor(props['marker-color'])) ||
+          baseColor;
+        const size = CABLE_PIN_SIZES[props['marker-size']] ?? CABLE_PIN_SIZE_PX;
+        const raised =
+          coordinate.length > 2 && Number.isFinite(Number(coordinate[2]));
+        const item = {
+          id: `${key}:pin:${part}`,
+          pos: {
+            lon: Number(coordinate[0]),
+            lat: Number(coordinate[1]),
+            height: raised ? Number(coordinate[2]) : 0,
+          },
+          height: raised ? 'absolute' : 'clampGround',
+          image: cablePinImage(color, size),
+          size: [size, size],
+          anchor: 'bottom',
+        };
+        out.pins.push(item);
+        keep('pins', item);
+      });
+      if (!reference) return;
+      addReference(out, {
+        reference,
+        label,
+        kind,
+        color: baseColor,
+        info,
+        base,
+      });
+    });
+  }
 
+  function addReference(out, { reference, label, kind, color, info, base }) {
+    const cable = kind === 'cable';
+    const tip = fromDegrees(reference.lon, reference.lat, 2500);
+    const id = `${kind}-reference-${out.references.length}-${info.featureId || 'feature'}`;
+    const record = {
+      id,
+      base,
+      // Moved in place: the overlay entry anchors to this object.
+      tip,
+      reference,
+      kind,
+      label: clampLabel(label),
+      visible: true,
+      distanceM: Infinity,
+      entry: null,
+      stem: {
+        id,
+        positions: [base, { ...tip }],
+        widthPx: cable ? 2 : 2.4,
+        mode: '3d',
+        style: {
+          kind: 'solid',
+          color: withAlpha(color, cable ? 0.58 : 0.68),
+        },
+        show: true,
+      },
+      point: {
+        id,
+        pos: { ...tip },
+        pixelSize: cable ? 7 : 8,
+        color: withAlpha(color, cable ? 0.84 : 0.94),
+        outlineColor: BLACK_OUTLINE,
+        outlineWidth: 1,
+        show: true,
+      },
+    };
+    record.entry = createCableOverlayEntry(record);
+    out.references.push(record);
+    out.picks.stems.set(id, info);
+    out.picks.references.set(id, info);
+  }
+
+  /**
+   * Draw both sources' features, replacing what was drawn. Items start
+   * culled for the camera as it is, so the first sweep has nothing to redo.
+   */
+  function drawFeatures(cableFeatures, landingFeatures) {
+    const out = {
+      lines: [],
+      fills: [],
+      pins: [],
+      references: [],
+      surface: [],
+      picks: {
+        lines: new Map(),
+        fills: new Map(),
+        pins: new Map(),
+        stems: new Map(),
+        references: new Map(),
+      },
+    };
+    buildFeatures(cableFeatures, 'cable', out);
+    buildFeatures(landingFeatures, 'landing-point', out);
+    state._referenceRecords = out.references;
+    state._surfaceItems = out.surface;
+    sweep({ draw: false });
+    if (!state._sets) return;
+    const sets = state._sets;
+    for (const [name, picks] of Object.entries(out.picks)) {
+      const map = state._picks.get(sets[name].id);
+      map.clear();
+      for (const [id, info] of picks) map.set(id, info);
+    }
+    sets.lines.set(out.lines);
+    sets.fills.set(out.fills);
+    state._pendingLandingReveals = inViewFirst(out.pins);
+    sets.pins.set([]);
+    revealLandingMarkers();
+    sets.stems.set(out.references.map((record) => record.stem));
+    sets.references.set(out.references.map((record) => record.point));
+  }
+
+  /** Pins in view from the camera as it is first, then the rest. */
+  function inViewFirst(pins) {
+    const eye = state._viewer && cameraOf(state._viewer).pose()?.position;
+    if (!eye) return pins;
+    const horizon = horizonFrom(eye);
+    const near = [];
+    const far = [];
+    for (const pin of pins) {
+      const base = fromDegrees(pin.pos.lon, pin.pos.lat, 0);
+      (horizon.isPointVisible(base) ? near : far).push(pin);
+    }
+    return near.concat(far);
+  }
+
+  /**
+   * Add the next few landing pins to their set, and ask for another frame
+   * while any are left. Called after a draw and then once per rendered
+   * frame, so a parked camera costs nothing once the list is empty.
+   */
   function revealLandingMarkers() {
     const pending = state._pendingLandingReveals;
-    if (!pending.length) return;
-    let budget = CABLE_LANDING_REVEALS_PER_FRAME;
-    while (pending.length && budget > 0) {
-      const record = pending.pop();
-      if (!record.visible || record.entity.show) continue;
-      record.entity.show = true;
-      budget--;
+    if (!pending.length || !state._sets) return;
+    state._sets.pins.upsert(pending.splice(0, CABLE_LANDING_REVEALS_PER_FRAME));
+    if (pending.length)
+      findFrame(state._viewer)?.requestRender('submarine-cables');
+  }
+
+  /** What a pick on one of the layer's sets names, or null. */
+  function pickInfo(hit) {
+    if (!hit || !state._setIds.has(hit.set)) return null;
+    return state._picks.get(hit.set)?.get(hit.id) ?? null;
+  }
+
+  /**
+   * One sweep: cull references and surface items by whether their
+   * reference is past the horizon, re-size visible stems, and redraw only
+   * what changed (`draw: false` changes the items without drawing them).
+   * Returns false when there is no camera to sweep from.
+   */
+  function sweep({ draw = true } = {}) {
+    const viewer = state._viewer;
+    if (!viewer) return false;
+    const pose = cameraOf(viewer).pose();
+    const cameraPos = pose?.position;
+    if (!cameraPos) return false;
+    const canvasHeight = canvasOf(viewer)?.clientHeight || 1080;
+    // The field of view along the canvas's longer side.
+    const fov =
+      pose.aspectRatio > 1
+        ? 2 * Math.atan(Math.tan(pose.fovy / 2) * pose.aspectRatio)
+        : pose.fovy;
+    const horizon = horizonFrom(cameraPos);
+    const stems = [];
+    const points = [];
+    for (const record of state._referenceRecords) {
+      const visible = horizon.isPointVisible(record.base);
+      const flipped = record.visible !== visible;
+      record.visible = visible;
+      record.distanceM = distance(cameraPos, record.base);
+      // Hidden stems keep their last geometry; this same sweep refreshes them
+      // in the pass where they turn visible again.
+      const moved =
+        visible &&
+        updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
+      if (!flipped && !moved) continue;
+      record.stem.positions = [record.base, { ...record.tip }];
+      record.stem.show = visible;
+      record.point.pos = { ...record.tip };
+      record.point.show = visible;
+      stems.push(record.stem);
+      points.push(record.point);
     }
-    if (pending.length) state._viewer?.scene?.requestRender?.();
+    const surface = { lines: [], fills: [] };
+    for (const entry of state._surfaceItems) {
+      const visible = horizon.isPointVisible(entry.base);
+      if (entry.item.show === visible) continue;
+      entry.item.show = visible;
+      surface[entry.set].push(entry.item);
+    }
+    if (draw && state._sets) {
+      if (stems.length) state._sets.stems.upsert(stems);
+      if (points.length) state._sets.references.upsert(points);
+      if (surface.lines.length) state._sets.lines.upsert(surface.lines);
+      if (surface.fills.length) state._sets.fills.upsert(surface.fills);
+    }
+    return true;
   }
 
   function updateReferenceVisibility() {
-    if (!state._enabled || !state._viewer?.camera) return;
-    const cameraPos = state._viewer.camera.positionWC;
-    if (!cameraPos) return;
-
-    const canvasHeight = state._viewer.scene?.canvas?.clientHeight || 1080;
-    const fov = state._viewer.camera.frustum?.fov || Math.PI / 3;
-    const occluder = new Cesium.EllipsoidalOccluder(
-      Cesium.Ellipsoid.WGS84,
-      cameraPos,
-    );
-    for (const record of state._referenceRecords) {
-      const visible = occluder.isPointVisible(record.base);
-      record.visible = visible;
-      record.distanceM = Cesium.Cartesian3.distance(cameraPos, record.base);
-      if (record.entity.show !== visible) {
-        record.entity.show = visible;
-      }
-      // Hidden stems keep their last geometry; this same sweep refreshes them
-      // in the pass where they turn visible again.
-      if (visible)
-        updateCableReferenceStem(record, cameraPos, canvasHeight, fov);
-    }
-    state._pendingLandingReveals.length = 0;
-    for (const record of state._surfaceRecords) {
-      const visible = occluder.isPointVisible(record.base);
-      record.visible = visible;
-      if (record.entity.show === visible) continue;
-      // Landing markers are shown a few per frame; hiding is immediate.
-      if (visible && record.staged) state._pendingLandingReveals.push(record);
-      else record.entity.show = visible;
-    }
-    revealLandingMarkers();
+    if (!state._enabled || !state._viewer) return;
+    if (!sweep()) return;
     const winners = selectCableReferenceLabelWinners(state._referenceRecords);
     let changed = winners.length !== state._lastPublishedCount;
     for (let i = 0; i < winners.length; i++) {
@@ -273,9 +519,6 @@ export function createRendering({ state }) {
     }
     state._publishScratch.length = winners.length;
     state._referenceLabelCount = winners.length;
-    // The marker collections are created lazily by the visualizers, so the
-    // single-pass blend is applied on the sweep cadence until both landed.
-    if (!state._markerBlendDone) applyMarkerBlendOnce();
     if (!changed) return;
     state._overlayPublisher.publish(state._publishScratch);
     state._lastPublishedCount = winners.length;
@@ -287,14 +530,14 @@ export function createRendering({ state }) {
     state._lastPublishedPriorities.length = winners.length;
   }
   return {
+    attach,
+    detach,
     resetPublishSignature,
-    releaseDataSources,
+    releaseDrawing,
     updateVisibility,
-    styleCableEntity,
-    applyMarkerBlendOnce,
     applyCableClassification,
-    styleLandingEntity,
-    addReferenceStem,
+    drawFeatures,
+    pickInfo,
     revealLandingMarkers,
     updateReferenceVisibility,
   };

@@ -3,7 +3,8 @@
 // dense extras and asked-for exclusions left out.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { fromDegrees } from '../../geo/ellipsoid.js';
+import { distance } from '../../geo/vector.js';
 import { createControls } from './controls.js';
 
 function controlsWith(satellites, { classes, dense = [] } = {}) {
@@ -15,7 +16,7 @@ function controlsWith(satellites, { classes, dense = [] } = {}) {
   };
   for (const sat of satellites) {
     state._points.set(sat.id, {
-      position: Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt),
+      pos: fromDegrees(sat.lon, sat.lat, sat.alt),
     });
     state._catalog.set(sat.id, {
       name: `${sat.name} `,
@@ -26,7 +27,9 @@ function controlsWith(satellites, { classes, dense = [] } = {}) {
   return createControls({
     state,
     services: { layerState: { isExplicitLayerStateOrigin: () => false } },
-    parts: {},
+    parts: {
+      rendering: { _pointPosition: (id) => state._points.get(id)?.pos ?? null },
+    },
   }).methods;
 }
 
@@ -40,7 +43,7 @@ const SATELLITES = [
   { id: 7, name: 'EXTRA', lat: 30.3, lon: -97, alt: 500_000, cls: 'imaging', group: 'dense' },
 ];
 
-const CENTRE = Cesium.Cartesian3.fromDegrees(-97, 30, 420_000);
+const CENTRE = fromDegrees(-97, 30, 420_000);
 
 test('the nearest shown satellites come first, bounded, with their distance', () => {
   const methods = controlsWith(SATELLITES, {
@@ -58,7 +61,7 @@ test('the nearest shown satellites come first, bounded, with their distance', ()
   );
   for (let i = 1; i < nearest.length; i += 1)
     assert.ok(nearest[i].distanceM >= nearest[i - 1].distanceM);
-  const exact = Cesium.Cartesian3.distance(CENTRE, nearest[0].position);
+  const exact = distance(CENTRE, nearest[0].position);
   assert.ok(Math.abs(nearest[0].distanceM - exact) < 1e-6);
   assert.ok(Math.abs(nearest[0].latitude - 30.5) < 1e-6);
   assert.equal(nearest[0].satelliteClass, 'imaging');

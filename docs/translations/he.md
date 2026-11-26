@@ -41,6 +41,8 @@ With {count} shown as a digit, `two` and `other` share the plural noun (2 מצל
 | aircraft / flight / military flight            | מטוס (כלי טיס in class lists) / טיסה / טיסה צבאית     |
 | vessel / ship / ships                          | אונייה / אוניות                                       |
 | satellite                                      | לוויין                                                |
+| FOCUS (the held object; the button)            | מוקד / התמקד                                          |
+| CONFIRMED (sightings chip; a landing)          | מאושרות / מאושר                                       |
 | launch (rocket) / space mission                | שיגור / משימת חלל                                     |
 | contact / tracking                             | מגע / עקיבה                                           |
 | installation / site                            | מתקן / אתר                                            |

@@ -169,14 +169,6 @@ export class ShellFacade {
     this._locationNavigation._currentPoi = value;
   }
 
-  get _searchedLocationLabel() {
-    return this._locationNavigation._searchedLocationLabel;
-  }
-
-  set _searchedLocationLabel(value) {
-    this._locationNavigation._searchedLocationLabel = value;
-  }
-
   get _trafficTransitionTimer() {
     return this._locationNavigation._trafficTransitionTimer;
   }
@@ -437,22 +429,6 @@ export class ShellFacade {
     this._panelChrome._panelDisclosureControls = value;
   }
 
-  get _hoverPanelControls() {
-    return this._panelChrome._hoverPanelControls;
-  }
-
-  set _hoverPanelControls(value) {
-    this._panelChrome._hoverPanelControls = value;
-  }
-
-  get _cancelMapSourceFocus() {
-    return this._panelChrome._cancelMapSourceFocus;
-  }
-
-  set _cancelMapSourceFocus(value) {
-    this._panelChrome._cancelMapSourceFocus = value;
-  }
-
   get _cockpitContextCollapsedForDataPanel() {
     return this._panelChrome._cockpitContextCollapsedForDataPanel;
   }
@@ -499,14 +475,6 @@ export class ShellFacade {
 
   get sharpenEnabled() {
     return this._visualSettings.sharpenEnabled;
-  }
-
-  get _bloomStage() {
-    return this._visualEffects.bloomStage;
-  }
-
-  get _sharpenStage() {
-    return this._visualEffects.sharpenStage;
   }
 
   /** Settle only the search generation that still owns the shared input UI. */
@@ -811,7 +779,6 @@ export class ShellFacade {
 
   /**
    * Initializes panel collapse buttons and restores persisted collapsed state.
-   * Also sets up hover-expand behavior for the style presets and location bar panels.
    * @returns {void}
    */
   _initPanelChrome() {
@@ -889,6 +856,10 @@ export class ShellFacade {
 
   get _preservePanelStateDuringLayerClear() {
     return this._contextControls?._preservePanelStateDuringLayerClear ?? false;
+  }
+
+  _contextSuspendsLayer(layerId) {
+    return this._contextControls?.suspendsLayer(layerId) ?? false;
   }
 
   _runUserFacingContextAction(...args) {
@@ -1042,15 +1013,16 @@ export class ShellFacade {
 
   /**
    * Reads global context mode state for voice/state-sync consumers.
-   * @returns {{mode: 'flights'|'space-missions'|null, active: boolean, changing: boolean, entering: 'flights'|'space-missions'|null, snapshotCaptured: boolean}}
+   * @returns {{mode: 'flights'|null, active: boolean, changing: boolean, entering: 'flights'|null, snapshotCaptured: boolean}}
    */
   getContextModeState(...args) {
     return this._contextControls?.getContextModeState(...args);
   }
 
   /**
-   * Sets global context mode (Contacts / Space Missions / off) for voice.
-   * @param {'contacts'|'space-missions'|'off'|null} mode - Requested context target.
+   * Sets global context mode (Contacts / off) for voice. Space Missions is
+   * an ordinary layer, not a Context mode.
+   * @param {'contacts'|'off'|null} mode - Requested context target.
    * @param {object} [options]
    * @param {string|Symbol|null} [options.notificationToken]
    * @param {AbortSignal|null} [options.signal]
@@ -1060,7 +1032,7 @@ export class ShellFacade {
    *   lane. Cockpit choreography calls this facade INTERNALLY for its own
    *   enter/rollback steps; those transitions are not a Context request by the
    *   operator and must stay inert, so they pass `false`.
-   * @returns {Promise<{ok:boolean, mode:'flights'|'space-missions'|null, active:boolean, action:string, error?:string}>}
+   * @returns {Promise<{ok:boolean, mode:'flights'|null, active:boolean, action:string, error?:string}>}
    */
   setContextMode(...args) {
     return this._contextControls?.setContextMode(...args);
@@ -1215,8 +1187,8 @@ export class ShellFacade {
     return this._locationNavigation._handleLocationSearchState(...args);
   }
 
-  _initLocationBar(...args) {
-    return this._locationNavigation._initLocationBar(...args);
+  _initLocationControls(...args) {
+    return this._locationNavigation._initLocationControls(...args);
   }
 
   _beginWorldJumpTransition(...args) {
@@ -1247,24 +1219,12 @@ export class ShellFacade {
     return this._locationNavigation._collapsePOIRow(...args);
   }
 
-  _updatePoiHighlight(...args) {
-    return this._locationNavigation._updatePoiHighlight(...args);
-  }
-
-  clearSearchedLocation(...args) {
-    return this._locationNavigation.clearSearchedLocation(...args);
-  }
-
   _setActiveLocation(...args) {
     return this._locationNavigation._setActiveLocation(...args);
   }
 
-  _updateLocationMiniStatus(...args) {
-    return this._locationNavigation._updateLocationMiniStatus(...args);
-  }
-
   /**
-   * Updates the collapsed mini-status readout with the active style label.
+   * Publishes the active style, which the scene chrome and Visual show.
    * @param {string} [styleName=this.activeStyle] - Style name to display.
    * @returns {void}
    */
@@ -1296,6 +1256,11 @@ export class ShellFacade {
 
   resetToGlobeView(...args) {
     return this._locationNavigation.resetToGlobeView(...args);
+  }
+
+  /** Back to live, at the view the app started from (the title's logo). */
+  returnToStart() {
+    return this._locationNavigation.returnToStart();
   }
 
   /**

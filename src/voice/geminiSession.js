@@ -3,6 +3,7 @@ import { t, translateKnown } from '../i18n/index.js';
 import { msg } from '../i18n/marker.js';
 import { createGeminiAudio } from './geminiAudio.js';
 import { RealtimeInput } from './realtimeInput.js';
+import { isStoriesOpen } from './realtimeInputPolicy.js';
 import { RealtimeRadio } from './realtimeRadio.js';
 import { captureViewportImage } from './realtimeViewport.js';
 import { createNarrationScheduler } from './narration.js';
@@ -652,7 +653,13 @@ export class GeminiSessionController {
   }
 
   async start({ pushToTalk = false } = {}) {
-    if (this.disposed || this.isActive() || this.signal?.aborted) return;
+    if (
+      isStoriesOpen() ||
+      this.disposed ||
+      this.isActive() ||
+      this.signal?.aborted
+    )
+      return;
     const held = pushToTalk && this.input.pushToTalkKeyHeld;
     const spaceHeld = this.input.spaceKeyHeld;
     this.stop({ preserveStatus: true });

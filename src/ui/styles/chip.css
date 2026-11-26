@@ -1,0 +1,23 @@
+/* Read-only chips: a label that says what something is, never a control (a
+   chip that presses is a button). The kit's UiChip (.ui-chip) and the news
+   cards' chips wear it; feature classes loaded later restyle it. */
+.ui-chip,
+.news-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--glass-border-hover);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font: 8px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* A selected chip takes the accent of the read-only badge (status-badge.css);
+   news marks official and confirmed reports this way. */
+.ui-chip--selected,
+.news-chip--official,
+.news-chip--confirmed {
+  border-color: rgba(0, 212, 255, 0.32);
+  background: rgba(0, 212, 255, 0.09);
+  color: #9defff;
+}

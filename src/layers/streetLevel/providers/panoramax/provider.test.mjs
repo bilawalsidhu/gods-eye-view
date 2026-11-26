@@ -14,15 +14,26 @@ import {
 } from './policy.js';
 import { validateProviders } from '../../registry.js';
 import { tileBounds } from '../../tileMath.js';
-import { fakeHost, until } from '../../../../testSupport/kartaViewFakes.mjs';
 import {
+  drawn,
+  fakeHost,
+  until,
+  resetPhotoView,
+} from '../../../../testSupport/kartaViewFakes.mjs';
+import {
+  bindStreetViewer,
   coverageViewer,
+  drawnLineSets,
   tileCentre,
 } from '../../../../testSupport/streetLevelFakes.mjs';
+import { fakeDrawPort } from '../../../../testSupport/fakeDrawPort.mjs';
 import {
   encodePanoramaxTile,
   stacItem,
 } from '../../../../testSupport/panoramaxFixtures.mjs';
+
+// Each test draws its own viewers only.
+test.beforeEach(resetPhotoView);
 
 const ORIGIN = { lon: 2.3495, lat: 48.8874 };
 /** A point `metres` east of ORIGIN. */
@@ -281,7 +292,7 @@ async function mounted(sourceOptions, contextOptions) {
   const env = setup(sourceOptions, contextOptions);
   const poses = [];
   env.instance.viewer.onPose((pose) => poses.push(pose.imageId));
-  const host = fakeHost();
+  const host = fakeHost(env.instance.viewer);
   await env.instance.viewer.mount(host);
   const [, , prev, next] = host.children[0].children;
   return { ...env, poses, prev, next };
@@ -317,7 +328,7 @@ test('one lookup for a picture asked twice at once', async () => {
     await gate;
     return getItem(id);
   };
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const first = instance.viewer.open('s-0');
   const second = instance.viewer.open('s-0');
@@ -357,23 +368,22 @@ async function withCones(t, env) {
     createElement: () => ({ getContext: () => drawing }),
   };
   t.after(() => (globalThis.document = saved));
-  let collection = null;
-  env.instance.init({
-    scene: {
-      frameState: { mode: Cesium.SceneMode.SCENE3D },
-      updateHeight: () => () => {},
-      getHeight: () => undefined,
-      primitives: { add: (c) => (collection = c), remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-    camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
-  });
+  const draw = fakeDrawPort();
+  env.instance.init(
+    bindStreetViewer(
+      {
+        scene: { preRender: { addEventListener: () => () => {} } },
+        camera: { positionWC: new Cesium.Cartesian3(0, 0, 1e8) },
+      },
+      { draw },
+    ),
+  );
+  const drawn = () => [
+    ...(draw.find('street-level:panoramax-cones:')?.items.values() ?? []),
+  ];
   return {
-    count: () => collection?.length ?? 0,
-    ids: () =>
-      Array.from({ length: collection?.length ?? 0 }, (_, i) =>
-        String(collection.get(i).id).replace(PICK_PREFIX.image, ''),
-      ),
+    count: () => drawn().length,
+    ids: () => drawn().map((cone) => cone.id.replace(PICK_PREFIX.image, '')),
   };
 }
 
@@ -455,13 +465,12 @@ test('a line clicked from high up looks for its sequence further off; the radius
   ];
   const { instance, source } = setup({ items });
   const height = (h) =>
-    instance.init({
-      camera: { positionCartographic: { height: h } },
-      scene: {
-        primitives: { add() {}, remove() {} },
-        preRender: { addEventListener: () => () => {} },
-      },
-    });
+    instance.init(
+      bindStreetViewer({
+        camera: { positionCartographic: { height: h } },
+        scene: { preRender: { addEventListener: () => () => {} } },
+      }),
+    );
   const click = () =>
     instance.handlePick(`${PICK_PREFIX.sequence}line`, {
       groundPoint: () => east(0),
@@ -636,7 +645,7 @@ function coverageSetup(t, { sequences = [], filter, height = 900 } = {}) {
     },
     { filter },
   );
-  const viewer = coverageViewer({ ...centre, height }, t);
+  const viewer = coverageViewer({ ...centre, height });
   env.instance.init(viewer);
   t.after(() => env.instance.destroy(viewer));
   return {
@@ -693,12 +702,12 @@ test('the selected sequence’s line is drawn again over the coverage, and goes 
   const env = coverageSetup(t, { sequences: [line('a'), line('b')] });
   env.instance.activate(env.viewer);
   assert.ok(await until(() => env.instance.coverageStats().count === 2));
-  const ground = env.viewer.scene.groundPrimitives.items;
-  const drawn = ground.size;
+  const lines = () => drawnLineSets(env.viewer).length;
+  const drawn = lines();
   await env.instance.selectSequence('a');
-  assert.equal(ground.size, drawn + 1, 'one highlight over the lines');
+  assert.equal(lines(), drawn + 1, 'one highlight over the lines');
   env.instance.clearSequence();
-  assert.equal(ground.size, drawn);
+  assert.equal(lines(), drawn);
 });
 
 test('coverage hints: nothing while loading, “no pictures” once an empty view has loaded', async (t) => {
@@ -721,7 +730,7 @@ test('from high up nothing is drawn or fetched, and the panel says to zoom in', 
   assert.equal(env.instance.coverageStats().count, 0);
   assert.equal(env.instance.coverageStats().loading, false);
   assert.deepEqual(env.source.calls.tiles, []);
-  assert.equal(env.viewer.scene.groundPrimitives.items.size, 0);
+  assert.equal(drawnLineSets(env.viewer).length, 0);
 });
 
 test('switching off clears the cones and forgets a pending line click', async (t) => {
@@ -821,13 +830,12 @@ test('a line clicked from low down still searches its own sequence within 50 m',
     ...sequence('clicked', 1, { offset: 30 }),
   ];
   const { instance, source } = setup({ items });
-  instance.init({
-    camera: { positionCartographic: { height: 300 } },
-    scene: {
-      primitives: { add() {}, remove() {} },
-      preRender: { addEventListener: () => () => {} },
-    },
-  });
+  instance.init(
+    bindStreetViewer({
+      camera: { positionCartographic: { height: 300 } },
+      scene: { preRender: { addEventListener: () => () => {} } },
+    }),
+  );
   instance.handlePick(`${PICK_PREFIX.sequence}clicked`, {
     groundPoint: () => east(0),
   });
@@ -985,7 +993,7 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const { context, actions } = fakeContext();
   const instance = definition.create(context);
   actions.instance = instance;
-  const host = fakeHost();
+  const host = fakeHost(instance.viewer);
   await instance.viewer.mount(host);
   const poses = [];
   instance.viewer.onPose((pose) => poses.push(pose.imageId));
@@ -994,6 +1002,8 @@ test('after a GPU reset the viewer draws the same picture itself, leaving the co
   const kind = () => host.children[0].dataset.kind;
   assert.equal(kind(), 'pano');
   canvas().fire('webglcontextlost');
+  await drawn();
+  assert.equal(kind(), '', 'cleared while it is drawn again');
   assert.ok(await until(() => kind() === 'pano'), 'drawn again');
   assert.deepEqual(poses, ['p-0', 'p-0']);
   assert.deepEqual(actions.opened, [], 'not through the core');

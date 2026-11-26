@@ -280,7 +280,7 @@ test('a tracked flight’s photo shows under its name, credited and linked to it
 test('no photo renders without one', async (t) => {
   const { panel, publish } = fixture(t);
   await publish({ ...results(), photo: null });
-  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+  assert.equal(panel().querySelector('.military-awareness-photo') === null, true);
 });
 
 test('a photo whose image fails to load is hidden until another arrives', async (t) => {
@@ -290,10 +290,10 @@ test('a photo whose image fails to load is hidden until another arrives', async 
     .querySelector('.military-awareness-photo img')
     .dispatchEvent(new Event('error'));
   await nextTick();
-  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+  assert.equal(panel().querySelector('.military-awareness-photo') === null, true);
   // A repaint with the same photo keeps it hidden.
   await publish({ ...results({ previousDisabled: false }), photo: photo() });
-  assert.equal(panel().querySelector('.military-awareness-photo'), null);
+  assert.equal(panel().querySelector('.military-awareness-photo') === null, true);
   // Another plane's photo shows.
   const next = photo({ src: 'https://t.plnspttrs.net/2/def456_280.jpg' });
   await publish({ ...results(), photo: next });

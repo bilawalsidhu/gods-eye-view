@@ -18,11 +18,20 @@ import {
 import { sanitizeCctvRangeHeader } from './cctv/range.js';
 import { admitSameSiteKeyless } from './common/same-site.js';
 import { PROXY_SIGNALS } from '../../src/localRequestGate.mjs';
-import { createHlsPuller } from './cctv/stream.js';
+import { createHlsPuller, HlsCapacityError } from './cctv/stream.js';
 import { isMlitRiverAdjustmentImage } from './cctv/worldCameras.js';
 import { ottawaAuthorizedFrameUrl } from './cctv/ottawa.js';
-import { googleServerApiKey } from './places/google-key.js';
+import {
+  GOOGLE_DEFAULT_PER_MIN,
+  googleServerApiKey,
+} from './places/google-key.js';
+import { clientNetworkKey, makeCostRateLimiter } from './common/rate-limit.js';
 export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
+
+/** An http(s) .m3u8 URL: what the HLS puller behind /media can play. */
+const isPullableHlsUrl = (url) =>
+  /^https?:\/\//i.test(url) && /\.m3u8(?:\?|$)/i.test(url);
+
 /**
  * Vite plugin: CCTV camera proxy with source registry, frame/media serving,
  * fallback chain (upstream -> Street View -> synthetic SVG), and health tracking.
@@ -198,17 +207,31 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     };
   };
 
+  let streetViewBudget; // undefined = not built yet; null = the explicit 0 opt-out
+
   /**
    * Fetch a Google Street View static image as a fallback frame. Server-side
    * call, never reaches the browser — prefers GOOGLE_MAPS_SERVER_API_KEY
    * (#33: a key scoped to Street View Static/Places, restricted by server IP
    * rather than HTTP referrer) and falls back to the browser-exposed
    * GOOGLE_MAPS_API_KEY for setups that haven't split the two yet.
+   * Each IP (or IPv6 /64) has its own GEV_RATELIMIT_GOOGLE_PER_MIN window,
+   * separate from Places. Setting it to 0 disables the limit.
    */
-  const streetViewFallback = async ({ lat, lon, heading, fov, pitch }) => {
+  const streetViewFallback = async (
+    client,
+    { lat, lon, heading, fov, pitch },
+  ) => {
     const streetViewKey = googleServerApiKey();
     if (!streetViewKey || !Number.isFinite(lat) || !Number.isFinite(lon))
       return null;
+    // Built on first use, after the standalone env has loaded.
+    if (streetViewBudget === undefined)
+      streetViewBudget = makeCostRateLimiter(
+        process.env.GEV_RATELIMIT_GOOGLE_PER_MIN,
+        GOOGLE_DEFAULT_PER_MIN,
+      );
+    if (streetViewBudget && !streetViewBudget(client)) return null;
     try {
       const sv = new URL('https://maps.googleapis.com/maps/api/streetview');
       sv.searchParams.set('size', '960x540');
@@ -264,6 +287,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // keyless gate keeps the routes reachable behind a reverse proxy; the
         // key-bearing Street View fallback below has its own check.
         if (admitSameSiteKeyless(req, res)) return;
+        // Read before any await: a socket the client has closed has no address.
+        const client = clientNetworkKey(req);
         const sources = await getCctvSources();
         const sourceById = new Map(
           sources.map((source) => [source.id, source]),
@@ -291,6 +316,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
               feedType: normalizeFeedType(source.feedType),
+              hasSnapshot: Boolean(source.snapshotUrl),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
               sourceUrl: source.sourceUrl || '',
@@ -386,10 +412,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             return;
           }
           if (feedType === 'hls') {
-            if (
-              !/^https?:\/\//i.test(mediaUrl) ||
-              !/\.m3u8(?:\?|$)/i.test(mediaUrl)
-            ) {
+            if (!isPullableHlsUrl(mediaUrl)) {
               res.writeHead(503, { 'Content-Type': 'application/json' });
               res.end(
                 JSON.stringify({
@@ -449,13 +472,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 'X-CCTV-Session': entry.token,
               });
               res.end(playlist);
-            } catch {
-              setHealth(cameraId, {
-                status: 'degraded',
-                sourceKind: 'fallback',
-                label: source?.provider || 'Configured source',
-                message: 'Live HLS unavailable',
-              });
+            } catch (error) {
+              // A capacity refusal says nothing about the source: keep its health.
+              if (!(error instanceof HlsCapacityError))
+                setHealth(cameraId, {
+                  status: 'degraded',
+                  sourceKind: 'fallback',
+                  label: source?.provider || 'Configured source',
+                  message: 'Live HLS unavailable',
+                });
               if (!downstream.closed) {
                 res.writeHead(503, {
                   'Content-Type': 'application/json',
@@ -635,14 +660,25 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const source = sourceById.get(cameraId);
         const label = url.searchParams.get('label') || source?.name || cameraId;
         const city = url.searchParams.get('city') || source?.city || '';
-        const lat = Number(url.searchParams.get('lat') || source?.lat);
-        const lon = Number(url.searchParams.get('lon') || source?.lon);
+        // The query sets only the view, the pose the browser draws.
         const heading = Number(
           url.searchParams.get('heading') || source?.headingDeg,
         );
         const fov = Number(url.searchParams.get('fov') || source?.fovDeg);
         const pitch = Number(url.searchParams.get('pitch') || source?.pitchDeg);
 
+        // A live camera card asks only for its registered photo. Its request
+        // must neither change video health nor substitute a historical frame.
+        const snapshotOnly = url.searchParams.get('snapshotOnly') === '1';
+        if (
+          snapshotOnly &&
+          (!source?.snapshotUrl ||
+            !isVideoFeedType(normalizeFeedType(source.feedType)))
+        ) {
+          res.writeHead(404, { 'Cache-Control': 'no-store' });
+          res.end();
+          return;
+        }
         // Only use server-registered upstream URLs — never accept client-supplied URLs
         // (prevents SSRF via ?upstream= query parameter)
         const upstreamCandidate =
@@ -650,6 +686,13 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           (!isVideoFeedType(normalizeFeedType(source?.feedType))
             ? source?.url
             : '');
+        // /media reports a pullable HLS camera's health. Without a snapshot of
+        // its own, the placeholder or Street View frame here says nothing about
+        // its stream, so it leaves that health as it is.
+        const keepHealth =
+          normalizeFeedType(source?.feedType) === 'hls' &&
+          !source?.snapshotUrl &&
+          isPullableHlsUrl(source?.url || '');
 
         const upstreamImage =
           source?.pack === 'world-cameras'
@@ -665,6 +708,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                 : await fetchCctvImageFromUpstream(upstreamCandidate, {
                     allowMjpeg: source?.sourceKind === 'taiwan-highway-motc',
                   });
+        if (snapshotOnly && !upstreamImage?.ok) {
+          res.writeHead(503, { 'Cache-Control': 'no-store' });
+          res.end();
+          return;
+        }
         if (
           source?.sourceKind === 'mlit-river' &&
           isMlitRiverAdjustmentImage(upstreamImage)
@@ -708,16 +756,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           return;
         }
         if (upstreamImage?.ok) {
-          setHealth(cameraId, {
-            status: upstreamImage.stale ? 'degraded' : 'ok',
-            sourceKind: 'snapshot',
-            label: source?.provider || 'Configured source',
-            message: upstreamImage.stale
-              ? 'Serving last snapshot; refresh failed'
-              : upstreamImage.cached
-                ? 'Cached snapshot active'
-                : 'Upstream snapshot active',
-          });
+          if (!snapshotOnly)
+            setHealth(cameraId, {
+              status: upstreamImage.stale ? 'degraded' : 'ok',
+              sourceKind: 'snapshot',
+              label: source?.provider || 'Configured source',
+              message: upstreamImage.stale
+                ? 'Serving last snapshot; refresh failed'
+                : upstreamImage.cached
+                  ? 'Cached snapshot active'
+                  : 'Upstream snapshot active',
+            });
           res.writeHead(200, {
             'Content-Type': upstreamImage.contentType,
             'Cache-Control': 'no-store',
@@ -731,25 +780,29 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         // request (whose client this server cannot see) gets the placeholder,
         // as if no key were configured. Any forwarding header counts, even an
         // empty one.
+        // It also answers only for catalog cameras, at the catalog position;
+        // the query never sets the location.
         const forwarded = PROXY_SIGNALS.some(
           (name) => req.headers?.[name] !== undefined,
         );
-        const sv = forwarded
-          ? null
-          : await streetViewFallback({
-              lat,
-              lon,
-              heading,
-              fov,
-              pitch,
-            });
+        const sv =
+          forwarded || !source
+            ? null
+            : await streetViewFallback(client, {
+                lat: source.lat,
+                lon: source.lon,
+                heading,
+                fov,
+                pitch,
+              });
         if (sv?.ok) {
-          setHealth(cameraId, {
-            status: 'degraded',
-            sourceKind: 'streetview',
-            label: 'Google Street View',
-            message: 'Fallback Street View frame',
-          });
+          if (!keepHealth)
+            setHealth(cameraId, {
+              status: 'degraded',
+              sourceKind: 'streetview',
+              label: 'Google Street View',
+              message: 'Fallback Street View frame',
+            });
           res.writeHead(200, {
             'Content-Type': sv.contentType,
             'Cache-Control': 'no-store',
@@ -768,14 +821,15 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             : 'NO UPSTREAM CONFIGURED',
         });
 
-        setHealth(cameraId, {
-          status: 'degraded',
-          sourceKind: 'synthetic',
-          label: source?.provider || 'Synthetic fallback',
-          message: source?.url
-            ? 'Upstream unavailable'
-            : 'No source configured',
-        });
+        if (!keepHealth)
+          setHealth(cameraId, {
+            status: 'degraded',
+            sourceKind: 'synthetic',
+            label: source?.provider || 'Synthetic fallback',
+            message: source?.url
+              ? 'Upstream unavailable'
+              : 'No source configured',
+          });
 
         res.writeHead(200, {
           'Content-Type': 'image/svg+xml',
@@ -792,6 +846,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
   };
   return {
     name: 'cctv-proxy',
+    // The catalog's size once it has been built (open data, no key).
+    api: { readLayerCount: getCctvSources.cachedCount },
     configureServer: installMiddleware,
     configurePreviewServer: installMiddleware,
   };

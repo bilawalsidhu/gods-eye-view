@@ -8,7 +8,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import * as Cesium from 'cesium';
+import { toLonLatH } from '../../geo/ellipsoid.js';
 import {
   BOSTON,
   railLayerHarness as harness,
@@ -67,22 +67,10 @@ function floorService({ neighbour = null } = {}) {
 }
 
 /**
- * Photorealistic tiles in the scene: a shown tileset whose streaming state
- * the test sets, and the mesh height every probe reads (recorded).
+ * Photorealistic tiles in place of the globe: their streaming state the test
+ * sets, and the mesh height every probe reads (recorded).
  */
-function photoreal(app, { loaded = true, height = 158 } = {}) {
-  const tileset = { show: true, tilesLoaded: loaded };
-  const mesh = { height, probes: [] };
-  app.viewer.scene.primitives.add(tileset);
-  app.viewer.scene.sampleHeight = (carto) => {
-    mesh.probes.push({
-      lat: (carto.latitude * 180) / Math.PI,
-      lon: (carto.longitude * 180) / Math.PI,
-    });
-    return mesh.height;
-  };
-  return { tileset, mesh };
-}
+const photoreal = (app, options) => app.photoreal(options);
 
 test('a train on a cold cell keeps its last floor, and the cell is warmed', async (t) => {
   const floors = floorService();
@@ -452,8 +440,7 @@ const STOPS = [
   expectedArrival: '14:32',
 }));
 
-const heightOf = (position) =>
-  Cesium.Cartographic.fromCartesian(position).height;
+const heightOf = (position) => toLonLatH(position).height;
 
 test('stops placed before their cells were warm move up onto the floor', async (t) => {
   const floors = floorService();
@@ -467,18 +454,14 @@ test('stops placed before their cells were warm move up onto the floor', async (
   await app.enable();
   const key = railTrainKey('mbta-rail', 'T1');
   app.parts().selection.selectTrain(key);
-  const dots = app.primitives.find(
-    (primitive) => primitive instanceof Cesium.PointPrimitiveCollection,
-  );
+  const dots = app.drawn('points', ':stops');
   const dotHeights = () =>
-    Array.from({ length: dots.length }, (_, i) =>
-      heightOf(dots.get(i).position),
-    );
+    [...dots.items.values()].map((dot) => heightOf(dot.pos));
   const labelHeights = () =>
     app.overlayEntries
       .get(RAIL_STOP_OVERLAY_SOURCE_ID)
       .map((entry) => heightOf(entry.position));
-  assert.equal(dots.length, STOPS.length);
+  assert.equal(dots.items.size, STOPS.length);
   // Every stop's cell is cold: on the ellipsoid for now.
   for (const h of [...dotHeights(), ...labelHeights()])
     assert.ok(Math.abs(h) < 0.01, `on the ellipsoid (${h})`);
@@ -489,7 +472,7 @@ test('stops placed before their cells were warm move up onto the floor', async (
   // Once warm, the next refresh stands them on the floor.
   for (const stop of STOPS) floors.warm.set(cellKey(stop), 20);
   t.mock.timers.tick(STOP_REFRESH_MS);
-  assert.equal(dots.length, STOPS.length);
+  assert.equal(dots.items.size, STOPS.length);
   for (const h of [...dotHeights(), ...labelHeights()])
     assert.ok(Math.abs(h - 21.5) < 0.01, `on the floor (${h})`);
   // Placed on a real floor, a stop is not read again.
