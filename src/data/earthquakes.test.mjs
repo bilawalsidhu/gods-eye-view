@@ -9,12 +9,13 @@ import {
   EARTHQUAKE_OVERLAY_COHORT_LIMIT,
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   createEarthquakeOverlayEntry,
-  createEarthquakesLayer,
+  createUsgsEarthquakeSource,
   depthAccent,
   depthColor,
   mapAnalystRecord,
   selectEarthquakeOverlayCohort,
-} from './earthquakes.js';
+} from '../layers/earthquakes/index.js';
+import { createApplicationEarthquakes } from '../app/layers/earthquakes.js';
 import { DataLayerManager } from '../testSupport/dataLayerManager.mjs';
 import {
   getRenderGovernorDiagnostics,
@@ -23,6 +24,11 @@ import {
 } from '../renderGovernor.js';
 import { framePortFor } from '../testSupport/fakeFramePort.mjs';
 import { bindFakeDraw } from '../testSupport/fakeDrawPort.mjs';
+
+const createEarthquakesLayer = ({
+  source = createUsgsEarthquakeSource(),
+  ...options
+} = {}) => createApplicationEarthquakes({ source, ...options });
 
 /** The layer's disc set, as the fake draw port holds it. */
 const discsOf = (draw) => draw.find('earthquakes:');

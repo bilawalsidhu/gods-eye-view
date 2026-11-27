@@ -7,10 +7,10 @@ import { FIRMS_AMBIENT_COHORT_LIMIT } from '../data/firmsLabels.js';
 import { vesselOverlayCohortLimit } from '../data/vesselLabels.js';
 import { CCTV_AMBIENT_CARD_MAX } from '../data/cctvLod.js';
 import { AMBIENT_CARD_COLLISION_CAPACITY } from './worldOverlay.js';
-import { EARTHQUAKE_OVERLAY_COHORT_LIMIT } from '../data/earthquakes.js';
+import { EARTHQUAKE_OVERLAY_COHORT_LIMIT } from '../layers/earthquakes/index.js';
 import { ROCKET_MISSION_AMBIENT_OVERLAY_COHORT_LIMIT } from '../data/rocketLaunches.js';
 import { RADIO_OVERLAY_COHORT_LIMIT } from '../data/radio.js';
-import { CABLE_REFERENCE_LABEL_WINNER_CAP } from '../data/telegeographySubmarineCables.js';
+import { CABLE_REFERENCE_LABEL_WINNER_CAP } from '../layers/submarineCables/index.js';
 import { AIR_QUALITY_OVERLAY_COHORT_LIMIT } from '../layers/airQuality/model.js';
 import { isCalibratedAllocationRuntime } from '../../scripts/run-unit-tests.mjs';
 

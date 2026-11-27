@@ -27,12 +27,19 @@ import {
   cableClassificationTypeForStack,
   cableReferencePriority,
   createCableOverlayEntry,
-  createCableOverlayPublisher,
+  createCableOverlayPublisher as createPublisher,
   createCableReferenceSweepGate,
-  createTeleGeographySubmarineCableLayer,
   selectCableReferenceLabelWinners,
   updateCableReferenceStem,
-} from './telegeographySubmarineCables.js';
+} from '../layers/submarineCables/index.js';
+import { createBundledCableSource } from '../layers/submarineCables/bundledSource.js';
+import { createApplicationCables } from '../app/layers/submarineCables.js';
+import { overlayHost } from '../app/layers/overlayHost.js';
+
+const createTeleGeographySubmarineCableLayer = (options = {}) =>
+  createApplicationCables({ source: createBundledCableSource(), ...options });
+const createCableOverlayPublisher = (options = {}) =>
+  createPublisher({ host: overlayHost, ...options });
 
 test('cable reference winners remain nearest-first and hard-capped', () => {
   const records = Array.from({ length: 300 }, (_, index) => ({

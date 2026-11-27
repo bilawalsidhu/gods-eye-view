@@ -43,7 +43,7 @@ import {
   EARTHQUAKE_OVERLAY_COLLISION_CAPACITY,
   EARTHQUAKE_OVERLAY_SOURCE_ID,
   createEarthquakeOverlayEntry,
-} from '../data/earthquakes.js';
+} from '../layers/earthquakes/index.js';
 import {
   BIKESHARE_SELECTED_OVERLAY_SOURCE_ID,
   BIKESHARE_SELECTED_OVERLAY_SOURCE_OPTIONS,
@@ -77,7 +77,7 @@ import {
   CABLE_OVERLAY_SOURCE_ID,
   CABLE_REFERENCE_LABEL_WINNER_CAP,
   createCableOverlayEntry,
-} from '../data/telegeographySubmarineCables.js';
+} from '../layers/submarineCables/index.js';
 import {
   destroyDetection,
   getDetectionDiagnostics,
