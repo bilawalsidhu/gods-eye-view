@@ -12,7 +12,7 @@
 import { toLonLatH } from '../../geo/ellipsoid.js';
 
 /** Stations closer on screen than about this many pixels draw as one. */
-export const CLUSTER_PX = 46;
+const CLUSTER_PX = 46;
 /** The cell, in degrees, when the view cannot be measured. */
 const FALLBACK_CELL_DEG = 6;
 /** Neighbouring cells join when their centres are closer than this. */

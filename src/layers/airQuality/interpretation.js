@@ -76,7 +76,7 @@ export function hourlyBandIndex(parameter, value) {
 }
 
 /** One fault ceiling per pollutant in every view. */
-export function hourlyCeiling(parameter) {
+function hourlyCeiling(parameter) {
   const ceiling = AQI_CEILINGS[AQI_POLLUTANTS[parameter]];
   return Number.isFinite(ceiling) ? ceiling : Infinity;
 }

@@ -54,7 +54,7 @@ export const FIELD_IDS = Object.freeze([
 /** A grid value with no data. */
 export const FIELD_MISSING = 65535;
 /** The Europe inset blends into the global field over this many degrees. */
-export const EUROPE_BLEND_DEG = 3;
+const EUROPE_BLEND_DEG = 3;
 /**
  * The field's strength by camera height: full (this share of each pixel's
  * own opacity) from `FIELD_FULL_M` up, fading on a log scale to nothing at

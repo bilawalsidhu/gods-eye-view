@@ -82,8 +82,6 @@ import {
   STALE_AFTER_MS,
 } from './model.js';
 import { analystRecordLimit } from '../../data/analystRecordLimit.js';
-export * from './model.js';
-export { createAirQualitySource } from './providers.js';
 
 /** Picking source ID for station and group clicks. */
 const STATION_CLICK_SOURCE = 'air-quality-stations';
@@ -146,11 +144,11 @@ const FIELD_WAIT_MS = 20_000;
 /** Farthest a station's reading stands for a point, in kilometres. */
 export const AIR_QUALITY_VALUE_RADIUS_KM = 50;
 
-export const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
+const AIR_QUALITY_MARKER_SET_ID = 'air-quality';
 let instances = 0;
 
 /** Pollutant views, as the providers' parameter ids; each on its own scale. */
-export const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
+const AIR_QUALITY_POLLUTANT_VIEWS = Object.freeze([
   'PM2.5',
   'PM10',
   'O3',
