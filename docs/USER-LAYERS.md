@@ -66,15 +66,20 @@ is the same one built-in layers implement:
 | `id` | yes | Must equal the descriptor `id`. |
 | `name` | yes | Shown in the layer panel. |
 | `icon` | no | Single character or emoji shown beside the name. |
-| `init(viewer)` | no | One-time setup. Create Cesium resources here, not in the factory. |
+| `init(viewer, { signal, panel })` | no | One-time setup. Create Cesium resources here, not in the factory. Keep `panel` if the layer's row can change on its own (see below). |
 | `enable(viewer)` | yes | Called when switched on. |
 | `disable(viewer)` | yes | Called when switched off. Must release what `enable` acquired. |
 | `update(viewer)` | no | Periodic refresh; `updateInterval` (ms, `0` disables) controls cadence. |
 | `destroy()` | no | Teardown on shutdown. |
 | `showInTogglePanel` | no | Whether the layer appears in the panel. **Defaults to `true` for user layers** (built-ins opt in explicitly). Set `false` for a layer driven only by share links. |
+| `getStats()` | no | What the row shows (count, last update, loading, error). A read with no side effects. |
+| `getRowControls()` | no | The row's extra controls and readout, as data. A read with no side effects. |
+| `panelFollowsTime` | no | `true` when the row reads the scene time; the panel then reads it again when the timeline moves. |
 
 Keep Cesium resource creation in `init`, not in `createLayer()` — the factory
 runs during catalog construction, before a viewer exists.
+
+The panel reads a row only when told it changed. A layer whose row changes outside `enable`, `disable` and `update`, such as when a slow load finishes, calls `panel.invalidate()` (the handle `init` receives; no arguments, no result). A layer that still defines the old `setRowControlsListener` is refused at registration.
 
 ---
 
