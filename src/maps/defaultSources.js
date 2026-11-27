@@ -3,7 +3,6 @@ import { photorealUnavailableReason } from './availability.js';
 import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
 import { t } from '../i18n/index.js';
 import { mapEngine } from './engine.js';
-import { ESRI_ATTRIBUTION_HTML } from './attribution.js';
 
 /**
  * Select sources and setup guidance without putting provider branches in the
@@ -64,7 +63,8 @@ export function createDefaultMapSources({
         terrain,
         ...(descriptor.id === 'esri-imagery'
           ? {
-              credit: ESRI_ATTRIBUTION_HTML,
+              // Esri is credited by its imagery layer, "Powered by Esri —
+              // Source: …", in Data attribution while it is shown.
               constructionFallback: {
                 id: 'osm',
                 message: 'Esri Satellite is unavailable; using OSM',
