@@ -57,7 +57,7 @@ function fieldFor(id) {
   return field;
 }
 
-function harness({ fieldReady = () => Promise.resolve() } = {}) {
+function harness({ fieldReady = () => Promise.resolve(), panel } = {}) {
   const fetched = [];
   const cells = [];
   const feed = {
@@ -94,7 +94,7 @@ function harness({ fieldReady = () => Promise.resolve() } = {}) {
     setTimeout: (fn) => timers.push(fn),
     clearTimeout: () => timers.splice(0),
   });
-  layer.init(withInput({ scene: {} }));
+  layer.init(withInput({ scene: {} }), { panel });
   return { layer, fetched, drawn, filters, timers, cells };
 }
 
@@ -589,4 +589,19 @@ test('the shell is one raster-shell field on the draw port, updated in place', (
   } finally {
     unbind();
   }
+});
+
+test('tells the panels its row changed through the handle its init receives', () => {
+  let invalidations = 0;
+  const { layer } = harness({ panel: { invalidate: () => invalidations++ } });
+  assert.equal(layer.setRowControlsListener, undefined);
+  layer.setParams({ opacity: 'light' });
+  assert.equal(invalidations, 1);
+  layer.disable();
+  assert.equal(invalidations, 2);
+  // Destroying disables once more, then lets go of the handle.
+  layer.destroy();
+  assert.equal(invalidations, 3);
+  layer.setParams({ opacity: 'strong' });
+  assert.equal(invalidations, 3);
 });

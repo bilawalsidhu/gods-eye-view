@@ -313,7 +313,9 @@ export function createGravityLayer({
     source: SOURCE,
     // CSR publishes about monthly; the server checks daily.
     updateInterval: 6 * 3600_000,
-    init(nextViewer) {
+    init(nextViewer, { panel = null } = {}) {
+      // The panels' handle: invalidated when the row or readout changed.
+      listener = panel ? () => panel.invalidate() : null;
       viewer = nextViewer;
       rendering = createRendering({ viewer, getHost });
       eventTarget?.addEventListener?.(
@@ -462,9 +464,6 @@ export function createGravityLayer({
           'Change in mass from the GRACE and GRACE-FO satellites, in centimetres of equivalent water against the 2004–2009 mean. Red is loss, blue is gain. Each solution is published about five weeks after its month ends; there is no data from July 2017 to May 2018 between the two missions.',
         ),
       };
-    },
-    setRowControlsListener(value) {
-      listener = typeof value === 'function' ? value : null;
     },
     getStats() {
       return {
