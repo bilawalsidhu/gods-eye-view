@@ -40,7 +40,6 @@ import {
   ensureGeoidReady,
   geoidHeight,
 } from './data/geoid.js';
-import { getBasemapLabelContext } from './voice/gevActions.js';
 import {
   hasWord,
   hudSummaryHasEnglish,
@@ -1105,6 +1104,9 @@ export class IntelHUD {
 
   async _summaryContext() {
     const revision = this._summaryRevision;
+    // Loaded on first summary: gevActions is a large voice module the first
+    // paint does not need.
+    const { getBasemapLabelContext } = await import('./voice/gevActions.js');
     const labels = await getBasemapLabelContext(this.viewer, this.placeSearch, {
       ...this.basemapContext,
       previous: this._placeLabels,

@@ -40,6 +40,7 @@ export function standaloneConfig(
   applyEnvFiles(() => loadEnv(mode, root, ''));
   const tools = standaloneVoiceTools();
   return createBrowserViteConfig({
+    lightDev: process.env.GEV_DEV_LIGHT === '1',
     plugins: [
       ...localProviderPlugins({
         realtime: { tools },

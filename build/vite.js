@@ -165,8 +165,30 @@ export function apiResponseHeadersPlugin() {
   };
 }
 
+/**
+ * Dev server only: serve application modules without their inline sourcemaps.
+ * Vite appends one base64 map to every module (about twice its size), which
+ * dominates what a low-memory browser downloads and parses at startup. The
+ * trade is that browser devtools show transformed code, so this is opt-in.
+ */
+function lightDevPlugin() {
+  return {
+    name: 'gev-light-dev',
+    apply: 'serve',
+    enforce: 'post',
+    transform(code, id) {
+      if (id.startsWith('\0') || id.includes('/node_modules/')) return null;
+      if (!/\.(?:m?js|ts|vue)(?:\?|$)/.test(id)) return null;
+      // An empty map is Rollup's "intentionally no sourcemap"; null would keep
+      // the map Vite already built.
+      return { code, map: { mappings: '' } };
+    },
+  };
+}
+
 /** Build browser assets with explicit inputs; never load environment or providers. */
 export function createBrowserViteConfig({
+  lightDev = false,
   plugins = [],
   publicDir,
   googleApiKey,
@@ -191,6 +213,7 @@ export function createBrowserViteConfig({
       ...plugins,
       embedFramingPlugin(),
       panelBuildPlugin(),
+      ...(lightDev ? [lightDevPlugin()] : []),
     ],
     ...(publicDir === undefined ? {} : { publicDir }),
     // A production build must not clean the dependency cache a running dev
@@ -216,6 +239,9 @@ export function createBrowserViteConfig({
       // Host-header check. LAN hostnames are added explicitly (see
       // build/allowedHosts.js); IP addresses are always accepted.
       allowedHosts: [...allowedHosts],
+      // Transform the entry in the background at startup, so the first page
+      // load finds it ready instead of paying for it.
+      warmup: { clientFiles: ['./src/main.js'] },
       fs: {
         deny: [
           '.env',
