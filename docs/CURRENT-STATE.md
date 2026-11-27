@@ -3577,6 +3577,24 @@ Layer rows, feed feedback, counts, focus-preserving chips and toggle listeners
 are owned by a renderer-free panel component. The layer manager supplies current
 snapshots, lifecycle actions and row descriptors. Remount and teardown remove
 listeners and row subscriptions; obsolete completions do not repaint old rows.
+A refresh (a layer's status or row controls, such as every step of a scene
+whose time advances) skips a row list whose panel is not displayed (collapsed
+or hidden) and repaints it once, with its current rows, when it is displayed
+again; the Weather and News rail readouts do the same for their bodies, while
+the panels still appear, count and open as before. Whatever shows a panel
+repaints what it owes at once, through `src/ui/rail/panelContent.js`, before
+anything measures the panel or reads its rows: the panel chrome opening a panel
+(a click, voice or any other caller), a phone sheet (every panel of its rail,
+expanded ones included), and leaving clean view, Cockpit or scene playback
+(every panel that is not collapsed). Each repaints only the owed lists inside
+the panel it shows. Each panel layout pass first repaints the owed lists that
+have a layout box and presents nothing when none is owed; content still not
+displayed stays owed. Each list is owed on its own. Content repainted this way
+counts as displayed until the ResizeObserver's next report, so a refresh in
+between paints it instead of owing it again. A ResizeObserver
+catches every other way a panel is
+displayed, before the browser draws it. A list whose presented rows equal the
+ones it shows is not rendered again.
 The clear control presents busy state while its existing action owns the transaction.
 The Wildlife group follows Events and precedes Weather; Wildlife Sightings
 provides its confirmed toggle, taxa presets and fixed-order, nonempty legend.

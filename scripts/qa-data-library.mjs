@@ -156,8 +156,20 @@ async function open(page, hash = '') {
   );
 }
 
-const libraryRows = (page) =>
-  page.evaluate(() =>
+/**
+ * Open Data Layers before reading its rows: they repaint while it is
+ * displayed, and it starts collapsed.
+ */
+const openDataLayers = (page) =>
+  page.evaluate(() => {
+    const panel = document.getElementById('data-panel');
+    if (panel?.classList.contains('collapsed'))
+      panel.querySelector('[data-collapse-target="data-panel"]')?.click();
+  });
+
+const libraryRows = async (page) => {
+  await openDataLayers(page);
+  return page.evaluate(() =>
     [...document.querySelectorAll('#data-toggles [data-library-entry]')].map(
       (row) => ({
         id: row.dataset.libraryEntry,
@@ -166,6 +178,7 @@ const libraryRows = (page) =>
       }),
     ),
   );
+};
 
 try {
   const page = await browser.newPage();
@@ -210,8 +223,8 @@ try {
   await step(
     'Browse opens a labelled modal with addable entries first and packs last',
     async () => {
+      await openDataLayers(page);
       await page.evaluate(() => {
-        document.getElementById('data-panel')?.classList.remove('collapsed');
         document.getElementById('data-library-browse').click();
       });
       const dialog = await page.$eval('#data-library', (node) => ({
@@ -434,9 +447,7 @@ try {
     async () => {
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="zoom"]';
-      await page.evaluate(() =>
-        document.getElementById('data-panel')?.classList.remove('collapsed'),
-      );
+      await openDataLayers(page);
       // The icons work while the layer is off; Zoom switches it back on.
       await page.evaluate(() =>
         window.__godsEyeView.dataManager.setEnabled(
@@ -508,8 +519,8 @@ try {
     async () => {
       await page.evaluate(() => {
         window.__gevDataLibrary.browser.close();
-        document.getElementById('data-panel')?.classList.remove('collapsed');
       });
+      await openDataLayers(page);
       const chip =
         '#data-toggles [data-layer-id="lib-eia-power-plants"] [data-chip-id="remove"]';
       await page.evaluate(() =>

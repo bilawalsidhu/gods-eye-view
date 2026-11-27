@@ -95,6 +95,7 @@ import {
 } from '../data/dataCredits.js';
 import { withPlacePacks } from './placePacksLoading.js';
 import { preloadOwnerFlags } from './ownerFlag.js';
+import { flushAllPanelContent } from './rail/panelContent.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -1391,6 +1392,8 @@ export class StyleManager extends ShellFacade {
         ? forceEnabled
         : !document.body.classList.contains('ui-clean-view');
     document.body.classList.toggle('ui-clean-view', shouldEnable);
+    // Leaving clean view shows the panels again: repaint what they owe first.
+    if (!shouldEnable) flushAllPanelContent();
     if (this._cleanViewBtn) {
       this._cleanViewBtn.classList.toggle('active', shouldEnable);
     }

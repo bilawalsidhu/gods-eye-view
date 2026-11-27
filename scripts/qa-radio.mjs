@@ -462,6 +462,10 @@ async function main() {
         stationIds: module.getTunerStations(3).map(({ id }) => id),
       });
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      // The Data Layers rows repaint while the panel is displayed; it starts collapsed.
+      const dataPanel = document.getElementById('data-panel');
+      if (dataPanel?.classList.contains('collapsed'))
+        dataPanel.querySelector('[data-collapse-target="data-panel"]')?.click();
       const result = {
         presentationActive: module.getUIState().presentationActive,
         markerSourceVisible: (window.__qaRadioRows('stations')[0]?.setShown ?? false),
