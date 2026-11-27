@@ -80,7 +80,7 @@ export function hexToRgb(hex) {
  * MW because the median detection is ~6 MW and a sub-megawatt floor hides
  * nothing worth a tick.
  */
-export const SLIDER_MAX_MW = 1000;
+const SLIDER_MAX_MW = 1000;
 const LOG_MAX = Math.log10(SLIDER_MAX_MW);
 
 /**

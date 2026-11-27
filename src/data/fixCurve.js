@@ -25,13 +25,13 @@ import { motionPosition } from '../render/motion/iconMotion.js';
 import { norm180, norm360 } from '../geo/vector.js';
 
 /** @constant {number} Pairs slower than this (m/s) are joined straight. */
-export const CURVE_MIN_SPEED_MPS = 40;
+const CURVE_MIN_SPEED_MPS = 40;
 /** @constant {number} A track further than this (°) off the chord is joined straight. */
-export const CURVE_MAX_TRACK_OFF_DEG = 75;
+const CURVE_MAX_TRACK_OFF_DEG = 75;
 /** @constant {number} How long (s) a segment runs on past its end. */
 export const CURVE_RUN_ON_S = 2;
 /** @constant {number} Turn (°) between points a trail samples along a curve. */
-export const CURVE_POINT_STEP_DEG = 1;
+const CURVE_POINT_STEP_DEG = 1;
 
 const DEG = Math.PI / 180;
 /** Turn rates under this (rad/s) fly straight, as `iconMotion` draws them. */

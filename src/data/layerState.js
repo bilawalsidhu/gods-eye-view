@@ -11,7 +11,7 @@ const VALID_DISPOSITIONS = new Set([
   'enabled+mirrored-options',
 ]);
 
-export const LAYER_STATE_VERSION = 2;
+const LAYER_STATE_VERSION = 2;
 export const LAYER_STATE_TOKEN_ALPHABET =
   '0123456789abcdefghijklmnopqrstuvwxyz';
 const LAYER_STATE_TOKEN_PATTERN = /^[a-z0-9]{1,2}$/;

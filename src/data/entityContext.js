@@ -403,7 +403,7 @@ export function entityKind(layerId, record) {
 }
 
 /** Latitude and longitude of a record, whichever names it uses. */
-export function recordPosition(record) {
+function recordPosition(record) {
   const lat = finite(record?.lat ?? record?.latitude);
   const lon = finite(record?.lon ?? record?.longitude);
   return lat === null || lon === null ? null : { lat, lon };
@@ -1944,7 +1944,7 @@ export function layerBreakdown(dataManager, layerId, { rect = null } = {}) {
  * @param {string} [layerLabel]
  * @returns {boolean}
  */
-export function recordMatches(record, needle, layerLabel = '') {
+function recordMatches(record, needle, layerLabel = '') {
   if (!needle) return true;
   if (text(layerLabel).toLowerCase().includes(needle)) return true;
   for (const value of Object.values(record || {})) {

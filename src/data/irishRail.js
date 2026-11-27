@@ -28,7 +28,7 @@ export const IRISH_RAIL_MAX_TEXT_CHARS = 1024 * 1024;
 /** Most trains read from one document; about 80 run at once. */
 export const IRISH_RAIL_MAX_TRAINS = 2000;
 /** Longest accepted field (characters); the public message is the longest. */
-export const IRISH_RAIL_MAX_FIELD_CHARS = 512;
+const IRISH_RAIL_MAX_FIELD_CHARS = 512;
 
 const FIELDS = Object.freeze([
   'TrainStatus',
