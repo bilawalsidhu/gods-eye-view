@@ -140,7 +140,7 @@ test('mosaic fetch is capped at 4 MiB, forwards cancellation, and releases decod
   assert.equal(closes, 2);
 });
 
-test('bitmap decoding and Image fallback release resources on success, error and abort', async (t) => {
+test('bitmap decoding returns the decoded bitmap', async (t) => {
   const original = Object.getOwnPropertyDescriptor(
     globalThis,
     'createImageBitmap',
@@ -156,41 +156,6 @@ test('bitmap decoding and Image fallback release resources on success, error and
     await decodeInfraredImage(new Blob(), new AbortController().signal),
     bitmap,
   );
-  globalThis.createImageBitmap = undefined;
-  const images = [],
-    revoked = [];
-  const originalImage = globalThis.Image;
-  globalThis.Image = class {
-    constructor() {
-      images.push(this);
-    }
-  };
-  t.after(() => {
-    if (originalImage) globalThis.Image = originalImage;
-    else delete globalThis.Image;
-  });
-  t.mock.method(URL, 'createObjectURL', () => 'blob:test');
-  t.mock.method(URL, 'revokeObjectURL', (url) => revoked.push(url));
-  for (const action of ['load', 'error', 'abort']) {
-    const controller = new AbortController();
-    const pending = decodeInfraredImage(new Blob(), controller.signal);
-    const image = images.at(-1);
-    assert.equal(image.src, 'blob:test');
-    if (action === 'load') {
-      image.onload();
-      assert.equal(await pending, image);
-    } else if (action === 'error') {
-      image.onerror();
-      await assert.rejects(pending, /decode failed/);
-    } else {
-      controller.abort();
-      await assert.rejects(pending, { name: 'AbortError' });
-      assert.equal(image.src, '');
-    }
-    assert.equal(image.onload, null);
-    assert.equal(image.onerror, null);
-  }
-  assert.deepEqual(revoked, ['blob:test', 'blob:test', 'blob:test']);
 });
 
 const pixels = (width, height) => ({

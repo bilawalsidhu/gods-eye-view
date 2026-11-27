@@ -1212,7 +1212,6 @@
   "FILTER": "מסנן",
   "Cloud filter strength": "עוצמת סינון עננים",
   "OPACITY": "אטימות",
-  "Infrared decode failed": "פענוח אינפרא-אדום נכשל",
   "Weather prefetch unavailable": "טעינה מראש של מזג האוויר אינה זמינה",
   "Weather tiles unavailable · previous frame retained": "אריחי מזג האוויר אינם זמינים · השקופית הקודמת נשמרה",
   "Some weather tiles unavailable": "חלק מאריחי מזג האוויר אינם זמינים",

@@ -1949,7 +1949,6 @@
   "FILTER": "FILTER",
   "Cloud filter strength": "Stärke des Wolkenfilters",
   "OPACITY": "DECKKRAFT",
-  "Infrared decode failed": "Infrarot-Dekodierung fehlgeschlagen",
   "Weather prefetch unavailable": "Wetter-Vorabruf nicht verfügbar",
   "Weather tiles unavailable · previous frame retained": "Wetterkacheln nicht verfügbar · vorheriger Frame bleibt erhalten",
   "Some weather tiles unavailable": "Einige Wetterkacheln nicht verfügbar",

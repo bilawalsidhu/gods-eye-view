@@ -1329,7 +1329,6 @@
   "FILTER": "フィルター",
   "Cloud filter strength": "雲フィルターの強度",
   "OPACITY": "不透明度",
-  "Infrared decode failed": "赤外画像のデコードに失敗しました",
   "Weather prefetch unavailable": "気象のプリフェッチを利用できません",
   "Weather tiles unavailable · previous frame retained": "気象タイルを利用できません · 前のフレームを保持",
   "Some weather tiles unavailable": "一部の気象タイルを利用できません",

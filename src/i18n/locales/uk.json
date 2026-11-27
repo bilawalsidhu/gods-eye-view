@@ -1391,7 +1391,6 @@
   "FILTER": "ФІЛЬТР",
   "Cloud filter strength": "Сила фільтра хмар",
   "OPACITY": "НЕПРОЗОР.",
-  "Infrared decode failed": "Не вдалося декодувати інфрачервоний знімок",
   "Weather prefetch unavailable": "Попереднє завантаження погоди недоступне",
   "Weather tiles unavailable · previous frame retained": "Погодні тайли недоступні · показано попередній кадр",
   "Some weather tiles unavailable": "Частина погодних тайлів недоступна",

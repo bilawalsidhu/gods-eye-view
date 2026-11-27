@@ -1369,7 +1369,6 @@
   "FILTER": "FILTRO",
   "Cloud filter strength": "Intensidade do filtro de nuvens",
   "OPACITY": "OPACIDADE",
-  "Infrared decode failed": "Falha ao decodificar o infravermelho",
   "Weather prefetch unavailable": "Pré-carregamento do clima indisponível",
   "Weather tiles unavailable · previous frame retained": "Blocos meteorológicos indisponíveis · o quadro anterior foi mantido",
   "Some weather tiles unavailable": "Alguns blocos meteorológicos indisponíveis",

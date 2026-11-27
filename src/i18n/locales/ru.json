@@ -2434,7 +2434,6 @@
   "Weather HTTP {status}": "Погода: HTTP {status}",
   "Weather image HTTP {status}": "Снимок погоды: HTTP {status}",
   "Weather prefetch unavailable": "Предзагрузка погоды недоступна",
-  "Infrared decode failed": "Не удалось декодировать инфракрасный снимок",
   "rate limited": "превышен лимит запросов",
   "routing service is rate limited": "сервис маршрутизации превысил лимит запросов",
   "route leg too long": "участок маршрута слишком длинный",

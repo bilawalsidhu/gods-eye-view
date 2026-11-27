@@ -1865,7 +1865,6 @@
   "FILTER": "FILTER",
   "Cloud filter strength": "Molnfiltrets styrka",
   "OPACITY": "OPACITET",
-  "Infrared decode failed": "Avkodning av infraröd bild misslyckades",
   "Weather prefetch unavailable": "Förhämtning av väder otillgänglig",
   "Weather tiles unavailable · previous frame retained": "Väderrutor otillgängliga · föregående bildruta behålls",
   "Some weather tiles unavailable": "Vissa väderrutor otillgängliga",

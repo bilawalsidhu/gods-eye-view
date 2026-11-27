@@ -2062,7 +2062,6 @@
   "FILTER": "المرشح",
   "Cloud filter strength": "قوة مرشح الغيوم",
   "OPACITY": "العتامة",
-  "Infrared decode failed": "فشل فك ترميز صورة الأشعة تحت الحمراء",
   "Weather prefetch unavailable": "الجلب المسبق للطقس غير متاح",
   "Weather tiles unavailable · previous frame retained": "بلاطات الطقس غير متاحة · أُبقي على الإطار السابق",
   "Some weather tiles unavailable": "بعض بلاطات الطقس غير متاحة",

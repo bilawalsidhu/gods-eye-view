@@ -1,5 +1,4 @@
 import { readResponseBytesCapped } from '../../sources/httpBody.js';
-import { msg } from '../../i18n/index.js';
 import {
   weatherImageUrl,
   weatherPixelSize,
@@ -57,35 +56,10 @@ function drawSuppliedImage(pixels, product, mode, size, signal, createCanvas) {
   }
 }
 
-/** Decode locally, releasing the object URL on success, failure or cancellation. */
+/** Decode locally with `createImageBitmap`. */
 export function decodeInfraredImage(blob, signal) {
   signal.throwIfAborted();
-  if (typeof globalThis.createImageBitmap === 'function')
-    return globalThis.createImageBitmap(blob);
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const url = URL.createObjectURL(blob);
-    const cleanup = () => {
-      signal.removeEventListener('abort', abort);
-      image.onload = image.onerror = null;
-      URL.revokeObjectURL(url);
-    };
-    const abort = () => {
-      cleanup();
-      image.src = '';
-      reject(signal.reason);
-    };
-    image.onload = () => {
-      cleanup();
-      resolve(image);
-    };
-    image.onerror = () => {
-      cleanup();
-      reject(new Error(msg('Infrared decode failed')));
-    };
-    signal.addEventListener('abort', abort, { once: true });
-    image.src = url;
-  });
+  return globalThis.createImageBitmap(blob);
 }
 
 /** Fetch one capped whole-extent frame, or a `bbox` detail window of it, and draw

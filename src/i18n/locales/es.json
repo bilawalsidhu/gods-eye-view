@@ -2388,7 +2388,6 @@
   "Weather HTTP {status}": "Clima: HTTP {status}",
   "Weather image HTTP {status}": "Imagen del clima: HTTP {status}",
   "Weather prefetch unavailable": "Precarga del clima no disponible",
-  "Infrared decode failed": "Falló la decodificación del infrarrojo",
   "rate limited": "límite de peticiones superado",
   "routing service is rate limited": "el servicio de rutas superó el límite de peticiones",
   "route leg too long": "tramo de la ruta demasiado largo",

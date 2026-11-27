@@ -1306,7 +1306,6 @@
   "FILTER": "滤镜",
   "Cloud filter strength": "云层滤镜强度",
   "OPACITY": "不透明度",
-  "Infrared decode failed": "红外图像解码失败",
   "Weather prefetch unavailable": "天气预取不可用",
   "Weather tiles unavailable · previous frame retained": "天气瓦片不可用 · 保留上一帧",
   "Some weather tiles unavailable": "部分天气瓦片不可用",
