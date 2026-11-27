@@ -262,6 +262,19 @@ const detailShown = computed(
     Boolean(selectedItem.value) ||
     (props.allowUnlisted && props.selected !== null),
 );
+// A pick or Back made with the card's own controls moves focus with it,
+// also when the click left focus on the page (Safari does not focus a
+// clicked button). One made elsewhere (the globe, voice, a walk from the
+// layer row) leaves focus where it is.
+// The flag is set after the emit, so it clears after the flush the emit
+// queued, once the focus watcher has read it.
+let actedHere = false;
+function actHere() {
+  actedHere = true;
+  void nextTick(() => {
+    actedHere = false;
+  });
+}
 function select(item, event) {
   if (props.returnRevision !== null) {
     returnOrder.value = {
@@ -273,9 +286,11 @@ function select(item, event) {
     };
   }
   emit('select', item, event);
+  actHere();
 }
 function back() {
   emit('back');
+  actHere();
 }
 function onDetailKey(event) {
   if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing)
@@ -306,18 +321,15 @@ function pointerMove(item) {
 }
 
 // Focus is never sent back to the page. Opening a detail moves it onto Back
-// and Back moves it onto the item's row (else the heading), when it was in
-// the card. A focused row that the rows leave (or move) hands it to the
+// and Back moves it onto the item's row (else the heading), when focus was
+// in the card or the card's own control was used. A focused row that the rows leave (or move) hands it to the
 // same item's row, else the row now in its place, else the pager or the
 // heading; any other control that goes hands it to the last row. A card
 // leaving the page hands it to the panel's body.
 const scrollerOf = () => root.value?.closest('[data-rail-scroller]') ?? null;
 const focusInCard = () => {
   const active = globalThis.document?.activeElement;
-  return Boolean(
-    active &&
-    (root.value?.contains(active) || active === globalThis.document.body),
-  );
+  return actedHere || Boolean(active && root.value?.contains(active));
 };
 const rowOf = (key) =>
   [...(root.value?.querySelectorAll('[data-list-key]') ?? [])].find(

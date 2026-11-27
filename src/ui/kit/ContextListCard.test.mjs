@@ -287,6 +287,27 @@ test('Esc in the detail is the card’s: it goes back, and nothing else takes it
   assert.equal(state.selected, null);
 });
 
+test('a pick made elsewhere leaves focus where it is; a click in the card moves it even unfocused', async (t) => {
+  const { $, state } = mount(t);
+  await settle();
+  document.activeElement?.blur?.();
+  assert.equal(document.activeElement, document.body);
+  // A camera or mission picked on the globe, then let go there.
+  state.selected = 'f2';
+  await settle();
+  assert.equal(document.activeElement, document.body, 'a pick elsewhere');
+  state.selected = null;
+  await settle();
+  assert.equal(document.activeElement, document.body, 'a deselect elsewhere');
+  // As in Safari, a click leaves the row unfocused; it still hands focus on.
+  $('[data-list-key="f3"]').click();
+  await settle();
+  assert.equal(focused($('[data-list-back]')), true, 'focus moves to Back');
+  $('[data-list-back]').click();
+  await settle();
+  assert.equal(focused($('[data-list-key="f3"]')), true, 'and back to the row');
+});
+
 test('Back restores the original row when detail advances beyond its page', async (t) => {
   const { $, state, range } = mount(t, {
     headerClose: true,
