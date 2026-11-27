@@ -121,35 +121,15 @@ export function createIngestion({
     const requestController = new AbortController();
     const requestSessionId = feed.sessionId;
     feed.abort = requestController;
-    let timeout = null;
 
     try {
       // Combine the layer's teardown-abort with a hard timeout so a hung upstream
       // can't wedge the poll indefinitely (parity with the track fetch + flights).
-      let requestSignal;
-      if (typeof AbortSignal.any === 'function')
-        requestSignal = AbortSignal.any([
-          requestController.signal,
-          AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          ...(signal ? [signal] : []),
-        ]);
-      else {
-        // Without it, the request's own controller takes the timeout and
-        // the caller's abort.
-        timeout = setTimeout(
-          () =>
-            requestController.abort(
-              new DOMException('Vessel request timed out', 'TimeoutError'),
-            ),
-          REQUEST_TIMEOUT_MS,
-        );
-        signal?.addEventListener(
-          'abort',
-          () => requestController.abort(signal.reason),
-          { once: true },
-        );
-        requestSignal = requestController.signal;
-      }
+      const requestSignal = AbortSignal.any([
+        requestController.signal,
+        AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        ...(signal ? [signal] : []),
+      ]);
       // Ask for the vessels in view; a wide view asks for every vessel.
       const area = readArea(viewer);
       feed.lastArea = area;
@@ -208,7 +188,6 @@ export function createIngestion({
       }
       return false;
     } finally {
-      if (timeout !== null) clearTimeout(timeout);
       if (
         feed.abort === requestController &&
         feed.sessionId === requestSessionId
