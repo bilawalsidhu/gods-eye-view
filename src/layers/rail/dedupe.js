@@ -134,15 +134,6 @@ export function recordNumbers(record) {
   return number ? { number, line: null } : named;
 }
 
-/**
- * A record's train number (recordNumbers), or null.
- * @param {object} record
- * @returns {string|null}
- */
-export function recordTrainNumber(record) {
-  return recordNumbers(record).number;
-}
-
 /** Whether two lines can be one: one number, and one product where both name it. */
 function sameLine(a, b) {
   return (
@@ -174,11 +165,6 @@ export function matchStrength(a, b) {
   return a.line && b.line && a.category != null && a.category === b.category
     ? 1 - km / (2 * MATCH_RADIUS_KM)
     : 0;
-}
-
-/** Whether two copies are the same physical train. */
-export function sameTrain(a, b) {
-  return matchStrength(a, b) > 0;
 }
 
 /**

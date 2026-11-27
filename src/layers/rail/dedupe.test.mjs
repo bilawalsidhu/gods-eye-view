@@ -9,9 +9,8 @@ import {
   createDuplicateFilter,
   labelNumbers,
   matchCopies,
+  matchStrength,
   recordNumbers,
-  recordTrainNumber,
-  sameTrain,
   scoreCopy,
   trainNumber,
 } from './dedupe.js';
@@ -48,19 +47,28 @@ test('train numbers compare across feeds', () => {
 
 test('the same number is one train; another number is not', () => {
   const a = copy('a', 'feed-a', { number: '160' });
-  assert.equal(sameTrain(a, copy('b', 'feed-b', { number: '160' })), true);
-  assert.equal(sameTrain(a, copy('b', 'feed-b', { number: '161' })), false);
-  // Never within one feed, never far apart.
-  assert.equal(sameTrain(a, copy('b', 'feed-a', { number: '160' })), false);
   assert.equal(
-    sameTrain(a, copy('b', 'feed-b', { number: '160', ...LINZ })),
+    matchStrength(a, copy('b', 'feed-b', { number: '160' })) > 0,
+    true,
+  );
+  assert.equal(
+    matchStrength(a, copy('b', 'feed-b', { number: '161' })) > 0,
+    false,
+  );
+  // Never within one feed, never far apart.
+  assert.equal(
+    matchStrength(a, copy('b', 'feed-a', { number: '160' })) > 0,
+    false,
+  );
+  assert.equal(
+    matchStrength(a, copy('b', 'feed-b', { number: '160', ...LINZ })) > 0,
     false,
   );
   // Two feeds report one train at different moments: 70 km on
   // (Rosenheim–Salzburg) it is still the same numbered train.
   assert.ok(NUMBER_RADIUS_KM > 70);
   assert.equal(
-    sameTrain(a, copy('b', 'feed-b', { number: '160', ...SALZBURG })),
+    matchStrength(a, copy('b', 'feed-b', { number: '160', ...SALZBURG })) > 0,
     true,
   );
   assert.equal(
@@ -81,40 +89,46 @@ test('the filter matches nothing from timetables: no stops, dates or homes', () 
   ])
     assert.equal(dedupe[gone], undefined, gone);
   // Unnumbered copies off any line are never joined, however close.
-  assert.equal(sameTrain(copy('a', 'feed-a'), copy('b', 'feed-b')), false);
+  assert.equal(
+    matchStrength(copy('a', 'feed-a'), copy('b', 'feed-b')) > 0,
+    false,
+  );
 });
 
 test('a bare-number headsign is the number when there is no name', () => {
   assert.equal(
-    recordTrainNumber({ label: null, headsign: '839162' }),
+    recordNumbers({ label: null, headsign: '839162' }).number,
     '839162',
   );
   assert.equal(
-    recordTrainNumber({ label: 'RJX 160', headsign: '9999' }),
+    recordNumbers({ label: 'RJX 160', headsign: '9999' }).number,
     '160',
   );
-  assert.equal(recordTrainNumber({ label: null, headsign: 'Paris-Est' }), null);
-  assert.equal(recordTrainNumber({ label: null, headsign: 'S 12' }), null);
+  assert.equal(
+    recordNumbers({ label: null, headsign: 'Paris-Est' }).number,
+    null,
+  );
+  assert.equal(recordNumbers({ label: null, headsign: 'S 12' }).number, null);
 });
 
 test('a live vehicle labelled with its own car number takes the number from its trip', () => {
   // A live feed's vehicle 8306 runs train 530.
   const live = { id: '8306', label: '8306', tripId: 'AM:530' };
-  assert.equal(recordTrainNumber(live), '530');
+  assert.equal(recordNumbers(live).number, '530');
   // A label that is not the vehicle id is the train's name.
   assert.equal(
-    recordTrainNumber({ id: 'v1', label: '531', tripId: 'AM:530' }),
+    recordNumbers({ id: 'v1', label: '531', tripId: 'AM:530' }).number,
     '531',
   );
   // Long trip ids are not train numbers.
   assert.equal(
-    recordTrainNumber({ id: '7', label: '7', tripId: '0519321010VRFV' }),
+    recordNumbers({ id: '7', label: '7', tripId: '0519321010VRFV' }).number,
     null,
   );
   // The GPS copy matches a station-report copy of train 530, and wins over
   // it even on the operator's line.
   const groups = matchCopies([
-    copy('gps', 'gps-feed', { number: recordTrainNumber(live) }),
+    copy('gps', 'gps-feed', { number: recordNumbers(live).number }),
     copy('event', 'event-feed', {
       number: '530',
       position: 'event',
@@ -279,15 +293,15 @@ test('a copy a first-person view holds stays drawn, with the selection', () => {
 
 test('a short number after a local product names a line, not a train (S1, RB 1, U6)', () => {
   for (const label of ['S1', 'RB 1', 'U6', 'S 12', 'RE5'])
-    assert.equal(recordTrainNumber({ label }), null, label);
+    assert.equal(recordNumbers({ label }).number, null, label);
   assert.deepEqual(labelNumbers('RB 1').line, { product: 'RB', number: '1' });
   // Three digits, or a long-distance product's own short number, are a
   // train's.
-  assert.equal(recordTrainNumber({ label: 'EC 7' }), '7');
-  assert.equal(recordTrainNumber({ label: 'NJ 40' }), '40');
-  assert.equal(recordTrainNumber({ label: 'S 1264' }), '1264');
+  assert.equal(recordNumbers({ label: 'EC 7' }).number, '7');
+  assert.equal(recordNumbers({ label: 'NJ 40' }).number, '40');
+  assert.equal(recordNumbers({ label: 'S 1264' }).number, '1264');
   // A line name gives way to a trip id that is the train's number.
-  assert.equal(recordTrainNumber({ label: '5', tripId: 'AM:5' }), '5');
+  assert.equal(recordNumbers({ label: '5', tripId: 'AM:5' }).number, '5');
 
   // An S1 and an RB 1 25 km apart are never joined as one train numbered 1.
   const s1 = copy('s1', 'feed-a', {
@@ -302,10 +316,13 @@ test('a short number after a local product names a line, not a train (S1, RB 1, 
     lon: 11.56,
     category: 'regional',
   });
-  assert.equal(sameTrain(s1, rb1), false);
+  assert.equal(matchStrength(s1, rb1) > 0, false);
   assert.deepEqual(matchCopies([s1, rb1]), []);
   // Nearer, still two lines.
-  assert.equal(sameTrain(s1, { ...rb1, lat: 48.15, category: 'local' }), false);
+  assert.equal(
+    matchStrength(s1, { ...rb1, lat: 48.15, category: 'local' }) > 0,
+    false,
+  );
 });
 
 test('copies on one line are one train in one category, the nearest first', () => {
@@ -321,7 +338,7 @@ test('copies on one line are one train in one category, the nearest first', () =
   // The other feed reports two S1 trains near it; the nearer is the same.
   const near = at('near', 'feed-b', 1, { position: 'event' });
   const next = at('next', 'feed-b', 6, { label: 'S 1', position: 'event' });
-  assert.equal(sameTrain(gps, near), true);
+  assert.equal(matchStrength(gps, near) > 0, true);
   assert.deepEqual(
     matchCopies([next, gps, near]).map((group) =>
       group.map((c) => c.key).sort(),
@@ -329,8 +346,11 @@ test('copies on one line are one train in one category, the nearest first', () =
     [['gps', 'near']],
   );
   // Another category, or beyond the match radius: not one train.
-  assert.equal(sameTrain(gps, { ...near, category: 'regional' }), false);
-  assert.equal(sameTrain(gps, at('far', 'feed-b', 20)), false);
+  assert.equal(
+    matchStrength(gps, { ...near, category: 'regional' }) > 0,
+    false,
+  );
+  assert.equal(matchStrength(gps, at('far', 'feed-b', 20)) > 0, false);
 });
 
 test('copies on one line 14 km apart east-west at 60°N are compared', () => {
@@ -339,7 +359,7 @@ test('copies on one line 14 km apart east-west at 60°N are compared', () => {
   const line = { ...recordNumbers({ label: 'R1' }), category: 'regional' };
   const west = copy('west', 'feed-a', { lat: 60, lon: 10.24, ...line });
   const east = copy('east', 'feed-b', { lat: 60, lon: 10.5, ...line });
-  assert.equal(sameTrain(west, east), true);
+  assert.equal(matchStrength(west, east) > 0, true);
   assert.equal(matchCopies([west, east]).length, 1);
 });
 

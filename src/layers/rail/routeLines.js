@@ -308,18 +308,6 @@ export function cumulativeChords(path) {
 }
 
 /**
- * Vertex-index positions: what splitFraction() needs when the drawn line's
- * texture coordinate runs by vertex index, as a plain PolylineGeometry's does.
- * @param {{n: number}} path
- * @returns {Float64Array}
- */
-export function vertexIndexChords(path) {
-  const out = new Float64Array(path?.n || 0);
-  for (let i = 0; i < out.length; i++) out[i] = i;
-  return out;
-}
-
-/**
  * The faint network's opacity at a camera altitude: full below `fullBelowM`,
  * none above `hiddenAboveM`, linear between.
  * @param {number} altitudeM
