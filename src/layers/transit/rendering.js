@@ -179,16 +179,6 @@ export function createRendering({ state, services, parts }) {
     );
   }
 
-  /** Whether `setId` is one of this layer's sets. */
-  function ownsSet(setId) {
-    return (
-      typeof setId === 'string' &&
-      (setId === state._stillIcons?.id ||
-        setId === state._movingIcons?.id ||
-        setId === modelSetId())
-    );
-  }
-
   /** Which of the sets a draw set id is: `'moving'`, `'still'` or null. */
   function setNameOf(setId) {
     if (setId && setId === state._movingIcons?.id) return 'moving';
@@ -736,20 +726,6 @@ export function createRendering({ state, services, parts }) {
   }
 
   /**
-   * The screen rotation that points a marker along `course`, projected
-   * exactly through the query port (see `perspectiveCourseRotation`).
-   */
-  function courseRotation(query, pose, position, course, previous) {
-    return perspectiveCourseRotation(
-      query.project,
-      pose,
-      position,
-      course,
-      previous,
-    );
-  }
-
-  /**
    * Point every glyph along its reported course.
    *
    * Icons are camera-facing quads, so a course has to be projected into
@@ -807,8 +783,8 @@ export function createRendering({ state, services, parts }) {
       // camera-basis helper aircraft use is orthographic — fine at altitude,
       // and wrong by twenty-odd degrees for a street-level contact away from
       // the centre of an obliquely pitched view, which is most of them.
-      const rotation = courseRotation(
-        query,
+      const rotation = perspectiveCourseRotation(
+        query.project,
         pose,
         position,
         course,
@@ -898,8 +874,8 @@ export function createRendering({ state, services, parts }) {
       const pose = Number.isFinite(selected.courseDeg) ? cameraPose() : null;
       const query = pose?.position ? findQuery(state._viewer) : null;
       const rotation = query
-        ? courseRotation(
-            query,
+        ? perspectiveCourseRotation(
+            query.project,
             pose,
             marker.position,
             selected.courseDeg,
@@ -1215,8 +1191,7 @@ export function createRendering({ state, services, parts }) {
   }
 
   /** Grow the selected glyph (or shrink it back) through the one styling path. */
-  function paintSelected(entry, selected) {
-    void selected; // decided from state._selectedKey, which the caller has set
+  function paintSelected(entry) {
     applySpriteStyle(entry);
     flushMarkers();
   }
@@ -1227,7 +1202,6 @@ export function createRendering({ state, services, parts }) {
     clearMarkers,
     destroyMarkers,
     setIds,
-    ownsSet,
     setNameOf,
     markerShown,
     markDirty,
@@ -1247,14 +1221,12 @@ export function createRendering({ state, services, parts }) {
     cancelWake,
     schedulePlayback,
     placeSample,
-    cartesianFor,
     refreshEndpoints,
     refreshVisibility,
     vehicleInView,
     addMarker,
     paintMode,
     paintSelected,
-    applySpriteStyle,
     setStylePreset,
     onPreRender,
     syncRenderHold,
