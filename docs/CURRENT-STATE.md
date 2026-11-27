@@ -4643,7 +4643,7 @@ which embeds the MAP_KEY.
 > **2026-08-23 — first-run mission launcher** (`src/firstRunExperience.js`,
 > `#first-run-launcher`, styles in `src/ui/styles/first-run.css`). After startup
 > settles, a fresh session gets three steps: mode introduction, a starting
-> mission, then quick tips and links. God mode is available; Analyst is
+> mission, then quick tips and links. Default mode is available; Analyst is
 > marked coming soon. **Space Missions · Environmental · Explore
 > manually** are the starting choices, with Explore selected by default; Live
 > Contacts is no longer offered as a starting mission (its Context tab is
@@ -4658,7 +4658,7 @@ which embeds the MAP_KEY.
 > Stories card's BROWSE STORIES button closes the card (a session dismissal,
 > like Skip) and opens the in-app Stories Explore view, keeping the Stories
 > announcement hidden while Stories loads. Next and Back preserve that selection without starting
-> a mission. Only **Enter God mode** runs it; Back is inert while it is loading.
+> a mission. Only **Enter Default mode** runs it; Back is inert while it is loading.
 > Step changes focus the main action, announce the new heading separately from
 > mission progress, and refresh the scrolling affordance after the transition. Repeated Enter keys,
 > double-clicks and activation during a step transition cannot launch a mission; a quick second
@@ -4716,7 +4716,7 @@ which embeds the MAP_KEY.
 > `localStorage['gev:first-run-mission:v1'] === 'suppressed'`, written **only**
 > by the "Don't show this again" checkbox → the per-session
 > `sessionStorage['gev:first-run-mission-session:v1'] === 'dismissed'`, written
-> by **every** close path (a mission or Explore from ENTER GOD MODE, ESC, the
+> by **every** close path (a mission or Explore from ENTER DEFAULT MODE, ESC, the
 > header Skip button, BROWSE STORIES). So
 > it returns each fresh browser session until the visitor ticks the box; clearing
 > storage un-ticks it, which is accepted. Both stores fail open — an unreadable
