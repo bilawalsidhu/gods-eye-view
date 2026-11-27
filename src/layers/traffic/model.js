@@ -1,6 +1,6 @@
 import { fromDegrees } from '../../geo/ellipsoid.js';
 import { distance } from '../../geo/vector.js';
-import { roadSurfaceChunks } from './surface.js';
+import { floorReaderOf, roadSurfaceChunks } from './surface.js';
 import { t, translateKnown } from '../../i18n/index.js';
 import {
   flowDensityMult,
@@ -10,22 +10,40 @@ import {
 import { DOT_HEIGHT_OFFSET, DENSITY_MULT } from './policy.js';
 
 export function createModel({ state: layerState, services, parts, source }) {
-  /** Build scene waypoints from source records; thinning and terrain remain rendering policy. */
-  function parseRoads(roadData) {
+  /**
+   * Build scene waypoints from source records; thinning and terrain remain rendering policy.
+   *
+   * `parsedBySource` (source record → its parsed roads) is filled here; a
+   * record already in it returns those same road objects, so state on them
+   * carries over, except flow, which takes the record's as a fresh parse does.
+   */
+  function parseRoads(roadData, _trace, parsedBySource) {
     if (!roadData || !roadData.roads) {
       return [];
     }
 
     const roads = [];
+    const floorAt = floorReaderOf(services.ground);
     for (const road of roadData.roads) {
       if (!road.coordinates || road.coordinates.length < 2) continue;
+      // A replacing snapshot repeats records this pass already parsed.
+      const known = parsedBySource?.get(road);
+      if (known) {
+        // Flow is matched per paint; a fresh parse takes the record's.
+        for (const parsed of known) {
+          parsed.flow = road.flow || null;
+          roads.push(parsed);
+        }
+        continue;
+      }
+      const first = roads.length;
 
       for (const coords of roadSurfaceChunks(road.coordinates)) {
         const type = road.type;
         const oneway = road.oneway;
         // Pre-compute ECEF waypoints (lon, lat, height) for fast lerp animation
         const waypoints = coords.map(([lng, lat]) => {
-          const floor = services.ground?.cachedGroundFloor?.(lat, lng);
+          const floor = floorAt(lat, lng);
           const h =
             (Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? floor
@@ -55,6 +73,7 @@ export function createModel({ state: layerState, services, parts, source }) {
             flow: road.flow || null,
           });
       }
+      parsedBySource?.set(road, roads.slice(first));
     }
 
     return roads;

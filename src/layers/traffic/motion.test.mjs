@@ -494,6 +494,79 @@ test('measured preview heights select elevated detail roads before surface admis
   );
 });
 
+test('provisional selection heights read each floor cell once', async () => {
+  const { createFlow } = await import('./flow.js');
+  const { createGroundFloor } = await import('../../services/groundFloor.js');
+  let reads = 0;
+  const readsAtSelection = [];
+  const ground = createGroundFloor({
+    terrain: {
+      cachedRealEllipsoidalGround() {
+        reads++;
+        return 50;
+      },
+      resolveEllipsoidalGround: async () => {},
+    },
+  });
+  ground.setMeshFloorPreferred(false);
+  const road = (coords) => ({
+    type: 'primary',
+    oneway: 1,
+    coords,
+    waypoints: coords.map(([lon, lat]) => C.Cartesian3.fromDegrees(lon, lat)),
+    segmentDist: coords.slice(1).map(() => 11),
+  });
+  const scene = {
+    globe: { show: true, tilesLoaded: true, getHeight: () => 750 },
+  };
+  const state = {
+    _dots: [],
+    _viewer: surfaceViewer(scene),
+    _enabled: true,
+    _loadGeneration: 1,
+    _roadSource: 'OpenStreetMap',
+    _flowPending: 0,
+    _viewHeightEstimate: 0,
+    _activeFetchAbort: new AbortController(),
+  };
+  const flow = createFlow({
+    state,
+    services: {
+      credits: { registerDynamicCredit() {} },
+      ground,
+    },
+    source: {},
+    parts: {
+      model: {
+        allocateRoadDotBudgets: (roads) => roads.map(() => 1),
+        recolorDotsInPlace() {},
+      },
+      rendering: {
+        visibleRoadsForAltitude: (roads) => {
+          readsAtSelection.push(reads);
+          return roads;
+        },
+        renderRoadsForAltitude() {},
+      },
+    },
+  });
+  const preview = road([
+    [0, 0],
+    [0.0001, 0],
+  ]);
+  await flow.applyFlowThenRender([preview], {}, 1, 1250, 'Loaded major');
+  const before = reads;
+  const detail = road([
+    [0.0101, 0.0101],
+    [0.0102, 0.0101],
+    [0.0103, 0.0102],
+    [0.0104, 0.0102],
+    [0.0104, 0.0103],
+  ]);
+  await flow.applyFlowThenRender([detail], {}, 1, 1250, 'Loaded full');
+  assert.equal(readsAtSelection.at(-1) - before, 1);
+});
+
 test('street spacing follows clearance above local ground in elevated cities', (t) => {
   const h = setup(t);
   const road = h.roads()[0];

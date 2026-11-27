@@ -7,7 +7,11 @@ import {
   findFrame,
   findQuery,
 } from '../../render/rendererOf.js';
-import { roadHeightStations, viewerRoadSurface } from './surface.js';
+import {
+  floorReaderOf,
+  roadHeightStations,
+  viewerRoadSurface,
+} from './surface.js';
 import { matchFlowToRoads } from '../../data/flowMatch.js';
 import {
   DOT_HEIGHT_OFFSET,
@@ -315,6 +319,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
       }
     }
     if (depthHeight !== undefined) layerState._viewHeightEstimate = depthHeight;
+    const floorAt = floorReaderOf(services.ground);
     for (const road of roads) {
       road.key ||= roadIdentity(road);
       const prepared = !refining && preparedRoads.get(road.key);
@@ -323,7 +328,10 @@ export function createFlow({ state: layerState, services, parts, source }) {
           copyInto(prepared.waypoints[i], road.waypoints[i]);
       } else if (
         (!road.surfaceReady || refining) &&
-        (localHeights.length || depthHeight !== undefined)
+        (localHeights.length ||
+          depthHeight !== undefined ||
+          // A failed surface preparation left 0 m where no floor was warm.
+          road.surfaceReady === false)
       ) {
         road.surfaceReady = false;
         // Opposite source directions may share waypoint arrays. Provisional
@@ -331,7 +339,7 @@ export function createFlow({ state: layerState, services, parts, source }) {
         road.waypoints = road.waypoints.map(({ x, y, z }) => ({ x, y, z }));
         for (let i = 0; i < road.coords.length; i++) {
           const [lon, lat] = road.coords[i];
-          const floor = services.ground?.cachedGroundFloor?.(lat, lon);
+          const floor = floorAt(lat, lon);
           const height =
             Number.isFinite(floor) && Math.abs(floor) <= 9000
               ? Math.max(floor, layerState._viewHeightEstimate)

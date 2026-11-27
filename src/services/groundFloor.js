@@ -579,6 +579,37 @@ export function createGroundFloor({ terrain, signal }) {
   }
 
   /**
+   * Ground-floor reads for one synchronous pass. DEM reads share a value
+   * per ~111 m cell except at rounding boundaries. Mesh reads use each
+   * point's nearest sample. Build a reader per pass: cells warm up between passes.
+   * @returns {(lat: number, lon: number) => (number|null|undefined)}
+   */
+  function floorReader() {
+    if (_meshPreferred) return cachedGroundFloor;
+    const cells = new Map();
+    return (lat, lon) => {
+      const y = lat * 1000,
+        x = lon * 1000;
+      const row = Math.round(y),
+        column = Math.round(x);
+      // coarseFloorCoord rounds with toFixed(3). At a cell edge that and
+      // Math.round can pick different cells, so an edge point asks directly.
+      if (!(
+        Math.abs(Math.abs(y - row) - 0.5) > 1e-6 &&
+        Math.abs(Math.abs(x - column) - 0.5) > 1e-6
+      ))
+        return cachedGroundFloor(lat, lon);
+      const key = row * 1e6 + column;
+      let floor = cells.get(key);
+      if (floor === undefined) {
+        floor = cachedGroundFloor(lat, lon) ?? null;
+        cells.set(key, floor);
+      }
+      return floor;
+    };
+  }
+
+  /**
    * Awaitable variant for one-shot consumers (trail backfills): dedupes the
    * points to unique coarse cells and resolves them, so `cachedGroundFloor`
    * reads immediately after are warm. The underlying resolver chunks (≤200/req)
@@ -722,6 +753,7 @@ export function createGroundFloor({ terrain, signal }) {
     cachedMeshFloor,
     _clearMeshFloorCellsForTest,
     cachedGroundFloor,
+    floorReader,
     FLOOR_RESOLVE_DEADLINE_MS,
     resolveGroundFloorCellsBounded,
     resolveGroundFloorCells,

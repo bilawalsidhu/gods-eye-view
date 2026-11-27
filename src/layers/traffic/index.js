@@ -39,10 +39,10 @@ export function createTrafficLayer({ services, source }) {
   parts.controls = createControls(context);
   parts.lifecycle = createLifecycle(context);
   state._parseRoads = TRAFFIC_TIMING_ENABLED
-    ? (data, trace) =>
+    ? (data, trace, parsedBySource) =>
         trace
-          ? parts.timing.parseRoadsTimed(data, trace)
-          : parts.model.parseRoads(data)
+          ? parts.timing.parseRoadsTimed(data, trace, parsedBySource)
+          : parts.model.parseRoads(data, trace, parsedBySource)
     : parts.model.parseRoads;
 
   state._loadRoadsForBounds = TRAFFIC_TIMING_ENABLED

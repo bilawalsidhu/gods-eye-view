@@ -179,7 +179,7 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
         name: 'traffic-timing-test-hooks',
         transform(code, id) {
           if (!id.endsWith('/src/layers/traffic/index.js')) return null;
-          return code.replace('return Object.assign(', 'return Object.assign({ __trafficTimingTestHooks: { currentAnchor: () => state._trafficTimingCurrentAnchor } },');
+          return code.replace('return Object.assign(', 'return Object.assign({ __trafficTimingTestHooks: { currentAnchor: () => state._trafficTimingCurrentAnchor, parseRoads: (...args) => state._parseRoads(...args) } },');
         },
       }],
     });
@@ -359,6 +359,21 @@ test('traffic timing pairs real ordering to the scheduling change and guards re-
     assert.ok(performance.getEntriesByType('measure').every((entry) => (
       entry.detail?.interactionId !== anchorB.interactionId
     )), 'the canceled/stale B load must never emit a correlated trace');
+
+    // The debug dispatcher hands the pass's parse memory to both parsers.
+    const parse = traffic.default.__trafficTimingTestHooks.parseRoads;
+    const record = {
+      type: 'primary',
+      oneway: 1,
+      coordinates: [[-97.74, 30.01], [-97.739, 30.011]],
+    };
+    for (const trace of [null, { id: 'parse-memory', passes: new Map() }]) {
+      const parsedBySource = new WeakMap();
+      const tile = parse({ roads: [record] }, trace, parsedBySource);
+      const replaced = parse({ roads: [record], replace: true }, trace, parsedBySource);
+      assert.equal(tile.length, 1);
+      assert.equal(replaced[0], tile[0], `${trace ? 'timed' : 'plain'} parse reuses the streamed road`);
+    }
   } finally {
     trafficLayer?.disable(viewer);
     await server?.close();

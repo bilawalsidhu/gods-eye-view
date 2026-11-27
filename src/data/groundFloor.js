@@ -26,6 +26,7 @@ export const {
   cachedMeshFloor,
   _clearMeshFloorCellsForTest,
   cachedGroundFloor,
+  floorReader,
   FLOOR_RESOLVE_DEADLINE_MS,
   resolveGroundFloorCellsBounded,
   resolveGroundFloorCells,

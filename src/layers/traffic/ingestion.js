@@ -344,11 +344,14 @@ export function createIngestion({
     layerState._retainedPreview = false;
     layerState._detailRoadsReady = false;
     let paintRevision = 0;
+    // The replacing snapshot reuses records parsed from tiles in this pass.
+    // Coarse roads added by the final detail snapshot are new records.
+    let parsedBySource = new WeakMap();
     const onTile = (data, passSignal, preview) => {
       if (generation !== layerState._loadGeneration || passSignal.aborted)
         return;
       const start = performance.now();
-      const parsed = layerState._parseRoads(data, trace);
+      const parsed = layerState._parseRoads(data, trace, parsedBySource);
       phaseTiming('parse', start, { roads: parsed.length, incremental: true });
       if (data.replace) streamed = parsed;
       else streamed.push(...parsed);
@@ -528,6 +531,7 @@ export function createIngestion({
       if (altitude > FAST_FETCH_ALTITUDE) return;
 
       streamed = [];
+      parsedBySource = new WeakMap();
       majorPass = false;
       // Detailed pass: fetch the full road graph (tertiary, residential, etc.)
       console.log(`[Data:Traffic] Full fetch local roads [${cacheKey}]`);

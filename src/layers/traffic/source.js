@@ -33,23 +33,77 @@ export function trafficDetailBounds(box) {
   return detail;
 }
 
-/** Keep coarse roads only outside the detailed tile cores. */
-export function outsideDetailTiles(roads, tiles) {
-  return roads.flatMap((road) => {
-    let lines = [road.coordinates];
-    for (const tile of tiles) {
-      const box = tileToBBox(tile.z, tile.x, tile.y);
-      const regions = [
+/** Longitude/latitude extent of one line. */
+function lineExtent(coordinates) {
+  let west = Infinity,
+    east = -Infinity,
+    south = Infinity,
+    north = -Infinity;
+  for (const [lon, lat] of coordinates) {
+    if (lon < west) west = lon;
+    if (lon > east) east = lon;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  }
+  return { coordinates, west, east, south, north };
+}
+
+/** Bounds used by the extent shortcut. */
+const CLIP_BOUNDS = { west: -180, east: 180, south: -85, north: 85 };
+
+/**
+ * Keep coarse roads only outside the detailed tile cores. A line wholly
+ * inside one of a tile's four regions is answered from its extent; any other
+ * line is clipped. The output matches clipping every road against every
+ * tile, within floating-point precision (roadLoadCost.test.mjs).
+ */
+export function outsideDetailTiles(roads, tiles, clip = clipTileLine) {
+  const around = tiles.map((tile) => {
+    const box = tileToBBox(tile.z, tile.x, tile.y);
+    return {
+      box,
+      regions: [
         { west: -180, east: box.west, south: -85, north: 85 },
         { west: box.east, east: 180, south: -85, north: 85 },
         { west: box.west, east: box.east, south: -85, north: box.south },
         { west: box.west, east: box.east, south: box.north, north: 85 },
-      ];
-      lines = lines.flatMap((line) =>
-        regions.flatMap((region) => clipTileLine(line, region)),
-      );
+      ],
+    };
+  });
+  return roads.flatMap((road) => {
+    let lines = [lineExtent(road.coordinates)];
+    for (const { box, regions } of around) {
+      const next = [];
+      for (const line of lines) {
+        // Strictly inside one region, and inside the bounds every region
+        // shares: the other three regions return nothing.
+        const clear =
+          line.west > -180 &&
+          line.east < 180 &&
+          line.south > -85 &&
+          line.north < 85 &&
+          (line.east < box.west ||
+            line.west > box.east ||
+            (line.west > box.west &&
+              line.east < box.east &&
+              (line.north < box.south || line.south > box.north)));
+        if (clear) {
+          // On the first tile, enforce the clip's minimum length even when
+          // the extent skips all four regions. Later pieces already passed.
+          if (
+            box !== around[0].box ||
+            clipTileLine(line.coordinates, CLIP_BOUNDS).length
+          )
+            next.push(line);
+        } else {
+          for (const region of regions)
+            for (const coordinates of clip(line.coordinates, region))
+              next.push(lineExtent(coordinates));
+        }
+      }
+      lines = next;
     }
-    return lines.map((coordinates) => ({ ...road, coordinates }));
+    return lines.map(({ coordinates }) => ({ ...road, coordinates }));
   });
 }
 
@@ -273,6 +327,8 @@ export function createTrafficSource({
    * @param {() => boolean} [options.liveModeHint] - Key state if the snapshot misses the pass deadline.
    * @param {number} [options.timeoutSec=20] - Pass deadline, also bounding the snapshot wait.
    * @param {(data:Object) => void} [options.onTile] - Incremental snapshots; `replace` resets.
+   *   Published records stay immutable. Within a pass, changes use a new record
+   *   object because the parser reuses results by record identity.
    */
   api.requestRoads = async (
     box,

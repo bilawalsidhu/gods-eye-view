@@ -122,6 +122,17 @@ export function viewerRoadSurface(viewer) {
   };
 }
 
+/**
+ * Ground-floor reads for one synchronous pass: the ground service's pass
+ * reader when it has one, else each read asks the service.
+ */
+export function floorReaderOf(ground) {
+  return (
+    ground?.floorReader?.() ??
+    ((lat, lon) => ground?.cachedGroundFloor?.(lat, lon))
+  );
+}
+
 /** Preserve bends and insert height samples at most 150 m apart, splitting long roads. */
 export function roadSurfaceChunks(coordinates) {
   const chunks = [];
