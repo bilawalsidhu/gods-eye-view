@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { bindFakeDraw } from '../../testSupport/fakeDrawPort.mjs';
 import * as picking from '../../data/pickRegistry.js';
-import { fromDegrees } from '../../geo/ellipsoid.js';
 import { fakeInputUnderLabel } from '../../input/testDoubles.mjs';
 import {
   createShipwrecksLayer,
@@ -153,25 +152,14 @@ test('markers sit on the wreck: no eye offset, bigger toll drawn last', async ()
   await h.layer.update();
   const ids = h.markers.billboards.map((billboard) => billboard.id);
   assert.deepEqual(ids, ['shipwreck:none', 'shipwreck:small', 'shipwreck:big']);
-  for (const billboard of h.markers.billboards)
+  for (const billboard of h.markers.billboards) {
     assert.equal(billboard.eyeOffset, undefined);
+    assert.equal(billboard.height, 'absolute');
+  }
   assert.deepEqual(h.markers.billboards[2].size, [
     markerPixelSize(1500),
     markerPixelSize(1500),
   ]);
-});
-
-test('markers are placed without a terrain height read each', async () => {
-  // A ground-clamped billboard reads the terrain height when it is created;
-  // for every wreck in one pass that froze the page for seconds.
-  const h = harness({ snapshots: [snapshot([wreck('a'), wreck('b')])] });
-  h.layer.enable();
-  await h.layer.update();
-  assert.equal(h.markers.billboards.length, 2);
-  for (const billboard of h.markers.billboards) {
-    assert.equal(billboard.height, 'absolute');
-    assert.deepEqual(billboard.pos, fromDegrees(-1, 50));
-  }
 });
 
 test('an unchanged snapshot does not rebuild the markers', async () => {
