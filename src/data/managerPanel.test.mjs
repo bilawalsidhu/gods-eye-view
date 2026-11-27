@@ -111,6 +111,9 @@ const row = (container, id) =>
   container.querySelector(`[data-layer-id="${id}"]`);
 const chipsIn = (node) => [...node.querySelectorAll('.data-toggle-chip')];
 const macrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
+/** The next animation frame: the panel paints what changed once per frame. */
+const frame = () =>
+  new Promise((resolve) => requestAnimationFrame(() => resolve()));
 
 async function waitFor(predicate, label) {
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -135,7 +138,8 @@ test('renders ordinary layer rows without recreating a panel-hidden coordinator'
     assert.ok(row(container, 'flights'));
     assert.ok(!row(container, 'military-awareness'));
     assert.equal(await mgr.setEnabled('military-awareness', true), true);
-    mgr._refreshTogglePanel();
+    await frame();
+    mgr._layerPanel._refreshTogglePanel();
     assert.ok(!row(container, 'military-awareness'));
     assert.equal(
       mgr.getAll().find(({ id }) => id === 'military-awareness').enabled,
@@ -190,6 +194,7 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
       () => typeof releaseEnable === 'function',
       'enable transition',
     );
+    await frame();
     assertSameNode(document.activeElement, button);
     assert.equal(button.disabled, false, 'ENABLING never uses native disabled');
     assert.equal(button.getAttribute('aria-disabled'), 'true');
@@ -207,6 +212,7 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
         button.getAttribute('aria-busy') === 'false',
       'enabled',
     );
+    await frame();
     assertSameNode(document.activeElement, button);
     assertSameNode(
       row(container, 'focus-layer').querySelector('.data-toggle-btn'),
@@ -221,6 +227,7 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
       () => typeof releaseDisable === 'function',
       'disable transition',
     );
+    await frame();
     assertSameNode(document.activeElement, button);
     assert.equal(
       button.disabled,
@@ -246,6 +253,7 @@ test('keyboard focus survives Data Layer enabling and disabling transitions', as
         button.getAttribute('aria-busy') === 'false',
       'disabled',
     );
+    await frame();
     assertSameNode(document.activeElement, button);
     assert.equal(button.disabled, false);
     assert.equal(button.getAttribute('aria-disabled'), 'false');
@@ -299,6 +307,7 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
       () => typeof rejectEnable === 'function',
       'enable transition',
     );
+    await frame();
     assertSameNode(document.activeElement, button);
     assert.equal(button.getAttribute('aria-disabled'), 'true');
     assert.equal(button.getAttribute('aria-busy'), 'true');
@@ -308,6 +317,7 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
       () => button.getAttribute('aria-busy') === 'false',
       'failure settlement',
     );
+    await frame();
     assertSameNode(
       document.activeElement,
       button,
@@ -324,6 +334,7 @@ test('a failed Data Layer transition clears busy state without losing keyboard f
 
     button.click();
     await waitFor(() => mgr.isEnabled('focus-failure-layer'), 'retry');
+    await frame();
     assert.equal(enableCalls, 2, 'the settled control accepts a later retry');
     assertSameNode(document.activeElement, button);
   } finally {
@@ -348,7 +359,8 @@ test('a layer that declares row controls renders its chips and color legend', as
     assert.equal(controls.hidden, true);
 
     assert.equal(await mgr.setEnabled('satellites', true), true);
-    mgr._refreshTogglePanel();
+    await frame();
+    mgr._layerPanel._refreshTogglePanel();
     assert.equal(controls.hidden, false);
 
     const chips = chipsIn(controls);
@@ -388,18 +400,21 @@ test('clicking a row chip applies the params it declared and re-renders', async 
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     const controls = row(container, 'satellites').querySelector(
       '.data-toggle-controls',
     );
     const chip = chipsIn(controls)[0];
 
     chip.click();
+    await frame();
     assert.equal(layer.mode, 'dense', 'the chip wrote the params it declared');
     // setLayerParams refreshes the panel, so the chip already reflects the flip.
     assert.equal(chip.getAttribute('aria-pressed'), 'true');
     assert.equal(chip.classList.contains('active'), true);
 
     chip.click();
+    await frame();
     assert.equal(
       layer.mode,
       'core',
@@ -421,19 +436,22 @@ test('a click outside a chip is inert, and a throwing layer cannot blank the pan
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     const controls = row(container, 'satellites').querySelector(
       '.data-toggle-controls',
     );
 
     controls.querySelector('.data-toggle-legend-item').click();
+    await frame();
     assert.equal(layer.mode, 'core', 'the legend is not a control');
     controls.click();
+    await frame();
     assert.equal(layer.mode, 'core');
 
     layer.module.getRowControls = () => {
       throw new Error('boom');
     };
-    mgr._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
     assert.equal(
       controls.hidden,
       true,
@@ -457,6 +475,7 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     const controls = row(container, 'satellites').querySelector(
       '.data-toggle-controls',
     );
@@ -466,6 +485,7 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
     assertSameNode(document.activeElement, chip, 'the chip starts focused');
 
     chip.click();
+    await frame();
     assertSameNode(
       document.activeElement,
       chip,
@@ -477,8 +497,8 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
       'the SAME button node is reused across the click-driven refresh',
     );
 
-    mgr._refreshTogglePanel();
-    mgr._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
     assertSameNode(
       document.activeElement,
       chip,
@@ -491,7 +511,7 @@ test('keyboard focus on a chip survives the refresh its own click triggers', asy
 
     // ...and a chip that genuinely goes away is removed from the row.
     layer.module.getRowControls = () => ({ chips: [], legend: [] });
-    mgr._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
     assert.equal(chip.isConnected, false);
   } finally {
     await mgr.destroyAll();
@@ -509,7 +529,9 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     icon: '',
     source: 'CelesTrak',
     updateInterval: -1,
-    async init() {},
+    async init(_viewer, { panel }) {
+      module._panel = panel;
+    },
     enable() {},
     disable() {},
     async update() {},
@@ -536,18 +558,16 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
         legend: [],
       };
     },
-    setRowControlsListener(fn) {
-      module._listener = fn;
-    },
   };
   mgr.register(module);
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     assert.equal(
-      typeof module._listener,
+      typeof module._panel?.invalidate,
       'function',
-      'the manager installed its listener',
+      'the manager handed the layer its panel handle',
     );
 
     const controls = row(container, 'satellites').querySelector(
@@ -565,18 +585,20 @@ test('an async layer pushes its own row refresh, and a busy chip refuses clicks'
     assert.equal(chip.classList.contains('chip-loading'), true);
 
     chip.click();
+    await frame();
     assert.equal(writes, 0, 'a disabled chip is inert');
 
     // The layer settles and pushes its own refresh — no panel poll involved.
     settled = true;
-    module._listener();
-    mgr._layerPanel._flushRowControlsRefresh();
+    module._panel.invalidate();
+    mgr._layerPanel.paintPending();
     assert.equal(chip.textContent, 'DENSE');
     assert.equal(chip.disabled, false);
     assert.equal(chip.getAttribute('aria-pressed'), 'true');
     assert.equal(chip.getAttribute('aria-busy'), 'false');
 
     chip.click();
+    await frame();
     assert.equal(writes, 1, 'the settled chip writes again');
   } finally {
     await mgr.destroyAll();
@@ -598,6 +620,7 @@ test('a layer that surrenders its row controls hides the block entirely', async 
   try {
     mgr.buildTogglePanel(container);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     const controls = row(container, 'satellites').querySelector(
       '.data-toggle-controls',
     );
@@ -605,7 +628,7 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     assert.equal(chipsIn(controls).length, 1);
 
     surrendered = true;
-    mgr._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
     assert.equal(controls.hidden, true);
     assert.equal(
       chipsIn(controls).length,
@@ -618,7 +641,7 @@ test('a layer that surrenders its row controls hides the block entirely', async 
     );
 
     surrendered = false;
-    mgr._refreshTogglePanel();
+    mgr._layerPanel._refreshTogglePanel();
     assert.equal(
       controls.hidden,
       false,
@@ -634,10 +657,10 @@ test('panel remount releases old listeners and destruction revokes retained cont
   panelHost(t);
   const manager = new DataLayerManager({});
   const layer = makeSlowLayer('lifecycle-panel', { updateInterval: -1 });
-  let rowListener;
+  let handle;
   layer.module.getRowControls = () => ({ chips: [] });
-  layer.module.setRowControlsListener = (listener) => {
-    rowListener = listener;
+  layer.module.init = async (_viewer, { panel }) => {
+    handle = panel;
   };
   manager.register(layer.module);
   try {
@@ -656,17 +679,22 @@ test('panel remount releases old listeners and destruction revokes retained cont
     );
     const currentButton = second.querySelector('.data-toggle-btn');
     assert.ok(currentButton);
-    assert.equal(typeof rowListener, 'function');
+    assert.equal(await manager.setEnabled('lifecycle-panel', true), true);
+    assert.equal(typeof handle?.invalidate, 'function');
+    const enables = layer.calls.enable;
     await manager.destroyAll();
     assert.equal(second.children.length, 0, 'destruction removes the rows');
     currentButton.click();
     await macrotask();
     assert.equal(
       layer.calls.enable,
-      0,
+      enables,
       'a retained control cannot act after destruction',
     );
-    assert.equal(rowListener, null);
+    assert.doesNotThrow(
+      () => handle.invalidate(),
+      'a retained handle is inert after destruction',
+    );
   } finally {
     await manager.destroyAll();
   }
@@ -681,10 +709,12 @@ test('a retained chip from a remounted or destroyed panel writes nothing', async
     const first = document.body.appendChild(document.createElement('div'));
     mgr.buildTogglePanel(first);
     assert.equal(await mgr.setEnabled('satellites', true), true);
+    await frame();
     const oldChip = chipsIn(first)[0];
     const second = document.body.appendChild(document.createElement('div'));
     mgr.buildTogglePanel(second);
     oldChip.click();
+    await frame();
     assert.equal(
       layer.mode,
       'core',
@@ -693,6 +723,7 @@ test('a retained chip from a remounted or destroyed panel writes nothing', async
     const chip = chipsIn(second)[0];
     mgr._layerPanel.destroy();
     chip.click();
+    await frame();
     assert.equal(layer.mode, 'core', 'a destroyed panel cannot write params');
   } finally {
     await mgr.destroyAll();
@@ -730,10 +761,12 @@ test('a toggle that settles after a remount repaints the new row idle', async (t
       () => typeof releaseEnable === 'function',
       'enable transition',
     );
+    await frame();
     const second = document.body.appendChild(document.createElement('div'));
     mgr.buildTogglePanel(second);
     releaseEnable();
     await waitFor(() => mgr.isEnabled('remount-layer'), 'enabled');
+    await frame();
     await macrotask();
     const button = second.querySelector('.data-toggle-btn');
     assert.equal(button.getAttribute('aria-busy'), 'false');
@@ -769,16 +802,20 @@ test('row action chips use live disabled state and descriptive counts without wr
   try {
     mgr.buildTogglePanel(container);
     await mgr.setEnabled('satellites', true);
+    await frame();
     const layerRow = row(container, 'satellites');
     assert.equal(layerRow.querySelector('.data-count').textContent, '3 nearby');
     const chip = chipsIn(layerRow)[0];
     chip.click();
+    await frame();
     assert.equal(calls, 1);
     blocked = true;
     chip.click();
+    await frame();
     assert.equal(calls, 1, 'live disabled descriptor wins before row repaint');
     blocked = false;
     await mgr.setEnabled('satellites', false);
+    await frame();
     assert.equal(chip.isConnected, false, 'the off row drops its chips');
     mgr._layerPanel._selectChip('satellites', 'find');
     assert.equal(calls, 1, 'disabled layer cannot navigate');
@@ -806,25 +843,28 @@ for (const scheduler of ['animation frame', 'timeout']) {
     const layer = makeSlowLayer('wind', { updateInterval: -1 });
     let notify;
     layer.module.getRowControls = () => ({ chips: [] });
-    layer.module.setRowControlsListener = (listener) => {
-      if (listener) notify = listener;
+    layer.module.init = async (_viewer, { panel }) => {
+      notify = () => panel.invalidate();
     };
     manager.register(layer.module);
     try {
       manager.buildTogglePanel(container);
+      assert.equal(await manager.setEnabled('wind', true), true);
       const panel = manager._layerPanel;
+      panel.paintPending();
+      await macrotask();
       let refreshes = 0;
-      const refresh = panel._refreshTogglePanel.bind(panel);
-      panel._refreshTogglePanel = () => {
+      const paint = panel._paint.bind(panel);
+      panel._paint = (...args) => {
         refreshes++;
-        refresh();
+        paint(...args);
       };
       for (let i = 0; i < 10; i++) notify();
       assert.equal(refreshes, 0, 'notifications defer refresh');
       if (scheduler === 'animation frame') assert.equal(frames.size, 1);
-      panel._flushRowControlsRefresh();
+      panel.paintPending();
       assert.equal(refreshes, 1);
-      panel._flushRowControlsRefresh();
+      panel.paintPending();
       await macrotask();
       assert.equal(frames.size, 0, 'flush cancels the pending frame');
       assert.equal(refreshes, 1, 'flush does not leave duplicate work');
@@ -840,7 +880,7 @@ for (const scheduler of ['animation frame', 'timeout']) {
       panel.destroy();
       assert.equal(frames.size, 0, 'destroy cancels pending work');
       notify();
-      panel._flushRowControlsRefresh();
+      panel.paintPending();
       await macrotask();
       assert.equal(
         refreshes,
@@ -870,6 +910,7 @@ test('row info and legends reconcile in place while chips retain focus and order
   try {
     manager.buildTogglePanel(container);
     await manager.setEnabled('wind', true);
+    await frame();
     const block = container.querySelector('.data-toggle-controls');
     const chip = block.children[0];
     const info = block.children[2];
@@ -885,7 +926,7 @@ test('row info and legends reconcile in place while chips retain focus and order
     ]) {
       controls = structuredClone(controls);
       Object.assign(controls.legend[0], change);
-      manager._refreshTogglePanel();
+      manager._layerPanel._refreshTogglePanel();
       assertSameNode(block.children[2], info);
       assertSameNode(document.activeElement, chip);
     }
@@ -896,7 +937,7 @@ test('row info and legends reconcile in place while chips retain focus and order
     controls.info = '<img onerror=alert(1)>';
     controls.infoTitle = '';
     controls.chips.push({ id: 'two', label: 'Two' });
-    manager._refreshTogglePanel();
+    manager._layerPanel._refreshTogglePanel();
     assert.deepEqual(
       [...block.children].map((node) =>
         [...node.classList].filter((name) => !name.startsWith('ui-')).join(' '),
@@ -914,7 +955,7 @@ test('row info and legends reconcile in place while chips retain focus and order
     assert.equal(info.title, '');
     assert.equal(info.children.length, 0, 'info remains plain text');
     controls = { chips: [], legend: [] };
-    manager._refreshTogglePanel();
+    manager._layerPanel._refreshTogglePanel();
     assert.equal(block.hidden, true);
     assert.equal(info.hidden, true);
     assert.equal(block.children.length, 1);
@@ -923,7 +964,7 @@ test('row info and legends reconcile in place while chips retain focus and order
       info: 'Restored',
       legend: [{ label: 'New', color: '#ffffff' }],
     };
-    manager._refreshTogglePanel();
+    manager._layerPanel._refreshTogglePanel();
     assertSameNode(block.lastElementChild, info);
     assert.equal(info.hidden, false);
     assert.equal(info.textContent, 'Restored');

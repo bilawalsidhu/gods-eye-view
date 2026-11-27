@@ -1,4 +1,6 @@
 import { bindOverlayPorts } from '../testSupport/fakeOverlayPorts.mjs';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { readShellSource } from '../testSupport/readShellSource.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -1723,3 +1725,149 @@ test('a WebGL 1 scene reads depth synchronously and reports it once', () => {
     env.cleanup();
   }
 });
+
+test('each paint asks each layer once, with one kept query, and brackets follow every paint', () => {
+  const env = installEnvironment();
+  const position = new Cesium.Cartesian3(0, 0, 6_356_752);
+  const objects = [
+    {
+      position,
+      sourceId: 'kept-1',
+      id: 'KEPT1',
+      metric: 'FL300',
+      type: 'AIR',
+    },
+  ];
+  const queries = [];
+  const layer = {
+    id: 'flights',
+    getDetectableObjects(options) {
+      queries.push(options);
+      return objects;
+    },
+  };
+  const bracketXs = () =>
+    env.detectionCtx.calls
+      .filter(([name, path]) => name === 'stroke' && path instanceof MockPath2D)
+      .flatMap(([, path]) => path.points.map(([x]) => x));
+  try {
+    initWorldOverlay(env.viewer);
+    initDetection(env.viewer, [layer], () => {});
+    setMode('DENSE');
+    env.advance(250);
+    env.postRender.raise();
+    const solved = getDetectionDiagnostics().solveRevision;
+    assert.equal(queries.length, 1);
+    // Paints between solves: the solve keeps its 125 ms cadence, the layer is
+    // asked once per paint, and the bracket moves with its contact each time.
+    for (let i = 1; i <= 4; i++) {
+      position.x = i * 0.05;
+      env.detectionCtx.calls.length = 0;
+      env.ctx.calls.length = 0;
+      env.advance(20);
+      env.postRender.raise();
+      assert.equal(queries.length, 1 + i, 'one collection per paint');
+      assert.equal(
+        getDetectionDiagnostics().solveRevision,
+        solved,
+        'no solve between ticks',
+      );
+      const expected = (position.x * 0.5 + 0.5) * 800;
+      assert.ok(
+        bracketXs().some((x) => Math.abs(x - expected) <= 12),
+        `the bracket follows the contact to x≈${expected}: ${bracketXs()}`,
+      );
+      assert.ok(
+        env.ctx.calls.some(
+          ([name, text]) => name === 'fillText' && text === 'KEPT1',
+        ),
+        'the held label repaints between solves',
+      );
+    }
+    // One query object, kept: nothing is made per layer per paint.
+    assert.ok(queries.every((query) => query === queries[0]));
+    // Flights is uncapped; every other layer is asked for at most 2600.
+    assert.deepEqual(
+      { ...queries[0] },
+      { mode: 'DENSE', maxCount: Number.POSITIVE_INFINITY, seed: 0 },
+    );
+    // The layer's own objects are what detection paints: no copies.
+    assert.equal(objects[0]._layerId, 'flights');
+  } finally {
+    env.cleanup();
+  }
+});
+
+/** A full collection, for proving what detection no longer keeps alive. */
+function collectGarbage() {
+  setFlagsFromString('--expose-gc');
+  runInNewContext('gc')();
+}
+
+/**
+ * Paint one contact through detection, keeping only a weak reference to it,
+ * then hand back that reference once the frame's job has ended (a WeakRef
+ * holds its target until then).
+ */
+async function paintOneContact(env, layer) {
+  let contact = {
+    position: new Cesium.Cartesian3(0, 0, 6_356_752),
+    sourceId: 'weak-1',
+    id: 'WEAK1',
+    metric: 'FL300',
+    type: 'AIR',
+  };
+  layer.objects = [contact];
+  const held = new WeakRef(contact);
+  contact = null;
+  env.advance(250);
+  env.postRender.raise();
+  env.advance(250);
+  env.postRender.raise();
+  assert.ok(
+    env.ctx.calls.some(([name, text]) => name === 'fillText' && text === 'WEAK1'),
+    'the contact was painted and labelled',
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  return held;
+}
+
+for (const [name, release] of [
+  ['detection is switched off', (layer) => setMode('OFF')],
+  [
+    'its layer is disabled and the next paint finds nothing',
+    (layer, env) => {
+      layer.objects = [];
+      env.advance(250);
+      env.postRender.raise();
+    },
+  ],
+]) {
+  test(`nothing from the last paint stays reachable once ${name}`, async () => {
+    const env = installEnvironment();
+    const layer = {
+      id: 'flights',
+      objects: [],
+      getDetectableObjects() {
+        return this.objects;
+      },
+    };
+    try {
+      initWorldOverlay(env.viewer);
+      initDetection(env.viewer, [layer], () => {});
+      setMode('DENSE');
+      const held = await paintOneContact(env, layer);
+      // The layer lets go of it; detection alone would keep it alive.
+      layer.objects = [];
+      release(layer, env);
+      env.ctx.calls.length = 0;
+      env.detectionCtx.calls.length = 0;
+      await new Promise((resolve) => setImmediate(resolve));
+      collectGarbage();
+      assert.equal(held.deref(), undefined, 'the contact was collected');
+    } finally {
+      env.cleanup();
+    }
+  });
+}
+

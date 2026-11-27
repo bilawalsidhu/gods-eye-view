@@ -277,7 +277,8 @@ html:not([lang='en']) .cctv-controls .scene-btn {
   display: none;
 }
 
-#cctv-meta {
+#cctv-meta,
+#cctv-frame-time {
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 1px;

@@ -154,7 +154,7 @@ export function createIngestion({ state, services, parts, source }) {
       // fleet, so the hold would sit there held by a fleet that no longer exists.
       parts.rendering.syncRenderHold();
       governorRequestRender('transit-evict');
-      state._dataManager?.refreshLayerStats?.();
+      state._panel?.invalidate();
     }
     return removed;
   }
@@ -197,7 +197,7 @@ export function createIngestion({ state, services, parts, source }) {
       status.count = 0;
       parts.rendering.syncRenderHold();
       governorRequestRender('transit-stale-refused');
-      state._dataManager?.refreshLayerStats?.();
+      state._panel?.invalidate();
       return;
     }
 
@@ -452,7 +452,7 @@ export function createIngestion({ state, services, parts, source }) {
     parts.rendering.requestVisibility();
     parts.rendering.syncRenderHold();
     governorRequestRender('transit-poll');
-    state._dataManager?.refreshLayerStats?.();
+    state._panel?.invalidate();
   }
 
   /**
@@ -520,7 +520,7 @@ export function createIngestion({ state, services, parts, source }) {
         // A failed poll is exactly when old vehicles must be re-examined:
         // nothing else will tell the globe this feed has gone quiet.
         sweepAgedVehicles(Date.now());
-        state._dataManager?.refreshLayerStats?.();
+        state._panel?.invalidate();
       } finally {
         if (state._inFlight.get(feed.id)?.controller === controller) {
           state._inFlight.delete(feed.id);

@@ -24,7 +24,10 @@ export const useCctvStore = defineStore('gev-cctv', () => {
    */
   const calEdit = shallowRef(null);
 
-  /** The preview: requested and shown frame, loading and error state. */
+  /**
+   * The preview: requested and shown frame, loading and error state, and the
+   * time its source gave the shown frame (`timeMs`, `timeLabel`, `timeIso`).
+   */
   const frame = shallowRef(null);
   /** Camera IDs with a mounted card or an open bigger view. */
   const previewCards = shallowRef([]);

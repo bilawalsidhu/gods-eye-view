@@ -7,7 +7,8 @@ import { resolvePickedContext } from '../data/pickedContext.js';
 import { onScreen } from '../data/locate.js';
 import { clickCard } from '../data/pickRegistry.js';
 import { followedOf, onFollowChanged } from '../data/followed.js';
-import { currentSelection } from '../data/clickSelect.js';
+import { currentSelection, onSelectionChanged } from '../data/clickSelect.js';
+import { _connectContextCard, _mapSelectionChanged } from './contextCard.js';
 import { fromDegreesInto } from '../geo/ellipsoid.js';
 import { inputFor } from '../input/dispatcher.js';
 import {
@@ -209,12 +210,13 @@ export function installEntityContext({
   function letGo(card) {
     if (!followsCard(card) && !selectsCard(card)) return;
     // Only the card's own layer lets go, as the person's own action; other
-    // layers' selections stay as they are.
+    // layers' selections stay as they are. A layer that takes `globeView`
+    // (satellites) brings a camera that followed the item back to the globe.
     const layer = getDataManager()?.layers?.get?.(card.layerId);
     try {
       const module = layer?.module;
       if (typeof module?.stopTracking === 'function')
-        module.stopTracking({ origin: 'user' });
+        module.stopTracking({ origin: 'user', globeView: true });
       else module?.clearSelection?.();
     } catch {
       // A layer going away meanwhile has nothing left to let go of.
@@ -610,6 +612,14 @@ export function installEntityContext({
     }, 250);
   });
 
+  // Custom layers open the card through ui/contextCard.js.
+  const offSelection = onSelectionChanged(_mapSelectionChanged);
+  const offCard = _connectContextCard({
+    // Nothing opens in Cockpit, as for a click.
+    select: (item) => !inCockpit() && store.select(item),
+    clear: () => store.clear(),
+  });
+
   // A click on anything a layer can identify opens its card. The input
   // dispatcher hands every subscriber the same click, picked once before
   // any layer acts on it, and only while no tool holds the pointer.
@@ -672,6 +682,8 @@ export function installEntityContext({
     }
     clearTimeout(firstRead);
     offClick();
+    offCard();
+    offSelection();
     for (const off of cameraOff) off?.();
     clearTimeout(trailing);
     clearTimeout(quiet);

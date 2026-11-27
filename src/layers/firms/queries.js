@@ -155,7 +155,7 @@ export function createQueries({
         components.selection.clearFireSelection();
       }
       if (layerState._enabled) components.rendering.renderCurrentLod(true);
-      layerState._rowControlsListener?.();
+      layerState._panel?.invalidate();
       return true;
     },
 
@@ -212,17 +212,6 @@ export function createQueries({
             })
           : '',
       };
-    },
-
-    /**
-     * Install the panel's "row controls changed" callback: a load or a filter
-     * change moves the counter, and nothing else repaints the row before the
-     * next scheduled refresh.
-     * @param {(() => void)|null} listener
-     */
-    setRowControlsListener(listener) {
-      layerState._rowControlsListener =
-        typeof listener === 'function' ? listener : null;
     },
 
     /**

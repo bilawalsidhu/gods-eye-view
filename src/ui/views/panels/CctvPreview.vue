@@ -33,9 +33,14 @@ const unavailable = computed(() => {
   if (!matchesActive.value || view.value.stillSuppressed) return true;
   return live.value && (!view.value.hasLiveSnapshot || (same.value && frame.value?.error));
 });
+// The frame's time, as its camera source gives it; none for a source that
+// gives none.
+const time = computed(() => (same.value && frame.value?.src && frame.value.timeLabel) || '');
+const datetime = computed(() => (time.value ? frame.value.timeIso : undefined));
+// The requested URL names the camera; a fetched frame is shown from an object URL.
 const params = computed(() => {
   try {
-    return new URL(src.value, location.origin).searchParams;
+    return new URL((same.value && frame.value?.currentSrc) || src.value, location.origin).searchParams;
   } catch {
     return new URLSearchParams();
   }
@@ -96,6 +101,7 @@ function openPanel() {
         <UiIcon name="open_in_full" :size="null" />
       </UiButton>
     </div>
+    <time v-if="time" class="cctv-preview__time" :datetime="datetime">{{ time }}</time>
     <Teleport to="body">
       <div v-if="big" class="cctv-popup" role="dialog" :aria-label="name || t('Camera view')" @click.self="big = false">
         <figure class="cctv-popup__card">
@@ -107,7 +113,8 @@ function openPanel() {
           </header>
           <img v-if="src" :src="src" :alt="name || t('Camera frame')" />
           <figcaption v-if="unavailable && !src">{{ t('FRAME · UNAVAILABLE') }}</figcaption>
-          <figcaption v-else-if="facts.length">
+          <figcaption v-else-if="time || facts.length">
+            <time v-if="time" :datetime="datetime">{{ time }}</time>
             <span v-for="fact in facts" :key="fact.label">{{ fact.label }} <b>{{ fact.value }}</b></span>
           </figcaption>
         </figure>

@@ -89,6 +89,7 @@ const STATION_CLICK_SOURCE = 'air-quality-stations';
 const SELECTED_LABEL_VALUE = 1e7;
 /** Time on either side of now for which stations can accompany the current step. */
 const STATIONS_NOW_MS = 3600_000;
+const HOUR_MS = 3600_000;
 /** Bidi controls a source's text may carry: marks, embeddings, overrides, isolates. */
 const BIDI_CONTROLS = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
 /** A station name on its map label: without bidi controls, isolated so it cannot reorder the value after it. */
@@ -227,9 +228,12 @@ function valueText(key, value) {
   return `${parameter} ${concentrationText(parameter, value)} ${layerUnits(parameter)}`;
 }
 
-/** How fresh `ms` is, in the card's short form ("5m ago", "3h ago"). */
-function shortAgo(ms) {
-  const minutes = Math.max(0, Math.floor((Date.now() - ms) / 60_000));
+/**
+ * How fresh `ms` is at `from` (now unless given), in the card's short form
+ * ("5m ago", "3h ago").
+ */
+function shortAgo(ms, from = Date.now()) {
+  const minutes = Math.max(0, Math.floor((from - ms) / 60_000));
   if (minutes < 1) return t('just now');
   if (minutes < 60) return t('{minutes}m ago', { minutes });
   return t('{count}h ago', { count: Math.floor(minutes / 60) });
@@ -327,7 +331,8 @@ export function createAirQualityLayer({
   let _readings = [];
   let _lastUpdate = null;
   let _enabled = false;
-  let rowControlsListener = null;
+  /** @type {{ invalidate: () => void } | null} the panels' handle, from init */
+  let _panel = null;
   /** Views this source can answer, the default first. */
   const views = Object.freeze([
     'aqi',
@@ -363,9 +368,17 @@ export function createAirQualityLayer({
     view === 'aqi'
       ? definitions
       : definitions.filter((entry) => entry.parameters.includes(view));
-  /** The request for the current view: one pollutant, or every one. */
-  const requestFor = () =>
-    view === 'aqi' ? { mode: 'aqi' } : { parameter: view };
+  /**
+   * The request for the current view: one pollutant, or every one, and away
+   * from now the hour the stations are asked for (`atMs`, see `stationsAt`).
+   */
+  const requestFor = () => {
+    const atMs = stationsAt();
+    return {
+      ...(view === 'aqi' ? { mode: 'aqi' } : { parameter: view }),
+      ...(atMs === null ? {} : { atMs }),
+    };
+  };
   const freshState = () => ({
     status: 'idle',
     readings: [],
@@ -374,6 +387,13 @@ export function createAirQualityLayer({
     retryAt: null,
     request: null,
     requestedView: null,
+    /** The hour last asked for, null for now (`stationsAt`). */
+    requestedAt: null,
+    /**
+     * The hour its readings are for, null for now: the time asked, once the
+     * source said it answered for it (`getCoverage().atMs`).
+     */
+    answeredAt: null,
     /** Whether it answered in this view: data, a failure, or no key. */
     settled: false,
     /** Whether its last failure was the network refusing the key. */
@@ -396,6 +416,8 @@ export function createAirQualityLayer({
   let removeMoveEnd = null;
   let moveTimer = null;
   let retryTimer = null;
+  /** The stations' time last asked for (`timeKey`). */
+  let stationsKey = null;
   /** Merges the drawn set again when its next reading turns too old. */
   let ageTimer = null;
   /**
@@ -541,7 +563,7 @@ export function createAirQualityLayer({
     return list.length > 0 && list.every((item) => item.stale === true);
   };
 
-  const notify = () => rowControlsListener?.();
+  const notify = () => _panel?.invalidate();
   /**
    * Whether the page is hidden (a background tab): the retry loop, OpenAQ's
    * discovery every few seconds among it, waits until it is shown again.
@@ -622,11 +644,19 @@ export function createAirQualityLayer({
 
   /**
    * Whether an observation time is recent enough to draw: no older than
-   * `OBSERVATION_MAX_AGE_MS`, judged now, whether or not a fetch succeeded
-   * since. A reading without a time is not aged.
+   * `OBSERVATION_MAX_AGE_MS`, judged at the stations' time (now, or the past
+   * hour asked, after which no reading is drawn), whether or not a fetch
+   * succeeded since. A reading without a time is not aged.
    */
-  const isCurrent = (ms) =>
-    !Number.isFinite(ms) || Date.now() - ms <= OBSERVATION_MAX_AGE_MS;
+  const isCurrent = (ms) => {
+    if (!Number.isFinite(ms)) return true;
+    const at = stationsAt();
+    return at === null
+      ? Date.now() - ms <= OBSERVATION_MAX_AGE_MS
+      : ms <= at && at - ms <= OBSERVATION_MAX_AGE_MS;
+  };
+  /** The time the stations' readings are aged at: now, or the past hour asked. */
+  const readingsNow = () => stationsAt() ?? Date.now();
   /** An AQI-view station with its values too old to draw left out. */
   const currentValuesOf = (station) => {
     const times = station.valueTimes ?? {};
@@ -1211,7 +1241,7 @@ export function createAirQualityLayer({
    */
   const claimNear = (click) => {
     if (!_enabled || !showStations || !_points || !_viewer) return null;
-    if (!click?.surface || !atNow()) return null;
+    if (!click?.surface || !stationsShown()) return null;
     if (pointer && !pointer.isPointerFree()) return null;
     if (!isTrackingSelectionGesture(click.gesture)) return null;
     const item = drawnNear(click);
@@ -1224,8 +1254,8 @@ export function createAirQualityLayer({
    */
   const onClick = (event) => {
     if (!_enabled || !showStations || !_points || !_viewer) return;
-    // Away from now no station is drawn, so none takes a click.
-    if (!atNow()) return;
+    // With no station drawn at the layer's time, none takes a click.
+    if (!stationsShown()) return;
     if (pointer && !pointer.isPointerFree()) return;
     if (!isTrackingSelectionGesture(event?.gesture)) return;
     const card = picking?.clickCard?.(event);
@@ -1301,10 +1331,15 @@ export function createAirQualityLayer({
    */
   const apply = () => {
     owners = new WeakMap();
+    const at = stationsAt();
     const lists = asked().map((entry) => ({
       provider: entry.id,
       direct: entry.direct === true,
-      readings: stateOf(entry).readings.flatMap((raw) => {
+      // Only readings answered for the stations' time are drawn.
+      readings: (stateOf(entry).answeredAt === at
+        ? stateOf(entry).readings
+        : []
+      ).flatMap((raw) => {
         const reading = present(raw);
         if (!isCurrent(reading.observedMs)) return [];
         owners.set(reading, entry);
@@ -1327,6 +1362,7 @@ export function createAirQualityLayer({
           : undefined,
     });
     followSelection();
+    syncVisibility();
     layer._render();
     armAgeOut();
   };
@@ -1335,7 +1371,9 @@ export function createAirQualityLayer({
   const armAgeOut = () => {
     clearTimeout(ageTimer);
     ageTimer = null;
-    if (!_enabled) return;
+    // At a past hour readings are aged against the hour, not the wall
+    // clock: nothing ages out while it is shown.
+    if (!_enabled || stationsAt() !== null) return;
     let next = Infinity;
     for (const entry of asked())
       for (const raw of stateOf(entry).readings) {
@@ -1405,7 +1443,15 @@ export function createAirQualityLayer({
       state.error = null;
       parked.delete(entry.id);
       state.readings = usable;
-      if (asking.mode === 'aqi')
+      // Answered for the hour asked only when the source says so: one that
+      // answers only now draws nothing away from it.
+      state.answeredAt =
+        asking.atMs === undefined
+          ? null
+          : coverage?.atMs === asking.atMs
+            ? asking.atMs
+            : undefined;
+      if (asking.mode === 'aqi' && asking.atMs === undefined)
         aqiMemory.set(entry.id, { at: Date.now(), readings: usable });
       state.coverage = coverage;
       setRetry(entry, coverage?.retryAt);
@@ -1507,6 +1553,7 @@ export function createAirQualityLayer({
     }
     const rect = currentView();
     const requestedView = JSON.stringify(rect);
+    stationsKey = timeKey();
     let waiting = false;
     const jobs = [];
     for (const entry of entries) {
@@ -1516,6 +1563,7 @@ export function createAirQualityLayer({
       state.retryAt = null;
       state.status = 'loading';
       state.error = null;
+      state.requestedAt = stationsAt();
       if (entry.viewDriven) {
         state.requestedView = requestedView;
         // A camera that is still restoring its share-link position has no
@@ -1572,6 +1620,51 @@ export function createAirQualityLayer({
       step === fieldStepAt(field.manifest, clock.wallNow()) &&
       Math.abs(layerTime() - clock.wallNow()) <= STATIONS_NOW_MS
     );
+  };
+  /**
+   * The hour the stations are asked for: null for now (the clock live, the
+   * layer not following it, or its time within the current hour or ahead of
+   * it); otherwise the start of the layer time's hour, whose readings are the
+   * hourly means ending by then.
+   */
+  const stationsAt = () => {
+    if (liveTime()) return null;
+    const hour = Math.floor(layerTime() / HOUR_MS) * HOUR_MS;
+    return hour < Math.floor(clock.wallNow() / HOUR_MS) * HOUR_MS ? hour : null;
+  };
+  /**
+   * Whether stations belong at the layer's time: a past hour, or now (with a
+   * field, the step nearest now; without one, any time of this hour up to
+   * now). Ahead of now nothing is measured yet.
+   */
+  const stationsTimely = () =>
+    stationsAt() !== null ||
+    atNow() ||
+    (!fieldOn() && layerTime() <= clock.wallNow());
+  /**
+   * Whether the stations show: at a time they belong to, and away from now
+   * once a provider answered for that hour.
+   */
+  const stationsShown = () => {
+    if (!stationsTimely()) return false;
+    const at = stationsAt();
+    return at === null || asked().some((e) => stateOf(e).answeredAt === at);
+  };
+  /** The stations' time as the clock moves: the hour asked, or none. */
+  const timeKey = () => (stationsTimely() ? String(stationsAt()) : 'none');
+  /**
+   * The clock moved the stations to another hour (or to now, or to a time
+   * with none): drop what no longer belongs and ask for the new hour.
+   */
+  const followTime = () => {
+    const key = timeKey();
+    if (key === stationsKey) return;
+    stationsKey = key;
+    apply();
+    // Ahead of now nothing is asked; what is in flight lands unshown.
+    if (key !== 'none')
+      void refresh(asked().filter((entry) => !isParked(stateOf(entry))));
+    notify();
   };
   /** Whether the model field is on the map: a run held. */
   const fieldOn = () => _enabled && field.manifest !== null;
@@ -2085,7 +2178,9 @@ export function createAirQualityLayer({
    * reaching now.
    */
   const onClock = () => {
-    if (!_enabled || field.absent || syncing) return;
+    if (!_enabled || syncing) return;
+    followTime();
+    if (field.absent) return;
     // Play began while the step was loading: hold the clock for it too, once.
     if (field.stepRequest && !field.stepRequest.held)
       field.stepRequest.held = waitForStep();
@@ -2142,9 +2237,9 @@ export function createAirQualityLayer({
       .join(' · ');
   };
 
-  /** Ask view-driven providers again after the camera stops, while stations follow now. */
+  /** Ask view-driven providers again after the camera stops, while stations show. */
   const followView = () => {
-    if (!atNow()) return;
+    if (!stationsTimely()) return;
     const key = JSON.stringify(currentView());
     // Only providers that fetch per view follow the camera; one still
     // waiting for a key is asked again by a scheduled refresh, once
@@ -2153,7 +2248,8 @@ export function createAirQualityLayer({
       (entry) =>
         entry.viewDriven &&
         !isParked(stateOf(entry)) &&
-        stateOf(entry).requestedView !== key,
+        (stateOf(entry).requestedView !== key ||
+          stateOf(entry).requestedAt !== stationsAt()),
     );
     if (moved.length) {
       for (const entry of moved) {
@@ -2188,7 +2284,7 @@ export function createAirQualityLayer({
           Math.min(999, Math.max(0, Math.round(amount)));
   };
   const syncVisibility = () => {
-    const shown = _enabled && showStations && atNow();
+    const shown = _enabled && showStations && stationsShown();
     if (_points) _points.show = shown;
     overlayHost.setVisible(AIR_QUALITY_OVERLAY_SOURCE_ID, shown);
   };
@@ -2202,8 +2298,9 @@ export function createAirQualityLayer({
     },
     updateInterval: 60_000,
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (_viewer) throw new Error('Air quality layer is already initialized');
+      _panel = panel;
       _points = drawOf(viewer).points({
         id: `${AIR_QUALITY_MARKER_SET_ID}:points:${++instances}`,
         show: false,
@@ -2226,13 +2323,14 @@ export function createAirQualityLayer({
         offVisibility = () =>
           page.removeEventListener('visibilitychange', onVisibility);
       }
+      // The stations and the forecast move with the timeline: another hour,
+      // a new step, or leaving now.
+      offClock = clock.subscribe(onClock);
       if (fieldSource) {
         fieldDrawing = createFieldDrawing({
           getViewer: () => _viewer,
           getHost: () => imageryHost?.() ?? globeImageryHost(_viewer),
         });
-        // The forecast moves with the timeline: a new step, or leaving now.
-        offClock = clock.subscribe(onClock);
         // The field fades in and out with the camera's height.
         const offChange = findCamera(viewer)?.on('changed', () => {
           if (_enabled) {
@@ -2435,8 +2533,8 @@ export function createAirQualityLayer({
 
     _publishOverlays() {
       if (!_enabled) return;
-      // Hidden with the stations, and away from now.
-      if (!showStations || !atNow()) {
+      // Hidden with the stations, and at a time they have no answer for.
+      if (!showStations || !stationsShown()) {
         overlayHost.clearSource(AIR_QUALITY_OVERLAY_SOURCE_ID);
         return;
       }
@@ -2503,7 +2601,7 @@ export function createAirQualityLayer({
       _readings = [];
       replacedBy = new Map();
       _lastUpdate = null;
-      rowControlsListener = null;
+      _panel = null;
     },
 
     /**
@@ -2558,10 +2656,11 @@ export function createAirQualityLayer({
           return !query?.isOccluded?.(position) && onScreen(position);
         });
       const visible = inViewNow(_readings);
-      // Stations are readings of now: away from now (a forecast or a past
-      // step of the model field) they are hidden, and the card leaves them
-      // out too.
-      const now = atNow();
+      // Stations are readings of their hour: ahead of now (a forecast), or
+      // at a past hour no provider answered for, they are hidden, and the
+      // card leaves them out too.
+      const now = stationsShown();
+      const past = stationsAt() !== null;
       // The stations the tiles may read: the stations in view.
       const candidates = now ? visible : [];
       const inView = visible
@@ -2671,8 +2770,8 @@ export function createAirQualityLayer({
               : `${limits[position - 1]}${position === limits.length ? '+' : ''}`,
           }))
         : [];
-      // The selected station as last seen: it stays while views change. Away
-      // from now it is not shown, and comes back at now.
+      // The selected station as last seen: it stays while views change. At a
+      // time with no stations it is not shown, and comes back with them.
       const selected =
         selectedStation === null || !now
           ? null
@@ -2730,10 +2829,11 @@ export function createAirQualityLayer({
             : !now
               ? ''
               : drawing.length && newest
-                ? `${drawing.map((entry) => entry.network).join(', ')} · ${t(
-                    'updated {age}',
-                    { age: shortAgo(newest) },
-                  )}`
+                ? `${drawing.map((entry) => entry.network).join(', ')} · ${
+                    past
+                      ? utcText(newest)
+                      : t('updated {age}', { age: shortAgo(newest) })
+                  }`
                 : '',
           status:
             loading || fieldLoading
@@ -2779,7 +2879,7 @@ export function createAirQualityLayer({
                       {
                         provider: selectedNetwork,
                         age: Number.isFinite(selected.observedMs)
-                          ? shortAgo(selected.observedMs)
+                          ? shortAgo(selected.observedMs, readingsNow())
                           : t('Unavailable'),
                       },
                     ),
@@ -2815,7 +2915,7 @@ export function createAirQualityLayer({
               ? new Date(reading.observedMs).toISOString()
               : t('Unavailable');
             const older =
-              timed && Date.now() - reading.observedMs > 2 * 3600_000;
+              timed && readingsNow() - reading.observedMs > 2 * 3600_000;
             const rated = isRatedReading(reading, view);
             const category = categoryText(reading);
             return {
@@ -2838,10 +2938,6 @@ export function createAirQualityLayer({
           }),
         },
       };
-    },
-
-    setRowControlsListener(listener) {
-      rowControlsListener = typeof listener === 'function' ? listener : null;
     },
 
     /**
@@ -2902,7 +2998,7 @@ export function createAirQualityLayer({
         ...(Number.isFinite(nearest.observedMs)
           ? {
               at: nearest.observedMs,
-              ...(Date.now() - nearest.observedMs > STALE_AFTER_MS && {
+              ...(readingsNow() - nearest.observedMs > STALE_AFTER_MS && {
                 stale: true,
               }),
             }

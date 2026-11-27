@@ -34,9 +34,10 @@ export function createLifecycle({
       layerState._heatImagery?.rehome();
     },
 
-    init(viewer) {
+    init(viewer, { panel = null } = {}) {
       if (layerState._destroyed) return;
       layerState._viewer = viewer;
+      layerState._panel = panel ?? layerState._panel;
       layerState._cells = drawOf(viewer).shapes({
         id: `${FIRMS_CELL_SET_PREFIX}:${++instances}:cells`,
         clampTo: 'both',
@@ -144,7 +145,7 @@ export function createLifecycle({
       layerState._imageryHost = null;
       layerState._count = 0;
       layerState._totalCount = 0;
-      layerState._rowControlsListener = null;
+      layerState._panel = null;
       layerState._cellCount = 0;
       layerState._lastUpdate = null;
       layerState._at = null;
