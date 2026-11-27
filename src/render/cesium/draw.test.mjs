@@ -2516,7 +2516,7 @@ test('points show only within their display range', () => {
   set.dispose();
 });
 
-test('the fire perimeters layer draws holed ground fills and draped outlines on a viewer of its own', async () => {
+test('the fire perimeters layer draws holed ground fills and draped edges over halos on a viewer of its own', async () => {
   const { createFirePerimetersLayer } =
     await import('../../layers/perimeters/index.js');
   const scene = fakeScene();
@@ -2566,11 +2566,14 @@ test('the fire perimeters layer draws holed ground fills and draped outlines on 
   const [instance] = fill.geometryInstances;
   assert.equal(instance.id.id, 'fire-perimeter:a:0');
   assert.equal(instance.geometry._polygonHierarchy.holes.length, 1);
-  const [line] = of(Cesium.GroundPolylinePrimitive);
+  // The edge, over its halo, in a set of its own.
+  const [halo, line] = of(Cesium.GroundPolylinePrimitive);
   assert.equal(line.classificationType, Cesium.ClassificationType.BOTH);
   assert.equal(line.geometryInstances.length, 2, 'the hole is outlined too');
-  assert.equal(line.geometryInstances[0].geometry.width, 2);
+  assert.equal(line.geometryInstances[0].geometry.width, 3.5);
   assert.equal(line.geometryInstances[0].id.id, 'fire-perimeter:a:line:0');
+  assert.equal(halo.geometryInstances[0].id.id, 'fire-perimeter:a:halo:0');
+  assert.ok(halo.geometryInstances[0].geometry.width > 3.5);
   layer.destroy();
   assert.equal(scene.added.length, 0);
 });
