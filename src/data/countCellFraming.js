@@ -20,12 +20,10 @@ function nearestPart(cell, eye) {
 }
 
 /**
- * Fly to frame a count marker's group from above, including coincident
- * points. `cellPx` and `minCellM` are the caller's grouping: cells about
- * `cellPx` across on screen, never grouped below `minCellM` metres. The
- * flight ends at least as close as half that no-grouping range, so even
- * coincident points split, and never further than halfway to the group, so
- * every click gets closer. `onComplete` and `onCancel` pass to the flight.
+ * Fly to frame a count marker's group from above. `cellPx` and `minCellM`
+ * are the caller's grouping. The range is at least half the range where
+ * grouping stops, so coincident points split, and at most halfway to the
+ * group, so every click gets closer. `onComplete` and `onCancel` pass to the flight.
  * @param {object} viewer
  * @param {object} cell A count cell (src/data/countCells.js).
  * @param {{cellPx: number, minCellM: number, onComplete?: Function, onCancel?: Function}} options
@@ -73,7 +71,7 @@ export function flyToCountCell(
     offset: { heading: 0, pitch: -Math.PI / 2, range },
     durationS: 1.2,
     easing: 'cubicInOut',
-    ...(onComplete ? { onComplete } : {}),
-    ...(onCancel ? { onCancel } : {}),
+    onComplete,
+    onCancel,
   });
 }

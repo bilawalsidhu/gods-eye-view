@@ -3,15 +3,14 @@
  * qa-infra-lod — browser checks for the local-infrastructure LOD declutter.
  *
  * Dams use a bounded active-stem set; datacenters draw count markers
- * instead (getClusterDiagnostics()). Cables are loaded for a representative
+ * instead (getLodDiagnostics() then reports sites, lone and counts). Cables are loaded for a representative
  * combined view but use their own unchanged renderer.
  *
  * Two jobs:
  *  1. GATE — with datacenters + dams enabled:
- *       a. at a full-earth camera, dams' getLodDiagnostics() reports
- *          computed===true, active<=budgetLimit, budgetLimit===INFRA_LOD_ACTIVE_MIN,
- *          and active<total (the declutter is actually engaged);
- *          and datacenters have grouped into count markers;
+ *       a. at a full-earth camera, datacenters have grouped into count markers,
+ *          and dams' getLodDiagnostics() reports computed===true, active<=budgetLimit,
+ *          budgetLimit===INFRA_LOD_ACTIVE_MIN and active<total;
  *       b. flying to a city lifts budgetLimit to INFRA_LOD_ACTIVE_MAX and the
  *          active count grows (or pins to the in-view count);
  *       c. the selection does not churn between camera moves.
@@ -166,13 +165,13 @@ try {
   }, STEM_LAYER_IDS).then((lod) => { report(label, lod); return lod; });
   const readClusters = () => page.evaluate(() => {
     const module = window.__godsEyeView.dataManager.layers.get('local-datacenters')?.module;
-    const d = module?.getClusterDiagnostics?.();
+    const d = module?.getLodDiagnostics?.();
     return d ? { sites: d.sites, lone: d.lone, counts: d.counts, computed: d.computed } : null;
   });
 
   if (!CONTROL) {
     const clusters = await readClusters();
-    report('getClusterDiagnostics @ full-earth', clusters);
+    report('getLodDiagnostics @ full-earth (datacenters)', clusters);
     check('local-datacenters: grouped into count markers at full earth',
       !!clusters && clusters.computed && clusters.counts > 0, clusters);
     const globalLod = await readLod('getLodDiagnostics @ full-earth');

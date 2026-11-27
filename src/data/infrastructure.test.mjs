@@ -282,6 +282,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'countMarkers.js',
     'dispatcher.js',
     'ellipsoid.js',
+    'followed.js',
     'frustum.js',
     'geoDistance.js',
     'geojsonPins.js',
@@ -301,6 +302,7 @@ test('consumer build includes only infrastructure code and resolves assets under
     'sensorPick.js',
     'sphere.js',
     'styleStages.js',
+    'trackingClickGesture.js',
     'vector.js',
     'worldOverlayTokens.js',
   ]);

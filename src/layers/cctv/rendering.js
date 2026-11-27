@@ -1,3 +1,4 @@
+import { COUNT_MERGE_GAP_PX } from '../../overlays/countMarkers.js';
 import { createCountMarkers } from './countMarkers.js';
 import {
   addCellPoint,
@@ -10,7 +11,6 @@ import {
   ACTIVE_CAMERA_COLOR,
   CAMERA_ICON,
   CAMERA_ICON_PX,
-  COUNT_MERGE_GAP_PX,
   VIEW_SITE_M,
   IDLE_CAMERA_ICON,
   IDLE_CAMERA_COLOR,

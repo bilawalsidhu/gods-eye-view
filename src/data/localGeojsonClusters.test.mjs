@@ -1,11 +1,13 @@
+import {
+  countTextDocument,
+  recordingContext,
+} from '../testSupport/countPaintFakes.mjs';
+import { clickCard } from './pickRegistry.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLocalGeoJsonLayer } from './localGeojsonCore.js';
 import { createInfrastructureLayers } from './infrastructure.js';
-import {
-  LOCAL_CLUSTER_MIN_CELL_M,
-  localClusterCells,
-} from './localClusters.js';
+import { localClusterCells } from './localClusters.js';
 import { bindFakeGroundRenderer } from '../testSupport/fakeGroundRenderer.mjs';
 import { fromDegrees } from '../geo/ellipsoid.js';
 import { cross, distance } from '../geo/vector.js';
@@ -54,17 +56,7 @@ const services = (overrides = {}) => ({
 
 /** A canvas text measurer for the count painter, which sizes each label. */
 function stubDocument(t) {
-  globalThis.document = {
-    createElement: () => ({
-      getContext: () => ({
-        measureText: (text) => ({
-          width: text.length * 7,
-          actualBoundingBoxAscent: 4,
-          actualBoundingBoxDescent: 4,
-        }),
-      }),
-    }),
-  };
+  globalThis.document = countTextDocument();
   t.after(() => delete globalThis.document);
 }
 
@@ -72,7 +64,16 @@ function stubDocument(t) {
  * A clustered data-centre layer over the fake renderer, enabled, with the
  * click handler, the camera holds and the count painter it registered.
  */
-async function clusteredLayer(t, { eye, sampleHeight = false } = {}) {
+async function clusteredLayer(
+  t,
+  {
+    eye,
+    sampleHeight = false,
+    features = [...CAMPUS, LONE].map(footprint),
+    serviceOverrides = {},
+    beforeEnable = null,
+  } = {},
+) {
   stubDocument(t);
   const viewer = {};
   const fake = bindFakeGroundRenderer(viewer, {
@@ -89,7 +90,7 @@ async function clusteredLayer(t, { eye, sampleHeight = false } = {}) {
       name: 'Datacenters',
       color: '#00ffff',
       markers: 'clusters',
-      loadFeatures: async () => [...CAMPUS, LONE].map(footprint),
+      loadFeatures: async () => features,
       projectToWindow: () => ({ x: 400, y: 300 }),
       inputFor: () => ({
         onClick: (fn) => {
@@ -104,11 +105,27 @@ async function clusteredLayer(t, { eye, sampleHeight = false } = {}) {
     },
     services({
       registerPaintLane: (_lane, painter, options) => {
-        lanes.push({ painter, id: options.id });
-        return { requestPaint() {}, setActive() {}, unregister() {} };
+        const lane = {
+          painter,
+          id: options.id,
+          active: options.active,
+          unregistered: false,
+        };
+        lanes.push(lane);
+        return {
+          requestPaint() {},
+          setActive(active) {
+            lane.active = active;
+          },
+          unregister() {
+            lane.unregistered = true;
+          },
+        };
       },
+      ...serviceOverrides,
     }),
   );
+  beforeEnable?.(fake);
   await layer.enable(viewer);
   t.after(() => layer.destroy(viewer));
   /** One walk after a settled camera move. */
@@ -141,23 +158,7 @@ function viewProjection(pose, width, height) {
     -dot(u, e) / tanY,
   ];
   [m[3], m[7], m[11], m[15]] = [d.x, d.y, d.z, -dot(d, e)];
-  return { ctx: paintContext(), width, height, viewProjectionMatrix: m };
-}
-
-function paintContext() {
-  return {
-    labels: [],
-    save() {},
-    restore() {},
-    beginPath() {},
-    roundRect() {},
-    stroke() {},
-    fill() {},
-    drawImage() {},
-    fillText(text, x, y) {
-      this.labels.push({ text, x, y });
-    },
-  };
+  return { ctx: recordingContext(), width, height, viewProjectionMatrix: m };
 }
 
 const markerItems = (fake) => [...fake.set('markers').items.values()];
@@ -172,12 +173,9 @@ test('far out, nearby data centres draw one count and a lone one its own marker'
     eye: { lon: CLUSTER_LON, lat: CLUSTER_LAT, height: 2_000_000 },
   });
   env.settle();
-  const diagnostics = env.layer.getClusterDiagnostics();
+  const diagnostics = env.layer.getLodDiagnostics();
   assert.equal(diagnostics.sites, 6);
-  assert.deepEqual(
-    diagnostics.markers.map((marker) => marker.count),
-    [5],
-  );
+  assert.equal(diagnostics.counts, 1);
   // The lone site is a marker, never a "1" count.
   assert.equal(diagnostics.lone, 1);
   assert.deepEqual(shownIds(markerItems(env.fake)), ['dc-lone']);
@@ -199,7 +197,7 @@ test('close in, every data centre is its own ground marker with its footprint', 
     eye: { lon: CLUSTER_LON + 0.008, lat: CLUSTER_LAT, height: 3_000 },
   });
   env.settle();
-  const diagnostics = env.layer.getClusterDiagnostics();
+  const diagnostics = env.layer.getLodDiagnostics();
   assert.equal(diagnostics.counts, 0);
   assert.deepEqual(shownIds(markerItems(env.fake)), [
     'dc-0',
@@ -225,7 +223,7 @@ test('clustered sites never sample ground heights or arm a retry', async (t) => 
   env.settle();
   env.settle();
   assert.equal(env.fake.sampleCalls.count, 0);
-  assert.equal(env.layer.getLodDiagnostics().active, 0);
+  assert.equal(env.layer.getLodDiagnostics().computed, true);
   const marker = env.fake.set('markers').items.get('dc-0');
   // It stands on the footprint's centre, clamped to the ground.
   assert.ok(Math.abs(marker.pos.lon - CAMPUS[0].lon) < 1e-6);
@@ -240,20 +238,20 @@ test('grouping reruns on a settled move or material motion, not every frame', as
     eye: { lon: CLUSTER_LON, lat: CLUSTER_LAT, height: 2_000_000 },
   });
   env.settle();
-  assert.equal(env.layer.getClusterDiagnostics().counts, 1);
+  assert.equal(env.layer.getLodDiagnostics().counts, 1);
   const writes = env.fake.set('markers').writes;
   // The eye drops to the campus without a moveEnd: frames before the motion
   // probe's window keep the last grouping.
   env.fake.setEye(CLUSTER_LON + 0.008, CLUSTER_LAT, 3_000);
   clock += 500;
   env.fake.preRender.raise();
-  assert.equal(env.layer.getClusterDiagnostics().counts, 1);
+  assert.equal(env.layer.getLodDiagnostics().counts, 1);
   assert.equal(env.fake.set('markers').writes, writes);
   // Once the probe sees the eye has travelled, it groups again.
   clock += 600;
   env.fake.preRender.raise();
-  assert.equal(env.layer.getClusterDiagnostics().counts, 0);
-  assert.equal(env.layer.getClusterDiagnostics().lone, 5);
+  assert.equal(env.layer.getLodDiagnostics().counts, 0);
+  assert.equal(env.layer.getLodDiagnostics().lone, 5);
   // A parked camera groups no more.
   const after = env.fake.set('markers').writes;
   for (let i = 0; i < 5; i++) {
@@ -274,11 +272,12 @@ test('clicking a count flies to frame its members and holds camera input meanwhi
   env.lanes[0].painter(frame);
   const label = frame.ctx.labels.find((painted) => painted.text === '5');
   assert.ok(label, 'the count of five is painted');
-  // A click on the ring, beside the label; nothing else is under it.
+  // A click inside the marker, above the count; nothing else is under it.
   env.input.clicks[0]({
     screenPosition: { x: label.x, y: label.y - 10 },
     drawHit: null,
     topHit: null,
+    gesture: { travelPx: 0, durationMs: 50 },
   });
   assert.equal(env.input.holds, 1);
   assert.equal(env.fake.flights.length, 1);
@@ -300,46 +299,27 @@ test('clicking a count flies to frame its members and holds camera input meanwhi
     screenPosition: { x: 5, y: 5 },
     drawHit: null,
     topHit: null,
+    gesture: { travelPx: 0, durationMs: 50 },
   });
   assert.equal(env.fake.flights.length, 1);
 });
 
 test('picking a lone marker selects its feature context as a stem did', async (t) => {
   const selected = [];
-  stubDocument(t);
-  const viewer = {};
-  const fake = bindFakeGroundRenderer(viewer, {
+  const env = await clusteredLayer(t, {
     eye: { lon: CLUSTER_LON + 0.008, lat: CLUSTER_LAT, height: 3_000 },
-  });
-  t.after(fake.unbind);
-  let click;
-  const layer = createLocalGeoJsonLayer(
-    {
-      id: 'local-datacenters',
-      name: 'Datacenters',
-      color: '#00ffff',
-      markers: 'clusters',
-      loadFeatures: async () => CAMPUS.map(footprint),
-      inputFor: () => ({
-        onClick: (fn) => {
-          click = fn;
-          return () => {};
-        },
-        suspendCamera: () => () => {},
-      }),
+    features: CAMPUS.map(footprint),
+    serviceOverrides: {
+      selectEntityContext: (carrier) => selected.push(carrier),
     },
-    services({ selectEntityContext: (carrier) => selected.push(carrier) }),
-  );
-  await layer.enable(viewer);
-  t.after(() => layer.destroy(viewer));
-  fake.moveEnd.raise();
-  fake.preRender.raise();
-  const marker = fake.set('markers').items.get('dc-2');
+  });
+  env.settle();
+  const marker = env.fake.set('markers').items.get('dc-2');
   assert.equal(marker.show, true);
   assert.equal(marker.meta.show, true, 'its context is active');
-  click({
+  env.input.clicks[0]({
     screenPosition: { x: 400, y: 300 },
-    drawHit: { set: fake.set('markers').spec.id, id: 'dc-2' },
+    drawHit: { set: env.fake.set('markers').spec.id, id: 'dc-2' },
     topHit: {},
   });
   assert.equal(selected.length, 1);
@@ -372,7 +352,6 @@ test('the cluster grouping keeps sites apart below the least cell size', () => {
       assert.equal(cell.count, 1);
       assert.match(cell.key, /^near:/);
     }
-    assert.ok(LOCAL_CLUSTER_MIN_CELL_M > 0);
     // From far away the same sites share one ground cell.
     fake.setEye(CLUSTER_LON, CLUSTER_LAT, 500_000);
     const far = localClusterCells(sites, {
@@ -426,9 +405,102 @@ test('dams keep their stems while data centres cluster', async (t) => {
   assert.ok(live('local-dams', 'stems'));
   assert.ok(live('local-dams', 'dots'));
   assert.equal(live('local-dams', 'markers'), undefined);
-  assert.equal(dams.getClusterDiagnostics(), null);
+  assert.equal('sites' in dams.getLodDiagnostics(), false);
   assert.equal(live('local-dams', 'stems').items.size, 1);
   assert.equal(live('local-datacenters', 'stems'), undefined);
   assert.equal(live('local-datacenters', 'dots'), undefined);
   assert.equal(live('local-datacenters', 'markers').items.size, 1);
+});
+
+test('high-ground sites split once their terrain loads, without a camera move', async (t) => {
+  let progress;
+  const env = await clusteredLayer(t, {
+    eye: { lon: CLUSTER_LON, lat: CLUSTER_LAT, height: 1_700 },
+    features: ['a', 'b'].map((id, i) => ({
+      type: 'Feature',
+      id,
+      properties: {},
+      geometry: {
+        type: 'Point',
+        coordinates: [CLUSTER_LON + i * 0.0001, CLUSTER_LAT],
+      },
+    })),
+    beforeEnable(fake) {
+      fake.renderer.globe.on = (event, cb) => {
+        if (event === 'progress') progress = cb;
+        return () => {
+          progress = null;
+        };
+      };
+    },
+  });
+  env.settle();
+  assert.equal(env.layer.getLodDiagnostics().counts, 1);
+  env.fake.globe.terrain = () => 1_600;
+  progress({ terrainPending: 2 });
+  progress({ terrainPending: 0 });
+  env.fake.preRender.raise();
+  assert.equal(env.layer.getLodDiagnostics().counts, 0);
+  assert.deepEqual(shownIds(markerItems(env.fake)), ['a', 'b']);
+  env.layer.disable(env.viewer);
+  assert.equal(progress, null);
+});
+
+test('disable drops the counts and their click claim; enable restores them; destroy lets the lane go', async (t) => {
+  const env = await clusteredLayer(t, {
+    eye: { lon: CLUSTER_LON, lat: CLUSTER_LAT, height: 2_000_000 },
+  });
+  const fonts = new Set();
+  globalThis.document.fonts = {
+    addEventListener: (_t, fn) => fonts.add(fn),
+    removeEventListener: (_t, fn) => fonts.delete(fn),
+  };
+  env.settle();
+  const lane = env.lanes[0];
+  assert.equal(lane.active, true);
+  assert.equal(fonts.size, 1);
+  const pose = env.fake.renderer.camera.pose();
+  const frame = viewProjection(pose, 800, 600);
+  lane.painter(frame);
+  const label = frame.ctx.labels.find((painted) => painted.text === '5');
+  assert.ok(label);
+  const click = () => ({
+    screenPosition: { x: label.x, y: label.y - 10 },
+    drawHit: null,
+    topHit: null,
+    gesture: { travelPx: 0, durationMs: 50 },
+  });
+  assert.equal(clickCard(click())?.sourceId, 'local-datacenters:count');
+  env.layer.disable(env.viewer);
+  assert.equal(lane.active, false);
+  assert.equal(clickCard(click()), null);
+  assert.equal(env.layer.getLodDiagnostics().counts, 0);
+  await env.layer.enable(env.viewer);
+  env.settle();
+  assert.equal(env.layer.getLodDiagnostics().counts, 1);
+  lane.painter(viewProjection(pose, 800, 600));
+  assert.equal(clickCard(click())?.sourceId, 'local-datacenters:count');
+  assert.equal(env.lanes.length, 1);
+  env.layer.destroy(env.viewer);
+  assert.equal(lane.unregistered, true);
+  assert.equal(fonts.size, 0);
+});
+
+test('replaceFeatures in clusters mode regroups the new sites', async (t) => {
+  const env = await clusteredLayer(t, {
+    eye: { lon: CLUSTER_LON + 0.008, lat: CLUSTER_LAT, height: 3_000 },
+  });
+  env.settle();
+  await env.layer.replaceFeatures(
+    env.viewer,
+    CAMPUS.slice(0, 3).map(footprint),
+  );
+  env.settle();
+  assert.deepEqual(shownIds(markerItems(env.fake)), ['dc-0', 'dc-1', 'dc-2']);
+  assert.deepEqual(env.layer.getLodDiagnostics(), {
+    sites: 3,
+    lone: 3,
+    counts: 0,
+    computed: true,
+  });
 });

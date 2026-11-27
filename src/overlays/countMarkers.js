@@ -46,21 +46,32 @@ const RING_PX = 2;
 const RIM_PX = 1;
 const STROKE_INSET = RIM_PX + RING_PX / 2;
 
+/** Least gap between the rims of two separate markers, in CSS pixels. */
+export const COUNT_MERGE_GAP_PX = 4;
+
+/** Live count lanes in paint order: one made later paints over one made earlier. */
+const paintOrder = [];
+
 /**
  * Merged point groups and their last painted hit rectangles in CSS pixels.
- * `style` gives the ring and count `color`, the `glyph` drawn above the count
- * (`src` image URL, painted `source` rectangle `[x, y, w, h]` in image pixels,
- * and `slotAspect`, the width over height its slot reserves before the image
- * loads), the drawn size of a lone point's icon `iconPx`, and the least `gap`
- * between two separate markers' rims.
+ * @param {Function} registerPaintLane The world overlay's lane registrar.
+ * @param {string} id The lane's identity.
+ * @param {Function} refreshView Regroup after painter changes.
+ * @param {Function} keyholeAlpha Fade at a screen position under the keyhole.
+ * @param {object} style
+ * @param {string} style.color Ring and count colour.
+ * @param {object} style.glyph `src` URL, painted `source` [x, y, w, h] in image
+ *   pixels, and `slotAspect`, the width over height its slot reserves before loading.
+ * @param {number} style.iconPx Drawn size of a lone point's icon.
  */
 export function createCountMarkerLane(
   registerPaintLane,
   id,
   refreshView,
   keyholeAlpha,
-  { color, glyph, iconPx, gap },
+  style,
 ) {
+  const { color, glyph, iconPx } = style;
   const glyphAspect = glyph.source[2] / glyph.source[3];
   const slotAspect = glyph.slotAspect ?? glyphAspect;
   let hardUi = null;
@@ -77,6 +88,9 @@ export function createCountMarkerLane(
     active: false,
     target: 'shared',
   });
+  const entry = { paintedCell };
+  paintOrder.push(entry);
+
   function loadSprite() {
     if (sprite || typeof Image === 'undefined') return;
     sprite = new Image();
@@ -213,7 +227,12 @@ export function createCountMarkerLane(
       pass++
     ) {
       ground(visible);
-      const merged = mergeCountCells(visible, project, footprint, gap);
+      const merged = mergeCountCells(
+        visible,
+        project,
+        footprint,
+        COUNT_MERGE_GAP_PX,
+      );
       if (merged.length === visible.length) break;
       visible = merged;
     }
@@ -379,7 +398,7 @@ export function createCountMarkerLane(
   }
 
   /** Resolve the topmost group actually painted at this screen position. */
-  function pickedCell(point) {
+  function paintedCell(point) {
     if (!point) return null;
     for (let i = hitCount - 1; i >= 0; i--) {
       const rect = hits[i];
@@ -393,6 +412,14 @@ export function createCountMarkerLane(
       if (dx * dx + dy * dy <= radius * radius) return rect.cell;
     }
     return null;
+  }
+
+  /** Resolve the topmost group, unless a later lane's count covers it. */
+  function pickedCell(point) {
+    if (!point) return null;
+    for (let i = paintOrder.length - 1; i >= 0 && paintOrder[i] !== entry; i--)
+      if (paintOrder[i].paintedCell(point)) return null;
+    return paintedCell(point);
   }
 
   /** A new group may already have arrived since the empty frame. */
@@ -409,6 +436,8 @@ export function createCountMarkerLane(
   /** Unhook this viewer's painter and its font listener. */
   function dispose() {
     hide();
+    const index = paintOrder.indexOf(entry);
+    if (index !== -1) paintOrder.splice(index, 1);
     fonts?.removeEventListener?.('loadingdone', fontsLoaded);
     lane?.unregister();
   }

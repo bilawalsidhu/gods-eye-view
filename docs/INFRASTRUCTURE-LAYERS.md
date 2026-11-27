@@ -19,6 +19,7 @@ const layers = createInfrastructureLayers({
   clearSelectedEntityContextForLayer,
   removeEntityContextsForLayer,
   governorRequestRender,
+  registerPaintLane,
 });
 
 // Register these layers with the existing data-layer manager and viewer.
@@ -35,12 +36,11 @@ const layers = createInfrastructureLayers({
 | `removeEntityContextsForLayer` | `(layerId, { retainIds })`; remove records owned by the layer on destruction or failed setup, or those a new feature set no longer has |
 | `getSelectedEntityContext` | optional; `()` the selected record, so `replaceFeatures` keeps a selection the new set still has |
 | `governorRequestRender` | `(reason)`; request a frame through the existing render scheduler |
-| `registerPaintLane` | optional; the world overlay's `registerWorldOverlayPaintLane`, which paints datacenter count markers; without it counts still group but are not painted |
+| `registerPaintLane` | optional; the world overlay's `registerWorldOverlayPaintLane`, which paints datacenter count markers; without it no count is painted and every datacenter in view draws its own marker |
 | `keyholeAlpha` | optional; `(x, y, keyhole)` the count markers' fade at the keyhole's edge |
 
 Each returned layer supports `init(viewer)`, `enable(viewer)`, `disable(viewer)`,
-`update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()`,
-`getClusterDiagnostics()` and `getAnalystRecords()`.
+`update(viewer)`, `destroy(viewer)`, `getStats()`, `getLodDiagnostics()` and `getAnalystRecords()`.
 Use the same viewer for the instance's entire lifetime. Each viewer/context/overlay
 host permits one live instance per layer ID; destroy an old instance before
 replacing it. Separate applications may use identical IDs with separate hosts.
@@ -79,7 +79,7 @@ GeoJSON features in place of `url`, and `featureColor(properties)`, a CSS colour
 per feature for its fill, stem, dot, pin and label accent, and `markers`:
 `'stems'` (the default, as dams draw) or `'clusters'` (as datacenters draw:
 count markers far out, one ground marker per feature close in, no stems or
-ground sampling). The layer it returns
+surface height samples). The layer it returns
 also has `dropCachedFeatures()`, so the next `enable` loads again, and
 `replaceFeatures(viewer, features)`, which draws a new feature set in place of
 the current one: the current one stays drawn until the new one is built, and
@@ -91,4 +91,4 @@ Dataset files and source/license notices remain under `src/data/local_data/`.
 Their input counts are 4,352 datacenter features and 706 dam features. A multipart
 dam geometry draws as several parts, each with its own stem; part and stem counts are
 different measurements from feature counts. A clustered datacenter counts once
-however many parts it has.
+however many parts it has, and stands its marker on a part in view.

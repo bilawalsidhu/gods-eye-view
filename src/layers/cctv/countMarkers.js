@@ -1,10 +1,5 @@
 import { createCountMarkerLane } from '../../overlays/countMarkers.js';
-import {
-  CAMERA_GREEN,
-  COUNT_CAMERA_ICON,
-  CAMERA_ICON_PX,
-  COUNT_MERGE_GAP_PX,
-} from './policy.js';
+import { CAMERA_GREEN, COUNT_CAMERA_ICON, CAMERA_ICON_PX } from './policy.js';
 
 /** CCTV count markers: green rings with the camera glyph over the count. */
 const CCTV_COUNT_STYLE = Object.freeze({
@@ -17,7 +12,6 @@ const CCTV_COUNT_STYLE = Object.freeze({
     slotAspect: 1.5,
   }),
   iconPx: CAMERA_ICON_PX,
-  gap: COUNT_MERGE_GAP_PX,
 });
 
 /** Merged camera groups and their last painted hit rectangles in CSS pixels. */
